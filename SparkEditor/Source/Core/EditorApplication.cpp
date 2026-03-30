@@ -11,6 +11,7 @@
 #include "Core/FaultIsolation.h"
 #include "EditorCrashHandler.h"
 #include "EditorPluginManager.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <memory>
@@ -66,52 +67,51 @@ namespace SparkEditor
     bool EditorApplication::Initialize(const EditorConfig& config)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("Initializing Enhanced Spark Engine Editor...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Enhanced Spark Engine Editor...");
 
         m_config = config;
         m_windowWidth = config.windowWidth;
         m_windowHeight = config.windowHeight;
 
         // Create main editor window
-        console.LogInfo("Creating main editor window...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating main editor window...");
         if (!CreateMainWindow(config))
         {
-            console.LogError("Failed to create main editor window");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create main editor window");
             return false;
         }
-        console.LogSuccess("Main window created successfully (" + std::to_string(m_windowWidth) + "x" +
-                           std::to_string(m_windowHeight) + ")");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Main window created successfully (%dx%d)", m_windowWidth,
+                       m_windowHeight);
 
         // Initialize graphics backend
-        console.LogInfo("Initializing graphics backend...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing graphics backend...");
         if (!InitializeGraphics())
         {
-            console.LogError("Failed to initialize graphics backend");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to initialize graphics backend");
             return false;
         }
-        console.LogSuccess("Graphics backend initialized successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Graphics backend initialized successfully");
 
         // Initialize Dear ImGui
-        console.LogInfo("Initializing Dear ImGui...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Dear ImGui...");
         if (!InitializeImGui())
         {
-            console.LogError("Failed to initialize Dear ImGui");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to initialize Dear ImGui");
             return false;
         }
-        console.LogSuccess("Dear ImGui initialized successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Dear ImGui initialized successfully");
 
         // Initialize EditorUI (this creates all panels including console)
-        console.LogInfo("Initializing EditorUI...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing EditorUI...");
         m_ui = std::make_unique<EditorUI>();
         if (!m_ui->Initialize(config))
         {
-            console.LogError("Failed to initialize EditorUI");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to initialize EditorUI");
             return false;
         }
         // Give EditorUI access to the plugin manager for menu bar rendering
         m_ui->SetPluginManager(&m_pluginManager);
-        console.LogSuccess("EditorUI initialized successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI initialized successfully");
 
 #ifdef _WIN32
         // Pass the DirectX device to panels that need it (Scene View)
@@ -124,16 +124,16 @@ namespace SparkEditor
 #endif
 
         // Initialize plugin system
-        console.LogInfo("Initializing editor plugins...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing editor plugins...");
         m_pluginManager.InitializeAll(this);
-        console.LogSuccess("Editor plugins initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor plugins initialized");
 
         m_isInitialized = true;
         m_isRunning = true;
 
-        console.LogSuccess("Enhanced Editor initialization complete");
-        console.LogInfo("SparkEditor is now ready for use");
-        console.LogInfo("All editor operations will be logged to external console");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Enhanced Editor initialization complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor is now ready for use");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "All editor operations will be logged to external console");
 
         return true;
     }
@@ -145,8 +145,6 @@ namespace SparkEditor
 
     bool EditorApplication::CreateMainWindow(const EditorConfig& config)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-
         // Register window class
         WNDCLASSEXW wc = {};
         wc.cbSize = sizeof(WNDCLASSEXW);
@@ -159,10 +157,10 @@ namespace SparkEditor
 
         if (!RegisterClassExW(&wc))
         {
-            console.LogError("Failed to register window class");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to register window class");
             return false;
         }
-        console.LogInfo("Window class registered successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Window class registered successfully");
 
         // Create window
         m_hwnd = CreateWindowExW(0,                         // dwExStyle
@@ -182,16 +180,16 @@ namespace SparkEditor
         if (!m_hwnd)
         {
             DWORD error = GetLastError();
-            console.LogError("Failed to create window (Error: " + std::to_string(error) + ")");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create window (Error: %lu)", error);
             return false;
         }
 
-        console.LogInfo("Window created successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Window created successfully");
 
         ShowWindow(m_hwnd, SW_SHOW);
         UpdateWindow(m_hwnd);
 
-        console.LogInfo("Window is now visible and active");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Window is now visible and active");
         return true;
     }
 
@@ -299,15 +297,13 @@ namespace SparkEditor
 
     int EditorApplication::Run()
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-
         if (!m_isInitialized)
         {
-            console.LogCritical("EditorApplication::Run() called but editor not initialized!");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorApplication::Run() called but editor not initialized!");
             return -1;
         }
 
-        console.LogInfo("Starting enhanced editor main loop...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting enhanced editor main loop...");
 
         // Main message loop
         MSG msg = {};
@@ -321,6 +317,7 @@ namespace SparkEditor
             lastTime = currentTime;
 
             // Update console (important for external console communication)
+            auto& console = Spark::SimpleConsole::GetInstance();
             SPARK_GUARDED_UPDATE("EditorConsole", "Editor", { console.Update(); });
 
             // Process messages
@@ -343,7 +340,7 @@ namespace SparkEditor
             UpdatePerformanceMetrics();
         }
 
-        console.LogInfo("Enhanced editor main loop ended");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Enhanced editor main loop ended");
         return static_cast<int>(msg.wParam);
     }
 
@@ -428,50 +425,49 @@ namespace SparkEditor
     void EditorApplication::Shutdown()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("Shutting down enhanced editor...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down enhanced editor...");
 
         m_isRunning = false;
 
         // Shutdown editor plugins before UI teardown
-        console.LogInfo("Shutting down editor plugins...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down editor plugins...");
         m_pluginManager.ShutdownAll();
-        console.LogSuccess("Editor plugins shutdown complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor plugins shutdown complete");
 
         if (m_ui)
         {
-            console.LogInfo("Shutting down EditorUI...");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down EditorUI...");
             m_ui->Shutdown();
             m_ui.reset();
-            console.LogSuccess("EditorUI shutdown complete");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI shutdown complete");
         }
 
         // Cleanup ImGui
-        console.LogInfo("Cleaning up Dear ImGui...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Cleaning up Dear ImGui...");
         ImGui_ImplDX11_Shutdown();
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
-        console.LogSuccess("Dear ImGui cleanup complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Dear ImGui cleanup complete");
 
         // Cleanup DirectX
-        console.LogInfo("Cleaning up DirectX 11...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Cleaning up DirectX 11...");
         m_rtv.Reset();
         m_context.Reset();
         m_device.Reset();
         m_swapChain.Reset();
-        console.LogSuccess("DirectX 11 cleanup complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DirectX 11 cleanup complete");
 
         // Cleanup window
         if (m_hwnd)
         {
-            console.LogInfo("Destroying main window...");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Destroying main window...");
             DestroyWindow(m_hwnd);
             m_hwnd = nullptr;
-            console.LogSuccess("Main window destroyed");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Main window destroyed");
         }
 
         m_isInitialized = false;
-        console.LogSuccess("Enhanced editor shutdown complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Enhanced editor shutdown complete");
     }
 
     LRESULT CALLBACK EditorApplication::WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -520,14 +516,12 @@ namespace SparkEditor
 
     bool EditorApplication::CreateMainWindow(const EditorConfig& config)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-
         if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0)
         {
-            console.LogError("Failed to initialize SDL2: " + std::string(SDL_GetError()));
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to initialize SDL2: %s", SDL_GetError());
             return false;
         }
-        console.LogInfo("SDL2 initialized successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SDL2 initialized successfully");
 
         // Set OpenGL attributes for OpenGL 3.3 Core Profile
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
@@ -549,24 +543,23 @@ namespace SparkEditor
 
         if (!m_window)
         {
-            console.LogError("Failed to create SDL2 window: " + std::string(SDL_GetError()));
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create SDL2 window: %s", SDL_GetError());
             return false;
         }
 
-        console.LogInfo("SDL2 window created successfully");
-        console.LogInfo("Window is now visible and active");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SDL2 window created successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Window is now visible and active");
         return true;
     }
 
     bool EditorApplication::InitializeGraphics()
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
         std::cout << "Initializing OpenGL 3.3...\n";
 
         m_glContext = SDL_GL_CreateContext(m_window);
         if (!m_glContext)
         {
-            console.LogError("Failed to create OpenGL context: " + std::string(SDL_GetError()));
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create OpenGL context: %s", SDL_GetError());
             return false;
         }
 
@@ -618,15 +611,13 @@ namespace SparkEditor
 
     int EditorApplication::Run()
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-
         if (!m_isInitialized)
         {
-            console.LogCritical("EditorApplication::Run() called but editor not initialized!");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorApplication::Run() called but editor not initialized!");
             return -1;
         }
 
-        console.LogInfo("Starting enhanced editor main loop...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting enhanced editor main loop...");
 
         auto lastTime = std::chrono::high_resolution_clock::now();
         int frameCount = 0;
@@ -649,6 +640,7 @@ namespace SparkEditor
             lastTime = currentTime;
 
             // Update console
+            auto& console = Spark::SimpleConsole::GetInstance();
             SPARK_GUARDED_UPDATE("EditorConsole", "Editor", { console.Update(); });
 
             // Process events
@@ -671,7 +663,7 @@ namespace SparkEditor
             UpdatePerformanceMetrics();
         }
 
-        console.LogInfo("Enhanced editor main loop ended");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Enhanced editor main loop ended");
         return 0;
     }
 
@@ -754,33 +746,32 @@ namespace SparkEditor
     void EditorApplication::Shutdown()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("Shutting down enhanced editor...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down enhanced editor...");
 
         m_isRunning = false;
 
         // Shutdown editor plugins before UI teardown
-        console.LogInfo("Shutting down editor plugins...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down editor plugins...");
         m_pluginManager.ShutdownAll();
-        console.LogSuccess("Editor plugins shutdown complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor plugins shutdown complete");
 
         if (m_ui)
         {
-            console.LogInfo("Shutting down EditorUI...");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down EditorUI...");
             m_ui->Shutdown();
             m_ui.reset();
-            console.LogSuccess("EditorUI shutdown complete");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI shutdown complete");
         }
 
         // Cleanup ImGui
-        console.LogInfo("Cleaning up Dear ImGui...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Cleaning up Dear ImGui...");
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL2_Shutdown();
         ImGui::DestroyContext();
-        console.LogSuccess("Dear ImGui cleanup complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Dear ImGui cleanup complete");
 
         // Cleanup OpenGL and SDL
-        console.LogInfo("Cleaning up OpenGL and SDL2...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Cleaning up OpenGL and SDL2...");
         if (m_glContext)
         {
             SDL_GL_DeleteContext(m_glContext);
@@ -792,10 +783,10 @@ namespace SparkEditor
             m_window = nullptr;
         }
         SDL_Quit();
-        console.LogSuccess("OpenGL and SDL2 cleanup complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "OpenGL and SDL2 cleanup complete");
 
         m_isInitialized = false;
-        console.LogSuccess("Enhanced editor shutdown complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Enhanced editor shutdown complete");
     }
 
 #endif // _WIN32
@@ -861,12 +852,11 @@ namespace SparkEditor
 
     bool EditorApplication::OnShutdownRequested()
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-
         // Check for unsaved scene changes
         if (m_ui && m_ui->IsSceneModified())
         {
-            console.LogWarning("Exiting with unsaved scene changes in: " + m_ui->GetCurrentSceneName());
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Exiting with unsaved scene changes in: %s",
+                           m_ui->GetCurrentSceneName().c_str());
             // Allow exit but log the warning so user sees it in console
         }
 
@@ -877,7 +867,7 @@ namespace SparkEditor
             if (pm && pm->HasOpenProject())
             {
                 pm->SaveProject();
-                console.LogInfo("Project auto-saved on exit");
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project auto-saved on exit");
             }
         }
 

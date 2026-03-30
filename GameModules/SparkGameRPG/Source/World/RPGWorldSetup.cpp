@@ -4,7 +4,6 @@
  */
 
 #include "RPGWorldSetup.h"
-#include "Utils/SparkConsole.h"
 #include "Engine/Streaming/SeamlessAreaManager.h"
 
 #ifdef ENABLE_EDITOR
@@ -12,6 +11,7 @@
 #endif
 
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace RPG
 {
@@ -137,8 +137,8 @@ namespace RPG
         };
         m_areas.push_back(swamp);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Defined " + std::to_string(m_areas.size()) +
-                                                    " world areas");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG World] Defined %s world areas",
+                       std::to_string(m_areas.size()).c_str());
     }
 
     void RPGWorldSetup::RegisterAreasWithStreaming()
@@ -158,7 +158,7 @@ namespace RPG
             streamingMgr.RegisterArea(def);
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Registered areas with SeamlessAreaManager");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG World] Registered areas with SeamlessAreaManager");
     }
 
     void RPGWorldSetup::ConfigureOriginRebasing()
@@ -166,7 +166,7 @@ namespace RPG
         m_originSystem.SetRebasingThreshold(3000.0f);
         m_originSystem.SetEnabled(true);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Origin rebasing enabled (threshold: 3000m)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG World] Origin rebasing enabled (threshold: 3000m)");
     }
 
     void RPGWorldSetup::Update(float deltaTime)

@@ -315,6 +315,7 @@ namespace Spark::Cinematic
     class SequencerManager
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<SequencerManager>() instead")]]
         static SequencerManager& GetInstance();
 
         Sequence* CreateSequence(const std::string& name);

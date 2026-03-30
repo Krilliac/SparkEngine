@@ -7,7 +7,7 @@
  */
 
 #include "LuaScriptEngine.h"
-#include "../../Utils/SparkConsole.h"
+#include "../../Utils/LogMacros.h"
 #include <sstream>
 
 namespace Spark::Scripting
@@ -27,9 +27,9 @@ namespace Spark::Scripting
 
     bool LuaScriptEngine::Initialize()
     {
-        Spark::SimpleConsole::GetInstance().LogWarning(
-            "[LuaScript] Lua scripting not available (SPARK_LUA_AVAILABLE not defined). "
-            "Add Luau to ThirdParty/Scripting/luau/ to enable.");
+        SPARK_LOG_WARN(Spark::LogCategory::Scripting,
+                       "[LuaScript] Lua scripting not available (SPARK_LUA_AVAILABLE not defined). "
+                       "Add Luau to ThirdParty/Scripting/luau/ to enable.");
         return false;
     }
 

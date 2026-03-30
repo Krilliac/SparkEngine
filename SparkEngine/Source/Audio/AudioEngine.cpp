@@ -5,7 +5,7 @@
 #include "Utils/Assert.h"
 #include "Utils/DebugHookManager.h"
 #include "Utils/SparkError.h"
-#include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include <algorithm>
 #include <iostream>
@@ -34,12 +34,12 @@ AudioEngine::AudioEngine()
     m_settings.listenerForward = XMFLOAT3(0.0f, 0.0f, 1.0f);
     m_settings.listenerUp = XMFLOAT3(0.0f, 1.0f, 0.0f);
 
-    Spark::SimpleConsole::GetInstance().Log("AudioEngine constructed with console integration.", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine constructed with console integration.");
 }
 
 AudioEngine::~AudioEngine()
 {
-    Spark::SimpleConsole::GetInstance().Log("AudioEngine destructor called.", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine destructor called.");
     Shutdown();
 }
 
@@ -87,8 +87,7 @@ HRESULT AudioEngine::Initialize(size_t maxSources)
     }
 
     SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine initialization complete - audio ready");
-    Spark::SimpleConsole::GetInstance().Log(
-        "AudioEngine initialization complete with console integration - audio ready.", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine initialization complete with console integration");
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Audio", 0.0);
     return S_OK;
 }
@@ -100,8 +99,7 @@ void AudioEngine::Update(float deltaTime)
     static bool firstFrame = true;
     if (firstFrame)
     {
-        Spark::SimpleConsole::GetInstance().Log("AudioEngine::Update - First frame started with console integration",
-                                                "INFO");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine::Update - First frame started");
         firstFrame = false;
     }
 
@@ -119,7 +117,7 @@ void AudioEngine::Shutdown()
     SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
     SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Audio", 0.0);
     SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine::Shutdown called");
-    Spark::SimpleConsole::GetInstance().Log("AudioEngine::Shutdown called.", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine::Shutdown called.");
     StopAllSounds();
     m_soundEffects.clear();
 
@@ -156,7 +154,7 @@ void AudioEngine::Shutdown()
         m_xAudio2->Release();
         m_xAudio2 = nullptr;
     }
-    Spark::SimpleConsole::GetInstance().Log("AudioEngine shutdown complete.", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "AudioEngine shutdown complete.");
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Audio", 0.0);
 }
 
@@ -172,12 +170,12 @@ HRESULT AudioEngine::LoadSound(const std::string& name, const std::wstring& file
     SPARK_WARN_IF(Spark::LogCategory::Audio, FAILED(hr), "SoundEffect::LoadFromFile failed");
     if (FAILED(hr))
     {
-        Spark::SimpleConsole::GetInstance().Log("Failed to load sound '" + name + "' from file", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Failed to load sound '%s' from file", name.c_str());
         return hr;
     }
 
     m_soundEffects[name] = std::move(sound);
-    Spark::SimpleConsole::GetInstance().Log("Sound '" + name + "' loaded successfully", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Sound '%s' loaded successfully", name.c_str());
     return S_OK;
 }
 
@@ -192,7 +190,7 @@ void AudioEngine::UnloadSound(const std::string& name)
                 StopSound(s.get());
         }
         m_soundEffects.erase(it);
-        Spark::SimpleConsole::GetInstance().Log("Sound '" + name + "' unloaded", "INFO");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "Sound '%s' unloaded", name.c_str());
     }
 }
 
@@ -209,14 +207,14 @@ AudioSource* AudioEngine::PlaySound(const std::string& name, float volume, float
     SoundEffect* sound = GetSound(name);
     if (!sound)
     {
-        Spark::SimpleConsole::GetInstance().Log("Sound '" + name + "' not found", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Sound '%s' not found", name.c_str());
         return nullptr;
     }
 
     AudioSource* src = GetAvailableSource();
     if (!src)
     {
-        Spark::SimpleConsole::GetInstance().Log("No available audio sources", "WARNING");
+        SPARK_LOG_WARN(Spark::LogCategory::Audio, "No available audio sources");
         return nullptr;
     }
 
@@ -367,12 +365,11 @@ void AudioEngine::Console_SetMasterVolume(float volume)
     if (volume >= 0.0f && volume <= 1.0f)
     {
         SetMasterVolume(volume);
-        Spark::SimpleConsole::GetInstance().Log("Master volume set to " + std::to_string(volume) + " via console",
-                                                "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "Master volume set to %f via console", volume);
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid master volume. Must be between 0.0 and 1.0", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Invalid master volume. Must be between 0.0 and 1.0");
     }
 }
 
@@ -381,12 +378,11 @@ void AudioEngine::Console_SetSFXVolume(float volume)
     if (volume >= 0.0f && volume <= 1.0f)
     {
         SetSFXVolume(volume);
-        Spark::SimpleConsole::GetInstance().Log("SFX volume set to " + std::to_string(volume) + " via console",
-                                                "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "SFX volume set to %f via console", volume);
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid SFX volume. Must be between 0.0 and 1.0", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Invalid SFX volume. Must be between 0.0 and 1.0");
     }
 }
 
@@ -395,12 +391,11 @@ void AudioEngine::Console_SetMusicVolume(float volume)
     if (volume >= 0.0f && volume <= 1.0f)
     {
         SetMusicVolume(volume);
-        Spark::SimpleConsole::GetInstance().Log("Music volume set to " + std::to_string(volume) + " via console",
-                                                "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "Music volume set to %f via console", volume);
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid music volume. Must be between 0.0 and 1.0", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Invalid music volume. Must be between 0.0 and 1.0");
     }
 }
 
@@ -413,7 +408,7 @@ void AudioEngine::Console_SetListenerPosition(float x, float y, float z)
 
     std::stringstream ss;
     ss << "3D listener position set to (" << x << ", " << y << ", " << z << ") via console";
-    Spark::SimpleConsole::GetInstance().Log(ss.str(), "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "%s", ss.str().c_str());
 }
 
 void AudioEngine::Console_SetListenerOrientation(float forwardX, float forwardY, float forwardZ, float upX, float upY,
@@ -429,7 +424,7 @@ void AudioEngine::Console_SetListenerOrientation(float forwardX, float forwardY,
     std::stringstream ss;
     ss << "3D listener orientation set - Forward: (" << forwardX << ", " << forwardY << ", " << forwardZ << "), Up: ("
        << upX << ", " << upY << ", " << upZ << ") via console";
-    Spark::SimpleConsole::GetInstance().Log(ss.str(), "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "%s", ss.str().c_str());
 }
 
 void AudioEngine::Console_SetDopplerScale(float scale)
@@ -440,12 +435,11 @@ void AudioEngine::Console_SetDopplerScale(float scale)
         m_dopplerScale = scale;
         m_settings.dopplerScale = scale;
         NotifyStateChange();
-        Spark::SimpleConsole::GetInstance().Log("Doppler scale set to " + std::to_string(scale) + " via console",
-                                                "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "Doppler scale set to %f via console", scale);
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid Doppler scale. Must be between 0.0 and 2.0", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Invalid Doppler scale. Must be between 0.0 and 2.0");
     }
 }
 
@@ -457,12 +451,11 @@ void AudioEngine::Console_SetDistanceScale(float scale)
         m_distanceScale = scale;
         m_settings.distanceScale = scale;
         NotifyStateChange();
-        Spark::SimpleConsole::GetInstance().Log("Distance scale set to " + std::to_string(scale) + " via console",
-                                                "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "Distance scale set to %f via console", scale);
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid distance scale. Must be between 0.1 and 10.0", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Invalid distance scale. Must be between 0.1 and 10.0");
     }
 }
 
@@ -472,8 +465,7 @@ void AudioEngine::Console_Set3DAudio(bool enabled)
     m_3DEnabled = enabled;
     m_settings.enable3D = enabled;
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log(
-        "3D audio " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "3D audio %s via console", enabled ? "enabled" : "disabled");
 }
 
 uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool is3D)
@@ -489,7 +481,7 @@ uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool i
             {
                 m_soundEffects["test_beep"] = std::move(testSound);
                 sound = m_soundEffects["test_beep"].get();
-                Spark::SimpleConsole::GetInstance().Log("Created procedural test beep sound", "INFO");
+                SPARK_LOG_INFO(Spark::LogCategory::Audio, "Created procedural test beep sound");
             }
         }
         else if (soundName == "test_gunshot")
@@ -499,7 +491,7 @@ uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool i
             {
                 m_soundEffects["test_gunshot"] = std::move(testSound);
                 sound = m_soundEffects["test_gunshot"].get();
-                Spark::SimpleConsole::GetInstance().Log("Created procedural gunshot sound", "INFO");
+                SPARK_LOG_INFO(Spark::LogCategory::Audio, "Created procedural gunshot sound");
             }
         }
         else if (soundName == "test_explosion")
@@ -509,7 +501,7 @@ uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool i
             {
                 m_soundEffects["test_explosion"] = std::move(testSound);
                 sound = m_soundEffects["test_explosion"].get();
-                Spark::SimpleConsole::GetInstance().Log("Created procedural explosion sound", "INFO");
+                SPARK_LOG_INFO(Spark::LogCategory::Audio, "Created procedural explosion sound");
             }
         }
         else if (soundName == "test_footstep")
@@ -519,7 +511,7 @@ uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool i
             {
                 m_soundEffects["test_footstep"] = std::move(testSound);
                 sound = m_soundEffects["test_footstep"].get();
-                Spark::SimpleConsole::GetInstance().Log("Created procedural footstep sound", "INFO");
+                SPARK_LOG_INFO(Spark::LogCategory::Audio, "Created procedural footstep sound");
             }
         }
         else if (soundName == "test_pickup")
@@ -529,7 +521,7 @@ uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool i
             {
                 m_soundEffects["test_pickup"] = std::move(testSound);
                 sound = m_soundEffects["test_pickup"].get();
-                Spark::SimpleConsole::GetInstance().Log("Created procedural pickup sound", "INFO");
+                SPARK_LOG_INFO(Spark::LogCategory::Audio, "Created procedural pickup sound");
             }
         }
         else if (soundName == "test_noise")
@@ -539,15 +531,15 @@ uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool i
             {
                 m_soundEffects["test_noise"] = std::move(testSound);
                 sound = m_soundEffects["test_noise"].get();
-                Spark::SimpleConsole::GetInstance().Log("Created procedural noise sound", "INFO");
+                SPARK_LOG_INFO(Spark::LogCategory::Audio, "Created procedural noise sound");
             }
         }
     }
 
     if (!sound)
     {
-        Spark::SimpleConsole::GetInstance().Log(
-            "Sound '" + soundName + "' not found and could not create procedural version", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Sound '%s' not found and could not create procedural version",
+                        soundName.c_str());
         return 0;
     }
 
@@ -566,14 +558,13 @@ uint32_t AudioEngine::Console_PlayTestSound(const std::string& soundName, bool i
     if (source)
     {
         std::string modeStr = is3D ? "3D" : "2D";
-        Spark::SimpleConsole::GetInstance().Log("Playing test sound '" + soundName + "' in " + modeStr +
-                                                    " mode (ID: " + std::to_string(source->SourceID) + ")",
-                                                "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "Playing test sound '%s' in %s mode (ID: %u)", soundName.c_str(),
+                       modeStr.c_str(), source->SourceID);
         return source->SourceID;
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Failed to play test sound '" + soundName + "'", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Failed to play test sound '%s'", soundName.c_str());
         return 0;
     }
 }
@@ -585,21 +576,18 @@ void AudioEngine::Console_StopSound(uint32_t sourceID)
         if (source->SourceID == sourceID && source->IsPlaying)
         {
             StopSound(source.get());
-            Spark::SimpleConsole::GetInstance().Log(
-                "Stopped sound source ID " + std::to_string(sourceID) + " via console", "SUCCESS");
+            SPARK_LOG_INFO(Spark::LogCategory::Audio, "Stopped sound source ID %u via console", sourceID);
             return;
         }
     }
-    Spark::SimpleConsole::GetInstance().Log("Sound source ID " + std::to_string(sourceID) + " not found or not playing",
-                                            "ERROR");
+    SPARK_LOG_ERROR(Spark::LogCategory::Audio, "Sound source ID %u not found or not playing", sourceID);
 }
 
 void AudioEngine::Console_StopAllSounds()
 {
     size_t stoppedCount = GetActiveSourceCount();
     StopAllSounds();
-    Spark::SimpleConsole::GetInstance().Log("Stopped " + std::to_string(stoppedCount) + " playing sounds via console",
-                                            "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Stopped %zu playing sounds via console", stoppedCount);
 }
 
 std::string AudioEngine::Console_ListSounds() const
@@ -661,7 +649,7 @@ void AudioEngine::Console_ApplySettings(const AudioSettings& settings)
     }
 
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log("Audio settings applied via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Audio settings applied via console");
 }
 
 void AudioEngine::Console_ResetToDefaults()
@@ -674,19 +662,19 @@ void AudioEngine::Console_ResetToDefaults()
     Console_Set3DAudio(true);
     Console_SetListenerPosition(0.0f, 0.0f, 0.0f);
     Console_SetListenerOrientation(0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f);
-    Spark::SimpleConsole::GetInstance().Log("Audio settings reset to defaults via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Audio settings reset to defaults via console");
 }
 
 void AudioEngine::Console_RegisterStateCallback(std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_stateCallback = callback;
-    Spark::SimpleConsole::GetInstance().Log("Audio state callback registered", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Audio state callback registered");
 }
 
 void AudioEngine::Console_RefreshAudio()
 {
-    Spark::SimpleConsole::GetInstance().Log("Audio system refresh requested via console", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Audio system refresh requested via console");
 
     // Force update all 3D audio sources
     if (m_3DEnabled)
@@ -704,7 +692,7 @@ void AudioEngine::Console_RefreshAudio()
         }
     }
 
-    Spark::SimpleConsole::GetInstance().Log("Audio system refresh complete", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "Audio system refresh complete");
 }
 
 std::string AudioEngine::Console_GetSourceInfo(uint32_t sourceID) const
@@ -889,7 +877,7 @@ IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(uint32_t inputChannels, uint
 {
     if (!m_xAudio2)
     {
-        Spark::SimpleConsole::GetInstance().Log("CreateSubmixVoice failed: XAudio2 not initialized", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "CreateSubmixVoice failed: XAudio2 not initialized");
         return nullptr;
     }
 
@@ -898,7 +886,7 @@ IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(uint32_t inputChannels, uint
     if (FAILED(hr))
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Audio, "CreateSubmixVoice failed HR=0x%08lX", static_cast<long>(hr));
-        Spark::SimpleConsole::GetInstance().Log("CreateSubmixVoice failed", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "CreateSubmixVoice failed");
         return nullptr;
     }
 
@@ -906,7 +894,7 @@ IXAudio2SubmixVoice* AudioEngine::CreateSubmixVoice(uint32_t inputChannels, uint
 
     std::stringstream ss;
     ss << "Submix voice created: " << inputChannels << " channels, " << inputSampleRate << " Hz";
-    Spark::SimpleConsole::GetInstance().Log(ss.str(), "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "%s", ss.str().c_str());
 
     return submixVoice;
 }

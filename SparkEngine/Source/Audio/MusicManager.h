@@ -57,6 +57,7 @@ namespace Spark::Audio
     class AudioBusMixer
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<AudioBusMixer>() instead")]]
         static AudioBusMixer& GetInstance();
 
         void SetBusVolume(AudioBus bus, float volume);
@@ -222,6 +223,7 @@ namespace Spark::Audio
     class MusicManager
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<MusicManager>() instead")]]
         static MusicManager& GetInstance();
 
         void Initialize();

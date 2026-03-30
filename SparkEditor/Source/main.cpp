@@ -8,6 +8,7 @@
 #include "Core/EditorApplication.h"
 #include "Communication/CollaborativeEditSession.h"
 #include "Core/FaultIsolation.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include <iostream>
 #include <fstream>
@@ -69,7 +70,8 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
     std::signal(SIGINT, CollabServerSignalHandler);
     std::signal(SIGTERM, CollabServerSignalHandler);
 
-    console.LogInfo("Starting headless collab server on port " + std::to_string(port) + " as '" + serverName + "'...");
+    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting headless collab server on port %u as '%s'...", port,
+                   serverName.c_str());
     std::cout << "=== SPARKEDITOR COLLAB SERVER ===" << std::endl;
     std::cout << "Port: " << port << "  Name: " << serverName << std::endl;
     std::cout << "Press Ctrl+C to stop." << std::endl;
@@ -77,24 +79,25 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
     SparkEditor::CollaborativeEditSession session;
 
     session.SetPeerConnectedCallback(
-        [&console](const SparkEditor::EditorPeer& peer)
-        { console.LogInfo("Peer connected: " + peer.userName + " (ID=" + std::to_string(peer.id) + ")"); });
+        [](const SparkEditor::EditorPeer& peer)
+        { SPARK_LOG_INFO(Spark::LogCategory::Editor, "Peer connected: %s (ID=%u)", peer.userName.c_str(), peer.id); });
 
-    session.SetPeerDisconnectedCallback([&console](SparkEditor::PeerID id)
-                                        { console.LogInfo("Peer disconnected: ID=" + std::to_string(id)); });
+    session.SetPeerDisconnectedCallback(
+        [](SparkEditor::PeerID id) { SPARK_LOG_INFO(Spark::LogCategory::Editor, "Peer disconnected: ID=%u", id); });
 
-    session.SetEditReceivedCallback([&console](const SparkEditor::EditMessage& edit)
-                                    { console.LogInfo("Edit: " + edit.nodeId + "." + edit.propertyName); });
+    session.SetEditReceivedCallback(
+        [](const SparkEditor::EditMessage& edit)
+        { SPARK_LOG_INFO(Spark::LogCategory::Editor, "Edit: %s.%s", edit.nodeId.c_str(), edit.propertyName.c_str()); });
 
     if (!session.Host(port, serverName))
     {
-        console.LogError("Failed to start collab server on port " + std::to_string(port));
+        SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to start collab server on port %u", port);
         std::cerr << "ERROR: Failed to bind on port " << port << std::endl;
         console.Shutdown();
         return 1;
     }
 
-    console.LogSuccess("Collab server running. Waiting for editors to connect...");
+    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Collab server running. Waiting for editors to connect...");
     std::cout << "Server started successfully." << std::endl;
 
     // Headless main loop — just tick the session at 10 Hz
@@ -115,7 +118,7 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
 
     std::cout << std::endl << "Shutting down collab server..." << std::endl;
     session.Disconnect();
-    console.LogInfo("Collab server stopped.");
+    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Collab server stopped.");
     console.Shutdown();
     return 0;
 }
@@ -200,8 +203,9 @@ int main(int argc, char* argv[])
     // Initialize Spark Console system (this will connect to external console)
     if (console.Initialize())
     {
-        console.LogSuccess("SparkEditor console system initialized successfully");
-        console.LogInfo("External console integration active - all editor operations will be logged");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor console system initialized successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor,
+                       "External console integration active - all editor operations will be logged");
     }
     else
     {
@@ -213,7 +217,7 @@ int main(int argc, char* argv[])
 
     try
     {
-        console.LogInfo("Starting SparkEditor application...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting SparkEditor application...");
         if (showDebugConsole)
         {
             std::cout << "Creating EditorApplication..." << std::endl;
@@ -221,7 +225,7 @@ int main(int argc, char* argv[])
 
         // Create editor application
         auto app = std::make_unique<SparkEditor::EditorApplication>();
-        console.LogInfo("EditorApplication instance created");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorApplication instance created");
 
         if (showDebugConsole)
         {
@@ -238,17 +242,17 @@ int main(int argc, char* argv[])
         config.testMode = testMode;
         config.testFrameLimit = testFrameLimit;
 
-        console.LogInfo("Editor configuration prepared");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor configuration prepared");
 
         if (showDebugConsole)
         {
             std::cout << "Calling app->Initialize()..." << std::endl;
         }
 
-        console.LogInfo("Initializing SparkEditor application...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing SparkEditor application...");
         if (!app->Initialize(config))
         {
-            console.LogError("Failed to initialize SparkEditor application");
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to initialize SparkEditor application");
             if (showDebugConsole)
             {
                 std::cerr << "Failed to initialize SparkEditor" << std::endl;
@@ -258,7 +262,7 @@ int main(int argc, char* argv[])
             return -1;
         }
 
-        console.LogSuccess("SparkEditor application initialized successfully");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor application initialized successfully");
 
         if (showDebugConsole)
         {
@@ -266,11 +270,11 @@ int main(int argc, char* argv[])
             std::cout << "Starting main loop..." << std::endl;
         }
 
-        console.LogInfo("Starting SparkEditor main loop...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting SparkEditor main loop...");
         // Run the editor
         int result = app->Run();
 
-        console.LogInfo("SparkEditor main loop ended with result: " + std::to_string(result));
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor main loop ended with result: %d", result);
 
         if (showDebugConsole)
         {
@@ -278,10 +282,10 @@ int main(int argc, char* argv[])
             std::cout << "Shutting down..." << std::endl;
         }
 
-        console.LogInfo("Shutting down SparkEditor application...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down SparkEditor application...");
         // Cleanup
         app->Shutdown();
-        console.LogSuccess("SparkEditor application shutdown complete");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor application shutdown complete");
 
         if (showDebugConsole)
         {
@@ -295,14 +299,14 @@ int main(int argc, char* argv[])
         }
 
         // Shutdown console system
-        console.LogInfo("Shutting down SparkEditor console system...");
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down SparkEditor console system...");
         console.Shutdown();
 
         return result;
     }
     catch (const std::exception& e)
     {
-        console.LogCritical("SparkEditor exception: " + std::string(e.what()));
+        SPARK_LOG_ERROR(Spark::LogCategory::Editor, "SparkEditor exception: %s", e.what());
         if (showDebugConsole)
         {
             std::cerr << "SparkEditor error: " << e.what() << std::endl;
@@ -314,7 +318,7 @@ int main(int argc, char* argv[])
     }
     catch (...)
     {
-        console.LogCritical("SparkEditor: Unknown critical exception occurred");
+        SPARK_LOG_ERROR(Spark::LogCategory::Editor, "SparkEditor: Unknown critical exception occurred");
         if (showDebugConsole)
         {
             std::cerr << "SparkEditor: Unknown error occurred" << std::endl;

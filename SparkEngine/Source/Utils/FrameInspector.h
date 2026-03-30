@@ -123,6 +123,7 @@ namespace Spark
       public:
         static constexpr int MAX_SNAPSHOTS = 60;
 
+        [[deprecated("Use EngineContext::Get()->GetSystem<FrameInspector>() instead")]]
         static FrameInspector& GetInstance()
         {
             static FrameInspector instance;

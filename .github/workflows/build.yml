@@ -39,10 +39,45 @@ jobs:
         find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-          xargs clang-format --dry-run --Werror 2>&1 || {
+          xargs clang-format --dry-run --Werror 2>&1 | tee format-check.log || {
             echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
             exit 1
           }
+
+    - name: Report errors to PR
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return;
+
+          const fs = require('fs');
+          let body = `## :x: check-format failed\n\nFormatting violations found. Run \`clang-format -i\` on the listed files.\n\n`;
+          try {
+            const log = fs.readFileSync('format-check.log', 'utf8');
+            const issues = log.split('\n').filter(l => /warning:|error:/.test(l));
+            if (issues.length > 0) {
+              body += `\`\`\`\n${issues.slice(0, 40).join('\n')}\n\`\`\`\n`;
+            }
+          } catch (e) {}
+          if (!body.includes('```')) {
+            body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
+          }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner, repo: context.repo.repo,
+            issue_number: prNumber, body: body.slice(0, 65000)
+          });
 
   # ===========================================================================
   # Prompt System Validation — anti-drift, overload prevention, stale detection
@@ -107,10 +142,24 @@ jobs:
         cat asan-console.txt >> asan-ubsan-lsan-results.txt || true
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-asan failed\n\n`;
 
@@ -131,14 +180,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
@@ -197,10 +247,24 @@ jobs:
         cat tsan-console.txt >> tsan-results.txt || true
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-tsan failed\n\n`;
 
@@ -221,14 +285,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload TSan report
       if: always()
@@ -286,10 +351,24 @@ jobs:
       run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
 
     - name: Report build errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-msan failed\n\n`;
           try {
@@ -301,14 +380,15 @@ jobs:
               body += `### Build Output\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`;
             }
           } catch (e) {}
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Run Tests under MSan
       env:
@@ -358,10 +438,24 @@ jobs:
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure 2>&1 | tee test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-windows-vs2022 (${{ matrix.config }}) failed\n\n`;
 
@@ -383,14 +477,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -514,10 +609,24 @@ jobs:
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           const maxLen = 30000;
           let body = `## :x: build-linux-gcc (${{ matrix.config }}) failed\n\n`;
@@ -541,14 +650,15 @@ jobs:
             } catch (e) { /* file doesn't exist — step didn't run */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -611,10 +721,24 @@ jobs:
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :x: build-linux-clang (${{ matrix.config }}) failed\n\n`;
 
@@ -636,14 +760,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -722,10 +847,24 @@ jobs:
         }
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :warning: build-linux-mingw-wine failed\n\n`;
           body += `> This is a **non-blocking** job. MinGW cross-compilation + Wine testing is experimental.\n\n`;
@@ -748,14 +887,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload test results
       if: always()
@@ -803,10 +943,24 @@ jobs:
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
+      if: failure()
       uses: actions/github-script@v7
       with:
         script: |
+          // Find the PR number (works for both push and pull_request events)
+          let prNumber = context.issue?.number;
+          if (!prNumber) {
+            const branch = context.ref?.replace('refs/heads/', '');
+            if (branch) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner, repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`, state: 'open'
+              });
+              prNumber = prs.data[0]?.number;
+            }
+          }
+          if (!prNumber) return; // No associated PR found
+
           const fs = require('fs');
           let body = `## :warning: build-macos (${{ matrix.config }}) failed\n\n`;
           body += `> This is a **non-blocking** job. macOS support is experimental.\n\n`;
@@ -829,14 +983,15 @@ jobs:
             } catch (e) { /* file doesn't exist */ }
           }
 
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
+          if (!body.includes('```')) {
+            body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
           }
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber,
+            body: body.slice(0, 65000)
+          });
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
@@ -876,19 +1031,77 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON
       - name: Build
-        run: cmake --build build --parallel $(nproc)
+        run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
       - name: Test
-        run: cd build && ./bin/SparkTests 2>&1 | tail -5
+        run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
+      - name: Report build errors to PR
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find the PR number (works for both push and pull_request events)
+            let prNumber = context.issue?.number;
+            if (!prNumber) {
+              const branch = context.ref?.replace('refs/heads/', '');
+              if (branch) {
+                const prs = await github.rest.pulls.list({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  head: `${context.repo.owner}:${branch}`, state: 'open'
+                });
+                prNumber = prs.data[0]?.number;
+              }
+            }
+            if (!prNumber) return;
+
+            const fs = require('fs');
+            let body = `## :x: Code Coverage (GCC) failed\n\n`;
+            for (const [label, file] of [
+              ['Build Output', 'cmake-build.log'],
+              ['Test Results', 'test-results.log']
+            ]) {
+              try {
+                const log = fs.readFileSync(file, 'utf8');
+                const issues = log.split('\n').filter(l =>
+                  /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
+                );
+                if (issues.length > 0) {
+                  body += `### ${label}\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n\n`;
+                }
+              } catch (e) {}
+            }
+            if (!body.includes('```')) {
+              body += `No error details could be extracted from build logs.\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for full output.\n`;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: body.slice(0, 65000)
+            });
       - name: Generate coverage
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
       - name: Post coverage summary to PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
         uses: actions/github-script@v7
         with:
           script: |
+            // Find the PR number (works for both push and pull_request events)
+            let prNumber = context.issue?.number;
+            if (!prNumber) {
+              const branch = context.ref?.replace('refs/heads/', '');
+              if (branch) {
+                const prs = await github.rest.pulls.list({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  head: `${context.repo.owner}:${branch}`, state: 'open'
+                });
+                prNumber = prs.data[0]?.number;
+              }
+            }
+            if (!prNumber) return; // No associated PR found
+
             const fs = require('fs');
             try {
               const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
@@ -902,7 +1115,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: prNumber,
                 body: body.slice(0, 65000)
               });
             } catch (e) {

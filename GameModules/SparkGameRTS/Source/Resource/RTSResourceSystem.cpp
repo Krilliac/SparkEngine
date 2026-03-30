@@ -4,13 +4,12 @@
  */
 
 #include "RTSResourceSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
+#include "Utils/LogMacros.h"
 
 namespace RTS
 {
@@ -20,7 +19,7 @@ namespace RTS
         m_context = context;
         m_gatherTimer = 0.0f;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Resource system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RTS] Resource system initialized");
         return true;
     }
 

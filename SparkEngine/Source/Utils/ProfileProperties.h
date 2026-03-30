@@ -51,6 +51,7 @@ namespace Spark
     {
       public:
         /// @brief Get the singleton instance
+        [[deprecated("Use EngineContext::Get()->GetSystem<ProfileProperties>() instead")]]
         static ProfileProperties& GetInstance();
 
         /// @brief Register a named property

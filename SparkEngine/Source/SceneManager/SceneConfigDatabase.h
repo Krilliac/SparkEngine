@@ -79,6 +79,7 @@ namespace Spark
     class SceneConfigDatabase
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<SceneConfigDatabase>() instead")]]
         static SceneConfigDatabase& GetInstance()
         {
             static SceneConfigDatabase instance;
@@ -116,7 +117,8 @@ namespace Spark
         /**
          * @brief Get a custom override value for a scene.
          */
-        std::optional<std::string> GetCustomOverride(const std::string& sceneId, const std::string& key) const
+        [[nodiscard]] std::optional<std::string> GetCustomOverride(const std::string& sceneId,
+                                                                   const std::string& key) const
         {
             auto it = m_entries.find(sceneId);
             if (it == m_entries.end())

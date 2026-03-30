@@ -94,6 +94,7 @@ namespace Spark
     class ConsoleProcessManager
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<ConsoleProcessManager>() instead")]]
         static ConsoleProcessManager& GetInstance();
 
         bool Initialize(const std::wstring& consolePath = L"SparkConsole");

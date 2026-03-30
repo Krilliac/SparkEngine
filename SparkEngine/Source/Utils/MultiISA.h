@@ -39,6 +39,7 @@ namespace Spark
     class MultiISADispatch
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<MultiISADispatch>() instead")]]
         static MultiISADispatch& GetInstance()
         {
             static MultiISADispatch instance;

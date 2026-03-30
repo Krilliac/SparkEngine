@@ -12,7 +12,7 @@
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
-#include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -73,17 +73,17 @@ bool MaterialSystem::Console_ReloadMaterial(const std::string& materialName)
     {
         if (it->second->LoadFromFile(materialName, m_device))
         {
-            Spark::SimpleConsole::GetInstance().LogSuccess("Reloaded material: " + materialName);
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Reloaded material: %s", materialName.c_str());
             return true;
         }
         else
         {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to reload material: " + materialName);
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to reload material: %s", materialName.c_str());
         }
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Material not found: %s", materialName.c_str());
     }
     return false;
 }
@@ -100,11 +100,11 @@ bool MaterialSystem::Console_CreateVariant(const std::string& materialName, cons
     if (material && material != m_defaultMaterial)
     {
         material->CreateVariant(variantName, defines);
-        Spark::SimpleConsole::GetInstance().LogSuccess("Created variant '" + variantName +
-                                                       "' for material: " + materialName);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Created variant '%s' for material: %s", variantName.c_str(),
+                       materialName.c_str());
         return true;
     }
-    Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
+    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Material not found: %s", materialName.c_str());
     return false;
 }
 
@@ -116,8 +116,8 @@ void MaterialSystem::Console_ClearCache()
     m_textureCache.clear();
     m_samplerCache.clear();
 
-    Spark::SimpleConsole::GetInstance().LogSuccess("Cleared cache: " + std::to_string(textureCount) + " textures, " +
-                                                   std::to_string(samplerCount) + " samplers");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Cleared cache: %zu textures, %zu samplers", textureCount,
+                   samplerCount);
 }
 
 void MaterialSystem::Console_GarbageCollect()
@@ -139,8 +139,7 @@ void MaterialSystem::Console_GarbageCollect()
         }
     }
 
-    Spark::SimpleConsole::GetInstance().LogSuccess("Garbage collected " + std::to_string(removedCount) +
-                                                   " unused materials");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Garbage collected %d unused materials", removedCount);
 }
 
 int MaterialSystem::Console_ValidateMaterials()
@@ -150,7 +149,7 @@ int MaterialSystem::Console_ValidateMaterials()
     std::vector<std::string> invalidMaterials;
     std::vector<std::string> warningMaterials;
 
-    Spark::SimpleConsole::GetInstance().LogInfo("Starting comprehensive material validation...");
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Starting comprehensive material validation...");
 
     for (const auto& pair : m_materials)
     {
@@ -337,10 +336,10 @@ int MaterialSystem::Console_ValidateMaterials()
         // Log detailed issues for invalid materials
         if (!isValid)
         {
-            Spark::SimpleConsole::GetInstance().LogError("Invalid material '" + materialName + "':");
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid material '%s':", materialName.c_str());
             for (const auto& issue : issues)
             {
-                Spark::SimpleConsole::GetInstance().LogError("  - " + issue);
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "  - %s", issue.c_str());
             }
         }
 
@@ -349,7 +348,8 @@ int MaterialSystem::Console_ValidateMaterials()
         {
             for (const auto& warning : warnings)
             {
-                Spark::SimpleConsole::GetInstance().LogWarning("Material '" + materialName + "': " + warning);
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Material '%s': %s", materialName.c_str(),
+                               warning.c_str());
             }
         }
     }
@@ -382,11 +382,11 @@ int MaterialSystem::Console_ValidateMaterials()
 
     if (invalidCount == 0)
     {
-        Spark::SimpleConsole::GetInstance().LogSuccess(report.str());
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "%s", report.str().c_str());
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().LogWarning(report.str());
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "%s", report.str().c_str());
     }
 
     return validCount;
@@ -513,18 +513,19 @@ bool MaterialSystem::Console_ExportMaterial(const std::string& materialName, con
     auto material = GetMaterial(materialName);
     if (!material || material == m_defaultMaterial)
     {
-        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Material not found: %s", materialName.c_str());
         return false;
     }
 
     if (material->SaveToFile(filePath))
     {
-        Spark::SimpleConsole::GetInstance().LogSuccess("Exported material '" + materialName + "' to: " + filePath);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Exported material '%s' to: %s", materialName.c_str(),
+                       filePath.c_str());
         return true;
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to export material: " + materialName);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to export material: %s", materialName.c_str());
         return false;
     }
 }
@@ -533,19 +534,19 @@ bool MaterialSystem::Console_ImportMaterial(const std::string& filePath)
 {
     if (!std::filesystem::exists(filePath))
     {
-        Spark::SimpleConsole::GetInstance().LogError("File not found: " + filePath);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "File not found: %s", filePath.c_str());
         return false;
     }
 
     auto material = LoadMaterial(filePath);
     if (material && material != m_errorMaterial)
     {
-        Spark::SimpleConsole::GetInstance().LogSuccess("Imported material from: " + filePath);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Imported material from: %s", filePath.c_str());
         return true;
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to import material from: " + filePath);
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to import material from: %s", filePath.c_str());
         return false;
     }
 }

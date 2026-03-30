@@ -4,14 +4,13 @@
  */
 
 #include "MMOInventorySystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -22,8 +21,8 @@ namespace MMO
         RegisterDefaultItems();
         RegisterDefaultLootTables();
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[MMO] Inventory system initialized (" + std::to_string(m_items.size()) + " items)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Inventory system initialized (%s items)",
+                       std::to_string(m_items.size()).c_str());
         return true;
     }
 

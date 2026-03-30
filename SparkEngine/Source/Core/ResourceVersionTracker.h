@@ -24,6 +24,7 @@ namespace Spark
     {
       public:
         /// @brief Get the singleton instance
+        [[deprecated("Use EngineContext::Get()->GetSystem<ResourceVersionTracker>() instead")]]
         static ResourceVersionTracker& GetInstance();
 
         /// @brief Register a resource and return its initial version (1)

@@ -140,6 +140,7 @@ namespace Spark::AI
     {
       public:
         /** @brief Get the singleton instance. */
+        [[deprecated("Use EngineContext::Get()->GetSystem<GroupAISystem>() instead")]]
         static GroupAISystem& GetInstance()
         {
             static GroupAISystem s;

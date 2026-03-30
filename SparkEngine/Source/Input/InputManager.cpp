@@ -4,7 +4,7 @@
 #include "InputManager.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
-#include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <windows.h>
 #include <windowsx.h> // GET_X_LPARAM, GET_Y_LPARAM
 #include <cstring>
@@ -30,13 +30,11 @@ InputManager::InputManager()
     m_recentInputEvents.reserve(100);
 
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager constructed (Windows)");
-    Spark::SimpleConsole::GetInstance().Log("InputManager constructed with console integration.", "INFO");
 }
 
 InputManager::~InputManager()
 {
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager shutting down");
-    Spark::SimpleConsole::GetInstance().Log("InputManager destructor called.", "INFO");
     if (m_mouseCaptured)
         CaptureMouse(false);
 
@@ -67,7 +65,6 @@ void InputManager::Initialize(HWND hwnd)
     m_mouseY = m_prevMouseY = center.y;
 
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager initialized (Windows)");
-    Spark::SimpleConsole::GetInstance().Log("InputManager initialized with console integration.", "SUCCESS");
 }
 
 void InputManager::Update()
@@ -75,8 +72,7 @@ void InputManager::Update()
     static bool firstFrame = true;
     if (firstFrame)
     {
-        Spark::SimpleConsole::GetInstance().Log("InputManager::Update - First frame started with console integration",
-                                                "INFO");
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager::Update - First frame started");
         firstFrame = false;
     }
 
@@ -248,7 +244,7 @@ void InputManager::CaptureMouse(bool capture)
             SetCapture(m_hwnd);
             ShowCursor(FALSE);
             m_mouseCaptured = true;
-            Spark::SimpleConsole::GetInstance().Log("Mouse captured.", "INFO");
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "Mouse captured");
         }
     }
     else
@@ -258,7 +254,7 @@ void InputManager::CaptureMouse(bool capture)
             ReleaseCapture();
             ShowCursor(TRUE);
             m_mouseCaptured = false;
-            Spark::SimpleConsole::GetInstance().Log("Mouse capture released.", "INFO");
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "Mouse capture released");
         }
     }
 }
@@ -274,12 +270,11 @@ void InputManager::Console_SetMouseSensitivity(float sensitivity)
     {
         m_mouseSensitivity = sensitivity;
         NotifyStateChange();
-        Spark::SimpleConsole::GetInstance().Log(
-            "Mouse sensitivity set to " + std::to_string(sensitivity) + " via console", "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "Mouse sensitivity set to %f via console", sensitivity);
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid mouse sensitivity. Must be between 0.1 and 10.0", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Input, "Invalid mouse sensitivity. Must be between 0.1 and 10.0");
     }
 }
 
@@ -290,12 +285,11 @@ void InputManager::Console_SetMouseDeadZone(float deadZone)
     {
         m_mouseDeadZone = deadZone;
         NotifyStateChange();
-        Spark::SimpleConsole::GetInstance().Log("Mouse dead zone set to " + std::to_string(deadZone) + " via console",
-                                                "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "Mouse dead zone set to %f via console", deadZone);
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid mouse dead zone. Must be between 0.0 and 10.0", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Input, "Invalid mouse dead zone. Must be between 0.0 and 10.0");
     }
 }
 
@@ -304,8 +298,7 @@ void InputManager::Console_SetMouseAcceleration(bool enabled)
     std::lock_guard<std::mutex> lock(m_inputMutex);
     m_mouseAcceleration = enabled;
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log(
-        "Mouse acceleration " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Mouse acceleration %s via console", enabled ? "enabled" : "disabled");
 }
 
 void InputManager::Console_SetInvertMouseY(bool enabled)
@@ -313,8 +306,7 @@ void InputManager::Console_SetInvertMouseY(bool enabled)
     std::lock_guard<std::mutex> lock(m_inputMutex);
     m_invertMouseY = enabled;
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log(
-        "Mouse Y inversion " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Mouse Y inversion %s via console", enabled ? "enabled" : "disabled");
 }
 
 void InputManager::Console_SetRawMouseInput(bool enabled)
@@ -322,8 +314,7 @@ void InputManager::Console_SetRawMouseInput(bool enabled)
     std::lock_guard<std::mutex> lock(m_inputMutex);
     m_rawMouseInput = enabled;
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log(
-        "Raw mouse input " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Raw mouse input %s via console", enabled ? "enabled" : "disabled");
 }
 
 void InputManager::Console_SetInputLogging(bool enabled)
@@ -335,8 +326,7 @@ void InputManager::Console_SetInputLogging(bool enabled)
         m_recentInputEvents.clear();
     }
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log(
-        "Input logging " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Input logging %s via console", enabled ? "enabled" : "disabled");
 }
 
 bool InputManager::Console_BindKey(const std::string& action, const std::string& keyName)
@@ -346,7 +336,7 @@ bool InputManager::Console_BindKey(const std::string& action, const std::string&
     int virtualKey = KeyNameToVirtualKey(keyName);
     if (virtualKey == 0)
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid key name: " + keyName, "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Input, "Invalid key name: %s", keyName.c_str());
         return false;
     }
 
@@ -364,8 +354,8 @@ bool InputManager::Console_BindKey(const std::string& action, const std::string&
     m_reverseBindings[virtualKey] = action;
 
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log("Key '" + keyName + "' bound to action '" + action + "' via console",
-                                            "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Key '%s' bound to action '%s' via console", keyName.c_str(),
+                   action.c_str());
     return true;
 }
 
@@ -379,11 +369,11 @@ void InputManager::Console_UnbindKey(const std::string& action)
         m_reverseBindings.erase(it->second);
         m_keyBindings.erase(it);
         NotifyStateChange();
-        Spark::SimpleConsole::GetInstance().Log("Action '" + action + "' unbound via console", "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "Action '%s' unbound via console", action.c_str());
     }
     else
     {
-        Spark::SimpleConsole::GetInstance().Log("Action '" + action + "' not found", "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Input, "Action '%s' not found", action.c_str());
     }
 }
 
@@ -418,7 +408,7 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
     int virtualKey = KeyNameToVirtualKey(keyName);
     if (virtualKey == 0)
     {
-        Spark::SimpleConsole::GetInstance().Log("Invalid key name: " + keyName, "ERROR");
+        SPARK_LOG_ERROR(Spark::LogCategory::Input, "Invalid key name: %s", keyName.c_str());
         return;
     }
 
@@ -437,7 +427,7 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
         {
             LogInputEvent(virtualKey, false);
         }
-        Spark::SimpleConsole::GetInstance().Log("Simulated single key press: " + keyName, "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "Simulated single key press: %s", keyName.c_str());
     }
     else
     {
@@ -465,11 +455,11 @@ void InputManager::Console_SimulateKeyPress(const std::string& keyName, int dura
                         LogInputEvent(virtualKey, false);
                     }
                 }
-                Spark::SimpleConsole::GetInstance().Log(
-                    "Timed key release: " + keyName + " after " + std::to_string(duration) + "ms", "SUCCESS");
+                SPARK_LOG_INFO(Spark::LogCategory::Input, "Timed key release: %s after %dms", keyName.c_str(),
+                               duration);
             });
-        Spark::SimpleConsole::GetInstance().Log(
-            "Simulated sustained key press: " + keyName + " (duration: " + std::to_string(duration) + "ms)", "SUCCESS");
+        SPARK_LOG_INFO(Spark::LogCategory::Input, "Simulated sustained key press: %s (duration: %dms)", keyName.c_str(),
+                       duration);
     }
 }
 
@@ -483,7 +473,7 @@ void InputManager::Console_ClearInputStates()
     ZeroMemory(m_prevMouseButtons, sizeof(m_prevMouseButtons));
     m_recentInputEvents.clear();
 
-    Spark::SimpleConsole::GetInstance().Log("All input states cleared via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "All input states cleared via console");
 }
 
 std::string InputManager::Console_GetRecentEvents(int count) const
@@ -578,7 +568,7 @@ void InputManager::Console_ApplySettings(const InputSettings& settings)
     }
 
     NotifyStateChange();
-    Spark::SimpleConsole::GetInstance().Log("Input settings applied via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Input settings applied via console");
 }
 
 void InputManager::Console_ResetToDefaults()
@@ -596,24 +586,24 @@ void InputManager::Console_ResetToDefaults()
         m_reverseBindings.clear();
     }
 
-    Spark::SimpleConsole::GetInstance().Log("Input settings reset to defaults via console", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Input settings reset to defaults via console");
 }
 
 void InputManager::Console_RegisterStateCallback(std::function<void()> callback)
 {
     std::lock_guard<std::mutex> lock(m_inputMutex);
     m_stateCallback = callback;
-    Spark::SimpleConsole::GetInstance().Log("Input state callback registered", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Input state callback registered");
 }
 
 void InputManager::Console_RefreshInput()
 {
-    Spark::SimpleConsole::GetInstance().Log("Input system refresh requested via console", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Input system refresh requested via console");
 
     // Force input state update
     Update();
 
-    Spark::SimpleConsole::GetInstance().Log("Input system refresh complete", "SUCCESS");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "Input system refresh complete");
 }
 
 // ============================================================================
@@ -796,7 +786,7 @@ InputManager::InputMetrics InputManager::GetMetricsThreadSafe() const
 #include "InputManager.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
-#include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <cstring>
 #include <cmath>
 #include <iostream>
@@ -838,7 +828,6 @@ void InputManager::Initialize(HWND hwnd)
     SPARK_TRACE_ENTER(Spark::LogCategory::Input);
     m_hwnd = hwnd;
     SPARK_LOG_INFO(Spark::LogCategory::Input, "InputManager initialized (Linux/SDL2 backend)");
-    Spark::SimpleConsole::GetInstance().Log("InputManager initialized (Linux/SDL2 backend).", "INFO");
 }
 
 void InputManager::Update()
@@ -959,7 +948,7 @@ void InputManager::CaptureMouse(bool capture)
     SDL_SetRelativeMouseMode(capture ? SDL_TRUE : SDL_FALSE);
 #endif
 
-    Spark::SimpleConsole::GetInstance().Log(capture ? "Mouse captured." : "Mouse capture released.", "INFO");
+    SPARK_LOG_INFO(Spark::LogCategory::Input, "%s", capture ? "Mouse captured" : "Mouse capture released");
 }
 
 void InputManager::UpdateKeyState(int key, bool isDown)

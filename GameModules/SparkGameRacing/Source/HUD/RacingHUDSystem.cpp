@@ -4,10 +4,9 @@
  */
 
 #include "RacingHUDSystem.h"
-#include "Utils/SparkConsole.h"
-
 #include <algorithm>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -24,8 +23,7 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Racing HUD] HUD system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing HUD] HUD system initialized");
         return true;
     }
 

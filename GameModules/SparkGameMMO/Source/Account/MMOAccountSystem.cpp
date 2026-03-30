@@ -4,8 +4,6 @@
  */
 
 #include "MMOAccountSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -15,6 +13,7 @@
 #include <functional>
 #include <random>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -22,7 +21,7 @@ namespace MMO
     bool MMOAccountSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Account system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Account system initialized");
         return true;
     }
 
@@ -134,8 +133,8 @@ namespace MMO
 
         result.success = true;
         result.accountId = id;
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Account registered: " + username + " (ID " +
-                                                    std::to_string(id) + ")");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Account registered: %s (ID %s)", username.c_str(),
+                       std::to_string(id).c_str());
         return result;
     }
 
@@ -249,7 +248,7 @@ namespace MMO
         result.accountId = account->accountId;
         result.sessionToken = token;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Login: " + username);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Login: %s", username.c_str());
         return result;
     }
 
@@ -263,7 +262,7 @@ namespace MMO
         if (acctIt != m_accounts.end())
             acctIt->second.totalPlayTimeHours += it->second.sessionDuration / 3600.0f;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Logout: " + it->second.username);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Logout: %s", it->second.username.c_str());
         m_sessions.erase(it);
     }
 
@@ -373,8 +372,8 @@ namespace MMO
             }
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Account banned: " + it->second.username + " (" + reason +
-                                                    ")");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Account banned: %s (%s)", it->second.username.c_str(),
+                       reason.c_str());
         return true;
     }
 

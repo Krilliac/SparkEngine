@@ -4,13 +4,12 @@
  */
 
 #include "RPGQuestSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace RPG
 {
@@ -20,8 +19,8 @@ namespace RPG
         m_context = context;
         RegisterDefaultQuests();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest system initialized (" +
-                                                    std::to_string(m_quests.size()) + " quests)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest system initialized (%s quests)",
+                       std::to_string(m_quests.size()).c_str());
         return true;
     }
 
@@ -173,7 +172,7 @@ namespace RPG
 
         charProgress[questId] = progress;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest accepted: " + def->name);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest accepted: %s", def->name.c_str());
         return true;
     }
 
@@ -192,7 +191,7 @@ namespace RPG
         questIt->second.state = QuestState::Failed;
 
         const auto* def = GetQuestDef(questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest abandoned: " + (def ? def->name : "?"));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest abandoned: %s", (def ? def->name : "?").c_str());
         return true;
     }
 
@@ -217,7 +216,8 @@ namespace RPG
 
                     if (obj.IsComplete())
                     {
-                        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Objective complete: " + obj.description);
+                        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Objective complete: %s",
+                                       obj.description.c_str());
                     }
                 }
             }
@@ -242,7 +242,7 @@ namespace RPG
         questIt->second.state = QuestState::Completed;
 
         const auto* def = GetQuestDef(questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest completed: " + (def ? def->name : "?"));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest completed: %s", (def ? def->name : "?").c_str());
         return true;
     }
 

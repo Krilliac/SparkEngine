@@ -5,8 +5,6 @@
 
 #include "MMOCharacterSystem.h"
 #include "Utils/ContainerUtils.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -14,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -23,9 +22,8 @@ namespace MMO
         m_context = context;
         RegisterDefaultRaces();
         RegisterDefaultClasses();
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character system initialized (" +
-                                                    std::to_string(m_races.size()) + " races, " +
-                                                    std::to_string(m_classes.size()) + " classes)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Character system initialized (%s races, %s classes)",
+                       std::to_string(m_races.size()).c_str(), std::to_string(m_classes.size()).c_str());
         return true;
     }
 
@@ -295,9 +293,8 @@ namespace MMO
         result.characterId = id;
 
         const auto* classDef = GetClass(request.classId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character created: " + request.name + " (" +
-                                                    (raceDef ? raceDef->name : "?") + " " +
-                                                    (classDef ? classDef->name : "?") + ")");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Character created: %s (%s %s)", request.name.c_str(),
+                       (raceDef ? raceDef->name : "?").c_str(), (classDef ? classDef->name : "?").c_str());
         return result;
     }
 
@@ -317,7 +314,7 @@ namespace MMO
         auto charIt = m_characters.find(characterId);
         if (charIt != m_characters.end())
         {
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character deleted: " + charIt->second.name);
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Character deleted: %s", charIt->second.name.c_str());
             m_characters.erase(charIt);
         }
         return true;

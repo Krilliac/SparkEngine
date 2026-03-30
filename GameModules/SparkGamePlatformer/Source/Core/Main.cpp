@@ -15,6 +15,7 @@
 #include "Checkpoint/PlatformerCheckpointSystem.h"
 #include "Camera/PlatformerCameraSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -68,14 +69,13 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Platformer] Loading Spark Platformer module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer] Loading Spark Platformer module...");
 
     // Initialize level system first (provides platform/spawn data to other systems)
     m_levelSystem = std::make_unique<Platformer::PlatformerLevelSystem>();
     if (!m_levelSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize level system");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Platformer] Failed to initialize level system");
         return false;
     }
 
@@ -83,7 +83,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_checkpointSystem = std::make_unique<Platformer::PlatformerCheckpointSystem>();
     if (!m_checkpointSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize checkpoint system");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Platformer] Failed to initialize checkpoint system");
         return false;
     }
 
@@ -91,7 +91,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_playerController = std::make_unique<Platformer::PlatformerPlayerController>();
     if (!m_playerController->Initialize(context, m_checkpointSystem.get()))
     {
-        console.LogError("[Platformer] Failed to initialize player controller");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Platformer] Failed to initialize player controller");
         return false;
     }
 
@@ -99,7 +99,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_collectibleSystem = std::make_unique<Platformer::PlatformerCollectibleSystem>();
     if (!m_collectibleSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize collectible system");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Platformer] Failed to initialize collectible system");
         return false;
     }
 
@@ -107,7 +107,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_hazardSystem = std::make_unique<Platformer::PlatformerHazardSystem>();
     if (!m_hazardSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize hazard system");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Platformer] Failed to initialize hazard system");
         return false;
     }
 
@@ -115,7 +115,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_cameraSystem = std::make_unique<Platformer::PlatformerCameraSystem>();
     if (!m_cameraSystem->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize camera system");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Platformer] Failed to initialize camera system");
         return false;
     }
 
@@ -123,18 +123,20 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<Platformer::PlatformerEngineSystems>();
     if (!m_engineSystems->Initialize(context))
     {
-        console.LogError("[Platformer] Failed to initialize engine systems");
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Platformer] Failed to initialize engine systems");
         return false;
     }
 
     RegisterConsoleCommands();
 
     m_initialized = true;
-    console.LogInfo("[Platformer] Spark Platformer module loaded successfully (7 subsystems)");
-    console.LogInfo("[Platformer] Levels: " + std::to_string(m_levelSystem->GetLevelCount()) +
-                    " | Collectibles: " + std::to_string(m_collectibleSystem->GetTotalCollectibleCount()) +
-                    " | Hazards: " + std::to_string(m_hazardSystem->GetHazardCount()) +
-                    " | Checkpoints: " + std::to_string(m_checkpointSystem->GetCheckpointCount()));
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer] Spark Platformer module loaded successfully (7 subsystems)");
+    SPARK_LOG_INFO(Spark::LogCategory::Game,
+                   "[Platformer] Levels: %s | Collectibles: %s | Hazards: %s | Checkpoints: %s",
+                   std::to_string(m_levelSystem->GetLevelCount()).c_str(),
+                   std::to_string(m_collectibleSystem->GetTotalCollectibleCount()).c_str(),
+                   std::to_string(m_hazardSystem->GetHazardCount()).c_str(),
+                   std::to_string(m_checkpointSystem->GetCheckpointCount()).c_str());
     return true;
 }
 
@@ -143,8 +145,7 @@ void SparkGamePlatformerModule::OnUnload()
     if (!m_initialized)
         return;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Platformer] Unloading Spark Platformer module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer] Unloading Spark Platformer module...");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -185,7 +186,7 @@ void SparkGamePlatformerModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
-    console.LogInfo("[Platformer] Spark Platformer module unloaded");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer] Spark Platformer module unloaded");
 }
 
 void SparkGamePlatformerModule::OnUpdate(float deltaTime)

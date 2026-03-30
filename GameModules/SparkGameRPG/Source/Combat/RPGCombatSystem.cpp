@@ -4,8 +4,6 @@
  */
 
 #include "RPGCombatSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -13,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include "Utils/LogMacros.h"
 
 namespace RPG
 {
@@ -27,7 +26,7 @@ namespace RPG
     bool RPGCombatSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Combat system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Combat system initialized");
         return true;
     }
 
@@ -66,7 +65,7 @@ namespace RPG
         uint32_t id = encounter.encounterId;
         m_encounters[id] = encounter;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Combat encounter " + std::to_string(id) + " started");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Combat encounter %s started", std::to_string(id).c_str());
         return id;
     }
 
@@ -76,8 +75,8 @@ namespace RPG
         if (it != m_encounters.end())
         {
             it->second.isActive = false;
-            Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Combat encounter " + std::to_string(encounterId) +
-                                                        " ended");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Combat encounter %s ended",
+                           std::to_string(encounterId).c_str());
         }
     }
 

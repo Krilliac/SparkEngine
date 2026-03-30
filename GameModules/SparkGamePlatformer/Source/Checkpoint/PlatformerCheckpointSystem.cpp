@@ -4,13 +4,12 @@
  */
 
 #include "PlatformerCheckpointSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace Platformer
 {
@@ -26,9 +25,8 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Platformer Checkpoint] System initialized with " + std::to_string(m_checkpoints.size()) +
-                        " checkpoints");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Checkpoint] System initialized with %s checkpoints",
+                       std::to_string(m_checkpoints.size()).c_str());
         return true;
     }
 
@@ -103,10 +101,9 @@ namespace Platformer
                 cp.animationTimer = 0.0f;
                 m_lastActivatedId = cp.id;
 
-                auto& console = Spark::SimpleConsole::GetInstance();
-                console.LogInfo("[Platformer Checkpoint] Checkpoint " + std::to_string(cp.id) + " activated at (" +
-                                std::to_string(static_cast<int>(cp.posX)) + ", " +
-                                std::to_string(static_cast<int>(cp.posY)) + ")");
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Checkpoint] Checkpoint %s activated at (%s, %s)",
+                               std::to_string(cp.id).c_str(), std::to_string(static_cast<int>(cp.posX)).c_str(),
+                               std::to_string(static_cast<int>(cp.posY)).c_str());
             }
         }
     }

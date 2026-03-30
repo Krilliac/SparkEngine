@@ -5,8 +5,6 @@
  */
 
 #include "MMOEngineSystems.h"
-#include "Utils/SparkConsole.h"
-
 // Engine subsystem headers (only include headers that compile from game module DLLs)
 #include "Graphics/WeatherSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
@@ -21,6 +19,7 @@
 // with IEngineContext.h forward declarations. Access through opaque pointers only.
 
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -32,8 +31,7 @@ namespace MMO
 
         m_context = context;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[MMO] Wiring engine subsystems...");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Wiring engine subsystems...");
 
         RegisterWeatherAndTimeOfDay();
         RegisterAbilities();
@@ -45,7 +43,7 @@ namespace MMO
         RegisterLocalization();
 
         m_initialized = true;
-        console.LogInfo("[MMO] Engine subsystems wired (8 integrations)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Engine subsystems wired (8 integrations)");
         return true;
     }
 
@@ -72,14 +70,14 @@ namespace MMO
         {
             // Server-authoritative weather: start with clear skies
             weather->SetWeather(Spark::WeatherType::Clear, 1.0f, 0.0f);
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Weather: clear skies (server-authoritative)");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Weather: clear skies (server-authoritative)");
         }
 
         if (auto* tod = m_context->GetTimeOfDay())
         {
             tod->SetTimeOfDay(8.0f);  // Start at 8:00 AM
             tod->SetTimeScale(60.0f); // 1 real second = 1 game minute
-            Spark::SimpleConsole::GetInstance().LogInfo("[MMO] TimeOfDay: 08:00, 60x time scale");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] TimeOfDay: 08:00, 60x time scale");
         }
     }
 
@@ -97,8 +95,8 @@ namespace MMO
         //   Mage:    Fireball (2s cast, 40m), Frost Nova (25s CD, AoE 10m)
         //   Healer:  Holy Light (2.5s cast, 40m), Mass Heal (30s CD, AoE 15m), Renew (HoT, 12s)
         //   Rogue:   Backstab (6s CD, 5m), Poison Blade (30% proc, 2s ICD)
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[MMO] Abilities: 7 abilities, 1 proc, 2 auras configured (Warrior/Mage/Healer/Rogue)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "[MMO] Abilities: 7 abilities, 1 proc, 2 auras configured (Warrior/Mage/Healer/Rogue)");
     }
 
     // =========================================================================
@@ -188,7 +186,7 @@ namespace MMO
 
         dialogue->RegisterTree("mmo_flight_master", std::move(flightTree));
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Dialogue: 2 NPC dialogue trees registered");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Dialogue: 2 NPC dialogue trees registered");
     }
 
     // =========================================================================
@@ -245,7 +243,7 @@ namespace MMO
         auto* bossEvents = bossIntro->AddEventTrack("BossEvents");
         bossEvents->AddCue({2.5f, "boss_aggro_enable", ""});
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Cinematic: 2 sequences (first_login, world_boss_spawn)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Cinematic: 2 sequences (first_login, world_boss_spawn)");
     }
 
     // =========================================================================
@@ -304,7 +302,7 @@ namespace MMO
         npcVendor->SetRoot(std::move(vendorRoot));
         ai->RegisterBehavior("mmo_npc_vendor", std::move(npcVendor));
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] AI: 3 behavior trees (mob_patrol, boss_phases, npc_vendor)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] AI: 3 behavior trees (mob_patrol, boss_phases, npc_vendor)");
     }
 
     // =========================================================================
@@ -320,7 +318,8 @@ namespace MMO
         //   States: idle, run, combat_idle, attack, cast, channel, die (7 states)
         //   Transitions: idle↔run, idle→combat_idle, combat↔attack/cast/channel (9 transitions)
         //   Mount SM: mount_idle, mount_run, mount_fly (3 states, 4 transitions)
-        Spark::SimpleConsole::GetInstance().LogInfo(
+        SPARK_LOG_INFO(
+            Spark::LogCategory::Game,
             "[MMO] Animation: class SM (7 states, 9 transitions), mount SM (3 states, 4 transitions) configured");
     }
 
@@ -338,9 +337,8 @@ namespace MMO
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
             [this](const Spark::EntityKilledEvent& e)
             {
-                Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Entity " + std::to_string(e.entityId) +
-                                                            " killed by " + std::to_string(e.killerId) +
-                                                            " — distributing loot to party");
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Entity %s killed by %s — distributing loot to party",
+                               std::to_string(e.entityId).c_str(), std::to_string(e.killerId).c_str());
 
                 // Publish loot distributed event
                 if (auto* bus = m_context->GetEventBus())
@@ -351,12 +349,12 @@ namespace MMO
         m_eventHandles.push_back(eventBus->Subscribe<Spark::WeatherChangedEvent>(
             [](const Spark::WeatherChangedEvent& e)
             {
-                Spark::SimpleConsole::GetInstance().LogInfo(
-                    "[MMO] Weather changed — syncing to all connected clients (intensity: " +
-                    std::to_string(e.intensity) + ")");
+                SPARK_LOG_INFO(Spark::LogCategory::Game,
+                               "[MMO] Weather changed — syncing to all connected clients (intensity: %s)",
+                               std::to_string(e.intensity).c_str());
             }));
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Events: 2 subscriptions (kill, weather)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Events: 2 subscriptions (kill, weather)");
     }
 
     // =========================================================================
@@ -376,7 +374,7 @@ namespace MMO
         loc->LoadLanguage("fr", "Data/Localization/mmo_fr.json");
         loc->SetCurrentLanguage("en");
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Localization: 2 languages configured (en, fr)");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Localization: 2 languages configured (en, fr)");
     }
 
     // =========================================================================

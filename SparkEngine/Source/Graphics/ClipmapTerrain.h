@@ -63,6 +63,7 @@ namespace Spark::Graphics
     {
       public:
         /// @brief Get the singleton instance
+        [[deprecated("Use EngineContext::Get()->GetSystem<ClipmapTerrain>() instead")]]
         static ClipmapTerrain& GetInstance();
 
         /**

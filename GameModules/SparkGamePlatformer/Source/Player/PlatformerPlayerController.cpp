@@ -5,14 +5,13 @@
 
 #include "PlatformerPlayerController.h"
 #include "Checkpoint/PlatformerCheckpointSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace Platformer
 {
@@ -33,8 +32,7 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Platformer Player] Player controller initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Player] Player controller initialized");
         return true;
     }
 
@@ -426,13 +424,12 @@ namespace Platformer
 
     void PlatformerPlayerController::UnlockAbility(PowerUpType type)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
 
         switch (type)
         {
         case PowerUpType::DoubleJump:
             m_abilities.doubleJump = true;
-            console.LogInfo("[Platformer Player] Unlocked: Double Jump");
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Platformer Player] Unlocked: Double Jump");
             break;
         case PowerUpType::SpeedBoost:
             // Speed boost is a temporary power-up, not a permanent unlock

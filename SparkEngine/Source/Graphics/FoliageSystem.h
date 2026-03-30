@@ -65,6 +65,7 @@ namespace Spark::Graphics
     class FoliageManager
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<FoliageManager>() instead")]]
         static FoliageManager& GetInstance()
         {
             static FoliageManager s;

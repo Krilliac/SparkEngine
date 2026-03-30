@@ -4,14 +4,13 @@
  */
 
 #include "MMOGuildSystem.h"
-#include "Utils/SparkConsole.h"
-
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -19,7 +18,7 @@ namespace MMO
     bool MMOGuildSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Guild system initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Guild system initialized");
         return true;
     }
 

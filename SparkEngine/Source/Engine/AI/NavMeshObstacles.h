@@ -173,6 +173,7 @@ namespace Spark::AI
          * @brief Access the global singleton instance.
          * @return Reference to the NavMeshObstacleManager.
          */
+        [[deprecated("Use EngineContext::Get()->GetSystem<NavMeshObstacleManager>() instead")]]
         static NavMeshObstacleManager& GetInstance();
 
         /**

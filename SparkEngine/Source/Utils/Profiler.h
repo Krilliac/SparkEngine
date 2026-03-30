@@ -125,6 +125,7 @@ class ScopedProfileTimer
 class Profiler
 {
   public:
+    [[deprecated("Use EngineContext::Get()->GetSystem<Profiler>() instead")]]
     static Profiler& GetInstance()
     {
         static Profiler instance;

@@ -29,19 +29,19 @@ namespace Spark
         /**
  * @brief Detect and return all available graphics backends on the system
  */
-        std::vector<GraphicsBackend> DetectAvailableBackends();
+        [[nodiscard]] std::vector<GraphicsBackend> DetectAvailableBackends();
 
         /**
  * @brief Get the recommended backend for the current platform
  */
-        GraphicsBackend GetRecommendedBackend();
+        [[nodiscard]] GraphicsBackend GetRecommendedBackend();
 
         /**
  * @brief Create an RHI device for the specified backend
  * @param backend Graphics API to use (Auto will pick the best available)
  * @return Unique pointer to the created device, or nullptr on failure
  */
-        std::unique_ptr<IRHIDevice> CreateDevice(GraphicsBackend backend = GraphicsBackend::Auto);
+        [[nodiscard]] std::unique_ptr<IRHIDevice> CreateDevice(GraphicsBackend backend = GraphicsBackend::Auto);
 
         /**
  * @brief Get a human-readable name for a graphics backend
@@ -98,12 +98,12 @@ namespace Spark
  * - GLSL -> native (for OpenGL)
  * - SPIR-V -> SPIR-V (passthrough for Vulkan)
  */
-        ShaderCompileResult CompileShader(const ShaderCompileOptions& options);
+        [[nodiscard]] ShaderCompileResult CompileShader(const ShaderCompileOptions& options);
 
         /**
  * @brief Load pre-compiled shader bytecode from file
  */
-        ShaderCompileResult LoadPrecompiledShader(const std::string& filePath);
+        [[nodiscard]] ShaderCompileResult LoadPrecompiledShader(const std::string& filePath);
 
         /**
  * @brief Save compiled shader bytecode to file
@@ -117,20 +117,20 @@ namespace Spark
         /**
  * @brief Cross-compile HLSL to GLSL
  */
-        std::string CrossCompileHLSLtoGLSL(const std::string& hlslSource, RHIShaderStage stage,
-                                           const std::string& entryPoint = "main");
+        [[nodiscard]] std::string CrossCompileHLSLtoGLSL(const std::string& hlslSource, RHIShaderStage stage,
+                                                         const std::string& entryPoint = "main");
 
         /**
  * @brief Cross-compile HLSL to SPIR-V
  */
-        std::vector<uint8_t> CrossCompileHLSLtoSPIRV(const std::string& hlslSource, RHIShaderStage stage,
-                                                     const std::string& entryPoint = "main");
+        [[nodiscard]] std::vector<uint8_t> CrossCompileHLSLtoSPIRV(const std::string& hlslSource, RHIShaderStage stage,
+                                                                   const std::string& entryPoint = "main");
 
         /**
  * @brief Compile GLSL to SPIR-V using glslang
  */
-        std::vector<uint8_t> CompileGLSLtoSPIRV(const std::string& glslSource, RHIShaderStage stage,
-                                                const std::string& entryPoint = "main");
+        [[nodiscard]] std::vector<uint8_t> CompileGLSLtoSPIRV(const std::string& glslSource, RHIShaderStage stage,
+                                                              const std::string& entryPoint = "main");
 
         // ============================================================================
         // SHADER REFLECTION
@@ -180,7 +180,7 @@ namespace Spark
         /**
  * @brief Reflect SPIR-V shader to get binding information
  */
-        ShaderReflection ReflectSPIRV(const std::vector<uint8_t>& spirvCode);
+        [[nodiscard]] ShaderReflection ReflectSPIRV(const std::vector<uint8_t>& spirvCode);
 
         // ============================================================================
         // UTILITY FUNCTIONS

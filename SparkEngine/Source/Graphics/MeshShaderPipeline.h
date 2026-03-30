@@ -87,6 +87,7 @@ namespace Spark::Graphics
     class MeshShaderPipeline
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<MeshShaderPipeline>() instead")]]
         static MeshShaderPipeline& GetInstance()
         {
             static MeshShaderPipeline instance;

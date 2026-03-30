@@ -124,6 +124,7 @@ namespace Spark::Graphics
     class GPUSkinning
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<GPUSkinning>() instead")]]
         static GPUSkinning& GetInstance();
 
         /**

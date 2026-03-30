@@ -70,6 +70,7 @@ namespace Spark::AI
     class CoverSystem
     {
       public:
+        [[deprecated("Use EngineContext::Get()->GetSystem<CoverSystem>() instead")]]
         static CoverSystem& GetInstance()
         {
             static CoverSystem s;

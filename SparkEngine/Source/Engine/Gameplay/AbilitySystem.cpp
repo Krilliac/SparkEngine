@@ -5,7 +5,7 @@
 
 #include "AbilitySystem.h"
 #include "../../Utils/DeferredDeletion.h"
-#include "../../Utils/SparkConsole.h"
+#include "../../Utils/LogMacros.h"
 #include "../ECS/Components/GameplayComponents.h"
 #include "../Events/EventSystem.h"
 
@@ -42,7 +42,7 @@ namespace Spark::Gameplay
         m_activeAuras.clear();
         m_cooldowns.clear();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[AbilitySystem] Initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[AbilitySystem] Initialized");
     }
 
     void AbilitySystem::Shutdown()
@@ -52,7 +52,7 @@ namespace Spark::Gameplay
         m_cooldowns.clear();
         m_eventBus = nullptr;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[AbilitySystem] Shut down");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[AbilitySystem] Shut down");
     }
 
     // ============================================================================
@@ -63,7 +63,7 @@ namespace Spark::Gameplay
     {
         if (def.id == 0)
         {
-            Spark::SimpleConsole::GetInstance().LogWarning("[AbilitySystem] Cannot register ability with id 0");
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[AbilitySystem] Cannot register ability with id 0");
             return;
         }
         m_abilities[def.id] = def;
@@ -73,7 +73,7 @@ namespace Spark::Gameplay
     {
         if (def.id == 0)
         {
-            Spark::SimpleConsole::GetInstance().LogWarning("[AbilitySystem] Cannot register aura with id 0");
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[AbilitySystem] Cannot register aura with id 0");
             return;
         }
         m_auras[def.id] = def;
@@ -105,8 +105,7 @@ namespace Spark::Gameplay
         const AbilityDefinition* def = GetAbilityDef(abilityId);
         if (!def)
         {
-            Spark::SimpleConsole::GetInstance().LogWarning("[AbilitySystem] Unknown ability id " +
-                                                           std::to_string(abilityId));
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[AbilitySystem] Unknown ability id %u", abilityId);
             return false;
         }
 
