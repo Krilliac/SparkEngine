@@ -176,6 +176,7 @@ namespace Spark
         if (zoneIndex != state.activeZoneIndex)
         {
             state.activeZoneIndex = zoneIndex;
+            state.startGravity = state.currentGravity;
             state.targetGravity = targetGravity;
             state.transitionProgress = 0.0f;
             state.inZone = (zoneIndex >= 0);
@@ -190,11 +191,11 @@ namespace Spark
 
         state.transitionProgress = std::min(1.0f, state.transitionProgress + transitionSpeed * dt);
 
-        // Lerp gravity
+        // Lerp gravity from start to target using absolute progress
         float t = state.transitionProgress;
-        state.currentGravity.x = state.currentGravity.x + (state.targetGravity.x - state.currentGravity.x) * t;
-        state.currentGravity.y = state.currentGravity.y + (state.targetGravity.y - state.currentGravity.y) * t;
-        state.currentGravity.z = state.currentGravity.z + (state.targetGravity.z - state.currentGravity.z) * t;
+        state.currentGravity.x = state.startGravity.x + (state.targetGravity.x - state.startGravity.x) * t;
+        state.currentGravity.y = state.startGravity.y + (state.targetGravity.y - state.startGravity.y) * t;
+        state.currentGravity.z = state.startGravity.z + (state.targetGravity.z - state.startGravity.z) * t;
 
         return state;
     }

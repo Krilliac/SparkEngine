@@ -74,6 +74,7 @@ namespace Spark
     struct GravityState
     {
         XMFLOAT3 currentGravity = {0, -20.0f, 0}; ///< Current effective gravity
+        XMFLOAT3 startGravity = {0, -20.0f, 0};   ///< Gravity at start of transition (for correct lerp)
         XMFLOAT3 targetGravity = {0, -20.0f, 0};  ///< Target gravity (for transitions)
         int activeZoneIndex = -1;                 ///< Currently active zone (-1 = world default)
         float transitionProgress = 1.0f;          ///< 0 = start transition, 1 = complete
