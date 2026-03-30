@@ -220,6 +220,7 @@ add_executable(SparkTests
     TestGPUClusterCulling.cpp
     TestDirectStorageLoader.cpp
     TestMeshShaderPipeline.cpp
+    TestSparkPak.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"

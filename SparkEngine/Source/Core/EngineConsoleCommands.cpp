@@ -16,6 +16,7 @@
 #include "Audio/AudioEngine.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
+#include "Engine/Modding/VirtualFileSystem.h"
 #include "Physics/PhysicsSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/MemoryMonitor.h"
@@ -915,6 +916,37 @@ namespace Spark
     }
 
     // ============================================================================
+    // Pak / VFS commands
+    // ============================================================================
+
+    static void RegisterPakCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "pak_status", [](const std::vector<std::string>&) -> std::string
+            { return VirtualFileSystem::GetInstance().Console_GetStatus(); },
+            "Show VFS mount points and SparkPak archives", "Assets");
+
+        console.RegisterCommand(
+            "pak_list",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                auto& vfs = VirtualFileSystem::GetInstance();
+                std::string dir = args.empty() ? "" : args[0];
+                std::string ext = args.size() > 1 ? args[1] : "";
+                auto files = vfs.ListFiles(dir, ext);
+                std::stringstream ss;
+                ss << files.size() << " file(s)";
+                if (!dir.empty())
+                    ss << " in '" << dir << "'";
+                ss << ":\n";
+                for (const auto& f : files)
+                    ss << "  " << f << "\n";
+                return ss.str();
+            },
+            "List files in VFS [directory] [.ext]", "Assets");
+    }
+
+    // ============================================================================
     // Public API — delegates to per-subsystem registrations
     // ============================================================================
 
@@ -932,6 +964,7 @@ namespace Spark
         RegisterHotReloadCommands(console, hotReload);
         RegisterTimeOfDayCommands(console);
         RegisterMemoryMonitorCommands(console);
+        RegisterPakCommands(console);
         RegisterDiagnosticCommands(console);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine console commands registered successfully");
     }

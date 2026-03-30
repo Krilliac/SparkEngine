@@ -294,4 +294,75 @@ pipeline.EnableHotReloading(true);
 pipeline.CheckForChangedAssets();  // Called each frame in editor
 ```
 
+---
+
+## SparkPak Archive Format (.spk)
+
+SparkPak is an MPQ-inspired binary archive format for bundling assets into single files. Archives are optional — the engine loads loose files by default and mounts .spk archives on top via the [VirtualFileSystem](Mod-System).
+
+**Source:** `SparkEngine/Source/Core/SparkPak.h`, `SparkEngine/Source/Core/SparkPakWriter.h`, `SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h`
+
+### File Layout
+
+```
+[Header 32 bytes]  [File data blobs...]  [Compressed TOC at end]
+```
+
+| Field | Size | Description |
+|-------|------|-------------|
+| Magic | 4B | `"SPK1"` (0x314B5053 little-endian) |
+| Version | 4B | Format version (currently 1) |
+| FileCount | 4B | Number of entries |
+| Reserved | 4B | — |
+| TOCOffset | 8B | Byte offset of compressed table of contents |
+| TOCSize | 4B | Compressed TOC size |
+| TOCRawSize | 4B | Uncompressed TOC size |
+
+### TOC Entry (per file)
+
+| Field | Size | Description |
+|-------|------|-------------|
+| PathHash | 8B | FNV-1a 64-bit hash (matches `AssetHandle`) |
+| DataOffset | 8B | Byte offset of file data in archive |
+| CompressedSize | 4B | Size of stored data |
+| OriginalSize | 4B | Uncompressed size |
+| Compression | 1B | 0 = stored, 1 = deflate |
+| PathLength | 2B | Length of path string |
+| Path | var | Virtual path (for listing/debugging) |
+
+### Features
+
+- **O(1) hash lookup** using FNV-1a (same hash as `AssetHandle`)
+- **Per-file deflate compression** via miniz (skipped when savings < 5%)
+- **TOC at end of file** (like ZIP central directory) — streaming-friendly
+- **Priority layering** via VFS — patch archives override base archives
+- **Auto-mount** — `.spk` files in `Data/` directory are mounted at startup
+
+### Usage
+
+```cpp
+// Writing an archive
+Spark::SparkPakWriter writer;
+writer.AddDirectory("Assets/", "");
+writer.Finalize("Data/base.spk");
+
+// Reading directly
+Spark::SparkPakReader reader;
+reader.Open("Data/base.spk");
+auto data = reader.ReadFile("textures/brick.png");
+
+// Via VFS (automatic after mounting)
+auto& vfs = Spark::VirtualFileSystem::GetInstance();
+vfs.Mount("base", std::make_unique<Spark::ArchiveResourceProvider>("Data/base.spk"),
+          Spark::ENGINE_PRIORITY);
+auto data = vfs.ReadFile("textures/brick.png");
+```
+
+### Console Commands
+
+| Command | Description |
+|---------|-------------|
+| `pak_status` | Show all VFS mount points and mounted archives |
+| `pak_list [dir] [.ext]` | List files in VFS, optionally filtered |
+
 See [Asset Pipeline](Asset-Pipeline) for the full pipeline architecture.
