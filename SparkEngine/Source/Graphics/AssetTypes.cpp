@@ -300,7 +300,7 @@ void TextureAsset::Unload()
 
 size_t TextureAsset::GetMemoryUsage() const
 {
-    return m_width * m_height * 4; // Assuming 4 bytes per pixel
+    return static_cast<size_t>(m_width) * m_height * 4; // Assuming 4 bytes per pixel
 }
 
 // ============================================================================

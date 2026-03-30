@@ -106,39 +106,21 @@ jobs:
         ./bin/SparkTests --output-file asan-ubsan-lsan-results.txt 2>&1 | tee asan-console.txt
         cat asan-console.txt >> asan-ubsan-lsan-results.txt || true
 
-    - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-asan" \
+          error-summary.json \
+          cmake-build.log build/asan-console.txt
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          let body = `## :x: build-linux-asan failed\n\n`;
-
-          for (const [label, file] of [
-            ['Build Output', 'cmake-build.log'],
-            ['Sanitizer Output', 'build/asan-console.txt']
-          ]) {
-            try {
-              const log = fs.readFileSync(file, 'utf8');
-              const lines = log.split('\n');
-              const issues = lines.filter(l =>
-                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error|ERROR:|SUMMARY:|LeakSanitizer|AddressSanitizer|UndefinedBehavior/i.test(l)
-              );
-              if (issues.length > 0) {
-                const snippet = issues.slice(-80).join('\n');
-                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
-              }
-            } catch (e) { /* file doesn't exist */ }
-          }
-
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-linux-asan
+        path: error-summary.json
+        retention-days: 1
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
@@ -196,39 +178,21 @@ jobs:
         ./bin/SparkTests --output-file tsan-results.txt 2>&1 | tee tsan-console.txt
         cat tsan-console.txt >> tsan-results.txt || true
 
-    - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-tsan" \
+          error-summary.json \
+          cmake-build.log build/tsan-console.txt
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          let body = `## :x: build-linux-tsan failed\n\n`;
-
-          for (const [label, file] of [
-            ['Build Output', 'cmake-build.log'],
-            ['Sanitizer Output', 'build/tsan-console.txt']
-          ]) {
-            try {
-              const log = fs.readFileSync(file, 'utf8');
-              const lines = log.split('\n');
-              const issues = lines.filter(l =>
-                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error|WARNING:|ThreadSanitizer|data race/i.test(l)
-              );
-              if (issues.length > 0) {
-                const snippet = issues.slice(-80).join('\n');
-                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
-              }
-            } catch (e) { /* file doesn't exist */ }
-          }
-
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-linux-tsan
+        path: error-summary.json
+        retention-days: 1
 
     - name: Upload TSan report
       if: always()
@@ -285,30 +249,21 @@ jobs:
     - name: Build (SparkTests only)
       run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
 
-    - name: Report build errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-msan" \
+          error-summary.json \
+          cmake-build.log
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          let body = `## :x: build-linux-msan failed\n\n`;
-          try {
-            const log = fs.readFileSync('cmake-build.log', 'utf8');
-            const issues = log.split('\n').filter(l =>
-              /error[:\s]|fatal error/i.test(l)
-            );
-            if (issues.length > 0) {
-              body += `### Build Output\n\`\`\`\n${issues.slice(-80).join('\n').slice(-30000)}\n\`\`\`\n`;
-            }
-          } catch (e) {}
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-linux-msan
+        path: error-summary.json
+        retention-days: 1
 
     - name: Run Tests under MSan
       env:
@@ -357,40 +312,22 @@ jobs:
       if: matrix.config == 'Release'
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure 2>&1 | tee test-results.log
 
-    - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      shell: bash
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-windows-vs2022-${{ matrix.config }}" \
+          error-summary.json \
+          cmake-configure.log cmake-build.log test-results.log
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          let body = `## :x: build-windows-vs2022 (${{ matrix.config }}) failed\n\n`;
-
-          for (const [label, file] of [
-            ['CMake Configure', 'cmake-configure.log'],
-            ['Build Output', 'cmake-build.log'],
-            ['Test Results', 'test-results.log']
-          ]) {
-            try {
-              const log = fs.readFileSync(file, 'utf8');
-              const lines = log.split('\n');
-              const issues = lines.filter(l =>
-                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
-              );
-              if (issues.length > 0) {
-                const snippet = issues.slice(-80).join('\n');
-                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
-              }
-            } catch (e) { /* file doesn't exist */ }
-          }
-
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-windows-vs2022-${{ matrix.config }}
+        path: error-summary.json
+        retention-days: 1
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -513,42 +450,21 @@ jobs:
     - name: Run Tests
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
-    - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-gcc-${{ matrix.config }}" \
+          error-summary.json \
+          cmake-configure.log cmake-build.log test-results.log
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          const maxLen = 30000;
-          let body = `## :x: build-linux-gcc (${{ matrix.config }}) failed\n\n`;
-
-          for (const [label, file] of [
-            ['CMake Configure', 'cmake-configure.log'],
-            ['Build Output', 'cmake-build.log'],
-            ['Test Results', 'test-results.log']
-          ]) {
-            try {
-              const log = fs.readFileSync(file, 'utf8');
-              // Extract errors and warnings
-              const lines = log.split('\n');
-              const issues = lines.filter(l =>
-                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
-              );
-              if (issues.length > 0) {
-                const snippet = issues.slice(-80).join('\n');
-                body += `### ${label}\n\`\`\`\n${snippet.slice(-maxLen)}\n\`\`\`\n\n`;
-              }
-            } catch (e) { /* file doesn't exist — step didn't run */ }
-          }
-
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-linux-gcc-${{ matrix.config }}
+        path: error-summary.json
+        retention-days: 1
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -610,40 +526,21 @@ jobs:
     - name: Run Tests
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
-    - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-clang-${{ matrix.config }}" \
+          error-summary.json \
+          cmake-configure.log cmake-build.log test-results.log
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          let body = `## :x: build-linux-clang (${{ matrix.config }}) failed\n\n`;
-
-          for (const [label, file] of [
-            ['CMake Configure', 'cmake-configure.log'],
-            ['Build Output', 'cmake-build.log'],
-            ['Test Results', 'test-results.log']
-          ]) {
-            try {
-              const log = fs.readFileSync(file, 'utf8');
-              const lines = log.split('\n');
-              const issues = lines.filter(l =>
-                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
-              );
-              if (issues.length > 0) {
-                const snippet = issues.slice(-80).join('\n');
-                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
-              }
-            } catch (e) { /* file doesn't exist */ }
-          }
-
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-linux-clang-${{ matrix.config }}
+        path: error-summary.json
+        retention-days: 1
 
     - name: Package build output
       if: matrix.config == 'Release'
@@ -721,41 +618,21 @@ jobs:
           true
         }
 
-    - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-mingw-wine" \
+          error-summary.json \
+          cmake-configure.log cmake-build.log wine-test-results.txt
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          let body = `## :warning: build-linux-mingw-wine failed\n\n`;
-          body += `> This is a **non-blocking** job. MinGW cross-compilation + Wine testing is experimental.\n\n`;
-
-          for (const [label, file] of [
-            ['CMake Configure', 'cmake-configure.log'],
-            ['Build Output', 'cmake-build.log'],
-            ['Wine Test Results', 'wine-test-results.txt']
-          ]) {
-            try {
-              const log = fs.readFileSync(file, 'utf8');
-              const lines = log.split('\n');
-              const issues = lines.filter(l =>
-                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
-              );
-              if (issues.length > 0) {
-                const snippet = issues.slice(-40).join('\n');
-                body += `### ${label}\n\`\`\`\n${snippet.slice(-20000)}\n\`\`\`\n\n`;
-              }
-            } catch (e) { /* file doesn't exist */ }
-          }
-
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-linux-mingw-wine
+        path: error-summary.json
+        retention-days: 1
 
     - name: Upload test results
       if: always()
@@ -802,41 +679,21 @@ jobs:
       if: matrix.config == 'Release'
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
-    - name: Report errors to PR
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-macos-${{ matrix.config }}" \
+          error-summary.json \
+          cmake-configure.log cmake-build.log test-results.log
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
       with:
-        script: |
-          const fs = require('fs');
-          let body = `## :warning: build-macos (${{ matrix.config }}) failed\n\n`;
-          body += `> This is a **non-blocking** job. macOS support is experimental.\n\n`;
-
-          for (const [label, file] of [
-            ['CMake Configure', 'cmake-configure.log'],
-            ['Build Output', 'cmake-build.log'],
-            ['Test Results', 'test-results.log']
-          ]) {
-            try {
-              const log = fs.readFileSync(file, 'utf8');
-              const lines = log.split('\n');
-              const issues = lines.filter(l =>
-                /error[:\s]|warning[:\s]|FAILED|FAIL:|fatal error/i.test(l)
-              );
-              if (issues.length > 0) {
-                const snippet = issues.slice(-80).join('\n');
-                body += `### ${label}\n\`\`\`\n${snippet.slice(-30000)}\n\`\`\`\n\n`;
-              }
-            } catch (e) { /* file doesn't exist */ }
-          }
-
-          if (body.includes('```')) {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body.slice(0, 65000)
-            });
-          }
+        name: ci-errors-macos-${{ matrix.config }}
+        path: error-summary.json
+        retention-days: 1
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
@@ -939,6 +796,49 @@ jobs:
           find SparkEngine/Source -name '*.cpp' | head -30 | \
             xargs clang-tidy -p build --warnings-as-errors="" 2>&1 | tail -100
         continue-on-error: true
+
+  # ===========================================================================
+  # Consolidated CI Error Report — single deduplicated PR comment
+  # Runs after all build jobs, collects error summaries, and posts/updates
+  # one comment instead of spamming separate comments per job.
+  # ===========================================================================
+  report-ci-errors:
+    name: "CI Error Report"
+    if: always() && github.event_name == 'pull_request'
+    needs:
+      - check-format
+      - validate-prompts
+      - build-linux-asan
+      - build-linux-tsan
+      - build-linux-msan
+      - build-windows-vs2022
+      - build-linux-gcc
+      - build-linux-clang
+      - build-linux-mingw-wine
+      - build-macos
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all error summaries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: ci-errors-*
+          path: ci-error-summaries
+          merge-multiple: false
+        continue-on-error: true
+
+      - name: Post consolidated error report
+        uses: actions/github-script@v8
+        env:
+          ARTIFACT_DIR: ci-error-summaries
+        with:
+          script: |
+            const report = require('./.github/scripts/report-ci-errors.js');
+            await report({ github, context, core, glob, io });
 
   # ===========================================================================
   # Code Hygiene — TODO/FIXME/HACK comment count

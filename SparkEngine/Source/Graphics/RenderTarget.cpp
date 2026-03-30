@@ -345,10 +345,15 @@ bool RenderTarget::SaveBMP(const std::string& filename, unsigned char* data, uin
         uint32_t importantColors = 0;
     };
 
+    // BMP rows must be padded to 4-byte boundaries
+    uint32_t rowBytes = width * 3;
+    uint32_t rowPadding = (4 - (rowBytes % 4)) % 4;
+    uint32_t paddedRowBytes = rowBytes + rowPadding;
+
     BMPHeader header;
     header.width = width;
     header.height = height;
-    header.imageSize = width * height * 3;
+    header.imageSize = paddedRowBytes * height;
     header.fileSize = header.dataOffset + header.imageSize;
 
     FILE* file = fopen(filename.c_str(), "wb");
@@ -362,6 +367,7 @@ bool RenderTarget::SaveBMP(const std::string& filename, unsigned char* data, uin
     fwrite(&header, sizeof(BMPHeader), 1, file);
 
     // Write pixel data (convert RGBA to BGR)
+    unsigned char padding[3] = {0, 0, 0};
     for (uint32_t y = 0; y < height; y++)
     {
         unsigned char* row = data + (height - 1 - y) * pitch; // Flip Y
@@ -371,6 +377,8 @@ bool RenderTarget::SaveBMP(const std::string& filename, unsigned char* data, uin
             fwrite(bgr, 3, 1, file);
             row += 4; // Skip alpha
         }
+        if (rowPadding > 0)
+            fwrite(padding, rowPadding, 1, file);
     }
 
     return true;

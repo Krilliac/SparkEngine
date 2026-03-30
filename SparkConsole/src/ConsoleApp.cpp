@@ -1316,7 +1316,7 @@ std::string ConsoleApp::GetNextCommand()
 {
     std::lock_guard<std::mutex> lock(m_historyMutex);
 
-    if (m_commandHistory.empty() || m_historyIndex >= m_commandHistory.size() - 1)
+    if (m_commandHistory.empty() || m_historyIndex + 1 >= m_commandHistory.size())
     {
         m_historyIndex = m_commandHistory.size();
         return "";

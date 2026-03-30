@@ -263,10 +263,13 @@ namespace Platformer
         if (!m_abilities.dash)
             return;
 
+        // Fixed timestep from FixedUpdate (avoid hardcoded 1/60)
+        constexpr float kFixedDt = 1.0f / 60.0f;
+
         // Active dash
         if (m_state == PlayerState::Dashing)
         {
-            m_dashTimer -= 1.0f / 60.0f; // Approximate fixed timestep
+            m_dashTimer -= kFixedDt;
             if (m_dashTimer <= 0.0f)
             {
                 m_velocity.x = m_facingDirection * m_moveSpeed * 0.5f;
@@ -278,7 +281,7 @@ namespace Platformer
 
         // Dash cooldown
         if (m_dashCooldownTimer > 0.0f)
-            m_dashCooldownTimer -= 1.0f / 60.0f;
+            m_dashCooldownTimer -= kFixedDt;
     }
 
     void PlatformerPlayerController::HandleGroundPound()

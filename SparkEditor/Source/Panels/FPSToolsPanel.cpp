@@ -113,7 +113,7 @@ namespace SparkEditor
         if (ImGui::Button(ICON_FA_TRASH " Remove") && m_selectedSpawn >= 0)
         {
             m_spawnPoints.erase(m_spawnPoints.begin() + m_selectedSpawn);
-            m_selectedSpawn = std::min(m_selectedSpawn, (int)m_spawnPoints.size() - 1);
+            m_selectedSpawn = m_spawnPoints.empty() ? -1 : std::min(m_selectedSpawn, (int)m_spawnPoints.size() - 1);
         }
         ImGui::Separator();
 

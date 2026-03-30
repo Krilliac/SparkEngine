@@ -213,7 +213,7 @@ namespace Spark
             XMFLOAT3 right = GetRight();
             pos.x += right.x * m_definition.dimensions.x * exitSide;
             pos.y += 1.0f; // Slightly above ground
-            pos.z += right.z * m_definition.dimensions.x * exitSide;
+            pos.z += right.z * m_definition.dimensions.z * exitSide;
         }
         return pos;
     }

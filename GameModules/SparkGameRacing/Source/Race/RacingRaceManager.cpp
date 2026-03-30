@@ -369,7 +369,10 @@ namespace Racing
             return;
 
         const char* stateNames[] = {"Countdown", "Racing", "Paused", "Finished", "DNF"};
-        ImGui::Text("State: %s", stateNames[static_cast<int>(m_state)]);
+        int stateIdx = static_cast<int>(m_state);
+        const char* stateName =
+            (stateIdx >= 0 && stateIdx < static_cast<int>(IM_ARRAYSIZE(stateNames))) ? stateNames[stateIdx] : "Unknown";
+        ImGui::Text("State: %s", stateName);
 
         if (m_state == RaceState::Countdown)
             ImGui::Text("Countdown: %.1f", m_countdownTimer);
