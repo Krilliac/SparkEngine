@@ -45,6 +45,8 @@ namespace Spark
         if (!game || !graphics)
             return;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Building arena geometry");
+
         // NOTE: Arena geometry is now defined in the scene file (Assets/Scenes/level1.scene)
         // as [Object] entries. The entire arena layout — floors, walls, cover, platforms,
         // ramps, and corridors — can be placed and edited in the SparkEditor without
@@ -63,6 +65,7 @@ namespace Spark
 
     void ArenaBuilder::BuildFloor(Game* game, GraphicsEngine* graphics)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Building arena floor geometry");
         auto* dev = graphics->GetDevice();
         auto* ctx = graphics->GetContext();
 
@@ -86,6 +89,7 @@ namespace Spark
 
     void ArenaBuilder::BuildWalls(Game* game, GraphicsEngine* graphics)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Building arena wall segments");
         (void)graphics;
 
         // North wall segments (with gaps for corridors)

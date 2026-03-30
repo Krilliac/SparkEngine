@@ -20,6 +20,7 @@
 #include "../CommandHistory.h"
 #include "Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -31,7 +32,7 @@ namespace SparkEditor
     bool HierarchyPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Hierarchy panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Hierarchy panel");
 
         // Create a default scene so the panel works immediately
         ResetToDefault();
@@ -105,6 +106,8 @@ namespace SparkEditor
             m_selectedSet.insert(objectID);
         }
         m_lastClickedObject = objectID;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Object selected: ID=%llu (total selected: %zu)",
+                        (unsigned long long)objectID, m_selectedObjects.size());
         NotifySelectionChanged();
     }
 
@@ -733,6 +736,8 @@ namespace SparkEditor
             "Create Object '" + name + "'"));
 
         SelectObject(newID);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created object '%s' (ID=%llu, parent=%llu)", name.c_str(),
+                       (unsigned long long)newID, (unsigned long long)parentID);
         NotifyObjectOperation("create", newID);
         return newID;
     }
@@ -790,6 +795,8 @@ namespace SparkEditor
             "Duplicate '" + original->name + "'"));
 
         SelectObject(newID);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Duplicated object '%s' as ID=%llu", original->name.c_str(),
+                       (unsigned long long)newID);
         NotifyObjectOperation("duplicate", newID);
         return newID;
     }
@@ -873,6 +880,8 @@ namespace SparkEditor
             },
             "Delete '" + savedObj.name + "'"));
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Deleted object '%s' (ID=%llu)", savedObj.name.c_str(),
+                       (unsigned long long)objectID);
         NotifyObjectOperation("delete", objectID);
     }
 
@@ -903,6 +912,8 @@ namespace SparkEditor
             },
             "Rename '" + oldName + "' to '" + newName + "'"));
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Renamed object ID=%llu: '%s' -> '%s'",
+                        (unsigned long long)objectID, oldName.c_str(), newName.c_str());
         NotifyObjectOperation("rename", objectID);
     }
 
@@ -1001,6 +1012,8 @@ namespace SparkEditor
             ExpandObject(newParentID);
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Reparented object ID=%llu: parent %llu -> %llu",
+                        (unsigned long long)objectID, (unsigned long long)oldParentID, (unsigned long long)newParentID);
         NotifyObjectOperation("reparent", objectID);
     }
 

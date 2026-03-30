@@ -5,6 +5,7 @@
 
 #include "MMOTradingSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -19,6 +20,7 @@ namespace MMO
     bool MMOTradingSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO trading system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Trading system initialized");
         return true;
     }
@@ -80,6 +82,8 @@ namespace MMO
         session.sideB.playerId = targetId;
         session.state = TradeState::Proposed;
         uint32_t id = session.tradeId;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Trade proposed: ID %u (player %u -> player %u)", id, initiatorId,
+                       targetId);
         m_trades[id] = std::move(session);
         return id;
     }
@@ -102,6 +106,7 @@ namespace MMO
             return false;
         if (trade->sideA.playerId != playerId && trade->sideB.playerId != playerId)
             return false;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Trade cancelled: ID %u by player %u", tradeId, playerId);
         trade->state = TradeState::Cancelled;
         m_trades.erase(tradeId);
         return true;
@@ -194,6 +199,7 @@ namespace MMO
         invB.currency -= trade->sideB.currency;
         invA.currency += trade->sideB.currency;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Trade completed: ID %u", tradeId);
         trade->state = TradeState::Completed;
         m_trades.erase(tradeId);
         return true;

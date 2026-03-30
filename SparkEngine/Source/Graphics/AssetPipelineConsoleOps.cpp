@@ -10,6 +10,7 @@
 
 #include "AssetPipeline.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <sstream>
 #include <filesystem>
 
@@ -61,18 +62,21 @@ std::string AssetPipeline::Console_GetAssetInfo(const std::string& path) const
 
 bool AssetPipeline::Console_LoadAsset(const std::string& path)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Console loading asset: %s", path.c_str());
     auto asset = LoadAsset(path);
     return asset != nullptr;
 }
 
 bool AssetPipeline::Console_UnloadAsset(const std::string& path)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Console unloading asset: %s", path.c_str());
     UnloadAsset(path);
     return true;
 }
 
 void AssetPipeline::Console_SetCacheSize(size_t maxMemoryMB)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Asset cache size set to %zu MB", maxMemoryMB);
     SetCacheSize(maxMemoryMB);
     Spark::SimpleConsole::GetInstance().LogSuccess("Asset cache size set to: " + std::to_string(maxMemoryMB) + " MB");
 }
@@ -137,6 +141,7 @@ int AssetPipeline::Console_ReloadAllAssets()
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "../Utils/LogMacros.h"
 #include <sstream>
 #include <filesystem>
 

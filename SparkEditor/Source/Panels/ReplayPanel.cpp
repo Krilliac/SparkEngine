@@ -5,6 +5,7 @@
 
 #include "ReplayPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 
@@ -15,7 +16,7 @@ namespace SparkEditor
 
     bool ReplayPanel::Initialize()
     {
-        std::cout << "Initializing Replay panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel initialized");
         return true;
     }
 
@@ -53,7 +54,7 @@ namespace SparkEditor
 
     void ReplayPanel::Shutdown()
     {
-        std::cout << "Shutting down Replay panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel shutting down");
     }
 
     void ReplayPanel::RenderTransportControls()
@@ -112,12 +113,18 @@ namespace SparkEditor
         {
             ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f), ICON_FA_CIRCLE " RECORDING");
             if (ImGui::Button(ICON_FA_STOP " Stop Recording"))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel: recording stopped");
                 m_isRecording = false;
+            }
         }
         else
         {
             if (ImGui::Button(ICON_FA_CIRCLE " Start Recording"))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "ReplayPanel: recording started");
                 m_isRecording = true;
+            }
         }
 
         ImGui::Separator();

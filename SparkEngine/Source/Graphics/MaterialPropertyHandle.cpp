@@ -4,6 +4,7 @@
  */
 
 #include "MaterialPropertyHandle.h"
+#include "../Utils/LogMacros.h"
 
 namespace Spark::Graphics
 {
@@ -14,8 +15,13 @@ namespace Spark::Graphics
         auto it = m_nameToHandle.find(name);
         if (it != m_nameToHandle.end())
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Property '%s' already registered, returning existing handle",
+                            name.c_str());
             return it->second;
         }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Registering property '%s' (type=%d, binding=%u, offset=%u)",
+                        name.c_str(), static_cast<int>(type), bindingIndex, offset);
 
         MaterialPropertyHandle handle;
         handle.encoded = (static_cast<uint32_t>(bindingIndex) & 0x3FF) | ((static_cast<uint32_t>(type) & 0x3F) << 10) |
@@ -32,6 +38,7 @@ namespace Spark::Graphics
         auto it = m_nameToHandle.find(name);
         if (it != m_nameToHandle.end())
             return it->second;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Property '%s' not found in registry", name.c_str());
         return MaterialPropertyHandle::Invalid();
     }
 

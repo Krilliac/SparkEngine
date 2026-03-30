@@ -6,6 +6,7 @@
  */
 
 #include "../Profiler/PerformanceProfiler.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
@@ -119,7 +120,7 @@ namespace SparkEditor
     bool PerformanceProfiler::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Performance Profiler panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Performance Profiler panel");
         m_isProfiling = true;
         return true;
     }
@@ -212,7 +213,7 @@ namespace SparkEditor
 
     void PerformanceProfiler::Shutdown()
     {
-        std::cout << "Shutting down Performance Profiler panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Performance Profiler panel");
         StopProfiling();
     }
 
@@ -224,13 +225,13 @@ namespace SparkEditor
     void PerformanceProfiler::StartProfiling()
     {
         m_isProfiling = true;
-        std::cout << "Started profiling session\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Started profiling session");
     }
 
     void PerformanceProfiler::StopProfiling()
     {
         m_isProfiling = false;
-        std::cout << "Stopped profiling session\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Stopped profiling session");
     }
 
     uint32_t PerformanceProfiler::BeginCPUSample(const std::string& name, const std::string& category)
@@ -422,11 +423,17 @@ namespace SparkEditor
 
     bool PerformanceProfiler::ExportProfilingData(const std::string& filePath, const std::string& format)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Exporting profiling data to '%s' (format=%s)", filePath.c_str(),
+                       format.c_str());
         try
         {
             std::ofstream file(filePath);
             if (!file.is_open())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to open file for profiling export: %s",
+                                filePath.c_str());
                 return false;
+            }
 
             if (format == "json")
             {

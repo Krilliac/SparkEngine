@@ -8,6 +8,7 @@
  */
 
 #include "AdaptiveProbeVolumes.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,11 +25,16 @@ namespace Spark::Graphics
         m_settings = settings;
         m_bricks.clear();
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "AdaptiveProbeVolumes initialized (streamingDist=%.1f, virtualOffsetDist=%.2f)",
+                       settings.streamingDistance, settings.virtualOffsetDistance);
         return true;
     }
 
     void AdaptiveProbeVolumes::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "AdaptiveProbeVolumes shutting down (%zu bricks)",
+                       m_bricks.size());
         m_bricks.clear();
         m_initialized = false;
     }
@@ -54,6 +60,8 @@ namespace Spark::Graphics
         brick.loaded = true;
 
         m_bricks[id] = std::move(brick);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "APV brick created at (%d,%d,%d) LOD=%d spacing=%.2f", gridX,
+                        gridY, gridZ, static_cast<int>(lod), spacing);
         return true;
     }
 
@@ -172,6 +180,12 @@ namespace Spark::Graphics
         for (const BrickID& id : toUnload)
         {
             m_bricks.erase(id);
+        }
+
+        if (!toUnload.empty())
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "APV streaming: unloaded %zu bricks, %zu remaining",
+                            toUnload.size(), m_bricks.size());
         }
     }
 

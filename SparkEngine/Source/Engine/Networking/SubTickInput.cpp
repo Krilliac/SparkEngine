@@ -5,6 +5,7 @@
 
 #include "SubTickInput.h"
 
+#include "../../Utils/LogMacros.h"
 #include <algorithm>
 #include <cmath>
 
@@ -24,6 +25,8 @@ namespace Spark::Net
         {
             recorded.sequenceNumber = ++m_nextSequence;
         }
+        SPARK_LOG_TRACE(Spark::LogCategory::Network, "RecordInput: seq=%u tickFraction=%.4f bufferSize=%zu",
+                        recorded.sequenceNumber, recorded.tickFraction, m_samples.size() + 1);
 
         // Clamp tickFraction to valid range [0, 1)
         recorded.tickFraction = std::clamp(recorded.tickFraction, 0.0f, 0.9999f);
@@ -55,6 +58,10 @@ namespace Spark::Net
 
     void SubTickInputBuffer::Clear()
     {
+        if (!m_samples.empty())
+        {
+            SPARK_LOG_TRACE(Spark::LogCategory::Network, "SubTickInputBuffer cleared (%zu samples)", m_samples.size());
+        }
         m_samples.clear();
     }
 
@@ -79,6 +86,9 @@ namespace Spark::Net
         {
             return;
         }
+
+        SPARK_LOG_TRACE(Spark::LogCategory::Network, "ProcessInputsForTick: %zu samples, tickDuration=%.4f",
+                        m_samples.size(), tickDuration);
 
         // Ensure tick duration is valid
         float safeDuration = std::max(tickDuration, 0.001f);

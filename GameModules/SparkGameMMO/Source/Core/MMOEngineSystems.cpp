@@ -6,6 +6,7 @@
 
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 // Engine subsystem headers (only include headers that compile from game module DLLs)
 #include "Graphics/WeatherSystem.h"
@@ -32,6 +33,7 @@ namespace MMO
 
         m_context = context;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO: Wiring engine subsystems");
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO] Wiring engine subsystems...");
 
@@ -45,6 +47,7 @@ namespace MMO
         RegisterLocalization();
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO: Engine subsystems wired (8 integrations)");
         console.LogInfo("[MMO] Engine subsystems wired (8 integrations)");
         return true;
     }

@@ -7,6 +7,7 @@
  */
 
 #include "PhysicsSystem.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
 #include <sstream>
 
@@ -16,6 +17,7 @@
 
 void PhysicsSystem::Console_EnableDebugDraw(bool enabled)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Physics debug draw %s", enabled ? "enabled" : "disabled");
     EnableDebugDraw(enabled);
     Spark::SimpleConsole::GetInstance().LogSuccess("Physics debug draw " +
                                                    std::string(enabled ? "enabled" : "disabled"));
@@ -23,12 +25,14 @@ void PhysicsSystem::Console_EnableDebugDraw(bool enabled)
 
 void PhysicsSystem::Console_PausePhysics(bool paused)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Physics simulation %s", paused ? "paused" : "resumed");
     m_paused = paused;
     Spark::SimpleConsole::GetInstance().LogSuccess("Physics simulation " + std::string(paused ? "paused" : "resumed"));
 }
 
 void PhysicsSystem::Console_SetTimeStep(float timeStep)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Physics time step changed to: %.6f", timeStep);
     SetTimeStep(timeStep);
     Spark::SimpleConsole::GetInstance().LogSuccess("Physics time step set to: " + std::to_string(timeStep));
 }
@@ -68,6 +72,8 @@ std::string PhysicsSystem::Console_Raycast(float originX, float originY, float o
 
 void PhysicsSystem::Console_Reset()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Physics, "Physics system reset (clearing %zu bodies, %zu constraints)",
+                   m_bodies.size(), m_constraints.size());
     RemoveAllBodies();
     m_constraints.clear();
     SetGravity({0.0f, -9.8f, 0.0f});
@@ -121,6 +127,16 @@ bool PhysicsSystem::Console_CreateBody(const std::string& name, const std::strin
     desc.mass = (desc.type == PhysicsBodyType::Static) ? 0.0f : 1.0f;
 
     auto body = CreateBody(desc);
+    if (body)
+    {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Console created body '%s' type=%s at (%.2f, %.2f, %.2f)",
+                        name.c_str(), type.c_str(), x, y, z);
+    }
+    else
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Physics, "Console failed to create body '%s' type=%s", name.c_str(),
+                        type.c_str());
+    }
     return body != nullptr;
 }
 
@@ -138,6 +154,7 @@ bool PhysicsSystem::Console_RemoveBody(const std::string& name)
 
 void PhysicsSystem::Console_SetGravity(float x, float y, float z)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Gravity changed to (%.2f, %.2f, %.2f)", x, y, z);
     SetGravity({x, y, z});
     Spark::SimpleConsole::GetInstance().LogSuccess("Gravity set to (" + std::to_string(x) + ", " + std::to_string(y) +
                                                    ", " + std::to_string(z) + ")");

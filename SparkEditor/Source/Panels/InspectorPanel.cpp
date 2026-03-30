@@ -14,6 +14,7 @@
 #include "../CommandHistory.h"
 #include "../../../SparkEngine/Source/Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
@@ -27,7 +28,7 @@ namespace SparkEditor
     bool InspectorPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Inspector panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Inspector panel");
         return true;
     }
 
@@ -111,10 +112,14 @@ namespace SparkEditor
             SceneObject* obj = m_scene->FindObject(objectID);
             if (obj)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspecting object '%s' (ID=%llu)", obj->name.c_str(),
+                                (unsigned long long)objectID);
                 m_inspectedObject = obj->name;
             }
             else
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Inspected object ID=%llu not found in scene",
+                               (unsigned long long)objectID);
                 m_inspectedObject.clear();
             }
         }
@@ -161,7 +166,13 @@ namespace SparkEditor
 
         // Check if already has this component
         if (HasComponent(type))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Object '%s' already has component type %d", obj->name.c_str(),
+                           static_cast<int>(type));
             return;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Adding component type %d to object '%s' (ID=%llu)",
+                       static_cast<int>(type), obj->name.c_str(), (unsigned long long)m_inspectedObjectID);
 
         const ObjectID capturedID = m_inspectedObjectID;
         SceneFile* capturedScene = m_scene;
@@ -420,6 +431,9 @@ namespace SparkEditor
         if (!HasComponent(type))
             return;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Removing component type %d from object ID=%llu",
+                       static_cast<int>(type), (unsigned long long)m_inspectedObjectID);
+
         const ObjectID capturedID = m_inspectedObjectID;
         SceneFile* capturedScene = m_scene;
 
@@ -584,6 +598,7 @@ namespace SparkEditor
                         },
                         "Rename '" + oldName + "' to '" + newName + "'"));
 
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: renamed object to '%s'", newName.c_str());
                     m_inspectedObject = newName;
                 }
                 else

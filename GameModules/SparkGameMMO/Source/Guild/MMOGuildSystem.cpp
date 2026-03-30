@@ -5,6 +5,7 @@
 
 #include "MMOGuildSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -19,6 +20,7 @@ namespace MMO
     bool MMOGuildSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO guild system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Guild system initialized");
         return true;
     }
@@ -84,6 +86,7 @@ namespace MMO
         guild.log.push_back(founderName + " founded the guild");
 
         uint32_t guildId = guild.id;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Guild created: %s [%s] (ID %u)", name.c_str(), tag.c_str(), guildId);
         m_guilds[guildId] = std::move(guild);
         return guildId;
     }
@@ -112,6 +115,7 @@ namespace MMO
         m.name = newMemberName;
         m.rank = GuildRank::Initiate;
         m.isOnline = true;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Guild member added: %s to guild %u", newMemberName.c_str(), guildId);
         guild->members.push_back(m);
         guild->log.push_back(newMemberName + " joined");
         return true;

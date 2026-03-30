@@ -3,9 +3,11 @@
 #include "Utils/Validate.h"
 #include <string>
 #include <iostream>
+#include "Utils/LogMacros.h"
 
 PyramidObject::PyramidObject(float size) : m_size(size)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "PyramidObject constructed (size=%.1f)", size);
     std::wcout << L"[INFO] PyramidObject constructed. size=" << size << std::endl;
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, size > 0.f, "Pyramid size must be positive");
     SetName("Pyramid_" + std::to_string(GetID()));

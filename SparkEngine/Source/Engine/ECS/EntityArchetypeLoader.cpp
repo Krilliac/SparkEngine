@@ -6,6 +6,7 @@
 #include "EntityArchetypeLoader.h"
 #include "Components/LightComponents.h"
 #include "../../Core/Reflection.h"
+#include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
 #include "../../Utils/StringUtils.h"
 
@@ -105,9 +106,12 @@ namespace Spark::ECS
 
     bool LoadArchetypeFromFile(const std::string& path)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "Loading archetype from file: %s", path.c_str());
+
         std::ifstream file(path);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::ECS, "Failed to open archetype file: %s", path.c_str());
             Spark::SimpleConsole::GetInstance().LogWarning("ArchetypeLoader: failed to open file: " + path);
             return false;
         }
@@ -144,11 +148,14 @@ namespace Spark::ECS
 
         if (archetype.name.empty())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::ECS, "Archetype file missing 'name' field: %s", path.c_str());
             Spark::SimpleConsole::GetInstance().LogWarning("ArchetypeLoader: file has no 'name' field: " + path);
             return false;
         }
 
         EntityArchetypeSystem::GetInstance().RegisterArchetype(archetype);
+        SPARK_LOG_INFO(Spark::LogCategory::ECS, "Registered archetype '%s' with %zu components", archetype.name.c_str(),
+                       archetype.components.size());
         Spark::SimpleConsole::GetInstance().LogSuccess("ArchetypeLoader: loaded archetype '" + archetype.name +
                                                        "' with " + std::to_string(archetype.components.size()) +
                                                        " components");
@@ -280,7 +287,11 @@ namespace Spark::ECS
 
         // Reflection path: add component via factory, then set fields by name
         if (!factory.IsRegistered(entry.typeName))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::ECS, "Component type '%s' not registered in factory",
+                           entry.typeName.c_str());
             return;
+        }
 
         factory.AddComponent(entry.typeName, &world, entityId);
 
@@ -314,11 +325,14 @@ namespace Spark::ECS
         const auto* archetype = EntityArchetypeSystem::GetInstance().GetArchetype(name);
         if (!archetype)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::ECS, "SpawnFromArchetype: archetype not found: %s", name.c_str());
             Spark::SimpleConsole::GetInstance().LogWarning("SpawnFromArchetype: archetype not found: " + name);
             return entt::null;
         }
 
         EntityID entity = world.CreateEntity(archetype->name);
+        SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "Spawned entity from archetype '%s' with %zu components", name.c_str(),
+                        archetype->components.size());
 
         for (const auto& comp : archetype->components)
         {

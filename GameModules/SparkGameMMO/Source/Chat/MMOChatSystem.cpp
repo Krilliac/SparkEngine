@@ -5,6 +5,7 @@
 
 #include "MMOChatSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -41,6 +42,7 @@ namespace MMO
 
         m_initialized = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO chat system initialized (4 channels)");
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO Chat] Chat system initialized (4 channels)");
         return true;
@@ -103,6 +105,7 @@ namespace MMO
         msg.timestamp = m_time;
         msg.targetAreaId = targetId;
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Chat message sent on channel %d", static_cast<int>(channel));
         m_history.push_back(msg);
         if (m_history.size() > MAX_HISTORY)
             m_history.pop_front();

@@ -11,6 +11,7 @@
  */
 
 #include "GPUOcclusionCulling.h"
+#include "Utils/LogMacros.h"
 
 #include <array>
 
@@ -97,6 +98,7 @@ namespace Spark::Graphics
         m_width = width;
         m_height = height;
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUOcclusionCuller initialized: %ux%u", width, height);
 
         // GPU: create HiZ UAV texture, visibility buffer, indirect draw args
     }
@@ -109,6 +111,7 @@ namespace Spark::Graphics
     void GPUOcclusionCuller::BuildHiZ(const float* depthBuffer, uint32_t w, uint32_t h)
     {
         m_hiZ.Build(depthBuffer, w, h);
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "HiZ pyramid built: %ux%u, %d mip levels", w, h, m_hiZ.mipCount);
 
         // GPU: dispatch compute shader for each mip level
         // Each mip reads the previous mip and writes max of 2x2 blocks
@@ -234,6 +237,8 @@ namespace Spark::Graphics
             }
         }
 
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "OcclusionCull: %zu/%zu objects visible", visible.size(),
+                        objects.size());
         return visible;
     }
 

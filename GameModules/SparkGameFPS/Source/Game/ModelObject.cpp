@@ -10,9 +10,11 @@
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include <iostream>
+#include "Utils/LogMacros.h"
 
 ModelObject::ModelObject(const std::wstring& modelPath) : m_modelPath(modelPath), m_model(std::make_unique<Model>())
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "ModelObject constructed");
     SetName("ModelObject");
 }
 
@@ -28,6 +30,7 @@ HRESULT ModelObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* conte
     {
         // Convert wstring to string for logging
         std::string modelPathStr(m_modelPath.begin(), m_modelPath.end());
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to load model");
         std::wcout << L"Warning: Failed to load model: " << m_modelPath << std::endl;
         return hr;
     }

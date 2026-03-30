@@ -25,6 +25,7 @@
 #include "UI/MMOLoginUI.h"
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -77,6 +78,8 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         return false;
 
     m_context = context;
+
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Loading SparkGameMMO module");
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Loading Spark MMO module...");
@@ -223,6 +226,7 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
 #endif
 
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameMMO module loaded: 17 subsystems initialized");
     console.LogInfo("[MMO] Spark MMO module loaded successfully (17 subsystems)");
     console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
     console.LogInfo("[MMO] Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
@@ -239,6 +243,7 @@ void SparkGameMMOModule::OnUnload()
     if (!m_initialized)
         return;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Unloading SparkGameMMO module");
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Unloading Spark MMO module...");
 
@@ -343,6 +348,7 @@ void SparkGameMMOModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameMMO module unloaded");
     console.LogInfo("[MMO] Spark MMO module unloaded");
 }
 

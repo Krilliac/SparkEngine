@@ -4,6 +4,7 @@
  */
 
 #include "AnimationTimeline.h"
+#include "Utils/LogMacros.h"
 #include <algorithm>
 #include <cmath>
 
@@ -138,6 +139,8 @@ namespace SparkEditor
 
     void AnimationCurve::AddKeyframe(const AnimationKeyframe& keyframe)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Adding keyframe at time=%.3f to curve '%s'", keyframe.time,
+                        propertyPath.c_str());
         // Insert maintaining sorted order by time
         auto it = std::lower_bound(keyframes.begin(), keyframes.end(), keyframe.time,
                                    [](const AnimationKeyframe& kf, float t) { return kf.time < t; });
@@ -148,7 +151,14 @@ namespace SparkEditor
     {
         if (index < keyframes.size())
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Removing keyframe at index %zu from curve '%s'", index,
+                            propertyPath.c_str());
             keyframes.erase(keyframes.begin() + static_cast<ptrdiff_t>(index));
+        }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Invalid keyframe index %zu (curve has %zu keyframes)", index,
+                           keyframes.size());
         }
     }
 

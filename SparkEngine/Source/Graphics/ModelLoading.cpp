@@ -11,6 +11,7 @@
 
 #include "AssetPipeline.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -22,11 +23,13 @@ using namespace DirectX;
 
 std::shared_ptr<MeshAsset> AssetPipeline::LoadMeshFromFile(const std::string& path)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loading mesh from file: %s", path.c_str());
     auto meshAsset = std::make_shared<MeshAsset>(path);
     HRESULT hr = meshAsset->Load(m_device);
 
     if (FAILED(hr))
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load mesh: %s", path.c_str());
         Spark::SimpleConsole::GetInstance().LogError("Failed to load mesh: " + path);
         return nullptr;
     }
@@ -66,6 +69,7 @@ std::shared_ptr<AudioAsset> AssetPipeline::LoadAudioFromFile(const std::string& 
 #else  // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "../Utils/LogMacros.h"
 #include <cfloat>
 #include <cmath>
 #include <unordered_map>
@@ -120,6 +124,7 @@ HRESULT AssetPipeline::LoadOBJ(const std::string& path, MeshAssetData& meshData)
 
     if (!ret)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OBJ load failed: %s (%s)", path.c_str(), err.c_str());
         fprintf(stderr, "[AssetPipeline] OBJ load failed: %s %s\n", path.c_str(), err.c_str());
         return E_FAIL;
     }
@@ -200,6 +205,8 @@ HRESULT AssetPipeline::LoadOBJ(const std::string& path, MeshAssetData& meshData)
     float dz = bboxMax.z - bboxMin.z;
     meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded OBJ: %s (%zu verts, %zu tris, %zu submeshes)", path.c_str(),
+                   meshData.vertices.size(), meshData.indices.size() / 3, meshData.submeshes.size());
     fprintf(stderr, "[AssetPipeline] Loaded OBJ: %s (%zu verts, %zu tris)\n", path.c_str(), meshData.vertices.size(),
             meshData.indices.size() / 3);
     return S_OK;

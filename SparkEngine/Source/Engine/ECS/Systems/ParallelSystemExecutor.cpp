@@ -10,6 +10,7 @@
 
 #include "ParallelSystemExecutor.h"
 #include "../../../Core/FaultIsolation.h"
+#include "../../../Utils/LogMacros.h"
 #include "../../../Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -18,12 +19,17 @@
 namespace Spark::ECS
 {
 
+    // Forward declaration for use in logging
+    static const char* StageToString(SystemStage stage);
+
     // ============================================================================
     // Registration
     // ============================================================================
 
     void StageBasedExecutor::RegisterSystem(const std::string& name, SystemStage stage, std::function<void(float)> fn)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::ECS, "Registering system '%s' in stage '%s'", name.c_str(),
+                       StageToString(stage));
         SystemEntry entry;
         entry.name = name;
         entry.stage = stage;
@@ -68,6 +74,8 @@ namespace Spark::ECS
             }
 
             // Multiple systems: run in parallel if the JobSystem is available
+            SPARK_LOG_TRACE(Spark::LogCategory::ECS, "Executing stage '%s' with %zu systems (%s)", StageToString(stage),
+                            stageSystems.size(), jobsAvailable ? "parallel" : "sequential");
             if (jobsAvailable)
             {
                 std::vector<std::future<void>> futures;
@@ -103,6 +111,7 @@ namespace Spark::ECS
 
     void StageBasedExecutor::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::ECS, "Shutting down StageBasedExecutor (%zu systems)", m_systems.size());
         m_systems.clear();
     }
 

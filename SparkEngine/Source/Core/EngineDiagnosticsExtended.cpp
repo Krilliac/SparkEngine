@@ -32,6 +32,8 @@
 #include "Utils/IODebugger.h"
 #include "Utils/ThreadDebugger.h"
 
+#include "Utils/LogMacros.h"
+
 #include <atomic>
 #include <future>
 #include <numeric>
@@ -47,6 +49,7 @@ namespace Spark
 
     void DiagRHI(DiagReport& report)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Running RHI diagnostics");
         const std::string sub = "RHI";
 
         auto& device = RHI::NullRHIDevice::GetInstance();
@@ -83,6 +86,7 @@ namespace Spark
 
     void DiagJobSystem(DiagReport& report)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Running JobSystem diagnostics");
         const std::string sub = "JobSystem";
 
         auto& jobs = JobSystem::Get();
@@ -133,6 +137,7 @@ namespace Spark
 
     void DiagAISystems(DiagReport& report)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Running AI systems diagnostics");
         const std::string sub = "AI";
 
         // TacticalPointSystem
@@ -381,6 +386,7 @@ namespace Spark
 
     void DiagRunAll(DiagReport& report)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Starting full diagnostics run (core + extended)");
         // Core diagnostics
         DiagPhysics(report);
         DiagWeather(report);
@@ -415,6 +421,7 @@ namespace Spark
         DiagCacheDebugger(report);
         DiagIODebugger(report);
         DiagThreadDebugger(report);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Full diagnostics run complete");
     }
 
 } // namespace Spark

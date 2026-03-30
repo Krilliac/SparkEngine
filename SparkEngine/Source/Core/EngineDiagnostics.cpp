@@ -29,6 +29,8 @@
 #include "Utils/MemoryMonitor.h"
 #include "Utils/SparkConsole.h"
 
+#include "Utils/LogMacros.h"
+
 #include <cmath>
 #include <sstream>
 
@@ -60,6 +62,7 @@ namespace Spark
             ss << "\n";
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Diagnostics report: %d passed, %d failed", passed, failed);
         ss << "\n=== Summary: " << passed << " passed, " << failed << " failed, " << (passed + failed)
            << " total ===\n";
         if (failed == 0)
@@ -85,11 +88,13 @@ namespace Spark
 
     void DiagPhysics(DiagReport& report)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Running physics diagnostics");
         const std::string sub = "Physics";
 
         auto* physics = Ctx() ? Ctx()->GetPhysics() : nullptr;
         if (!physics)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Physics diagnostics skipped: PhysicsSystem not registered");
             report.Add(sub, "System available", false, "PhysicsSystem not registered");
             return;
         }
@@ -244,11 +249,13 @@ namespace Spark
 
     void DiagECS(DiagReport& report)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Running ECS diagnostics");
         const std::string sub = "ECS";
 
         auto* world = Ctx() ? Ctx()->GetWorld() : nullptr;
         if (!world)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "ECS diagnostics skipped: World not registered");
             report.Add(sub, "World available", false, "World not registered");
             return;
         }
@@ -404,6 +411,7 @@ namespace Spark
 
     void DiagNetworking(DiagReport& report)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Running networking diagnostics");
         const std::string sub = "Networking";
 
         auto& net = Spark::Net::NetworkManager::GetInstance();

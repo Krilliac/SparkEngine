@@ -16,6 +16,7 @@
 #include "Monster/ARPGMonsterSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -71,6 +72,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[ARPG] Loading Spark ARPG module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module loading — initializing 7 subsystems");
 
     // Initialize hero system (classes, stats, leveling)
     m_heroSystem = std::make_unique<ARPG::ARPGHeroSystem>();
@@ -132,6 +134,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module loaded successfully — 7 subsystems active");
     console.LogInfo("[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
     console.LogInfo("[ARPG] Classes: " + std::to_string(m_heroSystem->GetClassCount()) +
                     " | Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) +
@@ -148,6 +151,7 @@ void SparkGameARPGModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[ARPG] Unloading Spark ARPG module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module shutting down");
 
     // Shutdown engine integrations first (depends on all ARPG subsystems)
     if (m_engineSystems)
@@ -190,6 +194,7 @@ void SparkGameARPGModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module unloaded");
     console.LogInfo("[ARPG] Spark ARPG module unloaded");
 }
 

@@ -5,6 +5,7 @@
 
 #include "ARPGMonsterSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -28,6 +29,8 @@ namespace ARPG
         m_context = context;
         RegisterMonsterTemplates();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG monster system initialized with %zu templates",
+                       m_templates.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Monster system initialized (" +
                                                     std::to_string(m_templates.size()) + " templates)");
         return true;
@@ -205,6 +208,8 @@ namespace ARPG
         }
 
         m_activeMonsters.push_back(monster);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG monster spawned: %s (level %d, rank %d)", monster.name.c_str(),
+                        level, static_cast<int>(rank));
         return monster;
     }
 
@@ -241,6 +246,7 @@ namespace ARPG
         // Bosses always get 3 affixes
         AssignChampionAffixes(boss, 3);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG boss spawned: %s (Lv%d)", boss.name.c_str(), level);
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Boss spawned: " + boss.name + " (Lv" +
                                                     std::to_string(level) + ")");
         return boss;

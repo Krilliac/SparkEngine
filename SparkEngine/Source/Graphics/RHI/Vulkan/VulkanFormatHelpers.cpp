@@ -9,6 +9,7 @@
 
 #include "VulkanDevice.h"
 #include "../RHIFormatUtils.h"
+#include "../../../Utils/LogMacros.h"
 
 namespace Spark
 {
@@ -41,6 +42,8 @@ namespace Spark
 
             VkFormat VulkanDevice::ConvertFormat(PixelFormat format) const
             {
+                SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "Converting PixelFormat %d to VkFormat",
+                                static_cast<int>(format));
                 switch (format)
                 {
                 case PixelFormat::R8_UNORM:
@@ -114,6 +117,8 @@ namespace Spark
                 case PixelFormat::D32_FLOAT_S8_UINT:
                     return VK_FORMAT_D32_SFLOAT_S8_UINT;
                 default:
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "Unknown PixelFormat %d, returning VK_FORMAT_UNDEFINED", static_cast<int>(format));
                     return VK_FORMAT_UNDEFINED;
                 }
             }

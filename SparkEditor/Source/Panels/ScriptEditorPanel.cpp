@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <iostream>
 #include <cstdio>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool ScriptEditorPanel::Initialize()
     {
-        std::cout << "Initializing Script Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Script Editor panel");
         return true;
     }
 
@@ -59,7 +60,7 @@ namespace SparkEditor
 
     void ScriptEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Script Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Script Editor panel");
     }
 
     void ScriptEditorPanel::RenderModuleList()

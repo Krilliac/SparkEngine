@@ -11,6 +11,7 @@
  */
 
 #include "GizmoSystem.h"
+#include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
@@ -121,13 +122,16 @@ namespace SparkEditor
 
         if (!CreateGizmoGeometry())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create gizmo geometry");
             return false;
         }
         if (!CreateGizmoShaders())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create gizmo shaders");
             return false;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "GizmoSystem initialized");
         return true;
     }
 
@@ -250,6 +254,8 @@ namespace SparkEditor
             // Begin drag if hovering over an axis
             if (m_hoveredAxis != GizmoAxis::NONE)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Gizmo drag started on axis %d in mode %d",
+                                static_cast<int>(m_hoveredAxis), static_cast<int>(m_currentMode));
                 m_isDragging = true;
                 m_interaction.isActive = true;
                 m_interaction.isDragging = true;
@@ -679,6 +685,8 @@ namespace SparkEditor
 
     void GizmoSystem::ApplyTranslation(const XMFLOAT3& delta, std::vector<Transform*>& transforms)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Applying translation delta (%.3f, %.3f, %.3f) to %zu objects",
+                        delta.x, delta.y, delta.z, transforms.size());
         for (auto* t : transforms)
         {
             if (t)
@@ -692,6 +700,8 @@ namespace SparkEditor
 
     void GizmoSystem::ApplyRotation(GizmoAxis axis, float angleDelta, std::vector<Transform*>& transforms)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Applying rotation delta %.3f rad on axis %d to %zu objects",
+                        angleDelta, static_cast<int>(axis), transforms.size());
         XMVECTOR rotAxis = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
         switch (axis)
         {
@@ -724,6 +734,8 @@ namespace SparkEditor
 
     void GizmoSystem::ApplyScale(const XMFLOAT3& scale, GizmoAxis axis, std::vector<Transform*>& transforms)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Applying scale (%.3f, %.3f, %.3f) on axis %d to %zu objects",
+                        scale.x, scale.y, scale.z, static_cast<int>(axis), transforms.size());
         for (auto* t : transforms)
         {
             if (t)

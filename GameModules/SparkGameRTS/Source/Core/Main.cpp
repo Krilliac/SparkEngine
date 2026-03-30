@@ -15,6 +15,7 @@
 #include "FogOfWar/RTSFogOfWarSystem.h"
 #include "Match/RTSMatchSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -70,6 +71,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[RTS] Loading Spark RTS module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module loading — initializing 7 subsystems");
 
     // Initialize unit system (faction templates, spawning, AI)
     m_unitSystem = std::make_unique<RTS::RTSUnitSystem>();
@@ -129,6 +131,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module loaded successfully — 7 subsystems active");
     console.LogInfo("[RTS] Spark RTS module loaded successfully (7 subsystems)");
     console.LogInfo("[RTS] Units: " + std::to_string(m_unitSystem->GetUnitCount()) +
                     " | Buildings: " + std::to_string(m_buildingSystem->GetBuildingCount()) +
@@ -143,6 +146,7 @@ void SparkGameRTSModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[RTS] Unloading Spark RTS module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module shutting down");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -183,6 +187,7 @@ void SparkGameRTSModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module unloaded");
     console.LogInfo("[RTS] Spark RTS module unloaded");
 }
 

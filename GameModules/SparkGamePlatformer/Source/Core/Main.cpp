@@ -15,6 +15,7 @@
 #include "Checkpoint/PlatformerCheckpointSystem.h"
 #include "Camera/PlatformerCameraSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -70,6 +71,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Platformer] Loading Spark Platformer module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module loading — initializing 7 subsystems");
 
     // Initialize level system first (provides platform/spawn data to other systems)
     m_levelSystem = std::make_unique<Platformer::PlatformerLevelSystem>();
@@ -130,6 +132,7 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module loaded successfully");
     console.LogInfo("[Platformer] Spark Platformer module loaded successfully (7 subsystems)");
     console.LogInfo("[Platformer] Levels: " + std::to_string(m_levelSystem->GetLevelCount()) +
                     " | Collectibles: " + std::to_string(m_collectibleSystem->GetTotalCollectibleCount()) +
@@ -145,6 +148,7 @@ void SparkGamePlatformerModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Platformer] Unloading Spark Platformer module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module shutting down");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -185,6 +189,7 @@ void SparkGamePlatformerModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module unloaded");
     console.LogInfo("[Platformer] Spark Platformer module unloaded");
 }
 

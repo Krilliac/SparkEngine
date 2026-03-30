@@ -7,6 +7,7 @@
 
 #include "EditorPanel.h"
 #include "Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 
 namespace SparkEditor
@@ -48,6 +49,7 @@ namespace SparkEditor
 
         if (visible != m_isVisible)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Panel '%s' %s", m_name.c_str(), visible ? "opened" : "closed");
             SetVisible(visible);
             NotifyStateChange();
         }

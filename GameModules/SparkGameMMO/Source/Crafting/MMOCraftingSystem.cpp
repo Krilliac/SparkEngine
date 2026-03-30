@@ -6,6 +6,7 @@
 #include "MMOCraftingSystem.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -21,6 +22,7 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultRecipes();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO crafting system initialized: %zu recipes", m_recipes.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Crafting system initialized (" +
                                                     std::to_string(m_recipes.size()) + " recipes)");
         return true;
@@ -207,7 +209,10 @@ namespace MMO
     bool MMOCraftingSystem::StartCraft(CraftingState& crafter, InventoryData& inv, uint32_t recipeId)
     {
         if (crafter.isCrafting || !CanCraft(crafter, inv, recipeId))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "Crafting attempt failed for recipe %u", recipeId);
             return false;
+        }
 
         const auto* recipe = GetRecipe(recipeId);
 
@@ -264,6 +269,8 @@ namespace MMO
 
         AwardSkillXP(crafter, recipe->discipline, recipe->skillXP);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Crafting complete: %s (x%d)", recipe->name.c_str(),
+                       recipe->resultCount);
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO] Crafted: " + recipe->name);
     }

@@ -7,6 +7,7 @@
  */
 #include "../../Core/Platform.h"
 #include "AnimationSystem.h"
+#include "../../Utils/LogMacros.h"
 #include <cmath>
 
 using namespace DirectX;
@@ -121,6 +122,8 @@ namespace Spark::Animation
                                         std::vector<XMFLOAT4X4>& outLocalTransforms)
     {
         size_t boneCount = skeleton.bones.size();
+        SPARK_LOG_TRACE(Spark::LogCategory::Animation, "SampleClip: '%s' at t=%.3f (%zu bones, %zu channels)",
+                        clip.name.c_str(), time, boneCount, clip.channels.size());
         outLocalTransforms.resize(boneCount);
 
         // Initialize with bind pose
@@ -163,6 +166,7 @@ namespace Spark::Animation
     void AnimationEvaluator::BlendTransforms(const std::vector<XMFLOAT4X4>& a, const std::vector<XMFLOAT4X4>& b,
                                              float blendFactor, std::vector<XMFLOAT4X4>& outResult)
     {
+        SPARK_LOG_TRACE(Spark::LogCategory::Animation, "BlendTransforms: factor=%.3f", blendFactor);
         size_t count = (std::min)(a.size(), b.size());
         outResult.resize(count);
 
@@ -191,6 +195,7 @@ namespace Spark::Animation
                                                      std::vector<XMFLOAT4X4>& outFinalTransforms)
     {
         size_t boneCount = skeleton.bones.size();
+        SPARK_LOG_TRACE(Spark::LogCategory::Animation, "ComputeSkinningMatrices: %zu bones", boneCount);
         outFinalTransforms.resize(boneCount);
 
         // Compute global transforms by traversing hierarchy

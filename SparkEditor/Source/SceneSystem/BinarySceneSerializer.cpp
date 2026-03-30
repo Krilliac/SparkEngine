@@ -9,6 +9,7 @@
  */
 
 #include "SceneSerializer.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <fstream>
 #include <cstring>
@@ -20,6 +21,8 @@ namespace SparkEditor
 
     SerializationResult SceneSerializer::SaveBinary(const SceneFile& scene, const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving scene (binary) to: %s (%zu objects)", filePath.c_str(),
+                       scene.objects.size());
         SerializationResult result;
         std::vector<uint8_t> buffer;
 
@@ -56,6 +59,7 @@ namespace SparkEditor
         {
             result.success = false;
             result.errorMessage = "Failed to write file: " + filePath;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to write binary scene: %s", filePath.c_str());
             return result;
         }
 
@@ -67,6 +71,7 @@ namespace SparkEditor
 
     SerializationResult SceneSerializer::LoadBinary(const std::string& filePath, SceneFile& outScene)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading scene (binary) from: %s", filePath.c_str());
         SerializationResult result;
 
         std::vector<uint8_t> data;

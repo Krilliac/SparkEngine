@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstring>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool TriggerEditorPanel::Initialize()
     {
-        std::cout << "Initializing Trigger Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Trigger Editor panel");
         return true;
     }
 
@@ -63,7 +64,7 @@ namespace SparkEditor
 
     void TriggerEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Trigger Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Trigger Editor panel");
     }
 
     void TriggerEditorPanel::RenderTriggerList()

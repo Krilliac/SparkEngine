@@ -7,6 +7,7 @@
 #include "../Core/EditorIcons.h"
 #include <imgui.h>
 #include <iostream>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -15,7 +16,7 @@ namespace SparkEditor
 
     bool VRConfigPanel::Initialize()
     {
-        std::cout << "Initializing VR Config panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing VR Config panel");
         return true;
     }
 
@@ -58,7 +59,7 @@ namespace SparkEditor
 
     void VRConfigPanel::Shutdown()
     {
-        std::cout << "Shutting down VR Config panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down VR Config panel");
     }
 
     void VRConfigPanel::RenderDeviceStatus()

@@ -8,12 +8,14 @@
 #endif // SPARK_PLATFORM_WINDOWS
 #include <iostream>
 #include <string>
+#include "Utils/LogMacros.h"
 
 using DirectX::XMFLOAT3;
 using DirectX::XMMATRIX;
 
 CubeObject::CubeObject(float size) : m_size(size)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "CubeObject constructed (size=%.1f)", size);
     std::wcout << L"[INFO] CubeObject constructed. size=" << size << std::endl;
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, size > 0.0f, "Cube size must be positive");
     SetName("Cube_" + std::to_string(GetID()));

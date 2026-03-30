@@ -16,6 +16,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
@@ -33,7 +34,7 @@ namespace SparkEditor
     bool MaterialEditorPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Material Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Material Editor panel");
 
         SetIcon(ICON_FA_PALETTE);
 
@@ -146,7 +147,7 @@ namespace SparkEditor
 
     void MaterialEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Material Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Material Editor panel");
         m_materials.clear();
         m_availableShaders.clear();
         m_selectedMaterialIndex = -1;
@@ -240,8 +241,8 @@ namespace SparkEditor
         m_selectedMaterialIndex = static_cast<int>(m_materials.size()) - 1;
         SetVisible(true);
 
-        std::cout << "Material Editor: loaded material '" << m_materials.back().name << "' from '" << materialPath
-                  << "'\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Material Editor: loaded material '%s' from '%s'",
+                       m_materials.back().name.c_str(), materialPath.c_str());
     }
 
     void MaterialEditorPanel::CreateMaterial(const std::string& name, const std::string& shaderPath)
@@ -259,7 +260,8 @@ namespace SparkEditor
         m_selectedMaterialIndex = static_cast<int>(m_materials.size()) - 1;
         SetModified(true);
 
-        std::cout << "Material Editor: created new material '" << name << "' with shader '" << shaderPath << "'\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Material Editor: created material '%s' (shader='%s')", name.c_str(),
+                       shaderPath.c_str());
     }
 
     bool MaterialEditorPanel::SaveMaterial()
@@ -267,13 +269,14 @@ namespace SparkEditor
         MaterialDefinition* selected = GetSelectedMaterial();
         if (selected == nullptr)
         {
-            std::cout << "Material Editor: no material selected to save\n";
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Material Editor: no material selected to save");
             return false;
         }
 
         if (selected->isBuiltIn)
         {
-            std::cout << "Material Editor: cannot save built-in material '" << selected->name << "'\n";
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Material Editor: cannot save built-in material '%s'",
+                           selected->name.c_str());
             return false;
         }
 
@@ -281,7 +284,8 @@ namespace SparkEditor
         std::ofstream file(selected->filePath);
         if (!file.is_open())
         {
-            std::cout << "Material Editor: failed to open file '" << selected->filePath << "' for writing\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Material Editor: failed to open file '%s' for writing",
+                            selected->filePath.c_str());
             return false;
         }
 

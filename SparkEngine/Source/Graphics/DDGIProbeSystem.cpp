@@ -8,6 +8,7 @@
  */
 
 #include "DDGIProbeSystem.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,11 +26,16 @@ namespace Spark::Graphics
         uint32_t totalProbes = settings.countX * settings.countY * settings.countZ;
         m_probes.resize(totalProbes);
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "DDGIProbeSystem initialized: %ux%ux%u = %u probes (spacing=%.2f,%.2f,%.2f)", settings.countX,
+                       settings.countY, settings.countZ, totalProbes, settings.spacingX, settings.spacingY,
+                       settings.spacingZ);
         return true;
     }
 
     void DDGIProbeSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "DDGIProbeSystem shutting down (%zu probes)", m_probes.size());
         m_probes.clear();
         m_initialized = false;
     }
@@ -189,6 +195,8 @@ namespace Spark::Graphics
             }
 
             probe.relocated = true;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "DDGI probe (%u,%u,%u) relocated: offset=(%.3f,%.3f,%.3f)",
+                            ix, iy, iz, probe.offsetX, probe.offsetY, probe.offsetZ);
         }
     }
 

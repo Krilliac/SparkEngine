@@ -11,6 +11,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cctype>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -20,6 +21,7 @@ namespace SparkEditor
     bool SearchPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Search panel");
         InitializeSampleData();
         m_isInitialized = true;
         return true;
@@ -231,6 +233,7 @@ namespace SparkEditor
         {
             return;
         }
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Performing search: '%s'", m_currentQuery.c_str());
 
         std::string lowerQuery = m_currentQuery;
         std::transform(lowerQuery.begin(), lowerQuery.end(), lowerQuery.begin(), ::tolower);

@@ -15,6 +15,7 @@
 #include "../RHI/RHIDevice.h"
 #include "../RHI/RHIResources.h"
 #include "../../Utils/Validate.h"
+#include "../../Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cstring>
@@ -35,6 +36,8 @@ namespace Spark::Graphics
         // Require compute shader support for SDFGI
         if (!device->GetCapabilities().computeShaderSupport)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "SDFSceneManager: compute shader support not available, cannot initialize");
             return false;
         }
 
@@ -90,6 +93,8 @@ namespace Spark::Graphics
         m_noiseData = SSAOKernel::GenerateNoiseTexture(4, 42);
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDFSceneManager initialized (%ux%u, max %u primitives)", width,
+                       height, kMaxPrimitives);
         return true;
     }
 
@@ -119,6 +124,7 @@ namespace Spark::Graphics
             return;
 
         m_primitiveCount = static_cast<uint32_t>(std::min(primitives.size(), static_cast<size_t>(kMaxPrimitives)));
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "Updating SDF scene with %u primitives", m_primitiveCount);
 
         if (m_primitiveCount > 0)
         {

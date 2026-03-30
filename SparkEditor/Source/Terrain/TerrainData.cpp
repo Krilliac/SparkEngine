@@ -4,6 +4,7 @@
  */
 
 #include "TerrainData.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -86,6 +87,8 @@ namespace SparkEditor
     {
         if (newWidth <= 0 || newHeight <= 0)
             return;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Resizing heightmap to %dx%d (preserve=%s)", newWidth, newHeight,
+                       preserveData ? "true" : "false");
 
         std::vector<float> newHeights(static_cast<size_t>(newWidth) * static_cast<size_t>(newHeight), 0.0f);
 

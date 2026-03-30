@@ -4,6 +4,7 @@
  */
 
 #include "LightProbeSystem.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -92,6 +93,7 @@ namespace Spark::Graphics
     {
         m_probes.clear();
         m_nextProbeId = 1;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightProbeSystem initialized");
         return true;
     }
 
@@ -109,6 +111,8 @@ namespace Spark::Graphics
 
     void LightProbeSystem::SetProbeGrid(const ProbeGrid& grid)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightProbeSystem: setting probe grid %ux%ux%u (%u probes)",
+                       grid.countX, grid.countY, grid.countZ, grid.countX * grid.countY * grid.countZ);
         for (uint32_t z = 0; z < grid.countZ; ++z)
         {
             for (uint32_t y = 0; y < grid.countY; ++y)
@@ -232,10 +236,13 @@ namespace Spark::Graphics
         }
 
         it->second.baked = true;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "LightProbe %u baked (pos=%.1f,%.1f,%.1f)", probeId,
+                        it->second.position.x, it->second.position.y, it->second.position.z);
     }
 
     void LightProbeSystem::BakeAllProbes()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightProbeSystem: baking all %zu probes", m_probes.size());
         for (auto& [id, probe] : m_probes)
         {
             BakeProbe(id);

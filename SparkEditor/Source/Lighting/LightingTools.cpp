@@ -6,6 +6,7 @@
  */
 
 #include "LightingTools.h"
+#include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
@@ -46,6 +47,7 @@ namespace SparkEditor
         m_device = device;
         m_context = context;
         m_isInitialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "LightingTools initialized");
 
         // Set sane default atmosphere
         UpdateSunPosition();
@@ -138,6 +140,7 @@ namespace SparkEditor
 
     void LightingTools::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "LightingTools shutting down (%zu lights)", m_lights.size());
         m_lights.clear();
         m_nextLightId = 1;
         m_selectedLightId = 0;
@@ -158,6 +161,7 @@ namespace SparkEditor
     uint32_t LightingTools::CreateLight(const SparkLightData& lightData)
     {
         uint32_t id = m_nextLightId++;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating light id=%u name='%s'", id, lightData.name.c_str());
         m_lights[id] = lightData;
 
         if (m_lightChangedCallback)
@@ -186,6 +190,7 @@ namespace SparkEditor
 
     void LightingTools::DeleteLight(uint32_t lightId)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Deleting light id=%u", lightId);
         m_lights.erase(lightId);
 
         if (m_selectedLightId == lightId)
@@ -238,9 +243,11 @@ namespace SparkEditor
     {
         if (m_lightmapBakeInProgress)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Lightmap bake already in progress");
             return false;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting lightmap bake with %zu lights", m_lights.size());
         m_lightmapBakeInProgress = true;
         m_bakeProgress = 0.0f;
         m_bakeStatus = "Initializing lightmap bake...";
@@ -441,6 +448,7 @@ namespace SparkEditor
 
     bool LightingTools::SaveLightingProfile(const std::string& profileName)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving lighting profile: '%s'", profileName.c_str());
         std::filesystem::path profileDir = "LightingProfiles";
         std::filesystem::create_directories(profileDir);
 
@@ -448,6 +456,7 @@ namespace SparkEditor
         std::ofstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to save lighting profile: %s", profileName.c_str());
             return false;
         }
 
@@ -526,10 +535,12 @@ namespace SparkEditor
 
     bool LightingTools::LoadLightingProfile(const std::string& profileName)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading lighting profile: '%s'", profileName.c_str());
         std::filesystem::path filePath = std::filesystem::path("LightingProfiles") / (profileName + ".slp");
         std::ifstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to load lighting profile: %s", profileName.c_str());
             return false;
         }
 

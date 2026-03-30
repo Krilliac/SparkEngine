@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -22,7 +23,7 @@ namespace SparkEditor
     bool WeaponEditorPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Weapon Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Weapon Editor panel");
 
         // Populate with default weapon data
         m_weapons = {
@@ -114,7 +115,7 @@ namespace SparkEditor
 
     void WeaponEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Weapon Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Weapon Editor panel");
     }
 
     void WeaponEditorPanel::RenderWeaponList()
@@ -417,7 +418,7 @@ namespace SparkEditor
                 savedCount++;
             }
         }
-        std::cout << "Saved " << savedCount << " modified weapon configuration(s)\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saved %d modified weapon configuration(s)", savedCount);
     }
 
 } // namespace SparkEditor

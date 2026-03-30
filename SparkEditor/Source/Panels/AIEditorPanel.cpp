@@ -5,6 +5,7 @@
 
 #include "AIEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool AIEditorPanel::Initialize()
     {
-        std::cout << "Initializing AI Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AIEditorPanel initialized");
         return true;
     }
 
@@ -57,7 +58,7 @@ namespace SparkEditor
 
     void AIEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down AI Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AIEditorPanel shutting down");
     }
 
     void AIEditorPanel::RenderBehaviorTreeEditor()
@@ -75,6 +76,7 @@ namespace SparkEditor
             }
             m_nodes.push_back(node);
             m_selectedNode = static_cast<int>(m_nodes.size()) - 1;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AIEditorPanel: added BT node '%s'", node.name);
         }
 
         if (m_selectedNode >= 0 && m_selectedNode < static_cast<int>(m_nodes.size()))
@@ -82,6 +84,8 @@ namespace SparkEditor
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_TRASH " Delete"))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AIEditorPanel: deleted BT node at index %d",
+                                m_selectedNode);
                 m_nodes.erase(m_nodes.begin() + m_selectedNode);
                 // Fix parent references
                 for (auto& n : m_nodes)

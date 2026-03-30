@@ -15,6 +15,7 @@
 #include <cstring>
 #include <cmath>
 #include <queue>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -24,7 +25,7 @@ namespace SparkEditor
     bool TilemapEditorPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Tilemap Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Tilemap Editor panel");
         return true;
     }
 
@@ -73,7 +74,7 @@ namespace SparkEditor
 
     void TilemapEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Tilemap Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Tilemap Editor panel");
     }
 
     void TilemapEditorPanel::RenderToolbar()

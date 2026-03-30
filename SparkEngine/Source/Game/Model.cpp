@@ -2,6 +2,7 @@
 #include "Model.h"
 #include "ModelVertex.h"
 #include "../Utils/Assert.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include "../Graphics/GraphicsEngine.h"
 #include <tiny_obj_loader.h>
@@ -36,8 +37,10 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     // ------------------------------------------------------------------
     //  TinyOBJ load
     // ------------------------------------------------------------------
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Model: Loading OBJ file: %s", fileUtf8.c_str());
     if (!tinyobj::LoadObj(&attrib, &shapes, &mats, &warn, &err, fileUtf8.c_str()))
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Model: tinyobj error: %s%s", warn.c_str(), err.c_str());
         OutputDebugStringA(("tinyobj error: " + warn + err + "\n").c_str());
         return E_FAIL;
     }
@@ -105,6 +108,8 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
 
     hr = device->CreateBuffer(&bd, &sd, &m_ib);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, SUCCEEDED(hr), "Failed to create index buffer");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Model: Loaded %zu vertices, %u indices from %zu shapes", verts.size(),
+                   m_indexCount, shapes.size());
     return hr;
 }
 
@@ -173,8 +178,10 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* /*device*/)
     std::vector<tinyobj::material_t> mats;
     std::string warn, err;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Model: Loading OBJ file: %s", fileUtf8.c_str());
     if (!tinyobj::LoadObj(&attrib, &shapes, &mats, &warn, &err, fileUtf8.c_str()))
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Model: tinyobj error: %s%s", warn.c_str(), err.c_str());
         fprintf(stderr, "Model::LoadObj error: %s%s\n", warn.c_str(), err.c_str());
         return E_FAIL;
     }
@@ -186,6 +193,8 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* /*device*/)
     for (const auto& shape : shapes)
         m_indexCount += static_cast<UINT>(shape.mesh.indices.size());
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Model: Loaded %u indices from %zu shapes (CPU-side, no GPU buffers)",
+                   m_indexCount, shapes.size());
     // No GPU buffers created on Linux - data loaded successfully for CPU-side use
     return S_OK;
 }

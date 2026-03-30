@@ -15,6 +15,7 @@
 
 #include "AssetDatabase.h"
 #include "Utils/ContainerUtils.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 
 #ifdef _WIN32
@@ -96,19 +97,20 @@ namespace SparkEditor
 
     AssetDatabase::AssetDatabase() : m_lastProcessTime(std::chrono::steady_clock::now())
     {
-        std::cout << "AssetDatabase constructed\n";
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AssetDatabase constructed");
     }
 
     AssetDatabase::~AssetDatabase()
     {
-        std::cout << "AssetDatabase destructor called\n";
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AssetDatabase destructor called");
         Shutdown();
     }
 
     bool AssetDatabase::Initialize(const std::string& assetDirectory)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "AssetDatabase::Initialize() - Directory: " << assetDirectory << "\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AssetDatabase initializing with directory: %s",
+                       assetDirectory.c_str());
 
         m_assetDirectory = assetDirectory;
         m_metadataDirectory = assetDirectory + "/.metadata";
@@ -124,7 +126,7 @@ namespace SparkEditor
         m_isMonitoring = true;
         m_monitoringThread = std::thread(&AssetDatabase::FileSystemMonitoringThread, this);
 
-        std::cout << "AssetDatabase initialized with " << m_assets.size() << " assets\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AssetDatabase initialized with %zu assets", m_assets.size());
         return true;
     }
 
@@ -143,7 +145,7 @@ namespace SparkEditor
 
     void AssetDatabase::Shutdown()
     {
-        std::cout << "AssetDatabase::Shutdown()\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AssetDatabase shutting down");
 
         // Stop monitoring
         m_isMonitoring = false;
@@ -188,7 +190,7 @@ namespace SparkEditor
             return false;
         }
 
-        std::cout << "Importing asset: " << filePath << "\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Importing asset: %s", filePath.c_str());
 
         std::lock_guard<std::mutex> lock(m_assetsMutex);
 
@@ -237,7 +239,7 @@ namespace SparkEditor
 
     bool AssetDatabase::ReimportAsset(const std::string& assetPath)
     {
-        std::cout << "Reimporting asset: " << assetPath << "\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Reimporting asset: %s", assetPath.c_str());
 
         std::lock_guard<std::mutex> lock(m_assetsMutex);
         auto it = m_assetMap.find(assetPath);
@@ -255,7 +257,7 @@ namespace SparkEditor
 
     bool AssetDatabase::DeleteAsset(const std::string& assetPath)
     {
-        std::cout << "Deleting asset: " << assetPath << "\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Deleting asset: %s", assetPath.c_str());
 
         std::lock_guard<std::mutex> lock(m_assetsMutex);
         auto it = m_assetMap.find(assetPath);
@@ -360,7 +362,7 @@ namespace SparkEditor
 
     void AssetDatabase::RefreshDatabase()
     {
-        std::cout << "Refreshing asset database...\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Refreshing asset database...");
 
         std::lock_guard<std::mutex> lock(m_assetsMutex);
         m_assets.clear();
@@ -369,7 +371,7 @@ namespace SparkEditor
 
         ScanDirectory(m_assetDirectory);
 
-        std::cout << "Database refresh complete. Found " << m_assets.size() << " assets\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Database refresh complete. Found %zu assets", m_assets.size());
     }
 
     AssetDatabase::DatabaseStats AssetDatabase::GetDatabaseStats() const
@@ -459,7 +461,8 @@ namespace SparkEditor
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Error scanning directory " << directoryPath << ": " << e.what() << "\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Error scanning directory %s: %s", directoryPath.c_str(),
+                            e.what());
         }
     }
 
@@ -648,7 +651,7 @@ namespace SparkEditor
 
     void AssetDatabase::FileSystemMonitoringThread()
     {
-        std::cout << "File system monitoring started\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "File system monitoring started");
 
 #ifdef _WIN32
         // Windows-specific file system monitoring using ReadDirectoryChangesW
@@ -825,7 +828,7 @@ namespace SparkEditor
         }
 #endif
 
-        std::cout << "File system monitoring stopped\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "File system monitoring stopped");
     }
 
     void AssetDatabase::ProcessFileSystemChanges()
@@ -843,7 +846,7 @@ namespace SparkEditor
             return;
         }
 
-        std::cout << "Processing " << changes.size() << " file system changes\n";
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Processing %zu file system changes", changes.size());
 
         for (const auto& change : changes)
         {
@@ -949,7 +952,8 @@ namespace SparkEditor
 
                     // Save updated metadata
                     SaveAssetMetadata(newPath);
-                    std::cout << "Renamed asset: " << oldPath << " -> " << newPath << "\n";
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Renamed asset: %s -> %s", oldPath.c_str(),
+                                   newPath.c_str());
                 }
             }
             else

@@ -11,6 +11,7 @@
 #include "SparkGame.h"
 #include "GameplayShowcase.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -64,6 +65,8 @@ bool SparkGameDefaultModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Loading SparkGame showcase module");
+
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Default] Loading Spark Engine Showcase module...");
 
@@ -78,6 +81,7 @@ bool SparkGameDefaultModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGame showcase module loaded successfully");
     console.LogInfo("[Default] Spark Engine Showcase module loaded successfully");
     return true;
 }
@@ -87,6 +91,7 @@ void SparkGameDefaultModule::OnUnload()
     if (!m_initialized)
         return;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Unloading SparkGame showcase module");
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Default] Unloading Spark Engine Showcase module...");
 

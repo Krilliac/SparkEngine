@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 #include "SoundEffect.h"
 #include "Utils/Assert.h"
+#include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "../Utils/Validate.h"
 #include <fstream>
@@ -35,7 +36,10 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
     std::ifstream file(narrowFilename, std::ios::binary | std::ios::ate);
 #endif
     if (!file.is_open())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: Failed to open WAV file");
         return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
 
     std::streamsize size = file.tellg();
     SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, size > 0, "Zero-length WAV file");
@@ -58,6 +62,7 @@ HRESULT SoundEffect::LoadFromMemory(const BYTE* data, DWORD dataSize)
 
 void SoundEffect::Unload()
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "SoundEffect: Unloading sound data (%u bytes)", m_audioDataSize);
     m_audioData.clear();
     m_audioDataSize = 0;
     ZeroMemory(&m_format, sizeof(m_format));
@@ -78,20 +83,27 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 
     DWORD fmtSize = 0, fmtPos = 0;
     if (FAILED(FindChunk(data, size, 0x20746d66, fmtSize, fmtPos))) // 'fmt '
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: 'fmt ' chunk not found in WAV data");
         return E_FAIL;
+    }
 
     if (FAILED(ReadChunkData(data, fmtPos, &m_format, fmtSize)))
         return E_FAIL;
 
     DWORD dataSize = 0, dataPos = 0;
     if (FAILED(FindChunk(data, size, 0x61746164, dataSize, dataPos))) // 'data'
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: 'data' chunk not found in WAV data");
         return E_FAIL;
+    }
 
     m_audioData.resize(dataSize);
     if (FAILED(ReadChunkData(data, dataPos, m_audioData.data(), dataSize)))
         return E_FAIL;
 
     m_audioDataSize = dataSize;
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "SoundEffect: WAV loaded successfully, data size: %u bytes", dataSize);
     return S_OK;
 }
 
@@ -147,6 +159,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFromSamples(const std::ve
     SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !samples.empty(), "CreateFromSamples: samples must not be empty");
 
     auto se = std::make_unique<SoundEffect>();
+    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "SoundEffect: Creating from %zu samples at %u Hz", samples.size(), SR);
 
     // Set up the PCM format directly (mono, 16-bit)
     se->m_format.wFormatTag = WAVE_FORMAT_PCM;
@@ -202,6 +215,7 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateNoise(float d)
 // ----- game-specific SFX -----------------------------------------------------
 std::unique_ptr<SoundEffect> SoundEffectFactory::CreateGunshot()
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "SoundEffectFactory: Creating gunshot SFX");
     const DWORD SR = 44100;
     const float DUR = 0.12f;
     const DWORD CNT = static_cast<DWORD>(SR * DUR);

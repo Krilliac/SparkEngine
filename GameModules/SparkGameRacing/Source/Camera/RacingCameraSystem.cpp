@@ -5,6 +5,7 @@
 
 #include "RacingCameraSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,6 +32,7 @@ namespace Racing
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing camera system initialized (5 modes)");
         console.LogInfo("[Racing Camera] Camera system initialized (5 modes)");
         return true;
     }
@@ -84,6 +86,7 @@ namespace Racing
         m_state.fov = m_configs[static_cast<size_t>(mode)].fov;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing camera mode changed to: %s", ModeToString(mode));
         console.LogInfo("[Racing Camera] Mode: " + std::string(ModeToString(mode)));
     }
 

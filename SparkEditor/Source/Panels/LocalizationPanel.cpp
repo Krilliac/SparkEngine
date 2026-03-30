@@ -5,6 +5,7 @@
 
 #include "LocalizationPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool LocalizationPanel::Initialize()
     {
-        std::cout << "Initializing Localization panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "LocalizationPanel initialized");
         return true;
     }
 
@@ -44,19 +45,19 @@ namespace SparkEditor
 
     void LocalizationPanel::Shutdown()
     {
-        std::cout << "Shutting down Localization panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "LocalizationPanel shutting down");
     }
 
     void LocalizationPanel::RenderToolbar()
     {
         if (ImGui::Button(ICON_FA_FILE_IMPORT " Import CSV"))
         {
-            std::cout << "Import CSV placeholder\n";
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "LocalizationPanel: import CSV requested");
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_FILE_EXPORT " Export CSV"))
         {
-            std::cout << "Export CSV placeholder\n";
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "LocalizationPanel: export CSV requested");
         }
         ImGui::SameLine();
         ImGui::Checkbox("Show Missing Only", &m_showMissingOnly);
@@ -247,6 +248,7 @@ namespace SparkEditor
                 entry.translations[m_languages[m_currentLanguage]] = m_newValue;
 
             m_strings.push_back(entry);
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "LocalizationPanel: added string key '%s'", m_newKey);
             m_newKey[0] = '\0';
             m_newValue[0] = '\0';
             m_newContext[0] = '\0';

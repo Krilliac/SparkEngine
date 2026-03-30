@@ -133,6 +133,9 @@ HRESULT Enemy::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, En
     m_turnSpeed = m_aiConfig.turnSpeed;
     m_moveSpeed = m_aiConfig.moveSpeed;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Enemy spawned: type=%d, HP=%.0f, speed=%.1f", static_cast<int>(type),
+                   m_health, m_moveSpeed);
+
     BuildBehaviorTree();
 
     SetScale({1.0f, 2.0f, 1.0f}); // Tall capsule-like shape
@@ -373,6 +376,7 @@ void Enemy::Attack(float dt)
     if (m_attackTimer > 0.0f || !m_player || !m_player->IsAlive())
         return;
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Enemy attacking player for %.0f damage", m_damage);
     m_player->TakeDamage(m_damage);
     m_attackTimer = m_attackCooldown;
 }
@@ -386,6 +390,7 @@ void Enemy::TakeDamage(float dmg)
 
     if (m_health <= 0.0f)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Enemy killed: type=%d, ID=%u", static_cast<int>(m_type), GetID());
         SetActive(false);
         SetVisible(false);
     }
@@ -408,6 +413,7 @@ void Enemy::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 
 void Enemy::SetPatrolPoints(const std::vector<XMFLOAT3>& points)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Enemy patrol route set: %zu waypoints", points.size());
     m_patrolPoints = points;
     m_currentPatrolIndex = 0;
     BuildBehaviorTree(); // Rebuild to include patrol branch

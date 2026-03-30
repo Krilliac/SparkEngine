@@ -7,6 +7,7 @@
 #include "MaterialSystem.h"
 #include "../Utils/DebugHookManager.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 
 #include "../Utils/StringUtils.h"
 
@@ -42,10 +43,12 @@ namespace Spark::Graphics
 
     bool MaterialLoader::LoadMaterial(const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loading material from file: %s", filePath.c_str());
         SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, filePath, 0.0);
         MaterialDefinition def;
         if (!ParseFile(filePath, def))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to parse material file: %s", filePath.c_str());
             return false;
         }
 
@@ -67,6 +70,7 @@ namespace Spark::Graphics
 
     bool MaterialLoader::LoadMaterialsFromDirectory(const std::string& dirPath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Scanning directory for materials: %s", dirPath.c_str());
         std::error_code ec;
         if (!fs::is_directory(dirPath, ec))
         {
@@ -111,6 +115,7 @@ namespace Spark::Graphics
         std::ifstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "MaterialLoader: failed to open file: %s", filePath.c_str());
             Spark::SimpleConsole::GetInstance().LogWarning("MaterialLoader: failed to open file: " + filePath);
             return false;
         }
@@ -244,6 +249,8 @@ namespace Spark::Graphics
             mat->SetTexture(MaterialTextureType::Occlusion, tex);
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Registered material '%s' (metallic=%.2f, roughness=%.2f)",
+                       def.name.c_str(), def.metallic, def.roughness);
         Spark::SimpleConsole::GetInstance().LogSuccess("MaterialLoader: loaded material '" + def.name + "'");
         return true;
     }

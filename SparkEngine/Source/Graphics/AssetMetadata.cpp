@@ -12,6 +12,7 @@
 
 #include "AssetPipeline.h"
 #include "../Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
@@ -82,9 +83,12 @@ std::vector<std::string> AssetPipeline::ScanDirectory(const std::string& directo
     }
     catch (const std::exception& e)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Error scanning directory '%s': %s", directory.c_str(), e.what());
         Spark::SimpleConsole::GetInstance().LogError("Error scanning directory: " + directory + " - " + e.what());
     }
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "ScanDirectory '%s': found %zu assets", directory.c_str(),
+                    assets.size());
     return assets;
 }
 
@@ -104,6 +108,12 @@ AssetMetadata AssetPipeline::GetAssetMetadata(const std::string& path) const
         metadata.fileSize = std::filesystem::file_size(path);
         metadata.lastModified = GetFileTimestamp(path);
         metadata.checksum = CalculateChecksum(path);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "GetAssetMetadata '%s': type=%s size=%zu", path.c_str(),
+                        AssetTypeToString(metadata.type).c_str(), static_cast<size_t>(metadata.fileSize));
+    }
+    else
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetAssetMetadata: file not found '%s'", path.c_str());
     }
 
     return metadata;
@@ -254,6 +264,7 @@ std::string LoadingPriorityToString(LoadingPriority priority)
 #else  // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "Utils/LogMacros.h"
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
@@ -328,6 +339,8 @@ std::vector<std::string> AssetPipeline::ScanDirectory(const std::string& directo
         // Permission denied or other filesystem error - return what we have
     }
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "ScanDirectory '%s': found %zu assets", directory.c_str(),
+                    results.size());
     std::sort(results.begin(), results.end());
     return results;
 }
@@ -405,6 +418,7 @@ void AssetPipeline::CheckForChangedAssets()
             auto assetIt = m_assets.find(path);
             if (assetIt != m_assets.end() && assetIt->second)
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot-reload: asset changed '%s', reloading", path.c_str());
                 assetIt->second->Unload();
                 assetIt->second->Load(m_device);
                 pair.second = currentTimestamp;

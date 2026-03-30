@@ -43,6 +43,7 @@ using namespace DirectX;
 
 void Game::InitializeInteractionObjects()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing interaction objects and damage zones");
     m_interactionSystem = std::make_unique<Spark::InteractionSystem>();
     m_interactionSystem->Initialize();
     m_player->SetInteractionSystem(m_interactionSystem.get());
@@ -154,6 +155,7 @@ void Game::InitializeRespawnAndVehicles()
 
 void Game::InitializeGameModeAndHUD()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing game mode and HUD systems");
     m_gameMode = std::make_unique<Spark::GameMode>();
     Spark::GameModeRules rules = Spark::GameMode::GetPreset(Spark::GameModeType::Deathmatch);
     m_gameMode->Initialize(rules);
@@ -247,6 +249,7 @@ void Game::InitializeGameModeAndHUD()
 
 void Game::InitializeInventorySystem()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing inventory system with item registry");
     Spark::ItemDef healthPotion;
     healthPotion.id = 1;
     healthPotion.name = "Health Potion";
@@ -340,7 +343,10 @@ Enemy* Game::SpawnEnemy(EnemyType type, float x, float y, float z)
     auto enemy = std::make_unique<Enemy>();
     HRESULT hr = enemy->Initialize(dev, ctx, type, m_player.get());
     if (FAILED(hr))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to initialize enemy at (%.1f, %.1f, %.1f)", x, y, z);
         return nullptr;
+    }
 
     enemy->SetPosition({x, y, z});
     enemy->SetName("Enemy_" + std::to_string(enemy->GetID()));
@@ -364,6 +370,7 @@ size_t Game::GetAliveEnemyCount() const
 
 void Game::InitializeEnemies()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Spawning initial AI enemies for combat arena");
     // Spawn AI enemies with patrol routes for the combat arena.
     // Grunts patrol cardinal positions around the arena perimeter.
     auto* g1 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, 15.0f);
@@ -408,6 +415,7 @@ void Game::InitializeEnemies()
 
 void Game::InitializeGameplaySystems()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing gameplay systems (waves, progression, loot)");
     // --- Wave Spawner ---
     m_waveSpawner = std::make_unique<Spark::WaveSpawner>();
 

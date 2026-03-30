@@ -4,9 +4,11 @@
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include <iostream>
+#include "Utils/LogMacros.h"
 
 SphereObject::SphereObject(float radius, int slices, int stacks) : m_radius(radius), m_slices(slices), m_stacks(stacks)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "SphereObject constructed (radius=%.1f)", radius);
     std::wcout << L"[INFO] SphereObject constructed. radius=" << radius << L" slices=" << slices << L" stacks="
                << stacks << std::endl;
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, radius > 0.0f, "Sphere radius must be positive");

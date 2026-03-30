@@ -5,6 +5,7 @@
 
 #include "CoroutineDebugPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 
@@ -15,7 +16,7 @@ namespace SparkEditor
 
     bool CoroutineDebugPanel::Initialize()
     {
-        std::cout << "Initializing Coroutine Debug panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CoroutineDebugPanel initialized");
         return true;
     }
 
@@ -39,7 +40,7 @@ namespace SparkEditor
 
     void CoroutineDebugPanel::Shutdown()
     {
-        std::cout << "Shutting down Coroutine Debug panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CoroutineDebugPanel shutting down");
     }
 
     void CoroutineDebugPanel::RenderCoroutineStats()
@@ -69,6 +70,8 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_STOP " Cancel All"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "CoroutineDebugPanel: cancelling all %d coroutines",
+                           static_cast<int>(m_coroutines.size()));
             m_totalCompleted += static_cast<int>(m_coroutines.size());
             m_coroutines.clear();
         }

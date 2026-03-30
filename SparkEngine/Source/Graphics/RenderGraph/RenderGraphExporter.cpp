@@ -4,6 +4,7 @@
  */
 
 #include "RenderGraphExporter.h"
+#include "../../Utils/LogMacros.h"
 
 #include <fstream>
 #include <set>
@@ -65,11 +66,17 @@ namespace Spark::Graphics
 
     bool RenderGraphExporter::ExportGraphViz(const std::vector<RenderPassInfo>& passes, const std::string& outputPath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Exporting render graph (%zu passes) to: %s", passes.size(),
+                       outputPath.c_str());
         std::string dotContent = GenerateDotString(passes);
 
         std::ofstream file(outputPath);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to open file for render graph export: %s",
+                            outputPath.c_str());
             return false;
+        }
 
         file << dotContent;
         return file.good();

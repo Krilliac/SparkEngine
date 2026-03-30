@@ -5,6 +5,7 @@
 
 #include "PlatformerCameraSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -28,6 +29,8 @@ namespace Platformer
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer camera system initialized (%zu zones)",
+                       m_cameraZones.size());
         console.LogInfo("[Platformer Camera] Camera system initialized (" + std::to_string(m_cameraZones.size()) +
                         " camera zones)");
         return true;

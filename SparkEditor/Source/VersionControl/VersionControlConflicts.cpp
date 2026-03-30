@@ -4,6 +4,7 @@
  */
 
 #include "VersionControlSystem.h"
+#include "Utils/LogMacros.h"
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -20,6 +21,7 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Locking file: %s", filePath.c_str());
         std::string cmd = "git lfs lock \"" + filePath + "\"";
         VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
         if (result.success)
@@ -53,6 +55,8 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return false;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Resolving merge conflict: %s (resolution=%s)",
+                       conflict.filePath.c_str(), resolution.c_str());
         conflict.resolution = resolution;
         conflict.isResolved = true;
 

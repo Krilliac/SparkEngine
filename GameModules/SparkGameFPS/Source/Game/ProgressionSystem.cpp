@@ -33,6 +33,7 @@ namespace Spark
         m_unlockedWeapons[static_cast<int>(WeaponType::RIFLE)] = true;
         m_unlockedClasses[static_cast<int>(PlayerClass::SCOUT)] = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression system initialized (level 1, max %d)", m_maxLevel);
         LOG_TO_CONSOLE_IMMEDIATE(L"Progression system initialized (level 1, 50 max)", L"SUCCESS");
     }
 
@@ -42,6 +43,8 @@ namespace Spark
             return;
 
         int modified = static_cast<int>(amount * m_currentBonuses.xpMultiplier);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "XP awarded: %d (source: %s, modified: %d)", amount, source.c_str(),
+                        modified);
         m_currentXP += modified;
 
         if (m_callbacks.onXPGained)
@@ -116,6 +119,7 @@ namespace Spark
             if (m_callbacks.onLevelUp)
                 m_callbacks.onLevelUp(m_level, m_currentBonuses);
 
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Level up! Now level %d", m_level);
             std::wstring msg = L"LEVEL UP! Now level " + std::to_wstring(m_level);
             LOG_TO_CONSOLE_IMMEDIATE(msg, L"SUCCESS");
         }

@@ -4,6 +4,7 @@
  */
 
 #include "WeatherGameplayIntegration.h"
+#include "../../Utils/LogMacros.h"
 
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 #include "../../Physics/PhysicsSystem.h"
@@ -52,6 +53,7 @@ namespace Spark::Gameplay
         m_perceptionModifier = {};
         m_audioState = {};
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "WeatherGameplayIntegration initialized");
     }
 
     void WeatherGameplayIntegration::Shutdown()
@@ -60,6 +62,7 @@ namespace Spark::Gameplay
         m_perceptionModifier = {};
         m_audioState = {};
         m_initialized = false;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "WeatherGameplayIntegration shut down");
     }
 
     void WeatherGameplayIntegration::Update(float /*dt*/, const WeatherSystem* weather, PhysicsSystem* physics)
@@ -101,6 +104,9 @@ namespace Spark::Gameplay
         XMFLOAT3 windForce = {state.windDirection.x * effectiveSpeed, state.windDirection.y * effectiveSpeed,
                               state.windDirection.z * effectiveSpeed};
 
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Trace, Spark::LogCategory::Game, 5,
+                                "Applying wind forces: effective speed=%.2f", effectiveSpeed);
+
         // Apply wind force to all dynamic bodies
         const auto& bodies = physics->GetBodies();
         for (const auto& body : bodies)
@@ -134,6 +140,11 @@ namespace Spark::Gameplay
 
         m_perceptionModifier.fogIntensity = state.fogDensity;
         m_perceptionModifier.stormIntensity = (state.type == WeatherType::Storm) ? state.intensity : 0.0f;
+
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Trace, Spark::LogCategory::Game, 5,
+                                "Weather perception: visibility=%.2f fog=%.2f storm=%.2f",
+                                m_perceptionModifier.GetVisibilityMultiplier(), m_perceptionModifier.fogIntensity,
+                                m_perceptionModifier.stormIntensity);
     }
 
     // =========================================================================
@@ -179,6 +190,10 @@ namespace Spark::Gameplay
         {
             m_audioState.snowVolume = 0.0f;
         }
+
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Trace, Spark::LogCategory::Game, 10,
+                                "Weather audio: rain=%.2f thunder=%.2f wind=%.2f snow=%.2f", m_audioState.rainVolume,
+                                m_audioState.thunderVolume, m_audioState.windVolume, m_audioState.snowVolume);
     }
 
 } // namespace Spark::Gameplay

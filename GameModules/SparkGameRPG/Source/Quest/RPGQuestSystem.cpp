@@ -5,6 +5,7 @@
 
 #include "RPGQuestSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -173,6 +174,7 @@ namespace RPG
 
         charProgress[questId] = progress;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest accepted: %s (id=%u)", def->name.c_str(), questId);
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest accepted: " + def->name);
         return true;
     }
@@ -192,6 +194,8 @@ namespace RPG
         questIt->second.state = QuestState::Failed;
 
         const auto* def = GetQuestDef(questId);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest abandoned: %s (id=%u)", def ? def->name.c_str() : "?",
+                       questId);
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest abandoned: " + (def ? def->name : "?"));
         return true;
     }
@@ -242,6 +246,8 @@ namespace RPG
         questIt->second.state = QuestState::Completed;
 
         const auto* def = GetQuestDef(questId);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest completed: %s (id=%u)", def ? def->name.c_str() : "?",
+                       questId);
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest completed: " + (def ? def->name : "?"));
         return true;
     }

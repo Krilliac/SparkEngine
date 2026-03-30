@@ -5,6 +5,7 @@
 
 #include "RPGDialogueSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -196,6 +197,8 @@ namespace RPG
         m_session.npcId = npcId;
         m_session.isActive = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG dialogue started: %s (tree=%u, npc=%u)", tree->name.c_str(),
+                       treeId, npcId);
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Dialogue started: " + tree->name);
         return true;
     }
@@ -222,6 +225,8 @@ namespace RPG
             if (choiceIndex >= 0 && choiceIndex < static_cast<int>(node->choices.size()))
             {
                 m_session.currentNodeId = node->choices[choiceIndex].nextNodeId;
+                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG dialogue choice %d selected -> node %u", choiceIndex,
+                                node->choices[choiceIndex].nextNodeId);
             }
             break;
 
@@ -269,6 +274,7 @@ namespace RPG
     {
         if (m_session.isActive)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG dialogue session ended");
             Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Dialogue ended");
         }
         m_session = {};

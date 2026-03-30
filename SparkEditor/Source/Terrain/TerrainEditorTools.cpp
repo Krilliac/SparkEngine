@@ -7,6 +7,7 @@
  */
 
 #include "TerrainEditor.h"
+#include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 
 #include <algorithm>
@@ -26,6 +27,8 @@ namespace SparkEditor
     {
         if (!m_currentTerrain)
             return;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Generating noise heightmap: octaves=%d, freq=%.2f, amp=%.2f",
+                       octaves, frequency, amplitude);
 
         auto& hm = m_currentTerrain->heightmap;
         hm.heights.resize(static_cast<size_t>(hm.width) * static_cast<size_t>(hm.height));

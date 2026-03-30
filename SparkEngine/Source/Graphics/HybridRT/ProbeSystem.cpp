@@ -13,6 +13,7 @@
 #include "ProbeSystem.h"
 #include "../RHI/RHIDevice.h"
 #include "../RHI/RHIResources.h"
+#include "../../Utils/LogMacros.h"
 
 #include <algorithm>
 
@@ -82,6 +83,10 @@ namespace Spark::Graphics
         BuildProbeGrid();
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "ProbeSystem initialized: %ux%ux%u grid (%u probes), spacing=%.1f, %d rays/probe",
+                       m_config.dimensionsX, m_config.dimensionsY, m_config.dimensionsZ, GetProbeCount(),
+                       m_config.spacing, m_config.raysPerProbe);
         return true;
     }
 
@@ -89,6 +94,7 @@ namespace Spark::Graphics
     {
         if (!m_device)
             return;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shutting down ProbeSystem");
 
         m_probeBuffer.reset();
         m_updateConstants.reset();
@@ -155,6 +161,8 @@ namespace Spark::Graphics
     {
         if (!m_initialized || !cmd || !m_updateCS)
             return;
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "Updating %u probes (lightIntensity=%.2f)", GetProbeCount(),
+                        lightIntensity);
 
         cmd->BeginEvent("ProbeUpdate");
 

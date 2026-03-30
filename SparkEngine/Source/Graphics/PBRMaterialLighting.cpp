@@ -14,6 +14,7 @@
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include "Utils/LocalFileCache.h"
 #include <iostream>
 #include <fstream>
@@ -31,6 +32,7 @@
 
 bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loading material from file: %s", filePath.c_str());
     try
     {
         std::string fileContent;
@@ -450,6 +452,8 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
             }
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' loaded from '%s' (textures: %zu, variants: %zu)",
+                       m_name.c_str(), filePath.c_str(), m_textures.size(), m_variants.size());
         Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' loaded from: " + filePath +
                                                        " (textures: " + std::to_string(m_textures.size()) +
                                                        ", variants: " + std::to_string(m_variants.size()) + ")");
@@ -458,6 +462,8 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
     }
     catch (const std::exception& e)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Exception loading material from '%s': %s", filePath.c_str(),
+                        e.what());
         Spark::SimpleConsole::GetInstance().LogError("Exception while loading material from " + filePath + ": " +
                                                      std::string(e.what()));
         return false;
@@ -466,8 +472,10 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
 
 bool Material::ReloadMaterial(ID3D11Device* device)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Reloading material: %s", m_name.c_str());
     if (!device)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ReloadMaterial: device is null for '%s'", m_name.c_str());
         Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: device is null for material '" + m_name + "'");
         return false;
     }
@@ -521,6 +529,7 @@ bool Material::ReloadMaterial(ID3D11Device* device)
 
     if (allSucceeded)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' reloaded successfully", m_name.c_str());
         Spark::SimpleConsole::GetInstance().LogSuccess("Material '" + m_name + "' reloaded successfully");
     }
 
@@ -533,6 +542,7 @@ bool Material::ReloadMaterial(ID3D11Device* device)
 
 #include "MaterialSystem.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include "Utils/LocalFileCache.h"
 #include <chrono>
 #include <cstdio>
@@ -580,6 +590,7 @@ bool Material::ReloadMaterial(ID3D11Device* device)
 
 bool Material::SaveToFile(const std::string& filePath) const
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Saving material '%s' to file: %s", m_name.c_str(), filePath.c_str());
     try
     {
         std::ofstream file(filePath);

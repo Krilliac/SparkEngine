@@ -5,6 +5,7 @@
 
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 #include <sstream>
@@ -15,11 +16,13 @@ namespace Spark
 
     ModuleHotReloadManager::~ModuleHotReloadManager()
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "ModuleHotReloadManager destructor called");
         Stop();
     }
 
     void ModuleHotReloadManager::Initialize(ModuleManager* moduleManager, IEngineContext* context)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing ModuleHotReloadManager");
         if (!moduleManager || !context)
         {
             SimpleConsole::GetInstance().LogWarning("ModuleHotReloadManager::Initialize called with null " +
@@ -33,6 +36,8 @@ namespace Spark
 
     void ModuleHotReloadManager::WatchModule(const std::string& moduleName, const std::string& dllPath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Watching module for hot-reload: %s (%s)", moduleName.c_str(),
+                       dllPath.c_str());
         std::lock_guard lock(m_mutex);
 
         WatchedModule watched;
@@ -163,8 +168,12 @@ namespace Spark
 
     bool ModuleHotReloadManager::ForceReload(const std::string& moduleName)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Force-reloading module: %s", moduleName.c_str());
         if (!m_moduleManager || !m_context)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "ForceReload failed: missing moduleManager or context");
             return false;
+        }
 
         auto& console = SimpleConsole::GetInstance();
         console.LogInfo("Force-reloading module: " + moduleName);
@@ -234,6 +243,7 @@ namespace Spark
 
         if (!std::filesystem::exists(path, ec))
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "SnapshotFile: DLL not found: %s", watched.dllPath.c_str());
             watched.valid = false;
             watched.lastSize = 0;
             return;

@@ -4,6 +4,7 @@
  */
 
 #include "FixedTimestepAccumulator.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <format>
@@ -21,6 +22,8 @@ namespace Spark
     {
         if (fixedDt <= 0.0f)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "FixedTimestepAccumulator::Initialize failed: invalid dt %.4f",
+                            fixedDt);
             return false;
         }
 
@@ -28,6 +31,8 @@ namespace Spark
         m_accumulator = 0.0f;
         m_fixedStepCount = 0;
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "FixedTimestepAccumulator initialized: dt=%.4fs (%.1f Hz)", fixedDt,
+                       1.0f / fixedDt);
         return true;
     }
 
@@ -35,7 +40,12 @@ namespace Spark
     {
         if (dt > 0.0f)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Fixed timestep changed: %.4fs -> %.4fs", m_fixedDt, dt);
             m_fixedDt = dt;
+        }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "SetFixedTimestep ignored: invalid dt %.4f", dt);
         }
     }
 
@@ -61,6 +71,9 @@ namespace Spark
         // If we hit the step cap, drain the excess to avoid permanent lag
         if (m_fixedStepCount >= MAX_STEPS_PER_FRAME && m_accumulator >= m_fixedDt)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "FixedTimestep catch-up: hit max steps (%u), draining excess accumulator",
+                           MAX_STEPS_PER_FRAME);
             m_accumulator = std::fmod(m_accumulator, m_fixedDt);
         }
     }
@@ -101,6 +114,7 @@ namespace Spark
 
     void FixedTimestepAccumulator::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "FixedTimestepAccumulator shutting down");
         m_accumulator = 0.0f;
         m_fixedStepCount = 0;
         m_initialized = false;

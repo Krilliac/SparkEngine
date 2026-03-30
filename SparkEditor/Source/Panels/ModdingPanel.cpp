@@ -5,6 +5,7 @@
 
 #include "ModdingPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 
@@ -15,7 +16,7 @@ namespace SparkEditor
 
     bool ModdingPanel::Initialize()
     {
-        std::cout << "Initializing Modding panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ModdingPanel initialized");
         return true;
     }
 
@@ -53,7 +54,7 @@ namespace SparkEditor
 
     void ModdingPanel::Shutdown()
     {
-        std::cout << "Shutting down Modding panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ModdingPanel shutting down");
     }
 
     void ModdingPanel::RenderModList()
@@ -99,6 +100,8 @@ namespace SparkEditor
 
             if (changed && mod.enabled && !mod.dependenciesMet)
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                               "ModdingPanel: cannot enable mod '%s' - missing dependencies", mod.name);
                 mod.enabled = false;
             }
 

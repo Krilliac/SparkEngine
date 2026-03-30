@@ -19,6 +19,7 @@
 
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/ContainerUtils.h"
+#include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -63,12 +64,14 @@ namespace Spark::Net
         auto& netMgr = NetworkManager::GetInstance();
         if (!netMgr.Initialize())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to initialize NetworkManager");
             Log("ERROR: Failed to initialize NetworkManager");
             return false;
         }
 
         if (!netMgr.StartServer(m_config.port, m_config.maxClients))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to start server on port %d", m_config.port);
             Log("ERROR: Failed to start server on port " + std::to_string(m_config.port));
             netMgr.Shutdown();
             return false;
@@ -77,39 +80,42 @@ namespace Spark::Net
         RegisterBuiltInRconCommands();
 
         // Register handlers for dedicated-server-specific messages
-        netMgr.RegisterHandler(MessageType::Connect,
-                               [this](const NetworkMessage& msg)
-                               {
-                                   // Check bans
-                                   {
-                                       std::lock_guard<std::mutex> lock(m_banMutex);
-                                       if (Spark::ContainerUtils::Contains(m_bannedClients, msg.senderID))
-                                       {
-                                           NetworkManager::GetInstance().KickClient(msg.senderID,
-                                                                                    "You are banned from this server");
-                                           return;
-                                       }
-                                   }
-                                   m_stats.totalConnectionsServed++;
-                                   uint32_t playerCount = GetPlayerCount();
-                                   if (playerCount > m_stats.peakPlayers)
-                                       m_stats.peakPlayers = playerCount;
-                                   m_stats.currentPlayers = playerCount;
+        netMgr.RegisterHandler(
+            MessageType::Connect,
+            [this](const NetworkMessage& msg)
+            {
+                // Check bans
+                {
+                    std::lock_guard<std::mutex> lock(m_banMutex);
+                    if (Spark::ContainerUtils::Contains(m_bannedClients, msg.senderID))
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Network, "Rejected banned client %u", msg.senderID);
+                        NetworkManager::GetInstance().KickClient(msg.senderID, "You are banned from this server");
+                        return;
+                    }
+                }
+                m_stats.totalConnectionsServed++;
+                SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u connected", msg.senderID);
+                uint32_t playerCount = GetPlayerCount();
+                if (playerCount > m_stats.peakPlayers)
+                    m_stats.peakPlayers = playerCount;
+                m_stats.currentPlayers = playerCount;
 
-                                   if (m_callbacks.onClientConnected)
-                                   {
-                                       auto clients = NetworkManager::GetInstance().GetClients();
-                                       auto it = clients.find(msg.senderID);
-                                       std::string name = (it != clients.end()) ? it->second.name : "Unknown";
-                                       m_callbacks.onClientConnected(msg.senderID, name);
-                                   }
-                                   Log("Client " + std::to_string(msg.senderID) + " connected");
-                               });
+                if (m_callbacks.onClientConnected)
+                {
+                    auto clients = NetworkManager::GetInstance().GetClients();
+                    auto it = clients.find(msg.senderID);
+                    std::string name = (it != clients.end()) ? it->second.name : "Unknown";
+                    m_callbacks.onClientConnected(msg.senderID, name);
+                }
+                Log("Client " + std::to_string(msg.senderID) + " connected");
+            });
 
         netMgr.RegisterHandler(MessageType::Disconnect,
                                [this](const NetworkMessage& msg)
                                {
                                    m_stats.currentPlayers = GetPlayerCount();
+                                   SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnected", msg.senderID);
                                    if (m_callbacks.onClientDisconnected)
                                    {
                                        m_callbacks.onClientDisconnected(msg.senderID, "Disconnected");
@@ -169,6 +175,8 @@ namespace Spark::Net
         m_startTime = std::chrono::steady_clock::now();
         m_running.store(true, std::memory_order_release);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Server '%s' initialized on port %d (max clients: %d)",
+                       m_config.serverName.c_str(), m_config.port, m_config.maxClients);
         Log("Server '" + m_config.serverName + "' initialized on port " + std::to_string(m_config.port));
         return true;
     }
@@ -194,6 +202,8 @@ namespace Spark::Net
         if (m_callbacks.onServerStarted)
             m_callbacks.onServerStarted();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Server started — tick rate: %d Hz, LAN broadcast: %s",
+                       static_cast<int>(m_config.tickRate), m_config.enableLanBroadcast ? "ON" : "OFF");
         Log("Server started — tick rate: " + std::to_string(static_cast<int>(m_config.tickRate)) + " Hz");
         return true;
     }
@@ -204,6 +214,8 @@ namespace Spark::Net
         if (!m_running.load(std::memory_order_acquire))
             return;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Server shutting down (uptime: %.0fs, total connections: %u)",
+                       m_stats.uptimeSeconds, m_stats.totalConnectionsServed);
         Log("Server shutting down...");
 
         // Signal all clients
@@ -337,6 +349,8 @@ namespace Spark::Net
         msg.payload = buf.GetData();
         NetworkManager::GetInstance().SendToAll(msg);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Match started on map '%s' (mode: %d, time limit: %.0fs)",
+                       m_currentMap.c_str(), static_cast<int>(m_config.gameMode), m_matchTimeRemaining);
         Log("Match started on map '" + m_currentMap + "'");
     }
 
@@ -434,6 +448,7 @@ namespace Spark::Net
         if (m_callbacks.onMapChanged)
             m_callbacks.onMapChanged(mapName);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Map changed to '%s'", mapName.c_str());
         Log("Map changed to '" + mapName + "'");
         StartMatch();
     }
@@ -534,6 +549,7 @@ namespace Spark::Net
         }
 
         std::string err = "Unknown command: " + cmdName;
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON unknown command: %s", cmdName.c_str());
         Log("RCON: " + err);
         return err;
     }

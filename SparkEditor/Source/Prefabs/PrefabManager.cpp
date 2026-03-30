@@ -7,6 +7,7 @@
 
 #include "PrefabManager.h"
 #include "Utils/ContainerUtils.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <filesystem>
@@ -45,6 +46,8 @@ namespace SparkEditor
         prefab.AddComponent(transform);
 
         m_prefabs[prefabName] = std::move(prefab);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created prefab from entity %llu: '%s'", entityId,
+                       prefabName.c_str());
         NotifyPrefabsChanged();
         return &m_prefabs[prefabName];
     }
@@ -71,6 +74,7 @@ namespace SparkEditor
         auto it = m_prefabs.find(prefabName);
         if (it == m_prefabs.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot instantiate unknown prefab: '%s'", prefabName.c_str());
             return 0;
         }
 
@@ -79,6 +83,8 @@ namespace SparkEditor
         static uint64_t nextInstanceId = 1000;
         uint64_t entityId = nextInstanceId++;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Instantiated prefab '%s' as entity %llu", prefabName.c_str(),
+                       entityId);
         RegisterInstance(entityId, prefabName);
         return entityId;
     }
@@ -226,7 +232,8 @@ namespace SparkEditor
             updatedCount++;
         }
 
-        std::cout << "Applied prefab '" << prefabName << "' to " << updatedCount << " instance(s)\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Applied prefab '%s' to %d instance(s)", prefabName.c_str(),
+                       updatedCount);
     }
 
     void PrefabManager::NotifyPrefabsChanged()

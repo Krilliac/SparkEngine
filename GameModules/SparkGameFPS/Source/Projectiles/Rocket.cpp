@@ -4,6 +4,7 @@
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/MathUtils.h"
+#include "Utils/LogMacros.h"
 #include "Physics/PhysicsSystem.h"
 
 using DirectX::XMFLOAT3;
@@ -70,6 +71,7 @@ void Rocket::Render(const XMMATRIX& view, const XMMATRIX& projection)
 void Rocket::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Game);
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Rocket launched: speed=%.1f, radius=%.1f", speed, m_explosionRadius);
     m_hasExploded = false;
     m_trailPositions.clear();
     m_trailTimer = 0.0f;
@@ -95,6 +97,8 @@ void Rocket::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 void Rocket::Explode(const XMFLOAT3& position)
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_hasExploded, "Rocket exploded multiple times");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Rocket exploded at (%.1f, %.1f, %.1f)", position.x, position.y,
+                   position.z);
     m_hasExploded = true;
 
     // Apply area damage to all physics bodies within explosion radius

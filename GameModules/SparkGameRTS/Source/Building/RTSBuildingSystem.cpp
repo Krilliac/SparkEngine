@@ -5,6 +5,7 @@
 
 #include "RTSBuildingSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -23,6 +24,8 @@ namespace RTS
         RegisterFactionTemplates(RTSFaction::Sentinel);
         RegisterFactionTemplates(RTSFaction::Swarm);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS building system initialized with %zu templates",
+                       m_templates.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Building system initialized (" +
                                                     std::to_string(m_templates.size()) + " templates)");
         return true;
@@ -71,6 +74,7 @@ namespace RTS
 
         uint32_t id = building.buildingId;
         m_buildings[id] = std::move(building);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS building placed: id=%u at (%.0f, %.0f)", id, x, y);
         return id;
     }
 
@@ -262,6 +266,7 @@ namespace RTS
                 bld.constructionProgress = 1.0f;
                 bld.constructionComplete = true;
                 bld.health = bld.maxHealth;
+                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS building %u construction complete", id);
             }
             else
             {

@@ -25,6 +25,7 @@ Shader::ShaderMetrics Shader::Console_GetMetrics() const
 
 void Shader::Console_RecompileAll()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Recompiling all shaders (%zu watched files)", m_watchedFiles.size());
     LOG_TO_CONSOLE_IMMEDIATE(L"Recompiling all shaders...", L"INFO");
 
     // Reload from watched files
@@ -202,6 +203,8 @@ int Shader::Console_ValidateShaders()
 
 void Shader::Console_ClearCache()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Clearing shader cache (%zu cached, %zu variants)",
+                   m_shaderCache.size(), m_variants.size());
     m_shaderCache.clear();
     m_shaderVariants.clear();
     m_variants.clear();
@@ -218,6 +221,7 @@ void Shader::Console_ClearCache()
 void Shader::Console_SetSearchPaths(const std::vector<std::string>& paths)
 {
     m_searchPaths = paths;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader search paths updated (%zu paths)", paths.size());
     std::wstring msg = L"Shader search paths updated (" + std::to_wstring(paths.size()) + L" paths)";
     LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
 }

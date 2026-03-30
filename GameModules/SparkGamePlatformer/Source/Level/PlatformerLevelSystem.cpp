@@ -5,6 +5,7 @@
 
 #include "PlatformerLevelSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 
@@ -32,6 +33,8 @@ namespace Platformer
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer level system initialized with %zu levels",
+                       m_levels.size());
         console.LogInfo("[Platformer Level] Level system initialized with " + std::to_string(m_levels.size()) +
                         " levels");
         return true;
@@ -257,6 +260,8 @@ namespace Platformer
         if (index < m_progress.size() && !m_progress[index].unlocked)
         {
             auto& console = Spark::SimpleConsole::GetInstance();
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "Platformer level %u is locked (need %u stars)", index,
+                           m_levels[index].requiredStarsToUnlock);
             console.LogWarning("[Platformer Level] Level " + std::to_string(index) + " is locked (need " +
                                std::to_string(m_levels[index].requiredStarsToUnlock) + " stars)");
             return false;
@@ -268,6 +273,7 @@ namespace Platformer
         m_levelActive = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer level %u loaded: %s", index, m_levels[index].name.c_str());
         console.LogInfo("[Platformer Level] Loaded level " + std::to_string(index) + ": " + m_levels[index].name);
         return true;
     }
@@ -317,6 +323,8 @@ namespace Platformer
         m_levelActive = false;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer level completed! Stars: %d, time: %.1fs, deaths: %d",
+                       stars, completionTime, deaths);
         console.LogInfo("[Platformer Level] Level completed! Stars: " + std::to_string(stars) +
                         " Time: " + std::to_string(completionTime) + "s Deaths: " + std::to_string(deaths));
     }

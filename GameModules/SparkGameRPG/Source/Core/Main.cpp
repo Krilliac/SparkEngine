@@ -16,6 +16,7 @@
 #include "Inventory/RPGInventorySystem.h"
 #include "NPC/RPGNPCSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -71,6 +72,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[RPG] Loading Spark RPG module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module loading — initializing 8 subsystems");
 
     // Initialize the world area setup (registers areas with streaming)
     m_worldSetup = std::make_unique<RPG::RPGWorldSetup>();
@@ -138,6 +140,7 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module loaded successfully — 8 subsystems active");
     console.LogInfo("[RPG] Spark RPG module loaded successfully (8 subsystems)");
     console.LogInfo("[RPG] Areas: " + std::to_string(m_worldSetup->GetAreaCount()) +
                     " | Classes: " + std::to_string(m_characterSystem->GetClassCount()) +
@@ -154,6 +157,7 @@ void SparkGameRPGModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[RPG] Unloading Spark RPG module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module shutting down");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -199,6 +203,7 @@ void SparkGameRPGModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module unloaded");
     console.LogInfo("[RPG] Spark RPG module unloaded");
 }
 

@@ -5,6 +5,7 @@
 
 #include "AIDebugRenderer.h"
 #include "../../Utils/DebugDraw.h"
+#include "../../Utils/LogMacros.h"
 
 using namespace DirectX;
 namespace Spark::AI
@@ -16,6 +17,10 @@ namespace Spark::AI
 
         if (navMesh.triangles.empty() || navMesh.vertices.empty())
             return;
+
+        SPARK_LOG_ONCE(Spark::LogLevel::Debug, Spark::LogCategory::AI,
+                       "Rendering navmesh debug: %zu triangles, %zu vertices", navMesh.triangles.size(),
+                       navMesh.vertices.size());
 
         for (const auto& tri : navMesh.triangles)
         {
@@ -55,6 +60,9 @@ namespace Spark::AI
         if (path.size() < 2)
             return;
 
+        SPARK_LOG_TRACE(Spark::LogCategory::AI, "Rendering debug path: %zu waypoints, current=%zu", path.size(),
+                        currentIndex);
+
         DebugColor pathColor{0.0f, 1.0f, 0.0f, 1.0f};
         DebugColor activeColor = DebugColor::Yellow();
         DebugColor visitedColor{0.5f, 0.5f, 0.5f, 1.0f};
@@ -84,6 +92,8 @@ namespace Spark::AI
     void AIDebugRenderer::RenderPerceptionCone(const XMFLOAT3& position, const XMFLOAT3& direction, float range,
                                                float halfAngle)
     {
+        SPARK_LOG_TRACE(Spark::LogCategory::AI, "Rendering perception cone: range=%.1f, halfAngle=%.2f", range,
+                        halfAngle);
         XMFLOAT3 tip = position;
         tip.y += 1.0f;
 

@@ -6,6 +6,7 @@
  */
 
 #include "RHIValidationLayer.h"
+#include "../../Utils/LogMacros.h"
 
 #include <format>
 
@@ -26,6 +27,7 @@ namespace Spark::Graphics
         m_errors.clear();
         m_initialized = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RHI validation layer initialized");
         return true;
     }
 
@@ -297,6 +299,8 @@ namespace Spark::Graphics
 
     void RHIValidationLayer::RecordError(uint32_t code, const std::string& message, const std::string& context)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "RHI validation error [%u] in %s: %s", code, context.c_str(),
+                       message.c_str());
         ValidationError error;
         error.message = message;
         error.context = context;

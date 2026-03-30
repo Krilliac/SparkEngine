@@ -13,6 +13,7 @@
 
 #include "Utils/CrashReportUploader.h"
 #include "Utils/CrashHandler.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_HAS_CURL
 #include <curl/curl.h>
@@ -90,7 +91,13 @@ static std::string JsonEscape(const std::string& s)
 bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, const std::string& zipPath)
 {
     if (cfg.githubRepo.empty() || cfg.githubToken.empty())
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Core,
+                       "CrashReportUploader: GitHub repo or token not configured, skipping upload");
         return false;
+    }
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashReportUploader: Uploading crash report to GitHub repo: %s",
+                   cfg.githubRepo.c_str());
 
     // ---- Build issue body ----
     std::ostringstream body;
@@ -326,15 +333,25 @@ bool UploadCrashToGitHub(const CrashConfig& cfg, const std::string& logContent, 
     curl_slist_free_all(headers);
     curl_easy_cleanup(c);
 
-    return (res == CURLE_OK && issueResponse.contains("\"id\""));
+    bool success = (res == CURLE_OK && issueResponse.contains("\"id\""));
+    if (success)
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashReportUploader: GitHub issue created successfully");
+    else
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashReportUploader: Failed to create GitHub issue");
+    return success;
 }
 
 bool UploadCrashFile(const CrashConfig& cfg, const std::string& url, const std::string& filePath,
                      const std::string& field)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "CrashReportUploader: Uploading file '%s' to %s", filePath.c_str(),
+                    url.c_str());
     CURL* c = curl_easy_init();
     if (!c)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashReportUploader: Failed to initialize CURL for file upload");
         return false;
+    }
     curl_mime* mime = curl_mime_init(c);
     curl_mimepart* part = curl_mime_addpart(mime);
     curl_mime_name(part, field.c_str());
@@ -345,6 +362,9 @@ bool UploadCrashFile(const CrashConfig& cfg, const std::string& url, const std::
     CURLcode res = curl_easy_perform(c);
     curl_mime_free(mime);
     curl_easy_cleanup(c);
+    if (res != CURLE_OK)
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashReportUploader: File upload failed with CURL error %d",
+                        static_cast<int>(res));
     return (res == CURLE_OK);
 }
 

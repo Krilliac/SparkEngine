@@ -9,6 +9,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
 #include "../../../SparkEngine/Source/Engine/Editor/PlayModeManager.h"
+#include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
@@ -26,7 +27,7 @@ namespace SparkEditor
     bool PlayModeToolbarPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Play Mode Toolbar panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayModeToolbarPanel initialized");
 
         SetIcon(ICON_FA_PLAY);
         m_timeScaleSlider = 1.0f;
@@ -115,7 +116,7 @@ namespace SparkEditor
 
     void PlayModeToolbarPanel::Shutdown()
     {
-        std::cout << "Shutting down Play Mode Toolbar panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayModeToolbarPanel shutting down");
         m_playModeManager = nullptr;
         m_isInitialized = false;
     }
@@ -191,10 +192,12 @@ namespace SparkEditor
         {
             if (isStopped)
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayModeToolbar: entering play mode");
                 m_playModeManager->EnterPlayMode();
             }
             else if (isPaused)
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayModeToolbar: resuming play mode");
                 m_playModeManager->ResumePlayMode();
             }
         }
@@ -262,6 +265,7 @@ namespace SparkEditor
         }
         if (ImGui::Button(ICON_FA_STOP "##StopBtn", ImVec2(32, 24)))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayModeToolbar: exiting play mode");
             m_playModeManager->ExitPlayMode();
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
@@ -345,6 +349,7 @@ namespace SparkEditor
         ImGui::SetNextItemWidth(100.0f);
         if (ImGui::SliderFloat("##TimeScale", &m_timeScaleSlider, 0.0f, 10.0f, "%.2fx"))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "PlayModeToolbar: time scale set to %.2f", m_timeScaleSlider);
             m_playModeManager->SetTimeScale(m_timeScaleSlider);
         }
         if (ImGui::IsItemHovered())

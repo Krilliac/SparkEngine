@@ -4,6 +4,7 @@
  */
 
 #include "TerrainEditor.h"
+#include "Utils/LogMacros.h"
 #include "../Core/EditorIcons.h"
 
 #include <imgui.h>
@@ -21,6 +22,7 @@ namespace SparkEditor
 
         if (ImGui::Button(ICON_FA_PLUS " Create New Terrain", ImVec2(-1, 32)))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating new terrain via UI");
             CreateNewTerrain();
         }
     }

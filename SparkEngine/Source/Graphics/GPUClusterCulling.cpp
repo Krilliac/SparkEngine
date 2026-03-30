@@ -6,6 +6,7 @@
  */
 
 #include "GPUClusterCulling.h"
+#include "Utils/LogMacros.h"
 
 #include <format>
 #include <chrono>
@@ -159,11 +160,16 @@ namespace Spark::Graphics
 
         m_stats.totalClusters = totalClusters;
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "GPUClusterCulling initialized: grid %ux%ux%u = %u clusters, max %u lights/cluster",
+                       config.gridX, config.gridY, config.gridZ, totalClusters, config.maxLightsPerCluster);
         return true;
     }
 
     void GPUClusterCulling::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUClusterCulling shutting down (%u dispatches total)",
+                       m_stats.dispatchCount);
         m_cullShader.Reset();
         m_lightBuffer.Reset();
         m_lightBufferSRV.Reset();
@@ -265,6 +271,8 @@ namespace Spark::Graphics
         m_stats.lastDispatchTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
         m_stats.activeLights = lightCount;
         m_stats.dispatchCount++;
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "GPUClusterCulling dispatch: %u lights, %.2f ms", lightCount,
+                        m_stats.lastDispatchTimeMs);
     }
 
 #endif // SPARK_PLATFORM_WINDOWS

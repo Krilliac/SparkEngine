@@ -7,6 +7,7 @@
 
 #include "AdvancedAssetPipeline.h"
 #include "Utils/ContainerUtils.h"
+#include "Utils/LogMacros.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -55,6 +56,7 @@ namespace SparkEditor
     bool TextureProcessor::Process(AssetMetadata& metadata, const AssetImportSettings& settings,
                                    std::function<void(float)> progressCallback)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Processing texture: %s", metadata.sourceFilePath.c_str());
         if (progressCallback)
         {
             progressCallback(0.0f);
@@ -65,6 +67,8 @@ namespace SparkEditor
         {
             metadata.status = ProcessingStatus::FAILED;
             metadata.errorMessage = "Source file does not exist: " + metadata.sourceFilePath;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Texture source not found: %s",
+                            metadata.sourceFilePath.c_str());
             return false;
         }
 
@@ -201,6 +205,7 @@ namespace SparkEditor
     bool MeshProcessor::Process(AssetMetadata& metadata, const AssetImportSettings& settings,
                                 std::function<void(float)> progressCallback)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Processing mesh: %s", metadata.sourceFilePath.c_str());
         if (progressCallback)
         {
             progressCallback(0.0f);
@@ -211,6 +216,7 @@ namespace SparkEditor
         {
             metadata.status = ProcessingStatus::FAILED;
             metadata.errorMessage = "Source file does not exist: " + metadata.sourceFilePath;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Mesh source not found: %s", metadata.sourceFilePath.c_str());
             return false;
         }
 
@@ -354,6 +360,7 @@ namespace SparkEditor
     bool AudioProcessor::Process(AssetMetadata& metadata, const AssetImportSettings& settings,
                                  std::function<void(float)> progressCallback)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Processing audio: %s", metadata.sourceFilePath.c_str());
         if (progressCallback)
         {
             progressCallback(0.0f);
@@ -364,6 +371,7 @@ namespace SparkEditor
         {
             metadata.status = ProcessingStatus::FAILED;
             metadata.errorMessage = "Source file does not exist: " + metadata.sourceFilePath;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Audio source not found: %s", metadata.sourceFilePath.c_str());
             return false;
         }
 
@@ -484,6 +492,7 @@ namespace SparkEditor
 
     void AssetDependencyGraph::AddAsset(const std::string& assetPath)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Adding asset to dependency graph: %s", assetPath.c_str());
         if (!Spark::ContainerUtils::Contains(m_dependencies, assetPath))
         {
             m_dependencies[assetPath] = {};

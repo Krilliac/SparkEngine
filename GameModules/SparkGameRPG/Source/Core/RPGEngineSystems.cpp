@@ -19,6 +19,7 @@
 #include "Audio/MusicManager.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 namespace RPG
 {
@@ -47,6 +48,7 @@ namespace RPG
         SubscribeToEvents();
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG engine systems integration initialized (8 subsystems wired)");
         console.LogInfo("[RPG] Engine systems integration initialized (8 subsystems wired)");
         return true;
     }
@@ -72,6 +74,7 @@ namespace RPG
 
         m_context = nullptr;
         m_initialized = false;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG engine systems integration shut down");
         console.LogInfo("[RPG] Engine systems integration shut down");
     }
 
@@ -121,6 +124,7 @@ namespace RPG
         // Configure autosave slots for RPG (3 rotating + metadata)
         saveSystem->SetMaxAutoSaves(3);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG registered 4 save serializers");
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Registered 4 save serializers");
     }
 
@@ -158,6 +162,7 @@ namespace RPG
         // 6 class animation state machines: warrior, mage, ranger, cleric, rogue, paladin
         // Each has: idle -> walk -> run -> attack -> cast -> dodge -> interact -> die
         // with class-specific blend durations (configured via data).
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG animation: 6 class state machines configured");
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Animation: 6 class state machines configured");
     }
 
@@ -211,6 +216,7 @@ namespace RPG
             aiSystem->RegisterBehavior("rpg_companion", std::move(companionTree));
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG registered 4 NPC behavior trees");
         Spark::SimpleConsole::GetInstance().LogInfo(
             "[RPG] Registered 4 NPC behavior trees (villager, merchant, guard, companion)");
     }
@@ -467,6 +473,7 @@ namespace RPG
                                                             " (intensity=" + std::to_string(evt.intensity) + ")");
             }));
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG subscribed to 4 engine events");
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Subscribed to 4 engine events");
     }
 

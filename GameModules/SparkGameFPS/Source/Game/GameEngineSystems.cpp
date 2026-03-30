@@ -40,8 +40,10 @@ using namespace DirectX;
 --------------------------------------------------------------*/
 void Game::InitializeEngineSystems()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing engine system connections");
     if (!m_engineContext)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "EngineContext not available — skipping engine system wiring");
         LOG_TO_CONSOLE_IMMEDIATE(L"EngineContext not available - skipping engine system wiring", L"WARNING");
         return;
     }
@@ -246,5 +248,6 @@ void Game::InitializeEngineSystems()
         LOG_TO_CONSOLE_IMMEDIATE(L"Replay: system configured (20fps, combat_arena)", L"SUCCESS");
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "All engine systems wired into game");
     LOG_TO_CONSOLE_IMMEDIATE(L"All engine systems wired into game", L"SUCCESS");
 }

@@ -5,6 +5,7 @@
 
 #include "../../../Core/Platform.h"
 #include "TerrainSystem.h"
+#include "../../../Utils/LogMacros.h"
 #include "Utils/Validate.h"
 
 #include <algorithm>
@@ -20,6 +21,8 @@ namespace Spark::ECS
         m_activeTerrainCount = 0;
 
         auto view = world.GetEntitiesWith<TerrainComponent, Transform>();
+        SPARK_LOG_TRACE(Spark::LogCategory::ECS, "TerrainSystem updating %zu terrain entities",
+                        static_cast<size_t>(view.size_hint()));
         for (auto entity : view)
         {
             auto& terrain = view.get<TerrainComponent>(entity);
@@ -60,6 +63,8 @@ namespace Spark::ECS
                 h = std::clamp(h, terrain.minHeight, terrain.maxHeight);
             }
         }
+
+        SPARK_LOG_TRACE(Spark::LogCategory::ECS, "TerrainSystem active terrains: %d", m_activeTerrainCount);
     }
 
 } // namespace Spark::ECS

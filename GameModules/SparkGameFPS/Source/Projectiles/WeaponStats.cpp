@@ -7,6 +7,7 @@
 
 #include "WeaponStats.h"
 #include "Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <unordered_map>
 #include <string>
 #include <algorithm>
@@ -213,6 +214,8 @@ WeaponStats CreateWeaponStats(WeaponType type, float damage, float fireRate, int
 WeaponStats ApplyWeaponModifications(const WeaponStats& baseStats, float damageMultiplier, float fireRateMultiplier,
                                      float accuracyMultiplier, float reloadTimeMultiplier)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Applying weapon mods: dmg=%.2fx, fire=%.2fx, acc=%.2fx, reload=%.2fx",
+                    damageMultiplier, fireRateMultiplier, accuracyMultiplier, reloadTimeMultiplier);
     WeaponStats modified = baseStats;
 
     modified.Damage *= damageMultiplier;
@@ -332,5 +335,6 @@ WeaponType StringToWeaponType(const char* str)
         return WeaponType::MELEE_WEAPON;
 
     // Default fallback
+    SPARK_LOG_WARN(Spark::LogCategory::Game, "Unknown weapon type string: %s, defaulting to Pistol", str);
     return WeaponType::PISTOL;
 }

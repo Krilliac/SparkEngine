@@ -9,6 +9,7 @@
 #include "RTCompositor.h"
 #include "../RHI/RHIDevice.h"
 #include "../RHI/RHIResources.h"
+#include "../../Utils/LogMacros.h"
 
 namespace Spark::Graphics
 {
@@ -56,6 +57,14 @@ namespace Spark::Graphics
         m_constants.screenHeight = static_cast<float>(height);
 
         m_initialized = (m_compositeCS && m_constantBuffer && m_historyBuffer);
+        if (m_initialized)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RTCompositor initialized (%ux%u)", width, height);
+        }
+        else
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "RTCompositor initialization failed");
+        }
         return m_initialized;
     }
 
@@ -75,6 +84,7 @@ namespace Spark::Graphics
     {
         if (width == m_width && height == m_height)
             return;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Resizing RTCompositor to %ux%u", width, height);
 
         m_width = width;
         m_height = height;

@@ -9,6 +9,7 @@
 #include "Communication/CollaborativeEditSession.h"
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 #include <iostream>
 #include <fstream>
 #include <memory>
@@ -200,6 +201,7 @@ int main(int argc, char* argv[])
     // Initialize Spark Console system (this will connect to external console)
     if (console.Initialize())
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor console system initialized");
         console.LogSuccess("SparkEditor console system initialized successfully");
         console.LogInfo("External console integration active - all editor operations will be logged");
     }
@@ -238,6 +240,8 @@ int main(int argc, char* argv[])
         config.testMode = testMode;
         config.testFrameLimit = testFrameLimit;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor config: %dx%d testMode=%s testFrames=%d", config.windowWidth,
+                       config.windowHeight, testMode ? "true" : "false", testFrameLimit);
         console.LogInfo("Editor configuration prepared");
 
         if (showDebugConsole)
@@ -248,6 +252,7 @@ int main(int argc, char* argv[])
         console.LogInfo("Initializing SparkEditor application...");
         if (!app->Initialize(config))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to initialize SparkEditor application");
             console.LogError("Failed to initialize SparkEditor application");
             if (showDebugConsole)
             {
@@ -278,9 +283,11 @@ int main(int argc, char* argv[])
             std::cout << "Shutting down..." << std::endl;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down SparkEditor application");
         console.LogInfo("Shutting down SparkEditor application...");
         // Cleanup
         app->Shutdown();
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor shutdown complete");
         console.LogSuccess("SparkEditor application shutdown complete");
 
         if (showDebugConsole)
@@ -302,6 +309,7 @@ int main(int argc, char* argv[])
     }
     catch (const std::exception& e)
     {
+        SPARK_LOG_FATAL(Spark::LogCategory::Editor, "SparkEditor exception: %s", e.what());
         console.LogCritical("SparkEditor exception: " + std::string(e.what()));
         if (showDebugConsole)
         {
@@ -314,6 +322,7 @@ int main(int argc, char* argv[])
     }
     catch (...)
     {
+        SPARK_LOG_FATAL(Spark::LogCategory::Editor, "SparkEditor: Unknown critical exception");
         console.LogCritical("SparkEditor: Unknown critical exception occurred");
         if (showDebugConsole)
         {

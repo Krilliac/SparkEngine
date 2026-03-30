@@ -5,6 +5,7 @@
 
 #include "MMOWorldSetup.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/WorldServer.h"
@@ -33,6 +34,8 @@ namespace MMO
             return false;
 
         m_context = context;
+
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing MMO world setup");
 
         DefineWorldAreas();
         RegisterAreasWithStreaming();
@@ -122,6 +125,7 @@ namespace MMO
         battleground.description = "20v20 PvP battleground with capture points";
         m_areas.push_back(battleground);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO world: %zu areas defined", m_areas.size());
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO World] Defined " + std::to_string(m_areas.size()) + " world areas");
     }
@@ -210,6 +214,7 @@ namespace MMO
         originSystem.SetRebasingThreshold(5000.0f);
         originSystem.SetEnabled(true);
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Origin rebasing enabled (threshold: 5000m)");
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO World] Origin rebasing enabled (threshold: 5000m)");
     }

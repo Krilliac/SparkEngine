@@ -6,6 +6,7 @@
  */
 
 #include "GPUSkinning.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
@@ -67,11 +68,14 @@ namespace Spark::Graphics
         m_initialized = true;
         m_totalDispatches = 0;
         m_dispatchesThisFrame = 0;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUSkinning initialized (compute shader compiled)");
         return true;
     }
 
     void GPUSkinning::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUSkinning shutting down (%zu meshes, %u total dispatches)",
+                       m_meshEntries.size(), m_totalDispatches);
         m_meshEntries.clear();
         m_skinningShader.Reset();
         m_device = nullptr;
@@ -116,7 +120,11 @@ namespace Spark::Graphics
             return false;
 
         if (maxBones > kMaxBonesPerMesh)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GPUSkinning: mesh %u has %u bones, exceeding max %u", meshId,
+                           maxBones, kMaxBonesPerMesh);
             return false;
+        }
 
         // Remove existing entry if re-registering
         m_meshEntries.erase(meshId);
@@ -216,6 +224,8 @@ namespace Spark::Graphics
             return false;
 
         m_meshEntries[meshId] = std::move(entry);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUSkinning: registered mesh %u (%u vertices, %u bones)", meshId,
+                       vertexCount, maxBones);
         return true;
     }
 

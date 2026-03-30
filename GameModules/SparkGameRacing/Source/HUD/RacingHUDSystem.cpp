@@ -5,6 +5,7 @@
 
 #include "RacingHUDSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,7 @@ namespace Racing
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing HUD system initialized");
         console.LogInfo("[Racing HUD] HUD system initialized");
         return true;
     }

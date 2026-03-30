@@ -5,6 +5,7 @@
 
 #include "AudioMixerPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstdio>
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool AudioMixerPanel::Initialize()
     {
-        std::cout << "Initializing Audio Mixer panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AudioMixerPanel initialized");
 
         // Default mix buses matching engine AudioBus enum
         const char* busNames[] = {"Master", "SFX", "Music", "Voice", "Ambient", "UI"};
@@ -84,7 +85,7 @@ namespace SparkEditor
 
     void AudioMixerPanel::Shutdown()
     {
-        std::cout << "Shutting down Audio Mixer panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AudioMixerPanel shutting down");
     }
 
     void AudioMixerPanel::RenderVolumeControls()
@@ -269,6 +270,7 @@ namespace SparkEditor
 
         if (ImGui::Button(ICON_FA_PLUS " Add Reverb Zone Entity"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "AudioMixerPanel: user requested add reverb zone entity");
             ImGui::TextDisabled("Creates a new entity with a ReverbZone component");
         }
     }

@@ -6,6 +6,7 @@
 #include "ProjectSettingsPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Core/EngineSettings.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool ProjectSettingsPanel::Initialize()
     {
-        std::cout << "Initializing Project Settings panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Project Settings panel");
         return true;
     }
 
@@ -123,7 +124,7 @@ namespace SparkEditor
 
     void ProjectSettingsPanel::Shutdown()
     {
-        std::cout << "Shutting down Project Settings panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Project Settings panel");
     }
 
     // =========================================================================
@@ -136,6 +137,7 @@ namespace SparkEditor
 
         if (ImGui::Button(ICON_FA_SAVE " Save"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project settings saved");
             settings.Save();
             m_modified = false;
         }
@@ -143,6 +145,7 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_UNDO " Reset to Defaults"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project settings reset to defaults");
             settings.ResetToDefaults();
             m_modified = true;
         }
@@ -163,13 +166,23 @@ namespace SparkEditor
         auto& gfx = EngineSettings::GetInstance().Graphics();
 
         if (ImGui::DragInt("Window Width", &gfx.windowWidth, 1, 640, 7680))
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Graphics: window width changed to %d", gfx.windowWidth);
             m_modified = true;
+        }
         if (ImGui::DragInt("Window Height", &gfx.windowHeight, 1, 480, 4320))
             m_modified = true;
         if (ImGui::Checkbox("Fullscreen", &gfx.fullscreen))
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Graphics: fullscreen %s",
+                           gfx.fullscreen ? "enabled" : "disabled");
             m_modified = true;
+        }
         if (ImGui::Checkbox("VSync", &gfx.vsync))
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Graphics: VSync %s", gfx.vsync ? "enabled" : "disabled");
             m_modified = true;
+        }
 
         const char* aaItems[] = {"Off", "2x MSAA", "4x MSAA", "8x MSAA"};
         int aaIndex = 0;
@@ -209,7 +222,11 @@ namespace SparkEditor
         {
             const char* pathItems[] = {"Forward", "Deferred", "Forward+", "Clustered"};
             if (ImGui::Combo("Render Path", &r.renderPath, pathItems, 4))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Rendering: render path changed to %s",
+                               pathItems[r.renderPath]);
                 m_modified = true;
+            }
 
             const char* presetItems[] = {"Low", "Medium", "High", "Ultra", "Custom"};
             if (ImGui::Combo("Quality Preset", &r.qualityPreset, presetItems, 5))
@@ -807,7 +824,10 @@ namespace SparkEditor
         if (ImGui::CollapsingHeader("Server", ImGuiTreeNodeFlags_DefaultOpen))
         {
             if (ImGui::DragInt("Server Port", &net.serverPort, 1, 1024, 65535))
+            {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Network: server port changed to %d", net.serverPort);
                 m_modified = true;
+            }
             if (ImGui::DragInt("Max Clients", &net.maxClients, 1, 1, 128))
                 m_modified = true;
             if (ImGui::DragFloat("Connection Timeout", &net.connectionTimeout, 0.5f, 1.0f, 60.0f, "%.1f s"))

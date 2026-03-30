@@ -5,6 +5,7 @@
 
 #include "RacingRaceManager.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 
@@ -24,6 +25,7 @@ namespace Racing
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing race manager initialized");
         console.LogInfo("[Racing Race] Race manager initialized");
         return true;
     }
@@ -91,6 +93,7 @@ namespace Racing
         }
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Race starting: %zu racers, %u laps", m_racers.size(), totalLaps);
         console.LogInfo("[Racing Race] Race starting: " + std::to_string(m_racers.size()) + " racers, " +
                         std::to_string(totalLaps) + " laps");
     }
@@ -229,6 +232,7 @@ namespace Racing
         {
             m_state = RaceState::Racing;
             auto& console = Spark::SimpleConsole::GetInstance();
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Race GO!");
             console.LogInfo("[Racing Race] GO!");
         }
     }
@@ -314,6 +318,7 @@ namespace Racing
             AwardChampionshipPoints();
 
             auto& console = Spark::SimpleConsole::GetInstance();
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Race finished!");
             console.LogInfo("[Racing Race] Race finished!");
         }
     }

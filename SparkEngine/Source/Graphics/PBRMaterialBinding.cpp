@@ -15,6 +15,7 @@
 #include "../Utils/Assert.h"
 #include "../Utils/ContainerUtils.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <filesystem>
 #include <cstring>
 #include <vector>
@@ -155,6 +156,8 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
     matTexture.enabled = true;
     m_textures[type] = matTexture;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded texture '%s' to slot %d for material '%s' (%ux%u)",
+                   filePath.c_str(), static_cast<int>(type), m_name.c_str(), width, height);
     Spark::SimpleConsole::GetInstance().LogInfo("Loaded texture: " + filePath + " for material '" + m_name + "'");
     return true;
 }
@@ -247,6 +250,9 @@ void Material::BindToShader(ID3D11DeviceContext* context) const
             boundTextures++;
         }
     }
+
+    SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "Binding material '%s': %d textures to shader", m_name.c_str(),
+                    boundTextures);
 
     // Bind all textures at once for efficiency
     if (boundTextures > 0)
@@ -464,6 +470,8 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
     }
 
     m_compiled = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material '%s' compiled successfully (blend=%d, cull=%d)",
+                   m_name.c_str(), static_cast<int>(m_renderState.blendMode), static_cast<int>(m_renderState.cullMode));
     Spark::SimpleConsole::GetInstance().LogInfo("Material '" + m_name + "' compiled successfully");
     return S_OK;
 }

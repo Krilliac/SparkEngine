@@ -3,11 +3,13 @@
 #include "Utils/Validate.h"
 #include <string>
 #include <iostream>
+#include "Utils/LogMacros.h"
 
 using namespace std;
 
 RampObject::RampObject(float length, float height) : m_length(length), m_height(height)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RampObject constructed (length=%.1f, height=%.1f)", length, height);
     std::wcout << L"[INFO] RampObject constructed. length=" << length << L" height=" << height << std::endl;
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, length > 0.f && height > 0.f, "Ramp dimensions must be positive");
     SetName("Ramp_" + std::to_string(GetID()));

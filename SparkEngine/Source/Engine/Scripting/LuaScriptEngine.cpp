@@ -7,6 +7,7 @@
  */
 
 #include "LuaScriptEngine.h"
+#include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
 #include <sstream>
 
@@ -27,6 +28,7 @@ namespace Spark::Scripting
 
     bool LuaScriptEngine::Initialize()
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Scripting, "Lua scripting not available (SPARK_LUA_AVAILABLE not defined)");
         Spark::SimpleConsole::GetInstance().LogWarning(
             "[LuaScript] Lua scripting not available (SPARK_LUA_AVAILABLE not defined). "
             "Add Luau to ThirdParty/Scripting/luau/ to enable.");
@@ -35,16 +37,20 @@ namespace Spark::Scripting
 
     void LuaScriptEngine::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Scripting, "LuaScriptEngine shutting down (%zu instances)",
+                       m_instances.size());
         m_instances.clear();
         m_initialized = false;
     }
 
     bool LuaScriptEngine::LoadScript(const std::string& /*path*/)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Scripting, "LoadScript called but Lua is not available");
         return false;
     }
     bool LuaScriptEngine::AttachScript(EntityID /*entity*/, const std::string& /*scriptPath*/)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Scripting, "AttachScript called but Lua is not available");
         return false;
     }
     void LuaScriptEngine::DetachScript(EntityID entity)

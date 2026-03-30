@@ -4,6 +4,7 @@
  */
 
 #include "EditorConsoleBridge.h"
+#include "Utils/LogMacros.h"
 
 // Include the engine's authoritative SimpleConsole header (provided by SparkEngineLib)
 #include "Utils/SparkConsole.h"
@@ -23,12 +24,14 @@ namespace SparkEditor
 
         if (!m_engineConsole)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to get engine console instance");
             return false;
         }
 
         RegisterDefaultEditorCommands();
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorConsoleBridge connected to engine console");
         LogSuccess("[R7.3] EditorConsoleBridge connected to engine console");
         return true;
     }

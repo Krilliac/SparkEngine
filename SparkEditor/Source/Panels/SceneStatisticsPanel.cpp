@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -21,6 +22,7 @@ namespace SparkEditor
     bool SceneStatisticsPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Scene Statistics panel");
         m_fpsHistory.fill(0.0f);
         m_frameTimeHistory.fill(0.0f);
         m_drawCallHistory.fill(0.0f);

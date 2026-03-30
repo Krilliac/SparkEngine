@@ -4,6 +4,7 @@
  */
 
 #include "VersionControlSystem.h"
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -103,6 +104,7 @@ namespace SparkEditor
             pos += 4;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Committing with message: '%s'", message.c_str());
         std::string cmd = "git commit -m '" + escapedMsg + "'";
         if (!description.empty())
         {
@@ -135,6 +137,7 @@ namespace SparkEditor
             return {false, "No repository open", "", -1, 0.0f, {}};
 
         std::string branch = branchName.empty() ? m_repositoryInfo->currentBranch.name : branchName;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Pushing to %s/%s", remoteName.c_str(), branch.c_str());
         std::string cmd = "git push " + remoteName + " " + branch;
         if (progressCallback)
             progressCallback(0.0f);
@@ -151,6 +154,7 @@ namespace SparkEditor
             return {false, "No repository open", "", -1, 0.0f, {}};
 
         std::string branch = branchName.empty() ? m_repositoryInfo->currentBranch.name : branchName;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Pulling from %s/%s", remoteName.c_str(), branch.c_str());
         std::string cmd = "git pull " + remoteName + " " + branch;
         if (progressCallback)
             progressCallback(0.0f);

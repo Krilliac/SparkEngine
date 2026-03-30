@@ -11,6 +11,7 @@
 #include "EditorTheme.h"
 #include "../Panels/HierarchyPanel.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 #include "EditorApplication.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -71,6 +72,7 @@ namespace SparkEditor
                 m_pluginManager->NotifySceneLoad("Untitled");
             }
 
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "New scene created");
             ShowNotification("New scene created", "success");
         }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
@@ -172,6 +174,7 @@ namespace SparkEditor
         ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Exit requested via File menu");
             m_exitRequested = true;
         }
         ImGui::EndMenu();
@@ -197,11 +200,13 @@ namespace SparkEditor
 
         if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Undo: %s", m_undoRedoManager->GetUndoDescription().c_str());
             m_undoRedoManager->Undo();
             ShowNotification("Undo: " + m_undoRedoManager->GetUndoDescription(), "info");
         }
         if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Redo: %s", m_undoRedoManager->GetRedoDescription().c_str());
             m_undoRedoManager->Redo();
             ShowNotification("Redo: " + m_undoRedoManager->GetRedoDescription(), "info");
         }
@@ -547,11 +552,13 @@ namespace SparkEditor
         ImGui::Separator();
         if (ImGui::MenuItem("Reset Layout"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Layout reset to default");
             ResetToDefaultLayout();
             ShowNotification("Layout reset!", "success");
         }
         if (ImGui::MenuItem("Save Layout"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Layout saved: Custom Layout");
             SaveLayout("Custom Layout");
             ShowNotification("Layout saved!", "success");
         }
@@ -779,6 +786,8 @@ namespace SparkEditor
         {
             m_playModeManager.TogglePlayMode();
             m_playMode = m_playModeManager.IsInPlayMode() ? PlayMode::Playing : PlayMode::Stopped;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Play mode toggled: %s",
+                           m_playModeManager.IsInPlayMode() ? "Playing" : "Stopped");
             ShowNotification(m_playModeManager.IsInPlayMode() ? "Playing..." : "Stopped",
                              m_playModeManager.IsInPlayMode() ? "success" : "info", 2.0f);
         }
