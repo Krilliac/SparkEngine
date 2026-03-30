@@ -25,7 +25,6 @@
 #include "UI/MMOLoginUI.h"
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -79,13 +78,14 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Loading Spark MMO module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[MMO] Loading Spark MMO module...");
 
     // Initialize the world area setup (registers areas with streaming/area servers)
     m_worldSetup = std::make_unique<MMO::MMOWorldSetup>();
     if (!m_worldSetup->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize world setup");
+        console.LogError("[MMO] Failed to initialize world setup");
         return false;
     }
 
@@ -93,7 +93,7 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     m_playerSystem = std::make_unique<MMO::MMOPlayerSystem>();
     if (!m_playerSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize player system");
+        console.LogError("[MMO] Failed to initialize player system");
         return false;
     }
 
@@ -101,7 +101,7 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     m_chatSystem = std::make_unique<MMO::MMOChatSystem>();
     if (!m_chatSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize chat system");
+        console.LogError("[MMO] Failed to initialize chat system");
         return false;
     }
 
@@ -109,91 +109,91 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     m_inventorySystem = std::make_unique<MMO::MMOInventorySystem>();
     if (!m_inventorySystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize inventory system");
+        console.LogError("[MMO] Failed to initialize inventory system");
         return false;
     }
 
     m_craftingSystem = std::make_unique<MMO::MMOCraftingSystem>();
     if (!m_craftingSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize crafting system");
+        console.LogError("[MMO] Failed to initialize crafting system");
         return false;
     }
 
     m_guildSystem = std::make_unique<MMO::MMOGuildSystem>();
     if (!m_guildSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize guild system");
+        console.LogError("[MMO] Failed to initialize guild system");
         return false;
     }
 
     m_tradingSystem = std::make_unique<MMO::MMOTradingSystem>();
     if (!m_tradingSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize trading system");
+        console.LogError("[MMO] Failed to initialize trading system");
         return false;
     }
 
     m_partySystem = std::make_unique<MMO::MMOPartySystem>();
     if (!m_partySystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize party system");
+        console.LogError("[MMO] Failed to initialize party system");
         return false;
     }
 
     m_achievementSystem = std::make_unique<MMO::MMOAchievementSystem>();
     if (!m_achievementSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize achievement system");
+        console.LogError("[MMO] Failed to initialize achievement system");
         return false;
     }
 
     m_reputationSystem = std::make_unique<MMO::MMOReputationSystem>();
     if (!m_reputationSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize reputation system");
+        console.LogError("[MMO] Failed to initialize reputation system");
         return false;
     }
 
     m_dungeonSystem = std::make_unique<MMO::MMODungeonSystem>();
     if (!m_dungeonSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize dungeon system");
+        console.LogError("[MMO] Failed to initialize dungeon system");
         return false;
     }
 
     m_worldBossSystem = std::make_unique<MMO::MMOWorldBossSystem>();
     if (!m_worldBossSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize world boss system");
+        console.LogError("[MMO] Failed to initialize world boss system");
         return false;
     }
 
     m_persistenceSystem = std::make_unique<MMO::MMOPersistenceSystem>();
     if (!m_persistenceSystem->Initialize(context))
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "[MMO] Persistence system unavailable (non-fatal)");
+        console.LogWarning("[MMO] Persistence system unavailable (non-fatal)");
         m_persistenceSystem.reset();
     }
 
     m_accountSystem = std::make_unique<MMO::MMOAccountSystem>();
     if (!m_accountSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize account system");
+        console.LogError("[MMO] Failed to initialize account system");
         return false;
     }
 
     m_characterSystem = std::make_unique<MMO::MMOCharacterSystem>();
     if (!m_characterSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize character system");
+        console.LogError("[MMO] Failed to initialize character system");
         return false;
     }
 
     m_loginUI = std::make_unique<MMO::MMOLoginUI>();
     if (!m_loginUI->Initialize(context, m_accountSystem.get(), m_characterSystem.get()))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to initialize login UI");
+        console.LogError("[MMO] Failed to initialize login UI");
         return false;
     }
 
@@ -201,7 +201,7 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<MMO::MMOEngineSystems>();
     if (!m_engineSystems->Initialize(context))
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "[MMO] Engine subsystem wiring partially failed (non-fatal)");
+        console.LogWarning("[MMO] Engine subsystem wiring partially failed (non-fatal)");
     }
 
     RegisterConsoleCommands();
@@ -213,29 +213,24 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         constexpr uint16_t MMO_SERVER_PORT = 27015;
         if (m_worldSetup->StartNetworkServer(MMO_SERVER_PORT))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Dedicated server listening on port %s",
-                           std::to_string(MMO_SERVER_PORT).c_str());
+            console.LogInfo("[MMO] Dedicated server listening on port " + std::to_string(MMO_SERVER_PORT));
         }
         else
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[MMO] Failed to start network server on port %s",
-                            std::to_string(MMO_SERVER_PORT).c_str());
+            console.LogError("[MMO] Failed to start network server on port " + std::to_string(MMO_SERVER_PORT));
         }
     }
 #endif
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Spark MMO module loaded successfully (17 subsystems)");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] World areas: %s",
-                   std::to_string(m_worldSetup->GetAreaCount()).c_str());
-    SPARK_LOG_INFO(Spark::LogCategory::Game,
-                   "[MMO] Items: %s | Recipes: %s | Factions: %s | Dungeons: %s | World Bosses: %s | Achievements: %s",
-                   std::to_string(m_inventorySystem->GetItemCount()).c_str(),
-                   std::to_string(m_craftingSystem->GetRecipeCount()).c_str(),
-                   std::to_string(m_reputationSystem->GetFactionCount()).c_str(),
-                   std::to_string(m_dungeonSystem->GetDungeonCount()).c_str(),
-                   std::to_string(m_worldBossSystem->GetBossCount()).c_str(),
-                   std::to_string(m_achievementSystem->GetAchievementCount()).c_str());
+    console.LogInfo("[MMO] Spark MMO module loaded successfully (17 subsystems)");
+    console.LogInfo("[MMO] World areas: " + std::to_string(m_worldSetup->GetAreaCount()));
+    console.LogInfo("[MMO] Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
+                    " | Recipes: " + std::to_string(m_craftingSystem->GetRecipeCount()) +
+                    " | Factions: " + std::to_string(m_reputationSystem->GetFactionCount()) +
+                    " | Dungeons: " + std::to_string(m_dungeonSystem->GetDungeonCount()) +
+                    " | World Bosses: " + std::to_string(m_worldBossSystem->GetBossCount()) +
+                    " | Achievements: " + std::to_string(m_achievementSystem->GetAchievementCount()));
     return true;
 }
 
@@ -244,7 +239,8 @@ void SparkGameMMOModule::OnUnload()
     if (!m_initialized)
         return;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Unloading Spark MMO module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[MMO] Unloading Spark MMO module...");
 
     // Shutdown engine subsystem wiring first
     if (m_engineSystems)
@@ -347,7 +343,7 @@ void SparkGameMMOModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Spark MMO module unloaded");
+    console.LogInfo("[MMO] Spark MMO module unloaded");
 }
 
 void SparkGameMMOModule::OnUpdate(float deltaTime)

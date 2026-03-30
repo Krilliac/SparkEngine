@@ -52,7 +52,6 @@ namespace Spark
     class SubsystemFaultIsolator
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<SubsystemFaultIsolator>() instead")]]
         static SubsystemFaultIsolator& GetInstance();
 
         /// Called by SPARK_GUARDED_UPDATE when an exception is caught

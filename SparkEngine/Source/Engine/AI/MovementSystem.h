@@ -326,7 +326,6 @@ namespace Spark::AI
     {
       public:
         /** @brief Get the singleton instance. */
-        [[deprecated("Use EngineContext::Get()->GetSystem<MovementSystem>() instead")]]
         static MovementSystem& GetInstance();
 
         void Initialize();

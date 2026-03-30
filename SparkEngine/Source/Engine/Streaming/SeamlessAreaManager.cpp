@@ -10,6 +10,7 @@
 #include "SeamlessAreaManager.h"
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/DebugHookManager.h"
+#include "../../Utils/SparkConsole.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -39,7 +40,7 @@ namespace Spark::Streaming
         m_timeSinceLastUpdate = 0.0f;
         m_initialized = true;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "[SeamlessAreaManager] Initialized");
+        Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Initialized");
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Streaming", 0.0);
     }
 
@@ -100,7 +101,7 @@ namespace Spark::Streaming
         m_stateCallbacks.clear();
         m_initialized = false;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "[SeamlessAreaManager] Shutdown");
+        Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Shutdown");
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Streaming", 0.0);
     }
 
@@ -110,8 +111,6 @@ namespace Spark::Streaming
 
     void SeamlessAreaManager::RegisterArea(const AreaDefinition& def)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "[SeamlessAreaManager] Registering area %u '%s' (priority=%d)",
-                        def.areaId, def.name.c_str(), def.priority);
         ManagedArea managed;
         managed.definition = def;
         managed.state = AreaState::Unloaded;
@@ -356,28 +355,8 @@ namespace Spark::Streaming
         }
     }
 
-    static const char* AreaStateToString(AreaState s)
-    {
-        switch (s)
-        {
-        case AreaState::Unloaded:
-            return "Unloaded";
-        case AreaState::Loading:
-            return "Loading";
-        case AreaState::Loaded:
-            return "Loaded";
-        case AreaState::Unloading:
-            return "Unloading";
-        default:
-            return "Unknown";
-        }
-    }
-
     void SeamlessAreaManager::TransitionAreaState(ManagedArea& area, AreaState newState)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "[SeamlessAreaManager] Area %u '%s': %s -> %s",
-                        area.definition.areaId, area.definition.name.c_str(), AreaStateToString(area.state),
-                        AreaStateToString(newState));
         area.state = newState;
 
         for (const auto& callback : m_stateCallbacks)

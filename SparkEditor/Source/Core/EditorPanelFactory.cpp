@@ -6,7 +6,7 @@
  * Split from EditorUI.cpp for maintainability.
  */
 #include "EditorUI.h"
-#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/HierarchyPanel.h"
@@ -220,7 +220,8 @@ namespace SparkEditor
 
     void EditorUI::CreatePanels()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating editor panels...");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("Creating editor panels...");
 
         bool isDebuggerPresent = false;
 #ifdef _WIN32
@@ -232,23 +233,22 @@ namespace SparkEditor
             try
             {
                 m_panels[name] = std::move(panel);
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created %s panel", name.c_str());
+                console.LogSuccess("Created " + name + " panel");
             }
             catch (const std::exception& e)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create %s panel: %s", name.c_str(), e.what());
+                console.LogError("Failed to create " + name + " panel: " + std::string(e.what()));
             }
         };
 
         if (isDebuggerPresent)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor,
-                           "DEBUGGER DETECTED - Using minimal panel set to avoid deadlocks");
+            console.LogWarning("DEBUGGER DETECTED - Using minimal panel set to avoid deadlocks");
             registerPanel("SceneView", std::make_shared<SceneViewPanel>());
         }
         else
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating full panel set...");
+            console.LogInfo("Creating full panel set...");
             CreateCorePanels(registerPanel);
             CreateToolAndContentPanels(registerPanel);
         }
@@ -257,27 +257,26 @@ namespace SparkEditor
         {
             try
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing %s panel", name.c_str());
+                console.LogInfo("Initializing " + name + " panel");
                 if (panel && panel->Initialize())
                 {
-                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initialized %s panel", name.c_str());
+                    console.LogSuccess("Initialized " + name + " panel");
                 }
                 else
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to initialize %s panel", name.c_str());
+                    console.LogError("Failed to initialize " + name + " panel");
                 }
             }
             catch (const std::exception& e)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Exception initializing %s panel: %s", name.c_str(),
-                                e.what());
+                console.LogError("Exception initializing " + name + " panel: " + std::string(e.what()));
             }
         }
 
         InitializePanelIcons();
         SetDefaultPanelVisibility();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created %zu editor panels", m_panels.size());
+        console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }
 
 } // namespace SparkEditor

@@ -100,7 +100,6 @@ namespace Spark
       public:
         static constexpr int FRAME_HISTORY_SIZE = 120; // ~2 seconds at 60fps
 
-        [[deprecated("Use EngineContext::Get()->GetSystem<DebugOverlay>() instead")]]
         static DebugOverlay& GetInstance()
         {
             static DebugOverlay instance;

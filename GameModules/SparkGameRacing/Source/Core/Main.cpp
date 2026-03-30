@@ -15,7 +15,6 @@
 #include "Camera/RacingCameraSystem.h"
 #include "HUD/RacingHUDSystem.h"
 #include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -69,13 +68,14 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Loading Spark Racing module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[Racing] Loading Spark Racing module...");
 
     // Initialize track system first (other systems query it)
     m_trackSystem = std::make_unique<Racing::RacingTrackSystem>();
     if (!m_trackSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Racing] Failed to initialize track system");
+        console.LogError("[Racing] Failed to initialize track system");
         return false;
     }
 
@@ -83,7 +83,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_vehicleSystem = std::make_unique<Racing::RacingVehicleSystem>();
     if (!m_vehicleSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Racing] Failed to initialize vehicle system");
+        console.LogError("[Racing] Failed to initialize vehicle system");
         return false;
     }
 
@@ -91,7 +91,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_raceManager = std::make_unique<Racing::RacingRaceManager>();
     if (!m_raceManager->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Racing] Failed to initialize race manager");
+        console.LogError("[Racing] Failed to initialize race manager");
         return false;
     }
 
@@ -99,7 +99,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_aiDriver = std::make_unique<Racing::RacingAIDriver>();
     if (!m_aiDriver->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Racing] Failed to initialize AI driver system");
+        console.LogError("[Racing] Failed to initialize AI driver system");
         return false;
     }
 
@@ -107,7 +107,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_cameraSystem = std::make_unique<Racing::RacingCameraSystem>();
     if (!m_cameraSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Racing] Failed to initialize camera system");
+        console.LogError("[Racing] Failed to initialize camera system");
         return false;
     }
 
@@ -115,7 +115,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_hudSystem = std::make_unique<Racing::RacingHUDSystem>();
     if (!m_hudSystem->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Racing] Failed to initialize HUD system");
+        console.LogError("[Racing] Failed to initialize HUD system");
         return false;
     }
 
@@ -123,18 +123,17 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_engineSystems = std::make_unique<Racing::RacingEngineSystems>();
     if (!m_engineSystems->Initialize(context))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[Racing] Failed to initialize engine system integrations");
+        console.LogError("[Racing] Failed to initialize engine system integrations");
         return false;
     }
 
     RegisterConsoleCommands();
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Spark Racing module loaded successfully (7 subsystems)");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Tracks: %s | Vehicles: %s | AI Drivers: %s",
-                   std::to_string(m_trackSystem->GetTrackCount()).c_str(),
-                   std::to_string(m_vehicleSystem->GetVehicleCount()).c_str(),
-                   std::to_string(m_aiDriver->GetDriverCount()).c_str());
+    console.LogInfo("[Racing] Spark Racing module loaded successfully (7 subsystems)");
+    console.LogInfo("[Racing] Tracks: " + std::to_string(m_trackSystem->GetTrackCount()) +
+                    " | Vehicles: " + std::to_string(m_vehicleSystem->GetVehicleCount()) +
+                    " | AI Drivers: " + std::to_string(m_aiDriver->GetDriverCount()));
     return true;
 }
 
@@ -143,7 +142,8 @@ void SparkGameRacingModule::OnUnload()
     if (!m_initialized)
         return;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Unloading Spark Racing module...");
+    auto& console = Spark::SimpleConsole::GetInstance();
+    console.LogInfo("[Racing] Unloading Spark Racing module...");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -184,7 +184,7 @@ void SparkGameRacingModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing] Spark Racing module unloaded");
+    console.LogInfo("[Racing] Spark Racing module unloaded");
 }
 
 void SparkGameRacingModule::OnUpdate(float deltaTime)

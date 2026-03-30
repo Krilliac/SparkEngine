@@ -67,7 +67,6 @@
 
 #pragma once
 #include "AnimationTypes.h"
-#include "IAnimationSystem.h"
 
 #include <memory>
 #include <algorithm>
@@ -336,14 +335,13 @@ namespace Spark::Animation
  *   auto runClip = mgr.GetClip("Run");
  * @endcode
  */
-    class AnimationManager : public IAnimationSystem
+    class AnimationManager
     {
       public:
         /**
      * @brief Access the global singleton instance.
      * @return  Reference to the AnimationManager.
      */
-        [[deprecated("Use EngineContext::Get()->GetSystem<AnimationManager>() instead")]]
         static AnimationManager& GetInstance();
 
         /**
@@ -354,7 +352,7 @@ namespace Spark::Animation
      * @param filepath  Path to the model file containing skeleton data.
      * @return          Shared pointer to the loaded Skeleton.
      */
-        std::shared_ptr<Skeleton> LoadSkeleton(const std::string& filepath) override;
+        std::shared_ptr<Skeleton> LoadSkeleton(const std::string& filepath);
 
         /**
      * @brief Load all animation clips from a 3D asset file using Assimp.
@@ -364,7 +362,7 @@ namespace Spark::Animation
      * @param filepath  Path to the model/animation file.
      * @return          Vector of shared pointers to loaded AnimationClips.
      */
-        std::vector<std::shared_ptr<AnimationClip>> LoadAnimations(const std::string& filepath) override;
+        std::vector<std::shared_ptr<AnimationClip>> LoadAnimations(const std::string& filepath);
 
         /**
      * @brief Register an animation clip by name for later lookup.
@@ -374,7 +372,7 @@ namespace Spark::Animation
      * @param name  Registration key (e.g. "Run"). Used by `GetClip()`.
      * @param clip  Clip to register.
      */
-        void RegisterClip(const std::string& name, std::shared_ptr<AnimationClip> clip) override;
+        void RegisterClip(const std::string& name, std::shared_ptr<AnimationClip> clip);
 
         /**
      * @brief Retrieve a cached clip by name.
@@ -382,7 +380,7 @@ namespace Spark::Animation
      * @param name  Name the clip was registered under.
      * @return      Shared pointer to the clip, or `nullptr` if not found.
      */
-        std::shared_ptr<AnimationClip> GetClip(const std::string& name) const override;
+        std::shared_ptr<AnimationClip> GetClip(const std::string& name) const;
 
         /**
      * @brief Retrieve a cached skeleton by name.
@@ -390,7 +388,7 @@ namespace Spark::Animation
      * @param name  Name or filepath the skeleton was loaded with.
      * @return      Shared pointer to the skeleton, or `nullptr` if not found.
      */
-        std::shared_ptr<Skeleton> GetSkeleton(const std::string& name) const override;
+        std::shared_ptr<Skeleton> GetSkeleton(const std::string& name) const;
 
         /**
      * @brief Release all cached clips and skeletons.
@@ -398,7 +396,7 @@ namespace Spark::Animation
      * Called at level unload. Existing shared_ptr holders retain data until their
      * reference count reaches zero.
      */
-        void Clear() override;
+        void Clear();
 
         /** @brief List all registered clip names (console integration). */
         std::string Console_ListAnimations() const;

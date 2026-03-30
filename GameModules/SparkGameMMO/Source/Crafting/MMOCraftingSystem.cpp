@@ -5,13 +5,14 @@
 
 #include "MMOCraftingSystem.h"
 #include "Utils/ContainerUtils.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <sstream>
-#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -20,8 +21,8 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultRecipes();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Crafting system initialized (%s recipes)",
-                       std::to_string(m_recipes.size()).c_str());
+        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Crafting system initialized (" +
+                                                    std::to_string(m_recipes.size()) + " recipes)");
         return true;
     }
 
@@ -263,7 +264,8 @@ namespace MMO
 
         AwardSkillXP(crafter, recipe->discipline, recipe->skillXP);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Crafted: %s", recipe->name.c_str());
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO] Crafted: " + recipe->name);
     }
 
     void MMOCraftingSystem::AwardSkillXP(CraftingState& crafter, CraftingDiscipline disc, int xp)

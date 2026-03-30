@@ -104,7 +104,6 @@ namespace Spark
             uint32_t registeredAliases = 0;
         };
 
-        [[deprecated("Use EngineContext::Get()->GetSystem<SimpleConsole>() instead")]]
         static SimpleConsole& GetInstance();
 
         bool Initialize();

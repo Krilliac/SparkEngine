@@ -90,7 +90,6 @@ namespace Spark::World
     class ProximityTriggerSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<ProximityTriggerSystem>() instead")]]
         static ProximityTriggerSystem& GetInstance()
         {
             static ProximityTriggerSystem s;

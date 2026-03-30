@@ -63,7 +63,6 @@ namespace Spark::AI
     class NavMeshLinkSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<NavMeshLinkSystem>() instead")]]
         static NavMeshLinkSystem& GetInstance()
         {
             static NavMeshLinkSystem s;

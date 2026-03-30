@@ -89,7 +89,6 @@ namespace Spark::Gameplay
     class MaterialEffectSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<MaterialEffectSystem>() instead")]]
         static MaterialEffectSystem& GetInstance()
         {
             static MaterialEffectSystem s;

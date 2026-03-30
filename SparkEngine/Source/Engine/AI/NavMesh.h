@@ -363,7 +363,6 @@ namespace Spark::AI
      * @brief Access the global singleton instance.
      * @return  Reference to the single NavMeshManager.
      */
-        [[deprecated("Use EngineContext::Get()->GetSystem<NavMeshManager>() instead")]]
         static NavMeshManager& GetInstance();
 
         /**

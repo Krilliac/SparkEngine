@@ -79,7 +79,6 @@ namespace Spark::Graphics
     {
       public:
         /// @brief Get the singleton instance.
-        [[deprecated("Use EngineContext::Get()->GetSystem<ClusteredLightCulling>() instead")]]
         static ClusteredLightCulling& GetInstance()
         {
             static ClusteredLightCulling instance;

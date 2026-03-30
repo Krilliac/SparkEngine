@@ -4,8 +4,9 @@
  */
 
 #include "RacingRaceManager.h"
+#include "Utils/SparkConsole.h"
+
 #include <algorithm>
-#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -22,7 +23,8 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Race] Race manager initialized");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[Racing Race] Race manager initialized");
         return true;
     }
 
@@ -88,8 +90,9 @@ namespace Racing
             racer.finishTime = 0.0f;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Race] Race starting: %s racers, %s laps",
-                       std::to_string(m_racers.size()).c_str(), std::to_string(totalLaps).c_str());
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[Racing Race] Race starting: " + std::to_string(m_racers.size()) + " racers, " +
+                        std::to_string(totalLaps) + " laps");
     }
 
     void RacingRaceManager::OnCheckpointCrossed(uint32_t vehicleId, uint32_t checkpointIndex)
@@ -225,7 +228,8 @@ namespace Racing
         if (m_countdownTimer <= 0.0f)
         {
             m_state = RaceState::Racing;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Race] GO!");
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogInfo("[Racing Race] GO!");
         }
     }
 
@@ -309,7 +313,8 @@ namespace Racing
             m_state = RaceState::Finished;
             AwardChampionshipPoints();
 
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[Racing Race] Race finished!");
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogInfo("[Racing Race] Race finished!");
         }
     }
 

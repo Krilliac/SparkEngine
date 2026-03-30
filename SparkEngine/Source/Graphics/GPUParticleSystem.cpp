@@ -15,8 +15,6 @@
 #include <algorithm>
 #include <format>
 
-#include "../Utils/LogMacros.h"
-
 #ifdef SPARK_PLATFORM_WINDOWS
 
 static const wchar_t* kEmitShaderPath = L"Shaders/HLSL/Compute/ParticleEmit.hlsl";
@@ -111,18 +109,11 @@ HRESULT GPUParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext*
         return E_INVALIDARG;
     m_device = device;
     m_context = context;
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUParticleSystem: Compiling compute shaders...");
     HRESULT hr = CompileComputeShaders();
     if (FAILED(hr))
-    {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                        "GPUParticleSystem: Compute shader compilation failed (hr=0x%08lX)",
-                        static_cast<unsigned long>(hr));
         return hr;
-    }
     m_nextEmitterId = 1;
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUParticleSystem: Initialized successfully");
     return S_OK;
 }
 
@@ -156,7 +147,6 @@ void GPUParticleSystem::Shutdown()
     if (!m_initialized)
         return;
 #ifdef SPARK_PLATFORM_WINDOWS
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUParticleSystem: Shutting down (%zu emitters)", m_emitters.size());
     m_emitters.clear();
     m_emitCS.Reset();
     m_simulateCS.Reset();

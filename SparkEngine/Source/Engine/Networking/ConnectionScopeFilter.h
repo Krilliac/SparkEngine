@@ -86,7 +86,6 @@ namespace Spark::Net
     class ConnectionScopeFilter
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<ConnectionScopeFilter>() instead")]]
         static ConnectionScopeFilter& GetInstance()
         {
             static ConnectionScopeFilter instance;

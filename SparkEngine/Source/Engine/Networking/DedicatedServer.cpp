@@ -19,7 +19,6 @@
 
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/ContainerUtils.h"
-#include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -61,22 +60,15 @@ namespace Spark::Net
         m_currentRound = 1;
         m_matchInProgress = false;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Network,
-                       "DedicatedServer: Initializing '%s' (port=%d, maxClients=%d, tickRate=%.0f)",
-                       config.serverName.c_str(), static_cast<int>(config.port), config.maxClients, config.tickRate);
-
         auto& netMgr = NetworkManager::GetInstance();
         if (!netMgr.Initialize())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "DedicatedServer: NetworkManager initialization failed");
             Log("ERROR: Failed to initialize NetworkManager");
             return false;
         }
 
         if (!netMgr.StartServer(m_config.port, m_config.maxClients))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "DedicatedServer: Failed to start on port %d",
-                            static_cast<int>(m_config.port));
             Log("ERROR: Failed to start server on port " + std::to_string(m_config.port));
             netMgr.Shutdown();
             return false;
@@ -177,8 +169,6 @@ namespace Spark::Net
         m_startTime = std::chrono::steady_clock::now();
         m_running.store(true, std::memory_order_release);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "DedicatedServer: '%s' initialized on port %d (map='%s')",
-                       m_config.serverName.c_str(), static_cast<int>(m_config.port), m_currentMap.c_str());
         Log("Server '" + m_config.serverName + "' initialized on port " + std::to_string(m_config.port));
         return true;
     }
@@ -214,11 +204,6 @@ namespace Spark::Net
         if (!m_running.load(std::memory_order_acquire))
             return;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "DedicatedServer: Shutting down '%s' (uptime=%llds)",
-                       m_config.serverName.c_str(),
-                       static_cast<long long>(std::chrono::duration_cast<std::chrono::seconds>(
-                                                  std::chrono::steady_clock::now() - m_startTime)
-                                                  .count()));
         Log("Server shutting down...");
 
         // Signal all clients

@@ -546,10 +546,10 @@ void PhysicsSystem::Update(float deltaTime)
 
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
-        m_metrics.simulationTime = static_cast<float>(duration.count()) / 1000.0f;
+        m_metrics.simulationTime = duration.count() / 1000.0f;
     }
 
-    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", static_cast<double>(duration.count()) / 1000.0);
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", duration.count() / 1000.0);
     UpdateMetrics();
 }
 

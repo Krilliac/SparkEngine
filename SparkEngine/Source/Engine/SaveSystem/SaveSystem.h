@@ -72,7 +72,6 @@
 
 #pragma once
 #include "SaveSystemTypes.h"
-#include "ISaveSystem.h"
 #include "../../Utils/Assert.h"
 
 #include "../ECS/Components.h"
@@ -166,7 +165,6 @@ namespace Spark
      *
      * @return  Reference to the global ComponentSerializerRegistry instance.
      */
-        [[deprecated("Use EngineContext::Get()->GetSystem<ComponentSerializerRegistry>() instead")]]
         static ComponentSerializerRegistry& GetInstance();
 
         /**
@@ -317,7 +315,7 @@ namespace Spark
  *       ss.Load("checkpoint1", world);
  * @endcode
  */
-    class SaveSystem : public ISaveSystem
+    class SaveSystem
     {
       public:
         /**
@@ -329,7 +327,6 @@ namespace Spark
      *
      * @return  Reference to the global SaveSystem instance.
      */
-        [[deprecated("Use EngineContext::Get()->GetSystem<SaveSystem>() instead")]]
         static SaveSystem& GetInstance();
 
         /**
@@ -343,7 +340,7 @@ namespace Spark
      * @return               `true` on success; `false` if the directory could not be
      *                       created or the serializers could not be registered.
      */
-        bool Initialize(const std::string& saveDirectory = "Saves") override;
+        bool Initialize(const std::string& saveDirectory = "Saves");
 
         /**
      * @brief Serialize and write the current world state to the specified save slot.
@@ -361,7 +358,7 @@ namespace Spark
      * @return          `true` if the file was written successfully; `false` on any error
      *                  (serialization failure, disk full, permission denied, etc.).
      */
-        bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata) override;
+        bool Save(const std::string& slotName, World& world, const SaveMetadata& metadata);
 
         /**
      * @brief Load a previously saved game state from the specified slot.
@@ -379,7 +376,7 @@ namespace Spark
      * @return          `true` if the world was fully restored; `false` on any error
      *                  (file not found, JSON parse error, version mismatch, etc.).
      */
-        bool Load(const std::string& slotName, World& world) override;
+        bool Load(const std::string& slotName, World& world);
 
         /**
      * @brief Save the current game state to the dedicated quicksave slot.
@@ -392,7 +389,7 @@ namespace Spark
      *                  automatically if left empty.
      * @return          `true` on success; `false` on error.
      */
-        bool QuickSave(World& world, const SaveMetadata& metadata) override;
+        bool QuickSave(World& world, const SaveMetadata& metadata);
 
         /**
      * @brief Restore the game state from the dedicated quicksave slot.
@@ -403,7 +400,7 @@ namespace Spark
      * @param world  The ECS World to restore into. Existing state is cleared.
      * @return       `true` if quicksave was found and loaded; `false` otherwise.
      */
-        bool QuickLoad(World& world) override;
+        bool QuickLoad(World& world);
 
         /**
      * @brief Save to a rotating autosave slot.
@@ -416,7 +413,7 @@ namespace Spark
      * @param metadata  Metadata to embed; `saveName` is typically set to "Auto Save".
      * @return          `true` on success; `false` on error.
      */
-        bool AutoSave(World& world, const SaveMetadata& metadata) override;
+        bool AutoSave(World& world, const SaveMetadata& metadata);
 
         /**
      * @brief Delete the save file for the specified slot.
@@ -428,7 +425,7 @@ namespace Spark
      * @param slotName  Slot to delete.
      * @return          `true` if the file was deleted (or didn't exist); `false` on error.
      */
-        bool DeleteSave(const std::string& slotName) override;
+        bool DeleteSave(const std::string& slotName);
 
         /**
      * @brief Return metadata for all save slots found in the save directory.
@@ -443,7 +440,7 @@ namespace Spark
      * @return  Vector of SaveMetadata, one per discovered save file. Empty if the
      *          directory contains no valid save files.
      */
-        std::vector<SaveMetadata> GetSaveSlots() const override;
+        std::vector<SaveMetadata> GetSaveSlots() const;
 
         /**
      * @brief Read the metadata header for a specific save slot without loading entities.
@@ -466,7 +463,7 @@ namespace Spark
      * @param slotName  Slot identifier to check.
      * @return          `true` if `<saveDirectory>/<slotName>.sav` exists on disk.
      */
-        bool SaveExists(const std::string& slotName) const override;
+        bool SaveExists(const std::string& slotName) const;
 
         /**
      * @brief Serialize the world to a SaveData without writing to disk.

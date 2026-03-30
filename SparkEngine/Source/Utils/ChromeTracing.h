@@ -41,7 +41,6 @@ namespace Spark
     class ChromeTracing
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<ChromeTracing>() instead")]]
         static ChromeTracing& GetInstance()
         {
             static ChromeTracing instance;

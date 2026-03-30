@@ -4,13 +4,14 @@
  */
 
 #include "MMOTradingSystem.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <sstream>
-#include "Utils/LogMacros.h"
 
 namespace MMO
 {
@@ -18,7 +19,7 @@ namespace MMO
     bool MMOTradingSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO] Trading system initialized");
+        Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Trading system initialized");
         return true;
     }
 

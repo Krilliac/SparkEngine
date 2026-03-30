@@ -9,7 +9,7 @@
  */
 
 #include "MaterialSystem.h"
-#include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 
 #include <filesystem>
 #include <string>
@@ -24,13 +24,13 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
 
     if (!m_device || filePath.empty())
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid device or empty file path in LoadTextureFromFile");
+        Spark::SimpleConsole::GetInstance().LogError("Invalid device or empty file path in LoadTextureFromFile");
         return texture;
     }
 
     if (!std::filesystem::exists(filePath))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Texture file not found: %s", filePath.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Texture file not found: " + filePath);
         return texture;
     }
 
@@ -42,8 +42,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
             CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wicFactory));
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create WIC Imaging Factory for: %s",
-                            filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Imaging Factory for: " + filePath);
             return texture;
         }
 
@@ -54,7 +53,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
                                                    WICDecodeMetadataCacheOnLoad, &decoder);
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create WIC decoder for: %s", filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC decoder for: " + filePath);
             return texture;
         }
 
@@ -63,7 +62,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
         hr = decoder->GetFrame(0, &frame);
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to get frame from decoder for: %s", filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to get frame from decoder for: " + filePath);
             return texture;
         }
 
@@ -72,7 +71,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
         hr = frame->GetSize(&originalWidth, &originalHeight);
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to get frame size for: %s", filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to get frame size for: " + filePath);
             return texture;
         }
 
@@ -93,8 +92,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
         hr = wicFactory->CreateFormatConverter(&converter);
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create format converter for: %s",
-                            filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to create format converter for: " + filePath);
             return texture;
         }
 
@@ -103,8 +101,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
                                    WICBitmapPaletteTypeCustom);
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to initialize format converter for: %s",
-                            filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to initialize format converter for: " + filePath);
             return texture;
         }
 
@@ -127,7 +124,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
         hr = converter->CopyPixels(nullptr, originalWidth * 4, static_cast<UINT>(imageData.size()), imageData.data());
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to copy pixels for: %s", filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to copy pixels for: " + filePath);
             return texture;
         }
 
@@ -141,8 +138,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
         hr = m_device->CreateTexture2D(&texDesc, &initData, &tex2D);
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create Direct3D texture for: %s",
-                            filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to create Direct3D texture for: " + filePath);
             return texture;
         }
 
@@ -156,8 +152,7 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
         hr = m_device->CreateShaderResourceView(tex2D.Get(), &srvDesc, &texture);
         if (FAILED(hr))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create shader resource view for: %s",
-                            filePath.c_str());
+            Spark::SimpleConsole::GetInstance().LogError("Failed to create shader resource view for: " + filePath);
             return texture;
         }
 
@@ -167,12 +162,14 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
             m_context->GenerateMips(texture.Get());
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Successfully loaded texture: %s (%ux%u, %u mips)",
-                       filePath.c_str(), originalWidth, originalHeight, mipLevels);
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "Successfully loaded texture: " + filePath + " (" + std::to_string(originalWidth) + "x" +
+            std::to_string(originalHeight) + ", " + std::to_string(mipLevels) + " mips)");
     }
     catch (const std::exception& e)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Exception loading texture %s: %s", filePath.c_str(), e.what());
+        Spark::SimpleConsole::GetInstance().LogError("Exception loading texture " + filePath + ": " +
+                                                     std::string(e.what()));
         texture.Reset();
     }
 

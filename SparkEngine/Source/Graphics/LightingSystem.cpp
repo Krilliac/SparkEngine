@@ -10,6 +10,7 @@
 #include "Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
+#include "../Utils/SparkConsole.h"
 #include <sstream>
 #include <algorithm>
 #include <chrono>
@@ -219,7 +220,7 @@ void LightingSystem::Shutdown()
     m_device = nullptr;
     m_context = nullptr;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem shutdown complete");
+    Spark::SimpleConsole::GetInstance().LogInfo("LightingSystem shutdown complete");
 }
 
 void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
@@ -275,7 +276,8 @@ void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const X
 void LightingSystem::EnableShadows(bool enabled)
 {
     m_shadowsEnabled = enabled;
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shadows %s globally", enabled ? "enabled" : "disabled");
+    Spark::SimpleConsole::GetInstance().LogInfo("Shadows " + std::string(enabled ? "enabled" : "disabled") +
+                                                " globally");
 }
 
 void LightingSystem::SetGlobalShadowQuality(uint32_t size)
@@ -291,13 +293,15 @@ void LightingSystem::SetGlobalShadowQuality(uint32_t size)
         }
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shadow map quality set to %ux%u", size, size);
+    Spark::SimpleConsole::GetInstance().LogInfo("Shadow map quality set to " + std::to_string(size) + "x" +
+                                                std::to_string(size));
 }
 
 void LightingSystem::Console_EnableShadows(bool enabled)
 {
     EnableShadows(enabled);
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Console command: Shadows %s", enabled ? "enabled" : "disabled");
+    Spark::SimpleConsole::GetInstance().LogInfo("Console command: Shadows " +
+                                                std::string(enabled ? "enabled" : "disabled"));
 }
 
 std::string LightingSystem::Console_ListLights() const
@@ -519,7 +523,7 @@ void LightingSystem::RenderShadowMaps(std::function<void(const XMMATRIX&, const 
         }
         catch (...)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Error in shadow map render callback for light");
+            Spark::SimpleConsole::GetInstance().LogWarning("Error in shadow map render callback for light");
         }
     }
 
@@ -554,7 +558,7 @@ std::shared_ptr<Light> LightingSystem::CreateLight(LightType type)
         }
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Created new light of type: %d", static_cast<int>(type));
+    Spark::SimpleConsole::GetInstance().LogInfo("Created new light of type: " + std::to_string(static_cast<int>(type)));
     return light;
 }
 
@@ -612,7 +616,7 @@ void LightingSystem::SetEnvironmentMap(const std::string& filePath)
 {
     // This would normally load an HDR environment map
     // For now, just log the request
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Environment map set to: %s", filePath.c_str());
+    Spark::SimpleConsole::GetInstance().LogInfo("Environment map set to: " + filePath);
 
     // Generate IBL textures after loading
     GenerateIBLTextures();
@@ -625,27 +629,27 @@ void LightingSystem::GenerateIBLTextures()
 
     // This would normally generate irradiance map, prefilter map, and BRDF LUT
     // For now, just log the operation
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Generating IBL textures");
+    Spark::SimpleConsole::GetInstance().LogInfo("Generating IBL textures");
 
     HRESULT hr = GenerateIrradianceMap(m_environmentLighting.environmentMap.Get());
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to generate irradiance map");
+        Spark::SimpleConsole::GetInstance().LogError("Failed to generate irradiance map");
         return;
     }
     hr = GeneratePrefilterMap(m_environmentLighting.environmentMap.Get());
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to generate prefilter map");
+        Spark::SimpleConsole::GetInstance().LogError("Failed to generate prefilter map");
         return;
     }
     hr = GenerateBRDFLUT();
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to generate BRDF LUT");
+        Spark::SimpleConsole::GetInstance().LogError("Failed to generate BRDF LUT");
         return;
     }
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "IBL textures generated successfully");
+    Spark::SimpleConsole::GetInstance().LogSuccess("IBL textures generated successfully");
 }
 
 // ============================================================================
@@ -675,12 +679,12 @@ int LightingSystem::Console_CreateLight(const std::string& type)
 
     if (m_lights.empty())
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create light of type: %s", type.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Failed to create light of type: " + type);
         return -1;
     }
 
     int index = static_cast<int>(m_lights.size() - 1);
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Created light at index %d", index);
+    Spark::SimpleConsole::GetInstance().LogSuccess("Created light at index " + std::to_string(index));
     return index;
 }
 
@@ -688,14 +692,14 @@ bool LightingSystem::Console_DeleteLight(int lightIndex)
 {
     if (lightIndex < 0 || lightIndex >= static_cast<int>(m_lights.size()))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid light index: %d", lightIndex);
+        Spark::SimpleConsole::GetInstance().LogError("Invalid light index: " + std::to_string(lightIndex));
         return false;
     }
 
     auto light = m_lights[lightIndex];
     RemoveLight(light);
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Deleted light at index %d", lightIndex);
+    Spark::SimpleConsole::GetInstance().LogSuccess("Deleted light at index " + std::to_string(lightIndex));
     return true;
 }
 
@@ -703,7 +707,7 @@ void LightingSystem::Console_SetLightProperty(int lightIndex, const std::string&
 {
     if (lightIndex < 0 || lightIndex >= static_cast<int>(m_lights.size()))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid light index: %d", lightIndex);
+        Spark::SimpleConsole::GetInstance().LogError("Invalid light index: " + std::to_string(lightIndex));
         return;
     }
 
@@ -711,7 +715,8 @@ void LightingSystem::Console_SetLightProperty(int lightIndex, const std::string&
     if (light)
     {
         light->Console_SetProperty(property, value);
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Set %s = %f for light %d", property.c_str(), value, lightIndex);
+        Spark::SimpleConsole::GetInstance().LogSuccess("Set " + property + " = " + std::to_string(value) +
+                                                       " for light " + std::to_string(lightIndex));
     }
 }
 
@@ -719,7 +724,7 @@ void LightingSystem::Console_SetLightColor(int lightIndex, float r, float g, flo
 {
     if (lightIndex < 0 || lightIndex >= static_cast<int>(m_lights.size()))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid light index: %d", lightIndex);
+        Spark::SimpleConsole::GetInstance().LogError("Invalid light index: " + std::to_string(lightIndex));
         return;
     }
 
@@ -727,7 +732,7 @@ void LightingSystem::Console_SetLightColor(int lightIndex, float r, float g, flo
     if (light)
     {
         light->Console_SetColor(r, g, b);
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Set color for light %d", lightIndex);
+        Spark::SimpleConsole::GetInstance().LogSuccess("Set color for light " + std::to_string(lightIndex));
     }
 }
 
@@ -745,12 +750,12 @@ void LightingSystem::Console_SetShadowQuality(const std::string& quality)
         size = 4096;
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid shadow quality: %s", quality.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Invalid shadow quality: " + quality);
         return;
     }
 
     SetGlobalShadowQuality(size);
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shadow quality set to %s", quality.c_str());
+    Spark::SimpleConsole::GetInstance().LogSuccess("Shadow quality set to " + quality);
 }
 
 void LightingSystem::Console_SetEnvironment(const std::string& skyType)
@@ -781,19 +786,19 @@ void LightingSystem::Console_SetEnvironment(const std::string& skyType)
         m_environmentLighting.fogEnabled = false;
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Environment set to %s", skyType.c_str());
+    Spark::SimpleConsole::GetInstance().LogSuccess("Environment set to " + skyType);
 }
 
 void LightingSystem::Console_EnableLightCulling(bool enabled)
 {
     EnableLightCulling(enabled);
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Light culling %s", enabled ? "enabled" : "disabled");
+    Spark::SimpleConsole::GetInstance().LogInfo("Light culling " + std::string(enabled ? "enabled" : "disabled"));
 }
 
 void LightingSystem::Console_ReloadIBL()
 {
     GenerateIBLTextures();
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "IBL textures reloaded");
+    Spark::SimpleConsole::GetInstance().LogSuccess("IBL textures reloaded");
 }
 
 // ============================================================================

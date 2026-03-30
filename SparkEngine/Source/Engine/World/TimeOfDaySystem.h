@@ -68,7 +68,6 @@ namespace Spark
          * @brief Get the singleton instance
          * @return Reference to the global TimeOfDaySystem
          */
-        [[deprecated("Use EngineContext::Get()->GetSystem<TimeOfDaySystem>() instead")]]
         static TimeOfDaySystem& GetInstance();
 
         /**

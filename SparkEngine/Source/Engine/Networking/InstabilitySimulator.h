@@ -65,7 +65,6 @@ namespace Spark::Net
     {
       public:
         /// @brief Get the singleton instance
-        [[deprecated("Use EngineContext::Get()->GetSystem<InstabilitySimulator>() instead")]]
         static InstabilitySimulator& GetInstance()
         {
             static InstabilitySimulator instance;

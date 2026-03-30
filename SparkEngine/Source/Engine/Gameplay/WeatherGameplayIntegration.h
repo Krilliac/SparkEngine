@@ -74,7 +74,6 @@ namespace Spark::Gameplay
     class WeatherGameplayIntegration
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<WeatherGameplayIntegration>() instead")]]
         static WeatherGameplayIntegration& GetInstance();
 
         /**

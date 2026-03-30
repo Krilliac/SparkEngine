@@ -110,11 +110,11 @@ namespace Spark
             // DEVICE ACCESS
             // ========================================================================
 
-            [[nodiscard]] IRHIDevice* GetDevice() const { return m_device.get(); }
-            [[nodiscard]] IRHISwapChain* GetSwapChain() const { return m_swapChain.get(); }
-            [[nodiscard]] IRHICommandList* GetCommandList() const;
-            [[nodiscard]] IRHITexture* GetBackBuffer() const;
-            [[nodiscard]] IRHITexture* GetDepthBuffer() const { return m_depthBuffer.get(); }
+            IRHIDevice* GetDevice() const { return m_device.get(); }
+            IRHISwapChain* GetSwapChain() const { return m_swapChain.get(); }
+            IRHICommandList* GetCommandList() const;
+            IRHITexture* GetBackBuffer() const;
+            IRHITexture* GetDepthBuffer() const { return m_depthBuffer.get(); }
             GraphicsBackend GetActiveBackend() const;
 
             /** @brief True when running on NullRHIDevice (no GPU / headless). */
@@ -127,46 +127,43 @@ namespace Spark
             /**
      * @brief Create a vertex buffer from data
      */
-            [[nodiscard]] std::unique_ptr<IRHIBuffer> CreateVertexBuffer(const void* data, uint64_t size,
-                                                                         uint32_t stride);
+            std::unique_ptr<IRHIBuffer> CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride);
 
             /**
      * @brief Create an index buffer from data
      */
-            [[nodiscard]] std::unique_ptr<IRHIBuffer> CreateIndexBuffer(const void* data, uint64_t size,
-                                                                        uint32_t stride = 4);
+            std::unique_ptr<IRHIBuffer> CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride = 4);
 
             /**
      * @brief Create a constant buffer
      */
-            [[nodiscard]] std::unique_ptr<IRHIBuffer> CreateConstantBuffer(uint64_t size);
+            std::unique_ptr<IRHIBuffer> CreateConstantBuffer(uint64_t size);
 
             /**
      * @brief Create a 2D texture with optional initial data
      */
-            [[nodiscard]] std::unique_ptr<IRHITexture> CreateTexture2D(uint32_t width, uint32_t height,
-                                                                       PixelFormat format, RHITextureUsage usage,
-                                                                       const void* data = nullptr);
+            std::unique_ptr<IRHITexture> CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format,
+                                                         RHITextureUsage usage, const void* data = nullptr);
 
             /**
      * @brief Create a depth buffer
      */
-            [[nodiscard]] std::unique_ptr<IRHITexture> CreateDepthBuffer(
-                uint32_t width, uint32_t height, PixelFormat format = PixelFormat::D24_UNORM_S8_UINT);
+            std::unique_ptr<IRHITexture> CreateDepthBuffer(uint32_t width, uint32_t height,
+                                                           PixelFormat format = PixelFormat::D24_UNORM_S8_UINT);
 
             /**
      * @brief Create a render target texture
      */
-            [[nodiscard]] std::unique_ptr<IRHITexture> CreateRenderTarget(
-                uint32_t width, uint32_t height, PixelFormat format = PixelFormat::R8G8B8A8_UNORM);
+            std::unique_ptr<IRHITexture> CreateRenderTarget(uint32_t width, uint32_t height,
+                                                            PixelFormat format = PixelFormat::R8G8B8A8_UNORM);
 
             /**
      * @brief Create a sampler state with common presets
      */
-            [[nodiscard]] std::unique_ptr<IRHISampler> CreateSamplerLinearWrap();
-            [[nodiscard]] std::unique_ptr<IRHISampler> CreateSamplerLinearClamp();
-            [[nodiscard]] std::unique_ptr<IRHISampler> CreateSamplerPointClamp();
-            [[nodiscard]] std::unique_ptr<IRHISampler> CreateSamplerAnisotropic(uint32_t maxAnisotropy = 16);
+            std::unique_ptr<IRHISampler> CreateSamplerLinearWrap();
+            std::unique_ptr<IRHISampler> CreateSamplerLinearClamp();
+            std::unique_ptr<IRHISampler> CreateSamplerPointClamp();
+            std::unique_ptr<IRHISampler> CreateSamplerAnisotropic(uint32_t maxAnisotropy = 16);
 
             // ========================================================================
             // SHADER CACHE
@@ -184,7 +181,7 @@ namespace Spark
             /**
      * @brief Get a loaded shader by name
      */
-            [[nodiscard]] IRHIShader* GetShader(const std::string& name);
+            IRHIShader* GetShader(const std::string& name);
 
             // ========================================================================
             // CAPABILITIES & INFO

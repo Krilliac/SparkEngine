@@ -13,7 +13,7 @@
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
-#include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -40,12 +40,12 @@ void MaterialSystem::Console_SetMaterialProperty(const std::string& materialName
     if (material && material != m_defaultMaterial)
     {
         material->Console_SetProperty(property, value);
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Set %s = %f for material: %s", property.c_str(), value,
-                       materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Set " + property + " = " + std::to_string(value) +
+                                                       " for material: " + materialName);
     }
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Material not found: %s", materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
     }
 }
 
@@ -56,12 +56,11 @@ void MaterialSystem::Console_SetMaterialColor(const std::string& materialName, c
     if (material && material != m_defaultMaterial)
     {
         material->Console_SetColor(property, r, g, b);
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Set %s color for material: %s", property.c_str(),
-                       materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Set " + property + " color for material: " + materialName);
     }
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Material not found: %s", materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
     }
 }
 
@@ -75,12 +74,12 @@ void MaterialSystem::Console_SetHotReload(bool enabled)
         {
             m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
         }
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload enabled");
+        Spark::SimpleConsole::GetInstance().LogSuccess("Hot reload enabled");
     }
     else
     {
         m_fileTimestamps.clear();
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload disabled");
+        Spark::SimpleConsole::GetInstance().LogInfo("Hot reload disabled");
     }
 }
 
@@ -104,8 +103,8 @@ void MaterialSystem::Console_SetTextureQuality(const std::string& quality)
     auto it = qualityPresets.find(quality);
     if (it == qualityPresets.end())
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                        "Invalid texture quality: %s. Available options: low, medium, high, ultra", quality.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Invalid texture quality: " + quality +
+                                                     ". Available options: low, medium, high, ultra");
         return;
     }
 
@@ -159,9 +158,10 @@ void MaterialSystem::Console_SetTextureQuality(const std::string& quality)
         regeneratedSamplers++;
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
-                   "Texture quality set to: %s - %s\nUpdated %d materials, cleared %d cached samplers", quality.c_str(),
-                   settings.description.c_str(), updatedMaterials, regeneratedSamplers);
+    Spark::SimpleConsole::GetInstance().LogSuccess("Texture quality set to: " + quality + " - " + settings.description +
+                                                   "\nUpdated " + std::to_string(updatedMaterials) + " materials, " +
+                                                   "cleared " + std::to_string(regeneratedSamplers) +
+                                                   " cached samplers");
 
     // Store current quality setting for future reference
     static std::string currentQuality = quality;
@@ -188,7 +188,7 @@ bool MaterialSystem::Console_LoadTextureToSlot(const std::string& materialName, 
     auto material = GetMaterial(materialName);
     if (!material || material == m_defaultMaterial)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Material not found: %s", materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
         return false;
     }
 
@@ -196,14 +196,14 @@ bool MaterialSystem::Console_LoadTextureToSlot(const std::string& materialName, 
 
     if (material->LoadTexture(type, texturePath, m_device))
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded texture '%s' to %s slot of material '%s'",
-                       texturePath.c_str(), textureType.c_str(), materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogSuccess("Loaded texture '" + texturePath + "' to " + textureType +
+                                                       " slot of material '" + materialName + "'");
         return true;
     }
     else
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load texture '%s' to material '%s'",
-                        texturePath.c_str(), materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Failed to load texture '" + texturePath + "' to material '" +
+                                                     materialName + "'");
         return false;
     }
 }
@@ -213,15 +213,15 @@ void MaterialSystem::Console_UnloadTextureFromSlot(const std::string& materialNa
     auto material = GetMaterial(materialName);
     if (!material || material == m_defaultMaterial)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Material not found: %s", materialName.c_str());
+        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
         return;
     }
 
     MaterialTextureType type = StringToTextureType(textureType);
     material->UnloadTexture(type);
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Unloaded %s texture from material '%s'", textureType.c_str(),
-                   materialName.c_str());
+    Spark::SimpleConsole::GetInstance().LogSuccess("Unloaded " + textureType + " texture from material '" +
+                                                   materialName + "'");
 }
 
 

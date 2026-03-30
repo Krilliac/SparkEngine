@@ -32,7 +32,6 @@ namespace Spark
     {
       public:
         /// @brief Get the singleton instance
-        [[deprecated("Use EngineContext::Get()->GetSystem<FixedTimestepAccumulator>() instead")]]
         static FixedTimestepAccumulator& GetInstance();
 
         /// @brief Initialize with the desired fixed timestep

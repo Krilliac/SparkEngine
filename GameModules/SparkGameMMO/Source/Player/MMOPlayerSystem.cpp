@@ -5,12 +5,13 @@
 
 #include "MMOPlayerSystem.h"
 #include "Utils/ContainerUtils.h"
+#include "Utils/SparkConsole.h"
+
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
 #include "Engine/World/SpatialGrid.h"
-#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -33,7 +34,8 @@ namespace MMO
 
         m_initialized = true;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO Player] Player system initialized");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO Player] Player system initialized");
         return true;
     }
 
@@ -66,8 +68,8 @@ namespace MMO
                                        player.isLocalPlayer = (clientId == m_localClientId);
                                        m_players[clientId] = player;
 
-                                       SPARK_LOG_INFO(Spark::LogCategory::Game,
-                                                      "[MMO Player] Spawned remote player: %s", player.name.c_str());
+                                       auto& console = Spark::SimpleConsole::GetInstance();
+                                       console.LogInfo("[MMO Player] Spawned remote player: " + player.name);
                                    }
                                });
 
@@ -114,7 +116,8 @@ namespace MMO
                                    }
                                });
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO Player] Network handlers registered");
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO Player] Network handlers registered");
 #endif
     }
 
@@ -163,8 +166,8 @@ namespace MMO
         netMgr.RegisterReplicatedEntity(repEntity);
 #endif
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO Player] Spawned local player '%s' in area %s", name.c_str(),
-                       std::to_string(areaId).c_str());
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[MMO Player] Spawned local player '" + name + "' in area " + std::to_string(areaId));
         return networkId;
     }
 
@@ -173,7 +176,8 @@ namespace MMO
         auto it = m_players.find(clientId);
         if (it != m_players.end())
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[MMO Player] Removed player: %s", it->second.name.c_str());
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.LogInfo("[MMO Player] Removed player: " + it->second.name);
             m_players.erase(it);
         }
     }

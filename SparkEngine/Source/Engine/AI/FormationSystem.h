@@ -125,7 +125,6 @@ namespace Spark::AI
     {
       public:
         /** @brief Get the singleton instance. */
-        [[deprecated("Use EngineContext::Get()->GetSystem<FormationSystem>() instead")]]
         static FormationSystem& GetInstance()
         {
             static FormationSystem s;

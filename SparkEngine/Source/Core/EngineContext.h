@@ -35,32 +35,6 @@ class AngelScriptEngine;
 class AssetPipeline;
 class World;
 
-// Interface forward declarations for abstraction layer
-namespace Spark::Audio
-{
-    class IAudioBackend;
-}
-namespace Spark::Animation
-{
-    class IAnimationSystem;
-}
-namespace Spark::Scripting
-{
-    class IScriptEngine;
-}
-namespace Spark::VR
-{
-    class IVRBackend;
-}
-namespace Spark::Streaming
-{
-    class IStreamingLoader;
-}
-namespace Spark::UI
-{
-    class IUISystem;
-}
-
 // ============================================================================
 // Compile-time type ID (works with incomplete/forward-declared types)
 // ============================================================================
@@ -275,19 +249,6 @@ class EngineContext : public Spark::IEngineContext
     bool IsHeadless() const override;
 
     // =========================================================================
-    // Interface getters — return abstract interface types for decoupled access
-    // =========================================================================
-
-    Spark::Animation::IAnimationSystem* GetAnimationInterface()
-    {
-        return GetSystem<Spark::Animation::IAnimationSystem>();
-    }
-    Spark::Scripting::IScriptEngine* GetScriptInterface() { return GetSystem<Spark::Scripting::IScriptEngine>(); }
-    Spark::VR::IVRBackend* GetVRInterface() { return GetSystem<Spark::VR::IVRBackend>(); }
-    Spark::Streaming::IStreamingLoader* GetStreamingLoader() { return GetSystem<Spark::Streaming::IStreamingLoader>(); }
-    Spark::UI::IUISystem* GetUIInterface() { return GetSystem<Spark::UI::IUISystem>(); }
-
-    // =========================================================================
     // Named setters — delegate to generic registry (R1.1)
     // =========================================================================
 
@@ -330,10 +291,6 @@ class EngineContext : public Spark::IEngineContext
     }
     void SetMusic(Spark::Audio::MusicManager* m) { RegisterSystem<Spark::Audio::MusicManager>(m); }
     void SetVFS(Spark::VirtualFileSystem* v) { RegisterSystem<Spark::VirtualFileSystem>(v); }
-    void SetStreamingLoader(Spark::Streaming::IStreamingLoader* s)
-    {
-        RegisterSystem<Spark::Streaming::IStreamingLoader>(s);
-    }
 
     // =========================================================================
     // Generic system registry (R1.1 — single source of truth)

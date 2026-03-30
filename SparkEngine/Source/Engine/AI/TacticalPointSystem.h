@@ -92,7 +92,6 @@ namespace Spark::AI
     class TacticalPointSystem
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<TacticalPointSystem>() instead")]]
         static TacticalPointSystem& GetInstance()
         {
             static TacticalPointSystem s;

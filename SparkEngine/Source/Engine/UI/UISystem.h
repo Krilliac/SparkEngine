@@ -50,8 +50,6 @@
 
 #pragma once
 
-#include "IUISystem.h"
-
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -409,38 +407,38 @@ namespace Spark::UI
  *
  * Owns the UICanvas and provides convenience methods for common HUD operations.
  */
-    class UISystem : public IUISystem
+    class UISystem
     {
       public:
         UISystem();
-        ~UISystem() override = default;
+        ~UISystem() = default;
 
         /**
      * \brief Initialize the UI system.
      * \param screenWidth  Screen width.
      * \param screenHeight Screen height.
      */
-        void Initialize(int screenWidth, int screenHeight) override;
+        void Initialize(int screenWidth, int screenHeight);
 
         /** \brief Get the root canvas. */
         UICanvas& GetCanvas() { return m_canvas; }
         const UICanvas& GetCanvas() const { return m_canvas; }
 
         /** \brief Update all UI elements. */
-        void Update(float deltaTime) override;
+        void Update(float deltaTime);
 
         /** \brief Render all UI elements. */
-        void Render() override;
+        void Render();
 
         /** \brief Handle screen resize. */
-        void OnResize(int width, int height) override;
+        void OnResize(int width, int height);
 
         /** \brief Handle mouse click. Returns true if UI consumed the click. */
-        bool HandleClick(float x, float y) override;
+        bool HandleClick(float x, float y);
 
         /** \brief Show or hide all UI. */
-        void SetVisible(bool visible) override { m_visible = visible; }
-        bool IsVisible() const override { return m_visible; }
+        void SetVisible(bool visible) { m_visible = visible; }
+        bool IsVisible() const { return m_visible; }
 
         // --- Console integration ---
 

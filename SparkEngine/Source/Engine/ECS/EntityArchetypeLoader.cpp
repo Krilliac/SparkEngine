@@ -6,7 +6,7 @@
 #include "EntityArchetypeLoader.h"
 #include "Components/LightComponents.h"
 #include "../../Core/Reflection.h"
-#include "../../Utils/LogMacros.h"
+#include "../../Utils/SparkConsole.h"
 #include "../../Utils/StringUtils.h"
 
 #include <algorithm>
@@ -108,7 +108,7 @@ namespace Spark::ECS
         std::ifstream file(path);
         if (!file.is_open())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::ECS, "ArchetypeLoader: failed to open file: %s", path.c_str());
+            Spark::SimpleConsole::GetInstance().LogWarning("ArchetypeLoader: failed to open file: " + path);
             return false;
         }
 
@@ -144,13 +144,14 @@ namespace Spark::ECS
 
         if (archetype.name.empty())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::ECS, "ArchetypeLoader: file has no 'name' field: %s", path.c_str());
+            Spark::SimpleConsole::GetInstance().LogWarning("ArchetypeLoader: file has no 'name' field: " + path);
             return false;
         }
 
         EntityArchetypeSystem::GetInstance().RegisterArchetype(archetype);
-        SPARK_LOG_INFO(Spark::LogCategory::ECS, "ArchetypeLoader: loaded archetype '%s' with %zu components",
-                       archetype.name.c_str(), archetype.components.size());
+        Spark::SimpleConsole::GetInstance().LogSuccess("ArchetypeLoader: loaded archetype '" + archetype.name +
+                                                       "' with " + std::to_string(archetype.components.size()) +
+                                                       " components");
         return true;
     }
 
@@ -313,7 +314,7 @@ namespace Spark::ECS
         const auto* archetype = EntityArchetypeSystem::GetInstance().GetArchetype(name);
         if (!archetype)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::ECS, "SpawnFromArchetype: archetype not found: %s", name.c_str());
+            Spark::SimpleConsole::GetInstance().LogWarning("SpawnFromArchetype: archetype not found: " + name);
             return entt::null;
         }
 
@@ -333,7 +334,7 @@ namespace Spark::ECS
         const auto* archetype = EntityArchetypeSystem::GetInstance().GetArchetype(name);
         if (!archetype)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::ECS, "SpawnFromArchetype: archetype not found: %s", name.c_str());
+            Spark::SimpleConsole::GetInstance().LogWarning("SpawnFromArchetype: archetype not found: " + name);
             return entt::null;
         }
 

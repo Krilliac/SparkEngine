@@ -5,7 +5,6 @@
 
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
-#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 #include <sstream>
@@ -23,15 +22,12 @@ namespace Spark
     {
         if (!moduleManager || !context)
         {
-            const char* missing = !moduleManager ? "moduleManager" : "context";
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "ModuleHotReloadManager::Initialize called with null %s", missing);
             SimpleConsole::GetInstance().LogWarning("ModuleHotReloadManager::Initialize called with null " +
-                                                    std::string(missing));
+                                                    std::string(!moduleManager ? "moduleManager" : "context"));
         }
         m_moduleManager = moduleManager;
         m_context = context;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "ModuleHotReloadManager initialized");
         SimpleConsole::GetInstance().LogInfo("ModuleHotReloadManager initialized");
     }
 
@@ -65,7 +61,6 @@ namespace Spark
     void ModuleHotReloadManager::Start()
     {
         m_running = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "Module hot-reload watcher started (debounce=%ums)", m_debounceMs);
         SimpleConsole::GetInstance().LogInfo("Module hot-reload started");
     }
 
@@ -74,8 +69,6 @@ namespace Spark
         if (m_running)
         {
             m_running = false;
-            SPARK_LOG_INFO(Spark::LogCategory::Core, "Module hot-reload watcher stopped (total reloads=%d)",
-                           m_reloadCount);
             SimpleConsole::GetInstance().LogInfo("Module hot-reload stopped");
         }
     }
@@ -109,7 +102,6 @@ namespace Spark
 
             if (!alreadyPending)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Core, "Hot-reload: Change detected in module '%s'", name.c_str());
                 SimpleConsole::GetInstance().LogInfo("Change detected in module: " + name);
                 m_pendingReloads.push_back({name, now});
             }

@@ -325,7 +325,6 @@ namespace Spark::Net
     class NetworkManager
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<NetworkManager>() instead")]]
         static NetworkManager& GetInstance();
 
         /// Initialize the networking subsystem (platform sockets).
@@ -625,7 +624,6 @@ namespace Spark::Net
     class NetworkManagerStub
     {
       public:
-        [[deprecated("Use EngineContext::Get()->GetSystem<NetworkManagerStub>() instead")]]
         static NetworkManagerStub& GetInstance()
         {
             static NetworkManagerStub instance;

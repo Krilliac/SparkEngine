@@ -18,7 +18,7 @@
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Audio/MusicManager.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 
 namespace RPG
 {
@@ -35,6 +35,7 @@ namespace RPG
             return false;
 
         m_context = context;
+        auto& console = Spark::SimpleConsole::GetInstance();
 
         RegisterSaveSerializers();
         RegisterAnimationStateMachines();
@@ -46,7 +47,7 @@ namespace RPG
         SubscribeToEvents();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Engine systems integration initialized (8 subsystems wired)");
+        console.LogInfo("[RPG] Engine systems integration initialized (8 subsystems wired)");
         return true;
     }
 
@@ -64,13 +65,14 @@ namespace RPG
         if (!m_initialized)
             return;
 
+        auto& console = Spark::SimpleConsole::GetInstance();
 
         // Release event subscriptions (RAII handles auto-unsubscribe)
         m_eventHandles.clear();
 
         m_context = nullptr;
         m_initialized = false;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Engine systems integration shut down");
+        console.LogInfo("[RPG] Engine systems integration shut down");
     }
 
     void RPGEngineSystems::RenderDebugUI()
@@ -119,7 +121,7 @@ namespace RPG
         // Configure autosave slots for RPG (3 rotating + metadata)
         saveSystem->SetMaxAutoSaves(3);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Registered 4 save serializers");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Registered 4 save serializers");
     }
 
     std::string RPGEngineSystems::SaveGame(const std::string& slotName)
@@ -156,7 +158,7 @@ namespace RPG
         // 6 class animation state machines: warrior, mage, ranger, cleric, rogue, paladin
         // Each has: idle -> walk -> run -> attack -> cast -> dodge -> interact -> die
         // with class-specific blend durations (configured via data).
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Animation: 6 class state machines configured");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Animation: 6 class state machines configured");
     }
 
     // =========================================================================
@@ -209,8 +211,8 @@ namespace RPG
             aiSystem->RegisterBehavior("rpg_companion", std::move(companionTree));
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[RPG] Registered 4 NPC behavior trees (villager, merchant, guard, companion)");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[RPG] Registered 4 NPC behavior trees (villager, merchant, guard, companion)");
     }
 
     // =========================================================================
@@ -293,7 +295,7 @@ namespace RPG
             events->AddCue({10.0f, "rpg_show_credits", ""});
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Registered 3 cinematic sequences (intro, boss, ending)");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Registered 3 cinematic sequences (intro, boss, ending)");
     }
 
     // =========================================================================
@@ -319,7 +321,7 @@ namespace RPG
         // movement). The actual modifiers are applied in RPGCombatSystem when it reads
         // the current weather state from context.
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Weather and time-of-day configured (8:00 AM, clear)");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Weather and time-of-day configured (8:00 AM, clear)");
     }
 
     std::string RPGEngineSystems::SetWeather(const std::string& weatherName)
@@ -371,8 +373,8 @@ namespace RPG
         // (C++20 coroutine header bugs with GCC 13). Coroutine patterns:
         // quest timers, dialogue pacing, NPC respawn delays — started on demand
         // by gameplay code via IEngineContext::GetCoroutineScheduler().
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[RPG] Coroutines: quest timers, dialogue pacing, respawn delays configured");
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            "[RPG] Coroutines: quest timers, dialogue pacing, respawn delays configured");
     }
 
     // =========================================================================
@@ -409,7 +411,7 @@ namespace RPG
         dynamicState.transitionDuration = 2.5f;
         music->SetDynamicMusicState(dynamicState);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Registered 5 music tracks with dynamic transitions");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Registered 5 music tracks with dynamic transitions");
     }
 
     // =========================================================================
@@ -426,17 +428,17 @@ namespace RPG
         m_eventHandles.push_back(eventBus->Subscribe<Spark::QuestCompletedEvent>(
             [](const Spark::QuestCompletedEvent& evt)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest completed: %s (id=%s)", evt.questName.c_str(),
-                               std::to_string(evt.questId).c_str());
+                Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest completed: " + evt.questName +
+                                                            " (id=" + std::to_string(evt.questId) + ")");
             }));
 
         // Entity killed: update quest kill counters, NPC reactions
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
             [](const Spark::EntityKilledEvent& evt)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Entity killed: %s by %s (%s)",
-                               std::to_string(evt.entityId).c_str(), std::to_string(evt.killerId).c_str(),
-                               evt.cause.c_str());
+                Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Entity killed: " + std::to_string(evt.entityId) +
+                                                            " by " + std::to_string(evt.killerId) + " (" + evt.cause +
+                                                            ")");
             }));
 
         // Time of day changed: update NPC schedules (shops close at night, guard shifts)
@@ -446,12 +448,13 @@ namespace RPG
                 // Night time: close shops, switch guard patrols
                 if (evt.currentHour >= 20.0f || evt.currentHour < 6.0f)
                 {
-                    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Night time — shops closing, guards on night shift");
+                    Spark::SimpleConsole::GetInstance().LogInfo(
+                        "[RPG] Night time — shops closing, guards on night shift");
                 }
                 // Dawn: reopen shops, day guards on duty
                 else if (evt.currentHour >= 6.0f && evt.previousHour < 6.0f)
                 {
-                    SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Dawn — shops opening, day guards on duty");
+                    Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Dawn — shops opening, day guards on duty");
                 }
             }));
 
@@ -459,11 +462,12 @@ namespace RPG
         m_eventHandles.push_back(eventBus->Subscribe<Spark::WeatherChangedEvent>(
             [](const Spark::WeatherChangedEvent& evt)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Weather changed to type %s (intensity=%s)",
-                               std::to_string(evt.newType).c_str(), std::to_string(evt.intensity).c_str());
+                Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Weather changed to type " +
+                                                            std::to_string(evt.newType) +
+                                                            " (intensity=" + std::to_string(evt.intensity) + ")");
             }));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Subscribed to 4 engine events");
+        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Subscribed to 4 engine events");
     }
 
 } // namespace RPG

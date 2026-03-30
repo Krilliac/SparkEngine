@@ -199,7 +199,7 @@ namespace Spark::AI
          *
          * @return EntityID of the next agent, or std::nullopt.
          */
-        [[nodiscard]] std::optional<EntityID> GetNextAgent();
+        std::optional<EntityID> GetNextAgent();
 
         /**
          * @brief Mark an agent as having been processed this frame.
