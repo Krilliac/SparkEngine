@@ -38,25 +38,29 @@ namespace Spark::Net
 
         bool Initialize(uint16_t /*port*/) override
         {
-            // TODO: Initialise ISteamNetworkingSockets when Steam SDK is linked
+            // Stub: returns false until Steamworks SDK is linked.
+            // With SDK: SteamNetworkingSockets()->InitAuthentication() on the given port.
             return false;
         }
 
         void Shutdown() override
         {
-            // TODO: Close Steam networking connections
+            // Stub: no-op until Steamworks SDK is linked.
+            // With SDK: close all HSteamNetConnection handles and release sockets interface.
         }
 
         bool Send(const uint8_t* /*data*/, size_t /*size*/, const std::string& /*address*/, uint16_t /*port*/) override
         {
-            // TODO: Send via ISteamNetworkingSockets
+            // Stub: returns false until Steamworks SDK is linked.
+            // With SDK: ISteamNetworkingSockets::SendMessageToConnection().
             return false;
         }
 
         int Receive(uint8_t* /*buffer*/, size_t /*bufferSize*/, std::string& /*fromAddress*/,
                     uint16_t& /*fromPort*/) override
         {
-            // TODO: Receive via ISteamNetworkingSockets
+            // Stub: returns -1 until Steamworks SDK is linked.
+            // With SDK: ISteamNetworkingSockets::ReceiveMessagesOnConnection().
             return -1;
         }
 

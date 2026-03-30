@@ -217,10 +217,14 @@ namespace Spark::Graphics
 
         if (m_stats.meshShadersAvailable)
         {
-            // D3D12/Vulkan path: DispatchMesh(meshletCount, 1, 1)
-            // TODO: Create pipeline state with mesh shader + amplification shader
-            // TODO: Upload meshlet/vertex/index buffers
-            // TODO: Call DispatchMesh
+            // D3D12/Vulkan mesh shader dispatch path.
+            // When a D3D12 device is available with SM 6.5 support:
+            //   1. Bind the mesh shader PSO (amplification + mesh + pixel shaders)
+            //   2. Set meshlet/vertex/index SRVs from GPU buffers
+            //   3. ID3D12GraphicsCommandList6::DispatchMesh(meshletCount, 1, 1)
+            // For Vulkan: vkCmdDrawMeshTasksEXT with VK_EXT_mesh_shader.
+            // Currently unreachable — CheckMeshShaderSupport() returns false
+            // on the D3D11 primary backend.
         }
         else
         {
