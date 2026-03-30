@@ -79,3 +79,4 @@ If the fix is more than 10 lines, ask: "What am I adding that I don't need?"
 - This problem is not fixable with AI alone — human review focused on *removal* is the real safeguard
 - The CLAUDE.md Anti-Bloat Rules section is the living enforcement mechanism; update it when new patterns are found
 - "Looks good, simplify it" is a valid and important review comment — it should be used often
+- **See also:** [Comprehensive bloat audit](codebase-bloat-audit-2026-03-15.md), [Code quality violations](code-quality-violations.md)

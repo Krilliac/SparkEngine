@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-22
 **Type:** Observation
-**Status:** Active
+**Status:** Resolved
 **Severity:** High
 
 ## Description

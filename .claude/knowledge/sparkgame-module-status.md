@@ -127,3 +127,7 @@ Audit of SparkGame (example FPS game DLL), SparkConsole (standalone debug consol
 | SparkShaderCompiler.exe | 100% | None |
 
 **Verdict**: SparkGame is a solid FPS framework and engine showcase, but lacks enemy combat AI — the single largest missing piece for a playable game.
+
+## Notes
+
+- **See also:** [Gameplay systems status](gameplay-systems-status.md)

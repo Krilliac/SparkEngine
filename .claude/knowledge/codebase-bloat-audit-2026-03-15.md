@@ -307,3 +307,4 @@ ChromeTracing macro renamed to `SPARK_CHROME_TRACE_SCOPE` to avoid conflict with
 - The 127 public-method violations are a NEW finding not in the prior audit.
 - The 17 orphaned singletons expand on the prior audit's count of 2.
 - ScopeGuard.h and Tween.h are NEW dead-code findings.
+- **See also:** [AI bloat pattern](ai-bloat-pattern.md), [Code quality violations](code-quality-violations.md)

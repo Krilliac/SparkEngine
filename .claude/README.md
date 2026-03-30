@@ -118,13 +118,30 @@ Use this when one entry's context or solution depends on knowledge from another 
 ├── README.md                              # This file — system overview
 ├── index.md                               # Master index — READ THIS AT SESSION START
 └── knowledge/
-    ├── github-api-pr-checks.md            # [Issue] PR check status access methods
-    ├── ci-failures.md                     # [Issue] CI job blocking rules, reproduction
-    ├── git-rebase-conflicts.md            # [Issue] Rebase conflict resolution
-    ├── clang-format.md                    # [Issue] clang-format issues and fixes
-    ├── cmake-linux-build-failures.md      # [Issue] Linux CMake configure/build failures
-    ├── windows-msvc-w4-warnings.md        # [Issue] MSVC /W4 warning-as-error patterns
-    ├── workflow-patterns.md               # [Pattern] Effective SparkEngine dev workflows
+    ├── ai-bloat-pattern.md                # [Observation] AI bloat causes and countermeasures
+    ├── build-optimizations.md             # [Optimization] Build and CI workflow speedups
+    ├── ci-reproducible-builds.md          # [Pattern] Local CI reproduction commands
+    ├── closed-engines-analysis.md         # [Decision] 13 closed/proprietary engine analysis
+    ├── code-quality-violations.md         # [Observation] Oversized functions, method violations
+    ├── codebase-bloat-audit-2026-03-15.md # [Observation] Comprehensive bloat audit
     ├── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
-    └── build-optimizations.md            # [Optimization] Build and CI workflow speedups
+    ├── documentation-coverage-audit.md    # [Observation] Wiki and API doc coverage
+    ├── eleven-engine-analysis.md          # [Decision] 11 engines + 3 frameworks analyzed
+    ├── engine-next-steps-2026-03-22.md    # [Decision] 5-phase roadmap
+    ├── five-engine-analysis.md            # [Decision] 5-engine analysis (Cocos/Defold/etc.)
+    ├── gameplay-systems-status.md         # [Observation] 29+ working engine systems
+    ├── hardware-acceleration-systems.md   # [Decision] 8 GPU systems, 72 tests
+    ├── jolt-physics-integration.md        # [Observation] Jolt Physics migration status
+    ├── live-editor-testing.md             # [Pattern] Xvfb + Mesa llvmpipe testing
+    ├── load-test-baseline.md              # [Observation] Performance benchmarks
+    ├── mac-compatibility-analysis.md      # [Observation] macOS gaps and roadmap
+    ├── memory-error-handling-issues.md    # [Issue] Memory safety (mostly resolved)
+    ├── mingw-wine-cross-compilation.md    # [Pattern] MinGW + Wine D3D11 on Linux
+    ├── raii-codebase-analysis.md          # [Observation] RAII analysis (resolved)
+    ├── rendering-pipeline-status.md       # [Observation] Rendering feature status
+    ├── sparkgame-module-status.md         # [Observation] SparkGame module audit
+    ├── test-suite-audit.md                # [Observation] Test suite inventory
+    ├── thirdparty-dependencies-audit.md   # [Observation] ThirdParty dependency status
+    ├── thorvg-unity-graphics-analysis.md  # [Decision] ThorVG + Unity + 33 libraries
+    └── workflow-patterns.md               # [Pattern] Effective dev workflows
 ```

@@ -120,3 +120,7 @@ The codebase is clean in this regard.
 | Classes with >10 private methods | 7 | High |
 | Struct m_ prefix violations | ~80+ fields | Low (gray area) |
 | Commented-out code | 2 blocks | Low |
+
+## Notes
+
+- **See also:** [Comprehensive bloat audit](codebase-bloat-audit-2026-03-15.md), [AI bloat pattern](ai-bloat-pattern.md)
