@@ -14,134 +14,61 @@ SparkEngine is a C++23 open-source 3D game engine (with C++26 forward-compatibil
 - **Headless/Software rendering**: NullRHIDevice fallback (no GPU) or full CPU rendering via OpenGL + Mesa llvmpipe
 - **Primary platform**: Windows 10+ (MSVC); Linux/macOS are experimental (macOS has CI job + CMake presets)
 
-## Build
+## Session start (run at the beginning of every session)
+
+**Step 1 — Git sync** (see [Git Sync Workflow](#git-sync-workflow) below for the commands):
+
+Sync your branch with the latest upstream `Working` branch. This is the **first thing** to do — before reading code, before making changes, before anything else. Feature branches diverge as other PRs merge; without rebasing you'll be working on stale code.
+
+**Step 2 — Load persistent context:**
 
 ```bash
-# Generate (pick one)
-cmake --preset windows-release       # Windows MSVC
-cmake --preset linux-gcc-release     # Linux GCC
-cmake --preset macos-release         # macOS Apple Clang (experimental)
-
-# Build
-cmake --build build --config Release
-
-# Test
-cd build && ctest --output-on-failure
+cat .claude/index.md
 ```
 
-CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR` (OFF), `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
+Scan the index for topics relevant to the current task. Read those knowledge files before proceeding.
 
-### Cross-compilation: Windows D3D11/D3D12 on Linux (MinGW + Wine)
-
-Build and test the Windows D3D11/D3D12 code paths on a Linux machine using MinGW cross-compilation and Wine. This exercises the **exact same `_WIN32` code** that MSVC compiles.
+**Step 3 — Bloat check:**
 
 ```bash
-# Prerequisites
-sudo apt-get install mingw-w64 wine64 mesa-vulkan-drivers
-
-# Build (produces .exe files)
-cmake --preset linux-mingw-release
-cmake --build build/linux-mingw-release
-
-# Run tests under Wine (DXVK translates D3D11->Vulkan, Lavapipe renders on CPU)
-tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
+find SparkEngine/Source SparkEditor/Source SparkConsole/src GameModules \
+  -name '*.cpp' | xargs wc -l | sort -rn | head -15
 ```
 
-**The stack:** D3D11/D3D12 C++ → MinGW compiler → `.exe` → Wine → DXVK/VKD3D-Proton (D3D→Vulkan) → Lavapipe (software Vulkan). Works without a GPU.
-
-**Key files:**
-- `cmake/toolchains/mingw-w64-x86_64.cmake` — CMake toolchain for MinGW cross-compilation
-- `tools/wine-run.sh` — Wine runner with DXVK/VKD3D-Proton auto-setup and Lavapipe detection
-- CMake presets: `linux-mingw-release`, `linux-mingw-debug`
-
-### Software rendering fallback (all backends)
-
-Every RHI backend has a software rendering fallback for GPU-less environments:
-
-| Backend | Platform | Software Fallback | How |
-|---------|----------|-------------------|-----|
-| D3D11 | Windows | WARP | `D3D_DRIVER_TYPE_WARP` (built into Windows 10+) |
-| D3D12 | Windows | WARP | `IDXGIFactory4::EnumWarpAdapter()` (built into Windows 10+) |
-| Vulkan | Cross-platform | Lavapipe | `VK_PHYSICAL_DEVICE_TYPE_CPU` (install `mesa-vulkan-drivers`) |
-| OpenGL | Linux | llvmpipe | Mesa llvmpipe via EGL or GLX (install `mesa-utils`) |
-| None | All | NullRHIDevice | No-op headless backend (always available) |
+If the task involves any file over the threshold, trim it first.
 
 ## Anti-Bloat Guidelines
 
-These guidelines exist because AI-assisted development has a structural bias toward complexity. Without active awareness, sessions tend to add more than they remove. The goal is **sanity, not sacrifice** — keep code clean and intentional without stripping away legitimate verbosity, comments, or readability.
-
-### The Core Problem
-
-AI defaults to:
-- Adding features "just in case" → dead code accumulates
-- Creating helper classes for single uses → pointless abstraction
-- Over-engineering simple problems → massive files that nobody can debug
-- Building systems without wiring them in → ConsoleProcessManager-style orphans
-- Scattering related logic → 25 command registration functions instead of 1
+AI-assisted development has a structural bias toward complexity: adding features "just in case," creating helpers for single uses, over-engineering simple problems, building systems without wiring them in. The goal is **sanity, not sacrifice** — keep code clean without stripping legitimate verbosity or readability.
 
 ### Sensible Thresholds (Not Hard Limits)
 
-These are **guidelines for when to pause and think**, not absolute rules. A 450-line `.cpp` that is clean, well-commented, and logically cohesive is fine. A 200-line `.cpp` full of cryptic compressed code is not. Use judgment.
+These are **guidelines for when to pause and think**, not absolute rules. A clean 450-line `.cpp` is fine; a cryptic 200-line `.cpp` is not.
 
 | Thing | Threshold | What to do |
 |-------|-----------|------------|
-| `.cpp` file size | ~500 lines | Ask: "Is this one cohesive thing, or two things jammed together?" Split if it's doing multiple jobs. Leave it if it's one coherent unit. |
-| `.h` file size | ~300 lines | Ask: "Are these types/declarations related?" Data-heavy headers with many structs are fine. A class header with 40 methods probably needs splitting. |
-| Public methods per class | ~15 | Ask: "Does each method earn its place?" If yes, keep them. |
-| Function length | ~60 lines | Ask: "Can I understand this at a glance?" Long functions with clear linear flow are fine. Long functions with nested branching should be split. |
+| `.cpp` file size | ~500 lines | Split if doing multiple jobs; leave if one coherent unit |
+| `.h` file size | ~300 lines | Split if unrelated types; data-heavy headers are fine |
+| Public methods per class | ~15 | Ask: "Does each method earn its place?" |
+| Function length | ~60 lines | Split if nested branching; clear linear flow is fine |
 | Command registration functions | 1 per subsystem | Consolidate before adding commands |
 | Parallel singleton systems doing the same thing | 0 | Remove the duplicate |
 
 ### The Readability Principle
 
-**Never sacrifice readability to hit a line count.** Specifically:
-- **Comments that explain "why"** are valuable — keep them. Don't strip comments to save lines.
-- **Descriptive variable names** are better than terse ones. `brushRadius` > `br`.
-- **Vertical whitespace** between logical sections aids scanning. Don't collapse everything.
-- **Explicit loop bodies with braces** are clearer than braceless single-line forms when the body is non-trivial.
-- **One statement per line** — don't pack `float h = 0.0f, freq = frequency, amp = amplitude;` to save two lines.
+**Never sacrifice readability to hit a line count.** Keep comments that explain "why," use descriptive variable names (`brushRadius` > `br`), maintain vertical whitespace between logical sections, use braces for non-trivial loop bodies, and one statement per line. The question is always: **"Does this make sense to someone reading it for the first time?"**
 
-The question is always: **"Does this make sense to someone reading it for the first time?"**
+### Before Writing Code — Checklist
 
-### Before Writing Any Code — Ask These Questions
-
-1. **Does this already exist?** Search before writing. If yes, use the existing one.
-2. **Will this be called?** If you can't name the caller right now, don't write it.
-3. **Can the existing code do this with a small change?** Prefer editing over adding.
-4. **Is this a one-time use?** If yes, inline it — no helper function, no new class.
+1. **Does this already exist?** Search before writing.
+2. **Will this be called?** If you can't name the caller, don't write it.
+3. **Can existing code do this with a small change?** Prefer editing over adding.
+4. **Is this a one-time use?** Inline it — no helper function, no new class.
 5. **Am I future-proofing?** Stop. Write only what is needed today.
-
-### Before Adding New Files or Classes
-
-- Adding a new class → ask if an existing one can be extended instead
-- Adding a new `.cpp` file → ask if it can logically live in an existing file
-- Adding a new public method → check if a private or existing method covers the need
-- Adding new command registrations → they go in ONE place per subsystem, not scattered
-
-If the answer is genuinely "no, this needs its own thing" — go ahead and add it. New files for clear responsibilities are good architecture, not bloat.
-
-### Dead Code Is Actively Harmful
-
-- Unused public methods → delete, don't comment out
-- Uninitialized systems (built but never called) → either wire them in or delete them
-- Features built but not integrated → count as bugs, not WIP
-- Commented-out code → delete it, git history exists for a reason
-- "Stub" implementations → either implement fully or remove entirely
-
-### Signs of Actual Bloat — Pause and Reconsider
-
-- A class has more `Register*` methods than actual logic
-- You're adding a 6th logging method when 3 exist
-- A new `*Manager` or `*System` class when the existing one can be extended
-- Duplicating member variables that exist in a related class
-- Creating an abstraction for something used in exactly one place
-- A file is growing because unrelated concerns are being added to it
-
-### On Removal
-
-When refactoring, aim to remove dead weight — but removal is a tool, not a mandate. A PR that adds 200 well-structured lines and removes 0 is fine if those 200 lines are genuinely needed. A PR that adds 50 lines of speculative code and removes 0 is bloat. The distinction is intent and necessity, not arithmetic.
-
----
+6. **Adding a new class/file?** Ask if an existing one can be extended instead.
+7. **Adding new command registrations?** They go in ONE place per subsystem.
+8. **Is the code dead?** Delete it. Don't comment it out — git history exists.
+9. **Is a system built but not wired in?** Either wire it in or delete it.
 
 ## Coding Standards
 
@@ -153,6 +80,8 @@ When refactoring, aim to remove dead weight — but removal is a tool, not a man
 - **Headers**: `#pragma once`, forward-declare where possible
 - **Style**: Allman braces, 4-space indent, 120-col limit (see `.clang-format`)
 - **Zero warnings**: `/W4` on MSVC, `-Wall -Wextra` on GCC/Clang
+- **Service locator**: Use `EngineContext`, not deprecated `g_graphics`/`g_input` globals
+- **Cross-platform types**: `Core/Platform.h` (DirectXMath stubs on Linux)
 
 ## Architecture (key directories)
 
@@ -185,7 +114,7 @@ SparkEngine/Source/Engine/Replay/        — Record/playback system
 SparkEngine/Source/Engine/SaveSystem/    — Save/load persistence
 SparkEngine/Source/Engine/Stats/         — (planned) Performance telemetry — not yet implemented
 SparkEngine/Source/Engine/UI/            — UI system
-SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking
+SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking (OpenXR-ready stub, wired in)
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
 SparkEditor/Source/Communication/        — CollaborativeEditSession (multi-user editing)
 SparkEditor/Source/                      — ImGui editor (22 subsystems, 52 specialized panels)
@@ -198,317 +127,109 @@ SparkSDK/                                — Public SDK/interface headers
 Tests/                                   — 1,989 unit tests across 170 files, CTest
 ```
 
-## ECS execution order
+NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
+
+### ECS execution order
 
 Physics → Animation → AI → Audio → Lifecycle → Render
 
-## Thread safety rules
+### Thread safety rules
 
 - `SimpleConsole` — thread-safe (mutex)
 - `PhysicsSystem` — Jolt physics; supports multithreaded job dispatch
 - `GraphicsEngine` — main thread render, `std::atomic` frame state
 - `NetworkManager` — queue mutex for message I/O and handler registration
 
-## Session start (run at the beginning of every session)
-
-At the start of every new session, **immediately** sync your branch with the latest upstream `Working` branch before doing anything else:
+## Build
 
 ```bash
-# 1. Fetch the latest upstream commits
+# Generate (pick one)
+cmake --preset windows-release       # Windows MSVC
+cmake --preset linux-gcc-release     # Linux GCC
+cmake --preset macos-release         # macOS Apple Clang (experimental)
+
+# Build
+cmake --build build --config Release
+
+# Test
+cd build && ctest --output-on-failure
+```
+
+CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR` (OFF), `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
+
+**Cross-compilation (MinGW + Wine):** Build Windows D3D11 code on Linux via MinGW, run under Wine + DXVK/Lavapipe. See `.claude/knowledge/mingw-wine-cross-compilation.md` for full setup. Presets: `linux-mingw-release`, `linux-mingw-debug`.
+
+**Software rendering:** Every RHI backend has a GPU-less fallback — WARP (D3D11/D3D12), Lavapipe (Vulkan), llvmpipe (OpenGL), or NullRHIDevice (headless). See `.claude/knowledge/codebase-observations.md` for details.
+
+## Git Sync Workflow
+
+Run this before every session start and before every commit/push. The default upstream branch is `Working` (not `main`).
+
+```bash
 git fetch origin Working
-
-# 2. Check how far behind you are
-git log --oneline HEAD..origin/Working | wc -l
-
-# 3. If behind, rebase onto the latest
-git rebase origin/Working
-
-# 4. If conflicts arise, resolve them (prefer upstream for auto-generated content)
-git add <resolved-files>
-git rebase --continue
-```
-
-**Why:** Feature branches diverge from `Working` as other PRs merge. Without rebasing at session start, you'll be working on stale code and face larger conflicts later.
-
-**Rules:**
-- This is the **first thing** to do in every session — before reading code, before making changes, before anything else.
-- If the rebase produces conflicts, resolve them carefully and re-run `docs/sync-wiki.sh sync`.
-- The default upstream branch is `Working` (not `main`).
-
-After the git sync, **read `.claude/index.md`** to load session context (step 5 below).
-
-```bash
-# 5. Load persistent context
-cat .claude/index.md
-
-# 6. Bloat check — identify the worst files before touching anything
-find SparkEngine/Source SparkEditor/Source SparkConsole/src GameModules \
-  -name '*.cpp' | xargs wc -l | sort -rn | head -15
-```
-
-Step 6 takes 2 seconds and tells you immediately what is over the line-count limit. If the task involves any of those files, the first job is to trim them, not add to them.
-
-## Persistence Context Database
-
-The `.claude/` directory is a persistent AI memory store — a general self-learning knowledge base that Claude reads and writes across sessions. It captures everything worth remembering: issue fixes, effective workflows, optimizations, codebase observations, and project decisions. Future sessions start with this accumulated knowledge rather than from scratch.
-
-### At session start
-
-After the git sync (steps 1–4 above), read the index:
-
-```bash
-cat .claude/index.md
-```
-
-Scan the index for topics relevant to the current task or domain. Read those files before proceeding.
-
-### When to write a new entry
-
-Write or update a `.claude/knowledge/` file whenever Claude learns something worth preserving:
-
-| Trigger | Entry type |
-|---------|-----------|
-| A problem required multiple attempts to solve | **Issue** |
-| A workflow or approach proved consistently effective | **Pattern** |
-| A faster/better way to do something was discovered | **Optimization** |
-| A non-obvious codebase/tooling fact was discovered | **Observation** |
-| An architectural or style decision was made | **Decision** |
-
-After writing, update `.claude/index.md` and commit both alongside code changes.
-
-### Entry format
-
-```markdown
-# [Topic]
-
-**Last updated:** YYYY-MM-DD
-**Type:** Issue | Pattern | Optimization | Observation | Decision
-**Status:** Resolved | Active | Ongoing | Superseded
-
-## Description
-## Context
-## Methods Tried  ← Issue only; numbered, each ending with → FAILED / → WORKED
-## Approach       ← Pattern/Optimization only
-## Details        ← Observation/Decision only
-## Solution / Summary
-## Notes
-```
-
-### Structure
-
-```
-.claude/
-├── README.md                              # Full usage guide
-├── index.md                               # Master index — read at session start
-└── knowledge/
-    ├── github-api-pr-checks.md            # [Issue] PR check status access
-    ├── ci-failures.md                     # [Issue] CI job blocking rules, reproduction
-    ├── git-rebase-conflicts.md            # [Issue] Rebase conflict resolution
-    ├── clang-format.md                    # [Issue] Full scan required; Metal excluded
-    ├── cmake-linux-build-failures.md      # [Issue] Linux CMake configure/build failures
-    ├── windows-msvc-w4-warnings.md        # [Issue] MSVC /W4 fix table
-    ├── workflow-patterns.md               # [Pattern] Effective dev workflows
-    ├── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
-    └── build-optimizations.md            # [Optimization] Build and CI workflow speedups
-```
-
-### At session end
-
-After completing any non-trivial task, review whether anything learned during the session warrants a new or updated entry. This is especially important for:
-- **Optimizations** discovered incidentally (a faster flag, a better command sequence)
-- **Patterns** that worked well and should be repeated
-- **Observations** about the codebase that weren't obvious before
-
-Don't wait for something to break. Positive learning — things that worked well — is equally worth recording.
-
-**Rules:**
-- Do not exclude `.claude/` from `.promptignore` — Claude must be able to read it.
-- Entries are written by Claude sessions; humans may correct factual errors only.
-- Always commit context changes — future sessions on any branch benefit.
-- Prefer updating an existing entry over creating a new one for the same topic.
-
-## Branch freshness (run before every commit)
-
-Before committing or pushing, **always** ensure your branch is up to date with the upstream base branch:
-
-```bash
-# 1. Fetch the latest upstream commits
-git fetch origin Working
-
-# 2. Check how far behind you are
-git log --oneline HEAD..origin/Working | wc -l
-
-# 3. If behind, rebase onto the latest
-git rebase origin/Working
-
-# 4. Resolve any conflicts, then continue
-git add <resolved-files>
-git rebase --continue
+git log --oneline HEAD..origin/Working | wc -l   # check if behind
+git rebase origin/Working                         # if behind, rebase
+# If conflicts: resolve, git add <files>, git rebase --continue
 ```
 
 **Rules:**
-- **Never** commit or push to a branch that is behind the base branch. Always rebase first.
-- After rebasing, re-run the doc sync scripts (`docs/sync-wiki.sh sync`) to pick up any upstream changes to auto-generated sections.
-- If the rebase produces conflicts, resolve them carefully — prefer upstream changes for auto-generated content (e.g., `<!-- AUTO:* -->` sections in wiki pages).
-- The default upstream branch is `Working` (not `main`).
+- **Never** commit or push while behind the base branch. Always rebase first.
+- After rebasing, re-run `docs/sync-wiki.sh sync` to pick up upstream changes.
+- Prefer upstream changes for auto-generated content (`<!-- AUTO:* -->` sections).
 
-## Pre-commit checks (run before every commit)
+## Pre-commit checks
 
-After finishing any code change, run the checks **appropriate to the files you changed**. Not every step applies to every commit.
+Run checks **appropriate to the files you changed**.
 
-### Docs-only changes (`.md`, `wiki/`, `docs/`, `.claude/`, `README.md`, `CLAUDE.md`)
-
-If you **only** changed markdown, wiki, documentation, or `.claude/` knowledge files — and touched **no** `.h`, `.hpp`, or `.cpp` files — skip steps 1–5 and only run step 6:
+### Docs-only changes (`.md`, `wiki/`, `docs/`, `.claude/`)
 
 ```bash
-# 6. Update documentation — regenerate API docs and sync wiki
 docs/generate-api-docs.sh check
 docs/sync-wiki.sh sync
 ```
 
-### Code changes (`.h`, `.hpp`, `.cpp`, `CMakeLists.txt`, etc.)
-
-If you changed any C++ source, headers, or build files, run **all** steps in order:
+### Code changes (`.h`, `.hpp`, `.cpp`, `CMakeLists.txt`)
 
 ```bash
-# 1. Format check — ensure code matches .clang-format
+# 1. Format check
 find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules \
   -name '*.h' -o -name '*.cpp' | head -50 | xargs clang-format --dry-run --Werror 2>&1
 
-# 2. Fix formatting automatically (if step 1 fails)
+# 2. Fix formatting (if step 1 fails)
 find SparkEngine/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src GameModules \
   -name '*.h' -o -name '*.cpp' | xargs clang-format -i
 
-# 3. Sanity check — CMake configure (Linux)
+# 3. CMake configure
 cmake --preset linux-gcc-release 2>&1 | tail -20
 
-# 4. Compile — build and verify zero errors
+# 4. Build
 cmake --build build --config Release 2>&1 | tail -30
 
-# 5. Tests — run the test suite
+# 5. Tests
 cd build && ctest --output-on-failure && cd ..
 
-# 6. Update documentation — regenerate API docs and sync wiki
+# 6. Docs
 docs/generate-api-docs.sh check
 docs/sync-wiki.sh sync
 ```
 
-If any step fails, fix the issue before committing. CI enforces clang-format on every PR.
+If any step fails, fix before committing. CI enforces clang-format on every PR.
 
-## Post-PR checks (poll after every PR submission)
+## Post-PR checks
 
-After creating or pushing to a pull request, **always** poll the CI checks and fix any failures before moving on. This is mandatory — do not consider a PR complete until all checks pass.
-
-### Polling procedure
+After creating or pushing to a PR, **always** poll CI and fix failures before moving on.
 
 ```bash
-# 1. Wait 15 seconds for checks to start, then poll status
 sleep 15
 gh pr checks --watch --fail-fast
 
-# 2. If the above is not available or times out, poll manually:
-#    Repeat every 30 seconds until all checks complete (up to 15 minutes)
-gh pr checks
-```
-
-If any check fails:
-
-```bash
-# 3. Get full failure logs for the failed job
+# If a check fails:
 gh run list --branch "$(git branch --show-current)" --limit 5
 gh run view <RUN_ID> --log-failed
-
-# 4. Fix the issue locally, commit, and push
-# 5. Re-poll checks until all pass (repeat steps 1-4)
+# Fix locally, commit, push, re-poll
 ```
 
-### Matching CI build configurations locally
-
-The GitHub Actions workflow (`.github/workflows/build.yml`) runs these jobs. To reproduce failures locally, mirror the exact CI settings:
-
-**clang-format check** (runs on every PR):
-```bash
-find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
-  -not -path '*/Metal/*' \
-  \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-  xargs clang-format --dry-run --Werror 2>&1
-# Fix: pipe the same file list to clang-format -i
-```
-
-**Linux GCC build** (Debug + Release):
-```bash
-cmake -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_TESTS=ON \
-  -DCMAKE_C_COMPILER=gcc \
-  -DCMAKE_CXX_COMPILER=g++
-cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
-```
-
-**Linux Clang build** (Debug + Release):
-```bash
-cmake -B build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_TESTS=ON \
-  -DCMAKE_C_COMPILER=clang \
-  -DCMAKE_CXX_COMPILER=clang++
-cmake --build build --parallel $(nproc)
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
-```
-
-**Linux GCC AddressSanitizer + UBSan + LSan** (Debug):
-```bash
-cmake -B build \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DBUILD_TESTS=ON \
-  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-  -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
-  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
-cmake --build build --parallel $(nproc)
-ASAN_OPTIONS=detect_leaks=1:halt_on_error=0 LSAN_OPTIONS=suppressions=Tests/lsan_suppressions.txt \
-  cd build && ./bin/SparkTests --output-file asan-results.txt && cd ..
-```
-
-**Linux GCC ThreadSanitizer** (Debug):
-```bash
-cmake -B build \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DBUILD_TESTS=ON \
-  -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
-  -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
-  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
-cmake --build build --parallel $(nproc)
-TSAN_OPTIONS=halt_on_error=0 cd build && ./bin/SparkTests --output-file tsan-results.txt && cd ..
-```
-
-**Linux Clang MemorySanitizer** (Debug):
-```bash
-cmake -B build \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DBUILD_TESTS=ON \
-  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-  -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -stdlib=libc++ -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
-  -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
-  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++ -lc++abi" \
-  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
-cmake --build build --parallel $(nproc)
-MSAN_OPTIONS=halt_on_error=0 cd build && ./bin/SparkTests --output-file msan-results.txt && cd ..
-```
-
-**Windows MSVC VS 2022 (v143)** (Debug + Release):
-```bash
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
-```
-
-**Prompt validation** (runs on every PR):
-```bash
-./tools/validate-prompts.sh --ci
-```
+To reproduce CI failures locally, see `.claude/knowledge/ci-reproducible-builds.md` for exact build commands for each job.
 
 ### CI jobs summary
 
@@ -520,111 +241,70 @@ ctest --test-dir build -C Release --output-on-failure
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan + LSan |
 | `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
-| `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan + ignorelist, `continue-on-error` (uninstrumented stdlib) |
+| `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan + ignorelist, `continue-on-error` |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
-| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error`, D3D11/D3D12 on Linux |
-| `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error`, SDL2 + OpenGL |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error` |
+| `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | — | — | threshold: 20 |
 
-### Rules
+`build-windows-vs2026`, `build-linux-mingw-wine`, `build-macos`, and `clang-tidy` use `continue-on-error` — failures are warnings, not blockers.
 
-- **Never** consider a PR done until `gh pr checks` shows all required checks passing.
-- If a check fails, download the failed run logs with `gh run view <ID> --log-failed`, diagnose, fix locally, push, and re-poll.
-- For Windows-only failures that cannot be reproduced on Linux, inspect the CI logs carefully and fix based on MSVC-specific diagnostics (e.g., `/W4` warnings, MSVC type conversion rules, Windows SDK headers).
-- The `build-windows-vs2026`, `build-linux-mingw-wine`, `build-macos`, and `clang-tidy` jobs use `continue-on-error` — failures there are warnings, not blockers.
+## Documentation
 
-## Documentation generation
-
-Two custom scripts generate documentation without requiring Doxygen or Graphviz:
+Two custom scripts generate docs without Doxygen/Graphviz:
 
 ```bash
-# 1. Generate markdown API reference from all headers (outputs to docs/api/)
-docs/generate-api-docs.sh generate    # Full generation (~250 headers → ~240 pages)
+docs/generate-api-docs.sh generate    # Full API reference (~250 headers → ~240 pages)
 docs/generate-api-docs.sh check       # Only regenerate if headers changed (checksum-based)
-docs/generate-api-docs.sh status      # Show generation status
-
-# 2. Sync wiki pages with current codebase inventory
-docs/sync-wiki.sh sync               # Update auto-generated sections in wiki pages
-docs/sync-wiki.sh check              # Dry-run: report what's out of date (exits 1 if stale)
-docs/sync-wiki.sh status             # Show codebase + wiki statistics
+docs/sync-wiki.sh sync               # Update auto-generated wiki sections
 ```
 
-**What gets generated:**
-- `docs/api/README.md` — API index grouped by module
-- `docs/api/ComponentIndex.md` — All ECS components with source locations
-- `docs/api/SystemIndex.md` — All ECS systems with source locations
-- `docs/api/SparkEngine/...` — Per-header API pages (classes, methods, enums, members)
-- Wiki auto-sections (`<!-- AUTO:name -->` markers) in: `Entity-Component-System.md`, `Testing.md`, `SparkEditor.md`, `Home.md`
+**What gets generated:** `docs/api/` (API index, component/system indices, per-header pages), wiki auto-sections (`<!-- AUTO:name -->` markers).
 
-**Legacy Doxygen (optional, requires doxygen + graphviz):**
-```bash
-cd docs && ./generate-docs.sh         # Full Doxygen HTML output
-cd docs && ./auto-update.sh check     # Auto-regenerate on header changes
-```
+**Requirements:** Whenever code is added, modified, or deleted:
+1. Run both doc scripts (included in pre-commit checks step 6)
+2. Update the relevant `wiki/` page. New subsystem → new wiki page + add to `wiki/_Sidebar.md`
+3. Ensure public headers have Doxygen-style comments (`@brief`, `@param`, `@return`)
+4. If the change affects architecture, build toggles, or key directories, update this file
 
-## Documentation requirements
-
-Whenever code is **added**, **modified**, or **deleted**, update the corresponding documentation:
-
-1. **Run the doc scripts** — After any code change, run both:
-   ```bash
-   docs/generate-api-docs.sh check    # Regenerate API pages if headers changed
-   docs/sync-wiki.sh sync             # Update wiki inventories (components, systems, panels, tests)
-   ```
-2. **Wiki pages** (`wiki/`): Update the relevant wiki page for the subsystem affected. If a new subsystem is introduced, create a new wiki page and add it to `wiki/_Sidebar.md`. Existing pages cover: Architecture, ECS, Rendering, Physics, AI, Animation, Audio, Networking, Scripting, Editor, Input, Scene Management, Terrain, Gameplay Systems, Event System, Save System, Shader Pipeline, Asset Pipeline, Day-Night/Weather, Cinematic Sequencer, Testing, Build System, and more.
-3. **API docs** (`docs/`): Ensure new or changed public headers have Doxygen-style comments (`@brief`, `@param`, `@return`). The `generate-api-docs.sh` script extracts these automatically. System maturity tracking lives in the `wiki/Codebase-Health.md` wiki page.
-4. **CLAUDE.md**: If the change affects architecture, build toggles, execution order, thread safety rules, or key directories, update this file to keep it accurate.
-
-Skipping documentation is **not acceptable** — treat docs as part of the deliverable, not an afterthought.
+Legacy Doxygen is optional: `cd docs && ./generate-docs.sh`
 
 ## Wiring Things In — Functionality Is Not Optional
 
-A system that exists but is never initialized, called, or connected is **worse than not existing**. It adds confusion, maintenance burden, and false confidence. The rule is simple:
+A system that exists but is never initialized, called, or connected is **worse than not existing**.
 
-- **Every system must be initialized.** If `Initialize()` exists, it must be called somewhere in the startup path.
+- **Every system must be initialized.** If `Initialize()` exists, it must be called in the startup path.
 - **Every update loop must be called.** If `Update()` or `ProcessCommands()` exists, it must appear in the main loop.
-- **Every sink must have a source.** If a system receives data (commands, logs, events), something must be sending it.
+- **Every sink must have a source.** If a system receives data, something must be sending it.
 
-When wiring a system in, use the absolute minimum code:
-```cpp
-// CORRECT — minimal, direct, explicit
-ConsoleProcessManager::GetInstance().Initialize();  // in startup
-ConsoleProcessManager::GetInstance().ProcessCommands();  // in main loop
+Wire systems in with minimal code — call the real function directly, don't wrap it in another abstraction. If you discover a system that is built but not wired in: **either wire it in immediately, or delete it**.
 
-// WRONG — wrapping in another layer of abstraction before it even works
-class ConsoleInitHelper { ... };  // NO. Just call Initialize().
-```
+**SparkConsole IPC:** ConsoleProcessManager launches the subprocess and owns the pipe. It must be initialized at engine startup and `ProcessCommands()` called each frame. SimpleConsole is the engine-side log sink only.
 
-If you discover a system that is built but not wired in: **either wire it in immediately, or delete it**. It cannot stay in a half-built state.
+## Persistence Context Database
 
-## Known Debloat Targets (address these before adding anything new)
+The `.claude/` directory is persistent AI memory — a knowledge base that Claude reads and writes across sessions. It captures issue fixes, effective workflows, optimizations, codebase observations, and project decisions. See `.claude/README.md` for entry format, rules, and directory structure.
 
-These are confirmed bloat problems discovered during audit. They must be fixed before new features are added in the relevant areas.
+### When to write a new entry
 
-| File | Problem | Status |
-|------|---------|--------|
-| `SparkEngine/Source/Utils/SparkConsole.cpp` | Was 261KB with embedded console UI | **Resolved** — refactored to 551 lines |
-| `SparkEngine/Source/Utils/ConsoleProcessManager` | Was initialized multiple times | **Resolved** — consolidated to single `InitConsole()` call |
-| `SparkEngine/Source/Core/SparkEngine.cpp` | `SimpleConsole::Initialize()` called 3 times | **Resolved** — all paths now use `InitConsole()` |
-| `SparkEngine/Source/Physics/PhysicsBodyImpl.cpp` | Used `extern g_physicsSystem` global alias | **Resolved** — migrated to `EngineContext::Get()->GetPhysics()` |
-| RHI backends (D3D11/D3D12/Vulkan/OpenGL) | Factory methods returned raw `new` pointers | **Resolved** — migrated to `std::unique_ptr` returns |
+| Trigger | Entry type |
+|---------|-----------|
+| A problem required multiple attempts to solve | **Issue** |
+| A workflow or approach proved consistently effective | **Pattern** |
+| A faster/better way to do something was discovered | **Optimization** |
+| A non-obvious codebase/tooling fact was discovered | **Observation** |
+| An architectural or style decision was made | **Decision** |
 
-## Things to know
+After writing, update `.claude/index.md` and commit both alongside code changes.
 
-- Use `EngineContext` service locator, not deprecated `g_graphics`/`g_input` globals
-- Cross-platform types live in `Core/Platform.h` (DirectXMath stubs on Linux)
-- Networking is enabled in default builds (`ENABLE_NETWORKING=ON`)
-- VR framework exists (`SparkEngine/Source/Engine/VR/`) — OpenXR-ready stub, wired into engine init/update loop. Requires OpenXR SDK for actual VR hardware. DXR raytracing is optional (`ENABLE_DXR=OFF` by default); DLSS/FSR are not implemented
-- **GLAD** (OpenGL loader) is bundled in `ThirdParty/glad/` (GL 4.6 Core). Auto-detected by CMake.
-- **SDL2** is bundled as a submodule in `ThirdParty/SDL2/` (release-2.30.0). Built automatically on Linux when `ENABLE_SDL2=ON`. Requires `libgl-dev` installed *before* CMake configure for OpenGL/GLX support.
-- **NullRHIDevice** automatically activates when no GPU backend is available — engine continues in headless mode
-- **Software rendering**: OpenGL backend + Mesa llvmpipe enables full CPU rendering. Requires `DISPLAY` (Xvfb works) and `LIBGL_ALWAYS_SOFTWARE=1`
-- `.clang-format` enforces Microsoft-based style (Allman braces, 120-col, 4-space indent)
-- `.clang-tidy` checks for bugprone, modernize, performance, and readability issues
-- Doxygen config lives in `docs/Doxyfile.txt`; wiki pages in `wiki/`
-- 1,989 unit tests across 170 files in `Tests/`; always run `ctest` after changes
-- **SparkConsole communicates with the engine via stdin/stdout pipes.** ConsoleProcessManager launches the subprocess and owns the pipe. SimpleConsole is the engine-side log sink only — it is not an IPC layer.
-- **ConsoleProcessManager must be initialized at engine startup** and `ProcessCommands()` must be called each frame. Without this, SparkConsole.exe never launches and commands are never executed.
+### At session end
+
+Review whether anything learned warrants a new or updated entry — especially optimizations, patterns, and observations discovered incidentally. Positive learning is equally worth recording.
+
+**Rules:**
+- Do not exclude `.claude/` from `.promptignore`
+- Always commit context changes — future sessions on any branch benefit
+- Prefer updating an existing entry over creating a new one for the same topic
