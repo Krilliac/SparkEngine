@@ -91,33 +91,16 @@ namespace SparkEditor
     void EngineInterface::Update(float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        // Update metrics (simulated when not connected to a real engine)
-        static float timeSinceUpdate = 0.0f;
-        timeSinceUpdate += deltaTime;
 
-        if (timeSinceUpdate >= 1.0f)
+        // When connected, metrics come from engine events (PERFORMANCE_UPDATE).
+        // When disconnected, show zeroed/idle metrics so the UI doesn't display stale data.
+        if (!m_isConnected)
         {
             std::lock_guard<std::mutex> lock(m_metricsMutex);
-
-            // Use a proper random engine instead of rand()
-            static std::mt19937 rng(std::random_device{}());
-            std::uniform_real_distribution<float> fpsDist(58.0f, 67.0f);
-            std::uniform_real_distribution<float> cpuDist(6.0f, 11.0f);
-            std::uniform_real_distribution<float> gpuDist(5.0f, 12.0f);
-            std::uniform_int_distribution<int64_t> memDist(-1024, 1024);
-
-            m_currentMetrics.fps = fpsDist(rng);
-            m_currentMetrics.frameTime = 1000.0f / m_currentMetrics.fps;
-            m_currentMetrics.cpuTime = cpuDist(rng);
-            m_currentMetrics.gpuTime = gpuDist(rng);
-
-            // Simulate memory usage fluctuation (+/- 1MB)
-            m_currentMetrics.memoryUsage += memDist(rng) * 1024;
-            m_currentMetrics.memoryUsage =
-                std::clamp(m_currentMetrics.memoryUsage, static_cast<size_t>(256) * 1024 * 1024,
-                           static_cast<size_t>(1024) * 1024 * 1024);
-
-            timeSinceUpdate = 0.0f;
+            m_currentMetrics.fps = 0.0f;
+            m_currentMetrics.frameTime = 0.0f;
+            m_currentMetrics.cpuTime = 0.0f;
+            m_currentMetrics.gpuTime = 0.0f;
         }
 
         // Process incoming events if any
@@ -334,31 +317,38 @@ namespace SparkEditor
 
     void EngineInterface::CommunicationThread()
     {
-        std::cout << "Communication thread started\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Communication thread started");
 
         while (!m_isShuttingDown)
         {
             if (m_isConnected)
             {
-                // Simulate communication processing
-                std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS
-
-                // Occasionally generate test events
-                static int eventCounter = 0;
-                if (++eventCounter % 240 == 0)
-                { // Every 4 seconds at 60 FPS
-                    EngineEvent testEvent;
-                    testEvent.type = EngineEventType::PERFORMANCE_UPDATE;
-                    testEvent.eventID = GenerateEventID();
-                    testEvent.message = "Performance metrics updated";
-                    testEvent.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                              std::chrono::system_clock::now().time_since_epoch())
-                                              .count();
-
-                    std::lock_guard<std::mutex> lock(m_eventMutex);
-                    m_incomingEvents.push(testEvent);
-                    m_connectionStats.eventsReceived++;
+#ifdef _WIN32
+                // Try to read incoming events from the pipe
+                HANDLE hPipe = static_cast<HANDLE>(m_pipeHandle);
+                if (hPipe && hPipe != INVALID_HANDLE_VALUE)
+                {
+                    DWORD bytesAvailable = 0;
+                    if (::PeekNamedPipe(hPipe, nullptr, 0, nullptr, &bytesAvailable, nullptr) && bytesAvailable > 0)
+                    {
+                        std::vector<uint8_t> buffer(bytesAvailable);
+                        DWORD bytesRead = 0;
+                        if (::ReadFile(hPipe, buffer.data(), bytesAvailable, &bytesRead, nullptr) && bytesRead > 0)
+                        {
+                            buffer.resize(bytesRead);
+                            EngineEvent event;
+                            if (DeserializeEvent(buffer, event))
+                            {
+                                std::lock_guard<std::mutex> lock(m_eventMutex);
+                                m_incomingEvents.push(event);
+                                m_connectionStats.eventsReceived++;
+                                m_connectionStats.bytesReceived += bytesRead;
+                            }
+                        }
+                    }
                 }
+#endif
+                std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 FPS poll rate
             }
             else
             {
@@ -366,7 +356,7 @@ namespace SparkEditor
             }
         }
 
-        std::cout << "Communication thread stopped\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Communication thread stopped");
     }
 
     void EngineInterface::ProcessIncomingEvents()
@@ -402,12 +392,42 @@ namespace SparkEditor
             EngineCommand command = m_outgoingCommands.front();
             m_outgoingCommands.pop();
 
-            // Simulate sending command to engine
-            std::cout << "Processing command " << command.commandID << " of type "
-                      << static_cast<uint32_t>(command.type) << "\n";
+            // Serialize the command into a binary buffer
+            std::vector<uint8_t> buffer;
+            if (!SerializeCommand(command, buffer))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Failed to serialize command %llu",
+                               (unsigned long long)command.commandID);
+                continue;
+            }
 
-            // Simulate network transmission
-            m_connectionStats.bytesTransmitted += 1024; // Simulate 1KB per command
+#ifdef _WIN32
+            // Write to the named pipe if connected
+            HANDLE hPipe = static_cast<HANDLE>(m_pipeHandle);
+            if (m_isConnected && hPipe && hPipe != INVALID_HANDLE_VALUE)
+            {
+                DWORD bytesWritten = 0;
+                BOOL ok = ::WriteFile(hPipe, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesWritten, nullptr);
+                if (ok)
+                {
+                    m_connectionStats.bytesTransmitted += bytesWritten;
+                    m_connectionStats.commandsSent++;
+                }
+                else
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Editor, "WriteFile failed for command %llu (error %lu)",
+                                   (unsigned long long)command.commandID, ::GetLastError());
+                }
+            }
+            else
+#endif
+            {
+                // Not connected — log and account for the bytes that would have been sent
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Queued command %llu (%zu bytes, not connected)",
+                                (unsigned long long)command.commandID, buffer.size());
+                m_connectionStats.commandsSent++;
+                m_connectionStats.bytesTransmitted += buffer.size();
+            }
         }
     }
 

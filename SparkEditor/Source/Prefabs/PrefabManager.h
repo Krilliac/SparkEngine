@@ -11,6 +11,7 @@
 #pragma once
 
 #include "PrefabAsset.h"
+#include "../SceneSystem/SceneFile.h"
 #include <cstdint>
 #include <unordered_map>
 #include <string>
@@ -165,10 +166,14 @@ namespace SparkEditor
          */
         void SetOnPrefabsChanged(std::function<void()> callback) { m_onPrefabsChanged = std::move(callback); }
 
+        /// @brief Set the active scene for entity queries and instantiation.
+        void SetScene(SceneFile* scene) { m_scene = scene; }
+
       private:
         std::unordered_map<std::string, PrefabAsset> m_prefabs;
         std::vector<PrefabInstance> m_instances;
         std::function<void()> m_onPrefabsChanged;
+        SceneFile* m_scene = nullptr; ///< Non-owning pointer to the active scene
 
         void NotifyPrefabsChanged();
 

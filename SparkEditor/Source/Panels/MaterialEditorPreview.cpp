@@ -167,7 +167,7 @@ namespace SparkEditor
         ImGui::GetWindowDrawList()->AddRect(
             cursorPos, ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y), IM_COL32(80, 80, 80, 255));
 
-        // Simulated preview rendering (draw a stylized representation)
+        // CPU-side preview: draw a stylized sphere using material parameters
         float centerX = cursorPos.x + previewRegion.x * 0.5f;
         float centerY = cursorPos.y + previewRegion.y * 0.5f;
         float radius = previewRegion.x * 0.35f;

@@ -282,28 +282,39 @@ namespace SparkEditor
         const int totalSteps = static_cast<int>(activeLights.size()) * m_giSettings.bounceCount;
         int currentStep = 0;
 
+        // Allocate lightmap buffer (RGBA per texel, accumulated across bounces)
+        int resolution = m_giSettings.lightmapResolution;
+        m_bakedLightmapResolution = resolution;
+        m_bakedLightmapData.assign(static_cast<size_t>(resolution) * resolution * 4, 0.0f);
+
         // Iterate through bounces
         for (int bounce = 0; bounce < m_giSettings.bounceCount; ++bounce)
         {
             for (const auto& [id, light] : activeLights)
             {
-                // Simulate per-light bake work: calculate simple ambient occlusion contribution
+                // Per-light contribution with energy falloff per bounce
                 float lightContribution = light->intensity / static_cast<float>(activeLights.size());
                 float aoFactor = 1.0f / static_cast<float>(bounce + 1);
                 float bakedValue = lightContribution * aoFactor;
 
-                // Scale by lightmap resolution to simulate work
-                int texelCount = m_giSettings.lightmapResolution * m_giSettings.lightmapResolution;
+                // Compute radiance for each texel and accumulate into lightmap
+                int texelCount = resolution * resolution;
                 for (int texel = 0; texel < texelCount; texel += 1024)
                 {
-                    // Simulate computing radiance for a block of texels
-                    float u = static_cast<float>(texel % m_giSettings.lightmapResolution) /
-                              static_cast<float>(m_giSettings.lightmapResolution);
-                    float v = static_cast<float>(texel / m_giSettings.lightmapResolution) /
-                              static_cast<float>(m_giSettings.lightmapResolution);
-                    // Simple distance-based AO approximation
-                    float dist = std::sqrt(u * u + v * v);
-                    (void)(dist * bakedValue); // result would be written to lightmap texture
+                    int blockEnd = std::min(texel + 1024, texelCount);
+                    for (int t = texel; t < blockEnd; ++t)
+                    {
+                        float u = static_cast<float>(t % resolution) / static_cast<float>(resolution);
+                        float v = static_cast<float>(t / resolution) / static_cast<float>(resolution);
+                        // Distance-based AO approximation
+                        float dist = std::sqrt(u * u + v * v);
+                        float radiance = (1.0f - dist * 0.5f) * bakedValue;
+                        size_t idx = static_cast<size_t>(t) * 4;
+                        m_bakedLightmapData[idx + 0] += radiance * light->color.x;
+                        m_bakedLightmapData[idx + 1] += radiance * light->color.y;
+                        m_bakedLightmapData[idx + 2] += radiance * light->color.z;
+                        m_bakedLightmapData[idx + 3] = 1.0f;
+                    }
                 }
 
                 ++currentStep;
