@@ -4,6 +4,7 @@
  */
 
 #include "TweenSystem.h"
+#include "../../Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -200,6 +201,7 @@ namespace Spark
     {
         m_tweens.clear();
         m_nextHandle = 1;
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "TweenSystem initialized");
         return true;
     }
 
@@ -207,6 +209,7 @@ namespace Spark
     {
         TweenHandle handle = m_nextHandle++;
         m_tweens[handle] = TweenInstance(duration, std::move(onUpdate), ease);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Tween created: handle=%u duration=%.2fs", handle, duration);
         return handle;
     }
 
@@ -220,11 +223,16 @@ namespace Spark
     {
         auto it = m_tweens.find(handle);
         if (it != m_tweens.end())
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Tween cancelled: handle=%u", handle);
             it->second.Cancel();
+        }
     }
 
     void TweenSystem::CancelAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Cancelling all tweens (count=%u)",
+                       static_cast<uint32_t>(m_tweens.size()));
         for (auto& [h, tween] : m_tweens)
             tween.Cancel();
         m_tweens.clear();
@@ -251,6 +259,7 @@ namespace Spark
         {
             if (it->second.Update(deltaTime))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Tween completed: handle=%u", it->first);
                 it = m_tweens.erase(it);
             }
             else

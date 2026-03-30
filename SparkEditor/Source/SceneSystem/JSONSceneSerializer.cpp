@@ -9,6 +9,7 @@
  */
 
 #include "SceneSerializer.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <fstream>
 #include <sstream>
@@ -279,6 +280,8 @@ namespace SparkEditor
 
     SerializationResult SceneSerializer::SaveJSON(const SceneFile& scene, const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving scene (JSON) to: %s (%zu objects)", filePath.c_str(),
+                       scene.objects.size());
         SerializationResult result;
 
         std::ofstream file(filePath);
@@ -286,6 +289,7 @@ namespace SparkEditor
         {
             result.success = false;
             result.errorMessage = "Failed to open file for writing: " + filePath;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to write JSON scene: %s", filePath.c_str());
             return result;
         }
 
@@ -788,6 +792,7 @@ namespace SparkEditor
 
     SerializationResult SceneSerializer::LoadJSON(const std::string& filePath, SceneFile& outScene)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading scene (JSON) from: %s", filePath.c_str());
         SerializationResult result;
 
         std::ifstream file(filePath);
@@ -795,6 +800,7 @@ namespace SparkEditor
         {
             result.success = false;
             result.errorMessage = "Failed to open file: " + filePath;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to read JSON scene: %s", filePath.c_str());
             return result;
         }
 

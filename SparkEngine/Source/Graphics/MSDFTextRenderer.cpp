@@ -4,6 +4,7 @@
  */
 
 #include "MSDFTextRenderer.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -110,11 +111,15 @@ float4 main(PS_IN input) : SV_Target {
             return false;
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MSDFTextRenderer initialized (%ux%u screen)", screenWidth,
+                       screenHeight);
         return true;
     }
 
     void MSDFTextRenderer::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MSDFTextRenderer shutting down (%zu fonts loaded)",
+                       m_fonts.size());
         m_fonts.clear();
         m_activeFont = nullptr;
         m_initialized = false;
@@ -244,6 +249,8 @@ float4 main(PS_IN input) : SV_Target {
             return false;
 
         m_fonts[fontName] = std::move(loaded);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MSDF font atlas loaded: '%s' (%ux%u)", fontName.c_str(),
+                       atlasWidth, atlasHeight);
         return true;
     }
 
@@ -251,7 +258,10 @@ float4 main(PS_IN input) : SV_Target {
     {
         auto it = m_fonts.find(fontName);
         if (it == m_fonts.end())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "MSDFTextRenderer: font '%s' not found", fontName.c_str());
             return false;
+        }
         m_activeFont = &it->second;
         return true;
     }
@@ -365,6 +375,12 @@ float4 main(PS_IN input) : SV_Target {
 
         // Upload glyph vertices
         size_t vertCount = std::min(m_glyphVertices.size(), static_cast<size_t>(kMaxGlyphsPerBatch * 6));
+        if (m_glyphVertices.size() > static_cast<size_t>(kMaxGlyphsPerBatch * 6))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "MSDFTextRenderer: glyph count %zu exceeds batch limit %u, clamping",
+                           m_glyphVertices.size() / 6, kMaxGlyphsPerBatch);
+        }
         if (FAILED(m_context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) || !mapped.pData)
             return;
         memcpy(mapped.pData, m_glyphVertices.data(), vertCount * sizeof(GlyphVertex));

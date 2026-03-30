@@ -10,6 +10,7 @@
  */
 
 #include "AsyncComputeScheduler.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <chrono>
@@ -50,6 +51,7 @@ namespace Spark::Graphics
 #endif
 
         m_initialized.store(true, std::memory_order_release);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "AsyncComputeScheduler initialized");
         return true;
     }
 
@@ -59,6 +61,8 @@ namespace Spark::Graphics
         {
             return;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "AsyncComputeScheduler shutting down (total dispatches: %u)",
+                       m_stats.totalDispatches);
 
         std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -93,11 +97,14 @@ namespace Spark::Graphics
             if (registeredName == name)
             {
                 registeredShader = shader;
+                SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "AsyncCompute: re-registered shader '%s'", name.c_str());
                 return;
             }
         }
 
         m_registeredShaders.emplace_back(name, shader);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "AsyncCompute: registered shader '%s' (%zu total)", name.c_str(),
+                        m_registeredShaders.size());
     }
 
     ID3D11ComputeShader* AsyncComputeScheduler::FindShader(const std::string& name) const
@@ -116,12 +123,15 @@ namespace Spark::Graphics
     {
         if (m_deviceContext == nullptr)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "AsyncCompute: dispatch skipped, no device context");
             return;
         }
 
         ID3D11ComputeShader* shader = FindShader(item.shaderName);
         if (shader == nullptr)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "AsyncCompute: shader '%s' not found for dispatch",
+                            item.shaderName.c_str());
             return;
         }
 

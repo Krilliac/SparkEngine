@@ -5,6 +5,7 @@
 
 #include "RTSMatchSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -20,6 +21,7 @@ namespace RTS
         m_matchTime = 0.0f;
         m_hasWinner = false;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS match system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match system initialized");
         return true;
     }
@@ -106,6 +108,7 @@ namespace RTS
             player.isEliminated = false;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS match started with %zu players", m_players.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match started!");
         return true;
     }
@@ -120,6 +123,8 @@ namespace RTS
         int idx = static_cast<int>(winner);
         std::string name = (idx >= 0 && idx < 3) ? factionNames[idx] : "Unknown";
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS match ended — winner: %s (time: %ds)", name.c_str(),
+                       static_cast<int>(m_matchTime));
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match ended! Winner: " + name +
                                                     " (Time: " + std::to_string(static_cast<int>(m_matchTime)) + "s)");
     }

@@ -14,6 +14,7 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 namespace RTS
 {
@@ -31,6 +32,7 @@ namespace RTS
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[RTS] Initializing engine system integrations...");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems initializing");
 
         SetupAI();
         SetupEvents();
@@ -40,6 +42,7 @@ namespace RTS
         SetupSaveSystem();
         SetupCoroutines();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems initialized (7 subsystems wired)");
         console.LogInfo("[RTS] Engine system integrations initialized (7 subsystems wired)");
         return true;
     }
@@ -68,6 +71,7 @@ namespace RTS
     {
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[RTS] Shutting down engine system integrations...");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems shutting down");
 
         // CoroutineScheduler.h cannot be included from game module DLLs
         // (C++20 coroutine header bugs with GCC 13). Coroutine cleanup
@@ -163,6 +167,7 @@ namespace RTS
         (void)navMgr;
         (void)rtsSettings;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS AI: 3 behavior trees registered");
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] AI: 3 behavior trees registered (worker, soldier, scout)");
     }
 
@@ -203,6 +208,7 @@ namespace RTS
                 // Rain slows ground units, fog reduces vision -- handled in Update()
             }));
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS subscribed to EntityKilled and WeatherChanged events");
         Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Events: subscribed to EntityKilled, WeatherChanged");
     }
 

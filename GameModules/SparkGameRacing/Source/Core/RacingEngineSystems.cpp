@@ -9,6 +9,7 @@
 
 #include "RacingEngineSystems.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 // Engine systems
 #include "Audio/MusicManager.h"
@@ -35,6 +36,7 @@ namespace Racing
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[Racing] Initializing engine system integrations...");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing engine systems initializing");
 
         RegisterMusicTracks();
         SubscribeToEvents();
@@ -45,6 +47,7 @@ namespace Racing
         RegisterCoroutines();
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing engine systems wired (7 subsystems)");
         console.LogInfo(
             "[Racing] Engine systems wired (audio, events, save, replay, weather, destruction, coroutines)");
         return true;
@@ -84,6 +87,7 @@ namespace Racing
         m_context = nullptr;
         m_initialized = false;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing engine system integrations shut down");
         Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Engine system integrations shut down");
     }
 

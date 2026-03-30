@@ -11,6 +11,7 @@
 
 #include "DebugVisualizerPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
@@ -23,7 +24,7 @@ namespace SparkEditor
     bool DebugVisualizerPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Debug Visualizer panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DebugVisualizerPanel initialized");
         return true;
     }
 
@@ -81,7 +82,7 @@ namespace SparkEditor
 
     void DebugVisualizerPanel::Shutdown()
     {
-        std::cout << "Shutting down Debug Visualizer panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DebugVisualizerPanel shutting down");
     }
 
     bool DebugVisualizerPanel::HandleEvent(const std::string& eventType, void* eventData)
@@ -153,7 +154,13 @@ namespace SparkEditor
         ImGui::Indent(8.0f);
 
         const char* shadingModes[] = {"Lit", "Unlit", "Wireframe", "Normals", "UVs", "Overdraw"};
+        int prevMode = m_shadingMode;
         ImGui::Combo("Shading Mode", &m_shadingMode, shadingModes, 6);
+        if (m_shadingMode != prevMode)
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "DebugVisualizerPanel: shading mode changed to '%s'",
+                            shadingModes[m_shadingMode]);
+        }
 
         ImGui::Checkbox("Show Normals", &m_showNormals);
         if (m_showNormals)

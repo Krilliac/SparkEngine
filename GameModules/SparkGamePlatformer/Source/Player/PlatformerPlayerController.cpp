@@ -6,6 +6,7 @@
 #include "PlatformerPlayerController.h"
 #include "Checkpoint/PlatformerCheckpointSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -34,6 +35,7 @@ namespace Platformer
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player controller initialized");
         console.LogInfo("[Platformer Player] Player controller initialized");
         return true;
     }
@@ -387,10 +389,13 @@ namespace Platformer
             return;
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer player took %d damage (lives remaining: %d)", amount,
+                        m_lives - amount);
         m_lives -= amount;
         if (m_lives <= 0)
         {
             m_lives = 0;
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player died — game over");
             TransitionState(PlayerState::Dead);
             return;
         }
@@ -425,6 +430,8 @@ namespace Platformer
 
         if (m_lives <= 0)
             m_lives = 3; // Restart with default lives on game over
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player respawned at (%.0f, %.0f, %.0f)", m_position.x,
+                       m_position.y, m_position.z);
     }
 
     void PlatformerPlayerController::UnlockAbility(PowerUpType type)
@@ -435,6 +442,7 @@ namespace Platformer
         {
         case PowerUpType::DoubleJump:
             m_abilities.doubleJump = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer ability unlocked: Double Jump");
             console.LogInfo("[Platformer Player] Unlocked: Double Jump");
             break;
         case PowerUpType::SpeedBoost:

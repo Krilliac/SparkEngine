@@ -6,6 +6,7 @@
  */
 
 #include "DirectStorageLoader.h"
+#include "../../Utils/LogMacros.h"
 
 #include <chrono>
 #include <cstring>
@@ -56,12 +57,16 @@ namespace Spark::Streaming
 #endif
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "DirectStorageLoader initialized (hardware=%s, GPU decompression=%s)",
+                       m_stats.usingDirectStorage ? "yes" : "no", m_stats.usingGPUDecompression ? "yes" : "no");
         return true;
     }
 
     void DirectStorageLoader::Shutdown()
     {
         std::lock_guard lock(m_mutex);
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "DirectStorageLoader shutting down (%zu active, %llu total bytes)",
+                       m_activeRequests.size(), static_cast<unsigned long long>(m_stats.totalBytesLoaded));
         m_activeRequests.clear();
         while (!m_pendingQueue.empty())
             m_pendingQueue.pop();
@@ -80,6 +85,11 @@ namespace Spark::Streaming
         m_pendingQueue.push(internal);
         m_stats.totalRequests++;
         m_stats.pendingRequests++;
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Submitted load request #%llu: %s (offset=%llu, size=%llu)",
+                        static_cast<unsigned long long>(internal->handle.id), request.filePath.c_str(),
+                        static_cast<unsigned long long>(request.fileOffset),
+                        static_cast<unsigned long long>(request.loadSize));
 
         return internal->handle;
     }
@@ -199,6 +209,8 @@ namespace Spark::Streaming
                 std::ifstream file(req->request.filePath, std::ios::binary | std::ios::ate);
                 if (!file.is_open())
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Scene, "Failed to open file for async load: %s",
+                                    req->request.filePath.c_str());
                     req->status = LoadStatus::Failed;
                     return;
                 }
@@ -231,6 +243,7 @@ namespace Spark::Streaming
 
                 if (!file.good() && !file.eof())
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Scene, "Read error on file: %s", req->request.filePath.c_str());
                     req->status = LoadStatus::Failed;
                     return;
                 }

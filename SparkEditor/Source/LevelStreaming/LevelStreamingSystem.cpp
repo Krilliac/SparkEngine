@@ -1,4 +1,5 @@
 #include "LevelStreamingSystem.h"
+#include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
@@ -204,6 +205,7 @@ namespace SparkEditor
 
     void LevelStreamingSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "LevelStreamingSystem shutting down (%zu tiles)", m_tiles.size());
         m_shouldStopLoading.store(true);
         m_loadingCondition.notify_all();
         for (auto& thread : m_loadingThreads)
@@ -223,6 +225,7 @@ namespace SparkEditor
 
     void LevelStreamingSystem::CreateNewWorld(const std::string& name, const WorldCompositionSettings& settings)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating new world: '%s'", name.c_str());
         m_worldName = name;
         m_worldSettings = settings;
         m_tiles.clear();
@@ -234,9 +237,13 @@ namespace SparkEditor
 
     bool LevelStreamingSystem::LoadWorld(const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading world from: %s", filePath.c_str());
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to open world file: %s", filePath.c_str());
             return false;
+        }
 
         // Read world name length + name
         uint32_t nameLen = 0;
@@ -314,9 +321,13 @@ namespace SparkEditor
 
     bool LevelStreamingSystem::SaveWorld(const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving world '%s' to: %s", m_worldName.c_str(), filePath.c_str());
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to save world to: %s", filePath.c_str());
             return false;
+        }
 
         // Write world name
         auto nameLen = static_cast<uint32_t>(m_worldName.size());
@@ -367,8 +378,13 @@ namespace SparkEditor
         for (const auto& t : m_tiles)
         {
             if (t.name == tile.name)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Duplicate tile name: '%s'", tile.name.c_str());
                 return false;
+            }
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Adding tile '%s' at position (%.1f, %.1f, %.1f)", tile.name.c_str(),
+                       tile.worldPosition.x, tile.worldPosition.y, tile.worldPosition.z);
         m_tiles.push_back(std::move(tile));
         m_tiles.back().state = StreamingState::UNLOADED;
         SetModified(true);
@@ -380,6 +396,7 @@ namespace SparkEditor
         auto it = std::find_if(m_tiles.begin(), m_tiles.end(), [&](const WorldTile& t) { return t.name == tileName; });
         if (it == m_tiles.end())
             return false;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Removing tile: '%s'", tileName.c_str());
 
         if (it->state == StreamingState::LOADED)
             UnloadTileSync(tileName);
@@ -439,6 +456,8 @@ namespace SparkEditor
         WorldTile* tile = GetTile(tileName);
         if (!tile || tile->state == StreamingState::LOADED || tile->state == StreamingState::LOADING)
             return false;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Requesting tile load: '%s' (priority=%d, blocking=%s)",
+                       tileName.c_str(), priority, blockOnLoad ? "true" : "false");
 
         if (blockOnLoad)
             return LoadTileSync(tileName);
@@ -459,6 +478,8 @@ namespace SparkEditor
         WorldTile* tile = GetTile(tileName);
         if (!tile || tile->state != StreamingState::LOADED)
             return false;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Requesting tile unload: '%s' (immediate=%s)", tileName.c_str(),
+                       immediate ? "true" : "false");
 
         if (immediate)
             return ForceUnloadTile(tileName);

@@ -14,6 +14,7 @@
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -40,11 +41,15 @@ void MaterialSystem::Console_SetMaterialProperty(const std::string& materialName
     if (material && material != m_defaultMaterial)
     {
         material->Console_SetProperty(property, value);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material property changed: %s.%s = %f", materialName.c_str(),
+                       property.c_str(), value);
         Spark::SimpleConsole::GetInstance().LogSuccess("Set " + property + " = " + std::to_string(value) +
                                                        " for material: " + materialName);
     }
     else
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Cannot set property: material '%s' not found",
+                       materialName.c_str());
         Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
     }
 }
@@ -66,6 +71,7 @@ void MaterialSystem::Console_SetMaterialColor(const std::string& materialName, c
 
 void MaterialSystem::Console_SetHotReload(bool enabled)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material hot reload %s", enabled ? "enabled" : "disabled");
     m_hotReloadEnabled = enabled;
     if (enabled)
     {
@@ -158,6 +164,9 @@ void MaterialSystem::Console_SetTextureQuality(const std::string& quality)
         regeneratedSamplers++;
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                   "Texture quality set to '%s': %d materials updated, %d samplers cleared", quality.c_str(),
+                   updatedMaterials, regeneratedSamplers);
     Spark::SimpleConsole::GetInstance().LogSuccess("Texture quality set to: " + quality + " - " + settings.description +
                                                    "\nUpdated " + std::to_string(updatedMaterials) + " materials, " +
                                                    "cleared " + std::to_string(regeneratedSamplers) +
@@ -188,6 +197,8 @@ bool MaterialSystem::Console_LoadTextureToSlot(const std::string& materialName, 
     auto material = GetMaterial(materialName);
     if (!material || material == m_defaultMaterial)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Cannot load texture: material '%s' not found",
+                       materialName.c_str());
         Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
         return false;
     }
@@ -232,6 +243,7 @@ void MaterialSystem::Console_UnloadTextureFromSlot(const std::string& materialNa
 #include "MaterialSystem.h"
 #include "RHI/RHI.h"
 #include "../Utils/Hash.h"
+#include "../Utils/LogMacros.h"
 #include <sstream>
 #include <algorithm>
 #include <cstring>
@@ -249,9 +261,13 @@ void MaterialSystem::Console_SetMaterialProperty(const std::string& materialName
     auto mat = GetMaterial(materialName);
     if (!mat)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Cannot set property: material '%s' not found",
+                       materialName.c_str());
         fprintf(stderr, "[MaterialSystem] Cannot set property: material '%s' not found\n", materialName.c_str());
         return;
     }
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material property changed: %s.%s = %f", materialName.c_str(),
+                   property.c_str(), value);
     mat->Console_SetProperty(property, value);
 }
 
@@ -269,6 +285,7 @@ void MaterialSystem::Console_SetMaterialColor(const std::string& materialName, c
 
 void MaterialSystem::Console_SetHotReload(bool enabled)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material hot reload %s", enabled ? "enabled" : "disabled");
     EnableHotReloading(enabled);
     fprintf(stderr, "[MaterialSystem] Hot reload %s\n", enabled ? "enabled" : "disabled");
 }

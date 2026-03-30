@@ -10,6 +10,7 @@
 
 #include "MaterialSystem.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 
 #include <filesystem>
 #include <string>
@@ -20,6 +21,7 @@
 
 ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::string& filePath)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Loading texture from file: %s", filePath.c_str());
     ComPtr<ID3D11ShaderResourceView> texture;
 
     if (!m_device || filePath.empty())
@@ -162,12 +164,15 @@ ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::
             m_context->GenerateMips(texture.Get());
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded texture: %s (%ux%u, %u mips, RGBA8)", filePath.c_str(),
+                       originalWidth, originalHeight, mipLevels);
         Spark::SimpleConsole::GetInstance().LogInfo(
             "Successfully loaded texture: " + filePath + " (" + std::to_string(originalWidth) + "x" +
             std::to_string(originalHeight) + ", " + std::to_string(mipLevels) + " mips)");
     }
     catch (const std::exception& e)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Exception loading texture '%s': %s", filePath.c_str(), e.what());
         Spark::SimpleConsole::GetInstance().LogError("Exception loading texture " + filePath + ": " +
                                                      std::string(e.what()));
         texture.Reset();

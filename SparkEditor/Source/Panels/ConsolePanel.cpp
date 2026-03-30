@@ -23,6 +23,7 @@
 #include "ConsolePanel.h"
 #include "../Core/EditorLogger.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -81,6 +82,7 @@ namespace SparkEditor
         }
         RegisterBuiltInCommands();
         m_isInitialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Console panel initialized");
         return true;
     }
 
@@ -90,6 +92,7 @@ namespace SparkEditor
             return;
         if (m_filterChanged)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Console filter updated");
             UpdateFilteredEntries();
             m_filterChanged = false;
         }
@@ -200,11 +203,13 @@ namespace SparkEditor
         auto it = m_commands.find(command);
         if (it != m_commands.end())
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Console command executed: %s", command.c_str());
             historyEntry.result = it->second.handler(args);
             historyEntry.wasSuccessful = true;
         }
         else
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Unknown console command: %s", command.c_str());
             historyEntry.result = "Unknown command: " + command;
             historyEntry.wasSuccessful = false;
         }
@@ -236,6 +241,7 @@ namespace SparkEditor
 
     void ConsolePanel::Clear()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Console log cleared");
         std::lock_guard<std::mutex> lock(m_logMutex);
         m_logEntries.clear();
         m_filteredIndices.clear();
@@ -292,12 +298,13 @@ namespace SparkEditor
                 }
             }
 
-            std::cout << "Console log exported to: " << filePath << " (" << format << " format)\n";
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Console log exported to: %s (%s format)", filePath.c_str(),
+                           format.c_str());
             return true;
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Export failed: " << e.what() << "\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Console log export failed: %s", e.what());
             return false;
         }
     }

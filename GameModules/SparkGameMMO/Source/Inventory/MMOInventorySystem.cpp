@@ -5,6 +5,7 @@
 
 #include "MMOInventorySystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -22,6 +23,8 @@ namespace MMO
         RegisterDefaultItems();
         RegisterDefaultLootTables();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO inventory system initialized: %zu items, %zu loot tables",
+                       m_items.size(), m_lootTables.size());
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO] Inventory system initialized (" + std::to_string(m_items.size()) + " items)");
         return true;
@@ -163,7 +166,10 @@ namespace MMO
     {
         const ItemDef* def = GetItem(itemId);
         if (!def || count <= 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "AddItem failed: item %u not found or count=%d", itemId, count);
             return 0;
+        }
 
         // Weight check
         float currentWeight = GetTotalWeight(inv);

@@ -6,6 +6,7 @@
 #include "MMOPlayerSystem.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -34,6 +35,7 @@ namespace MMO
 
         m_initialized = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO player system initialized");
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO Player] Player system initialized");
         return true;
@@ -153,6 +155,7 @@ namespace MMO
             break;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Local player spawned: %s in area %u", name.c_str(), areaId);
         m_players[m_localClientId] = player;
 
 #ifdef ENABLE_NETWORKING
@@ -176,6 +179,8 @@ namespace MMO
         auto it = m_players.find(clientId);
         if (it != m_players.end())
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Player removed: %s (client %u)", it->second.name.c_str(),
+                            clientId);
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogInfo("[MMO Player] Removed player: " + it->second.name);
             m_players.erase(it);

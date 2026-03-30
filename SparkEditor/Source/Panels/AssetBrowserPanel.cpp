@@ -16,6 +16,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -25,7 +26,7 @@ namespace SparkEditor
     bool AssetBrowserPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Asset Browser panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Asset Browser panel");
         return true;
     }
 
@@ -194,6 +195,7 @@ namespace SparkEditor
 
     void AssetBrowserPanel::SetProjectPath(const std::string& projectPath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Asset Browser: project path set to '%s'", projectPath.c_str());
         m_projectPath = projectPath;
         m_currentFolder = projectPath;
         RefreshAssets();
@@ -303,6 +305,7 @@ namespace SparkEditor
                 ImGui::InvisibleButton(asset.c_str(), size);
                 if (ImGui::IsItemClicked())
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Asset selected: %s", filename.c_str());
                     m_selectedAsset = asset;
                 }
 
@@ -412,13 +415,13 @@ namespace SparkEditor
 
         if (!std::filesystem::exists(sourcePath))
         {
-            std::cerr << "Import failed: file does not exist: " << filePath << std::endl;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import failed: file does not exist: %s", filePath.c_str());
             return;
         }
 
         if (!std::filesystem::is_regular_file(sourcePath))
         {
-            std::cerr << "Import failed: not a regular file: " << filePath << std::endl;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Import failed: not a regular file: %s", filePath.c_str());
             return;
         }
 
@@ -442,8 +445,8 @@ namespace SparkEditor
         try
         {
             std::filesystem::copy_file(sourcePath, destPath, std::filesystem::copy_options::overwrite_existing);
-            std::cout << "Imported asset: " << sourcePath.filename().string() << " -> " << destPath.string()
-                      << std::endl;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Imported asset: %s -> %s",
+                           sourcePath.filename().string().c_str(), destPath.string().c_str());
         }
         catch (const std::exception& e)
         {

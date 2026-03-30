@@ -5,6 +5,7 @@
 
 #include "CinematicSequencerPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <algorithm>
@@ -20,7 +21,7 @@ namespace SparkEditor
 
     bool CinematicSequencerPanel::Initialize()
     {
-        std::cout << "Initializing Cinematic Sequencer panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CinematicSequencerPanel initialized");
         return true;
     }
 
@@ -80,7 +81,7 @@ namespace SparkEditor
 
     void CinematicSequencerPanel::Shutdown()
     {
-        std::cout << "Shutting down Cinematic Sequencer panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CinematicSequencerPanel shutting down");
     }
 
     // =========================================================================
@@ -96,6 +97,7 @@ namespace SparkEditor
             snprintf(seq.name, sizeof(seq.name), "Sequence_%d", static_cast<int>(m_sequences.size() + 1));
             m_sequences.push_back(seq);
             m_selectedSequence = static_cast<int>(m_sequences.size()) - 1;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "CinematicSequencerPanel: created sequence '%s'", seq.name);
             m_selectedTrack = -1;
             m_selectedKeyframe = -1;
         }
@@ -126,7 +128,11 @@ namespace SparkEditor
 
             // Playback controls
             if (ImGui::Button(m_isPlaying ? ICON_FA_PAUSE : ICON_FA_PLAY))
+            {
                 m_isPlaying = !m_isPlaying;
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "CinematicSequencerPanel: playback %s",
+                                m_isPlaying ? "started" : "paused");
+            }
 
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_STOP))

@@ -12,6 +12,7 @@
 #include "MaterialEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Utils/ContainerUtils.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <algorithm>
 #include <iostream>
@@ -60,6 +61,8 @@ namespace SparkEditor
                 bool isSelected = (i == currentShaderIndex);
                 if (ImGui::Selectable(m_availableShaders[i].name.c_str(), isSelected))
                 {
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "MaterialEditor: shader changed to '%s'",
+                                   m_availableShaders[i].name.c_str());
                     selected->shaderPath = m_availableShaders[i].path;
                     selected->isModified = true;
                     SetModified(true);
@@ -304,7 +307,7 @@ namespace SparkEditor
         if (ImGui::Button(browseId.c_str()))
         {
             // Open asset browser for texture selection (placeholder)
-            std::cout << "Material Editor: browse texture for '" << param.name << "'\n";
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: browse texture for '%s'", param.name.c_str());
         }
         if (ImGui::IsItemHovered())
         {
@@ -389,7 +392,8 @@ namespace SparkEditor
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_FOLDER "##SlotBrowse"))
             {
-                std::cout << "Material Editor: browse texture for slot '" << slot.name << "'\n";
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: browse texture for slot '%s'",
+                                slot.name.c_str());
             }
 
             // Clear button

@@ -5,6 +5,7 @@
 
 #include "ConditionEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool ConditionEditorPanel::Initialize()
     {
-        std::cout << "Initializing Condition Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ConditionEditorPanel initialized");
         return true;
     }
 
@@ -55,7 +56,7 @@ namespace SparkEditor
 
     void ConditionEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Condition Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ConditionEditorPanel shutting down");
     }
 
     void ConditionEditorPanel::RenderConditionBuilder()
@@ -66,6 +67,8 @@ namespace SparkEditor
         {
             ConditionGroupEntry group;
             m_groups.push_back(group);
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "ConditionEditorPanel: added condition group %d",
+                            static_cast<int>(m_groups.size()));
         }
 
         ImGui::Separator();
@@ -233,6 +236,8 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_PLUS " Add") && strlen(m_newVarName) > 0)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "ConditionEditorPanel: added world variable '%s'",
+                            m_newVarName);
             WorldVariable var;
             strncpy(var.name, m_newVarName, sizeof(var.name) - 1);
             var.value = m_newVarValue;

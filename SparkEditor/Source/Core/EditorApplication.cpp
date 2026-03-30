@@ -13,6 +13,7 @@
 #include "EditorPluginManager.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <memory>
 #include <iostream>
 #include <stdexcept>
@@ -50,12 +51,12 @@ namespace SparkEditor
         : m_startTime(std::chrono::high_resolution_clock::now()), m_lastFrameTime(m_startTime)
     {
         s_instance = this;
-        std::cout << "Enhanced EditorApplication constructed\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorApplication constructed");
     }
 
     EditorApplication::~EditorApplication()
     {
-        std::cout << "EditorApplication destructor called\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorApplication destructor called");
         if (m_isInitialized)
         {
             Shutdown();
@@ -131,6 +132,8 @@ namespace SparkEditor
         m_isInitialized = true;
         m_isRunning = true;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor initialization complete (window %dx%d)", m_windowWidth,
+                       m_windowHeight);
         console.LogSuccess("Enhanced Editor initialization complete");
         console.LogInfo("SparkEditor is now ready for use");
         console.LogInfo("All editor operations will be logged to external console");
@@ -303,10 +306,12 @@ namespace SparkEditor
 
         if (!m_isInitialized)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Run() called but editor not initialized");
             console.LogCritical("EditorApplication::Run() called but editor not initialized!");
             return -1;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting editor main loop (Win32)");
         console.LogInfo("Starting enhanced editor main loop...");
 
         // Main message loop
@@ -622,10 +627,12 @@ namespace SparkEditor
 
         if (!m_isInitialized)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Run() called but editor not initialized");
             console.LogCritical("EditorApplication::Run() called but editor not initialized!");
             return -1;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting editor main loop (SDL2/OpenGL)");
         console.LogInfo("Starting enhanced editor main loop...");
 
         auto lastTime = std::chrono::high_resolution_clock::now();
@@ -850,7 +857,7 @@ namespace SparkEditor
 
     void EditorApplication::RequestExit()
     {
-        std::cout << "Exit requested\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Exit requested");
         m_isRunning = false;
     }
 
@@ -861,6 +868,7 @@ namespace SparkEditor
 
     bool EditorApplication::OnShutdownRequested()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutdown requested by user");
         auto& console = Spark::SimpleConsole::GetInstance();
 
         // Check for unsaved scene changes

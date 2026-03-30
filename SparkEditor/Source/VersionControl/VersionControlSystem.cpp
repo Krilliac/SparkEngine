@@ -10,6 +10,7 @@
  */
 
 #include "VersionControlSystem.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <filesystem>
@@ -195,11 +196,13 @@ namespace SparkEditor
         m_lastAutoSync = std::chrono::steady_clock::now();
         m_lastStatusUpdate = std::chrono::steady_clock::now();
         m_isInitialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "VersionControlSystem initialized");
         return true;
     }
 
     void VersionControlSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "VersionControlSystem shutting down");
         // Signal threads to stop
         m_shouldStopOperations.store(true);
         m_shouldStopWatcher.store(true);

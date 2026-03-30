@@ -5,6 +5,7 @@
 
 #include "ReplicationFields.h"
 
+#include "../../Utils/LogMacros.h"
 #include <cstring>
 
 namespace Spark::Net
@@ -18,6 +19,8 @@ namespace Spark::Net
     {
         if (index >= MAX_REPLICATED_FIELDS)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "RegisterField: index %u exceeds MAX_REPLICATED_FIELDS (%u)",
+                           index, MAX_REPLICATED_FIELDS);
             return;
         }
 
@@ -31,6 +34,8 @@ namespace Spark::Net
 
         // New fields start dirty so their initial value is sent
         m_dirtyBits |= bit;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Registered replicated field %u (visibility: %d, total: %u)",
+                        index, static_cast<int>(visibility), m_fieldCount);
     }
 
     void ReplicatedFieldSet::MarkDirty(uint8_t fieldIndex)
@@ -91,6 +96,8 @@ namespace Spark::Net
     {
         if (readPos + sizeof(uint64_t) > buffer.size())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "ReadDirtyMask: buffer too small (readPos: %zu, bufSize: %zu)",
+                           readPos, buffer.size());
             return 0;
         }
         std::memcpy(&m_dirtyBits, buffer.data() + readPos, sizeof(uint64_t));

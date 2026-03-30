@@ -5,6 +5,7 @@
 
 #include "ShaderGraphCompiler.h"
 #include "../../Utils/ContainerUtils.h"
+#include "../../Utils/LogMacros.h"
 #include <algorithm>
 #include <iomanip>
 #include <queue>
@@ -242,6 +243,8 @@ namespace Spark::Graphics
 
     ShaderGraphOutput ShaderGraphCompiler::Compile(const ShaderGraphInput& graph)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Compiling shader graph '%s' (%zu nodes, %zu connections)",
+                       graph.materialName.c_str(), graph.nodes.size(), graph.connections.size());
         ShaderGraphOutput output;
 
         // Find output node
@@ -254,6 +257,8 @@ namespace Spark::Graphics
         }
         if (outputNodeID == 0)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "No output node found in shader graph '%s'",
+                            graph.materialName.c_str());
             output.errors.push_back("No output node found in graph");
             return output;
         }
@@ -380,6 +385,9 @@ VSOutput main(VSInput input)
         ps << "}\n";
         output.pixelShader = ps.str();
         output.success = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "Shader graph compiled: %zu nodes processed, %u texture slots, %s output", sortedIDs.size(),
+                       output.textureSlotCount, isPBR ? "PBR" : "Unlit");
         return output;
     }
 

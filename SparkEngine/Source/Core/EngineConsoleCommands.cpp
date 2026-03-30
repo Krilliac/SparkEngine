@@ -21,6 +21,8 @@
 #include "Utils/MemoryMonitor.h"
 #include "EngineSetup.h"
 
+#include "Utils/LogMacros.h"
+
 #include <sstream>
 #include <string>
 
@@ -33,6 +35,7 @@ namespace Spark
 
     static void RegisterModuleCommands(SimpleConsole& console, ModuleManager* moduleManager)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Registering module console commands");
         console.RegisterCommand(
             "module_info",
             [moduleManager](const std::vector<std::string>&) -> std::string
@@ -125,6 +128,7 @@ namespace Spark
 
     static void RegisterPhysicsCommands(SimpleConsole& console)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Registering physics console commands");
         console.RegisterCommand(
             "physics_metrics",
             [](const std::vector<std::string>&) -> std::string
@@ -410,6 +414,7 @@ namespace Spark
 
     static void RegisterAudioCommands(SimpleConsole& console, AudioEngine* audioEngine)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Registering audio console commands");
         console.RegisterCommand(
             "audio_master_volume",
             [audioEngine](const std::vector<std::string>& args) -> std::string
@@ -916,6 +921,7 @@ namespace Spark
     void RegisterEngineConsoleCommands(ModuleManager* moduleManager, AudioEngine* audioEngine,
                                        ModuleHotReloadManager* hotReload)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Registering engine console commands");
         auto& console = SimpleConsole::GetInstance();
 
         RegisterModuleCommands(console, moduleManager);
@@ -927,6 +933,7 @@ namespace Spark
         RegisterTimeOfDayCommands(console);
         RegisterMemoryMonitorCommands(console);
         RegisterDiagnosticCommands(console);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine console commands registered successfully");
     }
 
 } // namespace Spark

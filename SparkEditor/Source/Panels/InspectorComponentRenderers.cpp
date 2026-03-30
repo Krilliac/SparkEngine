@@ -10,6 +10,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../CommandHistory.h"
+#include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include <imgui.h>
 #include <algorithm>
@@ -60,6 +61,9 @@ namespace SparkEditor
 
                 if (posChanged || rotChanged || scaleChanged)
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor,
+                                    "Inspector: transform changed for object %u (pos=%d rot=%d scale=%d)",
+                                    m_inspectedObjectID, posChanged, rotChanged, scaleChanged);
                     XMFLOAT3 newPos = {position[0], position[1], position[2]};
                     XMFLOAT3 newScale = {scale[0], scale[1], scale[2]};
 
@@ -123,6 +127,8 @@ namespace SparkEditor
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing MeshRenderer from object %u",
+                               m_inspectedObjectID);
                 RemoveComponent(ComponentType::MESH_RENDERER);
             }
             ImGui::EndPopup();
@@ -144,6 +150,7 @@ namespace SparkEditor
                 ImGui::SetNextItemWidth(-1);
                 if (ImGui::InputText("Mesh", meshBuf, sizeof(meshBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: mesh asset changed to '%s'", meshBuf);
                     mr->meshAssetPath = meshBuf;
                 }
 
@@ -154,6 +161,7 @@ namespace SparkEditor
                 ImGui::SetNextItemWidth(-1);
                 if (ImGui::InputText("Material", matBuf, sizeof(matBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: material asset changed to '%s'", matBuf);
                     mr->materialAssetPath = matBuf;
                 }
 
@@ -190,6 +198,8 @@ namespace SparkEditor
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing Light from object %u",
+                               m_inspectedObjectID);
                 RemoveComponent(ComponentType::LIGHT);
             }
             ImGui::EndPopup();
@@ -208,6 +218,8 @@ namespace SparkEditor
                 int lightType = static_cast<int>(light->type);
                 if (ImGui::Combo("Type", &lightType, lightTypes, IM_ARRAYSIZE(lightTypes)))
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: light type changed to '%s'",
+                                    lightTypes[lightType]);
                     light->type = static_cast<SparkEditor::Light::Type>(lightType);
                 }
 
@@ -334,6 +346,8 @@ namespace SparkEditor
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing RigidBody from object %u",
+                               m_inspectedObjectID);
                 RemoveComponent(ComponentType::RIGID_BODY);
             }
             ImGui::EndPopup();
@@ -352,6 +366,8 @@ namespace SparkEditor
                 int bodyType = static_cast<int>(rb->bodyType);
                 if (ImGui::Combo("Body Type", &bodyType, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: rigid body type changed to '%s'",
+                                    bodyTypes[bodyType]);
                     rb->bodyType = static_cast<RigidBody::BodyType>(bodyType);
                 }
 
@@ -1082,7 +1098,11 @@ namespace SparkEditor
         if (ImGui::BeginPopupContextItem("##ScriptCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing Script from object %u",
+                               m_inspectedObjectID);
                 RemoveComponent(ComponentType::SCRIPT);
+            }
             ImGui::EndPopup();
         }
         if (headerOpen)
@@ -1464,6 +1484,7 @@ namespace SparkEditor
     {
         if (!data)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Inspector: RenderReflectedFields called with null data");
             ImGui::TextDisabled("(Component data unavailable)");
             return;
         }

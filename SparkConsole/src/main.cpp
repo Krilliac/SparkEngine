@@ -1,4 +1,5 @@
 #include "ConsoleApp.h"
+#include "Utils/LogMacros.h"
 #include <iostream>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -26,6 +27,8 @@ int main()
     SetConsoleMode(hConsole, mode);
 #endif // SPARK_PLATFORM_WINDOWS
 
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "SparkConsole starting up (v1.0.0)");
+
     std::wcout << L"Spark Engine Console v1.0.0" << std::endl;
     std::wcout << L"Waiting for engine connection..." << std::endl;
     std::wcout << L"Type 'help' for available commands" << std::endl;
@@ -38,6 +41,7 @@ int main()
     }
     catch (const std::exception& e)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Fatal console error: %s", e.what());
         std::cerr << "Console error: " << e.what() << std::endl;
         std::wcout << L"Press any key to continue..." << std::endl;
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -48,6 +52,7 @@ int main()
         return 1;
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "SparkConsole exiting normally");
     std::wcout << L"Console application finished. Press any key to exit..." << std::endl;
 #ifdef SPARK_PLATFORM_WINDOWS
     _getch();

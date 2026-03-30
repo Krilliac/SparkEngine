@@ -5,6 +5,7 @@
 
 #include "SaveSystemPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstdio>
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool SaveSystemPanel::Initialize()
     {
-        std::cout << "Initializing Save System panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SaveSystemPanel initialized");
         m_slots.resize(m_maxSlots);
         for (int i = 0; i < m_maxSlots; ++i)
         {
@@ -61,7 +62,7 @@ namespace SparkEditor
 
     void SaveSystemPanel::Shutdown()
     {
-        std::cout << "Shutting down Save System panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "SaveSystemPanel shutting down");
     }
 
     void SaveSystemPanel::RenderSaveSlots()
@@ -155,8 +156,8 @@ namespace SparkEditor
             {
                 if (ImGui::Button(ICON_FA_DOWNLOAD " Load Save"))
                 {
-                    // Would trigger SaveSystem::LoadSlot()
-                    std::cout << "Loading save slot " << slot.slot << "\n";
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "SaveSystemPanel: loading slot %d ('%s')", slot.slot,
+                                   slot.name);
                 }
 
                 ImGui::SameLine();
@@ -169,7 +170,7 @@ namespace SparkEditor
                 ImGui::SameLine();
                 if (ImGui::Button(ICON_FA_FILE_EXPORT " Export"))
                 {
-                    std::cout << "Exporting save slot " << slot.slot << "\n";
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "SaveSystemPanel: exporting slot %d", slot.slot);
                 }
 
                 ImGui::SameLine();
@@ -187,7 +188,7 @@ namespace SparkEditor
         {
             if (ImGui::Button(ICON_FA_FILE_IMPORT " Import Save"))
             {
-                std::cout << "Importing save into slot " << slot.slot << "\n";
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "SaveSystemPanel: importing save into slot %d", slot.slot);
             }
         }
     }

@@ -8,6 +8,7 @@
 #include "Physics2DPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
@@ -29,7 +30,7 @@ namespace SparkEditor
     bool Physics2DPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
-        std::cout << "Initializing Physics 2D panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Physics2DPanel initialized");
         return true;
     }
 
@@ -65,7 +66,7 @@ namespace SparkEditor
 
     void Physics2DPanel::Shutdown()
     {
-        std::cout << "Shutting down Physics 2D panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Physics2DPanel shutting down");
     }
 
     void Physics2DPanel::RenderWorldSettings()
@@ -293,6 +294,9 @@ namespace SparkEditor
 
             if (ImGui::Button("Cast Ray"))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor,
+                                "Physics2DPanel: casting ray from (%.1f, %.1f) dir (%.1f, %.1f)", m_rayOrigin[0],
+                                m_rayOrigin[1], m_rayDirection[0], m_rayDirection[1]);
                 // Would cast ray through Physics2DWorld
                 ImGui::Text("Ray cast result: (no physics world connected)");
             }

@@ -5,6 +5,7 @@
 
 #include "DialogueEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool DialogueEditorPanel::Initialize()
     {
-        std::cout << "Initializing Dialogue Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DialogueEditorPanel initialized");
         return true;
     }
 
@@ -48,7 +49,7 @@ namespace SparkEditor
 
     void DialogueEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Dialogue Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DialogueEditorPanel shutting down");
     }
 
     void DialogueEditorPanel::RenderToolbar()
@@ -63,6 +64,7 @@ namespace SparkEditor
             m_nodes.push_back(node);
             m_selectedNode = static_cast<int>(m_nodes.size()) - 1;
             m_modified = true;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "DialogueEditorPanel: added node '%s'", node.id);
         }
 
         if (m_selectedNode >= 0 && m_selectedNode < static_cast<int>(m_nodes.size()))
@@ -70,6 +72,8 @@ namespace SparkEditor
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_TRASH " Delete Node"))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "DialogueEditorPanel: deleted node at index %d",
+                                m_selectedNode);
                 m_nodes.erase(m_nodes.begin() + m_selectedNode);
                 m_selectedNode = -1;
                 m_modified = true;

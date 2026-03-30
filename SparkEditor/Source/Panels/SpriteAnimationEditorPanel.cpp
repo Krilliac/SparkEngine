@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -26,7 +27,7 @@ namespace SparkEditor
     bool SpriteAnimationEditorPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Sprite Animation Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Sprite Animation Editor panel");
         return true;
     }
 
@@ -116,7 +117,7 @@ namespace SparkEditor
 
     void SpriteAnimationEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Sprite Animation Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Sprite Animation Editor panel");
     }
 
     void SpriteAnimationEditorPanel::RenderToolbar()
@@ -131,6 +132,7 @@ namespace SparkEditor
         {
             if (ImGui::Button(ICON_FA_PLAY " Play"))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Sprite animation playback started");
                 m_isPlaying = true;
                 if (m_previewFrame < 0)
                     m_previewFrame = 0;
@@ -139,6 +141,7 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_STOP " Stop"))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Sprite animation playback stopped");
             m_isPlaying = false;
             m_previewFrame = 0;
             m_previewTimer = 0.0f;

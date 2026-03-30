@@ -9,6 +9,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cmath>
@@ -28,7 +29,7 @@ namespace SparkEditor
     bool GameViewPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Game View panel with full FPS HUD\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Game View panel with FPS HUD");
 
         // Pre-populate scoreboard for preview
         m_scoreboardEntries = {{"Player1", 15, 8, 2200, 32, true},      {"FragMaster", 18, 5, 2650, 45, false},
@@ -206,7 +207,7 @@ namespace SparkEditor
 
     void GameViewPanel::Shutdown()
     {
-        std::cout << "Shutting down Game View panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Game View panel");
     }
 
     bool GameViewPanel::HandleEvent(const std::string& eventType, void* eventData)
@@ -222,6 +223,7 @@ namespace SparkEditor
         if (ImGui::Combo("##Resolution", &resIdx, resLabels, IM_ARRAYSIZE(resLabels)))
         {
             m_resolution = (Resolution)resIdx;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Game View resolution changed to: %s", resLabels[resIdx]);
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Output Resolution");
@@ -349,6 +351,7 @@ namespace SparkEditor
             if (!io.WantCaptureMouse || isWindowFocused)
             {
                 m_isCursorCaptured = true;
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Game View cursor captured");
             }
         }
 
@@ -356,6 +359,7 @@ namespace SparkEditor
         if (m_isCursorCaptured && ImGui::IsKeyPressed(ImGuiKey_Escape))
         {
             m_isCursorCaptured = false;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Game View cursor released (Escape)");
         }
 
         // Release capture if window loses focus
@@ -458,6 +462,8 @@ namespace SparkEditor
                 m_weaponSwitchTimer = 2.0f;
                 m_weaponSwitchName = m_currentWeaponName;
                 m_weaponSwitchSlot = i + 1;
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Game View weapon switched to slot %d: %s", i + 1,
+                                weaponNames[i]);
             }
         }
 
@@ -488,6 +494,9 @@ namespace SparkEditor
         ImVec2 available = ImGui::GetContentRegionAvail();
         if (available.x <= 0 || available.y <= 0)
             return;
+
+        SPARK_LOG_ONCE(Spark::LogLevel::Info, Spark::LogCategory::Editor, "Game View rendering first frame (%.0fx%.0f)",
+                       available.x, available.y);
 
         ImVec2 viewportSize = GetConstrainedViewportSize(available);
 

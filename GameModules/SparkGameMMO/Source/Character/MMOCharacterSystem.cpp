@@ -6,6 +6,7 @@
 #include "MMOCharacterSystem.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -23,6 +24,8 @@ namespace MMO
         m_context = context;
         RegisterDefaultRaces();
         RegisterDefaultClasses();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO character system initialized: %zu races, %zu classes",
+                       m_races.size(), m_classes.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character system initialized (" +
                                                     std::to_string(m_races.size()) + " races, " +
                                                     std::to_string(m_classes.size()) + " classes)");
@@ -259,6 +262,7 @@ namespace MMO
         // Validate race/class
         if (!IsValidCombination(request.race, request.classId))
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "Invalid race/class combination for character creation");
             result.errorMessage = "Invalid race/class combination";
             return result;
         }
@@ -295,6 +299,7 @@ namespace MMO
         result.characterId = id;
 
         const auto* classDef = GetClass(request.classId);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Character created: %s (ID %u)", request.name.c_str(), id);
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character created: " + request.name + " (" +
                                                     (raceDef ? raceDef->name : "?") + " " +
                                                     (classDef ? classDef->name : "?") + ")");
@@ -317,6 +322,8 @@ namespace MMO
         auto charIt = m_characters.find(characterId);
         if (charIt != m_characters.end())
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Character deleted: %s (ID %u)", charIt->second.name.c_str(),
+                           characterId);
             Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character deleted: " + charIt->second.name);
             m_characters.erase(charIt);
         }

@@ -4,6 +4,7 @@
  */
 
 #include "TimeOfDaySystem.h"
+#include "../../Utils/LogMacros.h"
 
 #include <cmath>
 #include <cstdio>
@@ -38,6 +39,7 @@ namespace Spark
         {
             m_hour -= 24.0f;
             m_dayCount++;
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "Day cycle advanced to day %u", m_dayCount);
         }
 
         UpdateSunState();
@@ -45,7 +47,9 @@ namespace Spark
 
     void TimeOfDaySystem::SetTimeOfDay(float hour)
     {
+        float oldHour = m_hour;
         m_hour = std::fmod(std::max(0.0f, hour), 24.0f);
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "TimeOfDay set from %.2f to %.2f", oldHour, m_hour);
         UpdateSunState();
     }
 
@@ -139,6 +143,10 @@ namespace Spark
         float ambientT = std::clamp(elevation + 0.2f, 0.0f, 1.0f);
         m_ambientColor = LerpColor(kNightAmbient, kDayAmbient, ambientT);
         m_ambientIntensity = 0.1f + 0.3f * ambientT;
+
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Trace, Spark::LogCategory::Scene, 10,
+                                "TimeOfDay: hour=%.2f sunIntensity=%.2f ambientIntensity=%.2f", m_hour, m_sunIntensity,
+                                m_ambientIntensity);
     }
 
     DirectX::XMFLOAT3 TimeOfDaySystem::LerpColor(const XMFLOAT3& a, const XMFLOAT3& b, float t)

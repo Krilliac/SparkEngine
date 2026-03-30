@@ -5,6 +5,7 @@
 
 #include "DestructionEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstdio>
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool DestructionEditorPanel::Initialize()
     {
-        std::cout << "Initializing Destruction Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DestructionEditorPanel initialized");
 
         // Add a sample fracture pattern
         PatternInfo defaultPattern;
@@ -71,7 +72,7 @@ namespace SparkEditor
 
     void DestructionEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Destruction Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DestructionEditorPanel shutting down");
     }
 
     void DestructionEditorPanel::RenderPatternList()
@@ -172,6 +173,7 @@ namespace SparkEditor
         ImGui::Separator();
         if (ImGui::Button(ICON_FA_TRASH " Clear All Debris"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "DestructionEditorPanel: cleared all debris");
             m_activeDebrisCount = 0;
         }
     }

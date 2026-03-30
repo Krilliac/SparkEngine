@@ -5,6 +5,7 @@
 
 #include "DecalEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool DecalEditorPanel::Initialize()
     {
-        std::cout << "Initializing Decal Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DecalEditorPanel initialized");
 
         // Pre-populate default surface mappings
         const char* surfaceNames[] = {"Default", "Concrete", "Metal", "Wood",   "Glass",
@@ -81,7 +82,7 @@ namespace SparkEditor
 
     void DecalEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Decal Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "DecalEditorPanel shutting down");
     }
 
     void DecalEditorPanel::RenderMaterialList()
@@ -92,6 +93,7 @@ namespace SparkEditor
             snprintf(mat.name, sizeof(mat.name), "Decal_%d", static_cast<int>(m_materials.size()));
             m_materials.push_back(mat);
             m_selectedMaterial = static_cast<int>(m_materials.size()) - 1;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "DecalEditorPanel: created material '%s'", mat.name);
         }
 
         ImGui::Separator();

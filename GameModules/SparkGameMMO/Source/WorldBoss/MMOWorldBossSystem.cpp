@@ -5,6 +5,7 @@
 
 #include "MMOWorldBossSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -20,6 +21,7 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultBosses();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO world boss system initialized: %zu bosses", m_bossDefs.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] World boss system initialized (" +
                                                     std::to_string(m_bossDefs.size()) + " bosses)");
         return true;
@@ -136,6 +138,8 @@ namespace MMO
             }
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "World boss spawned: %s — %s (HP=%.0f)", def->name.c_str(),
+                       def->title.c_str(), def->maxHealth);
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] WORLD BOSS SPAWNED: " + def->name + " - " + def->title);
         return true;
     }
@@ -217,6 +221,7 @@ namespace MMO
 
                 if (!trans.announcement.empty())
                 {
+                    SPARK_LOG_INFO(Spark::LogCategory::Game, "Boss phase transition: %s", trans.announcement.c_str());
                     Spark::SimpleConsole::GetInstance().LogInfo("[MMO] " + trans.announcement);
                 }
 
@@ -265,6 +270,8 @@ namespace MMO
         inst.spawnTimer = def.spawnCooldown;
         CalculateContributions(inst);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "World boss defeated: %s (%d participants)", def.name.c_str(),
+                       inst.GetParticipantCount());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] WORLD BOSS DEFEATED: " + def.name + " (" +
                                                     std::to_string(inst.GetParticipantCount()) + " participants)");
     }

@@ -14,6 +14,7 @@
 
 #include "PlatformerEngineSystems.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 // Engine systems
 #include "Audio/MusicManager.h"
@@ -39,6 +40,7 @@ namespace Platformer
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[Platformer] Wiring engine systems...");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer wiring engine systems");
 
         SetupAudio();
         SetupEvents();
@@ -48,6 +50,7 @@ namespace Platformer
         SetupCoroutines();
         SetupLocalization();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer engine systems wired (7 subsystems)");
         console.LogInfo("[Platformer] Engine systems wired (7 subsystems)");
         return true;
     }
@@ -113,6 +116,7 @@ namespace Platformer
         // Start with world 1 theme
         music->Play("world_1_theme", 1.0f);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer audio: 5 music tracks registered");
         Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Audio: 5 music tracks + dynamic state registered");
     }
 

@@ -5,6 +5,7 @@
 
 #include "ARPGCombatSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -31,6 +32,7 @@ namespace ARPG
         m_totalAttacksProcessed = 0;
         m_totalCrits = 0;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG combat system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Combat system initialized");
         return true;
     }
@@ -92,6 +94,8 @@ namespace ARPG
             result.wasResisted = true;
 
         result.finalDamage = std::max(effectiveDamage, 1.0f); // Minimum 1 damage
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG attack: final=%.1f crit=%s resisted=%s", result.finalDamage,
+                        result.wasCritical ? "yes" : "no", result.wasResisted ? "yes" : "no");
         return result;
     }
 

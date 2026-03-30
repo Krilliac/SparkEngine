@@ -27,6 +27,7 @@ namespace Spark
 
     void WaveSpawner::Initialize(const std::vector<XMFLOAT3>& spawnPoints)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing wave spawner with %zu spawn points", spawnPoints.size());
         m_spawnPoints = spawnPoints;
         if (m_spawnPoints.empty())
         {
@@ -41,6 +42,7 @@ namespace Spark
 
     void WaveSpawner::Start()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Wave spawner started (%d total waves)", m_totalWaves);
         m_currentWave = 0;
         m_totalEnemiesKilled = 0;
         m_state = WaveState::Countdown;
@@ -94,6 +96,11 @@ namespace Spark
             m_enemiesKilledThisWave = totalSpawnedAndExisting - currentAlive;
 
             // Wave complete when all spawned enemies are dead
+            if (aliveEnemies == 0 && m_enemiesSpawnedThisWave > 0)
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "Wave %d complete: %d enemies killed", m_currentWave,
+                               m_enemiesKilledThisWave);
+            }
             if (aliveEnemies == 0)
             {
                 m_totalEnemiesKilled += m_enemiesKilledThisWave;
@@ -218,6 +225,8 @@ namespace Spark
             }
         };
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Spawning wave %d: %d grunts, %d scouts, %d guards, %d heavies",
+                       wave.waveNumber, wave.gruntCount, wave.scoutCount, wave.guardCount, wave.heavyCount);
         spawnGroup(EnemyType::Grunt, wave.gruntCount);
         spawnGroup(EnemyType::Scout, wave.scoutCount);
         spawnGroup(EnemyType::Guard, wave.guardCount);

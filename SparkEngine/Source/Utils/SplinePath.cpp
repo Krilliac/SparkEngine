@@ -7,6 +7,7 @@
 #include "SplinePath.h"
 #include "SplineMath.h"
 #include "Utils/Assert.h"
+#include "Utils/LogMacros.h"
 #include "Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -16,7 +17,10 @@
 
 using namespace DirectX;
 
-SplinePath::SplinePath(SplineType type) : m_type(type) {}
+SplinePath::SplinePath(SplineType type) : m_type(type)
+{
+    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "SplinePath: Created with type %d", static_cast<int>(type));
+}
 
 // =============================================================================
 // POINT MANAGEMENT
@@ -25,6 +29,8 @@ SplinePath::SplinePath(SplineType type) : m_type(type) {}
 void SplinePath::AddPoint(const XMFLOAT3& point)
 {
     m_points.push_back(point);
+    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "SplinePath: Added point (%.2f, %.2f, %.2f), total points: %zu", point.x,
+                    point.y, point.z, m_points.size());
     MarkDirty();
 }
 
@@ -188,7 +194,10 @@ XMFLOAT3 SplinePath::Evaluate(float t) const
 {
     int count = static_cast<int>(m_points.size());
     if (count == 0)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "SplinePath::Evaluate: No points defined, returning zero");
         return XMFLOAT3(0.0f, 0.0f, 0.0f);
+    }
     if (count == 1)
         return m_points[0];
 
@@ -224,7 +233,10 @@ XMFLOAT3 SplinePath::EvaluateTangent(float t) const
 {
     int count = static_cast<int>(m_points.size());
     if (count < 2)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "SplinePath::EvaluateTangent: Need at least 2 points, have %d", count);
         return XMFLOAT3(0.0f, 0.0f, 0.0f);
+    }
 
     int segment = 0;
     float localT = 0.0f;
@@ -293,6 +305,8 @@ void SplinePath::RebuildArcLengthTable() const
     }
 
     m_dirty = false;
+    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "SplinePath: Arc-length table rebuilt, total length: %.2f",
+                    m_totalLength);
 }
 
 float SplinePath::GetTotalLength() const

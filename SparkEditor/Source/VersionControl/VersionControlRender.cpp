@@ -4,6 +4,7 @@
  */
 
 #include "VersionControlSystem.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <cstdio>
 #include <cstring>
@@ -464,6 +465,7 @@ namespace SparkEditor
     VCSOperationResult VersionControlSystem::ExecuteCommand(const std::string& command,
                                                             const std::string& workingDirectory)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Executing VCS command: %s", command.c_str());
         VCSOperationResult result;
         auto startTime = std::chrono::steady_clock::now();
 

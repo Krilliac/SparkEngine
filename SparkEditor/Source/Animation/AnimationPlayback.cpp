@@ -4,6 +4,7 @@
  */
 
 #include "AnimationTimeline.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
@@ -66,6 +67,7 @@ namespace SparkEditor
     {
         if (!m_currentClip)
             return;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Animation playback started: '%s'", m_currentClip->name.c_str());
         m_playbackState = PlaybackState::PLAYING;
         m_currentClip->isPlaying = true;
         m_currentClip->isPaused = false;
@@ -87,6 +89,7 @@ namespace SparkEditor
     {
         if (!m_currentClip)
             return;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Animation playback stopped: '%s'", m_currentClip->name.c_str());
         m_playbackState = PlaybackState::STOPPED;
         m_currentClip->SetTime(0.0f);
         m_currentClip->isPlaying = false;
@@ -139,6 +142,7 @@ namespace SparkEditor
 
     void AnimationTimeline::SetRecording(bool recording)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Animation recording %s", recording ? "started" : "stopped");
         if (recording)
         {
             m_playbackState = PlaybackState::RECORDING;

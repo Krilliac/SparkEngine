@@ -6,6 +6,7 @@
  */
 #include "../../Core/Platform.h"
 #include "AnimationSystem.h"
+#include "../../Utils/LogMacros.h"
 #include <cmath>
 
 using namespace DirectX;
@@ -24,10 +25,19 @@ namespace Spark::Animation
         const size_t boneCount = skeleton.bones.size();
 
         if (rootIdx < 0 || midIdx < 0 || endIdx < 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Animation,
+                           "TwoBoneIK: negative bone index in chain (root=%d mid=%d end=%d)", rootIdx, midIdx, endIdx);
             return;
+        }
         if (static_cast<size_t>(rootIdx) >= boneCount || static_cast<size_t>(midIdx) >= boneCount ||
             static_cast<size_t>(endIdx) >= boneCount)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Animation,
+                           "TwoBoneIK: bone index out of range (root=%d mid=%d end=%d, count=%zu)", rootIdx, midIdx,
+                           endIdx, boneCount);
             return;
+        }
 
         // Step 1: Compute world (global) transforms for all bones so we can
         // extract the three joint world positions accurately.
@@ -58,7 +68,11 @@ namespace Spark::Animation
         float lowerLen = XMVectorGetX(XMVector3Length(XMVectorSubtract(endPos, midPos)));
 
         if (upperLen < 1e-6f || lowerLen < 1e-6f)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Animation, "TwoBoneIK: degenerate bone lengths (upper=%.6f lower=%.6f)",
+                           upperLen, lowerLen);
             return;
+        }
 
         XMVECTOR rootToTarget = XMVectorSubtract(target, rootPos);
         float targetDist = XMVectorGetX(XMVector3Length(rootToTarget));
@@ -216,7 +230,11 @@ namespace Spark::Animation
 
         int32_t boneIdx = chain.boneIndices[0];
         if (boneIdx < 0 || boneIdx >= static_cast<int32_t>(localTransforms.size()))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Animation, "LookAtIK: bone index %d out of range (count=%zu)", boneIdx,
+                           localTransforms.size());
             return;
+        }
 
         XMMATRIX local = XMLoadFloat4x4(&localTransforms[boneIdx]);
         XMVECTOR bonePos = local.r[3];
@@ -243,6 +261,9 @@ namespace Spark::Animation
     {
         if (!chain.enabled || chain.boneIndices.size() < 2)
             return;
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Animation, "FABRIK: solving chain with %zu joints, maxIter=%d, tol=%.4f",
+                        chain.boneIndices.size(), chain.maxIterations, chain.tolerance);
 
         const size_t numJoints = chain.boneIndices.size();
 
@@ -300,6 +321,8 @@ namespace Spark::Animation
 
         if (distToTarget > totalLength)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Animation, "FABRIK: target unreachable (dist=%.3f > reach=%.3f)",
+                            distToTarget, totalLength);
             // Target is unreachable: stretch the chain toward the target
             XMVECTOR dir = XMVector3Normalize(rootToTarget);
             for (size_t i = 0; i < numJoints - 1; ++i)

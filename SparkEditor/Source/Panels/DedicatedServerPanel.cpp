@@ -13,6 +13,7 @@
 #include "DedicatedServerPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -31,7 +32,7 @@ namespace SparkEditor
     bool DedicatedServerPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Dedicated Server panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Dedicated Server panel");
         return true;
     }
 
@@ -125,9 +126,10 @@ namespace SparkEditor
     {
         if (m_pieServerRunning)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Stopping PIE server during shutdown");
             StopPIEServer();
         }
-        std::cout << "Shutting down Dedicated Server panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Dedicated Server panel");
     }
 
     bool DedicatedServerPanel::HandleEvent(const std::string& /*eventType*/, void* /*eventData*/)
@@ -564,6 +566,7 @@ namespace SparkEditor
         {
             if (ImGui::Button(ICON_FA_REFRESH " Scan LAN", ImVec2(120, 30)))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Scanning LAN for servers");
                 RefreshServerBrowser();
             }
         }
@@ -697,6 +700,8 @@ namespace SparkEditor
 
     void DedicatedServerPanel::StartCookServer()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Starting dedicated server cook (platform=%s, profile=%s)",
+                       GetPlatformName(m_cookSettings.platform), GetProfileName(m_cookSettings.profile));
         m_isCooking = true;
         m_cookProgress = 0.0f;
         m_cookStatus = "Cooking dedicated server...";
@@ -808,6 +813,9 @@ namespace SparkEditor
 
     void DedicatedServerPanel::LaunchPIEServer()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Launching PIE server: %s port=%d map=%s mode=%s maxPlayers=%d",
+                       m_pieConfig.serverName.c_str(), m_pieConfig.port, m_pieConfig.mapName.c_str(),
+                       GAME_MODE_NAMES[m_pieConfig.gameMode], m_pieConfig.maxPlayers);
         m_pieServerRunning = true;
         m_pieServerUptime = 0.0f;
         m_pieServerLog.clear();
@@ -834,6 +842,7 @@ namespace SparkEditor
 
     void DedicatedServerPanel::StopPIEServer()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Stopping PIE server (uptime: %.0fs)", m_pieServerUptime);
         m_pieServerLog.push_back("[Server] Shutting down...");
         m_pieServerLog.push_back("[Server] Notifying connected clients...");
         m_pieServerLog.push_back("[Server] Server stopped.");

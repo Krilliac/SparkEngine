@@ -3,6 +3,7 @@
 #include "Console.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -65,12 +66,14 @@ void Console::Initialize(int screenW, int screenH)
                             Log(msg);
                         }});
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "In-game console initialized with %zu built-in commands", commands.size());
     std::wcout << L"[INFO] Console initialization complete (" << commands.size() << " commands)." << std::endl;
 }
 
 // -----------------------------------------------------------------------------
 void Console::RegisterCommand(const std::wstring& name, std::function<void(const std::vector<std::wstring>&)> callback)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Registering console command: %ls", name.c_str());
     // Check for duplicate
     for (auto& cmd : commands)
     {
@@ -223,6 +226,7 @@ void Console::ExecuteCommand(const std::wstring& line)
         }
     }
 
+    SPARK_LOG_WARN(Spark::LogCategory::Game, "Unknown console command entered");
     Log(L"Unknown command: " + tokens[0] + L" (type 'help' for available commands)");
 }
 

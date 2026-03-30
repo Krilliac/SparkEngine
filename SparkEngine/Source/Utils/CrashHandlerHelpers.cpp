@@ -4,6 +4,7 @@
 // CrashHandlerHelpers.cpp
 #include "Utils/CrashHandler.h"
 #include "Utils/Assert.h"
+#include "Utils/LogMacros.h"
 #include "Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -527,6 +528,7 @@ static bool Upload(const std::string&, const std::wstring&, const std::string&);
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
 {
     // NOTE: Minimal instrumentation here — we are inside a crash handler
+    SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashHandler: Unhandled exception caught by crash filter");
     HandleCrashInternal(ep, nullptr);
     return EXCEPTION_EXECUTE_HANDLER;
 }
@@ -543,6 +545,7 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* msg)
     std::wstring shot = g_cfg.dumpPrefix + stamp + L".png";
     std::wstring zipFile = g_cfg.dumpPrefix + stamp + L".zip";
 
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: Writing crash artifacts with timestamp prefix");
     WriteMiniDump(dump, ep);
 
     std::wstringstream log;
@@ -571,17 +574,24 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* msg)
     }
     else
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashHandler: Failed to open crash log file for writing");
         MessageBoxW(nullptr, L"Failed to open crash log file", L"CrashHandler", MB_OK | MB_ICONERROR);
     }
 
     if (g_cfg.captureScreenshot)
+    {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "CrashHandler: Capturing screenshot");
         SaveScreenshot(shot);
+    }
 
     std::vector<std::wstring> files{dump, logFile};
     if (g_cfg.captureScreenshot)
         files.push_back(shot);
     if (g_cfg.zipBeforeUpload)
+    {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "CrashHandler: Zipping %zu crash files for upload", files.size());
         ZipFiles(zipFile, files);
+    }
 
     bool ok = true;
 #ifdef SPARK_HAS_CURL
@@ -643,7 +653,10 @@ static void WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep)
 {
     HANDLE hFile = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashHandler: Failed to create minidump file");
         return;
+    }
 
     MINIDUMP_EXCEPTION_INFORMATION info{};
     info.ThreadId = GetCurrentThreadId();
@@ -654,6 +667,7 @@ static void WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep)
         static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithUnloadedModules);
 
     MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, dumpType, &info, nullptr, nullptr);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: Minidump written successfully");
 
     CloseHandle(hFile);
 }
@@ -917,7 +931,10 @@ static void ZipFiles(const std::wstring& zipPath, const std::vector<std::wstring
     std::string zipUtf8 = WideToUtf8(zipPath);
     mz_zip_archive zip = {};
     if (!mz_zip_writer_init_file(&zip, zipUtf8.c_str(), 0))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashHandler: Failed to initialize zip archive");
         return;
+    }
 
     for (auto& wfile : files)
     {
@@ -961,6 +978,12 @@ static bool Upload(const std::string& url, const std::wstring& wfile, const std:
 
     curl_mime_free(mime);
     curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK)
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "CrashHandler: Upload failed with CURL error %d",
+                        static_cast<int>(res));
+    else
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: Upload completed successfully");
 
     return (res == CURLE_OK);
 }

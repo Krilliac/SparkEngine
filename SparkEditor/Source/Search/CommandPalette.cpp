@@ -7,6 +7,7 @@
 
 #include "CommandPalette.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
@@ -28,6 +29,8 @@ namespace SparkEditor
         action.shortcut = shortcut;
         action.callback = std::move(callback);
         m_allActions.push_back(std::move(action));
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Registered command: '%s' in category '%s'", name.c_str(),
+                        category.c_str());
     }
 
     void CommandPalette::ClearActions()
@@ -300,6 +303,7 @@ namespace SparkEditor
             const auto& action = m_allActions[m_filteredIndices[static_cast<size_t>(m_selectedIndex)]];
             if (action.callback)
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Executing command: '%s'", action.name.c_str());
                 Close();
                 action.callback();
             }

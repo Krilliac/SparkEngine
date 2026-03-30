@@ -10,6 +10,7 @@
 #include "GameplayShowcase.h"
 
 #include "Engine/Events/EventSystem.h"
+#include "Utils/LogMacros.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
@@ -35,6 +36,8 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
 
     console.LogInfo("[Showcase] Initializing gameplay showcase...");
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing gameplay showcase");
+
     SetupEventSubscriptions();
     SetupLocalization();
     SetupTimeOfDay();
@@ -48,6 +51,8 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
     // Kick off the coroutine demo (spawn → wait → damage → wait → heal)
     StartShowcaseCoroutine();
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Gameplay showcase initialized — %zu entities spawned",
+                   m_spawnedEntities.size());
     console.LogInfo("[Showcase] Gameplay showcase initialized — " + std::to_string(m_spawnedEntities.size()) +
                     " entities spawned");
     return true;
@@ -55,6 +60,7 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
 
 void GameplayShowcase::Shutdown()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down gameplay showcase");
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Showcase] Shutting down gameplay showcase...");
 
@@ -308,6 +314,7 @@ std::string GameplayShowcase::CycleWeather()
     weather->SetWeather(newType, -1.0f, 5.0f);
 
     std::string name = Spark::WeatherSystem::GetWeatherTypeName(newType);
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Weather cycling to: %s", name.c_str());
     Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Weather cycling to: " + name);
     return "Weather transitioning to: " + name;
 }

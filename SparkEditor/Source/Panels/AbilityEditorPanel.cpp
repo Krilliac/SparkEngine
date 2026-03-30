@@ -5,6 +5,7 @@
 
 #include "AbilityEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool AbilityEditorPanel::Initialize()
     {
-        std::cout << "Initializing Ability Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AbilityEditorPanel initialized");
         return true;
     }
 
@@ -64,7 +65,7 @@ namespace SparkEditor
 
     void AbilityEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Ability Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AbilityEditorPanel shutting down");
     }
 
     void AbilityEditorPanel::RenderAbilitiesTab()
@@ -76,6 +77,8 @@ namespace SparkEditor
             snprintf(entry.name, sizeof(entry.name), "New Ability %u", entry.id);
             m_abilities.push_back(entry);
             m_selectedAbility = static_cast<int>(m_abilities.size()) - 1;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "AbilityEditorPanel: created ability '%s' (id=%u)", entry.name,
+                           entry.id);
         }
 
         ImGui::Separator();
@@ -156,6 +159,7 @@ namespace SparkEditor
         ImGui::Separator();
         if (ImGui::Button(ICON_FA_TRASH " Delete"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "AbilityEditorPanel: deleted ability #%u", ability.id);
             m_abilities.erase(m_abilities.begin() + m_selectedAbility);
             m_selectedAbility = -1;
         }

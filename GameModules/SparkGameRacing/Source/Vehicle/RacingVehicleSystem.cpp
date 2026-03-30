@@ -5,6 +5,7 @@
 
 #include "RacingVehicleSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,7 @@ namespace Racing
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing vehicle system initialized (6 vehicle types)");
         console.LogInfo("[Racing Vehicle] Vehicle system initialized (6 vehicle types)");
         return true;
     }
@@ -84,6 +86,8 @@ namespace Racing
         vehicle.baseStats = GetDefaultStats(type);
         vehicle.isPlayer = isPlayer;
         m_vehicles.push_back(vehicle);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing vehicle created: %s (id=%u, player=%s)", name.c_str(),
+                        vehicle.id, isPlayer ? "yes" : "no");
         return vehicle.id;
     }
 

@@ -16,6 +16,7 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -35,6 +36,7 @@ RenderTargetManager::~RenderTargetManager()
 
 HRESULT RenderTargetManager::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initializing RenderTargetManager");
     m_device = device;
     m_context = context;
 
@@ -45,6 +47,8 @@ HRESULT RenderTargetManager::Initialize(ID3D11Device* device, ID3D11DeviceContex
 
 void RenderTargetManager::Shutdown()
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shutting down RenderTargetManager (%zu targets, %zu MRT groups)",
+                   m_renderTargets.size(), m_mrtGroups.size());
     m_mrtGroups.clear();
     m_renderTargets.clear();
     m_device = nullptr;
@@ -110,6 +114,8 @@ void RenderTargetManager::DestroyMRT(const std::string& name)
 
 HRESULT RenderTargetManager::CreateGBufferTargets(uint32_t width, uint32_t height, uint32_t sampleCount)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Creating GBuffer targets (%ux%u, %ux MSAA)", width, height,
+                   sampleCount);
     // G-Buffer for deferred rendering
 
     // Albedo + Metallic
@@ -236,6 +242,8 @@ HRESULT RenderTargetManager::CreateTemporalTargets(uint32_t width, uint32_t heig
 
 void RenderTargetManager::ResizeAllTargets(uint32_t width, uint32_t height)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Resizing all %zu render targets to %ux%u", m_renderTargets.size(),
+                   width, height);
     for (auto& pair : m_renderTargets)
     {
         pair.second->Resize(m_device, width, height);

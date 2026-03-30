@@ -4,9 +4,11 @@
 #include "Utils/Validate.h"
 #include <string>
 #include <iostream>
+#include "Utils/LogMacros.h"
 
 PlaneObject::PlaneObject(float width, float depth) : m_width(width), m_depth(depth)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "PlaneObject constructed (width=%.1f, depth=%.1f)", width, depth);
     std::wcout << L"[INFO] PlaneObject constructed. width=" << width << L" depth=" << depth << std::endl;
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, width > 0.f && depth > 0.f, "Plane dimensions must be positive");
     SetName("Plane_" + std::to_string(GetID()));

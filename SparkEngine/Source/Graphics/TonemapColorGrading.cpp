@@ -4,6 +4,7 @@
  */
 
 #include "TonemapColorGrading.h"
+#include "../Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -223,15 +224,22 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
     bool TonemapColorGrading::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, uint32_t width,
                                          uint32_t height)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initializing TonemapColorGrading (%ux%u)", width, height);
         m_device = device;
         m_context = context;
         m_width = width;
         m_height = height;
 
         if (!CompileShaders())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to compile tonemap shaders");
             return false;
+        }
         if (!CreateResources())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create tonemap resources");
             return false;
+        }
 
         m_initialized = true;
         return true;
@@ -246,6 +254,7 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
     {
         if (width == m_width && height == m_height)
             return;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Resizing tonemap resources to %ux%u", width, height);
         m_width = width;
         m_height = height;
         CreateResources();

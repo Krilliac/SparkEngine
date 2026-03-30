@@ -1,4 +1,5 @@
 #include "CommandRegistry.h"
+#include "Utils/LogMacros.h"
 #include <sstream>
 #include <vector>
 #include <string>
@@ -17,6 +18,7 @@ void CommandRegistry::RegisterCommand(const std::string& name, const std::string
     info.handler = handler;
 
     m_commands[name] = info;
+    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Registered command: %s", name.c_str());
 }
 
 std::string CommandRegistry::ExecuteCommand(const std::string& name, const CommandArgs& args)
@@ -24,6 +26,7 @@ std::string CommandRegistry::ExecuteCommand(const std::string& name, const Comma
     auto it = m_commands.find(name);
     if (it == m_commands.end())
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "Command lookup failed: '%s' not found", name.c_str());
         return "Unknown command: " + name + ". Type 'help' for available commands.";
     }
 
@@ -33,10 +36,12 @@ std::string CommandRegistry::ExecuteCommand(const std::string& name, const Comma
     }
     catch (const std::exception& e)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Command '%s' threw exception: %s", name.c_str(), e.what());
         return "Error executing command '" + name + "': " + e.what();
     }
     catch (...)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Command '%s' threw unknown exception", name.c_str());
         return "Unknown error executing command '" + name + "'";
     }
 }
@@ -64,6 +69,7 @@ std::string CommandRegistry::GetCommandHelp(const std::string& name) const
     auto it = m_commands.find(name);
     if (it == m_commands.end())
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "Help lookup failed: command '%s' not found", name.c_str());
         return "Unknown command: " + name;
     }
 

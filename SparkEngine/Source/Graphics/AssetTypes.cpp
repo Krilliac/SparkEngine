@@ -10,6 +10,7 @@
 
 #include "AssetPipeline.h"
 #include "Utils/Assert.h"
+#include "Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include <iostream>
@@ -168,6 +169,8 @@ HRESULT MeshAsset::Load(ID3D11Device* device)
     if (FAILED(hr))
         return hr;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MeshAsset loaded: %zu verts, %zu indices, GPU buffers created",
+                   m_meshData.vertices.size(), m_meshData.indices.size());
     m_loaded = true;
     return S_OK;
 }
@@ -285,6 +288,7 @@ HRESULT TextureAsset::Load(ID3D11Device* device)
     if (FAILED(hr))
         return hr;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "TextureAsset loaded: %ux%u", m_width, m_height);
     m_loaded = true;
     return S_OK;
 }
@@ -418,7 +422,10 @@ size_t AudioAsset::GetMemoryUsage() const
 // ASSET CACHE IMPLEMENTATION
 // ============================================================================
 
-AssetCache::AssetCache(size_t maxMemoryMB) : m_maxMemory(maxMemoryMB * 1024 * 1024) {}
+AssetCache::AssetCache(size_t maxMemoryMB) : m_maxMemory(maxMemoryMB * 1024 * 1024)
+{
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "AssetCache created with %zu MB budget", maxMemoryMB);
+}
 
 AssetCache::~AssetCache()
 {
@@ -480,6 +487,8 @@ std::shared_ptr<Asset> AssetCache::GetAsset(const std::string& path)
         return it->second.asset;
     }
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "AssetCache miss: '%s' (hits=%u, misses=%u)", path.c_str(), m_hits,
+                    m_misses);
     m_misses++;
     return nullptr;
 }
@@ -528,6 +537,7 @@ float AssetCache::GetHitRatio() const
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>

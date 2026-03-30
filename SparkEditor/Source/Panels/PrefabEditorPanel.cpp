@@ -7,6 +7,7 @@
 
 #include "PrefabEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
@@ -22,6 +23,7 @@ namespace SparkEditor
     bool PrefabEditorPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "PrefabEditorPanel initialized");
         m_isInitialized = true;
         return true;
     }
@@ -75,6 +77,8 @@ namespace SparkEditor
                 if (m_prefabManager && m_newPrefabName[0] != '\0')
                 {
                     m_prefabManager->CreateEmptyPrefab(m_newPrefabName);
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "PrefabEditorPanel: created prefab '%s'",
+                                   m_newPrefabName);
                     m_selectedPrefab = m_newPrefabName;
                     m_newPrefabName[0] = '\0';
                 }
@@ -150,6 +154,8 @@ namespace SparkEditor
         {
             if (m_prefabManager)
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "PrefabEditorPanel: deleting prefab '%s'",
+                               m_selectedPrefab.c_str());
                 m_prefabManager->DeletePrefab(m_selectedPrefab);
                 m_selectedPrefab.clear();
             }

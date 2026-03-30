@@ -10,6 +10,7 @@
 
 #include "MaterialEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
@@ -47,6 +48,8 @@ namespace SparkEditor
         ImGui::SetNextItemWidth(200.0f);
         if (ImGui::Combo("Blend Mode", &currentBlend, blendNames, 5))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: blend mode changed to '%s'",
+                            blendNames[currentBlend]);
             state.blendMode = static_cast<MaterialRenderState::BlendMode>(currentBlend);
             selected->isModified = true;
             SetModified(true);
@@ -72,6 +75,8 @@ namespace SparkEditor
         ImGui::SetNextItemWidth(200.0f);
         if (ImGui::Combo("Cull Mode", &currentCull, cullNames, 3))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: cull mode changed to '%s'",
+                            cullNames[currentCull]);
             state.cullMode = static_cast<MaterialRenderState::CullMode>(currentCull);
             selected->isModified = true;
             SetModified(true);
@@ -326,6 +331,7 @@ namespace SparkEditor
 
     void MaterialEditorPanel::LoadDefaultMaterials()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "MaterialEditor: loading default materials");
         m_materials.clear();
 
         // Standard PBR
@@ -575,7 +581,8 @@ namespace SparkEditor
             m_materials.push_back(std::move(mat));
         }
 
-        std::cout << "Material Editor: loaded " << m_materials.size() << " default materials\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "MaterialEditor: loaded %d default materials",
+                       static_cast<int>(m_materials.size()));
     }
 
     void MaterialEditorPanel::PopulateDefaultPBRParameters(MaterialDefinition& material)

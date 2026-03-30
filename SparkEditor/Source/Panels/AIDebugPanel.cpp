@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "Utils/LogMacros.h"
+
 namespace SparkEditor
 {
 
@@ -18,6 +20,7 @@ namespace SparkEditor
 
     bool AIDebugPanel::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AIDebugPanel initialized");
         return true;
     }
 
@@ -73,6 +76,8 @@ namespace SparkEditor
 
     void AIDebugPanel::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AIDebugPanel shutting down (%d agents tracked)",
+                       static_cast<int>(m_agents.size()));
         m_agents.clear();
         m_blackboardEntries.clear();
     }
@@ -140,6 +145,7 @@ namespace SparkEditor
                 std::snprintf(label, sizeof(label), "Entity %u", agent.entityID);
                 if (ImGui::Selectable(label, isSelected, ImGuiSelectableFlags_SpanAllColumns))
                 {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AIDebugPanel: selected agent %u", agent.entityID);
                     m_selectedAgentID = agent.entityID;
                 }
 
@@ -260,6 +266,7 @@ namespace SparkEditor
         ImGui::Text("Debug Overlay Toggles");
         ImGui::Separator();
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AIDebugPanel: rendering perception overlay toggles");
         ImGui::Checkbox("Detection Ranges", &m_showDetectionRanges);
         ImGui::SameLine();
         ImGui::TextDisabled("(spheres around agents)");

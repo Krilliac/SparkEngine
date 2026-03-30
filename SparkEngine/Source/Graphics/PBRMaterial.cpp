@@ -14,6 +14,7 @@
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <algorithm>
 #include <sstream>
 
@@ -25,6 +26,7 @@
 
 Material::Material(const std::string& name) : m_name(name)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Creating PBR material: %s", name.c_str());
     m_pbrProperties = {};
     m_advancedProperties = {};
     m_renderState = {};
@@ -60,6 +62,8 @@ bool Material::HasTexture(MaterialTextureType type) const
 
 void Material::CreateVariant(const std::string& variantName, const std::vector<std::string>& defines)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Creating variant '%s' for material '%s' with %zu defines",
+                   variantName.c_str(), m_name.c_str(), defines.size());
     m_variants[variantName] = defines;
 }
 
@@ -194,6 +198,8 @@ std::shared_ptr<Material> Material::CreateInstance(const std::string& instanceNa
     // Constant buffer is NOT shared; the instance gets its own so properties can diverge
     instance->m_compiled = false;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Created material instance '%s' from template '%s'",
+                   instanceName.c_str(), m_name.c_str());
     Spark::SimpleConsole::GetInstance().LogInfo("Created material instance '" + instanceName + "' from template '" +
                                                 m_name + "'");
     return instance;
@@ -206,6 +212,7 @@ std::shared_ptr<Material> Material::CreateInstance(const std::string& instanceNa
 #include "MaterialSystem.h"
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
+#include "../Utils/LogMacros.h"
 #include <sstream>
 #include <algorithm>
 #include <cmath>
@@ -216,6 +223,7 @@ std::shared_ptr<Material> Material::CreateInstance(const std::string& instanceNa
 
 Material::Material(const std::string& name) : m_name(name)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Creating PBR material: %s", name.c_str());
     // Initialize PBR defaults: white albedo, dielectric, medium roughness
     m_pbrProperties.albedoColor = {1.0f, 1.0f, 1.0f, 1.0f};
     m_pbrProperties.metallicFactor = 0.0f;
@@ -272,6 +280,8 @@ bool Material::HasTexture(MaterialTextureType type) const
 
 void Material::CreateVariant(const std::string& variantName, const std::vector<std::string>& defines)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Creating variant '%s' for material '%s' with %zu defines",
+                   variantName.c_str(), m_name.c_str(), defines.size());
     m_variants[variantName] = defines;
 }
 

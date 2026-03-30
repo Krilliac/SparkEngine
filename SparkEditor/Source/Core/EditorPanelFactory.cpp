@@ -7,6 +7,7 @@
  */
 #include "EditorUI.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/HierarchyPanel.h"
@@ -233,10 +234,12 @@ namespace SparkEditor
             try
             {
                 m_panels[name] = std::move(panel);
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Registered panel: %s", name.c_str());
                 console.LogSuccess("Created " + name + " panel");
             }
             catch (const std::exception& e)
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to create panel '%s': %s", name.c_str(), e.what());
                 console.LogError("Failed to create " + name + " panel: " + std::string(e.what()));
             }
         };
@@ -276,6 +279,7 @@ namespace SparkEditor
         InitializePanelIcons();
         SetDefaultPanelVisibility();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Panel creation complete: %zu panels registered", m_panels.size());
         console.LogSuccess("Created " + std::to_string(m_panels.size()) + " editor panels");
     }
 

@@ -8,6 +8,7 @@
 #include "Physics3DPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <iostream>
@@ -29,7 +30,7 @@ namespace SparkEditor
     bool Physics3DPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
-        std::cout << "Initializing Physics 3D panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Physics3DPanel initialized");
         return true;
     }
 
@@ -68,7 +69,7 @@ namespace SparkEditor
 
     void Physics3DPanel::Shutdown()
     {
-        std::cout << "Shutting down Physics 3D panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Physics3DPanel shutting down");
     }
 
     // =========================================================================
@@ -209,8 +210,8 @@ namespace SparkEditor
             {
                 // This will create an entity with Transform + RigidBody + Collider components
                 // via the scene system when wired to the engine. For now, stores the intent.
-                std::cout << "Add physics " << shapes[m_quickAddShape] << " (" << bodyTypes[m_quickAddBodyType]
-                          << ", mass=" << m_quickAddMass << ")\n";
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Physics3DPanel: add %s (%s, mass=%.1f)",
+                               shapes[m_quickAddShape], bodyTypes[m_quickAddBodyType], m_quickAddMass);
             }
 
             ImGui::Separator();
@@ -310,8 +311,8 @@ namespace SparkEditor
             if (ImGui::Button(ICON_FA_CROSSHAIRS " Cast Ray"))
             {
                 // Would call PhysicsSystem::Raycast when wired to the engine
-                std::cout << "Casting ray from (" << m_rayOrigin[0] << ", " << m_rayOrigin[1] << ", " << m_rayOrigin[2]
-                          << ")\n";
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Physics3DPanel: casting ray from (%.1f, %.1f, %.1f)",
+                                m_rayOrigin[0], m_rayOrigin[1], m_rayOrigin[2]);
                 m_rayHit = false; // Reset until wired
             }
 

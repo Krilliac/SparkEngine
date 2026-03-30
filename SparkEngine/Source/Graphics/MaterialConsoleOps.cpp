@@ -13,6 +13,7 @@
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -68,6 +69,7 @@ std::string MaterialSystem::Console_GetMaterialInfo(const std::string& materialN
 
 bool MaterialSystem::Console_ReloadMaterial(const std::string& materialName)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Reloading material: %s", materialName.c_str());
     auto it = m_materials.find(materialName);
     if (it != m_materials.end())
     {
@@ -113,6 +115,9 @@ void MaterialSystem::Console_ClearCache()
     size_t textureCount = m_textureCache.size();
     size_t samplerCount = m_samplerCache.size();
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Clearing material cache: %zu textures, %zu samplers", textureCount,
+                   samplerCount);
+
     m_textureCache.clear();
     m_samplerCache.clear();
 
@@ -122,6 +127,8 @@ void MaterialSystem::Console_ClearCache()
 
 void MaterialSystem::Console_GarbageCollect()
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Starting material garbage collection on %zu materials",
+                    m_materials.size());
     // Remove unused materials (those with only one reference - the one in the map)
     auto it = m_materials.begin();
     int removedCount = 0;
@@ -150,6 +157,8 @@ int MaterialSystem::Console_ValidateMaterials()
     std::vector<std::string> invalidMaterials;
     std::vector<std::string> warningMaterials;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Starting comprehensive material validation on %zu materials",
+                   m_materials.size());
     Spark::SimpleConsole::GetInstance().LogInfo("Starting comprehensive material validation...");
 
     for (const auto& pair : m_materials)
@@ -513,10 +522,13 @@ bool MaterialSystem::Console_ExportMaterial(const std::string& materialName, con
     auto material = GetMaterial(materialName);
     if (!material || material == m_defaultMaterial)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Cannot export: material '%s' not found", materialName.c_str());
         Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
         return false;
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Exporting material '%s' to '%s'", materialName.c_str(),
+                   filePath.c_str());
     if (material->SaveToFile(filePath))
     {
         Spark::SimpleConsole::GetInstance().LogSuccess("Exported material '" + materialName + "' to: " + filePath);
@@ -531,6 +543,7 @@ bool MaterialSystem::Console_ExportMaterial(const std::string& materialName, con
 
 bool MaterialSystem::Console_ImportMaterial(const std::string& filePath)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Importing material from: %s", filePath.c_str());
     if (!std::filesystem::exists(filePath))
     {
         Spark::SimpleConsole::GetInstance().LogError("File not found: " + filePath);
@@ -607,6 +620,7 @@ std::string MaterialSystem::Console_ListMaterialVariants(const std::string& mate
 #include "MaterialSystem.h"
 #include "RHI/RHI.h"
 #include "../Utils/Hash.h"
+#include "../Utils/LogMacros.h"
 #include <sstream>
 #include <algorithm>
 #include <cstring>
@@ -721,6 +735,8 @@ void MaterialSystem::Console_ClearCache()
 
 void MaterialSystem::Console_GarbageCollect()
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Starting material garbage collection on %zu materials",
+                    m_materials.size());
     int collected = 0;
     for (auto it = m_materials.begin(); it != m_materials.end();)
     {

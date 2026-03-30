@@ -4,6 +4,7 @@
  */
 
 #include "AnimationTimeline.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <fstream>
@@ -121,6 +122,8 @@ namespace SparkEditor
         m_viewEndTime = duration;
         m_selection.Clear();
         m_playbackState = PlaybackState::STOPPED;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created new animation clip '%s' (duration=%.2fs, fps=%.0f)",
+                       name.c_str(), duration, frameRate);
     }
 
     bool AnimationTimeline::LoadAnimationClip(const std::string& filePath)
@@ -128,7 +131,10 @@ namespace SparkEditor
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !filePath.empty(), false);
         std::ifstream file(filePath);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to open animation clip file: %s", filePath.c_str());
             return false;
+        }
 
         auto clip = std::make_unique<AnimationClip>();
         std::string line;
@@ -216,6 +222,8 @@ namespace SparkEditor
         AutoFitView();
         m_selection.Clear();
         m_playbackState = PlaybackState::STOPPED;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loaded animation clip from '%s' (%d tracks)", filePath.c_str(),
+                       trackCount);
         return true;
     }
 
@@ -227,7 +235,12 @@ namespace SparkEditor
 
         std::ofstream file(filePath);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to save animation clip to: %s", filePath.c_str());
             return false;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving animation clip '%s' to '%s'", m_currentClip->name.c_str(),
+                       filePath.c_str());
 
         // Header
         file << "SPARK_ANIM\n";

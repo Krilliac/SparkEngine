@@ -5,6 +5,7 @@
 
 #include "PostProcessingPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 
@@ -15,7 +16,7 @@ namespace SparkEditor
 
     bool PostProcessingPanel::Initialize()
     {
-        std::cout << "Initializing Post Processing panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "PostProcessingPanel initialized");
         return true;
     }
 
@@ -30,6 +31,7 @@ namespace SparkEditor
         {
             if (!m_scene)
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "PostProcessingPanel: no scene loaded");
                 ImGui::TextDisabled("No scene loaded");
             }
             else
@@ -46,7 +48,7 @@ namespace SparkEditor
 
     void PostProcessingPanel::Shutdown()
     {
-        std::cout << "Shutting down Post Processing panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "PostProcessingPanel shutting down");
     }
 
     void PostProcessingPanel::RenderBloomSettings()

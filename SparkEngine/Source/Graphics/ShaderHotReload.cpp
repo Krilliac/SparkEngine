@@ -55,6 +55,9 @@ int Shader::CreateShaderVariant(const std::string& baseName, const std::vector<s
 
     m_variants.push_back(variant);
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Created shader variant '%s' with %zu defines", variant.name.c_str(),
+                   defines.size());
+
     std::wstring msg = L"Created shader variant: ";
     std::string varName = variant.name;
     msg += std::wstring(varName.begin(), varName.end());
@@ -115,10 +118,12 @@ int Shader::HotReloadShaders()
             if (SUCCEEDED(hr))
             {
                 reloadCount++;
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot-reloaded shader: %s", narrowPath.c_str());
                 LOG_TO_CONSOLE_IMMEDIATE(L"Hot-reloaded shader: " + watchedFile, L"SUCCESS");
             }
             else
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to hot-reload shader: %s", narrowPath.c_str());
                 LOG_TO_CONSOLE_IMMEDIATE(L"Failed to hot-reload shader: " + watchedFile, L"ERROR");
             }
         }

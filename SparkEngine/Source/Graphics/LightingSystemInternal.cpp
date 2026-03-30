@@ -56,6 +56,8 @@ HRESULT LightingSystem::CreateConstantBuffers()
     if (FAILED(hr))
         return hr;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                   "LightingSystem: constant buffers created (light, environment, shadow)");
     return S_OK;
 }
 
@@ -98,8 +100,13 @@ HRESULT LightingSystem::CreateShadowMap(uint32_t size, ShadowMap& shadowMap)
 
     hr = m_device->CreateShaderResourceView(shadowMap.texture.Get(), &srvDesc, &shadowMap.srv);
     if (FAILED(hr))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "LightingSystem: failed to create shadow map SRV (size=%u)",
+                        size);
         return hr;
+    }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem: shadow map created (%ux%u)", size, size);
     return S_OK;
 }
 
@@ -118,6 +125,8 @@ HRESULT LightingSystem::CreateCascadedShadowMap()
             return hr;
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem: cascaded shadow map created (%u cascades, %u size)",
+                   m_csmShadowMap->cascadeCount, m_shadowMapSize);
     return S_OK;
 }
 
@@ -156,6 +165,7 @@ void LightingSystem::UpdateLightBuffer()
     }
     else
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "LightingSystem: failed to map light data buffer for update");
         Spark::SimpleConsole::GetInstance().LogWarning("Failed to map light data buffer for update");
     }
 
@@ -241,6 +251,9 @@ void LightingSystem::UpdateShadowMaps(const XMMATRIX& viewMatrix, const XMMATRIX
             }
             else
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                "LightingSystem: failed to create shadow map for light (size=%u)",
+                                light->GetShadowMapSize());
                 continue;
             }
         }
@@ -381,6 +394,8 @@ void LightingSystem::CullLights(const XMMATRIX& viewMatrix, const XMMATRIX& proj
 
     m_metrics.visibleLights = visibleCount;
     m_metrics.culledLights = m_metrics.activeLights - visibleCount;
+    SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "LightCull: %u visible, %u culled of %u total", visibleCount,
+                    m_metrics.culledLights, m_metrics.activeLights);
 }
 
 void LightingSystem::CalculateCSMSplits(float nearPlane, float farPlane, CascadedShadowMap& csm)
@@ -587,6 +602,8 @@ HRESULT LightingSystem::GenerateIrradianceMap(ID3D11ShaderResourceView* environm
     if (FAILED(hr))
         return hr;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Irradiance map generated (%ux%u cubemap)", irradianceSize,
+                   irradianceSize);
     Spark::SimpleConsole::GetInstance().LogSuccess("Irradiance map generated (" + std::to_string(irradianceSize) + "x" +
                                                    std::to_string(irradianceSize) + " cubemap)");
     return S_OK;
@@ -673,6 +690,8 @@ HRESULT LightingSystem::GeneratePrefilterMap(ID3D11ShaderResourceView* environme
     if (FAILED(hr))
         return hr;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Prefilter map generated (%ux%u, %u mip levels)", prefilterSize,
+                   prefilterSize, mipLevels);
     Spark::SimpleConsole::GetInstance().LogSuccess("Prefilter map generated (" + std::to_string(prefilterSize) + "x" +
                                                    std::to_string(prefilterSize) + ", " + std::to_string(mipLevels) +
                                                    " mip levels)");
@@ -811,6 +830,8 @@ HRESULT LightingSystem::GenerateBRDFLUT()
     if (FAILED(hr))
         return hr;
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "BRDF LUT generated (%ux%u, %u samples)", lutSize, lutSize,
+                   sampleCount);
     Spark::SimpleConsole::GetInstance().LogSuccess("BRDF LUT generated (" + std::to_string(lutSize) + "x" +
                                                    std::to_string(lutSize) + ", " + std::to_string(sampleCount) +
                                                    " samples)");
@@ -856,6 +877,10 @@ HRESULT LightingSystem::CreateDefaultEnvironment()
         return hr;
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                   "Default environment created with IBL textures (sky=%.1f,%.1f,%.1f intensity=%.1f)",
+                   m_environmentLighting.skyColor.x, m_environmentLighting.skyColor.y, m_environmentLighting.skyColor.z,
+                   m_environmentLighting.skyIntensity);
     Spark::SimpleConsole::GetInstance().LogSuccess("Default environment created with IBL textures");
     return S_OK;
 }

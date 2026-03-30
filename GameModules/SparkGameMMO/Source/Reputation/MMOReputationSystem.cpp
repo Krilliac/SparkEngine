@@ -5,6 +5,7 @@
 
 #include "MMOReputationSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -105,6 +106,7 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultFactions();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO reputation system initialized: %zu factions", m_factions.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Reputation system initialized (" +
                                                     std::to_string(m_factions.size()) + " factions)");
         return true;
@@ -207,6 +209,8 @@ namespace MMO
 
         if (standing.tier != oldTier)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Reputation tier changed: %s -> tier %d (rep=%d)",
+                           def->name.c_str(), static_cast<int>(standing.tier), standing.reputation);
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogInfo("[MMO] Reputation with " + def->name + " changed to " +
                             std::to_string(static_cast<int>(standing.tier)));

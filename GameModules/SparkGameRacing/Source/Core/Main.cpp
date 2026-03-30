@@ -15,6 +15,7 @@
 #include "Camera/RacingCameraSystem.h"
 #include "HUD/RacingHUDSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -70,6 +71,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Racing] Loading Spark Racing module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module loading — initializing 7 subsystems");
 
     // Initialize track system first (other systems query it)
     m_trackSystem = std::make_unique<Racing::RacingTrackSystem>();
@@ -130,6 +132,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module loaded successfully");
     console.LogInfo("[Racing] Spark Racing module loaded successfully (7 subsystems)");
     console.LogInfo("[Racing] Tracks: " + std::to_string(m_trackSystem->GetTrackCount()) +
                     " | Vehicles: " + std::to_string(m_vehicleSystem->GetVehicleCount()) +
@@ -144,6 +147,7 @@ void SparkGameRacingModule::OnUnload()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[Racing] Unloading Spark Racing module...");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module shutting down");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -184,6 +188,7 @@ void SparkGameRacingModule::OnUnload()
 
     m_context = nullptr;
     m_initialized = false;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module unloaded");
     console.LogInfo("[Racing] Spark Racing module unloaded");
 }
 

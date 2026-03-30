@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool SplineEditorPanel::Initialize()
     {
-        std::cout << "Initializing Spline Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Spline Editor panel");
         return true;
     }
 
@@ -51,7 +52,7 @@ namespace SparkEditor
 
     void SplineEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Spline Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Spline Editor panel");
     }
 
     void SplineEditorPanel::RenderSplineSettings()

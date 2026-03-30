@@ -6,6 +6,7 @@
  */
 
 #include "GPUParticleSystem.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
@@ -114,6 +115,7 @@ HRESULT GPUParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext*
         return hr;
     m_nextEmitterId = 1;
     m_initialized = true;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUParticleSystem initialized (D3D11 compute pipeline)");
     return S_OK;
 }
 
@@ -146,6 +148,7 @@ void GPUParticleSystem::Shutdown()
 {
     if (!m_initialized)
         return;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUParticleSystem shutting down");
 #ifdef SPARK_PLATFORM_WINDOWS
     m_emitters.clear();
     m_emitCS.Reset();
@@ -185,6 +188,7 @@ uint32_t GPUParticleSystem::CreateEmitter(const ParticleEmitterDesc& desc, uint3
 
     uint32_t id = m_nextEmitterId++;
     m_emitters[id] = std::move(emitter);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPU particle emitter created: id=%u capacity=%u", id, capacity);
     return id;
 #else
     (void)desc;
@@ -196,6 +200,7 @@ uint32_t GPUParticleSystem::CreateEmitter(const ParticleEmitterDesc& desc, uint3
 void GPUParticleSystem::DestroyEmitter(uint32_t emitterId)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "GPU particle emitter destroyed: id=%u", emitterId);
     m_emitters.erase(emitterId);
 #else
     (void)emitterId;

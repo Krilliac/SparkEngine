@@ -7,6 +7,7 @@
 
 #include "AdvancedAssetPipeline.h"
 #include "Utils/ContainerUtils.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 
 #include <imgui.h>
@@ -58,6 +59,8 @@ namespace SparkEditor
         }
 
         m_isInitialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AdvancedAssetPipeline initialized with %d processing threads",
+                       m_maxProcessingThreads);
         return true;
     }
 
@@ -153,6 +156,7 @@ namespace SparkEditor
 
     void AdvancedAssetPipeline::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "AdvancedAssetPipeline shutting down");
         // Stop processing threads
         m_shouldStopProcessing.store(true);
         m_queueCondition.notify_all();
@@ -213,9 +217,11 @@ namespace SparkEditor
     {
         if (!processor)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Attempted to register null asset processor");
             return;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Registering asset processor: %s", processor->GetName().c_str());
         // Build extension map
         for (const auto& ext : processor->GetSupportedExtensions())
         {
@@ -367,9 +373,12 @@ namespace SparkEditor
         const fs::path dirPath(directoryPath);
         if (!fs::exists(dirPath) || !fs::is_directory(dirPath))
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Scan directory does not exist: %s", directoryPath.c_str());
             return 0;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Scanning directory: %s (recursive=%s)", directoryPath.c_str(),
+                       recursive ? "true" : "false");
         int assetCount = 0;
 
         auto processEntry = [&](const fs::directory_entry& entry)
@@ -578,9 +587,12 @@ namespace SparkEditor
 
     bool AdvancedAssetPipeline::ExportAssetDatabase(const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Exporting asset database to: %s", filePath.c_str());
         std::ofstream file(filePath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to open file for database export: %s",
+                            filePath.c_str());
             return false;
         }
 

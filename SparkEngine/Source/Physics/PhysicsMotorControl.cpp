@@ -10,6 +10,7 @@
  */
 
 #include "PhysicsSystem.h"
+#include "../Utils/LogMacros.h"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -30,6 +31,8 @@ void PhysicsSystem::SetHingeMotorVelocity(std::shared_ptr<PhysicsConstraint> con
 {
     if (!constraint || !constraint->GetJoltConstraint())
         return;
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Hinge motor velocity: target=%.2f, maxTorque=%.2f", targetVelocity,
+                    maxTorque);
     auto* hinge = static_cast<JPH::HingeConstraint*>(constraint->GetJoltConstraint());
     hinge->GetMotorSettings().mMaxTorqueLimit = maxTorque;
     hinge->GetMotorSettings().mMinTorqueLimit = -maxTorque;
@@ -42,6 +45,8 @@ void PhysicsSystem::SetHingeMotorPosition(std::shared_ptr<PhysicsConstraint> con
 {
     if (!constraint || !constraint->GetJoltConstraint())
         return;
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Hinge motor position: targetAngle=%.2f, maxTorque=%.2f", targetAngle,
+                    maxTorque);
     auto* hinge = static_cast<JPH::HingeConstraint*>(constraint->GetJoltConstraint());
     hinge->GetMotorSettings().mMaxTorqueLimit = maxTorque;
     hinge->GetMotorSettings().mMinTorqueLimit = -maxTorque;
@@ -54,6 +59,8 @@ void PhysicsSystem::SetSliderMotorVelocity(std::shared_ptr<PhysicsConstraint> co
 {
     if (!constraint || !constraint->GetJoltConstraint())
         return;
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Slider motor velocity: target=%.2f, maxForce=%.2f", targetVelocity,
+                    maxForce);
     auto* slider = static_cast<JPH::SliderConstraint*>(constraint->GetJoltConstraint());
     slider->GetMotorSettings().mMaxForceLimit = maxForce;
     slider->GetMotorSettings().mMinForceLimit = -maxForce;
@@ -77,6 +84,9 @@ void PhysicsSystem::DisableConstraintMotor(std::shared_ptr<PhysicsConstraint> co
 {
     if (!constraint || !constraint->GetJoltConstraint())
         return;
+
+    SPARK_LOG_DEBUG(Spark::LogCategory::Physics, "Disabling motor on constraint type %d",
+                    static_cast<int>(constraint->GetType()));
 
     switch (constraint->GetType())
     {

@@ -18,6 +18,8 @@
 #include "../Engine/ECS/Components/VisibilityComponents.h"
 #include "../Engine/ECS/Components/TerrainComponents.h"
 
+#include "Utils/LogMacros.h"
+
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -31,6 +33,8 @@ namespace Spark
 
     bool SetFieldFromString(void* component, const FieldInfo& field, const std::string& value)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "SetFieldFromString: field='%s' value='%s'", field.name,
+                        value.c_str());
         auto* dst = static_cast<char*>(component) + field.offset;
 
         switch (field.type)
@@ -51,6 +55,8 @@ namespace Spark
             }
             catch (...)
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse int from '%s'",
+                                value.c_str());
                 return false;
             }
         }
@@ -118,6 +124,8 @@ namespace Spark
             return false;
         }
         default:
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "SetFieldFromString: unsupported field type %d for '%s'",
+                           static_cast<int>(field.type), field.name);
             return false;
         }
     }
@@ -523,6 +531,7 @@ namespace
     {
         ComponentFactoryRegistrar()
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Registering ECS component types with ComponentFactory");
             // Core
             SPARK_REGISTER_COMPONENT(NameComponent)
             SPARK_REGISTER_COMPONENT(Transform)
@@ -580,6 +589,8 @@ namespace
 
             // Terrain
             SPARK_REGISTER_COMPONENT(TerrainComponent)
+
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "ComponentFactory registration complete");
         }
     };
 

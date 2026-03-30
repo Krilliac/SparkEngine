@@ -5,6 +5,7 @@
 
 #include "GameModuleSelectorPanel.h"
 #include "Core/ModuleManager.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include <imgui.h>
 #include <filesystem>
@@ -20,6 +21,7 @@ namespace SparkEditor
 
     bool GameModuleSelectorPanel::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel initialized");
         m_isInitialized = true;
         RefreshModuleList();
         return true;
@@ -90,6 +92,7 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::RefreshModuleList()
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "GameModuleSelectorPanel: refreshing module list");
         m_modules.clear();
 
         // Scan the executable directory for game module shared libraries
@@ -232,6 +235,7 @@ namespace SparkEditor
             file << json;
             file.close();
             m_statusMessage = "Saved spark.modules.json (" + std::to_string(loadOrder - 1000) + " modules)";
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_statusMessage.c_str());
 
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogSuccess("[Editor] " + m_statusMessage);
@@ -239,6 +243,7 @@ namespace SparkEditor
         else
         {
             m_statusMessage = "Failed to write spark.modules.json";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_statusMessage.c_str());
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogError("[Editor] " + m_statusMessage);
         }

@@ -7,6 +7,7 @@
 #include "Account/MMOAccountSystem.h"
 #include "Character/MMOCharacterSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -28,6 +29,7 @@ namespace MMO
         std::memset(m_loginPassword, 0, sizeof(m_loginPassword));
         std::memset(m_registerEmail, 0, sizeof(m_registerEmail));
         std::memset(m_createName, 0, sizeof(m_createName));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO Login UI initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Login UI initialized");
         return true;
     }
@@ -47,6 +49,7 @@ namespace MMO
 
     void MMOLoginUI::ReturnToLogin()
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Login UI: returning to login screen");
         if (m_sessionToken != 0 && m_accountSys)
             m_accountSys->Logout(m_sessionToken);
         m_sessionToken = 0;
@@ -160,6 +163,7 @@ namespace MMO
                     auto result = m_accountSys->Login(m_loginUsername, m_loginPassword);
                     if (result.success)
                     {
+                        SPARK_LOG_INFO(Spark::LogCategory::Game, "Login UI: login successful for %s", m_loginUsername);
                         m_sessionToken = result.sessionToken;
                         m_loggedInAccountId = result.accountId;
                         m_loginError.clear();
@@ -255,6 +259,7 @@ namespace MMO
                 if (m_enterWorldCallback)
                     m_enterWorldCallback(m_loggedInAccountId, ch.characterId);
 
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "Login UI: entering world as %s", ch.name.c_str());
                 Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Entering world as " + ch.name);
             }
             ImGui::SameLine();

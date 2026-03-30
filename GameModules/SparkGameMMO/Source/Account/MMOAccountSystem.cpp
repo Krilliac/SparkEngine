@@ -5,6 +5,7 @@
 
 #include "MMOAccountSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -22,6 +23,7 @@ namespace MMO
     bool MMOAccountSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO account system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Account system initialized");
         return true;
     }
@@ -134,6 +136,7 @@ namespace MMO
 
         result.success = true;
         result.accountId = id;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Account registered: %s (ID %u)", username.c_str(), id);
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Account registered: " + username + " (ID " +
                                                     std::to_string(id) + ")");
         return result;
@@ -249,6 +252,7 @@ namespace MMO
         result.accountId = account->accountId;
         result.sessionToken = token;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Account login: %s (ID %u)", username.c_str(), account->accountId);
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Login: " + username);
         return result;
     }
@@ -263,6 +267,7 @@ namespace MMO
         if (acctIt != m_accounts.end())
             acctIt->second.totalPlayTimeHours += it->second.sessionDuration / 3600.0f;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Account logout: %s", it->second.username.c_str());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Logout: " + it->second.username);
         m_sessions.erase(it);
     }
@@ -373,6 +378,8 @@ namespace MMO
             }
         }
 
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "Account banned: %s (%s)", it->second.username.c_str(),
+                       reason.c_str());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Account banned: " + it->second.username + " (" + reason +
                                                     ")");
         return true;

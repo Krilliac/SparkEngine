@@ -5,6 +5,7 @@
 
 #include "MMODungeonSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -30,6 +31,7 @@ namespace MMO
     {
         m_context = context;
         RegisterDefaultDungeons();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO dungeon system initialized: %zu dungeons", m_dungeons.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Dungeon system initialized (" +
                                                     std::to_string(m_dungeons.size()) + " dungeons)");
         return true;
@@ -126,6 +128,8 @@ namespace MMO
         uint32_t id = inst.instanceId;
         m_instances[id] = std::move(inst);
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Dungeon instance created: %s (ID %u, %zu players)", def->name.c_str(),
+                       id, playerIds.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Created dungeon instance: " + def->name + " (ID " +
                                                     std::to_string(id) + ")");
         return id;
@@ -162,6 +166,8 @@ namespace MMO
                 boss.defeated = true;
                 boss.currentHealth = 0.0f;
 
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "Dungeon boss defeated: %s (instance %u)", boss.name.c_str(),
+                               instanceId);
                 Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Boss defeated: " + boss.name);
 
                 if (it->second.AllBossesDefeated())

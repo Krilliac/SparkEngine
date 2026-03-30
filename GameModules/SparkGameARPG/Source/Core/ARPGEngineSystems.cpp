@@ -21,6 +21,7 @@
 // SetupAnimation(), SetupCoroutines(), and SetupAbilities() use logging-only stubs.
 #include "Graphics/WeatherSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -55,6 +56,7 @@ namespace ARPG
         SetupWeather();
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG engine systems integration initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Engine systems integration initialized");
         return true;
     }
@@ -77,6 +79,7 @@ namespace ARPG
         // We don't call into it here because the header is not included (see top of file).
 
         m_initialized = false;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG engine systems integration shut down");
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Engine systems integration shut down");
     }
 
@@ -139,6 +142,7 @@ namespace ARPG
                 }
             }));
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG EventBus: 2 subscriptions registered");
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] EventBus: 2 subscriptions registered");
     }
 
@@ -300,6 +304,7 @@ namespace ARPG
         bossConfig.canUseCover = false;
         ai->RegisterBehavior("arpg_boss_phases", Spark::AI::FPSBehaviors::CreateCombatBehavior(bossConfig));
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG AI: 3 behavior trees registered");
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] AI: 3 behavior trees registered");
     }
 

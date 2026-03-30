@@ -1,6 +1,7 @@
 // CoreComponents.cpp
 #include "../../../Core/Platform.h"
 #include "CoreComponents.h"
+#include "../../../Utils/LogMacros.h"
 #include "../../../Utils/Validate.h"
 
 using namespace DirectX;
@@ -41,6 +42,8 @@ XMMATRIX Transform::GetWorldMatrix(const entt::registry& registry) const
         const auto* parentTransform = registry.try_get<Transform>(current);
         if (!parentTransform)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::ECS, "Transform parent entity missing Transform component at depth %d",
+                           depth);
             break;
         }
 
@@ -48,6 +51,12 @@ XMMATRIX Transform::GetWorldMatrix(const entt::registry& registry) const
         worldMtx = worldMtx * parentLocal;
         current = parentTransform->parent;
         ++depth;
+    }
+
+    if (depth >= kMaxHierarchyDepth)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::ECS,
+                        "Transform hierarchy exceeded max depth (%d) - possible cycle detected", kMaxHierarchyDepth);
     }
 
     return worldMtx;

@@ -2,6 +2,7 @@
 // MathUtils.cpp
 #include "MathUtils.h"
 #include "Utils/Assert.h"
+#include "Utils/LogMacros.h"
 #include "Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -119,6 +120,8 @@ XMFLOAT3 MathUtils::Direction(const XMFLOAT3& from, const XMFLOAT3& to)
 
 float MathUtils::Clamp(float value, float min, float max)
 {
+    SPARK_LOG_IF(Spark::LogLevel::Warn, Spark::LogCategory::Core, min > max,
+                 "MathUtils::Clamp: min (%f) > max (%f), inputs swapped", min, max);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Core, min <= max, "Clamp min must be <= max");
     if (value < min)
         return min;
@@ -164,6 +167,8 @@ XMFLOAT3 MathUtils::Multiply(const XMFLOAT3& v, float scalar)
 
 XMFLOAT3 MathUtils::Divide(const XMFLOAT3& v, float scalar)
 {
+    SPARK_LOG_IF(Spark::LogLevel::Error, Spark::LogCategory::Core, scalar == 0.0f,
+                 "MathUtils::Divide: Division by zero attempted");
     SPARK_REQUIRE_MSG(Spark::LogCategory::Core, scalar != 0.0f, "Divide by zero");
     float inv = 1.0f / scalar;
     return XMFLOAT3(v.x * inv, v.y * inv, v.z * inv);
@@ -185,6 +190,8 @@ XMFLOAT3 MathUtils::Normalize(const XMFLOAT3& v)
                       "Normalize input must be finite");
     float len = Length(v);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Core, len >= 0.0f, "Length must be non-negative");
+    if (len == 0.0f)
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "MathUtils::Normalize: Zero-length vector, returning zero vector");
     return len > 0.0f ? Divide(v, len) : XMFLOAT3(0, 0, 0);
 }
 

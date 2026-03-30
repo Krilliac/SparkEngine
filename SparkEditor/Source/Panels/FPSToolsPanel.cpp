@@ -7,6 +7,7 @@
 
 #include "FPSToolsPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
@@ -22,7 +23,7 @@ namespace SparkEditor
     bool FPSToolsPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing FPS Tools panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel initialized");
 
         // Default spawn points
         m_spawnPoints = {
@@ -92,7 +93,7 @@ namespace SparkEditor
 
     void FPSToolsPanel::Shutdown()
     {
-        std::cout << "Shutting down FPS Tools panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel shutting down");
     }
 
     void FPSToolsPanel::RenderSpawnPointEditor()
@@ -108,10 +109,13 @@ namespace SparkEditor
             sp.active = true;
             m_spawnPoints.push_back(sp);
             m_selectedSpawn = (int)m_spawnPoints.size() - 1;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel: added spawn point '%s'", sp.name.c_str());
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_TRASH " Remove") && m_selectedSpawn >= 0)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel: removed spawn point '%s'",
+                           m_spawnPoints[m_selectedSpawn].name.c_str());
             m_spawnPoints.erase(m_spawnPoints.begin() + m_selectedSpawn);
             m_selectedSpawn = m_spawnPoints.empty() ? -1 : std::min(m_selectedSpawn, (int)m_spawnPoints.size() - 1);
         }
@@ -232,7 +236,13 @@ namespace SparkEditor
 
         const char* gameModes[] = {"Free Play",   "Deathmatch", "Team Deathmatch",    "Capture the Flag", "Domination",
                                    "Elimination", "Gun Game",   "Search and Destroy", "King of the Hill", "Survival"};
+        int prevMode = m_selectedGameMode;
         ImGui::Combo("Game Mode", &m_selectedGameMode, gameModes, IM_ARRAYSIZE(gameModes));
+        if (m_selectedGameMode != prevMode)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel: game mode changed to '%s'",
+                           gameModes[m_selectedGameMode]);
+        }
 
         ImGui::Spacing();
         ImGui::Text(ICON_FA_COG " Rules");
@@ -315,6 +325,7 @@ namespace SparkEditor
         ImGui::Spacing();
         if (ImGui::Button(ICON_FA_PLAY " Apply & Start Match", ImVec2(-1, 30)))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel: applying game mode settings and starting match");
             // Apply game mode settings
         }
     }

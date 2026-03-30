@@ -11,6 +11,7 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include <algorithm>
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -30,7 +31,11 @@ void TextureSystem::Update(float deltaTime)
     if (currentUsage > m_memoryBudget)
     {
         size_t overage = currentUsage - m_memoryBudget;
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "Texture memory over budget: %zu bytes used, %zu budget, evicting %zu bytes", currentUsage,
+                       m_memoryBudget, overage);
         uint32_t evicted = EvictByPriority(overage);
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Evicted %u textures by priority", evicted);
 
         // If priority eviction was not sufficient, fall back to simple GC
         if (GetMemoryUsage() > m_memoryBudget)
@@ -201,6 +206,7 @@ void TextureSystem::GarbageCollect()
 
     if (collected > 0)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Garbage collected %zu texture(s)", collected);
         Spark::SimpleConsole::GetInstance().LogInfo("Garbage collected " + std::to_string(collected) + " texture(s)");
     }
 }
@@ -211,6 +217,7 @@ void TextureSystem::GarbageCollect()
 
 #include "TextureSystem.h"
 #include "../Utils/Validate.h"
+#include "../Utils/LogMacros.h"
 #include <algorithm>
 
 // ============================================================================

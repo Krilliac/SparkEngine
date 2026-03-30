@@ -6,6 +6,7 @@
  */
 
 #include "ProjectBrowserPanel.h"
+#include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -54,6 +55,7 @@ namespace SparkEditor
     bool ProjectBrowserPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ProjectBrowserPanel initialized");
         m_isInitialized = true;
         return true;
     }
@@ -161,10 +163,14 @@ namespace SparkEditor
             {
                 if (m_projectManager->OpenProject(path))
                 {
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "ProjectBrowserPanel: opened project at '%s'",
+                                   path.c_str());
                     m_showModal = false;
                 }
                 else
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Editor, "ProjectBrowserPanel: failed to open project at '%s'",
+                                    path.c_str());
                     m_openError = "Failed to open project at: " + path;
                 }
             }
@@ -405,12 +411,16 @@ namespace SparkEditor
                                                     m_newProjectDescription))
                 {
                     m_showModal = false;
-                    std::cout << "Project created successfully!\n";
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "ProjectBrowserPanel: project '%s' created at '%s'",
+                                   name.c_str(), m_newProjectPath);
                 }
                 else
                 {
                     m_createError = "Failed to create project. Check that the path is writable "
                                     "and the directory doesn't already contain a project.";
+                    SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                                    "ProjectBrowserPanel: failed to create project '%s' at '%s'", name.c_str(),
+                                    m_newProjectPath);
                 }
             }
         }

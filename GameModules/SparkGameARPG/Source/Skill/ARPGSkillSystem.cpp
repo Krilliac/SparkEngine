@@ -5,6 +5,7 @@
 
 #include "ARPGSkillSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -21,6 +22,7 @@ namespace ARPG
         m_context = context;
         RegisterSkillTrees();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG skill system initialized with %zu skills", m_allSkills.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Skill system initialized (" +
                                                     std::to_string(m_allSkills.size()) + " skills)");
         return true;
@@ -160,6 +162,7 @@ namespace ARPG
         }
 
         learned.push_back(skillId);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG skill learned: %s (id=%u)", skill->name.c_str(), skillId);
         Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Learned skill: " + skill->name);
         return true;
     }
@@ -186,6 +189,8 @@ namespace ARPG
         {
             m_cooldowns[heroId].push_back({skillId, skill->cooldown});
         }
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG skill used: %s (cd=%.1fs)", skill->name.c_str(),
+                        skill->cooldown);
 
         return true;
     }

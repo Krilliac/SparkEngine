@@ -75,6 +75,8 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
     SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !filename.empty(), "LoadVertexShader: filename empty");
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, m_device);
 
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Compiling vertex shader: %ls", filename.c_str());
+
     auto startTime = std::chrono::high_resolution_clock::now();
 
     ComPtr<ID3DBlob> vsBlob;
@@ -219,6 +221,7 @@ HRESULT Shader::CompileShaderFromFileAdvanced(const std::wstring& filename, Shad
 
     if (!fileFound)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader file not found in any search path");
         LOG_TO_CONSOLE_IMMEDIATE(L"Shader file not found: " + filename, L"ERROR");
         return E_FAIL;
     }
@@ -274,6 +277,7 @@ HRESULT Shader::CompileShaderFromFileAdvanced(const std::wstring& filename, Shad
         if (errorBlob)
         {
             std::string errorString(reinterpret_cast<const char*>(errorBlob->GetBufferPointer()));
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compilation error: %s", errorString.c_str());
             std::wstring wErrorString(errorString.begin(), errorString.end());
             LOG_TO_CONSOLE_IMMEDIATE(L"Shader compilation error: " + wErrorString, L"ERROR");
         }
@@ -283,6 +287,7 @@ HRESULT Shader::CompileShaderFromFileAdvanced(const std::wstring& filename, Shad
     }
     else
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader compiled successfully (target=%s)", target.c_str());
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_metrics.compiledShaders++;
     }
@@ -444,6 +449,7 @@ HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type,
 
     if (SUCCEEDED(hr))
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader compiled from source in %.2f ms", compileTimeMs);
         LOG_TO_CONSOLE_IMMEDIATE(L"Shader compiled from source successfully", L"SUCCESS");
         m_isCompiled = true;
     }
@@ -453,6 +459,8 @@ HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type,
 
 HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const ShaderCompilationFlags& flags)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loading shader from file: %s (type=%d)", filePath.c_str(),
+                   static_cast<int>(type));
     ASSERT_MSG(!filePath.empty(), "LoadFromFile: filePath is empty");
 
     // Try reading via LocalFileCache first, fall back to direct I/O

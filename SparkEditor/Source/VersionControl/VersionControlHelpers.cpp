@@ -4,6 +4,7 @@
  */
 
 #include "VersionControlSystem.h"
+#include "Utils/LogMacros.h"
 #include <sstream>
 #include <filesystem>
 
@@ -250,6 +251,7 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return;
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Detecting merge conflicts");
         m_repositoryInfo->conflicts.clear();
         for (const auto& change : m_repositoryInfo->changedFiles)
         {

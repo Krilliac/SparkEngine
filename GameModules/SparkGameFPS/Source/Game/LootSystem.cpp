@@ -35,6 +35,7 @@ namespace Spark
 
     void LootSystem::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing loot system");
         m_worldDrops.clear();
         m_activeBuffs.clear();
         BuildLootTable();
@@ -121,6 +122,9 @@ namespace Spark
         std::uniform_real_distribution<float> chance(0.0f, 1.0f);
         std::uniform_real_distribution<float> offset(-1.5f, 1.5f);
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Spawning enemy loot at (%.1f, %.1f, %.1f), boss=%d", position.x,
+                        position.y, position.z, isBossWave);
+
         const auto& table = isBossWave ? m_bossLootTable : m_lootTable;
 
         for (const auto& entry : table)
@@ -168,6 +172,8 @@ namespace Spark
 
     void LootSystem::CollectDrop(WorldDrop& drop, Player* player)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Player collected loot drop type=%d, value=%.1f",
+                        static_cast<int>(drop.type), drop.value);
         drop.collected = true;
 
         switch (drop.type)

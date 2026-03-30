@@ -17,6 +17,7 @@
  */
 
 #include "FroxelVolumetricFog.h"
+#include "Utils/LogMacros.h"
 
 namespace Spark::Graphics
 {
@@ -30,11 +31,17 @@ namespace Spark::Graphics
         m_integratedGrid.resize(total);
         m_frameCount = 0;
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "FroxelVolumetricFog initialized: grid %ux%ux%u (%u froxels), near=%.1f far=%.1f",
+                       settings.gridWidth, settings.gridHeight, settings.gridDepth, total, settings.nearPlane,
+                       settings.farPlane);
         return true;
     }
 
     void FroxelVolumetricFog::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FroxelVolumetricFog shutting down (%u frames processed)",
+                       m_frameCount);
         m_currentGrid.clear();
         m_historyGrid.clear();
         m_integratedGrid.clear();
@@ -73,6 +80,7 @@ namespace Spark::Graphics
         {
             return;
         }
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "FroxelFog InjectMedia: %d local fog volumes", volumeCount);
 
         uint32_t w = m_settings.gridWidth;
         uint32_t h = m_settings.gridHeight;

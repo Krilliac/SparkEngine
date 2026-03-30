@@ -6,6 +6,7 @@
  */
 
 #include "SceneFile.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <chrono>
@@ -91,6 +92,8 @@ namespace SparkEditor
     {
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, assetPath);
         SPARK_VALIDATE_NOT_EMPTY(Spark::LogCategory::Editor, assetType);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Adding asset reference: %s (type=%s)", assetPath.c_str(),
+                        assetType.c_str());
         // Check if already referenced
         for (const auto& ref : assetReferences)
         {

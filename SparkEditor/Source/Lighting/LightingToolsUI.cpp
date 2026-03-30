@@ -6,6 +6,7 @@
  */
 
 #include "LightingTools.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <algorithm>
 #include <sstream>
@@ -19,6 +20,7 @@ namespace SparkEditor
     {
         if (ImGui::Button("Add Point Light"))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Adding point light via UI");
             SparkLightData newLight;
             newLight.type = SparkLightType::Point;
             newLight.name = "Point Light " + std::to_string(m_nextLightId);
@@ -287,7 +289,10 @@ namespace SparkEditor
 
     void LightingTools::RenderGlobalIlluminationUI()
     {
-        ImGui::Checkbox("Enable Global Illumination", &m_giSettings.enableGI);
+        if (ImGui::Checkbox("Enable Global Illumination", &m_giSettings.enableGI))
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "GI %s", m_giSettings.enableGI ? "enabled" : "disabled");
+        }
         ImGui::Checkbox("Enable SSAO", &m_giSettings.enableSSAO);
         ImGui::Checkbox("Enable SSR", &m_giSettings.enableSSR);
         ImGui::Checkbox("Enable Ray-Traced GI", &m_giSettings.enableRTGI);
@@ -582,6 +587,7 @@ namespace SparkEditor
         {
             if (ImGui::Button(preset))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Applying lighting preset: %s", preset);
                 ApplyLightingPreset(preset);
             }
             ImGui::SameLine();
@@ -599,6 +605,7 @@ namespace SparkEditor
         {
             if (std::strlen(profileNameBuffer) > 0)
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving lighting profile from UI: %s", profileNameBuffer);
                 SaveLightingProfile(profileNameBuffer);
             }
         }
@@ -617,6 +624,7 @@ namespace SparkEditor
             {
                 if (ImGui::Selectable(profile.c_str()))
                 {
+                    SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading lighting profile from UI: %s", profile.c_str());
                     LoadLightingProfile(profile);
                 }
             }

@@ -6,6 +6,7 @@
  */
 
 #include "UndoRedoManager.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 
@@ -29,6 +30,7 @@ namespace SparkEditor
             return;
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Executing command: '%s'", command->GetDescription().c_str());
         // Execute the command
         command->Execute();
 
@@ -55,7 +57,8 @@ namespace SparkEditor
 
         auto command = std::move(m_undoStack.back());
         m_undoStack.pop_back();
-
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Undoing command: '%s' (stack depth: %zu)",
+                        command->GetDescription().c_str(), m_undoStack.size());
         command->Undo();
 
         m_redoStack.push_back(std::move(command));

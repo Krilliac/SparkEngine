@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool StreamingPanel::Initialize()
     {
-        std::cout << "Initializing Streaming panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Streaming panel");
         return true;
     }
 
@@ -78,7 +79,7 @@ namespace SparkEditor
 
     void StreamingPanel::Shutdown()
     {
-        std::cout << "Shutting down Streaming panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Streaming panel");
     }
 
     void StreamingPanel::RenderAreaList()

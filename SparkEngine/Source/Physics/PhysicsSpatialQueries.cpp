@@ -10,6 +10,7 @@
 
 #include "PhysicsSystem.h"
 #include "../Utils/ContainerUtils.h"
+#include "../Utils/LogMacros.h"
 
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -45,6 +46,9 @@ RaycastHit PhysicsSystem::Raycast(const XMFLOAT3& origin, const XMFLOAT3& direct
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_metrics.raycastCount++;
     }
+
+    SPARK_LOG_TRACE(Spark::LogCategory::Physics, "Raycast from (%.2f, %.2f, %.2f) dir (%.2f, %.2f, %.2f) maxDist=%.2f",
+                    origin.x, origin.y, origin.z, direction.x, direction.y, direction.z, maxDistance);
 
     if (!m_joltSystem)
         return hit;
@@ -123,6 +127,8 @@ std::vector<RaycastHit> PhysicsSystem::RaycastAll(const XMFLOAT3& origin, const 
 
     collector.Sort();
 
+    SPARK_LOG_TRACE(Spark::LogCategory::Physics, "RaycastAll: %zu hits", collector.mHits.size());
+
     auto& bodyInterface = m_joltSystem->GetBodyInterface();
     for (const auto& result : collector.mHits)
     {
@@ -159,6 +165,9 @@ std::vector<RaycastHit> PhysicsSystem::RaycastAll(const XMFLOAT3& origin, const 
 bool PhysicsSystem::SphereOverlap(const XMFLOAT3& center, float radius, std::vector<PhysicsBody*>& results)
 {
     results.clear();
+
+    SPARK_LOG_TRACE(Spark::LogCategory::Physics, "SphereOverlap at (%.2f, %.2f, %.2f) radius=%.2f", center.x, center.y,
+                    center.z, radius);
 
     if (!m_joltSystem)
         return false;
@@ -282,12 +291,17 @@ static RaycastHit PerformShapeCast(JPH::PhysicsSystem* joltSystem, const JPH::Sh
 
 RaycastHit PhysicsSystem::SphereCast(float radius, const XMFLOAT3& from, const XMFLOAT3& to)
 {
+    SPARK_LOG_TRACE(Spark::LogCategory::Physics, "SphereCast radius=%.2f from (%.2f,%.2f,%.2f) to (%.2f,%.2f,%.2f)",
+                    radius, from.x, from.y, from.z, to.x, to.y, to.z);
     JPH::SphereShape sphereShape(radius);
     return PerformShapeCast(m_joltSystem.get(), &sphereShape, from, to);
 }
 
 RaycastHit PhysicsSystem::BoxCast(const XMFLOAT3& halfExtents, const XMFLOAT3& from, const XMFLOAT3& to)
 {
+    SPARK_LOG_TRACE(Spark::LogCategory::Physics,
+                    "BoxCast halfExtents=(%.2f,%.2f,%.2f) from (%.2f,%.2f,%.2f) to (%.2f,%.2f,%.2f)", halfExtents.x,
+                    halfExtents.y, halfExtents.z, from.x, from.y, from.z, to.x, to.y, to.z);
     JPH::BoxShape boxShape(JPH::Vec3(halfExtents.x, halfExtents.y, halfExtents.z));
     return PerformShapeCast(m_joltSystem.get(), &boxShape, from, to);
 }

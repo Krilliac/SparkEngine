@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -23,7 +24,7 @@ namespace SparkEditor
     bool SpriteEditorPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Sprite Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Sprite Editor panel");
         return true;
     }
 
@@ -89,7 +90,7 @@ namespace SparkEditor
 
     void SpriteEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Sprite Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Sprite Editor panel");
     }
 
     void SpriteEditorPanel::RenderTexturePreview()

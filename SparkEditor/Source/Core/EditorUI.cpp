@@ -13,6 +13,7 @@
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/HierarchyPanel.h"
@@ -116,16 +117,19 @@ namespace SparkEditor
             console.LogSuccess("Theme applied");
 
             m_isInitialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI initialized successfully");
             console.LogSuccess("Enhanced EditorUI initialized successfully");
             return true;
         }
         catch (const std::exception& e)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorUI::Initialize exception: %s", e.what());
             console.LogError("Exception in EditorUI::Initialize: " + std::string(e.what()));
             return false;
         }
         catch (...)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorUI::Initialize unknown exception");
             console.LogError("Unknown exception in EditorUI::Initialize");
             return false;
         }
@@ -567,6 +571,7 @@ namespace SparkEditor
 
     void EditorUI::SetupDefaultDockLayout(ImGuiID dockspaceId)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Setting up default dock layout");
         ImGui::DockBuilderRemoveNode(dockspaceId);
         ImGui::DockBuilderAddNode(dockspaceId, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(dockspaceId, ImGui::GetMainViewport()->WorkSize);
@@ -679,6 +684,7 @@ namespace SparkEditor
         // Note: Don't shutdown crash handler here as it's managed elsewhere
 
         m_isInitialized = false;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI shutdown complete");
         console.LogSuccess("EditorUI shutdown complete");
     }
 
@@ -947,6 +953,7 @@ namespace SparkEditor
 
     bool EditorUI::SaveLayout(const std::string& layoutName, const std::string& description)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving layout: %s", layoutName.c_str());
         // Implementation for saving ImGui docking layout
         try
         {
@@ -982,6 +989,7 @@ namespace SparkEditor
 
     bool EditorUI::LoadLayout(const std::string& layoutName)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading layout: %s", layoutName.c_str());
         // Implementation for loading ImGui docking layout
         try
         {
@@ -989,6 +997,7 @@ namespace SparkEditor
 
             if (!std::filesystem::exists(filePath))
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Layout file not found: %s", filePath.c_str());
                 return false;
             }
 
@@ -1005,6 +1014,7 @@ namespace SparkEditor
 
     void EditorUI::ResetToDefaultLayout()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Resetting to default layout");
         // Reset all panels to default visibility using the actual panel map keys
         for (auto& [name, panel] : m_panels)
         {
@@ -1036,10 +1046,13 @@ namespace SparkEditor
 
     void EditorUI::ApplyTheme(const std::string& themeName)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Applying theme: %s", themeName.c_str());
         m_currentTheme = themeName;
 
         if (!EditorTheme::ApplyTheme(themeName))
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Theme '%s' not found, falling back to ImGui dark",
+                           themeName.c_str());
             // Fallback to basic ImGui dark style
             ImGui::StyleColorsDark();
         }

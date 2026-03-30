@@ -5,6 +5,7 @@
 
 #include "EventMonitorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool EventMonitorPanel::Initialize()
     {
-        std::cout << "Initializing Event Monitor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EventMonitorPanel initialized");
         return true;
     }
 
@@ -45,7 +46,7 @@ namespace SparkEditor
 
     void EventMonitorPanel::Shutdown()
     {
-        std::cout << "Shutting down Event Monitor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "EventMonitorPanel shutting down");
     }
 
     void EventMonitorPanel::RenderToolbar()
@@ -56,6 +57,8 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_TRASH " Clear"))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "EventMonitorPanel: cleared %d events",
+                            static_cast<int>(m_events.size()));
             m_events.clear();
             memset(m_categoryCounts, 0, sizeof(m_categoryCounts));
         }

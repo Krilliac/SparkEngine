@@ -16,6 +16,7 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -74,6 +75,8 @@ bool RenderTargetManager::Console_SaveRenderTarget(const std::string& name, cons
 bool RenderTargetManager::Console_CreateRenderTarget(const std::string& name, uint32_t width, uint32_t height,
                                                      const std::string& format)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Console creating render target '%s' (%ux%u, %s)", name.c_str(), width,
+                   height, format.c_str());
     RenderTargetDesc desc;
     desc.name = name;
     desc.width = width;
@@ -127,19 +130,24 @@ void RenderTargetManager::Console_SetClearColor(const std::string& name, float r
 
 void RenderTargetManager::Console_GarbageCollect()
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Starting render target garbage collection (%zu targets)",
+                    m_renderTargets.size());
     // Remove unused render targets
+    int collected = 0;
     for (auto it = m_renderTargets.begin(); it != m_renderTargets.end();)
     {
         if (it->second.use_count() == 1)
         { // Only held by manager
             it->second->Destroy();
             it = m_renderTargets.erase(it);
+            collected++;
         }
         else
         {
             ++it;
         }
     }
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Garbage collected %d render targets", collected);
     UpdateMetrics();
 }
 
@@ -151,6 +159,7 @@ int RenderTargetManager::Console_ValidateRenderTargets()
     {
         if (!pair.second->IsValid())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Render target '%s' failed validation", pair.first.c_str());
             errors++;
         }
     }
@@ -256,6 +265,7 @@ bool RenderTargetManager::IsVisualizationEnabled(const std::string& name) const
 
 #include "RenderTarget.h"
 #include "../Utils/Validate.h"
+#include "../Utils/LogMacros.h"
 
 // ============================================================================
 // RenderTargetManager (Linux stub) — Console Integration
@@ -304,6 +314,8 @@ bool RenderTargetManager::Console_SaveRenderTarget(const std::string& name, cons
 bool RenderTargetManager::Console_CreateRenderTarget(const std::string& name, uint32_t width, uint32_t height,
                                                      const std::string& format)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Console creating render target '%s' (%ux%u, %s)", name.c_str(), width,
+                   height, format.c_str());
     RenderTargetDesc desc;
     desc.name = name;
     desc.width = width;

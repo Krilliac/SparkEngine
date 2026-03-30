@@ -2,6 +2,7 @@
 // Primitives.cpp
 #include "Primitives.h"
 #include "../Utils/Assert.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -37,6 +38,8 @@ MeshData Primitives::CreateCube(float size)
 
     SPARK_ENSURE_MSG(Spark::LogCategory::Graphics, !m.vertices.empty() && !m.indices.empty(),
                      "CreateCube produced empty mesh");
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Primitives: Created cube (size=%.2f), %zu vertices, %zu indices", size,
+                    m.vertices.size(), m.indices.size());
     return m;
 }
 
@@ -59,6 +62,8 @@ MeshData Primitives::CreatePlane(float width, float depth)
 
     SPARK_ENSURE_MSG(Spark::LogCategory::Graphics, !m.vertices.empty() && !m.indices.empty(),
                      "CreatePlane produced empty mesh");
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Primitives: Created plane (%.2fx%.2f), %zu vertices", width, depth,
+                    m.vertices.size());
     return m;
 }
 
@@ -98,5 +103,7 @@ MeshData Primitives::CreateSphere(float radius, int slices, int stacks)
 
     SPARK_ENSURE_MSG(Spark::LogCategory::Graphics, !m.vertices.empty() && !m.indices.empty(),
                      "CreateSphere produced empty mesh");
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Primitives: Created sphere (r=%.2f, %dx%d), %zu vertices, %zu indices",
+                    radius, slices, stacks, m.vertices.size(), m.indices.size());
     return m;
 }

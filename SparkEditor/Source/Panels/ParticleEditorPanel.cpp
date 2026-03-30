@@ -5,6 +5,7 @@
 
 #include "ParticleEditorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -16,7 +17,7 @@ namespace SparkEditor
 
     bool ParticleEditorPanel::Initialize()
     {
-        std::cout << "Initializing Particle Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ParticleEditorPanel initialized");
         return true;
     }
 
@@ -68,7 +69,7 @@ namespace SparkEditor
 
     void ParticleEditorPanel::Shutdown()
     {
-        std::cout << "Shutting down Particle Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ParticleEditorPanel shutting down");
     }
 
     void ParticleEditorPanel::RenderPresetSelector()
@@ -78,6 +79,7 @@ namespace SparkEditor
 
         if (ImGui::SmallButton("Fire"))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "ParticleEditorPanel: applied 'Fire' preset");
             m_emissionRate = 50.0f;
             m_lifetimeMin = 0.3f;
             m_lifetimeMax = 1.0f;

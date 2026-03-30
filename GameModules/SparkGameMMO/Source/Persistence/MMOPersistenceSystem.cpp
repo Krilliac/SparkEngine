@@ -5,6 +5,7 @@
 
 #include "MMOPersistenceSystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -51,6 +52,7 @@ namespace MMO
 
         if (!m_db->Open(dbPath, 2))
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to open MMO database: %s", dbPath.c_str());
             Spark::SimpleConsole::GetInstance().LogError("[MMO] Failed to open database: " + dbPath);
             return false;
         }
@@ -61,6 +63,7 @@ namespace MMO
         m_initialized = true;
         m_autoSaveTimer = m_autoSaveInterval;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO persistence system initialized (db: %s)", dbPath.c_str());
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Persistence system initialized (db: " + dbPath + ")");
         return true;
     }
@@ -261,6 +264,8 @@ namespace MMO
         outData.lastLogin = GetTimestamp();
         m_totalLoads++;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Character loaded: %s (Lv%d, ID %u)", outData.name.c_str(),
+                       outData.level, characterId);
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Character loaded: " + outData.name + " (Lv" +
                                                     std::to_string(outData.level) + ")");
         return true;
@@ -280,6 +285,9 @@ namespace MMO
            << data.mana << "|" << data.maxMana << "|" << data.playTime << "|" << data.inventory.currency;
 
         m_db->AsyncQuery(sid(MMOStmtId::UpdateCharacter), {MakeInt(data.characterId), MakeString(ss.str())});
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Async save character: %s (ID %u)", data.name.c_str(),
+                        data.characterId);
 
         // Save subsystem data asynchronously via transactions
         SaveInventory(data.characterId, data.inventory);
@@ -322,6 +330,7 @@ namespace MMO
 
     bool MMOPersistenceSystem::DeleteCharacter(uint32_t characterId)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Deleting character from persistence: ID %u", characterId);
         if (!m_initialized)
             return false;
 
@@ -655,6 +664,8 @@ namespace MMO
 
     void MMOPersistenceSystem::SaveWorldAsync(const WorldSaveData& data)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Saving world data: %zu guilds, %zu boss kills", data.guilds.size(),
+                        data.bossKillHistory.size());
         if (!m_initialized)
             return;
 

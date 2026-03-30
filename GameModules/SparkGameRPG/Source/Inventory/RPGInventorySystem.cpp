@@ -5,6 +5,7 @@
 
 #include "RPGInventorySystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -21,6 +22,7 @@ namespace RPG
         m_context = context;
         RegisterDefaultItems();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG inventory system initialized with %zu items", m_items.size());
         Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Inventory system initialized (" +
                                                     std::to_string(m_items.size()) + " items)");
         return true;
@@ -370,11 +372,16 @@ namespace RPG
         {
             int fittable = static_cast<int>((inv.maxWeight - currentWeight) / def->weight);
             if (fittable <= 0)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "RPG inventory full — cannot add item %u (weight limit)",
+                               itemId);
                 return 0;
+            }
             count = std::min(count, fittable);
         }
 
         int remaining = count;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG adding item %u x%d to inventory", itemId, count);
 
         // Stack with existing slots
         for (auto& slot : inv.slots)
@@ -465,6 +472,8 @@ namespace RPG
         float totalDiff = result.difference.strength + result.difference.dexterity + result.difference.intelligence +
                           result.difference.wisdom + result.difference.constitution + result.difference.charisma;
         result.isUpgrade = (totalDiff > 0.0f);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG item comparison: %u vs %u — %s", currentItemId, newItemId,
+                        result.isUpgrade ? "upgrade" : "downgrade");
 
         return result;
     }

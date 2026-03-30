@@ -6,6 +6,7 @@
  */
 
 #include "MeshShaderPipeline.h"
+#include "../Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -33,9 +34,12 @@ namespace Spark::Graphics
 
         if (!m_stats.meshShadersAvailable)
         {
-            // Mesh shaders not available - meshlet building still works for
-            // CPU-side cluster culling. The actual dispatch falls back to
-            // traditional DrawIndexedInstanced.
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "Mesh shaders not available; falling back to traditional draw calls");
+        }
+        else
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Mesh shader pipeline initialized with hardware support");
         }
 
         m_initialized = true;
@@ -168,6 +172,9 @@ namespace Spark::Graphics
         }
 
         // Build a single LOD group containing all meshlets
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Built %zu meshlets from %u vertices, %u triangles",
+                        result.meshlets.size(), vertexCount, indexCount / 3);
+
         if (!result.meshlets.empty())
         {
             GPUMeshletGroup group = {};

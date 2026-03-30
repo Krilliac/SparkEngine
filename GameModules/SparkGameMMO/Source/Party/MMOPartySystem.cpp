@@ -5,6 +5,7 @@
 
 #include "MMOPartySystem.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -19,6 +20,7 @@ namespace MMO
     bool MMOPartySystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO party system initialized");
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Party system initialized");
         return true;
     }
@@ -59,6 +61,7 @@ namespace MMO
         party.members.push_back(leader);
 
         uint32_t id = party.partyId;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Party created: ID %u, leader=%s", id, leaderName.c_str());
         m_parties[id] = std::move(party);
         return id;
     }
@@ -87,6 +90,7 @@ namespace MMO
                 return false;
         }
 
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Party member joined: %s (party %u)", newName.c_str(), partyId);
         PartyMember member;
         member.playerId = newId;
         member.name = newName;

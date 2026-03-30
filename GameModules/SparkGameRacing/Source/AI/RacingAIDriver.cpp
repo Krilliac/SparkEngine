@@ -5,6 +5,7 @@
 
 #include "RacingAIDriver.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,7 @@ namespace Racing
         m_initialized = true;
 
         auto& console = Spark::SimpleConsole::GetInstance();
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI driver system initialized");
         console.LogInfo("[Racing AI] AI driver system initialized");
         return true;
     }
@@ -88,6 +90,8 @@ namespace Racing
 
         auto& console = Spark::SimpleConsole::GetInstance();
         const char* names[] = {"Easy", "Medium", "Hard", "Expert"};
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI global difficulty set to: %s",
+                       names[static_cast<int>(difficulty)]);
         console.LogInfo("[Racing AI] Global difficulty set to: " + std::string(names[static_cast<int>(difficulty)]));
     }
 
@@ -161,6 +165,8 @@ namespace Racing
 
         // Nitro usage: AI uses nitro on straights when behind
         state.useNitro = (state.rubberBandFactor > 1.05f) && (std::abs(state.steer) < 0.2f);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing AI driver %u: throttle=%.2f steer=%.2f nitro=%s",
+                        state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
     }
 
     void RacingAIDriver::ComputeSteering(const AIDriverConfig& config, AIDriverState& state)

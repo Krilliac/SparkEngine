@@ -6,6 +6,7 @@
  */
 
 #include "AdvancedAssetPipeline.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <algorithm>
 #include <filesystem>
@@ -42,6 +43,7 @@ namespace SparkEditor
         // Scan directory button
         if (ImGui::Button("Scan Asset Directory"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "User triggered asset directory scan");
             ScanDirectory(m_assetDirectory, true);
         }
 
@@ -279,6 +281,7 @@ namespace SparkEditor
 
         if (ImGui::Button("Reprocess"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Reprocessing asset: %s", m_selectedAsset.c_str());
             ProcessAsset(m_selectedAsset, m_currentImportSettings);
         }
 
@@ -392,6 +395,7 @@ namespace SparkEditor
 
         if (ImGui::Button("Validate All Assets"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Validating all assets");
             auto invalid = ValidateAllAssets();
             // Results would be shown in a log or status bar
         }
@@ -399,6 +403,7 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button("Optimize All Assets"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Optimizing all assets");
             OptimizeAllAssets(nullptr);
         }
 
@@ -406,12 +411,14 @@ namespace SparkEditor
 
         if (ImGui::Button("Export Database"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Exporting asset database");
             ExportAssetDatabase(m_cacheDirectory + "asset_database.txt");
         }
 
         ImGui::SameLine();
         if (ImGui::Button("Import Database"))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Importing asset database");
             ImportAssetDatabase(m_cacheDirectory + "asset_database.txt");
         }
     }

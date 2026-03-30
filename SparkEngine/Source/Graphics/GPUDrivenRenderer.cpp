@@ -13,6 +13,7 @@
  * @see GPUDrivenRenderer.h, GPUOcclusionCulling.h, GPUSceneBuffer.h
  */
 #include "GPUDrivenRenderer.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
@@ -115,6 +116,8 @@ namespace Spark::Graphics
             return false;
 
         m_initialized = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "GPUDrivenRenderer initialized: maxInstances=%u, cull + HiZ shaders compiled", maxInstances);
         return true;
     }
 
@@ -130,6 +133,8 @@ namespace Spark::Graphics
         // Recreate HiZ resources if the depth buffer size changed
         if (width != m_hiZWidth || height != m_hiZHeight)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUDrivenRenderer: recreating HiZ resources %ux%u", width,
+                           height);
             if (!CreateHiZResources(width, height))
                 return;
         }
@@ -428,6 +433,7 @@ namespace Spark::Graphics
         m_stats = {};
         m_maxInstances = 0;
         m_initialized = false;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUDrivenRenderer shut down");
     }
 
     // =========================================================================

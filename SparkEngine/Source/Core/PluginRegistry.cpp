@@ -6,6 +6,7 @@
 #include "PluginRegistry.h"
 
 #include "FaultIsolation.h"
+#include "Utils/LogMacros.h"
 
 #include <format>
 #include <vector>
@@ -24,6 +25,7 @@ namespace Spark
         : name(pluginName), initFn(init), updateFn(update), shutdownFn(shutdown), next(PluginRegistry::s_head)
     {
         PluginRegistry::s_head = this;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Plugin registered: %s", pluginName ? pluginName : "(unnamed)");
     }
 
     // ---------------------------------------------------------------------------
@@ -37,6 +39,7 @@ namespace Spark
 
     void PluginRegistry::InitializeAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing all registered plugins (%u total)", GetPluginCount());
         // Walk in registration order is reversed (LIFO), so collect into a
         // vector first to initialize in declaration order.
         std::vector<PluginDescriptor*> plugins;
@@ -50,9 +53,12 @@ namespace Spark
         {
             if ((*it)->initFn)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Initializing plugin: %s",
+                                (*it)->name ? (*it)->name : "(unnamed)");
                 (*it)->initFn();
             }
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "All plugins initialized");
     }
 
     void PluginRegistry::UpdateAll(float deltaTime)
@@ -69,11 +75,14 @@ namespace Spark
 
     void PluginRegistry::ShutdownAll()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Shutting down all plugins");
         // Shutdown in registration order (LIFO = reverse of init order)
         for (auto* desc = s_head; desc != nullptr; desc = desc->next)
         {
             if (desc->shutdownFn)
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Shutting down plugin: %s",
+                                desc->name ? desc->name : "(unnamed)");
                 desc->shutdownFn();
             }
         }

@@ -3,9 +3,11 @@
 #include "Utils/Validate.h"
 #include <string>
 #include <iostream>
+#include "Utils/LogMacros.h"
 
 WallObject::WallObject(float width, float height) : m_width(width), m_height(height)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "WallObject constructed (width=%.1f, height=%.1f)", width, height);
     std::wcout << L"[INFO] WallObject constructed. width=" << width << L" height=" << height << std::endl;
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, width > 0.f && height > 0.f, "Wall dimensions must be positive");
     SetName("Wall_" + std::to_string(GetID()));

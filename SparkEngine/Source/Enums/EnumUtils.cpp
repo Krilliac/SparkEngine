@@ -7,6 +7,7 @@
 
 #include "EnumUtils.h"
 #include "Enums/GameSystemEnums.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include <algorithm>
 #include <unordered_map>
@@ -46,6 +47,9 @@ namespace SparkEditor
             {WeaponType::CUSTOM_3, "Custom Weapon 3"}};
 
         auto it = weaponNames.find(value);
+        if (it == weaponNames.end())
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "EnumUtils: Unknown WeaponType value: %d",
+                           static_cast<int>(value));
         return (it != weaponNames.end()) ? it->second : "Unknown Weapon";
     }
 
@@ -96,6 +100,9 @@ namespace SparkEditor
                        [](unsigned char c) { return std::tolower(c); });
 
         auto it = nameToType.find(lowerStr);
+        if (it == nameToType.end())
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "EnumUtils: Unknown WeaponType string: '%s', defaulting to PISTOL",
+                           str.c_str());
         return (it != nameToType.end()) ? it->second : WeaponType::PISTOL;
     }
 
@@ -138,6 +145,9 @@ namespace SparkEditor
             {MovementState::DEAD, "Dead"}};
 
         auto it = stateNames.find(value);
+        if (it == stateNames.end())
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "EnumUtils: Unknown MovementState value: %d",
+                           static_cast<int>(value));
         return (it != stateNames.end()) ? it->second : "Unknown State";
     }
 
@@ -313,6 +323,9 @@ namespace SparkEditor
                                                                            {GraphicsAPI::VULKAN, "Vulkan"},
                                                                            {GraphicsAPI::METAL, "Metal"}};
         auto it = names.find(value);
+        if (it == names.end())
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "EnumUtils: Unknown GraphicsAPI value: %d",
+                           static_cast<int>(value));
         return (it != names.end()) ? it->second : "Unknown Graphics API";
     }
 
@@ -332,6 +345,9 @@ namespace SparkEditor
         std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
                        [](unsigned char c) { return std::tolower(c); });
         auto it = nameToType.find(lowerStr);
+        if (it == nameToType.end())
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "EnumUtils: Unknown GraphicsAPI string: '%s', defaulting to DirectX 11", str.c_str());
         return (it != nameToType.end()) ? it->second : GraphicsAPI::DIRECTX_11;
     }
 

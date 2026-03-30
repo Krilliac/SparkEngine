@@ -11,6 +11,7 @@
  */
 
 #include "SceneSerializer.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <fstream>
 #include <chrono>
@@ -40,6 +41,8 @@ namespace SparkEditor
                 actualFormat = SerializationFormat::BINARY;
             }
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving scene to '%s' (format=%s)", filePath.c_str(),
+                       actualFormat == SerializationFormat::BINARY ? "binary" : "json");
 
         SerializationResult result;
         if (m_createBackups)
@@ -69,6 +72,8 @@ namespace SparkEditor
         auto startTime = std::chrono::high_resolution_clock::now();
 
         SerializationFormat format = DetectFormat(filePath);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading scene from '%s' (detected format=%s)", filePath.c_str(),
+                       format == SerializationFormat::JSON ? "json" : "binary");
         SerializationResult result;
 
         if (format == SerializationFormat::JSON)

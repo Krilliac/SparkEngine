@@ -4,6 +4,7 @@
  */
 
 #include "TerrainEditor.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include "../Core/EditorIcons.h"
 
@@ -24,7 +25,7 @@ namespace SparkEditor
     bool TerrainEditor::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Terrain Editor panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Terrain Editor panel");
         return true;
     }
 
@@ -100,6 +101,8 @@ namespace SparkEditor
 
     void TerrainEditor::CreateNewTerrain(float size, int heightmapResolution, const XMFLOAT3& position)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating new terrain: size=%.1f, resolution=%d", size,
+                       heightmapResolution);
         m_currentTerrain = std::make_unique<TerrainData>();
         m_currentTerrain->name = "New Terrain";
         m_currentTerrain->size = size;
@@ -123,9 +126,13 @@ namespace SparkEditor
 
     bool TerrainEditor::LoadTerrain(const std::string& filePath)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading terrain from: %s", filePath.c_str());
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to open terrain file: %s", filePath.c_str());
             return false;
+        }
 
         uint32_t magic = 0;
         file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
@@ -196,9 +203,14 @@ namespace SparkEditor
         if (!m_currentTerrain)
             return false;
 
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving terrain '%s' to: %s", m_currentTerrain->name.c_str(),
+                       filePath.c_str());
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to save terrain to: %s", filePath.c_str());
             return false;
+        }
 
         uint32_t magic = 0x53504B54; // 'SPKT'
         file.write(reinterpret_cast<const char*>(&magic), sizeof(magic));

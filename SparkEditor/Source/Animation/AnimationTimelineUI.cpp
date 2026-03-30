@@ -4,6 +4,7 @@
  */
 
 #include "AnimationTimeline.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
@@ -81,6 +82,7 @@ namespace SparkEditor
 
     bool AnimationTimeline::HandleEvent(const std::string& eventType, void* eventData)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AnimationTimeline handling event: %s", eventType.c_str());
         if (eventType == "play")
         {
             Play();
@@ -394,6 +396,7 @@ namespace SparkEditor
         nameBuffer[sizeof(nameBuffer) - 1] = '\0';
         if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer)))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Animation clip renamed to '%s'", nameBuffer);
             m_currentClip->name = nameBuffer;
         }
 
@@ -733,10 +736,14 @@ namespace SparkEditor
                     kf.time = clickTime;
                     kf.value = curve->Evaluate(clickTime);
                     curve->AddKeyframe(kf);
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Added keyframe via context menu at time=%.3f",
+                                    clickTime);
                 }
             }
             if (ImGui::MenuItem("Delete Selected", nullptr, false, !m_selection.selectedKeyframes.empty()))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Deleting %zu selected keyframes",
+                                m_selection.selectedKeyframes.size());
                 RemoveSelectedKeyframes();
             }
             ImGui::Separator();
@@ -827,6 +834,8 @@ namespace SparkEditor
         if (hit)
         {
             hit->isSelected = !hit->isSelected;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Keyframe %s at time=%.3f",
+                            hit->isSelected ? "selected" : "deselected", hit->time);
             if (hit->isSelected)
             {
                 m_selection.selectedKeyframes.push_back(hit);

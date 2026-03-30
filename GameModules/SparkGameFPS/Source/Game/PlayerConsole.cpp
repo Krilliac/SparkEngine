@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 #include "Player.h"
 #include "Utils/ConsoleProcessManager.h"
+#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -19,6 +20,7 @@ using namespace DirectX;
 
 void Player::Console_SetHealth(float health)
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Console: setting player health to %.1f", health);
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_health = std::max(0.0f, std::min(m_maxHealth, health));
     if (m_health <= 0.0f)
@@ -94,6 +96,7 @@ void Player::Console_SetJumpHeight(float height)
 
 void Player::Console_SetPosition(float x, float y, float z)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Console: teleporting player to (%.1f, %.1f, %.1f)", x, y, z);
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     DirectX::XMFLOAT3 newPos = {x, y, z};
     SetPosition(newPos);
@@ -113,6 +116,7 @@ void Player::Console_SetPosition(float x, float y, float z)
 
 void Player::Console_SetGodMode(bool enabled)
 {
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Console: god mode %s", enabled ? "enabled" : "disabled");
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_godModeEnabled = enabled;
     NotifyStateChange();

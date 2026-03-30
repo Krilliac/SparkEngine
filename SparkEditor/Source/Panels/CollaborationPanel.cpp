@@ -5,6 +5,7 @@
 
 #include "CollaborationPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <sstream>
@@ -20,6 +21,7 @@ namespace SparkEditor
     bool CollaborationPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CollaborationPanel initialized");
         m_isInitialized = true;
 
         // Wire up the edit callback to capture edits for the log
@@ -130,10 +132,14 @@ namespace SparkEditor
                     if (m_collabSession->Host(port, m_userNameBuffer))
                     {
                         m_statusMessage = "Hosting on port " + std::to_string(port);
+                        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CollaborationPanel: hosting session on port %u",
+                                       port);
                     }
                     else
                     {
                         m_statusMessage = "Failed to host session.";
+                        SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                                        "CollaborationPanel: failed to host session on port %u", port);
                     }
                 }
             }
@@ -156,10 +162,14 @@ namespace SparkEditor
                     if (m_collabSession->Connect(m_hostAddressBuffer, port, m_userNameBuffer))
                     {
                         m_statusMessage = "Connected to " + std::string(m_hostAddressBuffer);
+                        SPARK_LOG_INFO(Spark::LogCategory::Editor, "CollaborationPanel: connected to %s:%u",
+                                       m_hostAddressBuffer, port);
                     }
                     else
                     {
                         m_statusMessage = "Failed to connect.";
+                        SPARK_LOG_ERROR(Spark::LogCategory::Editor, "CollaborationPanel: failed to connect to %s:%u",
+                                        m_hostAddressBuffer, port);
                     }
                 }
             }

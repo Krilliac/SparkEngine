@@ -3,6 +3,7 @@
 #include "Terrain.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
+#include "Utils/LogMacros.h"
 #include <fstream>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -23,11 +24,16 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, w > 1 && h > 1, "Terrain dimensions must be >1");
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, s > 0, "Cell spacing must be positive");
 
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing terrain: %ux%u, spacing=%.2f", w, h, s);
+
     // 1) Read raw 8-bit BMP after 54-byte header
     std::vector<uint8_t> data(w * h);
     std::ifstream in(file, std::ios::binary);
     if (!in)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to open terrain heightmap file");
         return E_FAIL;
+    }
     in.seekg(54);
     in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(w) * h);
     in.close();
@@ -52,7 +58,10 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     HRESULT hr = device->CreateBuffer(&bd, &sd, &m_vb);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Terrain vertex buffer creation failed");
     if (FAILED(hr))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Terrain vertex buffer creation failed");
         return hr;
+    }
 
     // 4) Create IB
     bd.Usage = D3D11_USAGE_DEFAULT;
@@ -63,6 +72,8 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
     hr = device->CreateBuffer(&bd, &sd, &m_ib);
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Terrain index buffer creation failed");
     m_indexCount = UINT(m_indices.size());
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Terrain loaded: %zu vertices, %u indices", m_vertices.size(),
+                   m_indexCount);
     return hr;
 }
 
@@ -178,6 +189,9 @@ HRESULT Terrain::Initialize(ID3D11Device* /*device*/, ID3D11DeviceContext* /*ctx
                             const TerrainDesc& desc)
 {
     m_desc = desc;
+
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing terrain (Linux): %ux%u, spacing=%.2f", desc.width,
+                   desc.height, desc.cellSpacing);
 
     // Read raw 8-bit BMP after 54-byte header
     std::vector<uint8_t> data(desc.width * desc.height);

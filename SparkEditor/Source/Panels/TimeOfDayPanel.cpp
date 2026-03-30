@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cmath>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool TimeOfDayPanel::Initialize()
     {
-        std::cout << "Initializing Time of Day panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Time of Day panel");
         return true;
     }
 
@@ -72,7 +73,7 @@ namespace SparkEditor
 
     void TimeOfDayPanel::Shutdown()
     {
-        std::cout << "Shutting down Time of Day panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Time of Day panel");
     }
 
     void TimeOfDayPanel::RenderTimeControls()

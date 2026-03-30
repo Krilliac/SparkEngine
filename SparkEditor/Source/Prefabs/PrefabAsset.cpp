@@ -6,6 +6,7 @@
  */
 
 #include "PrefabAsset.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <fstream>
@@ -72,8 +73,12 @@ namespace SparkEditor
         std::ofstream file(path);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to save prefab '%s' to: %s", m_name.c_str(),
+                            path.c_str());
             return false;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving prefab '%s' with %zu components to: %s", m_name.c_str(),
+                       m_components.size(), path.c_str());
 
         file << "SPARKPREFAB 1\n";
         file << "name " << m_name << "\n";
@@ -136,8 +141,10 @@ namespace SparkEditor
         std::ifstream file(path);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to load prefab from: %s", path.c_str());
             return prefab;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading prefab from: %s", path.c_str());
 
         std::string line;
         // Read header

@@ -5,6 +5,7 @@
 
 #include "AbilitySystem.h"
 #include "../../Utils/DeferredDeletion.h"
+#include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
 #include "../ECS/Components/GameplayComponents.h"
 #include "../Events/EventSystem.h"
@@ -43,6 +44,7 @@ namespace Spark::Gameplay
         m_cooldowns.clear();
 
         Spark::SimpleConsole::GetInstance().LogInfo("[AbilitySystem] Initialized");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "AbilitySystem initialized");
     }
 
     void AbilitySystem::Shutdown()
@@ -67,6 +69,7 @@ namespace Spark::Gameplay
             return;
         }
         m_abilities[def.id] = def;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Registered ability id=%u", def.id);
     }
 
     void AbilitySystem::RegisterAura(const AuraDefinition& def)
@@ -107,6 +110,7 @@ namespace Spark::Gameplay
         {
             Spark::SimpleConsole::GetInstance().LogWarning("[AbilitySystem] Unknown ability id " +
                                                            std::to_string(abilityId));
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "CastAbility failed: unknown ability id %u", abilityId);
             return false;
         }
 
@@ -156,6 +160,8 @@ namespace Spark::Gameplay
         }
 
         m_activeCasts[caster] = cast;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Ability %u cast by entity %u on target %u (phase=%s)", abilityId,
+                       caster, resolvedTarget, (def->castTime <= 0.0f) ? "instant" : "casting");
 
         // Start cooldown
         casterCooldowns[abilityId] = def->cooldown;
@@ -163,6 +169,7 @@ namespace Spark::Gameplay
         // Proc: OnAbilityCast
         ProcessProcs(world, static_cast<uint32_t>(ProcTrigger::OnAbilityCast), caster, resolvedTarget,
                      AbilitySchool::Physical);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Ability %u cooldown started: %.1fs", abilityId, def->cooldown);
 
         return true;
     }
@@ -179,6 +186,8 @@ namespace Spark::Gameplay
         if (phase == CastPhase::Casting || phase == CastPhase::Channeling)
         {
             it->second.phase = CastPhase::Interrupted;
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "Cast interrupted for entity %u (ability %u)", caster,
+                           it->second.abilityId);
         }
     }
 
@@ -232,6 +241,9 @@ namespace Spark::Gameplay
             if (!def && cast.phase != CastPhase::Completed && cast.phase != CastPhase::Failed &&
                 cast.phase != CastPhase::Interrupted)
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "Cast failed: missing ability definition for id %u (entity %u)", cast.abilityId,
+                                entityId);
                 cast.phase = CastPhase::Failed;
             }
 

@@ -11,6 +11,7 @@
 
 #include "ObjectPlacementPanel.h"
 #include "../Core/EditorIcons.h"
+#include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 
 namespace SparkEditor
@@ -23,7 +24,7 @@ namespace SparkEditor
     bool ObjectPlacementPanel::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        std::cout << "Initializing Object Placement panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ObjectPlacementPanel initialized");
 
         // Populate built-in prefab library
         m_prefabs.push_back({"Cube", "Primitives/Cube", "Primitives", false});
@@ -143,7 +144,7 @@ namespace SparkEditor
 
     void ObjectPlacementPanel::Shutdown()
     {
-        std::cout << "Shutting down Object Placement panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "ObjectPlacementPanel shutting down");
     }
 
     bool ObjectPlacementPanel::HandleEvent(const std::string& eventType, void* eventData)
@@ -189,6 +190,8 @@ namespace SparkEditor
         ImGui::SetNextItemWidth(-1);
         if (ImGui::Combo("##AlignMode", &alignIdx, alignModes, 4))
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "ObjectPlacementPanel: align mode changed to '%s'",
+                            alignModes[alignIdx]);
             m_alignMode = static_cast<AlignMode>(alignIdx);
         }
     }

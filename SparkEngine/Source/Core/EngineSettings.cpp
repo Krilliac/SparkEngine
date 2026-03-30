@@ -4,6 +4,7 @@
  */
 
 #include "EngineSettings.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <filesystem>
@@ -57,14 +58,18 @@ bool EngineSettings::Load(const std::string& path)
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
 
     m_filePath = path.empty() ? FindSettingsPath() : path;
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading engine settings from: %s", m_filePath.c_str());
 
     if (m_config.Load(m_filePath))
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine settings loaded successfully");
         ReadFromConfig();
         return true;
     }
 
     // File doesn't exist or failed to parse - use defaults
+    SPARK_LOG_WARN(Spark::LogCategory::Core, "Settings file not found or failed to parse, using defaults: %s",
+                   m_filePath.c_str());
     PopulateDefaults();
     ReadFromConfig();
 
@@ -80,8 +85,14 @@ bool EngineSettings::Save() const
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
 
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Saving engine settings to: %s", m_filePath.c_str());
     WriteToConfig();
-    return m_config.Save(m_filePath);
+    bool result = m_config.Save(m_filePath);
+    if (!result)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Failed to save engine settings to: %s", m_filePath.c_str());
+    }
+    return result;
 }
 
 bool EngineSettings::SaveAs(const std::string& path) const
@@ -96,6 +107,7 @@ bool EngineSettings::SaveAs(const std::string& path) const
 void EngineSettings::ResetToDefaults()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "Resetting all engine settings to defaults");
 
     m_graphics = GraphicsSettings{};
     m_audio = AudioSettings{};
@@ -762,9 +774,12 @@ bool EngineSettings::SetValue(const std::string& section, const std::string& key
     }
     if (!validSection)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "SetValue: unknown section '%s'", section.c_str());
         return false;
     }
 
+    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Setting changed: [%s] %s = %s", section.c_str(), key.c_str(),
+                    value.c_str());
     m_config.SetString(section, key, value);
     ReadFromConfig(); // Sync back to structs
     NotifyChanged(section, key);
@@ -805,6 +820,7 @@ void EngineSettings::NotifyChanged(const std::string& section, const std::string
 // =============================================================================
 void EngineSettings::RegisterConsoleCommands()
 {
+    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Registering settings console commands");
     auto& console = Spark::SimpleConsole::GetInstance();
 
     console.RegisterCommand(

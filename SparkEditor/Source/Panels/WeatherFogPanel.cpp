@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstring>
 #include <cstdio>
+#include "Utils/LogMacros.h"
 
 namespace SparkEditor
 {
@@ -17,7 +18,7 @@ namespace SparkEditor
 
     bool WeatherFogPanel::Initialize()
     {
-        std::cout << "Initializing Weather & Fog panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Weather & Fog panel");
 
         // Create default presets matching engine WeatherSystem
         const char* defaultNames[] = {"Clear", "Cloudy", "Rain", "Snow", "Fog", "Storm"};
@@ -80,7 +81,7 @@ namespace SparkEditor
 
     void WeatherFogPanel::Shutdown()
     {
-        std::cout << "Shutting down Weather & Fog panel\n";
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down Weather & Fog panel");
     }
 
     void WeatherFogPanel::RenderPresetList()
