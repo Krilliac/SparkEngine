@@ -6,6 +6,8 @@
 #include "PlatformerLevelSystem.h"
 #include "Utils/SparkConsole.h"
 
+#include <algorithm>
+
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
@@ -287,7 +289,7 @@ namespace Platformer
 
     void PlatformerLevelSystem::CompleteLevel(float completionTime, int deaths)
     {
-        if (m_currentLevel >= m_levels.size())
+        if (m_currentLevel >= m_levels.size() || m_currentLevel >= m_progress.size())
             return;
 
         auto& prog = m_progress[m_currentLevel];
@@ -305,7 +307,8 @@ namespace Platformer
 
         // Unlock next level if star requirements met
         int totalStars = GetTotalStarsEarned();
-        for (size_t i = 0; i < m_levels.size(); ++i)
+        size_t unlockCount = std::min(m_levels.size(), m_progress.size());
+        for (size_t i = 0; i < unlockCount; ++i)
         {
             if (static_cast<int>(m_levels[i].requiredStarsToUnlock) <= totalStars)
                 m_progress[i].unlocked = true;
@@ -367,7 +370,8 @@ namespace Platformer
     std::string PlatformerLevelSystem::GetLevelListString() const
     {
         std::string list = "=== Platformer Levels ===\n";
-        for (size_t i = 0; i < m_levels.size(); ++i)
+        size_t count = std::min(m_levels.size(), m_progress.size());
+        for (size_t i = 0; i < count; ++i)
         {
             const auto& level = m_levels[i];
             const auto& prog = m_progress[i];
@@ -410,7 +414,8 @@ namespace Platformer
             ImGui::Text("Timer: %.1fs", m_levelTimer);
         ImGui::Separator();
 
-        for (size_t i = 0; i < m_levels.size(); ++i)
+        size_t debugCount = std::min(m_levels.size(), m_progress.size());
+        for (size_t i = 0; i < debugCount; ++i)
         {
             const auto& level = m_levels[i];
             const auto& prog = m_progress[i];
