@@ -111,7 +111,7 @@ namespace Spark::Streaming
     void SeamlessAreaManager::RegisterArea(const AreaDefinition& def)
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "[SeamlessAreaManager] Registering area %u '%s' (priority=%d)",
-                        def.areaId, def.areaName.c_str(), def.priority);
+                        def.areaId, def.name.c_str(), def.priority);
         ManagedArea managed;
         managed.definition = def;
         managed.state = AreaState::Unloaded;
@@ -376,7 +376,7 @@ namespace Spark::Streaming
     void SeamlessAreaManager::TransitionAreaState(ManagedArea& area, AreaState newState)
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "[SeamlessAreaManager] Area %u '%s': %s -> %s",
-                        area.definition.areaId, area.definition.areaName.c_str(), AreaStateToString(area.state),
+                        area.definition.areaId, area.definition.name.c_str(), AreaStateToString(area.state),
                         AreaStateToString(newState));
         area.state = newState;
 

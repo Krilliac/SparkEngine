@@ -62,7 +62,7 @@ namespace Spark::Net
         m_matchInProgress = false;
 
         SPARK_LOG_INFO(Spark::LogCategory::Network,
-                       "DedicatedServer: Initializing '%s' (port=%u, maxClients=%u, tickRate=%u)",
+                       "DedicatedServer: Initializing '%s' (port=%u, maxClients=%u, tickRate=%.0f)",
                        config.serverName.c_str(), config.port, config.maxClients, config.tickRate);
 
         auto& netMgr = NetworkManager::GetInstance();
