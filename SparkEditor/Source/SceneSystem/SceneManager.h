@@ -10,84 +10,61 @@
 
 #pragma once
 
-#include <string>
+#include "SceneFile.h"
+#include "SceneSerializer.h"
+
+#include <functional>
 #include <memory>
+#include <string>
 
 namespace SparkEditor
 {
 
     /**
- * @brief Scene management system
- * 
- * Handles scene file operations, scene loading/saving, and scene state management.
- */
+     * @brief Scene management system
+     *
+     * Owns the current SceneFile and delegates serialization to SceneSerializer.
+     * Panels read/write through GetCurrentScene().
+     */
     class SceneManager
     {
       public:
-        /**
-     * @brief Constructor
-     */
         SceneManager();
-
-        /**
-     * @brief Destructor
-     */
         ~SceneManager();
 
-        /**
-     * @brief Initialize the scene manager
-     * @return true if initialization succeeded, false otherwise
-     */
         bool Initialize();
-
-        /**
-     * @brief Update scene manager
-     * @param deltaTime Time elapsed since last frame in seconds
-     */
         void Update(float deltaTime);
-
-        /**
-     * @brief Shutdown the scene manager
-     */
         void Shutdown();
 
-        /**
-     * @brief Create a new scene
-     * @param sceneName Name of the new scene
-     * @return true if scene was created successfully
-     */
+        /// @brief Create a blank scene with default camera and light.
         bool CreateNewScene(const std::string& sceneName);
 
-        /**
-     * @brief Load scene from file
-     * @param scenePath Path to the scene file
-     * @return true if scene was loaded successfully
-     */
+        /// @brief Load a scene from disk (auto-detects format).
         bool LoadScene(const std::string& scenePath);
 
-        /**
-     * @brief Save current scene
-     * @param scenePath Path where to save the scene
-     * @return true if scene was saved successfully
-     */
+        /// @brief Save the current scene to disk.
         bool SaveScene(const std::string& scenePath);
 
-        /**
-     * @brief Get current scene path
-     * @return Path to the currently loaded scene, or empty string if none
-     */
         const std::string& GetCurrentScenePath() const { return m_currentScenePath; }
-
-        /**
-     * @brief Check if scene has unsaved changes
-     * @return true if scene has unsaved changes
-     */
         bool HasUnsavedChanges() const { return m_hasUnsavedChanges; }
 
+        /// @brief Get the active scene data (non-owning). Returns nullptr if no scene loaded.
+        SceneFile* GetCurrentScene() { return m_currentScene.get(); }
+        const SceneFile* GetCurrentScene() const { return m_currentScene.get(); }
+
+        /// @brief Mark the scene as dirty (has unsaved changes).
+        void MarkDirty() { m_hasUnsavedChanges = true; }
+
+        /// @brief Register callback for scene change events.
+        void SetOnSceneChanged(std::function<void()> callback) { m_onSceneChanged = std::move(callback); }
+
       private:
-        std::string m_currentScenePath;   ///< Path to current scene
-        bool m_hasUnsavedChanges = false; ///< Whether scene has unsaved changes
-        bool m_isInitialized = false;     ///< Initialization state
+        std::unique_ptr<SceneFile> m_currentScene;
+        SceneSerializer m_serializer;
+        std::string m_currentScenePath;
+        bool m_hasUnsavedChanges = false;
+        bool m_isInitialized = false;
+        std::function<void()> m_onSceneChanged;
     };
 
 } // namespace SparkEditor

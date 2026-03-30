@@ -51,6 +51,7 @@
 #include "EditorCrashHandler.h"
 #include "EditorPluginManager.h"
 #include "EditorApplication.h"
+#include "../Workflow/BuiltinWorkflows.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <iostream>
@@ -98,6 +99,9 @@ namespace SparkEditor
 
             // Register command palette actions (after panels are created)
             InitializeCommandPalette();
+
+            // Register built-in editor workflows (Build, Scene, etc.)
+            RegisterBuiltinWorkflows();
 
             // Wire project-opened / project-closed callbacks into panels
             WireCallbacks();

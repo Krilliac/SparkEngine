@@ -33,17 +33,50 @@ namespace SparkEditor
     PrefabAsset* PrefabManager::CreatePrefabFromEntity(uint64_t entityId, const std::string& prefabName)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        // Create a new prefab and populate it with the entity's components
         PrefabAsset prefab(prefabName);
 
-        // In a full implementation, this would query the ECS for the entity's components
-        // and serialize them into the prefab. For now, create a basic template.
-        SerializedComponent transform;
-        transform.typeName = "Transform";
-        transform.properties["position"] = XMFLOAT3{0.0f, 0.0f, 0.0f};
-        transform.properties["rotation"] = XMFLOAT4{0.0f, 0.0f, 0.0f, 1.0f};
-        transform.properties["scale"] = XMFLOAT3{1.0f, 1.0f, 1.0f};
-        prefab.AddComponent(transform);
+        // Query the scene for the entity's transform and components
+        if (m_scene)
+        {
+            auto objectId = static_cast<ObjectID>(entityId);
+            SceneObject* obj = m_scene->FindObject(objectId);
+            if (obj)
+            {
+                // Serialize the transform
+                SerializedComponent transform;
+                transform.typeName = "Transform";
+                transform.properties["position"] = obj->transform.position;
+                transform.properties["rotation"] = obj->transform.rotation;
+                transform.properties["scale"] = obj->transform.scale;
+                prefab.AddComponent(transform);
+
+                // Serialize each component attached to the entity
+                auto comps = m_scene->GetObjectComponents(objectId);
+                for (auto* comp : comps)
+                {
+                    SerializedComponent sc;
+                    sc.typeName = std::to_string(static_cast<uint32_t>(comp->type));
+                    sc.properties["enabled"] = comp->enabled;
+                    prefab.AddComponent(sc);
+                }
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Entity %llu not found in scene for prefab creation",
+                               entityId);
+            }
+        }
+
+        // Fallback: always include a default transform if we have nothing
+        if (prefab.GetComponents().empty())
+        {
+            SerializedComponent transform;
+            transform.typeName = "Transform";
+            transform.properties["position"] = XMFLOAT3{0.0f, 0.0f, 0.0f};
+            transform.properties["rotation"] = XMFLOAT4{0.0f, 0.0f, 0.0f, 1.0f};
+            transform.properties["scale"] = XMFLOAT3{1.0f, 1.0f, 1.0f};
+            prefab.AddComponent(transform);
+        }
 
         m_prefabs[prefabName] = std::move(prefab);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created prefab from entity %llu: '%s'", entityId,
@@ -78,13 +111,48 @@ namespace SparkEditor
             return 0;
         }
 
-        // In a full implementation, this would create an entity in the ECS
-        // and apply the prefab's component data to it.
-        static uint64_t nextInstanceId = 1000;
-        uint64_t entityId = nextInstanceId++;
+        // Create a scene object from the prefab data
+        if (m_scene)
+        {
+            ObjectID newId = m_scene->GetNextObjectID();
+            SceneObject obj;
+            obj.id = newId;
+            obj.name = prefabName;
+            obj.active = true;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Instantiated prefab '%s' as entity %llu", prefabName.c_str(),
-                       entityId);
+            // Apply prefab transform if stored
+            for (const auto& comp : it->second.GetComponents())
+            {
+                if (comp.typeName == "Transform")
+                {
+                    auto posIt = comp.properties.find("position");
+                    if (posIt != comp.properties.end())
+                    {
+                        if (auto* val = std::get_if<XMFLOAT3>(&posIt->second))
+                            obj.transform.position = *val;
+                    }
+                    auto scaleIt = comp.properties.find("scale");
+                    if (scaleIt != comp.properties.end())
+                    {
+                        if (auto* val = std::get_if<XMFLOAT3>(&scaleIt->second))
+                            obj.transform.scale = *val;
+                    }
+                }
+            }
+
+            m_scene->objects.push_back(std::move(obj));
+
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Instantiated prefab '%s' as entity %llu", prefabName.c_str(),
+                           (unsigned long long)newId);
+            RegisterInstance(newId, prefabName);
+            return newId;
+        }
+
+        // Fallback if no scene is set: use a counter
+        static uint64_t nextFallbackId = 1000;
+        uint64_t entityId = nextFallbackId++;
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Instantiated prefab '%s' as entity %llu (no scene)",
+                       prefabName.c_str(), entityId);
         RegisterInstance(entityId, prefabName);
         return entityId;
     }

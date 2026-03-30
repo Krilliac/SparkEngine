@@ -214,7 +214,7 @@ namespace SparkEditor
             }
         }
 
-        // Load the material from disk (simulated)
+        // Create material definition from the file path (file parsing deferred to runtime)
         MaterialDefinition material;
         material.filePath = materialPath;
 

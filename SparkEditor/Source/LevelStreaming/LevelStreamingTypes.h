@@ -82,9 +82,10 @@ namespace SparkEditor
         size_t memoryUsage = 0;                          ///< Current memory usage in bytes
 
         // Loading data
-        std::future<bool> loadingTask; ///< Async loading task
-        float loadingProgress = 0.0f;  ///< Loading progress (0-1)
-        std::string errorMessage;      ///< Error message if loading failed
+        std::future<bool> loadingTask;   ///< Async loading task
+        float loadingProgress = 0.0f;    ///< Loading progress (0-1)
+        std::string errorMessage;        ///< Error message if loading failed
+        std::vector<uint8_t> loadedData; ///< Raw loaded scene data (for deferred deserialization)
 
         // Dependencies
         std::vector<std::string> dependencies; ///< Tiles this tile depends on

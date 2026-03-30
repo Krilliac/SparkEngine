@@ -58,6 +58,7 @@
 #include "../Panels/TriggerEditorPanel.h"
 #include "../Panels/ConditionEditorPanel.h"
 #include "../Panels/DecalEditorPanel.h"
+#include "../Panels/WorkflowPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorIcons.h"
@@ -131,6 +132,10 @@ namespace SparkEditor
         registerPanel("TriggerEditor", std::make_shared<TriggerEditorPanel>());
         registerPanel("ConditionEditor", std::make_shared<ConditionEditorPanel>());
         registerPanel("DecalEditor", std::make_shared<DecalEditorPanel>());
+
+        auto workflowPanel = std::make_shared<WorkflowPanel>();
+        workflowPanel->SetEditorUI(this);
+        registerPanel("Workflows", workflowPanel);
     }
 
     void EditorUI::InitializePanelIcons()
@@ -185,6 +190,7 @@ namespace SparkEditor
             {"TriggerEditor", ICON_FA_CROSSHAIRS},
             {"ConditionEditor", ICON_FA_CHECK_CIRCLE},
             {"DecalEditor", ICON_FA_STAMP},
+            {"Workflows", ICON_FA_COGS},
         };
 
         for (const auto& [name, icon] : panelIcons)
@@ -209,7 +215,7 @@ namespace SparkEditor
             "Streaming",          "Modding",         "CoroutineDebug",
             "GameModuleSelector", "Collaboration",   "TimeOfDay",
             "AbilityEditor",      "TriggerEditor",   "ConditionEditor",
-            "DecalEditor",
+            "DecalEditor",        "Workflows",
         };
 
         for (const char* name : hiddenPanels)

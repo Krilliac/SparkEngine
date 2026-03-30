@@ -864,4 +864,5 @@ cmake --build build --config Release
 | `VRConfigPanel` | `SparkEditor/Source/Panels/VRConfigPanel.h` |
 | `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |
 | `WeatherFogPanel` | `SparkEditor/Source/Panels/WeatherFogPanel.h` |
+| `WorkflowPanel` | `SparkEditor/Source/Panels/WorkflowPanel.h` |
 <!-- /AUTO:panel_list -->

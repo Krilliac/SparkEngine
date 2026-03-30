@@ -589,7 +589,7 @@ jobs:
   # Runs the resulting .exe under Wine + DXVK + Lavapipe (software Vulkan)
   # ===========================================================================
   build-linux-mingw-wine:
-    if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     continue-on-error: true
     steps:

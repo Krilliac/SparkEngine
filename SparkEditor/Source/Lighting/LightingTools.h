@@ -530,6 +530,10 @@ namespace SparkEditor
         float m_bakeProgress = 0.0f;
         std::string m_bakeStatus;
         LightBakeProgressCallback m_bakeProgressCallback;
+
+        /// @brief CPU-side lightmap buffer from the last bake (RGBA float per texel).
+        std::vector<float> m_bakedLightmapData;
+        int m_bakedLightmapResolution = 0;
         LightChangedCallback m_lightChangedCallback;
 
         // Performance metrics

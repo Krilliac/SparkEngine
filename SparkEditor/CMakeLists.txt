@@ -308,6 +308,7 @@ if(MSVC)
     source_group("Asset Management" REGULAR_EXPRESSION "Source/AssetBrowser/.*")
     source_group("Communication" REGULAR_EXPRESSION "Source/Communication/.*")
     source_group("Viewport" REGULAR_EXPRESSION "Source/Viewport/.*")
+    source_group("Workflow" REGULAR_EXPRESSION "Source/Workflow/.*")
 
     set_property(TARGET SparkEditor PROPERTY VS_GLOBAL_KEYWORD "Win32Proj")
     set_property(TARGET SparkEditor PROPERTY VS_GLOBAL_ROOTNAMESPACE "SparkEditor")

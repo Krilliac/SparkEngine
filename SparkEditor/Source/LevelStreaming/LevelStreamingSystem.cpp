@@ -1140,10 +1140,42 @@ namespace SparkEditor
         tile->state = StreamingState::LOADING;
         tile->loadingProgress = 0.0f;
 
-        // Simulate loading (in a real engine this would load the scene file)
+        // Load the tile's scene file from disk if a path is set
+        if (!tile->filePath.empty())
+        {
+            std::ifstream file(tile->filePath, std::ios::binary | std::ios::ate);
+            if (file.is_open())
+            {
+                auto fileSize = file.tellg();
+                tile->memoryUsage = static_cast<size_t>(fileSize);
+                file.close();
+                tile->loadingProgress = 0.5f;
+
+                // Read the raw data (the scene serializer can parse it later)
+                tile->loadedData.resize(tile->memoryUsage);
+                std::ifstream dataFile(tile->filePath, std::ios::binary);
+                if (dataFile.is_open())
+                {
+                    dataFile.read(reinterpret_cast<char*>(tile->loadedData.data()),
+                                  static_cast<std::streamsize>(tile->memoryUsage));
+                }
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loaded tile '%s' from '%s' (%zu bytes)", tileName.c_str(),
+                               tile->filePath.c_str(), tile->memoryUsage);
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Tile file not found: '%s'", tile->filePath.c_str());
+                tile->memoryUsage = static_cast<size_t>(tile->worldSize.x * tile->worldSize.z * 4);
+            }
+        }
+        else
+        {
+            // No file path — estimate memory from tile dimensions
+            tile->memoryUsage = static_cast<size_t>(tile->worldSize.x * tile->worldSize.z * 4);
+        }
+
         tile->loadingProgress = 1.0f;
         tile->state = StreamingState::LOADED;
-        tile->memoryUsage = static_cast<size_t>(tile->worldSize.x * tile->worldSize.z * 4); // Estimate
         tile->lastUpdateTime = 0.0f;
         return true;
     }
