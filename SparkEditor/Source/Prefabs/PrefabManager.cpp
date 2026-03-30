@@ -128,24 +128,14 @@ namespace SparkEditor
                     auto posIt = comp.properties.find("position");
                     if (posIt != comp.properties.end())
                     {
-                        try
-                        {
-                            obj.transform.position = std::any_cast<XMFLOAT3>(posIt->second);
-                        }
-                        catch (...)
-                        {
-                        }
+                        if (auto* val = std::get_if<XMFLOAT3>(&posIt->second))
+                            obj.transform.position = *val;
                     }
                     auto scaleIt = comp.properties.find("scale");
                     if (scaleIt != comp.properties.end())
                     {
-                        try
-                        {
-                            obj.transform.scale = std::any_cast<XMFLOAT3>(scaleIt->second);
-                        }
-                        catch (...)
-                        {
-                        }
+                        if (auto* val = std::get_if<XMFLOAT3>(&scaleIt->second))
+                            obj.transform.scale = *val;
                     }
                 }
             }
