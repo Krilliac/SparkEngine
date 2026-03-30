@@ -2,8 +2,7 @@
 //
 // Called by the report-ci-errors job after all build jobs complete.
 // Downloads error summary artifacts from each failed job, consolidates
-// them into one PR comment, and deduplicates against existing comments
-// to prevent spam.
+// them into one PR comment with file paths, error codes, and context.
 //
 // Strategy:
 //   1. Find or create a single "CI Error Report" comment (identified by marker)
@@ -89,7 +88,6 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
 
     if (!hasIssues) {
         if (existingComment) {
-            // All green — update existing comment to show resolved
             const resolvedBody = [
                 COMMENT_MARKER,
                 '## :white_check_mark: CI Errors Resolved',
@@ -99,7 +97,6 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
                 `*Last checked: ${new Date().toISOString().slice(0, 19)}Z*`
             ].join('\n');
 
-            // Only update if it's not already showing resolved
             if (!existingComment.body.includes(':white_check_mark:')) {
                 await github.rest.issues.updateComment({
                     owner, repo, comment_id: existingComment.id,
@@ -115,37 +112,84 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
     // ── 4. Build consolidated report ─────────────────────────────────
 
     // Deduplicate errors across jobs — track unique error signatures
-    const globalErrors = new Map();   // signature -> { message, jobs[] }
+    const globalErrors = new Map();   // signature -> { message, jobs[], file, errorCode }
     const globalWarnings = new Map();
     const globalTests = new Map();
+
+    // Parse structured info from error lines
+    function parseErrorInfo(msg) {
+        const info = { file: '', line: '', errorCode: '', message: msg };
+
+        // GCC/Clang: "path/file.cpp:123:45: error: message"
+        let m = msg.match(/([^\s]+\.(cpp|h|hpp|c)):(\d+):\d+:\s*(?:fatal )?error:\s*(.*)/);
+        if (m) {
+            info.file = m[1];
+            info.line = m[3];
+            info.message = m[4];
+            return info;
+        }
+
+        // MSVC: "path\file.cpp(123): error C2039: message"
+        m = msg.match(/([^\s]+\.(cpp|h|hpp|c))\((\d+)\):\s*(?:fatal )?error\s+(C\d+):\s*(.*)/);
+        if (m) {
+            info.file = m[1].replace(/\\/g, '/');
+            info.line = m[3];
+            info.errorCode = m[4];
+            info.message = m[5];
+            return info;
+        }
+
+        // Linker: "undefined reference to `symbol'"
+        m = msg.match(/undefined reference to [`']([^'`]+)/);
+        if (m) {
+            info.message = `undefined reference to \`${m[1]}\``;
+            return info;
+        }
+
+        // MSVC linker: "unresolved external symbol ..."
+        m = msg.match(/unresolved external symbol\s+(.*)/);
+        if (m) {
+            info.message = `unresolved external symbol: ${m[1].slice(0, 120)}`;
+            return info;
+        }
+
+        return info;
+    }
+
+    function normalizeSignature(msg) {
+        return msg
+            .replace(/\/home\/runner\/work\/[^/]*\/[^/]*\//g, '')
+            .replace(/[A-Z]:\\[^\s]*\\SparkEngine\\/g, '')
+            .replace(/:\d+:\d+/g, ':N:N')
+            .replace(/\(\d+\)/g, '(N)')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
 
     for (const result of jobResults) {
         const job = result.job || 'unknown';
 
         for (const err of (result.errors || [])) {
-            // Normalize: strip paths, line numbers for dedup signature
-            const sig = err
-                .replace(/\/home\/[^\s:]*/g, '')
-                .replace(/[A-Z]:\\[^\s:]*/g, '')
-                .replace(/:\d+:\d+/g, ':N:N')
-                .replace(/\s+/g, ' ')
-                .trim();
+            const sig = normalizeSignature(err);
 
             if (globalErrors.has(sig)) {
                 const entry = globalErrors.get(sig);
                 if (!entry.jobs.includes(job)) entry.jobs.push(job);
             } else {
-                globalErrors.set(sig, { message: err, jobs: [job] });
+                const info = parseErrorInfo(err);
+                globalErrors.set(sig, {
+                    raw: err,
+                    file: info.file,
+                    line: info.line,
+                    errorCode: info.errorCode,
+                    message: info.message,
+                    jobs: [job]
+                });
             }
         }
 
         for (const warn of (result.warnings || [])) {
-            const sig = warn
-                .replace(/\/home\/[^\s:]*/g, '')
-                .replace(/[A-Z]:\\[^\s:]*/g, '')
-                .replace(/:\d+:\d+/g, ':N:N')
-                .replace(/\s+/g, ' ')
-                .trim();
+            const sig = normalizeSignature(warn);
 
             if (!globalWarnings.has(sig)) {
                 globalWarnings.set(sig, { message: warn, jobs: [job] });
@@ -170,92 +214,124 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
     const sections = [];
 
     if (globalErrors.size > 0) {
-        const lines = [];
-        // Group: errors seen in all compilers vs compiler-specific
         const allJobs = [...new Set(jobResults.map(r => r.job))];
-        const universal = [];
-        const specific = [];
+
+        // Group errors by file for readability
+        const byFile = new Map();    // file -> entries[]
+        const noFile = [];           // entries without a parsed file
 
         for (const [, entry] of globalErrors) {
-            if (entry.jobs.length >= allJobs.length && allJobs.length > 1) {
-                universal.push(entry.message);
+            if (entry.file) {
+                const key = entry.file;
+                if (!byFile.has(key)) byFile.set(key, []);
+                byFile.get(key).push(entry);
             } else {
-                specific.push({ ...entry });
+                noFile.push(entry);
             }
         }
 
-        if (universal.length > 0) {
-            lines.push('### Build Errors (all compilers)');
-            lines.push('```');
-            lines.push(...universal.slice(0, 20));
-            lines.push('```');
-        }
+        const lines = ['### Build Errors'];
+        lines.push('');
 
-        if (specific.length > 0) {
-            // Group by job
-            const byJob = {};
-            for (const entry of specific) {
-                for (const job of entry.jobs) {
-                    if (!byJob[job]) byJob[job] = [];
-                    byJob[job].push(entry.message);
+        // File-grouped errors as a table
+        if (byFile.size > 0) {
+            lines.push('| File | Line | Error | Jobs |');
+            lines.push('|------|------|-------|------|');
+
+            for (const [file, entries] of byFile) {
+                for (const entry of entries) {
+                    const shortFile = file.replace(/^.*?(?=SparkEngine\/|SparkEditor\/|SparkConsole\/|Tests\/|GameModules\/)/, '');
+                    const code = entry.errorCode ? `\`${entry.errorCode}\` ` : '';
+                    const jobList = entry.jobs.length >= allJobs.length && allJobs.length > 1
+                        ? 'all'
+                        : entry.jobs.map(j => j.replace('build-', '')).join(', ');
+                    const msg = entry.message.length > 100
+                        ? entry.message.slice(0, 97) + '...'
+                        : entry.message;
+                    lines.push(`| \`${shortFile}\` | ${entry.line} | ${code}${msg} | ${jobList} |`);
                 }
             }
-            for (const [job, msgs] of Object.entries(byJob)) {
-                lines.push(`### Build Errors — ${job}`);
-                lines.push('```');
-                lines.push(...[...new Set(msgs)].slice(0, 15));
-                lines.push('```');
+            lines.push('');
+        }
+
+        // Errors without file info (linker errors, sanitizer, etc.)
+        if (noFile.length > 0) {
+            lines.push('<details><summary>Other errors (' + noFile.length + ')</summary>');
+            lines.push('');
+            lines.push('```');
+            for (const entry of noFile.slice(0, 15)) {
+                const jobTag = entry.jobs.length < allJobs.length
+                    ? ` [${entry.jobs.map(j => j.replace('build-', '')).join(', ')}]`
+                    : '';
+                lines.push(entry.message + jobTag);
             }
+            lines.push('```');
+            lines.push('</details>');
+            lines.push('');
+        }
+
+        // Raw error output for full context (collapsible)
+        const rawErrors = [...globalErrors.values()].slice(0, 20);
+        if (rawErrors.some(e => e.raw.includes('\n') || e.raw !== e.message)) {
+            lines.push('<details><summary>Full error output</summary>');
+            lines.push('');
+            lines.push('```');
+            for (const entry of rawErrors) {
+                lines.push(entry.raw);
+            }
+            lines.push('```');
+            lines.push('</details>');
         }
 
         sections.push(lines.join('\n'));
     }
 
     if (globalTests.size > 0) {
-        const lines = ['### Test Failures', '```'];
+        const lines = ['### Test Failures', ''];
+        lines.push('| Test | Jobs |');
+        lines.push('|------|------|');
         for (const [, entry] of globalTests) {
-            const jobTag = entry.jobs.length < jobResults.length
-                ? ` [${entry.jobs.join(', ')}]`
-                : '';
-            lines.push(entry.message + jobTag);
+            const jobList = entry.jobs.map(j => j.replace('build-', '')).join(', ');
+            const msg = entry.message.length > 120
+                ? entry.message.slice(0, 117) + '...'
+                : entry.message;
+            lines.push(`| ${msg} | ${jobList} |`);
         }
-        lines.push('```');
         sections.push(lines.join('\n'));
     }
 
     if (globalWarnings.size > 0) {
-        // Only show compiler-specific warnings (ones not shared by all compilers)
         const allJobs = [...new Set(jobResults.map(r => r.job))];
         const specificWarnings = [...globalWarnings.values()]
             .filter(w => w.jobs.length < allJobs.length || allJobs.length === 1);
 
         if (specificWarnings.length > 0) {
             const lines = [];
-            const byJob = {};
-            for (const entry of specificWarnings) {
-                for (const job of entry.jobs) {
-                    if (!byJob[job]) byJob[job] = [];
-                    byJob[job].push(entry.message);
-                }
+            lines.push(`<details><summary>Compiler Warnings (${specificWarnings.length})</summary>`);
+            lines.push('');
+            lines.push('```');
+            for (const entry of specificWarnings.slice(0, 20)) {
+                const jobTag = entry.jobs.length < allJobs.length
+                    ? ` [${entry.jobs.map(j => j.replace('build-', '')).join(', ')}]`
+                    : '';
+                lines.push(entry.message + jobTag);
             }
-            for (const [job, msgs] of Object.entries(byJob)) {
-                lines.push(`<details><summary>Warnings — ${job} (${msgs.length})</summary>\n`);
-                lines.push('```');
-                lines.push(...[...new Set(msgs)].slice(0, 10));
-                lines.push('```');
-                lines.push('</details>\n');
+            if (specificWarnings.length > 20) {
+                lines.push(`... and ${specificWarnings.length - 20} more`);
             }
+            lines.push('```');
+            lines.push('</details>');
             sections.push(lines.join('\n'));
         }
     }
 
-    const failedJobs = jobResults.map(r => r.job).join(', ');
+    const failedJobs = jobResults.map(r => r.job.replace('build-', '')).join(', ');
     const body = [
         COMMENT_MARKER,
         `## :x: CI Error Report`,
         '',
         `**Failed jobs:** ${failedJobs}`,
-        `**Unique errors:** ${globalErrors.size} | **Test failures:** ${globalTests.size} | **Warnings:** ${globalWarnings.size}`,
+        `**Errors:** ${globalErrors.size} | **Test failures:** ${globalTests.size} | **Warnings:** ${globalWarnings.size}`,
         '',
         ...sections,
         '',
@@ -264,7 +340,6 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
 
     // ── 6. Deduplicate: skip if body hasn't changed ──────────────────
     if (existingComment) {
-        // Compare error content (ignore timestamp)
         const stripTimestamp = s => s.replace(/\*Updated:.*\*/, '').replace(/\*Last checked:.*\*/, '');
         if (stripTimestamp(existingComment.body) === stripTimestamp(body)) {
             core.info('Error report unchanged — skipping update');
