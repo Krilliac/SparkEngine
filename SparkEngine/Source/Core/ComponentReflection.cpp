@@ -125,7 +125,7 @@ namespace Spark
         }
         default:
             SPARK_LOG_WARN(Spark::LogCategory::Core, "SetFieldFromString: unsupported field type %d for '%s'",
-                           static_cast<int>(field.type), field.name);
+                           static_cast<int>(field.type), field.name.c_str());
             return false;
         }
     }

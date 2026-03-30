@@ -1,5 +1,4 @@
 #include "ConsoleApp.h"
-#include "Utils/LogMacros.h"
 #include <iostream>
 #include <sstream>
 #include <filesystem>
@@ -71,7 +70,6 @@ ConsoleApp::ConsoleApp()
 #endif
 {
     RegisterDefaultCommands();
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleApp initialized, default commands registered");
 
     // Start engine input reading thread (joined in destructor)
     m_engineInputThread = std::thread(&ConsoleApp::ReadEngineInput, this);
@@ -81,7 +79,6 @@ ConsoleApp::ConsoleApp()
 
 ConsoleApp::~ConsoleApp()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleApp shutting down");
     m_running = false;
     if (m_engineInputThread.joinable())
     {
@@ -112,12 +109,10 @@ void ConsoleApp::Run()
 #endif
     if (pipeMode)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "IPC pipe connection detected, entering pipe mode");
         PrintLog(L"Connected to Spark Engine via pipe communication.");
     }
     else
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "No IPC pipe detected, running in standalone mode");
         PrintLog(L"Running in standalone mode. Engine commands will not be available.");
         PrintLog(L"Waiting for SparkEngine to connect... (or type commands to use standalone)");
     }
@@ -227,8 +222,6 @@ void ConsoleApp::Run()
                 DWORD newFileType = GetFileType(hStdin);
                 if (newFileType != FILE_TYPE_PIPE)
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core,
-                                   "Engine pipe connection lost, switching to standalone mode");
                     PrintLog(L"Engine connection lost. Switching to standalone mode.");
                     pipeMode = false;
                     keyboardThreadRunning = false;
@@ -271,7 +264,6 @@ void ConsoleApp::Run()
             }
             else
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Input stream closed unexpectedly");
                 PrintLog(L"Input stream closed. Exiting...");
                 m_running = false;
                 break;
@@ -313,13 +305,11 @@ void ConsoleApp::ReadEngineInput()
 
     if (isPipeConnected || fileType == FILE_TYPE_PIPE)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine input reader: pipe connection confirmed");
         PrintLog(L"Connected to engine via pipe communication.");
         OutputDebugStringA("ReadEngineInput: Pipe connection confirmed\n");
     }
     else
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Engine input reader: no pipe connection, exiting thread");
         PrintLog(L"No pipe connection detected. Running in standalone mode.");
         OutputDebugStringA("ReadEngineInput: No pipe connection detected\n");
         return; // Exit thread if no pipe connection
@@ -336,7 +326,6 @@ void ConsoleApp::ReadEngineInput()
             DWORD error = GetLastError();
             if (error == ERROR_BROKEN_PIPE || error == ERROR_INVALID_HANDLE)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Engine pipe connection lost (error: %lu)", error);
                 PrintLog(L"Engine pipe connection lost.");
                 OutputDebugStringA("ReadEngineInput: Pipe connection lost\n");
                 break;
@@ -397,7 +386,6 @@ void ConsoleApp::ReadEngineInput()
             else
             {
                 DWORD error = GetLastError();
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "ReadFile failed with error %lu", error);
                 OutputDebugStringA(
                     ("ReadEngineInput: ReadFile failed with error " + std::to_string(error) + "\n").c_str());
                 if (error == ERROR_BROKEN_PIPE)
@@ -470,14 +458,12 @@ void ConsoleApp::ReadEngineInput()
             else if (bytesRead == 0)
             {
                 // EOF - pipe closed
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Engine pipe EOF received, connection closed");
                 PrintLog(L"Engine pipe connection closed.");
                 break;
             }
         }
         else if (ret < 0)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Engine pipe select() returned error");
             PrintLog(L"Engine pipe read error.");
             break;
         }
@@ -934,14 +920,12 @@ void ConsoleApp::ExecuteCommand(const std::string& cmdLine)
     // Check if this is an engine command first, then forward it
     if (ShouldForwardToEngine(command))
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Forwarding command to engine: %s", cmdLine.c_str());
         std::cout << cmdLine << std::endl;
         std::cout.flush();
         PrintResult("Command sent to engine: " + cmdLine);
     }
     else
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Executing local command: %s", command.c_str());
         std::string result = m_commandRegistry.ExecuteCommand(command, args);
         PrintResult(result);
     }
@@ -1293,9 +1277,6 @@ void ConsoleApp::RegisterDefaultCommands()
     m_aliases["hist"] = "history";
     m_aliases["tc"] = "test_connection";
     m_aliases["pt"] = "pipe_test";
-
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "Registered %zu default commands and %zu aliases",
-                   m_commandRegistry.GetAllCommands().size(), m_aliases.size());
 }
 
 void ConsoleApp::AddToHistory(const std::string& cmd)

@@ -1,5 +1,4 @@
 #include "CommandParser.h"
-#include "Utils/LogMacros.h"
 #include <sstream>
 #include <vector>
 #include <string>
@@ -9,14 +8,9 @@ bool CommandParser::ParseCommandLine(const std::string& commandLine, std::string
 {
     auto tokens = Tokenize(commandLine);
     if (tokens.empty())
-    {
-        SPARK_LOG_WARN(Spark::LogCategory::Core, "ParseCommandLine: empty command line, no tokens produced");
         return false;
-    }
 
     commandName = tokens[0];
-    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "ParseCommandLine: parsed command '%s' with %zu args", tokens[0].c_str(),
-                    tokens.size() - 1);
     args.clear();
 
     // Copy all tokens except the first one (command name) as string arguments
