@@ -96,6 +96,9 @@ jobs:
   # ===========================================================================
   build-linux-asan:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -212,6 +215,9 @@ jobs:
   # ===========================================================================
   build-linux-tsan:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -305,6 +311,9 @@ jobs:
   build-linux-msan:
     runs-on: ubuntu-24.04
     continue-on-error: true
+    defaults:
+      run:
+        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -541,6 +550,9 @@ jobs:
   # ===========================================================================
   build-linux-gcc:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash -o pipefail {0}
     strategy:
       fail-fast: true
       matrix:
@@ -633,6 +645,9 @@ jobs:
   # ===========================================================================
   build-linux-clang:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash -o pipefail {0}
     strategy:
       fail-fast: true
       matrix:
@@ -727,6 +742,9 @@ jobs:
   build-linux-mingw-wine:
     runs-on: ubuntu-24.04
     continue-on-error: true
+    defaults:
+      run:
+        shell: bash -o pipefail {0}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
@@ -906,6 +924,9 @@ jobs:
       contents: read
       pull-requests: write
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash -o pipefail {0}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -959,10 +980,21 @@ jobs:
             if (!body.includes('```')) body += `Check the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
             await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body: body.slice(0, 65000) });
       - name: Generate coverage
+        id: coverage
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
+      - name: Report coverage errors to PR
+        if: failure() && steps.coverage.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let prNumber = context.issue?.number;
+            if (!prNumber) { const branch = context.ref?.replace('refs/heads/', ''); if (branch) { const prs = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' }); prNumber = prs.data[0]?.number; } }
+            if (!prNumber) return;
+            let body = `## :x: Code Coverage (GCC) — coverage generation failed\n\nCheck the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.\n`;
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body });
       - name: Post coverage summary to PR
         if: github.event_name == 'pull_request' || github.event_name == 'push'
         uses: actions/github-script@v7
