@@ -18,7 +18,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Build and CI workflow speedups | [knowledge/build-optimizations.md](knowledge/build-optimizations.md) | Optimization | Active | 2026-03-14 |
 | AI bloat pattern and countermeasures | [knowledge/ai-bloat-pattern.md](knowledge/ai-bloat-pattern.md) | Observation | Active | 2026-03-14 |
 | Comprehensive bloat audit | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-18 |
-| 145 tests (suite audit) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-19 |
+| Deep test coverage analysis (211 files, 2577 tests, 194 untested headers) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-03-31 |
 | 66 oversized functions, 7 private-method violations | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
 | Memory/error handling (3 low-risk items) | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | Mostly Resolved | 2026-03-16 |
 | Rendering pipeline (all 12 stubs now implemented) | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | **Resolved** | 2026-03-22 |
@@ -38,7 +38,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 170+ test files, 2,509 tests (2,504 pass under Wine, all pass on native Linux)
+- **Tests**: 211 test files, 2,577 tests (all pass on native Linux). 194 engine headers still lack dedicated tests — see test-suite-audit.md
 - **Editor**: 52 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations (ShadowAtlas, ScreenSpaceEffects, GPUOcclusionCulling, FroxelVolumetricFog, DynamicQualityScaler, DDGIProbeSystem, AdaptiveProbeVolumes, LightProbeSystem, SkyAtmosphere, WaterRenderer, ClusteredLightCulling, DynamicQualityTypes)
 - **Post-processing**: Bloom, auto-exposure, tonemapping (ACES/Filmic/Neutral/Reinhard), color grading (LGG)
@@ -62,7 +62,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 - Refactor 66 oversized functions (see code-quality-violations.md)
 - Fix duplicate functions in MaterialSystem.cpp
-- Add AudioEngine and SceneManager test suites
+- Add 15 critical missing test suites (NetworkManager, ECSystems, MaterialSystem, AssetPipeline, EngineSettings, PerceptionSystem, InputManager, GamepadInput, Camera, WorldServer + 5 more)
 - Documentation specs (networking wire format, asset format, plugin ABI)
 
 ---
