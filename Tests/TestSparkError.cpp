@@ -3,44 +3,15 @@
 #include "TestFramework.h"
 #include "Utils/SparkError.h"
 
+// Helper macros to suppress stderr for tests that intentionally trigger error logging.
+// Uses the same freopen pattern as the original tests that pass on all platforms.
 #ifdef _WIN32
-#include <io.h>
-#define dup _dup
-#define dup2 _dup2
-#define fileno _fileno
+#define SUPPRESS_STDERR() std::freopen("NUL", "w", stderr)
+#define RESTORE_STDERR() std::freopen("CON", "w", stderr)
 #else
-#include <unistd.h>
+#define SUPPRESS_STDERR() std::freopen("/dev/null", "w", stderr)
+#define RESTORE_STDERR() std::freopen("/dev/tty", "w", stderr)
 #endif
-
-// RAII helper to suppress stderr output during tests that intentionally
-// trigger error logging, then restore it reliably (works on CI without a console).
-struct SuppressStderr
-{
-    int savedFd = -1;
-    SuppressStderr()
-    {
-        fflush(stderr);
-        savedFd = dup(fileno(stderr));
-#ifdef _WIN32
-        freopen("NUL", "w", stderr);
-#else
-        freopen("/dev/null", "w", stderr);
-#endif
-    }
-    ~SuppressStderr()
-    {
-        fflush(stderr);
-        if (savedFd >= 0)
-        {
-            dup2(savedFd, fileno(stderr));
-#ifdef _WIN32
-            _close(savedFd);
-#else
-            close(savedFd);
-#endif
-        }
-    }
-};
 
 TEST(SparkError_SeverityToString)
 {
@@ -54,22 +25,25 @@ TEST(SparkError_SeverityToString)
 
 TEST(SparkError_CheckFailedReturnsFalse)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SparkError::CheckFailed("false", __FILE__, __LINE__, __FUNCTION__);
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_CheckFailedWithMsg)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SparkError::CheckFailed("expr", __FILE__, __LINE__, __FUNCTION__, "custom message");
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_BoundsCheckFailed)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SparkError::BoundsCheckFailed("idx", 10, 5, __FILE__, __LINE__, __FUNCTION__);
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
@@ -81,10 +55,7 @@ TEST(SparkError_LogMessageDoesNotCrash)
 
 TEST(SparkError_ScopedContextDoesNotCrash)
 {
-    EXPECT_NO_THROW({
-        SparkError::ScopedContext ctx("TestContext", __FILE__, __LINE__);
-        // Context logs on enter and exit
-    });
+    EXPECT_NO_THROW({ SparkError::ScopedContext ctx("TestContext", __FILE__, __LINE__); });
 }
 
 // =============================================================================
@@ -99,8 +70,9 @@ TEST(SparkError_CheckPassesOnTrue)
 
 TEST(SparkError_CheckFailsOnFalse)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SPARK_CHECK(1 == 2);
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
@@ -116,8 +88,9 @@ TEST(SparkError_CheckMsgPassesOnTrue)
 
 TEST(SparkError_CheckMsgFailsOnFalse)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SPARK_CHECK_MSG(false, "expected failure");
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
@@ -139,15 +112,17 @@ TEST(SparkError_BoundsCheckAtZero)
 
 TEST(SparkError_BoundsCheckOutOfRange)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SPARK_BOUNDS_CHECK(10, 5);
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_BoundsCheckNegativeIndex)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SPARK_BOUNDS_CHECK(-1, 5);
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
@@ -157,19 +132,21 @@ TEST(SparkError_BoundsCheckNegativeIndex)
 
 TEST(SparkError_CatchAllStdException)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool reached = false;
     SPARK_CATCH_ALL("Test", { throw std::runtime_error("test error"); });
     reached = true;
+    RESTORE_STDERR();
     EXPECT_TRUE(reached);
 }
 
 TEST(SparkError_CatchAllUnknownException)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool reached = false;
     SPARK_CATCH_ALL("Test", { throw 42; });
     reached = true;
+    RESTORE_STDERR();
     EXPECT_TRUE(reached);
 }
 
@@ -190,8 +167,9 @@ TEST(SparkError_CatchAllNoException)
 
 TEST(SparkError_CatchAllRetReturnsDefault)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     int result = SPARK_CATCH_ALL_RET("Test", -1, { throw std::runtime_error("error"); });
+    RESTORE_STDERR();
     EXPECT_EQ(result, -1);
 }
 
@@ -222,19 +200,21 @@ TEST(SparkError_LogMessageNullArgs)
 }
 
 // =============================================================================
-// HResultFailed (non-Windows just exercises the else branch)
+// HResultFailed
 // =============================================================================
 
-TEST(SparkError_HResultFailedNonWindows)
+TEST(SparkError_HResultFailedReturnsFalse)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SparkError::HResultFailed("hrExpr", -1, __FILE__, __LINE__, __FUNCTION__);
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_HResultFailedWithMsg)
 {
-    SuppressStderr guard;
+    SUPPRESS_STDERR();
     bool result = SparkError::HResultFailed("hrExpr", -1, __FILE__, __LINE__, __FUNCTION__, "custom msg");
+    RESTORE_STDERR();
     EXPECT_FALSE(result);
 }

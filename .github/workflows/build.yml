@@ -326,16 +326,7 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      shell: bash
-      run: |
-        # Run the test executable directly to capture per-test output
-        if ./build/bin/SparkTests.exe 2>&1 | tee test-results.log; then
-          echo "All tests passed"
-        else
-          echo "::error::Test executable returned non-zero. Last 100 lines:"
-          tail -100 test-results.log
-          exit 1
-        fi
+      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --verbose 2>&1 | tee test-results.log
 
     - name: Extract error summary
       if: failure()
@@ -807,9 +798,10 @@ jobs:
           # Full directory listing for the PR comment
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
       - name: Per-subsystem coverage analysis
-        continue-on-error: true
         run: |
-          scripts/coverage-report.sh coverage.info --json coverage-report.json --check 2>&1 | tee subsystem-coverage.txt
+          scripts/coverage-report.sh coverage.info --json coverage-report.json 2>&1 | tee subsystem-coverage.txt || true
+          # Threshold check — informational only, does not fail the job
+          scripts/coverage-report.sh coverage.info --check 2>&1 | tee coverage-check.txt || true
       - name: Post coverage summary to PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v8
