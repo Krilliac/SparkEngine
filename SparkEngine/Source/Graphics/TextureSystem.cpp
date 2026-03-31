@@ -762,14 +762,33 @@ uint32_t GetFormatBytesPerPixel(TextureFormat format)
 #include <algorithm>
 #include <filesystem>
 
+#if SPARK_HAS_STB_IMAGE
+#include <stb_image.h>
+#endif
+
 // ============================================================================
-// Texture class (Linux stub)
+// Texture class (Linux — stb_image for real image loading)
 // ============================================================================
 
 Texture::Texture(const std::string& name, const TextureDesc& desc) : m_name(name), m_desc(desc) {}
 
 HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* /*device*/)
 {
+#if SPARK_HAS_STB_IMAGE
+    int width = 0, height = 0, channels = 0;
+    stbi_uc* pixels = stbi_load(filePath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+    if (pixels)
+    {
+        m_desc.width = static_cast<uint32_t>(width);
+        m_desc.height = static_cast<uint32_t>(height);
+        m_memoryUsage = static_cast<size_t>(width * height * 4);
+        m_loaded = true;
+        stbi_image_free(pixels);
+        return S_OK;
+    }
+    // stb_image failed — fall through to default stub behavior
+    fprintf(stderr, "[TextureSystem] stb_image failed to load: %s (%s)\n", filePath.c_str(), stbi_failure_reason());
+#endif
     m_loaded = true;
     m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
     return S_OK;

@@ -32,6 +32,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Hardware acceleration (8 GPU systems, 72 tests) | [knowledge/hardware-acceleration-systems.md](knowledge/hardware-acceleration-systems.md) | Decision | Active | 2026-03-28 |
 | RAII deep analysis (all subsystems, all items resolved) | [knowledge/raii-codebase-analysis.md](knowledge/raii-codebase-analysis.md) | Observation | **Resolved** | 2026-03-28 |
 | Mac compatibility analysis (gaps, roadmap, changes) | [knowledge/mac-compatibility-analysis.md](knowledge/mac-compatibility-analysis.md) | Observation | Active | 2026-03-28 |
+| Third-party library evaluation (5 added, 7 rejected) | [knowledge/third-party-library-evaluation.md](knowledge/third-party-library-evaluation.md) | Decision | Active | 2026-03-31 |
 ## Quick Reference
 
 ### Current Engine State (2026-03-22)

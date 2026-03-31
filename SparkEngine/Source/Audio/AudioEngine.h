@@ -114,6 +114,8 @@ class AudioEngine
     {
 #ifdef SPARK_PLATFORM_WINDOWS
         return true;
+#elif SPARK_HAS_MINIAUDIO
+        return true; // miniaudio provides cross-platform audio
 #else
         return false;
 #endif
