@@ -471,3 +471,260 @@ TEST(Ability_ResourceCostCheck)
     EXPECT_TRUE(sys.StartCast(8));
     EXPECT_NEAR(sys.currentResource, 25.0f, 0.001f);
 }
+
+// ============================================================================
+// Effect Type Tests (mirror production AbilitySystem::ApplyEffect)
+// ============================================================================
+
+namespace
+{
+    enum class EffectType : uint8_t
+    {
+        Damage,
+        Heal,
+        ApplyAura,
+        RemoveAura,
+        Summon,
+        Teleport,
+        ModifyAttribute,
+        ApplyForce,
+        SpawnProjectile,
+        Custom
+    };
+
+    struct AbilityEffect
+    {
+        EffectType type = EffectType::Damage;
+        float baseValue = 0.0f;
+        float scaling = 1.0f;
+        uint32_t customParam = 0;
+    };
+
+    struct HealthData
+    {
+        float health = 100.0f;
+        float maxHealth = 100.0f;
+        bool isDead = false;
+    };
+
+    struct Position
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        float rotY = 0.0f; // yaw in degrees
+    };
+
+    struct Velocity
+    {
+        float vx = 0.0f, vy = 0.0f, vz = 0.0f;
+    };
+
+    void ApplyEffectTest(const AbilityEffect& effect, HealthData* targetHp, Position* targetPos, Position* casterPos,
+                         Velocity* targetVel, int& summonCount, int& projectileCount)
+    {
+        switch (effect.type)
+        {
+        case EffectType::Damage:
+        {
+            float amount = effect.baseValue * effect.scaling;
+            if (targetHp && amount > 0.0f)
+            {
+                targetHp->health = (std::max)(targetHp->health - amount, 0.0f);
+                targetHp->isDead = (targetHp->health <= 0.0f);
+            }
+            break;
+        }
+        case EffectType::Heal:
+        {
+            float amount = effect.baseValue * effect.scaling;
+            if (targetHp && amount > 0.0f && !targetHp->isDead)
+            {
+                targetHp->health = (std::min)(targetHp->health + amount, targetHp->maxHealth);
+            }
+            break;
+        }
+        case EffectType::Summon:
+        {
+            if (casterPos)
+            {
+                summonCount++;
+            }
+            break;
+        }
+        case EffectType::Teleport:
+        {
+            if (targetPos && casterPos && effect.baseValue > 0.0f)
+            {
+                float yawRad = targetPos->rotY * 3.14159f / 180.0f;
+                targetPos->x += std::sin(yawRad) * effect.baseValue;
+                targetPos->z += std::cos(yawRad) * effect.baseValue;
+            }
+            break;
+        }
+        case EffectType::ModifyAttribute:
+        {
+            if (targetHp)
+            {
+                targetHp->maxHealth = targetHp->maxHealth * effect.scaling + effect.baseValue;
+                if (targetHp->maxHealth < 1.0f)
+                    targetHp->maxHealth = 1.0f;
+                if (targetHp->health > targetHp->maxHealth)
+                    targetHp->health = targetHp->maxHealth;
+            }
+            break;
+        }
+        case EffectType::ApplyForce:
+        {
+            if (targetVel && targetPos && casterPos)
+            {
+                float magnitude = effect.baseValue * effect.scaling;
+                if (effect.customParam == 1)
+                {
+                    targetVel->vy += magnitude;
+                }
+                else
+                {
+                    float dx = targetPos->x - casterPos->x;
+                    float dz = targetPos->z - casterPos->z;
+                    float dist = std::sqrt(dx * dx + dz * dz);
+                    if (dist > 0.001f)
+                    {
+                        targetVel->vx += (dx / dist) * magnitude;
+                        targetVel->vz += (dz / dist) * magnitude;
+                    }
+                }
+            }
+            break;
+        }
+        case EffectType::SpawnProjectile:
+        {
+            if (casterPos)
+            {
+                projectileCount++;
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+} // namespace
+
+TEST(Effect_DamageReducesHealth)
+{
+    HealthData hp{100.0f, 100.0f, false};
+    AbilityEffect eff{EffectType::Damage, 30.0f, 1.0f, 0};
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, &hp, nullptr, nullptr, nullptr, s, p);
+    EXPECT_NEAR(hp.health, 70.0f, 0.001f);
+    EXPECT_FALSE(hp.isDead);
+}
+
+TEST(Effect_DamageKills)
+{
+    HealthData hp{20.0f, 100.0f, false};
+    AbilityEffect eff{EffectType::Damage, 25.0f, 1.0f, 0};
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, &hp, nullptr, nullptr, nullptr, s, p);
+    EXPECT_NEAR(hp.health, 0.0f, 0.001f);
+    EXPECT_TRUE(hp.isDead);
+}
+
+TEST(Effect_HealRestoresHealth)
+{
+    HealthData hp{50.0f, 100.0f, false};
+    AbilityEffect eff{EffectType::Heal, 30.0f, 1.0f, 0};
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, &hp, nullptr, nullptr, nullptr, s, p);
+    EXPECT_NEAR(hp.health, 80.0f, 0.001f);
+}
+
+TEST(Effect_HealClampsToMax)
+{
+    HealthData hp{90.0f, 100.0f, false};
+    AbilityEffect eff{EffectType::Heal, 50.0f, 1.0f, 0};
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, &hp, nullptr, nullptr, nullptr, s, p);
+    EXPECT_NEAR(hp.health, 100.0f, 0.001f);
+}
+
+TEST(Effect_SummonCreatesEntity)
+{
+    Position casterPos{10.0f, 0.0f, 10.0f, 90.0f};
+    AbilityEffect eff{EffectType::Summon, 50.0f, 1.0f, 1};
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, nullptr, nullptr, &casterPos, nullptr, s, p);
+    EXPECT_EQ(s, 1);
+}
+
+TEST(Effect_TeleportMovesTarget)
+{
+    Position targetPos{0.0f, 0.0f, 0.0f, 0.0f}; // facing +Z (yaw=0)
+    Position casterPos{10.0f, 0.0f, 10.0f, 0.0f};
+    AbilityEffect eff{EffectType::Teleport, 5.0f, 1.0f, 0};
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, nullptr, &targetPos, &casterPos, nullptr, s, p);
+    EXPECT_NEAR(targetPos.z, 5.0f, 0.001f); // Moved 5 units along +Z
+    EXPECT_NEAR(targetPos.x, 0.0f, 0.01f);  // No lateral movement
+}
+
+TEST(Effect_ModifyAttributeIncreasesMaxHealth)
+{
+    HealthData hp{100.0f, 100.0f, false};
+    AbilityEffect eff{EffectType::ModifyAttribute, 50.0f, 1.0f, 0}; // +50 flat
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, &hp, nullptr, nullptr, nullptr, s, p);
+    EXPECT_NEAR(hp.maxHealth, 150.0f, 0.001f);
+}
+
+TEST(Effect_ModifyAttributeClampsHealth)
+{
+    HealthData hp{100.0f, 100.0f, false};
+    AbilityEffect eff{EffectType::ModifyAttribute, -60.0f, 1.0f, 0}; // -60 flat
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, &hp, nullptr, nullptr, nullptr, s, p);
+    EXPECT_NEAR(hp.maxHealth, 40.0f, 0.001f);
+    EXPECT_NEAR(hp.health, 40.0f, 0.001f); // Clamped to new max
+}
+
+TEST(Effect_ApplyForceKnockback)
+{
+    Position targetPos{5.0f, 0.0f, 5.0f, 0.0f};
+    Position casterPos{0.0f, 0.0f, 0.0f, 0.0f};
+    Velocity targetVel{0.0f, 0.0f, 0.0f};
+    AbilityEffect eff{EffectType::ApplyForce, 10.0f, 1.0f, 0}; // knockback
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, nullptr, &targetPos, &casterPos, &targetVel, s, p);
+    // Force should push target away from caster (positive direction)
+    EXPECT_TRUE(targetVel.vx > 0.0f);
+    EXPECT_TRUE(targetVel.vz > 0.0f);
+}
+
+TEST(Effect_ApplyForceKnockup)
+{
+    Position targetPos{5.0f, 0.0f, 5.0f, 0.0f};
+    Position casterPos{0.0f, 0.0f, 0.0f, 0.0f};
+    Velocity targetVel{0.0f, 0.0f, 0.0f};
+    AbilityEffect eff{EffectType::ApplyForce, 15.0f, 1.0f, 1}; // knockup (customParam=1)
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, nullptr, &targetPos, &casterPos, &targetVel, s, p);
+    EXPECT_NEAR(targetVel.vy, 15.0f, 0.001f);
+    EXPECT_NEAR(targetVel.vx, 0.0f, 0.001f);
+}
+
+TEST(Effect_SpawnProjectileCreatesEntity)
+{
+    Position casterPos{0.0f, 0.0f, 0.0f, 45.0f};
+    AbilityEffect eff{EffectType::SpawnProjectile, 50.0f, 1.0f, 1};
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, nullptr, nullptr, &casterPos, nullptr, s, p);
+    EXPECT_EQ(p, 1);
+}
+
+TEST(Effect_DamageWithScaling)
+{
+    HealthData hp{100.0f, 100.0f, false};
+    AbilityEffect eff{EffectType::Damage, 20.0f, 1.5f, 0}; // 20 * 1.5 = 30
+    int s = 0, p = 0;
+    ApplyEffectTest(eff, &hp, nullptr, nullptr, nullptr, s, p);
+    EXPECT_NEAR(hp.health, 70.0f, 0.001f);
+}

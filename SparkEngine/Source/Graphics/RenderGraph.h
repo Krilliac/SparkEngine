@@ -904,9 +904,51 @@ namespace Spark::Graphics
                 {
                     continue;
                 }
+                if (res.type == RenderGraphResourceType::Buffer)
+                {
+#ifdef SPARK_PLATFORM_WINDOWS
+                    // Allocate transient buffer via D3D11
+                    if (res.bufferDesc.sizeBytes == 0)
+                    {
+                        continue;
+                    }
+
+                    D3D11_BUFFER_DESC bufDesc{};
+                    bufDesc.ByteWidth = static_cast<UINT>(res.bufferDesc.sizeBytes);
+                    bufDesc.StructureByteStride = static_cast<UINT>(res.bufferDesc.stride);
+
+                    // Map RenderTargetUsage bitmask to D3D11 bind flags
+                    UINT bindFlags = 0;
+                    auto usageBits = std::to_underlying(res.bufferDesc.usage);
+                    if (usageBits & std::to_underlying(RenderTargetUsage::ShaderResource))
+                    {
+                        bindFlags |= D3D11_BIND_SHADER_RESOURCE;
+                    }
+                    if (usageBits & std::to_underlying(RenderTargetUsage::UnorderedAccess))
+                    {
+                        bindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+                    }
+                    if (bindFlags == 0)
+                    {
+                        bindFlags = D3D11_BIND_SHADER_RESOURCE;
+                    }
+                    bufDesc.BindFlags = bindFlags;
+
+                    if (res.bufferDesc.stride > 0)
+                    {
+                        bufDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+                    }
+
+                    bufDesc.Usage = D3D11_USAGE_DEFAULT;
+
+                    m_device->CreateBuffer(&bufDesc, nullptr, res.physicalBuffer.ReleaseAndGetAddressOf());
+#endif // SPARK_PLATFORM_WINDOWS
+                    continue;
+                }
+
                 if (res.type != RenderGraphResourceType::Texture)
                 {
-                    continue; // Buffer allocation not yet implemented
+                    continue;
                 }
 
                 // If aliased, share the physical texture with the alias target

@@ -513,7 +513,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*210 test files, 2520+ test cases*
+*210 test files, 2539+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -521,7 +521,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAIBudgetLimiter` | 6 |
 | `TestAIDirector` | 11 |
 | `TestAIStress` | 18 |
-| `TestAbilitySystem` | 15 |
+| `TestAbilitySystem` | 27 |
 | `TestAdversarialEngine` | 89 |
 | `TestAlignedHeapArray` | 6 |
 | `TestAngleUtils` | 10 |
@@ -636,7 +636,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
 | `TestModuleHotReload` | 15 |
-| `TestMovementSystem` | 12 |
+| `TestMovementSystem` | 18 |
 | `TestMultiISADispatch` | 2 |
 | `TestNavMesh` | 11 |
 | `TestNavMeshObstacles` | 7 |
@@ -671,7 +671,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestReflection` | 18 |
 | `TestReliableChannel` | 9 |
 | `TestRenderCommandRing` | 4 |
-| `TestRenderGraph` | 24 |
+| `TestRenderGraph` | 25 |
 | `TestReplaySystem` | 8 |
 | `TestReplicationFields` | 15 |
 | `TestResult` | 8 |
