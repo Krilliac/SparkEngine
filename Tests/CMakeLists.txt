@@ -221,6 +221,21 @@ add_executable(SparkTests
     TestDirectStorageLoader.cpp
     TestMeshShaderPipeline.cpp
     TestSparkPak.cpp
+    TestNetworkManagerOrchestration.cpp
+    TestECSystemOrdering.cpp
+    TestMaterialSystemValidation.cpp
+    TestAssetPipelineCache.cpp
+    TestEngineSettingsParser.cpp
+    TestPerceptionSystemMath.cpp
+    TestInputManagerState.cpp
+    TestGamepadInputProcessing.cpp
+    TestCameraTransforms.cpp
+    TestWorldServerRouting.cpp
+    TestAudioMixerBus.cpp
+    TestConsoleVariables.cpp
+    TestWeaponMechanics.cpp
+    TestGameObjectTransforms.cpp
+    TestSceneSerializer.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
