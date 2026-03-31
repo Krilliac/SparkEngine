@@ -332,3 +332,150 @@ TEST(LocalFileCache_MetricsTotalBytesServed)
 
     CleanupCacheTestDir();
 }
+
+// =============================================================================
+// Contains
+// =============================================================================
+
+TEST(LocalFileCache_ContainsAfterWrite)
+{
+    SetupCacheTestDir();
+    std::string path = GetCacheTestDir() + "/contains.txt";
+
+    Spark::LocalFileCache cache;
+    EXPECT_FALSE(cache.Contains(path));
+
+    cache.WriteText(path, "content");
+    EXPECT_TRUE(cache.Contains(path));
+
+    CleanupCacheTestDir();
+}
+
+// =============================================================================
+// GetCurrentSize and GetEntryCount
+// =============================================================================
+
+TEST(LocalFileCache_CurrentSizeTracking)
+{
+    SetupCacheTestDir();
+    std::string pathA = GetCacheTestDir() + "/size_a.txt";
+    std::string pathB = GetCacheTestDir() + "/size_b.txt";
+
+    Spark::LocalFileCache cache;
+    cache.WriteText(pathA, "AAAA"); // 4 bytes
+    cache.WriteText(pathB, "BB");   // 2 bytes
+
+    EXPECT_EQ(cache.GetCurrentSize(), (size_t)6);
+    EXPECT_EQ(cache.GetEntryCount(), (size_t)2);
+
+    cache.Invalidate(pathA);
+    EXPECT_EQ(cache.GetCurrentSize(), (size_t)2);
+    EXPECT_EQ(cache.GetEntryCount(), (size_t)1);
+
+    CleanupCacheTestDir();
+}
+
+// =============================================================================
+// Write updates existing cache entry
+// =============================================================================
+
+TEST(LocalFileCache_WriteUpdatesExistingEntry)
+{
+    SetupCacheTestDir();
+    std::string path = GetCacheTestDir() + "/update.txt";
+
+    Spark::LocalFileCache cache;
+    cache.WriteText(path, "original");
+
+    auto r1 = cache.ReadText(path);
+    EXPECT_TRUE(r1.IsOk());
+    EXPECT_EQ(r1.Value(), std::string("original"));
+
+    // Overwrite
+    cache.WriteText(path, "updated");
+
+    auto r2 = cache.ReadText(path);
+    EXPECT_TRUE(r2.IsOk());
+    EXPECT_EQ(r2.Value(), std::string("updated"));
+
+    // Both reads should be cache hits
+    EXPECT_EQ(cache.GetMetrics().hits, (uint64_t)2);
+
+    CleanupCacheTestDir();
+}
+
+// =============================================================================
+// ReadBinary non-existent
+// =============================================================================
+
+TEST(LocalFileCache_ReadBinaryNonexistent)
+{
+    Spark::LocalFileCache cache;
+    auto result = cache.ReadBinary("/tmp/spark_nonexistent_binary_xyz.bin");
+    EXPECT_TRUE(result.IsErr());
+}
+
+// =============================================================================
+// Create with subdirectory
+// =============================================================================
+
+TEST(LocalFileCache_CreateInSubdir)
+{
+    SetupCacheTestDir();
+    std::string path = GetCacheTestDir() + "/subdir/nested.txt";
+
+    Spark::LocalFileCache cache;
+    auto c = cache.Create(path, "nested content");
+    EXPECT_TRUE(c.IsOk());
+    EXPECT_TRUE(cache.Contains(path));
+
+    auto r = cache.ReadText(path);
+    EXPECT_TRUE(r.IsOk());
+    EXPECT_EQ(r.Value(), std::string("nested content"));
+
+    CleanupCacheTestDir();
+}
+
+// =============================================================================
+// LRU touch order
+// =============================================================================
+
+TEST(LocalFileCache_LRUTouchOrder)
+{
+    SetupCacheTestDir();
+
+    std::string pathA = GetCacheTestDir() + "/touch_a.txt";
+    std::string pathB = GetCacheTestDir() + "/touch_b.txt";
+    std::string pathC = GetCacheTestDir() + "/touch_c.txt";
+
+    Spark::FileUtils::WriteTextFile(pathA, std::string(100, 'A'));
+    Spark::FileUtils::WriteTextFile(pathB, std::string(100, 'B'));
+    Spark::FileUtils::WriteTextFile(pathC, std::string(100, 'C'));
+
+    // Cache with 250 byte limit
+    Spark::LocalFileCache cache(250);
+
+    cache.ReadText(pathA); // A
+    cache.ReadText(pathB); // A, B
+
+    // Touch A again to make B the LRU
+    cache.ReadText(pathA); // B, A (A is now MRU)
+
+    // Adding C should evict B (LRU), not A
+    cache.ReadText(pathC); // A, C
+
+    EXPECT_TRUE(cache.Contains(pathA));
+    EXPECT_FALSE(cache.Contains(pathB));
+    EXPECT_TRUE(cache.Contains(pathC));
+
+    CleanupCacheTestDir();
+}
+
+// =============================================================================
+// Default max size constant
+// =============================================================================
+
+TEST(LocalFileCache_DefaultMaxSize)
+{
+    EXPECT_EQ(Spark::LocalFileCache::DEFAULT_MAX_SIZE, static_cast<size_t>(64 * 1024 * 1024));
+}

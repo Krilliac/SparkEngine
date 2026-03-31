@@ -172,3 +172,152 @@ TEST(StringUtils_Format)
     EXPECT_EQ(Format("FPS: %d", 60), std::string("FPS: 60"));
     EXPECT_EQ(Format("%.2f", 3.14159f), std::string("3.14"));
 }
+
+// =============================================================================
+// Extended ToString coverage
+// =============================================================================
+
+TEST(StringUtils_ToStringLong)
+{
+    EXPECT_EQ(ToString(100L), std::string("100"));
+}
+
+TEST(StringUtils_ToStringLongLong)
+{
+    EXPECT_EQ(ToString(9999999999LL), std::string("9999999999"));
+}
+
+TEST(StringUtils_ToStringUnsigned)
+{
+    EXPECT_EQ(ToString(42u), std::string("42"));
+}
+
+TEST(StringUtils_ToStringUnsignedLong)
+{
+    EXPECT_EQ(ToString(12345UL), std::string("12345"));
+}
+
+TEST(StringUtils_ToStringUnsignedLongLong)
+{
+    EXPECT_EQ(ToString(999999999ULL), std::string("999999999"));
+}
+
+TEST(StringUtils_ToStringFloat)
+{
+    auto str = ToString(3.14f);
+    EXPECT_TRUE(str.find("3.14") != std::string::npos);
+}
+
+TEST(StringUtils_ToStringDouble)
+{
+    auto str = ToString(2.71828);
+    EXPECT_TRUE(str.find("2.71") != std::string::npos);
+}
+
+// =============================================================================
+// Extended parsing
+// =============================================================================
+
+TEST(StringUtils_ParseIntLargeNumber)
+{
+    auto v = ParseInt("2147483647");
+    EXPECT_TRUE(v.has_value());
+    EXPECT_EQ(v.value(), 2147483647);
+}
+
+TEST(StringUtils_ParseIntOverflow)
+{
+    // Out of int range
+    EXPECT_FALSE(ParseInt("99999999999999999").has_value());
+}
+
+TEST(StringUtils_ParseFloatNegative)
+{
+    auto v = ParseFloat("-2.5");
+    EXPECT_TRUE(v.has_value());
+    EXPECT_NEAR(v.value(), -2.5f, 0.01f);
+}
+
+TEST(StringUtils_ParseFloatTrailingChars)
+{
+    EXPECT_FALSE(ParseFloat("3.14abc").has_value());
+}
+
+TEST(StringUtils_ParseBoolTrimmed)
+{
+    EXPECT_TRUE(ParseBool("  TRUE  ").value());
+    EXPECT_FALSE(ParseBool("  false  ").value());
+}
+
+// =============================================================================
+// Split edge cases
+// =============================================================================
+
+TEST(StringUtils_SplitEmptyString)
+{
+    auto parts = Split("", ',');
+    EXPECT_EQ((int)parts.size(), 1);
+    EXPECT_EQ(parts[0], std::string(""));
+}
+
+TEST(StringUtils_SplitEmptyDelimiter)
+{
+    auto parts = Split("hello", std::string(""));
+    EXPECT_EQ((int)parts.size(), 1);
+    EXPECT_EQ(parts[0], std::string("hello"));
+}
+
+TEST(StringUtils_SplitTrailingDelimiter)
+{
+    auto parts = Split("a,b,", ',');
+    EXPECT_EQ((int)parts.size(), 3);
+    EXPECT_EQ(parts[2], std::string(""));
+}
+
+// =============================================================================
+// Join single element
+// =============================================================================
+
+TEST(StringUtils_JoinSingle)
+{
+    std::vector<std::string> parts = {"only"};
+    EXPECT_EQ(Join(parts, ","), std::string("only"));
+}
+
+// =============================================================================
+// Replace edge cases
+// =============================================================================
+
+TEST(StringUtils_ReplaceEmptyFrom)
+{
+    EXPECT_EQ(Replace("hello", "", "x"), std::string("hello"));
+}
+
+TEST(StringUtils_ReplaceAllNoMatch)
+{
+    EXPECT_EQ(ReplaceAll("hello", "xyz", "abc"), std::string("hello"));
+}
+
+// =============================================================================
+// Contains edge case
+// =============================================================================
+
+TEST(StringUtils_ContainsEmptyString)
+{
+    EXPECT_TRUE(Contains("", ""));
+}
+
+// =============================================================================
+// Format empty and long
+// =============================================================================
+
+TEST(StringUtils_FormatEmpty)
+{
+    EXPECT_EQ(Format(""), std::string(""));
+}
+
+TEST(StringUtils_FormatMultipleArgs)
+{
+    auto result = Format("%s=%d (%.1f)", "score", 100, 99.5f);
+    EXPECT_EQ(result, std::string("score=100 (99.5)"));
+}

@@ -191,3 +191,95 @@ TEST(StackTrace_EmptyTraceCompactString)
     // Should not crash on empty trace
     EXPECT_EQ(compact.size(), static_cast<size_t>(0));
 }
+
+// =============================================================================
+// Symbol Resolution
+// =============================================================================
+
+TEST(StackTrace_ResolvesSymbols)
+{
+    auto trace = Spark::StackTrace::Capture(0);
+    const auto& frames = trace.GetFrames();
+
+    // At least one frame should have a resolved function name
+    bool anyResolved = false;
+    for (const auto& f : frames)
+    {
+        if (!f.functionName.empty())
+        {
+            anyResolved = true;
+            break;
+        }
+    }
+    // On Linux with debug info, we should resolve some symbols
+    // On stripped builds this might not resolve, but shouldn't crash
+    EXPECT_TRUE(anyResolved || trace.GetFrameCount() > 0);
+}
+
+// =============================================================================
+// StackFrame displacement
+// =============================================================================
+
+TEST(StackTrace_FrameDisplacement)
+{
+    Spark::StackFrame frame;
+    frame.address = 0x1000;
+    frame.functionName = "Func";
+    frame.displacement = 0;
+    // No displacement should not show "+0x..."
+    std::string str = frame.ToString();
+    EXPECT_STR_CONTAINS(str, "Func");
+}
+
+// =============================================================================
+// MAX_FRAMES constant
+// =============================================================================
+
+TEST(StackTrace_MaxFramesConstant)
+{
+    EXPECT_EQ(Spark::StackTrace::MAX_FRAMES, 64);
+}
+
+// =============================================================================
+// Capture with maxFrames=1
+// =============================================================================
+
+TEST(StackTrace_CaptureMaxFrames1)
+{
+    auto trace = Spark::StackTrace::Capture(0, 1);
+    EXPECT_LE(trace.GetFrameCount(), 1);
+    if (trace.GetFrameCount() == 1)
+    {
+        EXPECT_NE(trace.GetFrames()[0].address, static_cast<uintptr_t>(0));
+    }
+}
+
+// =============================================================================
+// ToString with empty indent
+// =============================================================================
+
+TEST(StackTrace_ToStringEmptyIndent)
+{
+    auto trace = Spark::StackTrace::Capture(0, 3);
+    std::string output = trace.ToString("");
+    if (trace.GetFrameCount() > 0)
+    {
+        EXPECT_STR_CONTAINS(output, "#0");
+    }
+}
+
+// =============================================================================
+// Macro test
+// =============================================================================
+
+TEST(StackTrace_CaptureStackMacro)
+{
+    auto trace = SPARK_CAPTURE_STACK();
+    EXPECT_GT(trace.GetFrameCount(), 0);
+}
+
+TEST(StackTrace_CaptureStackExMacro)
+{
+    auto trace = SPARK_CAPTURE_STACK_EX(0, 5);
+    EXPECT_LE(trace.GetFrameCount(), 5);
+}

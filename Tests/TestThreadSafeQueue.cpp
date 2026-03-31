@@ -131,3 +131,116 @@ TEST(ThreadSafeQueue_ConcurrentPushPop)
 
     EXPECT_TRUE(queue.IsEmpty());
 }
+
+// =============================================================================
+// PopAll on empty queue
+// =============================================================================
+
+TEST(ThreadSafeQueue_PopAllEmpty)
+{
+    Spark::ThreadSafeQueue<int> queue;
+    std::vector<int> batch;
+    queue.PopAll(batch);
+    EXPECT_TRUE(batch.empty());
+}
+
+// =============================================================================
+// PopAll appends to existing vector
+// =============================================================================
+
+TEST(ThreadSafeQueue_PopAllAppends)
+{
+    Spark::ThreadSafeQueue<int> queue;
+    queue.TryPush(1);
+    queue.TryPush(2);
+
+    std::vector<int> batch = {99};
+    queue.PopAll(batch);
+    EXPECT_EQ(batch.size(), 3u);
+    EXPECT_EQ(batch[0], 99);
+    EXPECT_EQ(batch[1], 1);
+    EXPECT_EQ(batch[2], 2);
+}
+
+// =============================================================================
+// ForcePush on unbounded queue
+// =============================================================================
+
+TEST(ThreadSafeQueue_ForcePushUnbounded)
+{
+    Spark::ThreadSafeQueue<int> queue; // maxSize=0 = unbounded
+    for (int i = 0; i < 100; ++i)
+        queue.ForcePush(i);
+    EXPECT_EQ(queue.Size(), 100u);
+}
+
+// =============================================================================
+// Clear on empty queue
+// =============================================================================
+
+TEST(ThreadSafeQueue_ClearEmpty)
+{
+    Spark::ThreadSafeQueue<int> queue;
+    queue.Clear();
+    EXPECT_TRUE(queue.IsEmpty());
+}
+
+// =============================================================================
+// Bounded capacity exact limit
+// =============================================================================
+
+TEST(ThreadSafeQueue_BoundedExactCapacity)
+{
+    Spark::ThreadSafeQueue<int> queue(1);
+    EXPECT_TRUE(queue.TryPush(1));
+    EXPECT_FALSE(queue.TryPush(2)); // at capacity
+    EXPECT_EQ(queue.Size(), 1u);
+
+    int val;
+    EXPECT_TRUE(queue.TryPop(val));
+    EXPECT_EQ(val, 1);
+    EXPECT_TRUE(queue.TryPush(3)); // now has room
+}
+
+// =============================================================================
+// Move-only types
+// =============================================================================
+
+TEST(ThreadSafeQueue_MoveOnlyType)
+{
+    Spark::ThreadSafeQueue<std::unique_ptr<int>> queue;
+    queue.TryPush(std::make_unique<int>(42));
+    EXPECT_EQ(queue.Size(), 1u);
+
+    std::unique_ptr<int> val;
+    EXPECT_TRUE(queue.TryPop(val));
+    EXPECT_TRUE(val != nullptr);
+    EXPECT_EQ(*val, 42);
+}
+
+// =============================================================================
+// Multiple concurrent producers
+// =============================================================================
+
+TEST(ThreadSafeQueue_MultiProducer)
+{
+    Spark::ThreadSafeQueue<int> queue;
+    constexpr int THREADS = 4;
+    constexpr int PER_THREAD = 250;
+
+    std::vector<std::thread> producers;
+    for (int t = 0; t < THREADS; ++t)
+    {
+        producers.emplace_back(
+            [&queue, t]()
+            {
+                for (int i = 0; i < PER_THREAD; ++i)
+                    queue.ForcePush(t * PER_THREAD + i);
+            });
+    }
+
+    for (auto& t : producers)
+        t.join();
+
+    EXPECT_EQ(queue.Size(), static_cast<size_t>(THREADS * PER_THREAD));
+}

@@ -370,3 +370,110 @@ TEST(MemDbg_PrintLeakReportReturnsCount)
     leakCount = md.PrintLeakReport();
     EXPECT_EQ(leakCount, static_cast<size_t>(0));
 }
+
+// =============================================================================
+// PrintSummary
+// =============================================================================
+
+TEST(MemDbg_PrintSummaryDoesNotCrash)
+{
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+
+    int a = 0, b = 0;
+    md.RecordAlloc(&a, 100, "Test");
+    md.RecordAlloc(&b, 200, "Test2");
+    md.RecordFree(&a);
+
+    EXPECT_NO_THROW(md.PrintSummary());
+
+    md.RecordFree(&b);
+}
+
+// =============================================================================
+// Call-site Information in Leaks
+// =============================================================================
+
+TEST(MemDbg_LeakEntryHasLocation)
+{
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+
+    int dummy = 0;
+    md.RecordAlloc(&dummy, 256, "Shader", "ShaderCompiler.cpp", 99, "CompileShader");
+
+    auto leaks = md.GetLeaks();
+    EXPECT_EQ(leaks.size(), static_cast<size_t>(1));
+    if (!leaks.empty())
+    {
+        EXPECT_STR_CONTAINS(leaks[0].location, "ShaderCompiler.cpp");
+        EXPECT_STR_CONTAINS(leaks[0].location, "99");
+        EXPECT_STR_CONTAINS(leaks[0].location, "CompileShader");
+        EXPECT_EQ(leaks[0].category, std::string("Shader"));
+    }
+
+    md.RecordFree(&dummy);
+}
+
+// =============================================================================
+// Allocation with Null File/Func
+// =============================================================================
+
+TEST(MemDbg_AllocNullFileFuncDefaults)
+{
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+
+    int dummy = 0;
+    md.RecordAlloc(&dummy, 64, nullptr, nullptr, 0, nullptr);
+
+    EXPECT_EQ(md.GetActiveAllocationCount(), static_cast<size_t>(1));
+
+    auto leaks = md.GetLeaks();
+    EXPECT_EQ(leaks.size(), static_cast<size_t>(1));
+    EXPECT_EQ(leaks[0].category, std::string("General"));
+
+    md.RecordFree(&dummy);
+}
+
+// =============================================================================
+// Hotspot LargestAllocation Tracking
+// =============================================================================
+
+TEST(MemDbg_HotSpotLargestAllocation)
+{
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+
+    int ptrs[3];
+    md.RecordAlloc(&ptrs[0], 100, "General", "alloc.cpp", 10, "Alloc");
+    md.RecordAlloc(&ptrs[1], 500, "General", "alloc.cpp", 10, "Alloc");
+    md.RecordAlloc(&ptrs[2], 250, "General", "alloc.cpp", 10, "Alloc");
+
+    auto hotspots = md.GetHotSpots(10);
+    EXPECT_GE(hotspots.size(), static_cast<size_t>(1));
+    EXPECT_EQ(hotspots[0].largestAllocation, static_cast<size_t>(500));
+    EXPECT_EQ(hotspots[0].totalBytes, static_cast<size_t>(850));
+
+    for (int i = 0; i < 3; ++i)
+        md.RecordFree(&ptrs[i]);
+}
+
+// =============================================================================
+// IsEnabled default
+// =============================================================================
+
+TEST(MemDbg_IsEnabledToggle)
+{
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+    EXPECT_TRUE(md.IsEnabled());
+    md.SetEnabled(false);
+    EXPECT_FALSE(md.IsEnabled());
+    md.SetEnabled(true);
+}

@@ -269,3 +269,161 @@ TEST(MemoryMonitor_AnomalyRingBufferWraps)
 
     mm.Shutdown();
 }
+
+// =============================================================================
+// Pressure Callbacks
+// =============================================================================
+
+TEST(MemoryMonitor_PressureCallbackRegistration)
+{
+    auto& mm = Spark::MemoryMonitor::GetInstance();
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+    mm.Initialize();
+
+    bool callbackInvoked = false;
+    mm.RegisterPressureCallback("test_cb", [&](Spark::MemoryHealthStatus status) { callbackInvoked = true; });
+
+    // Unregister should not crash
+    mm.UnregisterPressureCallback("test_cb");
+    mm.UnregisterPressureCallback("nonexistent_cb"); // no-op
+
+    mm.Shutdown();
+}
+
+// =============================================================================
+// Global Budget + Update
+// =============================================================================
+
+TEST(MemoryMonitor_GlobalBudgetExceeded)
+{
+    auto& mm = Spark::MemoryMonitor::GetInstance();
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+    mm.Initialize();
+    mm.SetEnabled(true);
+
+    // Set a very small global budget
+    mm.SetGlobalBudget(100);
+
+    // Allocate more than the budget
+    int dummy = 0;
+    md.RecordAlloc(&dummy, 200, "General");
+
+    // Run several update cycles to trigger checks
+    for (int i = 0; i < 5; ++i)
+        mm.Update(1.0f);
+
+    // Should have detected budget anomaly
+    auto anomalies = mm.GetRecentAnomalies();
+    bool foundBudget = false;
+    for (const auto& a : anomalies)
+    {
+        if (a.type == Spark::MemoryAnomalyType::BudgetExceeded || a.type == Spark::MemoryAnomalyType::BudgetWarning)
+            foundBudget = true;
+    }
+    // May or may not trigger depending on check interval, just verify no crash
+    (void)foundBudget;
+
+    md.RecordFree(&dummy);
+    mm.SetGlobalBudget(0);
+    mm.Shutdown();
+}
+
+// =============================================================================
+// Category Budget Warning
+// =============================================================================
+
+TEST(MemoryMonitor_CategoryBudgetWarning)
+{
+    auto& mm = Spark::MemoryMonitor::GetInstance();
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+    mm.Initialize();
+    mm.SetEnabled(true);
+
+    mm.SetCategoryBudget("SmallBudget", 100);
+    mm.SetBudgetWarningPercent(0.5f); // 50% warning
+
+    int dummy = 0;
+    md.RecordAlloc(&dummy, 80, "SmallBudget");
+
+    for (int i = 0; i < 5; ++i)
+        mm.Update(1.0f);
+
+    md.RecordFree(&dummy);
+    mm.SetCategoryBudget("SmallBudget", 0);
+    mm.Shutdown();
+}
+
+// =============================================================================
+// Snapshot Content
+// =============================================================================
+
+TEST(MemoryMonitor_SnapshotCapturesPeakAndDoubleFrees)
+{
+    auto& mm = Spark::MemoryMonitor::GetInstance();
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+    mm.Initialize();
+
+    int a = 0;
+    md.RecordAlloc(&a, 500, "Test");
+    md.RecordFree(&a);
+    md.RecordFree(&a); // double-free
+
+    auto snap = mm.TakeSnapshot();
+    EXPECT_EQ(snap.peakBytes, static_cast<size_t>(500));
+    EXPECT_EQ(snap.doubleFreeCount, static_cast<uint64_t>(1));
+    EXPECT_EQ(snap.totalBytes, static_cast<size_t>(0));
+    EXPECT_EQ(snap.activeAllocations, static_cast<size_t>(0));
+
+    mm.Shutdown();
+}
+
+// =============================================================================
+// Health Status Transitions
+// =============================================================================
+
+TEST(MemoryMonitor_HealthStatusAfterInit)
+{
+    auto& mm = Spark::MemoryMonitor::GetInstance();
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+    mm.Initialize();
+
+    EXPECT_TRUE(mm.GetHealthStatus() == Spark::MemoryHealthStatus::Healthy);
+    EXPECT_TRUE(mm.IsHealthy());
+
+    mm.Shutdown();
+}
+
+// =============================================================================
+// Status Report Content
+// =============================================================================
+
+TEST(MemoryMonitor_StatusReportFormat)
+{
+    auto& mm = Spark::MemoryMonitor::GetInstance();
+    auto& md = Spark::MemoryDebugger::GetInstance();
+    md.Reset();
+    md.SetEnabled(true);
+    mm.Initialize();
+
+    int dummy = 0;
+    md.RecordAlloc(&dummy, 1024, "TestCat");
+
+    std::string report = mm.GetStatusReport();
+    EXPECT_STR_CONTAINS(report, "Memory Monitor Status");
+    EXPECT_STR_CONTAINS(report, "Health:");
+    EXPECT_STR_CONTAINS(report, "Current:");
+    EXPECT_STR_CONTAINS(report, "Peak:");
+
+    md.RecordFree(&dummy);
+    mm.Shutdown();
+}

@@ -314,3 +314,139 @@ TEST(Profiler_Shutdown)
 
     EXPECT_NO_THROW(p.Shutdown());
 }
+
+// =============================================================================
+// Console Memory Report Content
+// =============================================================================
+
+TEST(Profiler_ConsoleMemoryReportContent)
+{
+    auto& p = Profiler::GetInstance();
+    p.SetEnabled(true);
+
+    p.RecordAllocation("TestMem", 2048);
+    p.RecordDeallocation("TestMem", 1024);
+
+    std::string report = p.Console_GetMemoryReport();
+    EXPECT_FALSE(report.empty());
+    // Should contain the category name
+    EXPECT_STR_CONTAINS(report, "TestMem");
+}
+
+// =============================================================================
+// Nested Sections
+// =============================================================================
+
+TEST(Profiler_NestedSections)
+{
+    auto& p = Profiler::GetInstance();
+    p.SetEnabled(true);
+
+    p.BeginSection("Outer", ProfileCategory::Render);
+    p.BeginSection("Inner", ProfileCategory::Render);
+    p.EndSection("Inner");
+    p.EndSection("Outer");
+
+    double outerTime = p.GetSectionTimeMs("Outer");
+    double innerTime = p.GetSectionTimeMs("Inner");
+    EXPECT_GE(outerTime, 0.0);
+    EXPECT_GE(innerTime, 0.0);
+}
+
+// =============================================================================
+// Disabled Profiler
+// =============================================================================
+
+TEST(Profiler_DisabledDoesNotRecord)
+{
+    auto& p = Profiler::GetInstance();
+    p.SetEnabled(false);
+
+    p.BeginSection("Disabled", ProfileCategory::Custom);
+    p.EndSection("Disabled");
+
+    // Re-enable to query
+    p.SetEnabled(true);
+}
+
+// =============================================================================
+// Console Report Content
+// =============================================================================
+
+TEST(Profiler_ConsoleReportContent)
+{
+    auto& p = Profiler::GetInstance();
+    p.SetEnabled(true);
+
+    p.BeginSection("ReportContent", ProfileCategory::GameLogic);
+    volatile int x = 0;
+    for (int i = 0; i < 1000; ++i)
+        x += i;
+    p.EndSection("ReportContent");
+
+    std::string report = p.Console_GetReport();
+    EXPECT_STR_CONTAINS(report, "ReportContent");
+}
+
+// =============================================================================
+// Frame History Access After Multiple Frames
+// =============================================================================
+
+TEST(Profiler_FrameHistoryAfterManyFrames)
+{
+    auto& p = Profiler::GetInstance();
+    p.SetEnabled(true);
+
+    for (int i = 0; i < 20; ++i)
+    {
+        p.BeginFrame();
+        volatile int x = 0;
+        for (int j = 0; j < 1000; ++j)
+            x += j;
+        p.EndFrame();
+    }
+
+    const auto& history = p.GetFrameHistory();
+    EXPECT_GT(history.avgTime, 0.0f);
+    EXPECT_GE(history.minTime, 0.0f);
+    EXPECT_GE(history.maxTime, history.minTime);
+}
+
+// =============================================================================
+// Multiple Category Timing
+// =============================================================================
+
+TEST(Profiler_MultipleCategoryTiming)
+{
+    auto& p = Profiler::GetInstance();
+    p.SetEnabled(true);
+
+    p.BeginSection("PhysicsWork", ProfileCategory::Physics);
+    p.EndSection("PhysicsWork");
+
+    p.BeginSection("AudioWork", ProfileCategory::Audio);
+    p.EndSection("AudioWork");
+
+    double physics = p.GetCategoryTimeMs(ProfileCategory::Physics);
+    double audio = p.GetCategoryTimeMs(ProfileCategory::Audio);
+    EXPECT_GE(physics, 0.0);
+    EXPECT_GE(audio, 0.0);
+}
+
+// =============================================================================
+// Console CSV Export
+// =============================================================================
+
+TEST(Profiler_ConsoleExportCSV)
+{
+    auto& p = Profiler::GetInstance();
+    p.SetEnabled(true);
+
+    p.BeginFrame();
+    p.BeginSection("CSVTest", ProfileCategory::Custom);
+    p.EndSection("CSVTest");
+    p.EndFrame();
+
+    std::string csvPath = "/tmp/spark_profiler_test.csv";
+    EXPECT_NO_THROW(p.Console_ExportCSV(csvPath));
+}

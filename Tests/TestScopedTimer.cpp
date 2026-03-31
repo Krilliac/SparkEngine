@@ -46,3 +46,61 @@ TEST(ScopedTimer_MeasuresTime)
     // Should have measured at least ~10ms (allow some OS scheduling variance)
     EXPECT_GT(measuredMs, 5.0f);
 }
+
+// =============================================================================
+// Default callback (no callback = printf)
+// =============================================================================
+
+TEST(ScopedTimer_DefaultCallback)
+{
+    // With no callback, ScopedTimer prints to stdout. Just verify no crash.
+    {
+        Spark::ScopedTimer timer("DefaultCb");
+        volatile int x = 0;
+        for (int i = 0; i < 100; ++i)
+            x += i;
+    }
+    // If we got here, no crash
+    EXPECT_TRUE(true);
+}
+
+// =============================================================================
+// Name is correctly passed
+// =============================================================================
+
+TEST(ScopedTimer_NamePassedCorrectly)
+{
+    std::string capturedName;
+    {
+        Spark::ScopedTimer timer("MyTimerName", [&](const char* name, float) { capturedName = name; });
+    }
+    EXPECT_EQ(capturedName, std::string("MyTimerName"));
+}
+
+// =============================================================================
+// ElapsedMs increases
+// =============================================================================
+
+TEST(ScopedTimer_ElapsedMsIncreases)
+{
+    Spark::ScopedTimer timer("Elapsed2", [](const char*, float) {});
+    float first = timer.ElapsedMs();
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    float second = timer.ElapsedMs();
+    EXPECT_GE(second, first);
+}
+
+// =============================================================================
+// SPARK_SCOPED_TIMER macro
+// =============================================================================
+
+TEST(ScopedTimer_MacroDoesNotCrash)
+{
+    {
+        SPARK_SCOPED_TIMER("MacroTest");
+        volatile int x = 0;
+        for (int i = 0; i < 100; ++i)
+            x += i;
+    }
+    EXPECT_TRUE(true);
+}

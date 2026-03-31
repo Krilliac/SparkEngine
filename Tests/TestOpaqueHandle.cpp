@@ -73,3 +73,85 @@ TEST(OpaqueHandle_DifferentTagTypesAreDistinct)
     EXPECT_TRUE(ah.IsValid());
     EXPECT_EQ(ph.Raw(), ah.Raw());
 }
+
+// =============================================================================
+// All Handle Aliases
+// =============================================================================
+
+TEST(OpaqueHandle_ParticleHandle)
+{
+    int dummy = 0;
+    Spark::ParticleHandle h(static_cast<void*>(&dummy));
+    EXPECT_TRUE(h.IsValid());
+    EXPECT_EQ(h.As<int>(), &dummy);
+    h = nullptr;
+    EXPECT_FALSE(h.IsValid());
+}
+
+TEST(OpaqueHandle_BehaviorTreeHandle)
+{
+    int dummy = 0;
+    Spark::BehaviorTreeHandle h(static_cast<void*>(&dummy));
+    EXPECT_TRUE(h.IsValid());
+    h.Reset();
+    EXPECT_FALSE(h.IsValid());
+}
+
+TEST(OpaqueHandle_NavQueryHandle)
+{
+    float dummy = 3.14f;
+    Spark::NavQueryHandle h(static_cast<void*>(&dummy));
+    EXPECT_TRUE(h.IsValid());
+    float* p = h.As<float>();
+    EXPECT_NE(p, nullptr);
+    EXPECT_NEAR(*p, 3.14f, 0.01f);
+}
+
+// =============================================================================
+// Default handle comparisons
+// =============================================================================
+
+TEST(OpaqueHandle_DefaultEquality)
+{
+    Spark::PhysicsHandle h1;
+    Spark::PhysicsHandle h2;
+    EXPECT_TRUE(h1 == h2);
+    EXPECT_FALSE(h1 != h2);
+}
+
+TEST(OpaqueHandle_ValidVsInvalid)
+{
+    int dummy = 0;
+    Spark::PhysicsHandle valid(static_cast<void*>(&dummy));
+    Spark::PhysicsHandle invalid;
+    EXPECT_TRUE(valid != invalid);
+    EXPECT_FALSE(valid == invalid);
+}
+
+// =============================================================================
+// Boolean conversion
+// =============================================================================
+
+TEST(OpaqueHandle_BoolConversion)
+{
+    Spark::AudioHandle h;
+    if (h)
+    {
+        EXPECT_TRUE(false); // Should not reach here
+    }
+    else
+    {
+        EXPECT_TRUE(true);
+    }
+
+    int dummy = 0;
+    Spark::AudioHandle h2(static_cast<void*>(&dummy));
+    if (h2)
+    {
+        EXPECT_TRUE(true);
+    }
+    else
+    {
+        EXPECT_TRUE(false);
+    }
+}
