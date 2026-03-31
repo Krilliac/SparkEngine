@@ -1,13 +1,15 @@
 # Code Quality Violations — Functions, Methods, and Conventions
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-03-31
 **Type:** Observation
-**Status:** Active
-**Severity:** High
+**Status:** Mostly Resolved
+**Severity:** Medium
 
 ## Description
 
 Comprehensive audit of CLAUDE.md hard limit violations beyond file/class size: oversized functions, private method limits, and naming conventions.
+
+**Progress (2026-03-31):** Down from 66 oversized functions to 9 remaining (86% reduction). RegisterDefaultCommands split into 3 focused functions. InspectorComponentRenderers.cpp split into 4 domain-specific files. MaterialSystem "duplicates" confirmed as wrapper+impl (not true duplicates). Remaining oversized functions are mostly clear linear code (data-driven arena creation, UI callbacks) that would lose readability if split further.
 
 ---
 

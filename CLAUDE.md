@@ -109,10 +109,8 @@ SparkEngine/Source/Engine/Loading/       — Loading screens and management
 SparkEngine/Source/Engine/Localization/  — Localization system
 SparkEngine/Source/Engine/Mobile/        — Mobile platform support
 SparkEngine/Source/Engine/Modding/       — Game modding support
-SparkEngine/Source/Engine/Procedural/    — (planned) Procedural generation — ENABLE_PROCEDURAL toggle exists but no implementation yet
 SparkEngine/Source/Engine/Replay/        — Record/playback system
 SparkEngine/Source/Engine/SaveSystem/    — Save/load persistence
-SparkEngine/Source/Engine/Stats/         — (planned) Performance telemetry — not yet implemented
 SparkEngine/Source/Engine/UI/            — UI system
 SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking (OpenXR-ready stub, wired in)
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
