@@ -548,6 +548,14 @@ float AssetCache::GetHitRatio() const
 #include <sys/stat.h>
 #include <tiny_obj_loader.h>
 
+#if SPARK_HAS_CGLTF
+#include <cgltf.h>
+#endif
+
+#if SPARK_HAS_STB_IMAGE
+#include <stb_image.h>
+#endif
+
 // ============================================================================
 // Asset implementations (Linux)
 // ============================================================================
@@ -561,6 +569,141 @@ HRESULT MeshAsset::Load(ID3D11Device* /*device*/)
     if (std::filesystem::exists(m_path))
     {
         m_metadata.fileSize = std::filesystem::file_size(m_path);
+
+        // Parse mesh format by extension
+        std::string ext = std::filesystem::path(m_path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+        if (ext == ".obj")
+        {
+            // OBJ parsing is handled by tinyobjloader via AssetPipeline::LoadOBJ
+            // For standalone MeshAsset loading, use a simple parse
+            tinyobj::attrib_t attrib;
+            std::vector<tinyobj::shape_t> shapes;
+            std::vector<tinyobj::material_t> materials;
+            std::string warn, err;
+            if (tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, m_path.c_str()))
+            {
+                m_meshData.vertices.clear();
+                m_meshData.indices.clear();
+                for (const auto& shape : shapes)
+                {
+                    for (const auto& index : shape.mesh.indices)
+                    {
+                        MeshAssetData::Vertex vertex{};
+                        if (index.vertex_index >= 0)
+                        {
+                            vertex.position = {attrib.vertices[3 * index.vertex_index + 0],
+                                               attrib.vertices[3 * index.vertex_index + 1],
+                                               attrib.vertices[3 * index.vertex_index + 2]};
+                        }
+                        if (index.normal_index >= 0 && !attrib.normals.empty())
+                        {
+                            vertex.normal = {attrib.normals[3 * index.normal_index + 0],
+                                             attrib.normals[3 * index.normal_index + 1],
+                                             attrib.normals[3 * index.normal_index + 2]};
+                        }
+                        if (index.texcoord_index >= 0 && !attrib.texcoords.empty())
+                        {
+                            vertex.texCoord0 = {attrib.texcoords[2 * index.texcoord_index + 0],
+                                                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
+                        }
+                        vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                        m_meshData.indices.push_back(static_cast<uint32_t>(m_meshData.vertices.size()));
+                        m_meshData.vertices.push_back(vertex);
+                    }
+                }
+            }
+        }
+#if SPARK_HAS_CGLTF
+        else if (ext == ".gltf" || ext == ".glb")
+        {
+            // glTF loading via cgltf
+            cgltf_options options = {};
+            cgltf_data* data = nullptr;
+            if (cgltf_parse_file(&options, m_path.c_str(), &data) == cgltf_result_success)
+            {
+                cgltf_load_buffers(&options, data, m_path.c_str());
+                m_meshData.vertices.clear();
+                m_meshData.indices.clear();
+
+                for (cgltf_size mi = 0; mi < data->meshes_count; ++mi)
+                {
+                    const cgltf_mesh& mesh = data->meshes[mi];
+                    for (cgltf_size pi = 0; pi < mesh.primitives_count; ++pi)
+                    {
+                        const cgltf_primitive& prim = mesh.primitives[pi];
+                        if (prim.type != cgltf_primitive_type_triangles)
+                            continue;
+
+                        uint32_t vertexOffset = static_cast<uint32_t>(m_meshData.vertices.size());
+                        const cgltf_accessor* posAccessor = nullptr;
+                        const cgltf_accessor* normAccessor = nullptr;
+                        const cgltf_accessor* texAccessor = nullptr;
+
+                        for (cgltf_size ai = 0; ai < prim.attributes_count; ++ai)
+                        {
+                            if (prim.attributes[ai].type == cgltf_attribute_type_position)
+                                posAccessor = prim.attributes[ai].data;
+                            else if (prim.attributes[ai].type == cgltf_attribute_type_normal)
+                                normAccessor = prim.attributes[ai].data;
+                            else if (prim.attributes[ai].type == cgltf_attribute_type_texcoord)
+                                texAccessor = prim.attributes[ai].data;
+                        }
+
+                        if (!posAccessor)
+                            continue;
+
+                        cgltf_size vertCount = posAccessor->count;
+                        std::vector<float> positions(vertCount * 3);
+                        cgltf_accessor_unpack_floats(posAccessor, positions.data(), vertCount * 3);
+
+                        std::vector<float> normals;
+                        if (normAccessor)
+                        {
+                            normals.resize(vertCount * 3);
+                            cgltf_accessor_unpack_floats(normAccessor, normals.data(), vertCount * 3);
+                        }
+
+                        std::vector<float> texcoords;
+                        if (texAccessor)
+                        {
+                            texcoords.resize(vertCount * 2);
+                            cgltf_accessor_unpack_floats(texAccessor, texcoords.data(), vertCount * 2);
+                        }
+
+                        for (cgltf_size vi = 0; vi < vertCount; ++vi)
+                        {
+                            MeshAssetData::Vertex vertex{};
+                            vertex.position = {positions[vi * 3], positions[vi * 3 + 1], positions[vi * 3 + 2]};
+                            if (!normals.empty())
+                                vertex.normal = {normals[vi * 3], normals[vi * 3 + 1], normals[vi * 3 + 2]};
+                            if (!texcoords.empty())
+                                vertex.texCoord0 = {texcoords[vi * 2], texcoords[vi * 2 + 1]};
+                            vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                            m_meshData.vertices.push_back(vertex);
+                        }
+
+                        if (prim.indices)
+                        {
+                            for (cgltf_size ii = 0; ii < prim.indices->count; ++ii)
+                            {
+                                cgltf_uint idx = 0;
+                                cgltf_accessor_read_uint(prim.indices, ii, &idx, 1);
+                                m_meshData.indices.push_back(vertexOffset + idx);
+                            }
+                        }
+                        else
+                        {
+                            for (uint32_t vi = 0; vi < static_cast<uint32_t>(vertCount); ++vi)
+                                m_meshData.indices.push_back(vertexOffset + vi);
+                        }
+                    }
+                }
+                cgltf_free(data);
+            }
+        }
+#endif // SPARK_HAS_CGLTF
     }
     m_metadata.memorySize = GetMemoryUsage();
     m_loaded = true;

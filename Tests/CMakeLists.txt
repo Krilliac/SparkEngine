@@ -171,6 +171,7 @@ add_executable(SparkTests
     TestScheduledCallback.cpp
     TestFixtures.cpp
     TestJsonUtils.cpp
+    TestThirdPartyIntegration.cpp
     TestNetworkStress.cpp
     TestNetworkMMOIntegration.cpp
     TestAnimationStress.cpp

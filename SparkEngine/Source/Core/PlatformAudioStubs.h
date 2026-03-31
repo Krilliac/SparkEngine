@@ -14,6 +14,25 @@
 
 #include <cstdio>
 
+// --- miniaudio forward declarations (needed by XAudio2 stub bodies) ---
+#if SPARK_HAS_MINIAUDIO
+#include <miniaudio.h>
+#include <cstring>
+
+struct MiniaudioState
+{
+    ma_engine engine;
+    bool initialized = false;
+    float masterVolume = 1.0f;
+};
+
+inline MiniaudioState& GetMiniaudioState()
+{
+    static MiniaudioState state;
+    return state;
+}
+#endif // SPARK_HAS_MINIAUDIO
+
 // --- XAudio2 stubs ---
 #ifndef XAUDIO2_DEFAULT_PROCESSOR
 #define XAUDIO2_DEFAULT_PROCESSOR 1
@@ -88,7 +107,20 @@ struct IXAudio2SourceVoice
 struct IXAudio2MasteringVoice
 {
     virtual ~IXAudio2MasteringVoice() = default;
-    long SetVolume(float) { return 0; }
+    long SetVolume(float volume)
+    {
+#if SPARK_HAS_MINIAUDIO
+        auto& state = GetMiniaudioState();
+        if (state.initialized)
+        {
+            state.masterVolume = volume;
+            ma_engine_set_volume(&state.engine, volume);
+        }
+#else
+        (void)volume;
+#endif
+        return 0;
+    }
     void GetVoiceDetails(XAUDIO2_VOICE_DETAILS* d)
     {
         if (d)
@@ -99,7 +131,17 @@ struct IXAudio2MasteringVoice
             d->ActiveFlags = 0;
         }
     }
-    void DestroyVoice() {}
+    void DestroyVoice()
+    {
+#if SPARK_HAS_MINIAUDIO
+        auto& state = GetMiniaudioState();
+        if (state.initialized)
+        {
+            ma_engine_uninit(&state.engine);
+            state.initialized = false;
+        }
+#endif
+    }
     void Release() {}
 };
 
@@ -139,8 +181,39 @@ struct IXAudio2
     void Release() {}
 };
 
-// Wine wraps XAudio2 over ALSA/PulseAudio on Linux. SparkEngine uses no-op
-// stubs for now — a native SDL2 audio backend is planned but not yet implemented.
+#if SPARK_HAS_MINIAUDIO
+// miniaudio-backed XAudio2 stubs: real audio playback on Linux/macOS via
+// miniaudio (PulseAudio/ALSA/CoreAudio/WASAPI). The XAudio2 API surface is
+// preserved so AudioEngine.cpp compiles without #ifdef changes.
+
+inline long XAudio2Create(IXAudio2** pp, uint32_t = 0, uint32_t = XAUDIO2_DEFAULT_PROCESSOR)
+{
+    auto& state = GetMiniaudioState();
+    if (!state.initialized)
+    {
+        ma_engine_config config = ma_engine_config_init();
+        config.channels = 2;
+        config.sampleRate = 44100;
+        ma_result result = ma_engine_init(&config, &state.engine);
+        if (result == MA_SUCCESS)
+        {
+            state.initialized = true;
+            fprintf(stderr, "[SparkEngine] miniaudio initialized (cross-platform audio active)\n");
+        }
+        else
+        {
+            fprintf(stderr, "[SparkEngine] Warning: miniaudio init failed (%d). Audio is disabled.\n", result);
+        }
+    }
+
+    static IXAudio2 stubEngine;
+    if (pp)
+        *pp = &stubEngine;
+    return 0; // S_OK
+}
+
+#else
+// No audio backend available — pure no-op stubs
 inline long XAudio2Create(IXAudio2** pp, uint32_t = 0, uint32_t = XAUDIO2_DEFAULT_PROCESSOR)
 {
     static bool warned = false;
@@ -154,6 +227,7 @@ inline long XAudio2Create(IXAudio2** pp, uint32_t = 0, uint32_t = XAUDIO2_DEFAUL
         *pp = &stubEngine;
     return 0; // S_OK — succeeds silently so callers don't crash
 }
+#endif // SPARK_HAS_MINIAUDIO
 
 // --- XInput stubs ---
 struct XINPUT_GAMEPAD

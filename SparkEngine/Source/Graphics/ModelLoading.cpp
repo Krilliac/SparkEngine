@@ -75,6 +75,10 @@ std::shared_ptr<AudioAsset> AssetPipeline::LoadAudioFromFile(const std::string& 
 #include <unordered_map>
 #include <tiny_obj_loader.h>
 
+#if SPARK_HAS_CGLTF
+#include <cgltf.h>
+#endif
+
 // ============================================================================
 // FILE-TO-ASSET CREATION HELPERS (Linux)
 // ============================================================================
@@ -219,11 +223,143 @@ HRESULT AssetPipeline::LoadFBX(const std::string& path, MeshAssetData& /*meshDat
     return E_NOTIMPL;
 }
 
-HRESULT AssetPipeline::LoadGLTF(const std::string& path, MeshAssetData& /*meshData*/)
+HRESULT AssetPipeline::LoadGLTF(const std::string& path, MeshAssetData& meshData)
 {
-    // glTF loading not implemented on Linux - requires external library
+#if SPARK_HAS_CGLTF
+    cgltf_options options = {};
+    cgltf_data* data = nullptr;
+
+    cgltf_result result = cgltf_parse_file(&options, path.c_str(), &data);
+    if (result != cgltf_result_success)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "glTF parse failed: %s (error %d)", path.c_str(),
+                        static_cast<int>(result));
+        return E_FAIL;
+    }
+
+    result = cgltf_load_buffers(&options, data, path.c_str());
+    if (result != cgltf_result_success)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "glTF buffer load failed: %s", path.c_str());
+        cgltf_free(data);
+        return E_FAIL;
+    }
+
+    meshData.vertices.clear();
+    meshData.indices.clear();
+    meshData.submeshes.clear();
+
+    XMFLOAT3 bboxMin = {FLT_MAX, FLT_MAX, FLT_MAX};
+    XMFLOAT3 bboxMax = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+    for (cgltf_size mi = 0; mi < data->meshes_count; ++mi)
+    {
+        const cgltf_mesh& mesh = data->meshes[mi];
+        for (cgltf_size pi = 0; pi < mesh.primitives_count; ++pi)
+        {
+            const cgltf_primitive& prim = mesh.primitives[pi];
+            if (prim.type != cgltf_primitive_type_triangles)
+                continue;
+
+            meshData.submeshes.push_back(static_cast<uint32_t>(meshData.indices.size()));
+            uint32_t vertexOffset = static_cast<uint32_t>(meshData.vertices.size());
+
+            // Find position/normal/texcoord accessors
+            const cgltf_accessor* posAccessor = nullptr;
+            const cgltf_accessor* normAccessor = nullptr;
+            const cgltf_accessor* texAccessor = nullptr;
+
+            for (cgltf_size ai = 0; ai < prim.attributes_count; ++ai)
+            {
+                if (prim.attributes[ai].type == cgltf_attribute_type_position)
+                    posAccessor = prim.attributes[ai].data;
+                else if (prim.attributes[ai].type == cgltf_attribute_type_normal)
+                    normAccessor = prim.attributes[ai].data;
+                else if (prim.attributes[ai].type == cgltf_attribute_type_texcoord && prim.attributes[ai].index == 0)
+                    texAccessor = prim.attributes[ai].data;
+            }
+
+            if (!posAccessor)
+                continue;
+
+            // Read vertices
+            cgltf_size vertCount = posAccessor->count;
+            std::vector<float> positions(vertCount * 3);
+            cgltf_accessor_unpack_floats(posAccessor, positions.data(), vertCount * 3);
+
+            std::vector<float> normals;
+            if (normAccessor)
+            {
+                normals.resize(vertCount * 3);
+                cgltf_accessor_unpack_floats(normAccessor, normals.data(), vertCount * 3);
+            }
+
+            std::vector<float> texcoords;
+            if (texAccessor)
+            {
+                texcoords.resize(vertCount * 2);
+                cgltf_accessor_unpack_floats(texAccessor, texcoords.data(), vertCount * 2);
+            }
+
+            for (cgltf_size vi = 0; vi < vertCount; ++vi)
+            {
+                MeshAssetData::Vertex vertex{};
+                vertex.position = {positions[vi * 3 + 0], positions[vi * 3 + 1], positions[vi * 3 + 2]};
+
+                bboxMin.x = std::min(bboxMin.x, vertex.position.x);
+                bboxMin.y = std::min(bboxMin.y, vertex.position.y);
+                bboxMin.z = std::min(bboxMin.z, vertex.position.z);
+                bboxMax.x = std::max(bboxMax.x, vertex.position.x);
+                bboxMax.y = std::max(bboxMax.y, vertex.position.y);
+                bboxMax.z = std::max(bboxMax.z, vertex.position.z);
+
+                if (!normals.empty())
+                    vertex.normal = {normals[vi * 3 + 0], normals[vi * 3 + 1], normals[vi * 3 + 2]};
+                if (!texcoords.empty())
+                    vertex.texCoord0 = {texcoords[vi * 2 + 0], texcoords[vi * 2 + 1]};
+                vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+                meshData.vertices.push_back(vertex);
+            }
+
+            // Read indices
+            if (prim.indices)
+            {
+                for (cgltf_size ii = 0; ii < prim.indices->count; ++ii)
+                {
+                    cgltf_uint idx = 0;
+                    cgltf_accessor_read_uint(prim.indices, ii, &idx, 1);
+                    meshData.indices.push_back(vertexOffset + idx);
+                }
+            }
+            else
+            {
+                // No index buffer — generate sequential indices
+                for (uint32_t vi = 0; vi < static_cast<uint32_t>(vertCount); ++vi)
+                    meshData.indices.push_back(vertexOffset + vi);
+            }
+        }
+    }
+
+    meshData.boundingBoxMin = bboxMin;
+    meshData.boundingBoxMax = bboxMax;
+    meshData.boundingSphereCenter = {(bboxMin.x + bboxMax.x) * 0.5f, (bboxMin.y + bboxMax.y) * 0.5f,
+                                     (bboxMin.z + bboxMax.z) * 0.5f};
+    float dx = bboxMax.x - bboxMin.x;
+    float dy = bboxMax.y - bboxMin.y;
+    float dz = bboxMax.z - bboxMin.z;
+    meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded glTF: %s (%zu verts, %zu tris, %zu submeshes)", path.c_str(),
+                   meshData.vertices.size(), meshData.indices.size() / 3, meshData.submeshes.size());
+
+    cgltf_free(data);
+    return S_OK;
+#else
     (void)path;
+    (void)meshData;
     return E_NOTIMPL;
+#endif
 }
 
 #endif // SPARK_PLATFORM_WINDOWS

@@ -39,6 +39,10 @@
 #include <variant>
 #include <vector>
 
+#if SPARK_HAS_NLOHMANN_JSON
+#include <nlohmann_json.h>
+#endif
+
 namespace Spark::Json
 {
 
@@ -637,13 +641,116 @@ namespace Spark::Json
     // Public API: Parse / Stringify
     // =========================================================================
 
+#if SPARK_HAS_NLOHMANN_JSON
+    // =========================================================================
+    // nlohmann/json interop: convert between nlohmann::json and Spark::Json::Value
+    // =========================================================================
+
+    namespace Detail
+    {
+        inline Value FromNlohmann(const nlohmann::json& j)
+        {
+            if (j.is_null())
+                return Value();
+            if (j.is_boolean())
+                return Value(j.get<bool>());
+            if (j.is_number_integer())
+                return Value(static_cast<double>(j.get<int64_t>()));
+            if (j.is_number_unsigned())
+                return Value(static_cast<double>(j.get<uint64_t>()));
+            if (j.is_number_float())
+                return Value(j.get<double>());
+            if (j.is_string())
+                return Value(j.get<std::string>());
+            if (j.is_array())
+            {
+                auto arr = Value::MakeArray();
+                for (size_t i = 0; i < j.size(); ++i)
+                    arr.PushBack(FromNlohmann(j[i]));
+                return arr;
+            }
+            if (j.is_object())
+            {
+                auto obj = Value::MakeObject();
+                for (const auto& item : j.items())
+                    obj[item.key] = FromNlohmann(item.value);
+                return obj;
+            }
+            return Value();
+        }
+
+        inline nlohmann::json ToNlohmann(const Value& val)
+        {
+            switch (val.GetType())
+            {
+            case Type::Null:
+                return nullptr;
+            case Type::Bool:
+                return val.AsBool();
+            case Type::Number:
+                return val.AsNumber();
+            case Type::String:
+                return val.AsString();
+            case Type::Array:
+            {
+                auto arr = nlohmann::json::array();
+                for (size_t i = 0; i < val.Size(); ++i)
+                    arr.push_back(ToNlohmann(val[i]));
+                return arr;
+            }
+            case Type::Object:
+            {
+                auto obj = nlohmann::json::object();
+                for (const auto& key : val.GetKeys())
+                    obj[key] = ToNlohmann(val[key]);
+                return obj;
+            }
+            }
+            return nullptr;
+        }
+    } // namespace Detail
+
+    /**
+     * @brief Convert a Spark::Json::Value to nlohmann::json
+     */
+    [[nodiscard]] inline nlohmann::json ToNlohmann(const Value& val)
+    {
+        return Detail::ToNlohmann(val);
+    }
+
+    /**
+     * @brief Convert a nlohmann::json to Spark::Json::Value
+     */
+    [[nodiscard]] inline Value FromNlohmann(const nlohmann::json& j)
+    {
+        return Detail::FromNlohmann(j);
+    }
+#endif // SPARK_HAS_NLOHMANN_JSON
+
     /**
      * @brief Parse a JSON string into a Value. Returns Null on malformed input.
+     *
+     * When SPARK_HAS_NLOHMANN_JSON is defined, uses nlohmann/json for parsing
+     * (more robust, handles edge cases, Unicode escapes). Otherwise falls back
+     * to the built-in recursive-descent parser.
      */
     [[nodiscard]] inline Value Parse(std::string_view json)
     {
+#if SPARK_HAS_NLOHMANN_JSON
+        try
+        {
+            auto j = nlohmann::json::parse(json);
+            return Detail::FromNlohmann(j);
+        }
+        catch (...)
+        {
+            // nlohmann parse failed — return null (matches existing behavior)
+            return {};
+        }
+#else
         Detail::Parser parser(json);
         return parser.Parse();
+#endif
     }
 
     namespace Detail

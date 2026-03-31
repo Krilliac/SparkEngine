@@ -61,8 +61,9 @@ namespace SparkEditor
                 if (posChanged || rotChanged || scaleChanged)
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Editor,
-                                    "Inspector: transform changed for object %u (pos=%d rot=%d scale=%d)",
-                                    m_inspectedObjectID, posChanged, rotChanged, scaleChanged);
+                                    "Inspector: transform changed for object %llu (pos=%d rot=%d scale=%d)",
+                                    static_cast<unsigned long long>(m_inspectedObjectID), posChanged, rotChanged,
+                                    scaleChanged);
                     XMFLOAT3 newPos = {position[0], position[1], position[2]};
                     XMFLOAT3 newScale = {scale[0], scale[1], scale[2]};
 
@@ -126,8 +127,8 @@ namespace SparkEditor
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing MeshRenderer from object %u",
-                               m_inspectedObjectID);
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing MeshRenderer from object %llu",
+                               static_cast<unsigned long long>(m_inspectedObjectID));
                 RemoveComponent(ComponentType::MESH_RENDERER);
             }
             ImGui::EndPopup();
@@ -197,8 +198,8 @@ namespace SparkEditor
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing Light from object %u",
-                               m_inspectedObjectID);
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing Light from object %llu",
+                               static_cast<unsigned long long>(m_inspectedObjectID));
                 RemoveComponent(ComponentType::LIGHT);
             }
             ImGui::EndPopup();
@@ -345,8 +346,8 @@ namespace SparkEditor
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing RigidBody from object %u",
-                               m_inspectedObjectID);
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing RigidBody from object %llu",
+                               static_cast<unsigned long long>(m_inspectedObjectID));
                 RemoveComponent(ComponentType::RIGID_BODY);
             }
             ImGui::EndPopup();
