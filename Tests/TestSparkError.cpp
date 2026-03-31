@@ -191,16 +191,14 @@ TEST(SparkError_CatchAllNoException)
 TEST(SparkError_CatchAllRetReturnsDefault)
 {
     SuppressStderr guard;
-    int result = SPARK_CATCH_ALL_RET("Test", -1, {
-        throw std::runtime_error("error");
-        return 42;
-    });
+    int result = SPARK_CATCH_ALL_RET("Test", -1, { throw std::runtime_error("error"); });
     EXPECT_EQ(result, -1);
 }
 
 TEST(SparkError_CatchAllRetReturnsNormal)
 {
-    int result = SPARK_CATCH_ALL_RET("Test", -1, { return 42; });
+    int val = 42;
+    int result = SPARK_CATCH_ALL_RET("Test", -1, { return val; });
     EXPECT_EQ(result, 42);
 }
 

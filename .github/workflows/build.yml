@@ -326,7 +326,18 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
+      shell: bash
+      run: |
+        # Run the test executable directly first to capture per-test output
+        if ./build/bin/${{ matrix.config }}/SparkTests.exe 2>&1 | tee test-results.log; then
+          echo "All tests passed"
+        else
+          echo "::error::Test executable returned non-zero. Last 100 lines:"
+          tail -100 test-results.log
+          # Also run via CTest for standard reporting
+          ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tail -20 || true
+          exit 1
+        fi
 
     - name: Extract error summary
       if: failure()

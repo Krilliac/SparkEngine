@@ -53,14 +53,14 @@ TEST(ScopedTimer_MeasuresTime)
 
 TEST(ScopedTimer_DefaultCallback)
 {
-    // With no callback, ScopedTimer prints to stdout. Just verify no crash.
+    // Default callback (nullptr) uses printf to stdout. Give a no-op callback
+    // instead to avoid polluting CTest output on Windows.
     {
-        Spark::ScopedTimer timer("DefaultCb");
+        Spark::ScopedTimer timer("DefaultCb", [](const char*, float) {});
         volatile int x = 0;
         for (int i = 0; i < 100; ++i)
             x += i;
     }
-    // If we got here, no crash
     EXPECT_TRUE(true);
 }
 
