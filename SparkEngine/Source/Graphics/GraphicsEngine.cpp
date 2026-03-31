@@ -820,7 +820,7 @@ void GraphicsEngine::EndFrame()
 // ECS MESH DRAW SUBMISSION
 // ============================================================================
 
-void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const std::string& materialPath,
+void GraphicsEngine::SubmitMeshForRendering(std::string_view meshPath, std::string_view materialPath,
                                             const DirectX::XMMATRIX& worldMatrix, bool castShadows)
 {
     SPARK_WARN_IF(Spark::LogCategory::Graphics, meshPath.empty(), "SubmitMeshForRendering: empty meshPath");
@@ -830,28 +830,32 @@ void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const s
     cmd.materialPath = materialPath;
     XMStoreFloat4x4(&cmd.worldMatrix, worldMatrix);
     cmd.castShadows = castShadows;
+
+    // Spinlock: lower overhead than std::mutex for short critical sections.
+    // Draw submission is called per-entity but holds the lock only for a push_back.
+    while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
     {
-        std::lock_guard<std::mutex> lock(m_drawListMutex);
-        m_drawList.push_back(std::move(cmd));
     }
+    m_drawList.push_back(cmd);
+    m_drawListSpinlock.clear(std::memory_order_release);
 }
 
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {
-    // Move draw list under lock so Submit calls don't block during processing.
-    // Using move + clear preserves the source vector's capacity for next frame,
-    // avoiding repeated heap allocations.
+    // Swap the draw list out under the spinlock — minimal hold time.
     std::vector<MeshDrawCommand> localDrawList;
+    while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
     {
-        std::lock_guard<std::mutex> lock(m_drawListMutex);
-        localDrawList = std::move(m_drawList);
-        m_drawList.clear();
-        // Reserve capacity based on last frame's draw count to avoid mid-frame reallocs
-        if (m_drawList.capacity() == 0 && !localDrawList.empty())
-        {
-            m_drawList.reserve(localDrawList.size());
-        }
     }
+    localDrawList = std::move(m_drawList);
+    m_drawList.clear();
+    // Pre-reserve capacity for next frame based on this frame's count
+    if (m_drawList.capacity() == 0 && !localDrawList.empty())
+    {
+        m_drawList.reserve(localDrawList.size());
+    }
+    m_drawListSpinlock.clear(std::memory_order_release);
+
     if (localDrawList.empty())
         return;
 
@@ -868,8 +872,8 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
         // Bind mesh and material through the asset pipeline, then draw
         if (m_assetPipeline)
         {
-            m_assetPipeline->BindMesh(cmd.meshPath);
-            m_assetPipeline->BindMaterial(cmd.materialPath);
+            m_assetPipeline->BindMesh(std::string(cmd.meshPath));
+            m_assetPipeline->BindMaterial(std::string(cmd.materialPath));
             m_assetPipeline->DrawBoundMesh();
         }
 
@@ -1400,50 +1404,8 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     cmd->EndEvent();
 }
 
-// ============================================================================
-// ECS Draw Submission
-// ============================================================================
-
-void GraphicsEngine::SubmitMeshForRendering(const std::string& meshPath, const std::string& materialPath,
-                                            const DirectX::XMMATRIX& worldMatrix, bool castShadows)
-{
-    MeshDrawCommand cmd;
-    cmd.meshPath = meshPath;
-    cmd.materialPath = materialPath;
-    DirectX::XMStoreFloat4x4(&cmd.worldMatrix, worldMatrix);
-    cmd.castShadows = castShadows;
-    {
-        std::lock_guard<std::mutex> lock(m_drawListMutex);
-        m_drawList.push_back(std::move(cmd));
-    }
-}
-
-void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
-{
-    std::vector<MeshDrawCommand> localDrawList;
-    {
-        std::lock_guard<std::mutex> lock(m_drawListMutex);
-        localDrawList = std::move(m_drawList);
-        m_drawList.clear();
-        if (m_drawList.capacity() == 0 && !localDrawList.empty())
-        {
-            m_drawList.reserve(localDrawList.size());
-        }
-    }
-    if (localDrawList.empty())
-        return;
-
-    for (const auto& cmd : localDrawList)
-    {
-        if (m_assetPipeline)
-        {
-            m_assetPipeline->BindMesh(cmd.meshPath);
-            m_assetPipeline->BindMaterial(cmd.materialPath);
-            m_assetPipeline->DrawBoundMesh();
-        }
-        m_statistics.drawCalls++;
-    }
-}
+// NOTE: SubmitMeshForRendering and ProcessDrawList are defined above in the
+// "ECS MESH DRAW SUBMISSION" section (single definition, spinlock-based).
 
 // ============================================================================
 // System Accessors

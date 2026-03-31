@@ -166,7 +166,9 @@ namespace Spark
             }
 
             int batchSize = std::max(minBatchSize, totalItems / (numWorkers + 1));
+            int batchCount = (totalItems + batchSize - 1) / batchSize;
             std::vector<std::future<void>> futures;
+            futures.reserve(batchCount);
 
             for (int batchStart = begin; batchStart < end; batchStart += batchSize)
             {

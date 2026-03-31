@@ -245,23 +245,39 @@ namespace Spark::Graphics
             m_context->CSSetUnorderedAccessViews(0, 2, nullUAVs, nullptr);
         }
 
-        // Read back visible count for statistics
+        // Read back previous frame's visibility data (1-frame latency avoids CPU-GPU stall).
+        // We read the data that was copied to staging at the END of the previous frame,
+        // and kick off a new async copy for this frame's results.
         if (m_visibilityStaging)
         {
-            m_context->CopyResource(m_visibilityStaging.Get(), m_visibilityBuffer.Get());
-            D3D11_MAPPED_SUBRESOURCE rb = {};
-            if (SUCCEEDED(m_context->Map(m_visibilityStaging.Get(), 0, D3D11_MAP_READ, 0, &rb)) && rb.pData)
+            // Try to read previously-staged data without blocking (DONOTFLUSH).
+            // On the very first frame m_readbackPending is false, so we skip the read.
+            if (m_readbackPending)
             {
-                const auto* vis = static_cast<const uint32_t*>(rb.pData);
-                uint32_t count = 0;
-                for (uint32_t i = 0; i < m_stats.totalInstances; ++i)
-                    if (vis[i] != 0)
-                        ++count;
-                m_stats.visibleInstances = count;
-                m_stats.culledByFrustum = m_stats.totalInstances - count;
-                m_stats.culledByHiZ = 0; // GPU merges both tests; total culled reported
-                m_context->Unmap(m_visibilityStaging.Get(), 0);
+                D3D11_MAPPED_SUBRESOURCE rb = {};
+                HRESULT mapHr =
+                    m_context->Map(m_visibilityStaging.Get(), 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &rb);
+                if (SUCCEEDED(mapHr) && rb.pData)
+                {
+                    const auto* vis = static_cast<const uint32_t*>(rb.pData);
+                    uint32_t count = 0;
+                    for (uint32_t i = 0; i < m_readbackInstanceCount; ++i)
+                        if (vis[i] != 0)
+                            ++count;
+                    m_stats.visibleInstances = count;
+                    m_stats.culledByFrustum = m_readbackInstanceCount - count;
+                    m_stats.culledByHiZ = 0;
+                    m_context->Unmap(m_visibilityStaging.Get(), 0);
+                    m_readbackPending = false;
+                }
+                // If map returned DXGI_ERROR_WAS_STILL_DRAWING, the GPU hasn't
+                // finished — we keep stale stats and try again next frame.
             }
+
+            // Kick off async copy for THIS frame's results (read next frame)
+            m_context->CopyResource(m_visibilityStaging.Get(), m_visibilityBuffer.Get());
+            m_readbackInstanceCount = m_stats.totalInstances;
+            m_readbackPending = true;
         }
 
         // Issue indirect draw call for visible geometry

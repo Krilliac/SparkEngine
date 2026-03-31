@@ -19,7 +19,7 @@
 // ScopedProfileTimer
 // ============================================================================
 
-ScopedProfileTimer::ScopedProfileTimer(const std::string& name, ProfileCategory category)
+ScopedProfileTimer::ScopedProfileTimer(std::string_view name, ProfileCategory category)
     : m_name(name), m_category(category), m_start(std::chrono::high_resolution_clock::now())
 {
     Profiler::GetInstance().BeginSection(m_name, m_category);
@@ -70,25 +70,25 @@ void Profiler::Shutdown()
 // CPU Timing
 // ============================================================================
 
-void Profiler::BeginSection(const std::string& name, ProfileCategory category)
+void Profiler::BeginSection(std::string_view name, ProfileCategory category)
 {
     if (!m_enabled)
     {
         return;
     }
 
-    m_activeSections[name] = std::chrono::high_resolution_clock::now();
+    auto now = std::chrono::high_resolution_clock::now();
+    m_activeSections[name] = now;
 
     ProfileSample sample;
     sample.name = name;
     sample.category = category;
-    sample.depth = 0; // Depth tracking could be enhanced with a stack
-    sample.startTimeMs =
-        std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+    sample.depth = 0;
+    sample.startTimeMs = std::chrono::duration<double, std::milli>(now.time_since_epoch()).count();
     m_currentFrameSamples.push_back(sample);
 }
 
-void Profiler::EndSection(const std::string& name)
+void Profiler::EndSection(std::string_view name)
 {
     if (!m_enabled)
     {
@@ -107,15 +107,15 @@ void Profiler::EndSection(const std::string& name)
     m_sectionResults[name] = durationMs;
     m_activeSections.erase(it);
 
-    // Update the corresponding sample's duration
-    for (auto& sample : m_currentFrameSamples)
+    // Reverse-search samples: the most recent unfinished sample with this name
+    // is almost always at or near the end of the vector — O(1) amortized.
+    for (auto rit = m_currentFrameSamples.rbegin(); rit != m_currentFrameSamples.rend(); ++rit)
     {
-        if (sample.name == name && sample.durationMs == 0.0)
+        if (rit->name == name && rit->durationMs == 0.0)
         {
-            sample.durationMs = durationMs;
+            rit->durationMs = durationMs;
 
-            // Add to category total
-            auto catIdx = static_cast<size_t>(sample.category);
+            auto catIdx = static_cast<size_t>(rit->category);
             if (catIdx < m_categoryTotals.size())
             {
                 m_categoryTotals[catIdx] += durationMs;
@@ -133,7 +133,13 @@ void Profiler::BeginFrame()
     }
 
     m_frameStart = std::chrono::high_resolution_clock::now();
+
+    // Clear but retain capacity — avoids per-frame heap allocations.
     m_currentFrameSamples.clear();
+    if (m_currentFrameSamples.capacity() < kExpectedSectionsPerFrame)
+    {
+        m_currentFrameSamples.reserve(kExpectedSectionsPerFrame);
+    }
     m_categoryTotals.fill(0.0);
     m_sectionResults.clear();
 }
@@ -157,14 +163,14 @@ void Profiler::EndFrame()
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
-void Profiler::BeginGPUTimer(const std::string& name)
+void Profiler::BeginGPUTimer(std::string_view name)
 {
     if (!m_enabled || !m_device || !m_context)
     {
         return;
     }
 
-    auto& timer = m_gpuTimers[name];
+    auto& timer = m_gpuTimers[std::string(name)];
 
     if (!timer.beginQuery)
     {
@@ -183,14 +189,14 @@ void Profiler::BeginGPUTimer(const std::string& name)
     timer.pending = true;
 }
 
-void Profiler::EndGPUTimer(const std::string& name)
+void Profiler::EndGPUTimer(std::string_view name)
 {
     if (!m_enabled || !m_context)
     {
         return;
     }
 
-    auto it = m_gpuTimers.find(name);
+    auto it = m_gpuTimers.find(std::string(name));
     if (it == m_gpuTimers.end())
     {
         return;
@@ -250,9 +256,9 @@ void Profiler::ResolveGPUQueries()
 // Memory Tracking
 // ============================================================================
 
-void Profiler::RecordAllocation(const std::string& category, size_t bytes)
+void Profiler::RecordAllocation(std::string_view category, size_t bytes)
 {
-    auto& cat = m_memoryCategories[category];
+    auto& cat = m_memoryCategories[std::string(category)];
     cat.currentBytes += bytes;
     cat.totalAllocations++;
     if (cat.currentBytes > cat.peakBytes)
@@ -261,9 +267,9 @@ void Profiler::RecordAllocation(const std::string& category, size_t bytes)
     }
 }
 
-void Profiler::RecordDeallocation(const std::string& category, size_t bytes)
+void Profiler::RecordDeallocation(std::string_view category, size_t bytes)
 {
-    auto& cat = m_memoryCategories[category];
+    auto& cat = m_memoryCategories[std::string(category)];
     if (bytes <= cat.currentBytes)
     {
         cat.currentBytes -= bytes;
@@ -278,7 +284,7 @@ void Profiler::RecordDeallocation(const std::string& category, size_t bytes)
 // Query Results
 // ============================================================================
 
-double Profiler::GetSectionTimeMs(const std::string& name) const
+double Profiler::GetSectionTimeMs(std::string_view name) const
 {
     auto it = m_sectionResults.find(name);
     if (it != m_sectionResults.end())
@@ -288,10 +294,10 @@ double Profiler::GetSectionTimeMs(const std::string& name) const
     return 0.0;
 }
 
-double Profiler::GetGPUTimeMs([[maybe_unused]] const std::string& name) const
+double Profiler::GetGPUTimeMs([[maybe_unused]] std::string_view name) const
 {
 #ifdef SPARK_PLATFORM_WINDOWS
-    auto it = m_gpuTimers.find(name);
+    auto it = m_gpuTimers.find(std::string(name));
     if (it != m_gpuTimers.end())
     {
         return it->second.resultMs;
