@@ -16,6 +16,15 @@ Comprehensive audit combining prior findings (March 14) with new deep analysis. 
 
 **Progress (2026-03-31):** InspectorComponentRenderers.cpp (1,887 lines) split into 4 domain-specific files (~470 lines each): Core3D, 2D, Gameplay, Reflected. ConsoleApp::RegisterDefaultCommands (321 lines) split into 3 focused functions: RegisterCoreCommands, RegisterDiagnosticCommands, RegisterAliasCommands. Oversized function count reduced from 66 to 9 (86% reduction). CLAUDE.md phantom system references (Procedural, Stats) removed.
 
+**Progress (2026-03-31, optimization pass):** ~1100 lines net reduction across 5 files:
+- InputManager.cpp: Windows/Linux code consolidated — shared key mapping, query methods, console integration defined once (1338→840, -37%)
+- UpscalingSystem.cpp: 640 lines of inline HLSL shaders extracted to UpscalingShaders.h (1335→652, -51%)
+- SaveSystem.cpp: RegisterBuiltins() split into 3 domain functions; SerializeWorld() refactored with TrySerialize<T> template (1350→1274)
+- ConsoleApp.cpp: Run/ReadEngineInput/ReadUserInput split into focused helpers
+- SparkEngine.cpp: RunHeadlessWindows refactored to reuse existing helpers
+- AudioMixer ODR issue confirmed FALSE — MusicManager.h defines AudioBusMixer, not AudioMixer
+- MaterialSystem duplicates confirmed RESOLVED in prior sessions
+
 ---
 
 ## 1. Oversized Files (Hard Limit Violations)

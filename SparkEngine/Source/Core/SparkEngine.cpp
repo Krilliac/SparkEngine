@@ -418,27 +418,28 @@ static void SetupCrashHandler()
 }
 
 #ifdef SPARK_HEADLESS_SUPPORT
+
 /**
- * @brief Run the engine in headless/dedicated server mode (Windows).
- *
- * Allocates a console, initializes server-only subsystems, runs a fixed 60 Hz
- * tick loop, and shuts down cleanly on Ctrl+C.
+ * @brief Attach a Win32 console for headless stdout/stderr/stdin.
  */
-static int RunHeadlessWindows(LPWSTR lpCmdLine)
+static void AllocHeadlessConsole()
 {
-    // Allocate a console for stdout/stderr output
     AllocConsole();
     FILE* fp = nullptr;
     freopen_s(&fp, "CONOUT$", "w", stdout);
     freopen_s(&fp, "CONOUT$", "w", stderr);
     freopen_s(&fp, "CONIN$", "r", stdin);
-
-    // Install Ctrl+C handler for graceful shutdown
     SetConsoleCtrlHandler(HeadlessCtrlHandler, TRUE);
+}
 
-    Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server) ===");
-
-    // Initialize only the subsystems needed for headless operation
+/**
+ * @brief Initialize headless engine context (no graphics, no input).
+ *
+ * Reuses the same pattern as InitEngineContext() but passes nullptr for
+ * graphics and input — headless mode has no GPU or window.
+ */
+static bool InitHeadlessEngineContext()
+{
     g_timer = std::make_unique<Timer>();
     g_eventBus = std::make_unique<Spark::EventBus>();
     EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
@@ -447,28 +448,34 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     if (!ctx)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init aborted");
-        return 1;
+        return false;
     }
 
-    // File cache
     g_fileCache = std::make_unique<Spark::LocalFileCache>();
     ctx->SetFileCache(g_fileCache.get());
 
     InitPhysics();
 
-    // Register core subsystems with dependency metadata
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
     Spark::EngineSetup::InitializeJobSystem();
 
-    // Module loading
-    g_moduleManager = std::make_unique<ModuleManager>();
+    ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
+    ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
-    InitConsole();
+    return true;
+}
+
+/**
+ * @brief Load modules and register console commands for headless mode.
+ */
+static void LoadHeadlessModules(LPWSTR lpCmdLine)
+{
+    g_moduleManager = std::make_unique<ModuleManager>();
     auto& console = Spark::SimpleConsole::GetInstance();
 
     if (LoadGameModules(*g_moduleManager, lpCmdLine))
     {
-        g_moduleManager->InitializeAll(ctx);
+        g_moduleManager->InitializeAll(EngineContext::Get());
         console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
     }
     else
@@ -476,31 +483,39 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
         console.LogWarning("No game modules found. Running engine-only headless mode.");
     }
 
-    // Module hot-reload watcher
     g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-    g_moduleHotReload->Initialize(g_moduleManager.get(), ctx);
+    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
     g_moduleHotReload->WatchAllLoadedModules();
     g_moduleHotReload->Start();
 
-    // SaveSystem
-    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
-    {
-        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
-    }
-    ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
-    console.LogInfo("SaveSystem initialized");
-
-    // CoroutineScheduler
-    ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
-
-    // Register console commands
-    if (g_graphics)
-        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
+}
+
+/**
+ * @brief Run the engine in headless/dedicated server mode (Windows).
+ *
+ * Allocates a console, initializes server-only subsystems, runs a fixed 60 Hz
+ * tick loop, and shuts down cleanly on Ctrl+C.
+ */
+static int RunHeadlessWindows(LPWSTR lpCmdLine)
+{
+    AllocHeadlessConsole();
+    Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server) ===");
+
+    if (!InitHeadlessEngineContext())
+        return 1;
+
+    if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
+        Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
+    Spark::SimpleConsole::GetInstance().LogInfo("SaveSystem initialized");
+
+    InitConsole();
+    LoadHeadlessModules(lpCmdLine);
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
+    auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Starting headless server loop (60 Hz)...");
     console.LogInfo("Press Ctrl+C or type 'quit' to stop.");
 

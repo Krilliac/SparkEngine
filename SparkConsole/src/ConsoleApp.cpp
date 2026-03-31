@@ -86,7 +86,7 @@ ConsoleApp::~ConsoleApp()
     }
 }
 
-void ConsoleApp::Run()
+void ConsoleApp::PrintBanner()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     [[maybe_unused]] int rc_ = system("cls");
@@ -99,7 +99,10 @@ void ConsoleApp::Run()
     std::wcout << L"========================================" << std::endl;
     std::wcout << std::endl;
     PrintLog(L"Console application started. Type 'help' for commands or 'exit' to quit.");
+}
 
+bool ConsoleApp::DetectPipeMode()
+{
 #ifdef SPARK_PLATFORM_WINDOWS
     HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
     DWORD fileType = GetFileType(hStdin);
@@ -116,140 +119,97 @@ void ConsoleApp::Run()
         PrintLog(L"Running in standalone mode. Engine commands will not be available.");
         PrintLog(L"Waiting for SparkEngine to connect... (or type commands to use standalone)");
     }
+    return pipeMode;
+}
 
-    std::string input;
-    int noInputCounter = 0;
+void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool& pipeMode,
+                                   std::atomic<bool>& keyboardThreadRunning)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hConsoleOut, &csbi);
 
-    // In pipe mode, start a separate thread for keyboard input
-    std::thread keyboardThread;
-    std::atomic<bool> keyboardThreadRunning{false};
+    SetConsoleTextAttribute(hConsoleOut, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+    WriteConsoleW(hConsoleOut, L"> ", 2, NULL, NULL);
+    SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+#else
+    std::cout << ANSI_GREEN_BOLD << "> " << ANSI_RESET << std::flush;
+#endif
 
-    if (pipeMode)
-    {
-        keyboardThreadRunning = true;
-        keyboardThread = std::thread(
-            [&]()
-            {
-                while (keyboardThreadRunning && m_running)
-                {
-#ifdef SPARK_PLATFORM_WINDOWS
-                    if (_kbhit())
-                    {
-                        char ch = _getch();
-#else
-                    if (LinuxKbhit())
-                    {
-                        char ch = LinuxGetch();
-#endif
-                        if (ch == '\r' || ch == '\n')
-                        {
-                            if (!input.empty())
-                            {
-                                AddToHistory(input);
-                                if (input == "exit" || input == "quit")
-                                {
-                                    PrintLog(L"Console shutting down...");
-                                    m_running = false;
-                                    keyboardThreadRunning = false;
-                                    break;
-                                }
-                                // Send command to engine via stdout
-                                std::cout << input << std::endl;
-                                std::cout.flush();
-                                input.clear();
-                            }
-#ifdef SPARK_PLATFORM_WINDOWS
-                            HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
-                            WriteConsoleW(hConsoleOut, L"\n", 1, NULL, NULL);
-#else
-                            std::cout << std::endl;
-#endif
-                        }
-                        else if (ch == '\b' || ch == 127) // 127 = DEL on Linux
-                        {
-                            if (!input.empty())
-                            {
-                                input.pop_back();
-#ifdef SPARK_PLATFORM_WINDOWS
-                                HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
-                                WriteConsoleW(hConsoleOut, L"\b \b", 3, NULL, NULL);
-#else
-                                std::cout << "\b \b" << std::flush;
-#endif
-                            }
-                        }
-                        else if (ch >= 32 && ch <= 126)
-                        {
-                            input += ch;
-#ifdef SPARK_PLATFORM_WINDOWS
-                            HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
-                            wchar_t wch = static_cast<wchar_t>(ch);
-                            WriteConsoleW(hConsoleOut, &wch, 1, NULL, NULL);
-#else
-                            std::cout << ch << std::flush;
-#endif
-                        }
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-            });
-    }
+    // Just sleep and let the keyboard thread and ReadEngineInput thread do their work
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    while (m_running)
-    {
-        // In pipe mode, display prompt and let keyboard thread handle input
-        if (pipeMode)
+    noInputCounter++;
+    if (noInputCounter > 100)
+    { // Check connection every 10 seconds
+#ifdef SPARK_PLATFORM_WINDOWS
+        HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+        DWORD newFileType = GetFileType(hStdin);
+        if (newFileType != FILE_TYPE_PIPE)
         {
-#ifdef SPARK_PLATFORM_WINDOWS
-            HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
-            CONSOLE_SCREEN_BUFFER_INFO csbi;
-            GetConsoleScreenBufferInfo(hConsoleOut, &csbi);
-
-            SetConsoleTextAttribute(hConsoleOut, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-            WriteConsoleW(hConsoleOut, L"> ", 2, NULL, NULL);
-            SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-#else
-            std::cout << ANSI_GREEN_BOLD << "> " << ANSI_RESET << std::flush;
-#endif
-
-            // Just sleep and let the keyboard thread and ReadEngineInput thread do their work
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-            noInputCounter++;
-            if (noInputCounter > 100)
-            { // Check connection every 10 seconds
-#ifdef SPARK_PLATFORM_WINDOWS
-                DWORD newFileType = GetFileType(hStdin);
-                if (newFileType != FILE_TYPE_PIPE)
-                {
-                    PrintLog(L"Engine connection lost. Switching to standalone mode.");
-                    pipeMode = false;
-                    keyboardThreadRunning = false;
-                }
-#endif
-                noInputCounter = 0;
-            }
+            PrintLog(L"Engine connection lost. Switching to standalone mode.");
+            pipeMode = false;
+            keyboardThreadRunning = false;
         }
-        else
-        {
-            // Standalone mode - use standard input handling
-#ifdef SPARK_PLATFORM_WINDOWS
-            SetConsoleColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-#else
-            std::cout << ANSI_GREEN_BOLD;
 #endif
-            std::cout << "> ";
-#ifdef SPARK_PLATFORM_WINDOWS
-            SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-#else
-            std::cout << ANSI_RESET;
-#endif
-            std::cout.flush();
+        noInputCounter = 0;
+    }
+}
 
-            if (std::getline(std::cin, input))
+void ConsoleApp::PollStandaloneInput(std::string& input)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    SetConsoleColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+#else
+    std::cout << ANSI_GREEN_BOLD;
+#endif
+    std::cout << "> ";
+#ifdef SPARK_PLATFORM_WINDOWS
+    SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+#else
+    std::cout << ANSI_RESET;
+#endif
+    std::cout.flush();
+
+    if (std::getline(std::cin, input))
+    {
+        input.erase(0, input.find_first_not_of(" \t"));
+        input.erase(input.find_last_not_of(" \t") + 1);
+        if (!input.empty())
+        {
+            AddToHistory(input);
+            if (input == "exit" || input == "quit")
             {
-                input.erase(0, input.find_first_not_of(" \t"));
-                input.erase(input.find_last_not_of(" \t") + 1);
+                PrintLog(L"Console shutting down...");
+                m_running = false;
+                return;
+            }
+            ExecuteCommand(input);
+        }
+    }
+    else
+    {
+        PrintLog(L"Input stream closed. Exiting...");
+        m_running = false;
+    }
+}
+
+void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& keyboardThreadRunning)
+{
+    while (keyboardThreadRunning && m_running)
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        if (_kbhit())
+        {
+            char ch = _getch();
+#else
+        if (LinuxKbhit())
+        {
+            char ch = LinuxGetch();
+#endif
+            if (ch == '\r' || ch == '\n')
+            {
                 if (!input.empty())
                 {
                     AddToHistory(input);
@@ -257,17 +217,60 @@ void ConsoleApp::Run()
                     {
                         PrintLog(L"Console shutting down...");
                         m_running = false;
+                        keyboardThreadRunning = false;
                         break;
                     }
-                    ExecuteCommand(input);
+                    std::cout << input << std::endl;
+                    std::cout.flush();
+                    input.clear();
                 }
+#ifdef SPARK_PLATFORM_WINDOWS
+                HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+                WriteConsoleW(hConsoleOut, L"\n", 1, NULL, NULL);
+#else
+                std::cout << std::endl;
+#endif
             }
-            else
+            else if (ch == '\b' || ch == 127)
             {
-                PrintLog(L"Input stream closed. Exiting...");
-                m_running = false;
-                break;
+                HandleBackspaceKey(input);
             }
+            else if (ch >= 32 && ch <= 126)
+            {
+                HandlePrintableChar(input, ch);
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+void ConsoleApp::Run()
+{
+    PrintBanner();
+    bool pipeMode = DetectPipeMode();
+
+    std::string input;
+    int noInputCounter = 0;
+
+    std::thread keyboardThread;
+    std::atomic<bool> keyboardThreadRunning{false};
+
+    if (pipeMode)
+    {
+        keyboardThreadRunning = true;
+        keyboardThread =
+            std::thread(&ConsoleApp::PipeKeyboardThreadFunc, this, std::ref(input), std::ref(keyboardThreadRunning));
+    }
+
+    while (m_running)
+    {
+        if (pipeMode)
+        {
+            PollPipeModeInput(input, noInputCounter, pipeMode, keyboardThreadRunning);
+        }
+        else
+        {
+            PollStandaloneInput(input);
         }
     }
 
@@ -275,31 +278,112 @@ void ConsoleApp::Run()
     if (keyboardThreadRunning)
     {
         keyboardThreadRunning = false;
-        if (keyboardThread.joinable())
-        {
-            keyboardThread.join();
-        }
+    }
+    if (keyboardThread.joinable())
+    {
+        keyboardThread.join();
     }
 
     PrintLog(L"Console application terminated.");
 }
 
-void ConsoleApp::ReadEngineInput()
+void ConsoleApp::ProcessPipeMessages(const std::string& message)
 {
-    // This method reads messages from the engine via stdin (which is redirected from engine's pipe)
-    std::string line;
+    std::istringstream iss(message);
+    std::string pipeLine;
+    while (std::getline(iss, pipeLine))
+    {
+        if (pipeLine.empty())
+        {
+            continue;
+        }
+
+        // Remove carriage return if present
+        if (pipeLine.back() == '\r')
+        {
+            pipeLine.pop_back();
+        }
+        if (pipeLine.empty())
+        {
+            continue;
+        }
 
 #ifdef SPARK_PLATFORM_WINDOWS
+        OutputDebugStringA(("ReadEngineInput: Processing line: " + pipeLine + "\n").c_str());
+#endif
+
+        std::wstring wMessage(pipeLine.begin(), pipeLine.end());
+        PrintEngineLog(wMessage);
+
+        m_messageBuffer.push_back(wMessage);
+        if (m_messageBuffer.size() > MAX_BUFFER_SIZE)
+        {
+            m_messageBuffer.pop_front();
+        }
+    }
+}
+
+#ifdef SPARK_PLATFORM_WINDOWS
+bool ConsoleApp::PollWindowsPipeData(HANDLE hStdin)
+{
     char buffer[1024];
     DWORD bytesRead = 0;
+    DWORD bytesAvailable = 0;
+    BOOL pipeResult = PeekNamedPipe(hStdin, NULL, 0, NULL, &bytesAvailable, NULL);
+
+    if (!pipeResult)
+    {
+        DWORD error = GetLastError();
+        if (error == ERROR_BROKEN_PIPE || error == ERROR_INVALID_HANDLE)
+        {
+            PrintLog(L"Engine pipe connection lost.");
+            OutputDebugStringA("ReadEngineInput: Pipe connection lost\n");
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        return true;
+    }
+
+    if (bytesAvailable > 0)
+    {
+        OutputDebugStringA(("ReadEngineInput: " + std::to_string(bytesAvailable) + " bytes available\n").c_str());
+
+        DWORD bytesToRead = std::min(bytesAvailable, static_cast<DWORD>(sizeof(buffer) - 1));
+        if (ReadFile(hStdin, buffer, bytesToRead, &bytesRead, NULL))
+        {
+            if (bytesRead > 0)
+            {
+                buffer[bytesRead] = '\0';
+                std::string message(buffer);
+
+                std::string debugMsg = "ReadEngineInput: Received data: " + message.substr(0, 100) + "\n";
+                OutputDebugStringA(debugMsg.c_str());
+
+                ProcessPipeMessages(message);
+            }
+        }
+        else
+        {
+            DWORD error = GetLastError();
+            OutputDebugStringA(("ReadEngineInput: ReadFile failed with error " + std::to_string(error) + "\n").c_str());
+            if (error == ERROR_BROKEN_PIPE)
+            {
+                PrintLog(L"Engine connection lost.");
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+void ConsoleApp::ReadEngineInputWindows()
+{
     HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
 
     OutputDebugStringA("ReadEngineInput: Starting engine input reader thread\n");
 
-    // Check if stdin is redirected (connected to a pipe)
     DWORD fileType = GetFileType(hStdin);
-
-    // Try to detect if we're connected to a pipe by testing for pipe-specific operations
     DWORD bytesAvailable = 0;
     BOOL isPipeConnected = PeekNamedPipe(hStdin, NULL, 0, NULL, &bytesAvailable, NULL);
 
@@ -312,97 +396,24 @@ void ConsoleApp::ReadEngineInput()
     {
         PrintLog(L"No pipe connection detected. Running in standalone mode.");
         OutputDebugStringA("ReadEngineInput: No pipe connection detected\n");
-        return; // Exit thread if no pipe connection
+        return;
     }
 
     while (m_running)
     {
-        // Check if data is available
-        DWORD bytesAvailable2 = 0;
-        BOOL pipeResult = PeekNamedPipe(hStdin, NULL, 0, NULL, &bytesAvailable2, NULL);
-
-        if (!pipeResult)
+        if (!PollWindowsPipeData(hStdin))
         {
-            DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE || error == ERROR_INVALID_HANDLE)
-            {
-                PrintLog(L"Engine pipe connection lost.");
-                OutputDebugStringA("ReadEngineInput: Pipe connection lost\n");
-                break;
-            }
-            // For other errors, continue trying
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
+            break;
         }
-
-        if (bytesAvailable2 > 0)
-        {
-            OutputDebugStringA(("ReadEngineInput: " + std::to_string(bytesAvailable2) + " bytes available\n").c_str());
-
-            // Read available data
-            DWORD bytesToRead = std::min(bytesAvailable2, static_cast<DWORD>(sizeof(buffer) - 1));
-            if (ReadFile(hStdin, buffer, bytesToRead, &bytesRead, NULL))
-            {
-                if (bytesRead > 0)
-                {
-                    buffer[bytesRead] = '\0';
-                    std::string message(buffer);
-
-                    std::string debugMsg = "ReadEngineInput: Received data: " + message.substr(0, 100) + "\n";
-                    OutputDebugStringA(debugMsg.c_str());
-
-                    // Process each line in the message
-                    std::istringstream iss(message);
-                    std::string pipeLine;
-                    while (std::getline(iss, pipeLine))
-                    {
-                        if (!pipeLine.empty())
-                        {
-                            // Remove carriage return if present
-                            if (!pipeLine.empty() && pipeLine.back() == '\r')
-                            {
-                                pipeLine.pop_back();
-                            }
-
-                            if (!pipeLine.empty())
-                            {
-                                OutputDebugStringA(("ReadEngineInput: Processing line: " + pipeLine + "\n").c_str());
-
-                                // Convert to wide string and display
-                                std::wstring wMessage(pipeLine.begin(), pipeLine.end());
-                                PrintEngineLog(wMessage);
-
-                                // Add to message buffer
-                                m_messageBuffer.push_back(wMessage);
-                                if (m_messageBuffer.size() > MAX_BUFFER_SIZE)
-                                {
-                                    m_messageBuffer.pop_front();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                DWORD error = GetLastError();
-                OutputDebugStringA(
-                    ("ReadEngineInput: ReadFile failed with error " + std::to_string(error) + "\n").c_str());
-                if (error == ERROR_BROKEN_PIPE)
-                {
-                    PrintLog(L"Engine connection lost.");
-                    break;
-                }
-            }
-        }
-
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     OutputDebugStringA("ReadEngineInput: Engine input reader thread terminated\n");
     PrintLog(L"Engine input reader thread terminated.");
-
-#else  // Linux/macOS
+}
+#else
+void ConsoleApp::ReadEngineInputPosix()
+{
     if (!LinuxIsStdinPipe())
     {
         PrintLog(L"No pipe connection detected. Running in standalone mode.");
@@ -429,35 +440,10 @@ void ConsoleApp::ReadEngineInput()
             if (bytesRead > 0)
             {
                 buffer[bytesRead] = '\0';
-                std::string message(buffer);
-
-                std::istringstream iss(message);
-                std::string pipeLine;
-                while (std::getline(iss, pipeLine))
-                {
-                    if (!pipeLine.empty())
-                    {
-                        if (!pipeLine.empty() && pipeLine.back() == '\r')
-                        {
-                            pipeLine.pop_back();
-                        }
-                        if (!pipeLine.empty())
-                        {
-                            std::wstring wMessage(pipeLine.begin(), pipeLine.end());
-                            PrintEngineLog(wMessage);
-
-                            m_messageBuffer.push_back(wMessage);
-                            if (m_messageBuffer.size() > MAX_BUFFER_SIZE)
-                            {
-                                m_messageBuffer.pop_front();
-                            }
-                        }
-                    }
-                }
+                ProcessPipeMessages(std::string(buffer));
             }
             else if (bytesRead == 0)
             {
-                // EOF - pipe closed
                 PrintLog(L"Engine pipe connection closed.");
                 break;
             }
@@ -470,12 +456,129 @@ void ConsoleApp::ReadEngineInput()
     }
 
     PrintLog(L"Engine input reader thread terminated.");
+}
 #endif // SPARK_PLATFORM_WINDOWS
+
+void ConsoleApp::ReadEngineInput()
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    ReadEngineInputWindows();
+#else
+    ReadEngineInputPosix();
+#endif
+}
+
+void ConsoleApp::HandleArrowKey(std::string& input, char scanCode)
+{
+    switch (scanCode)
+    {
+    case 72:
+    { // Up arrow - previous command
+        std::string prev = GetPreviousCommand();
+        if (!prev.empty())
+        {
+            ClearInputLine();
+            input = prev;
+            UpdateInputLine(input);
+        }
+        break;
+    }
+    case 80:
+    { // Down arrow - next command
+        ClearInputLine();
+        std::string next = GetNextCommand();
+        input = next;
+        UpdateInputLine(input);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+#ifndef SPARK_PLATFORM_WINDOWS
+void ConsoleApp::HandleLinuxEscapeSequence(std::string& input)
+{
+    if (LinuxKbhit())
+    {
+        char seq = LinuxGetch();
+        if (seq == '[' && LinuxKbhit())
+        {
+            char arrow = LinuxGetch();
+            if (arrow == 'A')
+            { // Up arrow
+                std::string prev = GetPreviousCommand();
+                if (!prev.empty())
+                {
+                    ClearInputLine();
+                    input = prev;
+                    UpdateInputLine(input);
+                }
+            }
+            else if (arrow == 'B')
+            { // Down arrow
+                ClearInputLine();
+                std::string next = GetNextCommand();
+                input = next;
+                UpdateInputLine(input);
+            }
+        }
+    }
+    else
+    {
+        // Standalone Escape - clear line
+        ClearInputLine();
+        input.clear();
+    }
+}
+#endif
+
+void ConsoleApp::HandleEnterKey(std::string& input)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
+#else
+    std::cout << std::endl;
+#endif
+
+    if (!input.empty())
+    {
+        AddToHistory(input);
+        std::string resolved = ResolveAlias(input);
+        ExecuteCommand(resolved);
+        input.clear();
+    }
+}
+
+void ConsoleApp::HandleBackspaceKey(std::string& input)
+{
+    if (!input.empty())
+    {
+        input.pop_back();
+#ifdef SPARK_PLATFORM_WINDOWS
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
+#else
+        std::cout << "\b \b" << std::flush;
+#endif
+    }
+}
+
+void ConsoleApp::HandlePrintableChar(std::string& input, char ch)
+{
+    input += ch;
+#ifdef SPARK_PLATFORM_WINDOWS
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    wchar_t wch = static_cast<wchar_t>(ch);
+    WriteConsoleW(hOut, &wch, 1, NULL, NULL);
+#else
+    std::cout << ch << std::flush;
+#endif
 }
 
 void ConsoleApp::ReadUserInput()
 {
-    // Advanced input handling with history navigation and tab completion
     std::string input;
 
     while (m_running)
@@ -498,67 +601,13 @@ void ConsoleApp::ReadUserInput()
 #else
                 char scanCode = LinuxGetch();
 #endif
-                switch (scanCode)
-                {
-                case 72:
-                { // Up arrow - previous command
-                    std::string prev = GetPreviousCommand();
-                    if (!prev.empty())
-                    {
-                        ClearInputLine();
-                        input = prev;
-                        UpdateInputLine(input);
-                    }
-                    break;
-                }
-                case 80:
-                { // Down arrow - next command
-                    ClearInputLine();
-                    std::string next = GetNextCommand();
-                    input = next;
-                    UpdateInputLine(input);
-                    break;
-                }
-                default:
-                    break;
-                }
+                HandleArrowKey(input, scanCode);
                 continue;
             }
 #ifndef SPARK_PLATFORM_WINDOWS
-            // Linux escape sequences (e.g. arrow keys: ESC [ A/B/C/D)
             if (ch == 27)
             {
-                if (LinuxKbhit())
-                {
-                    char seq = LinuxGetch();
-                    if (seq == '[' && LinuxKbhit())
-                    {
-                        char arrow = LinuxGetch();
-                        if (arrow == 'A')
-                        { // Up arrow
-                            std::string prev = GetPreviousCommand();
-                            if (!prev.empty())
-                            {
-                                ClearInputLine();
-                                input = prev;
-                                UpdateInputLine(input);
-                            }
-                        }
-                        else if (arrow == 'B')
-                        { // Down arrow
-                            ClearInputLine();
-                            std::string next = GetNextCommand();
-                            input = next;
-                            UpdateInputLine(input);
-                        }
-                    }
-                }
-                else
-                {
-                    // Standalone Escape - clear line
-                    ClearInputLine();
-                    input.clear();
-                }
+                HandleLinuxEscapeSequence(input);
                 continue;
             }
 #endif
@@ -572,33 +621,11 @@ void ConsoleApp::ReadUserInput()
 
             if (ch == '\r' || ch == '\n')
             {
-#ifdef SPARK_PLATFORM_WINDOWS
-                HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-                WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
-#else
-                std::cout << std::endl;
-#endif
-
-                if (!input.empty())
-                {
-                    AddToHistory(input);
-                    std::string resolved = ResolveAlias(input);
-                    ExecuteCommand(resolved);
-                    input.clear();
-                }
+                HandleEnterKey(input);
             }
-            else if (ch == '\b' || ch == 127) // 127 = DEL on Linux
+            else if (ch == '\b' || ch == 127)
             {
-                if (!input.empty())
-                {
-                    input.pop_back();
-#ifdef SPARK_PLATFORM_WINDOWS
-                    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-                    WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
-#else
-                    std::cout << "\b \b" << std::flush;
-#endif
-                }
+                HandleBackspaceKey(input);
             }
             else if (ch == '\t')
             {
@@ -611,14 +638,7 @@ void ConsoleApp::ReadUserInput()
             }
             else if (ch >= 32 && ch <= 126)
             {
-                input += ch;
-#ifdef SPARK_PLATFORM_WINDOWS
-                HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-                wchar_t wch = static_cast<wchar_t>(ch);
-                WriteConsoleW(hOut, &wch, 1, NULL, NULL);
-#else
-                std::cout << ch << std::flush;
-#endif
+                HandlePrintableChar(input, ch);
             }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -666,56 +686,38 @@ std::vector<std::string> ConsoleApp::GetCompletions(const std::string& prefix)
     return completions;
 }
 
-void ConsoleApp::HandleTabCompletion(std::string& input)
+void ConsoleApp::DisplayCompletionCandidates()
 {
-    if (input.empty())
-        return;
-
-    if (m_tabIndex == -1)
-    {
-        m_tabPrefix = input;
-        m_tabCompletions = GetCompletions(m_tabPrefix);
-        if (m_tabCompletions.empty())
-            return;
-        m_tabIndex = 0;
-    }
-    else
-    {
-        m_tabIndex = (m_tabIndex + 1) % static_cast<int>(m_tabCompletions.size());
-    }
-
-    // Show all completions on first tab when multiple matches
-    if (m_tabCompletions.size() > 1 && m_tabIndex == 0)
-    {
 #ifdef SPARK_PLATFORM_WINDOWS
-        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
-        SetConsoleColor(FOREGROUND_BLUE | FOREGROUND_GREEN);
-        for (const auto& comp : m_tabCompletions)
-        {
-            std::wstring wcomp(comp.begin(), comp.end());
-            wcomp += L"  ";
-            WriteConsoleW(hOut, wcomp.c_str(), static_cast<DWORD>(wcomp.length()), NULL, NULL);
-        }
-        WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
-        SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-
-        // Re-display prompt
-        SetConsoleColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-        WriteConsoleW(hOut, L"> ", 2, NULL, NULL);
-        SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-#else
-        std::cout << "\n" << ANSI_CYAN;
-        for (const auto& comp : m_tabCompletions)
-        {
-            std::cout << comp << "  ";
-        }
-        std::cout << ANSI_RESET << "\n";
-        std::cout << ANSI_GREEN_BOLD << "> " << ANSI_RESET;
-#endif
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
+    SetConsoleColor(FOREGROUND_BLUE | FOREGROUND_GREEN);
+    for (const auto& comp : m_tabCompletions)
+    {
+        std::wstring wcomp(comp.begin(), comp.end());
+        wcomp += L"  ";
+        WriteConsoleW(hOut, wcomp.c_str(), static_cast<DWORD>(wcomp.length()), NULL, NULL);
     }
+    WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
+    SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 
-    // Replace input with completion
+    // Re-display prompt
+    SetConsoleColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+    WriteConsoleW(hOut, L"> ", 2, NULL, NULL);
+    SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+#else
+    std::cout << "\n" << ANSI_CYAN;
+    for (const auto& comp : m_tabCompletions)
+    {
+        std::cout << comp << "  ";
+    }
+    std::cout << ANSI_RESET << "\n";
+    std::cout << ANSI_GREEN_BOLD << "> " << ANSI_RESET;
+#endif
+}
+
+void ConsoleApp::ReplaceInputWithCompletion(std::string& input)
+{
 #ifdef SPARK_PLATFORM_WINDOWS
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     for (size_t i = 0; i < input.size(); ++i)
@@ -734,6 +736,32 @@ void ConsoleApp::HandleTabCompletion(std::string& input)
     input = m_tabCompletions[m_tabIndex];
     std::cout << input << std::flush;
 #endif
+}
+
+void ConsoleApp::HandleTabCompletion(std::string& input)
+{
+    if (input.empty())
+        return;
+
+    if (m_tabIndex == -1)
+    {
+        m_tabPrefix = input;
+        m_tabCompletions = GetCompletions(m_tabPrefix);
+        if (m_tabCompletions.empty())
+            return;
+        m_tabIndex = 0;
+    }
+    else
+    {
+        m_tabIndex = (m_tabIndex + 1) % static_cast<int>(m_tabCompletions.size());
+    }
+
+    if (m_tabCompletions.size() > 1 && m_tabIndex == 0)
+    {
+        DisplayCompletionCandidates();
+    }
+
+    ReplaceInputWithCompletion(input);
 }
 
 std::string ConsoleApp::ResolveAlias(const std::string& input)
@@ -791,6 +819,29 @@ void ConsoleApp::PrintLog(const std::wstring& msg)
     }
 }
 
+void ConsoleApp::PrintDuplicateSkipNotice(int skippedCount)
+{
+    auto currentTime = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(currentTime);
+#ifdef SPARK_PLATFORM_WINDOWS
+    HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN);
+
+    std::wstringstream skipMsg;
+    skipMsg << L"[" << std::put_time(std::localtime(&time_t), L"%H:%M:%S") << L"] ENGINE: (Skipped " << skippedCount
+            << L" duplicate messages)\n";
+
+    std::wstring skipStr = skipMsg.str();
+    DWORD written;
+    WriteConsoleW(hConsoleOut, skipStr.c_str(), static_cast<DWORD>(skipStr.length()), &written, NULL);
+#else
+    std::stringstream skipMsg;
+    skipMsg << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S") << "] ENGINE: (Skipped " << skippedCount
+            << " duplicate messages)";
+    std::cout << ANSI_YELLOW << skipMsg.str() << ANSI_RESET << std::endl;
+#endif
+}
+
 void ConsoleApp::PrintEngineLog(const std::wstring& msg)
 {
     std::lock_guard<std::mutex> lock(m_outputMutex);
@@ -803,38 +854,19 @@ void ConsoleApp::PrintEngineLog(const std::wstring& msg)
     auto now = std::chrono::steady_clock::now();
     auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastLogTime).count();
 
-    // If same message within 200ms, count as duplicate
     if (msg == lastMessage && timeDiff < 200)
     {
         duplicateCount++;
         if (duplicateCount > 3)
         {
-            return; // Skip excessive duplicate messages
+            return;
         }
     }
     else
     {
         if (duplicateCount > 3)
         {
-            auto currentTime = std::chrono::system_clock::now();
-            auto time_t = std::chrono::system_clock::to_time_t(currentTime);
-#ifdef SPARK_PLATFORM_WINDOWS
-            HANDLE hConsoleOut = GetStdHandle(STD_OUTPUT_HANDLE);
-            SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN);
-
-            std::wstringstream skipMsg;
-            skipMsg << L"[" << std::put_time(std::localtime(&time_t), L"%H:%M:%S") << L"] ENGINE: (Skipped "
-                    << duplicateCount - 3 << L" duplicate messages)\n";
-
-            std::wstring skipStr = skipMsg.str();
-            DWORD written;
-            WriteConsoleW(hConsoleOut, skipStr.c_str(), static_cast<DWORD>(skipStr.length()), &written, NULL);
-#else
-            std::stringstream skipMsg;
-            skipMsg << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S") << "] ENGINE: (Skipped "
-                    << duplicateCount - 3 << " duplicate messages)";
-            std::cout << ANSI_YELLOW << skipMsg.str() << ANSI_RESET << std::endl;
-#endif
+            PrintDuplicateSkipNotice(duplicateCount - 3);
         }
         duplicateCount = 0;
         lastMessage = msg;

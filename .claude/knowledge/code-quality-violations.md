@@ -11,6 +11,8 @@ Comprehensive audit of CLAUDE.md hard limit violations beyond file/class size: o
 
 **Progress (2026-03-31):** Down from 66 oversized functions to 9 remaining (86% reduction). RegisterDefaultCommands split into 3 focused functions. InspectorComponentRenderers.cpp split into 4 domain-specific files. MaterialSystem "duplicates" confirmed as wrapper+impl (not true duplicates). Remaining oversized functions are mostly clear linear code (data-driven arena creation, UI callbacks) that would lose readability if split further.
 
+**Progress (2026-03-31, optimization pass):** SaveSystem::RegisterBuiltins() (425 lines) split into 3 domain functions. SaveSystem::SerializeWorld() (124 lines) refactored with TrySerialize<T> template. ConsoleApp Run/ReadEngineInput/ReadUserInput split into focused helpers. SparkEngine RunHeadlessWindows trimmed.
+
 ---
 
 ## 1. Functions Over 50 Lines (66 Violations)
