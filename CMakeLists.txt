@@ -917,36 +917,41 @@ if(TINYOBJ_FOUND)
 endif()
 
 # Link stb_image (cross-platform texture loading)
+# PUBLIC because TextureSystem.h consumers may transitively need it
 if(TARGET stb_image)
-    target_link_libraries(SparkEngineLib PRIVATE stb_image)
+    target_link_libraries(SparkEngineLib PUBLIC stb_image)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_STB_IMAGE=1)
     message(STATUS "Linking SparkEngineLib with stb_image")
 endif()
 
 # Link cgltf (glTF 2.0 model loading)
+# PUBLIC because AssetPipeline.h consumers may transitively need it
 if(TARGET cgltf)
-    target_link_libraries(SparkEngineLib PRIVATE cgltf)
+    target_link_libraries(SparkEngineLib PUBLIC cgltf)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_CGLTF=1)
     message(STATUS "Linking SparkEngineLib with cgltf")
 endif()
 
 # Link miniaudio (cross-platform audio backend)
+# PUBLIC because PlatformAudioStubs.h includes miniaudio.h transitively
 if(TARGET miniaudio)
-    target_link_libraries(SparkEngineLib PRIVATE miniaudio)
+    target_link_libraries(SparkEngineLib PUBLIC miniaudio)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_MINIAUDIO=1)
     message(STATUS "Linking SparkEngineLib with miniaudio")
 endif()
 
 # Link nlohmann/json (JSON parsing library)
+# PUBLIC because JsonUtils.h includes nlohmann_json.h when available
 if(TARGET nlohmann_json)
-    target_link_libraries(SparkEngineLib PRIVATE nlohmann_json)
+    target_link_libraries(SparkEngineLib PUBLIC nlohmann_json)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_NLOHMANN_JSON=1)
     message(STATUS "Linking SparkEngineLib with nlohmann/json")
 endif()
 
 # Link tinyexr (OpenEXR image loading)
+# PUBLIC because TextureSystem consumers may transitively need it
 if(TARGET tinyexr)
-    target_link_libraries(SparkEngineLib PRIVATE tinyexr)
+    target_link_libraries(SparkEngineLib PUBLIC tinyexr)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_TINYEXR=1)
     message(STATUS "Linking SparkEngineLib with tinyexr")
 endif()

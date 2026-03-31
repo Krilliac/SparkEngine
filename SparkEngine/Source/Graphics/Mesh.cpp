@@ -14,6 +14,9 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include <tiny_obj_loader.h>
+#if SPARK_HAS_CGLTF
+#include <cgltf.h>
+#endif
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -772,6 +775,112 @@ bool Mesh::LoadFromFile(const std::wstring& path)
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
 
+    m_vertices.clear();
+    m_indices.clear();
+
+#if SPARK_HAS_CGLTF
+    if (ext == ".gltf" || ext == ".glb")
+    {
+        cgltf_options options = {};
+        cgltf_data* data = nullptr;
+        if (cgltf_parse_file(&options, narrowPath.c_str(), &data) != cgltf_result_success)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "LoadFromFile: cgltf parse failed: %s", narrowPath.c_str());
+            return false;
+        }
+        cgltf_load_buffers(&options, data, narrowPath.c_str());
+
+        for (cgltf_size mi = 0; mi < data->meshes_count; ++mi)
+        {
+            const cgltf_mesh& mesh = data->meshes[mi];
+            for (cgltf_size pi = 0; pi < mesh.primitives_count; ++pi)
+            {
+                const cgltf_primitive& prim = mesh.primitives[pi];
+                if (prim.type != cgltf_primitive_type_triangles)
+                    continue;
+
+                auto vertexOffset = static_cast<unsigned int>(m_vertices.size());
+                const cgltf_accessor* posAcc = nullptr;
+                const cgltf_accessor* normAcc = nullptr;
+                const cgltf_accessor* texAcc = nullptr;
+
+                for (cgltf_size ai = 0; ai < prim.attributes_count; ++ai)
+                {
+                    if (prim.attributes[ai].type == cgltf_attribute_type_position)
+                        posAcc = prim.attributes[ai].data;
+                    else if (prim.attributes[ai].type == cgltf_attribute_type_normal)
+                        normAcc = prim.attributes[ai].data;
+                    else if (prim.attributes[ai].type == cgltf_attribute_type_texcoord)
+                        texAcc = prim.attributes[ai].data;
+                }
+
+                if (!posAcc)
+                    continue;
+
+                cgltf_size vertCount = posAcc->count;
+                std::vector<float> positions(vertCount * 3);
+                cgltf_accessor_unpack_floats(posAcc, positions.data(), vertCount * 3);
+
+                std::vector<float> normals;
+                if (normAcc)
+                {
+                    normals.resize(vertCount * 3);
+                    cgltf_accessor_unpack_floats(normAcc, normals.data(), vertCount * 3);
+                }
+
+                std::vector<float> texcoords;
+                if (texAcc)
+                {
+                    texcoords.resize(vertCount * 2);
+                    cgltf_accessor_unpack_floats(texAcc, texcoords.data(), vertCount * 2);
+                }
+
+                for (cgltf_size vi = 0; vi < vertCount; ++vi)
+                {
+                    Vertex vertex;
+                    vertex.Position = {positions[vi * 3], positions[vi * 3 + 1], positions[vi * 3 + 2]};
+                    if (!normals.empty())
+                        vertex.Normal = {normals[vi * 3], normals[vi * 3 + 1], normals[vi * 3 + 2]};
+                    if (!texcoords.empty())
+                        vertex.TexCoord = {texcoords[vi * 2], texcoords[vi * 2 + 1]};
+                    m_vertices.push_back(vertex);
+                }
+
+                if (prim.indices)
+                {
+                    for (cgltf_size ii = 0; ii < prim.indices->count; ++ii)
+                    {
+                        cgltf_uint idx = 0;
+                        cgltf_accessor_read_uint(prim.indices, ii, &idx, 1);
+                        m_indices.push_back(vertexOffset + idx);
+                    }
+                }
+                else
+                {
+                    for (unsigned int vi = 0; vi < static_cast<unsigned int>(vertCount); ++vi)
+                        m_indices.push_back(vertexOffset + vi);
+                }
+            }
+        }
+
+        bool needsNormals = true;
+        for (cgltf_size mi = 0; mi < data->meshes_count && needsNormals; ++mi)
+            for (cgltf_size pi = 0; pi < data->meshes[mi].primitives_count; ++pi)
+                for (cgltf_size ai = 0; ai < data->meshes[mi].primitives[pi].attributes_count; ++ai)
+                    if (data->meshes[mi].primitives[pi].attributes[ai].type == cgltf_attribute_type_normal)
+                        needsNormals = false;
+
+        cgltf_free(data);
+
+        if (needsNormals)
+            CalculateNormals();
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded glTF: %s (%zu vertices, %zu triangles)",
+                       narrowPath.c_str(), m_vertices.size(), m_indices.size() / 3);
+        return CreateBuffers() == S_OK;
+    }
+#endif // SPARK_HAS_CGLTF
+
     if (ext != ".obj")
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "LoadFromFile: unsupported format '%s' on Linux: %s", ext.c_str(),
@@ -793,11 +902,7 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     if (!ret)
         return false;
 
-    m_vertices.clear();
-    m_indices.clear();
-
     // Deduplicate vertices using a hash combining vertex/normal/texcoord indices.
-    // This reduces vertex count for shared geometry (e.g., smooth-shaded faces).
     std::unordered_map<size_t, unsigned int> uniqueVertices;
 
     for (const auto& shape : shapes)
@@ -825,7 +930,6 @@ bool Mesh::LoadFromFile(const std::wstring& path)
                                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
             }
 
-            // Simple hash combining vertex/normal/texcoord indices
             size_t h = std::hash<int>()(index.vertex_index);
             h ^= std::hash<int>()(index.normal_index) + 0x9e3779b9 + (h << 6) + (h >> 2);
             h ^= std::hash<int>()(index.texcoord_index) + 0x9e3779b9 + (h << 6) + (h >> 2);
@@ -845,7 +949,6 @@ bool Mesh::LoadFromFile(const std::wstring& path)
         }
     }
 
-    // If normals are missing, calculate them
     if (attrib.normals.empty())
         CalculateNormals();
 

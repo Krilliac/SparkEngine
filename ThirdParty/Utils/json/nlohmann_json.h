@@ -123,8 +123,7 @@ namespace nlohmann
 
         // -- Value access --
 
-        template <typename T>
-        T get() const;
+        template <typename T> T get() const;
 
         // String conversion
         [[nodiscard]] const std::string& get_ref() const
@@ -143,6 +142,9 @@ namespace nlohmann
         }
 
         // -- Object access --
+
+        json& operator[](const char* key) { return operator[](std::string(key)); }
+        const json& operator[](const char* key) const { return operator[](std::string(key)); }
 
         json& operator[](const std::string& key)
         {
@@ -185,6 +187,8 @@ namespace nlohmann
                 throw std::runtime_error("json: key not found: " + key);
             return it->second;
         }
+
+        [[nodiscard]] bool contains(const char* key) const { return contains(std::string(key)); }
 
         [[nodiscard]] bool contains(const std::string& key) const
         {
@@ -317,8 +321,7 @@ namespace nlohmann
         bool operator!=(const json& other) const { return !(*this == other); }
 
         // Allow json to be used with value_from / value_to patterns
-        template <typename T>
-        [[nodiscard]] T value(const std::string& key, const T& default_value) const
+        template <typename T> [[nodiscard]] T value(const std::string& key, const T& default_value) const
         {
             if (m_type != value_t::object)
                 return default_value;
@@ -711,24 +714,21 @@ namespace nlohmann
 
     // -- Template specializations for get<T>() --
 
-    template <>
-    inline std::string json::get<std::string>() const
+    template <> inline std::string json::get<std::string>() const
     {
         if (m_type == value_t::string)
             return m_string;
         throw std::runtime_error("json: not a string");
     }
 
-    template <>
-    inline bool json::get<bool>() const
+    template <> inline bool json::get<bool>() const
     {
         if (m_type == value_t::boolean)
             return m_bool;
         throw std::runtime_error("json: not a boolean");
     }
 
-    template <>
-    inline int json::get<int>() const
+    template <> inline int json::get<int>() const
     {
         if (m_type == value_t::number_integer)
             return static_cast<int>(m_int);
@@ -739,8 +739,7 @@ namespace nlohmann
         throw std::runtime_error("json: not a number");
     }
 
-    template <>
-    inline int64_t json::get<int64_t>() const
+    template <> inline int64_t json::get<int64_t>() const
     {
         if (m_type == value_t::number_integer)
             return m_int;
@@ -751,8 +750,7 @@ namespace nlohmann
         throw std::runtime_error("json: not a number");
     }
 
-    template <>
-    inline uint64_t json::get<uint64_t>() const
+    template <> inline uint64_t json::get<uint64_t>() const
     {
         if (m_type == value_t::number_unsigned)
             return m_uint;
@@ -761,8 +759,7 @@ namespace nlohmann
         throw std::runtime_error("json: not a number");
     }
 
-    template <>
-    inline double json::get<double>() const
+    template <> inline double json::get<double>() const
     {
         if (m_type == value_t::number_float)
             return m_float;
@@ -773,14 +770,16 @@ namespace nlohmann
         throw std::runtime_error("json: not a number");
     }
 
-    template <>
-    inline float json::get<float>() const
+    template <> inline float json::get<float>() const
     {
         return static_cast<float>(get<double>());
     }
 
     // String literal operator for JSON parsing
-    inline json operator""_json(const char* s, size_t n) { return json::parse(std::string_view(s, n)); }
+    inline json operator""_json(const char* s, size_t n)
+    {
+        return json::parse(std::string_view(s, n));
+    }
 
 } // namespace nlohmann
 
