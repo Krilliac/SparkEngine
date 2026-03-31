@@ -100,11 +100,11 @@ void* PhysicsSystem::CreateCollisionShape(const CollisionShapeDesc& desc)
         }
         else
         {
-            JPH::HeightFieldShapeSettings hfSettings(desc.heightfieldData.data(), JPH::Vec3::sZero(),
-                                                     JPH::Vec3(desc.dimensions.x / desc.heightfieldSamples,
-                                                               desc.heightfieldScale,
-                                                               desc.dimensions.z / desc.heightfieldSamples),
-                                                     desc.heightfieldSamples);
+            float samples = static_cast<float>(desc.heightfieldSamples);
+            JPH::HeightFieldShapeSettings hfSettings(
+                desc.heightfieldData.data(), JPH::Vec3::sZero(),
+                JPH::Vec3(desc.dimensions.x / samples, desc.heightfieldScale, desc.dimensions.z / samples),
+                desc.heightfieldSamples);
             auto result = hfSettings.Create();
             if (!result.HasError())
             {
@@ -291,7 +291,7 @@ void* PhysicsSystem::CreateConeShape(float radius, float height)
     constexpr int segments = 16;
     for (int i = 0; i < segments; ++i)
     {
-        float angle = (2.0f * 3.14159265f * i) / segments;
+        float angle = (2.0f * 3.14159265f * static_cast<float>(i)) / static_cast<float>(segments);
         points.push_back(JPH::Vec3(radius * std::cos(angle), 0, radius * std::sin(angle)));
     }
 

@@ -10,6 +10,7 @@
 #include "TestFramework.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <string>
