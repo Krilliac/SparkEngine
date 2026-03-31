@@ -747,7 +747,7 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
-  # Code Coverage — GCC with lcov
+  # Code Coverage — GCC with lcov (whole-project analysis)
   # ===========================================================================
   coverage:
     name: "Code Coverage (GCC)"
@@ -774,7 +774,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
-            -DBUILD_TESTS=ON
+            -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
       - name: Build
         env:
           CCACHE_COMPRESS: "true"
@@ -784,9 +784,25 @@ jobs:
         run: cd build && ./bin/SparkTests 2>&1 | tail -5
       - name: Generate coverage
         run: |
-          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
-          lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
+          # Capture raw coverage from all compiled sources
+          lcov --capture --directory build --output-file coverage-raw.info \
+            --ignore-errors mismatch,mismatch,gcov,negative \
+            --rc geninfo_unexecuted_blocks=1
+
+          # Remove system headers, third-party, and test code
+          lcov --remove coverage-raw.info \
+            '/usr/*' '*/ThirdParty/*' '*/Tests/*' \
+            --output-file coverage.info \
+            --ignore-errors unused,negative
+
+          # Full directory listing for the PR comment
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
+      - name: Per-subsystem coverage analysis
+        run: |
+          scripts/coverage-report.sh coverage.info --json coverage-report.json 2>&1 | tee subsystem-coverage.txt
+      - name: Coverage threshold check
+        run: |
+          scripts/coverage-report.sh coverage.info --check 2>&1 | tee coverage-check.txt
       - name: Post coverage summary to PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v8
@@ -794,14 +810,63 @@ jobs:
           script: |
             const fs = require('fs');
             try {
+              // Read the per-subsystem breakdown
+              let subsystemReport = '';
+              try {
+                subsystemReport = fs.readFileSync('subsystem-coverage.txt', 'utf8');
+                // Strip ANSI color codes for GitHub
+                subsystemReport = subsystemReport.replace(/\x1b\[[0-9;]*m/g, '');
+              } catch (e) { /* ignore */ }
+
+              // Read the lcov directory breakdown
               const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
               const lines = summary.split('\n');
-              // Extract the total line (last non-empty line with a percentage)
-              const totalLine = lines.filter(l => /Total:/.test(l) || /\d+\.\d+%/.test(l)).pop() || '';
-              let body = `## Code Coverage (GCC + lcov)\n\n`;
-              // Get the last 30 lines which contain the per-directory breakdown
-              const table = lines.slice(-35).join('\n');
-              body += `\`\`\`\n${table}\n\`\`\`\n`;
+              const table = lines.slice(-50).join('\n');
+
+              // Read JSON for structured data
+              let jsonData = null;
+              try {
+                jsonData = JSON.parse(fs.readFileSync('coverage-report.json', 'utf8'));
+              } catch (e) { /* ignore */ }
+
+              // Build the PR comment
+              let body = `## Code Coverage Report\n\n`;
+
+              // Total coverage badge-style summary
+              if (jsonData) {
+                const total = jsonData.total;
+                const icon = total.pass ? ':white_check_mark:' : ':x:';
+                body += `${icon} **Total: ${total.coverage}%** (${total.lines_hit} / ${total.lines_total} lines, threshold: ${total.threshold}%)\n\n`;
+              }
+
+              // Per-subsystem table
+              if (jsonData) {
+                body += `### Per-Subsystem Breakdown\n\n`;
+                body += `| Subsystem | Coverage | Lines | Threshold | Status |\n`;
+                body += `|-----------|----------|-------|-----------|--------|\n`;
+                const sorted = jsonData.subsystems
+                  .filter(s => s.lines_total > 0)
+                  .sort((a, b) => b.coverage - a.coverage);
+                for (const s of sorted) {
+                  const icon = s.pass ? ':white_check_mark:' : ':x:';
+                  body += `| ${s.subsystem} | ${s.coverage}% | ${s.lines_hit}/${s.lines_total} | ${s.threshold}% | ${icon} |\n`;
+                }
+
+                // Subsystems with no coverage data
+                const empty = jsonData.subsystems.filter(s => s.lines_total === 0);
+                if (empty.length > 0) {
+                  body += `\n<details><summary>Subsystems with no coverage data (${empty.length})</summary>\n\n`;
+                  for (const s of empty) {
+                    body += `- ${s.subsystem}\n`;
+                  }
+                  body += `</details>\n`;
+                }
+              }
+
+              // Detailed lcov breakdown (collapsed)
+              body += `\n<details><summary>Full lcov directory breakdown</summary>\n\n`;
+              body += `\`\`\`\n${table}\n\`\`\`\n</details>\n`;
+
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -811,11 +876,14 @@ jobs:
             } catch (e) {
               console.log('Could not post coverage:', e.message);
             }
-      - name: Upload coverage
+      - name: Upload coverage artifacts
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
-          path: coverage.info
+          path: |
+            coverage.info
+            coverage-report.json
+            subsystem-coverage.txt
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================

@@ -246,7 +246,7 @@ To reproduce CI failures locally, see `.claude/knowledge/ci-reproducible-builds.
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
 | `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error` |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
-| `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
+| `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov, per-subsystem thresholds |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | — | — | threshold: 20 |
 

@@ -363,33 +363,61 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
-| `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
+| `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov, per-subsystem thresholds |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | -- | -- | threshold: 20 |
 
 ### Code Coverage
 
-The `coverage` CI job produces lcov reports showing line and branch coverage. To generate coverage locally:
+The `coverage` CI job produces per-subsystem lcov reports with threshold enforcement. On pull requests, it posts a detailed markdown table showing coverage for every engine subsystem (Core, Utils, Graphics, Physics, AI, ECS, Networking, etc.) with pass/fail status against per-subsystem minimums.
+
+#### Local Coverage Generation
 
 ```bash
 # Build with coverage flags
 cmake -B build \
   -DCMAKE_BUILD_TYPE=Debug \
   -DBUILD_TESTS=ON \
-  -DCMAKE_CXX_FLAGS="--coverage" \
-  -DCMAKE_C_FLAGS="--coverage"
+  -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" \
+  -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
+  -DCMAKE_EXE_LINKER_FLAGS="--coverage"
 cmake --build build --parallel $(nproc)
 
 # Run tests to generate coverage data
-cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
+cd build && ./bin/SparkTests && cd ..
 
 # Generate coverage report (requires lcov)
-lcov --capture --directory build --output-file coverage.info
-lcov --remove coverage.info '/usr/*' 'ThirdParty/*' 'Tests/*' --output-file coverage.filtered.info
-genhtml coverage.filtered.info --output-directory coverage-report
+lcov --capture --directory build --output-file coverage.info \
+  --ignore-errors mismatch,mismatch,gcov,negative \
+  --rc geninfo_unexecuted_blocks=1
+lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' \
+  --output-file coverage.info --ignore-errors unused,negative
+
+# Per-subsystem analysis with threshold check
+scripts/coverage-report.sh coverage.info --check
+
+# Generate JSON report for tooling
+scripts/coverage-report.sh coverage.info --json coverage-report.json
+
+# HTML report (optional, for browser viewing)
+genhtml coverage.info --output-directory coverage-report
 ```
 
-Open `coverage-report/index.html` in a browser to view the report.
+#### Per-Subsystem Thresholds
+
+The `scripts/coverage-report.sh` script defines minimum coverage thresholds for each subsystem. These are intentionally conservative starting points — they should be ratcheted upward as coverage improves. Key thresholds:
+
+| Subsystem | Threshold | Subsystem | Threshold |
+|-----------|-----------|-----------|-----------|
+| Core | 25% | Utils | 20% |
+| ECS | 15% | Events | 15% |
+| Physics | 10% | AI | 10% |
+| Animation | 10% | Input | 10% |
+| Networking | 10% | Gameplay | 10% |
+| Graphics | 5% | Editor | 3% |
+| **Total** | **20%** | | |
+
+To update thresholds, edit `SUBSYSTEM_THRESHOLDS` in `scripts/coverage-report.sh`.
 
 ### Running Sanitizer Builds Locally
 
