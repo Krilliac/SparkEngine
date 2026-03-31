@@ -144,10 +144,13 @@ namespace Spark
         return it->second;
     }
 
-    void ComponentSerializerRegistry::RegisterBuiltins()
+    // ============================================================================
+    // Domain-specific serializer registration (called from RegisterBuiltins)
+    // ============================================================================
+
+    static void RegisterCoreSerializers(ComponentSerializerRegistry& reg)
     {
-        // Transform
-        Register(
+        reg.Register(
             "Transform",
             [](const void* comp) -> SerializedComponent
             {
@@ -174,8 +177,7 @@ namespace Spark
                 t.scale = {SafeGetFloat(p, "sx", 1), SafeGetFloat(p, "sy", 1), SafeGetFloat(p, "sz", 1)};
             });
 
-        // MeshRenderer
-        Register(
+        reg.Register(
             "MeshRenderer",
             [](const void* comp) -> SerializedComponent
             {
@@ -200,84 +202,7 @@ namespace Spark
                 m.visible = SafeGetString(p, "visible") != "0";
             });
 
-        // HealthComponent
-        Register(
-            "HealthComponent",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* h = static_cast<const HealthComponent*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "HealthComponent";
-                sc.properties["health"] = std::to_string(h->health);
-                sc.properties["maxHealth"] = std::to_string(h->maxHealth);
-                sc.properties["isDead"] = h->isDead ? "1" : "0";
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& h = world.AddComponent<HealthComponent>(entity);
-                auto& p = data.properties;
-                h.health = SafeGetFloat(p, "health", 100.0f);
-                h.maxHealth = SafeGetFloat(p, "maxHealth", 100.0f);
-                h.isDead = SafeGetString(p, "isDead") == "1";
-            });
-
-        // LightComponent
-        Register(
-            "LightComponent",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* l = static_cast<const LightComponent*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "LightComponent";
-                sc.properties["type"] = std::to_string(static_cast<int>(l->type));
-                sc.properties["cr"] = std::to_string(l->color.x);
-                sc.properties["cg"] = std::to_string(l->color.y);
-                sc.properties["cb"] = std::to_string(l->color.z);
-                sc.properties["intensity"] = std::to_string(l->intensity);
-                sc.properties["range"] = std::to_string(l->range);
-                sc.properties["castShadows"] = l->castShadows ? "1" : "0";
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& l = world.AddComponent<LightComponent>(entity);
-                auto& p = data.properties;
-                l.type = static_cast<LightComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 1)));
-                l.color = {SafeGetFloat(p, "cr", 1), SafeGetFloat(p, "cg", 1), SafeGetFloat(p, "cb", 1)};
-                l.intensity = SafeGetFloat(p, "intensity", 1.0f);
-                l.range = SafeGetFloat(p, "range", 10.0f);
-                l.castShadows = SafeGetString(p, "castShadows") == "1";
-            });
-
-        // AudioSourceComponent
-        Register(
-            "AudioSourceComponent",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* a = static_cast<const AudioSourceComponent*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "AudioSourceComponent";
-                sc.properties["soundName"] = a->soundName;
-                sc.properties["volume"] = std::to_string(a->volume);
-                sc.properties["is3D"] = a->is3D ? "1" : "0";
-                sc.properties["loop"] = a->loop ? "1" : "0";
-                sc.properties["playOnAwake"] = a->playOnAwake ? "1" : "0";
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& a = world.AddComponent<AudioSourceComponent>(entity);
-                auto& p = data.properties;
-                a.soundName = SafeGetString(p, "soundName");
-                a.volume = SafeGetFloat(p, "volume", 1.0f);
-                a.is3D = SafeGetString(p, "is3D") != "0";
-                a.loop = SafeGetString(p, "loop") == "1";
-                a.playOnAwake = SafeGetString(p, "playOnAwake") == "1";
-            });
-
-        // Camera
-        Register(
+        reg.Register(
             "Camera",
             [](const void* comp) -> SerializedComponent
             {
@@ -300,8 +225,7 @@ namespace Spark
                 c.isMainCamera = SafeGetString(p, "isMainCamera") == "1";
             });
 
-        // Script
-        Register(
+        reg.Register(
             "Script",
             [](const void* comp) -> SerializedComponent
             {
@@ -326,201 +250,13 @@ namespace Spark
                 s.started = SafeGetString(p, "started") == "1";
             });
 
-        // RigidBodyComponent
-        Register(
-            "RigidBodyComponent",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* rb = static_cast<const RigidBodyComponent*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "RigidBodyComponent";
-                sc.properties["type"] = std::to_string(static_cast<int>(rb->type));
-                sc.properties["mass"] = std::to_string(rb->mass);
-                sc.properties["friction"] = std::to_string(rb->friction);
-                sc.properties["restitution"] = std::to_string(rb->restitution);
-                sc.properties["linearDamping"] = std::to_string(rb->linearDamping);
-                sc.properties["angularDamping"] = std::to_string(rb->angularDamping);
-                sc.properties["isTrigger"] = rb->isTrigger ? "1" : "0";
-                sc.properties["lvx"] = std::to_string(rb->linearVelocity.x);
-                sc.properties["lvy"] = std::to_string(rb->linearVelocity.y);
-                sc.properties["lvz"] = std::to_string(rb->linearVelocity.z);
-                sc.properties["avx"] = std::to_string(rb->angularVelocity.x);
-                sc.properties["avy"] = std::to_string(rb->angularVelocity.y);
-                sc.properties["avz"] = std::to_string(rb->angularVelocity.z);
-                // physicsBodyHandle is runtime-only, skip
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& rb = world.AddComponent<RigidBodyComponent>(entity);
-                auto& p = data.properties;
-                rb.type = static_cast<RigidBodyComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 2)));
-                rb.mass = SafeGetFloat(p, "mass", 1.0f);
-                rb.friction = SafeGetFloat(p, "friction", 0.5f);
-                rb.restitution = SafeGetFloat(p, "restitution", 0.1f);
-                rb.linearDamping = SafeGetFloat(p, "linearDamping", 0.1f);
-                rb.angularDamping = SafeGetFloat(p, "angularDamping", 0.1f);
-                rb.isTrigger = SafeGetString(p, "isTrigger") == "1";
-                rb.linearVelocity = {SafeGetFloat(p, "lvx", 0), SafeGetFloat(p, "lvy", 0), SafeGetFloat(p, "lvz", 0)};
-                rb.angularVelocity = {SafeGetFloat(p, "avx", 0), SafeGetFloat(p, "avy", 0), SafeGetFloat(p, "avz", 0)};
-                rb.physicsBodyHandle = nullptr;
-            });
-
-        // ColliderComponent
-        Register(
-            "ColliderComponent",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* col = static_cast<const ColliderComponent*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "ColliderComponent";
-                sc.properties["shape"] = std::to_string(static_cast<int>(col->shape));
-                sc.properties["hex"] = std::to_string(col->halfExtents.x);
-                sc.properties["hey"] = std::to_string(col->halfExtents.y);
-                sc.properties["hez"] = std::to_string(col->halfExtents.z);
-                sc.properties["radius"] = std::to_string(col->radius);
-                sc.properties["height"] = std::to_string(col->height);
-                sc.properties["ox"] = std::to_string(col->offset.x);
-                sc.properties["oy"] = std::to_string(col->offset.y);
-                sc.properties["oz"] = std::to_string(col->offset.z);
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& col = world.AddComponent<ColliderComponent>(entity);
-                auto& p = data.properties;
-                col.shape = static_cast<ColliderComponent::Shape>(static_cast<int>(SafeGetFloat(p, "shape", 0)));
-                col.halfExtents = {SafeGetFloat(p, "hex", 0.5f), SafeGetFloat(p, "hey", 0.5f),
-                                   SafeGetFloat(p, "hez", 0.5f)};
-                col.radius = SafeGetFloat(p, "radius", 0.5f);
-                col.height = SafeGetFloat(p, "height", 1.0f);
-                col.offset = {SafeGetFloat(p, "ox", 0), SafeGetFloat(p, "oy", 0), SafeGetFloat(p, "oz", 0)};
-            });
-
-        // ParticleEmitterComponent
-        Register(
-            "ParticleEmitterComponent",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* pe = static_cast<const ParticleEmitterComponent*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "ParticleEmitterComponent";
-                sc.properties["effectName"] = pe->effectName;
-                sc.properties["autoPlay"] = pe->autoPlay ? "1" : "0";
-                sc.properties["isPlaying"] = pe->isPlaying ? "1" : "0";
-                sc.properties["emissionRate"] = std::to_string(pe->emissionRate);
-                sc.properties["lifetime"] = std::to_string(pe->lifetime);
-                sc.properties["scr"] = std::to_string(pe->startColor.x);
-                sc.properties["scg"] = std::to_string(pe->startColor.y);
-                sc.properties["scb"] = std::to_string(pe->startColor.z);
-                sc.properties["sca"] = std::to_string(pe->startColor.w);
-                sc.properties["startSize"] = std::to_string(pe->startSize);
-                sc.properties["startSpeed"] = std::to_string(pe->startSpeed);
-                // emitterHandle is runtime-only, skip
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& pe = world.AddComponent<ParticleEmitterComponent>(entity);
-                auto& p = data.properties;
-                pe.effectName = SafeGetString(p, "effectName");
-                pe.autoPlay = SafeGetString(p, "autoPlay") != "0";
-                pe.isPlaying = SafeGetString(p, "isPlaying") == "1";
-                pe.emissionRate = SafeGetFloat(p, "emissionRate", 10.0f);
-                pe.lifetime = SafeGetFloat(p, "lifetime", 1.0f);
-                pe.startColor = {SafeGetFloat(p, "scr", 1), SafeGetFloat(p, "scg", 1), SafeGetFloat(p, "scb", 1),
-                                 SafeGetFloat(p, "sca", 1)};
-                pe.startSize = SafeGetFloat(p, "startSize", 0.1f);
-                pe.startSpeed = SafeGetFloat(p, "startSpeed", 1.0f);
-                pe.emitterHandle = nullptr;
-            });
-
-        // AnimationController
-        Register(
-            "AnimationController",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* ac = static_cast<const AnimationController*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "AnimationController";
-                sc.properties["currentAnimation"] = ac->currentAnimation;
-                sc.properties["defaultAnimation"] = ac->defaultAnimation;
-                sc.properties["playbackSpeed"] = std::to_string(ac->playbackSpeed);
-                sc.properties["currentTime"] = std::to_string(ac->currentTime);
-                sc.properties["playing"] = ac->playing ? "1" : "0";
-                sc.properties["loop"] = ac->loop ? "1" : "0";
-                // Serialize availableAnimations as comma-separated string
-                std::string animList;
-                for (size_t i = 0; i < ac->availableAnimations.size(); ++i)
-                {
-                    if (i > 0)
-                        animList += ",";
-                    animList += ac->availableAnimations[i];
-                }
-                sc.properties["availableAnimations"] = animList;
-                // animInstanceHandle is runtime-only, skip
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& ac = world.AddComponent<AnimationController>(entity);
-                auto& p = data.properties;
-                ac.currentAnimation = SafeGetString(p, "currentAnimation");
-                ac.defaultAnimation = SafeGetString(p, "defaultAnimation");
-                ac.playbackSpeed = SafeGetFloat(p, "playbackSpeed", 1.0f);
-                ac.currentTime = SafeGetFloat(p, "currentTime", 0.0f);
-                ac.playing = SafeGetString(p, "playing") != "0";
-                ac.loop = SafeGetString(p, "loop") != "0";
-                // Deserialize availableAnimations from comma-separated string
-                std::string animList = SafeGetString(p, "availableAnimations");
-                if (!animList.empty())
-                {
-                    std::istringstream iss(animList);
-                    std::string anim;
-                    while (std::getline(iss, anim, ','))
-                    {
-                        if (!anim.empty())
-                            ac.availableAnimations.push_back(anim);
-                    }
-                }
-                ac.animInstanceHandle = nullptr;
-            });
-
-        // NetworkIdentity
-        Register(
-            "NetworkIdentity",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* ni = static_cast<const NetworkIdentity*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "NetworkIdentity";
-                sc.properties["networkID"] = std::to_string(ni->networkID);
-                sc.properties["ownerClientID"] = std::to_string(ni->ownerClientID);
-                sc.properties["isLocalAuthority"] = ni->isLocalAuthority ? "1" : "0";
-                sc.properties["replicateTransform"] = ni->replicateTransform ? "1" : "0";
-                sc.properties["replicateHealth"] = ni->replicateHealth ? "1" : "0";
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& ni = world.AddComponent<NetworkIdentity>(entity);
-                auto& p = data.properties;
-                ni.networkID = SafeGetUint32(p, "networkID", 0);
-                ni.ownerClientID = SafeGetUint32(p, "ownerClientID", 0);
-                ni.isLocalAuthority = SafeGetString(p, "isLocalAuthority") == "1";
-                ni.replicateTransform = SafeGetString(p, "replicateTransform") != "0";
-                ni.replicateHealth = SafeGetString(p, "replicateHealth") != "0";
-            });
-
-        // TagComponent
-        Register(
+        reg.Register(
             "TagComponent",
             [](const void* comp) -> SerializedComponent
             {
                 const auto* tc = static_cast<const TagComponent*>(comp);
                 SerializedComponent sc;
                 sc.typeName = "TagComponent";
-                // Serialize tags as comma-separated string
                 std::string tagList;
                 bool first = true;
                 for (const auto& tag : tc->tags)
@@ -549,8 +285,7 @@ namespace Spark
                 }
             });
 
-        // ActiveComponent
-        Register(
+        reg.Register(
             "ActiveComponent",
             [](const void* comp) -> SerializedComponent
             {
@@ -566,8 +301,268 @@ namespace Spark
                 auto it = data.properties.find("active");
                 ac.active = (it == data.properties.end()) || (it->second != "0");
             });
+    }
 
-        // Auto-register reflection-driven serializers for all remaining reflected types
+    static void RegisterPhysicsSerializers(ComponentSerializerRegistry& reg)
+    {
+        reg.Register(
+            "RigidBodyComponent",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* rb = static_cast<const RigidBodyComponent*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "RigidBodyComponent";
+                sc.properties["type"] = std::to_string(static_cast<int>(rb->type));
+                sc.properties["mass"] = std::to_string(rb->mass);
+                sc.properties["friction"] = std::to_string(rb->friction);
+                sc.properties["restitution"] = std::to_string(rb->restitution);
+                sc.properties["linearDamping"] = std::to_string(rb->linearDamping);
+                sc.properties["angularDamping"] = std::to_string(rb->angularDamping);
+                sc.properties["isTrigger"] = rb->isTrigger ? "1" : "0";
+                sc.properties["lvx"] = std::to_string(rb->linearVelocity.x);
+                sc.properties["lvy"] = std::to_string(rb->linearVelocity.y);
+                sc.properties["lvz"] = std::to_string(rb->linearVelocity.z);
+                sc.properties["avx"] = std::to_string(rb->angularVelocity.x);
+                sc.properties["avy"] = std::to_string(rb->angularVelocity.y);
+                sc.properties["avz"] = std::to_string(rb->angularVelocity.z);
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& rb = world.AddComponent<RigidBodyComponent>(entity);
+                auto& p = data.properties;
+                rb.type = static_cast<RigidBodyComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 2)));
+                rb.mass = SafeGetFloat(p, "mass", 1.0f);
+                rb.friction = SafeGetFloat(p, "friction", 0.5f);
+                rb.restitution = SafeGetFloat(p, "restitution", 0.1f);
+                rb.linearDamping = SafeGetFloat(p, "linearDamping", 0.1f);
+                rb.angularDamping = SafeGetFloat(p, "angularDamping", 0.1f);
+                rb.isTrigger = SafeGetString(p, "isTrigger") == "1";
+                rb.linearVelocity = {SafeGetFloat(p, "lvx", 0), SafeGetFloat(p, "lvy", 0), SafeGetFloat(p, "lvz", 0)};
+                rb.angularVelocity = {SafeGetFloat(p, "avx", 0), SafeGetFloat(p, "avy", 0), SafeGetFloat(p, "avz", 0)};
+                rb.physicsBodyHandle = nullptr;
+            });
+
+        reg.Register(
+            "ColliderComponent",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* col = static_cast<const ColliderComponent*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "ColliderComponent";
+                sc.properties["shape"] = std::to_string(static_cast<int>(col->shape));
+                sc.properties["hex"] = std::to_string(col->halfExtents.x);
+                sc.properties["hey"] = std::to_string(col->halfExtents.y);
+                sc.properties["hez"] = std::to_string(col->halfExtents.z);
+                sc.properties["radius"] = std::to_string(col->radius);
+                sc.properties["height"] = std::to_string(col->height);
+                sc.properties["ox"] = std::to_string(col->offset.x);
+                sc.properties["oy"] = std::to_string(col->offset.y);
+                sc.properties["oz"] = std::to_string(col->offset.z);
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& col = world.AddComponent<ColliderComponent>(entity);
+                auto& p = data.properties;
+                col.shape = static_cast<ColliderComponent::Shape>(static_cast<int>(SafeGetFloat(p, "shape", 0)));
+                col.halfExtents = {SafeGetFloat(p, "hex", 0.5f), SafeGetFloat(p, "hey", 0.5f),
+                                   SafeGetFloat(p, "hez", 0.5f)};
+                col.radius = SafeGetFloat(p, "radius", 0.5f);
+                col.height = SafeGetFloat(p, "height", 1.0f);
+                col.offset = {SafeGetFloat(p, "ox", 0), SafeGetFloat(p, "oy", 0), SafeGetFloat(p, "oz", 0)};
+            });
+    }
+
+    static void RegisterGameplaySerializers(ComponentSerializerRegistry& reg)
+    {
+        reg.Register(
+            "HealthComponent",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* h = static_cast<const HealthComponent*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "HealthComponent";
+                sc.properties["health"] = std::to_string(h->health);
+                sc.properties["maxHealth"] = std::to_string(h->maxHealth);
+                sc.properties["isDead"] = h->isDead ? "1" : "0";
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& h = world.AddComponent<HealthComponent>(entity);
+                auto& p = data.properties;
+                h.health = SafeGetFloat(p, "health", 100.0f);
+                h.maxHealth = SafeGetFloat(p, "maxHealth", 100.0f);
+                h.isDead = SafeGetString(p, "isDead") == "1";
+            });
+
+        reg.Register(
+            "LightComponent",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* l = static_cast<const LightComponent*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "LightComponent";
+                sc.properties["type"] = std::to_string(static_cast<int>(l->type));
+                sc.properties["cr"] = std::to_string(l->color.x);
+                sc.properties["cg"] = std::to_string(l->color.y);
+                sc.properties["cb"] = std::to_string(l->color.z);
+                sc.properties["intensity"] = std::to_string(l->intensity);
+                sc.properties["range"] = std::to_string(l->range);
+                sc.properties["castShadows"] = l->castShadows ? "1" : "0";
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& l = world.AddComponent<LightComponent>(entity);
+                auto& p = data.properties;
+                l.type = static_cast<LightComponent::Type>(static_cast<int>(SafeGetFloat(p, "type", 1)));
+                l.color = {SafeGetFloat(p, "cr", 1), SafeGetFloat(p, "cg", 1), SafeGetFloat(p, "cb", 1)};
+                l.intensity = SafeGetFloat(p, "intensity", 1.0f);
+                l.range = SafeGetFloat(p, "range", 10.0f);
+                l.castShadows = SafeGetString(p, "castShadows") == "1";
+            });
+
+        reg.Register(
+            "AudioSourceComponent",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* a = static_cast<const AudioSourceComponent*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "AudioSourceComponent";
+                sc.properties["soundName"] = a->soundName;
+                sc.properties["volume"] = std::to_string(a->volume);
+                sc.properties["is3D"] = a->is3D ? "1" : "0";
+                sc.properties["loop"] = a->loop ? "1" : "0";
+                sc.properties["playOnAwake"] = a->playOnAwake ? "1" : "0";
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& a = world.AddComponent<AudioSourceComponent>(entity);
+                auto& p = data.properties;
+                a.soundName = SafeGetString(p, "soundName");
+                a.volume = SafeGetFloat(p, "volume", 1.0f);
+                a.is3D = SafeGetString(p, "is3D") != "0";
+                a.loop = SafeGetString(p, "loop") == "1";
+                a.playOnAwake = SafeGetString(p, "playOnAwake") == "1";
+            });
+
+        reg.Register(
+            "ParticleEmitterComponent",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* pe = static_cast<const ParticleEmitterComponent*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "ParticleEmitterComponent";
+                sc.properties["effectName"] = pe->effectName;
+                sc.properties["autoPlay"] = pe->autoPlay ? "1" : "0";
+                sc.properties["isPlaying"] = pe->isPlaying ? "1" : "0";
+                sc.properties["emissionRate"] = std::to_string(pe->emissionRate);
+                sc.properties["lifetime"] = std::to_string(pe->lifetime);
+                sc.properties["scr"] = std::to_string(pe->startColor.x);
+                sc.properties["scg"] = std::to_string(pe->startColor.y);
+                sc.properties["scb"] = std::to_string(pe->startColor.z);
+                sc.properties["sca"] = std::to_string(pe->startColor.w);
+                sc.properties["startSize"] = std::to_string(pe->startSize);
+                sc.properties["startSpeed"] = std::to_string(pe->startSpeed);
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& pe = world.AddComponent<ParticleEmitterComponent>(entity);
+                auto& p = data.properties;
+                pe.effectName = SafeGetString(p, "effectName");
+                pe.autoPlay = SafeGetString(p, "autoPlay") != "0";
+                pe.isPlaying = SafeGetString(p, "isPlaying") == "1";
+                pe.emissionRate = SafeGetFloat(p, "emissionRate", 10.0f);
+                pe.lifetime = SafeGetFloat(p, "lifetime", 1.0f);
+                pe.startColor = {SafeGetFloat(p, "scr", 1), SafeGetFloat(p, "scg", 1), SafeGetFloat(p, "scb", 1),
+                                 SafeGetFloat(p, "sca", 1)};
+                pe.startSize = SafeGetFloat(p, "startSize", 0.1f);
+                pe.startSpeed = SafeGetFloat(p, "startSpeed", 1.0f);
+                pe.emitterHandle = nullptr;
+            });
+
+        reg.Register(
+            "AnimationController",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* ac = static_cast<const AnimationController*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "AnimationController";
+                sc.properties["currentAnimation"] = ac->currentAnimation;
+                sc.properties["defaultAnimation"] = ac->defaultAnimation;
+                sc.properties["playbackSpeed"] = std::to_string(ac->playbackSpeed);
+                sc.properties["currentTime"] = std::to_string(ac->currentTime);
+                sc.properties["playing"] = ac->playing ? "1" : "0";
+                sc.properties["loop"] = ac->loop ? "1" : "0";
+                std::string animList;
+                for (size_t i = 0; i < ac->availableAnimations.size(); ++i)
+                {
+                    if (i > 0)
+                        animList += ",";
+                    animList += ac->availableAnimations[i];
+                }
+                sc.properties["availableAnimations"] = animList;
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& ac = world.AddComponent<AnimationController>(entity);
+                auto& p = data.properties;
+                ac.currentAnimation = SafeGetString(p, "currentAnimation");
+                ac.defaultAnimation = SafeGetString(p, "defaultAnimation");
+                ac.playbackSpeed = SafeGetFloat(p, "playbackSpeed", 1.0f);
+                ac.currentTime = SafeGetFloat(p, "currentTime", 0.0f);
+                ac.playing = SafeGetString(p, "playing") != "0";
+                ac.loop = SafeGetString(p, "loop") != "0";
+                std::string animList = SafeGetString(p, "availableAnimations");
+                if (!animList.empty())
+                {
+                    std::istringstream iss(animList);
+                    std::string anim;
+                    while (std::getline(iss, anim, ','))
+                    {
+                        if (!anim.empty())
+                            ac.availableAnimations.push_back(anim);
+                    }
+                }
+                ac.animInstanceHandle = nullptr;
+            });
+
+        reg.Register(
+            "NetworkIdentity",
+            [](const void* comp) -> SerializedComponent
+            {
+                const auto* ni = static_cast<const NetworkIdentity*>(comp);
+                SerializedComponent sc;
+                sc.typeName = "NetworkIdentity";
+                sc.properties["networkID"] = std::to_string(ni->networkID);
+                sc.properties["ownerClientID"] = std::to_string(ni->ownerClientID);
+                sc.properties["isLocalAuthority"] = ni->isLocalAuthority ? "1" : "0";
+                sc.properties["replicateTransform"] = ni->replicateTransform ? "1" : "0";
+                sc.properties["replicateHealth"] = ni->replicateHealth ? "1" : "0";
+                return sc;
+            },
+            [](World& world, EntityID entity, const SerializedComponent& data)
+            {
+                auto& ni = world.AddComponent<NetworkIdentity>(entity);
+                auto& p = data.properties;
+                ni.networkID = SafeGetUint32(p, "networkID", 0);
+                ni.ownerClientID = SafeGetUint32(p, "ownerClientID", 0);
+                ni.isLocalAuthority = SafeGetString(p, "isLocalAuthority") == "1";
+                ni.replicateTransform = SafeGetString(p, "replicateTransform") != "0";
+                ni.replicateHealth = SafeGetString(p, "replicateHealth") != "0";
+            });
+    }
+
+    void ComponentSerializerRegistry::RegisterBuiltins()
+    {
+        RegisterCoreSerializers(*this);
+        RegisterPhysicsSerializers(*this);
+        RegisterGameplaySerializers(*this);
         RegisterReflectedSerializers();
     }
 
@@ -786,6 +781,17 @@ namespace Spark
         return fs::exists(GetSavePath(slotName));
     }
 
+    template <typename T>
+    static void TrySerialize(World& world, entt::entity entity, const ComponentSerializerRegistry& reg,
+                             const char* typeName, std::vector<SerializedComponent>& out)
+    {
+        if (auto* comp = world.GetComponent<T>(entity))
+        {
+            if (reg.HasSerializer(typeName))
+                out.push_back(reg.Serialize(typeName, comp));
+        }
+    }
+
     SaveData SaveSystem::SerializeWorld(World& world, const SaveMetadata& metadata) const
     {
         SaveData data;
@@ -806,103 +812,22 @@ namespace Spark
             auto* name = world.GetComponent<NameComponent>(entity);
             se.name = name ? name->name : "";
 
-            // Serialize Transform
-            if (auto* t = world.GetComponent<Transform>(entity))
-            {
-                if (serializerRegistry.HasSerializer("Transform"))
-                    se.components.push_back(serializerRegistry.Serialize("Transform", t));
-            }
-
-            // Serialize MeshRenderer
-            if (auto* m = world.GetComponent<MeshRenderer>(entity))
-            {
-                if (serializerRegistry.HasSerializer("MeshRenderer"))
-                    se.components.push_back(serializerRegistry.Serialize("MeshRenderer", m));
-            }
-
-            // Serialize HealthComponent
-            if (auto* h = world.GetComponent<HealthComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("HealthComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("HealthComponent", h));
-            }
-
-            // Serialize LightComponent
-            if (auto* l = world.GetComponent<LightComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("LightComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("LightComponent", l));
-            }
-
-            // Serialize AudioSourceComponent
-            if (auto* a = world.GetComponent<AudioSourceComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("AudioSourceComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("AudioSourceComponent", a));
-            }
-
-            // Serialize Camera
-            if (auto* c = world.GetComponent<Camera>(entity))
-            {
-                if (serializerRegistry.HasSerializer("Camera"))
-                    se.components.push_back(serializerRegistry.Serialize("Camera", c));
-            }
-
-            // Serialize Script
-            if (auto* s = world.GetComponent<Script>(entity))
-            {
-                if (serializerRegistry.HasSerializer("Script"))
-                    se.components.push_back(serializerRegistry.Serialize("Script", s));
-            }
-
-            // Serialize RigidBodyComponent
-            if (auto* rb = world.GetComponent<RigidBodyComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("RigidBodyComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("RigidBodyComponent", rb));
-            }
-
-            // Serialize ColliderComponent
-            if (auto* col = world.GetComponent<ColliderComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("ColliderComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("ColliderComponent", col));
-            }
-
-            // Serialize ParticleEmitterComponent
-            if (auto* pe = world.GetComponent<ParticleEmitterComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("ParticleEmitterComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("ParticleEmitterComponent", pe));
-            }
-
-            // Serialize AnimationController
-            if (auto* ac = world.GetComponent<AnimationController>(entity))
-            {
-                if (serializerRegistry.HasSerializer("AnimationController"))
-                    se.components.push_back(serializerRegistry.Serialize("AnimationController", ac));
-            }
-
-            // Serialize NetworkIdentity
-            if (auto* ni = world.GetComponent<NetworkIdentity>(entity))
-            {
-                if (serializerRegistry.HasSerializer("NetworkIdentity"))
-                    se.components.push_back(serializerRegistry.Serialize("NetworkIdentity", ni));
-            }
-
-            // Serialize TagComponent
-            if (auto* tc = world.GetComponent<TagComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("TagComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("TagComponent", tc));
-            }
-
-            // Serialize ActiveComponent
-            if (auto* ac = world.GetComponent<ActiveComponent>(entity))
-            {
-                if (serializerRegistry.HasSerializer("ActiveComponent"))
-                    se.components.push_back(serializerRegistry.Serialize("ActiveComponent", ac));
-            }
+            TrySerialize<Transform>(world, entity, serializerRegistry, "Transform", se.components);
+            TrySerialize<MeshRenderer>(world, entity, serializerRegistry, "MeshRenderer", se.components);
+            TrySerialize<HealthComponent>(world, entity, serializerRegistry, "HealthComponent", se.components);
+            TrySerialize<LightComponent>(world, entity, serializerRegistry, "LightComponent", se.components);
+            TrySerialize<AudioSourceComponent>(world, entity, serializerRegistry, "AudioSourceComponent",
+                                               se.components);
+            TrySerialize<Camera>(world, entity, serializerRegistry, "Camera", se.components);
+            TrySerialize<Script>(world, entity, serializerRegistry, "Script", se.components);
+            TrySerialize<RigidBodyComponent>(world, entity, serializerRegistry, "RigidBodyComponent", se.components);
+            TrySerialize<ColliderComponent>(world, entity, serializerRegistry, "ColliderComponent", se.components);
+            TrySerialize<ParticleEmitterComponent>(world, entity, serializerRegistry, "ParticleEmitterComponent",
+                                                   se.components);
+            TrySerialize<AnimationController>(world, entity, serializerRegistry, "AnimationController", se.components);
+            TrySerialize<NetworkIdentity>(world, entity, serializerRegistry, "NetworkIdentity", se.components);
+            TrySerialize<TagComponent>(world, entity, serializerRegistry, "TagComponent", se.components);
+            TrySerialize<ActiveComponent>(world, entity, serializerRegistry, "ActiveComponent", se.components);
 
             if (!se.components.empty())
                 data.entities.push_back(se);

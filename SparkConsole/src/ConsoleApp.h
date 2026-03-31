@@ -49,10 +49,38 @@ class ConsoleApp
     void ReadEngineInput(); ///< Background thread: reads log messages from engine pipe.
     void ReadUserInput();   ///< Main thread: reads keyboard input and dispatches commands.
 
+    // --- Run() helpers ---
+    void PrintBanner();    ///< Clear screen and print the startup banner.
+    bool DetectPipeMode(); ///< Detect if stdin is a pipe; print connection status. Returns true if pipe mode.
+    void PipeKeyboardThreadFunc(std::string& input,
+                                std::atomic<bool>& keyboardThreadRunning); ///< Keyboard input loop for pipe mode.
+    void PollPipeModeInput(std::string& input, int& noInputCounter, bool& pipeMode,
+                           std::atomic<bool>& keyboardThreadRunning); ///< One iteration of pipe-mode input polling.
+    void PollStandaloneInput(std::string& input); ///< One iteration of standalone-mode input polling.
+
+    // --- ReadEngineInput() helpers ---
+    void ProcessPipeMessages(const std::string& message); ///< Parse newline-delimited pipe data into log lines.
+#ifdef SPARK_PLATFORM_WINDOWS
+    bool PollWindowsPipeData(HANDLE hStdin); ///< Read one batch from pipe; returns false if pipe lost.
+    void ReadEngineInputWindows();           ///< Windows pipe reading loop.
+#else
+    void ReadEngineInputPosix(); ///< POSIX (Linux/macOS) pipe reading loop.
+#endif
+
+    // --- ReadUserInput() helpers ---
+    void HandleArrowKey(std::string& input, char scanCode); ///< Process up/down arrow for history navigation.
+#ifndef SPARK_PLATFORM_WINDOWS
+    void HandleLinuxEscapeSequence(std::string& input); ///< Process Linux ESC-[ arrow sequences.
+#endif
+    void HandleEnterKey(std::string& input);               ///< Process Enter keypress (submit command).
+    void HandleBackspaceKey(std::string& input);           ///< Process Backspace/DEL keypress.
+    void HandlePrintableChar(std::string& input, char ch); ///< Process a printable character keypress.
+
     // --- Display ---
-    void PrintLog(const std::wstring& msg);       ///< Print a raw log line to the console.
-    void PrintEngineLog(const std::wstring& msg); ///< Print an engine log line with severity coloring.
-    void PrintResult(const std::string& result);  ///< Print a command result string.
+    void PrintLog(const std::wstring& msg);          ///< Print a raw log line to the console.
+    void PrintEngineLog(const std::wstring& msg);    ///< Print an engine log line with severity coloring.
+    void PrintDuplicateSkipNotice(int skippedCount); ///< Print a notice about skipped duplicate engine messages.
+    void PrintResult(const std::string& result);     ///< Print a command result string.
 #ifdef SPARK_PLATFORM_WINDOWS
     void SetConsoleColor(WORD color); ///< Set Win32 console text color attribute.
 #else
@@ -79,6 +107,8 @@ class ConsoleApp
     // --- Tab completion ---
     std::vector<std::string> GetCompletions(const std::string& prefix); ///< Find commands matching a prefix.
     void HandleTabCompletion(std::string& input);                       ///< Cycle through completions on Tab press.
+    void DisplayCompletionCandidates();                  ///< Print all tab-completion candidates to console.
+    void ReplaceInputWithCompletion(std::string& input); ///< Replace current input text with selected completion.
 
     // --- Alias system ---
     std::string ResolveAlias(const std::string& input); ///< Expand aliases before command dispatch.
