@@ -60,8 +60,11 @@ class ConsoleApp
 #endif
 
     // --- Command handling ---
-    void ExecuteCommand(const std::string& cmdLine);        ///< Parse and dispatch a command line.
-    void RegisterDefaultCommands();                         ///< Register built-in commands (help, quit, clear, alias).
+    void ExecuteCommand(const std::string& cmdLine); ///< Parse and dispatch a command line.
+    void RegisterDefaultCommands();                  ///< Register all built-in commands.
+    void RegisterCoreCommands();                     ///< Register core commands (help, clear, echo, version).
+    void RegisterDiagnosticCommands();               ///< Register diagnostic commands (status, diag, pipe_test, etc).
+    void RegisterAliasCommands();                    ///< Register alias/history commands and default aliases.
     bool ShouldForwardToEngine(const std::string& command); ///< True if this command should be sent to the engine.
 
     // --- Command history (up/down arrow navigation) ---

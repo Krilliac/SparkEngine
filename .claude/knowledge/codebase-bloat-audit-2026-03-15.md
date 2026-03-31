@@ -14,6 +14,8 @@ Comprehensive audit combining prior findings (March 14) with new deep analysis. 
 
 **Progress (2026-03-18):** All P0 targets resolved. SparkConsole refactored (7,000→551). Five major file splits completed: GraphicsEngine.cpp (4,949→5 files), MaterialSystem.cpp (4,283→3 files), EditorUI.cpp (2,691→3 files), AssetPipeline.cpp (2,557→3 files), Shader.cpp (2,344→2 files). VisualScriptingSystem deleted. ~16,800 lines redistributed from 5 monolithic files into 17 focused modules.
 
+**Progress (2026-03-31):** InspectorComponentRenderers.cpp (1,887 lines) split into 4 domain-specific files (~470 lines each): Core3D, 2D, Gameplay, Reflected. ConsoleApp::RegisterDefaultCommands (321 lines) split into 3 focused functions: RegisterCoreCommands, RegisterDiagnosticCommands, RegisterAliasCommands. Oversized function count reduced from 66 to 9 (86% reduction). CLAUDE.md phantom system references (Procedural, Stats) removed.
+
 ---
 
 ## 1. Oversized Files (Hard Limit Violations)

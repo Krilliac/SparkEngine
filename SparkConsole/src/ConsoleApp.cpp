@@ -959,7 +959,13 @@ bool ConsoleApp::ShouldForwardToEngine(const std::string& command)
 
 void ConsoleApp::RegisterDefaultCommands()
 {
-    // Help command
+    RegisterCoreCommands();
+    RegisterDiagnosticCommands();
+    RegisterAliasCommands();
+}
+
+void ConsoleApp::RegisterCoreCommands()
+{
     m_commandRegistry.RegisterCommand("help", "Show available commands or help for specific command",
                                       "help [command_name]",
                                       [this](const std::vector<std::string>& args) -> std::string
@@ -993,7 +999,6 @@ void ConsoleApp::RegisterDefaultCommands()
                                           }
                                       });
 
-    // Clear command
     m_commandRegistry.RegisterCommand("clear", "Clear the console screen and refresh display", "clear",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1032,21 +1037,30 @@ void ConsoleApp::RegisterDefaultCommands()
                                           return "";
                                       });
 
-    // History command
-    m_commandRegistry.RegisterCommand("history", "Show command history", "history",
-                                      [this](const std::vector<std::string>& args) -> std::string
+    m_commandRegistry.RegisterCommand("echo", "Echo back the provided arguments", "echo <message>",
+                                      [](const std::vector<std::string>& args) -> std::string
                                       {
-                                          std::lock_guard<std::mutex> lock(m_historyMutex);
                                           std::stringstream ss;
-                                          ss << "Command History:\n";
-                                          for (size_t i = 0; i < m_commandHistory.size(); ++i)
+                                          for (size_t i = 0; i < args.size(); ++i)
                                           {
-                                              ss << "  " << (i + 1) << ": " << m_commandHistory[i] << "\n";
+                                              if (i > 0)
+                                                  ss << " ";
+                                              ss << args[i];
                                           }
                                           return ss.str();
                                       });
 
-    // Status command
+    m_commandRegistry.RegisterCommand("version", "Show console version", "version",
+                                      [](const std::vector<std::string>& args) -> std::string
+                                      {
+                                          return "Spark Engine Console v2.0.0\n"
+                                                 "Features: Tab completion, command aliases, history navigation\n"
+                                                 "Build: Development";
+                                      });
+}
+
+void ConsoleApp::RegisterDiagnosticCommands()
+{
     m_commandRegistry.RegisterCommand("status", "Show console status information", "status",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1062,21 +1076,6 @@ void ConsoleApp::RegisterDefaultCommands()
                                           return ss.str();
                                       });
 
-    // Echo command
-    m_commandRegistry.RegisterCommand("echo", "Echo back the provided arguments", "echo <message>",
-                                      [](const std::vector<std::string>& args) -> std::string
-                                      {
-                                          std::stringstream ss;
-                                          for (size_t i = 0; i < args.size(); ++i)
-                                          {
-                                              if (i > 0)
-                                                  ss << " ";
-                                              ss << args[i];
-                                          }
-                                          return ss.str();
-                                      });
-
-    // Test connection command
     m_commandRegistry.RegisterCommand("test_connection", "Test connection to engine", "test_connection",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1085,7 +1084,6 @@ void ConsoleApp::RegisterDefaultCommands()
                                           return "Test command sent to engine. Check for response above.";
                                       });
 
-    // Diagnostic command
     m_commandRegistry.RegisterCommand("diag", "Show console diagnostic information", "diag",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1128,7 +1126,6 @@ void ConsoleApp::RegisterDefaultCommands()
                                           return ss.str();
                                       });
 
-    // Pipe test command
     m_commandRegistry.RegisterCommand("pipe_test", "Test pipe communication with engine", "pipe_test",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1174,7 +1171,6 @@ void ConsoleApp::RegisterDefaultCommands()
                                           return ss.str();
                                       });
 
-    // Console refresh command
     m_commandRegistry.RegisterCommand("refresh", "Refresh console display", "refresh",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1194,7 +1190,37 @@ void ConsoleApp::RegisterDefaultCommands()
                                           return "";
                                       });
 
-    // Alias command
+    m_commandRegistry.RegisterCommand("uptime", "Show how long the console has been running", "uptime",
+                                      [](const std::vector<std::string>& args) -> std::string
+                                      {
+                                          static auto startTime = std::chrono::steady_clock::now();
+                                          auto now = std::chrono::steady_clock::now();
+                                          auto uptime =
+                                              std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
+                                          int h = static_cast<int>(uptime.count()) / 3600;
+                                          int m = (static_cast<int>(uptime.count()) % 3600) / 60;
+                                          int s = static_cast<int>(uptime.count()) % 60;
+                                          std::stringstream ss;
+                                          ss << "Console uptime: " << h << "h " << m << "m " << s << "s";
+                                          return ss.str();
+                                      });
+}
+
+void ConsoleApp::RegisterAliasCommands()
+{
+    m_commandRegistry.RegisterCommand("history", "Show command history", "history",
+                                      [this](const std::vector<std::string>& args) -> std::string
+                                      {
+                                          std::lock_guard<std::mutex> lock(m_historyMutex);
+                                          std::stringstream ss;
+                                          ss << "Command History:\n";
+                                          for (size_t i = 0; i < m_commandHistory.size(); ++i)
+                                          {
+                                              ss << "  " << (i + 1) << ": " << m_commandHistory[i] << "\n";
+                                          }
+                                          return ss.str();
+                                      });
+
     m_commandRegistry.RegisterCommand("alias", "Create or list command aliases", "alias [name] [command]",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1228,7 +1254,6 @@ void ConsoleApp::RegisterDefaultCommands()
                                           return "Alias set: " + args[0] + " -> " + cmd;
                                       });
 
-    // Unalias command
     m_commandRegistry.RegisterCommand("unalias", "Remove a command alias", "unalias <name|all>",
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
@@ -1243,31 +1268,6 @@ void ConsoleApp::RegisterDefaultCommands()
                                           if (m_aliases.erase(args[0]) > 0)
                                               return "Alias removed: " + args[0];
                                           return "No alias '" + args[0] + "' found";
-                                      });
-
-    // Version command
-    m_commandRegistry.RegisterCommand("version", "Show console version", "version",
-                                      [](const std::vector<std::string>& args) -> std::string
-                                      {
-                                          return "Spark Engine Console v2.0.0\n"
-                                                 "Features: Tab completion, command aliases, history navigation\n"
-                                                 "Build: Development";
-                                      });
-
-    // Uptime command
-    m_commandRegistry.RegisterCommand("uptime", "Show how long the console has been running", "uptime",
-                                      [](const std::vector<std::string>& args) -> std::string
-                                      {
-                                          static auto startTime = std::chrono::steady_clock::now();
-                                          auto now = std::chrono::steady_clock::now();
-                                          auto uptime =
-                                              std::chrono::duration_cast<std::chrono::seconds>(now - startTime);
-                                          int h = static_cast<int>(uptime.count()) / 3600;
-                                          int m = (static_cast<int>(uptime.count()) % 3600) / 60;
-                                          int s = static_cast<int>(uptime.count()) % 60;
-                                          std::stringstream ss;
-                                          ss << "Console uptime: " << h << "h " << m << "m " << s << "s";
-                                          return ss.str();
                                       });
 
     // Set default aliases
