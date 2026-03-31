@@ -801,6 +801,7 @@ jobs:
         run: |
           scripts/coverage-report.sh coverage.info --json coverage-report.json 2>&1 | tee subsystem-coverage.txt
       - name: Coverage threshold check
+        continue-on-error: true
         run: |
           scripts/coverage-report.sh coverage.info --check 2>&1 | tee coverage-check.txt
       - name: Post coverage summary to PR

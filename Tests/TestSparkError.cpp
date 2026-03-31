@@ -3,6 +3,45 @@
 #include "TestFramework.h"
 #include "Utils/SparkError.h"
 
+#ifdef _WIN32
+#include <io.h>
+#define dup _dup
+#define dup2 _dup2
+#define fileno _fileno
+#else
+#include <unistd.h>
+#endif
+
+// RAII helper to suppress stderr output during tests that intentionally
+// trigger error logging, then restore it reliably (works on CI without a console).
+struct SuppressStderr
+{
+    int savedFd = -1;
+    SuppressStderr()
+    {
+        fflush(stderr);
+        savedFd = dup(fileno(stderr));
+#ifdef _WIN32
+        freopen("NUL", "w", stderr);
+#else
+        freopen("/dev/null", "w", stderr);
+#endif
+    }
+    ~SuppressStderr()
+    {
+        fflush(stderr);
+        if (savedFd >= 0)
+        {
+            dup2(savedFd, fileno(stderr));
+#ifdef _WIN32
+            _close(savedFd);
+#else
+            close(savedFd);
+#endif
+        }
+    }
+};
+
 TEST(SparkError_SeverityToString)
 {
     EXPECT_EQ(std::string(SparkError::SeverityToString(SparkError::Severity::Trace)), std::string("TRACE"));
@@ -15,64 +54,22 @@ TEST(SparkError_SeverityToString)
 
 TEST(SparkError_CheckFailedReturnsFalse)
 {
-    // Redirect stderr to suppress intentional [ERROR] output that causes CTest
-    // on Windows to misinterpret the test as failed
-    std::FILE* origStderr = stderr;
-#ifdef _WIN32
-    std::FILE* devnull = std::freopen("NUL", "w", stderr);
-#else
-    std::FILE* devnull = std::freopen("/dev/null", "w", stderr);
-#endif
-    (void)devnull;
-
+    SuppressStderr guard;
     bool result = SparkError::CheckFailed("false", __FILE__, __LINE__, __FUNCTION__);
-
-    // Restore stderr
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-    (void)origStderr;
-
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_CheckFailedWithMsg)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SparkError::CheckFailed("expr", __FILE__, __LINE__, __FUNCTION__, "custom message");
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_BoundsCheckFailed)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SparkError::BoundsCheckFailed("idx", 10, 5, __FILE__, __LINE__, __FUNCTION__);
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }
 
@@ -102,20 +99,8 @@ TEST(SparkError_CheckPassesOnTrue)
 
 TEST(SparkError_CheckFailsOnFalse)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SPARK_CHECK(1 == 2);
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }
 
@@ -131,20 +116,8 @@ TEST(SparkError_CheckMsgPassesOnTrue)
 
 TEST(SparkError_CheckMsgFailsOnFalse)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SPARK_CHECK_MSG(false, "expected failure");
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }
 
@@ -166,39 +139,15 @@ TEST(SparkError_BoundsCheckAtZero)
 
 TEST(SparkError_BoundsCheckOutOfRange)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SPARK_BOUNDS_CHECK(10, 5);
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_BoundsCheckNegativeIndex)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SPARK_BOUNDS_CHECK(-1, 5);
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }
 
@@ -208,45 +157,19 @@ TEST(SparkError_BoundsCheckNegativeIndex)
 
 TEST(SparkError_CatchAllStdException)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool reached = false;
     SPARK_CATCH_ALL("Test", { throw std::runtime_error("test error"); });
     reached = true;
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
-    EXPECT_TRUE(reached); // Execution continues after catch
+    EXPECT_TRUE(reached);
 }
 
 TEST(SparkError_CatchAllUnknownException)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool reached = false;
-    SPARK_CATCH_ALL("Test", {
-        throw 42; // non-std exception
-    });
+    SPARK_CATCH_ALL("Test", { throw 42; });
     reached = true;
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_TRUE(reached);
 }
 
@@ -258,7 +181,6 @@ TEST(SparkError_CatchAllNoException)
         (void)x;
     });
     reached = true;
-
     EXPECT_TRUE(reached);
 }
 
@@ -268,30 +190,17 @@ TEST(SparkError_CatchAllNoException)
 
 TEST(SparkError_CatchAllRetReturnsDefault)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     int result = SPARK_CATCH_ALL_RET("Test", -1, {
         throw std::runtime_error("error");
         return 42;
     });
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_EQ(result, -1);
 }
 
 TEST(SparkError_CatchAllRetReturnsNormal)
 {
     int result = SPARK_CATCH_ALL_RET("Test", -1, { return 42; });
-
     EXPECT_EQ(result, 42);
 }
 
@@ -320,38 +229,14 @@ TEST(SparkError_LogMessageNullArgs)
 
 TEST(SparkError_HResultFailedNonWindows)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SparkError::HResultFailed("hrExpr", -1, __FILE__, __LINE__, __FUNCTION__);
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }
 
 TEST(SparkError_HResultFailedWithMsg)
 {
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
+    SuppressStderr guard;
     bool result = SparkError::HResultFailed("hrExpr", -1, __FILE__, __LINE__, __FUNCTION__, "custom msg");
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
-
     EXPECT_FALSE(result);
 }

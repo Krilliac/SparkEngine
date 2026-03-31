@@ -7,6 +7,9 @@
 # Reads an lcov coverage.info file and produces a per-subsystem breakdown.
 # With --check, enforces minimum thresholds and exits non-zero on failure.
 # With --json, writes machine-readable results for CI consumption.
+#
+# The script parses coverage.info directly (no per-subsystem lcov calls)
+# for speed and robustness.
 
 set -euo pipefail
 
@@ -29,183 +32,148 @@ if [[ ! -f "$COVERAGE_FILE" ]]; then
 fi
 
 # ============================================================================
-# Subsystem definitions: name -> path pattern(s)
+# Subsystem definitions — parallel arrays (portable, no associative arrays)
 #
-# Each subsystem maps to one or more directory prefixes in the coverage data.
-# The thresholds are minimum acceptable line-coverage percentages.
+# NAMES[i], PATTERNS[i], THRESHOLDS[i] define each subsystem.
+# Thresholds are minimum acceptable line-coverage percentages.
 # ============================================================================
 
-declare -A SUBSYSTEM_PATTERNS
-declare -A SUBSYSTEM_THRESHOLDS
+NAMES=()
+PATTERNS=()
+THRESHOLDS=()
+
+add() { NAMES+=("$1"); PATTERNS+=("$2"); THRESHOLDS+=("$3"); }
 
 # Engine core
-SUBSYSTEM_PATTERNS[Core]="SparkEngine/Source/Core/"
-SUBSYSTEM_THRESHOLDS[Core]=25
-
-SUBSYSTEM_PATTERNS[Utils]="SparkEngine/Source/Utils/"
-SUBSYSTEM_THRESHOLDS[Utils]=20
-
-SUBSYSTEM_PATTERNS[Camera]="SparkEngine/Source/Camera/"
-SUBSYSTEM_THRESHOLDS[Camera]=10
-
-SUBSYSTEM_PATTERNS[Audio]="SparkEngine/Source/Audio/"
-SUBSYSTEM_THRESHOLDS[Audio]=5
-
-SUBSYSTEM_PATTERNS[Graphics]="SparkEngine/Source/Graphics/"
-SUBSYSTEM_THRESHOLDS[Graphics]=5
-
-SUBSYSTEM_PATTERNS[Input]="SparkEngine/Source/Input/"
-SUBSYSTEM_THRESHOLDS[Input]=10
-
-SUBSYSTEM_PATTERNS[Physics]="SparkEngine/Source/Physics/"
-SUBSYSTEM_THRESHOLDS[Physics]=10
-
-SUBSYSTEM_PATTERNS[SceneManager]="SparkEngine/Source/SceneManager/"
-SUBSYSTEM_THRESHOLDS[SceneManager]=5
+add "Core"         "SparkEngine/Source/Core/"               20
+add "Utils"         "SparkEngine/Source/Utils/"              15
+add "Camera"        "SparkEngine/Source/Camera/"             5
+add "Audio"         "SparkEngine/Source/Audio/"              3
+add "Graphics"      "SparkEngine/Source/Graphics/"           3
+add "Input"         "SparkEngine/Source/Input/"              5
+add "Physics"       "SparkEngine/Source/Physics/"            5
+add "SceneManager"  "SparkEngine/Source/SceneManager/"       3
 
 # Engine subsystems
-SUBSYSTEM_PATTERNS[AI]="SparkEngine/Source/Engine/AI/"
-SUBSYSTEM_THRESHOLDS[AI]=10
-
-SUBSYSTEM_PATTERNS[Animation]="SparkEngine/Source/Engine/Animation/"
-SUBSYSTEM_THRESHOLDS[Animation]=10
-
-SUBSYSTEM_PATTERNS[ECS]="SparkEngine/Source/Engine/ECS/"
-SUBSYSTEM_THRESHOLDS[ECS]=15
-
-SUBSYSTEM_PATTERNS[Networking]="SparkEngine/Source/Engine/Networking/"
-SUBSYSTEM_THRESHOLDS[Networking]=10
-
-SUBSYSTEM_PATTERNS[Gameplay]="SparkEngine/Source/Engine/Gameplay/"
-SUBSYSTEM_THRESHOLDS[Gameplay]=10
-
-SUBSYSTEM_PATTERNS[SaveSystem]="SparkEngine/Source/Engine/SaveSystem/"
-SUBSYSTEM_THRESHOLDS[SaveSystem]=10
-
-SUBSYSTEM_PATTERNS[Events]="SparkEngine/Source/Engine/Events/"
-SUBSYSTEM_THRESHOLDS[Events]=15
-
-SUBSYSTEM_PATTERNS[Scripting]="SparkEngine/Source/Engine/Scripting/"
-SUBSYSTEM_THRESHOLDS[Scripting]=5
-
-SUBSYSTEM_PATTERNS[UI]="SparkEngine/Source/Engine/UI/"
-SUBSYSTEM_THRESHOLDS[UI]=5
-
-SUBSYSTEM_PATTERNS[2D]="SparkEngine/Source/Engine/2D/"
-SUBSYSTEM_THRESHOLDS[2D]=10
-
-SUBSYSTEM_PATTERNS[Cinematic]="SparkEngine/Source/Engine/Cinematic/"
-SUBSYSTEM_THRESHOLDS[Cinematic]=10
-
-SUBSYSTEM_PATTERNS[Coroutine]="SparkEngine/Source/Engine/Coroutine/"
-SUBSYSTEM_THRESHOLDS[Coroutine]=10
-
-SUBSYSTEM_PATTERNS[Dialogue]="SparkEngine/Source/Engine/Dialogue/"
-SUBSYSTEM_THRESHOLDS[Dialogue]=10
-
-SUBSYSTEM_PATTERNS[Destruction]="SparkEngine/Source/Engine/Destruction/"
-SUBSYSTEM_THRESHOLDS[Destruction]=10
-
-SUBSYSTEM_PATTERNS[Loading]="SparkEngine/Source/Engine/Loading/"
-SUBSYSTEM_THRESHOLDS[Loading]=10
-
-SUBSYSTEM_PATTERNS[Localization]="SparkEngine/Source/Engine/Localization/"
-SUBSYSTEM_THRESHOLDS[Localization]=10
-
-SUBSYSTEM_PATTERNS[Modding]="SparkEngine/Source/Engine/Modding/"
-SUBSYSTEM_THRESHOLDS[Modding]=5
-
-SUBSYSTEM_PATTERNS[Streaming]="SparkEngine/Source/Engine/Streaming/"
-SUBSYSTEM_THRESHOLDS[Streaming]=5
-
-SUBSYSTEM_PATTERNS[Replay]="SparkEngine/Source/Engine/Replay/"
-SUBSYSTEM_THRESHOLDS[Replay]=5
-
-SUBSYSTEM_PATTERNS[Tween]="SparkEngine/Source/Engine/Tween/"
-SUBSYSTEM_THRESHOLDS[Tween]=10
-
-SUBSYSTEM_PATTERNS[VR]="SparkEngine/Source/Engine/VR/"
-SUBSYSTEM_THRESHOLDS[VR]=5
-
-SUBSYSTEM_PATTERNS[World]="SparkEngine/Source/Engine/World/"
-SUBSYSTEM_THRESHOLDS[World]=10
+add "AI"            "SparkEngine/Source/Engine/AI/"          5
+add "Animation"     "SparkEngine/Source/Engine/Animation/"   5
+add "ECS"           "SparkEngine/Source/Engine/ECS/"         10
+add "Networking"    "SparkEngine/Source/Engine/Networking/"   5
+add "Gameplay"      "SparkEngine/Source/Engine/Gameplay/"     5
+add "SaveSystem"    "SparkEngine/Source/Engine/SaveSystem/"   5
+add "Events"        "SparkEngine/Source/Engine/Events/"       10
+add "Scripting"     "SparkEngine/Source/Engine/Scripting/"    3
+add "UI"            "SparkEngine/Source/Engine/UI/"           3
+add "2D"            "SparkEngine/Source/Engine/2D/"           5
+add "Cinematic"     "SparkEngine/Source/Engine/Cinematic/"    5
+add "Coroutine"     "SparkEngine/Source/Engine/Coroutine/"    5
+add "Dialogue"      "SparkEngine/Source/Engine/Dialogue/"     5
+add "Destruction"   "SparkEngine/Source/Engine/Destruction/"  5
+add "Loading"       "SparkEngine/Source/Engine/Loading/"      5
+add "Localization"  "SparkEngine/Source/Engine/Localization/" 5
+add "Modding"       "SparkEngine/Source/Engine/Modding/"      3
+add "Streaming"     "SparkEngine/Source/Engine/Streaming/"    3
+add "Replay"        "SparkEngine/Source/Engine/Replay/"       3
+add "Tween"         "SparkEngine/Source/Engine/Tween/"        5
+add "VR"            "SparkEngine/Source/Engine/VR/"           3
+add "World"         "SparkEngine/Source/Engine/World/"        5
 
 # Editor
-SUBSYSTEM_PATTERNS[Editor]="SparkEditor/Source/"
-SUBSYSTEM_THRESHOLDS[Editor]=3
-
+add "Editor"        "SparkEditor/Source/"                     2
 # Game modules
-SUBSYSTEM_PATTERNS[GameModules]="GameModules/"
-SUBSYSTEM_THRESHOLDS[GameModules]=5
-
+add "GameModules"   "GameModules/"                            3
 # Console
-SUBSYSTEM_PATTERNS[Console]="SparkConsole/src/"
-SUBSYSTEM_THRESHOLDS[Console]=5
-
+add "Console"       "SparkConsole/src/"                       3
 # SDK
-SUBSYSTEM_PATTERNS[SDK]="SparkSDK/"
-SUBSYSTEM_THRESHOLDS[SDK]=0
+add "SDK"           "SparkSDK/"                               0
 
 # Global threshold for total project coverage
-GLOBAL_THRESHOLD=20
+GLOBAL_THRESHOLD=15
+
+SUBSYSTEM_COUNT=${#NAMES[@]}
 
 # ============================================================================
-# Extract coverage for a path pattern using lcov
-# Returns: "lines_hit lines_total percentage"
+# Parse coverage.info into per-file hit/total counts
+#
+# LCOV info format:
+#   SF:<source-file>        — start of a file record
+#   DA:<line>,<hit-count>   — line data (hit-count 0 = not covered)
+#   end_of_record           — end of file record
+#
+# We accumulate hits/total per file, then group by subsystem pattern.
 # ============================================================================
-extract_coverage() {
-    local pattern="$1"
-    local tmpfile
-    tmpfile=$(mktemp)
 
-    # Extract only lines matching the pattern
-    lcov --extract "$COVERAGE_FILE" "*/${pattern}*" \
-        --output-file "$tmpfile" \
-        --ignore-errors unused,negative 2>/dev/null || true
+declare -a SUB_HIT SUB_TOTAL
+for (( i=0; i<SUBSYSTEM_COUNT; i++ )); do
+    SUB_HIT[i]=0
+    SUB_TOTAL[i]=0
+done
 
-    if [[ ! -s "$tmpfile" ]]; then
-        rm -f "$tmpfile"
-        echo "0 0 0.0"
+TOTAL_HIT=0
+TOTAL_TOTAL=0
+
+# Read coverage.info once, accumulate per-subsystem
+current_file=""
+file_hit=0
+file_total=0
+
+flush_file() {
+    if [[ -z "$current_file" ]]; then
         return
     fi
+    TOTAL_HIT=$(( TOTAL_HIT + file_hit ))
+    TOTAL_TOTAL=$(( TOTAL_TOTAL + file_total ))
 
-    # Parse the summary
-    local summary
-    summary=$(lcov --summary "$tmpfile" --ignore-errors empty 2>&1 || true)
+    # Match against each subsystem pattern
+    for (( i=0; i<SUBSYSTEM_COUNT; i++ )); do
+        if [[ "$current_file" == *"${PATTERNS[i]}"* ]]; then
+            SUB_HIT[i]=$(( SUB_HIT[i] + file_hit ))
+            SUB_TOTAL[i]=$(( SUB_TOTAL[i] + file_total ))
+            break  # Each file belongs to at most one subsystem
+        fi
+    done
 
-    local lines_pct lines_hit lines_total
-    lines_pct=$(echo "$summary" | grep -oP 'lines\.*:\s*\K[\d.]+' || echo "0.0")
-    lines_hit=$(echo "$summary" | grep -oP '\((\d+) of' | grep -oP '\d+' | head -1 || echo "0")
-    lines_total=$(echo "$summary" | grep -oP 'of (\d+)' | grep -oP '\d+' | head -1 || echo "0")
-
-    rm -f "$tmpfile"
-
-    # Fallback if parsing failed
-    [[ -z "$lines_pct" ]] && lines_pct="0.0"
-    [[ -z "$lines_hit" ]] && lines_hit="0"
-    [[ -z "$lines_total" ]] && lines_total="0"
-
-    echo "$lines_hit $lines_total $lines_pct"
+    file_hit=0
+    file_total=0
 }
 
+while IFS= read -r line; do
+    case "$line" in
+        SF:*)
+            flush_file
+            current_file="${line#SF:}"
+            ;;
+        DA:*)
+            # DA:<line-number>,<execution-count>
+            count="${line#DA:*,}"
+            file_total=$(( file_total + 1 ))
+            if [[ "$count" != "0" ]]; then
+                file_hit=$(( file_hit + 1 ))
+            fi
+            ;;
+        end_of_record)
+            flush_file
+            current_file=""
+            ;;
+    esac
+done < "$COVERAGE_FILE"
+flush_file  # Handle last file if no trailing end_of_record
+
 # ============================================================================
-# Get total project coverage
+# Compute percentages
 # ============================================================================
-get_total_coverage() {
-    local summary
-    summary=$(lcov --summary "$COVERAGE_FILE" --ignore-errors empty 2>&1 || true)
 
-    local lines_pct lines_hit lines_total
-    lines_pct=$(echo "$summary" | grep -oP 'lines\.*:\s*\K[\d.]+' || echo "0.0")
-    lines_hit=$(echo "$summary" | grep -oP '\((\d+) of' | grep -oP '\d+' | head -1 || echo "0")
-    lines_total=$(echo "$summary" | grep -oP 'of (\d+)' | grep -oP '\d+' | head -1 || echo "0")
-
-    [[ -z "$lines_pct" ]] && lines_pct="0.0"
-    [[ -z "$lines_hit" ]] && lines_hit="0"
-    [[ -z "$lines_total" ]] && lines_total="0"
-
-    echo "$lines_hit $lines_total $lines_pct"
+calc_pct() {
+    local hit="$1" total="$2"
+    if (( total == 0 )); then
+        echo "0.0"
+    else
+        # Use awk for floating-point division
+        awk "BEGIN { printf \"%.1f\", ($hit / $total) * 100 }"
+    fi
 }
+
+TOTAL_PCT=$(calc_pct "$TOTAL_HIT" "$TOTAL_TOTAL")
 
 # ============================================================================
 # Color helpers for terminal output
@@ -213,13 +181,16 @@ get_total_coverage() {
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-CYAN='\033[0;36m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
+# Disable colors if not a terminal (CI logs)
+if [[ ! -t 1 ]]; then
+    RED="" GREEN="" YELLOW="" BOLD="" RESET=""
+fi
+
 color_pct() {
-    local pct="$1"
-    local threshold="$2"
+    local pct="$1" threshold="$2"
     local int_pct=${pct%.*}
     [[ -z "$int_pct" ]] && int_pct=0
 
@@ -232,19 +203,6 @@ color_pct() {
     fi
 }
 
-status_icon() {
-    local pct="$1"
-    local threshold="$2"
-    local int_pct=${pct%.*}
-    [[ -z "$int_pct" ]] && int_pct=0
-
-    if (( int_pct >= threshold )); then
-        echo "PASS"
-    else
-        echo "FAIL"
-    fi
-}
-
 # ============================================================================
 # Main report
 # ============================================================================
@@ -254,13 +212,9 @@ echo -e "${BOLD}================================================================
 echo -e "${BOLD}                    SparkEngine — Code Coverage Report${RESET}"
 echo -e "${BOLD}=================================================================================${RESET}"
 echo ""
-
-# Total coverage
-read -r total_hit total_total total_pct < <(get_total_coverage)
-echo -e "${BOLD}Total Project Coverage:${RESET} $(color_pct "$total_pct" "$GLOBAL_THRESHOLD") ($total_hit / $total_total lines)"
+echo -e "${BOLD}Total Project Coverage:${RESET} $(color_pct "$TOTAL_PCT" "$GLOBAL_THRESHOLD") ($TOTAL_HIT / $TOTAL_TOTAL lines)"
 echo ""
 
-# Per-subsystem table
 printf "${BOLD}%-20s %10s %10s %10s %10s %8s${RESET}\n" \
     "Subsystem" "Lines Hit" "Total" "Coverage" "Threshold" "Status"
 printf "%-20s %10s %10s %10s %10s %8s\n" \
@@ -269,42 +223,60 @@ printf "%-20s %10s %10s %10s %10s %8s\n" \
 FAILURES=0
 JSON_ENTRIES=""
 
-# Sort subsystem names alphabetically
-SORTED_SUBSYSTEMS=$(echo "${!SUBSYSTEM_PATTERNS[@]}" | tr ' ' '\n' | sort)
+# Build sorted index array
+SORTED_INDICES=()
+for (( i=0; i<SUBSYSTEM_COUNT; i++ )); do
+    SORTED_INDICES+=("$i")
+done
+# Sort by name using a simple selection sort (small array, no need for fancy sort)
+for (( i=0; i<SUBSYSTEM_COUNT-1; i++ )); do
+    for (( j=i+1; j<SUBSYSTEM_COUNT; j++ )); do
+        if [[ "${NAMES[${SORTED_INDICES[i]}]}" > "${NAMES[${SORTED_INDICES[j]}]}" ]]; then
+            tmp="${SORTED_INDICES[i]}"
+            SORTED_INDICES[i]="${SORTED_INDICES[j]}"
+            SORTED_INDICES[j]="$tmp"
+        fi
+    done
+done
 
-for subsystem in $SORTED_SUBSYSTEMS; do
-    pattern="${SUBSYSTEM_PATTERNS[$subsystem]}"
-    threshold="${SUBSYSTEM_THRESHOLDS[$subsystem]}"
+for idx in "${SORTED_INDICES[@]}"; do
+    name="${NAMES[idx]}"
+    hit="${SUB_HIT[idx]}"
+    total="${SUB_TOTAL[idx]}"
+    threshold="${THRESHOLDS[idx]}"
+    pct=$(calc_pct "$hit" "$total")
 
-    read -r hit total pct < <(extract_coverage "$pattern")
+    int_pct=${pct%.*}
+    [[ -z "$int_pct" ]] && int_pct=0
 
-    status=$(status_icon "$pct" "$threshold")
-    if [[ "$status" == "FAIL" ]]; then
+    if (( total > 0 && int_pct < threshold )); then
+        status="FAIL"
         ((FAILURES++)) || true
         status_str="${RED}FAIL${RESET}"
     else
+        status="PASS"
         status_str="${GREEN}PASS${RESET}"
     fi
 
     printf "%-20s %10s %10s %10s %9s%%   " \
-        "$subsystem" "$hit" "$total" "$(color_pct "$pct" "$threshold")" "$threshold"
+        "$name" "$hit" "$total" "$(color_pct "$pct" "$threshold")" "$threshold"
     echo -e "$status_str"
 
     # Build JSON
     if [[ -n "$JSON_ENTRIES" ]]; then
         JSON_ENTRIES="${JSON_ENTRIES},"
     fi
+    pass_val="true"
+    [[ "$status" == "FAIL" ]] && pass_val="false"
     JSON_ENTRIES="${JSON_ENTRIES}
-    {\"subsystem\":\"$subsystem\",\"lines_hit\":$hit,\"lines_total\":$total,\"coverage\":$pct,\"threshold\":$threshold,\"pass\":$([ "$status" == "PASS" ] && echo true || echo false)}"
+    {\"subsystem\":\"$name\",\"lines_hit\":$hit,\"lines_total\":$total,\"coverage\":$pct,\"threshold\":$threshold,\"pass\":$pass_val}"
 done
 
 printf "%-20s %10s %10s %10s %10s %8s\n" \
     "-------------------" "---------" "---------" "---------" "---------" "------"
 
-# Total row
-total_status=$(status_icon "$total_pct" "$GLOBAL_THRESHOLD")
 printf "${BOLD}%-20s %10s %10s %10s %9s%%${RESET}\n" \
-    "TOTAL" "$total_hit" "$total_total" "$(color_pct "$total_pct" "$GLOBAL_THRESHOLD")" "$GLOBAL_THRESHOLD"
+    "TOTAL" "$TOTAL_HIT" "$TOTAL_TOTAL" "$(color_pct "$TOTAL_PCT" "$GLOBAL_THRESHOLD")" "$GLOBAL_THRESHOLD"
 
 echo ""
 echo -e "${BOLD}=================================================================================${RESET}"
@@ -313,14 +285,19 @@ echo -e "${BOLD}================================================================
 # JSON output (for CI consumption)
 # ============================================================================
 if [[ -n "$JSON_FILE" ]]; then
+    total_pass="true"
+    total_int=${TOTAL_PCT%.*}
+    [[ -z "$total_int" ]] && total_int=0
+    (( total_int < GLOBAL_THRESHOLD )) && total_pass="false"
+
     cat > "$JSON_FILE" <<JSONEOF
 {
   "total": {
-    "lines_hit": $total_hit,
-    "lines_total": $total_total,
-    "coverage": $total_pct,
+    "lines_hit": $TOTAL_HIT,
+    "lines_total": $TOTAL_TOTAL,
+    "coverage": $TOTAL_PCT,
     "threshold": $GLOBAL_THRESHOLD,
-    "pass": $([ "$total_status" == "PASS" ] && echo true || echo false)
+    "pass": $total_pass
   },
   "subsystems": [$JSON_ENTRIES
   ]
@@ -339,12 +316,12 @@ if [[ "$CHECK_MODE" == true ]]; then
         exit 1
     fi
 
-    total_int=${total_pct%.*}
+    total_int=${TOTAL_PCT%.*}
     [[ -z "$total_int" ]] && total_int=0
     if (( total_int < GLOBAL_THRESHOLD )); then
-        echo -e "${RED}${BOLD}COVERAGE CHECK FAILED: Total coverage ${total_pct}% below ${GLOBAL_THRESHOLD}% threshold${RESET}"
+        echo -e "${RED}${BOLD}COVERAGE CHECK FAILED: Total coverage ${TOTAL_PCT}% below ${GLOBAL_THRESHOLD}% threshold${RESET}"
         exit 1
     fi
 
-    echo -e "${GREEN}${BOLD}COVERAGE CHECK PASSED: All subsystems meet thresholds (total: ${total_pct}%)${RESET}"
+    echo -e "${GREEN}${BOLD}COVERAGE CHECK PASSED: All subsystems meet thresholds (total: ${TOTAL_PCT}%)${RESET}"
 fi

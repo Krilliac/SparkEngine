@@ -501,25 +501,14 @@ TEST(Logger_StderrSinkDoesNotCrash)
     logger.ClearSinks();
     logger.Initialize(false);
 
-    // Redirect stderr to suppress output
-#ifdef _WIN32
-    std::freopen("NUL", "w", stderr);
-#else
-    std::freopen("/dev/null", "w", stderr);
-#endif
-
     auto sink = std::make_unique<Spark::StderrSink>();
     logger.AddSink(std::move(sink));
 
     logger.SetGlobalLevel(Spark::LogLevel::Trace);
-    logger.Log(Spark::LogLevel::Warn, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__, "Stderr test");
+    // StderrSink writes to stderr; just verify it doesn't crash
+    EXPECT_NO_THROW(
+        logger.Log(Spark::LogLevel::Warn, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__, "Stderr test"));
     logger.FlushAll();
-
-#ifdef _WIN32
-    std::freopen("CON", "w", stderr);
-#else
-    std::freopen("/dev/tty", "w", stderr);
-#endif
 
     logger.ClearSinks();
     logger.Shutdown();
