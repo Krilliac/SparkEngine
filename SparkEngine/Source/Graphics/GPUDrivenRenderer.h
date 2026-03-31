@@ -222,6 +222,10 @@ namespace Spark::Graphics
         CullStatistics m_stats;
         uint32_t m_maxInstances = 0;
         bool m_initialized = false;
+
+        // 1-frame-deferred readback state (avoids CPU-GPU sync stall)
+        bool m_readbackPending = false;       ///< True when staging buffer has unread data
+        uint32_t m_readbackInstanceCount = 0; ///< Instance count for the pending readback
     };
 
 } // namespace Spark::Graphics

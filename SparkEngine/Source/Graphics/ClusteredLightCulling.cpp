@@ -204,8 +204,6 @@ namespace Spark::Graphics
 
     void ClusteredLightCulling::AssignLightsToClusters(const XMFLOAT4X4& viewMatrix)
     {
-        uint32_t clusterCount = GetClusterCount();
-
         // Reset all cluster light counts
         std::fill(m_clusterLightCounts.begin(), m_clusterLightCounts.end(), 0);
 
@@ -216,19 +214,59 @@ namespace Spark::Graphics
             // Transform light position into view space
             XMFLOAT3 viewPos = TransformPoint(light.position, viewMatrix);
 
-            // Test against each cluster AABB
-            for (uint32_t c = 0; c < clusterCount; ++c)
-            {
-                if (m_clusterLightCounts[c] >= m_config.maxLightsPerCluster)
-                {
-                    continue;
-                }
+            // --- Z-slice range culling ---
+            // Determine which Z slices the light's bounding sphere can possibly
+            // overlap based on the Z (depth) extent. This turns O(gridX*gridY*gridZ)
+            // into O(gridX*gridY*affectedSlices) per light — typically 10-100x fewer
+            // intersection tests for point lights that affect only a few depth slices.
+            float lightZMin = viewPos.z - light.radius;
+            float lightZMax = viewPos.z + light.radius;
 
-                if (SphereIntersectsAABB(viewPos, light.radius, m_clusterAABBs[c]))
+            uint32_t zStart = 0;
+            uint32_t zEnd = m_config.gridZ;
+
+            // Find the first Z slice whose far bound is >= lightZMin
+            for (uint32_t z = 0; z < m_config.gridZ; ++z)
+            {
+                uint32_t sampleIdx = z * m_config.gridX * m_config.gridY; // First cluster in slice z
+                if (m_clusterAABBs[sampleIdx].maxBounds.z >= lightZMin)
                 {
-                    uint32_t offset = c * m_config.maxLightsPerCluster + m_clusterLightCounts[c];
-                    m_clusterLightIndices[offset] = lightIdx;
-                    ++m_clusterLightCounts[c];
+                    zStart = z;
+                    break;
+                }
+            }
+            // Find the last Z slice whose near bound is <= lightZMax
+            for (uint32_t z = m_config.gridZ; z > zStart; --z)
+            {
+                uint32_t sampleIdx = (z - 1) * m_config.gridX * m_config.gridY;
+                if (m_clusterAABBs[sampleIdx].minBounds.z <= lightZMax)
+                {
+                    zEnd = z;
+                    break;
+                }
+            }
+
+            // Only test clusters in the affected Z-slice range
+            for (uint32_t z = zStart; z < zEnd; ++z)
+            {
+                for (uint32_t y = 0; y < m_config.gridY; ++y)
+                {
+                    for (uint32_t x = 0; x < m_config.gridX; ++x)
+                    {
+                        uint32_t c = x + y * m_config.gridX + z * m_config.gridX * m_config.gridY;
+
+                        if (m_clusterLightCounts[c] >= m_config.maxLightsPerCluster)
+                        {
+                            continue;
+                        }
+
+                        if (SphereIntersectsAABB(viewPos, light.radius, m_clusterAABBs[c]))
+                        {
+                            uint32_t offset = c * m_config.maxLightsPerCluster + m_clusterLightCounts[c];
+                            m_clusterLightIndices[offset] = lightIdx;
+                            ++m_clusterLightCounts[c];
+                        }
+                    }
                 }
             }
         }

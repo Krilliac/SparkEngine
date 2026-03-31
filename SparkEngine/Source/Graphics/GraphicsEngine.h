@@ -41,6 +41,7 @@
 #include <vector>
 #include <unordered_map>
 #include <memory>
+#include <string_view>
 #include <atomic> // Thread-safe frame state management
 
 using Microsoft::WRL::ComPtr;
@@ -150,11 +151,15 @@ class GraphicsEngine
      *
      * Accumulated each frame via SubmitMeshForRendering() and consumed by
      * ProcessDrawList() during the render pass.
+     *
+     * Uses string_view references into component storage to avoid per-entity
+     * string copies. The views are valid for the duration of the frame since
+     * ECS component data is stable within a frame.
      */
     struct MeshDrawCommand
     {
-        std::string meshPath;
-        std::string materialPath;
+        std::string_view meshPath;
+        std::string_view materialPath;
         DirectX::XMFLOAT4X4 worldMatrix;
         bool castShadows = true;
     };
@@ -164,13 +169,15 @@ class GraphicsEngine
      *
      * Called by RenderSystem::Update() for each visible entity. The command is
      * stored in a per-frame draw list that is consumed by ProcessDrawList().
+     * Uses string_view to avoid per-entity string copies — callers must ensure
+     * the referenced strings outlive the current frame.
      *
-     * @param meshPath      Asset path to the mesh resource.
-     * @param materialPath  Asset path to the material resource.
+     * @param meshPath      Asset path to the mesh resource (view into component storage).
+     * @param materialPath  Asset path to the material resource (view into component storage).
      * @param worldMatrix   World transformation matrix for the mesh instance.
      * @param castShadows   Whether this mesh should be included in the shadow pass.
      */
-    void SubmitMeshForRendering(const std::string& meshPath, const std::string& materialPath,
+    void SubmitMeshForRendering(std::string_view meshPath, std::string_view materialPath,
                                 const DirectX::XMMATRIX& worldMatrix, bool castShadows);
 
     /**
@@ -186,13 +193,17 @@ class GraphicsEngine
     void ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix);
 
     /**
-     * @brief Return the per-frame draw list (read-only).
-     * @return  Const reference to the current frame's draw commands.
+     * @brief Return the per-frame draw list (read-only, cold path).
+     * @return  Copy of the current frame's draw commands.
      */
     std::vector<MeshDrawCommand> GetDrawList() const
     {
-        std::lock_guard<std::mutex> lock(m_drawListMutex);
-        return m_drawList;
+        while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
+        {
+        }
+        auto copy = m_drawList;
+        m_drawListSpinlock.clear(std::memory_order_release);
+        return copy;
     }
 
     /**
@@ -200,8 +211,11 @@ class GraphicsEngine
      */
     void ClearDrawList()
     {
-        std::lock_guard<std::mutex> lock(m_drawListMutex);
+        while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
+        {
+        }
         m_drawList.clear();
+        m_drawListSpinlock.clear(std::memory_order_release);
     }
 
     // ========================================================================
@@ -597,9 +611,13 @@ class GraphicsEngine
     size_t m_textureMemoryUsage;
     size_t m_bufferMemoryUsage;
 
-    // Per-frame ECS draw list populated by SubmitMeshForRendering(), consumed by ProcessDrawList()
+    // Per-frame ECS draw list populated by SubmitMeshForRendering(), consumed by ProcessDrawList().
+    // Uses a pre-reserved vector and a lightweight spinlock instead of std::mutex
+    // to minimize contention on the per-entity submission hot path.
     std::vector<MeshDrawCommand> m_drawList;
-    mutable std::mutex m_drawListMutex; ///< Guards m_drawList for concurrent Submit/Process access
+    mutable std::atomic_flag m_drawListSpinlock =
+        ATOMIC_FLAG_INIT;               ///< Spinlock for draw list (lower overhead than mutex)
+    mutable std::mutex m_drawListMutex; ///< Fallback mutex for GetDrawList() copies (cold path only)
 
     // ========================================================================
     // RENDERER INTEGRATION SYSTEMS

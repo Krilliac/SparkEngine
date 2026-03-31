@@ -209,6 +209,7 @@ namespace Spark::Graphics
         float m_totalTime = 0.0f;
         int m_activePassCount = 0;
         int m_currentTarget = 0;
+        bool m_vsAlreadyBound = false; ///< Avoids redundant VS/sampler/topology binding between passes
 
         bool m_passEnabled[static_cast<int>(PostProcessPass::Count)] = {};
         float m_passTimings[static_cast<int>(PostProcessPass::Count)] = {};

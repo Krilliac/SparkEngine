@@ -74,6 +74,7 @@ namespace Spark::Graphics
             return;
         m_totalTime += deltaTime;
         m_activePassCount = 0;
+        m_vsAlreadyBound = false; // Reset per-frame — VS/sampler/CB binding will be set on first pass
 
         for (int i = 0; i < static_cast<int>(PostProcessPass::Count); ++i)
         {
@@ -808,18 +809,28 @@ namespace Spark::Graphics
         int src = GetSourceTarget();
         int dst = m_currentTarget;
 
-        // Unbind current target as SRV
+        // Unbind current target as SRV before binding as RTV
         ID3D11ShaderResourceView* nullSRV = nullptr;
         m_context->PSSetShaderResources(0, 1, &nullSRV);
 
         // Set render target
         m_context->OMSetRenderTargets(1, &m_pingPongRTVs[dst], nullptr);
 
-        // Set shaders
-        m_context->VSSetShader(m_fullscreenVS.Get(), nullptr, 0);
+        // Only set VS on the first pass — it never changes between passes.
+        // The PS changes per-pass, so always set it.
+        if (!m_vsAlreadyBound)
+        {
+            m_context->VSSetShader(m_fullscreenVS.Get(), nullptr, 0);
+            m_context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+            ID3D11SamplerState* samplers[] = {m_linearSampler.Get(), m_pointSampler.Get()};
+            m_context->PSSetSamplers(0, 2, samplers);
+            m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            m_context->IASetInputLayout(nullptr);
+            m_vsAlreadyBound = true;
+        }
         m_context->PSSetShader(ps, nullptr, 0);
 
-        // Update constant buffer
+        // Update constant buffer (WRITE_DISCARD triggers driver buffer rename — no stall)
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) && mapped.pData)
         {
@@ -827,16 +838,10 @@ namespace Spark::Graphics
             m_context->Unmap(m_constantBuffer.Get(), 0);
         }
 
-        m_context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
-
-        // Set source texture
+        // Set source texture and optional depth
         m_context->PSSetShaderResources(0, 1, &m_pingPongSRVs[src]);
         if (m_depthSRV)
             m_context->PSSetShaderResources(1, 1, &m_depthSRV);
-
-        // Set samplers
-        ID3D11SamplerState* samplers[] = {m_linearSampler.Get(), m_pointSampler.Get()};
-        m_context->PSSetSamplers(0, 2, samplers);
 #else
         (void)ps;
         (void)cb;
@@ -848,8 +853,7 @@ namespace Spark::Graphics
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!m_context)
             return;
-        m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        m_context->IASetInputLayout(nullptr);
+        // Topology and input layout already set in BeginPass (first pass only)
         m_context->Draw(3, 0);
         SwapTargets();
 #endif
