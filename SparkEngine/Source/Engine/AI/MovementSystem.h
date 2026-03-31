@@ -78,7 +78,7 @@ namespace Spark::AI
         Home,  ///< Return to spawn position
         Patrol,
         Charge, ///< Fast dash toward a target
-        Spline, ///< Follow a curve (not yet implemented)
+        Spline, ///< Follow a Catmull-Rom spline curve
         Count
     };
 
@@ -271,6 +271,60 @@ namespace Spark::AI
         void Reset(EntityID entity) override;
     };
 
+    /** @brief Fast dash toward a target entity over a short duration. */
+    struct ChargeGenerator : IMovementGenerator
+    {
+        EntityID target = 0;
+        float speed = 20.0f;      ///< Charge speed (faster than normal movement).
+        float duration = 0.5f;    ///< Maximum charge duration (seconds).
+        float elapsed = 0.0f;     ///< Time spent charging so far.
+        float arrivalDist = 1.0f; ///< Stop when this close to target.
+
+        MovementType GetType() const override { return MovementType::Charge; }
+        MovementSlot GetSlot() const override { return MovementSlot::Active; }
+        const char* GetName() const override { return "Charge"; }
+        void Initialize(EntityID entity) override;
+        bool Update(EntityID entity, float deltaTime) override;
+        void Finalize(EntityID entity) override;
+        void Reset(EntityID entity) override;
+    };
+
+    /** @brief Follow a Catmull-Rom spline path. */
+    struct SplineGenerator : IMovementGenerator
+    {
+        std::vector<std::array<float, 3>> controlPoints; ///< Spline control points.
+        float speed = 5.0f;
+        float t = 0.0f;    ///< Normalized parameter [0, 1] along the spline.
+        bool loop = false; ///< If true, wrap around when reaching the end.
+        bool completed = false;
+
+        MovementType GetType() const override { return MovementType::Spline; }
+        MovementSlot GetSlot() const override { return MovementSlot::Motion; }
+        const char* GetName() const override { return "Spline"; }
+        void Initialize(EntityID entity) override;
+        bool Update(EntityID entity, float deltaTime) override;
+        void Finalize(EntityID entity) override;
+        void Reset(EntityID entity) override;
+    };
+
+    /** @brief Move to a single waypoint and complete. */
+    struct WaypointGenerator : IMovementGenerator
+    {
+        float targetX = 0.0f;
+        float targetY = 0.0f;
+        float targetZ = 0.0f;
+        float speed = 5.0f;
+        float arrivalThreshold = 0.3f; ///< Distance at which the waypoint is considered reached.
+
+        MovementType GetType() const override { return MovementType::Waypoint; }
+        MovementSlot GetSlot() const override { return MovementSlot::Motion; }
+        const char* GetName() const override { return "Waypoint"; }
+        void Initialize(EntityID entity) override;
+        bool Update(EntityID entity, float deltaTime) override;
+        void Finalize(EntityID entity) override;
+        void Reset(EntityID entity) override;
+    };
+
     // =========================================================================
     // MotionController
     // =========================================================================
@@ -342,6 +396,10 @@ namespace Spark::AI
         void MovePatrol(EntityID entity, const std::vector<std::array<float, 3>>& waypoints, bool loop = true);
         void MoveHome(EntityID entity, float x, float y, float z);
         void MoveRandomWander(EntityID entity, float radius = 10.0f, float waitTime = 3.0f);
+        void MoveCharge(EntityID entity, EntityID target, float speed = 20.0f, float duration = 0.5f);
+        void MoveSpline(EntityID entity, const std::vector<std::array<float, 3>>& controlPoints, float speed = 5.0f,
+                        bool loop = false);
+        void MoveWaypoint(EntityID entity, float x, float y, float z, float speed = 5.0f);
 
         void StopMovement(EntityID entity, MovementSlot slot);
         void StopAllMovement(EntityID entity);

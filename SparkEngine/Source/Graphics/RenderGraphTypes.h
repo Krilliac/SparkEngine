@@ -221,6 +221,9 @@ namespace Spark::Graphics
         /// Execution-time concrete object. Populated during Execute().
         std::shared_ptr<RenderTarget> physicalTexture;
 
+        /// Execution-time concrete buffer object. Populated during Execute() for Buffer resources.
+        ComPtr<ID3D11Buffer> physicalBuffer;
+
         /// Aliasing: if non-null, this resource shares memory with another.
         uint32_t aliasTarget = RenderGraphResource::INVALID_INDEX;
 
@@ -269,6 +272,21 @@ namespace Spark::Graphics
                 return node.importedTexture;
             }
             return node.physicalTexture.get();
+        }
+
+        /**
+         * @brief Resolve a resource handle to its physical buffer.
+         * @param handle The resource handle obtained during pass setup.
+         * @return Non-owning pointer to the D3D11 buffer, or nullptr if
+         *         the resource is not backed by a buffer.
+         */
+        ID3D11Buffer* GetBuffer(RenderGraphResource handle) const
+        {
+            if (!handle.IsValid() || handle.index >= m_resources.size())
+            {
+                return nullptr;
+            }
+            return m_resources[handle.index].physicalBuffer.Get();
         }
 
         /**

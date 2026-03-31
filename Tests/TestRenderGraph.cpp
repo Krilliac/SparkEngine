@@ -454,6 +454,45 @@ TEST(RenderGraph_ExportDotContainsPasses)
     EXPECT_TRUE(dot.find("ShadowMap") != std::string::npos);
 }
 
+TEST(RenderGraph_BufferResourceCreation)
+{
+    RenderGraph graph("BufferTest");
+
+    RenderGraphResource bufHandle;
+
+    auto& pass = graph.AddPass(
+        "ComputePass", RenderGraphPassType::Compute,
+        [&](RenderGraphBuilder& builder)
+        {
+            RenderGraphBufferDesc bufDesc;
+            bufDesc.sizeBytes = 4096;
+            bufDesc.stride = 16;
+            bufDesc.usage = RenderTargetUsage::UnorderedAccess;
+            bufHandle = builder.Create("StructuredBuf", bufDesc);
+        },
+        [](const RenderGraphResourceRegistry&) {});
+    pass.MarkSideEffects();
+
+    graph.Compile();
+
+    // Verify the buffer resource was created in the graph
+    const auto& resources = graph.GetResources();
+    bool found = false;
+    for (const auto& res : resources)
+    {
+        if (res.name == "StructuredBuf" && res.type == RenderGraphResourceType::Buffer)
+        {
+            EXPECT_EQ(res.bufferDesc.sizeBytes, size_t(4096));
+            EXPECT_EQ(res.bufferDesc.stride, size_t(16));
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found);
+
+    // Execute without device — buffer allocation gracefully skips (no crash)
+    graph.Execute();
+}
+
 TEST(RenderGraph_ConsoleGetGraphStats)
 {
     RenderGraph graph("StatsTest");

@@ -238,6 +238,92 @@ namespace Spark::AI
     void HomeGenerator::Reset([[maybe_unused]] EntityID entity) {}
 
     // =============================================================================
+    // ChargeGenerator
+    // =============================================================================
+
+    void ChargeGenerator::Initialize([[maybe_unused]] EntityID entity)
+    {
+        elapsed = 0.0f;
+    }
+
+    bool ChargeGenerator::Update([[maybe_unused]] EntityID entity, float deltaTime)
+    {
+        elapsed += deltaTime;
+        return elapsed < duration; // Completes when duration expires or arrival (checked in MovementSystem::Update)
+    }
+
+    void ChargeGenerator::Finalize([[maybe_unused]] EntityID entity) {}
+
+    void ChargeGenerator::Reset([[maybe_unused]] EntityID entity)
+    {
+        elapsed = 0.0f;
+    }
+
+    // =============================================================================
+    // SplineGenerator — Catmull-Rom evaluation
+    // =============================================================================
+
+    /// Evaluate a Catmull-Rom spline segment at parameter t in [0,1].
+    static void CatmullRom(const std::array<float, 3>& p0, const std::array<float, 3>& p1,
+                           const std::array<float, 3>& p2, const std::array<float, 3>& p3, float t, float& outX,
+                           float& outY, float& outZ)
+    {
+        float t2 = t * t;
+        float t3 = t2 * t;
+
+        // Catmull-Rom basis: q(t) = 0.5 * ((2*p1) + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t^2 + (-p0+3*p1-3*p2+p3)*t^3)
+        outX = 0.5f * (2.0f * p1[0] + (-p0[0] + p2[0]) * t + (2.0f * p0[0] - 5.0f * p1[0] + 4.0f * p2[0] - p3[0]) * t2 +
+                       (-p0[0] + 3.0f * p1[0] - 3.0f * p2[0] + p3[0]) * t3);
+        outY = 0.5f * (2.0f * p1[1] + (-p0[1] + p2[1]) * t + (2.0f * p0[1] - 5.0f * p1[1] + 4.0f * p2[1] - p3[1]) * t2 +
+                       (-p0[1] + 3.0f * p1[1] - 3.0f * p2[1] + p3[1]) * t3);
+        outZ = 0.5f * (2.0f * p1[2] + (-p0[2] + p2[2]) * t + (2.0f * p0[2] - 5.0f * p1[2] + 4.0f * p2[2] - p3[2]) * t2 +
+                       (-p0[2] + 3.0f * p1[2] - 3.0f * p2[2] + p3[2]) * t3);
+    }
+
+    void SplineGenerator::Initialize([[maybe_unused]] EntityID entity)
+    {
+        t = 0.0f;
+        completed = false;
+    }
+
+    bool SplineGenerator::Update([[maybe_unused]] EntityID entity, [[maybe_unused]] float deltaTime)
+    {
+        if (completed)
+        {
+            return false;
+        }
+        if (controlPoints.size() < 2)
+        {
+            completed = true;
+            return false;
+        }
+        return true; // Movement applied by MovementSystem::Update
+    }
+
+    void SplineGenerator::Finalize([[maybe_unused]] EntityID entity) {}
+
+    void SplineGenerator::Reset([[maybe_unused]] EntityID entity)
+    {
+        t = 0.0f;
+        completed = false;
+    }
+
+    // =============================================================================
+    // WaypointGenerator
+    // =============================================================================
+
+    void WaypointGenerator::Initialize([[maybe_unused]] EntityID entity) {}
+
+    bool WaypointGenerator::Update([[maybe_unused]] EntityID entity, [[maybe_unused]] float deltaTime)
+    {
+        // Completes when entity reaches the waypoint (checked by MovementSystem::Update)
+        return true;
+    }
+
+    void WaypointGenerator::Finalize([[maybe_unused]] EntityID entity) {}
+    void WaypointGenerator::Reset([[maybe_unused]] EntityID entity) {}
+
+    // =============================================================================
     // MotionController
     // =============================================================================
 
@@ -524,10 +610,111 @@ namespace Spark::AI
                 break;
             }
 
-            case MovementType::Idle:
             case MovementType::Charge:
+            {
+                auto* charge = static_cast<ChargeGenerator*>(gen);
+                auto* targetTf = world.GetComponent<Transform>(static_cast<entt::entity>(charge->target));
+                if (!targetTf)
+                    break;
+                float dist = Distance3D(transform->position.x, transform->position.y, transform->position.z,
+                                        targetTf->position.x, targetTf->position.y, targetTf->position.z);
+                if (dist > charge->arrivalDist)
+                {
+                    float step = charge->speed * deltaTime;
+                    MoveToward(transform->position.x, transform->position.y, transform->position.z,
+                               targetTf->position.x, targetTf->position.y, targetTf->position.z, step);
+                }
+                else
+                {
+                    // Arrived — mark as expired so generator completes
+                    charge->elapsed = charge->duration;
+                }
+                // Face the charge target
+                float dx = targetTf->position.x - transform->position.x;
+                float dz = targetTf->position.z - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
+                break;
+            }
+
             case MovementType::Spline:
+            {
+                auto* spline = static_cast<SplineGenerator*>(gen);
+                int numPts = static_cast<int>(spline->controlPoints.size());
+                if (numPts < 2)
+                    break;
+
+                // Advance t based on speed and approximate arc length
+                int segments = numPts - 1;
+                float segLen = 1.0f / static_cast<float>(segments);
+                float step = (spline->speed * deltaTime) / (static_cast<float>(segments) * 2.0f); // approximate
+                spline->t += step;
+
+                if (spline->t >= 1.0f)
+                {
+                    if (spline->loop)
+                    {
+                        spline->t -= 1.0f;
+                    }
+                    else
+                    {
+                        spline->t = 1.0f;
+                        spline->completed = true;
+                        // Snap to last point
+                        const auto& last = spline->controlPoints.back();
+                        transform->position.x = last[0];
+                        transform->position.y = last[1];
+                        transform->position.z = last[2];
+                        break;
+                    }
+                }
+
+                // Determine which segment we're in
+                float globalT = spline->t * static_cast<float>(segments);
+                int seg = static_cast<int>(globalT);
+                if (seg >= segments)
+                    seg = segments - 1;
+                float localT = globalT - static_cast<float>(seg);
+
+                // Catmull-Rom needs 4 control points; clamp at boundaries
+                int i0 = (std::max)(seg - 1, 0);
+                int i1 = seg;
+                int i2 = (std::min)(seg + 1, numPts - 1);
+                int i3 = (std::min)(seg + 2, numPts - 1);
+
+                float newX, newY, newZ;
+                CatmullRom(spline->controlPoints[i0], spline->controlPoints[i1], spline->controlPoints[i2],
+                           spline->controlPoints[i3], localT, newX, newY, newZ);
+
+                // Face movement direction
+                float dx = newX - transform->position.x;
+                float dz = newZ - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
+
+                transform->position.x = newX;
+                transform->position.y = newY;
+                transform->position.z = newZ;
+                (void)segLen;
+                break;
+            }
+
             case MovementType::Waypoint:
+            {
+                auto* wp = static_cast<WaypointGenerator*>(gen);
+                float step = wp->speed * deltaTime;
+                float remaining = MoveToward(transform->position.x, transform->position.y, transform->position.z,
+                                             wp->targetX, wp->targetY, wp->targetZ, step);
+                // Face movement direction
+                float dx = wp->targetX - transform->position.x;
+                float dz = wp->targetZ - transform->position.z;
+                if (std::abs(dx) > 0.01f || std::abs(dz) > 0.01f)
+                    transform->rotation.y = std::atan2(dx, dz) * MathUtils::RAD_TO_DEG;
+                (void)remaining;
+                break;
+            }
+
+            case MovementType::Idle:
             case MovementType::Count:
                 break;
             }
@@ -614,6 +801,35 @@ namespace Spark::AI
         auto gen = std::make_unique<RandomWanderGenerator>();
         gen->radius = radius;
         gen->waitTime = waitTime;
+        GetOrCreateController(entity).SetGenerator(std::move(gen));
+    }
+
+    void MovementSystem::MoveCharge(EntityID entity, EntityID target, float speed, float duration)
+    {
+        auto gen = std::make_unique<ChargeGenerator>();
+        gen->target = target;
+        gen->speed = speed;
+        gen->duration = duration;
+        GetOrCreateController(entity).SetGenerator(std::move(gen));
+    }
+
+    void MovementSystem::MoveSpline(EntityID entity, const std::vector<std::array<float, 3>>& controlPoints,
+                                    float speed, bool loop)
+    {
+        auto gen = std::make_unique<SplineGenerator>();
+        gen->controlPoints = controlPoints;
+        gen->speed = speed;
+        gen->loop = loop;
+        GetOrCreateController(entity).SetGenerator(std::move(gen));
+    }
+
+    void MovementSystem::MoveWaypoint(EntityID entity, float x, float y, float z, float speed)
+    {
+        auto gen = std::make_unique<WaypointGenerator>();
+        gen->targetX = x;
+        gen->targetY = y;
+        gen->targetZ = z;
+        gen->speed = speed;
         GetOrCreateController(entity).SetGenerator(std::move(gen));
     }
 
