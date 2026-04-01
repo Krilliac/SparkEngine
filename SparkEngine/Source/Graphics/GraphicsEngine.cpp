@@ -30,6 +30,7 @@
 #include "PostProcessingPipeline.h"
 #include "ShadowAtlas.h"
 #include "ScreenSpaceEffects.h"
+#include "TerrainRenderer.h"
 using Spark::Graphics::PostProcessingPipeline;
 #ifdef SPARK_HYBRID_RT
 #include "HybridRT/HybridRTManager.h"
@@ -131,6 +132,7 @@ GraphicsEngine::GraphicsEngine()
         m_temporalEffects = std::make_unique<TemporalEffects>();
         m_shadowAtlas = std::make_unique<Spark::Graphics::ShadowAtlas>();
         m_screenSpaceEffects = std::make_unique<Spark::Graphics::ScreenSpaceEffects>();
+        m_terrainRenderer = std::make_unique<Spark::Graphics::TerrainRenderer>();
 
         LOG_TO_CONSOLE_IMMEDIATE(L"Advanced systems created successfully", L"INFO");
     }
@@ -405,6 +407,19 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         {
             m_screenSpaceEffects->SetSSAOEnabled(m_settings.ssao);
             LOG_TO_CONSOLE_IMMEDIATE(L"ScreenSpaceEffects initialized successfully", L"SUCCESS");
+        }
+    }
+
+    // Initialize terrain renderer
+    if (m_terrainRenderer)
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        if (m_terrainRenderer->Initialize(m_device.Get()))
+#else
+        if (m_terrainRenderer->Initialize())
+#endif
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"TerrainRenderer initialized", L"SUCCESS");
         }
     }
 

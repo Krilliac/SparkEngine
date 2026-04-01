@@ -50,4 +50,8 @@ struct TerrainComponent
     bool castShadows = true;                    ///< Whether terrain casts shadows.
     bool receiveShadows = true;                 ///< Whether terrain receives shadows.
     bool visible = true;                        ///< Runtime visibility toggle.
+
+    // Runtime state (not serialized)
+    uint32_t selectedLOD = 0; ///< LOD level selected by TerrainSystem.
+    bool dirty = true;        ///< Mesh needs rebuild (heightmap changed).
 };

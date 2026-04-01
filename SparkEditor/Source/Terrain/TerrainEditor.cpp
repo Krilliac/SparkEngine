@@ -252,6 +252,12 @@ namespace SparkEditor
         }
 
         SetModified(false);
+
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Terrain saved to: %s (heightmap=%dx%d, layers=%zu, splatmap=%d)",
+                       filePath.c_str(), m_currentTerrain->heightmap.GetWidth(),
+                       m_currentTerrain->heightmap.GetHeight(), m_currentTerrain->textureLayers.size(),
+                       m_currentTerrain->splatmapResolution);
+
         return file.good();
     }
 
