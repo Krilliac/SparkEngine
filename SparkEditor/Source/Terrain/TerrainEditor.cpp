@@ -7,6 +7,10 @@
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include "../Core/EditorIcons.h"
+#include "Core/EngineContext.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/TerrainComponents.h"
+#include "Engine/ECS/Components/CoreComponents.h"
 
 #include <imgui.h>
 #include <algorithm>
@@ -254,9 +258,8 @@ namespace SparkEditor
         SetModified(false);
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Terrain saved to: %s (heightmap=%dx%d, layers=%zu, splatmap=%d)",
-                       filePath.c_str(), m_currentTerrain->heightmap.GetWidth(),
-                       m_currentTerrain->heightmap.GetHeight(), m_currentTerrain->textureLayers.size(),
-                       m_currentTerrain->splatmapResolution);
+                       filePath.c_str(), m_currentTerrain->heightmap.width, m_currentTerrain->heightmap.height,
+                       m_currentTerrain->textureLayers.size(), m_currentTerrain->splatmapResolution);
 
         return file.good();
     }
@@ -344,6 +347,9 @@ namespace SparkEditor
         m_meshDirty = false;
         if (!m_currentTerrain)
             return;
+
+        // Push changes to the engine so the viewport shows the updated terrain
+        SyncToEngine();
 
         auto& hm = m_currentTerrain->heightmap;
         int w = hm.width;
@@ -434,6 +440,76 @@ namespace SparkEditor
         {
             m_collisionHeights[i] = hm.heights[i] * hm.scale + posY;
         }
+    }
+
+    // =========================================================================
+    // Engine sync — push editor terrain data to ECS TerrainComponent
+    // =========================================================================
+
+    void TerrainEditor::SyncToEngine()
+    {
+        if (!m_currentTerrain)
+            return;
+
+        auto* ctx = EngineContext::Get();
+        if (!ctx)
+            return;
+
+        auto* world = ctx->GetWorld();
+        if (!world)
+            return;
+
+        // Find or create a terrain entity in the ECS world
+        // Look for an existing entity with TerrainComponent
+        entt::entity terrainEntity = entt::null;
+        auto& reg = world->GetRegistry();
+        auto terrainView = reg.view<TerrainComponent>();
+        for (auto entity : terrainView)
+        {
+            terrainEntity = entity;
+            break; // Use the first terrain entity found
+        }
+
+        // If no terrain entity exists, create one
+        if (terrainEntity == entt::null)
+        {
+            terrainEntity = reg.create();
+            reg.emplace<TerrainComponent>(terrainEntity);
+            reg.emplace<Transform>(terrainEntity, Transform{m_currentTerrain->position});
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created new terrain entity in ECS world");
+        }
+
+        // Sync heightmap data from editor to engine component
+        auto& tc = reg.get<TerrainComponent>(terrainEntity);
+        auto& hm = m_currentTerrain->heightmap;
+
+        tc.heightmapResolution = hm.width;
+        tc.heightScale = hm.scale;
+        tc.minHeight = hm.minHeight;
+        tc.maxHeight = hm.maxHeight;
+        tc.terrainSize = m_currentTerrain->size;
+        tc.lodLevels = m_meshLODLevels;
+
+        // Copy heightmap data
+        tc.heightmap = hm.heights;
+
+        // Copy splatmap data
+        tc.splatmap = m_currentTerrain->splatmaps;
+        tc.splatmapResolution = m_currentTerrain->splatmapResolution;
+
+        // Copy texture layer paths
+        tc.textureLayerPaths.clear();
+        for (const auto& layer : m_currentTerrain->textureLayers)
+        {
+            tc.textureLayerPaths.push_back(layer->name);
+        }
+
+        // Mark dirty so TerrainSystem will push to ClipmapTerrain and rebuild meshes
+        tc.dirty = true;
+
+        // Update transform
+        auto& transform = reg.get<Transform>(terrainEntity);
+        transform.position = m_currentTerrain->position;
     }
 
 } // namespace SparkEditor

@@ -79,7 +79,7 @@ namespace Spark::ECS
             }
 
             // Rebuild clipmap meshes for levels that moved
-            for (int level = 0; level < clipmap.GetLevelCount(); ++level)
+            for (uint32_t level = 0; level < clipmap.GetLevelCount(); ++level)
             {
                 const auto& lvl = clipmap.GetLevel(level);
                 if (lvl.needsUpdate)

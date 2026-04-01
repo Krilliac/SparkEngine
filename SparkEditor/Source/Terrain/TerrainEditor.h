@@ -59,6 +59,17 @@ namespace SparkEditor
         void UpdateTerrainMesh();
         void UpdateTerrainCollision();
 
+        /**
+         * @brief Sync editor terrain data to the engine's ECS TerrainComponent
+         *
+         * Pushes heightmap, splatmap, and texture layers from the editor's TerrainData
+         * to the engine's TerrainComponent on the terrain entity. Call after sculpting,
+         * painting, or procedural generation to see changes in real-time in the viewport.
+         *
+         * If no terrain entity exists in the scene, creates one automatically.
+         */
+        void SyncToEngine();
+
       private:
         // UI rendering (TerrainEditorUI.cpp)
         void RenderNoTerrainView();
