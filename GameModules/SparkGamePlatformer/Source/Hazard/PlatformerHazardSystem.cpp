@@ -163,9 +163,18 @@ namespace Platformer
             if (hazard.type != HazardType::Crusher)
                 continue;
 
+            if (hazard.crusherSpeed <= 0.0f)
+                continue;
+
             // Simple oscillation between start Y and crusherEndY
             float cycleTime = std::abs(hazard.posY - hazard.crusherEndY) / hazard.crusherSpeed;
+            if (cycleTime <= 0.0f)
+                continue;
+
             float totalCycle = cycleTime * 2.0f + hazard.crusherPauseTime * 2.0f;
+            if (totalCycle <= 0.0f)
+                continue;
+
             float t = std::fmod(m_globalTimer, totalCycle);
 
             float startY = hazard.posY;
@@ -205,7 +214,7 @@ namespace Platformer
             float pathLength = std::sqrt((hazard.pathEndX - hazard.posX) * (hazard.pathEndX - hazard.posX) +
                                          (hazard.pathEndY - hazard.posY) * (hazard.pathEndY - hazard.posY));
 
-            if (pathLength < 0.01f)
+            if (pathLength < 0.01f || hazard.pathSpeed <= 0.0f)
                 continue;
 
             float travelTime = pathLength / hazard.pathSpeed;
