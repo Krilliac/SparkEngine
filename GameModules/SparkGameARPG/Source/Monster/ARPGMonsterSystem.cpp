@@ -215,6 +215,9 @@ namespace ARPG
 
     std::vector<MonsterData> ARPGMonsterSystem::SpawnElitePack(int level, int packSize)
     {
+        if (m_templates.empty())
+            return {};
+
         // Pick a random template for the pack
         std::uniform_int_distribution<size_t> dist(0, m_templates.size() - 1);
         const auto& tmpl = m_templates[dist(GetMonsterRNG())];
