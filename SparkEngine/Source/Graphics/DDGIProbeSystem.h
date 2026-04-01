@@ -22,9 +22,11 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace Spark::Graphics
@@ -181,6 +183,31 @@ namespace Spark::Graphics
         /// @brief Check if initialized
         bool IsInitialized() const { return m_initialized; }
 
+        // ---- GPU Resource Management ----
+
+        /**
+         * @brief Create GPU resources for the DDGI probe system
+         *
+         * Creates a structured buffer for all probe SH data (9 coefficients
+         * x 3 channels per probe) and a constant buffer for grid configuration.
+         *
+         * @param device  RHI device to create resources on
+         * @return True if resources were created successfully
+         */
+        bool CreateGPUResources(Spark::RHI::IRHIDevice* device);
+
+        /**
+         * @brief Upload current probe SH data to the GPU structured buffer
+         * @param device  RHI device used for the upload
+         */
+        void UploadProbeDataToGPU(Spark::RHI::IRHIDevice* device);
+
+        /// @brief Get the probe SH data structured buffer
+        Spark::RHI::IRHIBuffer* GetProbeBuffer() const { return m_gpuProbeBuffer.get(); }
+
+        /// @brief Check if GPU resources have been created
+        bool HasGPUResources() const { return m_gpuProbeBuffer != nullptr; }
+
       private:
         /// @brief Compute flat index from 3D grid coordinates
         uint32_t ProbeIndex(uint32_t ix, uint32_t iy, uint32_t iz) const;
@@ -206,6 +233,10 @@ namespace Spark::Graphics
         DDGISettings m_settings;
         std::vector<DDGIProbe> m_probes;
         bool m_initialized = false;
+
+        // GPU resources
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuProbeBuffer;    ///< Structured buffer for probe SH data
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuConstantBuffer; ///< Constant buffer for grid config
     };
 
 } // namespace Spark::Graphics

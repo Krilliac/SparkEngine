@@ -21,8 +21,10 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace Spark::Graphics
@@ -178,6 +180,31 @@ namespace Spark::Graphics
         /// @brief Get total froxel count
         uint32_t GetFroxelCount() const { return m_settings.gridWidth * m_settings.gridHeight * m_settings.gridDepth; }
 
+        // ---- GPU Resource Management ----
+
+        /**
+         * @brief Create GPU resources for the froxel fog system
+         *
+         * Creates a 3D texture (gridWidth x gridHeight x gridDepth, RGBA16F)
+         * for the integrated froxel grid and a constant buffer for fog settings.
+         *
+         * @param device  RHI device to create resources on
+         * @return True if resources were created successfully
+         */
+        bool CreateGPUResources(Spark::RHI::IRHIDevice* device);
+
+        /**
+         * @brief Upload the integrated grid data to the 3D GPU texture
+         * @param device  RHI device used for the upload
+         */
+        void UploadGridToGPU(Spark::RHI::IRHIDevice* device);
+
+        /// @brief Get the 3D fog volume texture
+        Spark::RHI::IRHITexture* GetFogVolumeTexture() const { return m_gpuFogVolumeTexture.get(); }
+
+        /// @brief Check if GPU resources have been created
+        bool HasGPUResources() const { return m_gpuFogVolumeTexture != nullptr; }
+
       private:
         /// @brief Compute flat index from 3D froxel coordinates
         uint32_t FroxelIndex(uint32_t x, uint32_t y, uint32_t z) const
@@ -194,6 +221,10 @@ namespace Spark::Graphics
         std::vector<FroxelData> m_integratedGrid;
         uint32_t m_frameCount = 0;
         bool m_initialized = false;
+
+        // GPU resources
+        std::unique_ptr<Spark::RHI::IRHITexture> m_gpuFogVolumeTexture; ///< 3D texture for integrated fog grid
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuConstantBuffer;    ///< Constant buffer for fog settings
     };
 
 } // namespace Spark::Graphics

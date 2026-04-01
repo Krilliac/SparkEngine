@@ -83,15 +83,18 @@ Each system now has CreateGPUResources/UploadToGPU methods ready for shader inte
 
 ---
 
-## RHI Backend Status
+## RHI Backend Status (Updated 2026-04-01)
 
-| Backend | Files | Status |
-|---------|-------|--------|
-| D3D11 | D3D11Device.cpp (1.3K) | WORKING — primary backend |
-| D3D12 | D3D12Device.cpp (1.8K) | STUBS — not default |
-| Vulkan | VulkanDevice.cpp (2.2K) | STUBS — not default |
-| Metal | MetalDevice.h (542) | STUBS — no .cpp |
-| OpenGL | OpenGLDevice.cpp (1.6K) | STUBS — not default |
+| Backend | Files | Lines | Status |
+|---------|-------|-------|--------|
+| D3D11 | D3D11Device.cpp | 1,430 | WORKING — primary backend |
+| D3D12 | D3D12Device.cpp | 1,511 | WORKING — full implementation |
+| Vulkan | VulkanDevice.cpp | 1,571 | WORKING — full implementation |
+| OpenGL | OpenGLDevice.cpp | 1,921 | WORKING — 251 GL API calls |
+| Metal | MetalDevice.h | 541 | HEADER-ONLY — needs .mm ObjC++ files |
+
+**Previous documentation incorrectly listed D3D12/Vulkan/OpenGL as stubs.** All three have
+full IRHIDevice implementations with buffer/texture/shader/pipeline creation and draw calls.
 
 ---
 

@@ -201,32 +201,16 @@ namespace Spark
             FogSystem() = default;
             ~FogSystem() = default;
 
-            bool Initialize()
-            {
-                m_initialized = true;
-                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FogSystem initialized");
-                return true;
-            }
+            /// @brief Initialize the fog system
+            bool Initialize();
 
-            void Shutdown()
-            {
-                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FogSystem shutting down");
-                m_initialized = false;
-            }
+            /// @brief Shut down the fog system
+            void Shutdown();
 
             // ---- Mode and Settings ----
 
-            void SetMode(FogMode mode)
-            {
-                if (m_mode != mode)
-                {
-                    static const char* modeNames[] = {"None",   "Linear",    "Exponential", "ExpSquared",
-                                                      "Height", "ExpHeight", "Volumetric"};
-                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FogSystem mode changed: %s -> %s",
-                                   modeNames[static_cast<int>(m_mode)], modeNames[static_cast<int>(mode)]);
-                }
-                m_mode = mode;
-            }
+            /// @brief Set the active fog mode
+            void SetMode(FogMode mode);
             FogMode GetMode() const { return m_mode; }
 
             void SetEnabled(bool enabled) { m_enabled = enabled; }
@@ -235,19 +219,12 @@ namespace Spark
             void SetColor(const FogColor& color) { m_color = color; }
             const FogColor& GetColor() const { return m_color; }
 
-            void SetDensity(float density)
-            {
-                m_exponentialSettings.density = std::max(density, 0.0f);
-                m_heightSettings.baseDensity = std::max(density, 0.0f);
-            }
+            /// @brief Set fog density for exponential and height modes
+            void SetDensity(float density);
             float GetDensity() const { return m_exponentialSettings.density; }
 
-            // Linear fog settings
-            void SetLinearRange(float start, float end)
-            {
-                m_linearSettings.start = start;
-                m_linearSettings.end = std::max(end, start + 0.01f);
-            }
+            /// @brief Set linear fog start and end distances
+            void SetLinearRange(float start, float end);
             const LinearFogSettings& GetLinearSettings() const { return m_linearSettings; }
 
             // Height fog settings
@@ -263,99 +240,36 @@ namespace Spark
             // ---- Fog Computation ----
 
             /**
-     * @brief Compute fog factor for a fragment at given distance from camera
-     * @param distance Distance from camera to fragment
-     * @return Fog factor: 0 = no fog, 1 = fully fogged
-     */
-            float ComputeFogFactor(float distance) const
-            {
-                if (!m_enabled || m_mode == FogMode::None)
-                    return 0.0f;
-
-                switch (m_mode)
-                {
-                case FogMode::Linear:
-                    return FogMath::LinearFog(distance, m_linearSettings.start, m_linearSettings.end);
-                case FogMode::Exponential:
-                    return FogMath::ExponentialFog(distance, m_exponentialSettings.density);
-                case FogMode::ExponentialSquared:
-                    return FogMath::ExponentialSquaredFog(distance, m_exponentialSettings.density);
-                default:
-                    return FogMath::ExponentialFog(distance, m_exponentialSettings.density);
-                }
-            }
+             * @brief Compute fog factor for a fragment at given distance from camera
+             * @param distance Distance from camera to fragment
+             * @return Fog factor: 0 = no fog, 1 = fully fogged
+             */
+            float ComputeFogFactor(float distance) const;
 
             /**
-     * @brief Compute height-aware fog factor
-     * @param cameraY Camera Y position
-     * @param fragmentY Fragment world Y position
-     * @param distance Distance from camera to fragment
-     * @return Fog factor: 0 = no fog, 1 = fully fogged
-     */
-            float ComputeHeightFogFactor(float cameraY, float fragmentY, float distance) const
-            {
-                if (!m_enabled)
-                    return 0.0f;
-
-                if (m_mode == FogMode::Height || m_mode == FogMode::ExponentialHeight)
-                {
-                    return FogMath::IntegratedHeightFog(cameraY, fragmentY, distance, m_heightSettings.baseHeight,
-                                                        m_heightSettings.heightFalloff, m_heightSettings.baseDensity);
-                }
-
-                return ComputeFogFactor(distance);
-            }
+             * @brief Compute height-aware fog factor
+             * @param cameraY Camera Y position
+             * @param fragmentY Fragment world Y position
+             * @param distance Distance from camera to fragment
+             * @return Fog factor: 0 = no fog, 1 = fully fogged
+             */
+            float ComputeHeightFogFactor(float cameraY, float fragmentY, float distance) const;
 
             /**
-     * @brief Apply fog to a color value
-     * @param sceneColor Original scene color (RGB)
-     * @param fogFactor Fog amount (0 to 1)
-     * @return Fogged color
-     */
-            FogColor ApplyFog(const FogColor& sceneColor, float fogFactor) const
-            {
-                float f = std::clamp(fogFactor, 0.0f, 1.0f);
-                return sceneColor.Lerp(m_color, f);
-            }
+             * @brief Apply fog to a color value
+             * @param sceneColor Original scene color (RGB)
+             * @param fogFactor Fog amount (0 to 1)
+             * @return Fogged color
+             */
+            FogColor ApplyFog(const FogColor& sceneColor, float fogFactor) const;
 
             // ---- Metrics ----
 
-            FogMetrics GetMetrics() const
-            {
-                FogMetrics m;
-                m.activeMode = static_cast<int>(m_mode);
-                m.currentDensity = m_exponentialSettings.density;
-                m.maxFogDistance =
-                    (m_mode == FogMode::Linear) ? m_linearSettings.end : m_volumetricSettings.maxDistance;
-                m.volumetricSamples = (m_mode == FogMode::Volumetric) ? m_volumetricSettings.rayMarchSteps : 0;
-                return m;
-            }
+            /// @brief Get current fog system metrics
+            FogMetrics GetMetrics() const;
 
-            std::string Console_GetStatus() const
-            {
-                static const char* modeNames[] = {"None",   "Linear",    "Exponential", "ExpSquared",
-                                                  "Height", "ExpHeight", "Volumetric"};
-                std::string s = "Fog System:\n";
-                s += "  Enabled: " + std::string(m_enabled ? "yes" : "no") + "\n";
-                s += "  Mode: " + std::string(modeNames[static_cast<int>(m_mode)]) + "\n";
-                s += "  Color: (" + std::to_string(m_color.r) + ", " + std::to_string(m_color.g) + ", " +
-                     std::to_string(m_color.b) + ")\n";
-                if (m_mode == FogMode::Linear)
-                {
-                    s += "  Range: " + std::to_string(m_linearSettings.start) + " - " +
-                         std::to_string(m_linearSettings.end) + "\n";
-                }
-                else
-                {
-                    s += "  Density: " + std::to_string(m_exponentialSettings.density) + "\n";
-                }
-                if (m_mode == FogMode::Height || m_mode == FogMode::ExponentialHeight)
-                {
-                    s += "  Base height: " + std::to_string(m_heightSettings.baseHeight) + "\n";
-                    s += "  Height falloff: " + std::to_string(m_heightSettings.heightFalloff) + "\n";
-                }
-                return s;
-            }
+            /// @brief Get console status string
+            std::string Console_GetStatus() const;
 
           private:
             bool m_initialized = false;

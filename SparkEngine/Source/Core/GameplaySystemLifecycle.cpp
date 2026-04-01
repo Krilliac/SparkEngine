@@ -40,6 +40,8 @@
 #include "Engine/Gameplay/AbilitySystem.h"
 #include "Engine/Gameplay/ConditionSystem.h"
 #include "Engine/Gameplay/InstanceManager.h"
+#include "Engine/Gameplay/InventorySystem.h"
+#include "Engine/Gameplay/QuestSystem.h"
 #include "Engine/AI/MovementSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/ECS/Systems/TerrainSystem.h"
@@ -301,6 +303,8 @@ static void InitCoreGameplaySystems(EngineContext* ctx)
     Spark::Gameplay::ConditionSystem::GetInstance().Initialize();
     Spark::Gameplay::AbilitySystem::GetInstance().Initialize(eventBus);
     Spark::Gameplay::InstanceManager::GetInstance().Initialize();
+    Spark::Gameplay::InventorySystem::GetInstance().Initialize();
+    Spark::Gameplay::QuestSystem::GetInstance().Initialize();
     Spark::AI::MovementSystem::GetInstance().Initialize();
     Spark::Audio::MusicManager::GetInstance().Initialize();
     Spark::Audio::AudioMixer::GetInstance().Initialize();
@@ -831,6 +835,8 @@ void ShutdownGameplaySystems()
 
     Spark::Audio::MusicManager::GetInstance().Shutdown();
     Spark::AI::MovementSystem::GetInstance().Shutdown();
+    Spark::Gameplay::QuestSystem::GetInstance().Shutdown();
+    Spark::Gameplay::InventorySystem::GetInstance().Shutdown();
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
     Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
     Spark::Gameplay::ConditionSystem::GetInstance().Shutdown();

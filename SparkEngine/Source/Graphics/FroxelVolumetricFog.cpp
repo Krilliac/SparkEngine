@@ -372,4 +372,109 @@ namespace Spark::Graphics
         return (1.0f - g2) / (4.0f * FROXEL_PI * std::pow(denom, 1.5f));
     }
 
+    // =========================================================================
+    // GPU Resource Management
+    // =========================================================================
+
+    bool FroxelVolumetricFog::CreateGPUResources(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FroxelVolumetricFog::CreateGPUResources: null device");
+            return false;
+        }
+
+        if (!m_initialized)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "FroxelVolumetricFog::CreateGPUResources: system not initialized");
+            return false;
+        }
+
+        // Create 3D texture for the integrated froxel grid (RGBA16F)
+        Spark::RHI::RHITextureDesc texDesc;
+        texDesc.width = m_settings.gridWidth;
+        texDesc.height = m_settings.gridHeight;
+        texDesc.depth = m_settings.gridDepth;
+        texDesc.mipLevels = 1;
+        texDesc.format = Spark::RHI::PixelFormat::R16G16B16A16_FLOAT;
+        texDesc.type = Spark::RHI::RHITextureType::Texture3D;
+        texDesc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
+        texDesc.debugName = "FroxelFog_VolumeTexture";
+
+        m_gpuFogVolumeTexture = device->CreateTexture(texDesc);
+        if (!m_gpuFogVolumeTexture)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "FroxelVolumetricFog::CreateGPUResources: failed to create 3D fog texture");
+            return false;
+        }
+
+        // Create constant buffer for fog settings
+        struct alignas(16) FogSettingsCB
+        {
+            uint32_t gridWidth;
+            uint32_t gridHeight;
+            uint32_t gridDepth;
+            float nearPlane;
+            float farPlane;
+            float logDistribution;
+            float globalDensity;
+            float phaseG;
+        };
+
+        FogSettingsCB cbData = {};
+        cbData.gridWidth = m_settings.gridWidth;
+        cbData.gridHeight = m_settings.gridHeight;
+        cbData.gridDepth = m_settings.gridDepth;
+        cbData.nearPlane = m_settings.nearPlane;
+        cbData.farPlane = m_settings.farPlane;
+        cbData.logDistribution = m_settings.logDistribution;
+        cbData.globalDensity = m_settings.globalDensity;
+        cbData.phaseG = m_settings.phaseG;
+
+        Spark::RHI::RHIBufferDesc cbDesc;
+        cbDesc.size = sizeof(FogSettingsCB);
+        cbDesc.stride = 0;
+        cbDesc.usage = Spark::RHI::RHIBufferUsage::Constant;
+        cbDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        cbDesc.initialData = &cbData;
+        cbDesc.debugName = "FroxelFog_SettingsCB";
+
+        m_gpuConstantBuffer = device->CreateBuffer(cbDesc);
+        if (!m_gpuConstantBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "FroxelVolumetricFog::CreateGPUResources: failed to create constant buffer");
+            m_gpuFogVolumeTexture.reset();
+            return false;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "FroxelVolumetricFog: GPU resources created (3D texture %ux%ux%u RGBA16F, settings CB)",
+                       m_settings.gridWidth, m_settings.gridHeight, m_settings.gridDepth);
+        return true;
+    }
+
+    void FroxelVolumetricFog::UploadGridToGPU(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device || !m_gpuFogVolumeTexture)
+        {
+            return;
+        }
+
+        if (!m_initialized || m_integratedGrid.empty())
+        {
+            return;
+        }
+
+        // Upload the integrated grid data to the 3D texture
+        // FroxelData has 4 floats (inscatterR, inscatterG, inscatterB, extinction)
+        // which maps directly to RGBA16F
+        device->UpdateTexture(m_gpuFogVolumeTexture.get(), m_integratedGrid.data());
+
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics,
+                        "FroxelVolumetricFog: uploaded integrated grid to GPU (%u froxels)", GetFroxelCount());
+    }
+
 } // namespace Spark::Graphics

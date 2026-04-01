@@ -23,9 +23,11 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -244,6 +246,34 @@ namespace Spark::Graphics
         /// @brief Access settings
         const APVSettings& GetSettings() const { return m_settings; }
 
+        // ---- GPU Resource Management ----
+
+        /**
+         * @brief Create GPU resources for the adaptive probe volume system
+         *
+         * Creates a structured buffer for brick probe data and a constant
+         * buffer for volume configuration.
+         *
+         * @param device  RHI device to create resources on
+         * @return True if resources were created successfully
+         */
+        bool CreateGPUResources(Spark::RHI::IRHIDevice* device);
+
+        /**
+         * @brief Upload active brick data to the GPU structured buffer
+         * @param device  RHI device used for the upload
+         */
+        void UploadBrickDataToGPU(Spark::RHI::IRHIDevice* device);
+
+        /// @brief Get the brick data structured buffer
+        Spark::RHI::IRHIBuffer* GetBrickBuffer() const { return m_gpuBrickBuffer.get(); }
+
+        /// @brief Get the number of bricks currently in the GPU buffer
+        uint32_t GetGPUBrickCount() const { return m_gpuBrickCount; }
+
+        /// @brief Check if GPU resources have been created
+        bool HasGPUResources() const { return m_gpuBrickBuffer != nullptr; }
+
       private:
         /// @brief Compute local probe index within a brick
         static int LocalProbeIndex(int px, int py, int pz);
@@ -257,6 +287,11 @@ namespace Spark::Graphics
         APVSettings m_settings;
         std::unordered_map<BrickID, APVBrick, BrickIDHash> m_bricks;
         bool m_initialized = false;
+
+        // GPU resources
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuBrickBuffer;    ///< Structured buffer for brick probe data
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuConstantBuffer; ///< Constant buffer for volume config
+        uint32_t m_gpuBrickCount = 0;                                ///< Number of bricks in GPU buffer
     };
 
 } // namespace Spark::Graphics
