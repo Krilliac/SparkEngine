@@ -316,4 +316,97 @@ namespace Spark::Graphics
         return {x, y, z};
     }
 
+    // =========================================================================
+    // GPU resource management
+    // =========================================================================
+
+    bool ClusteredLightCulling::CreateGPUBuffers(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ClusteredLightCulling::CreateGPUBuffers: null device");
+            return false;
+        }
+
+        if (!m_initialized)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ClusteredLightCulling::CreateGPUBuffers: system not initialized");
+            return false;
+        }
+
+        uint32_t clusterCount = GetClusterCount();
+
+        // Cluster light counts buffer (one uint32_t per cluster)
+        Spark::RHI::RHIBufferDesc clusterDesc;
+        clusterDesc.size = clusterCount * sizeof(uint32_t);
+        clusterDesc.stride = sizeof(uint32_t);
+        clusterDesc.usage = Spark::RHI::RHIBufferUsage::Structured;
+        clusterDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        clusterDesc.debugName = "ClusteredCulling_ClusterCounts";
+
+        m_gpuClusterBuffer = device->CreateBuffer(clusterDesc);
+        if (!m_gpuClusterBuffer || !m_gpuClusterBuffer->IsValid())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ClusteredLightCulling::CreateGPUBuffers: failed to create cluster count buffer");
+            m_gpuClusterBuffer.reset();
+            return false;
+        }
+
+        // Light index list buffer (maxLightsPerCluster indices per cluster)
+        Spark::RHI::RHIBufferDesc indexDesc;
+        indexDesc.size = static_cast<uint64_t>(clusterCount) * m_config.maxLightsPerCluster * sizeof(uint32_t);
+        indexDesc.stride = sizeof(uint32_t);
+        indexDesc.usage = Spark::RHI::RHIBufferUsage::Structured;
+        indexDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        indexDesc.debugName = "ClusteredCulling_LightIndices";
+
+        m_gpuLightIndexBuffer = device->CreateBuffer(indexDesc);
+        if (!m_gpuLightIndexBuffer || !m_gpuLightIndexBuffer->IsValid())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ClusteredLightCulling::CreateGPUBuffers: failed to create light index buffer");
+            m_gpuClusterBuffer.reset();
+            m_gpuLightIndexBuffer.reset();
+            return false;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "ClusteredLightCulling GPU buffers created (clusters=%u, maxPerCluster=%u)", clusterCount,
+                       m_config.maxLightsPerCluster);
+        return true;
+    }
+
+    void ClusteredLightCulling::UploadToGPU(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device || !m_gpuClusterBuffer || !m_gpuLightIndexBuffer)
+        {
+            return;
+        }
+
+        if (!m_initialized)
+        {
+            return;
+        }
+
+        // Upload per-cluster light counts
+        device->UpdateBuffer(m_gpuClusterBuffer.get(), m_clusterLightCounts.data(),
+                             m_clusterLightCounts.size() * sizeof(uint32_t));
+
+        // Upload the flat light index array
+        device->UpdateBuffer(m_gpuLightIndexBuffer.get(), m_clusterLightIndices.data(),
+                             m_clusterLightIndices.size() * sizeof(uint32_t));
+    }
+
+    Spark::RHI::IRHIBuffer* ClusteredLightCulling::GetClusterBuffer() const
+    {
+        return m_gpuClusterBuffer.get();
+    }
+
+    Spark::RHI::IRHIBuffer* ClusteredLightCulling::GetLightIndexBuffer() const
+    {
+        return m_gpuLightIndexBuffer.get();
+    }
+
 } // namespace Spark::Graphics

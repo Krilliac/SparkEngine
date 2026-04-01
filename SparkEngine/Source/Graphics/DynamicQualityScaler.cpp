@@ -161,4 +161,11 @@ namespace Spark::Graphics
         return m_thresholds;
     }
 
+    void DynamicQualityScaler::GetRenderDimensions(uint32_t nativeWidth, uint32_t nativeHeight, uint32_t& outWidth,
+                                                   uint32_t& outHeight) const
+    {
+        outWidth = std::max(1u, static_cast<uint32_t>(nativeWidth * m_currentScale));
+        outHeight = std::max(1u, static_cast<uint32_t>(nativeHeight * m_currentScale));
+    }
+
 } // namespace Spark::Graphics

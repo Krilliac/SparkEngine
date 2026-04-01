@@ -24,10 +24,12 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 
 namespace Spark::Graphics
 {
@@ -158,6 +160,25 @@ namespace Spark::Graphics
          */
         void Update(float deltaTime);
 
+        /**
+         * @brief Render sky colors for cubemap faces using GPU constant buffer.
+         *
+         * Creates a constant buffer with the Perez coefficients, zenith values,
+         * sun direction, and exposure. Samples the Preetham model at 6 cardinal
+         * directions (+X, -X, +Y, -Y, +Z, -Z) to produce cubemap-ready colors
+         * stored in m_skyboxColors. This works without actual shader compilation
+         * by providing CPU-computed sky colors to the renderer.
+         *
+         * @param deltaTime  Frame time in seconds.
+         */
+        void RenderGPU(float deltaTime);
+
+        /**
+         * @brief Get the array of 6 skybox face colors (+X, -X, +Y, -Y, +Z, -Z).
+         * @return Pointer to array of 6 SkyColor values, or nullptr if not yet computed.
+         */
+        const SkyColor* GetSkyboxColors() const { return m_skyboxColors; }
+
       private:
         SkyAtmosphereSystem() = default;
         ~SkyAtmosphereSystem() = default;
@@ -196,6 +217,10 @@ namespace Spark::Graphics
         float m_zenithy = 0.0f; ///< Zenith chrominance y
 
         float m_sunTheta = 0.0f; ///< Sun zenith angle (radians)
+
+        // GPU resources
+        SkyColor m_skyboxColors[6] = {};                             ///< Cubemap face colors (+X,-X,+Y,-Y,+Z,-Z)
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuConstantBuffer; ///< Constant buffer for Perez/sky data
     };
 
 } // namespace Spark::Graphics

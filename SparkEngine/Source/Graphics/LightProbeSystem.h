@@ -155,6 +155,24 @@ namespace Spark::Graphics
         /// @brief Shutdown
         void Shutdown();
 
+        /**
+         * @brief Upload all probe SH data to a GPU structured buffer
+         *
+         * Packs probe data via PackProbeDataForGPU() and uploads to a
+         * structured buffer suitable for binding to shaders. Call after
+         * baking or when probe set changes.
+         *
+         * @param device RHI device for buffer creation/upload
+         * @return true if upload succeeded (or no probes to upload)
+         */
+        bool UploadToGPU(void* device);
+
+        /** @brief Check if GPU data has been uploaded and is current */
+        bool HasGPUData() const { return m_gpuDataUploaded; }
+
+        /** @brief Get the number of probes uploaded to GPU */
+        uint32_t GetGPUProbeCount() const { return m_gpuProbeCount; }
+
       private:
         LightProbeSystem() = default;
         ~LightProbeSystem() = default;
@@ -163,6 +181,8 @@ namespace Spark::Graphics
 
         std::unordered_map<uint32_t, LightProbe> m_probes;
         uint32_t m_nextProbeId = 1;
+        bool m_gpuDataUploaded = false;
+        uint32_t m_gpuProbeCount = 0;
     };
 
 } // namespace Spark::Graphics

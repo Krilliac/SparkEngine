@@ -276,4 +276,130 @@ namespace Spark::Graphics
         return it->second.vertices;
     }
 
+    // =========================================================================
+    // GPU Buffer Management
+    // =========================================================================
+
+    bool WaterRenderer::CreateGPUBuffers(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "WaterRenderer::CreateGPUBuffers: null device");
+            return false;
+        }
+
+        if (m_planes.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "WaterRenderer::CreateGPUBuffers: no water planes exist");
+            return false;
+        }
+
+        // Use the first water plane for GPU buffer creation
+        auto it = m_planes.begin();
+        m_gpuWaterPlaneID = it->first;
+        const WaterPlane& plane = it->second;
+
+        if (plane.vertices.empty())
+        {
+            return false;
+        }
+
+        // Create vertex buffer from current vertices
+        uint64_t vertexDataSize = plane.vertices.size() * sizeof(WaterVertex);
+        Spark::RHI::RHIBufferDesc vbDesc;
+        vbDesc.size = vertexDataSize;
+        vbDesc.stride = sizeof(WaterVertex);
+        vbDesc.usage = Spark::RHI::RHIBufferUsage::Vertex;
+        vbDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        vbDesc.initialData = plane.vertices.data();
+        vbDesc.debugName = "Water_VertexBuffer";
+
+        m_gpuVertexBuffer = device->CreateBuffer(vbDesc);
+        if (!m_gpuVertexBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "WaterRenderer::CreateGPUBuffers: failed to create vertex buffer");
+            return false;
+        }
+        m_gpuVertexCount = static_cast<uint32_t>(plane.vertices.size());
+
+        // Generate index buffer for the grid (two triangles per quad)
+        int res = plane.gridResolution;
+        std::vector<uint32_t> indices;
+        indices.reserve(static_cast<size_t>((res - 1) * (res - 1)) * 6);
+
+        for (int z = 0; z < res - 1; ++z)
+        {
+            for (int x = 0; x < res - 1; ++x)
+            {
+                uint32_t topLeft = static_cast<uint32_t>(z * res + x);
+                uint32_t topRight = topLeft + 1;
+                uint32_t bottomLeft = static_cast<uint32_t>((z + 1) * res + x);
+                uint32_t bottomRight = bottomLeft + 1;
+
+                indices.push_back(topLeft);
+                indices.push_back(bottomLeft);
+                indices.push_back(topRight);
+
+                indices.push_back(topRight);
+                indices.push_back(bottomLeft);
+                indices.push_back(bottomRight);
+            }
+        }
+
+        uint64_t indexDataSize = indices.size() * sizeof(uint32_t);
+        Spark::RHI::RHIBufferDesc ibDesc;
+        ibDesc.size = indexDataSize;
+        ibDesc.stride = sizeof(uint32_t);
+        ibDesc.usage = Spark::RHI::RHIBufferUsage::Index;
+        ibDesc.access = Spark::RHI::RHIBufferAccess::Static;
+        ibDesc.initialData = indices.data();
+        ibDesc.debugName = "Water_IndexBuffer";
+
+        m_gpuIndexBuffer = device->CreateBuffer(ibDesc);
+        if (!m_gpuIndexBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "WaterRenderer::CreateGPUBuffers: failed to create index buffer");
+            m_gpuVertexBuffer.reset();
+            m_gpuVertexCount = 0;
+            return false;
+        }
+        m_gpuIndexCount = static_cast<uint32_t>(indices.size());
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "WaterRenderer: GPU buffers created (%u verts, %u indices)",
+                       m_gpuVertexCount, m_gpuIndexCount);
+        return true;
+    }
+
+    void WaterRenderer::UpdateGPUBuffers(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            return;
+        }
+
+        if (!m_gpuVertexBuffer)
+        {
+            return;
+        }
+
+        // Find the water plane that the GPU buffers were created from
+        auto it = m_planes.find(m_gpuWaterPlaneID);
+        if (it == m_planes.end())
+        {
+            return;
+        }
+
+        const WaterPlane& plane = it->second;
+        if (plane.vertices.empty())
+        {
+            return;
+        }
+
+        // Upload the displaced vertex data to the GPU
+        uint64_t dataSize = plane.vertices.size() * sizeof(WaterVertex);
+        device->UpdateBuffer(m_gpuVertexBuffer.get(), plane.vertices.data(), static_cast<size_t>(dataSize));
+    }
+
 } // namespace Spark::Graphics

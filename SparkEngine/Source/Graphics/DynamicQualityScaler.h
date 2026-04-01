@@ -47,9 +47,21 @@ namespace Spark::Graphics
     class DynamicQualityScaler
     {
       public:
-        DynamicQualityScaler() = default;
+        /** @brief Singleton access */
+        static DynamicQualityScaler& GetInstance()
+        {
+            static DynamicQualityScaler s;
+            return s;
+        }
+
         ~DynamicQualityScaler() = default;
 
+      private:
+        DynamicQualityScaler() = default;
+        DynamicQualityScaler(const DynamicQualityScaler&) = delete;
+        DynamicQualityScaler& operator=(const DynamicQualityScaler&) = delete;
+
+      public:
         /// @brief Initialize with thresholds
         void Initialize(const DynamicQualityThresholds& thresholds);
 
@@ -76,6 +88,16 @@ namespace Spark::Graphics
 
         /// @brief Access the thresholds
         const DynamicQualityThresholds& GetThresholds() const;
+
+        /**
+         * @brief Compute scaled render dimensions from native resolution
+         * @param nativeWidth Full resolution width
+         * @param nativeHeight Full resolution height
+         * @param outWidth Scaled render width (clamped to minimum 1)
+         * @param outHeight Scaled render height (clamped to minimum 1)
+         */
+        void GetRenderDimensions(uint32_t nativeWidth, uint32_t nativeHeight, uint32_t& outWidth,
+                                 uint32_t& outHeight) const;
 
       private:
         DynamicQualityThresholds m_thresholds;
