@@ -513,7 +513,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*226 test files, 2907+ test cases*
+*230 test files, 2994+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -584,10 +584,12 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestECSStress` | 10 |
 | `TestECSWorld` | 11 |
 | `TestECSystemOrdering` | 15 |
+| `TestECSystemSpecialized` | 27 |
 | `TestEngineContext` | 18 |
 | `TestEngineDiagnostics` | 4 |
 | `TestEngineLoadTest` | 9 |
 | `TestEngineMonitor` | 10 |
+| `TestEngineSettingsEdgeCases` | 27 |
 | `TestEngineSettingsParser` | 20 |
 | `TestEntityArchetype` | 6 |
 | `TestEntityEventBus` | 11 |
@@ -636,6 +638,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLogger` | 18 |
 | `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
+| `TestMaterialSystemEdgeCases` | 10 |
 | `TestMaterialSystemValidation` | 31 |
 | `TestMathUtils` | 11 |
 | `TestMemoryDebugger` | 16 |
@@ -655,6 +658,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkIntegration` | 31 |
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
+| `TestNetworkManagerEdgeCases` | 23 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkSecurity` | 12 |
 | `TestNetworkStress` | 21 |

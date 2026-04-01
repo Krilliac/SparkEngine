@@ -223,10 +223,14 @@ add_executable(SparkTests
     TestMeshShaderPipeline.cpp
     TestSparkPak.cpp
     TestNetworkManagerOrchestration.cpp
+    TestNetworkManagerEdgeCases.cpp
     TestECSystemOrdering.cpp
+    TestECSystemSpecialized.cpp
     TestMaterialSystemValidation.cpp
+    TestMaterialSystemEdgeCases.cpp
     TestAssetPipelineCache.cpp
     TestEngineSettingsParser.cpp
+    TestEngineSettingsEdgeCases.cpp
     TestPerceptionSystemMath.cpp
     TestInputManagerState.cpp
     TestGamepadInputProcessing.cpp

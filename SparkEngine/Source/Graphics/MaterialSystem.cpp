@@ -1,5 +1,3 @@
-#include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file MaterialSystem.cpp
  * @brief Core MaterialSystem implementation — lifecycle, CRUD, texture loading, utilities
@@ -9,33 +7,38 @@
  * Console editing/texture/hot-reload commands are in MaterialConsoleEdit.cpp.
  */
 
+#include "Core/Platform.h"
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
-#include "../Utils/SparkConsole.h"
-#include "Utils/LocalFileCache.h"
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <filesystem>
 #include <algorithm>
-#include <iomanip>
 #include <chrono>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 
 #ifdef SPARK_PLATFORM_WINDOWS
+#include "../Utils/SparkConsole.h"
+#include "Utils/LocalFileCache.h"
 #include <wincodec.h>
-#endif // SPARK_PLATFORM_WINDOWS
 #include <wincodecsdk.h>
-
-#ifdef SPARK_PLATFORM_WINDOWS
+#else
+#include "RHI/RHI.h"
+#include <sys/stat.h>
+#endif
 
 // ============================================================================
-// MATERIAL SYSTEM IMPLEMENTATION
+// PLATFORM-INDEPENDENT IMPLEMENTATIONS
 // ============================================================================
 
-MaterialSystem::MaterialSystem() : m_device(nullptr), m_context(nullptr), m_hotReloadEnabled(false) {}
+MaterialSystem::MaterialSystem() : m_device(nullptr), m_context(nullptr), m_hotReloadEnabled(false)
+{
+    memset(&m_metrics, 0, sizeof(m_metrics));
+}
 
 MaterialSystem::~MaterialSystem()
 {
@@ -45,12 +48,19 @@ MaterialSystem::~MaterialSystem()
 HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+#ifdef SPARK_PLATFORM_WINDOWS
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
+#endif
     m_device = device;
     m_context = context;
+    memset(&m_metrics, 0, sizeof(m_metrics));
+    m_frameStartTime = std::chrono::high_resolution_clock::now();
 
     HRESULT hr = CreateDefaultMaterials();
+    UpdateMetrics();
+
+#ifdef SPARK_PLATFORM_WINDOWS
     if (SUCCEEDED(hr))
     {
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem initialized successfully");
@@ -59,29 +69,42 @@ HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "MaterialSystem failed to create default materials");
     }
+#else
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem (Linux) initialized");
+#endif
+
     return hr;
 }
 
 void MaterialSystem::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem shutting down (%zu materials, %zu cached textures)",
-                   m_materials.size(), m_textureCache.size());
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem shutting down (%zu materials)", m_materials.size());
     m_materials.clear();
     m_textureCache.clear();
     m_samplerCache.clear();
+    m_fileTimestamps.clear();
     m_defaultMaterial.reset();
     m_errorMaterial.reset();
     m_device = nullptr;
     m_context = nullptr;
+    memset(&m_metrics, 0, sizeof(m_metrics));
 }
 
 std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name)
 {
     SPARK_VALIDATE_RET(Spark::LogCategory::Graphics, !name.empty(), nullptr);
+
+    auto existing = GetMaterial(name);
+    if (existing && existing != m_defaultMaterial)
+    {
+        return existing;
+    }
+
     SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Creating material '%s'", name.c_str());
     auto material = std::make_shared<Material>(name);
     m_materials[name] = material;
+    UpdateMetrics();
     return material;
 }
 
@@ -89,19 +112,31 @@ std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePa
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     SPARK_VALIDATE_RET(Spark::LogCategory::Graphics, !filePath.empty(), nullptr);
-    // Check if already loaded
+
     auto it = m_materials.find(filePath);
     if (it != m_materials.end())
     {
         return it->second;
     }
 
-    auto material = std::make_shared<Material>(filePath);
+    // Extract a material name from the filename
+    std::string name = filePath;
+    auto slashPos = filePath.find_last_of("/\\");
+    if (slashPos != std::string::npos)
+    {
+        name = filePath.substr(slashPos + 1);
+    }
+    auto dotPos = name.find_last_of('.');
+    if (dotPos != std::string::npos)
+    {
+        name = name.substr(0, dotPos);
+    }
+
+    auto material = std::make_shared<Material>(name);
     if (material->LoadFromFile(filePath, m_device))
     {
         m_materials[filePath] = material;
 
-        // Store file timestamp for hot reloading
         if (m_hotReloadEnabled)
         {
             m_fileTimestamps[filePath] = GetFileTimestamp(filePath);
@@ -118,20 +153,15 @@ std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePa
 std::shared_ptr<Material> MaterialSystem::GetMaterial(const std::string& name) const
 {
     auto it = m_materials.find(name);
-    SPARK_WARN_IF(Spark::LogCategory::Graphics, it == m_materials.end() && !name.empty(),
-                  "Material not found, returning default");
     return (it != m_materials.end()) ? it->second : m_defaultMaterial;
 }
 
 void MaterialSystem::UnloadMaterial(const std::string& name)
 {
     SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Unloading material '%s'", name.c_str());
-    auto it = m_materials.find(name);
-    if (it != m_materials.end())
-    {
-        m_materials.erase(it);
-        m_fileTimestamps.erase(name);
-    }
+    m_materials.erase(name);
+    m_fileTimestamps.erase(name);
+    UpdateMetrics();
 }
 
 void MaterialSystem::UnloadAllMaterials()
@@ -139,7 +169,308 @@ void MaterialSystem::UnloadAllMaterials()
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Unloading all materials (%zu total)", m_materials.size());
     m_materials.clear();
     m_fileTimestamps.clear();
+    UpdateMetrics();
 }
+
+void MaterialSystem::EnableHotReloading(bool enabled)
+{
+    m_hotReloadEnabled = enabled;
+    if (enabled)
+    {
+        for (const auto& pair : m_materials)
+        {
+            m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload enabled");
+    }
+    else
+    {
+        m_fileTimestamps.clear();
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload disabled");
+    }
+}
+
+void MaterialSystem::UpdateHotReload()
+{
+    if (!m_hotReloadEnabled)
+        return;
+
+    for (auto& pair : m_fileTimestamps)
+    {
+        const std::string& filePath = pair.first;
+        uint64_t& lastTimestamp = pair.second;
+
+        uint64_t currentTimestamp = GetFileTimestamp(filePath);
+        if (currentTimestamp > lastTimestamp)
+        {
+            auto it = m_materials.find(filePath);
+            if (it != m_materials.end())
+            {
+                if (it->second->LoadFromFile(filePath, m_device))
+                {
+                    lastTimestamp = currentTimestamp;
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reloaded material: %s", filePath.c_str());
+                }
+                else
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to hot reload material: %s",
+                                    filePath.c_str());
+                }
+            }
+        }
+    }
+}
+
+int MaterialSystem::ReloadAllMaterials()
+{
+    int reloadedCount = 0;
+    for (auto& pair : m_materials)
+    {
+        if (pair.second->LoadFromFile(pair.first, m_device))
+        {
+            reloadedCount++;
+        }
+    }
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Reloaded %d materials", reloadedCount);
+    return reloadedCount;
+}
+
+void MaterialSystem::BeginFrame()
+{
+    m_frameStartTime = std::chrono::high_resolution_clock::now();
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.materialSwitches = 0;
+        m_metrics.textureBinds = 0;
+    }
+
+    UpdateMetrics();
+    UpdateHotReload();
+    PerformPeriodicMaintenance();
+}
+
+void MaterialSystem::EndFrame()
+{
+    auto frameEndTime = std::chrono::high_resolution_clock::now();
+    auto frameDuration = std::chrono::duration_cast<std::chrono::microseconds>(frameEndTime - m_frameStartTime);
+    (void)frameDuration;
+}
+
+std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::string& templateName,
+                                                                 const std::string& instanceName)
+{
+    auto templateMat = GetMaterial(templateName);
+    if (!templateMat || templateMat == m_defaultMaterial)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "CreateMaterialInstance: template not found: %s",
+                        templateName.c_str());
+        return m_errorMaterial;
+    }
+
+    auto instance = templateMat->CreateInstance(instanceName);
+    if (instance)
+    {
+        if (m_device)
+        {
+            instance->CompileMaterial(m_device);
+        }
+        m_materials[instanceName] = instance;
+    }
+    return instance;
+}
+
+void MaterialSystem::BindMaterial(const std::string& name)
+{
+    auto material = GetMaterial(name);
+    BindMaterial(material);
+}
+
+bool MaterialSystem::ReloadMaterial(const std::string& name)
+{
+    auto it = m_materials.find(name);
+    if (it == m_materials.end() || !it->second)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ReloadMaterial: material not found: %s", name.c_str());
+        return false;
+    }
+
+    bool result = it->second->ReloadMaterial(m_device);
+
+    if (result && m_hotReloadEnabled)
+    {
+        m_fileTimestamps[name] = GetFileTimestamp(name);
+    }
+
+    return result;
+}
+
+MaterialSystem::MaterialMetrics MaterialSystem::GetMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    MaterialMetrics metrics = m_metrics;
+    metrics.loadedMaterials = static_cast<int>(m_materials.size());
+    metrics.textureCount = static_cast<int>(m_textureCache.size());
+    metrics.hotReloadEnabled = m_hotReloadEnabled;
+
+    int totalVariants = 0;
+    for (const auto& pair : m_materials)
+    {
+        if (pair.second)
+        {
+            totalVariants += static_cast<int>(pair.second->GetAvailableVariants().size());
+        }
+    }
+    metrics.variantCount = totalVariants;
+
+    return metrics;
+}
+
+void MaterialSystem::UpdateMetrics()
+{
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
+    m_metrics.loadedMaterials = static_cast<int>(m_materials.size());
+    m_metrics.textureCount = static_cast<int>(m_textureCache.size());
+    m_metrics.hotReloadEnabled = m_hotReloadEnabled;
+
+    size_t totalTextureMemory = 0;
+    for ([[maybe_unused]] const auto& pair : m_textureCache)
+    {
+        totalTextureMemory += 1024 * 1024; // 1MB per texture (rough estimate)
+    }
+    m_metrics.textureMemory = totalTextureMemory;
+
+    int totalVariants = 0;
+    for (const auto& pair : m_materials)
+    {
+        if (pair.second)
+        {
+            totalVariants += static_cast<int>(pair.second->GetAvailableVariants().size());
+        }
+    }
+    m_metrics.variantCount = totalVariants;
+
+    m_metrics.averageLoadTime = 0.0f;
+}
+
+size_t MaterialSystem::HashSampling(const TextureSampling& sampling) const
+{
+    size_t hash = 0;
+    auto hashCombine = [](size_t& seed, size_t value) { seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2); };
+
+    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.filter)));
+    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.addressU)));
+    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.addressV)));
+    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.addressW)));
+    hashCombine(hash, std::hash<unsigned int>{}(sampling.maxAnisotropy));
+    hashCombine(hash, std::hash<float>{}(sampling.mipLODBias));
+    hashCombine(hash, std::hash<float>{}(sampling.minLOD));
+    hashCombine(hash, std::hash<float>{}(sampling.maxLOD));
+
+    return hash;
+}
+
+std::vector<std::string> MaterialSystem::GetShaderPermutation(const std::string& name) const
+{
+    auto material = GetMaterial(name);
+    if (material && material != m_defaultMaterial)
+    {
+        return material->GetShaderPermutation();
+    }
+    return {};
+}
+
+std::string MaterialSystem::TextureTypeToString(MaterialTextureType type) const
+{
+    switch (type)
+    {
+    case MaterialTextureType::Albedo:
+        return "Albedo";
+    case MaterialTextureType::Normal:
+        return "Normal";
+    case MaterialTextureType::Metallic:
+        return "Metallic";
+    case MaterialTextureType::Roughness:
+        return "Roughness";
+    case MaterialTextureType::Occlusion:
+        return "Occlusion";
+    case MaterialTextureType::Emissive:
+        return "Emissive";
+    case MaterialTextureType::Height:
+        return "Height";
+    case MaterialTextureType::DetailAlbedo:
+        return "DetailAlbedo";
+    case MaterialTextureType::DetailNormal:
+        return "DetailNormal";
+    case MaterialTextureType::Subsurface:
+        return "Subsurface";
+    case MaterialTextureType::Transmission:
+        return "Transmission";
+    case MaterialTextureType::Clearcoat:
+        return "Clearcoat";
+    case MaterialTextureType::ClearcoatRoughness:
+        return "ClearcoatRoughness";
+    case MaterialTextureType::Anisotropy:
+        return "Anisotropy";
+    case MaterialTextureType::Custom0:
+        return "Custom0";
+    case MaterialTextureType::Custom1:
+        return "Custom1";
+    case MaterialTextureType::Custom2:
+        return "Custom2";
+    case MaterialTextureType::Custom3:
+        return "Custom3";
+    default:
+        return "Unknown";
+    }
+}
+
+MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) const
+{
+    if (str == "Albedo")
+        return MaterialTextureType::Albedo;
+    if (str == "Normal")
+        return MaterialTextureType::Normal;
+    if (str == "Metallic")
+        return MaterialTextureType::Metallic;
+    if (str == "Roughness")
+        return MaterialTextureType::Roughness;
+    if (str == "Occlusion")
+        return MaterialTextureType::Occlusion;
+    if (str == "Emissive")
+        return MaterialTextureType::Emissive;
+    if (str == "Height")
+        return MaterialTextureType::Height;
+    if (str == "DetailAlbedo")
+        return MaterialTextureType::DetailAlbedo;
+    if (str == "DetailNormal")
+        return MaterialTextureType::DetailNormal;
+    if (str == "Subsurface")
+        return MaterialTextureType::Subsurface;
+    if (str == "Transmission")
+        return MaterialTextureType::Transmission;
+    if (str == "Clearcoat")
+        return MaterialTextureType::Clearcoat;
+    if (str == "ClearcoatRoughness")
+        return MaterialTextureType::ClearcoatRoughness;
+    if (str == "Anisotropy")
+        return MaterialTextureType::Anisotropy;
+    if (str == "Custom0")
+        return MaterialTextureType::Custom0;
+    if (str == "Custom1")
+        return MaterialTextureType::Custom1;
+    if (str == "Custom2")
+        return MaterialTextureType::Custom2;
+    if (str == "Custom3")
+        return MaterialTextureType::Custom3;
+    return MaterialTextureType::Albedo;
+}
+
+// ============================================================================
+// PLATFORM-SPECIFIC IMPLEMENTATIONS
+// ============================================================================
+
+#ifdef SPARK_PLATFORM_WINDOWS
 
 ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTexture(const std::string& filePath)
 {
@@ -191,111 +522,6 @@ ComPtr<ID3D11SamplerState> MaterialSystem::GetSampler(const TextureSampling& sam
     return sampler;
 }
 
-void MaterialSystem::UpdateHotReload()
-{
-    if (!m_hotReloadEnabled)
-        return;
-
-    for (auto& pair : m_fileTimestamps)
-    {
-        const std::string& filePath = pair.first;
-        uint64_t& lastTimestamp = pair.second;
-
-        uint64_t currentTimestamp = GetFileTimestamp(filePath);
-        if (currentTimestamp > lastTimestamp)
-        {
-            // File has been modified, reload it
-            auto it = m_materials.find(filePath);
-            if (it != m_materials.end())
-            {
-                if (it->second->LoadFromFile(filePath, m_device))
-                {
-                    lastTimestamp = currentTimestamp;
-                    Spark::SimpleConsole::GetInstance().LogInfo("Hot reloaded material: " + filePath);
-                }
-                else
-                {
-                    Spark::SimpleConsole::GetInstance().LogError("Failed to hot reload material: " + filePath);
-                }
-            }
-        }
-    }
-}
-
-int MaterialSystem::ReloadAllMaterials()
-{
-    int reloadedCount = 0;
-
-    for (auto& pair : m_materials)
-    {
-        auto& material = pair.second;
-        if (material->LoadFromFile(pair.first, m_device))
-        {
-            reloadedCount++;
-        }
-    }
-
-    Spark::SimpleConsole::GetInstance().LogInfo("Reloaded " + std::to_string(reloadedCount) + " materials");
-    return reloadedCount;
-}
-
-void MaterialSystem::BeginFrame()
-{
-    m_frameStartTime = std::chrono::high_resolution_clock::now();
-
-    // Reset per-frame metrics
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_metrics.materialSwitches = 0;
-    m_metrics.textureBinds = 0;
-
-    UpdateMetrics();
-
-    // Update hot reloading
-    UpdateHotReload();
-
-    // Perform periodic maintenance
-    PerformPeriodicMaintenance();
-}
-
-void MaterialSystem::EndFrame()
-{
-    auto frameEndTime = std::chrono::high_resolution_clock::now();
-    auto frameDuration = std::chrono::duration_cast<std::chrono::microseconds>(frameEndTime - m_frameStartTime);
-
-    // Update frame time metrics if needed
-}
-
-std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::string& templateName,
-                                                                 const std::string& instanceName)
-{
-    auto templateMat = GetMaterial(templateName);
-    if (!templateMat || (m_defaultMaterial && templateMat == m_defaultMaterial))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("CreateMaterialInstance: template material not found: " +
-                                                     templateName);
-        return m_errorMaterial;
-    }
-
-    auto instance = templateMat->CreateInstance(instanceName);
-    if (instance)
-    {
-        // Compile the instance so it has its own constant buffer
-        if (m_device)
-        {
-            instance->CompileMaterial(m_device);
-        }
-        m_materials[instanceName] = instance;
-    }
-
-    return instance;
-}
-
-void MaterialSystem::BindMaterial(const std::string& name)
-{
-    auto material = GetMaterial(name);
-    BindMaterial(material);
-}
-
 void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
 {
     if (!material || !m_context)
@@ -333,7 +559,6 @@ void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
             m_context->Unmap(material->m_constantBuffer.Get(), 0);
         }
 
-        // Bind constant buffer to pixel shader slot 1 (slot 0 is often per-frame/camera)
         ID3D11Buffer* cbuffers[] = {material->m_constantBuffer.Get()};
         m_context->PSSetConstantBuffers(1, 1, cbuffers);
     }
@@ -376,19 +601,16 @@ void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
         m_context->OMSetBlendState(material->m_blendState.Get(), blendFactor, 0xFFFFFFFF);
     }
 
-    // Set depth stencil state
     if (material->m_depthStencilState)
     {
         m_context->OMSetDepthStencilState(material->m_depthStencilState.Get(), 0);
     }
 
-    // Set rasterizer state
     if (material->m_rasterizerState)
     {
         m_context->RSSetState(material->m_rasterizerState.Get());
     }
 
-    // Update per-frame metrics
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_metrics.materialSwitches++;
@@ -396,67 +618,8 @@ void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
     }
 }
 
-bool MaterialSystem::ReloadMaterial(const std::string& name)
-{
-    auto it = m_materials.find(name);
-    if (it == m_materials.end() || !it->second)
-    {
-        Spark::SimpleConsole::GetInstance().LogError("ReloadMaterial: material not found: " + name);
-        return false;
-    }
-
-    bool result = it->second->ReloadMaterial(m_device);
-
-    // Update file timestamp if hot reload is enabled
-    if (result && m_hotReloadEnabled)
-    {
-        m_fileTimestamps[name] = GetFileTimestamp(name);
-    }
-
-    return result;
-}
-
-MaterialSystem::MaterialMetrics MaterialSystem::GetMetrics() const
-{
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    MaterialMetrics metrics = m_metrics;
-    metrics.loadedMaterials = static_cast<int>(m_materials.size());
-    metrics.textureCount = static_cast<int>(m_textureCache.size());
-    metrics.hotReloadEnabled = m_hotReloadEnabled;
-
-    int totalVariants = 0;
-    for (const auto& materialPair : m_materials)
-    {
-        if (materialPair.second)
-        {
-            totalVariants += static_cast<int>(materialPair.second->GetAvailableVariants().size());
-        }
-    }
-    metrics.variantCount = totalVariants;
-
-    return metrics;
-}
-
-void MaterialSystem::EnableHotReloading(bool enabled)
-{
-    m_hotReloadEnabled = enabled;
-    if (enabled)
-    {
-        for (const auto& pair : m_materials)
-        {
-            m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
-        }
-        Spark::SimpleConsole::GetInstance().LogSuccess("Hot reload enabled");
-    }
-    else
-    {
-        m_fileTimestamps.clear();
-        Spark::SimpleConsole::GetInstance().LogInfo("Hot reload disabled");
-    }
-}
 HRESULT MaterialSystem::CreateDefaultMaterials()
 {
-    // Create default material
     m_defaultMaterial = std::make_shared<Material>("Default");
     PBRProperties defaultPbr = {};
     defaultPbr.albedoColor = {0.7f, 0.7f, 0.7f, 1.0f};
@@ -470,15 +633,13 @@ HRESULT MaterialSystem::CreateDefaultMaterials()
     defaultPbr.indexOfRefraction = 1.5f;
     m_defaultMaterial->SetPBRProperties(defaultPbr);
 
-    // Create error material (magenta color for missing materials)
     m_errorMaterial = std::make_shared<Material>("Error");
     PBRProperties errorPbr = defaultPbr;
-    errorPbr.albedoColor = {1.0f, 0.0f, 1.0f, 1.0f}; // Magenta
+    errorPbr.albedoColor = {1.0f, 0.0f, 1.0f, 1.0f};
     errorPbr.emissiveColor = {0.2f, 0.0f, 0.2f};
     errorPbr.emissiveFactor = 0.5f;
     m_errorMaterial->SetPBRProperties(errorPbr);
 
-    // Compile default pipeline states for both materials
     if (m_device)
     {
         m_defaultMaterial->CompileMaterial(m_device);
@@ -510,20 +671,6 @@ HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11Sam
     return m_device->CreateSamplerState(&desc, sampler);
 }
 
-size_t MaterialSystem::HashSampling(const TextureSampling& sampling) const
-{
-    size_t hash = 0;
-    hash ^= std::hash<int>{}(static_cast<int>(sampling.filter));
-    hash ^= std::hash<int>{}(static_cast<int>(sampling.addressU)) << 1;
-    hash ^= std::hash<int>{}(static_cast<int>(sampling.addressV)) << 2;
-    hash ^= std::hash<int>{}(static_cast<int>(sampling.addressW)) << 3;
-    hash ^= std::hash<UINT>{}(sampling.maxAnisotropy) << 4;
-    hash ^= std::hash<float>{}(sampling.mipLODBias) << 5;
-    hash ^= std::hash<float>{}(sampling.minLOD) << 6;
-    hash ^= std::hash<float>{}(sampling.maxLOD) << 7;
-    return hash;
-}
-
 uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
 {
     try
@@ -536,218 +683,42 @@ uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
     }
     catch (const std::exception&)
     {
-        // Error accessing file
-        Spark::SimpleConsole::GetInstance().LogError("Failed to get timestamp for file: " + filePath);
-        return 0; // Return 0 if we can't get the timestamp
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to get timestamp for file: %s", filePath.c_str());
     }
     return 0;
 }
 
 // LoadTextureFromFile is in MaterialTextureLoading.cpp (WIC-based, Windows only)
 
-void MaterialSystem::UpdateMetrics()
-{
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-
-    // Basic metrics
-    m_metrics.loadedMaterials = static_cast<int>(m_materials.size());
-    m_metrics.textureCount = static_cast<int>(m_textureCache.size());
-    m_metrics.hotReloadEnabled = m_hotReloadEnabled;
-
-    // Calculate texture memory usage (improved estimation)
-    size_t totalTextureMemory = 0;
-    for (const auto& pair : m_textureCache)
-    {
-        // For a more accurate estimate, we'd need to query the actual texture
-        // For now, estimate based on common texture sizes and formats
-        // This is a rough approximation - in production you'd want to track actual sizes
-        totalTextureMemory += 1024 * 1024; // 1MB per texture (very rough estimate)
-    }
-    m_metrics.textureMemory = totalTextureMemory;
-
-    // Count variants across all materials
-    int totalVariants = 0;
-    for (const auto& materialPair : m_materials)
-    {
-        if (materialPair.second)
-        {
-            // Access variant count through material's internal structure
-            // Since we can't directly access private members, we estimate based on naming
-            totalVariants += 1; // Each material has at least one "default" variant
-        }
-    }
-    m_metrics.variantCount = totalVariants;
-
-    // Performance metrics (would be updated during actual rendering)
-    // These would be incremented during actual material binding operations
-    // m_metrics.materialSwitches and m_metrics.textureBinds are reset in BeginFrame()
-
-    // Load time tracking — actual per-material timing would require
-    // instrumenting CreateMaterial(). For now, report 0 until that's added.
-    m_metrics.averageLoadTime = 0.0f;
-}
-
 void MaterialSystem::PerformPeriodicMaintenance()
 {
-    // This method can be called periodically to perform maintenance tasks
-    // such as cleaning up unused resources, optimizing caches, etc.
-
     static auto lastMaintenanceTime = std::chrono::high_resolution_clock::now();
     auto currentTime = std::chrono::high_resolution_clock::now();
     auto deltaTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastMaintenanceTime);
 
-    // Perform maintenance every 60 seconds
     if (deltaTime.count() >= 60)
     {
         lastMaintenanceTime = currentTime;
 
-        // Clean up unused samplers (keep commonly used ones)
         if (m_samplerCache.size() > 50)
         {
-            // In a full implementation, you'd track usage frequency
-            // For now, just log that maintenance would occur
             Spark::SimpleConsole::GetInstance().LogInfo(
                 "MaterialSystem maintenance: " + std::to_string(m_samplerCache.size()) + " samplers in cache");
         }
 
-        // Log memory usage
-        size_t estimatedMemory = m_textureCache.size() * 1024 * 1024; // Rough estimate
+        size_t estimatedMemory = m_textureCache.size() * 1024 * 1024;
         if (estimatedMemory > 500 * 1024 * 1024)
-        { // > 500MB
+        {
             Spark::SimpleConsole::GetInstance().LogWarning("MaterialSystem using high memory: ~" +
                                                            std::to_string(estimatedMemory / 1024 / 1024) + "MB");
         }
     }
 }
 
-// TextureTypeToString and StringToTextureType are in the platform-independent section below
-
-#endif // inner SPARK_PLATFORM_WINDOWS
-
 #else // !SPARK_PLATFORM_WINDOWS
-
-#include "MaterialSystem.h"
-#include "RHI/RHI.h"
-#include "../Utils/Hash.h"
-#include "../Utils/Validate.h"
-#include <sstream>
-#include <algorithm>
-#include <cmath>
-#include <cstring>
-#include <fstream>
-#include <iomanip>
-#include <filesystem>
-#include <sys/stat.h>
-
-// ============================================================================
-// MaterialSystem (Linux full implementation)
-// ============================================================================
-
-// ============================================================================
-// MaterialSystem (Linux full implementation)
-// ============================================================================
-
-MaterialSystem::MaterialSystem() : m_device(nullptr), m_context(nullptr), m_hotReloadEnabled(false)
-{
-    memset(&m_metrics, 0, sizeof(m_metrics));
-}
-
-MaterialSystem::~MaterialSystem()
-{
-    Shutdown();
-}
-
-HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
-{
-    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
-    m_device = device;
-    m_context = context;
-    memset(&m_metrics, 0, sizeof(m_metrics));
-    m_frameStartTime = std::chrono::high_resolution_clock::now();
-
-    CreateDefaultMaterials();
-
-    UpdateMetrics();
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem (Linux) initialized");
-    return S_OK;
-}
-
-void MaterialSystem::Shutdown()
-{
-    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem (Linux) shutting down (%zu materials)",
-                   m_materials.size());
-    m_materials.clear();
-    m_textureCache.clear();
-    m_samplerCache.clear();
-    m_fileTimestamps.clear();
-    m_defaultMaterial.reset();
-    m_errorMaterial.reset();
-    m_device = nullptr;
-    m_context = nullptr;
-    memset(&m_metrics, 0, sizeof(m_metrics));
-}
-
-std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name)
-{
-    auto existing = GetMaterial(name);
-    if (existing)
-    {
-        return existing;
-    }
-    auto material = std::make_shared<Material>(name);
-    m_materials[name] = material;
-    UpdateMetrics();
-    return material;
-}
-
-std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePath)
-{
-    auto it = m_materials.find(filePath);
-    if (it != m_materials.end())
-        return it->second;
-
-    // Extract a material name from the filename
-    std::string name = filePath;
-    auto slashPos = filePath.find_last_of("/\\");
-    if (slashPos != std::string::npos)
-    {
-        name = filePath.substr(slashPos + 1);
-    }
-    auto dotPos = name.find_last_of('.');
-    if (dotPos != std::string::npos)
-    {
-        name = name.substr(0, dotPos);
-    }
-
-    auto material = std::make_shared<Material>(name);
-    material->LoadFromFile(filePath, m_device);
-    m_materials[filePath] = material;
-    UpdateMetrics();
-    return material;
-}
-
-std::shared_ptr<Material> MaterialSystem::GetMaterial(const std::string& name) const
-{
-    auto it = m_materials.find(name);
-    return (it != m_materials.end()) ? it->second : nullptr;
-}
-
-void MaterialSystem::UnloadMaterial(const std::string& name)
-{
-    m_materials.erase(name);
-    UpdateMetrics();
-}
-
-void MaterialSystem::UnloadAllMaterials()
-{
-    m_materials.clear();
-    UpdateMetrics();
-}
 
 ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTexture(const std::string& /*filePath*/)
 {
-    // No GPU texture loading on Linux - return empty ComPtr
     return ComPtr<ID3D11ShaderResourceView>();
 }
 
@@ -759,114 +730,7 @@ void MaterialSystem::UnloadTexture(const std::string& filePath)
 
 ComPtr<ID3D11SamplerState> MaterialSystem::GetSampler(const TextureSampling& /*sampling*/)
 {
-    // No GPU sampler creation on Linux - return empty ComPtr
     return ComPtr<ID3D11SamplerState>();
-}
-
-void MaterialSystem::EnableHotReloading(bool enabled)
-{
-    m_hotReloadEnabled = enabled;
-    if (enabled)
-    {
-        // Initialize timestamps for all currently loaded materials
-        for (const auto& pair : m_materials)
-        {
-            m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
-        }
-    }
-    else
-    {
-        m_fileTimestamps.clear();
-    }
-}
-
-void MaterialSystem::UpdateHotReload()
-{
-    if (!m_hotReloadEnabled)
-        return;
-
-    for (auto& pair : m_fileTimestamps)
-    {
-        const std::string& filePath = pair.first;
-        uint64_t& lastTimestamp = pair.second;
-
-        uint64_t currentTimestamp = GetFileTimestamp(filePath);
-        if (currentTimestamp > lastTimestamp)
-        {
-            auto it = m_materials.find(filePath);
-            if (it != m_materials.end())
-            {
-                if (it->second->LoadFromFile(filePath, m_device))
-                {
-                    lastTimestamp = currentTimestamp;
-                    fprintf(stderr, "[MaterialSystem] Hot reloaded material: %s\n", filePath.c_str());
-                }
-                else
-                {
-                    fprintf(stderr, "[MaterialSystem] Failed to hot reload material: %s\n", filePath.c_str());
-                }
-            }
-        }
-    }
-}
-
-int MaterialSystem::ReloadAllMaterials()
-{
-    int reloadedCount = 0;
-    for (auto& pair : m_materials)
-    {
-        if (pair.second->LoadFromFile(pair.first, m_device))
-        {
-            reloadedCount++;
-        }
-    }
-    fprintf(stderr, "[MaterialSystem] Reloaded %d materials\n", reloadedCount);
-    return reloadedCount;
-}
-
-void MaterialSystem::BeginFrame()
-{
-    m_frameStartTime = std::chrono::high_resolution_clock::now();
-    {
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        m_metrics.materialSwitches = 0;
-        m_metrics.textureBinds = 0;
-    }
-}
-
-void MaterialSystem::EndFrame()
-{
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(endTime - m_frameStartTime).count();
-    (void)elapsed; // Available for profiling if needed
-
-    UpdateMetrics();
-    PerformPeriodicMaintenance();
-}
-
-std::shared_ptr<Material> MaterialSystem::CreateMaterialInstance(const std::string& templateName,
-                                                                 const std::string& instanceName)
-{
-    auto templateMat = GetMaterial(templateName);
-    if (!templateMat)
-    {
-        fprintf(stderr, "[MaterialSystem] CreateMaterialInstance: template '%s' not found\n", templateName.c_str());
-        return nullptr;
-    }
-
-    auto instance = templateMat->CreateInstance(instanceName);
-    if (instance)
-    {
-        instance->CompileMaterial(m_device);
-        m_materials[instanceName] = instance;
-    }
-    return instance;
-}
-
-void MaterialSystem::BindMaterial(const std::string& name)
-{
-    auto material = GetMaterial(name);
-    BindMaterial(material);
 }
 
 void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
@@ -874,63 +738,14 @@ void MaterialSystem::BindMaterial(const std::shared_ptr<Material>& material)
     if (!material)
         return;
 
-    // No-op on Linux - no GPU binding
-    {
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        m_metrics.materialSwitches++;
-    }
-}
-
-bool MaterialSystem::ReloadMaterial(const std::string& name)
-{
-    auto it = m_materials.find(name);
-    if (it == m_materials.end() || !it->second)
-    {
-        fprintf(stderr, "[MaterialSystem] ReloadMaterial: material '%s' not found\n", name.c_str());
-        return false;
-    }
-
-    bool result = it->second->ReloadMaterial(m_device);
-
-    if (result && m_hotReloadEnabled)
-    {
-        m_fileTimestamps[name] = GetFileTimestamp(name);
-    }
-
-    return result;
-}
-
-MaterialSystem::MaterialMetrics MaterialSystem::GetMetrics() const
-{
     std::lock_guard<std::mutex> lock(m_metricsMutex);
-    MaterialMetrics metrics = m_metrics;
-    metrics.loadedMaterials = static_cast<int>(m_materials.size());
-    metrics.textureCount = static_cast<int>(m_textureCache.size());
-    metrics.hotReloadEnabled = m_hotReloadEnabled;
-
-    int totalVariants = 0;
-    for (const auto& pair : m_materials)
-    {
-        if (pair.second)
-        {
-            totalVariants += static_cast<int>(pair.second->GetAvailableVariants().size());
-        }
-    }
-    metrics.variantCount = totalVariants;
-
-    return metrics;
+    m_metrics.materialSwitches++;
 }
-
-// ============================================================================
-// Private helper methods
-// ============================================================================
 
 HRESULT MaterialSystem::CreateDefaultMaterials()
 {
-    // Create default material with standard PBR defaults
     m_defaultMaterial = std::make_shared<Material>("__default");
 
-    // Create error material - bright magenta to be visually obvious
     m_errorMaterial = std::make_shared<Material>("__error");
     PBRProperties errorPBR;
     errorPBR.albedoColor = {1.0f, 0.0f, 1.0f, 1.0f};
@@ -945,16 +760,12 @@ HRESULT MaterialSystem::CreateDefaultMaterials()
 
 HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11SamplerState** /*sampler*/)
 {
-    // On Linux, create the sampler state through the RHI abstraction layer.
-    // The ID3D11SamplerState** output is unused; the RHI manages sampler lifetime.
     auto rhiDevice = Spark::RHI::CreateDevice(Spark::RHI::GraphicsBackend::Auto);
     if (!rhiDevice)
         return E_FAIL;
 
-    // Map D3D11 filter enum to RHI filter mode
     Spark::RHI::RHISamplerDesc desc;
 
-    // D3D11_FILTER_ANISOTROPIC = 0x55
     if (sampling.filter == D3D11_FILTER_ANISOTROPIC)
     {
         desc.minFilter = Spark::RHI::RHIFilterMode::Anisotropic;
@@ -975,13 +786,11 @@ HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11Sam
     }
     else
     {
-        // Default to linear filtering for other filter combinations
         desc.minFilter = Spark::RHI::RHIFilterMode::Linear;
         desc.magFilter = Spark::RHI::RHIFilterMode::Linear;
         desc.mipFilter = Spark::RHI::RHIFilterMode::Linear;
     }
 
-    // Map D3D11 address modes to RHI address modes
     auto mapAddressMode = [](D3D11_TEXTURE_ADDRESS_MODE mode) -> Spark::RHI::RHIAddressMode
     {
         switch (mode)
@@ -1020,24 +829,6 @@ HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11Sam
     return S_OK;
 }
 
-size_t MaterialSystem::HashSampling(const TextureSampling& sampling) const
-{
-    size_t hash = 0;
-    // Combine hash values for sampling parameters
-    auto hashCombine = [](size_t& seed, size_t value) { seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2); };
-
-    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.filter)));
-    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.addressU)));
-    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.addressV)));
-    hashCombine(hash, std::hash<int>{}(static_cast<int>(sampling.addressW)));
-    hashCombine(hash, std::hash<unsigned int>{}(sampling.maxAnisotropy));
-    hashCombine(hash, std::hash<float>{}(sampling.mipLODBias));
-    hashCombine(hash, std::hash<float>{}(sampling.minLOD));
-    hashCombine(hash, std::hash<float>{}(sampling.maxLOD));
-
-    return hash;
-}
-
 uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
 {
     struct stat fileStat;
@@ -1050,27 +841,7 @@ uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
 
 ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::string& /*filePath*/)
 {
-    // No GPU texture loading on Linux
     return ComPtr<ID3D11ShaderResourceView>();
-}
-
-void MaterialSystem::UpdateMetrics()
-{
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-    m_metrics.loadedMaterials = static_cast<int>(m_materials.size());
-    m_metrics.textureCount = static_cast<int>(m_textureCache.size());
-
-    // Count variants
-    int totalVariants = 0;
-    for (const auto& pair : m_materials)
-    {
-        if (pair.second)
-        {
-            totalVariants += static_cast<int>(pair.second->GetAvailableVariants().size());
-        }
-    }
-    m_metrics.variantCount = totalVariants;
-    m_metrics.hotReloadEnabled = m_hotReloadEnabled;
 }
 
 void MaterialSystem::PerformPeriodicMaintenance()
@@ -1078,115 +849,4 @@ void MaterialSystem::PerformPeriodicMaintenance()
     // No-op on Linux - no GPU resources to manage
 }
 
-// TextureTypeToString and StringToTextureType are in the platform-independent section below
-
 #endif // SPARK_PLATFORM_WINDOWS
-
-// ============================================================================
-// PLATFORM-INDEPENDENT IMPLEMENTATIONS
-// ============================================================================
-
-std::string MaterialSystem::TextureTypeToString(MaterialTextureType type) const
-{
-    switch (type)
-    {
-    case MaterialTextureType::Albedo:
-        return "Albedo";
-    case MaterialTextureType::Normal:
-        return "Normal";
-    case MaterialTextureType::Metallic:
-        return "Metallic";
-    case MaterialTextureType::Roughness:
-        return "Roughness";
-    case MaterialTextureType::Occlusion:
-        return "Occlusion";
-    case MaterialTextureType::Emissive:
-        return "Emissive";
-    case MaterialTextureType::Height:
-        return "Height";
-    case MaterialTextureType::DetailAlbedo:
-        return "DetailAlbedo";
-    case MaterialTextureType::DetailNormal:
-        return "DetailNormal";
-    case MaterialTextureType::Subsurface:
-        return "Subsurface";
-    case MaterialTextureType::Transmission:
-        return "Transmission";
-    case MaterialTextureType::Clearcoat:
-        return "Clearcoat";
-    case MaterialTextureType::ClearcoatRoughness:
-        return "ClearcoatRoughness";
-    case MaterialTextureType::Anisotropy:
-        return "Anisotropy";
-    case MaterialTextureType::Custom0:
-        return "Custom0";
-    case MaterialTextureType::Custom1:
-        return "Custom1";
-    case MaterialTextureType::Custom2:
-        return "Custom2";
-    case MaterialTextureType::Custom3:
-        return "Custom3";
-    default:
-        return "Unknown";
-    }
-}
-
-MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) const
-{
-    // Case-insensitive comparison using lowercase hash
-    std::string lower = str;
-    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
-
-    using namespace Spark::HashLiterals;
-    switch (Spark::FNV1a64(lower))
-    {
-    case "albedo"_hash64:
-        return MaterialTextureType::Albedo;
-    case "normal"_hash64:
-        return MaterialTextureType::Normal;
-    case "metallic"_hash64:
-        return MaterialTextureType::Metallic;
-    case "roughness"_hash64:
-        return MaterialTextureType::Roughness;
-    case "occlusion"_hash64:
-        return MaterialTextureType::Occlusion;
-    case "emissive"_hash64:
-        return MaterialTextureType::Emissive;
-    case "height"_hash64:
-        return MaterialTextureType::Height;
-    case "detailalbedo"_hash64:
-        return MaterialTextureType::DetailAlbedo;
-    case "detailnormal"_hash64:
-        return MaterialTextureType::DetailNormal;
-    case "subsurface"_hash64:
-        return MaterialTextureType::Subsurface;
-    case "transmission"_hash64:
-        return MaterialTextureType::Transmission;
-    case "clearcoat"_hash64:
-        return MaterialTextureType::Clearcoat;
-    case "clearcoatroughness"_hash64:
-        return MaterialTextureType::ClearcoatRoughness;
-    case "anisotropy"_hash64:
-        return MaterialTextureType::Anisotropy;
-    case "custom0"_hash64:
-        return MaterialTextureType::Custom0;
-    case "custom1"_hash64:
-        return MaterialTextureType::Custom1;
-    case "custom2"_hash64:
-        return MaterialTextureType::Custom2;
-    case "custom3"_hash64:
-        return MaterialTextureType::Custom3;
-    default:
-        return MaterialTextureType::Albedo;
-    }
-}
-
-std::vector<std::string> MaterialSystem::GetShaderPermutation(const std::string& name) const
-{
-    auto material = GetMaterial(name);
-    if (material && (!m_defaultMaterial || material != m_defaultMaterial))
-    {
-        return material->GetShaderPermutation();
-    }
-    return {};
-}
