@@ -385,11 +385,7 @@ namespace Spark
     class Logger
     {
       public:
-        static Logger& Get()
-        {
-            static Logger instance;
-            return instance;
-        }
+        static Logger& Get();
 
         /**
          * @brief Initialize the logger and start the async writer thread

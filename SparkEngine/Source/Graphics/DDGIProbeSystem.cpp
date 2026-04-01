@@ -207,10 +207,10 @@ namespace Spark::Graphics
         if (!m_initialized)
             return result;
 
-        // Convert world position to grid-local continuous coordinates
-        float gx = (worldX - m_settings.originX) / m_settings.spacingX;
-        float gy = (worldY - m_settings.originY) / m_settings.spacingY;
-        float gz = (worldZ - m_settings.originZ) / m_settings.spacingZ;
+        // Convert world position to grid-local continuous coordinates (guard against zero spacing)
+        float gx = (worldX - m_settings.originX) / std::max(m_settings.spacingX, 0.001f);
+        float gy = (worldY - m_settings.originY) / std::max(m_settings.spacingY, 0.001f);
+        float gz = (worldZ - m_settings.originZ) / std::max(m_settings.spacingZ, 0.001f);
 
         // Clamp to valid grid range
         float maxX = static_cast<float>(m_settings.countX - 1);

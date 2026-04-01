@@ -136,7 +136,7 @@ namespace Spark::Graphics
             // Each successive wave is smaller and higher frequency
             float scale = 1.0f / static_cast<float>(1 + i);
             wave.amplitude = m_settings.waveAmplitude * scale;
-            wave.wavelength = 10.0f * scale / m_settings.waveFrequency;
+            wave.wavelength = 10.0f * scale / std::max(m_settings.waveFrequency, 0.001f);
             wave.wavelength = std::max(wave.wavelength, 0.5f);
             wave.speed = m_settings.waveSpeed * std::sqrt(wave.wavelength);
             wave.steepness = std::clamp(0.3f + 0.1f * static_cast<float>(i), 0.0f, 1.0f);

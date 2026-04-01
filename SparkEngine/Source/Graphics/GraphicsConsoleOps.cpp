@@ -273,9 +273,9 @@ std::string GraphicsEngine::Console_Benchmark(int seconds)
     ss << "=== Benchmark Results ===\n";
     ss << "Duration: " << seconds << " seconds\n";
     ss << "Total Frames: " << frameCount << "\n";
-    ss << "Average FPS: " << (frameCount / static_cast<float>(seconds)) << "\n";
-    ss << "Average Frame Time: " << (totalFrameTime / frameCount) << " ms\n";
-    ss << "Min Frame Time: " << minFrameTime << " ms\n";
+    ss << "Average FPS: " << (seconds > 0 ? (frameCount / static_cast<float>(seconds)) : 0.0f) << "\n";
+    ss << "Average Frame Time: " << (frameCount > 0 ? (totalFrameTime / frameCount) : 0.0f) << " ms\n";
+    ss << "Min Frame Time: " << (frameCount > 0 ? minFrameTime : 0.0f) << " ms\n";
     ss << "Max Frame Time: " << maxFrameTime << " ms\n";
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Benchmark completed", L"SUCCESS");
