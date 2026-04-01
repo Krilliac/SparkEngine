@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-01
 **Type:** Observation
-**Status:** Active
+**Status:** Active (gaps being addressed across 4 phases)
 **Severity:** N/A (evaluation, not issue)
 
 ## Executive Verdict: YES, with caveats
@@ -153,3 +153,20 @@ weather, destruction, modding (VFS + SparkPak), coroutines, events
 SparkEngine is a real engine. The core loop runs, draw calls hit the GPU, physics simulates, AI pathfinds, networking replicates entities, and 2,577 tests validate it. The SparkGame module proves a game can load, run, and process logic through the module interface.
 
 **To ship a game today:** Windows target, C++ proficiency, willingness to build against IGameModule, custom work for missing features. Comparable to early-access indie engines (Flax, Stride) in system breadth, behind in tooling/platform support/artist workflows. Networking stack is notably more sophisticated than most indie engines.
+
+---
+
+## Gaps Addressed (2026-04-01, 4-phase session)
+
+| Phase | What | Lines |
+|-------|------|-------|
+| 1 | Making Your First Game tutorial, vehicle weapons fixed, IAudioBackend + NullBackend | 940 |
+| 2 | GPU binding for 8 rendering systems (sky, water, terrain, shadow, cluster, SSAO, probes, DQS) | 986 |
+| 3 | Cross-platform audio (XAudio2/OpenAL/Null backend adapters, factory, engine wiring) | 620 |
+| 4 | Artist Workflow Guide, Multiplayer Quick Start, knowledge updates | ~900 |
+
+**Remaining gaps after session:**
+- Actual HLSL/GLSL shaders for GPU rendering systems (GPU binding layer exists but no shaders)
+- D3D12/Vulkan backends still stubs (OpenGL is real: 1,921 lines, 251 GL calls)
+- Engine-level inventory/quest systems (game-module level only)
+- Console/mobile platforms

@@ -36,7 +36,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine viability evaluation (can you make a game?) | [knowledge/engine-viability-evaluation.md](knowledge/engine-viability-evaluation.md) | Observation | Active | 2026-04-01 |
 ## Quick Reference
 
-### Current Engine State (2026-03-22)
+### Current Engine State (2026-04-01)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
