@@ -34,6 +34,7 @@
 #include "Graphics/GraphicsConsoleCommands.h"
 #include "Input/InputManager.h"
 #include "Audio/AudioEngine.h"
+#include "Audio/AudioBackendFactory.h"
 #include "Utils/Timer.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/ConsoleProcessManager.h"
@@ -99,6 +100,7 @@ std::unique_ptr<Timer> g_timer;
 std::unique_ptr<Spark::EventBus> g_eventBus;
 std::unique_ptr<ModuleManager> g_moduleManager;
 std::unique_ptr<AudioEngine> g_audioEngine;
+std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
 std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
 std::unique_ptr<PhysicsSystem> g_physicsOwned;
@@ -684,6 +686,9 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         g_audioEngine.reset();
     }
 
+    // Create cross-platform audio backend (wraps AudioEngine on Windows, OpenAL on Linux)
+    g_audioBackend = Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto, g_audioEngine.get());
+
     LoadAndInitModules(lpCmdLine);
 
     if (g_graphics)
@@ -1216,6 +1221,9 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
             console.LogWarning("AudioEngine initialization failed");
             g_audioEngine.reset();
         }
+
+        // Create cross-platform audio backend (OpenAL on Linux, wraps AudioEngine on Windows)
+        g_audioBackend = Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto, g_audioEngine.get());
     }
 
     g_moduleManager = std::make_unique<ModuleManager>();
