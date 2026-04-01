@@ -62,31 +62,60 @@ namespace SparkEditor
                 }
                 else
                 {
-                    // Placeholder when no render texture is available
+                    // Fallback scene view when no render texture is available
                     ImDrawList* drawList = ImGui::GetWindowDrawList();
                     ImVec2 pos = ImGui::GetCursorScreenPos();
+                    ImVec2 maxPos(pos.x + viewportSize.x, pos.y + viewportSize.y);
 
-                    // Draw a simple grid pattern as placeholder
-                    drawList->AddRectFilled(pos, ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y),
-                                            IM_COL32(50, 50, 50, 255));
+                    // Dark background
+                    drawList->AddRectFilled(pos, maxPos, IM_COL32(40, 42, 48, 255));
 
-                    // Draw grid lines
-                    for (int i = 0; i < 20; ++i)
+                    // Grid configuration
+                    constexpr float gridSpacingSmall = 32.0f;
+                    constexpr float gridSpacingLarge = gridSpacingSmall * 4.0f;
+                    float cx = pos.x + viewportSize.x * 0.5f;
+                    float cy = pos.y + viewportSize.y * 0.5f;
+
+                    // Minor grid lines
+                    for (float x = fmodf(cx, gridSpacingSmall); x < viewportSize.x; x += gridSpacingSmall)
                     {
-                        float x = pos.x + (i * viewportSize.x / 20.0f);
-                        float y = pos.y + (i * viewportSize.y / 20.0f);
-
-                        drawList->AddLine(ImVec2(x, pos.y), ImVec2(x, pos.y + viewportSize.y),
-                                          IM_COL32(70, 70, 70, 255));
-                        drawList->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + viewportSize.x, y),
-                                          IM_COL32(70, 70, 70, 255));
+                        drawList->AddLine(ImVec2(pos.x + x, pos.y), ImVec2(pos.x + x, maxPos.y),
+                                          IM_COL32(55, 58, 65, 255));
+                    }
+                    for (float y = fmodf(cy, gridSpacingSmall); y < viewportSize.y; y += gridSpacingSmall)
+                    {
+                        drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(maxPos.x, pos.y + y),
+                                          IM_COL32(55, 58, 65, 255));
                     }
 
-                    // Center text
-                    ImVec2 textSize = ImGui::CalcTextSize("Scene View");
-                    ImVec2 textPos = ImVec2(pos.x + (viewportSize.x - textSize.x) * 0.5f,
-                                            pos.y + (viewportSize.y - textSize.y) * 0.5f);
-                    drawList->AddText(textPos, IM_COL32(150, 150, 150, 255), "Scene View");
+                    // Major grid lines
+                    for (float x = fmodf(cx, gridSpacingLarge); x < viewportSize.x; x += gridSpacingLarge)
+                    {
+                        drawList->AddLine(ImVec2(pos.x + x, pos.y), ImVec2(pos.x + x, maxPos.y),
+                                          IM_COL32(70, 75, 85, 255));
+                    }
+                    for (float y = fmodf(cy, gridSpacingLarge); y < viewportSize.y; y += gridSpacingLarge)
+                    {
+                        drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(maxPos.x, pos.y + y),
+                                          IM_COL32(70, 75, 85, 255));
+                    }
+
+                    // Origin axes
+                    drawList->AddLine(ImVec2(cx, pos.y), ImVec2(cx, maxPos.y), IM_COL32(80, 180, 80, 120), 1.5f);
+                    drawList->AddLine(ImVec2(pos.x, cy), ImVec2(maxPos.x, cy), IM_COL32(180, 80, 80, 120), 1.5f);
+
+                    // Origin crosshair
+                    drawList->AddCircle(ImVec2(cx, cy), 6.0f, IM_COL32(200, 200, 200, 100), 12);
+
+                    // "No render target" label
+                    const char* label = "Scene View — No Render Target";
+                    ImVec2 textSize = ImGui::CalcTextSize(label);
+                    ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f,
+                                   pos.y + (viewportSize.y - textSize.y) * 0.5f);
+                    drawList->AddRectFilled(ImVec2(textPos.x - 8, textPos.y - 4),
+                                            ImVec2(textPos.x + textSize.x + 8, textPos.y + textSize.y + 4),
+                                            IM_COL32(30, 30, 30, 180), 4.0f);
+                    drawList->AddText(textPos, IM_COL32(180, 180, 180, 255), label);
 
                     // Use InvisibleButton so the area registers as an interactive item
                     // for hover detection and input handling
@@ -273,14 +302,24 @@ namespace SparkEditor
             viewport.MaxDepth = 1.0f;
             m_context->RSSetViewports(1, &viewport);
 
-            // Render a skybox-style gradient background as scene placeholder
+            // Render sky gradient background and ground plane
             {
+                // Upper half — sky color
                 D3D11_VIEWPORT upperVP = viewport;
                 upperVP.Height = viewport.Height * 0.5f;
                 m_context->RSSetViewports(1, &upperVP);
                 float skyColor[4] = {0.4f, 0.6f, 0.9f, 1.0f};
                 m_context->ClearRenderTargetView(m_rtv.Get(), skyColor);
 
+                // Lower half — ground color
+                D3D11_VIEWPORT lowerVP = viewport;
+                lowerVP.TopLeftY = viewport.Height * 0.5f;
+                lowerVP.Height = viewport.Height * 0.5f;
+                m_context->RSSetViewports(1, &lowerVP);
+                float groundColor[4] = {0.25f, 0.28f, 0.22f, 1.0f};
+                m_context->ClearRenderTargetView(m_rtv.Get(), groundColor);
+
+                // Restore full viewport
                 m_context->RSSetViewports(1, &viewport);
             }
 

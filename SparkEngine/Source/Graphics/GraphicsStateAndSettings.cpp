@@ -565,7 +565,17 @@ HRESULT GraphicsEngine::SaveScreenshot(const std::string& filename)
 #include "LightingSystem.h"
 #include "../Utils/Validate.h"
 
+#if defined(SPARK_OPENGL_SUPPORT)
+#include <glad/glad.h>
+#endif
+
+#if SPARK_HAS_STB_IMAGE
+#include <stb_image_write.h>
+#endif
+
+#include <algorithm>
 #include <string>
+#include <vector>
 
 using namespace Spark::Graphics::Detail;
 
@@ -812,8 +822,88 @@ void GraphicsEngine::ResetStatistics()
 
 HRESULT GraphicsEngine::SaveScreenshot(const std::string& filename)
 {
-    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot not implemented on Linux: %s", filename.c_str());
+#if defined(SPARK_OPENGL_SUPPORT) && SPARK_HAS_STB_IMAGE
+    auto& rhi = GetRHI();
+    if (!rhi.initialized)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot: RHI not initialized");
+        return E_FAIL;
+    }
+
+    // Only supported when using the OpenGL backend
+    auto* device = rhi.bridge.GetDevice();
+    if (!device || device->GetBackendType() != Spark::RHI::GraphicsBackend::OpenGL)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot: only supported with OpenGL backend on Linux");
+        return E_NOTIMPL;
+    }
+
+    auto* swapChain = rhi.bridge.GetSwapChain();
+    if (!swapChain)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot: no swap chain available");
+        return E_FAIL;
+    }
+
+    const int w = static_cast<int>(swapChain->GetWidth());
+    const int h = static_cast<int>(swapChain->GetHeight());
+    if (w <= 0 || h <= 0)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot: invalid dimensions %dx%d", w, h);
+        return E_FAIL;
+    }
+
+    constexpr int channels = 4; // RGBA
+    std::vector<uint8_t> pixels(static_cast<size_t>(w) * h * channels);
+
+    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+    // OpenGL reads bottom-up; flip rows so the image is top-down
+    const size_t rowBytes = static_cast<size_t>(w) * channels;
+    std::vector<uint8_t> rowTemp(rowBytes);
+    for (int y = 0; y < h / 2; ++y)
+    {
+        uint8_t* top = pixels.data() + y * rowBytes;
+        uint8_t* bot = pixels.data() + (h - 1 - y) * rowBytes;
+        std::copy_n(top, rowBytes, rowTemp.data());
+        std::copy_n(bot, rowBytes, top);
+        std::copy_n(rowTemp.data(), rowBytes, bot);
+    }
+
+    // Choose format based on file extension (default to PNG)
+    const std::string& name = filename.empty() ? "screenshot.png" : filename;
+    int result = 0;
+
+    if (name.size() >= 4 && name.substr(name.size() - 4) == ".bmp")
+    {
+        result = stbi_write_bmp(name.c_str(), w, h, channels, pixels.data());
+    }
+    else if (name.size() >= 4 && name.substr(name.size() - 4) == ".tga")
+    {
+        result = stbi_write_tga(name.c_str(), w, h, channels, pixels.data());
+    }
+    else if (name.size() >= 4 && name.substr(name.size() - 4) == ".jpg")
+    {
+        result = stbi_write_jpg(name.c_str(), w, h, channels, pixels.data(), 90);
+    }
+    else
+    {
+        result = stbi_write_png(name.c_str(), w, h, channels, pixels.data(), static_cast<int>(rowBytes));
+    }
+
+    if (result)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Screenshot saved: %s (%dx%d)", name.c_str(), w, h);
+        return S_OK;
+    }
+
+    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot: failed to write %s", name.c_str());
+    return E_FAIL;
+#else
+    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "SaveScreenshot not available (requires OpenGL + stb_image_write): %s",
+                   filename.c_str());
     return E_NOTIMPL;
+#endif
 }
 
 #endif // SPARK_PLATFORM_WINDOWS

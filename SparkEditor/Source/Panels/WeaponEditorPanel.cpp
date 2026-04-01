@@ -380,7 +380,7 @@ namespace SparkEditor
 
     void WeaponEditorPanel::RenderWeaponPreview()
     {
-        // Placeholder for 3D weapon preview
+        // Wireframe weapon preview
         ImVec2 avail = ImGui::GetContentRegionAvail();
         float previewH = std::min(150.0f, avail.y);
 
@@ -391,18 +391,74 @@ namespace SparkEditor
         ImVec2 pos = ImGui::GetCursorScreenPos();
         ImVec2 size(avail.x - 20, previewH - 30);
 
-        dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(25, 28, 35, 255), 4.0f);
+        // Background with subtle vignette border
+        dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(22, 24, 30, 255), 4.0f);
         dl->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(60, 70, 80, 200), 4.0f);
 
-        // Rotating weapon silhouette (placeholder)
+        // Animated weapon wireframe outline
         float cx = pos.x + size.x * 0.5f;
         float cy = pos.y + size.y * 0.5f;
-        float scale = sinf(m_previewTime * 0.5f) * 0.1f + 1.0f;
+        float breathe = sinf(m_previewTime * 0.5f) * 0.05f + 1.0f;
+        float rot = m_previewTime * 0.3f;
+        float cosR = cosf(rot);
+        float sinR = sinf(rot);
 
-        dl->AddRectFilled(ImVec2(cx - 40 * scale, cy - 8 * scale), ImVec2(cx + 40 * scale, cy + 8 * scale),
-                          IM_COL32(80, 90, 100, 200), 2.0f);
-        dl->AddRectFilled(ImVec2(cx - 5 * scale, cy + 2 * scale), ImVec2(cx + 5 * scale, cy + 20 * scale),
-                          IM_COL32(60, 65, 70, 200), 2.0f);
+        // Scale factor based on preview area
+        float s = std::min(size.x, size.y) * 0.3f * breathe;
+
+        // Weapon wireframe points (barrel, body, stock, grip, trigger guard)
+        // defined in local coords [-1,1], then transformed
+        struct Point
+        {
+            float x, y;
+        };
+        auto transform = [&](float lx, float ly) -> ImVec2
+        {
+            float rx = lx * cosR - ly * sinR;
+            float ry = lx * sinR + ly * cosR;
+            return ImVec2(cx + rx * s, cy + ry * s);
+        };
+
+        ImU32 wireCol = IM_COL32(140, 180, 220, 200);
+        ImU32 accentCol = IM_COL32(100, 200, 255, 150);
+
+        // Barrel
+        dl->AddLine(transform(0.3f, -0.05f), transform(1.0f, -0.05f), wireCol, 1.5f);
+        dl->AddLine(transform(0.3f, 0.05f), transform(1.0f, 0.05f), wireCol, 1.5f);
+        dl->AddLine(transform(1.0f, -0.05f), transform(1.0f, 0.05f), wireCol, 1.5f);
+        // Muzzle flash hint
+        dl->AddLine(transform(1.0f, -0.08f), transform(1.05f, 0.0f), accentCol, 1.0f);
+        dl->AddLine(transform(1.0f, 0.08f), transform(1.05f, 0.0f), accentCol, 1.0f);
+
+        // Receiver body
+        dl->AddLine(transform(-0.3f, -0.12f), transform(0.3f, -0.12f), wireCol, 1.5f);
+        dl->AddLine(transform(-0.3f, 0.08f), transform(0.3f, 0.08f), wireCol, 1.5f);
+        dl->AddLine(transform(-0.3f, -0.12f), transform(-0.3f, 0.08f), wireCol, 1.5f);
+        dl->AddLine(transform(0.3f, -0.12f), transform(0.3f, 0.08f), wireCol, 1.5f);
+
+        // Stock
+        dl->AddLine(transform(-0.3f, -0.1f), transform(-0.7f, -0.05f), wireCol, 1.5f);
+        dl->AddLine(transform(-0.3f, 0.06f), transform(-0.7f, 0.02f), wireCol, 1.5f);
+        dl->AddLine(transform(-0.7f, -0.05f), transform(-0.7f, 0.02f), wireCol, 1.5f);
+
+        // Grip
+        dl->AddLine(transform(0.0f, 0.08f), transform(-0.08f, 0.35f), wireCol, 1.5f);
+        dl->AddLine(transform(0.1f, 0.08f), transform(0.04f, 0.35f), wireCol, 1.5f);
+        dl->AddLine(transform(-0.08f, 0.35f), transform(0.04f, 0.35f), wireCol, 1.5f);
+
+        // Trigger guard arc
+        dl->AddLine(transform(0.12f, 0.08f), transform(0.15f, 0.18f), accentCol, 1.0f);
+        dl->AddLine(transform(0.15f, 0.18f), transform(0.0f, 0.18f), accentCol, 1.0f);
+        dl->AddLine(transform(0.0f, 0.18f), transform(-0.02f, 0.08f), accentCol, 1.0f);
+
+        // Weapon name label
+        if (m_selectedWeapon >= 0 && m_selectedWeapon < static_cast<int>(m_weapons.size()))
+        {
+            const char* name = m_weapons[m_selectedWeapon].name.c_str();
+            ImVec2 nameSize = ImGui::CalcTextSize(name);
+            dl->AddText(ImVec2(pos.x + size.x - nameSize.x - 8, pos.y + size.y - nameSize.y - 4),
+                        IM_COL32(160, 170, 180, 180), name);
+        }
 
         ImGui::EndChild();
     }

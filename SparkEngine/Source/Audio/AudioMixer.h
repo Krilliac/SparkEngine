@@ -175,6 +175,12 @@ namespace Spark::Audio
     class AudioMixer
     {
       public:
+        static AudioMixer& GetInstance()
+        {
+            static AudioMixer instance;
+            return instance;
+        }
+
         AudioMixer();
         ~AudioMixer() = default;
 

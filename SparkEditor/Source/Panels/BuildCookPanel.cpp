@@ -266,7 +266,56 @@ namespace SparkEditor
 
         ImGui::Checkbox("Test Content", &m_settings.stripTestContent);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Remove test scenes, placeholder assets, debug levels.");
+            ImGui::SetTooltip("Remove test scenes, debug levels, and test-only content.");
+
+        // Show asset summary for stripping decisions
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text(ICON_FA_LIST " Assets to strip:");
+
+        struct AssetCategory
+        {
+            const char* icon;
+            const char* name;
+            int count;
+            bool stripped;
+        };
+
+        AssetCategory categories[] = {
+            {ICON_FA_IMAGE, "Editor Textures", 24, m_settings.stripEditorAssets},
+            {ICON_FA_FONT, "Editor Fonts", 6, m_settings.stripEditorAssets},
+            {ICON_FA_CUBE, "Test Scenes", 8, m_settings.stripTestContent},
+            {ICON_FA_BUG, "Debug Meshes", 12, m_settings.stripTestContent},
+            {ICON_FA_TERMINAL, "Console Scripts", 3, m_settings.stripConsole},
+            {ICON_FA_CHART_BAR, "Profiler Data", 5, m_settings.stripProfiler},
+        };
+
+        if (ImGui::BeginTable("##StripAssets", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH))
+        {
+            ImGui::TableSetupColumn("Asset", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+
+            for (const auto& cat : categories)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%s %s", cat.icon, cat.name);
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", cat.count);
+                ImGui::TableNextColumn();
+                if (cat.stripped)
+                {
+                    ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "Strip");
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "Keep");
+                }
+            }
+
+            ImGui::EndTable();
+        }
 
         ImGui::Unindent(8.0f);
     }

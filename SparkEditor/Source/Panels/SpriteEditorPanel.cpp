@@ -117,21 +117,55 @@ namespace SparkEditor
             }
         }
 
-        // Draw sprite preview rectangle (placeholder without actual GPU texture)
+        // Draw sprite bounds area (no GPU texture — render outline and info)
         float spriteW = previewSize * 0.8f * m_previewZoom;
         float spriteH = previewSize * 0.8f * m_previewZoom;
         float ox = canvasPos.x + (previewSize - spriteW) * 0.5f + m_previewPanX;
         float oy = canvasPos.y + (previewSize - spriteH) * 0.5f + m_previewPanY;
 
-        drawList->AddRectFilled(ImVec2(ox, oy), ImVec2(ox + spriteW, oy + spriteH), IM_COL32(100, 150, 255, 180));
-        drawList->AddRect(ImVec2(ox, oy), ImVec2(ox + spriteW, oy + spriteH), IM_COL32(255, 255, 255, 200), 0.0f, 0,
-                          1.0f);
+        // Sprite region fill with subtle gradient effect using two half-rects
+        float halfH = spriteH * 0.5f;
+        drawList->AddRectFilled(ImVec2(ox, oy), ImVec2(ox + spriteW, oy + halfH), IM_COL32(70, 120, 200, 140));
+        drawList->AddRectFilled(ImVec2(ox, oy + halfH), ImVec2(ox + spriteW, oy + spriteH), IM_COL32(50, 90, 170, 140));
 
-        // Draw source rect highlight
+        // Outer border
+        drawList->AddRect(ImVec2(ox, oy), ImVec2(ox + spriteW, oy + spriteH), IM_COL32(255, 255, 255, 220), 0.0f, 0,
+                          2.0f);
+
+        // Diagonal cross to indicate missing texture
+        drawList->AddLine(ImVec2(ox, oy), ImVec2(ox + spriteW, oy + spriteH), IM_COL32(255, 255, 255, 60));
+        drawList->AddLine(ImVec2(ox + spriteW, oy), ImVec2(ox, oy + spriteH), IM_COL32(255, 255, 255, 60));
+
+        // Sprite dimensions label
+        char dimLabel[64];
+        snprintf(dimLabel, sizeof(dimLabel), "%.0f x %.0f", spriteW, spriteH);
+        ImVec2 dimSize = ImGui::CalcTextSize(dimLabel);
+        drawList->AddText(ImVec2(ox + (spriteW - dimSize.x) * 0.5f, oy + spriteH + 4.0f), IM_COL32(200, 200, 200, 200),
+                          dimLabel);
+
+        // Draw source rect highlight as dashed-style inner border
         if (m_showGrid)
         {
-            drawList->AddRect(ImVec2(ox + 2, oy + 2), ImVec2(ox + spriteW - 2, oy + spriteH - 2),
-                              IM_COL32(0, 255, 0, 150), 0.0f, 0, 2.0f);
+            constexpr float inset = 4.0f;
+            ImVec2 srcMin(ox + inset, oy + inset);
+            ImVec2 srcMax(ox + spriteW - inset, oy + spriteH - inset);
+            drawList->AddRect(srcMin, srcMax, IM_COL32(0, 255, 0, 180), 0.0f, 0, 1.5f);
+
+            // Corner markers for source rect
+            constexpr float cornerLen = 8.0f;
+            ImU32 cornerCol = IM_COL32(0, 255, 0, 220);
+            // Top-left
+            drawList->AddLine(srcMin, ImVec2(srcMin.x + cornerLen, srcMin.y), cornerCol, 2.0f);
+            drawList->AddLine(srcMin, ImVec2(srcMin.x, srcMin.y + cornerLen), cornerCol, 2.0f);
+            // Top-right
+            drawList->AddLine(ImVec2(srcMax.x, srcMin.y), ImVec2(srcMax.x - cornerLen, srcMin.y), cornerCol, 2.0f);
+            drawList->AddLine(ImVec2(srcMax.x, srcMin.y), ImVec2(srcMax.x, srcMin.y + cornerLen), cornerCol, 2.0f);
+            // Bottom-left
+            drawList->AddLine(ImVec2(srcMin.x, srcMax.y), ImVec2(srcMin.x + cornerLen, srcMax.y), cornerCol, 2.0f);
+            drawList->AddLine(ImVec2(srcMin.x, srcMax.y), ImVec2(srcMin.x, srcMax.y - cornerLen), cornerCol, 2.0f);
+            // Bottom-right
+            drawList->AddLine(srcMax, ImVec2(srcMax.x - cornerLen, srcMax.y), cornerCol, 2.0f);
+            drawList->AddLine(srcMax, ImVec2(srcMax.x, srcMax.y - cornerLen), cornerCol, 2.0f);
         }
 
         // Draw pivot point

@@ -35,6 +35,7 @@
 #include "Utils/ProfileProperties.h"
 #include "Graphics/DecalSystem.h"
 #include "Audio/MusicManager.h"
+#include "Audio/AudioMixer.h"
 #include "Engine/Gameplay/WeaponManager.h"
 #include "Engine/Gameplay/AbilitySystem.h"
 #include "Engine/Gameplay/ConditionSystem.h"
@@ -302,6 +303,7 @@ static void InitCoreGameplaySystems(EngineContext* ctx)
     Spark::Gameplay::InstanceManager::GetInstance().Initialize();
     Spark::AI::MovementSystem::GetInstance().Initialize();
     Spark::Audio::MusicManager::GetInstance().Initialize();
+    Spark::Audio::AudioMixer::GetInstance().Initialize();
 
     auto& destruction = Spark::DestructionSystem::GetInstance();
     destruction.Initialize();
@@ -568,6 +570,8 @@ static void UpdateECSDependentSystems(World* world, float dt)
     SPARK_GUARDED_UPDATE("Coroutine", "Core", { Spark::CoroutineScheduler::GetInstance().Update(dt); });
 
     SPARK_GUARDED_UPDATE("MusicManager", "Core", { Spark::Audio::MusicManager::GetInstance().Update(dt); });
+
+    SPARK_GUARDED_UPDATE("AudioMixer", "Core", { Spark::Audio::AudioMixer::GetInstance().Update({0, 0, 0}, dt); });
 
     SPARK_GUARDED_UPDATE("WeaponSystem", "Core", {
         static Spark::Gameplay::WeaponSystem s_weaponSystem;

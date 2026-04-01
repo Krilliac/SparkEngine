@@ -306,12 +306,67 @@ namespace SparkEditor
         std::string browseId = ICON_FA_FOLDER "##Browse_" + param.name;
         if (ImGui::Button(browseId.c_str()))
         {
-            // Open asset browser for texture selection (placeholder)
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: browse texture for '%s'", param.name.c_str());
+            ImGui::OpenPopup(("TexBrowse_" + param.name).c_str());
         }
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("Browse for texture asset");
+        }
+
+        // Texture selection popup
+        if (ImGui::BeginPopup(("TexBrowse_" + param.name).c_str()))
+        {
+            ImGui::Text(ICON_FA_IMAGE " Select Texture for '%s'", param.displayName.c_str());
+            ImGui::Separator();
+
+            // Show current path
+            if (!param.texturePath.empty())
+            {
+                ImGui::TextColored(ImVec4(0.6f, 0.8f, 0.6f, 1.0f), "Current: %s", param.texturePath.c_str());
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.3f, 1.0f), "No texture assigned");
+            }
+
+            ImGui::Separator();
+
+            // Common texture paths as quick-select options
+            const char* commonTextures[] = {
+                "Textures/Default/white.png",
+                "Textures/Default/black.png",
+                "Textures/Default/normal.png",
+                "Textures/Default/checkerboard.png",
+            };
+
+            ImGui::Text("Default Textures:");
+            for (const char* tex : commonTextures)
+            {
+                if (ImGui::Selectable(tex, param.texturePath == tex))
+                {
+                    param.texturePath = tex;
+                    if (selected != nullptr)
+                    {
+                        selected->isModified = true;
+                        SetModified(true);
+                    }
+                }
+            }
+
+            ImGui::Separator();
+            if (ImGui::Button("Clear Texture"))
+            {
+                param.texturePath.clear();
+                if (selected != nullptr)
+                {
+                    selected->isModified = true;
+                    SetModified(true);
+                }
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
         }
     }
 
