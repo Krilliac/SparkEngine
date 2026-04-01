@@ -19,11 +19,84 @@ namespace SparkEditor
         ImGui::Spacing();
         ImGui::TextWrapped("No terrain loaded. Create a new terrain or load an existing one.");
         ImGui::Spacing();
+        ImGui::Separator();
 
-        if (ImGui::Button(ICON_FA_PLUS " Create New Terrain", ImVec2(-1, 32)))
+        // --- Quick-create presets ---
+        ImGui::Text(ICON_FA_PLUS " Create Terrain");
+        ImGui::Spacing();
+
+        static int presetSize = 1; // 0=Small, 1=Medium, 2=Large
+        static int presetRes = 1;  // 0=Low, 1=Medium, 2=High
+        static int presetType = 0; // 0=Flat, 1=Noise Hills, 2=Mountains
+
+        ImGui::Text("Size:");
+        ImGui::SameLine();
+        ImGui::RadioButton("512m", &presetSize, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("1024m", &presetSize, 1);
+        ImGui::SameLine();
+        ImGui::RadioButton("2048m", &presetSize, 2);
+
+        ImGui::Text("Resolution:");
+        ImGui::SameLine();
+        ImGui::RadioButton("257", &presetRes, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("513", &presetRes, 1);
+        ImGui::SameLine();
+        ImGui::RadioButton("1025", &presetRes, 2);
+
+        ImGui::Text("Preset:");
+        ImGui::SameLine();
+        ImGui::RadioButton("Flat", &presetType, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("Hills", &presetType, 1);
+        ImGui::SameLine();
+        ImGui::RadioButton("Mountains", &presetType, 2);
+
+        ImGui::Spacing();
+
+        float sizes[] = {512.0f, 1024.0f, 2048.0f};
+        int resolutions[] = {257, 513, 1025};
+
+        if (ImGui::Button(ICON_FA_PLUS " Create Terrain", ImVec2(-1, 36)))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating new terrain via UI");
-            CreateNewTerrain();
+            float selectedSize = sizes[presetSize];
+            int selectedRes = resolutions[presetRes];
+
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating terrain: %.0fm, %dx%d, preset=%d", selectedSize,
+                           selectedRes, selectedRes, presetType);
+
+            CreateNewTerrain(selectedSize, selectedRes);
+
+            // Apply procedural generation based on preset
+            if (presetType == 1) // Hills
+            {
+                GenerateNoiseHeightmap(4, 0.005f, 30.0f, 2.0f, 0.5f);
+                SmoothTerrain(2, 0.4f);
+            }
+            else if (presetType == 2) // Mountains
+            {
+                GenerateNoiseHeightmap(8, 0.003f, 80.0f, 2.2f, 0.45f);
+                ApplyErosion(200, 0.15f, 0.02f, 0.3f);
+                SmoothTerrain(1, 0.3f);
+            }
+
+            UpdateTerrainMesh();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // --- Load existing ---
+        ImGui::Text(ICON_FA_FOLDER_OPEN " Load Existing");
+        ImGui::Spacing();
+
+        static char loadPath[256] = "Assets/Terrains/terrain.sparkterrain";
+        ImGui::InputText("##terrainpath", loadPath, sizeof(loadPath));
+        if (ImGui::Button(ICON_FA_FOLDER_OPEN " Load Terrain File", ImVec2(-1, 32)))
+        {
+            LoadTerrain(loadPath);
         }
     }
 

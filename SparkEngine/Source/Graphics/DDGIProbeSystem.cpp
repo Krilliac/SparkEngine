@@ -315,4 +315,135 @@ namespace Spark::Graphics
         outZ = std::sin(theta) * sinPhi;
     }
 
+    // =========================================================================
+    // GPU Resource Management
+    // =========================================================================
+
+    bool DDGIProbeSystem::CreateGPUResources(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "DDGIProbeSystem::CreateGPUResources: null device");
+            return false;
+        }
+
+        if (!m_initialized)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "DDGIProbeSystem::CreateGPUResources: system not initialized");
+            return false;
+        }
+
+        uint32_t probeCount = GetProbeCount();
+
+        // Create structured buffer for probe SH data
+        // Each probe stores 9 coefficients x 3 channels = 27 floats
+        uint64_t probeDataSize = static_cast<uint64_t>(probeCount) * DDGI_FLOATS_PER_PROBE * sizeof(float);
+
+        Spark::RHI::RHIBufferDesc probeDesc;
+        probeDesc.size = probeDataSize;
+        probeDesc.stride = DDGI_FLOATS_PER_PROBE * sizeof(float);
+        probeDesc.usage = Spark::RHI::RHIBufferUsage::Structured;
+        probeDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        probeDesc.initialData = nullptr;
+        probeDesc.debugName = "DDGI_ProbeBuffer";
+
+        m_gpuProbeBuffer = device->CreateBuffer(probeDesc);
+        if (!m_gpuProbeBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "DDGIProbeSystem::CreateGPUResources: failed to create probe buffer");
+            return false;
+        }
+
+        // Create constant buffer for grid configuration
+        struct alignas(16) DDGIGridConfigCB
+        {
+            float spacingX, spacingY, spacingZ;
+            uint32_t countX;
+            uint32_t countY;
+            uint32_t countZ;
+            float originX, originY, originZ;
+            float normalBias;
+            float hysteresis;
+            float maxRayDistance;
+        };
+
+        DDGIGridConfigCB cbData = {};
+        cbData.spacingX = m_settings.spacingX;
+        cbData.spacingY = m_settings.spacingY;
+        cbData.spacingZ = m_settings.spacingZ;
+        cbData.countX = m_settings.countX;
+        cbData.countY = m_settings.countY;
+        cbData.countZ = m_settings.countZ;
+        cbData.originX = m_settings.originX;
+        cbData.originY = m_settings.originY;
+        cbData.originZ = m_settings.originZ;
+        cbData.normalBias = m_settings.normalBias;
+        cbData.hysteresis = m_settings.hysteresis;
+        cbData.maxRayDistance = m_settings.maxRayDistance;
+
+        Spark::RHI::RHIBufferDesc cbDesc;
+        cbDesc.size = sizeof(DDGIGridConfigCB);
+        cbDesc.stride = 0;
+        cbDesc.usage = Spark::RHI::RHIBufferUsage::Constant;
+        cbDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        cbDesc.initialData = &cbData;
+        cbDesc.debugName = "DDGI_GridConfigCB";
+
+        m_gpuConstantBuffer = device->CreateBuffer(cbDesc);
+        if (!m_gpuConstantBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "DDGIProbeSystem::CreateGPUResources: failed to create constant buffer");
+            m_gpuProbeBuffer.reset();
+            return false;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "DDGIProbeSystem: GPU resources created (%u probes, %u floats/probe, structured buffer + CB)",
+                       probeCount, DDGI_FLOATS_PER_PROBE);
+        return true;
+    }
+
+    void DDGIProbeSystem::UploadProbeDataToGPU(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device || !m_gpuProbeBuffer)
+        {
+            return;
+        }
+
+        if (!m_initialized || m_probes.empty())
+        {
+            return;
+        }
+
+        // Pack probe SH data into a flat float array (R0..R8, G0..G8, B0..B8 per probe)
+        uint32_t probeCount = GetProbeCount();
+        std::vector<float> packedData(static_cast<size_t>(probeCount) * DDGI_FLOATS_PER_PROBE);
+
+        for (uint32_t i = 0; i < probeCount; ++i)
+        {
+            const DDGIProbe& probe = m_probes[i];
+            float* dst = &packedData[static_cast<size_t>(i) * DDGI_FLOATS_PER_PROBE];
+
+            for (int c = 0; c < DDGI_SH_COEFFICIENTS; ++c)
+            {
+                dst[c] = probe.r[c];
+            }
+            for (int c = 0; c < DDGI_SH_COEFFICIENTS; ++c)
+            {
+                dst[DDGI_SH_COEFFICIENTS + c] = probe.g[c];
+            }
+            for (int c = 0; c < DDGI_SH_COEFFICIENTS; ++c)
+            {
+                dst[2 * DDGI_SH_COEFFICIENTS + c] = probe.b[c];
+            }
+        }
+
+        device->UpdateBuffer(m_gpuProbeBuffer.get(), packedData.data(), packedData.size() * sizeof(float));
+
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "DDGIProbeSystem: uploaded %u probes to GPU", probeCount);
+    }
+
 } // namespace Spark::Graphics

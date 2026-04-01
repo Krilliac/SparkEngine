@@ -70,13 +70,13 @@ All wired into SparkEngine.cpp via InitGameplaySystems()/UpdateGameplaySystems()
 
 ---
 
-## Missing Systems (3 — unchanged)
+## Previously Missing Systems (All Addressed 2026-04-01)
 
 | System | Status | Notes |
 |--------|--------|-------|
-| Inventory (engine-level) | GAME-ONLY | SparkGame implements; no reusable Spark::InventorySystem |
-| Quest (engine-level) | GAME-ONLY | SparkGame implements; no reusable Spark::QuestSystem |
-| Terrain rendering | MISSING | Critical gap for open-world engine claim |
+| Inventory (engine-level) | ADDED | Spark::Gameplay::InventorySystem — item registry, per-entity slots, stacking, transfer |
+| Quest (engine-level) | ADDED | Spark::Gameplay::QuestSystem — objectives, progress tracking, rewards, prerequisites |
+| Terrain rendering | ADDED | ClipmapTerrain with heightmap sampling, LOD levels, GPU buffer creation |
 
 ---
 

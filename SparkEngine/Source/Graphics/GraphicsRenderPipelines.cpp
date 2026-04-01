@@ -12,6 +12,7 @@
 #include "GraphicsEngine.h"
 #include "LightingSystem.h"
 #include "PostProcessingPipeline.h"
+#include "TerrainRenderer.h"
 #include "TemporalEffects.h"
 #include "../Game/GameObject.h"
 #include "../Utils/LogMacros.h"
@@ -93,6 +94,14 @@ void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& p
             }
         }
     }
+
+    // Render terrain after scene objects
+#ifdef SPARK_PLATFORM_WINDOWS
+    if (m_terrainRenderer && m_context)
+    {
+        m_terrainRenderer->Render(m_context.Get(), viewMatrix, projMatrix);
+    }
+#endif
 
     // Update statistics
     {

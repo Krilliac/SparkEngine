@@ -290,4 +290,77 @@ namespace Spark::Graphics
         return true;
     }
 
+    // =========================================================================
+    // GPU resource management
+    // =========================================================================
+
+    bool ShadowAtlas::CreateGPUResources(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ShadowAtlas::CreateGPUResources: null device");
+            return false;
+        }
+
+        if (!m_initialized)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ShadowAtlas::CreateGPUResources: atlas not initialized");
+            return false;
+        }
+
+        Spark::RHI::RHITextureDesc desc;
+        desc.width = m_atlasSize;
+        desc.height = m_atlasSize;
+        desc.format = Spark::RHI::PixelFormat::R32_FLOAT;
+        desc.type = Spark::RHI::RHITextureType::Texture2D;
+        desc.usage = Spark::RHI::RHITextureUsage::DepthStencil | Spark::RHI::RHITextureUsage::ShaderResource;
+        desc.clearDepth = 1.0f;
+        desc.debugName = "ShadowAtlas_DepthTexture";
+
+        m_gpuAtlasTexture = device->CreateTexture(desc);
+        if (!m_gpuAtlasTexture || !m_gpuAtlasTexture->IsValid())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ShadowAtlas::CreateGPUResources: failed to create %ux%u depth atlas", m_atlasSize,
+                            m_atlasSize);
+            m_gpuAtlasTexture.reset();
+            return false;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ShadowAtlas GPU depth texture created (%ux%u, R32_FLOAT)",
+                       m_atlasSize, m_atlasSize);
+        return true;
+    }
+
+    void ShadowAtlas::BindForShadowPass(Spark::RHI::IRHICommandList* cmdList, uint32_t lightId)
+    {
+        if (!cmdList || !m_gpuAtlasTexture)
+        {
+            return;
+        }
+
+        const ShadowTile* tile = GetTile(lightId);
+        if (!tile)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "ShadowAtlas::BindForShadowPass: no tile for light %u",
+                           lightId);
+            return;
+        }
+
+        Spark::RHI::RHIViewport viewport;
+        viewport.x = static_cast<float>(tile->x);
+        viewport.y = static_cast<float>(tile->y);
+        viewport.width = static_cast<float>(tile->size);
+        viewport.height = static_cast<float>(tile->size);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        cmdList->SetViewport(viewport);
+    }
+
+    Spark::RHI::IRHITexture* ShadowAtlas::GetAtlasTexture() const
+    {
+        return m_gpuAtlasTexture.get();
+    }
+
 } // namespace Spark::Graphics

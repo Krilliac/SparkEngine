@@ -14,9 +14,11 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -134,6 +136,23 @@ namespace Spark::Graphics
         /// @brief Release all resources.
         void Shutdown();
 
+        /// @brief Create GPU structured buffers for cluster light counts and light index lists
+        /// @param device RHI device used to create the buffers
+        /// @return True if buffers were created successfully
+        bool CreateGPUBuffers(Spark::RHI::IRHIDevice* device);
+
+        /// @brief Upload CPU-computed cluster data to the GPU buffers after Update()
+        /// @param device RHI device used to update buffer contents
+        void UploadToGPU(Spark::RHI::IRHIDevice* device);
+
+        /// @brief Get the GPU buffer containing per-cluster light counts
+        /// @return Pointer to the cluster count buffer, or nullptr if not created
+        Spark::RHI::IRHIBuffer* GetClusterBuffer() const;
+
+        /// @brief Get the GPU buffer containing the flat light index list
+        /// @return Pointer to the light index buffer, or nullptr if not created
+        Spark::RHI::IRHIBuffer* GetLightIndexBuffer() const;
+
       private:
         ClusteredLightCulling() = default;
 
@@ -160,6 +179,9 @@ namespace Spark::Graphics
 
         /// Flat array of light indices per cluster. Size = clusterCount * maxLightsPerCluster.
         std::vector<uint32_t> m_clusterLightIndices;
+
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuClusterBuffer;    ///< GPU buffer for per-cluster light counts
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuLightIndexBuffer; ///< GPU buffer for light index lists
     };
 
 } // namespace Spark::Graphics

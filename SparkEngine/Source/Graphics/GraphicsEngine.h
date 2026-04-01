@@ -32,6 +32,7 @@
 #include "ConstantBufferRing.h"
 #include "GPUDebugMarkers.h"
 #include "MakeDesc.h"
+#include "TerrainRenderer.h"
 #include "GPUTimestampQuery.h"
 #include "RHI/RHIBridge.h"
 #include "RenderPipeline.h"
@@ -517,6 +518,7 @@ class GraphicsEngine
     std::unique_ptr<TemporalEffects> m_temporalEffects;
     std::unique_ptr<Spark::Graphics::ShadowAtlas> m_shadowAtlas;
     std::unique_ptr<Spark::Graphics::ScreenSpaceEffects> m_screenSpaceEffects;
+    std::unique_ptr<Spark::Graphics::TerrainRenderer> m_terrainRenderer;
 
 #ifdef SPARK_HYBRID_RT
     std::unique_ptr<Spark::Graphics::HybridRTManager> m_hybridRT;

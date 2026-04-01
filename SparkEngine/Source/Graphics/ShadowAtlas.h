@@ -23,8 +23,10 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -100,6 +102,20 @@ namespace Spark::Graphics
         /// @brief Get a human-readable status string for the console
         std::string Console_GetStatus() const;
 
+        /// @brief Create the GPU depth texture atlas (R32_FLOAT, atlasSize x atlasSize)
+        /// @param device RHI device used to create the texture
+        /// @return True if the GPU texture was created successfully
+        bool CreateGPUResources(Spark::RHI::IRHIDevice* device);
+
+        /// @brief Set the viewport to the tile region for a given light's shadow pass
+        /// @param cmdList RHI command list to record the viewport change on
+        /// @param lightId Light whose tile viewport should be bound
+        void BindForShadowPass(Spark::RHI::IRHICommandList* cmdList, uint32_t lightId);
+
+        /// @brief Get the depth atlas texture for sampling in lighting shaders
+        /// @return Pointer to the atlas texture, or nullptr if not created
+        Spark::RHI::IRHITexture* GetAtlasTexture() const;
+
       private:
         bool IsRegionFree(uint32_t gx, uint32_t gy, uint32_t cells) const;
         void MarkRegion(uint32_t gx, uint32_t gy, uint32_t cells, bool used);
@@ -115,6 +131,8 @@ namespace Spark::Graphics
         std::vector<ShadowTile> m_tiles;
         std::unordered_map<uint32_t, uint32_t> m_tileMap; ///< lightId -> tile index
         std::vector<bool> m_gridCells;                    ///< Grid occupancy
+
+        std::unique_ptr<Spark::RHI::IRHITexture> m_gpuAtlasTexture; ///< GPU depth atlas texture
     };
 
 } // namespace Spark::Graphics

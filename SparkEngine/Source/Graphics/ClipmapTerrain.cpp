@@ -278,6 +278,121 @@ namespace Spark::Graphics
     }
 
     // ========================================================================
+    // GPU Resource Management
+    // ========================================================================
+
+    bool ClipmapTerrain::CreateGPUResources(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ClipmapTerrain::CreateGPUResources: null device");
+            return false;
+        }
+
+        if (m_heightmap.empty() || m_heightmapWidth == 0 || m_heightmapHeight == 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ClipmapTerrain::CreateGPUResources: no heightmap data loaded");
+            return false;
+        }
+
+        // Create a R32_FLOAT texture from the CPU heightmap data
+        Spark::RHI::RHITextureDesc texDesc;
+        texDesc.width = m_heightmapWidth;
+        texDesc.height = m_heightmapHeight;
+        texDesc.depth = 1;
+        texDesc.mipLevels = 1;
+        texDesc.arraySize = 1;
+        texDesc.sampleCount = 1;
+        texDesc.format = Spark::RHI::PixelFormat::R32_FLOAT;
+        texDesc.type = Spark::RHI::RHITextureType::Texture2D;
+        texDesc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
+        texDesc.debugName = "ClipmapTerrain_Heightmap";
+
+        m_gpuHeightmapTexture = device->CreateTexture(texDesc);
+        if (!m_gpuHeightmapTexture)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "ClipmapTerrain::CreateGPUResources: failed to create heightmap texture");
+            return false;
+        }
+
+        // Upload the heightmap data to the texture
+        device->UpdateTexture(m_gpuHeightmapTexture.get(), m_heightmap.data());
+
+        // Pre-allocate per-level GPU buffer entries
+        m_levelGPUBuffers.resize(m_levels.size());
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "ClipmapTerrain: GPU heightmap texture created (%ux%u, R32_FLOAT)",
+                       m_heightmapWidth, m_heightmapHeight);
+        return true;
+    }
+
+    void ClipmapTerrain::UpdateGPUMesh(Spark::RHI::IRHIDevice* device, int levelIndex)
+    {
+        if (!device)
+        {
+            return;
+        }
+
+        if (!m_initialized || levelIndex < 0 ||
+            static_cast<uint32_t>(levelIndex) >= static_cast<uint32_t>(m_levels.size()))
+        {
+            return;
+        }
+
+        // Generate CPU mesh data for this level
+        std::vector<float> vertices;
+        std::vector<uint32_t> indices;
+        GenerateMesh(static_cast<uint32_t>(levelIndex), vertices, indices);
+
+        if (vertices.empty() || indices.empty())
+        {
+            return;
+        }
+
+        // Ensure the GPU buffer vector is large enough
+        if (m_levelGPUBuffers.size() <= static_cast<size_t>(levelIndex))
+        {
+            m_levelGPUBuffers.resize(static_cast<size_t>(levelIndex) + 1);
+        }
+
+        auto& gpuBuffers = m_levelGPUBuffers[static_cast<size_t>(levelIndex)];
+
+        // Create or recreate vertex buffer
+        uint64_t vertexDataSize = vertices.size() * sizeof(float);
+        uint32_t vertexStride = sizeof(float) * 3; // x, y, z per vertex
+
+        Spark::RHI::RHIBufferDesc vbDesc;
+        vbDesc.size = vertexDataSize;
+        vbDesc.stride = vertexStride;
+        vbDesc.usage = Spark::RHI::RHIBufferUsage::Vertex;
+        vbDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        vbDesc.initialData = vertices.data();
+        vbDesc.debugName = std::format("ClipmapTerrain_VB_L{}", levelIndex);
+
+        gpuBuffers.vertexBuffer = device->CreateBuffer(vbDesc);
+        gpuBuffers.vertexCount = static_cast<uint32_t>(vertices.size() / 3);
+
+        // Create or recreate index buffer
+        uint64_t indexDataSize = indices.size() * sizeof(uint32_t);
+
+        Spark::RHI::RHIBufferDesc ibDesc;
+        ibDesc.size = indexDataSize;
+        ibDesc.stride = sizeof(uint32_t);
+        ibDesc.usage = Spark::RHI::RHIBufferUsage::Index;
+        ibDesc.access = Spark::RHI::RHIBufferAccess::Static;
+        ibDesc.initialData = indices.data();
+        ibDesc.debugName = std::format("ClipmapTerrain_IB_L{}", levelIndex);
+
+        gpuBuffers.indexBuffer = device->CreateBuffer(ibDesc);
+        gpuBuffers.indexCount = static_cast<uint32_t>(indices.size());
+
+        // Clear the update flag for this level
+        m_levels[static_cast<size_t>(levelIndex)].needsUpdate = false;
+    }
+
+    // ========================================================================
     // SnapToGrid
     // ========================================================================
 

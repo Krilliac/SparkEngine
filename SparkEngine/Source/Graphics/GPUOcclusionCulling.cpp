@@ -248,4 +248,96 @@ namespace Spark::Graphics
                std::to_string(m_hiZ.mipCount) + " mips)\n";
     }
 
+    // =========================================================================
+    // GPU Resource Management
+    // =========================================================================
+
+    bool GPUOcclusionCuller::CreateGPUResources(Spark::RHI::IRHIDevice* device, uint32_t width, uint32_t height)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GPUOcclusionCuller::CreateGPUResources: null device");
+            return false;
+        }
+
+        if (width == 0 || height == 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "GPUOcclusionCuller::CreateGPUResources: invalid dimensions %ux%u", width, height);
+            return false;
+        }
+
+        // Compute mip level count for the HiZ pyramid
+        uint32_t maxDim = std::max(width, height);
+        uint32_t mipLevels = 1;
+        uint32_t temp = maxDim;
+        while (temp > 1)
+        {
+            temp >>= 1;
+            ++mipLevels;
+        }
+        mipLevels = std::min(mipLevels, static_cast<uint32_t>(HiZPyramid::kMaxMips));
+
+        // Create HiZ mip chain texture (R32_FLOAT with mip levels)
+        Spark::RHI::RHITextureDesc hiZDesc;
+        hiZDesc.width = width;
+        hiZDesc.height = height;
+        hiZDesc.depth = 1;
+        hiZDesc.mipLevels = mipLevels;
+        hiZDesc.format = Spark::RHI::PixelFormat::R32_FLOAT;
+        hiZDesc.type = Spark::RHI::RHITextureType::Texture2D;
+        hiZDesc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
+        hiZDesc.debugName = "HiZ_MipChain";
+
+        m_gpuHiZTexture = device->CreateTexture(hiZDesc);
+        if (!m_gpuHiZTexture)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "GPUOcclusionCuller::CreateGPUResources: failed to create HiZ texture");
+            return false;
+        }
+
+        // Create visibility result buffer
+        // One uint32_t per potential object (use a reasonable default capacity)
+        static constexpr uint32_t kMaxObjects = 65536;
+        Spark::RHI::RHIBufferDesc visDesc;
+        visDesc.size = static_cast<uint64_t>(kMaxObjects) * sizeof(uint32_t);
+        visDesc.stride = sizeof(uint32_t);
+        visDesc.usage = Spark::RHI::RHIBufferUsage::Structured;
+        visDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        visDesc.initialData = nullptr;
+        visDesc.debugName = "HiZ_VisibilityBuffer";
+
+        m_gpuVisibilityBuffer = device->CreateBuffer(visDesc);
+        if (!m_gpuVisibilityBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "GPUOcclusionCuller::CreateGPUResources: failed to create visibility buffer");
+            m_gpuHiZTexture.reset();
+            return false;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "GPUOcclusionCuller: GPU resources created (HiZ %ux%u R32F, %u mips, visibility buffer)", width,
+                       height, mipLevels);
+        return true;
+    }
+
+    void GPUOcclusionCuller::ResizeGPUResources(Spark::RHI::IRHIDevice* device, uint32_t width, uint32_t height)
+    {
+        if (!device)
+        {
+            return;
+        }
+
+        // Release existing resources and recreate at new dimensions
+        m_gpuHiZTexture.reset();
+        m_gpuVisibilityBuffer.reset();
+
+        if (width > 0 && height > 0)
+        {
+            CreateGPUResources(device, width, height);
+        }
+    }
+
 } // namespace Spark::Graphics

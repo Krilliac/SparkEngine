@@ -33,9 +33,10 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | RAII deep analysis (all subsystems, all items resolved) | [knowledge/raii-codebase-analysis.md](knowledge/raii-codebase-analysis.md) | Observation | **Resolved** | 2026-03-28 |
 | Mac compatibility analysis (gaps, roadmap, changes) | [knowledge/mac-compatibility-analysis.md](knowledge/mac-compatibility-analysis.md) | Observation | Active | 2026-03-28 |
 | Third-party library evaluation (5 added, 7 rejected) | [knowledge/third-party-library-evaluation.md](knowledge/third-party-library-evaluation.md) | Decision | Active | 2026-03-31 |
+| Engine viability evaluation (can you make a game?) | [knowledge/engine-viability-evaluation.md](knowledge/engine-viability-evaluation.md) | Observation | Active | 2026-04-01 |
 ## Quick Reference
 
-### Current Engine State (2026-03-22)
+### Current Engine State (2026-04-01)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps

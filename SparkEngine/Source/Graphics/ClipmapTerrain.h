@@ -17,8 +17,10 @@
 
 #pragma once
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -128,6 +130,25 @@ namespace Spark::Graphics
         /// @brief Release all resources
         void Shutdown();
 
+        // ---- GPU Resource Management ----
+
+        /**
+         * @brief Create a GPU heightmap texture from the CPU heightmap data.
+         * @param device  RHI device to create the texture on. Must not be null.
+         * @return True if the heightmap texture was created successfully.
+         */
+        bool CreateGPUResources(Spark::RHI::IRHIDevice* device);
+
+        /**
+         * @brief Upload a specific clipmap level's mesh to GPU vertex/index buffers.
+         * @param device      RHI device for buffer creation/update. Must not be null.
+         * @param levelIndex  The clipmap level to upload.
+         */
+        void UpdateGPUMesh(Spark::RHI::IRHIDevice* device, int levelIndex);
+
+        /** @brief Check whether a GPU heightmap texture has been created. */
+        bool HasHeightmapTexture() const { return m_gpuHeightmapTexture != nullptr; }
+
       private:
         ClipmapTerrain() = default;
 
@@ -139,6 +160,19 @@ namespace Spark::Graphics
 
         /// @brief Snap a world coordinate to a grid cell boundary
         static float SnapToGrid(float value, float cellSize);
+
+        // GPU resources
+        std::unique_ptr<Spark::RHI::IRHITexture> m_gpuHeightmapTexture; ///< GPU heightmap texture (R32_FLOAT)
+
+        /** @brief Per-level GPU mesh buffers. */
+        struct LevelGPUBuffers
+        {
+            std::unique_ptr<Spark::RHI::IRHIBuffer> vertexBuffer;
+            std::unique_ptr<Spark::RHI::IRHIBuffer> indexBuffer;
+            uint32_t vertexCount = 0;
+            uint32_t indexCount = 0;
+        };
+        std::vector<LevelGPUBuffers> m_levelGPUBuffers;
     };
 
 } // namespace Spark::Graphics

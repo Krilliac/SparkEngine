@@ -412,4 +412,144 @@ namespace Spark::Graphics
         }
     }
 
+    // =========================================================================
+    // GPU Resource Management
+    // =========================================================================
+
+    bool AdaptiveProbeVolumes::CreateGPUResources(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "AdaptiveProbeVolumes::CreateGPUResources: null device");
+            return false;
+        }
+
+        if (!m_initialized)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "AdaptiveProbeVolumes::CreateGPUResources: system not initialized");
+            return false;
+        }
+
+        // Create structured buffer for brick probe data
+        // Each brick has 64 probes, each with 27 SH floats + 3 offset floats + 1 validity float = 31 floats
+        // Use a generous initial capacity for streaming
+        static constexpr uint32_t kInitialBrickCapacity = 256;
+        static constexpr uint32_t kFloatsPerProbe = APV_SH_COEFFICIENTS * 3 + 4; // 27 SH + offsetXYZ + valid
+        static constexpr uint32_t kFloatsPerBrick = APV_PROBES_PER_BRICK * kFloatsPerProbe;
+        uint64_t bufferSize = static_cast<uint64_t>(kInitialBrickCapacity) * kFloatsPerBrick * sizeof(float);
+
+        Spark::RHI::RHIBufferDesc brickDesc;
+        brickDesc.size = bufferSize;
+        brickDesc.stride = kFloatsPerBrick * sizeof(float);
+        brickDesc.usage = Spark::RHI::RHIBufferUsage::Structured;
+        brickDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        brickDesc.initialData = nullptr;
+        brickDesc.debugName = "APV_BrickBuffer";
+
+        m_gpuBrickBuffer = device->CreateBuffer(brickDesc);
+        if (!m_gpuBrickBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "AdaptiveProbeVolumes::CreateGPUResources: failed to create brick buffer");
+            return false;
+        }
+
+        // Create constant buffer for volume configuration
+        struct alignas(16) APVConfigCB
+        {
+            float streamingDistance;
+            float subdivisionThreshold;
+            float virtualOffsetDistance;
+            uint32_t activeBrickCount;
+        };
+
+        APVConfigCB cbData = {};
+        cbData.streamingDistance = m_settings.streamingDistance;
+        cbData.subdivisionThreshold = m_settings.subdivisionGeometryThreshold;
+        cbData.virtualOffsetDistance = m_settings.virtualOffsetDistance;
+        cbData.activeBrickCount = static_cast<uint32_t>(m_bricks.size());
+
+        Spark::RHI::RHIBufferDesc cbDesc;
+        cbDesc.size = sizeof(APVConfigCB);
+        cbDesc.stride = 0;
+        cbDesc.usage = Spark::RHI::RHIBufferUsage::Constant;
+        cbDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+        cbDesc.initialData = &cbData;
+        cbDesc.debugName = "APV_ConfigCB";
+
+        m_gpuConstantBuffer = device->CreateBuffer(cbDesc);
+        if (!m_gpuConstantBuffer)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "AdaptiveProbeVolumes::CreateGPUResources: failed to create constant buffer");
+            m_gpuBrickBuffer.reset();
+            return false;
+        }
+
+        m_gpuBrickCount = 0;
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "AdaptiveProbeVolumes: GPU resources created (brick buffer capacity=%u, config CB)",
+                       kInitialBrickCapacity);
+        return true;
+    }
+
+    void AdaptiveProbeVolumes::UploadBrickDataToGPU(Spark::RHI::IRHIDevice* device)
+    {
+        if (!device || !m_gpuBrickBuffer)
+        {
+            return;
+        }
+
+        if (!m_initialized || m_bricks.empty())
+        {
+            m_gpuBrickCount = 0;
+            return;
+        }
+
+        // Pack active brick probe data into a flat float array
+        static constexpr uint32_t kFloatsPerProbe = APV_SH_COEFFICIENTS * 3 + 4;
+        static constexpr uint32_t kFloatsPerBrick = APV_PROBES_PER_BRICK * kFloatsPerProbe;
+
+        uint32_t brickCount = static_cast<uint32_t>(m_bricks.size());
+        std::vector<float> packedData(static_cast<size_t>(brickCount) * kFloatsPerBrick);
+
+        uint32_t brickIdx = 0;
+        for (const auto& [id, brick] : m_bricks)
+        {
+            float* brickBase = &packedData[static_cast<size_t>(brickIdx) * kFloatsPerBrick];
+
+            for (int p = 0; p < APV_PROBES_PER_BRICK; ++p)
+            {
+                const APVProbeData& probe = brick.probes[p];
+                float* dst = &brickBase[static_cast<size_t>(p) * kFloatsPerProbe];
+
+                for (int c = 0; c < APV_SH_COEFFICIENTS; ++c)
+                {
+                    dst[c] = probe.r[c];
+                }
+                for (int c = 0; c < APV_SH_COEFFICIENTS; ++c)
+                {
+                    dst[APV_SH_COEFFICIENTS + c] = probe.g[c];
+                }
+                for (int c = 0; c < APV_SH_COEFFICIENTS; ++c)
+                {
+                    dst[2 * APV_SH_COEFFICIENTS + c] = probe.b[c];
+                }
+                dst[27] = probe.offsetX;
+                dst[28] = probe.offsetY;
+                dst[29] = probe.offsetZ;
+                dst[30] = probe.valid ? 1.0f : 0.0f;
+            }
+
+            ++brickIdx;
+        }
+
+        device->UpdateBuffer(m_gpuBrickBuffer.get(), packedData.data(), packedData.size() * sizeof(float));
+        m_gpuBrickCount = brickCount;
+
+        SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "AdaptiveProbeVolumes: uploaded %u bricks to GPU", brickCount);
+    }
+
 } // namespace Spark::Graphics

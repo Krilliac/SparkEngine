@@ -1,6 +1,7 @@
 #include "Core/Platform.h"
 #include "VehicleSystem.h"
 #include "Player.h"
+#include "Projectiles/ProjectilePool.h"
 #include "Input/InputManager.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Assert.h"
@@ -128,9 +129,66 @@ namespace Spark
             return;
         if (m_weaponCooldown > 0.0f)
             return;
+        if (!m_projectilePool)
+            return;
 
-        m_weaponCooldown = 1.0f / m_seats[seatIndex].weaponFireRate;
-        // Projectile spawning would be done through the projectile pool
+        const auto& seat = m_seats[seatIndex];
+
+        // Calculate muzzle position from vehicle position + seat offset
+        XMFLOAT3 vehPos = GetPosition();
+        XMFLOAT3 vehRot = GetRotation();
+        float cosY = std::cos(vehRot.y);
+        float sinY = std::sin(vehRot.y);
+
+        // Rotate seat offset by vehicle yaw
+        XMFLOAT3 muzzlePos;
+        muzzlePos.x = vehPos.x + seat.localOffset.x * cosY + seat.localOffset.z * sinY;
+        muzzlePos.y = vehPos.y + seat.localOffset.y + 0.5f; // Slightly above seat
+        muzzlePos.z = vehPos.z - seat.localOffset.x * sinY + seat.localOffset.z * cosY;
+
+        // Fire direction: use the occupant's camera forward if available, otherwise vehicle forward
+        XMFLOAT3 fireDir;
+        if (seat.occupant)
+        {
+            // Get aim direction from the player's camera
+            fireDir = seat.occupant->GetForwardDirection();
+        }
+        else
+        {
+            fireDir = {sinY, 0.0f, cosY};
+        }
+
+        // Map mounted weapon type to projectile type and muzzle velocity
+        ProjectileType projType = ProjectileType::BULLET;
+        float muzzleVelocity = 100.0f;
+
+        switch (seat.mountedWeapon)
+        {
+        case WeaponType::ROCKET_LAUNCHER:
+            projType = ProjectileType::ROCKET;
+            muzzleVelocity = 40.0f;
+            break;
+        case WeaponType::GRENADE_LAUNCHER:
+            projType = ProjectileType::GRENADE;
+            muzzleVelocity = 25.0f;
+            break;
+        case WeaponType::RAILGUN:
+            projType = ProjectileType::BULLET;
+            muzzleVelocity = 200.0f;
+            break;
+        case WeaponType::MINIGUN:
+        case WeaponType::MACHINE_GUN:
+            projType = ProjectileType::BULLET;
+            muzzleVelocity = 120.0f;
+            break;
+        default:
+            projType = ProjectileType::BULLET;
+            muzzleVelocity = 100.0f;
+            break;
+        }
+
+        m_projectilePool->FireProjectile(projType, muzzlePos, fireDir, muzzleVelocity);
+        m_weaponCooldown = 1.0f / seat.weaponFireRate;
     }
 
     bool Vehicle::EnterSeat(Player* player, int seatIndex)
@@ -515,9 +573,22 @@ namespace Spark
         vehicle->Initialize(device, context);
         vehicle->SetPosition(position);
 
+        if (m_projectilePool)
+            vehicle->SetProjectilePool(m_projectilePool);
+
         Vehicle* ptr = vehicle.get();
         m_vehicles.push_back(std::move(vehicle));
         return ptr;
+    }
+
+    void VehicleSystem::SetProjectilePool(ProjectilePool* pool)
+    {
+        m_projectilePool = pool;
+        for (auto& vehicle : m_vehicles)
+        {
+            if (vehicle)
+                vehicle->SetProjectilePool(pool);
+        }
     }
 
     void VehicleSystem::RemoveVehicle(Vehicle* vehicle)

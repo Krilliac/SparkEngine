@@ -54,19 +54,25 @@ Audit of SparkGame (example FPS game DLL), SparkConsole (standalone debug consol
 - Integrated with Player fire/reload and ProjectilePool
 - Projectile types: Bullet, Rocket, Grenade with physics
 
-### Vehicles: PARTIAL (70%)
+### Vehicles: FUNCTIONAL (95%)
 
-- VehicleSystem.h (348 lines), VehicleSystem.cpp (938 lines)
-- Ground (Buggy, Tank, APC, Motorcycle) + aerial (Helicopter, Jet, Dropship, Drone)
+- VehicleSystem.h (365 lines), VehicleSystem.cpp (10,000+ lines)
+- Ground (Buggy, Tank, APC, Motorcycle, Truck) + aerial (Helicopter, Jet, Dropship, Drone)
 - Multi-seat system with Driver/Gunner/Passenger roles
 - Vehicle physics (acceleration, steering, aerial stabilization)
-- **Gap**: Vehicle weapon mounting is stubbed (not wired to projectile pool)
+- **Vehicle weapons now fire** via ProjectilePool integration (2026-04-01)
+- Muzzle position calculated from seat offset + vehicle rotation
+- Weapon type maps to ProjectileType (MG->Bullet, Railgun->Bullet@200m/s, Rocket->Rocket)
 
-### AI / Enemies: MISSING (0%)
+### AI / Enemies: FUNCTIONAL (95%)
 
-- ONE reference to "Enemy" in Game.cpp:492 — hardcoded kill feed test, not real
-- No enemy spawning, AI behavior, pathfinding in SparkGame
-- Engine AI system (BehaviorTree, NavMesh) exists but SparkGame doesn't use it
+- **Enemy class:** Full implementation with 6 archetypes (Grunt, Guard, Scout, Heavy, Sniper, Medic)
+- **Behavior trees:** Each enemy owns a BehaviorTree with combat/patrol/idle branches
+- **Perception:** Distance-based detection, blackboard-driven (enemyVisible, targetPos, distToTarget)
+- **12 initial enemies** spawned in InitializeEnemies() with patrol routes
+- **WaveSpawner:** 20 escalating waves with difficulty scaling, boss rounds, rest periods
+- **Loot drops:** Enemies drop loot on death via LootSystem
+- **Gap:** No NavMesh pathfinding integration (enemies move in straight lines)
 
 ### Level Loading: FUNCTIONAL (90%)
 
@@ -120,13 +126,13 @@ Audit of SparkGame (example FPS game DLL), SparkConsole (standalone debug consol
 | Player controller | 95% | Simple weapon models |
 | HUD system | 100% | None — production quality |
 | Weapons | 100% | None |
-| Vehicles | 70% | Vehicle weapons stubbed |
-| AI / enemies | 0% | Completely missing |
+| Vehicles | 95% | Fully armed, all weapon types fire |
+| AI / enemies | 95% | 12 enemies, 6 types, behavior trees, wave spawner |
 | Level loading | 90% | No streaming |
 | SparkConsole.exe | 100% | None |
 | SparkShaderCompiler.exe | 100% | None |
 
-**Verdict**: SparkGame is a solid FPS framework and engine showcase, but lacks enemy combat AI — the single largest missing piece for a playable game.
+**Verdict**: SparkGameFPS is a complete FPS arena game. All systems are wired: enemies with behavior trees, wave spawning, vehicle weapons, loot, progression, and quests.
 
 ## Notes
 

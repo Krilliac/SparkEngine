@@ -30,9 +30,11 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -194,6 +196,30 @@ namespace Spark::Graphics
         /** @brief Get the number of active water planes. */
         size_t GetWaterPlaneCount() const { return m_planes.size(); }
 
+        // ---- GPU Buffer Management ----
+
+        /**
+         * @brief Create GPU vertex and index buffers from the first water plane's mesh.
+         * @param device  RHI device to create buffers on. Must not be null.
+         * @return True if buffers were created successfully.
+         */
+        bool CreateGPUBuffers(Spark::RHI::IRHIDevice* device);
+
+        /**
+         * @brief Upload displaced vertices to the GPU vertex buffer after Update().
+         * @param device  RHI device for buffer updates. Must not be null.
+         */
+        void UpdateGPUBuffers(Spark::RHI::IRHIDevice* device);
+
+        /** @brief Check whether GPU buffers have been created. */
+        bool HasGPUBuffers() const { return m_gpuVertexBuffer != nullptr; }
+
+        /** @brief Get the number of vertices in the GPU vertex buffer. */
+        uint32_t GetGPUVertexCount() const { return m_gpuVertexCount; }
+
+        /** @brief Get the number of indices in the GPU index buffer. */
+        uint32_t GetGPUIndexCount() const { return m_gpuIndexCount; }
+
       private:
         WaterRenderer() = default;
         ~WaterRenderer() = default;
@@ -231,6 +257,13 @@ namespace Spark::Graphics
 
         std::unordered_map<uint32_t, WaterPlane> m_planes;
         std::vector<GerstnerWave> m_waves;
+
+        // GPU resources
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuVertexBuffer; ///< GPU vertex buffer for water mesh
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuIndexBuffer;  ///< GPU index buffer for water mesh
+        uint32_t m_gpuVertexCount = 0;                             ///< Number of vertices in GPU buffer
+        uint32_t m_gpuIndexCount = 0;                              ///< Number of indices in GPU buffer
+        uint32_t m_gpuWaterPlaneID = 0;                            ///< Water plane ID used for GPU buffers
     };
 
 } // namespace Spark::Graphics

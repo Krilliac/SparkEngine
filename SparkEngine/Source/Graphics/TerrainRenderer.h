@@ -30,6 +30,7 @@
 #endif
 
 #include <cstdint>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -135,6 +136,18 @@ namespace Spark::Graphics
 
         /** @brief Remove a terrain entity's GPU resources. */
         void RemoveTerrain(uint32_t entityID);
+
+        /**
+         * @brief Load a .sparkterrain file and populate a TerrainComponent
+         *
+         * Reads the binary format written by SparkEditor's TerrainEditor::SaveTerrain().
+         * Populates heightmap, splatmap, texture layers, and terrain parameters.
+         *
+         * @param filepath Path to the .sparkterrain file
+         * @param outComponent TerrainComponent to populate
+         * @return true on success
+         */
+        static bool LoadSparkTerrain(const std::string& filepath, TerrainComponent& outComponent);
 
       private:
         /**

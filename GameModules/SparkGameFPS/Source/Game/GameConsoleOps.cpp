@@ -743,6 +743,10 @@ Spark::Vehicle* Game::SpawnVehicle(SparkEditor::VehicleType type, float x, float
     auto* vehicle = m_vehicleSystem->SpawnVehicle(type, {x, y, z}, m_graphics->GetDevice(), m_graphics->GetContext());
     if (vehicle)
     {
+        // Wire projectile pool so vehicle weapons can fire
+        if (m_projectilePool)
+            vehicle->SetProjectilePool(m_projectilePool.get());
+
         std::wstring msg = L"Vehicle spawned: " +
                            std::wstring(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()) + L" at (" +
                            std::to_wstring(x) + L"," + std::to_wstring(y) + L"," + std::to_wstring(z) + L")";

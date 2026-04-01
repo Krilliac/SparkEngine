@@ -3,6 +3,8 @@
 ### Getting Started
 - [Home](Home)
 - [Getting Started](Getting-Started)
+- [Making Your First Game](Making-Your-First-Game)
+- [Artist Workflow Guide](Artist-Workflow-Guide)
 - [Architecture Overview](Architecture-Overview)
 - [Creating a Game Module](Creating-a-Game-Module)
 
@@ -21,6 +23,7 @@
 - [2D Systems](2D-Systems)
 - [Networking](Networking)
 - [Dedicated Server](Dedicated-Server)
+- [Multiplayer Quick Start](Multiplayer-Quick-Start)
 - [Area Server Architecture](Area-Server-Architecture)
 - [Scene Management](Scene-Management)
 - [Large World Support](Large-World-Support)

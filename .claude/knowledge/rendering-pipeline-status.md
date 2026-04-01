@@ -50,9 +50,10 @@ Comprehensive audit of all 26 rendering features to determine what actually work
 
 ---
 
-## Header-Only Stubs (12 systems, ~15K dead lines)
+## CPU Implementations with GPU Binding Layer (12 systems)
 
-These have full type definitions and interface stubs but NO actual GPU work:
+These have CPU-side mathematical implementations AND GPU resource management methods (added 2026-04-01).
+Each system now has CreateGPUResources/UploadToGPU methods ready for shader integration:
 
 | Feature | File | Lines | What Exists |
 |---------|------|-------|-------------|
@@ -82,23 +83,27 @@ These have full type definitions and interface stubs but NO actual GPU work:
 
 ---
 
-## RHI Backend Status
+## RHI Backend Status (Updated 2026-04-01)
 
-| Backend | Files | Status |
-|---------|-------|--------|
-| D3D11 | D3D11Device.cpp (1.3K) | WORKING — primary backend |
-| D3D12 | D3D12Device.cpp (1.8K) | STUBS — not default |
-| Vulkan | VulkanDevice.cpp (2.2K) | STUBS — not default |
-| Metal | MetalDevice.h (542) | STUBS — no .cpp |
-| OpenGL | OpenGLDevice.cpp (1.6K) | STUBS — not default |
+| Backend | Files | Lines | Status |
+|---------|-------|-------|--------|
+| D3D11 | D3D11Device.cpp | 1,430 | WORKING — primary backend |
+| D3D12 | D3D12Device.cpp | 1,511 | WORKING — full implementation |
+| Vulkan | VulkanDevice.cpp | 1,571 | WORKING — full implementation |
+| OpenGL | OpenGLDevice.cpp | 1,921 | WORKING — 251 GL API calls |
+| Metal | MetalDevice.h | 541 | HEADER-ONLY — needs .mm ObjC++ files |
+
+**Previous documentation incorrectly listed D3D12/Vulkan/OpenGL as stubs.** All three have
+full IRHIDevice implementations with buffer/texture/shader/pipeline creation and draw calls.
 
 ---
 
 ## Key Findings
 
 1. **Core D3D11 pipeline is solid** — device, swap chain, render targets, state management all work
-2. **12 header-only rendering systems** add ~15K lines of dead code that creates false confidence
+2. **12 systems now have CPU math + GPU binding layer** — ready for shader integration (2026-04-01)
 3. **DXR is feature-complete** (45K lines) but disabled by default and not in main render loop
-4. **No terrain rendering** — critical gap for an engine claiming open-world support
-5. **Post-processing created but render path unclear** — effects defined but execution uncertain
-6. **Header-only systems need D3D11 binding** to become functional (shaders, CBs, RT setup)
+4. **ClipmapTerrain system exists** with heightmap sampling, LOD levels, and GPU buffer creation
+5. **Post-processing pipeline is functional** — effects execute via render targets
+6. **GPU binding layer added** — all 8 major systems have CreateGPUResources/UploadToGPU methods
+7. **DynamicQualityScaler wired** — singleton with GetRenderDimensions() for resolution scaling

@@ -29,10 +29,12 @@
 
 #include "../Core/Platform.h"
 #include "../Utils/MathUtils.h"
+#include "RHI/RHI.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 #include <random>
 #include <string>
 #include <vector>
@@ -293,6 +295,28 @@ namespace Spark
             ScreenSpaceMetrics GetMetrics() const;
             std::string Console_GetStatus() const;
 
+            // ---- GPU Resources ----
+
+            /// @brief Create GPU resources for SSAO: render target, kernel CB, noise texture
+            /// @param device RHI device used to create resources
+            /// @param width Framebuffer width (SSAO target is half resolution)
+            /// @param height Framebuffer height
+            /// @return True if all GPU resources were created successfully
+            bool CreateGPUResources(Spark::RHI::IRHIDevice* device, uint32_t width, uint32_t height);
+
+            /// @brief Recreate GPU render targets after a window resize
+            /// @param device RHI device used to create resources
+            /// @param width New framebuffer width
+            /// @param height New framebuffer height
+            void ResizeGPUResources(Spark::RHI::IRHIDevice* device, uint32_t width, uint32_t height);
+
+            /// @brief Get the SSAO result texture for compositing
+            /// @return Pointer to the SSAO texture, or nullptr if not created
+            Spark::RHI::IRHITexture* GetSSAOTexture() const;
+
+            /// @brief Check whether GPU resources have been created
+            bool HasGPUResources() const;
+
           private:
             bool m_initialized = false;
             uint32_t m_width = 1920;
@@ -304,6 +328,11 @@ namespace Spark
 
             std::vector<SamplePoint> m_ssaoKernel;
             std::vector<SamplePoint> m_noiseTexture;
+
+            std::unique_ptr<Spark::RHI::IRHITexture> m_gpuSSAOTexture;  ///< Half-res SSAO render target
+            std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuKernelBuffer;  ///< Constant buffer for SSAO kernel samples
+            std::unique_ptr<Spark::RHI::IRHITexture> m_gpuNoiseTexture; ///< Small tiled noise texture
+            bool m_hasGPUResources = false;
         };
 
     } // namespace Graphics

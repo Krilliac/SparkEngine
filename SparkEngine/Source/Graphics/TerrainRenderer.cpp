@@ -12,6 +12,7 @@
 #include "../Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 
 using namespace DirectX;
 namespace Spark::Graphics
@@ -251,8 +252,8 @@ namespace Spark::Graphics
         return true;
     }
 
-    void TerrainRenderer::Render(ID3D11DeviceContext* context, const DirectX::XMMATRIX& /*viewMatrix*/,
-                                 const DirectX::XMMATRIX& /*projMatrix*/)
+    void TerrainRenderer::Render(ID3D11DeviceContext* context, const DirectX::XMMATRIX& viewMatrix,
+                                 const DirectX::XMMATRIX& projMatrix)
     {
         if (!context)
             return;
@@ -261,6 +262,14 @@ namespace Spark::Graphics
         {
             if (!data.vertexBuffer || !data.indexBuffer || data.indexCount == 0)
                 continue;
+
+            // Set shaders — reuse the engine's basic vertex/pixel shaders which
+            // are already bound by the calling render pipeline (SetBasicShaders).
+            // Terrain just needs its own world matrix (identity for terrain at origin).
+
+            // Update the per-object constant buffer with identity world + view + proj.
+            // The calling pipeline (RenderForward/Deferred) already calls SetBasicShaders()
+            // so VS/PS are bound. We set topology and buffers, then draw.
 
             // Bind vertex buffer
             UINT stride = sizeof(TerrainVertex);
@@ -277,6 +286,111 @@ namespace Spark::Graphics
             // Issue draw call
             context->DrawIndexed(data.indexCount, 0, 0);
         }
+    }
+
+    // =========================================================================
+    // .sparkterrain file loading (bridges editor output to engine runtime)
+    // =========================================================================
+
+    bool TerrainRenderer::LoadSparkTerrain(const std::string& filepath, TerrainComponent& outComponent)
+    {
+        std::ifstream file(filepath, std::ios::binary);
+        if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to open .sparkterrain file: %s", filepath.c_str());
+            return false;
+        }
+
+        // Read and validate magic number (0x53504B54 = "SPKT")
+        uint32_t magic = 0;
+        file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+        if (magic != 0x53504B54)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Invalid .sparkterrain magic: 0x%08X (expected 0x53504B54)",
+                            magic);
+            return false;
+        }
+
+        // Read name
+        uint32_t nameLen = 0;
+        file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+        std::string name(nameLen, '\0');
+        if (nameLen > 0)
+            file.read(name.data(), nameLen);
+
+        // Read terrain parameters
+        float size = 0.0f;
+        float posX = 0.0f, posY = 0.0f, posZ = 0.0f;
+        int lodLevels = 4;
+        float lodBias = 1.0f;
+        int genCollider = 1;
+
+        file.read(reinterpret_cast<char*>(&size), sizeof(size));
+        file.read(reinterpret_cast<char*>(&posX), sizeof(posX));
+        file.read(reinterpret_cast<char*>(&posY), sizeof(posY));
+        file.read(reinterpret_cast<char*>(&posZ), sizeof(posZ));
+        file.read(reinterpret_cast<char*>(&lodLevels), sizeof(lodLevels));
+        file.read(reinterpret_cast<char*>(&lodBias), sizeof(lodBias));
+        file.read(reinterpret_cast<char*>(&genCollider), sizeof(genCollider));
+
+        outComponent.terrainAssetPath = filepath;
+        outComponent.terrainSize = size;
+        outComponent.lodLevels = lodLevels;
+        outComponent.lodBias = lodBias;
+        outComponent.generateCollider = (genCollider != 0);
+
+        // Read heightmap
+        int hmWidth = 0, hmHeight = 0;
+        float hScale = 1.0f, hMin = 0.0f, hMax = 100.0f;
+        file.read(reinterpret_cast<char*>(&hmWidth), sizeof(hmWidth));
+        file.read(reinterpret_cast<char*>(&hmHeight), sizeof(hmHeight));
+        file.read(reinterpret_cast<char*>(&hScale), sizeof(hScale));
+        file.read(reinterpret_cast<char*>(&hMin), sizeof(hMin));
+        file.read(reinterpret_cast<char*>(&hMax), sizeof(hMax));
+
+        outComponent.heightmapResolution = hmWidth;
+        outComponent.heightScale = hScale;
+        outComponent.minHeight = hMin;
+        outComponent.maxHeight = hMax;
+
+        size_t heightmapSize = static_cast<size_t>(hmWidth) * hmHeight;
+        outComponent.heightmap.resize(heightmapSize);
+        if (heightmapSize > 0)
+        {
+            file.read(reinterpret_cast<char*>(outComponent.heightmap.data()),
+                      static_cast<std::streamsize>(heightmapSize * sizeof(float)));
+        }
+
+        // Read texture layers
+        int layerCount = 0;
+        file.read(reinterpret_cast<char*>(&layerCount), sizeof(layerCount));
+        outComponent.textureLayerPaths.resize(layerCount);
+        for (int i = 0; i < layerCount; ++i)
+        {
+            uint32_t pathLen = 0;
+            file.read(reinterpret_cast<char*>(&pathLen), sizeof(pathLen));
+            outComponent.textureLayerPaths[i].resize(pathLen);
+            if (pathLen > 0)
+                file.read(outComponent.textureLayerPaths[i].data(), pathLen);
+        }
+
+        // Read splatmap
+        int splatRes = 0;
+        file.read(reinterpret_cast<char*>(&splatRes), sizeof(splatRes));
+        outComponent.splatmapResolution = splatRes;
+        size_t splatSize = static_cast<size_t>(splatRes) * splatRes * 4;
+        outComponent.splatmap.resize(splatSize);
+        if (splatSize > 0)
+        {
+            file.read(reinterpret_cast<char*>(outComponent.splatmap.data()), static_cast<std::streamsize>(splatSize));
+        }
+
+        outComponent.dirty = true;
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "Loaded .sparkterrain: '%s' (%dx%d heightmap, %d texture layers, %dx%d splatmap)", name.c_str(),
+                       hmWidth, hmHeight, layerCount, splatRes, splatRes);
+        return true;
     }
 
 #endif // SPARK_PLATFORM_WINDOWS

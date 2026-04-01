@@ -30,6 +30,7 @@ using SparkEditor::WeaponType;
 
 class Player;
 class InputManager;
+class ProjectilePool;
 
 namespace Spark
 {
@@ -153,6 +154,12 @@ namespace Spark
      */
         void FireWeapon(int seatIndex);
 
+        /**
+     * @brief Set the projectile pool used for vehicle weapon firing
+     * @param pool Non-owning pointer to the game's ProjectilePool
+     */
+        void SetProjectilePool(ProjectilePool* pool) { m_projectilePool = pool; }
+
         // === Seat Management ===
 
         /**
@@ -256,6 +263,9 @@ namespace Spark
         float m_weaponCooldown = 0.0f;
         float m_engineSoundTimer = 0.0f;
 
+        // Weapon system
+        ProjectilePool* m_projectilePool{nullptr}; ///< Non-owning reference for firing
+
         // Callbacks
         std::function<void(Vehicle*)> m_destructionCallback;
 
@@ -321,6 +331,11 @@ namespace Spark
      */
         size_t GetVehicleCount() const { return m_vehicles.size(); }
 
+        /**
+     * @brief Set projectile pool for all current and future vehicles
+     */
+        void SetProjectilePool(ProjectilePool* pool);
+
         // Console integration
         std::string Console_ListVehicles() const;
         bool Console_SpawnVehicle(const std::string& type, float x, float y, float z, ID3D11Device* device,
@@ -341,6 +356,7 @@ namespace Spark
         std::unordered_map<int, VehicleDefinition> m_definitions;
         std::vector<std::unique_ptr<Vehicle>> m_vehicles;
         VehicleDefinition m_defaultDefinition;
+        ProjectilePool* m_projectilePool{nullptr}; ///< Shared pool for all vehicle weapons
 
         static constexpr int MAX_VEHICLES = 32;
     };

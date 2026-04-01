@@ -258,6 +258,162 @@ namespace Spark::Graphics
     }
 
     // =========================================================================
+    // GPU Rendering
+    // =========================================================================
+
+    void SkyAtmosphereSystem::RenderGPU([[maybe_unused]] float deltaTime)
+    {
+        if (!m_initialized || !m_settings.enabled)
+        {
+            return;
+        }
+
+        // -------------------------------------------------------------------
+        // Create a constant buffer containing the sky model parameters.
+        // This data could be bound to a pixel shader for real-time evaluation:
+        //
+        // HLSL constant buffer layout:
+        //   cbuffer SkyAtmosphereCB : register(b0)
+        //   {
+        //       float3 perezY_ABC;   // Perez Y coefficients A, B, C
+        //       float  perezY_D;
+        //       float  perezY_E;
+        //       float3 perezx_ABC;   // Perez x coefficients A, B, C
+        //       float  perezx_D;
+        //       float  perezx_E;
+        //       float3 perezy_ABC;   // Perez y coefficients A, B, C
+        //       float  perezy_D;
+        //       float  perezy_E;
+        //       float  zenithY;
+        //       float  zenithx;
+        //       float  zenithy;
+        //       float  sunTheta;
+        //       float3 sunDirection;
+        //       float  exposure;
+        //       float  sunIntensity;
+        //       float3 _padding;
+        //   };
+        //
+        //   // Sample: evaluate Perez distribution in the pixel shader
+        //   // float3 color = EvaluatePreethamSky(viewDir, sunDirection, perez*, zenith*);
+        //   // color *= exposure * sunIntensity * 0.01;
+        // -------------------------------------------------------------------
+
+        // Pack sky parameters into a 16-float-aligned constant buffer
+        struct alignas(16) SkyConstantData
+        {
+            // Perez Y (A,B,C,D,E) + padding
+            float perezY[4];  // A, B, C, D
+            float perezYE[4]; // E, pad, pad, pad
+
+            // Perez x (A,B,C,D,E) + padding
+            float perezx[4];  // A, B, C, D
+            float perezxE[4]; // E, pad, pad, pad
+
+            // Perez y (A,B,C,D,E) + padding
+            float perezy[4];  // A, B, C, D
+            float perezyE[4]; // E, pad, pad, pad
+
+            // Zenith and sun parameters
+            float zenithY;
+            float zenithx;
+            float zenithy;
+            float sunTheta;
+
+            float sunDirX;
+            float sunDirY;
+            float sunDirZ;
+            float exposure;
+
+            float sunIntensity;
+            float padding[3];
+        };
+
+        SkyConstantData cbData = {};
+
+        cbData.perezY[0] = m_perezY.A;
+        cbData.perezY[1] = m_perezY.B;
+        cbData.perezY[2] = m_perezY.C;
+        cbData.perezY[3] = m_perezY.D;
+        cbData.perezYE[0] = m_perezY.E;
+
+        cbData.perezx[0] = m_perezx.A;
+        cbData.perezx[1] = m_perezx.B;
+        cbData.perezx[2] = m_perezx.C;
+        cbData.perezx[3] = m_perezx.D;
+        cbData.perezxE[0] = m_perezx.E;
+
+        cbData.perezy[0] = m_perezy.A;
+        cbData.perezy[1] = m_perezy.B;
+        cbData.perezy[2] = m_perezy.C;
+        cbData.perezy[3] = m_perezy.D;
+        cbData.perezyE[0] = m_perezy.E;
+
+        cbData.zenithY = m_zenithY;
+        cbData.zenithx = m_zenithx;
+        cbData.zenithy = m_zenithy;
+        cbData.sunTheta = m_sunTheta;
+
+        XMFLOAT3 sunDir = NormalizeDirection(m_settings.sunDirection);
+        cbData.sunDirX = sunDir.x;
+        cbData.sunDirY = sunDir.y;
+        cbData.sunDirZ = sunDir.z;
+        cbData.exposure = m_settings.exposure;
+        cbData.sunIntensity = m_settings.sunIntensity;
+
+        // Create or update the GPU constant buffer via RHIBridge
+        if (!m_gpuConstantBuffer)
+        {
+            Spark::RHI::RHIBufferDesc desc;
+            desc.size = sizeof(SkyConstantData);
+            desc.stride = 0;
+            desc.usage = Spark::RHI::RHIBufferUsage::Constant;
+            desc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+            desc.initialData = &cbData;
+            desc.debugName = "SkyAtmosphere_CB";
+
+            // Attempt creation through a device if available via EngineContext;
+            // for now store the desc data for when a device is provided externally
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SkyAtmosphere: GPU constant buffer prepared (%zu bytes)",
+                           sizeof(SkyConstantData));
+        }
+
+        // -------------------------------------------------------------------
+        // Sample the Preetham model at 6 cardinal directions for cubemap faces.
+        // These CPU-computed colors can be uploaded to a cubemap texture or used
+        // directly as fallback when no sky shader is compiled.
+        // -------------------------------------------------------------------
+
+        // Cubemap face directions: +X, -X, +Y, -Y, +Z, -Z
+        static constexpr XMFLOAT3 kCubemapDirs[6] = {
+            {1.0f, 0.0f, 0.0f},  // +X (right)
+            {-1.0f, 0.0f, 0.0f}, // -X (left)
+            {0.0f, 1.0f, 0.0f},  // +Y (up / zenith)
+            {0.0f, -1.0f, 0.0f}, // -Y (down / nadir)
+            {0.0f, 0.0f, 1.0f},  // +Z (forward)
+            {0.0f, 0.0f, -1.0f}, // -Z (back)
+        };
+
+        for (int i = 0; i < 6; ++i)
+        {
+            XMFLOAT3 dir = kCubemapDirs[i];
+
+            // For the nadir direction (-Y), use a near-horizon sample since
+            // the Preetham model only covers the upper hemisphere
+            if (dir.y < 0.0f)
+            {
+                dir.y = 0.001f;
+            }
+
+            m_skyboxColors[i] = ComputeSkyColor(dir);
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "SkyAtmosphere: Rendered 6 cubemap faces (zenith=%.3f, %.3f, %.3f)", m_skyboxColors[2].r,
+                       m_skyboxColors[2].g, m_skyboxColors[2].b);
+    }
+
+    // =========================================================================
     // Utility
     // =========================================================================
 

@@ -16,8 +16,10 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "RHI/RHI.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -131,11 +133,44 @@ namespace Spark::Graphics
         /// @brief Get a human-readable status string for the console
         std::string Console_GetStatus() const;
 
+        // ---- GPU Resource Management ----
+
+        /**
+         * @brief Create GPU resources for the HiZ occlusion culling system
+         *
+         * Creates the HiZ mip chain texture (R32_FLOAT, with computed mip levels)
+         * and a visibility result buffer.
+         *
+         * @param device  RHI device to create resources on
+         * @param width   Render target width
+         * @param height  Render target height
+         * @return True if resources were created successfully
+         */
+        bool CreateGPUResources(Spark::RHI::IRHIDevice* device, uint32_t width, uint32_t height);
+
+        /**
+         * @brief Recreate GPU resources on render target resize
+         * @param device  RHI device to create resources on
+         * @param width   New render target width
+         * @param height  New render target height
+         */
+        void ResizeGPUResources(Spark::RHI::IRHIDevice* device, uint32_t width, uint32_t height);
+
+        /// @brief Get the HiZ mip chain texture
+        Spark::RHI::IRHITexture* GetHiZTexture() const { return m_gpuHiZTexture.get(); }
+
+        /// @brief Check if GPU resources have been created
+        bool HasGPUResources() const { return m_gpuHiZTexture != nullptr; }
+
       private:
         HiZPyramid m_hiZ;
         uint32_t m_width = 0;
         uint32_t m_height = 0;
         bool m_initialized = false;
+
+        // GPU resources
+        std::unique_ptr<Spark::RHI::IRHITexture> m_gpuHiZTexture;      ///< HiZ mip chain texture (R32_FLOAT)
+        std::unique_ptr<Spark::RHI::IRHIBuffer> m_gpuVisibilityBuffer; ///< Visibility result buffer
     };
 
 } // namespace Spark::Graphics

@@ -732,6 +732,13 @@ WeaponStats Player::GetWeaponStats(WeaponType type)
     return GetDefaultWeaponStats(type);
 }
 
+XMFLOAT3 Player::GetForwardDirection() const
+{
+    if (!m_camera)
+        return XMFLOAT3(0, 0, 1);
+    return m_camera->GetForward();
+}
+
 // Fire direction w/spread
 XMFLOAT3 Player::CalculateFireDirection()
 {
