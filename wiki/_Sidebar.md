@@ -3,6 +3,7 @@
 ### Getting Started
 - [Home](Home)
 - [Getting Started](Getting-Started)
+- [Making Your First Game](Making-Your-First-Game)
 - [Architecture Overview](Architecture-Overview)
 - [Creating a Game Module](Creating-a-Game-Module)
 

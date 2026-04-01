@@ -118,7 +118,7 @@ weather, destruction, modding (VFS + SparkPak), coroutines, events
 | **Only D3D11 renders** | Windows-only for real graphics | HIGH |
 | **No terrain system** | Can't build open-world games | HIGH |
 | **12 rendering stubs** (sky, water, GI) | Advanced visuals need custom work | MEDIUM |
-| **SparkGame has no AI enemies** | Example FPS has no combat | MEDIUM |
+| **~~SparkGame has no AI enemies~~** | RESOLVED: 12 enemies, 6 types, wave spawner | ~~MEDIUM~~ |
 | **AngelScript needs external SDK** | Scripting stubs without it | MEDIUM |
 | **Audio is XAudio2 only** | No Linux/macOS audio | MEDIUM |
 

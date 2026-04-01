@@ -154,7 +154,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     /* Vehicle System -----------------------------------*/
     m_vehicleSystem = std::make_unique<Spark::VehicleSystem>();
     m_vehicleSystem->Initialize();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Vehicle system initialized (9 vehicle types)", L"SUCCESS");
+    if (m_projectilePool)
+        m_vehicleSystem->SetProjectilePool(m_projectilePool.get());
+    LOG_TO_CONSOLE_IMMEDIATE(L"Vehicle system initialized (9 vehicle types, weapons armed)", L"SUCCESS");
 
     /* Gravity System -----------------------------------*/
     m_gravitySystem = std::make_unique<Spark::GravitySystem>();

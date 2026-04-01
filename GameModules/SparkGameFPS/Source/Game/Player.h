@@ -217,6 +217,9 @@ class SPARK_GAME_API Player : public GameObject
     /** @brief Get the player's projectile pool (owned or external) */
     ProjectilePool* GetProjectilePool() const { return m_projectilePool; }
 
+    /** @brief Get the player's forward look direction from camera */
+    DirectX::XMFLOAT3 GetForwardDirection() const;
+
     /**
      * @brief Get current player health
      * @return Current health value
