@@ -118,10 +118,11 @@ namespace Spark::Graphics
         float halfY = m_config.spacing * m_config.dimensionsY * 0.5f;
         float halfZ = m_config.spacing * m_config.dimensionsZ * 0.5f;
 
-        // Snap to grid
-        m_config.origin.x = std::floor((cameraPos.x - halfX) / m_config.spacing) * m_config.spacing;
-        m_config.origin.y = std::floor((cameraPos.y - halfY) / m_config.spacing) * m_config.spacing;
-        m_config.origin.z = std::floor((cameraPos.z - halfZ) / m_config.spacing) * m_config.spacing;
+        // Snap to grid (guard against zero spacing)
+        float safeSpacing = std::max(m_config.spacing, 0.001f);
+        m_config.origin.x = std::floor((cameraPos.x - halfX) / safeSpacing) * safeSpacing;
+        m_config.origin.y = std::floor((cameraPos.y - halfY) / safeSpacing) * safeSpacing;
+        m_config.origin.z = std::floor((cameraPos.z - halfZ) / safeSpacing) * safeSpacing;
 
         // Rebuild grid with new origin
         BuildProbeGrid();

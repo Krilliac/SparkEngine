@@ -32,7 +32,7 @@ namespace Spark::AI
             [this](float dt)
             {
                 m_phaseTimer += dt;
-                float progress = m_phaseTimer / m_buildUpDuration;
+                float progress = m_phaseTimer / std::max(m_buildUpDuration, 0.001f);
                 m_targetIntensity = m_minIntensity + (m_maxIntensity - m_minIntensity) * progress;
             });
 
@@ -63,7 +63,7 @@ namespace Spark::AI
             [this](float dt)
             {
                 m_phaseTimer += dt;
-                float progress = m_phaseTimer / m_relaxDuration;
+                float progress = m_phaseTimer / std::max(m_relaxDuration, 0.001f);
                 m_targetIntensity = m_maxIntensity - (m_maxIntensity - m_minIntensity) * progress;
             });
 

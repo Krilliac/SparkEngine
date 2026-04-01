@@ -79,7 +79,7 @@ namespace Spark::AI
             std::vector<EQSItem> items;
             float radiusSq = m_radius * m_radius;
 
-            int steps = static_cast<int>(m_radius / m_spacing);
+            int steps = static_cast<int>(m_radius / std::max(m_spacing, 0.001f));
             for (int x = -steps; x <= steps; ++x)
             {
                 for (int z = -steps; z <= steps; ++z)
@@ -365,7 +365,7 @@ namespace Spark::AI
             float dy = item.position.y - m_reference.y;
             float dz = item.position.z - m_reference.z;
             float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-            float normalized = std::min(dist / m_maxDistance, 1.0f);
+            float normalized = (m_maxDistance > 0.0f) ? std::min(dist / m_maxDistance, 1.0f) : 0.0f;
             return m_preferCloser ? (1.0f - normalized) : normalized;
         }
 

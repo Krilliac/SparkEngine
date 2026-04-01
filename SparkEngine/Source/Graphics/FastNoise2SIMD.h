@@ -459,22 +459,23 @@ namespace Spark::Graphics
                 std::vector<float> scaledX(count);
                 std::vector<float> scaledY(count);
 
+                float childFreq = std::max(m_child->GetFrequency(), 0.001f);
                 int i = 0;
                 for (; i + 3 < count; i += 4)
                 {
-                    scaledX[i + 0] = inX[i + 0] * freq / m_child->GetFrequency();
-                    scaledX[i + 1] = inX[i + 1] * freq / m_child->GetFrequency();
-                    scaledX[i + 2] = inX[i + 2] * freq / m_child->GetFrequency();
-                    scaledX[i + 3] = inX[i + 3] * freq / m_child->GetFrequency();
-                    scaledY[i + 0] = inY[i + 0] * freq / m_child->GetFrequency();
-                    scaledY[i + 1] = inY[i + 1] * freq / m_child->GetFrequency();
-                    scaledY[i + 2] = inY[i + 2] * freq / m_child->GetFrequency();
-                    scaledY[i + 3] = inY[i + 3] * freq / m_child->GetFrequency();
+                    scaledX[i + 0] = inX[i + 0] * freq / childFreq;
+                    scaledX[i + 1] = inX[i + 1] * freq / childFreq;
+                    scaledX[i + 2] = inX[i + 2] * freq / childFreq;
+                    scaledX[i + 3] = inX[i + 3] * freq / childFreq;
+                    scaledY[i + 0] = inY[i + 0] * freq / childFreq;
+                    scaledY[i + 1] = inY[i + 1] * freq / childFreq;
+                    scaledY[i + 2] = inY[i + 2] * freq / childFreq;
+                    scaledY[i + 3] = inY[i + 3] * freq / childFreq;
                 }
                 for (; i < count; ++i)
                 {
-                    scaledX[i] = inX[i] * freq / m_child->GetFrequency();
-                    scaledY[i] = inY[i] * freq / m_child->GetFrequency();
+                    scaledX[i] = inX[i] * freq / childFreq;
+                    scaledY[i] = inY[i] * freq / childFreq;
                 }
 
                 m_child->BatchEvaluate(temp.data(), scaledX.data(), scaledY.data(), count);
