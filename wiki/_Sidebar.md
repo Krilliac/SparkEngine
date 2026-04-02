@@ -6,6 +6,7 @@
 - [Making Your First Game](Making-Your-First-Game)
 - [Artist Workflow Guide](Artist-Workflow-Guide)
 - [Architecture Overview](Architecture-Overview)
+- [Engine Architecture Flowchart](Engine-Architecture-Flowchart)
 - [Creating a Game Module](Creating-a-Game-Module)
 
 ### Engine Subsystems
