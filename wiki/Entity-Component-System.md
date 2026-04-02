@@ -569,6 +569,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `FormationSystem` | `SparkEngine/Source/Engine/AI/FormationSystem.h` |
 | `FreezeSystem` | `SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h` |
 | `GPUParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
+| `InventorySystem` | `SparkEngine/Source/Engine/Gameplay/InventorySystem.h` |
 | `JobSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
@@ -592,6 +593,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `ProbeSystem` | `SparkEngine/Source/Graphics/HybridRT/ProbeSystem.h` |
 | `ProjectileSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ProximityTriggerSystem` | `SparkEngine/Source/Engine/World/ProximityTriggerSystem.h` |
+| `QuestSystem` | `SparkEngine/Source/Engine/Gameplay/QuestSystem.h` |
 | `RTHandleSystem` | `SparkEngine/Source/Graphics/RTHandleSystem.h` |
 | `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
