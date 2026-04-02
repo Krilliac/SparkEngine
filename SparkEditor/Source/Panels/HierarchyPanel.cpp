@@ -18,6 +18,7 @@
 #include "HierarchyPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../CommandHistory.h"
+#include "Engine/ECS/EntityPresetManager.h"
 #include "Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"
@@ -576,6 +577,43 @@ namespace SparkEditor
                     CreateObject("Plane");
                 ImGui::EndMenu();
             }
+
+            ImGui::Separator();
+
+            // Entity presets — pre-configured game objects for no-code workflows
+            if (ImGui::BeginMenu(ICON_FA_MAGIC " Create From Preset"))
+            {
+                auto& presetMgr = Spark::ECS::EntityPresetManager::GetInstance();
+                auto categories = presetMgr.GetPresetsByCategory();
+
+                for (const auto& [category, presetNames] : categories)
+                {
+                    if (ImGui::BeginMenu(category.c_str()))
+                    {
+                        for (const auto& name : presetNames)
+                        {
+                            const auto* preset = presetMgr.FindPreset(name);
+                            if (preset && ImGui::MenuItem(name.c_str()))
+                            {
+                                CreateObject(preset->name);
+                            }
+                            if (preset && ImGui::IsItemHovered())
+                            {
+                                ImGui::SetTooltip("%s", preset->description.c_str());
+                            }
+                        }
+                        ImGui::EndMenu();
+                    }
+                }
+
+                if (categories.empty())
+                {
+                    ImGui::TextDisabled("No presets registered");
+                }
+
+                ImGui::EndMenu();
+            }
+
             ImGui::EndPopup();
         }
     }

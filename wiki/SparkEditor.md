@@ -830,6 +830,7 @@ cmake --build build --config Release
 | `DestructionEditorPanel` | `SparkEditor/Source/Panels/DestructionEditorPanel.h` |
 | `DialogueEditorPanel` | `SparkEditor/Source/Panels/DialogueEditorPanel.h` |
 | `EventMonitorPanel` | `SparkEditor/Source/Panels/EventMonitorPanel.h` |
+| `EventResponsePanel` | `SparkEditor/Source/Panels/EventResponsePanel.h` |
 | `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
 | `GameModuleSelectorPanel` | `SparkEditor/Source/Panels/GameModuleSelectorPanel.h` |
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
@@ -862,6 +863,7 @@ cmake --build build --config Release
 | `TriggerEditorPanel` | `SparkEditor/Source/Panels/TriggerEditorPanel.h` |
 | `UndoHistoryPanel` | `SparkEditor/Source/Panels/UndoHistoryPanel.h` |
 | `VRConfigPanel` | `SparkEditor/Source/Panels/VRConfigPanel.h` |
+| `VisualScriptPanel` | `SparkEditor/Source/Panels/VisualScriptPanel.h` |
 | `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |
 | `WeatherFogPanel` | `SparkEditor/Source/Panels/WeatherFogPanel.h` |
 | `WorkflowPanel` | `SparkEditor/Source/Panels/WorkflowPanel.h` |

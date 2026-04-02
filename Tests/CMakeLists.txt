@@ -246,6 +246,9 @@ add_executable(SparkTests
     TestScriptHotReload.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
+    TestEventResponseSystem.cpp
+    TestVisualScriptCompiler.cpp
+    TestEntityPresetManager.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"

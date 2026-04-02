@@ -1,0 +1,528 @@
+/**
+ * @file VisualScriptCompiler.cpp
+ * @brief Implementation of visual script graph → AngelScript compiler
+ */
+
+#include "VisualScriptCompiler.h"
+
+#include <algorithm>
+#include <queue>
+#include <sstream>
+#include <unordered_set>
+
+namespace Spark::Scripting
+{
+
+    // ========================================================================
+    // Helpers
+    // ========================================================================
+
+    std::string VisualScriptCompiler::VarName(uint32_t nodeID, uint32_t pinIndex)
+    {
+        return "n" + std::to_string(nodeID) + "_out" + std::to_string(pinIndex);
+    }
+
+    std::string VisualScriptCompiler::PinTypeString(PinKind kind)
+    {
+        switch (kind)
+        {
+        case PinKind::Bool:
+            return "bool";
+        case PinKind::Int:
+            return "int";
+        case PinKind::Float:
+            return "float";
+        case PinKind::String:
+            return "string";
+        case PinKind::Vector3:
+            return "Vector3";
+        case PinKind::Entity:
+            return "uint";
+        default:
+            return "float";
+        }
+    }
+
+    std::string VisualScriptCompiler::DefaultLiteral(const ScriptPin& pin)
+    {
+        switch (pin.kind)
+        {
+        case PinKind::Bool:
+            return pin.defaultValue[0] != 0.0f ? "true" : "false";
+        case PinKind::Int:
+            return std::to_string(static_cast<int>(pin.defaultValue[0]));
+        case PinKind::Float:
+            return std::to_string(pin.defaultValue[0]) + "f";
+        case PinKind::String:
+            return "\"" + pin.defaultString + "\"";
+        case PinKind::Vector3:
+            return "Vector3(" + std::to_string(pin.defaultValue[0]) + "f, " + std::to_string(pin.defaultValue[1]) +
+                   "f, " + std::to_string(pin.defaultValue[2]) + "f)";
+        case PinKind::Entity:
+            return std::to_string(static_cast<uint32_t>(pin.defaultValue[0]));
+        default:
+            return "0.0f";
+        }
+    }
+
+    const ScriptNode* VisualScriptCompiler::FindNode(const VisualScriptGraph& graph, uint32_t nodeID)
+    {
+        for (const auto& node : graph.nodes)
+        {
+            if (node.id == nodeID)
+            {
+                return &node;
+            }
+        }
+        return nullptr;
+    }
+
+    const ScriptConnection* VisualScriptCompiler::FindConnectionToInput(const VisualScriptGraph& graph, uint32_t nodeID,
+                                                                        uint32_t pinIndex)
+    {
+        for (const auto& conn : graph.connections)
+        {
+            if (conn.toNode == nodeID && conn.toPin == pinIndex)
+            {
+                return &conn;
+            }
+        }
+        return nullptr;
+    }
+
+    bool VisualScriptCompiler::IsEventNode(ScriptNodeType type)
+    {
+        return type == ScriptNodeType::OnStart || type == ScriptNodeType::OnUpdate ||
+               type == ScriptNodeType::OnTriggerEnter || type == ScriptNodeType::OnTriggerExit ||
+               type == ScriptNodeType::OnDamaged || type == ScriptNodeType::OnKeyPress ||
+               type == ScriptNodeType::OnCollision || type == ScriptNodeType::OnCustomEvent;
+    }
+
+    bool VisualScriptCompiler::IsActionNode(ScriptNodeType type)
+    {
+        auto val = static_cast<uint32_t>(type);
+        // Action nodes: flow control (50-53) and setters (150-159)
+        return (val >= 50 && val <= 53) || (val >= 150 && val <= 159);
+    }
+
+    std::string VisualScriptCompiler::ResolveInput(const ScriptNode& node, uint32_t inputIndex,
+                                                   const VisualScriptGraph& graph)
+    {
+        const auto* conn = FindConnectionToInput(graph, node.id, inputIndex);
+        if (conn)
+        {
+            return VarName(conn->fromNode, conn->fromPin);
+        }
+
+        // Use default value from the pin
+        if (inputIndex < node.inputs.size())
+        {
+            return DefaultLiteral(node.inputs[inputIndex]);
+        }
+        return "0.0f";
+    }
+
+    // ========================================================================
+    // Topological Sort (data dependencies)
+    // ========================================================================
+
+    std::vector<uint32_t> VisualScriptCompiler::TopologicalSortData(const VisualScriptGraph& graph, uint32_t startNode)
+    {
+        std::unordered_set<uint32_t> visited;
+        std::vector<uint32_t> order;
+
+        // BFS in both directions from the start node:
+        // Forward (fromNode → toNode): follows execution flow from event to actions
+        // Backward (toNode → fromNode): follows data dependencies from consumers to producers
+        std::queue<uint32_t> queue;
+        queue.push(startNode);
+        visited.insert(startNode);
+
+        while (!queue.empty())
+        {
+            uint32_t current = queue.front();
+            queue.pop();
+
+            for (const auto& conn : graph.connections)
+            {
+                // Forward: find nodes this node connects TO
+                if (conn.fromNode == current && visited.find(conn.toNode) == visited.end())
+                {
+                    visited.insert(conn.toNode);
+                    queue.push(conn.toNode);
+                }
+                // Backward: find nodes that connect TO this node
+                if (conn.toNode == current && visited.find(conn.fromNode) == visited.end())
+                {
+                    visited.insert(conn.fromNode);
+                    queue.push(conn.fromNode);
+                }
+            }
+            order.push_back(current);
+        }
+
+        // Sort so dependencies come before dependents
+        // A node that feeds into another (fromNode in a connection) should come first
+        std::sort(order.begin(), order.end(),
+                  [&graph](uint32_t a, uint32_t b)
+                  {
+                      for (const auto& conn : graph.connections)
+                      {
+                          if (conn.fromNode == a && conn.toNode == b)
+                              return true;
+                          if (conn.fromNode == b && conn.toNode == a)
+                              return false;
+                      }
+                      return a < b;
+                  });
+
+        return order;
+    }
+
+    // ========================================================================
+    // Code Emission for Individual Nodes
+    // ========================================================================
+
+    void VisualScriptCompiler::EmitNode(const ScriptNode& node, const VisualScriptGraph& graph, std::string& code)
+    {
+        auto input = [&](uint32_t idx) { return ResolveInput(node, idx, graph); };
+        auto out = [&](uint32_t idx) { return VarName(node.id, idx); };
+
+        switch (node.type)
+        {
+        // -- Constants --
+        case ScriptNodeType::ConstFloat:
+            code += "    float " + out(0) + " = " + DefaultLiteral(node.outputs[0]) + ";\n";
+            break;
+        case ScriptNodeType::ConstInt:
+            code += "    int " + out(0) + " = " + DefaultLiteral(node.outputs[0]) + ";\n";
+            break;
+        case ScriptNodeType::ConstBool:
+            code += "    bool " + out(0) + " = " + DefaultLiteral(node.outputs[0]) + ";\n";
+            break;
+        case ScriptNodeType::ConstString:
+            code += "    string " + out(0) + " = " + DefaultLiteral(node.outputs[0]) + ";\n";
+            break;
+        case ScriptNodeType::ConstVector3:
+            code += "    Vector3 " + out(0) + " = " + DefaultLiteral(node.outputs[0]) + ";\n";
+            break;
+
+        // -- Math --
+        case ScriptNodeType::Add:
+            code += "    float " + out(0) + " = " + input(0) + " + " + input(1) + ";\n";
+            break;
+        case ScriptNodeType::Subtract:
+            code += "    float " + out(0) + " = " + input(0) + " - " + input(1) + ";\n";
+            break;
+        case ScriptNodeType::Multiply:
+            code += "    float " + out(0) + " = " + input(0) + " * " + input(1) + ";\n";
+            break;
+        case ScriptNodeType::Divide:
+            code +=
+                "    float " + out(0) + " = (" + input(1) + " != 0.0f) ? " + input(0) + " / " + input(1) + " : 0.0f;\n";
+            break;
+        case ScriptNodeType::Negate:
+            code += "    float " + out(0) + " = -" + input(0) + ";\n";
+            break;
+        case ScriptNodeType::Abs:
+            code += "    float " + out(0) + " = abs(" + input(0) + ");\n";
+            break;
+        case ScriptNodeType::Lerp:
+            code += "    float " + out(0) + " = " + input(0) + " + (" + input(1) + " - " + input(0) + ") * " +
+                    input(2) + ";\n";
+            break;
+        case ScriptNodeType::Clamp:
+            code += "    float _v" + std::to_string(node.id) + " = " + input(0) + ";\n";
+            code += "    float " + out(0) + " = (_v" + std::to_string(node.id) + " < " + input(1) + ") ? " + input(1) +
+                    " : ((_v" + std::to_string(node.id) + " > " + input(2) + ") ? " + input(2) + " : _v" +
+                    std::to_string(node.id) + ");\n";
+            break;
+        case ScriptNodeType::Random:
+            code += "    float " + out(0) + " = float(rand()) / float(2147483647);\n";
+            break;
+        case ScriptNodeType::RandomRange:
+            code += "    float " + out(0) + " = " + input(0) + " + float(rand()) / float(2147483647) * (" + input(1) +
+                    " - " + input(0) + ");\n";
+            break;
+
+        // -- Logic --
+        case ScriptNodeType::And:
+            code += "    bool " + out(0) + " = " + input(0) + " && " + input(1) + ";\n";
+            break;
+        case ScriptNodeType::Or:
+            code += "    bool " + out(0) + " = " + input(0) + " || " + input(1) + ";\n";
+            break;
+        case ScriptNodeType::Not:
+            code += "    bool " + out(0) + " = !" + input(0) + ";\n";
+            break;
+        case ScriptNodeType::Equal:
+            code += "    bool " + out(0) + " = (" + input(0) + " == " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::NotEqual:
+            code += "    bool " + out(0) + " = (" + input(0) + " != " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::Greater:
+            code += "    bool " + out(0) + " = (" + input(0) + " > " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::Less:
+            code += "    bool " + out(0) + " = (" + input(0) + " < " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::GreaterEqual:
+            code += "    bool " + out(0) + " = (" + input(0) + " >= " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::LessEqual:
+            code += "    bool " + out(0) + " = (" + input(0) + " <= " + input(1) + ");\n";
+            break;
+
+        // -- Getters --
+        case ScriptNodeType::GetKeyDown:
+        {
+            std::string key = !node.properties.empty() ? node.properties.begin()->second : "Space";
+            code += "    bool " + out(0) + " = getKeyDown(\"" + key + "\");\n";
+            break;
+        }
+        case ScriptNodeType::GetKey:
+        {
+            std::string key = !node.properties.empty() ? node.properties.begin()->second : "Space";
+            code += "    bool " + out(0) + " = getKey(\"" + key + "\");\n";
+            break;
+        }
+        case ScriptNodeType::GetDeltaTime:
+            // dt is passed as method parameter — stored in a local
+            code += "    // dt available as parameter\n";
+            break;
+        case ScriptNodeType::GetSelf:
+            code += "    uint " + out(0) + " = selfEntity;\n";
+            break;
+
+        // -- Actions --
+        case ScriptNodeType::PrintMessage:
+            code += "    print(" + input(0) + ");\n";
+            break;
+        case ScriptNodeType::PlaySound:
+        {
+            std::string sound = !node.properties.empty() ? node.properties.begin()->second : "";
+            code += "    print(\"PlaySound: " + sound + "\");\n";
+            break;
+        }
+        case ScriptNodeType::PlayAnimation:
+        {
+            std::string anim = !node.properties.empty() ? node.properties.begin()->second : "";
+            code += "    print(\"PlayAnimation: " + anim + "\");\n";
+            break;
+        }
+        case ScriptNodeType::SpawnEntity:
+        {
+            std::string name = !node.properties.empty() ? node.properties.begin()->second : "Entity";
+            code += "    uint " + out(0) + " = createEntity(\"" + name + "\");\n";
+            break;
+        }
+        case ScriptNodeType::DestroyEntity:
+            code += "    // DestroyEntity: " + input(0) + "\n";
+            break;
+        case ScriptNodeType::SetHealth:
+            code += "    // SetHealth: " + input(0) + "\n";
+            break;
+        case ScriptNodeType::FireEvent:
+        {
+            std::string evt = !node.properties.empty() ? node.properties.begin()->second : "";
+            code += "    print(\"FireEvent: " + evt + "\");\n";
+            break;
+        }
+
+        // -- Flow control --
+        case ScriptNodeType::Branch:
+            // Branch is handled specially during execution chain emission
+            break;
+        case ScriptNodeType::DoNothing:
+            break;
+
+        // -- Variables --
+        case ScriptNodeType::GetVariable:
+        {
+            auto it = node.properties.find("name");
+            std::string varName = (it != node.properties.end()) ? it->second : "var";
+            code += "    // GetVariable: " + varName + "\n";
+            break;
+        }
+        case ScriptNodeType::SetVariable:
+        {
+            auto it = node.properties.find("name");
+            std::string varName = (it != node.properties.end()) ? it->second : "var";
+            code += "    " + varName + " = " + input(1) + ";\n";
+            break;
+        }
+
+        default:
+            code += "    // Unhandled node type " + std::to_string(static_cast<uint32_t>(node.type)) + "\n";
+            break;
+        }
+    }
+
+    // ========================================================================
+    // Main Compile Entry Point
+    // ========================================================================
+
+    ScriptCompileResult VisualScriptCompiler::Compile(const VisualScriptGraph& graph)
+    {
+        ScriptCompileResult result;
+
+        if (graph.nodes.empty())
+        {
+            result.errors.push_back("Empty graph — no nodes to compile");
+            return result;
+        }
+
+        // Collect event entry-point nodes
+        std::vector<const ScriptNode*> eventNodes;
+        for (const auto& node : graph.nodes)
+        {
+            if (IsEventNode(node.type))
+            {
+                eventNodes.push_back(&node);
+            }
+        }
+
+        if (eventNodes.empty())
+        {
+            result.errors.push_back("No event nodes found — add OnStart, OnUpdate, or another event node");
+            return result;
+        }
+
+        std::ostringstream source;
+        source << "// Auto-generated by SparkEngine Visual Script Compiler\n";
+        source << "// Class: " << graph.className << "\n\n";
+        source << "class " << graph.className << "\n{\n";
+
+        // Emit member variables
+        for (const auto& var : graph.variables)
+        {
+            source << "    " << PinTypeString(var.type) << " " << var.name;
+            if (!var.defaultValue.empty())
+            {
+                source << " = " << var.defaultValue;
+            }
+            source << ";\n";
+        }
+        if (!graph.variables.empty())
+        {
+            source << "\n";
+        }
+
+        // Emit methods for each event node
+        for (const auto* eventNode : eventNodes)
+        {
+            // Determine method signature from event type
+            std::string methodName;
+            std::string params;
+
+            switch (eventNode->type)
+            {
+            case ScriptNodeType::OnStart:
+                methodName = "Start";
+                break;
+            case ScriptNodeType::OnUpdate:
+                methodName = "Update";
+                params = "float dt";
+                break;
+            case ScriptNodeType::OnCollision:
+                methodName = "OnCollision";
+                params = "uint other";
+                break;
+            case ScriptNodeType::OnTriggerEnter:
+                methodName = "OnTriggerEnter";
+                params = "uint triggerId";
+                break;
+            case ScriptNodeType::OnTriggerExit:
+                methodName = "OnTriggerExit";
+                params = "uint triggerId";
+                break;
+            case ScriptNodeType::OnDamaged:
+                methodName = "OnDamaged";
+                params = "float amount";
+                break;
+            case ScriptNodeType::OnKeyPress:
+            {
+                auto it = eventNode->properties.find("key");
+                std::string key = (it != eventNode->properties.end()) ? it->second : "Space";
+                methodName = "Update"; // Key checks go in Update
+                params = "float dt";
+                break;
+            }
+            default:
+                methodName = "CustomHandler";
+                break;
+            }
+
+            source << "    void " << methodName << "(" << params << ")\n    {\n";
+
+            // Collect all nodes reachable from this event via execution connections
+            auto sortedNodes = TopologicalSortData(graph, eventNode->id);
+
+            // For OnKeyPress, wrap in a key check
+            if (eventNode->type == ScriptNodeType::OnKeyPress)
+            {
+                auto it = eventNode->properties.find("key");
+                std::string key = (it != eventNode->properties.end()) ? it->second : "Space";
+                source << "        if (getKeyDown(\"" << key << "\"))\n        {\n";
+            }
+
+            // Emit code for each node in dependency order (skip the event node itself)
+            std::string bodyCode;
+            for (uint32_t nodeId : sortedNodes)
+            {
+                if (nodeId == eventNode->id)
+                {
+                    continue;
+                }
+                const auto* node = FindNode(graph, nodeId);
+                if (!node || IsEventNode(node->type))
+                {
+                    continue;
+                }
+
+                // Handle Branch nodes specially
+                if (node->type == ScriptNodeType::Branch)
+                {
+                    std::string condition = ResolveInput(*node, 0, graph);
+                    bodyCode += "    if (" + condition + ")\n    {\n";
+                    bodyCode += "        // True branch\n";
+                    bodyCode += "    }\n";
+                }
+                else
+                {
+                    EmitNode(*node, graph, bodyCode);
+                }
+            }
+
+            // Indent body code
+            std::istringstream bodyStream(bodyCode);
+            std::string line;
+            while (std::getline(bodyStream, line))
+            {
+                if (eventNode->type == ScriptNodeType::OnKeyPress)
+                {
+                    source << "        " << line << "\n";
+                }
+                else
+                {
+                    source << "    " << line << "\n";
+                }
+            }
+
+            if (eventNode->type == ScriptNodeType::OnKeyPress)
+            {
+                source << "        }\n";
+            }
+
+            source << "    }\n\n";
+        }
+
+        source << "}\n";
+
+        result.angelScriptSource = source.str();
+        result.success = true;
+        return result;
+    }
+
+} // namespace Spark::Scripting
