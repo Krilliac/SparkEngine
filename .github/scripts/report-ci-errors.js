@@ -2,13 +2,14 @@
 //
 // Called by the report-ci-errors job after all build jobs complete.
 // Downloads error summary artifacts from each failed job, consolidates
-// them into one PR comment with file paths, error codes, and context.
+// them into one PR comment (on PRs) or a job summary (on push).
 //
 // Strategy:
-//   1. Find or create a single "CI Error Report" comment (identified by marker)
-//   2. Merge all job error summaries into one report
-//   3. Compare against the previous comment body — skip update if identical
-//   4. On success (no errors), delete the old error comment if it exists
+//   1. Collect error summaries from all failed job artifacts
+//   2. Merge and deduplicate into one consolidated report
+//   3. On PRs: find or create a single "CI Error Report" comment
+//   4. On push: write a job summary visible in the Actions UI
+//   5. On success (no errors), update/clear the old error comment if it exists
 
 const COMMENT_MARKER = '<!-- spark-ci-error-report -->';
 
@@ -16,11 +17,7 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
     const owner = context.repo.owner;
     const repo = context.repo.repo;
     const prNumber = context.issue.number;
-
-    if (!prNumber) {
-        core.info('Not a pull request — skipping error report');
-        return;
-    }
+    const isPullRequest = !!prNumber;
 
     // ── 1. Collect error summaries from downloaded artifacts ──────────
     const fs = require('fs');
@@ -68,16 +65,18 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
         }
     }
 
-    // ── 2. Find existing error report comment ────────────────────────
+    // ── 2. Find existing error report comment (PRs only) ──────────────
     let existingComment = null;
-    const comments = await github.rest.issues.listComments({
-        owner, repo, issue_number: prNumber, per_page: 100
-    });
+    if (isPullRequest) {
+        const comments = await github.rest.issues.listComments({
+            owner, repo, issue_number: prNumber, per_page: 100
+        });
 
-    for (const comment of comments.data) {
-        if (comment.body && comment.body.includes(COMMENT_MARKER)) {
-            existingComment = comment;
-            break;
+        for (const comment of comments.data) {
+            if (comment.body && comment.body.includes(COMMENT_MARKER)) {
+                existingComment = comment;
+                break;
+            }
         }
     }
 
@@ -87,7 +86,7 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
     );
 
     if (!hasIssues) {
-        if (existingComment) {
+        if (isPullRequest && existingComment) {
             const resolvedBody = [
                 COMMENT_MARKER,
                 '## :white_check_mark: CI Errors Resolved',
@@ -338,22 +337,35 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
         `*Updated: ${new Date().toISOString().slice(0, 19)}Z — this comment is updated in-place, not duplicated.*`
     ].join('\n').slice(0, 65000);
 
-    // ── 6. Deduplicate: skip if body hasn't changed ──────────────────
-    if (existingComment) {
-        const stripTimestamp = s => s.replace(/\*Updated:.*\*/, '').replace(/\*Last checked:.*\*/, '');
-        if (stripTimestamp(existingComment.body) === stripTimestamp(body)) {
-            core.info('Error report unchanged — skipping update');
-            return;
-        }
+    // ── 6. Post report ────────────────────────────────────────────────
+    if (isPullRequest) {
+        // Deduplicate: skip if body hasn't changed
+        if (existingComment) {
+            const stripTimestamp = s => s.replace(/\*Updated:.*\*/, '').replace(/\*Last checked:.*\*/, '');
+            if (stripTimestamp(existingComment.body) === stripTimestamp(body)) {
+                core.info('Error report unchanged — skipping update');
+                return;
+            }
 
-        await github.rest.issues.updateComment({
-            owner, repo, comment_id: existingComment.id, body
-        });
-        core.info(`Updated existing error report comment #${existingComment.id}`);
+            await github.rest.issues.updateComment({
+                owner, repo, comment_id: existingComment.id, body
+            });
+            core.info(`Updated existing error report comment #${existingComment.id}`);
+        } else {
+            await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber, body
+            });
+            core.info('Created new error report comment');
+        }
     } else {
-        await github.rest.issues.createComment({
-            owner, repo, issue_number: prNumber, body
-        });
-        core.info('Created new error report comment');
+        // Push event: write to job summary (visible in Actions UI)
+        const summaryBody = body.replace(COMMENT_MARKER, '').trim();
+        await core.summary
+            .addRaw(summaryBody)
+            .write();
+        core.info('Wrote error report to job summary (push event, no PR)');
+
+        // Also set the job as failed so it's visible in the Actions UI
+        core.setFailed(`CI Error Report: ${globalErrors.size} errors, ${globalTests.size} test failures`);
     }
 };

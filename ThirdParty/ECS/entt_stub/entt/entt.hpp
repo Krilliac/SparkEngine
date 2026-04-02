@@ -185,6 +185,7 @@ namespace entt
         auto begin() const { return m_matching.begin(); }
         auto end() const { return m_matching.end(); }
         std::size_t size() const { return m_matching.size(); }
+        std::size_t size_hint() const { return m_matching.size(); }
 
         /** Get a specific component for an entity from this view. */
         template <typename T> T& get(entity e)
