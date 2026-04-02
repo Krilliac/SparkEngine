@@ -815,6 +815,14 @@ namespace SparkEditor
                 file << "          \"position\": [0, 20, 0],\n";
                 file << "          \"rotation\": [90, 0, 0],\n";
                 break;
+            case ProjectTemplate::Platformer:
+                file << "          \"position\": [0, 5, -12],\n";
+                file << "          \"rotation\": [10, 0, 0],\n";
+                break;
+            case ProjectTemplate::RPG:
+                file << "          \"position\": [0, 8, -10],\n";
+                file << "          \"rotation\": [30, 0, 0],\n";
+                break;
             default:
                 file << "          \"position\": [0, 3, -8],\n";
                 file << "          \"rotation\": [15, 0, 0],\n";
@@ -1041,6 +1049,10 @@ namespace SparkEditor
             return "Blank 3D";
         case ProjectTemplate::MMO:
             return "MMO";
+        case ProjectTemplate::Platformer:
+            return "Platformer";
+        case ProjectTemplate::RPG:
+            return "RPG";
         default:
             return "Unknown";
         }
@@ -1063,6 +1075,12 @@ namespace SparkEditor
         case ProjectTemplate::MMO:
             return "MMO template with WorldServer/AreaServer architecture, seamless area "
                    "streaming, entity replication, chat channels, and large-world support.";
+        case ProjectTemplate::Platformer:
+            return "Platformer template with jump mechanics, collectibles, checkpoints, "
+                   "and win triggers. Uses event response rules for gameplay logic.";
+        case ProjectTemplate::RPG:
+            return "RPG template with inventory system, dialogue NPCs, quest givers, "
+                   "and event response rules. No coding required to get started.";
         default:
             return "";
         }

@@ -17,6 +17,7 @@
  *   SPARK_TEST_LIMIT=N     Stop after N tests
  *   SPARK_TEST_FILE=name   Filter tests by source file
  *   SPARK_TEST_NAME=name   Filter tests by test name
+ *   SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)
  */
 
 #include "TestFramework.h"
@@ -293,7 +294,8 @@ static void PrintUsage(const char* argv0)
               << "Environment variables:\n"
               << "  SPARK_TEST_LIMIT=N     Stop after N tests\n"
               << "  SPARK_TEST_FILE=name   Filter tests by source file\n"
-              << "  SPARK_TEST_NAME=name   Filter tests by test name\n";
+              << "  SPARK_TEST_NAME=name   Filter tests by test name\n"
+              << "  SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)\n";
 }
 
 // ============================================================================
@@ -397,6 +399,19 @@ int main(int argc, char** argv)
     const char* fileFilter = std::getenv("SPARK_TEST_FILE");
     const char* nameFilter = std::getenv("SPARK_TEST_NAME");
 
+    // Parse comma-separated exclude patterns
+    std::vector<std::string> excludePatterns;
+    if (const char* excludeEnv = std::getenv("SPARK_TEST_EXCLUDE"))
+    {
+        std::string pat;
+        std::istringstream stream(excludeEnv);
+        while (std::getline(stream, pat, ','))
+        {
+            if (!pat.empty())
+                excludePatterns.push_back(pat);
+        }
+    }
+
     // Capture stderr from assertion macros when writing to file
     std::streambuf* origCerrBuf = nullptr;
     std::ostringstream cerrCapture;
@@ -419,6 +434,17 @@ int main(int argc, char** argv)
         if (fileFilter && test.file.find(fileFilter) == std::string::npos)
             continue;
         if (nameFilter && test.name.find(nameFilter) == std::string::npos)
+            continue;
+        bool excluded = false;
+        for (const auto& pat : excludePatterns)
+        {
+            if (test.name.find(pat) != std::string::npos)
+            {
+                excluded = true;
+                break;
+            }
+        }
+        if (excluded)
             continue;
         ++ranCount;
         g_currentTest = test.name;

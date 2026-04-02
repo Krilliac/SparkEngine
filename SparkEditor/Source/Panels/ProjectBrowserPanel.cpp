@@ -323,10 +323,11 @@ namespace SparkEditor
             int idx = 0;
             ProjectTemplate templates[] = {ProjectTemplate::Blank3D,     ProjectTemplate::FirstPerson,
                                            ProjectTemplate::ThirdPerson, ProjectTemplate::TopDown,
+                                           ProjectTemplate::Platformer,  ProjectTemplate::RPG,
                                            ProjectTemplate::MMO,         ProjectTemplate::Empty};
-            const char* icons[] = {"[ ]", "[FP]", "[TP]", "[TD]", "[MMO]", "[ ]"};
+            const char* icons[] = {"[ ]", "[FP]", "[TP]", "[TD]", "[PL]", "[RPG]", "[MMO]", "[ ]"};
 
-            for (int i = 0; i < 6; ++i)
+            for (int i = 0; i < 8; ++i)
             {
                 if (idx > 0 && (idx % cols) != 0)
                 {

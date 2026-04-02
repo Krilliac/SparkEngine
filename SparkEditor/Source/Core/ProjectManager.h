@@ -46,7 +46,9 @@ namespace SparkEditor
         ThirdPerson, ///< Third person template
         TopDown,     ///< Top-down camera template
         Blank3D,     ///< Single empty scene with default lighting
-        MMO          ///< MMO template with area servers, world server, chat
+        MMO,         ///< MMO template with area servers, world server, chat
+        Platformer,  ///< Side-scrolling platformer with jump mechanics, collectibles, checkpoints
+        RPG          ///< RPG template with inventory, dialogue NPCs, quest system
     };
 
     /**
