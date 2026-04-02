@@ -114,7 +114,7 @@ namespace SparkEditor
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing Script from object %u",
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Inspector: removing Script from object %lu",
                                m_inspectedObjectID);
                 RemoveComponent(ComponentType::SCRIPT);
             }
