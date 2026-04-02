@@ -513,7 +513,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*230 test files, 2994+ test cases*
+*235 test files, 3072+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -524,6 +524,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAbilitySystem` | 27 |
 | `TestAdversarialEngine` | 89 |
 | `TestAlignedHeapArray` | 6 |
+| `TestAngelScriptEngine` | 14 |
 | `TestAngleUtils` | 10 |
 | `TestAnimationCompression` | 6 |
 | `TestAnimationRetargeting` | 9 |
@@ -651,6 +652,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModuleHotReload` | 15 |
 | `TestMovementSystem` | 18 |
 | `TestMultiISADispatch` | 2 |
+| `TestMusicManager` | 24 |
 | `TestNavMesh` | 11 |
 | `TestNavMeshObstacles` | 7 |
 | `TestNetBuffer` | 29 |
@@ -704,6 +706,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestScopedTimer` | 3 |
 | `TestScreenSpaceEffects` | 16 |
 | `TestScriptHookManager` | 15 |
+| `TestScriptHotReload` | 16 |
+| `TestSeamlessAreaManager` | 12 |
 | `TestSelfRecovery` | 16 |
 | `TestSequencer` | 10 |
 | `TestSerializer` | 17 |
@@ -737,6 +741,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestUUID` | 12 |
 | `TestUpscalingSystem` | 10 |
 | `TestUtilsStress` | 13 |
+| `TestVRSystem` | 12 |
 | `TestVersionedHandle` | 9 |
 | `TestVulkanLavapipe` | 4 |
 | `TestWARPRendering` | 4 |

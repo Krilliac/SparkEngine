@@ -1,16 +1,16 @@
 # Test Suite Audit — Deep Coverage Analysis
 
-**Last updated:** 2026-03-31
+**Last updated:** 2026-04-02
 **Type:** Observation
 **Status:** Active
-**Severity:** Medium (211 test files / 2,577 tests exist, but 194 engine headers + 105 editor headers + 88 game module headers have no dedicated tests)
+**Severity:** Medium (236 test files / 3,076 tests exist, but some engine headers + 105 editor headers + 88 game module headers have no dedicated tests)
 
 ## Executive Summary
 
 | Metric | Value |
 |--------|-------|
-| Test files | 211 |
-| Total TEST/TEST_F macros | 2,577 |
+| Test files | 236 |
+| Total TEST/TEST_F macros | 3,076 |
 | Engine headers (SparkEngine/Source) | 405 |
 | Engine headers with dedicated test | 211 (52%) |
 | Engine headers with NO test | 194 (48%) |
@@ -114,15 +114,15 @@ These are large, complex systems with **zero dedicated tests** that sit on criti
 
 | System | File | Lines | Key Testable API |
 |--------|------|-------|-----------------|
-| AudioMixer | Audio/AudioMixer.h | 331 | Bus hierarchy, volume cascading, reverb blending |
-| MusicManager | Audio/MusicManager.h | 306 | Crossfade timing, playlist sequencing |
-| AngelScriptEngine | Engine/Scripting/AngelScriptEngine.h | 402 | Compilation errors, hot reload, module tracking |
-| ScriptHotReload | Engine/Scripting/ScriptHotReload.h | 335 | File watching, reload triggers, state persistence |
-| ConsoleVariable | Utils/ConsoleVariable.h | 457 | CVar registration, type parsing, change callbacks |
-| VRSystem | Engine/VR/VRSystem.h | 186 | Tracking config, eye matrix, haptic timers |
-| WeaponManager | Engine/Gameplay/WeaponManager.h | 307 | Fire rate, spread calc, recoil recovery |
-| GameObject | Game/GameObject.h | 320 | World matrix, direction vectors, transform chain |
-| SeamlessAreaManager | Engine/Streaming/SeamlessAreaManager.h | — | Area transitions, origin rebasing triggers |
+| ~~AudioMixer~~ | ~~Audio/AudioMixer.h~~ | ~~331~~ | ~~Bus hierarchy, volume cascading, reverb blending~~ — **Resolved** (TestAudioMixerBus.cpp) |
+| ~~MusicManager~~ | ~~Audio/MusicManager.h~~ | ~~306~~ | ~~Crossfade timing, playlist sequencing~~ — **Resolved** (TestMusicManager.cpp, 24 tests) |
+| ~~AngelScriptEngine~~ | ~~Engine/Scripting/AngelScriptEngine.h~~ | ~~402~~ | ~~Compilation errors, hot reload, module tracking~~ — **Resolved** (TestAngelScriptEngine.cpp, 14 tests) |
+| ~~ScriptHotReload~~ | ~~Engine/Scripting/ScriptHotReload.h~~ | ~~335~~ | ~~File watching, reload triggers, state persistence~~ — **Resolved** (TestScriptHotReload.cpp, 16 tests) |
+| ~~ConsoleVariable~~ | ~~Utils/ConsoleVariable.h~~ | ~~457~~ | ~~CVar registration, type parsing, change callbacks~~ — **Resolved** (TestConsoleVariables.cpp) |
+| ~~VRSystem~~ | ~~Engine/VR/VRSystem.h~~ | ~~186~~ | ~~Tracking config, eye matrix, haptic timers~~ — **Resolved** (TestVRSystem.cpp, 12 tests) |
+| ~~WeaponManager~~ | ~~Engine/Gameplay/WeaponManager.h~~ | ~~307~~ | ~~Fire rate, spread calc, recoil recovery~~ — **Resolved** (TestWeaponMechanics.cpp) |
+| ~~GameObject~~ | ~~Game/GameObject.h~~ | ~~320~~ | ~~World matrix, direction vectors, transform chain~~ — **Resolved** (TestGameObjectTransforms.cpp) |
+| ~~SeamlessAreaManager~~ | ~~Engine/Streaming/SeamlessAreaManager.h~~ | ~~—~~ | ~~Area transitions, origin rebasing triggers~~ — **Resolved** (TestSeamlessAreaManager.cpp, 12 tests) |
 
 ## LOW: Untested But Acceptable
 

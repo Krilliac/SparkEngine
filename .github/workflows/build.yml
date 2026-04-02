@@ -851,13 +851,13 @@ jobs:
         continue-on-error: true
 
   # ===========================================================================
-  # Consolidated CI Error Report — single deduplicated PR comment
+  # Consolidated CI Error Report — PR comment or job summary
   # Runs after all build jobs, collects error summaries, and posts/updates
-  # one comment instead of spamming separate comments per job.
+  # one comment (on PRs) or writes a job summary (on push).
   # ===========================================================================
   report-ci-errors:
     name: "CI Error Report"
-    if: always() && github.event_name == 'pull_request'
+    if: always()
     needs:
       - check-format
       - validate-prompts
