@@ -131,7 +131,7 @@ namespace Spark
         std::string ToString(const std::string& indent = "  ") const
         {
             std::ostringstream oss;
-            for (int i = 0; i < static_cast<int>(m_frames.size()); ++i)
+            for (size_t i = 0; i < m_frames.size(); ++i)
             {
                 oss << indent << "#" << i << " " << m_frames[i].ToString() << "\n";
             }
@@ -142,11 +142,11 @@ namespace Spark
      * @brief Get a compact single-line summary (top N frames)
      * @param topN Number of top frames to include
      */
-        std::string ToCompactString(int topN = 5) const
+        std::string ToCompactString(size_t topN = 5) const
         {
             std::ostringstream oss;
-            int count = (topN < static_cast<int>(m_frames.size())) ? topN : static_cast<int>(m_frames.size());
-            for (int i = 0; i < count; ++i)
+            size_t count = std::min(topN, m_frames.size());
+            for (size_t i = 0; i < count; ++i)
             {
                 if (i > 0)
                     oss << " <- ";
@@ -155,7 +155,7 @@ namespace Spark
                 else
                     oss << "0x" << std::hex << m_frames[i].address;
             }
-            if (count < static_cast<int>(m_frames.size()))
+            if (count < m_frames.size())
                 oss << " <- ... (" << m_frames.size() - count << " more)";
             return oss.str();
         }
@@ -245,13 +245,13 @@ namespace Spark
 
         void ResolveSymbols()
         {
-            m_frames.resize(m_capturedFrames);
+            m_frames.resize(static_cast<size_t>(m_capturedFrames));
 
 #ifdef SPARK_PLATFORM_WINDOWS
             EnsureSymbolsInitialized();
             HANDLE process = GetCurrentProcess();
 
-            for (int i = 0; i < m_capturedFrames; ++i)
+            for (size_t i = 0; i < m_frames.size(); ++i)
             {
                 StackFrame& frame = m_frames[i];
                 frame.address = reinterpret_cast<uintptr_t>(m_rawAddresses[i]);
@@ -289,7 +289,7 @@ namespace Spark
             }
 
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
-            for (int i = 0; i < m_capturedFrames; ++i)
+            for (size_t i = 0; i < m_frames.size(); ++i)
             {
                 StackFrame& frame = m_frames[i];
                 frame.address = reinterpret_cast<uintptr_t>(m_rawAddresses[i]);
