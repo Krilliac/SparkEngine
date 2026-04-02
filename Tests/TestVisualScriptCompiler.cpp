@@ -457,7 +457,8 @@ TEST(VisualScriptCompiler_TopologicalSortOrder)
         if (sorted[i] == 3)
             pos3 = i;
     }
-    // Dependencies should come before dependents
+    // Start node should come first, dependencies before dependents
+    EXPECT_TRUE(pos1 < pos2);
     EXPECT_TRUE(pos2 < pos3);
 }
 
