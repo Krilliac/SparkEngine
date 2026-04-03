@@ -40,7 +40,7 @@ SparkConsole/        ← External debug console app (named pipe communication)
 
 Shaders/HLSL/        ← DirectX shaders (PBR, post-processing, compute)
 Shaders/GLSL/        ← OpenGL shaders (experimental)
-Tests/               ← 3,119 unit tests across 244 files, CTest integration
+Tests/               ← 3119 unit tests across 244 files, CTest integration
 Templates/           ← Game module templates
 Assets/              ← Demo scenes, models, scripts
 ```

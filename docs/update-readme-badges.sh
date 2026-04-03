@@ -1,0 +1,276 @@
+#!/bin/bash
+
+# SparkEngine README Badge & Count Updater
+# Scans the live codebase and updates hardcoded counts in README.md,
+# .github/copilot-instructions.md, .github/prompts/*, and badge JSON files.
+#
+# What it updates:
+#   - README.md: test badge, panel count, game module count, test count prose
+#   - .github/badges/*.json: LOC and file count badges
+#   - .github/copilot-instructions.md: test/panel counts
+#   - .github/prompts/copilot-instructions.md: test/panel counts
+#   - .github/prompts/build-test.prompt.md: test counts
+#
+# Usage:
+#   ./update-readme-badges.sh              # Update (default)
+#   ./update-readme-badges.sh update       # Same as above
+#   ./update-readme-badges.sh check        # Dry-run: report if out of date (exit 1 if stale)
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+SRC="$PROJECT_ROOT/SparkEngine/Source"
+EDITOR_SRC="$PROJECT_ROOT/SparkEditor/Source"
+CONSOLE_SRC="$PROJECT_ROOT/SparkConsole/src"
+SHADER_SRC="$PROJECT_ROOT/SparkShaderCompiler/src"
+GAME_SRC="$PROJECT_ROOT/GameModules"
+TEST_DIR="$PROJECT_ROOT/Tests"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info()    { echo -e "${BLUE}[BADGES]${NC} $1"; }
+log_success() { echo -e "${GREEN}[BADGES]${NC} $1"; }
+log_warning() { echo -e "${YELLOW}[BADGES]${NC} $1"; }
+
+CHANGES_MADE=0
+
+# ============================================================================
+# Collect metrics
+# ============================================================================
+collect_metrics() {
+    log_info "Scanning codebase..."
+
+    TEST_CASES=$(grep -rch '^TEST(' "$TEST_DIR"/*.cpp 2>/dev/null | awk '{s+=$1} END {print s}')
+    TEST_FILES=$(find "$TEST_DIR" -name 'Test*.cpp' 2>/dev/null | wc -l | tr -d " ")
+    PANEL_COUNT=$(find "$EDITOR_SRC/Panels" -name '*Panel.h' 2>/dev/null | wc -l | tr -d " ")
+    GAME_MODULES=$(find "$GAME_SRC" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d " ")
+    WIKI_PAGES=$(find "$PROJECT_ROOT/wiki" -name '*.md' ! -name '_Sidebar.md' 2>/dev/null | wc -l | tr -d " ")
+
+    # LOC counts (matching loc-counter.yml logic)
+    TOTAL_LINES=$(find "$SRC" "$EDITOR_SRC" "$GAME_SRC" "$CONSOLE_SRC" "$SHADER_SRC" "$TEST_DIR" \
+        -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+    FILE_COUNT=$(find "$SRC" "$EDITOR_SRC" "$GAME_SRC" "$CONSOLE_SRC" "$SHADER_SRC" "$TEST_DIR" \
+        -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | wc -l | tr -d " ")
+    ENGINE_LINES=$(find "$SRC" -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+    EDITOR_LINES=$(find "$EDITOR_SRC" -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+    GAME_LINES=$(find "$GAME_SRC" -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+    TEST_LINES=$(find "$TEST_DIR" -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+    TOOL_LINES=$(find "$CONSOLE_SRC" "$SHADER_SRC" -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+
+    # URL-encoded test count for badge (commas → %2C)
+    FORMATTED_TESTS=$(printf "%'d" "$TEST_CASES" 2>/dev/null || echo "$TEST_CASES")
+    BADGE_TESTS=$(echo "${FORMATTED_TESTS}" | sed 's/,/%2C/g')
+
+    log_info "Found: ${TEST_CASES} tests, ${PANEL_COUNT} panels, ${GAME_MODULES} modules, ${TOTAL_LINES} LOC"
+}
+
+# ============================================================================
+# Sed-based in-place replacement (portable)
+# ============================================================================
+sed_replace() {
+    local file="$1"
+    local pattern="$2"
+    local replacement="$3"
+
+    if [ ! -f "$file" ]; then
+        return
+    fi
+
+    local before_hash after_hash
+    before_hash=$(md5sum "$file" | awk '{print $1}')
+
+    sed -i "s|${pattern}|${replacement}|g" "$file"
+
+    after_hash=$(md5sum "$file" | awk '{print $1}')
+    if [ "$before_hash" != "$after_hash" ]; then
+        CHANGES_MADE=$((CHANGES_MADE + 1))
+        log_info "  Updated $(basename "$file")"
+    fi
+}
+
+# ============================================================================
+# Update README.md
+# ============================================================================
+update_readme() {
+    local readme="$PROJECT_ROOT/README.md"
+
+    # Test badge: tests-N%2CNNN_cases
+    sed_replace "$readme" \
+        'tests-[0-9%2C]*_cases' \
+        "tests-${BADGE_TESTS}_cases"
+
+    # "N specialized panels:" or "N panels"
+    sed_replace "$readme" \
+        '[0-9]* specialized panels' \
+        "${PANEL_COUNT} specialized panels"
+
+    # "ImGui editor (N panels)"
+    sed_replace "$readme" \
+        'ImGui editor ([0-9]* panels)' \
+        "ImGui editor (${PANEL_COUNT} panels)"
+
+    # Test count in prose: "N unit tests across M test files"
+    sed_replace "$readme" \
+        '[0-9,]* unit tests across [0-9,]* test files' \
+        "${FORMATTED_TESTS} unit tests across ${TEST_FILES} test files"
+
+    # Test count in tree: "N unit tests across M files"
+    sed_replace "$readme" \
+        '# [0-9,]* unit tests across [0-9,]* files' \
+        "# ${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
+
+    # Wiki page count in tree
+    sed_replace "$readme" \
+        '# [0-9]* wiki pages' \
+        "# ${WIKI_PAGES} wiki pages"
+
+    # Game module count: "(N modules)"
+    sed_replace "$readme" \
+        'Game module shared libraries ([0-9]* modules)' \
+        "Game module shared libraries (${GAME_MODULES} modules)"
+}
+
+# ============================================================================
+# Update AI instruction files
+# ============================================================================
+update_ai_instructions() {
+    local files=(
+        "$PROJECT_ROOT/.github/copilot-instructions.md"
+        "$PROJECT_ROOT/.github/prompts/copilot-instructions.md"
+    )
+
+    for f in "${files[@]}"; do
+        # "N unit tests across M files"
+        sed_replace "$f" \
+            '[0-9,]* unit tests across [0-9,]* files' \
+            "${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
+
+        # "ImGui-based editor (N panels)"
+        sed_replace "$f" \
+            'ImGui-based editor ([0-9]* panels)' \
+            "ImGui-based editor (${PANEL_COUNT} panels)"
+    done
+
+    # build-test.prompt.md
+    local bt="$PROJECT_ROOT/.github/prompts/build-test.prompt.md"
+    sed_replace "$bt" \
+        '[0-9,]* unit tests across [0-9,]* files' \
+        "${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
+}
+
+# ============================================================================
+# Update badge JSON files (mirrors loc-counter.yml)
+# ============================================================================
+update_badges() {
+    local badge_dir="$PROJECT_ROOT/.github/badges"
+    mkdir -p "$badge_dir"
+
+    local formatted_loc formatted_files
+    formatted_loc=$(printf "%'d" "$TOTAL_LINES" 2>/dev/null || echo "$TOTAL_LINES")
+    formatted_files=$(printf "%'d" "$FILE_COUNT" 2>/dev/null || echo "$FILE_COUNT")
+    local ts
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    local loc_json='{"schemaVersion":1,"label":"C++ lines of code","message":"'"$formatted_loc"'","color":"blue","namedLogo":"cplusplus","logoColor":"white"}'
+    local files_json='{"schemaVersion":1,"label":"source files","message":"'"$formatted_files"'","color":"green"}'
+    local breakdown_json='{"schemaVersion":1,"total":'"$TOTAL_LINES"',"files":'"$FILE_COUNT"',"engine":'"$ENGINE_LINES"',"editor":'"$EDITOR_LINES"',"game":'"$GAME_LINES"',"tests":'"$TEST_LINES"',"tools":'"$TOOL_LINES"',"updated":"'"$ts"'"}'
+
+    local before_hash after_hash
+
+    for pair in "loc.json:$loc_json" "files.json:$files_json" "loc-breakdown.json:$breakdown_json"; do
+        local name="${pair%%:*}"
+        local content="${pair#*:}"
+        local filepath="$badge_dir/$name"
+
+        if [ -f "$filepath" ]; then
+            before_hash=$(md5sum "$filepath" | awk '{print $1}')
+        else
+            before_hash=""
+        fi
+
+        echo "$content" | python3 -m json.tool > "$filepath" 2>/dev/null || echo "$content" > "$filepath"
+
+        after_hash=$(md5sum "$filepath" | awk '{print $1}')
+        if [ "$before_hash" != "$after_hash" ]; then
+            CHANGES_MADE=$((CHANGES_MADE + 1))
+            log_info "  Updated $name"
+        fi
+    done
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+update() {
+    collect_metrics
+
+    log_info "Updating README.md..."
+    update_readme
+
+    log_info "Updating AI instruction files..."
+    update_ai_instructions
+
+    log_info "Updating badge JSON files..."
+    update_badges
+
+    if [ "$CHANGES_MADE" -gt 0 ]; then
+        log_success "Updated $CHANGES_MADE file(s)"
+    else
+        log_success "All files already up to date"
+    fi
+}
+
+check_mode() {
+    collect_metrics
+
+    # Create temp copies, update them, compare
+    local tmpdir
+    tmpdir=$(mktemp -d)
+
+    local files_to_check=(
+        "README.md"
+        ".github/copilot-instructions.md"
+        ".github/prompts/copilot-instructions.md"
+        ".github/prompts/build-test.prompt.md"
+    )
+
+    local stale=0
+    for f in "${files_to_check[@]}"; do
+        local src="$PROJECT_ROOT/$f"
+        if [ ! -f "$src" ]; then continue; fi
+        local tmp="$tmpdir/$(basename "$f")"
+        cp "$src" "$tmp"
+    done
+
+    # Run update on temp copies
+    local orig_root="$PROJECT_ROOT"
+    # Instead, just run update and check CHANGES_MADE
+    CHANGES_MADE=0
+    update_readme
+    update_ai_instructions
+
+    rm -rf "$tmpdir"
+
+    if [ "$CHANGES_MADE" -gt 0 ]; then
+        log_warning "$CHANGES_MADE file(s) out of date. Run: docs/update-readme-badges.sh"
+        exit 1
+    else
+        log_success "All README/badge files up to date."
+        exit 0
+    fi
+}
+
+case "${1:-update}" in
+    update|full) update ;;
+    check)       check_mode ;;
+    *)
+        echo "Usage: $0 [update|check]"
+        exit 1
+        ;;
+esac

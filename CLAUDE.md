@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 3,119 unit tests across 244 files, CTest
+Tests/                                   — 3119 unit tests across 244 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -194,8 +194,18 @@ Run checks **appropriate to the files you changed**.
 ### Docs-only changes (`.md`, `wiki/`, `docs/`, `.claude/`)
 
 ```bash
-docs/generate-api-docs.sh check
-docs/sync-wiki.sh sync
+docs/update-all-docs.sh           # One command updates everything
+```
+
+Or run individual scripts:
+
+```bash
+docs/sync-wiki.sh sync            # Update AUTO: sections in wiki pages
+docs/generate-api-docs.sh check   # Regenerate API docs if headers changed
+docs/generate-flowchart.sh generate  # Regenerate architecture flowchart
+docs/update-codebase-stats.sh generate  # Regenerate Codebase-Statistics.md
+docs/update-readme-badges.sh update    # Update README counts & badge JSON
+docs/update-context.sh update          # Update .claude/index.md & CLAUDE.md
 ```
 
 ### Code changes (`.h`, `.hpp`, `.cpp`, `CMakeLists.txt`)
@@ -218,12 +228,26 @@ cmake --build build --config Release 2>&1 | tail -30
 # 5. Tests
 cd build && ctest --output-on-failure && cd ..
 
-# 6. Docs
-docs/generate-api-docs.sh check
-docs/sync-wiki.sh sync
+# 6. Docs (one command updates all wikis, stats, badges, context)
+docs/update-all-docs.sh
 ```
 
 If any step fails, fix before committing. CI enforces clang-format on every PR.
+
+### Documentation scripts reference
+
+| Script | What it updates | Speed |
+|--------|----------------|-------|
+| `docs/update-all-docs.sh` | Runs all scripts below in order | ~30s |
+| `docs/update-all-docs.sh quick` | Skips API docs + flowchart | ~10s |
+| `docs/sync-wiki.sh sync` | Wiki AUTO: sections (components, systems, panels, tests) | ~2s |
+| `docs/generate-api-docs.sh check` | API reference pages (~240 pages) | ~15s |
+| `docs/generate-flowchart.sh generate` | Engine-Architecture-Flowchart.md | ~5s |
+| `docs/update-codebase-stats.sh generate` | Codebase-Statistics.md (all metrics) | ~5s |
+| `docs/update-readme-badges.sh update` | README.md, badge JSON, AI prompts | ~3s |
+| `docs/update-context.sh update` | .claude/index.md, CLAUDE.md | ~2s |
+
+All scripts support `check` mode (dry-run, exit 1 if stale).
 
 ## Post-PR checks
 
@@ -264,21 +288,37 @@ To reproduce CI failures locally, see `.claude/knowledge/ci-reproducible-builds.
 
 ## Documentation
 
-Two custom scripts generate docs without Doxygen/Graphviz:
+Six scripts keep all documentation, wikis, badges, and context up to date:
 
 ```bash
-docs/generate-api-docs.sh generate    # Full API reference (~250 headers → ~240 pages)
-docs/generate-api-docs.sh check       # Only regenerate if headers changed (checksum-based)
-docs/sync-wiki.sh sync               # Update auto-generated wiki sections
+docs/update-all-docs.sh              # Master script — runs all 6 below in order
+docs/update-all-docs.sh quick        # Skip slow steps (API docs, flowchart)
+docs/update-all-docs.sh check        # Dry-run — report what's out of date
 ```
 
-**What gets generated:** `docs/api/` (API index, component/system indices, per-header pages), wiki auto-sections (`<!-- AUTO:name -->` markers).
+Individual scripts (all support `check` mode):
+
+```bash
+docs/sync-wiki.sh sync               # Wiki AUTO: sections (components, systems, panels, tests)
+docs/generate-api-docs.sh generate   # API reference (~250 headers → ~240 pages)
+docs/generate-flowchart.sh generate  # Engine-Architecture-Flowchart.md
+docs/update-codebase-stats.sh generate  # Codebase-Statistics.md (LOC, file counts, largest files)
+docs/update-readme-badges.sh update     # README.md counts, badge JSON, AI prompt files
+docs/update-context.sh update           # .claude/index.md and CLAUDE.md counts
+```
+
+**What gets auto-generated:**
+- `docs/api/` — per-header API pages, component/system indices
+- `wiki/` AUTO: sections — live component, system, panel, test inventories
+- `wiki/Engine-Architecture-Flowchart.md` — architecture ASCII diagrams
+- `wiki/Codebase-Statistics.md` — all code metrics
+- `.github/badges/*.json` — LOC and file count badges for README
+- README.md, CLAUDE.md, .claude/index.md — hardcoded counts
 
 **Requirements:** Whenever code is added, modified, or deleted:
-1. Run both doc scripts (included in pre-commit checks step 6)
+1. Run `docs/update-all-docs.sh` (included in pre-commit checks step 6)
 2. Update the relevant `wiki/` page. New subsystem → new wiki page + add to `wiki/_Sidebar.md`
 3. Ensure public headers have Doxygen-style comments (`@brief`, `@param`, `@return`)
-4. If the change affects architecture, build toggles, or key directories, update this file
 
 Legacy Doxygen is optional: `cd docs && ./generate-docs.sh`
 

@@ -6,22 +6,28 @@ The primary documentation for SparkEngine lives in the [`wiki/`](../wiki/) direc
 
 See the [Wiki Home](../wiki/Home.md) for a full table of contents.
 
-## API Reference
+## Documentation Automation
 
-Two documentation tools are available:
-
-### Custom API Docs (recommended, no external deps)
+### Master Script (recommended)
 
 ```bash
-docs/generate-api-docs.sh generate    # Full API reference (~250 headers → ~240 pages)
-docs/generate-api-docs.sh check       # Only regenerate if headers changed (checksum-based)
+docs/update-all-docs.sh              # Run all 6 doc scripts in order
+docs/update-all-docs.sh quick        # Skip slow steps (API docs, flowchart)
+docs/update-all-docs.sh check        # Dry-run: report what's stale
 ```
 
-### Wiki Sync
+### Individual Scripts
 
-```bash
-docs/sync-wiki.sh sync               # Update auto-generated wiki sections
-```
+| Script | What it updates | Deps | Speed |
+|--------|----------------|------|-------|
+| `sync-wiki.sh sync` | Wiki AUTO: sections (components, systems, panels, tests) | None | ~2s |
+| `generate-api-docs.sh generate` | API reference (~250 headers → ~240 pages) | None | ~15s |
+| `generate-flowchart.sh generate` | Engine-Architecture-Flowchart.md | Python 3 | ~5s |
+| `update-codebase-stats.sh generate` | Codebase-Statistics.md (LOC, metrics, largest files) | None | ~5s |
+| `update-readme-badges.sh update` | README.md counts, badge JSON, AI prompt files | None | ~3s |
+| `update-context.sh update` | .claude/index.md and CLAUDE.md counts | None | ~2s |
+
+All scripts support a `check` mode that exits 1 if stale (for CI use).
 
 ### Legacy Doxygen (optional, requires doxygen + graphviz)
 
