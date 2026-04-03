@@ -112,17 +112,29 @@ SparkEngine/Source/Engine/Modding/       — Game modding support
 SparkEngine/Source/Engine/Replay/        — Record/playback system
 SparkEngine/Source/Engine/SaveSystem/    — Save/load persistence
 SparkEngine/Source/Engine/UI/            — UI system
+SparkEngine/Source/Engine/Tween/          — Tween system with easing functions
+SparkEngine/Source/Engine/Persistence/   — Async database-backed persistence
+SparkEngine/Source/Engine/Physics/       — Physics-specific engine utilities
+SparkEngine/Source/Engine/Editor/        — Engine-side editor utilities
 SparkEngine/Source/Engine/VR/            — VR headset/controller/tracking (OpenXR-ready stub, wired in)
 SparkEngine/Source/Utils/                — Console, Logger, Profiler, Assert
 SparkEditor/Source/Communication/        — CollaborativeEditSession (multi-user editing)
-SparkEditor/Source/                      — ImGui editor (22 subsystems, 52 specialized panels)
-GameModules/                             — Game module directory (auto-discovered by CMake)
-GameModules/SparkGame/Source/            — Example FPS game module (DLL)
-GameModules/SparkGameMMO/Source/         — Example MMO game module (DLL)
+SparkEditor/Source/                      — ImGui editor (22 subsystems, 57 specialized panels)
+GameModules/                             — Game module directory (auto-discovered by CMake, 10 modules)
+GameModules/SparkGame/Source/            — Base game module (DLL)
+GameModules/SparkGameFPS/Source/         — FPS game module (DLL)
+GameModules/SparkGameMMO/Source/         — MMO game module (DLL)
+GameModules/SparkGameRPG/Source/         — RPG game module (DLL)
+GameModules/SparkGameARPG/Source/        — Action RPG game module (DLL)
+GameModules/SparkGameRTS/Source/         — RTS game module (DLL)
+GameModules/SparkGameRacing/Source/      — Racing game module (DLL)
+GameModules/SparkGamePlatformer/Source/  — Platformer game module (DLL)
+GameModules/SparkGameOpenWorld/Source/   — Open-world game module (DLL)
+GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 1,989 unit tests across 170 files, CTest
+Tests/                                   — 3,119 unit tests across 244 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.

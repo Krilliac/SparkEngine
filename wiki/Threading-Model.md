@@ -144,7 +144,7 @@ Socket operations run on the main thread during `Update()`. The mutexes protect 
 
 ## 4. Async Database Pool
 
-**Source:** `SparkEngine/Source/Engine/Persistence/AsyncDatabase.h/.cpp`
+**Source:** `SparkEngine/Source/Engine/Persistence/AsyncDatabase.h`, `SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp`
 
 TrinityCore-inspired architecture: one database connection per worker thread, plus a dedicated sync connection for the main thread.
 
@@ -209,7 +209,7 @@ Dedicated streaming threads load textures from disk without blocking the main th
 
 ## 6. Logger (Async Writer)
 
-**Source:** `SparkEngine/Source/Utils/Logger.h/.cpp`
+**Source:** `SparkEngine/Source/Utils/Logger.h`, `SparkEngine/Source/Utils/Logger.cpp`
 
 ### Architecture
 
@@ -284,7 +284,7 @@ Batch 2: [RenderSystem, AISystem]         ← parallel (no conflicts)
 
 ## 9. Parallel AI Perception
 
-**Source:** `SparkEngine/Source/Engine/AI/ParallelPerception.h/.cpp`
+**Source:** `SparkEngine/Source/Engine/AI/ParallelPerception.h`, `SparkEngine/Source/Engine/AI/ParallelPerception.cpp`
 
 ### Gather-Process-Writeback Pattern
 

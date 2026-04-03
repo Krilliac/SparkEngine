@@ -6,24 +6,39 @@ The primary documentation for SparkEngine lives in the [`wiki/`](../wiki/) direc
 
 See the [Wiki Home](../wiki/Home.md) for a full table of contents.
 
-## API Reference (Doxygen)
+## API Reference
 
-This `docs/` directory contains tooling for auto-generated API documentation using Doxygen. It extracts documentation from C++ header files and produces a searchable, cross-referenced HTML site.
+Two documentation tools are available:
+
+### Custom API Docs (recommended, no external deps)
+
+```bash
+docs/generate-api-docs.sh generate    # Full API reference (~250 headers → ~240 pages)
+docs/generate-api-docs.sh check       # Only regenerate if headers changed (checksum-based)
+```
+
+### Wiki Sync
+
+```bash
+docs/sync-wiki.sh sync               # Update auto-generated wiki sections
+```
+
+### Legacy Doxygen (optional, requires doxygen + graphviz)
+
+This `docs/` directory also contains tooling for Doxygen-based API documentation.
 
 ### Covered Source Directories
-
-The Doxygen configuration indexes the following:
 
 | Directory | Description |
 |-----------|-------------|
 | `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (52 panels) |
+| `SparkEditor/Source/` | ImGui visual editor (57 panels) |
 | `SparkConsole/src/` | Standalone debug console application |
 | `SparkShaderCompiler/src/` | Offline shader compilation tool |
-| `GameModules/SparkGame/Source/` | Example FPS game module |
+| `GameModules/*/Source/` | 10 game modules (FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript) |
 | `SparkSDK/` | Public SDK headers |
 
-### Quick Start
+### Quick Start (Legacy Doxygen)
 
 ```bash
 # Generate docs (requires doxygen and graphviz)

@@ -2,7 +2,7 @@
 
 SparkEngine includes dynamic time-of-day and weather systems that affect lighting, [rendering](Rendering-and-Graphics), and [gameplay](Gameplay-Systems). Both systems output parameters that feed into the lighting pipeline, post-processing, particle system, and audio engine, enabling rich atmospheric environments.
 
-**Source:** `SparkEngine/Source/Engine/World/DayNightCycle.h`, `SparkEngine/Source/Graphics/WeatherSystem.h`
+**Source:** `SparkEngine/Source/Engine/World/TimeOfDaySystem.h`, `SparkEngine/Source/Graphics/WeatherSystem.h`
 
 **CMake toggles:** `ENABLE_DAY_NIGHT=ON`, `ENABLE_WEATHER=ON`
 
@@ -53,7 +53,7 @@ The Day/Night Cycle and Weather systems are designed to be independent but compl
 ### Namespace and Header
 
 ```cpp
-#include "Engine/World/DayNightCycle.h"
+#include "Engine/World/TimeOfDaySystem.h"
 
 // All types live in the Spark namespace
 namespace Spark {
@@ -264,7 +264,7 @@ struct TimeOfDayChangedEvent {
 ### Usage Example
 
 ```cpp
-#include "Engine/World/DayNightCycle.h"
+#include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/Events/EventSystem.h"
 
 Spark::EventBus eventBus;

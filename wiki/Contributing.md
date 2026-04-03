@@ -260,7 +260,7 @@ When contributing a new engine subsystem:
 - [ ] Guard code with `#ifdef SPARK_ENABLE_YOUR_SYSTEM`
 - [ ] Implement singleton pattern with `GetInstance()` if appropriate
 - [ ] Register console commands if the system has debug controls
-- [ ] Add unit tests in `Tests/TestYourSystem.cpp`
+- [ ] Add unit tests in Tests/Test**YourSystem**.cpp (e.g., `Tests/TestPhysicsSystem.cpp`)
 - [ ] Create wiki page in `wiki/Your-System.md`
 - [ ] Add to `wiki/_Sidebar.md` navigation
 - [ ] Update `wiki/Home.md` navigation

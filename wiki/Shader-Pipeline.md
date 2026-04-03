@@ -2,7 +2,7 @@
 
 SparkEngine supports HLSL and GLSL shader authoring with cross-compilation through the [RHI pipeline](Rendering-and-Graphics). The `SparkShaderCompiler` tool handles offline compilation. The runtime `Shader` class manages loading, compilation, variant management, constant buffers, and hot-reloading. The `ShaderCacheWarming` system precompiles shader permutations on background threads to eliminate runtime hitches.
 
-**Source:** `SparkEngine/Source/Graphics/Shader.h`, `SparkEngine/Source/Graphics/ShaderCacheWarming.h`, `SparkShaderCompiler/src/main.cpp`
+**Source:** `SparkEngine/Source/Graphics/Shader.h`, `SparkEngine/Source/Graphics/ShaderVariantSystem.h`, `SparkShaderCompiler/src/main.cpp`
 
 ---
 

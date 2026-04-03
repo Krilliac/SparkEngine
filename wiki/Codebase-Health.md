@@ -64,7 +64,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| EnTT registry | **DONE** | 80+ component types, 24 systems |
+| EnTT registry | **DONE** | 75 component types, 25 systems |
 | System execution order | **DONE** | Physics → Animation → AI → Audio → Lifecycle → Render |
 | Reactive systems | **DONE** | Component change detection via EnTT signals |
 
@@ -118,7 +118,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| ImGui editor core | **DONE** | 52 panel classes, docking, theming |
+| ImGui editor core | **DONE** | 57 panel classes, docking, theming |
 | Scene hierarchy | **DONE** | Tree view with drag-drop |
 | Inspector | **DONE** | Component renderers |
 | Material editor | **DONE** | PBR material editing |
@@ -159,8 +159,8 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 ### Strengths
 
 - **Modular service locator** — EngineContext provides clean subsystem access with dependency-aware initialization
-- **Comprehensive ECS** — 80+ component types with well-ordered system execution
-- **Strong test coverage** — 1,989 test cases across 170 files covering all major subsystems
+- **Comprehensive ECS** — 75 component types with well-ordered system execution
+- **Strong test coverage** — 3,119 test cases across 244 files covering all major subsystems
 - **Consistent code style** — clang-format enforced in CI, Allman braces, 120-col limit
 - **RHI abstraction** — Clean backend selection via factory pattern
 

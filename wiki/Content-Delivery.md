@@ -2,7 +2,7 @@
 
 SparkEngine provides content delivery infrastructure for live-service games, including asset bundle versioning, patch manifest comparison, delta updates, and a prioritized download queue with integrity verification.
 
-**Source:** `SparkEngine/Source/Engine/Streaming/ContentDelivery.h`
+**Source:** `SparkEngine/Source/Engine/Streaming/` (planned -- ContentDelivery is not yet implemented as a standalone header)
 
 ## Architecture Overview
 

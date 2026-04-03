@@ -17,7 +17,7 @@ EditorApplication
   |     |
   |     +-- EditorLayoutManager   (dock positions, panel visibility, layout save/load)
   |     +-- EditorTheme           (color palette, rounding, spacing, font config)
-  |     +-- EditorPanel* panels[] (32+ registered panels)
+  |     +-- EditorPanel* panels[] (57 registered panels)
   |     +-- GizmoSystem           (translate/rotate/scale gizmos via DX11)
   |     +-- UndoRedoManager       (command history stack)
   |     +-- CommandPalette        (Ctrl+P quick-command search)
@@ -114,7 +114,7 @@ protected:
 
 ## Editor Panels
 
-The editor includes 51 subsystem panels:
+The editor includes 57 subsystem panels:
 
 ### Scene Hierarchy
 
