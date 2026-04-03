@@ -24,6 +24,7 @@
 #include "MaterialSystem.h"
 #include "LightingSystem.h"
 #include "AssetPipeline.h"
+#include "UpscalingSystem.h"
 
 #include "TemporalEffects.h"
 #include "LightManager.h"
@@ -124,6 +125,7 @@ GraphicsEngine::GraphicsEngine()
         m_materialSystem = std::make_unique<MaterialSystem>();
         m_lightingSystem = std::make_unique<LightingSystem>();
         m_assetPipeline = std::make_unique<AssetPipeline>();
+        m_upscalingSystem = std::make_unique<UpscalingSystem>();
 
         m_lightManager = std::make_unique<LightManager>();
         m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
@@ -310,6 +312,18 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         else
         {
             LOG_TO_CONSOLE_IMMEDIATE(L"AssetPipeline initialized successfully", L"SUCCESS");
+        }
+    }
+
+    if (m_upscalingSystem)
+    {
+        if (m_upscalingSystem->Initialize(m_device.Get(), m_context.Get(), m_windowWidth, m_windowHeight))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"UpscalingSystem initialized successfully", L"SUCCESS");
+        }
+        else
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize UpscalingSystem", L"ERROR");
         }
     }
 
@@ -1139,6 +1153,7 @@ ID3D11DepthStencilView* GraphicsEngine::GetDepthStencilView() const
 #include "MaterialSystem.h"
 #include "LightingSystem.h"
 #include "AssetPipeline.h"
+#include "UpscalingSystem.h"
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
 using Spark::Graphics::PostProcessingPipeline;
@@ -1216,6 +1231,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_materialSystem = std::make_unique<MaterialSystem>();
     m_lightingSystem = std::make_unique<LightingSystem>();
     m_assetPipeline = std::make_unique<AssetPipeline>();
+    m_upscalingSystem = std::make_unique<UpscalingSystem>();
     m_lightManager = std::make_unique<LightManager>();
     m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
     m_renderPipeline->SetGraphicsEngine(this);

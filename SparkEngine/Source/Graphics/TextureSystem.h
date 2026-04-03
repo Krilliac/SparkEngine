@@ -31,9 +31,6 @@
 
 using Microsoft::WRL::ComPtr;
 
-// Forward declarations for VRAM budget integration
-class VRAMBudgetMonitor;
-
 /**
  * @brief LRU tracking data attached to each cached texture
  */
@@ -281,11 +278,6 @@ class TextureSystem
     // ========================================================================
 
     /**
-     * @brief Set the VRAM budget monitor for pressure-driven eviction
-     */
-    void SetVRAMBudgetMonitor(VRAMBudgetMonitor* monitor) { m_vramBudgetMonitor = monitor; }
-
-    /**
      * @brief Mark a texture as used this frame (updates LRU data)
      * @param name            Texture name/path
      * @param currentFrame    Current engine frame number
@@ -362,8 +354,6 @@ class TextureSystem
     uint64_t m_currentFrame = 0;
 
     // VRAM budget monitor integration (non-owning)
-    VRAMBudgetMonitor* m_vramBudgetMonitor = nullptr;
-
     // Streaming
     bool m_streamingEnabled = true;
     std::vector<std::thread> m_streamingThreads;

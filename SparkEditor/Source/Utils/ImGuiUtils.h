@@ -1,3 +1,8 @@
+/**
+ * @file ImGuiUtils.h
+ * @brief Utility helpers for Dear ImGui rendering in the SparkEditor
+ */
+
 #pragma once
 
 #include <imgui.h>

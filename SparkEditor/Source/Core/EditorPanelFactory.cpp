@@ -34,6 +34,7 @@
 #include "../Panels/PlayModeToolbarPanel.h"
 #include "../Panels/PostProcessingPanel.h"
 #include "../Panels/DialogueEditorPanel.h"
+#include "../Panels/AIDebugPanel.h"
 #include "../Panels/AIEditorPanel.h"
 #include "../Panels/SplineEditorPanel.h"
 #include "../Panels/ParticleEditorPanel.h"
@@ -112,6 +113,7 @@ namespace SparkEditor
         registerPanel("PostProcessing", std::make_shared<PostProcessingPanel>());
         registerPanel("DialogueEditor", std::make_shared<DialogueEditorPanel>());
         registerPanel("AIEditor", std::make_shared<AIEditorPanel>());
+        registerPanel("AIDebug", std::make_shared<AIDebugPanel>());
         registerPanel("SplineEditor", std::make_shared<SplineEditorPanel>());
         registerPanel("ParticleEditor", std::make_shared<ParticleEditorPanel>());
         registerPanel("EventMonitor", std::make_shared<EventMonitorPanel>());
@@ -180,6 +182,7 @@ namespace SparkEditor
             {"PostProcessing", ICON_FA_MAGIC},
             {"DialogueEditor", ICON_FA_COMMENTS},
             {"AIEditor", ICON_FA_BRAIN},
+            {"AIDebug", ICON_FA_BUG},
             {"SplineEditor", ICON_FA_BEZIER_CURVE},
             {"ParticleEditor", ICON_FA_FIRE},
             {"EventMonitor", ICON_FA_BOLT},
@@ -219,21 +222,21 @@ namespace SparkEditor
     void EditorUI::SetDefaultPanelVisibility()
     {
         const char* hiddenPanels[] = {
-            "WeaponEditor",       "FPSTools",        "DebugVisualizer",
-            "SceneStats",         "ObjectPlacement", "BuildCook",
-            "UndoHistory",        "PrefabEditor",    "Search",
-            "DedicatedServer",    "TerrainEditor",   "PostProcessing",
-            "DialogueEditor",     "AIEditor",        "SplineEditor",
-            "ParticleEditor",     "EventMonitor",    "SaveSystem",
-            "Localization",       "WeatherFog",      "CinematicSequencer",
-            "ProjectSettings",    "AudioMixer",      "ScriptEditor",
-            "DestructionEditor",  "Replay",          "VRConfig",
-            "Streaming",          "Modding",         "CoroutineDebug",
-            "GameModuleSelector", "Collaboration",   "TimeOfDay",
-            "AbilityEditor",      "TriggerEditor",   "ConditionEditor",
-            "DecalEditor",        "EventResponses",  "VisualScript",
-            "Workflows",          "Prototyping",     "UIDesigner",
-            "ScriptDebugger",
+            "WeaponEditor",       "FPSTools",           "DebugVisualizer",
+            "SceneStats",         "ObjectPlacement",    "BuildCook",
+            "UndoHistory",        "PrefabEditor",       "Search",
+            "DedicatedServer",    "TerrainEditor",      "PostProcessing",
+            "DialogueEditor",     "AIEditor",           "AIDebug",
+            "SplineEditor",       "ParticleEditor",     "EventMonitor",
+            "SaveSystem",         "Localization",       "WeatherFog",
+            "CinematicSequencer", "ProjectSettings",    "AudioMixer",
+            "ScriptEditor",       "DestructionEditor",  "Replay",
+            "VRConfig",           "Streaming",          "Modding",
+            "CoroutineDebug",     "GameModuleSelector", "Collaboration",
+            "TimeOfDay",          "AbilityEditor",      "TriggerEditor",
+            "ConditionEditor",    "DecalEditor",        "EventResponses",
+            "VisualScript",       "Workflows",          "Prototyping",
+            "UIDesigner",         "ScriptDebugger",
         };
 
         for (const char* name : hiddenPanels)
