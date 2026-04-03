@@ -85,17 +85,25 @@ namespace SparkEditor
         // Debug compilation flag
         bool IsDebugCompileEnabled() const { return m_debugCompile; }
 
+        // Step-through control
+        bool IsPaused() const { return m_isPaused; }
+        void StepOver(); ///< Execute one node, then pause again
+        void Continue(); ///< Resume until next breakpoint
+
       private:
         void RenderBreakpoints();
         void RenderWatchVariables();
         void RenderTraceLog();
         void RenderToolbar();
+        void RenderCallStack();
 
         std::vector<ScriptBreakpoint> m_breakpoints;
         std::vector<WatchVariable> m_watches;
         std::vector<TraceEntry> m_traceLog;
         bool m_debugCompile = false; ///< When true, compiler inserts trace calls
         bool m_isPaused = false;
+        bool m_stepMode = false;     ///< Step one node then pause
+        uint32_t m_pausedAtNode = 0; ///< Node ID where execution is paused
         float m_elapsedTime = 0.0f;
         size_t m_maxTraceEntries = 500;
     };

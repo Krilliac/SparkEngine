@@ -1729,4 +1729,108 @@ namespace SparkEditor
         return -1;
     }
 
+    // ========================================================================
+    // Undo/Redo Command Implementations
+    // ========================================================================
+
+    void AddNodeCommand::Execute()
+    {
+        m_panel->AddNodeAtPositionDirect(m_type, m_x, m_y);
+        if (!m_panel->GetNodes().empty())
+            m_createdNodeId = m_panel->GetNodes().back().node.id;
+    }
+
+    void AddNodeCommand::Undo()
+    {
+        auto& nodes = m_panel->GetNodes();
+        for (size_t i = 0; i < nodes.size(); i++)
+        {
+            if (nodes[i].node.id == m_createdNodeId)
+            {
+                auto& conns = m_panel->GetConnections();
+                std::erase_if(
+                    conns, [this](const VisualScriptPanel::ConnectionUI& c)
+                    { return c.connection.fromNode == m_createdNodeId || c.connection.toNode == m_createdNodeId; });
+                nodes.erase(nodes.begin() + static_cast<ptrdiff_t>(i));
+                break;
+            }
+        }
+    }
+
+    void RemoveNodeCommand::Execute()
+    {
+        auto& nodes = m_panel->GetNodes();
+        if (m_nodeIndex >= 0 && m_nodeIndex < static_cast<int>(nodes.size()))
+        {
+            m_savedNode = nodes[m_nodeIndex].node;
+            m_savedX = nodes[m_nodeIndex].posX;
+            m_savedY = nodes[m_nodeIndex].posY;
+
+            uint32_t nodeId = m_savedNode.id;
+            m_savedConnections.clear();
+            for (const auto& c : m_panel->GetConnections())
+            {
+                if (c.connection.fromNode == nodeId || c.connection.toNode == nodeId)
+                    m_savedConnections.push_back(c.connection);
+            }
+
+            m_panel->RemoveNodeDirect(m_nodeIndex);
+        }
+    }
+
+    void RemoveNodeCommand::Undo()
+    {
+        m_panel->AddNodeAtPositionDirect(m_savedNode.type, m_savedX, m_savedY);
+        auto& nodes = m_panel->GetNodes();
+        if (!nodes.empty())
+            nodes.back().node = m_savedNode;
+
+        for (const auto& conn : m_savedConnections)
+            m_panel->AddConnectionDirect(conn);
+    }
+
+    void AddConnectionCommand::Execute()
+    {
+        m_panel->AddConnectionDirect(m_conn);
+    }
+
+    void AddConnectionCommand::Undo()
+    {
+        m_panel->RemoveConnectionDirect(m_conn);
+    }
+
+    void VisualScriptPanel::AddNodeAtPositionDirect(ScriptNodeType type, float x, float y)
+    {
+        AddNodeAtPosition(type, x, y);
+    }
+
+    void VisualScriptPanel::RemoveNodeDirect(int nodeIndex)
+    {
+        if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_nodes.size()))
+            return;
+        uint32_t nodeId = m_nodes[nodeIndex].node.id;
+        std::erase_if(m_connections, [nodeId](const ConnectionUI& c)
+                      { return c.connection.fromNode == nodeId || c.connection.toNode == nodeId; });
+        m_nodes.erase(m_nodes.begin() + nodeIndex);
+        if (m_selectedNode == nodeIndex)
+            m_selectedNode = -1;
+    }
+
+    void VisualScriptPanel::AddConnectionDirect(const ScriptConnection& conn)
+    {
+        ConnectionUI c;
+        c.connection = conn;
+        m_connections.push_back(c);
+    }
+
+    void VisualScriptPanel::RemoveConnectionDirect(const ScriptConnection& conn)
+    {
+        std::erase_if(m_connections,
+                      [&conn](const ConnectionUI& c)
+                      {
+                          return c.connection.fromNode == conn.fromNode && c.connection.fromPin == conn.fromPin &&
+                                 c.connection.toNode == conn.toNode && c.connection.toPin == conn.toPin;
+                      });
+    }
+
 } // namespace SparkEditor

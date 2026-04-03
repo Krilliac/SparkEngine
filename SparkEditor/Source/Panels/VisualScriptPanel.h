@@ -12,6 +12,8 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include "../UndoRedo/EditorCommand.h"
+#include "../UndoRedo/UndoRedoManager.h"
 #include "Engine/Scripting/VisualScriptCompiler.h"
 
 #include <string>
@@ -19,6 +21,62 @@
 
 namespace SparkEditor
 {
+
+    class VisualScriptPanel; // forward declare for commands
+
+    /// @brief Undo command for adding a node to the visual script graph
+    class AddNodeCommand : public EditorCommand
+    {
+      public:
+        AddNodeCommand(VisualScriptPanel* panel, Spark::Scripting::ScriptNodeType type, float x, float y)
+            : m_panel(panel), m_type(type), m_x(x), m_y(y)
+        {
+        }
+        void Execute() override;
+        void Undo() override;
+        std::string GetDescription() const override { return "Add Node"; }
+
+      private:
+        VisualScriptPanel* m_panel;
+        Spark::Scripting::ScriptNodeType m_type;
+        float m_x, m_y;
+        uint32_t m_createdNodeId = 0;
+    };
+
+    /// @brief Undo command for removing a node from the visual script graph
+    class RemoveNodeCommand : public EditorCommand
+    {
+      public:
+        RemoveNodeCommand(VisualScriptPanel* panel, int nodeIndex) : m_panel(panel), m_nodeIndex(nodeIndex) {}
+        void Execute() override;
+        void Undo() override;
+        std::string GetDescription() const override { return "Remove Node"; }
+
+      private:
+        VisualScriptPanel* m_panel;
+        int m_nodeIndex;
+        // Snapshot for undo
+        Spark::Scripting::ScriptNode m_savedNode;
+        float m_savedX = 0, m_savedY = 0;
+        std::vector<Spark::Scripting::ScriptConnection> m_savedConnections;
+    };
+
+    /// @brief Undo command for adding a connection
+    class AddConnectionCommand : public EditorCommand
+    {
+      public:
+        AddConnectionCommand(VisualScriptPanel* panel, Spark::Scripting::ScriptConnection conn)
+            : m_panel(panel), m_conn(conn)
+        {
+        }
+        void Execute() override;
+        void Undo() override;
+        std::string GetDescription() const override { return "Add Connection"; }
+
+      private:
+        VisualScriptPanel* m_panel;
+        Spark::Scripting::ScriptConnection m_conn;
+    };
 
     /**
      * @brief Visual scripting editor with node graph canvas
@@ -127,6 +185,20 @@ namespace SparkEditor
 
         // Debug
         bool m_debugCompile = false;
+
+        // Undo/Redo
+        UndoRedoManager* m_undoRedo = nullptr;
+
+      public:
+        // Accessed by undo commands
+        void AddNodeAtPositionDirect(Spark::Scripting::ScriptNodeType type, float x, float y);
+        void RemoveNodeDirect(int nodeIndex);
+        void AddConnectionDirect(const Spark::Scripting::ScriptConnection& conn);
+        void RemoveConnectionDirect(const Spark::Scripting::ScriptConnection& conn);
+        std::vector<NodeUI>& GetNodes() { return m_nodes; }
+        std::vector<ConnectionUI>& GetConnections() { return m_connections; }
+        uint32_t GetNextNodeId() const { return m_nextNodeId; }
+        void SetUndoRedoManager(UndoRedoManager* mgr) { m_undoRedo = mgr; }
     };
 
 } // namespace SparkEditor

@@ -66,6 +66,11 @@ namespace SparkEditor
                 RenderTraceLog();
                 ImGui::EndTabItem();
             }
+            if (ImGui::BeginTabItem("Call Stack"))
+            {
+                RenderCallStack();
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
 
@@ -78,10 +83,13 @@ namespace SparkEditor
     {
         if (m_isPaused)
         {
-            if (ImGui::Button("Resume"))
-                m_isPaused = false;
+            if (ImGui::Button("Continue"))
+                Continue();
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "PAUSED");
+            if (ImGui::Button("Step Over"))
+                StepOver();
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "PAUSED at Node %u", m_pausedAtNode);
         }
         else
         {
@@ -262,6 +270,14 @@ namespace SparkEditor
         if (m_traceLog.size() > m_maxTraceEntries)
             m_traceLog.erase(m_traceLog.begin());
 
+        // Step mode: pause after each node
+        if (m_stepMode)
+        {
+            m_isPaused = true;
+            m_stepMode = false;
+            m_pausedAtNode = nodeId;
+        }
+
         // Check breakpoints
         for (auto& bp : m_breakpoints)
         {
@@ -270,6 +286,7 @@ namespace SparkEditor
                 bp.isHit = true;
                 bp.hitCount++;
                 m_isPaused = true;
+                m_pausedAtNode = nodeId;
             }
         }
     }
@@ -304,6 +321,45 @@ namespace SparkEditor
     void ScriptDebugPanel::RemoveWatch(const std::string& name)
     {
         std::erase_if(m_watches, [&name](const WatchVariable& w) { return w.name == name; });
+    }
+
+    void ScriptDebugPanel::StepOver()
+    {
+        // Allow one trace entry, then pause again
+        m_stepMode = true;
+        m_isPaused = false;
+    }
+
+    void ScriptDebugPanel::Continue()
+    {
+        m_stepMode = false;
+        m_isPaused = false;
+        m_pausedAtNode = 0;
+    }
+
+    void ScriptDebugPanel::RenderCallStack()
+    {
+        ImGui::Text("Execution Call Stack");
+        ImGui::Separator();
+
+        if (m_traceLog.empty())
+        {
+            ImGui::TextDisabled("No execution data");
+            return;
+        }
+
+        // Show recent trace as a call stack (most recent at top)
+        size_t start = m_traceLog.size() > 20 ? m_traceLog.size() - 20 : 0;
+        for (size_t i = m_traceLog.size(); i > start; i--)
+        {
+            const auto& entry = m_traceLog[i - 1];
+            bool isTop = (i == m_traceLog.size());
+            if (isTop && m_isPaused)
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "-> Node %u (%s)", entry.nodeId,
+                                   entry.nodeName.c_str());
+            else
+                ImGui::Text("   Node %u (%s)", entry.nodeId, entry.nodeName.c_str());
+        }
     }
 
 } // namespace SparkEditor
