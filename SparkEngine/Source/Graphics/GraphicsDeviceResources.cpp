@@ -1224,7 +1224,12 @@ void main() {
         desc.bytecodeSize = result.bytecode.size();
         desc.entryPoint = "main";
         desc.debugName = "EmbeddedBasicVS";
-        device->CreateShader(desc);
+        auto shader = device->CreateShader(desc);
+        if (!shader)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create embedded vertex shader");
+            return E_FAIL;
+        }
     }
 
     return S_OK;
@@ -1280,7 +1285,12 @@ void main() {
         desc.bytecodeSize = result.bytecode.size();
         desc.entryPoint = "main";
         desc.debugName = "EmbeddedBasicPS";
-        device->CreateShader(desc);
+        auto shader = device->CreateShader(desc);
+        if (!shader)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create embedded pixel shader");
+            return E_FAIL;
+        }
     }
 
     return S_OK;

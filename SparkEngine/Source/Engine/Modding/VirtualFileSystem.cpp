@@ -59,6 +59,11 @@ namespace Spark
         std::vector<uint8_t> buffer(static_cast<size_t>(size));
         file.seekg(0, std::ios::beg);
         file.read(reinterpret_cast<char*>(buffer.data()), size);
+        if (file.bad())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Read error for '%s'", fullPath.c_str());
+            return {};
+        }
         return buffer;
     }
 

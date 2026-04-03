@@ -310,9 +310,15 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
             desc.Usage = D3D11_USAGE_DEFAULT;
             desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-            m_device->CreateTexture2D(&desc, nullptr, &m_lumTextures[i]);
-            m_device->CreateRenderTargetView(m_lumTextures[i].Get(), nullptr, &m_lumRTVs[i]);
-            m_device->CreateShaderResourceView(m_lumTextures[i].Get(), nullptr, &m_lumSRVs[i]);
+            HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_lumTextures[i]);
+            if (FAILED(hr))
+                return false;
+            hr = m_device->CreateRenderTargetView(m_lumTextures[i].Get(), nullptr, &m_lumRTVs[i]);
+            if (FAILED(hr))
+                return false;
+            hr = m_device->CreateShaderResourceView(m_lumTextures[i].Get(), nullptr, &m_lumSRVs[i]);
+            if (FAILED(hr))
+                return false;
 
             lumSize = std::max(lumSize / 2, 1u);
         }
@@ -330,9 +336,15 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
             desc.Usage = D3D11_USAGE_DEFAULT;
             desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-            m_device->CreateTexture2D(&desc, nullptr, &m_adaptedLum[i]);
-            m_device->CreateRenderTargetView(m_adaptedLum[i].Get(), nullptr, &m_adaptedLumRTV[i]);
-            m_device->CreateShaderResourceView(m_adaptedLum[i].Get(), nullptr, &m_adaptedLumSRV[i]);
+            HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_adaptedLum[i]);
+            if (FAILED(hr))
+                return false;
+            hr = m_device->CreateRenderTargetView(m_adaptedLum[i].Get(), nullptr, &m_adaptedLumRTV[i]);
+            if (FAILED(hr))
+                return false;
+            hr = m_device->CreateShaderResourceView(m_adaptedLum[i].Get(), nullptr, &m_adaptedLumSRV[i]);
+            if (FAILED(hr))
+                return false;
         }
 
         // Constant buffer
@@ -341,16 +353,22 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
         cbDesc.Usage = D3D11_USAGE_DYNAMIC;
         cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        m_device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
+        HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
+        if (FAILED(hr))
+            return false;
 
         // Samplers
         D3D11_SAMPLER_DESC sampDesc = {};
         sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
         sampDesc.AddressU = sampDesc.AddressV = sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-        m_device->CreateSamplerState(&sampDesc, &m_linearClampSampler);
+        hr = m_device->CreateSamplerState(&sampDesc, &m_linearClampSampler);
+        if (FAILED(hr))
+            return false;
 
         sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-        m_device->CreateSamplerState(&sampDesc, &m_pointSampler);
+        hr = m_device->CreateSamplerState(&sampDesc, &m_pointSampler);
+        if (FAILED(hr))
+            return false;
 
         return true;
     }

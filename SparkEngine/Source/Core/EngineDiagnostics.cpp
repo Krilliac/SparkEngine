@@ -375,7 +375,7 @@ namespace Spark
         report.Add(sub, "Non-existent slot check", nonExistent);
 
         // If we have a world, test save/load roundtrip
-        auto* world = Ctx()->GetWorld();
+        auto* world = Ctx() ? Ctx()->GetWorld() : nullptr;
         if (world)
         {
             SaveMetadata meta;

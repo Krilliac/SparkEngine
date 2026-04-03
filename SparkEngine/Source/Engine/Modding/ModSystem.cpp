@@ -267,6 +267,12 @@ namespace Spark
         Json::Value root;
         root["mods"] = std::move(modsArray);
         file << Json::StringifyPretty(root) << "\n";
+        file.close();
+        if (file.fail())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem::SaveConfig write failed for '%s'", filePath.c_str());
+            return false;
+        }
         return true;
     }
 
