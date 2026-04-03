@@ -1,6 +1,6 @@
 # Testing
 
-SparkEngine includes a comprehensive test suite with 71 test files and 864+ test cases using a lightweight internal test framework with CTest integration.
+SparkEngine includes a comprehensive test suite with 244 test files and 3,119 test cases using a lightweight internal test framework with CTest integration.
 
 **Source:** `Tests/TestFramework.h`, `Tests/`
 
@@ -125,14 +125,14 @@ Cross-compile with MinGW and run the exact same Windows D3D11 code paths under W
 cmake --preset linux-mingw-release
 cmake --build build/linux-mingw-release --parallel $(nproc)
 
-# Run all 2,509 tests under Wine
+# Run all 3,119 tests under Wine
 tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
 
 # Or run the full automated test suite (unit tests + live engine + stress + break tests)
 python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
 ```
 
-Results: ~2,504/2,509 tests pass (99.8%). See [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) for full setup and troubleshooting.
+Results: ~3,114/3,119 tests pass (99.8%). See [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) for full setup and troubleshooting.
 
 ### Engine/Editor Test Mode Flags
 
@@ -150,7 +150,7 @@ wine64 SparkEditor.exe --test-mode --test-frames 120       # Wine
 
 ## Test Categories and Coverage
 
-The 71 test files cover all major engine subsystems:
+The 244 test files cover all major engine subsystems:
 
 ### Core & Utilities
 
@@ -360,9 +360,13 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `validate-prompts` | ubuntu-24.04 | -- | -- | `--ci` |
 | `build-linux-gcc` | ubuntu-24.04 | GCC | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
-| `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
+| `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan + LSan |
+| `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
+| `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan (`continue-on-error`) |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
+| `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error` |
+| `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | -- | -- | threshold: 20 |

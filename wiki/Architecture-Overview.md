@@ -351,7 +351,7 @@ SparkEngine/
 ├── ThirdParty/               # Git submodules (15 libraries)
 ├── Assets/                   # Models, Scenes, Scripts
 ├── Shaders/                  # HLSL, GLSL, Compiled bytecode
-├── Tests/                    # 170 test files, 1,989 test cases
+├── Tests/                    # 244 test files, 3,119 test cases
 ├── Tools/                    # CLI tools (spark-cli, SparkBuild)
 ├── docs/                     # API docs, gap analysis, roadmap
 ├── wiki/                     # Wiki documentation pages

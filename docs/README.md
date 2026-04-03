@@ -6,24 +6,63 @@ The primary documentation for SparkEngine lives in the [`wiki/`](../wiki/) direc
 
 See the [Wiki Home](../wiki/Home.md) for a full table of contents.
 
-## API Reference (Doxygen)
+## Documentation Automation
 
-This `docs/` directory contains tooling for auto-generated API documentation using Doxygen. It extracts documentation from C++ header files and produces a searchable, cross-referenced HTML site.
+### Master Script (recommended)
+
+```bash
+docs/update-all-docs.sh              # Run all 6 doc scripts in order
+docs/update-all-docs.sh quick        # Skip slow steps (API docs, flowchart)
+docs/update-all-docs.sh check        # Dry-run: report what's stale
+```
+
+### Individual Scripts
+
+| Script | What it updates | Deps | Speed |
+|--------|----------------|------|-------|
+| `sync-wiki.sh sync` | Wiki AUTO: sections (components, systems, panels, tests) | None | ~2s |
+| `generate-api-docs.sh generate` | API reference (~250 headers → ~240 pages) | None | ~15s |
+| `generate-flowchart.sh generate` | Engine-Architecture-Flowchart.md | Python 3 | ~5s |
+| `update-codebase-stats.sh generate` | Codebase-Statistics.md (LOC, metrics, largest files) | None | ~5s |
+| `update-readme-badges.sh update` | README.md counts, badge JSON, AI prompt files | None | ~3s |
+| `update-context.sh update` | .claude/index.md and CLAUDE.md counts | None | ~2s |
+
+All scripts support a `check` mode that exits 1 if stale (for CI use).
+
+## Validation Scripts
+
+Code quality and architectural integrity checks (all in `tools/`):
+
+```bash
+tools/validate-all.sh              # Run all 6 checks
+tools/validate-all.sh --warn-only  # Report but don't fail
+```
+
+| Script | What it checks | Deps |
+|--------|---------------|------|
+| `check-pragma-once.sh` | All headers use `#pragma once` | None |
+| `check-editor-panels.sh` | All panels registered in EditorPanelFactory.cpp | None |
+| `check-wiki-nav.sh` | Wiki pages match `_Sidebar.md` | None |
+| `check-wiring.sh` | Systems with Initialize() are actually called | None |
+| `check-bloat.sh` | File size thresholds (500-line .cpp, 300-line .h) | None |
+| `check-doxygen-coverage.sh` | Headers have @file/@brief docs (95% threshold) | None |
+
+### Legacy Doxygen (optional, requires doxygen + graphviz)
+
+This `docs/` directory also contains tooling for Doxygen-based API documentation.
 
 ### Covered Source Directories
-
-The Doxygen configuration indexes the following:
 
 | Directory | Description |
 |-----------|-------------|
 | `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (52 panels) |
+| `SparkEditor/Source/` | ImGui visual editor (57 panels) |
 | `SparkConsole/src/` | Standalone debug console application |
 | `SparkShaderCompiler/src/` | Offline shader compilation tool |
-| `GameModules/SparkGame/Source/` | Example FPS game module |
+| `GameModules/*/Source/` | 10 game modules (FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript) |
 | `SparkSDK/` | Public SDK headers |
 
-### Quick Start
+### Quick Start (Legacy Doxygen)
 
 ```bash
 # Generate docs (requires doxygen and graphviz)

@@ -63,6 +63,7 @@ Pick the path that matches your role:
 - [Cloth Simulation](Cloth-Simulation) — Position-based dynamics cloth simulation
 - [Audio](Audio) — Spatial audio system
 - [Input System](Input-System) — Keyboard, mouse, and gamepad
+- [Camera System](Camera-System) — Camera controls and management
 - [Scripting with AngelScript](Scripting-with-AngelScript) — Gameplay scripting
 - [Visual Scripting](Visual-Scripting) — Node-based visual scripting
 - [AI and Navigation](AI-and-Navigation) — Behavior trees and pathfinding
@@ -70,6 +71,7 @@ Pick the path that matches your role:
 - [2D Systems](2D-Systems) — 2D physics, sprite batching, and rendering
 - [Networking](Networking) — Multiplayer networking
 - [Dedicated Server](Dedicated-Server) — Headless dedicated server
+- [Multiplayer Quick Start](Multiplayer-Quick-Start) — Get multiplayer running fast
 - [Area Server Architecture](Area-Server-Architecture) — Scalable MMO-style area servers
 - [Scene Management](Scene-Management) — Scenes, hierarchy, and prefabs
 - [Large World Support](Large-World-Support) — Origin rebasing and seamless area streaming
@@ -86,11 +88,13 @@ Pick the path that matches your role:
 - [Loading System](Loading-System) — Loading screen framework
 - [Mod System](Mod-System) — Mod loading and management
 - [Content Delivery](Content-Delivery) — CDN and patching system
+- [Tween System](Tween-System) — Value interpolation and easing
 
 ### Gameplay & Tools
 - [Gameplay Systems](Gameplay-Systems) — Player, weapons, inventory, quests
 - [Terrain and Procedural Generation](Terrain-and-Procedural-Generation) — Terrain and procedural content
 - [Save System](Save-System) — Save/load functionality
+- [Persistence System](Persistence-System) — Database-backed persistence
 - [Day Night Cycle and Weather](Day-Night-Cycle-and-Weather) — Time-of-day and weather
 - [Cinematic Sequencer](Cinematic-Sequencer) — Timeline-based cinematics
 - [SparkEditor](SparkEditor) — Visual editor reference
@@ -102,24 +106,49 @@ Pick the path that matches your role:
 ### Platform Support
 - [VR Support](VR-Support) — OpenXR virtual reality framework
 - [Mobile Platform](Mobile-Platform) — iOS and Android platform abstraction
+- [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) — MinGW cross-compile and Wine testing
 
-### Graphics Backends
+### Graphics
 - [RHI Abstraction Layer](RHI-Abstraction-Layer) — Backend-agnostic graphics interface
 - [D3D12 Backend](D3D12-Backend) — Direct3D 12 implementation
 - [DXR Raytracing](DXR-Raytracing) — DXR 1.1 ray tracing
+- [Hybrid Ray Tracing](Hybrid-Ray-Tracing) — Software + hardware hybrid RT
 - [Upscaling (DLSS/FSR)](Upscaling-System) — Temporal upscaling techniques
+- [Render Graph](Render-Graph) — Frame graph rendering system
+- [Shader Graph](Shader-Graph) — Node-based shader authoring
+- [GPU Particles](GPU-Particles) — Compute-based particle system
+- [GPU-Driven Rendering](GPU-Driven-Rendering) — Indirect draw and mesh clustering
+- [Volumetric Fog](Volumetric-Fog) — Froxel-based volumetric fog
+- [Global Illumination](Global-Illumination) — DDGI and probe-based GI
+- [Virtual Texturing](Virtual-Texturing) — Streaming virtual textures
+- [Water Rendering](Water-Rendering) — FFT ocean and water surfaces
+- [Clustered Lighting](Clustered-Lighting) — Clustered forward+ lighting
+- [Mesh Shaders](Mesh-Shaders) — Mesh and amplification shaders
 
 ### Advanced
 - [Configuration Reference](Configuration-Reference) — All settings, console commands, and CVars
 - [Performance Tips](Performance-Tips) — Optimization guide for game developers
+- [Threading Model](Threading-Model) — Thread architecture and safety rules
+- [Memory Management Patterns](Memory-Management-Patterns) — Allocation strategies and RAII
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) — CMake configuration and CI/CD
 - [Profiler and Debugging](Profiler-and-Debugging) — Frame profiling, GPU timing, and debug tools
+- [Performance Profiling Guide](Performance-Profiling-Guide) — Detailed profiling workflows
+- [Utilities](Utilities) — Logger, console, crash handler, debug tools
 - [Testing](Testing) — Unit tests and test framework
+- [Codebase Statistics](Codebase-Statistics) — Code volume, file counts, and metrics
+- [Codebase Health](Codebase-Health) — System maturity and known gaps
+- [Error Handling Patterns](Error-Handling-Patterns) — Error handling conventions
+- [Hot Reload Overview](Hot-Reload-Overview) — Script and asset hot-reloading
 - [Troubleshooting](Troubleshooting) — Common issues and solutions
 - [Contributing](Contributing) — How to contribute (includes pre-commit checks)
 
+### Specifications
+- [Networking Wire Format](Networking-Wire-Format) — Network packet format spec
+- [Asset Format Specifications](Asset-Format-Specifications) — Asset file format spec
+- [Editor Plugin Development](Editor-Plugin-Development) — Editor plugin ABI guide
+
 ### Reference
-- [API Documentation](../docs/README.md) — Doxygen-generated API reference (class diagrams, call graphs, source browser)
+- [API Documentation](../docs/README.md) — Generated API reference
 
 ## Code Quality
 
@@ -127,9 +156,9 @@ SparkEngine enforces code quality automatically:
 
 - **clang-format** — Enforced in CI on every PR (Microsoft-based style, Allman braces, 120-col, 4-space indent)
 - **clang-tidy** — Static analysis for bugprone, modernize, performance, and readability checks
-- **35+ unit tests** — CTest suite covering all major subsystems
-- **AddressSanitizer / UBSanitizer** — Memory safety checks in CI
-- **CodeQL** — GitHub security scanning
+- **3,119 unit tests** — CTest suite across 244 test files covering all major subsystems
+- **5 sanitizers** — ASan, UBSan, LSan, TSan, MSan in CI
+- **Code coverage** — lcov reports generated per CI run
 
 See [Contributing](Contributing) for the full pre-commit checklist.
 
@@ -149,5 +178,5 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | Test files | 243 |
 | Test cases | 3119+ |
 | Wiki pages | 88 |
-| *Last synced* | *2026-04-03 20:42* |
+| *Last synced* | *2026-04-03 22:36* |
 <!-- /AUTO:stats -->

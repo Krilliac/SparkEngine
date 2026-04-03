@@ -19,7 +19,7 @@
 
 **Quality & Testing:**
 
-[![Tests](https://img.shields.io/badge/tests-2%2C108_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/Working/Tests)
+[![Tests](https://img.shields.io/badge/tests-3119_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/Working/Tests)
 [![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-format)
 [![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-tidy)
 
@@ -130,7 +130,7 @@ AngelScript with Unity-style hot-reload (file watcher with debouncing and state 
 
 ### Editor
 
-ImGui-powered visual editor with 52 specialized panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, terrain editing, weapon editor, profiler, AI editor, physics debug, 2D editors, FPS tools, version control integration, build/deployment system, level streaming, search, prefab system, project management, scene statistics, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming. Full undo/redo support and play-mode editing.
+ImGui-powered visual editor with 57 specialized panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, terrain editing, weapon editor, profiler, AI editor, physics debug, 2D editors, FPS tools, version control integration, build/deployment system, level streaming, search, prefab system, project management, scene statistics, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming. Full undo/redo support and play-mode editing.
 
 ### Procedural Generation
 
@@ -307,13 +307,13 @@ SparkEngine/
 |       |-- SceneManager/    # Scene and level management
 |       |-- Utils/           # Logging, profiler, crash handler, console, debug tools
 |-- SparkEditor/
-|   |-- Source/              # ImGui editor (52 panels)
+|   |-- Source/              # ImGui editor (57 panels)
 |-- SparkConsole/
 |   |-- src/                 # Standalone debug console application
 |-- SparkShaderCompiler/
 |   |-- src/                 # Offline shader compilation tool
 |-- SparkSDK/                # Public SDK/interface headers
-|-- GameModules/             # Game module shared libraries (8 modules)
+|-- GameModules/             # Game module shared libraries (10 modules)
 |   |-- SparkGame/           # Base game module
 |   |-- SparkGameFPS/        # FPS game module
 |   |-- SparkGameMMO/        # MMO game module
@@ -322,6 +322,8 @@ SparkEngine/
 |   |-- SparkGameRTS/        # RTS game module
 |   |-- SparkGameRacing/     # Racing game module
 |   |-- SparkGamePlatformer/ # Platformer game module
+|   |-- SparkGameOpenWorld/  # Open-world game module
+|   |-- SparkGameVisualScript/ # Visual script game module
 |-- ThirdParty/              # Git submodules (see Dependencies)
 |-- Shaders/
 |   |-- HLSL/               # DirectX shaders
@@ -332,12 +334,12 @@ SparkEngine/
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
 |-- Templates/               # Game module project templates
-|-- Tests/                   # 2,108 unit tests across 174 files (CTest + 5 sanitizers)
+|-- Tests/                   # 3119 unit tests across 244 files (CTest + 5 sanitizers)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
 |-- docs/                    # Doxygen docs, wiki, API reference
-|-- wiki/                    # 64 wiki pages covering all subsystems
+|-- wiki/                    # 88 wiki pages covering all subsystems
 |-- cmake/                   # CMake utility modules
 |-- .github/
 |   |-- workflows/          # CI/CD (build + release)
@@ -377,7 +379,7 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-2,108 unit tests across 174 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+3119 unit tests across 244 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests

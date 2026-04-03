@@ -157,7 +157,7 @@ Integration with [Area Server Architecture](Area-Server-Architecture) enables se
 | `SparkEngine/Source/Engine/World/WorldOriginSystem.cpp` | Origin rebasing implementation |
 | `SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h` | Seamless area manager |
 | `SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp` | Seamless area implementation |
-| `SparkEngine/Source/Engine/Streaming/SceneTransitionManager.h` | Async scene loading |
+| `SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h` | Async storage/loading |
 
 ## Related Pages
 

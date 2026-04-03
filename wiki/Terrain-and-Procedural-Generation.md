@@ -2,7 +2,7 @@
 
 SparkEngine includes heightmap terrain rendering and a procedural generation toolkit for creating game content at runtime.
 
-**Source:** `SparkEngine/Source/Game/` (terrain), `SparkEngine/Source/Engine/Procedural/ProceduralGeneration.h`
+**Source:** `SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.h`, `SparkEngine/Source/Graphics/TerrainRenderer.h`, `SparkEngine/Source/Engine/ECS/Components/TerrainComponents.h`
 
 ## Heightmap Terrain
 
