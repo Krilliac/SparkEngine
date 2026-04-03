@@ -66,8 +66,8 @@ TEST(Profiler_BeginEndSection)
     p.BeginSection("TestSection", ProfileCategory::GameLogic);
 
     // Small busy-wait to ensure measurable time
-    volatile int x = 0;
-    for (int i = 0; i < 100000; ++i)
+    volatile unsigned int x = 0;
+    for (unsigned int i = 0; i < 100000; ++i)
         x += i;
 
     p.EndSection("TestSection");
@@ -111,8 +111,8 @@ TEST(Profiler_BeginEndFrame)
 
     p.BeginFrame();
 
-    volatile int x = 0;
-    for (int i = 0; i < 10000; ++i)
+    volatile unsigned int x = 0;
+    for (unsigned int i = 0; i < 10000; ++i)
         x += i;
 
     p.EndFrame();
@@ -181,8 +181,8 @@ TEST(Profiler_CategoryTimeMs)
     p.SetEnabled(true);
 
     p.BeginSection("RenderWork", ProfileCategory::Render);
-    volatile int x = 0;
-    for (int i = 0; i < 10000; ++i)
+    volatile unsigned int x = 0;
+    for (unsigned int i = 0; i < 10000; ++i)
         x += i;
     p.EndSection("RenderWork");
 
@@ -291,8 +291,8 @@ TEST(Profiler_ScopedProfileTimer)
 
     {
         ScopedProfileTimer timer("ScopedTest", ProfileCategory::GameLogic);
-        volatile int x = 0;
-        for (int i = 0; i < 10000; ++i)
+        volatile unsigned int x = 0;
+        for (unsigned int i = 0; i < 10000; ++i)
             x += i;
     }
 

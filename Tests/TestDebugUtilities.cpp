@@ -27,8 +27,8 @@ TEST(CpuDebugger_BasicTiming)
 
     cd.BeginSection("TestSection", "General", __FILE__, __LINE__, __FUNCTION__);
     // Small busy-wait to ensure measurable time
-    volatile int x = 0;
-    for (int i = 0; i < 10000; ++i)
+    volatile unsigned int x = 0;
+    for (unsigned int i = 0; i < 10000; ++i)
         x += i;
     cd.EndSection("TestSection");
 
@@ -48,8 +48,8 @@ TEST(CpuDebugger_SectionStats)
     for (int i = 0; i < 10; ++i)
     {
         cd.BeginSection("Repeated", "Test");
-        volatile int x = 0;
-        for (int j = 0; j < 1000; ++j)
+        volatile unsigned int x = 0;
+        for (unsigned int j = 0; j < 1000; ++j)
             x += j;
         cd.EndSection("Repeated");
     }
@@ -72,8 +72,8 @@ TEST(CpuDebugger_HotSpots)
     cd.EndSection("FastSection");
 
     cd.BeginSection("SlowSection", "General", "fileB.cpp", 20, "funcB");
-    volatile int x = 0;
-    for (int i = 0; i < 100000; ++i)
+    volatile unsigned int x = 0;
+    for (unsigned int i = 0; i < 100000; ++i)
         x += i;
     cd.EndSection("SlowSection");
 
@@ -89,8 +89,8 @@ TEST(CpuDebugger_ScopedSection)
 
     {
         Spark::ScopedCpuSection section("ScopedTest", "General", __FILE__, __LINE__, __FUNCTION__);
-        volatile int x = 0;
-        for (int i = 0; i < 1000; ++i)
+        volatile unsigned int x = 0;
+        for (unsigned int i = 0; i < 1000; ++i)
             x += i;
     }
 
@@ -137,8 +137,8 @@ TEST(CpuDebugger_P99Calculation)
     for (int i = 0; i < 100; ++i)
     {
         cd.BeginSection("P99Test", "Test");
-        volatile int x = 0;
-        for (int j = 0; j < 1000; ++j)
+        volatile unsigned int x = 0;
+        for (unsigned int j = 0; j < 1000; ++j)
             x += j;
         cd.EndSection("P99Test");
     }
@@ -469,8 +469,8 @@ TEST(ThreadDebugger_ContentionTracking)
     // Simulate a mutex wait
     td.RecordMutexWaitBegin("RenderMutex", __FILE__, __LINE__);
     // Small delay to simulate contention
-    volatile int x = 0;
-    for (int i = 0; i < 10000; ++i)
+    volatile unsigned int x = 0;
+    for (unsigned int i = 0; i < 10000; ++i)
         x += i;
     td.RecordMutexWaitEnd("RenderMutex");
 
