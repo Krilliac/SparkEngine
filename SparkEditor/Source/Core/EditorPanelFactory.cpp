@@ -61,6 +61,8 @@
 #include "../Panels/EventResponsePanel.h"
 #include "../Panels/VisualScriptPanel.h"
 #include "../Panels/WorkflowPanel.h"
+#include "../Panels/PrototypingPanel.h"
+#include "../Panels/UIDesignerPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 #include "EditorIcons.h"
@@ -137,6 +139,9 @@ namespace SparkEditor
         registerPanel("EventResponses", std::make_shared<EventResponsePanel>());
         registerPanel("VisualScript", std::make_shared<VisualScriptPanel>());
 
+        registerPanel("Prototyping", std::make_shared<PrototypingPanel>());
+        registerPanel("UIDesigner", std::make_shared<UIDesignerPanel>());
+
         auto workflowPanel = std::make_shared<WorkflowPanel>();
         workflowPanel->SetEditorUI(this);
         registerPanel("Workflows", workflowPanel);
@@ -197,6 +202,8 @@ namespace SparkEditor
             {"EventResponses", ICON_FA_BOLT},
             {"VisualScript", ICON_FA_PROJECT_DIAGRAM},
             {"Workflows", ICON_FA_COGS},
+            {"Prototyping", ICON_FA_CUBES},
+            {"UIDesigner", ICON_FA_COLUMNS},
         };
 
         for (const auto& [name, icon] : panelIcons)
@@ -222,7 +229,7 @@ namespace SparkEditor
             "GameModuleSelector", "Collaboration",   "TimeOfDay",
             "AbilityEditor",      "TriggerEditor",   "ConditionEditor",
             "DecalEditor",        "EventResponses",  "VisualScript",
-            "Workflows",
+            "Workflows",          "Prototyping",     "UIDesigner",
         };
 
         for (const char* name : hiddenPanels)

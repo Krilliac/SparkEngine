@@ -848,6 +848,7 @@ cmake --build build --config Release
 | `PrefabEditorPanel` | `SparkEditor/Source/Panels/PrefabEditorPanel.h` |
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
 | `ProjectSettingsPanel` | `SparkEditor/Source/Panels/ProjectSettingsPanel.h` |
+| `PrototypingPanel` | `SparkEditor/Source/Panels/PrototypingPanel.h` |
 | `ReplayPanel` | `SparkEditor/Source/Panels/ReplayPanel.h` |
 | `SaveSystemPanel` | `SparkEditor/Source/Panels/SaveSystemPanel.h` |
 | `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
@@ -861,6 +862,7 @@ cmake --build build --config Release
 | `TilemapEditorPanel` | `SparkEditor/Source/Panels/TilemapEditorPanel.h` |
 | `TimeOfDayPanel` | `SparkEditor/Source/Panels/TimeOfDayPanel.h` |
 | `TriggerEditorPanel` | `SparkEditor/Source/Panels/TriggerEditorPanel.h` |
+| `UIDesignerPanel` | `SparkEditor/Source/Panels/UIDesignerPanel.h` |
 | `UndoHistoryPanel` | `SparkEditor/Source/Panels/UndoHistoryPanel.h` |
 | `VRConfigPanel` | `SparkEditor/Source/Panels/VRConfigPanel.h` |
 | `VisualScriptPanel` | `SparkEditor/Source/Panels/VisualScriptPanel.h` |
