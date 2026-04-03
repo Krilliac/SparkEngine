@@ -78,7 +78,7 @@ RaycastHit PhysicsSystem::Raycast(const XMFLOAT3& origin, const XMFLOAT3& direct
         {
             // Get surface normal at hit point
             JPH::Body* joltBody = m_joltSystem->GetBodyLockInterface().TryGetBody(hitBodyID);
-            if (joltBody)
+            if (joltBody && joltBody->GetShape())
             {
                 JPH::Vec3 normal =
                     joltBody->GetShape()->GetSurfaceNormal(result.mSubShapeID2, ray.GetPointOnRay(result.mFraction));

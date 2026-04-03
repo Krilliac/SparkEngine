@@ -633,7 +633,15 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.size() < 2)
                 return "Usage: audio_volume <master|sfx|music> <0.0-1.0>";
-            float vol = std::stof(args[1]);
+            float vol;
+            try
+            {
+                vol = std::stof(args[1]);
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid volume value: " + args[1];
+            }
             auto& mixer = Spark::Audio::AudioBusMixer::GetInstance();
             if (args[0] == "master")
                 mixer.SetBusVolume(Spark::Audio::AudioBus::Master, vol);
@@ -738,7 +746,15 @@ void SparkGameModule::RegisterGameConsoleCommands()
             if (args.empty())
                 return "Usage: destroy <entity_id>";
             auto& destruction = Spark::DestructionSystem::GetInstance();
-            uint32_t entityId = static_cast<uint32_t>(std::stoul(args[0]));
+            uint32_t entityId;
+            try
+            {
+                entityId = static_cast<uint32_t>(std::stoul(args[0]));
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid entity ID: " + args[0];
+            }
             destruction.ForceDestroy(entityId, 50.0f);
             return "Force-destroyed entity " + args[0];
         },
@@ -798,7 +814,14 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* seq = Spark::Cinematic::SequencerManager::GetInstance().GetSequence(args[0]);
             if (!seq)
                 return "Sequence not found: " + args[0];
-            seq->SetTime(std::stof(args[1]));
+            try
+            {
+                seq->SetTime(std::stof(args[1]));
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid time value: " + args[1];
+            }
             return "Seeked " + args[0] + " to " + args[1] + "s";
         },
         "Seek a sequence to a specific time");
@@ -875,7 +898,15 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.empty())
                 return "Usage: replay_seek <seconds>";
-            float t = std::stof(args[0]);
+            float t;
+            try
+            {
+                t = std::stof(args[0]);
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid time value: " + args[0];
+            }
             Spark::ReplaySystem::GetInstance().SeekTo(t);
             return "Seeked to " + args[0] + "s";
         },
@@ -887,7 +918,15 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.empty())
                 return "Usage: replay_speed <multiplier>";
-            float speed = std::stof(args[0]);
+            float speed;
+            try
+            {
+                speed = std::stof(args[0]);
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid speed value: " + args[0];
+            }
             Spark::ReplaySystem::GetInstance().SetPlaybackSpeed(speed);
             return "Playback speed set to " + std::to_string(speed) + "x";
         },
@@ -928,7 +967,18 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* ws = game->GetWaveSpawner();
             if (!ws)
                 return "Wave spawner not initialized";
-            int wave = args.empty() ? ws->GetCurrentWave() + 1 : std::stoi(args[0]);
+            int wave = ws->GetCurrentWave() + 1;
+            if (!args.empty())
+            {
+                try
+                {
+                    wave = std::stoi(args[0]);
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid wave number: " + args[0];
+                }
+            }
             ws->SkipToWave(wave);
             return "Skipping to wave " + std::to_string(wave);
         },
@@ -945,7 +995,15 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* ws = game->GetWaveSpawner();
             if (!ws)
                 return "Wave spawner not initialized";
-            float scale = std::stof(args[0]);
+            float scale;
+            try
+            {
+                scale = std::stof(args[0]);
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid scale value: " + args[0];
+            }
             ws->SetDifficultyScale(scale);
             return "Difficulty scale set to " + std::to_string(scale);
         },
@@ -977,7 +1035,15 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* prog = game->GetProgression();
             if (!prog)
                 return "Progression not initialized";
-            int amount = std::stoi(args[0]);
+            int amount;
+            try
+            {
+                amount = std::stoi(args[0]);
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid XP amount: " + args[0];
+            }
             prog->AwardXP(amount, "console");
             return "Awarded " + std::to_string(amount) + " XP (level " + std::to_string(prog->GetLevel()) + ")";
         },
@@ -1049,10 +1115,17 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Game not available";
             uint16_t port = 27015;
             int maxClients = 32;
-            if (!args.empty())
-                port = static_cast<uint16_t>(std::stoi(args[0]));
-            if (args.size() > 1)
-                maxClients = std::stoi(args[1]);
+            try
+            {
+                if (!args.empty())
+                    port = static_cast<uint16_t>(std::stoi(args[0]));
+                if (args.size() > 1)
+                    maxClients = std::stoi(args[1]);
+            }
+            catch (const std::exception&)
+            {
+                return "Invalid port or max_clients value";
+            }
             return game->StartServer(port, maxClients) ? "Server started" : "Failed to start server";
         },
         "Host a server (net_host [port] [max_clients])");
@@ -1067,7 +1140,16 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Game not available";
             uint16_t port = 27015;
             if (args.size() > 1)
-                port = static_cast<uint16_t>(std::stoi(args[1]));
+            {
+                try
+                {
+                    port = static_cast<uint16_t>(std::stoi(args[1]));
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid port value: " + args[1];
+                }
+            }
             return game->ConnectToServer(args[0], port) ? "Connecting..." : "Failed to connect";
         },
         "Connect to a server (net_connect <address> [port])");

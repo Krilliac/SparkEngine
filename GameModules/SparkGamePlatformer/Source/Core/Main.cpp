@@ -289,7 +289,15 @@ void SparkGamePlatformerModule::RegisterConsoleCommands()
                             {
                                 if (args.empty())
                                     return "Usage: platformer_level <index>";
-                                uint32_t idx = static_cast<uint32_t>(std::stoi(args[0]));
+                                uint32_t idx;
+                                try
+                                {
+                                    idx = static_cast<uint32_t>(std::stoi(args[0]));
+                                }
+                                catch (const std::exception&)
+                                {
+                                    return "Invalid level index: " + args[0];
+                                }
                                 return m_levelSystem->LoadLevel(idx) ? "Level " + std::to_string(idx) + " loaded"
                                                                      : "Failed to load level";
                             });

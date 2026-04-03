@@ -236,20 +236,28 @@ namespace MMO
 
                 if (tokens.size() >= 14)
                 {
-                    outData.name = tokens[0];
-                    outData.level = std::stoi(tokens[1]);
-                    outData.xp = std::stoi(tokens[2]);
-                    outData.areaId = static_cast<uint32_t>(std::stoi(tokens[3]));
-                    outData.posX = std::stof(tokens[4]);
-                    outData.posY = std::stof(tokens[5]);
-                    outData.posZ = std::stof(tokens[6]);
-                    outData.rotY = std::stof(tokens[7]);
-                    outData.health = std::stof(tokens[8]);
-                    outData.maxHealth = std::stof(tokens[9]);
-                    outData.mana = std::stof(tokens[10]);
-                    outData.maxMana = std::stof(tokens[11]);
-                    outData.playTime = std::stof(tokens[12]);
-                    outData.inventory.currency = std::stoi(tokens[13]);
+                    try
+                    {
+                        outData.name = tokens[0];
+                        outData.level = std::stoi(tokens[1]);
+                        outData.xp = std::stoi(tokens[2]);
+                        outData.areaId = static_cast<uint32_t>(std::stoi(tokens[3]));
+                        outData.posX = std::stof(tokens[4]);
+                        outData.posY = std::stof(tokens[5]);
+                        outData.posZ = std::stof(tokens[6]);
+                        outData.rotY = std::stof(tokens[7]);
+                        outData.health = std::stof(tokens[8]);
+                        outData.maxHealth = std::stof(tokens[9]);
+                        outData.mana = std::stof(tokens[10]);
+                        outData.maxMana = std::stof(tokens[11]);
+                        outData.playTime = std::stof(tokens[12]);
+                        outData.inventory.currency = std::stoi(tokens[13]);
+                    }
+                    catch (const std::exception&)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: corrupt character data for ID %u",
+                                        characterId);
+                    }
                 }
             }
         }
@@ -363,8 +371,15 @@ namespace MMO
                     if (key.starts_with("character_"))
                     {
                         auto idStr = key.substr(10);
-                        uint32_t charId = static_cast<uint32_t>(std::stoul(idStr));
-                        result.emplace_back(charId, idStr);
+                        try
+                        {
+                            uint32_t charId = static_cast<uint32_t>(std::stoul(idStr));
+                            result.emplace_back(charId, idStr);
+                        }
+                        catch (const std::exception&)
+                        {
+                            continue;
+                        }
                     }
                 }
             }
@@ -409,11 +424,18 @@ namespace MMO
                     auto sep = val.find('|');
                     if (sep != std::string::npos)
                     {
-                        ItemStack stack;
-                        stack.itemDefId = static_cast<uint32_t>(std::stoul(val.substr(0, sep)));
-                        stack.count = std::stoi(val.substr(sep + 1));
-                        if (!stack.IsEmpty())
-                            inv.slots.push_back(stack);
+                        try
+                        {
+                            ItemStack stack;
+                            stack.itemDefId = static_cast<uint32_t>(std::stoul(val.substr(0, sep)));
+                            stack.count = std::stoi(val.substr(sep + 1));
+                            if (!stack.IsEmpty())
+                                inv.slots.push_back(stack);
+                        }
+                        catch (const std::exception&)
+                        {
+                            continue;
+                        }
                     }
                 }
             }
@@ -425,7 +447,16 @@ namespace MMO
         {
             const auto& val = currResult.rows[0].columns[0];
             if (std::holds_alternative<std::string>(val))
-                inv.currency = std::stoi(std::get<std::string>(val));
+            {
+                try
+                {
+                    inv.currency = std::stoi(std::get<std::string>(val));
+                }
+                catch (const std::exception&)
+                {
+                    inv.currency = 0;
+                }
+            }
             else if (std::holds_alternative<int64_t>(val))
                 inv.currency = static_cast<int>(std::get<int64_t>(val));
         }
@@ -458,21 +489,27 @@ namespace MMO
                     auto prefix = "rep_" + std::to_string(charId) + "_";
                     if (key.starts_with(prefix))
                     {
-                        uint32_t factionId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
-                        // Load the actual value
-                        auto valResult =
-                            m_db->SyncQuery(sid(MMOStmtId::SaveReputation), {MakeInt(charId), MakeInt(factionId)});
-                        if (valResult.success && !valResult.rows.empty())
+                        try
                         {
-                            FactionStanding standing;
-                            standing.factionId = factionId;
-                            const auto& val = valResult.rows[0].columns[0];
-                            if (std::holds_alternative<int64_t>(val))
-                                standing.reputation = static_cast<int>(std::get<int64_t>(val));
-                            else if (std::holds_alternative<std::string>(val))
-                                standing.reputation = std::stoi(std::get<std::string>(val));
-                            standing.tier = FactionStanding::GetTierForValue(standing.reputation);
-                            state.standings[factionId] = standing;
+                            uint32_t factionId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
+                            auto valResult =
+                                m_db->SyncQuery(sid(MMOStmtId::SaveReputation), {MakeInt(charId), MakeInt(factionId)});
+                            if (valResult.success && !valResult.rows.empty())
+                            {
+                                FactionStanding standing;
+                                standing.factionId = factionId;
+                                const auto& val = valResult.rows[0].columns[0];
+                                if (std::holds_alternative<int64_t>(val))
+                                    standing.reputation = static_cast<int>(std::get<int64_t>(val));
+                                else if (std::holds_alternative<std::string>(val))
+                                    standing.reputation = std::stoi(std::get<std::string>(val));
+                                standing.tier = FactionStanding::GetTierForValue(standing.reputation);
+                                state.standings[factionId] = standing;
+                            }
+                        }
+                        catch (const std::exception&)
+                        {
+                            continue;
                         }
                     }
                 }
@@ -513,8 +550,15 @@ namespace MMO
                     auto prefix = "ach_" + std::to_string(charId) + "_";
                     if (key.starts_with(prefix))
                     {
-                        uint32_t achId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
-                        state.completedIds.insert(achId);
+                        try
+                        {
+                            uint32_t achId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
+                            state.completedIds.insert(achId);
+                        }
+                        catch (const std::exception&)
+                        {
+                            continue;
+                        }
                     }
                 }
             }
@@ -541,7 +585,16 @@ namespace MMO
                             if (std::holds_alternative<int64_t>(val))
                                 state.stats[statKey] = static_cast<int>(std::get<int64_t>(val));
                             else if (std::holds_alternative<std::string>(val))
-                                state.stats[statKey] = std::stoi(std::get<std::string>(val));
+                            {
+                                try
+                                {
+                                    state.stats[statKey] = std::stoi(std::get<std::string>(val));
+                                }
+                                catch (const std::exception&)
+                                {
+                                    state.stats[statKey] = 0;
+                                }
+                            }
                         }
                     }
                 }
@@ -583,12 +636,19 @@ namespace MMO
                     auto prefix = "craft_" + std::to_string(charId) + "_";
                     if (key.starts_with(prefix))
                     {
-                        int discKey = std::stoi(key.substr(prefix.size()));
-                        CraftingSkill skill;
-                        skill.discipline = static_cast<CraftingDiscipline>(discKey);
-                        skill.level = 1;
-                        skill.currentXP = 0;
-                        state.skills[discKey] = skill;
+                        try
+                        {
+                            int discKey = std::stoi(key.substr(prefix.size()));
+                            CraftingSkill skill;
+                            skill.discipline = static_cast<CraftingDiscipline>(discKey);
+                            skill.level = 1;
+                            skill.currentXP = 0;
+                            state.skills[discKey] = skill;
+                        }
+                        catch (const std::exception&)
+                        {
+                            continue;
+                        }
                     }
                 }
             }
@@ -606,8 +666,15 @@ namespace MMO
                     auto prefix = "recipe_" + std::to_string(charId) + "_";
                     if (key.starts_with(prefix))
                     {
-                        uint32_t recipeId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
-                        state.knownRecipes.push_back(recipeId);
+                        try
+                        {
+                            uint32_t recipeId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
+                            state.knownRecipes.push_back(recipeId);
+                        }
+                        catch (const std::exception&)
+                        {
+                            continue;
+                        }
                     }
                 }
             }
@@ -646,11 +713,18 @@ namespace MMO
                         auto sep = rest.find('_');
                         if (sep != std::string::npos)
                         {
-                            LootLockout lo;
-                            lo.dungeonDefId = static_cast<uint32_t>(std::stoul(rest.substr(0, sep)));
-                            lo.difficulty = static_cast<DungeonDifficulty>(std::stoi(rest.substr(sep + 1)));
-                            lo.remaining = 604800.0f; // Default 1 week, actual loaded from value
-                            state.lockouts.push_back(lo);
+                            try
+                            {
+                                LootLockout lo;
+                                lo.dungeonDefId = static_cast<uint32_t>(std::stoul(rest.substr(0, sep)));
+                                lo.difficulty = static_cast<DungeonDifficulty>(std::stoi(rest.substr(sep + 1)));
+                                lo.remaining = 604800.0f; // Default 1 week, actual loaded from value
+                                state.lockouts.push_back(lo);
+                            }
+                            catch (const std::exception&)
+                            {
+                                continue;
+                            }
                         }
                     }
                 }

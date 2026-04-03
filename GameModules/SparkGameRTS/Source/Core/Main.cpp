@@ -317,7 +317,15 @@ void SparkGameRTSModule::RegisterConsoleCommands()
                                     return "Engine systems not initialized";
                                 if (args.empty())
                                     return "Usage: rts_time <0-24>";
-                                float hour = std::stof(args[0]);
+                                float hour;
+                                try
+                                {
+                                    hour = std::stof(args[0]);
+                                }
+                                catch (const std::exception&)
+                                {
+                                    return "Invalid time value: " + args[0];
+                                }
                                 m_engineSystems->SetTimeOfDay(hour);
                                 return "Time set to: " + args[0];
                             });

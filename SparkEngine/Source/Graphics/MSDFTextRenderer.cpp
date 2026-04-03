@@ -184,13 +184,17 @@ float4 main(PS_IN input) : SV_Target {
         cbDesc.Usage = D3D11_USAGE_DYNAMIC;
         cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        m_device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
+        hr = m_device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
+        if (FAILED(hr))
+            return false;
 
         // Sampler
         D3D11_SAMPLER_DESC sampDesc = {};
         sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
         sampDesc.AddressU = sampDesc.AddressV = sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-        m_device->CreateSamplerState(&sampDesc, &m_linearSampler);
+        hr = m_device->CreateSamplerState(&sampDesc, &m_linearSampler);
+        if (FAILED(hr))
+            return false;
 
         // Alpha blend state
         D3D11_BLEND_DESC blendDesc = {};
@@ -202,19 +206,25 @@ float4 main(PS_IN input) : SV_Target {
         blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
         blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
         blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-        m_device->CreateBlendState(&blendDesc, &m_alphaBlendState);
+        hr = m_device->CreateBlendState(&blendDesc, &m_alphaBlendState);
+        if (FAILED(hr))
+            return false;
 
         // Depth stencil state (no depth test for UI text)
         D3D11_DEPTH_STENCIL_DESC dsDesc = {};
         dsDesc.DepthEnable = FALSE;
-        m_device->CreateDepthStencilState(&dsDesc, &m_depthStencilState);
+        hr = m_device->CreateDepthStencilState(&dsDesc, &m_depthStencilState);
+        if (FAILED(hr))
+            return false;
 
         // Rasterizer state
         D3D11_RASTERIZER_DESC rsDesc = {};
         rsDesc.FillMode = D3D11_FILL_SOLID;
         rsDesc.CullMode = D3D11_CULL_NONE;
         rsDesc.ScissorEnable = FALSE;
-        m_device->CreateRasterizerState(&rsDesc, &m_rasterizerState);
+        hr = m_device->CreateRasterizerState(&rsDesc, &m_rasterizerState);
+        if (FAILED(hr))
+            return false;
 
         return true;
     }

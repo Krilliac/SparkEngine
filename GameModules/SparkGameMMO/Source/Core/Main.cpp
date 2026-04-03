@@ -510,7 +510,15 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                             {
                                 if (args.empty())
                                     return "Usage: mmo_boss_spawn <boss_id>";
-                                uint32_t id = static_cast<uint32_t>(std::stoi(args[0]));
+                                uint32_t id;
+                                try
+                                {
+                                    id = static_cast<uint32_t>(std::stoi(args[0]));
+                                }
+                                catch (const std::exception&)
+                                {
+                                    return "Invalid boss ID: " + args[0];
+                                }
                                 return m_worldBossSystem->SpawnBoss(id) ? "Boss spawned!" : "Spawn failed";
                             });
 
@@ -575,7 +583,15 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                             {
                                 if (args.empty())
                                     return "Usage: mmo_characters <account_id>";
-                                uint32_t acctId = static_cast<uint32_t>(std::stoi(args[0]));
+                                uint32_t acctId;
+                                try
+                                {
+                                    acctId = static_cast<uint32_t>(std::stoi(args[0]));
+                                }
+                                catch (const std::exception&)
+                                {
+                                    return "Invalid account ID: " + args[0];
+                                }
                                 return m_characterSystem->GetCharacterListString(acctId);
                             });
 }

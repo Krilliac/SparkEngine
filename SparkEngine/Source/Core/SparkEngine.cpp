@@ -256,7 +256,14 @@ static int ParseTestFrameLimit(LPWSTR cmdLine)
         ++pos;
     if (pos >= cmd.size())
         return 0;
-    return std::max(0, std::stoi(std::wstring(cmd.substr(pos))));
+    try
+    {
+        return std::max(0, std::stoi(std::wstring(cmd.substr(pos))));
+    }
+    catch (const std::exception&)
+    {
+        return 0;
+    }
 }
 
 /**
@@ -279,8 +286,15 @@ static void ParseWindowSizeOverride(LPWSTR cmdLine)
         xPos = sizeStr.find(L'X');
     if (xPos != std::wstring::npos)
     {
-        g_windowWidthOverride = std::max(320, std::stoi(sizeStr.substr(0, xPos)));
-        g_windowHeightOverride = std::max(240, std::stoi(sizeStr.substr(xPos + 1)));
+        try
+        {
+            g_windowWidthOverride = std::max(320, std::stoi(sizeStr.substr(0, xPos)));
+            g_windowHeightOverride = std::max(240, std::stoi(sizeStr.substr(xPos + 1)));
+        }
+        catch (const std::exception&)
+        {
+            // Ignore malformed window size arguments
+        }
     }
 }
 
