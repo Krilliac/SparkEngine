@@ -875,7 +875,8 @@ void UpdateDebugSystems(float dt)
     SPARK_GUARDED_UPDATE("HitchDetector", "Debug", { Spark::HitchDetector::GetInstance().Update(dt); });
     SPARK_GUARDED_UPDATE("AssetStallDetector", "Debug", { Spark::AssetStallDetector::GetInstance().Update(dt); });
     SPARK_GUARDED_UPDATE("NetworkHealthMonitor", "Debug", { Spark::NetworkHealthMonitor::GetInstance().Update(dt); });
-    SPARK_GUARDED_UPDATE("GPUResourceLeakDetector", "Debug", { Spark::GPUResourceLeakDetector::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("GPUResourceLeakDetector", "Debug",
+                         { Spark::GPUResourceLeakDetector::GetInstance().Update(dt); });
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading

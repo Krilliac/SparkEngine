@@ -424,11 +424,10 @@ namespace Spark
         report.Add(sub, "Singleton accessible", true);
 
         auto status = hd.GetStatus();
-        report.Add(sub, "Frames analyzed", status.framesAnalyzed > 0,
-                   std::format("{} frames", status.framesAnalyzed));
-        report.Add(sub, "No severe hitches", status.severeCount == 0,
-                   std::format("{} severe, {} moderate, {} mild", status.severeCount, status.moderateCount,
-                               status.mildCount));
+        report.Add(sub, "Frames analyzed", status.framesAnalyzed > 0, std::format("{} frames", status.framesAnalyzed));
+        report.Add(
+            sub, "No severe hitches", status.severeCount == 0,
+            std::format("{} severe, {} moderate, {} mild", status.severeCount, status.moderateCount, status.mildCount));
     }
 
     void DiagAssetStall(DiagReport& report)
