@@ -2,9 +2,12 @@
 
 ### Getting Started
 - [Home](Home)
+- [FAQ](FAQ)
 - [Getting Started](Getting-Started)
+- [Quick-Start Tutorial](Quick-Start-Tutorial)
 - [Making Your First Game](Making-Your-First-Game)
 - [Artist Workflow Guide](Artist-Workflow-Guide)
+- [Editor Walkthrough](Editor-Walkthrough)
 - [Architecture Overview](Architecture-Overview)
 - [Engine Architecture Flowchart](Engine-Architecture-Flowchart)
 - [Creating a Game Module](Creating-a-Game-Module)
@@ -78,6 +81,8 @@
 - [Mesh Shaders](Mesh-Shaders)
 
 ### Advanced
+- [Configuration Reference](Configuration-Reference)
+- [Performance Tips](Performance-Tips)
 - [Threading Model](Threading-Model)
 - [Memory Management Patterns](Memory-Management-Patterns)
 - [Build System and CMake Modules](Build-System-and-CMake-Modules)

@@ -1,23 +1,34 @@
 # Documentation Coverage Audit
 
-**Last updated:** 2026-04-02
+**Last updated:** 2026-04-03
 **Type:** Observation
 **Status:** Active
 **Severity:** Low
 
 ## Description
 
-83 wiki pages (excluding _Sidebar.md), 245/246 headers with Doxygen comments, near-complete API coverage. Added 13 new wiki pages covering advanced graphics subsystems, tween system, error handling patterns, and hot-reload overview.
+88 wiki pages (excluding _Sidebar.md), 245/246 headers with Doxygen comments, near-complete API coverage. Added 5 new user-facing wiki pages: FAQ, Quick-Start Tutorial, Editor Walkthrough, Configuration Reference, Performance Tips. Updated Home.md with role-based reading paths.
 
 ---
 
 ## Wiki Coverage (83 pages)
 
 ### Statistics
-- **Total pages**: 83 (excluding _Sidebar.md)
+- **Total pages**: 88 (excluding _Sidebar.md)
 - All engine subsystems have wiki pages (including Tween System, previously missing)
 - All major graphics subsystems documented (Render Graph, GPU Particles, GPU-Driven Rendering, Volumetric Fog, Global Illumination, Virtual Texturing, Water Rendering, Clustered Lighting, Mesh Shaders, Shader Graph)
 - Broad topic pages added: Error Handling Patterns, Hot Reload Overview
+- User-facing docs added: FAQ, Quick-Start Tutorial, Editor Walkthrough, Configuration Reference, Performance Tips
+
+### New Pages Added (2026-04-03)
+
+| Page | Category | Coverage |
+|------|----------|----------|
+| `FAQ.md` | Getting Started | Common questions: general, building, editor, gameplay, graphics, physics, audio, modding |
+| `Quick-Start-Tutorial.md` | Getting Started | First 10 minutes: launch, console, editor, spawn objects, adjust world, graphics |
+| `Editor-Walkthrough.md` | Getting Started | Practical hands-on editor guide: navigation, panels, workflows, play mode, shortcuts |
+| `Configuration-Reference.md` | Advanced | Complete settings.ini reference, 150+ console commands, CVar system |
+| `Performance-Tips.md` | Advanced | Optimization for rendering, physics, audio, networking, scripting, animation |
 
 ### New Pages Added (2026-04-02)
 
