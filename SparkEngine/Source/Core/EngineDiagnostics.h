@@ -78,6 +78,7 @@ namespace Spark
     void DiagCacheDebugger(DiagReport& report);
     void DiagIODebugger(DiagReport& report);
     void DiagThreadDebugger(DiagReport& report);
+    void DiagWatchdog(DiagReport& report);
 
     /// @brief Run ALL diagnostics (core + extended) into a single report.
     void DiagRunAll(DiagReport& report);

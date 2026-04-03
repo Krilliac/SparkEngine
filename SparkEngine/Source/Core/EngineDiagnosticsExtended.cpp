@@ -31,6 +31,7 @@
 #include "Utils/CacheDebugger.h"
 #include "Utils/IODebugger.h"
 #include "Utils/ThreadDebugger.h"
+#include "Utils/FreezeDetector.h"
 
 #include "Utils/LogMacros.h"
 
@@ -380,6 +381,34 @@ namespace Spark
         td.RecordThreadEnd(tid);
     }
 
+    void DiagWatchdog(DiagReport& report)
+    {
+        const std::string sub = "FreezeDetector";
+
+        auto& fd = FreezeDetector::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        auto status = fd.GetStatus();
+        // Watchdog may not be started (e.g. in test harness) — report state but
+        // only assert health checks when actually running
+        report.Add(sub, "Watchdog configured", true,
+                   status.watchdogRunning ? "running" : "not started (OK outside engine)");
+
+        if (status.watchdogRunning)
+        {
+            report.Add(sub, "State is Normal", status.state == FreezeState::Normal);
+            report.Add(sub, "Heartbeats received", status.totalHeartbeats > 0,
+                       std::format("{} heartbeats", status.totalHeartbeats));
+            report.Add(sub, "No unrecovered freezes", status.totalFreezes == 0,
+                       std::format("{} freezes", status.totalFreezes));
+        }
+        else
+        {
+            report.Add(sub, "State clean (not started)", status.state == FreezeState::Normal);
+            report.Add(sub, "No freezes recorded", status.totalFreezes == 0);
+        }
+    }
+
     // ========================================================================
     // DiagRunAll — master orchestrator
     // ========================================================================
@@ -421,6 +450,7 @@ namespace Spark
         DiagCacheDebugger(report);
         DiagIODebugger(report);
         DiagThreadDebugger(report);
+        DiagWatchdog(report);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Full diagnostics run complete");
     }
 

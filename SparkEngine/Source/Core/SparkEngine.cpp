@@ -51,6 +51,7 @@
 #include "Utils/DebugHookManager.h"
 #include "Utils/Logger.h"
 #include "Utils/JobSystem.h"
+#include "Utils/FreezeDetector.h"
 #include "FixedTimestepAccumulator.h"
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
@@ -180,6 +181,10 @@ static void ShutdownPhysics()
  */
 static void ShutdownEngine()
 {
+    // Stop the freeze detector first — we're intentionally tearing down,
+    // don't let the watchdog interpret shutdown delays as a freeze.
+    Spark::FreezeDetector::GetInstance().Stop();
+
     SPARK_DEBUG_HOOK(EnginePreShutdown, GetGameplayFrameCount(), 0.0f);
 
     // Publish EngineShutdownEvent before tearing down systems
@@ -528,6 +533,8 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
     InitConsole();
     LoadHeadlessModules(lpCmdLine);
+    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+    Spark::FreezeDetector::GetInstance().Start();
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -537,6 +544,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
     while (!g_shutdownRequested)
     {
+        SPARK_HEARTBEAT();
         auto tickStart = std::chrono::steady_clock::now();
 
         float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
@@ -709,6 +717,8 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
+    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+    Spark::FreezeDetector::GetInstance().Start();
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
     LogMissingModuleWarnings();
@@ -762,6 +772,15 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
         }
         else
         {
+            SPARK_HEARTBEAT();
+
+            // If the freeze detector requested recovery, skip this frame
+            if (SPARK_FREEZE_RECOVERY_REQUESTED())
+            {
+                SPARK_FREEZE_RECOVERY_ACK();
+                continue;
+            }
+
             // Smooth delta time over the last N frames to prevent physics/animation
             // jitter caused by single-frame spikes (e.g. shader compilation stalls,
             // OS scheduling delays). Raw dt is preserved for profiling accuracy.
@@ -1091,6 +1110,15 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
  */
 static void TickFrame(float dt)
 {
+    SPARK_HEARTBEAT();
+
+    // If the freeze detector requested recovery, skip this frame
+    if (SPARK_FREEZE_RECOVERY_REQUESTED())
+    {
+        SPARK_FREEZE_RECOVERY_ACK();
+        return;
+    }
+
     // Advance the global fixed-timestep accumulator for deterministic fixed-rate updates.
     Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
@@ -1297,6 +1325,8 @@ static int RunHeadlessLinux(int argc, char* argv[])
     InitConsole();
 
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
+    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+    Spark::FreezeDetector::GetInstance().Start();
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -1306,6 +1336,7 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
     while (!g_shutdownRequested)
     {
+        SPARK_HEARTBEAT();
         auto tickStart = std::chrono::steady_clock::now();
         float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
 
@@ -1514,6 +1545,8 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     }
 
     settings.RegisterConsoleCommands();
+    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+    Spark::FreezeDetector::GetInstance().Start();
 
     // Initialize console, debug, and gameplay systems in one call
     // (also publishes EngineStartEvent when complete)
