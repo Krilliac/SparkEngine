@@ -43,8 +43,8 @@ TEST(ChromeTracing_ScopeGuard)
     {
         SPARK_CHROME_TRACE_SCOPE("ScopedTest");
         // Some work
-        volatile int x = 0;
-        for (int i = 0; i < 100; i++)
+        volatile unsigned int x = 0;
+        for (unsigned int i = 0; i < 100; i++)
             x += i;
     }
 
