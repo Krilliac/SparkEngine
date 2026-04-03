@@ -190,6 +190,7 @@ add_executable(SparkTests
     TestDebugUtilities.cpp
     TestMemoryDebugger.cpp
     TestMemoryMonitor.cpp
+    TestFreezeDetector.cpp
     TestLogger.cpp
     TestProfiler.cpp
     TestStackTrace.cpp

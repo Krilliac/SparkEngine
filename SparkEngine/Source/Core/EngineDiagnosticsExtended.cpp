@@ -31,6 +31,7 @@
 #include "Utils/CacheDebugger.h"
 #include "Utils/IODebugger.h"
 #include "Utils/ThreadDebugger.h"
+#include "Utils/FreezeDetector.h"
 
 #include "Utils/LogMacros.h"
 
@@ -380,6 +381,22 @@ namespace Spark
         td.RecordThreadEnd(tid);
     }
 
+    void DiagWatchdog(DiagReport& report)
+    {
+        const std::string sub = "FreezeDetector";
+
+        auto& fd = FreezeDetector::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        auto status = fd.GetStatus();
+        report.Add(sub, "Watchdog running", status.watchdogRunning);
+        report.Add(sub, "State is Normal", status.state == FreezeState::Normal);
+        report.Add(sub, "Heartbeats received", status.totalHeartbeats > 0,
+                   std::format("{} heartbeats", status.totalHeartbeats));
+        report.Add(sub, "No unrecovered freezes", status.totalFreezes == 0,
+                   std::format("{} freezes", status.totalFreezes));
+    }
+
     // ========================================================================
     // DiagRunAll — master orchestrator
     // ========================================================================
@@ -421,6 +438,7 @@ namespace Spark
         DiagCacheDebugger(report);
         DiagIODebugger(report);
         DiagThreadDebugger(report);
+        DiagWatchdog(report);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Full diagnostics run complete");
     }
 

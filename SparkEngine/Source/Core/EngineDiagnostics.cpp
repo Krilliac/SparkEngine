@@ -26,6 +26,7 @@
 #include "Physics/PhysicsSystem.h"
 #include "Utils/EventBus.h"
 #include "Utils/LocalFileCache.h"
+#include "Utils/FreezeDetector.h"
 #include "Utils/MemoryMonitor.h"
 #include "Utils/SparkConsole.h"
 
@@ -990,6 +991,10 @@ namespace Spark
             "diag_threads",
             [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagThreadDebugger); },
             "Diagnose thread debugger (lifecycle, contention)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_watchdog", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagWatchdog); },
+            "Diagnose freeze detector watchdog (heartbeat, state)", "Diagnostics");
     }
 
 } // namespace Spark
