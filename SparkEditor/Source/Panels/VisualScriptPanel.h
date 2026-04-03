@@ -124,6 +124,9 @@ namespace SparkEditor
 
         // Node ID counter
         uint32_t m_nextNodeId = 1;
+
+        // Debug
+        bool m_debugCompile = false;
     };
 
 } // namespace SparkEditor

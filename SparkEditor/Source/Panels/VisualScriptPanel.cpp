@@ -96,6 +96,7 @@ namespace SparkEditor
         {"Custom Event", ScriptNodeType::DefineCustomEvent},
         {"Call Function", ScriptNodeType::CallFunction},
         {"Return Value", ScriptNodeType::ReturnValue},
+        {"Comment", ScriptNodeType::Comment},
     };
 
     static constexpr NodeCategory kCategories[] = {
@@ -130,6 +131,8 @@ namespace SparkEditor
             return IM_COL32(140, 140, 40, 255); // Variables: yellow
         if (val >= 350 && val <= 354)
             return IM_COL32(100, 100, 100, 255); // Constants: gray
+        if (val == 500)
+            return IM_COL32(60, 120, 60, 255); // Comment: dark green
         return IM_COL32(80, 80, 80, 255);
     }
 
@@ -170,6 +173,48 @@ namespace SparkEditor
             return IM_COL32(40, 120, 220, 255);
         default:
             return IM_COL32(150, 150, 150, 255);
+        }
+    }
+
+    // Pin label helper — returns a short label for a pin based on its kind and index
+    static const char* GetPinLabel(PinKind kind, int index, bool isOutput, ScriptNodeType nodeType)
+    {
+        // Event outputs
+        if (isOutput && index == 0 && kind == PinKind::Execution)
+            return "";
+        if (isOutput && kind == PinKind::Execution)
+        {
+            if (nodeType == ScriptNodeType::Branch)
+                return index == 0 ? "True" : "False";
+            if (nodeType == ScriptNodeType::ForLoop)
+                return index == 0 ? "Body" : "Done";
+            if (nodeType == ScriptNodeType::Sequence)
+            {
+                static const char* seqLabels[] = {"0", "1", "2", "3"};
+                return (index < 4) ? seqLabels[index] : "";
+            }
+            return "";
+        }
+        // Input exec
+        if (!isOutput && kind == PinKind::Execution)
+            return "";
+        // Data pins by kind
+        switch (kind)
+        {
+        case PinKind::Bool:
+            return "Bool";
+        case PinKind::Int:
+            return "Int";
+        case PinKind::Float:
+            return "Float";
+        case PinKind::String:
+            return "Str";
+        case PinKind::Vector3:
+            return "Vec3";
+        case PinKind::Entity:
+            return "Entity";
+        default:
+            return "";
         }
     }
 
@@ -221,14 +266,55 @@ namespace SparkEditor
     void VisualScriptPanel::RenderNodePalette()
     {
         ImGui::Text("Node Palette");
+
+        // Search filter
+        static char searchBuf[64] = "";
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputTextWithHint("##search", "Search nodes...", searchBuf, sizeof(searchBuf));
         ImGui::Separator();
+
+        bool hasSearch = searchBuf[0] != '\0';
+        std::string searchLower;
+        if (hasSearch)
+        {
+            searchLower = searchBuf;
+            std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(), ::tolower);
+        }
 
         for (const auto& category : kCategories)
         {
-            if (ImGui::TreeNode(category.name))
+            // If searching, skip empty categories
+            bool hasMatch = false;
+            if (hasSearch)
             {
                 for (int i = 0; i < category.count; ++i)
                 {
+                    std::string name = category.entries[i].name;
+                    std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+                    if (name.find(searchLower) != std::string::npos)
+                    {
+                        hasMatch = true;
+                        break;
+                    }
+                }
+                if (!hasMatch)
+                    continue;
+            }
+
+            // Auto-open categories when searching
+            bool open = hasSearch ? ImGui::TreeNodeEx(category.name, ImGuiTreeNodeFlags_DefaultOpen)
+                                  : ImGui::TreeNode(category.name);
+            if (open)
+            {
+                for (int i = 0; i < category.count; ++i)
+                {
+                    if (hasSearch)
+                    {
+                        std::string name = category.entries[i].name;
+                        std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+                        if (name.find(searchLower) == std::string::npos)
+                            continue;
+                    }
                     if (ImGui::Selectable(category.entries[i].name))
                     {
                         // Add node at center of canvas view
@@ -347,6 +433,14 @@ namespace SparkEditor
         const char* title = GetNodeTitle(nodeUI.node.type);
         drawList->AddText(ImVec2(nx + 8, ny + 4), IM_COL32(255, 255, 255, 255), title);
 
+        // Comment nodes: render text body
+        if (nodeUI.node.type == ScriptNodeType::Comment)
+        {
+            auto it = nodeUI.node.properties.find("text");
+            const char* commentText = (it != nodeUI.node.properties.end()) ? it->second.c_str() : "Comment";
+            drawList->AddText(ImVec2(nx + 8, ny + 26.0f * m_canvasZoom), IM_COL32(200, 230, 200, 220), commentText);
+        }
+
         // Input pins (with click detection for connection dragging)
         float pinRadius = 5.0f * m_canvasZoom;
         float pinY = ny + 30.0f * m_canvasZoom;
@@ -356,6 +450,14 @@ namespace SparkEditor
             ImVec2 pinPos(nx, pinY);
             ImU32 pinColor = GetPinColor(nodeUI.node.inputs[p].kind);
             drawList->AddCircleFilled(pinPos, pinRadius, pinColor);
+
+            // Pin label
+            const char* label = GetPinLabel(nodeUI.node.inputs[p].kind, static_cast<int>(p), false, nodeUI.node.type);
+            if (label[0] != '\0' && m_canvasZoom > 0.5f)
+            {
+                drawList->AddText(ImVec2(pinPos.x + pinRadius + 3.0f, pinPos.y - 6.0f * m_canvasZoom),
+                                  IM_COL32(180, 180, 180, 200), label);
+            }
 
             // Hover highlight
             float dx = pinIO.MousePos.x - pinPos.x;
@@ -381,6 +483,16 @@ namespace SparkEditor
             ImVec2 pinPos(nx + nw, pinY);
             ImU32 pinColor = GetPinColor(nodeUI.node.outputs[p].kind);
             drawList->AddCircleFilled(pinPos, pinRadius, pinColor);
+
+            // Pin label (right-aligned)
+            const char* outLabel =
+                GetPinLabel(nodeUI.node.outputs[p].kind, static_cast<int>(p), true, nodeUI.node.type);
+            if (outLabel[0] != '\0' && m_canvasZoom > 0.5f)
+            {
+                float textWidth = ImGui::CalcTextSize(outLabel).x;
+                drawList->AddText(ImVec2(pinPos.x - pinRadius - 3.0f - textWidth, pinPos.y - 6.0f * m_canvasZoom),
+                                  IM_COL32(180, 180, 180, 200), outLabel);
+            }
 
             float dx = pinIO.MousePos.x - pinPos.x;
             float dy = pinIO.MousePos.y - pinPos.y;
@@ -795,6 +907,12 @@ namespace SparkEditor
             addInput(PinKind::Float); // Value to return
             break;
 
+        // Comment (no pins, just a visual box)
+        case ScriptNodeType::Comment:
+            nodeUI.width = 200.0f;
+            nodeUI.height = 60.0f;
+            break;
+
         // Constants
         case ScriptNodeType::ConstFloat:
             addOutput(PinKind::Float);
@@ -1037,6 +1155,17 @@ namespace SparkEditor
                 }
             }
         }
+
+        // Comment text
+        if (nodeUI.node.type == ScriptNodeType::Comment)
+        {
+            auto it = props.find("text");
+            char buf[256];
+            std::strncpy(buf, (it != props.end()) ? it->second.c_str() : "Comment", sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            if (ImGui::InputTextMultiline("##comment", buf, sizeof(buf), ImVec2(-1, 60)))
+                props["text"] = buf;
+        }
     }
 
     // ========================================================================
@@ -1065,6 +1194,11 @@ namespace SparkEditor
             std::string loadPath = std::string(m_savePath) + std::string(m_scriptName) + ".vscript";
             LoadGraph(loadPath);
         }
+
+        ImGui::SameLine();
+        ImGui::Checkbox("Debug", &m_debugCompile);
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Insert trace calls for each node (view in Script Debugger panel)");
 
         ImGui::SameLine();
         if (m_compileSuccess)
@@ -1128,7 +1262,7 @@ namespace SparkEditor
             graph.variables.push_back(std::move(var));
         }
 
-        auto result = VisualScriptCompiler::Compile(graph);
+        auto result = VisualScriptCompiler::Compile(graph, m_debugCompile);
         m_compileErrors = result.errors;
         m_compileSuccess = result.success;
         m_lastCompiledSource = result.angelScriptSource;
@@ -1277,19 +1411,68 @@ namespace SparkEditor
             auto end = s.find("\"", pos);
             return (end != std::string::npos) ? s.substr(pos, end - pos) : "";
         };
+        // Find matching closing brace accounting for nesting
+        auto findMatchingBrace = [](const std::string& s, size_t openPos) -> size_t
+        {
+            int depth = 0;
+            for (size_t i = openPos; i < s.size(); i++)
+            {
+                if (s[i] == '{')
+                    depth++;
+                else if (s[i] == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return i;
+                }
+            }
+            return std::string::npos;
+        };
+        // Extract properties sub-object: "props":{"key":"val",...}
+        auto extractProps = [](const std::string& s) -> std::unordered_map<std::string, std::string>
+        {
+            std::unordered_map<std::string, std::string> props;
+            auto pos = s.find("\"props\":{");
+            if (pos == std::string::npos)
+                return props;
+            pos += 8; // skip to inner {
+            auto end = s.find("}", pos + 1);
+            if (end == std::string::npos)
+                return props;
+            std::string inner = s.substr(pos + 1, end - pos - 1);
+            // Parse "key":"val" pairs
+            size_t p = 0;
+            while ((p = inner.find("\"", p)) != std::string::npos)
+            {
+                auto keyEnd = inner.find("\"", p + 1);
+                if (keyEnd == std::string::npos)
+                    break;
+                std::string key = inner.substr(p + 1, keyEnd - p - 1);
+                auto valStart = inner.find("\"", keyEnd + 2);
+                if (valStart == std::string::npos)
+                    break;
+                auto valEnd = inner.find("\"", valStart + 1);
+                if (valEnd == std::string::npos)
+                    break;
+                props[key] = inner.substr(valStart + 1, valEnd - valStart - 1);
+                p = valEnd + 1;
+            }
+            return props;
+        };
 
-        // Parse nodes
+        // Parse sections with brace-depth-aware object extraction
         auto parseSection = [&](const std::string& sectionName, auto callback)
         {
             auto start = content.find("\"" + sectionName + "\"");
-            auto end = content.find("]", start);
-            if (start == std::string::npos || end == std::string::npos)
+            auto arrayStart = content.find("[", start);
+            auto arrayEnd = content.find("]", arrayStart);
+            if (start == std::string::npos || arrayStart == std::string::npos || arrayEnd == std::string::npos)
                 return;
-            std::string section = content.substr(start, end - start);
+            std::string section = content.substr(arrayStart, arrayEnd - arrayStart);
             size_t pos = 0;
             while ((pos = section.find("{", pos)) != std::string::npos)
             {
-                auto objEnd = section.find("}", pos);
+                auto objEnd = findMatchingBrace(section, pos);
                 if (objEnd == std::string::npos)
                     break;
                 callback(section.substr(pos, objEnd - pos + 1));
@@ -1310,6 +1493,10 @@ namespace SparkEditor
                              m_nodes.back().node.id = id;
                              if (id >= m_nextNodeId)
                                  m_nextNodeId = id + 1;
+                             // Restore properties
+                             auto props = extractProps(obj);
+                             for (const auto& [k, v] : props)
+                                 m_nodes.back().node.properties[k] = v;
                          }
                      });
 

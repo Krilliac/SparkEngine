@@ -12,10 +12,21 @@
 namespace SparkEditor
 {
 
+    // Static instance for the trace callback
+    static ScriptDebugPanel* s_activeDebugPanel = nullptr;
+
+    static void DebugTraceHandler(uint32_t nodeId, const char* nodeName, const char* output)
+    {
+        if (s_activeDebugPanel)
+            s_activeDebugPanel->AddTraceEntry(nodeId, nodeName ? nodeName : "", "script", output ? output : "");
+    }
+
     ScriptDebugPanel::ScriptDebugPanel() : EditorPanel("Script Debugger", "ScriptDebugger") {}
 
     bool ScriptDebugPanel::Initialize()
     {
+        s_activeDebugPanel = this;
+        ASSetDebugTraceCallback(DebugTraceHandler);
         m_isInitialized = true;
         return true;
     }

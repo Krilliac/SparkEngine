@@ -446,3 +446,9 @@ void ASFireEvent(const std::string& eventName);
 
 /** @brief Print a debug trace message (callable as `debugTrace()`) */
 void ASDebugTrace(uint32_t nodeId, const std::string& nodeName, const std::string& output);
+
+/** @brief Callback type for debug trace messages (editor hooks into this) */
+using DebugTraceCallback = void (*)(uint32_t nodeId, const char* nodeName, const char* output);
+
+/** @brief Set a callback to receive debug trace messages from running scripts */
+void ASSetDebugTraceCallback(DebugTraceCallback callback);

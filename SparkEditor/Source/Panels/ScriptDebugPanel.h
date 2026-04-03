@@ -8,6 +8,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
 #include "Engine/Scripting/VisualScriptCompiler.h"
 
 #include <cstdint>

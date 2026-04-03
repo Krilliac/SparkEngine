@@ -356,9 +356,18 @@ void ASFireEvent(const std::string& eventName)
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[Script] FireEvent: %s", eventName.c_str());
 }
 
+static DebugTraceCallback g_debugTraceCallback = nullptr;
+
 void ASDebugTrace(uint32_t nodeId, const std::string& nodeName, const std::string& output)
 {
     SPARK_LOG_INFO(Spark::LogCategory::Scripting, "[Trace] Node %u (%s): %s", nodeId, nodeName.c_str(), output.c_str());
+    if (g_debugTraceCallback)
+        g_debugTraceCallback(nodeId, nodeName.c_str(), output.c_str());
+}
+
+void ASSetDebugTraceCallback(DebugTraceCallback callback)
+{
+    g_debugTraceCallback = callback;
 }
 
 // ============================================================================

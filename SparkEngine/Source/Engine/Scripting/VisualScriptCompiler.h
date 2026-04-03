@@ -109,6 +109,9 @@ namespace Spark::Scripting
         DefineCustomEvent = 400, ///< Defines a custom event handler method
         CallFunction = 401,      ///< Calls a reusable function sub-graph
         ReturnValue = 402,       ///< Returns a value from a function sub-graph
+
+        // Editor-only (not compiled)
+        Comment = 500, ///< Visual comment box for graph organization
     };
 
     // ========================================================================
