@@ -1,0 +1,8 @@
+name: "SparkEngine CodeQL Config"
+
+# Exclude third-party libraries from code scanning analysis.
+# These are vendored dependencies we don't maintain — alerts in them
+# are noise and should not block PRs.
+paths-ignore:
+  - "ThirdParty"
+  - "ThirdParty/**"
