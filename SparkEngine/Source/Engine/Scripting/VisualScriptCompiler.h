@@ -236,9 +236,10 @@ namespace Spark::Scripting
         /**
          * @brief Compile a visual script graph to AngelScript source
          * @param graph Input graph with nodes and connections
+         * @param debugMode When true, inserts debugTrace() calls at each node for tracing
          * @return Compilation result with generated source or errors
          */
-        static ScriptCompileResult Compile(const VisualScriptGraph& graph);
+        static ScriptCompileResult Compile(const VisualScriptGraph& graph, bool debugMode = false);
 
       private:
         /// Generate a unique variable name for a node's output

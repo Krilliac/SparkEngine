@@ -384,7 +384,20 @@ namespace Spark::Scripting
             std::string idx = out(0);
             code += "    for (int " + idx + " = " + start + "; " + idx + " < " + end + "; " + idx + "++)\n";
             code += "    {\n";
-            code += "        // Loop body (connected nodes execute here)\n";
+            // Emit body nodes connected to output pin 0 (LoopBody exec)
+            for (const auto& c : graph.connections)
+            {
+                if (c.fromNode == node.id && c.fromPin == 0)
+                {
+                    const auto* bodyNode = FindNode(graph, c.toNode);
+                    if (bodyNode && !IsEventNode(bodyNode->type))
+                    {
+                        std::string bodyCode;
+                        EmitNode(*bodyNode, graph, bodyCode);
+                        code += "    " + bodyCode;
+                    }
+                }
+            }
             code += "    }\n";
             break;
         }
@@ -469,7 +482,7 @@ namespace Spark::Scripting
     // Main Compile Entry Point
     // ========================================================================
 
-    ScriptCompileResult VisualScriptCompiler::Compile(const VisualScriptGraph& graph)
+    ScriptCompileResult VisualScriptCompiler::Compile(const VisualScriptGraph& graph, bool debugMode)
     {
         ScriptCompileResult result;
 
@@ -587,45 +600,81 @@ namespace Spark::Scripting
                     continue;
                 }
 
+                // Debug trace instrumentation
+                if (debugMode)
+                {
+                    bodyCode += "    debugTrace(" + std::to_string(node->id) + ", \"" +
+                                std::to_string(static_cast<uint32_t>(node->type)) + "\", \"executing\");\n";
+                }
+
                 // Handle Branch nodes specially — emit if/else with true/false paths
                 if (node->type == ScriptNodeType::Branch)
                 {
-                    // Input 0 is the condition (after exec pin)
                     std::string condition = ResolveInput(*node, 0, graph);
                     bodyCode += "    if (" + condition + ")\n    {\n";
 
-                    // Find nodes connected to output pin 0 (True) via execution
-                    for (const auto& c : graph.connections)
+                    // Walk the True execution chain (output pin 0)
+                    auto emitExecChain = [&](uint32_t fromNodeId, uint32_t fromPinIdx)
                     {
-                        if (c.fromNode == node->id && c.fromPin == 0)
+                        std::string chainCode;
+                        uint32_t currentNode = 0;
+                        bool found = true;
+
+                        // Find first connected node
+                        for (const auto& c : graph.connections)
                         {
-                            const auto* trueNode = FindNode(graph, c.toNode);
-                            if (trueNode && !IsEventNode(trueNode->type))
+                            if (c.fromNode == fromNodeId && c.fromPin == fromPinIdx)
                             {
-                                std::string trueCode;
-                                EmitNode(*trueNode, graph, trueCode);
-                                bodyCode += "    " + trueCode;
+                                currentNode = c.toNode;
+                                break;
                             }
                         }
-                    }
+                        if (currentNode == 0)
+                            return chainCode;
 
+                        // Walk the chain following execution output pin 0
+                        std::unordered_set<uint32_t> emittedInChain;
+                        while (found && currentNode != 0 && emittedInChain.find(currentNode) == emittedInChain.end())
+                        {
+                            const auto* chainNode = FindNode(graph, currentNode);
+                            if (!chainNode || IsEventNode(chainNode->type))
+                                break;
+
+                            emittedInChain.insert(currentNode);
+                            EmitNode(*chainNode, graph, chainCode);
+
+                            // Follow first execution output (pin 0) to next node
+                            found = false;
+                            for (const auto& c : graph.connections)
+                            {
+                                if (c.fromNode == currentNode && c.fromPin == 0 &&
+                                    !IsActionNode(chainNode->type) == false)
+                                {
+                                    // Only follow execution connections
+                                    const auto* nextNode = FindNode(graph, c.toNode);
+                                    if (nextNode && !nextNode->outputs.empty() && nextNode->inputs.size() > 0 &&
+                                        nextNode->inputs[0].kind == PinKind::Execution)
+                                    {
+                                        currentNode = c.toNode;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        return chainCode;
+                    };
+
+                    std::string trueChain = emitExecChain(node->id, 0);
+                    for (auto& ch : trueChain)
+                    {
+                        // already properly indented by EmitNode
+                    }
+                    bodyCode += trueChain;
                     bodyCode += "    }\n    else\n    {\n";
 
-                    // Find nodes connected to output pin 1 (False) via execution
-                    for (const auto& c : graph.connections)
-                    {
-                        if (c.fromNode == node->id && c.fromPin == 1)
-                        {
-                            const auto* falseNode = FindNode(graph, c.toNode);
-                            if (falseNode && !IsEventNode(falseNode->type))
-                            {
-                                std::string falseCode;
-                                EmitNode(*falseNode, graph, falseCode);
-                                bodyCode += "    " + falseCode;
-                            }
-                        }
-                    }
-
+                    std::string falseChain = emitExecChain(node->id, 1);
+                    bodyCode += falseChain;
                     bodyCode += "    }\n";
                 }
                 else

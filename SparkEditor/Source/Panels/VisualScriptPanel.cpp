@@ -4,6 +4,7 @@
  */
 
 #include "VisualScriptPanel.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
 #include <imgui.h>
 
 #include <algorithm>
@@ -931,17 +932,109 @@ namespace SparkEditor
         }
 
         // Node-specific properties
+        auto& props = nodeUI.node.properties;
+
+        // Key name dropdown for input nodes
         if (nodeUI.node.type == ScriptNodeType::OnKeyPress || nodeUI.node.type == ScriptNodeType::GetKeyDown ||
             nodeUI.node.type == ScriptNodeType::GetKey)
         {
-            auto& props = nodeUI.node.properties;
-            char keyBuf[64];
+            static const char* keyNames[] = {"W", "A", "S",   "D",      "Space", "LeftShift", "E",         "F",
+                                             "R", "Q", "Tab", "Escape", "Enter", "LeftCtrl",  "LeftMouse", "RightMouse",
+                                             "1", "2", "3",   "4",      "Up",    "Down",      "Left",      "Right"};
+            static constexpr int keyCount = static_cast<int>(std::size(keyNames));
+
             auto it = props.find("key");
-            std::strncpy(keyBuf, (it != props.end()) ? it->second.c_str() : "Space", sizeof(keyBuf) - 1);
-            keyBuf[sizeof(keyBuf) - 1] = '\0';
-            if (ImGui::InputText("Key", keyBuf, sizeof(keyBuf)))
+            std::string currentKey = (it != props.end()) ? it->second : "Space";
+            int selectedKey = 4; // Default: Space
+            for (int k = 0; k < keyCount; k++)
             {
-                props["key"] = keyBuf;
+                if (currentKey == keyNames[k])
+                {
+                    selectedKey = k;
+                    break;
+                }
+            }
+            if (ImGui::Combo("Key", &selectedKey, keyNames, keyCount))
+                props["key"] = keyNames[selectedKey];
+        }
+
+        // Sound name for PlaySound
+        if (nodeUI.node.type == ScriptNodeType::PlaySound)
+        {
+            auto it = props.find("sound");
+            char buf[128];
+            std::strncpy(buf, (it != props.end()) ? it->second.c_str() : "", sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            if (ImGui::InputText("Sound", buf, sizeof(buf)))
+                props["sound"] = buf;
+        }
+
+        // Animation name for PlayAnimation
+        if (nodeUI.node.type == ScriptNodeType::PlayAnimation)
+        {
+            auto it = props.find("animation");
+            char buf[128];
+            std::strncpy(buf, (it != props.end()) ? it->second.c_str() : "", sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            if (ImGui::InputText("Animation", buf, sizeof(buf)))
+                props["animation"] = buf;
+        }
+
+        // Event name for FireEvent
+        if (nodeUI.node.type == ScriptNodeType::FireEvent)
+        {
+            auto it = props.find("event");
+            char buf[128];
+            std::strncpy(buf, (it != props.end()) ? it->second.c_str() : "", sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            if (ImGui::InputText("Event", buf, sizeof(buf)))
+                props["event"] = buf;
+        }
+
+        // Entity name for SpawnEntity and GetEntityByName
+        if (nodeUI.node.type == ScriptNodeType::SpawnEntity || nodeUI.node.type == ScriptNodeType::GetEntityByName)
+        {
+            auto it = props.find("name");
+            char buf[128];
+            std::strncpy(buf, (it != props.end()) ? it->second.c_str() : "Entity", sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            if (ImGui::InputText("Entity Name", buf, sizeof(buf)))
+                props["name"] = buf;
+        }
+
+        // Function name for CallFunction
+        if (nodeUI.node.type == ScriptNodeType::CallFunction)
+        {
+            auto it = props.find("function");
+            char buf[128];
+            std::strncpy(buf, (it != props.end()) ? it->second.c_str() : "myFunction", sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            if (ImGui::InputText("Function", buf, sizeof(buf)))
+                props["function"] = buf;
+        }
+
+        // Variable name for Get/Set Variable
+        if (nodeUI.node.type == ScriptNodeType::GetVariable || nodeUI.node.type == ScriptNodeType::SetVariable)
+        {
+            auto it = props.find("name");
+            char buf[128];
+            std::strncpy(buf, (it != props.end()) ? it->second.c_str() : "var0", sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            if (ImGui::InputText("Variable", buf, sizeof(buf)))
+                props["name"] = buf;
+
+            // Show dropdown of declared variables
+            if (!m_variables.empty())
+            {
+                if (ImGui::BeginCombo("##varlist", (it != props.end()) ? it->second.c_str() : "select..."))
+                {
+                    for (const auto& v : m_variables)
+                    {
+                        if (ImGui::Selectable(v.name))
+                            props["name"] = v.name;
+                    }
+                    ImGui::EndCombo();
+                }
             }
         }
     }
@@ -991,6 +1084,17 @@ namespace SparkEditor
                 ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "  %s", err.c_str());
             }
         }
+
+        // Generated code preview (collapsible)
+        if (!m_lastCompiledSource.empty())
+        {
+            if (ImGui::CollapsingHeader("Generated AngelScript"))
+            {
+                ImGui::BeginChild("CodePreview", ImVec2(0, 200), true);
+                ImGui::TextUnformatted(m_lastCompiledSource.c_str());
+                ImGui::EndChild();
+            }
+        }
     }
 
     // ========================================================================
@@ -1038,6 +1142,18 @@ namespace SparkEditor
             {
                 file << result.angelScriptSource;
                 file.close();
+            }
+
+            // Load into AngelScript engine for execution
+            auto* asEngine = AngelScriptEngine::GetInstance();
+            if (asEngine)
+            {
+                std::string moduleName = m_scriptName;
+                if (!asEngine->CompileScriptFromString(result.angelScriptSource, moduleName))
+                {
+                    m_compileErrors.push_back("AngelScript: " + asEngine->GetLastError());
+                    m_compileSuccess = false;
+                }
             }
         }
     }
@@ -1102,19 +1218,103 @@ namespace SparkEditor
         if (!file.is_open())
             return;
 
-        // Read entire file — actual JSON parsing would use a library,
-        // but for now we rebuild from the saved compilation output
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         file.close();
 
-        // Clear current state
         m_nodes.clear();
         m_connections.clear();
         m_variables.clear();
         m_selectedNode = -1;
+        m_nextNodeId = 1;
 
-        // Basic parse would go here — for now, log success
-        (void)content;
+        // Helpers for parsing our simple JSON format
+        auto extractInt = [](const std::string& s, const std::string& key) -> int
+        {
+            auto pos = s.find("\"" + key + "\":");
+            if (pos == std::string::npos)
+                return 0;
+            pos += key.size() + 3;
+            return std::atoi(s.c_str() + pos);
+        };
+        auto extractFloat = [](const std::string& s, const std::string& key) -> float
+        {
+            auto pos = s.find("\"" + key + "\":");
+            if (pos == std::string::npos)
+                return 0.0f;
+            pos += key.size() + 3;
+            return std::strtof(s.c_str() + pos, nullptr);
+        };
+        auto extractStr = [](const std::string& s, const std::string& key) -> std::string
+        {
+            auto pos = s.find("\"" + key + "\":\"");
+            if (pos == std::string::npos)
+                return "";
+            pos += key.size() + 4;
+            auto end = s.find("\"", pos);
+            return (end != std::string::npos) ? s.substr(pos, end - pos) : "";
+        };
+
+        // Parse nodes
+        auto parseSection = [&](const std::string& sectionName, auto callback)
+        {
+            auto start = content.find("\"" + sectionName + "\"");
+            auto end = content.find("]", start);
+            if (start == std::string::npos || end == std::string::npos)
+                return;
+            std::string section = content.substr(start, end - start);
+            size_t pos = 0;
+            while ((pos = section.find("{", pos)) != std::string::npos)
+            {
+                auto objEnd = section.find("}", pos);
+                if (objEnd == std::string::npos)
+                    break;
+                callback(section.substr(pos, objEnd - pos + 1));
+                pos = objEnd + 1;
+            }
+        };
+
+        parseSection("nodes",
+                     [&](const std::string& obj)
+                     {
+                         uint32_t id = static_cast<uint32_t>(extractInt(obj, "id"));
+                         auto type = static_cast<ScriptNodeType>(extractInt(obj, "type"));
+                         float x = extractFloat(obj, "x");
+                         float y = extractFloat(obj, "y");
+                         AddNodeAtPosition(type, x, y);
+                         if (!m_nodes.empty())
+                         {
+                             m_nodes.back().node.id = id;
+                             if (id >= m_nextNodeId)
+                                 m_nextNodeId = id + 1;
+                         }
+                     });
+
+        parseSection("connections",
+                     [&](const std::string& obj)
+                     {
+                         ConnectionUI conn;
+                         conn.connection.fromNode = static_cast<uint32_t>(extractInt(obj, "from"));
+                         conn.connection.fromPin = static_cast<uint32_t>(extractInt(obj, "fromPin"));
+                         conn.connection.toNode = static_cast<uint32_t>(extractInt(obj, "to"));
+                         conn.connection.toPin = static_cast<uint32_t>(extractInt(obj, "toPin"));
+                         m_connections.push_back(conn);
+                     });
+
+        parseSection("variables",
+                     [&](const std::string& obj)
+                     {
+                         VariableUI var{};
+                         std::string name = extractStr(obj, "name");
+                         std::strncpy(var.name, name.c_str(), sizeof(var.name) - 1);
+                         var.typeIndex = extractInt(obj, "type");
+                         std::string defVal = extractStr(obj, "default");
+                         std::strncpy(var.defaultValue, defVal.c_str(), sizeof(var.defaultValue) - 1);
+                         m_variables.push_back(var);
+                     });
+
+        std::string className = extractStr(content, "className");
+        if (!className.empty())
+            std::strncpy(m_scriptName, className.c_str(), sizeof(m_scriptName) - 1);
     }
 
     // ========================================================================
