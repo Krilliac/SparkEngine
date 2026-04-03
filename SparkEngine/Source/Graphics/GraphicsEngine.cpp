@@ -25,6 +25,7 @@
 #include "LightingSystem.h"
 #include "AssetPipeline.h"
 #include "UpscalingSystem.h"
+#include "VRAMBudgetMonitor.h"
 
 #include "TemporalEffects.h"
 #include "LightManager.h"
@@ -126,6 +127,7 @@ GraphicsEngine::GraphicsEngine()
         m_lightingSystem = std::make_unique<LightingSystem>();
         m_assetPipeline = std::make_unique<AssetPipeline>();
         m_upscalingSystem = std::make_unique<UpscalingSystem>();
+        m_vramBudgetMonitor = std::make_unique<VRAMBudgetMonitor>();
 
         m_lightManager = std::make_unique<LightManager>();
         m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
@@ -327,6 +329,25 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
+    if (m_vramBudgetMonitor)
+    {
+        hr = m_vramBudgetMonitor->Initialize(m_device.Get());
+        if (FAILED(hr))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize VRAMBudgetMonitor", L"ERROR");
+        }
+        else
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"VRAMBudgetMonitor initialized successfully", L"SUCCESS");
+
+            // Connect to TextureSystem for pressure-driven eviction
+            if (m_textureSystem)
+            {
+                m_textureSystem->SetVRAMBudgetMonitor(m_vramBudgetMonitor.get());
+            }
+        }
+    }
+
     if (m_physicsSystem)
     {
         hr = m_physicsSystem->Initialize();
@@ -488,6 +509,12 @@ void GraphicsEngine::Shutdown()
     {
         m_assetPipeline->Shutdown();
         LOG_TO_CONSOLE_IMMEDIATE(L"AssetPipeline shutdown complete", L"INFO");
+    }
+
+    if (m_vramBudgetMonitor)
+    {
+        m_vramBudgetMonitor->Shutdown();
+        LOG_TO_CONSOLE_IMMEDIATE(L"VRAMBudgetMonitor shutdown complete", L"INFO");
     }
 
     // PhysicsSystem lifecycle is now managed by SparkEngine.cpp / EngineContext
@@ -716,6 +743,10 @@ void GraphicsEngine::BeginFrame()
     m_gpuTimestampQuery.BeginFrame(m_context.Get());
     if (m_shadowAtlas)
         m_shadowAtlas->BeginFrame();
+
+    // Update VRAM budget monitor (lightweight DXGI query)
+    if (m_vramBudgetMonitor)
+        m_vramBudgetMonitor->Update();
 
     // Shader hot-reload: check for modified .hlsl files each frame
     if (m_shader)
@@ -1154,6 +1185,7 @@ ID3D11DepthStencilView* GraphicsEngine::GetDepthStencilView() const
 #include "LightingSystem.h"
 #include "AssetPipeline.h"
 #include "UpscalingSystem.h"
+#include "VRAMBudgetMonitor.h"
 #include "LightManager.h"
 #include "PostProcessingPipeline.h"
 using Spark::Graphics::PostProcessingPipeline;
@@ -1232,6 +1264,7 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_lightingSystem = std::make_unique<LightingSystem>();
     m_assetPipeline = std::make_unique<AssetPipeline>();
     m_upscalingSystem = std::make_unique<UpscalingSystem>();
+    m_vramBudgetMonitor = std::make_unique<VRAMBudgetMonitor>();
     m_lightManager = std::make_unique<LightManager>();
     m_renderPipeline = std::make_unique<Spark::Graphics::RenderPipeline>();
     m_renderPipeline->SetGraphicsEngine(this);
@@ -1260,6 +1293,7 @@ void GraphicsEngine::Shutdown()
     m_lightingSystem.reset();
     m_postProcessing.reset();
     m_assetPipeline.reset();
+    m_vramBudgetMonitor.reset();
     m_physicsSystem = nullptr;
     m_lightManager.reset();
     m_postProcessing.reset();
@@ -1316,6 +1350,10 @@ void GraphicsEngine::BeginFrame()
     rhi.frameStart = std::chrono::high_resolution_clock::now();
 
     rhi.bridge.BeginFrame();
+
+    // Update VRAM budget monitor (lightweight query)
+    if (m_vramBudgetMonitor)
+        m_vramBudgetMonitor->Update();
 
     // Clear the back buffer
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();

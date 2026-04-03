@@ -8,6 +8,7 @@
  */
 
 #include "TextureSystem.h"
+#include "VRAMBudgetMonitor.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -25,6 +26,16 @@ void TextureSystem::Update(float deltaTime)
     UpdateMetrics();
 
     m_currentFrame++;
+
+    // If a VRAM budget monitor is attached, let it adjust the texture budget
+    if (m_vramBudgetMonitor)
+    {
+        size_t recommended = m_vramBudgetMonitor->GetRecommendedTextureBudget();
+        if (recommended > 0)
+        {
+            m_memoryBudget = recommended;
+        }
+    }
 
     // Priority-based eviction: if over budget, evict lowest-priority LRU textures first
     size_t currentUsage = GetMemoryUsage();
@@ -216,6 +227,7 @@ void TextureSystem::GarbageCollect()
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "TextureSystem.h"
+#include "VRAMBudgetMonitor.h"
 #include "../Utils/Validate.h"
 #include "../Utils/LogMacros.h"
 #include <algorithm>
@@ -229,6 +241,16 @@ void TextureSystem::Update(float /*deltaTime*/)
     UpdateMetrics();
 
     m_currentFrame++;
+
+    // If a VRAM budget monitor is attached, let it adjust the texture budget
+    if (m_vramBudgetMonitor)
+    {
+        size_t recommended = m_vramBudgetMonitor->GetRecommendedTextureBudget();
+        if (recommended > 0)
+        {
+            m_memoryBudget = recommended;
+        }
+    }
 
     // Priority-based eviction: if over budget, evict lowest-priority LRU textures first
     size_t currentUsage = GetMemoryUsage();
