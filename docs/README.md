@@ -29,6 +29,24 @@ docs/update-all-docs.sh check        # Dry-run: report what's stale
 
 All scripts support a `check` mode that exits 1 if stale (for CI use).
 
+## Validation Scripts
+
+Code quality and architectural integrity checks (all in `tools/`):
+
+```bash
+tools/validate-all.sh              # Run all 6 checks
+tools/validate-all.sh --warn-only  # Report but don't fail
+```
+
+| Script | What it checks | Deps |
+|--------|---------------|------|
+| `check-pragma-once.sh` | All headers use `#pragma once` | None |
+| `check-editor-panels.sh` | All panels registered in EditorPanelFactory.cpp | None |
+| `check-wiki-nav.sh` | Wiki pages match `_Sidebar.md` | None |
+| `check-wiring.sh` | Systems with Initialize() are actually called | None |
+| `check-bloat.sh` | File size thresholds (500-line .cpp, 300-line .h) | None |
+| `check-doxygen-coverage.sh` | Headers have @file/@brief docs (95% threshold) | None |
+
 ### Legacy Doxygen (optional, requires doxygen + graphviz)
 
 This `docs/` directory also contains tooling for Doxygen-based API documentation.

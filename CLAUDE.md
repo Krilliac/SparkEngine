@@ -234,6 +234,11 @@ docs/update-all-docs.sh
 
 If any step fails, fix before committing. CI enforces clang-format on every PR.
 
+```bash
+# 7. Validation checks (optional but recommended)
+tools/validate-all.sh --warn-only
+```
+
 ### Documentation scripts reference
 
 | Script | What it updates | Speed |
@@ -248,6 +253,18 @@ If any step fails, fix before committing. CI enforces clang-format on every PR.
 | `docs/update-context.sh update` | .claude/index.md, CLAUDE.md | ~2s |
 
 All scripts support `check` mode (dry-run, exit 1 if stale).
+
+### Validation scripts reference
+
+| Script | What it checks | Speed |
+|--------|---------------|-------|
+| `tools/validate-all.sh` | Runs all checks below | ~30s |
+| `tools/check-pragma-once.sh` | All headers use `#pragma once` | ~2s |
+| `tools/check-editor-panels.sh` | All panels registered in EditorPanelFactory | ~1s |
+| `tools/check-wiki-nav.sh` | Wiki pages match `_Sidebar.md` | ~1s |
+| `tools/check-wiring.sh` | Systems with Initialize() are called | ~10s |
+| `tools/check-bloat.sh` | Files under 500/.cpp 300/.h line thresholds | ~5s |
+| `tools/check-doxygen-coverage.sh` | Headers have @file/@brief docs (95% threshold) | ~3s |
 
 ## Post-PR checks
 
