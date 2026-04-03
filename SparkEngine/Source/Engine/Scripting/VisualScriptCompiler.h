@@ -104,6 +104,14 @@ namespace Spark::Scripting
         ConstBool = 352,
         ConstString = 353,
         ConstVector3 = 354,
+
+        // Custom events & functions (user-defined)
+        DefineCustomEvent = 400, ///< Defines a custom event handler method
+        CallFunction = 401,      ///< Calls a reusable function sub-graph
+        ReturnValue = 402,       ///< Returns a value from a function sub-graph
+
+        // Editor-only (not compiled)
+        Comment = 500, ///< Visual comment box for graph organization
     };
 
     // ========================================================================
@@ -170,6 +178,27 @@ namespace Spark::Scripting
     };
 
     /**
+     * @brief A reusable function sub-graph (compiles to a separate method)
+     */
+    struct FunctionGraph
+    {
+        std::string name;                     ///< Function name (becomes method name)
+        PinKind returnType = PinKind::Float;  ///< Return type (or Execution for void)
+        std::vector<VariableDecl> parameters; ///< Function parameters
+        std::vector<ScriptNode> nodes;
+        std::vector<ScriptConnection> connections;
+    };
+
+    /**
+     * @brief A custom event definition
+     */
+    struct CustomEventDef
+    {
+        std::string name;                     ///< Event name (becomes method name)
+        std::vector<VariableDecl> parameters; ///< Event parameters
+    };
+
+    /**
      * @brief Complete visual script graph
      */
     struct VisualScriptGraph
@@ -178,6 +207,8 @@ namespace Spark::Scripting
         std::vector<ScriptNode> nodes;
         std::vector<ScriptConnection> connections;
         std::vector<VariableDecl> variables;
+        std::vector<FunctionGraph> functions;     ///< Reusable function sub-graphs
+        std::vector<CustomEventDef> customEvents; ///< Custom event definitions
     };
 
     /**
@@ -208,9 +239,10 @@ namespace Spark::Scripting
         /**
          * @brief Compile a visual script graph to AngelScript source
          * @param graph Input graph with nodes and connections
+         * @param debugMode When true, inserts debugTrace() calls at each node for tracing
          * @return Compilation result with generated source or errors
          */
-        static ScriptCompileResult Compile(const VisualScriptGraph& graph);
+        static ScriptCompileResult Compile(const VisualScriptGraph& graph, bool debugMode = false);
 
       private:
         /// Generate a unique variable name for a node's output

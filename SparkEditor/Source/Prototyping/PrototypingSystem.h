@@ -1,25 +1,52 @@
 /**
- * @file EEPrototypingSystem.h
- * @brief Rapid prototyping tools: blockout meshes, game templates, quick iteration
+ * @file PrototypingSystem.h
+ * @brief Rapid prototyping tools: blockout meshes, game templates, gameplay rules
  * @author Spark Engine Team
  * @date 2026
  *
  * Provides rapid prototyping tools including primitive blockout shapes for
- * level gray-boxing, pre-built game templates (FPS, third-person, top-down,
- * etc.), quick-play testing, and gameplay rule configuration.
+ * level gray-boxing, pre-built game templates, no-code gameplay rules,
+ * and quick play-test sessions.
  */
 
 #pragma once
-
-#include "Spark/IEngineContext.h"
-#include "Enums/EngineEditorEnums.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace EngineEditor
+namespace SparkEditor
 {
+
+    /// @brief Prototype primitive shapes for quick level blocking
+    enum class BlockoutShape : uint8_t
+    {
+        Cube = 0,
+        Cylinder = 1,
+        Sphere = 2,
+        Ramp = 3,
+        Stairs = 4,
+        Arch = 5,
+        LShape = 6,
+        TShape = 7,
+        Ring = 8,
+        Pipe = 9,
+        Count = 10
+    };
+
+    /// @brief Pre-built gameplay templates for rapid prototyping
+    enum class GameTemplate : uint8_t
+    {
+        BlankProject = 0,
+        FirstPerson = 1,
+        ThirdPerson = 2,
+        TopDown = 3,
+        SideScroller = 4,
+        VehicleSim = 5,
+        PuzzleGame = 6,
+        TwinStick = 7,
+        Count = 8
+    };
 
     /// @brief A placed blockout primitive for level gray-boxing
     struct BlockoutPrimitive
@@ -61,40 +88,28 @@ namespace EngineEditor
         bool isEnabled = true;
     };
 
-    /// @brief A prototype session for quick play-testing
-    struct PrototypeSession
-    {
-        uint32_t sessionId = 0;
-        std::string name;
-        GameTemplate baseTemplate = GameTemplate::BlankProject;
-        std::vector<BlockoutPrimitive> primitives;
-        std::vector<GameplayRule> rules;
-        float playTime = 0.0f;
-        bool isPlaying = false;
-    };
-
     /**
      * @brief Rapid prototyping toolkit for no-code game iteration
      *
      * Manages blockout primitives, game templates, gameplay rules,
      * and prototype sessions with play-testing.
      */
-    class EEPrototypingSystem
+    class PrototypingSystem
     {
       public:
-        EEPrototypingSystem() = default;
-        ~EEPrototypingSystem() = default;
+        PrototypingSystem() = default;
+        ~PrototypingSystem() = default;
 
-        bool Initialize(Spark::IEngineContext* context);
+        void Initialize();
         void Update(float deltaTime);
         void Shutdown();
-        void RenderDebugUI();
 
         // Blockout primitives
         uint32_t PlaceBlockout(BlockoutShape shape, float x, float y, float z);
         bool RemoveBlockout(uint32_t primitiveId);
         bool ScaleBlockout(uint32_t primitiveId, float sx, float sy, float sz);
         void ClearAllBlockouts();
+        const BlockoutPrimitive* GetBlockout(uint32_t primitiveId) const;
 
         // Templates
         uint32_t ApplyTemplate(GameTemplate type);
@@ -106,32 +121,29 @@ namespace EngineEditor
         bool RemoveRule(uint32_t ruleId);
         bool ToggleRule(uint32_t ruleId);
 
-        // Prototype session
+        // Play-test
         bool StartPlayTest();
         bool StopPlayTest();
-        bool IsPlaying() const;
+        bool IsPlaying() const { return m_isPlaying; }
+        float GetPlayTime() const { return m_playTime; }
 
         // Queries
-        size_t GetBlockoutCount() const { return m_primitives.size(); }
-        size_t GetTemplateCount() const { return m_templates.size(); }
-        size_t GetRuleCount() const { return m_rules.size(); }
-        std::string GetBlockoutListString() const;
-        std::string GetTemplateListString() const;
-        std::string GetRuleListString() const;
-        std::string GetSessionStatusString() const;
+        const std::vector<BlockoutPrimitive>& GetBlockouts() const { return m_primitives; }
+        const std::vector<GameTemplateConfig>& GetTemplates() const { return m_templates; }
+        const std::vector<GameplayRule>& GetRules() const { return m_rules; }
 
       private:
         void RegisterBuiltinTemplates();
+        std::string MakeBlockoutName(BlockoutShape shape, uint32_t id) const;
 
-        Spark::IEngineContext* m_context{nullptr};
         std::vector<BlockoutPrimitive> m_primitives;
         std::vector<GameTemplateConfig> m_templates;
         std::vector<GameplayRule> m_rules;
-        PrototypeSession m_session;
         uint32_t m_nextPrimitiveId{1};
         uint32_t m_nextRuleId{1};
-        uint32_t m_nextSessionId{1};
+        float m_playTime{0.0f};
+        bool m_isPlaying{false};
         bool m_initialized{false};
     };
 
-} // namespace EngineEditor
+} // namespace SparkEditor

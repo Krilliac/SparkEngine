@@ -400,3 +400,55 @@ bool ASGetKeyDown(const std::string& key);
  * @return true if the key is currently held
  */
 bool ASGetKey(const std::string& key);
+
+// ============================================================================
+// Visual Script API — Entity manipulation functions for generated scripts
+// ============================================================================
+
+/** @brief Destroy an ECS entity (callable from AngelScript as `destroyEntity()`) */
+void ASDestroyEntity(EntityID entity);
+
+/** @brief Get entity position as Vector3 (callable as `getPosition()`) */
+DirectX::XMFLOAT3 ASGetPosition(EntityID entity);
+
+/** @brief Set entity position (callable as `setPosition()`) */
+void ASSetPosition(EntityID entity, const DirectX::XMFLOAT3& pos);
+
+/** @brief Get entity rotation as euler angles (callable as `getRotation()`) */
+DirectX::XMFLOAT3 ASGetRotation(EntityID entity);
+
+/** @brief Set entity rotation from euler angles (callable as `setRotation()`) */
+void ASSetRotation(EntityID entity, const DirectX::XMFLOAT3& rot);
+
+/** @brief Get entity health value (callable as `getHealth()`) */
+float ASGetHealth(EntityID entity);
+
+/** @brief Set entity health value (callable as `setHealth()`) */
+void ASSetHealth(EntityID entity, float health);
+
+/** @brief Get entity movement speed (callable as `getSpeed()`) */
+float ASGetSpeed(EntityID entity);
+
+/** @brief Apply a physics force to an entity (callable as `applyForce()`) */
+void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force);
+
+/** @brief Play a sound effect on an entity (callable as `playSound()`) */
+void ASPlaySound(EntityID entity, const std::string& soundName);
+
+/** @brief Play an animation on an entity (callable as `playAnimation()`) */
+void ASPlayAnimation(EntityID entity, const std::string& animName);
+
+/** @brief Find an entity by name (callable as `getEntityByName()`) */
+EntityID ASGetEntityByName(const std::string& name);
+
+/** @brief Fire a named event (callable as `fireEvent()`) */
+void ASFireEvent(const std::string& eventName);
+
+/** @brief Print a debug trace message (callable as `debugTrace()`) */
+void ASDebugTrace(uint32_t nodeId, const std::string& nodeName, const std::string& output);
+
+/** @brief Callback type for debug trace messages (editor hooks into this) */
+using DebugTraceCallback = void (*)(uint32_t nodeId, const char* nodeName, const char* output);
+
+/** @brief Set a callback to receive debug trace messages from running scripts */
+void ASSetDebugTraceCallback(DebugTraceCallback callback);

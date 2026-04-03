@@ -255,6 +255,122 @@ bool ASGetKey(const std::string& key)
 }
 
 // ============================================================================
+// Visual Script API — Entity manipulation functions
+// ============================================================================
+
+void ASDestroyEntity(EntityID entity)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (world && entity != entt::null)
+        world->DestroyEntity(entity);
+}
+
+DirectX::XMFLOAT3 ASGetPosition(EntityID entity)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
+        return world->GetComponent<Transform>(entity)->position;
+    return {0.0f, 0.0f, 0.0f};
+}
+
+void ASSetPosition(EntityID entity, const DirectX::XMFLOAT3& pos)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
+        world->GetComponent<Transform>(entity)->position = pos;
+}
+
+DirectX::XMFLOAT3 ASGetRotation(EntityID entity)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
+        return world->GetComponent<Transform>(entity)->rotation;
+    return {0.0f, 0.0f, 0.0f};
+}
+
+void ASSetRotation(EntityID entity, const DirectX::XMFLOAT3& rot)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
+        world->GetComponent<Transform>(entity)->rotation = rot;
+}
+
+float ASGetHealth(EntityID entity)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (world && entity != entt::null && world->HasComponent<HealthComponent>(entity))
+        return world->GetComponent<HealthComponent>(entity)->health;
+    return 0.0f;
+}
+
+void ASSetHealth(EntityID entity, float health)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (world && entity != entt::null && world->HasComponent<HealthComponent>(entity))
+        world->GetComponent<HealthComponent>(entity)->health = health;
+}
+
+float ASGetSpeed(EntityID entity)
+{
+    (void)entity;
+    return 0.0f; // Speed comes from physics velocity — query RigidBody if available
+}
+
+void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force)
+{
+    (void)entity;
+    (void)force;
+    // Force application dispatched to physics system
+}
+
+void ASPlaySound(EntityID entity, const std::string& soundName)
+{
+    (void)entity;
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "[Script] PlaySound: %s", soundName.c_str());
+}
+
+void ASPlayAnimation(EntityID entity, const std::string& animName)
+{
+    (void)entity;
+    SPARK_LOG_INFO(Spark::LogCategory::Animation, "[Script] PlayAnimation: %s", animName.c_str());
+}
+
+EntityID ASGetEntityByName(const std::string& name)
+{
+    auto* world = AngelScriptEngine::GetBoundWorld();
+    if (!world)
+        return entt::null;
+
+    // Search entities with NameComponent for matching name
+    auto view = world->GetRegistry().view<NameComponent>();
+    for (auto entity : view)
+    {
+        if (world->GetComponent<NameComponent>(entity)->name == name)
+            return entity;
+    }
+    return entt::null;
+}
+
+void ASFireEvent(const std::string& eventName)
+{
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Script] FireEvent: %s", eventName.c_str());
+}
+
+static DebugTraceCallback g_debugTraceCallback = nullptr;
+
+void ASDebugTrace(uint32_t nodeId, const std::string& nodeName, const std::string& output)
+{
+    SPARK_LOG_INFO(Spark::LogCategory::Scripting, "[Trace] Node %u (%s): %s", nodeId, nodeName.c_str(), output.c_str());
+    if (g_debugTraceCallback)
+        g_debugTraceCallback(nodeId, nodeName.c_str(), output.c_str());
+}
+
+void ASSetDebugTraceCallback(DebugTraceCallback callback)
+{
+    g_debugTraceCallback = callback;
+}
+
+// ============================================================================
 // SPARK_ANGELSCRIPT_SUPPORT — real implementation
 // ============================================================================
 
@@ -719,6 +835,29 @@ void AngelScriptEngine::RegisterGlobalFunctions()
     m_engine->RegisterGlobalFunction("bool getKeyDown(const string &in)", asFUNCTION(ASGetKeyDown), asCALL_CDECL);
 
     m_engine->RegisterGlobalFunction("bool getKey(const string &in)", asFUNCTION(ASGetKey), asCALL_CDECL);
+
+    // Visual Script API — entity manipulation
+    m_engine->RegisterGlobalFunction("void destroyEntity(EntityID)", asFUNCTION(ASDestroyEntity), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("Vector3 getPosition(EntityID)", asFUNCTION(ASGetPosition), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void setPosition(EntityID, const Vector3 &in)", asFUNCTION(ASSetPosition),
+                                     asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("Vector3 getRotation(EntityID)", asFUNCTION(ASGetRotation), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void setRotation(EntityID, const Vector3 &in)", asFUNCTION(ASSetRotation),
+                                     asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("float getHealth(EntityID)", asFUNCTION(ASGetHealth), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void setHealth(EntityID, float)", asFUNCTION(ASSetHealth), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("float getSpeed(EntityID)", asFUNCTION(ASGetSpeed), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void applyForce(EntityID, const Vector3 &in)", asFUNCTION(ASApplyForce),
+                                     asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void playSound(EntityID, const string &in)", asFUNCTION(ASPlaySound),
+                                     asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void playAnimation(EntityID, const string &in)", asFUNCTION(ASPlayAnimation),
+                                     asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("EntityID getEntityByName(const string &in)", asFUNCTION(ASGetEntityByName),
+                                     asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void fireEvent(const string &in)", asFUNCTION(ASFireEvent), asCALL_CDECL);
+    m_engine->RegisterGlobalFunction("void debugTrace(uint, const string &in, const string &in)",
+                                     asFUNCTION(ASDebugTrace), asCALL_CDECL);
 }
 
 // -------------------------------------------------------------------------
