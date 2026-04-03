@@ -33,10 +33,26 @@ Pre-built binaries are published on every commit to `master`:
 - [Linux Release (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz)
 - [Linux Debug (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz)
 
+## Where to Start
+
+Pick the path that matches your role:
+
+| Role | Recommended reading order |
+|------|---------------------------|
+| **New to SparkEngine** | [Getting Started](Getting-Started) → [Quick-Start Tutorial](Quick-Start-Tutorial) → [FAQ](FAQ) |
+| **Programmer** | [Getting Started](Getting-Started) → [Architecture Overview](Architecture-Overview) → [Creating a Game Module](Creating-a-Game-Module) → [Entity Component System](Entity-Component-System) |
+| **Artist / Designer** | [Getting Started](Getting-Started) → [Quick-Start Tutorial](Quick-Start-Tutorial) → [Editor Walkthrough](Editor-Walkthrough) → [Artist Workflow Guide](Artist-Workflow-Guide) |
+| **Gameplay Designer** | [Making Your First Game](Making-Your-First-Game) → [Gameplay Systems](Gameplay-Systems) → [Scripting with AngelScript](Scripting-with-AngelScript) |
+| **Multiplayer Developer** | [Multiplayer Quick Start](Multiplayer-Quick-Start) → [Networking](Networking) → [Dedicated Server](Dedicated-Server) |
+| **Optimizer / QA** | [Performance Tips](Performance-Tips) → [Configuration Reference](Configuration-Reference) → [Profiler and Debugging](Profiler-and-Debugging) |
+
 ## Wiki Navigation
 
 ### Getting Started
+- [Home](Home) — You are here
+- [FAQ](FAQ) — Common questions and answers
 - [Getting Started](Getting-Started) — Prerequisites, building, and running
+- [Quick-Start Tutorial](Quick-Start-Tutorial) — Your first 10 minutes with the engine
 - [Architecture Overview](Architecture-Overview) — Engine design and project structure
 - [Creating a Game Module](Creating-a-Game-Module) — Build your first game module
 
@@ -77,7 +93,8 @@ Pre-built binaries are published on every commit to `master`:
 - [Save System](Save-System) — Save/load functionality
 - [Day Night Cycle and Weather](Day-Night-Cycle-and-Weather) — Time-of-day and weather
 - [Cinematic Sequencer](Cinematic-Sequencer) — Timeline-based cinematics
-- [SparkEditor](SparkEditor) — Visual editor guide
+- [SparkEditor](SparkEditor) — Visual editor reference
+- [Editor Walkthrough](Editor-Walkthrough) — Practical editor guide
 - [SparkConsole](SparkConsole) — Debug console
 - [Shader Pipeline](Shader-Pipeline) — Shader authoring and compilation
 - [Asset Pipeline](Asset-Pipeline) — Asset loading and formats
@@ -93,6 +110,8 @@ Pre-built binaries are published on every commit to `master`:
 - [Upscaling (DLSS/FSR)](Upscaling-System) — Temporal upscaling techniques
 
 ### Advanced
+- [Configuration Reference](Configuration-Reference) — All settings, console commands, and CVars
+- [Performance Tips](Performance-Tips) — Optimization guide for game developers
 - [Build System and CMake Modules](Build-System-and-CMake-Modules) — CMake configuration and CI/CD
 - [Profiler and Debugging](Profiler-and-Debugging) — Frame profiling, GPU timing, and debug tools
 - [Testing](Testing) — Unit tests and test framework
@@ -129,6 +148,6 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | Editor Panels | 54 |
 | Test files | 238 |
 | Test cases | 3109+ |
-| Wiki pages | 83 |
-| *Last synced* | *2026-04-02 23:37* |
+| Wiki pages | 88 |
+| *Last synced* | *2026-04-03 00:55* |
 <!-- /AUTO:stats -->
