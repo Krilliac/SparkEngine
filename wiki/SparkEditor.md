@@ -853,6 +853,7 @@ cmake --build build --config Release
 | `SaveSystemPanel` | `SparkEditor/Source/Panels/SaveSystemPanel.h` |
 | `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
 | `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |
+| `ScriptDebugPanel` | `SparkEditor/Source/Panels/ScriptDebugPanel.h` |
 | `ScriptEditorPanel` | `SparkEditor/Source/Panels/ScriptEditorPanel.h` |
 | `SearchPanel` | `SparkEditor/Source/Panels/SearchPanel.h` |
 | `SplineEditorPanel` | `SparkEditor/Source/Panels/SplineEditorPanel.h` |

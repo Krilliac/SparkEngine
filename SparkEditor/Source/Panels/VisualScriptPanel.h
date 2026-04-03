@@ -55,6 +55,14 @@ namespace SparkEditor
         void AddNodeAtPosition(Spark::Scripting::ScriptNodeType type, float x, float y);
         void AddContextMenuNode();
 
+        // -- Connection management --
+        void TryStartConnection(int nodeIndex, int pinIndex, bool isOutput);
+        void TryCompleteConnection(int nodeIndex, int pinIndex, bool isOutput);
+        bool AreTypesCompatible(PinKind a, PinKind b) const;
+        ImVec2 GetPinScreenPos(int nodeIndex, int pinIndex, bool isOutput) const;
+        int HitTestPin(float mouseX, float mouseY, int& outPinIndex, bool& outIsOutput) const;
+        void RenderPendingConnection();
+
         // -- Compilation --
         void CompileGraph();
         void SaveGraph(const std::string& path);
@@ -100,6 +108,7 @@ namespace SparkEditor
         int m_connectionSourceNode = -1;
         int m_connectionSourcePin = -1;
         bool m_connectionSourceIsOutput = false;
+        ImVec2 m_canvasOrigin{0.0f, 0.0f}; ///< Top-left of canvas in screen coords
 
         // Context menu
         bool m_showContextMenu = false;

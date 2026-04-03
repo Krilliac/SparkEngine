@@ -95,7 +95,8 @@ namespace Spark::Scripting
         return type == ScriptNodeType::OnStart || type == ScriptNodeType::OnUpdate ||
                type == ScriptNodeType::OnTriggerEnter || type == ScriptNodeType::OnTriggerExit ||
                type == ScriptNodeType::OnDamaged || type == ScriptNodeType::OnKeyPress ||
-               type == ScriptNodeType::OnCollision || type == ScriptNodeType::OnCustomEvent;
+               type == ScriptNodeType::OnCollision || type == ScriptNodeType::OnCustomEvent ||
+               type == ScriptNodeType::DefineCustomEvent;
     }
 
     bool VisualScriptCompiler::IsActionNode(ScriptNodeType type)
@@ -295,44 +296,101 @@ namespace Spark::Scripting
             code += "    uint " + out(0) + " = selfEntity;\n";
             break;
 
+        // -- Getters --
+        case ScriptNodeType::GetPosition:
+            code += "    Vector3 " + out(0) + " = getPosition(" + input(0) + ");\n";
+            break;
+        case ScriptNodeType::GetRotation:
+            code += "    Vector3 " + out(0) + " = getRotation(" + input(0) + ");\n";
+            break;
+        case ScriptNodeType::GetHealth:
+            code += "    float " + out(0) + " = getHealth(" + input(0) + ");\n";
+            break;
+        case ScriptNodeType::GetSpeed:
+            code += "    float " + out(0) + " = getSpeed(" + input(0) + ");\n";
+            break;
+        case ScriptNodeType::GetEntityByName:
+        {
+            auto it = node.properties.find("name");
+            std::string name = (it != node.properties.end()) ? it->second : "Entity";
+            code += "    uint " + out(0) + " = getEntityByName(\"" + name + "\");\n";
+            break;
+        }
+
         // -- Actions --
         case ScriptNodeType::PrintMessage:
             code += "    print(" + input(0) + ");\n";
             break;
+        case ScriptNodeType::SetPosition:
+            code += "    setPosition(" + input(0) + ", " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::SetRotation:
+            code += "    setRotation(" + input(0) + ", " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::SetHealth:
+            code += "    setHealth(" + input(0) + ", " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::ApplyForce:
+            code += "    applyForce(" + input(0) + ", " + input(1) + ");\n";
+            break;
         case ScriptNodeType::PlaySound:
         {
-            std::string sound = !node.properties.empty() ? node.properties.begin()->second : "";
-            code += "    print(\"PlaySound: " + sound + "\");\n";
+            auto it = node.properties.find("sound");
+            std::string sound = (it != node.properties.end()) ? it->second : "";
+            if (sound.empty() && !node.properties.empty())
+                sound = node.properties.begin()->second;
+            code += "    playSound(selfEntity, \"" + sound + "\");\n";
             break;
         }
         case ScriptNodeType::PlayAnimation:
         {
-            std::string anim = !node.properties.empty() ? node.properties.begin()->second : "";
-            code += "    print(\"PlayAnimation: " + anim + "\");\n";
+            auto it = node.properties.find("animation");
+            std::string anim = (it != node.properties.end()) ? it->second : "";
+            if (anim.empty() && !node.properties.empty())
+                anim = node.properties.begin()->second;
+            code += "    playAnimation(selfEntity, \"" + anim + "\");\n";
             break;
         }
         case ScriptNodeType::SpawnEntity:
         {
-            std::string name = !node.properties.empty() ? node.properties.begin()->second : "Entity";
+            auto it = node.properties.find("name");
+            std::string name = (it != node.properties.end()) ? it->second : "Entity";
+            if (name.empty() && !node.properties.empty())
+                name = node.properties.begin()->second;
             code += "    uint " + out(0) + " = createEntity(\"" + name + "\");\n";
             break;
         }
         case ScriptNodeType::DestroyEntity:
-            code += "    // DestroyEntity: " + input(0) + "\n";
-            break;
-        case ScriptNodeType::SetHealth:
-            code += "    // SetHealth: " + input(0) + "\n";
+            code += "    destroyEntity(" + input(0) + ");\n";
             break;
         case ScriptNodeType::FireEvent:
         {
-            std::string evt = !node.properties.empty() ? node.properties.begin()->second : "";
-            code += "    print(\"FireEvent: " + evt + "\");\n";
+            auto it = node.properties.find("event");
+            std::string evt = (it != node.properties.end()) ? it->second : "";
+            if (evt.empty() && !node.properties.empty())
+                evt = node.properties.begin()->second;
+            code += "    fireEvent(\"" + evt + "\");\n";
             break;
         }
 
         // -- Flow control --
         case ScriptNodeType::Branch:
-            // Branch is handled specially during execution chain emission
+            // Branch is handled in the main compile loop with true/false path routing
+            break;
+        case ScriptNodeType::ForLoop:
+        {
+            std::string start = input(0);
+            std::string end = input(1);
+            std::string idx = out(0);
+            code += "    for (int " + idx + " = " + start + "; " + idx + " < " + end + "; " + idx + "++)\n";
+            code += "    {\n";
+            code += "        // Loop body (connected nodes execute here)\n";
+            code += "    }\n";
+            break;
+        }
+        case ScriptNodeType::Sequence:
+            // Sequence simply emits all connected execution outputs in order
+            code += "    // Sequence: execute all outputs in order\n";
             break;
         case ScriptNodeType::DoNothing:
             break;
@@ -342,16 +400,64 @@ namespace Spark::Scripting
         {
             auto it = node.properties.find("name");
             std::string varName = (it != node.properties.end()) ? it->second : "var";
-            code += "    // GetVariable: " + varName + "\n";
+            // Output pin type determines the declared type
+            std::string typeStr = "float";
+            if (!node.outputs.empty())
+                typeStr = PinTypeString(node.outputs[0].kind);
+            code += "    " + typeStr + " " + out(0) + " = " + varName + ";\n";
             break;
         }
         case ScriptNodeType::SetVariable:
         {
             auto it = node.properties.find("name");
             std::string varName = (it != node.properties.end()) ? it->second : "var";
-            code += "    " + varName + " = " + input(1) + ";\n";
+            code += "    " + varName + " = " + input(0) + ";\n";
             break;
         }
+
+        // -- Custom events & functions --
+        case ScriptNodeType::CallFunction:
+        {
+            auto it = node.properties.find("function");
+            std::string funcName = (it != node.properties.end()) ? it->second : "myFunction";
+            // Pass all data inputs as arguments
+            std::string args;
+            for (size_t i = 0; i < node.inputs.size(); i++)
+            {
+                if (node.inputs[i].kind == PinKind::Execution)
+                    continue;
+                if (!args.empty())
+                    args += ", ";
+                args += input(static_cast<uint32_t>(i));
+            }
+            if (!node.outputs.empty() && node.outputs[0].kind != PinKind::Execution)
+            {
+                std::string retType = PinTypeString(node.outputs[0].kind);
+                code += "    " + retType + " " + out(0) + " = " + funcName + "(" + args + ");\n";
+            }
+            else
+            {
+                code += "    " + funcName + "(" + args + ");\n";
+            }
+            break;
+        }
+        case ScriptNodeType::ReturnValue:
+            code += "    return " + input(0) + ";\n";
+            break;
+        case ScriptNodeType::DefineCustomEvent:
+            // DefineCustomEvent is handled as an event entry point in the main compile loop
+            break;
+
+        // -- Vector math --
+        case ScriptNodeType::Normalize:
+            code += "    Vector3 " + out(0) + " = normalize(" + input(0) + ");\n";
+            break;
+        case ScriptNodeType::DotProduct:
+            code += "    float " + out(0) + " = dot(" + input(0) + ", " + input(1) + ");\n";
+            break;
+        case ScriptNodeType::Distance:
+            code += "    float " + out(0) + " = distance(" + input(0) + ", " + input(1) + ");\n";
+            break;
 
         default:
             code += "    // Unhandled node type " + std::to_string(static_cast<uint32_t>(node.type)) + "\n";
@@ -481,12 +587,45 @@ namespace Spark::Scripting
                     continue;
                 }
 
-                // Handle Branch nodes specially
+                // Handle Branch nodes specially — emit if/else with true/false paths
                 if (node->type == ScriptNodeType::Branch)
                 {
+                    // Input 0 is the condition (after exec pin)
                     std::string condition = ResolveInput(*node, 0, graph);
                     bodyCode += "    if (" + condition + ")\n    {\n";
-                    bodyCode += "        // True branch\n";
+
+                    // Find nodes connected to output pin 0 (True) via execution
+                    for (const auto& c : graph.connections)
+                    {
+                        if (c.fromNode == node->id && c.fromPin == 0)
+                        {
+                            const auto* trueNode = FindNode(graph, c.toNode);
+                            if (trueNode && !IsEventNode(trueNode->type))
+                            {
+                                std::string trueCode;
+                                EmitNode(*trueNode, graph, trueCode);
+                                bodyCode += "    " + trueCode;
+                            }
+                        }
+                    }
+
+                    bodyCode += "    }\n    else\n    {\n";
+
+                    // Find nodes connected to output pin 1 (False) via execution
+                    for (const auto& c : graph.connections)
+                    {
+                        if (c.fromNode == node->id && c.fromPin == 1)
+                        {
+                            const auto* falseNode = FindNode(graph, c.toNode);
+                            if (falseNode && !IsEventNode(falseNode->type))
+                            {
+                                std::string falseCode;
+                                EmitNode(*falseNode, graph, falseCode);
+                                bodyCode += "    " + falseCode;
+                            }
+                        }
+                    }
+
                     bodyCode += "    }\n";
                 }
                 else
@@ -515,6 +654,59 @@ namespace Spark::Scripting
                 source << "        }\n";
             }
 
+            source << "    }\n\n";
+        }
+
+        // Emit reusable function methods
+        for (const auto& func : graph.functions)
+        {
+            std::string retTypeStr = PinTypeString(func.returnType);
+            if (func.returnType == PinKind::Execution)
+                retTypeStr = "void";
+
+            std::string paramStr;
+            for (size_t i = 0; i < func.parameters.size(); i++)
+            {
+                if (i > 0)
+                    paramStr += ", ";
+                paramStr += PinTypeString(func.parameters[i].type) + " " + func.parameters[i].name;
+            }
+
+            source << "    " << retTypeStr << " " << func.name << "(" << paramStr << ")\n    {\n";
+
+            // Build a mini-graph for this function and emit its nodes
+            VisualScriptGraph funcGraph;
+            funcGraph.nodes = func.nodes;
+            funcGraph.connections = func.connections;
+
+            for (const auto& funcNode : func.nodes)
+            {
+                if (IsEventNode(funcNode.type))
+                    continue;
+
+                std::string funcCode;
+                EmitNode(funcNode, funcGraph, funcCode);
+                std::istringstream funcStream(funcCode);
+                std::string funcLine;
+                while (std::getline(funcStream, funcLine))
+                    source << "    " << funcLine << "\n";
+            }
+
+            source << "    }\n\n";
+        }
+
+        // Emit custom event handler stubs
+        for (const auto& evt : graph.customEvents)
+        {
+            std::string paramStr;
+            for (size_t i = 0; i < evt.parameters.size(); i++)
+            {
+                if (i > 0)
+                    paramStr += ", ";
+                paramStr += PinTypeString(evt.parameters[i].type) + " " + evt.parameters[i].name;
+            }
+            source << "    void On" << evt.name << "(" << paramStr << ")\n    {\n";
+            source << "        // Custom event handler — connected nodes execute here\n";
             source << "    }\n\n";
         }
 
