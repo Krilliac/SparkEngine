@@ -1175,7 +1175,31 @@ namespace SparkEditor
             const auto& n = m_nodes[i];
             file << "    {\"id\":" << n.node.id << ",\"type\":" << static_cast<uint32_t>(n.node.type)
                  << ",\"x\":" << n.posX << ",\"y\":" << n.posY << ",\"inputs\":" << n.node.inputs.size()
-                 << ",\"outputs\":" << n.node.outputs.size() << "}";
+                 << ",\"outputs\":" << n.node.outputs.size();
+            // Save node properties
+            if (!n.node.properties.empty())
+            {
+                file << ",\"props\":{";
+                bool firstProp = true;
+                for (const auto& [key, val] : n.node.properties)
+                {
+                    if (!firstProp)
+                        file << ",";
+                    file << "\"" << key << "\":\"" << val << "\"";
+                    firstProp = false;
+                }
+                file << "}";
+            }
+            // Save pin default values for constants
+            if (!n.node.outputs.empty() && static_cast<uint32_t>(n.node.type) >= 350)
+            {
+                const auto& pin = n.node.outputs[0];
+                file << ",\"defVal\":[" << pin.defaultValue[0] << "," << pin.defaultValue[1] << ","
+                     << pin.defaultValue[2] << "," << pin.defaultValue[3] << "]";
+                if (!pin.defaultString.empty())
+                    file << ",\"defStr\":\"" << pin.defaultString << "\"";
+            }
+            file << "}";
             if (i + 1 < m_nodes.size())
                 file << ",";
             file << "\n";
@@ -1414,6 +1438,10 @@ namespace SparkEditor
 
     bool VisualScriptPanel::AreTypesCompatible(PinKind a, PinKind b) const
     {
+        // Execution pins can only connect to Execution pins
+        if (a == PinKind::Execution || b == PinKind::Execution)
+            return a == b;
+        // Data pins
         if (a == b)
             return true;
         if (a == PinKind::Any || b == PinKind::Any)
