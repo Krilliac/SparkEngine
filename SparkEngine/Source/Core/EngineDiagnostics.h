@@ -79,6 +79,10 @@ namespace Spark
     void DiagIODebugger(DiagReport& report);
     void DiagThreadDebugger(DiagReport& report);
     void DiagWatchdog(DiagReport& report);
+    void DiagHitchDetector(DiagReport& report);
+    void DiagAssetStall(DiagReport& report);
+    void DiagNetworkHealth(DiagReport& report);
+    void DiagGPUResourceLeak(DiagReport& report);
 
     /// @brief Run ALL diagnostics (core + extended) into a single report.
     void DiagRunAll(DiagReport& report);

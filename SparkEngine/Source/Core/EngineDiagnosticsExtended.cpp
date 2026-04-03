@@ -32,6 +32,10 @@
 #include "Utils/IODebugger.h"
 #include "Utils/ThreadDebugger.h"
 #include "Utils/FreezeDetector.h"
+#include "Utils/HitchDetector.h"
+#include "Utils/AssetStallDetector.h"
+#include "Utils/NetworkHealthMonitor.h"
+#include "Utils/GPUResourceLeakDetector.h"
 
 #include "Utils/LogMacros.h"
 
@@ -410,6 +414,81 @@ namespace Spark
     }
 
     // ========================================================================
+    // Detector diagnostics
+    // ========================================================================
+
+    void DiagHitchDetector(DiagReport& report)
+    {
+        const std::string sub = "HitchDetector";
+        auto& hd = HitchDetector::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        auto status = hd.GetStatus();
+        report.Add(sub, "Frames analyzed", status.framesAnalyzed > 0,
+                   std::format("{} frames", status.framesAnalyzed));
+        report.Add(sub, "No severe hitches", status.severeCount == 0,
+                   std::format("{} severe, {} moderate, {} mild", status.severeCount, status.moderateCount,
+                               status.mildCount));
+    }
+
+    void DiagAssetStall(DiagReport& report)
+    {
+        const std::string sub = "AssetStallDetector";
+        auto& ad = AssetStallDetector::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        auto status = ad.GetStatus();
+        report.Add(sub, "No stalled loads", status.stalledLoads == 0,
+                   std::format("{} active, {} stalled", status.activeLoads, status.stalledLoads));
+        report.Add(sub, "No failed loads", status.failedLoads == 0,
+                   std::format("{} completed, {} failed", status.completedLoads, status.failedLoads));
+    }
+
+    void DiagNetworkHealth(DiagReport& report)
+    {
+        const std::string sub = "NetworkHealthMonitor";
+        auto& nh = NetworkHealthMonitor::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        auto status = nh.GetStatus();
+        const char* stateStr = "Unknown";
+        switch (status.state)
+        {
+        case NetworkHealthState::Excellent:
+            stateStr = "Excellent";
+            break;
+        case NetworkHealthState::Good:
+            stateStr = "Good";
+            break;
+        case NetworkHealthState::Degraded:
+            stateStr = "Degraded";
+            break;
+        case NetworkHealthState::Poor:
+            stateStr = "Poor";
+            break;
+        case NetworkHealthState::Disconnected:
+            stateStr = "Disconnected";
+            break;
+        }
+        report.Add(sub, "Health state", true, stateStr);
+        report.Add(sub, "No disconnects", status.disconnectCount == 0,
+                   std::format("{} disconnects", status.disconnectCount));
+    }
+
+    void DiagGPUResourceLeak(DiagReport& report)
+    {
+        const std::string sub = "GPUResourceLeakDetector";
+        auto& gld = GPUResourceLeakDetector::GetInstance();
+        report.Add(sub, "Singleton accessible", true);
+
+        auto status = gld.GetStatus();
+        report.Add(sub, "No suspected leaks", status.suspectedLeaks == 0,
+                   std::format("{} suspected leaks", status.suspectedLeaks));
+        report.Add(sub, "Memory within budget", true,
+                   std::format("{:.1f} MB current, {:.1f} MB peak", status.estimatedMemoryMB, status.peakMemoryMB));
+    }
+
+    // ========================================================================
     // DiagRunAll — master orchestrator
     // ========================================================================
 
@@ -451,6 +530,12 @@ namespace Spark
         DiagIODebugger(report);
         DiagThreadDebugger(report);
         DiagWatchdog(report);
+
+        // Runtime detector diagnostics
+        DiagHitchDetector(report);
+        DiagAssetStall(report);
+        DiagNetworkHealth(report);
+        DiagGPUResourceLeak(report);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Full diagnostics run complete");
     }
 

@@ -52,6 +52,10 @@
 #include "Utils/Logger.h"
 #include "Utils/JobSystem.h"
 #include "Utils/FreezeDetector.h"
+#include "Utils/HitchDetector.h"
+#include "Utils/AssetStallDetector.h"
+#include "Utils/NetworkHealthMonitor.h"
+#include "Utils/GPUResourceLeakDetector.h"
 #include "FixedTimestepAccumulator.h"
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
@@ -535,6 +539,10 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     LoadHeadlessModules(lpCmdLine);
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -719,6 +727,10 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
     LogMissingModuleWarnings();
@@ -1327,6 +1339,10 @@ static int RunHeadlessLinux(int argc, char* argv[])
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -1547,6 +1563,10 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     settings.RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
 
     // Initialize console, debug, and gameplay systems in one call
     // (also publishes EngineStartEvent when complete)

@@ -23,6 +23,10 @@
 #include "Utils/ChromeTracing.h"
 #include "Utils/MemoryDebugger.h"
 #include "Utils/MemoryMonitor.h"
+#include "Utils/HitchDetector.h"
+#include "Utils/AssetStallDetector.h"
+#include "Utils/NetworkHealthMonitor.h"
+#include "Utils/GPUResourceLeakDetector.h"
 #include "Utils/FrameInspector.h"
 #include "Utils/Tween.h"
 #include "Utils/DebugDraw.h"
@@ -262,6 +266,10 @@ void InitDebugSystems()
 #endif
     Spark::DebugOverlay::GetInstance().SetEnabled(true);
     Spark::MemoryMonitor::GetInstance().Initialize();
+    Spark::HitchDetector::GetInstance().Initialize();
+    Spark::AssetStallDetector::GetInstance().Initialize();
+    Spark::NetworkHealthMonitor::GetInstance().Initialize();
+    Spark::GPUResourceLeakDetector::GetInstance().Initialize();
 
     // Register memory pressure response callbacks
     Spark::MemoryMonitor::GetInstance().RegisterPressureCallback(
@@ -864,6 +872,10 @@ void UpdateDebugSystems(float dt)
     Spark::DebugDrawManager::GetInstance().Flush(dt);
     SPARK_GUARDED_UPDATE("DebugOverlay", "Debug", { Spark::DebugOverlay::GetInstance().Update(dt); });
     SPARK_GUARDED_UPDATE("MemoryMonitor", "Debug", { Spark::MemoryMonitor::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("HitchDetector", "Debug", { Spark::HitchDetector::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("AssetStallDetector", "Debug", { Spark::AssetStallDetector::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("NetworkHealthMonitor", "Debug", { Spark::NetworkHealthMonitor::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("GPUResourceLeakDetector", "Debug", { Spark::GPUResourceLeakDetector::GetInstance().Update(dt); });
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading
@@ -879,6 +891,10 @@ void ShutdownDebugSystems()
     Spark::TweenManager::GetInstance().KillAll();
     Spark::DebugDrawManager::GetInstance().Clear();
     Spark::MemoryMonitor::GetInstance().Shutdown();
+    Spark::HitchDetector::GetInstance().Shutdown();
+    Spark::AssetStallDetector::GetInstance().Shutdown();
+    Spark::NetworkHealthMonitor::GetInstance().Shutdown();
+    Spark::GPUResourceLeakDetector::GetInstance().Shutdown();
 #ifndef NDEBUG
     Spark::MemoryDebugger::GetInstance().PrintLeakReport();
 #endif
