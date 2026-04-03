@@ -513,7 +513,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*239 test files, 3119+ test cases*
+*243 test files, 3119+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -531,6 +531,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAnimationStress` | 12 |
 | `TestAnimationSystem` | 17 |
 | `TestAssetPipelineCache` | 22 |
+| `TestAssetStallDetector` | 0 |
 | `TestAsyncComputeScheduler` | 9 |
 | `TestAsyncDatabase` | 23 |
 | `TestAudioEngine` | 18 |
@@ -615,6 +616,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGPUDrivenRenderer` | 13 |
 | `TestGPUParticleSystem` | 11 |
 | `TestGPUPerfCounters` | 2 |
+| `TestGPUResourceLeakDetector` | 0 |
 | `TestGPUSkinning` | 9 |
 | `TestGameMode` | 5 |
 | `TestGameObjectTransforms` | 24 |
@@ -626,6 +628,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGraphicsStress` | 15 |
 | `TestGroupAI` | 5 |
 | `TestHash` | 18 |
+| `TestHitchDetector` | 0 |
 | `TestHybridRT` | 20 |
 | `TestInputBindings` | 5 |
 | `TestInputManagerState` | 21 |
@@ -660,6 +663,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNavMeshObstacles` | 7 |
 | `TestNetBuffer` | 29 |
 | `TestNetworkEncryption` | 17 |
+| `TestNetworkHealthMonitor` | 0 |
 | `TestNetworkIntegration` | 31 |
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
