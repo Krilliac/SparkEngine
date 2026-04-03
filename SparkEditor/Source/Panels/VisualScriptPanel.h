@@ -116,8 +116,8 @@ namespace SparkEditor
         // -- Connection management --
         void TryStartConnection(int nodeIndex, int pinIndex, bool isOutput);
         void TryCompleteConnection(int nodeIndex, int pinIndex, bool isOutput);
-        bool AreTypesCompatible(PinKind a, PinKind b) const;
-        ImVec2 GetPinScreenPos(int nodeIndex, int pinIndex, bool isOutput) const;
+        bool AreTypesCompatible(Spark::Scripting::PinKind a, Spark::Scripting::PinKind b) const;
+        void GetPinScreenPos(int nodeIndex, int pinIndex, bool isOutput, float& outX, float& outY) const;
         int HitTestPin(float mouseX, float mouseY, int& outPinIndex, bool& outIsOutput) const;
         void RenderPendingConnection();
 
@@ -166,7 +166,8 @@ namespace SparkEditor
         int m_connectionSourceNode = -1;
         int m_connectionSourcePin = -1;
         bool m_connectionSourceIsOutput = false;
-        ImVec2 m_canvasOrigin{0.0f, 0.0f}; ///< Top-left of canvas in screen coords
+        float m_canvasOriginX = 0.0f; ///< Canvas top-left screen X
+        float m_canvasOriginY = 0.0f; ///< Canvas top-left screen Y
 
         // Context menu
         bool m_showContextMenu = false;

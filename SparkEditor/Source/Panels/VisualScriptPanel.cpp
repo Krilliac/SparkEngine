@@ -361,7 +361,8 @@ namespace SparkEditor
         drawList->PushClipRect(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), true);
 
         // Store canvas origin for pin position calculations
-        m_canvasOrigin = canvasPos;
+        m_canvasOriginX = canvasPos.x;
+        m_canvasOriginY = canvasPos.y;
 
         // Draw connections
         RenderConnections();
@@ -1639,20 +1640,23 @@ namespace SparkEditor
         return false;
     }
 
-    ImVec2 VisualScriptPanel::GetPinScreenPos(int nodeIndex, int pinIndex, bool isOutput) const
+    void VisualScriptPanel::GetPinScreenPos(int nodeIndex, int pinIndex, bool isOutput, float& outX, float& outY) const
     {
         if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_nodes.size()))
-            return ImVec2(0, 0);
+        {
+            outX = 0;
+            outY = 0;
+            return;
+        }
 
         const auto& n = m_nodes[nodeIndex];
-        float nx = m_canvasOrigin.x + (n.posX + m_canvasOffsetX) * m_canvasZoom;
-        float ny = m_canvasOrigin.y + (n.posY + m_canvasOffsetY) * m_canvasZoom;
+        float nx = m_canvasOriginX + (n.posX + m_canvasOffsetX) * m_canvasZoom;
+        float ny = m_canvasOriginY + (n.posY + m_canvasOffsetY) * m_canvasZoom;
         float nw = n.width * m_canvasZoom;
         float pinY = ny + (30.0f + pinIndex * 18.0f) * m_canvasZoom;
 
-        if (isOutput)
-            return ImVec2(nx + nw, pinY);
-        return ImVec2(nx, pinY);
+        outX = isOutput ? (nx + nw) : nx;
+        outY = pinY;
     }
 
     void VisualScriptPanel::RenderPendingConnection()
@@ -1661,7 +1665,9 @@ namespace SparkEditor
             return;
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 startPos = GetPinScreenPos(m_connectionSourceNode, m_connectionSourcePin, m_connectionSourceIsOutput);
+        float startX, startY;
+        GetPinScreenPos(m_connectionSourceNode, m_connectionSourcePin, m_connectionSourceIsOutput, startX, startY);
+        ImVec2 startPos(startX, startY);
         ImVec2 endPos = ImGui::GetIO().MousePos;
 
         // Determine wire color from source pin
@@ -1702,9 +1708,10 @@ namespace SparkEditor
             // Check output pins
             for (int p = 0; p < static_cast<int>(m_nodes[i].node.outputs.size()); p++)
             {
-                ImVec2 pos = GetPinScreenPos(i, p, true);
-                float dx = mouseX - pos.x;
-                float dy = mouseY - pos.y;
+                float px, py;
+                GetPinScreenPos(i, p, true, px, py);
+                float dx = mouseX - px;
+                float dy = mouseY - py;
                 if (dx * dx + dy * dy < hitRadius * hitRadius)
                 {
                     outPinIndex = p;
@@ -1715,9 +1722,10 @@ namespace SparkEditor
             // Check input pins
             for (int p = 0; p < static_cast<int>(m_nodes[i].node.inputs.size()); p++)
             {
-                ImVec2 pos = GetPinScreenPos(i, p, false);
-                float dx = mouseX - pos.x;
-                float dy = mouseY - pos.y;
+                float px, py;
+                GetPinScreenPos(i, p, false, px, py);
+                float dx = mouseX - px;
+                float dy = mouseY - py;
                 if (dx * dx + dy * dy < hitRadius * hitRadius)
                 {
                     outPinIndex = p;
