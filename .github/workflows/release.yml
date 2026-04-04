@@ -178,6 +178,58 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        ref: ${{ github.ref }}
+        fetch-depth: 0
+
+    - name: Snapshot nightly download count before replacing
+      if: needs.prepare.outputs.is_versioned == 'false'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Fetch current nightly release download count (sum of all assets)
+        CURRENT_DOWNLOADS=$(gh api repos/${{ github.repository }}/releases/tags/nightly \
+          --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
+        echo "Current nightly downloads before reset: $CURRENT_DOWNLOADS"
+
+        # Read existing lifetime total from badge JSON
+        BADGE_FILE=".github/badges/downloads.json"
+        if [ -f "$BADGE_FILE" ]; then
+          LIFETIME=$(jq -r '.total // 0' "$BADGE_FILE")
+        else
+          LIFETIME=0
+        fi
+        echo "Previous lifetime total: $LIFETIME"
+
+        # Accumulate
+        NEW_TOTAL=$((LIFETIME + CURRENT_DOWNLOADS))
+        echo "New lifetime total: $NEW_TOTAL"
+
+        # Format with commas for display
+        FORMATTED=$(printf "%'d" "$NEW_TOTAL" 2>/dev/null || echo "$NEW_TOTAL")
+
+        # Write updated badge JSON
+        mkdir -p .github/badges
+        cat > "$BADGE_FILE" << EOF
+        {
+            "schemaVersion": 1,
+            "label": "lifetime downloads",
+            "message": "$FORMATTED",
+            "color": "brightgreen",
+            "namedLogo": "github",
+            "logoColor": "white",
+            "total": $NEW_TOTAL,
+            "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        EOF
+
+        # Commit the updated counter
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "$BADGE_FILE"
+        git diff --cached --quiet && echo "No download count change" && exit 0
+        git commit -m "chore: update lifetime download counter ($NEW_TOTAL) [skip ci]"
+        git push origin HEAD:${{ github.ref_name }}
 
     - name: Resolve short commit SHA
       id: sha
