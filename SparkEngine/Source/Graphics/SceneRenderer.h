@@ -18,6 +18,7 @@
 #include "../Core/AssetHandle.h"
 #include "../Utils/FrameAllocator.h"
 #include "BVHAccelerator.h"
+#include "PortalCulling.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -153,6 +154,20 @@ namespace Spark::Graphics
         // Asset path resolution
         // ====================================================================
 
+        // ====================================================================
+        // Portal culling
+        // ====================================================================
+
+        /** @brief Access the portal culling system for graph construction. */
+        PortalCullingSystem& GetPortalCulling() { return m_portalCulling; }
+
+        /** @brief Access the portal culling system (const). */
+        const PortalCullingSystem& GetPortalCulling() const { return m_portalCulling; }
+
+        // ====================================================================
+        // Asset path resolution
+        // ====================================================================
+
         /**
          * @brief Resolve an AssetHandle back to its string path.
          *
@@ -173,7 +188,8 @@ namespace Spark::Graphics
 
         std::unordered_map<AssetHandle, std::string> m_pathLookup; ///< Handle→path resolution
 
-        BVHAccelerator m_bvh; ///< Hierarchical culling accelerator
+        BVHAccelerator m_bvh;                ///< Hierarchical culling accelerator
+        PortalCullingSystem m_portalCulling; ///< Portal-based visibility for indoor scenes
         uint32_t m_maxDrawCommands = 8192;
 
         static const std::string s_emptyString; ///< Returned for unknown handles

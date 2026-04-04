@@ -312,6 +312,8 @@ namespace SparkEditor
                 m_modified = true;
             if (ImGui::Checkbox("Occlusion Culling", &r.occlusionCulling))
                 m_modified = true;
+            if (ImGui::Checkbox("Portal Culling", &r.portalCulling))
+                m_modified = true;
             if (ImGui::Checkbox("Level of Detail", &r.levelOfDetail))
                 m_modified = true;
             if (ImGui::DragInt("Max Draw Calls", &r.maxDrawCalls, 10, 100, 100000))

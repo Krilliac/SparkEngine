@@ -12,6 +12,7 @@
 
 #include "SceneRenderer.h"
 #include "DrawSortKey.h"
+#include "../Core/EngineSettings.h"
 #include "../Utils/Validate.h"
 #include <algorithm>
 
@@ -30,6 +31,7 @@ namespace Spark::Graphics
         m_maxDrawCommands = maxDrawCommands;
         m_drawCommands.reserve(maxDrawCommands);
         m_visibleCommands.reserve(maxDrawCommands);
+        m_portalCulling.Initialize();
         return true;
     }
 
@@ -38,6 +40,7 @@ namespace Spark::Graphics
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SceneRenderer shutting down (%zu draw commands in flight)",
                        m_drawCommands.size());
+        m_portalCulling.Shutdown();
         m_drawCommands.clear();
         m_visibleCommands.clear();
         m_pathLookup.clear();
@@ -88,6 +91,16 @@ namespace Spark::Graphics
         DirectX::XMMATRIX viewProj = DirectX::XMMatrixMultiply(viewMatrix, projMatrix);
         DirectX::XMVECTOR cameraPosVec = DirectX::XMLoadFloat3(&cameraPos);
 
+        // Portal culling: determine visible cells before frustum testing
+        bool usePortalCulling =
+            EngineSettings::GetInstance().GetRendering().portalCulling && m_portalCulling.GetCellCount() > 0;
+        if (usePortalCulling)
+        {
+            DirectX::XMFLOAT4X4 vpStored;
+            DirectX::XMStoreFloat4x4(&vpStored, viewProj);
+            m_portalCulling.DetermineVisibility(cameraPos, vpStored);
+        }
+
         // Build sorted draw list using DrawSortKey for optimal state batching
         std::vector<DrawSortEntry> sortEntries;
         sortEntries.reserve(m_drawCommands.size());
@@ -99,6 +112,16 @@ namespace Spark::Graphics
             // Extract position from world matrix
             DirectX::XMFLOAT3 objPos(cmd.worldMatrix._41, cmd.worldMatrix._42, cmd.worldMatrix._43);
             DirectX::XMVECTOR objPosVec = DirectX::XMLoadFloat3(&objPos);
+
+            // Portal culling: skip objects in non-visible cells
+            if (usePortalCulling)
+            {
+                CellId objCell = m_portalCulling.FindCell(objPos);
+                if (objCell != kInvalidCell && !m_portalCulling.IsCellVisible(objCell))
+                {
+                    continue;
+                }
+            }
 
             // Compute distance to camera
             DirectX::XMVECTOR diff = DirectX::XMVectorSubtract(objPosVec, cameraPosVec);
