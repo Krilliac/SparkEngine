@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 234000 |
+| **SparkEngine/Source** | 234004 |
 | **SparkEditor/Source** | 82333 |
 | **GameModules** | 56786 |
 | **Tests** | 81889 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~457399** |
+| **Total C++ (excl. ThirdParty)** | **~457403** |
 
 ### File Counts
 
@@ -26,7 +26,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
 | Test files (.cpp) | 257 |
-| Wiki pages (.md) | 88 |
+| Wiki pages (.md) | 100 |
 
 ### Code Density
 
@@ -43,7 +43,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 92013 | 39.3% |
-| Engine (all subsystems) | 69018 | 29.4% |
+| Engine (all subsystems) | 69022 | 29.4% |
 | Utils | 31302 | 13.3% |
 | Core | 17198 | 7.3% |
 | Physics | 10087 | 4.3% |
@@ -61,7 +61,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | AI | 12757 |
 | Networking | 10985 |
 | ECS | 8517 |
-| Gameplay | 6656 |
+| Gameplay | 6660 |
 | Animation | 6237 |
 | Scripting | 3883 |
 | UI | 2524 |

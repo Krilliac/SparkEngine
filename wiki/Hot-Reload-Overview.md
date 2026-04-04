@@ -3,7 +3,8 @@
 SparkEngine supports hot-reloading across multiple subsystems: shaders, scripts, game modules, materials, and assets. This page provides a unified overview of all hot-reload capabilities, how they work, and how to use them during development.
 
 **Relevant sources:**
-- `SparkEngine/Source/Graphics/Shader.h` (shader hot-reload)
+- `SparkEngine/Source/Graphics/ShaderHotReload.h` (dedicated shader hot-reload with file watcher)
+- `SparkEngine/Source/Graphics/Shader.h` (shader management and compilation)
 - `SparkEngine/Source/Engine/Scripting/ScriptHotReload.h` (script hot-reload)
 - `SparkEngine/Source/Core/ModuleHotReload.h` (module hot-reload)
 - `SparkEngine/Source/Graphics/MaterialSystem.h` (material hot-reload)
