@@ -1,5 +1,6 @@
 # Spark Engine — Open-Source C++ Game Engine
 
+[![SparkEngine DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Krilliac/SparkEngine)
 [![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml?query=branch%3AWorking)
 [![Publish](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml?query=branch%3AWorking)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
