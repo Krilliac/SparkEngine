@@ -53,7 +53,7 @@
 - **Large world support** — seamless area streaming and floating-point origin rebasing for worlds of any size
 - **Truly open-source** — MIT license, no royalties, no strings attached
 - **Built for learning and modding** — clean C++23 codebase with 30+ toggleable CMake modules
-- **Ready-to-download binaries** — pre-built Windows and Linux binaries on every commit
+- **Ready-to-download binaries** — nightly Windows and Linux builds published on every commit
 
 ## Editor Preview
 
@@ -84,26 +84,41 @@
 
 ## Downloads
 
-Latest binaries are published automatically on every commit to `master`.
-The commit hash shown on each badge matches the build you are downloading.
+[![Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/total?label=total%20downloads&color=brightgreen&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
 
-[![Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine?label=built%20from&style=flat-square)](https://github.com/Krilliac/SparkEngine/commits/Working)
+### Nightly (Recommended)
 
-**Windows (VS 2022 · x64)**
+Built automatically on every commit to `Working`. Always the latest code — all CI checks pass before publishing.
 
-[![Windows Release](https://img.shields.io/badge/Windows-Release-0078D4?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Release.zip)
-[![Windows Debug](https://img.shields.io/badge/Windows-Debug-555555?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Debug.zip)
+[![Built From](https://img.shields.io/github/last-commit/Krilliac/SparkEngine/Working?label=last%20updated&style=flat-square)](https://github.com/Krilliac/SparkEngine/commits/Working)
+[![Nightly Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/nightly/total?label=nightly%20downloads&color=brightgreen&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/tag/nightly)
 
-**Linux (GCC · ubuntu-24.04 · x64)**
+| Platform | Release | Debug |
+|---|---|---|
+| **Windows** (VS 2022 · x64) | [![Windows Release](https://img.shields.io/badge/⬇_Download-Release-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-Release.zip) | [![Windows Debug](https://img.shields.io/badge/⬇_Download-Debug-555555?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-Debug.zip) |
+| **Linux** (GCC · ubuntu-24.04 · x64) | [![Linux Release](https://img.shields.io/badge/⬇_Download-Release-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Linux-Release.tar.gz) | [![Linux Debug](https://img.shields.io/badge/⬇_Download-Debug-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Linux-Debug.tar.gz) |
 
-[![Linux Release](https://img.shields.io/badge/Linux-Release-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz)
-[![Linux Debug](https://img.shields.io/badge/Linux-Debug-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz)
+> Nightly builds are from the [`nightly` release](https://github.com/Krilliac/SparkEngine/releases/tag/nightly). Each release includes the exact commit hash and build timestamp.
 
-> All downloads are from the [`latest` release](https://github.com/Krilliac/SparkEngine/releases/tag/latest). Each release body includes the exact commit hash and timestamp of the build.
+### Stable
 
-### CI Build Artifacts (latest Working branch)
+Stable releases are published manually when a version is considered production-ready. These are less frequent but thoroughly tested.
 
-Build artifacts from the most recent CI run on the `Working` branch. These are per-commit builds, updated automatically. Provided via [nightly.link](https://nightly.link) (no GitHub login required).
+[![Stable Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/latest/total?label=stable%20downloads&color=blue&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/latest)
+
+| Platform | Release | Debug |
+|---|---|---|
+| **Windows** (VS 2022 · x64) | [![Windows Release](https://img.shields.io/badge/⬇_Download-Release-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Release.zip) | [![Windows Debug](https://img.shields.io/badge/⬇_Download-Debug-555555?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Debug.zip) |
+| **Linux** (GCC · ubuntu-24.04 · x64) | [![Linux Release](https://img.shields.io/badge/⬇_Download-Release-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz) | [![Linux Debug](https://img.shields.io/badge/⬇_Download-Debug-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz) |
+
+> No stable release yet — use the nightly build above. Stable releases will appear here when a version is tagged (e.g. `v1.0.0`).
+
+### CI Artifacts
+
+Per-commit build artifacts from CI on the `Working` branch via [nightly.link](https://nightly.link) (no GitHub login required).
+
+<details>
+<summary>Build binaries, sanitizer reports, and coverage</summary>
 
 **Build Binaries:**
 
@@ -120,6 +135,8 @@ Build artifacts from the most recent CI run on the `Working` branch. These are p
 **Code Coverage:**
 
 [![Coverage Report](https://img.shields.io/badge/⬇_Coverage-lcov_report-blue?style=for-the-badge&logo=codecov&logoColor=white)](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/coverage-report.zip)
+
+</details>
 
 ## Key Features
 
