@@ -67,6 +67,7 @@
 #include "Engine/Editor/CoreComponentSerializers.h"
 #include "Graphics/RenderCommandRing.h"
 #include "Graphics/ConstantBufferDiff.h"
+#include "Graphics/GPUProfiler.h"
 #include "Utils/MultiISA.h"
 #include "Utils/GPUPerfCounters.h"
 #include "SceneManager/SceneConfigDatabase.h"
@@ -385,6 +386,7 @@ static void InitRenderingAndUtilitySystems()
     Spark::Cinematic::VideoPlayer::GetInstance().Initialize();
     Spark::Graphics::LightmapBaker::GetInstance().Initialize();
     Spark::Procedural::ProceduralGenerator::GetInstance().Initialize();
+    Spark::Graphics::GPUProfiler::GetInstance().Initialize();
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "RenderingAndUtility", 0.0);
 }
 
@@ -762,6 +764,7 @@ void UpdateGameplaySystems(float dt)
     Spark::SubsystemFaultIsolator::GetInstance().Update(s_engineTime);
 
     Profiler::GetInstance().BeginFrame();
+    Spark::Graphics::GPUProfiler::GetInstance().BeginFrame();
 
     SPARK_DEBUG_HOOK(FrameBegin, g_frameCounter, dt);
 
@@ -779,6 +782,7 @@ void UpdateGameplaySystems(float dt)
     UpdateECSDependentSystems(world, dt);
 
     Spark::Graphics::ConstantBufferDiffManager::GetInstance().BeginFrame();
+    Spark::Graphics::GPUProfiler::GetInstance().EndFrame();
     Spark::Graphics::GPUPerfCounters::GetInstance().EndFrame();
 
     UpdateClusteredLighting(world);
@@ -874,6 +878,7 @@ void ShutdownGameplaySystems()
     Spark::Cinematic::VideoPlayer::GetInstance().Shutdown();
     Spark::Graphics::LightmapBaker::GetInstance().Shutdown();
     Spark::Procedural::ProceduralGenerator::GetInstance().Shutdown();
+    Spark::Graphics::GPUProfiler::GetInstance().Shutdown();
 
     if (auto* as = AngelScriptEngine::GetInstance())
     {

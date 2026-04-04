@@ -36,13 +36,14 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine viability evaluation (can you make a game?) | [knowledge/engine-viability-evaluation.md](knowledge/engine-viability-evaluation.md) | Observation | Active | 2026-04-01 |
 | Project recommendations (13+3 production systems) | [knowledge/project-recommendations-2026-04-04.md](knowledge/project-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 | Engine feature recommendations (7 new game-making systems) | [knowledge/engine-feature-recommendations-2026-04-04.md](knowledge/engine-feature-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
+| Engine next steps (15 recommendations, 4 tiers) | [knowledge/engine-recommendations-2026-04-04.md](knowledge/engine-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-04)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 264 test files, 3389 tests (all pass on native Linux)
+- **Tests**: 279 test files, 3511 tests (all pass on native Linux)
 - **Editor**: 57 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations. 6 RHI backends (D3D11, D3D12, Vulkan, OpenGL, Metal, NullRHI)
 - **Post-processing**: 14 passes (Bloom, AutoExposure, Tonemapping, ColorGrading, FXAA, DOF, MotionBlur, Vignette, ChromaticAberration, FilmGrain, LensDistortion, LightShafts, LensFlare, Sharpen)
@@ -50,7 +51,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides
 - **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame, WeatherSystem integration
-- **Codebase**: ~462K lines of C++ across 1424 source files, 100 wiki pages
+- **Codebase**: ~469K lines of C++ across 1452 source files, 101 wiki pages
 
 ### Before Writing Code
 
