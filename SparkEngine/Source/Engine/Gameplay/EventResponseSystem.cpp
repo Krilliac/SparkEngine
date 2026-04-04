@@ -4,6 +4,7 @@
  */
 
 #include "EventResponseSystem.h"
+#include "Core/EngineContext.h"
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -235,17 +236,20 @@ namespace Spark::Gameplay
             }
 
             // Evaluate conditions (skip if no conditions defined)
-            // Note: Full condition evaluation requires an ECS World reference.
-            // When conditions are present but no World is available, the rule
-            // fires unconditionally. In practice, the AngelScriptEngine binds
-            // the active World; a future enhancement can pass it through here.
             if (!rule.conditions.IsEmpty())
             {
-                // Condition evaluation requires a World& — not available here
-                // without coupling to the ECS. For now, non-empty conditions
-                // are evaluated by the ConditionSystem only when a World
-                // pointer is provided via a future SetWorld() method.
-                // TODO: Wire ConditionSystem evaluation when World is available.
+                auto* ctx = EngineContext::Get();
+                World* world = ctx ? ctx->GetWorld() : nullptr;
+                if (world)
+                {
+                    bool conditionsPassed =
+                        ConditionSystem::GetInstance().Evaluate(rule.conditions, contextEntity, *world);
+                    if (!conditionsPassed)
+                    {
+                        continue;
+                    }
+                }
+                // If no World available, skip condition check (fire unconditionally)
             }
 
             // All checks passed — fire the rule

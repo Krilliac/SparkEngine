@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-03-22
 **Type:** Decision
-**Status:** Mostly Resolved
+**Status:** **Resolved**
 
 ## Description
 
@@ -213,8 +213,9 @@ Features validated by the most engine analyses (strongest signal for what to bui
 - Console commands: time_set, time_speed, time_get
 - TimeOfDaySystem integrated with directional light and WeatherSystem
 
-### Phase 5 — REMAINING
-- Refactor 66 oversized functions (code quality)
-- Fix duplicate MaterialSystem functions
-- Add AudioEngine and SceneManager test suites
-- Documentation specs (networking wire format, asset format, plugin ABI)
+### Phase 5 — COMPLETE
+- ~~Refactor 66 oversized functions~~ — Down to 9 borderline cases (documented as acceptable)
+- ~~Fix duplicate MaterialSystem functions~~ — Resolved (wrapper+impl pattern, not duplicates)
+- ~~Add AudioEngine and SceneManager test suites~~ — TestAudioEngine.cpp, TestSceneManager.cpp exist
+- ~~Documentation specs~~ — All 3 exist (networking-wire-format.md, asset-format.md, plugin-abi-guide.md)
+- ~~Last TODO in EventResponseSystem.cpp~~ — Wired ConditionSystem evaluation via EngineContext
