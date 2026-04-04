@@ -42,7 +42,7 @@
 
 **Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 
-> **Early Development** — SparkEngine is under active development. Systems are being built out and stabilized. Expect rough edges.
+> **v1.0.0 Released** — SparkEngine's first official release. Production-ready core systems with active feature development. See the [changelog](CHANGELOG.md) for details.
 
 > **AI Disclosure** — This project makes extensive use of AI-assisted development. All AI-generated code is reviewed, tested, and validated to ensure correctness, stability, and functional integrity. If the use of AI in development is a concern for you, this project may not be the right fit — but if you're open to it, contributions of any and all kinds are welcome!
 
@@ -87,7 +87,7 @@
 
 [![Lifetime Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
 
-### Nightly (Recommended)
+### Nightly
 
 Built automatically on every commit to `Working`. Always the latest code — all CI checks pass before publishing.
 
@@ -101,9 +101,9 @@ Built automatically on every commit to `Working`. Always the latest code — all
 
 > Nightly builds are from the [`nightly` release](https://github.com/Krilliac/SparkEngine/releases/tag/nightly). Each release includes the exact commit hash and build timestamp.
 
-### Stable
+### Stable (Recommended)
 
-Stable releases are published manually when a version is considered production-ready. These are less frequent but thoroughly tested.
+Stable releases are published manually and thoroughly tested. Recommended for most users.
 
 [![Stable Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/latest/total?label=stable%20downloads&color=blue&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/latest)
 
@@ -112,7 +112,7 @@ Stable releases are published manually when a version is considered production-r
 | **Windows** (VS 2022 · x64) | [![Windows Release](https://img.shields.io/badge/⬇_Download-Release-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Release.zip) | [![Windows Debug](https://img.shields.io/badge/⬇_Download-Debug-555555?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Debug.zip) |
 | **Linux** (GCC · ubuntu-24.04 · x64) | [![Linux Release](https://img.shields.io/badge/⬇_Download-Release-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz) | [![Linux Debug](https://img.shields.io/badge/⬇_Download-Debug-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz) |
 
-> No stable release yet — use the nightly build above. Stable releases will appear here when a version is tagged (e.g. `v1.0.0`).
+> Download the latest stable release (v1.0.0). For bleeding-edge features, use the nightly build above.
 
 ### CI Artifacts
 
