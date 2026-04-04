@@ -25,7 +25,7 @@ Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 | `ENABLE_NETWORKING` | ON | UDP multiplayer (raw sockets) |
 | `ENABLE_VULKAN` | ON | Vulkan (experimental) |
 | `ENABLE_OPENGL` | OFF | OpenGL (experimental) |
-| `ENABLE_DXR` | OFF | DXR (requires D3D12) |
+| `ENABLE_DXR` | ON | DXR (Windows/D3D12; SDFGI fallback elsewhere) |
 | `BUILD_TESTS` | ON | CTest unit tests |
 
 ### Build Targets

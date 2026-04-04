@@ -416,7 +416,7 @@ static void InitScriptingAndPlatformSystems(EngineContext* ctx)
     (void)Spark::Animation::BlendSpaceManager::GetInstance();
     Profiler::GetInstance().SetEnabled(true);
 
-#ifdef ENABLE_DXR
+#ifdef SPARK_HARDWARE_RT
     Spark::Graphics::DXRManager::GetInstance().Initialize(nullptr);
 #endif
 
@@ -883,7 +883,7 @@ void ShutdownGameplaySystems()
 
     Profiler::GetInstance().Shutdown();
 
-#ifdef ENABLE_DXR
+#ifdef SPARK_HARDWARE_RT
     Spark::Graphics::DXRManager::GetInstance().Shutdown();
 #endif
 

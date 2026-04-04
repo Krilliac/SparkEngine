@@ -216,7 +216,7 @@ chmod +x generate.sh
 | **DirectX 11** | **Stable** | Primary rendering backend |
 | **Vulkan** | Experimental | Via RHI abstraction layer; requires Vulkan SDK |
 | **OpenGL 4.5** | Experimental | Via RHI abstraction layer; GLSL shaders in `Shaders/GLSL/` |
-| **DirectX Raytracing (DXR)** | Experimental | Requires D3D12; disabled by default (`ENABLE_DXR=OFF`) |
+| **DirectX Raytracing (DXR)** | Experimental | Requires D3D12 (Windows); enabled by default with SDFGI software fallback |
 | **Networking (UDP)** | Experimental | Enabled by default (`ENABLE_NETWORKING=ON`); see [Networking](#networking-configuration) |
 
 > **What does "Experimental" mean?** These platforms and backends compile and have basic functionality, but are not yet fully tested, may have missing features, and are not guaranteed to work in all configurations. Bug reports are welcome!
@@ -468,7 +468,7 @@ All options are passed to CMake via `-D<OPTION>=ON/OFF`.
 | `ENABLE_VULKAN` | ON | Vulkan graphics backend (experimental) |
 | `ENABLE_OPENGL` | ON | OpenGL graphics backend (experimental) |
 | `ENABLE_METAL` | OFF | Metal graphics backend (macOS, experimental) |
-| `ENABLE_DXR` | OFF | DirectX Raytracing (experimental, needs D3D12) |
+| `ENABLE_DXR` | ON | DirectX Raytracing (Windows/D3D12; SDFGI fallback on other platforms) |
 | `ENABLE_HYBRID_RT` | ON | Hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT) |
 | `ENABLE_RECAST` | ON | Recast/Detour navmesh generation |
 | `ENABLE_SDL2` | OFF | SDL2 cross-platform input (auto-enabled on Linux) |

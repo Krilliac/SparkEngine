@@ -22,7 +22,7 @@ Several major engine systems are **disabled by default** in CMake. A build will 
 
 ```
 ENABLE_NETWORKING=OFF   ← off by default
-ENABLE_DXR=OFF          ← off by default (DXR raytracing)
+ENABLE_DXR=ON           ← on by default (SDFGI fallback when no D3D12/DXR hardware)
 ENABLE_VR=OFF           ← VR is implemented but disabled by default
 ```
 

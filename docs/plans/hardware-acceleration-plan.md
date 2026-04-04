@@ -30,7 +30,7 @@ This plan covers activating existing systems and adding new GPU-driven capabilit
 ### Built But Disabled
 | System | Lines | Blocker |
 |--------|-------|---------|
-| DXR 1.1 Ray Tracing | 45K | `ENABLE_DXR=OFF`, not in render loop |
+| DXR 1.1 Ray Tracing | 45K | `ENABLE_DXR=ON` (SDFGI fallback active; DXR wired in on Windows) |
 | FSR 2.0 / DLSS / XeSS | ~2K | Vendor SDK not linked |
 | Mesh Cluster System | 820 | GPU rasterization path incomplete |
 | Render Graph Async Compute | 1.7K | Pass type exists, no workloads assigned |
@@ -160,8 +160,8 @@ D3D12 and Vulkan backends have queue separation capability.
 
 **Goal:** Wire existing 45K-line DXR implementation into main render loop.
 
-**Current state:** `DXRSupport.cpp/h` is complete but `ENABLE_DXR=OFF` and not called
-from `GraphicsEngine::RenderScene()`.
+**Current state:** `DXRSupport.cpp/h` is complete, `ENABLE_DXR=ON` by default,
+DXR wired into `GraphicsEngine::RenderScene()` behind `#ifdef SPARK_HARDWARE_RT`.
 
 **Changes to existing files:**
 - `GraphicsEngine.cpp` - Add DXR dispatch after G-buffer/lighting pass
