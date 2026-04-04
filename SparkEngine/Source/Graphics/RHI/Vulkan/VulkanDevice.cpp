@@ -4,7 +4,7 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Complete Vulkan 1.3 device implementation with instance creation,
+ * Vulkan 1.4 device implementation (1.3 fallback) with instance creation,
  * physical device selection, logical device, command pools, and
  * all resource creation/management functionality.
  */
@@ -176,8 +176,8 @@ namespace Spark
                 QueryCapabilities();
 
                 // Create immediate command list with statistics tracking
-                m_immediateCommandList =
-                    std::make_unique<VulkanCommandList>(m_device, m_commandPool, true, &m_statistics);
+                m_immediateCommandList = std::make_unique<VulkanCommandList>(m_device, m_commandPool, true,
+                                                                             &m_statistics, m_vkCmdPushDescriptorSet);
 
                 // Create pipeline cache
                 VkPipelineCacheCreateInfo cacheInfo = {};
@@ -236,6 +236,21 @@ namespace Spark
                         vkGetInstanceProcAddr(m_instance, "vkCmdInsertDebugUtilsLabelEXT"));
                 }
 
+                // Load push descriptor function (Vulkan 1.4 core or VK_KHR_push_descriptor)
+                if (m_pushDescriptorSupported)
+                {
+                    m_vkCmdPushDescriptorSet = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(
+                        vkGetDeviceProcAddr(m_device, "vkCmdPushDescriptorSetKHR"));
+                    if (!m_vkCmdPushDescriptorSet)
+                        m_pushDescriptorSupported = false;
+                }
+
+                if (m_vulkan14Available)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Vulkan 1.4: push_desc=%s host_image_copy=%s",
+                                   m_pushDescriptorSupported ? "yes" : "no", m_hostImageCopySupported ? "yes" : "no");
+                }
+
                 return true;
             }
 
@@ -247,7 +262,13 @@ namespace Spark
                 appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
                 appInfo.pEngineName = "SparkEngine";
                 appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+
+                // Try Vulkan 1.4 first, fall back to 1.3 if unavailable
+#ifdef VK_API_VERSION_1_4
+                appInfo.apiVersion = VK_API_VERSION_1_4;
+#else
                 appInfo.apiVersion = VK_API_VERSION_1_3;
+#endif
 
                 // Surface extensions are needed for windowed rendering but not for
                 // headless/software devices (e.g. Lavapipe in CI). We enumerate
@@ -295,6 +316,18 @@ namespace Spark
                 createInfo.ppEnabledLayerNames = layers.data();
 
                 VkResult result = vkCreateInstance(&createInfo, nullptr, &m_instance);
+#ifdef VK_API_VERSION_1_4
+                if (result == VK_ERROR_INCOMPATIBLE_DRIVER)
+                {
+                    // Vulkan 1.4 not supported by driver — fall back to 1.3
+                    appInfo.apiVersion = VK_API_VERSION_1_3;
+                    result = vkCreateInstance(&createInfo, nullptr, &m_instance);
+                }
+                else if (result == VK_SUCCESS)
+                {
+                    m_vulkan14Available = true;
+                }
+#endif
                 if (result != VK_SUCCESS)
                     return false;
 
@@ -423,7 +456,7 @@ namespace Spark
 
                 // Query what the physical device actually supports before enabling features.
                 // Software devices (Lavapipe) lack geometry shaders, tessellation, and some
-                // Vulkan 1.2/1.3 features that hardware GPUs provide.
+                // Vulkan 1.2/1.3/1.4 features that hardware GPUs provide.
                 VkPhysicalDeviceFeatures supportedFeatures = {};
                 vkGetPhysicalDeviceFeatures(m_physicalDevice, &supportedFeatures);
 
@@ -432,6 +465,12 @@ namespace Spark
                 VkPhysicalDeviceVulkan13Features supported13 = {};
                 supported13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
                 supported12.pNext = &supported13;
+
+#ifdef VK_API_VERSION_1_4
+                VkPhysicalDeviceVulkan14Features supported14 = {};
+                supported14.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+                supported13.pNext = &supported14;
+#endif
 
                 VkPhysicalDeviceFeatures2 features2 = {};
                 features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -459,6 +498,29 @@ namespace Spark
                 vulkan12Features.descriptorIndexing = supported12.descriptorIndexing;
                 vulkan12Features.timelineSemaphore = supported12.timelineSemaphore;
                 vulkan12Features.bufferDeviceAddress = supported12.bufferDeviceAddress;
+
+#ifdef VK_API_VERSION_1_4
+                // Vulkan 1.4 features — push descriptors, dynamic rendering local read,
+                // maintenance5/6, pipeline robustness, host image copy, index type uint8
+                VkPhysicalDeviceVulkan14Features vulkan14Features = {};
+                vulkan14Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+                if (m_vulkan14Available)
+                {
+                    vulkan14Features.pushDescriptor = supported14.pushDescriptor;
+                    vulkan14Features.dynamicRenderingLocalRead = supported14.dynamicRenderingLocalRead;
+                    vulkan14Features.maintenance5 = supported14.maintenance5;
+                    vulkan14Features.maintenance6 = supported14.maintenance6;
+                    vulkan14Features.pipelineRobustness = supported14.pipelineRobustness;
+                    vulkan14Features.hostImageCopy = supported14.hostImageCopy;
+                    vulkan14Features.indexTypeUint8 = supported14.indexTypeUint8;
+                    vulkan14Features.shaderExpectAssume = supported14.shaderExpectAssume;
+
+                    m_pushDescriptorSupported = (supported14.pushDescriptor == VK_TRUE);
+                    m_hostImageCopySupported = (supported14.hostImageCopy == VK_TRUE);
+
+                    vulkan13Features.pNext = &vulkan14Features;
+                }
+#endif
 
                 // Build extension list — software devices don't need VK_KHR_swapchain
                 std::vector<const char*> enabledExtensions;
@@ -490,6 +552,17 @@ namespace Spark
                     {
                         if (hasExt(ext))
                             enabledExtensions.push_back(ext);
+                    }
+
+                    // VRS for adaptive ray tracing resolution
+                    if (hasExt(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME))
+                        enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+
+                    // Push descriptors as extension fallback for pre-1.4 devices
+                    if (!m_vulkan14Available && hasExt(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME))
+                    {
+                        enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+                        m_pushDescriptorSupported = true;
                     }
                 }
 
@@ -576,9 +649,13 @@ namespace Spark
                 vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
 
                 m_capabilities.deviceName = properties.deviceName;
-                m_capabilities.apiVersion = "Vulkan " + std::to_string(VK_VERSION_MAJOR(properties.apiVersion)) + "." +
-                                            std::to_string(VK_VERSION_MINOR(properties.apiVersion)) + "." +
-                                            std::to_string(VK_VERSION_PATCH(properties.apiVersion));
+                // Report the effective API version (what we requested, not device max)
+                std::string apiStr = "Vulkan " + std::to_string(VK_VERSION_MAJOR(properties.apiVersion)) + "." +
+                                     std::to_string(VK_VERSION_MINOR(properties.apiVersion)) + "." +
+                                     std::to_string(VK_VERSION_PATCH(properties.apiVersion));
+                if (m_vulkan14Available)
+                    apiStr += " (1.4 features active)";
+                m_capabilities.apiVersion = apiStr;
                 m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
 
                 m_capabilities.maxTextureSize = properties.limits.maxImageDimension2D;
@@ -798,6 +875,10 @@ namespace Spark
                 m_device = VK_NULL_HANDLE;
                 m_debugMessenger = VK_NULL_HANDLE;
                 m_instance = VK_NULL_HANDLE;
+                m_vkCmdPushDescriptorSet = nullptr;
+                m_vulkan14Available = false;
+                m_pushDescriptorSupported = false;
+                m_hostImageCopySupported = false;
             }
 
             std::unique_ptr<IRHISwapChain> VulkanDevice::CreateSwapChain(const RHISwapChainDesc& desc)
@@ -1467,7 +1548,8 @@ namespace Spark
 
             std::unique_ptr<IRHICommandList> VulkanDevice::CreateDeferredCommandList()
             {
-                return std::make_unique<VulkanCommandList>(m_device, m_commandPool, false);
+                return std::make_unique<VulkanCommandList>(m_device, m_commandPool, false, nullptr,
+                                                           m_vkCmdPushDescriptorSet);
             }
 
             void VulkanDevice::ExecuteCommandList(IRHICommandList* commandList)
@@ -1544,6 +1626,9 @@ namespace Spark
                 info += "Max Color Attachments: " + std::to_string(m_capabilities.maxRenderTargets) + "\n";
                 info += "Tessellation: " + std::string(m_capabilities.tessellationSupport ? "Yes" : "No") + "\n";
                 info += "Geometry Shaders: " + std::string(m_capabilities.geometryShaderSupport ? "Yes" : "No") + "\n";
+                info += "Vulkan 1.4: " + std::string(m_vulkan14Available ? "Yes" : "No") + "\n";
+                info += "Push Descriptors: " + std::string(m_pushDescriptorSupported ? "Yes" : "No") + "\n";
+                info += "Host Image Copy: " + std::string(m_hostImageCopySupported ? "Yes" : "No") + "\n";
                 return info;
             }
 

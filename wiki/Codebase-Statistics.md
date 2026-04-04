@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 237171 |
-| **SparkEditor/Source** | 82334 |
+| **SparkEngine/Source** | 237336 |
+| **SparkEditor/Source** | 82394 |
 | **GameModules** | 56786 |
-| **Tests** | 83208 |
+| **Tests** | 83259 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~461890** |
+| **Total C++ (excl. ThirdParty)** | **~462166** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |--------|-------|
 | Average lines per .cpp file | ~861 |
 | Average lines per .h file | ~570 |
-| Largest codebase section | Graphics (93212 lines — 39% of SparkEngine/Source) |
+| Largest codebase section | Graphics (93377 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 93212 | 39.3% |
+| Graphics | 93377 | 39.3% |
 | Engine (all subsystems) | 70560 | 29.7% |
 | Utils | 31706 | 13.3% |
 | Core | 17224 | 7.2% |
@@ -99,14 +99,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 57 |
-| Total editor lines | 82334 |
+| Total editor lines | 82394 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 264 |
-| TEST() definitions | 3388 |
+| TEST() definitions | 3389 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -156,7 +156,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |------|------:|
 | `OpenGLDevice.cpp` | 1921 |
 | `SparkEngine.cpp` | 1767 |
-| `VulkanDevice.cpp` | 1571 |
+| `VulkanDevice.cpp` | 1656 |
 | `GraphicsEngine.cpp` | 1553 |
 | `D3D12Device.cpp` | 1511 |
 | `D3D11Device.cpp` | 1430 |
@@ -185,7 +185,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | File | Lines |
 |------|------:|
 | `VisualScriptPanel.cpp` | 1844 |
-| `EditorUI.cpp` | 1608 |
+| `EditorUI.cpp` | 1669 |
 | `CollaborativeEditSession.cpp` | 1382 |
 | `PerformanceProfiler.cpp` | 1332 |
 | `EditorTheme.cpp` | 1325 |

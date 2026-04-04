@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*263 test files, 3388+ test cases*
+*263 test files, 3389+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -775,7 +775,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestVersionedHandle` | 9 |
 | `TestVideoPlayer` | 12 |
 | `TestVisualScriptCompiler` | 12 |
-| `TestVulkanLavapipe` | 4 |
+| `TestVulkanLavapipe` | 5 |
 | `TestWARPRendering` | 4 |
 | `TestWaterRenderer` | 6 |
 | `TestWeaponMechanics` | 29 |

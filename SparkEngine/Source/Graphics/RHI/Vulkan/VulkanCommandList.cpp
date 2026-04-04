@@ -231,8 +231,10 @@ namespace Spark
             // ============================================================================
 
             VulkanCommandList::VulkanCommandList(VkDevice device, VkCommandPool commandPool, bool isImmediate,
-                                                 RHIStatistics* statistics)
-                : m_device(device), m_commandPool(commandPool), m_isImmediate(isImmediate), m_statistics(statistics)
+                                                 RHIStatistics* statistics,
+                                                 PFN_vkCmdPushDescriptorSetKHR pushDescriptorFn)
+                : m_device(device), m_commandPool(commandPool), m_isImmediate(isImmediate), m_statistics(statistics),
+                  m_vkCmdPushDescriptorSet(pushDescriptorFn)
             {
                 VkCommandBufferAllocateInfo allocInfo = {};
                 allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -419,7 +421,15 @@ namespace Spark
                 if (!buffer)
                     return;
                 auto* vkBuf = static_cast<VulkanBuffer*>(buffer);
-                VkIndexType indexType = (vkBuf->GetStride() == 4) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+                VkIndexType indexType;
+                if (vkBuf->GetStride() == 4)
+                    indexType = VK_INDEX_TYPE_UINT32;
+#ifdef VK_API_VERSION_1_4
+                else if (vkBuf->GetStride() == 1)
+                    indexType = VK_INDEX_TYPE_UINT8_KHR; // Vulkan 1.4 core (was VK_KHR_index_type_uint8)
+#endif
+                else
+                    indexType = VK_INDEX_TYPE_UINT16;
                 vkCmdBindIndexBuffer(m_commandBuffer, vkBuf->GetVkBuffer(), offset, indexType);
             }
 
@@ -464,7 +474,64 @@ namespace Spark
 
             void VulkanCommandList::BindDescriptorSet(VkPipelineLayout layout, VkDescriptorSet descriptorSet)
             {
-                if (m_isRecording && descriptorSet != VK_NULL_HANDLE)
+                if (!m_isRecording)
+                    return;
+
+                // Push descriptor path: push pending bindings directly into the command
+                // buffer without allocating from the descriptor pool. Available on
+                // Vulkan 1.4 (core) or via VK_KHR_push_descriptor extension.
+                if (m_vkCmdPushDescriptorSet && m_pendingBindings.dirty && layout != VK_NULL_HANDLE)
+                {
+                    std::vector<VkWriteDescriptorSet> writes;
+                    std::vector<VkDescriptorBufferInfo> bufInfos;
+                    std::vector<VkDescriptorImageInfo> imgInfos;
+                    bufInfos.reserve(m_pendingBindings.constantBuffers.size());
+                    imgInfos.reserve(m_pendingBindings.shaderResources.size());
+
+                    for (const auto& [slot, buffer] : m_pendingBindings.constantBuffers)
+                    {
+                        auto& bi = bufInfos.emplace_back();
+                        bi.buffer = buffer;
+                        bi.offset = 0;
+                        bi.range = m_pendingBindings.constantBufferSizes[slot];
+
+                        VkWriteDescriptorSet w = {};
+                        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        w.dstBinding = slot;
+                        w.descriptorCount = 1;
+                        w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                        w.pBufferInfo = &bufInfos.back();
+                        writes.push_back(w);
+                    }
+
+                    for (const auto& [slot, imageView] : m_pendingBindings.shaderResources)
+                    {
+                        auto& ii = imgInfos.emplace_back();
+                        ii.imageView = imageView;
+                        ii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                        auto sampIt = m_pendingBindings.samplers.find(slot);
+                        ii.sampler = (sampIt != m_pendingBindings.samplers.end()) ? sampIt->second : VK_NULL_HANDLE;
+
+                        VkWriteDescriptorSet w = {};
+                        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        w.dstBinding = 14 + slot; // Texture bindings start at 14
+                        w.descriptorCount = 1;
+                        w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                        w.pImageInfo = &imgInfos.back();
+                        writes.push_back(w);
+                    }
+
+                    if (!writes.empty())
+                    {
+                        m_vkCmdPushDescriptorSet(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
+                                                 static_cast<uint32_t>(writes.size()), writes.data());
+                    }
+                    m_pendingBindings.dirty = false;
+                    return;
+                }
+
+                // Traditional descriptor set path
+                if (descriptorSet != VK_NULL_HANDLE)
                 {
                     vkCmdBindDescriptorSets(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
                                             &descriptorSet, 0, nullptr);

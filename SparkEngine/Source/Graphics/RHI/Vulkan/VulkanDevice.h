@@ -4,9 +4,9 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Full Vulkan 1.3 backend for the RHI abstraction layer.
- * Supports modern Vulkan features including dynamic rendering,
- * timeline semaphores, and descriptor indexing.
+ * Vulkan 1.4 backend (with 1.3 fallback) for the RHI abstraction layer.
+ * Supports modern Vulkan features including dynamic rendering, push
+ * descriptors, timeline semaphores, host image copy, and descriptor indexing.
  */
 
 #pragma once
@@ -254,7 +254,8 @@ namespace Spark
             {
               public:
                 VulkanCommandList(VkDevice device, VkCommandPool commandPool, bool isImmediate,
-                                  RHIStatistics* statistics = nullptr);
+                                  RHIStatistics* statistics = nullptr,
+                                  PFN_vkCmdPushDescriptorSetKHR pushDescriptorFn = nullptr);
                 ~VulkanCommandList() override;
 
                 void Begin() override;
@@ -313,6 +314,9 @@ namespace Spark
                 bool m_isImmediate;
                 bool m_isRecording = false;
                 RHIStatistics* m_statistics = nullptr;
+
+                // Push descriptor function (Vulkan 1.4 core / VK_KHR_push_descriptor)
+                PFN_vkCmdPushDescriptorSetKHR m_vkCmdPushDescriptorSet = nullptr;
 
                 // Current render pass state
                 VkRenderPass m_activeRenderPass = VK_NULL_HANDLE;
@@ -382,6 +386,9 @@ namespace Spark
                 VkPhysicalDevice GetVkPhysicalDevice() const { return m_physicalDevice; }
                 VkInstance GetVkInstance() const { return m_instance; }
                 bool IsSoftwareDevice() const { return m_isSoftwareDevice; }
+                bool IsVulkan14() const { return m_vulkan14Available; }
+                bool SupportsPushDescriptors() const { return m_pushDescriptorSupported; }
+                bool SupportsHostImageCopy() const { return m_hostImageCopySupported; }
                 VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
                 VkQueue GetPresentQueue() const { return m_presentQueue; }
                 VkCommandPool GetCommandPool() const { return m_commandPool; }
@@ -448,10 +455,16 @@ namespace Spark
                 PFN_vkCmdEndDebugUtilsLabelEXT m_vkCmdEndDebugUtilsLabel = nullptr;
                 PFN_vkCmdInsertDebugUtilsLabelEXT m_vkCmdInsertDebugUtilsLabel = nullptr;
 
+                // Push descriptor function pointer (Vulkan 1.4 core / VK_KHR_push_descriptor)
+                PFN_vkCmdPushDescriptorSetKHR m_vkCmdPushDescriptorSet = nullptr;
+
                 RHIDeviceCapabilities m_capabilities;
                 RHIStatistics m_statistics;
                 bool m_validationEnabled = false;
                 bool m_isSoftwareDevice = false;
+                bool m_vulkan14Available = false;
+                bool m_pushDescriptorSupported = false;
+                bool m_hostImageCopySupported = false;
 
                 const std::vector<const char*> m_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
             };
