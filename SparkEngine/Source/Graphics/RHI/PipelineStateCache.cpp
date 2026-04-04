@@ -24,12 +24,13 @@ namespace Spark::Graphics
         auto it = m_cache.find(desc);
         if (it != m_cache.end())
         {
-            SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "PSO cache hit (hash=0x%llx)", desc.shaderHash);
+            SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "PSO cache hit (hash=0x%llx)",
+                            static_cast<unsigned long long>(desc.shaderHash));
             return it->second;
         }
 
         SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "PSO cache miss, creating new state (hash=0x%llx)",
-                        desc.shaderHash);
+                        static_cast<unsigned long long>(desc.shaderHash));
         auto pso = std::make_shared<PipelineStateDesc>(desc);
         m_cache[desc] = pso;
         return pso;
@@ -38,7 +39,7 @@ namespace Spark::Graphics
     void PipelineStateCache::Invalidate(uint64_t shaderHash)
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Invalidating PSO cache entries for shader hash 0x%llx",
-                        shaderHash);
+                        static_cast<unsigned long long>(shaderHash));
         std::lock_guard<std::mutex> lock(m_mutex);
 
         auto it = m_cache.begin();

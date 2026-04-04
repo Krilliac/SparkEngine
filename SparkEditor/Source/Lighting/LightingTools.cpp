@@ -13,6 +13,7 @@
 #include <cmath>
 #include <algorithm>
 #include <fstream>
+#include <stdexcept>
 #include <sstream>
 #include <filesystem>
 
@@ -608,218 +609,231 @@ namespace SparkEditor
             std::string key = line.substr(0, eqPos);
             std::string value = line.substr(eqPos + 1);
 
-            if (currentSection == "Atmosphere")
+            try
             {
-                if (key == "timeOfDay")
+                if (currentSection == "Atmosphere")
                 {
-                    m_atmosphereSettings.timeOfDay = std::stof(value);
+                    if (key == "timeOfDay")
+                    {
+                        m_atmosphereSettings.timeOfDay = std::stof(value);
+                    }
+                    else if (key == "dayDuration")
+                    {
+                        m_atmosphereSettings.dayDuration = std::stof(value);
+                    }
+                    else if (key == "sunDirection")
+                    {
+                        m_atmosphereSettings.sunDirection = parseFloat3(value);
+                    }
+                    else if (key == "sunColor")
+                    {
+                        m_atmosphereSettings.sunColor = parseFloat3(value);
+                    }
+                    else if (key == "sunIntensity")
+                    {
+                        m_atmosphereSettings.sunIntensity = std::stof(value);
+                    }
+                    else if (key == "enableAtmosphereScattering")
+                    {
+                        m_atmosphereSettings.enableAtmosphereScattering = (value == "1");
+                    }
+                    else if (key == "turbidity")
+                    {
+                        m_atmosphereSettings.turbidity = std::stof(value);
+                    }
+                    else if (key == "enableFog")
+                    {
+                        m_atmosphereSettings.enableFog = (value == "1");
+                    }
+                    else if (key == "fogDensity")
+                    {
+                        m_atmosphereSettings.fogDensity = std::stof(value);
+                    }
+                    else if (key == "fogStartDistance")
+                    {
+                        m_atmosphereSettings.fogStartDistance = std::stof(value);
+                    }
+                    else if (key == "fogEndDistance")
+                    {
+                        m_atmosphereSettings.fogEndDistance = std::stof(value);
+                    }
+                    else if (key == "fogColor")
+                    {
+                        m_atmosphereSettings.fogColor = parseFloat3(value);
+                    }
                 }
-                else if (key == "dayDuration")
+                else if (currentSection == "GlobalIllumination")
                 {
-                    m_atmosphereSettings.dayDuration = std::stof(value);
+                    if (key == "enableGI")
+                    {
+                        m_giSettings.enableGI = (value == "1");
+                    }
+                    else if (key == "enableSSAO")
+                    {
+                        m_giSettings.enableSSAO = (value == "1");
+                    }
+                    else if (key == "enableSSR")
+                    {
+                        m_giSettings.enableSSR = (value == "1");
+                    }
+                    else if (key == "bounceCount")
+                    {
+                        m_giSettings.bounceCount = std::stoi(value);
+                    }
+                    else if (key == "lightmapResolution")
+                    {
+                        m_giSettings.lightmapResolution = std::stoi(value);
+                    }
+                    else if (key == "ambientColor")
+                    {
+                        m_giSettings.ambientColor = parseFloat3(value);
+                    }
+                    else if (key == "ambientIntensity")
+                    {
+                        m_giSettings.ambientIntensity = std::stof(value);
+                    }
+                    else if (key == "skyboxExposure")
+                    {
+                        m_giSettings.skyboxExposure = std::stof(value);
+                    }
                 }
-                else if (key == "sunDirection")
+                else if (currentSection == "PostProcessing")
                 {
-                    m_atmosphereSettings.sunDirection = parseFloat3(value);
+                    if (key == "enableTonemapping")
+                    {
+                        m_postProcessingSettings.enableTonemapping = (value == "1");
+                    }
+                    else if (key == "tonemappingOperator")
+                    {
+                        m_postProcessingSettings.tonemappingOperator = value;
+                    }
+                    else if (key == "exposure")
+                    {
+                        m_postProcessingSettings.exposure = std::stof(value);
+                    }
+                    else if (key == "gamma")
+                    {
+                        m_postProcessingSettings.gamma = std::stof(value);
+                    }
+                    else if (key == "enableBloom")
+                    {
+                        m_postProcessingSettings.enableBloom = (value == "1");
+                    }
+                    else if (key == "bloomThreshold")
+                    {
+                        m_postProcessingSettings.bloomThreshold = std::stof(value);
+                    }
+                    else if (key == "bloomIntensity")
+                    {
+                        m_postProcessingSettings.bloomIntensity = std::stof(value);
+                    }
+                    else if (key == "contrast")
+                    {
+                        m_postProcessingSettings.contrast = std::stof(value);
+                    }
+                    else if (key == "saturation")
+                    {
+                        m_postProcessingSettings.saturation = std::stof(value);
+                    }
+                    else if (key == "brightness")
+                    {
+                        m_postProcessingSettings.brightness = std::stof(value);
+                    }
                 }
-                else if (key == "sunColor")
+                else if (currentSection == "Lights")
                 {
-                    m_atmosphereSettings.sunColor = parseFloat3(value);
-                }
-                else if (key == "sunIntensity")
-                {
-                    m_atmosphereSettings.sunIntensity = std::stof(value);
-                }
-                else if (key == "enableAtmosphereScattering")
-                {
-                    m_atmosphereSettings.enableAtmosphereScattering = (value == "1");
-                }
-                else if (key == "turbidity")
-                {
-                    m_atmosphereSettings.turbidity = std::stof(value);
-                }
-                else if (key == "enableFog")
-                {
-                    m_atmosphereSettings.enableFog = (value == "1");
-                }
-                else if (key == "fogDensity")
-                {
-                    m_atmosphereSettings.fogDensity = std::stof(value);
-                }
-                else if (key == "fogStartDistance")
-                {
-                    m_atmosphereSettings.fogStartDistance = std::stof(value);
-                }
-                else if (key == "fogEndDistance")
-                {
-                    m_atmosphereSettings.fogEndDistance = std::stof(value);
-                }
-                else if (key == "fogColor")
-                {
-                    m_atmosphereSettings.fogColor = parseFloat3(value);
+                    if (key == "count")
+                    {
+                        lightCount = std::stoi(value);
+                        continue;
+                    }
+
+                    // Parse "lightN.property"
+                    auto dotPos = key.find('.');
+                    if (dotPos == std::string::npos)
+                    {
+                        continue;
+                    }
+
+                    std::string lightPrefix = key.substr(0, dotPos);
+                    std::string property = key.substr(dotPos + 1);
+
+                    // Extract light index from "lightN"
+                    int lightIndex = 0;
+                    if (lightPrefix.size() > 5)
+                    {
+                        lightIndex = std::stoi(lightPrefix.substr(5));
+                    }
+
+                    auto& light = loadedLights[lightIndex];
+
+                    if (property == "name")
+                    {
+                        light.name = value;
+                    }
+                    else if (property == "type")
+                    {
+                        light.type = static_cast<SparkLightType>(std::stoul(value));
+                    }
+                    else if (property == "position")
+                    {
+                        light.position = parseFloat3(value);
+                    }
+                    else if (property == "direction")
+                    {
+                        light.direction = parseFloat3(value);
+                    }
+                    else if (property == "color")
+                    {
+                        light.color = parseFloat3(value);
+                    }
+                    else if (property == "intensity")
+                    {
+                        light.intensity = std::stof(value);
+                    }
+                    else if (property == "range")
+                    {
+                        light.range = std::stof(value);
+                    }
+                    else if (property == "castShadows")
+                    {
+                        light.castShadows = (value == "1");
+                    }
+                    else if (property == "shadowQuality")
+                    {
+                        light.shadowQuality = static_cast<ShadowQuality>(std::stoul(value));
+                    }
+                    else if (property == "innerConeAngle")
+                    {
+                        light.innerConeAngle = std::stof(value);
+                    }
+                    else if (property == "outerConeAngle")
+                    {
+                        light.outerConeAngle = std::stof(value);
+                    }
+                    else if (property == "temperature")
+                    {
+                        light.temperature = std::stof(value);
+                    }
+                    else if (property == "isActive")
+                    {
+                        light.isActive = (value == "1");
+                    }
+                    else if (property == "priority")
+                    {
+                        light.priority = std::stoi(value);
+                    }
                 }
             }
-            else if (currentSection == "GlobalIllumination")
+            catch (const std::invalid_argument&)
             {
-                if (key == "enableGI")
-                {
-                    m_giSettings.enableGI = (value == "1");
-                }
-                else if (key == "enableSSAO")
-                {
-                    m_giSettings.enableSSAO = (value == "1");
-                }
-                else if (key == "enableSSR")
-                {
-                    m_giSettings.enableSSR = (value == "1");
-                }
-                else if (key == "bounceCount")
-                {
-                    m_giSettings.bounceCount = std::stoi(value);
-                }
-                else if (key == "lightmapResolution")
-                {
-                    m_giSettings.lightmapResolution = std::stoi(value);
-                }
-                else if (key == "ambientColor")
-                {
-                    m_giSettings.ambientColor = parseFloat3(value);
-                }
-                else if (key == "ambientIntensity")
-                {
-                    m_giSettings.ambientIntensity = std::stof(value);
-                }
-                else if (key == "skyboxExposure")
-                {
-                    m_giSettings.skyboxExposure = std::stof(value);
-                }
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Invalid number in lighting file: key='%s' value='%s'",
+                               key.c_str(), value.c_str());
             }
-            else if (currentSection == "PostProcessing")
+            catch (const std::out_of_range&)
             {
-                if (key == "enableTonemapping")
-                {
-                    m_postProcessingSettings.enableTonemapping = (value == "1");
-                }
-                else if (key == "tonemappingOperator")
-                {
-                    m_postProcessingSettings.tonemappingOperator = value;
-                }
-                else if (key == "exposure")
-                {
-                    m_postProcessingSettings.exposure = std::stof(value);
-                }
-                else if (key == "gamma")
-                {
-                    m_postProcessingSettings.gamma = std::stof(value);
-                }
-                else if (key == "enableBloom")
-                {
-                    m_postProcessingSettings.enableBloom = (value == "1");
-                }
-                else if (key == "bloomThreshold")
-                {
-                    m_postProcessingSettings.bloomThreshold = std::stof(value);
-                }
-                else if (key == "bloomIntensity")
-                {
-                    m_postProcessingSettings.bloomIntensity = std::stof(value);
-                }
-                else if (key == "contrast")
-                {
-                    m_postProcessingSettings.contrast = std::stof(value);
-                }
-                else if (key == "saturation")
-                {
-                    m_postProcessingSettings.saturation = std::stof(value);
-                }
-                else if (key == "brightness")
-                {
-                    m_postProcessingSettings.brightness = std::stof(value);
-                }
-            }
-            else if (currentSection == "Lights")
-            {
-                if (key == "count")
-                {
-                    lightCount = std::stoi(value);
-                    continue;
-                }
-
-                // Parse "lightN.property"
-                auto dotPos = key.find('.');
-                if (dotPos == std::string::npos)
-                {
-                    continue;
-                }
-
-                std::string lightPrefix = key.substr(0, dotPos);
-                std::string property = key.substr(dotPos + 1);
-
-                // Extract light index from "lightN"
-                int lightIndex = 0;
-                if (lightPrefix.size() > 5)
-                {
-                    lightIndex = std::stoi(lightPrefix.substr(5));
-                }
-
-                auto& light = loadedLights[lightIndex];
-
-                if (property == "name")
-                {
-                    light.name = value;
-                }
-                else if (property == "type")
-                {
-                    light.type = static_cast<SparkLightType>(std::stoul(value));
-                }
-                else if (property == "position")
-                {
-                    light.position = parseFloat3(value);
-                }
-                else if (property == "direction")
-                {
-                    light.direction = parseFloat3(value);
-                }
-                else if (property == "color")
-                {
-                    light.color = parseFloat3(value);
-                }
-                else if (property == "intensity")
-                {
-                    light.intensity = std::stof(value);
-                }
-                else if (property == "range")
-                {
-                    light.range = std::stof(value);
-                }
-                else if (property == "castShadows")
-                {
-                    light.castShadows = (value == "1");
-                }
-                else if (property == "shadowQuality")
-                {
-                    light.shadowQuality = static_cast<ShadowQuality>(std::stoul(value));
-                }
-                else if (property == "innerConeAngle")
-                {
-                    light.innerConeAngle = std::stof(value);
-                }
-                else if (property == "outerConeAngle")
-                {
-                    light.outerConeAngle = std::stof(value);
-                }
-                else if (property == "temperature")
-                {
-                    light.temperature = std::stof(value);
-                }
-                else if (property == "isActive")
-                {
-                    light.isActive = (value == "1");
-                }
-                else if (property == "priority")
-                {
-                    light.priority = std::stoi(value);
-                }
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Number out of range in lighting file: key='%s' value='%s'",
+                               key.c_str(), value.c_str());
             }
         }
 

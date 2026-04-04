@@ -69,11 +69,13 @@ namespace Spark::Graphics
         /// @brief Initialize with screen dimensions
         bool Initialize(uint32_t width, uint32_t height, const GTAOSettings& settings)
         {
+            if (width == 0 || height == 0 || width > 16384 || height > 16384)
+                return false;
             m_width = width;
             m_height = height;
             m_settings = settings;
-            m_aoBuffer.resize(width * height, 1.0f);
-            m_denoisedBuffer.resize(width * height, 1.0f);
+            m_aoBuffer.resize(static_cast<size_t>(width) * height, 1.0f);
+            m_denoisedBuffer.resize(static_cast<size_t>(width) * height, 1.0f);
             m_initialized = true;
             return true;
         }

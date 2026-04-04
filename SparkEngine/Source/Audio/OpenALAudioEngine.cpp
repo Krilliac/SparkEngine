@@ -603,7 +603,10 @@ namespace Spark::Audio
                 dataSize = chunk->size;
             }
 
-            offset += sizeof(WAVChunkHeader) + chunk->size;
+            size_t chunkTotalSize = sizeof(WAVChunkHeader) + chunk->size;
+            if (chunkTotalSize < chunk->size || offset + chunkTotalSize < offset)
+                break; // overflow protection
+            offset += chunkTotalSize;
             if (offset % 2 != 0)
                 offset++; // WAV chunks are 2-byte aligned
         }

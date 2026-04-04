@@ -457,6 +457,8 @@ namespace Platformer
         case PowerUpType::GhostMode:
             // Ghost is a temporary power-up
             break;
+        default:
+            break;
         }
     }
 

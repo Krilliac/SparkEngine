@@ -212,7 +212,9 @@ namespace Spark::Procedural
          */
         std::vector<float> GenerateHeightmap(int width, int height, const HeightmapParams& params = {})
         {
-            std::vector<float> heightmap(static_cast<size_t>(width * height), 0.0f);
+            if (width <= 0 || height <= 0 || width > 16384 || height > 16384)
+                return {};
+            std::vector<float> heightmap(static_cast<size_t>(width) * height, 0.0f);
 
             float maxVal = 0.0f;
             float minVal = 1e10f;
@@ -268,7 +270,9 @@ namespace Spark::Procedural
             DungeonResult result;
             result.width = width;
             result.height = height;
-            result.tiles.assign(static_cast<size_t>(width * height), DungeonTile::Wall);
+            if (width <= 0 || height <= 0 || width > 16384 || height > 16384)
+                return result;
+            result.tiles.assign(static_cast<size_t>(width) * height, DungeonTile::Wall);
 
             std::uniform_int_distribution<int> sizeDist(params.roomMinSize, params.roomMaxSize);
 
@@ -347,14 +351,20 @@ namespace Spark::Procedural
             result.width = width;
             result.height = height;
 
+            if (width <= 0 || height <= 0 || width > 16384 || height > 16384)
+            {
+                result.success = false;
+                return result;
+            }
+
             if (rules.empty())
             {
-                result.tiles.assign(static_cast<size_t>(width * height), -1);
+                result.tiles.assign(static_cast<size_t>(width) * height, -1);
                 return result;
             }
 
             // Initialize — each cell starts with all possible tiles
-            size_t cellCount = static_cast<size_t>(width * height);
+            size_t cellCount = static_cast<size_t>(width) * height;
             std::vector<std::vector<int>> possibilities(cellCount);
             for (auto& cell : possibilities)
             {

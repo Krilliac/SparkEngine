@@ -17,6 +17,7 @@
 #include "RenderTarget.h"
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -138,7 +139,16 @@ namespace Spark::Graphics
                 bpp = 4;
                 break;
             }
-            return static_cast<size_t>(width) * height * depth * arraySize * sampleCount * bpp;
+            size_t result = static_cast<size_t>(width);
+            constexpr size_t kMaxSize = std::numeric_limits<size_t>::max();
+            auto safeMul = [kMaxSize](size_t a, size_t b) -> size_t
+            { return (a > 0 && b > kMaxSize / a) ? kMaxSize : a * b; };
+            result = safeMul(result, height);
+            result = safeMul(result, depth);
+            result = safeMul(result, arraySize);
+            result = safeMul(result, sampleCount);
+            result = safeMul(result, bpp);
+            return result;
         }
     };
 

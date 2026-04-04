@@ -62,7 +62,8 @@ HRESULT SoundEffect::LoadFromMemory(const BYTE* data, DWORD dataSize)
 
 void SoundEffect::Unload()
 {
-    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "SoundEffect: Unloading sound data (%u bytes)", m_audioDataSize);
+    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "SoundEffect: Unloading sound data (%lu bytes)",
+                    static_cast<unsigned long>(m_audioDataSize));
     m_audioData.clear();
     m_audioDataSize = 0;
     ZeroMemory(&m_format, sizeof(m_format));
@@ -159,7 +160,8 @@ std::unique_ptr<SoundEffect> SoundEffectFactory::CreateFromSamples(const std::ve
     SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !samples.empty(), "CreateFromSamples: samples must not be empty");
 
     auto se = std::make_unique<SoundEffect>();
-    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "SoundEffect: Creating from %zu samples at %u Hz", samples.size(), SR);
+    SPARK_LOG_DEBUG(Spark::LogCategory::Audio, "SoundEffect: Creating from %zu samples at %lu Hz", samples.size(),
+                    static_cast<unsigned long>(SR));
 
     // Set up the PCM format directly (mono, 16-bit)
     se->m_format.wFormatTag = WAVE_FORMAT_PCM;

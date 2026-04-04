@@ -220,15 +220,17 @@ HRESULT TextureAsset::Load(ID3D11Device* device)
                     uint8_t bpp = header[16];
                     uint8_t imageType = header[2];
 
-                    if (imageType == 2 && (bpp == 24 || bpp == 32) && m_width > 0 && m_height > 0)
+                    if (imageType == 2 && (bpp == 24 || bpp == 32) && m_width > 0 && m_height > 0 && m_width <= 65536 &&
+                        m_height <= 65536)
                     {
                         size_t bytesPerPixel = bpp / 8;
-                        size_t dataSize = m_width * m_height * bytesPerPixel;
+                        size_t dataSize = static_cast<size_t>(m_width) * m_height * bytesPerPixel;
                         std::vector<uint8_t> rawData(dataSize);
                         file.read(reinterpret_cast<char*>(rawData.data()), dataSize);
 
-                        pixelData.resize(m_width * m_height);
-                        for (uint32_t i = 0; i < m_width * m_height; ++i)
+                        size_t pixelCount = static_cast<size_t>(m_width) * m_height;
+                        pixelData.resize(pixelCount);
+                        for (size_t i = 0; i < pixelCount; ++i)
                         {
                             uint8_t b = rawData[i * bytesPerPixel + 0];
                             uint8_t g = rawData[i * bytesPerPixel + 1];

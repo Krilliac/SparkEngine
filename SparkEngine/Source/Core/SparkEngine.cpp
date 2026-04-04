@@ -70,6 +70,7 @@
 
 #include <atomic>
 #include <memory>
+#include <stdexcept>
 #include <sstream>
 #include <chrono>
 #include <cmath>
@@ -1812,8 +1813,13 @@ int main(int argc, char* argv[])
         {
             g_eventBus->ClearAll();
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Exception during eventBus cleanup: %s", e.what());
+        }
         catch (...)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Unknown exception during eventBus cleanup");
         }
     }
     g_eventBus.release();

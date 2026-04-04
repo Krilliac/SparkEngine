@@ -213,7 +213,7 @@ namespace Spark
         auto& inspector = FrameInspector::GetInstance();
         inspector.OnFrameEnd();
         uint64_t frameNum = inspector.GetFrameNumber();
-        report.Add(sub, "FrameInspector frame cycle", frameNum >= 0);
+        report.Add(sub, "FrameInspector frame cycle", frameNum > 0);
 
         // Profiler
         auto& profiler = Profiler::GetInstance();

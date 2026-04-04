@@ -93,7 +93,7 @@ namespace Spark::Graphics
 
         // Portal culling: determine visible cells before frustum testing
         bool usePortalCulling =
-            EngineSettings::GetInstance().GetRendering().portalCulling && m_portalCulling.GetCellCount() > 0;
+            EngineSettings::GetInstance().Rendering().portalCulling && m_portalCulling.GetCellCount() > 0;
         if (usePortalCulling)
         {
             DirectX::XMFLOAT4X4 vpStored;

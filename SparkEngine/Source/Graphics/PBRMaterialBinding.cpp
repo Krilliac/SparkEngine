@@ -109,7 +109,12 @@ bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath
         return false;
     }
 
-    std::vector<BYTE> imageData(width * height * 4); // 4 bytes per pixel (RGBA)
+    if (width > 65536 || height > 65536)
+    {
+        Spark::SimpleConsole::GetInstance().LogError("Image dimensions too large for PBR binding");
+        return false;
+    }
+    std::vector<BYTE> imageData(static_cast<size_t>(width) * height * 4); // 4 bytes per pixel (RGBA)
     hr = converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(imageData.size()), imageData.data());
     if (FAILED(hr))
     {

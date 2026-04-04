@@ -193,16 +193,10 @@ namespace Spark
          */
         template <typename E> void Publish(const E& event)
         {
-            // Guard against infinite recursion (handler publishes same event type)
-            static thread_local int s_publishDepth = 0;
-            if (s_publishDepth > 0)
-                return; // Silently ignore recursive publish for the same event type
-
             ChannelOf<E>* ch = FindChannel<E>();
             if (!ch)
                 return;
 
-            // Snapshot handler list under lock so we can call outside the lock.
             std::vector<std::function<void(const E&)>> snapshot;
             {
                 std::lock_guard<std::mutex> lock(ch->mutex);
@@ -211,7 +205,6 @@ namespace Spark
                     snapshot.push_back(entry.handler);
             }
 
-            ++s_publishDepth;
             for (auto& handler : snapshot)
             {
                 try
@@ -220,14 +213,11 @@ namespace Spark
                 }
                 catch (const std::exception&)
                 {
-                    // Fault isolation: skip faulted handler, continue dispatching
                 }
                 catch (...)
                 {
-                    // Fault isolation: skip faulted handler, continue dispatching
                 }
             }
-            --s_publishDepth;
         }
 
         /**
