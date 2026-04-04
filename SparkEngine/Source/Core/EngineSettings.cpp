@@ -4,6 +4,7 @@
  */
 
 #include "EngineSettings.h"
+#include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
@@ -64,6 +65,7 @@ bool EngineSettings::Load(const std::string& path)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine settings loaded successfully");
         ReadFromConfig();
+        ApplyDebugSettings();
         return true;
     }
 
@@ -72,6 +74,7 @@ bool EngineSettings::Load(const std::string& path)
                    m_filePath.c_str());
     PopulateDefaults();
     ReadFromConfig();
+    ApplyDebugSettings();
 
     // Save defaults so the file exists for next time
     Save();
@@ -133,6 +136,15 @@ void EngineSettings::ResetToDefaults()
     m_animation = AnimationSettings{};
     m_logging = LoggingSettings{};
     PopulateDefaults();
+}
+
+// =============================================================================
+// Apply debug settings to the Assert system
+// =============================================================================
+void EngineSettings::ApplyDebugSettings()
+{
+    Assert::SetSuppressionEnabled(m_debug.suppressFatalAsserts);
+    Assert::SetDebugBreakOnSuppressed(m_debug.breakOnSuppressedAsserts);
 }
 
 // =============================================================================
@@ -404,6 +416,10 @@ void EngineSettings::ReadFromConfig()
     m_animation.lodDistanceMultiplier = m_config.GetFloat("Animation", "LODDistanceMultiplier", 1.0f);
     m_animation.compressionQuality = m_config.GetInt("Animation", "CompressionQuality", 2);
     m_animation.enableAnimationEvents = m_config.GetBool("Animation", "EnableAnimationEvents", true);
+
+    // Debug
+    m_debug.suppressFatalAsserts = m_config.GetBool("Debug", "SuppressFatalAsserts", false);
+    m_debug.breakOnSuppressedAsserts = m_config.GetBool("Debug", "BreakOnSuppressedAsserts", true);
 
     // Logging
     m_logging.globalLevel = m_config.GetString("Logging", "GlobalLevel", "Info");
@@ -708,6 +724,10 @@ void EngineSettings::WriteToConfig() const
     m_config.SetFloat("Animation", "LODDistanceMultiplier", m_animation.lodDistanceMultiplier);
     m_config.SetInt("Animation", "CompressionQuality", m_animation.compressionQuality);
     m_config.SetBool("Animation", "EnableAnimationEvents", m_animation.enableAnimationEvents);
+
+    // Debug
+    m_config.SetBool("Debug", "SuppressFatalAsserts", m_debug.suppressFatalAsserts);
+    m_config.SetBool("Debug", "BreakOnSuppressedAsserts", m_debug.breakOnSuppressedAsserts);
 
     // Logging
     m_config.SetString("Logging", "GlobalLevel", m_logging.globalLevel);

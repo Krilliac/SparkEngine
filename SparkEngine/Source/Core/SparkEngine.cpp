@@ -515,6 +515,7 @@ static void LoadHeadlessModules(LPWSTR lpCmdLine)
 
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
+    Assert::RegisterConsoleCommands();
 }
 
 /**
@@ -543,6 +544,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Assert::RegisterConsoleCommands();
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -731,6 +733,7 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Assert::RegisterConsoleCommands();
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
     LogMissingModuleWarnings();
@@ -1303,6 +1306,7 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
     Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
+    Assert::RegisterConsoleCommands();
 
     LogMissingModuleWarnings();
 }
@@ -1343,6 +1347,7 @@ static int RunHeadlessLinux(int argc, char* argv[])
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Assert::RegisterConsoleCommands();
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -1580,6 +1585,7 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Assert::RegisterConsoleCommands();
 
     // Initialize console, debug, and gameplay systems in one call
     // (also publishes EngineStartEvent when complete)
