@@ -197,6 +197,7 @@ void EngineSettings::ReadFromConfig()
     m_rendering.motionBlur = m_config.GetBool("Rendering", "MotionBlur", false);
     m_rendering.frustumCulling = m_config.GetBool("Rendering", "FrustumCulling", true);
     m_rendering.occlusionCulling = m_config.GetBool("Rendering", "OcclusionCulling", false);
+    m_rendering.portalCulling = m_config.GetBool("Rendering", "PortalCulling", false);
     m_rendering.levelOfDetail = m_config.GetBool("Rendering", "LevelOfDetail", true);
     m_rendering.maxDrawCalls = m_config.GetInt("Rendering", "MaxDrawCalls", 1000);
     m_rendering.wireframeMode = m_config.GetBool("Rendering", "WireframeMode", false);
@@ -505,6 +506,7 @@ void EngineSettings::WriteToConfig() const
     m_config.SetBool("Rendering", "MotionBlur", m_rendering.motionBlur);
     m_config.SetBool("Rendering", "FrustumCulling", m_rendering.frustumCulling);
     m_config.SetBool("Rendering", "OcclusionCulling", m_rendering.occlusionCulling);
+    m_config.SetBool("Rendering", "PortalCulling", m_rendering.portalCulling);
     m_config.SetBool("Rendering", "LevelOfDetail", m_rendering.levelOfDetail);
     m_config.SetInt("Rendering", "MaxDrawCalls", m_rendering.maxDrawCalls);
     m_config.SetBool("Rendering", "WireframeMode", m_rendering.wireframeMode);

@@ -84,6 +84,7 @@ class EngineSettings
         bool motionBlur = false;
         bool frustumCulling = true;
         bool occlusionCulling = false;
+        bool portalCulling = false;
         bool levelOfDetail = true;
         int maxDrawCalls = 1000;
         bool wireframeMode = false;
