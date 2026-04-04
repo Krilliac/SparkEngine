@@ -304,7 +304,13 @@ Example:
 
 ## Verify Installation
 
-Once the engine is running, open [SparkConsole](SparkConsole) and try:
+Once the engine is running, you should see the editor interface:
+
+![SparkEditor interface](../docs/screenshots/editor-overview.png)
+
+*SparkEditor with docked panels — Material Editor, Physics tools, Scene View, Inspector, and Asset Browser.*
+
+Open [SparkConsole](SparkConsole) and try:
 
 ```
 help            # List all commands

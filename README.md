@@ -55,6 +55,12 @@
 - **Built for learning and modding** — clean C++23 codebase with 30+ toggleable CMake modules
 - **Ready-to-download binaries** — pre-built Windows and Linux binaries on every commit
 
+## Editor Preview
+
+![SparkEditor — ImGui-based visual editor with 57+ dockable panels](docs/screenshots/editor-overview.png)
+
+*SparkEditor running on Linux with software rendering (Mesa llvmpipe). Shows Material Editor, Physics tools, Scene View, Inspector, and Asset Browser panels with the Spark Professional dark theme.*
+
 ## Downloads
 
 Latest binaries are published automatically on every commit to `master`.

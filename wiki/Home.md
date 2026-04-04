@@ -4,6 +4,10 @@
 
 > **Early Development** — SparkEngine is under active development. Expect rough edges.
 
+![SparkEditor — ImGui-based visual editor](../docs/screenshots/editor-overview.png)
+
+*SparkEditor running on Linux (Mesa llvmpipe software rendering) with the Spark Professional theme.*
+
 ## Platform Support
 
 | Platform | Status | Compiler |

@@ -2,11 +2,17 @@
 
 The SparkEditor is an ImGui-based visual editor for creating and editing game content. It provides a dockable workspace with multiple panels for [scene editing](Scene-Management), material authoring, [animation](Animation), and debugging.
 
+![SparkEditor running on Linux with software rendering](../docs/screenshots/editor-overview.png)
+
+*SparkEditor with the Spark Professional theme — showing Material Editor, Physics tools, Performance overlay, Scene View, Inspector, and Asset Browser panels.*
+
 **Source:** `SparkEditor/Source/`
 
-> **Note:** SparkEditor is Windows-only (requires Win32 + DirectX 11 ImGui backends). It is automatically disabled on non-Windows platforms.
+**Platforms:**
+- **Windows:** Win32 + DirectX 11 ImGui backends (primary)
+- **Linux:** SDL2 + OpenGL 3.3 ImGui backends (software rendering via Mesa llvmpipe supported)
 
-`ENABLE_EDITOR=ON` (Windows only)
+`ENABLE_EDITOR=ON`
 
 ## Architecture
 
