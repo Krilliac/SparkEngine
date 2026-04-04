@@ -372,6 +372,9 @@ namespace Spark
             bool rayTracingSupport = false;
             bool variableRateShadingSupport = false;
             bool bindlessResourceSupport = false;
+            bool pushDescriptorSupport = false;  ///< Push descriptors (Vulkan 1.4) / root descriptors (D3D12)
+            bool hostImageCopySupport = false;   ///< CPU-side image copy (Vulkan 1.4) / GPU upload heaps (D3D12)
+            bool enhancedBarrierSupport = false; ///< Enhanced barriers (D3D12) / synchronization2 (Vulkan 1.3+)
             bool isSoftwareDevice = false; ///< True when running on a CPU/software driver (e.g. Lavapipe, llvmpipe)
 
             RTCapabilities rayTracing; ///< Detailed ray tracing capabilities

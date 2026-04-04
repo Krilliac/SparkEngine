@@ -456,6 +456,34 @@ namespace Spark
                     m_capabilities.meshShaderSupport =
                         (options7.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED);
                 }
+
+                // D3D12 root descriptors are the equivalent of Vulkan push descriptors —
+                // always available in D3D12 via root signature inline descriptors.
+                m_capabilities.pushDescriptorSupport = true;
+
+                // Enhanced Barriers (D3D12_OPTIONS12) — modern barrier model that
+                // parallels Vulkan's synchronization2. Available in Windows 11 22H2+
+                // with Agility SDK 1.706.4+ or compatible drivers.
+#ifdef __ID3D12Device10_FWD_DEFINED__
+                D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12 = {};
+                if (SUCCEEDED(
+                        m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))))
+                {
+                    m_capabilities.enhancedBarrierSupport = (options12.EnhancedBarriersSupported == TRUE);
+                }
+#endif
+
+                // GPU Upload Heaps (D3D12_OPTIONS16) — allows GPU to read directly from
+                // upload heaps, eliminating the copy step for frequently updated resources.
+                // Equivalent to Vulkan 1.4's host image copy capability.
+#ifdef __ID3D12Device12_FWD_DEFINED__
+                D3D12_FEATURE_DATA_D3D12_OPTIONS16 options16 = {};
+                if (SUCCEEDED(
+                        m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS16, &options16, sizeof(options16))))
+                {
+                    m_capabilities.hostImageCopySupport = (options16.GPUUploadHeapSupported == TRUE);
+                }
+#endif
             }
 
             void D3D12Device::DetectDXRSupport()
@@ -1151,6 +1179,8 @@ namespace Spark
                 ss << "DXR: " << (m_dxrSupported ? "Yes" : "No") << "\n";
                 ss << "Mesh Shaders: " << (m_capabilities.meshShaderSupport ? "Yes" : "No") << "\n";
                 ss << "Bindless: " << (m_capabilities.bindlessResourceSupport ? "Yes" : "No") << "\n";
+                ss << "Enhanced Barriers: " << (m_capabilities.enhancedBarrierSupport ? "Yes" : "No") << "\n";
+                ss << "GPU Upload Heaps: " << (m_capabilities.hostImageCopySupport ? "Yes" : "No") << "\n";
                 return ss.str();
             }
 

@@ -680,6 +680,9 @@ namespace Spark
                 m_capabilities.geometryShaderSupport = features.geometryShader;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.multiDrawIndirectSupport = features.multiDrawIndirect;
+                m_capabilities.pushDescriptorSupport = m_pushDescriptorSupported;
+                m_capabilities.hostImageCopySupport = m_hostImageCopySupported;
+                m_capabilities.enhancedBarrierSupport = true; // synchronization2 is Vulkan 1.3 core
 
                 // Probe Vulkan RT extensions per Vulkan-Hpp / KHR spec patterns.
                 // Full hardware RT requires these four extensions (Vulkan 1.1+):
