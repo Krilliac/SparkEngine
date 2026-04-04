@@ -20,174 +20,250 @@
 namespace
 {
 
-struct Vec3
-{
-    float x = 0.0f, y = 0.0f, z = 0.0f;
-    float DistanceTo(const Vec3& o) const
+    struct Vec3
     {
-        float dx = x - o.x, dy = y - o.y, dz = z - o.z;
-        return std::sqrt(dx * dx + dy * dy + dz * dz);
-    }
-};
-
-enum class PlaylistMode { Sequential, Shuffle, Loop, LoopOne };
-
-struct Playlist
-{
-    std::vector<std::string> trackNames;
-    PlaylistMode mode = PlaylistMode::Loop;
-    int currentIndex = 0;
-
-    std::string GetCurrentTrack() const
-    {
-        return trackNames.empty() ? "" : trackNames[static_cast<size_t>(currentIndex)];
-    }
-    std::string GetNextTrack() const
-    {
-        if (trackNames.empty()) return "";
-        int count = static_cast<int>(trackNames.size());
-        switch (mode)
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        float DistanceTo(const Vec3& o) const
         {
-        case PlaylistMode::Sequential:
-            return (currentIndex + 1 < count) ? trackNames[static_cast<size_t>(currentIndex + 1)] : "";
-        case PlaylistMode::Loop:
-            return trackNames[static_cast<size_t>((currentIndex + 1) % count)];
-        case PlaylistMode::LoopOne:
-        case PlaylistMode::Shuffle:
-            return trackNames[static_cast<size_t>(currentIndex)];
+            float dx = x - o.x, dy = y - o.y, dz = z - o.z;
+            return std::sqrt(dx * dx + dy * dy + dz * dz);
         }
-        return "";
-    }
-    void Advance()
+    };
+
+    enum class PlaylistMode
     {
-        if (trackNames.empty()) return;
-        int count = static_cast<int>(trackNames.size());
-        switch (mode)
+        Sequential,
+        Shuffle,
+        Loop,
+        LoopOne
+    };
+
+    struct Playlist
+    {
+        std::vector<std::string> trackNames;
+        PlaylistMode mode = PlaylistMode::Loop;
+        int currentIndex = 0;
+
+        std::string GetCurrentTrack() const
         {
-        case PlaylistMode::Sequential: if (currentIndex + 1 < count) currentIndex++; break;
-        case PlaylistMode::Loop: currentIndex = (currentIndex + 1) % count; break;
-        case PlaylistMode::LoopOne: break;
-        case PlaylistMode::Shuffle:
+            return trackNames.empty() ? "" : trackNames[static_cast<size_t>(currentIndex)];
+        }
+        std::string GetNextTrack() const
         {
-            std::random_device rd;
-            std::mt19937 rng(rd());
-            currentIndex = std::uniform_int_distribution<int>(0, count - 1)(rng);
-            break;
+            if (trackNames.empty())
+                return "";
+            int count = static_cast<int>(trackNames.size());
+            switch (mode)
+            {
+            case PlaylistMode::Sequential:
+                return (currentIndex + 1 < count) ? trackNames[static_cast<size_t>(currentIndex + 1)] : "";
+            case PlaylistMode::Loop:
+                return trackNames[static_cast<size_t>((currentIndex + 1) % count)];
+            case PlaylistMode::LoopOne:
+            case PlaylistMode::Shuffle:
+                return trackNames[static_cast<size_t>(currentIndex)];
+            }
+            return "";
         }
-        }
-    }
-};
-
-struct MusicTrack { std::string name, filepath; float bpm = 120.0f; };
-
-class TrackRegistry
-{
-  public:
-    void Register(const MusicTrack& t) { m_tracks[t.name] = t; }
-    void Unregister(const std::string& n) { m_tracks.erase(n); }
-    const MusicTrack* Find(const std::string& n) const
-    {
-        auto it = m_tracks.find(n);
-        return (it != m_tracks.end()) ? &it->second : nullptr;
-    }
-    size_t Count() const { return m_tracks.size(); }
-  private:
-    std::unordered_map<std::string, MusicTrack> m_tracks;
-};
-
-struct CrossfadeState
-{
-    std::string fromTrack, toTrack;
-    float duration = 2.0f, elapsed = 0.0f;
-    bool active = false;
-    float Progress() const { return (duration <= 0.0f) ? 1.0f : std::clamp(elapsed / duration, 0.0f, 1.0f); }
-    void Update(float dt) { if (!active) return; elapsed += dt; if (elapsed >= duration) active = false; }
-};
-
-enum class CombatIntensity { Exploration, LowThreat, Combat, BossFight };
-
-struct DynamicMusicState
-{
-    std::string tracks[4]; // indexed by CombatIntensity
-    CombatIntensity current = CombatIntensity::Exploration;
-    float transitionDuration = 2.0f;
-    const std::string& TrackFor(CombatIntensity i) const { return tracks[static_cast<int>(i)]; }
-};
-
-enum class AudioBus { Master, SFX, Music, Voice, Ambient, UI, Count };
-constexpr int kBusCount = static_cast<int>(AudioBus::Count);
-struct BusSettings { float volume = 1.0f; bool muted = false; AudioBus parent = AudioBus::Master; };
-
-class AudioBusMixer
-{
-  public:
-    void SetVolume(AudioBus b, float v) { m_bus[idx(b)].volume = std::clamp(v, 0.0f, 1.0f); }
-    float GetVolume(AudioBus b) const { return m_bus[idx(b)].volume; }
-    void SetMuted(AudioBus b, bool m) { m_bus[idx(b)].muted = m; }
-    void SetParent(AudioBus b, AudioBus p) { m_bus[idx(b)].parent = p; }
-    float GetEffectiveVolume(AudioBus b) const
-    {
-        if (m_bus[idx(b)].muted) return 0.0f;
-        float vol = m_bus[idx(b)].volume;
-        AudioBus cur = b;
-        for (int depth = 0; depth < 10; depth++)
+        void Advance()
         {
-            AudioBus p = m_bus[idx(cur)].parent;
-            if (p == cur) break;
-            if (m_bus[idx(p)].muted) return 0.0f;
-            vol *= m_bus[idx(p)].volume;
-            cur = p;
-            if (cur == AudioBus::Master) break;
+            if (trackNames.empty())
+                return;
+            int count = static_cast<int>(trackNames.size());
+            switch (mode)
+            {
+            case PlaylistMode::Sequential:
+                if (currentIndex + 1 < count)
+                    currentIndex++;
+                break;
+            case PlaylistMode::Loop:
+                currentIndex = (currentIndex + 1) % count;
+                break;
+            case PlaylistMode::LoopOne:
+                break;
+            case PlaylistMode::Shuffle:
+            {
+                std::random_device rd;
+                std::mt19937 rng(rd());
+                currentIndex = std::uniform_int_distribution<int>(0, count - 1)(rng);
+                break;
+            }
+            }
         }
-        return vol;
-    }
-    void FadeBus(AudioBus b, float target, float dur)
+    };
+
+    struct MusicTrack
     {
-        m_fades.push_back({b, m_bus[idx(b)].volume, std::clamp(target, 0.0f, 1.0f), dur, 0.0f});
-    }
-    void Update(float dt)
+        std::string name, filepath;
+        float bpm = 120.0f;
+    };
+
+    class TrackRegistry
     {
-        for (auto it = m_fades.begin(); it != m_fades.end();)
+      public:
+        void Register(const MusicTrack& t) { m_tracks[t.name] = t; }
+        void Unregister(const std::string& n) { m_tracks.erase(n); }
+        const MusicTrack* Find(const std::string& n) const
         {
-            it->elapsed += dt;
-            float t = std::clamp(it->elapsed / it->duration, 0.0f, 1.0f);
-            m_bus[idx(it->bus)].volume = it->startVol + (it->targetVol - it->startVol) * t;
-            it = (it->elapsed >= it->duration) ? m_fades.erase(it) : std::next(it);
+            auto it = m_tracks.find(n);
+            return (it != m_tracks.end()) ? &it->second : nullptr;
         }
-    }
-  private:
-    static int idx(AudioBus b) { return static_cast<int>(b); }
-    BusSettings m_bus[kBusCount]{};
-    struct Fade { AudioBus bus; float startVol, targetVol, duration, elapsed; };
-    std::vector<Fade> m_fades;
-};
+        size_t Count() const { return m_tracks.size(); }
 
-struct OcclusionSettings { bool enabled = true; float maxFactor = 0.8f; float lpOccluded = 800.0f; int maxRays = 4; };
-struct OcclusionResult { float factor = 0.0f; float lowPassCutoff = 22000.0f; };
+      private:
+        std::unordered_map<std::string, MusicTrack> m_tracks;
+    };
 
-OcclusionResult ComputeOcclusion(const Vec3& src, const Vec3& ear, int obstacles, const OcclusionSettings& s)
-{
-    if (!s.enabled) return {0.0f, 22000.0f};
-    float distF = std::clamp(src.DistanceTo(ear) / 50.0f, 0.0f, 1.0f);
-    float obsF = std::clamp(float(obstacles) / float(s.maxRays), 0.0f, 1.0f);
-    float occ = std::min(distF * obsF, s.maxFactor);
-    float cutoff = 22000.0f - (22000.0f - s.lpOccluded) * (occ / s.maxFactor);
-    return {occ, cutoff};
-}
-
-struct ReverbZone { std::string name; Vec3 position; float outerRadius = 15.0f; float decayTime = 1.0f; };
-
-const ReverbZone* FindActiveZone(const std::vector<ReverbZone>& zones, const Vec3& listener)
-{
-    const ReverbZone* best = nullptr;
-    float bestDist = std::numeric_limits<float>::max();
-    for (auto& z : zones)
+    struct CrossfadeState
     {
-        float d = listener.DistanceTo(z.position);
-        if (d <= z.outerRadius && d < bestDist) { bestDist = d; best = &z; }
+        std::string fromTrack, toTrack;
+        float duration = 2.0f, elapsed = 0.0f;
+        bool active = false;
+        float Progress() const { return (duration <= 0.0f) ? 1.0f : std::clamp(elapsed / duration, 0.0f, 1.0f); }
+        void Update(float dt)
+        {
+            if (!active)
+                return;
+            elapsed += dt;
+            if (elapsed >= duration)
+                active = false;
+        }
+    };
+
+    enum class CombatIntensity
+    {
+        Exploration,
+        LowThreat,
+        Combat,
+        BossFight
+    };
+
+    struct DynamicMusicState
+    {
+        std::string tracks[4]; // indexed by CombatIntensity
+        CombatIntensity current = CombatIntensity::Exploration;
+        float transitionDuration = 2.0f;
+        const std::string& TrackFor(CombatIntensity i) const { return tracks[static_cast<int>(i)]; }
+    };
+
+    enum class AudioBus
+    {
+        Master,
+        SFX,
+        Music,
+        Voice,
+        Ambient,
+        UI,
+        Count
+    };
+    constexpr int kBusCount = static_cast<int>(AudioBus::Count);
+    struct BusSettings
+    {
+        float volume = 1.0f;
+        bool muted = false;
+        AudioBus parent = AudioBus::Master;
+    };
+
+    class AudioBusMixer
+    {
+      public:
+        void SetVolume(AudioBus b, float v) { m_bus[idx(b)].volume = std::clamp(v, 0.0f, 1.0f); }
+        float GetVolume(AudioBus b) const { return m_bus[idx(b)].volume; }
+        void SetMuted(AudioBus b, bool m) { m_bus[idx(b)].muted = m; }
+        void SetParent(AudioBus b, AudioBus p) { m_bus[idx(b)].parent = p; }
+        float GetEffectiveVolume(AudioBus b) const
+        {
+            if (m_bus[idx(b)].muted)
+                return 0.0f;
+            float vol = m_bus[idx(b)].volume;
+            AudioBus cur = b;
+            for (int depth = 0; depth < 10; depth++)
+            {
+                AudioBus p = m_bus[idx(cur)].parent;
+                if (p == cur)
+                    break;
+                if (m_bus[idx(p)].muted)
+                    return 0.0f;
+                vol *= m_bus[idx(p)].volume;
+                cur = p;
+                if (cur == AudioBus::Master)
+                    break;
+            }
+            return vol;
+        }
+        void FadeBus(AudioBus b, float target, float dur)
+        {
+            m_fades.push_back({b, m_bus[idx(b)].volume, std::clamp(target, 0.0f, 1.0f), dur, 0.0f});
+        }
+        void Update(float dt)
+        {
+            for (auto it = m_fades.begin(); it != m_fades.end();)
+            {
+                it->elapsed += dt;
+                float t = std::clamp(it->elapsed / it->duration, 0.0f, 1.0f);
+                m_bus[idx(it->bus)].volume = it->startVol + (it->targetVol - it->startVol) * t;
+                it = (it->elapsed >= it->duration) ? m_fades.erase(it) : std::next(it);
+            }
+        }
+
+      private:
+        static int idx(AudioBus b) { return static_cast<int>(b); }
+        BusSettings m_bus[kBusCount]{};
+        struct Fade
+        {
+            AudioBus bus;
+            float startVol, targetVol, duration, elapsed;
+        };
+        std::vector<Fade> m_fades;
+    };
+
+    struct OcclusionSettings
+    {
+        bool enabled = true;
+        float maxFactor = 0.8f;
+        float lpOccluded = 800.0f;
+        int maxRays = 4;
+    };
+    struct OcclusionResult
+    {
+        float factor = 0.0f;
+        float lowPassCutoff = 22000.0f;
+    };
+
+    OcclusionResult ComputeOcclusion(const Vec3& src, const Vec3& ear, int obstacles, const OcclusionSettings& s)
+    {
+        if (!s.enabled)
+            return {0.0f, 22000.0f};
+        float distF = std::clamp(src.DistanceTo(ear) / 50.0f, 0.0f, 1.0f);
+        float obsF = std::clamp(float(obstacles) / float(s.maxRays), 0.0f, 1.0f);
+        float occ = std::min(distF * obsF, s.maxFactor);
+        float cutoff = 22000.0f - (22000.0f - s.lpOccluded) * (occ / s.maxFactor);
+        return {occ, cutoff};
     }
-    return best;
-}
+
+    struct ReverbZone
+    {
+        std::string name;
+        Vec3 position;
+        float outerRadius = 15.0f;
+        float decayTime = 1.0f;
+    };
+
+    const ReverbZone* FindActiveZone(const std::vector<ReverbZone>& zones, const Vec3& listener)
+    {
+        const ReverbZone* best = nullptr;
+        float bestDist = std::numeric_limits<float>::max();
+        for (auto& z : zones)
+        {
+            float d = listener.DistanceTo(z.position);
+            if (d <= z.outerRadius && d < bestDist)
+            {
+                bestDist = d;
+                best = &z;
+            }
+        }
+        return best;
+    }
 
 } // anonymous namespace
 
@@ -238,7 +314,11 @@ TEST(MusicManager_PlaylistLoop_FullCycle)
     pl.mode = PlaylistMode::Loop;
 
     std::vector<std::string> v;
-    for (int i = 0; i < 6; i++) { v.push_back(pl.GetCurrentTrack()); pl.Advance(); }
+    for (int i = 0; i < 6; i++)
+    {
+        v.push_back(pl.GetCurrentTrack());
+        pl.Advance();
+    }
     // A B C A B C
     EXPECT_EQ(v[0], std::string("A"));
     EXPECT_EQ(v[3], std::string("A"));
@@ -268,7 +348,11 @@ TEST(MusicManager_PlaylistShuffle_CoversAllTracks)
     pl.mode = PlaylistMode::Shuffle;
 
     std::set<std::string> seen;
-    for (int i = 0; i < 200; i++) { seen.insert(pl.GetCurrentTrack()); pl.Advance(); }
+    for (int i = 0; i < 200; i++)
+    {
+        seen.insert(pl.GetCurrentTrack());
+        pl.Advance();
+    }
     EXPECT_EQ(seen.size(), pl.trackNames.size());
 }
 
@@ -338,7 +422,10 @@ TEST(MusicManager_CrossfadeZeroDuration)
 TEST(MusicManager_DynamicIntensityTrackSelection)
 {
     DynamicMusicState st;
-    st.tracks[0] = "calm"; st.tracks[1] = "tension"; st.tracks[2] = "battle"; st.tracks[3] = "boss";
+    st.tracks[0] = "calm";
+    st.tracks[1] = "tension";
+    st.tracks[2] = "battle";
+    st.tracks[3] = "boss";
 
     EXPECT_EQ(st.TrackFor(CombatIntensity::Exploration), std::string("calm"));
     EXPECT_EQ(st.TrackFor(CombatIntensity::LowThreat), std::string("tension"));
@@ -349,7 +436,8 @@ TEST(MusicManager_DynamicIntensityTrackSelection)
 TEST(MusicManager_DynamicIntensityTriggersCrossfade)
 {
     DynamicMusicState st;
-    st.tracks[0] = "calm"; st.tracks[2] = "battle";
+    st.tracks[0] = "calm";
+    st.tracks[2] = "battle";
     st.current = CombatIntensity::Exploration;
     st.transitionDuration = 2.0f;
 
@@ -453,7 +541,8 @@ TEST(MusicManager_OcclusionWithObstacles)
 
 TEST(MusicManager_OcclusionDisabled)
 {
-    OcclusionSettings s; s.enabled = false;
+    OcclusionSettings s;
+    s.enabled = false;
     auto r = ComputeOcclusion({100, 0, 0}, {0, 0, 0}, 4, s);
     EXPECT_NEAR(r.factor, 0.0f, 0.01f);
     EXPECT_NEAR(r.lowPassCutoff, 22000.0f, 0.01f);

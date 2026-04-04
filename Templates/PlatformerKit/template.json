@@ -1,0 +1,7 @@
+{
+    "name": "PlatformerKit",
+    "description": "2D/3D platformer with character controller and level design",
+    "genre": "Platformer",
+    "gameModule": "SparkGamePlatformer",
+    "features": ["character-controller", "collectibles", "checkpoints", "level-timer"]
+}

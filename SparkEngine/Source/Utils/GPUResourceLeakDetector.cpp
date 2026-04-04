@@ -93,8 +93,7 @@ namespace Spark
         float currentMB = static_cast<float>(m_currentMemoryBytes) / (1024.0f * 1024.0f);
         if (currentMB > m_config.budgetMB)
         {
-            std::fprintf(stderr,
-                         "[GPUResourceLeakDetector] WARNING: GPU memory ({:.1f} MB) exceeds budget ({:.1f} MB)\n",
+            std::fprintf(stderr, "[GPUResourceLeakDetector] WARNING: GPU memory (%.1f MB) exceeds budget (%.1f MB)\n",
                          currentMB, m_config.budgetMB);
         }
     }

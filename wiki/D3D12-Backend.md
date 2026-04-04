@@ -178,6 +178,425 @@ d3d12_debug <on|off> # Toggle debug layer validation messages
 
 ---
 
+## Device Initialization Walkthrough
+
+The `D3D12Device::Initialize()` method follows a strict sequence to set up the D3D12 runtime:
+
+### Step 1: Enable Debug Layer (Debug Builds)
+
+```cpp
+// In debug builds, enable the D3D12 debug layer before device creation
+#if defined(_DEBUG)
+ComPtr<ID3D12Debug> debugInterface;
+if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface))))
+{
+    debugInterface->EnableDebugLayer();
+
+    // Optional: GPU-based validation (expensive but thorough)
+    ComPtr<ID3D12Debug1> debugInterface1;
+    if (SUCCEEDED(debugInterface.As(&debugInterface1)))
+    {
+        debugInterface1->SetEnableGPUBasedValidation(TRUE);
+    }
+}
+#endif
+```
+
+### Step 2: Create DXGI Factory and Enumerate Adapters
+
+```cpp
+// D3D12Device uses IDXGIFactory6 for GPU preference selection
+ComPtr<IDXGIFactory6> dxgiFactory;
+CreateDXGIFactory2(debugFlags, IID_PPV_ARGS(&dxgiFactory));
+
+// Enumerate adapters, preferring high-performance (discrete GPU)
+ComPtr<IDXGIAdapter1> adapter;
+dxgiFactory->EnumAdapterByGpuPreference(
+    0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter));
+
+// Fallback: WARP software adapter when no hardware GPU is available
+if (!adapter || desc.forceSoftware)
+{
+    dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&adapter));
+    m_isSoftwareDevice = true;
+}
+```
+
+### Step 3: Create Device
+
+```cpp
+// Create the D3D12 device with feature level 11_0 as the minimum
+HRESULT hr = D3D12CreateDevice(
+    adapter.Get(),
+    D3D_FEATURE_LEVEL_11_0,
+    IID_PPV_ARGS(&m_device)
+);
+
+// Query for ID3D12Device5 (needed for DXR)
+m_device->QueryInterface(IID_PPV_ARGS(&m_dxrDevice));
+```
+
+### Step 4: Create Command Queues, Descriptor Heaps, Frame Resources
+
+```cpp
+// Internal helper methods called by Initialize():
+CreateCommandQueues();     // Direct, Copy, Compute queues
+CreateDescriptorHeaps();   // CBV/SRV/UAV, RTV, DSV, Sampler heaps
+CreateFrameResources();    // Per-frame command allocators and fences
+DetectCapabilities();      // Feature detection (mesh shaders, bindless, etc.)
+DetectDXRSupport();        // DXR tier detection via ID3D12Device5
+```
+
+### Complete Initialization Example
+
+```cpp
+Spark::RHI::RHIDeviceDesc desc;
+desc.enableDebugLayer = true;
+desc.enableGPUValidation = false;  // Enable only when debugging GPU issues
+desc.preferredAdapter = 0;          // 0 = auto-select best GPU
+desc.forceSoftware = false;         // true = force WARP software rendering
+
+auto device = std::make_unique<Spark::RHI::D3D12::D3D12Device>();
+if (!device->Initialize(desc))
+{
+    LOG_ERROR("D3D12 device initialization failed");
+    return false;
+}
+
+LOG_INFO("D3D12 device: {}", device->GetDeviceInfo());
+LOG_INFO("DXR supported: {}", device->GetDXRDevice() != nullptr);
+LOG_INFO("Software device: {}", device->IsSoftwareDevice());
+```
+
+---
+
+## Resource Barrier Management
+
+D3D12 requires explicit resource state transitions via barriers. The `D3D12CommandList` handles this through the RHI abstraction:
+
+### Common Resource State Transitions
+
+```cpp
+// Transition a render target for rendering
+D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+    renderTarget.Get(),
+    D3D12_RESOURCE_STATE_PRESENT,           // From: presentation
+    D3D12_RESOURCE_STATE_RENDER_TARGET      // To: render target
+);
+commandList->ResourceBarrier(1, &barrier);
+
+// After rendering, transition back for presentation
+barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+    renderTarget.Get(),
+    D3D12_RESOURCE_STATE_RENDER_TARGET,
+    D3D12_RESOURCE_STATE_PRESENT
+);
+commandList->ResourceBarrier(1, &barrier);
+```
+
+### Barrier Batching
+
+Multiple barriers should be batched into a single call to minimize GPU overhead:
+
+```cpp
+D3D12_RESOURCE_BARRIER barriers[3] = {
+    CD3DX12_RESOURCE_BARRIER::Transition(tex0.Get(),
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        D3D12_RESOURCE_STATE_RENDER_TARGET),
+    CD3DX12_RESOURCE_BARRIER::Transition(tex1.Get(),
+        D3D12_RESOURCE_STATE_RENDER_TARGET,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+    CD3DX12_RESOURCE_BARRIER::UAV(uavResource.Get())
+};
+commandList->ResourceBarrier(3, barriers);
+```
+
+### Initial Resource States
+
+The `D3D12Device` selects appropriate initial states based on buffer access patterns:
+
+```cpp
+// GetInitialResourceState() maps RHI access flags to D3D12 states:
+// RHIBufferAccess::Vertex     -> D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+// RHIBufferAccess::Index      -> D3D12_RESOURCE_STATE_INDEX_BUFFER
+// RHIBufferAccess::Constant   -> D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+// RHIBufferAccess::Storage    -> D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+// RHIBufferAccess::CopyDest   -> D3D12_RESOURCE_STATE_COPY_DEST
+```
+
+---
+
+## Root Signature Setup
+
+### Default Root Signature
+
+The engine provides a default root signature via `CreateDefaultRootSignature()` that covers the majority of shader needs:
+
+```cpp
+// Root parameter layout:
+// [0] CBV table:     b0-b13 (14 constant buffers, all shader stages)
+// [1] SRV table:     t0-t31 (32 textures/buffers, pixel shader)
+// [2] Sampler table: s0-s15 (16 samplers, pixel shader)
+// [3] UAV table:     u0-u7  (8 UAVs, all shader stages)
+
+ComPtr<ID3D12RootSignature> rootSig = device->CreateDefaultRootSignature();
+```
+
+### Custom Root Signatures
+
+For specialized shaders (compute, raytracing), create custom root signatures from serialized blobs:
+
+```cpp
+// Compile a root signature from HLSL
+ID3DBlob* serializedRootSig = nullptr;
+D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1_1,
+                             &serializedRootSig, nullptr);
+
+// Create via D3D12Device helper
+auto customRootSig = device->CreateRootSignature(
+    serializedRootSig->GetBufferPointer(),
+    serializedRootSig->GetBufferSize()
+);
+```
+
+---
+
+## Shader Model 6.x Features
+
+The D3D12 backend detects and exposes advanced shader features through `RHIDeviceCapabilities`:
+
+| Feature | Detection Method | Capability Flag |
+|---------|-----------------|-----------------|
+| DXR 1.0+ Raytracing | `ID3D12Device5` + `OPTIONS5` | `rayTracingSupport` |
+| Mesh Shaders | `D3D12_OPTIONS7` | `meshShaderSupport` |
+| Bindless Resources | `RESOURCE_BINDING_TIER_3` | `bindlessResourceSupport` |
+| Conservative Rasterization | `D3D12_OPTIONS` | `conservativeRasterSupport` |
+
+```cpp
+const auto& caps = device->GetCapabilities();
+
+if (caps.rayTracingSupport)
+{
+    // DXR is available -- use ID3D12Device5 for BLAS/TLAS creation
+    ID3D12Device5* dxrDevice = device->GetDXRDevice();
+    // Build acceleration structures, create ray tracing pipelines
+}
+
+if (caps.meshShaderSupport)
+{
+    // Use mesh/amplification shaders for GPU-driven rendering
+}
+
+if (caps.bindlessResourceSupport)
+{
+    // Tier 3 binding allows indexing into descriptor heaps from shaders
+    // Use the 1M CBV/SRV/UAV heap directly as a bindless resource array
+}
+```
+
+---
+
+## Debugging with PIX and RenderDoc
+
+### PIX Event Markers
+
+The backend inserts named regions into command lists for GPU profiling:
+
+```cpp
+// PIX markers are inserted via the RHI command list interface
+commandList->BeginEvent("ShadowPass");
+// ... shadow rendering commands ...
+commandList->EndEvent();
+
+commandList->BeginEvent("GBuffer");
+// ... geometry pass commands ...
+commandList->EndEvent();
+```
+
+### DRED (Device Removed Extended Data)
+
+When enabled, DRED provides detailed diagnostics after a device-lost crash:
+
+```cpp
+// DRED is activated automatically in debug builds
+// After a device-lost event, query the DRED data:
+// - Which command was executing when the device was removed
+// - Auto-breadcrumbs showing the last successful commands
+// - Page fault information for invalid memory access
+```
+
+### Info Queue Filtering
+
+The `m_infoQueue` member (active in debug builds) filters validation messages:
+
+```cpp
+// The D3D12Device filters out known benign messages and promotes
+// warnings to errors for critical issues:
+//
+// Suppressed: D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE
+//             (harmless when using different clear colors)
+//
+// Promoted to error: D3D12_MESSAGE_SEVERITY_CORRUPTION
+//                    (memory corruption, must be fixed immediately)
+```
+
+---
+
+## Deferred Deletion Deep Dive
+
+The deferred deletion system is critical for D3D12 correctness. Unlike D3D11, destroying a resource while the GPU is still using it causes undefined behavior.
+
+### How It Works
+
+```cpp
+// When a resource is destroyed:
+struct DeferredRelease
+{
+    ComPtr<IUnknown> resource;  // Prevents ref-count from hitting 0
+    uint64_t fenceValue;        // GPU must pass this value before release
+};
+
+// D3D12Device queues the resource:
+void D3D12Device::DeferredReleaseBuffer(D3D12Buffer* buffer)
+{
+    DeferredRelease entry;
+    entry.resource = buffer->GetD3D12Resource();
+    entry.fenceValue = m_frameFence.GetCurrentValue();
+
+    std::lock_guard lock(m_deferredReleaseMutex);
+    m_deferredReleaseQueue.push(std::move(entry));
+}
+
+// At the end of each frame, ProcessDeferredReleases() checks:
+void D3D12Device::ProcessDeferredReleases()
+{
+    uint64_t completedValue = m_frameFence.GetCompletedValue();
+
+    std::lock_guard lock(m_deferredReleaseMutex);
+    while (!m_deferredReleaseQueue.empty())
+    {
+        auto& front = m_deferredReleaseQueue.front();
+        if (front.fenceValue > completedValue)
+            break;  // GPU hasn't reached this fence yet
+
+        // Safe to release -- GPU is done with this resource
+        m_deferredReleaseQueue.pop();  // ComPtr destructor releases
+    }
+}
+```
+
+### Frame Resource Management
+
+Each frame has its own `FrameResources` containing a command allocator and a fence value:
+
+```cpp
+// MAX_FRAMES_IN_FLIGHT = 2 (double buffering)
+// m_frameResources[0] and m_frameResources[1] alternate each frame
+
+// MoveToNextFrame():
+// 1. Signal the fence on the direct queue with the current frame's fence value
+// 2. Advance m_currentFrameIndex = (m_currentFrameIndex + 1) % MAX_FRAMES_IN_FLIGHT
+// 3. Wait for the next frame's previous fence value to complete
+// 4. Reset that frame's command allocator (now safe -- GPU finished with it)
+```
+
+---
+
+## Advanced Performance Tips
+
+### GPU Memory Budget Monitoring
+
+```cpp
+// Query VRAM budget via DXGI
+DXGI_QUERY_VIDEO_MEMORY_INFO memInfo = {};
+ComPtr<IDXGIAdapter3> adapter3;
+device->GetAdapter()->QueryInterface(IID_PPV_ARGS(&adapter3));
+adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memInfo);
+
+LOG_INFO("VRAM: {} MB used / {} MB budget",
+         memInfo.CurrentUsage / (1024 * 1024),
+         memInfo.Budget / (1024 * 1024));
+```
+
+### Minimizing State Changes
+
+```
+DO:
+  - Sort draw calls by pipeline state to minimize root signature and PSO swaps
+  - Use the default root signature for all standard materials
+  - Batch descriptor copies using CopyDescriptorsSimple
+
+DON'T:
+  - Switch root signatures between every draw call
+  - Create new pipeline states at runtime (cache them)
+  - Allocate descriptors one at a time (allocate ranges)
+```
+
+### Copy Queue Best Practices
+
+```cpp
+// Use the copy queue for texture uploads to overlap with rendering:
+ID3D12CommandQueue* copyQueue = device->GetCopyQueue();
+
+// 1. Record upload commands on a copy command list
+// 2. Submit to copy queue (runs concurrently with direct queue)
+// 3. Insert a fence on the copy queue
+// 4. Wait for that fence on the direct queue before using the texture
+
+// This overlaps GPU rendering with texture data transfer
+```
+
+### Compute Queue Usage
+
+```cpp
+// Async compute runs independently of the graphics pipeline:
+ID3D12CommandQueue* computeQueue = device->GetComputeQueue();
+
+// Good candidates for async compute:
+// - Post-processing passes (bloom, SSAO reduction)
+// - Particle simulation
+// - Culling and indirect draw argument generation
+// - Virtual texture feedback analysis
+```
+
+---
+
+## RHI Statistics
+
+The device tracks per-frame rendering statistics:
+
+```cpp
+const RHIStatistics& stats = device->GetStatistics();
+
+LOG_INFO("Draw calls: {}", stats.drawCalls);
+LOG_INFO("Dispatch calls: {}", stats.dispatchCalls);
+LOG_INFO("Triangles: {}", stats.trianglesRendered);
+LOG_INFO("Buffer creates: {}", stats.buffersCreated);
+LOG_INFO("Texture creates: {}", stats.texturesCreated);
+
+// Reset at the start of each frame
+device->ResetStatistics();
+```
+
+---
+
+## MinGW Compatibility
+
+The D3D12 backend includes compatibility stubs for MinGW cross-compilation:
+
+```cpp
+// MinGW's d3d12.h only defines up to ID3D12Device1
+// The header stubs ID3D12Device5 to allow compilation:
+#if defined(__MINGW32__) && !defined(__ID3D12Device5_FWD_DEFINED__)
+#define __ID3D12Device5_FWD_DEFINED__
+typedef ID3D12Device1 ID3D12Device5; // Safe stub -- DXR disabled at runtime
+#endif
+```
+
+DXR features are automatically disabled when running under MinGW/Wine. The device still functions for all standard rendering via DXVK/D3D12 translation layers.
+
+---
+
 ## See Also
 
 - [RHI Abstraction Layer](RHI-Abstraction-Layer) — Backend-agnostic graphics interface

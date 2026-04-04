@@ -11,9 +11,18 @@ namespace
 {
 
     // Lightweight math types mirroring DirectX types used by VRSystem
-    struct Float2 { float x = 0.0f, y = 0.0f; };
-    struct Float3 { float x = 0.0f, y = 0.0f, z = 0.0f; };
-    struct Float4 { float x = 0.0f, y = 0.0f, z = 0.0f, w = 1.0f; };
+    struct Float2
+    {
+        float x = 0.0f, y = 0.0f;
+    };
+    struct Float3
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+    };
+    struct Float4
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f, w = 1.0f;
+    };
 
     struct Float4x4
     {
@@ -104,10 +113,7 @@ namespace
         const VREye& GetLeftEye() const { return m_leftEye; }
         const VREye& GetRightEye() const { return m_rightEye; }
 
-        std::pair<int, int> GetRecommendedRenderSize() const
-        {
-            return {m_recommendedWidth, m_recommendedHeight};
-        }
+        std::pair<int, int> GetRecommendedRenderSize() const { return {m_recommendedWidth, m_recommendedHeight}; }
 
         const VRController& GetLeftController() const { return m_leftController; }
         const VRController& GetRightController() const { return m_rightController; }
@@ -137,8 +143,7 @@ namespace
             status += m_initialized ? "Active" : "Inactive";
             status += " | Tracking: ";
             status += (m_trackingSpace == VRTrackingSpace::RoomScale) ? "RoomScale" : "Seated";
-            status += " | Render: " + std::to_string(m_recommendedWidth) + "x"
-                      + std::to_string(m_recommendedHeight);
+            status += " | Render: " + std::to_string(m_recommendedWidth) + "x" + std::to_string(m_recommendedHeight);
             return status;
         }
 
@@ -185,7 +190,7 @@ TEST(VRSystem_InitializeShutdown)
     EXPECT_TRUE(vr.Initialize());
     EXPECT_TRUE(vr.IsAvailable());
 
-    EXPECT_TRUE(vr.Initialize());  // double init is safe
+    EXPECT_TRUE(vr.Initialize()); // double init is safe
     EXPECT_TRUE(vr.IsAvailable());
 
     vr.Shutdown();
@@ -222,8 +227,8 @@ TEST(VRSystem_EyeRenderingData)
     const auto& leftEye = vr.GetLeftEye();
     const auto& rightEye = vr.GetRightEye();
 
-    EXPECT_TRUE(leftEye.position.x < 0.0f);   // IPD offset left
-    EXPECT_TRUE(rightEye.position.x > 0.0f);  // IPD offset right
+    EXPECT_TRUE(leftEye.position.x < 0.0f);  // IPD offset left
+    EXPECT_TRUE(rightEye.position.x > 0.0f); // IPD offset right
 
     EXPECT_GT(leftEye.viewportWidth, 0);
     EXPECT_GT(leftEye.viewportHeight, 0);

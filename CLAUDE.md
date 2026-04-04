@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 3119 unit tests across 244 files, CTest
+Tests/                                   — 3311 unit tests across 257 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.

@@ -2,7 +2,7 @@
 
 SparkEngine provides a platform-agnostic achievement and statistics tracking system. It supports defining achievements with stat-based conditions, persistent statistics, and callbacks for bridging to platform APIs (Steam, Xbox, PlayStation).
 
-**Source:** `SparkEngine/Source/Engine/Gameplay/` (planned -- AchievementSystem is not yet implemented as a standalone header; achievement enums are in `SparkEngine/Source/Enums/GameSystemEnums.h`)
+**Source:** `SparkEngine/Source/Engine/Gameplay/AchievementSystem.h`
 
 ## Overview
 

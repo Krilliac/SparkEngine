@@ -1,0 +1,7 @@
+{
+    "name": "EmptyProject",
+    "description": "Minimal boilerplate project with IModule interface",
+    "genre": "General",
+    "gameModule": "SparkGame",
+    "features": ["minimal"]
+}

@@ -1,0 +1,7 @@
+{
+    "name": "FPSStarter",
+    "description": "First-person shooter with weapons, AI enemies, and HUD",
+    "genre": "FPS",
+    "gameModule": "SparkGameFPS",
+    "features": ["weapons", "ai-enemies", "hud", "health-system"]
+}

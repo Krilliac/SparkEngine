@@ -553,6 +553,8 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `AIUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AbilitySystem` | `SparkEngine/Source/Engine/Gameplay/AbilitySystem.h` |
 | `AbilityUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `AccessibilitySystem` | `SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h` |
+| `AchievementSystem` | `SparkEngine/Source/Engine/Gameplay/AchievementSystem.h` |
 | `AnimationUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AudioUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Camera2DFollowSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
