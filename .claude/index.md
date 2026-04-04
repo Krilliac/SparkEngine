@@ -36,6 +36,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine viability evaluation (can you make a game?) | [knowledge/engine-viability-evaluation.md](knowledge/engine-viability-evaluation.md) | Observation | Active | 2026-04-01 |
 | Project recommendations (13+3 production systems) | [knowledge/project-recommendations-2026-04-04.md](knowledge/project-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 | Engine feature recommendations (7 new game-making systems) | [knowledge/engine-feature-recommendations-2026-04-04.md](knowledge/engine-feature-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
+| Engine next steps (15 recommendations, 4 tiers) | [knowledge/engine-recommendations-2026-04-04.md](knowledge/engine-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-04)
