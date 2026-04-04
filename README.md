@@ -76,9 +76,9 @@
 
 ![GameObject menu](docs/screenshots/editor-gameobject-menu.png)
 
-**Physics Panel**
+**FPS Tools**
 
-![Physics 3D](docs/screenshots/editor-physics-panel.png)
+![FPS Tools](docs/screenshots/editor-fpstools-menu.png)
 
 </details>
 

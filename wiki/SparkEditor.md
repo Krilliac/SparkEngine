@@ -28,11 +28,11 @@ Create entities with pre-configured components:
 
 ![GameObject creation menu](../docs/screenshots/editor-gameobject-menu.png)
 
-### Physics Panel
+### FPS Tools Menu
 
-The Physics 3D panel provides world settings, gravity presets, and debug tools:
+Weapon editor, spawn points, objectives, explosives, and cover points:
 
-![Physics 3D panel](../docs/screenshots/editor-physics-panel.png)
+![FPS Tools menu](../docs/screenshots/editor-fpstools-menu.png)
 
 **Source:** `SparkEditor/Source/`
 
