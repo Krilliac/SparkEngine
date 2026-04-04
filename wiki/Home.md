@@ -6,7 +6,7 @@
 
 ![SparkEditor — ImGui-based visual editor](../docs/screenshots/editor-overview.png)
 
-*SparkEditor running on Linux (Mesa llvmpipe software rendering) with the Spark Professional theme.*
+*SparkEditor default layout with the Spark Professional theme. Open more panels from the Window menu.*
 
 ## Platform Support
 

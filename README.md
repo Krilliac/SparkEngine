@@ -59,7 +59,28 @@
 
 ![SparkEditor — ImGui-based visual editor with 57+ dockable panels](docs/screenshots/editor-overview.png)
 
-*SparkEditor running on Linux with software rendering (Mesa llvmpipe). Shows Material Editor, Physics tools, Scene View, Inspector, and Asset Browser panels with the Spark Professional dark theme.*
+*SparkEditor default layout — Hierarchy, Scene View, Inspector, Console, and Asset Browser. Additional panels available from the Window menu. Spark Professional dark theme.*
+
+<details>
+<summary>More screenshots</summary>
+
+**Welcome Screen** (first launch)
+
+![Welcome screen](docs/screenshots/editor-welcome.png)
+
+**Window Menu** (57+ panels available)
+
+![Window menu](docs/screenshots/editor-window-menu.png)
+
+**GameObject Creation**
+
+![GameObject menu](docs/screenshots/editor-gameobject-menu.png)
+
+**Physics Panel**
+
+![Physics 3D](docs/screenshots/editor-physics-panel.png)
+
+</details>
 
 ## Downloads
 
