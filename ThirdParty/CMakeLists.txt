@@ -109,7 +109,7 @@ else()
 endif()
 
 # AngelScript - path matches the submodule name in .gitmodules (angelscript-mirror)
-set(ANGELSCRIPT_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripting/angelscript-mirror/angelscript/projects/cmake")
+set(ANGELSCRIPT_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Scripting/angelscript-mirror/sdk/angelscript/projects/cmake")
 if(EXISTS "${ANGELSCRIPT_CMAKE_DIR}/CMakeLists.txt")
     add_subdirectory("${ANGELSCRIPT_CMAKE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/angelscript")
     message(STATUS "ThirdParty: AngelScript configured")

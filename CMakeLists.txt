@@ -673,8 +673,8 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/UI/imgui")
 endif()
 
 # AngelScript
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
-    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk/angelscript/include")
+    list(APPEND THIRDPARTY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk/angelscript/include")
     message(STATUS "Found AngelScript")
 endif()
 
@@ -872,6 +872,15 @@ if(MINGW AND NOT MSVC)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/RHI/DXRSupport\\.cpp$")
     add_compile_definitions(SPARK_NO_D3D12)
     message(STATUS "MinGW: D3D12/DXR backend excluded (headers too old). D3D11 is primary.")
+
+    # Copy libwinpthread-1.dll to the output bin/ directory so Wine can find it.
+    # MinGW's posix threading model requires this DLL at runtime.
+    find_file(MINGW_WINPTHREAD_DLL "libwinpthread-1.dll"
+              PATHS /usr/x86_64-w64-mingw32/lib /usr/lib/gcc/x86_64-w64-mingw32
+              NO_DEFAULT_PATH)
+    if(MINGW_WINPTHREAD_DLL)
+        message(STATUS "MinGW: Will copy ${MINGW_WINPTHREAD_DLL} to output bin/")
+    endif()
 endif()
 
 # 9a) SparkEngineLib - Static library with all engine systems
@@ -1238,6 +1247,16 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Resources/Config")
     )
 endif()
 
+# Copy libwinpthread-1.dll for MinGW cross-compilation (Wine needs it at runtime)
+if(MINGW AND MINGW_WINPTHREAD_DLL)
+    add_custom_command(TARGET SparkEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MINGW_WINPTHREAD_DLL}"
+            "$<TARGET_FILE_DIR:SparkEngine>"
+        COMMENT "Copying libwinpthread-1.dll for Wine runtime"
+    )
+endif()
+
 # ---------------------------------------------------------------------
 # 11.5) Precompiled Headers (PCH)
 # ---------------------------------------------------------------------
@@ -1402,10 +1421,10 @@ endif()
 if(ENABLE_HYBRID_RT)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HYBRID_RT=1)
     message(STATUS "SparkEngine: Hybrid Ray Tracing ENABLED (SDFGI software fallback)")
-    if(ENABLE_DXR AND WIN32)
+    if(ENABLE_DXR AND WIN32 AND NOT MINGW)
         target_compile_definitions(SparkEngineLib PUBLIC SPARK_HARDWARE_RT=1)
         message(STATUS "SparkEngine: Hardware RT (DXR) ENABLED")
-    elseif(ENABLE_DXR AND NOT WIN32)
+    elseif(ENABLE_DXR AND (NOT WIN32 OR MINGW))
         message(STATUS "SparkEngine: DXR requested but requires D3D12 (Windows only) — SDFGI fallback active")
     endif()
 endif()
@@ -1785,7 +1804,7 @@ else()
 endif()
 
 # AngelScript
-if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/angelscript/include")
+if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/Scripting/angelscript-mirror/sdk/angelscript/include")
     message(STATUS "  [OK]      AngelScript     — hot-reload scripting")
 else()
     list(APPEND _SPARK_MISSING_DEPS "angelscript")
