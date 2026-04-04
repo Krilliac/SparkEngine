@@ -182,19 +182,17 @@ jobs:
         ref: ${{ github.ref }}
         fetch-depth: 0
 
-    - name: Snapshot nightly download count before replacing
-      if: needs.prepare.outputs.is_versioned == 'false'
+    - name: Snapshot download counts and update badges
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        # Fetch current nightly release download count (sum of all assets)
-        CURRENT_DOWNLOADS=$(gh api repos/${{ github.repository }}/releases/tags/nightly \
-          --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
-        echo "Current nightly downloads before reset: $CURRENT_DOWNLOADS"
-
-        # Read existing lifetime total from data file
+        mkdir -p .github/badges
         DATA_FILE=".github/badges/downloads-data.json"
-        BADGE_FILE=".github/badges/downloads.json"
+        LIFETIME_BADGE=".github/badges/downloads.json"
+        NIGHTLY_BADGE=".github/badges/nightly-downloads.json"
+        STABLE_BADGE=".github/badges/stable-downloads.json"
+
+        # Read existing lifetime total
         if [ -f "$DATA_FILE" ]; then
           LIFETIME=$(jq -r '.total // 0' "$DATA_FILE")
         else
@@ -202,40 +200,77 @@ jobs:
         fi
         echo "Previous lifetime total: $LIFETIME"
 
-        # Accumulate
-        NEW_TOTAL=$((LIFETIME + CURRENT_DOWNLOADS))
-        echo "New lifetime total: $NEW_TOTAL"
+        SNAPSHOT=0
 
-        # Format with commas for display
+        if [[ "${{ needs.prepare.outputs.is_versioned }}" == "false" ]]; then
+          # Nightly release: snapshot current nightly downloads before replacement
+          NIGHTLY_DL=$(gh api repos/${{ github.repository }}/releases/tags/nightly \
+            --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
+          echo "Current nightly downloads before reset: $NIGHTLY_DL"
+          SNAPSHOT=$NIGHTLY_DL
+
+          # Reset nightly badge to 0 (release is being replaced)
+          cat > "$NIGHTLY_BADGE" << BADGE_EOF
+{
+    "schemaVersion": 1,
+    "label": "nightly downloads",
+    "message": "0",
+    "color": "brightgreen",
+    "namedLogo": "github",
+    "logoColor": "white"
+}
+BADGE_EOF
+        else
+          # Stable release: snapshot current stable downloads before new version
+          STABLE_DL=$(gh api repos/${{ github.repository }}/releases/latest \
+            --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
+          echo "Current stable downloads before reset: $STABLE_DL"
+          SNAPSHOT=$STABLE_DL
+
+          # Reset stable badge to 0 (new release is being published)
+          cat > "$STABLE_BADGE" << BADGE_EOF
+{
+    "schemaVersion": 1,
+    "label": "release downloads",
+    "message": "0",
+    "color": "blue",
+    "namedLogo": "github",
+    "logoColor": "white"
+}
+BADGE_EOF
+        fi
+
+        # Accumulate into lifetime total
+        NEW_TOTAL=$((LIFETIME + SNAPSHOT))
+        echo "New lifetime total: $NEW_TOTAL"
         FORMATTED=$(printf "%'d" "$NEW_TOTAL" 2>/dev/null || echo "$NEW_TOTAL")
 
-        # Write data file (running total)
-        mkdir -p .github/badges
-        cat > "$DATA_FILE" << EOF
-        {
-            "total": $NEW_TOTAL,
-            "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        }
-        EOF
+        # Write data file
+        cat > "$DATA_FILE" << DATA_EOF
+{
+    "total": $NEW_TOTAL,
+    "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+DATA_EOF
 
-        # Write badge file (shields.io-compatible, no extra fields)
-        cat > "$BADGE_FILE" << EOF
-        {
-            "schemaVersion": 1,
-            "label": "lifetime downloads",
-            "message": "$FORMATTED",
-            "color": "brightgreen",
-            "namedLogo": "github",
-            "logoColor": "white"
-        }
-        EOF
+        # Write lifetime badge
+        cat > "$LIFETIME_BADGE" << BADGE_EOF
+{
+    "schemaVersion": 1,
+    "label": "lifetime downloads",
+    "message": "$FORMATTED",
+    "color": "brightgreen",
+    "namedLogo": "github",
+    "logoColor": "white"
+}
+BADGE_EOF
 
-        # Commit the updated counter
+        # Commit updated counters
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add "$BADGE_FILE" "$DATA_FILE"
+        git add .github/badges/
         git diff --cached --quiet && echo "No download count change" && exit 0
-        git commit -m "chore: update lifetime download counter ($NEW_TOTAL) [skip ci]"
+        git commit -m "chore: update download counters (lifetime: $NEW_TOTAL) [skip ci]"
         git push origin HEAD:${{ github.ref_name }}
 
     - name: Resolve short commit SHA
