@@ -1037,28 +1037,32 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
         auto& dxr = Spark::Graphics::DXRManager::GetInstance();
         if (dxr.IsAvailable())
         {
+            XMMATRIX viewProj = viewMatrix * projMatrix;
+
             // Rebuild TLAS each frame for dynamic objects
-            dxr.BuildTLAS();
+            dxr.BuildTLAS(m_dxrInstances);
 
             // Dispatch enabled RT effects
             const auto& settings = dxr.GetSettings();
-            auto effects = static_cast<uint32_t>(settings.enabledEffects);
+            auto features = static_cast<uint32_t>(settings.enabledFeatures);
 
-            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::Reflections))
+            if (features & static_cast<uint32_t>(Spark::Graphics::RTFeature::Reflections))
             {
-                dxr.TraceReflections(viewMatrix, projMatrix);
+                dxr.TraceReflections(viewProj, cameraPos);
             }
-            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::Shadows))
+            if (features & static_cast<uint32_t>(Spark::Graphics::RTFeature::Shadows))
             {
-                dxr.TraceShadows(viewMatrix, projMatrix);
+                // Use primary light direction for shadow rays
+                XMFLOAT3 lightDir = {0.0f, -1.0f, 0.5f};
+                dxr.TraceShadows(lightDir);
             }
-            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::AmbientOcclusion))
+            if (features & static_cast<uint32_t>(Spark::Graphics::RTFeature::AmbientOcclusion))
             {
-                dxr.TraceAmbientOcclusion(viewMatrix, projMatrix);
+                dxr.TraceAmbientOcclusion(viewProj, cameraPos);
             }
-            if (effects & static_cast<uint32_t>(Spark::RHI::RTEffect::GlobalIllumination))
+            if (features & static_cast<uint32_t>(Spark::Graphics::RTFeature::GlobalIllumination))
             {
-                dxr.TraceGlobalIllumination(viewMatrix, projMatrix);
+                dxr.TraceGlobalIllumination(viewProj, cameraPos);
             }
         }
     }

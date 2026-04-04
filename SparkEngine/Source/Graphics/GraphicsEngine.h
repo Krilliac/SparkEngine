@@ -35,6 +35,9 @@
 #include "TerrainRenderer.h"
 #include "GPUTimestampQuery.h"
 #include "RHI/RHIBridge.h"
+#ifdef SPARK_HARDWARE_RT
+#include "RHI/DXRSupport.h"
+#endif
 #include "RenderPipeline.h"
 #include <functional>
 #include <mutex>
@@ -528,6 +531,10 @@ class GraphicsEngine
 
 #ifdef SPARK_HYBRID_RT
     std::unique_ptr<Spark::Graphics::HybridRTManager> m_hybridRT;
+#endif
+
+#ifdef SPARK_HARDWARE_RT
+    std::vector<Spark::Graphics::BLASInstance> m_dxrInstances; ///< Per-frame TLAS instance list
 #endif
 
     // ========================================================================
