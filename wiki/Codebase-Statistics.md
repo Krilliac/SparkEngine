@@ -8,31 +8,31 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 240489 |
+| **SparkEngine/Source** | 240828 |
 | **SparkEditor/Source** | 82887 |
 | **GameModules** | 57421 |
-| **Tests** | 86220 |
+| **Tests** | 86358 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~469408** |
+| **Total C++ (excl. ThirdParty)** | **~469885** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hpp) | 696 |
-| Implementation files (.cpp) | 766 |
+| Implementation files (.cpp) | 768 |
 | HLSL shader files | 32 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 279 |
+| Test files (.cpp) | 280 |
 | Wiki pages (.md) | 101 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~862 |
+| Average lines per .cpp file | ~860 |
 | Average lines per .h file | ~570 |
 | Largest codebase section | Graphics (95851 lines — 39% of SparkEngine/Source) |
 
@@ -44,8 +44,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |-----------|------:|:----------:|
 | Graphics | 95851 | 39.8% |
 | Engine (all subsystems) | 71184 | 29.5% |
-| Utils | 31706 | 13.1% |
-| Core | 17279 | 7.1% |
+| Utils | 32004 | 13.2% |
+| Core | 17320 | 7.1% |
 | Physics | 10087 | 4.1% |
 | Audio | 5520 | 2.2% |
 | Input | 3345 | 1.3% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 279 |
-| TEST() definitions | 3511 |
+| Test files | 280 |
+| TEST() definitions | 3520 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -155,7 +155,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | File | Lines |
 |------|------:|
 | `OpenGLDevice.cpp` | 1932 |
-| `SparkEngine.cpp` | 1817 |
+| `SparkEngine.cpp` | 1823 |
 | `VulkanDevice.cpp` | 1722 |
 | `GraphicsEngine.cpp` | 1569 |
 | `D3D12Device.cpp` | 1558 |

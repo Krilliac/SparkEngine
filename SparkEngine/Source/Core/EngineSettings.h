@@ -382,6 +382,14 @@ class EngineSettings
         bool enableAnimationEvents = true;
     };
 
+    // ---- Debug ----
+
+    struct DebugSettings
+    {
+        bool suppressFatalAsserts = false;    ///< Suppress fatal assertions (log + continue instead of abort)
+        bool breakOnSuppressedAsserts = true; ///< Break into debugger on suppressed assertions
+    };
+
     // ---- Logging ----
 
     struct LoggingSettings
@@ -513,6 +521,9 @@ class EngineSettings
     AnimationSettings& Animation() { return m_animation; }
     const AnimationSettings& Animation() const { return m_animation; }
 
+    DebugSettings& Debug() { return m_debug; }
+    const DebugSettings& Debug() const { return m_debug; }
+
     LoggingSettings& Logging() { return m_logging; }
     const LoggingSettings& Logging() const { return m_logging; }
 
@@ -549,6 +560,9 @@ class EngineSettings
 
   private:
     EngineSettings() = default;
+
+    /// Apply debug settings (assertion suppression) to the Assert system.
+    void ApplyDebugSettings();
 
     /// Read struct fields from the ConfigParser.
     void ReadFromConfig();
@@ -591,6 +605,7 @@ class EngineSettings
     NetworkSettings m_network;
     ScriptingSettings m_scripting;
     AnimationSettings m_animation;
+    DebugSettings m_debug;
     LoggingSettings m_logging;
 
     // Change listeners
