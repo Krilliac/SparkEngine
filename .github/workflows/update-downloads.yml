@@ -1,0 +1,68 @@
+name: Update Download Badges
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-badges:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        ref: Working
+
+    - name: Refresh download count badges
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        mkdir -p .github/badges
+        NIGHTLY_BADGE=".github/badges/nightly-downloads.json"
+        STABLE_BADGE=".github/badges/stable-downloads.json"
+
+        # Fetch current nightly downloads
+        NIGHTLY_DL=$(gh api repos/${{ github.repository }}/releases/tags/nightly \
+          --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
+        NIGHTLY_FMT=$(printf "%'d" "$NIGHTLY_DL" 2>/dev/null || echo "$NIGHTLY_DL")
+        echo "Nightly downloads: $NIGHTLY_DL"
+
+        cat > "$NIGHTLY_BADGE" << EOF
+{
+    "schemaVersion": 1,
+    "label": "nightly downloads",
+    "message": "$NIGHTLY_FMT",
+    "color": "brightgreen",
+    "namedLogo": "github",
+    "logoColor": "white"
+}
+EOF
+
+        # Fetch current stable (latest) downloads
+        STABLE_DL=$(gh api repos/${{ github.repository }}/releases/latest \
+          --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
+        STABLE_FMT=$(printf "%'d" "$STABLE_DL" 2>/dev/null || echo "$STABLE_DL")
+        echo "Stable downloads: $STABLE_DL"
+
+        cat > "$STABLE_BADGE" << EOF
+{
+    "schemaVersion": 1,
+    "label": "release downloads",
+    "message": "$STABLE_FMT",
+    "color": "blue",
+    "namedLogo": "github",
+    "logoColor": "white"
+}
+EOF
+
+        # Commit if changed
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .github/badges/nightly-downloads.json .github/badges/stable-downloads.json
+        git diff --cached --quiet && echo "No changes" && exit 0
+        git commit -m "chore: refresh download badges (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]"
+        git push origin Working

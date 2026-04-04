@@ -4,7 +4,9 @@
 [![Publish](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml?query=branch%3AWorking)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
-[![Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/downloads.json)](https://github.com/Krilliac/SparkEngine/releases)
+[![Lifetime Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/downloads.json)](https://github.com/Krilliac/SparkEngine/releases)
+[![Release Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/stable-downloads.json)](https://github.com/Krilliac/SparkEngine/releases/latest)
+[![Nightly Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/nightly-downloads.json)](https://github.com/Krilliac/SparkEngine/releases/tag/nightly)
 [![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/Working)
 [![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
 [![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
@@ -92,7 +94,7 @@
 Built automatically on every commit to `Working`. Always the latest code — all CI checks pass before publishing.
 
 [![Built From](https://img.shields.io/github/last-commit/Krilliac/SparkEngine/Working?label=last%20updated&style=flat-square)](https://github.com/Krilliac/SparkEngine/commits/Working)
-[![Nightly Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/nightly/total?label=nightly%20downloads&color=brightgreen&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/tag/nightly)
+[![Nightly Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/nightly-downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/tag/nightly)
 
 | Platform | Release | Debug |
 |---|---|---|
@@ -105,7 +107,7 @@ Built automatically on every commit to `Working`. Always the latest code — all
 
 Stable releases are published manually and thoroughly tested. Recommended for most users.
 
-[![Stable Downloads](https://img.shields.io/github/downloads/Krilliac/SparkEngine/latest/total?label=stable%20downloads&color=blue&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/latest)
+[![Stable Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/stable-downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/latest)
 
 | Platform | Release | Debug |
 |---|---|---|
