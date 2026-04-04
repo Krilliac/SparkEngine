@@ -3,8 +3,19 @@
 #include "Utils/BenchmarkFramework.h"
 
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
+
+namespace
+{
+    /// @brief Get a cross-platform temporary file path for tests
+    std::string TempPath(const char* filename)
+    {
+        return (std::filesystem::temp_directory_path() / filename).string();
+    }
+} // namespace
 
 // ============================================================================
 // Stub scenario for testing
@@ -252,20 +263,31 @@ TEST(BenchmarkFramework_SaveLoad_Baseline_Roundtrip)
     result.scenarioName = "RoundtripTest";
     result.metrics = {{"FrameTime", 16.5, "ms", true}, {"Memory", 256.0, "MB", true}};
 
-    std::string path = "/tmp/spark_bench_test_baseline.json";
+    std::string path = TempPath("spark_bench_test_baseline.json");
     bench.SaveBaseline(path, {result});
 
     auto baselines = bench.LoadBaseline(path);
     EXPECT_EQ(baselines.size(), 1u);
+    if (baselines.empty())
+    {
+        bench.Shutdown();
+        return;
+    }
     EXPECT_TRUE(baselines[0].scenarioName == "RoundtripTest");
 
     auto it = baselines[0].metrics.find("FrameTime");
     EXPECT_TRUE(it != baselines[0].metrics.end());
-    EXPECT_NEAR(it->second, 16.5, 0.01);
+    if (it != baselines[0].metrics.end())
+    {
+        EXPECT_NEAR(it->second, 16.5, 0.01);
+    }
 
     auto it2 = baselines[0].metrics.find("Memory");
     EXPECT_TRUE(it2 != baselines[0].metrics.end());
-    EXPECT_NEAR(it2->second, 256.0, 0.01);
+    if (it2 != baselines[0].metrics.end())
+    {
+        EXPECT_NEAR(it2->second, 256.0, 0.01);
+    }
 
     // Cleanup
     std::remove(path.c_str());
@@ -278,7 +300,7 @@ TEST(BenchmarkFramework_LoadBaseline_NonexistentFile)
     auto& bench = Spark::BenchmarkFramework::GetInstance();
     bench.Initialize();
 
-    auto baselines = bench.LoadBaseline("/tmp/spark_bench_nonexistent_file.json");
+    auto baselines = bench.LoadBaseline(TempPath("spark_bench_nonexistent_file.json"));
     EXPECT_TRUE(baselines.empty());
 
     bench.Shutdown();
@@ -293,7 +315,7 @@ TEST(BenchmarkFramework_SaveBaseline_ContainsJSON)
     result.scenarioName = "JsonCheck";
     result.metrics = {{"FPS", 60.0, "fps", false}};
 
-    std::string path = "/tmp/spark_bench_json_check.json";
+    std::string path = TempPath("spark_bench_json_check.json");
     bench.SaveBaseline(path, {result});
 
     // Read file and verify it contains expected JSON keys
