@@ -1198,6 +1198,12 @@ namespace Spark
                 m_capabilities.tessellationSupport = true;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.geometryShaderSupport = true;
+                m_capabilities.multiDrawIndirectSupport = true; // GL 4.3+ core (GL_ARB_multi_draw_indirect)
+
+                // Query actual max MSAA sample count
+                GLint maxSamples = 8;
+                glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+                m_capabilities.maxMSAASamples = static_cast<uint32_t>(maxSamples);
             }
 
             std::unique_ptr<IRHISwapChain> GLDevice::CreateSwapChain(const RHISwapChainDesc& desc)

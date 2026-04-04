@@ -658,10 +658,48 @@ namespace Spark
                 m_capabilities.apiVersion = apiStr;
                 m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
 
+                // Map Vulkan vendor ID to name
+                switch (properties.vendorID)
+                {
+                case 0x10DE:
+                    m_capabilities.vendorName = "NVIDIA";
+                    break;
+                case 0x1002:
+                    m_capabilities.vendorName = "AMD";
+                    break;
+                case 0x8086:
+                    m_capabilities.vendorName = "Intel";
+                    break;
+                case 0x13B5:
+                    m_capabilities.vendorName = "ARM";
+                    break;
+                case 0x5143:
+                    m_capabilities.vendorName = "Qualcomm";
+                    break;
+                case 0x10005:
+                    m_capabilities.vendorName = "Mesa";
+                    break;
+                default:
+                    m_capabilities.vendorName = "Unknown";
+                    break;
+                }
+
                 m_capabilities.maxTextureSize = properties.limits.maxImageDimension2D;
                 m_capabilities.maxRenderTargets = properties.limits.maxColorAttachments;
                 m_capabilities.maxSamplers = properties.limits.maxPerStageDescriptorSamplers;
                 m_capabilities.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+                // Query max MSAA sample count from device limits
+                VkSampleCountFlags msaaCounts =
+                    properties.limits.framebufferColorSampleCounts & properties.limits.framebufferDepthSampleCounts;
+                if (msaaCounts & VK_SAMPLE_COUNT_8_BIT)
+                    m_capabilities.maxMSAASamples = 8;
+                else if (msaaCounts & VK_SAMPLE_COUNT_4_BIT)
+                    m_capabilities.maxMSAASamples = 4;
+                else if (msaaCounts & VK_SAMPLE_COUNT_2_BIT)
+                    m_capabilities.maxMSAASamples = 2;
+                else
+                    m_capabilities.maxMSAASamples = 1;
 
                 VkPhysicalDeviceMemoryProperties memProperties;
                 vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
@@ -706,6 +744,8 @@ namespace Spark
                     bool hasBufferAddr = false;
                     bool hasRayQuery = false;
                     bool hasVRS = false;
+                    bool hasConservativeRaster = false;
+                    bool hasMeshShader = false;
 
                     for (const auto& ext : exts)
                     {
@@ -721,7 +761,17 @@ namespace Spark
                             hasRayQuery = true;
                         else if (std::strcmp(ext.extensionName, "VK_KHR_fragment_shading_rate") == 0)
                             hasVRS = true;
+                        else if (std::strcmp(ext.extensionName, "VK_EXT_conservative_rasterization") == 0)
+                            hasConservativeRaster = true;
+                        else if (std::strcmp(ext.extensionName, "VK_EXT_mesh_shader") == 0)
+                            hasMeshShader = true;
                     }
+
+                    m_capabilities.conservativeRasterSupport = hasConservativeRaster;
+                    m_capabilities.meshShaderSupport = hasMeshShader;
+                    m_capabilities.variableRateShadingSupport = hasVRS;
+                    // descriptorIndexing is Vulkan 1.2 core — bindless is available
+                    m_capabilities.bindlessResourceSupport = true;
 
                     bool fullHWRT = hasAccelStruct && hasRTPipeline && hasDeferredOps && hasBufferAddr;
 
