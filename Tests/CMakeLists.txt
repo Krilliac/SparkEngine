@@ -270,6 +270,24 @@ add_executable(SparkTests
     TestProceduralGenerator.cpp
     TestVideoPlayer.cpp
     TestLightmapBaker.cpp
+    # Cross-system integration tests
+    TestPhysicsECSIntegration.cpp
+    TestSceneRoundtrip.cpp
+    TestAnimationPhysicsIntegration.cpp
+    TestNetworkReplicationIntegration.cpp
+    TestRenderECSIntegration.cpp
+    TestFPSMultiplayer.cpp
+    # Asset pipeline and GPU profiling
+    TestFBXImporter.cpp
+    TestTextureCompressor.cpp
+    TestGPUProfiler.cpp
+    TestShaderHotReloadCompilation.cpp
+    # Editor, gameplay, LOD, AI debug
+    TestEditorCommands.cpp
+    TestEditorWindowManager.cpp
+    TestGameplayExtensionRegistry.cpp
+    TestLODGenerator.cpp
+    TestAIDebugRenderer.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
