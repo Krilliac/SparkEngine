@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*256 test files, 3311+ test cases*
+*263 test files, 3388+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -532,6 +532,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAlignedHeapArray` | 6 |
 | `TestAngelScriptEngine` | 14 |
 | `TestAngleUtils` | 10 |
+| `TestAnimNotify` | 10 |
 | `TestAnimationCompression` | 6 |
 | `TestAnimationRetargeting` | 9 |
 | `TestAnimationStress` | 12 |
@@ -631,7 +632,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameObjectTransforms` | 24 |
 | `TestGamePackager` | 10 |
 | `TestGamepadInputProcessing` | 23 |
+| `TestGameplayDebugger` | 11 |
 | `TestGameplayStress` | 15 |
+| `TestGameplayTags` | 13 |
 | `TestGoldenImageTest` | 14 |
 | `TestGraphicsEngine` | 10 |
 | `TestGraphicsInitFallback` | 5 |
@@ -649,6 +652,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestJobSystem` | 11 |
 | `TestJsonUtils` | 23 |
 | `TestLightManager` | 13 |
+| `TestLightmapBaker` | 9 |
 | `TestLoadingScreen` | 4 |
 | `TestLocalFileCache` | 15 |
 | `TestLocalizationSystem` | 6 |
@@ -699,6 +703,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPlayModeManager` | 33 |
 | `TestPoseModifier` | 4 |
 | `TestPostProcessingPipeline` | 16 |
+| `TestProceduralGenerator` | 13 |
 | `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
@@ -724,6 +729,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestScheduledCallback` | 8 |
 | `TestScopeGuard` | 13 |
 | `TestScopedTimer` | 3 |
+| `TestScreenCapture` | 9 |
 | `TestScreenSpaceEffects` | 16 |
 | `TestScriptHookManager` | 15 |
 | `TestScriptHotReload` | 16 |
@@ -767,6 +773,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestUtilsStress` | 13 |
 | `TestVRSystem` | 12 |
 | `TestVersionedHandle` | 9 |
+| `TestVideoPlayer` | 12 |
 | `TestVisualScriptCompiler` | 12 |
 | `TestVulkanLavapipe` | 4 |
 | `TestWARPRendering` | 4 |
