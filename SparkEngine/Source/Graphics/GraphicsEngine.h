@@ -62,6 +62,8 @@ namespace Spark::Graphics
 class TextureSystem;
 class LightingSystem;
 class AssetPipeline;
+class UpscalingSystem;
+class VRAMBudgetMonitor;
 class PhysicsSystem;
 class GameObject;
 class Shader;
@@ -230,6 +232,8 @@ class GraphicsEngine
     Spark::Graphics::ShadowAtlas* GetShadowAtlas() const { return m_shadowAtlas.get(); }
     Spark::Graphics::ScreenSpaceEffects* GetScreenSpaceEffects() const { return m_screenSpaceEffects.get(); }
     AssetPipeline* GetAssetPipeline() const;
+    UpscalingSystem* GetUpscalingSystem() const { return m_upscalingSystem.get(); }
+    VRAMBudgetMonitor* GetVRAMBudgetMonitor() const { return m_vramBudgetMonitor.get(); }
 
     // ========================================================================
     // RHI BRIDGE ACCESS
@@ -503,6 +507,8 @@ class GraphicsEngine
     std::unique_ptr<MaterialSystem> m_materialSystem;
     std::unique_ptr<LightingSystem> m_lightingSystem;
     std::unique_ptr<AssetPipeline> m_assetPipeline;
+    std::unique_ptr<UpscalingSystem> m_upscalingSystem;
+    std::unique_ptr<VRAMBudgetMonitor> m_vramBudgetMonitor;
     // Non-owning: PhysicsSystem lifetime managed by SparkEngine.cpp / EngineContext
     PhysicsSystem* m_physicsSystem = nullptr;
 

@@ -31,7 +31,6 @@
 
 using Microsoft::WRL::ComPtr;
 
-// Forward declarations for VRAM budget integration
 class VRAMBudgetMonitor;
 
 /**
@@ -276,14 +275,15 @@ class TextureSystem
     size_t GetMemoryUsage() const;
     void GarbageCollect();
 
+    /**
+     * @brief Set the VRAM budget monitor for pressure-driven eviction
+     * @param monitor Non-owning pointer to the VRAMBudgetMonitor (lifetime managed by GraphicsEngine)
+     */
+    void SetVRAMBudgetMonitor(VRAMBudgetMonitor* monitor) { m_vramBudgetMonitor = monitor; }
+
     // ========================================================================
     // LRU / PRIORITY-BASED EVICTION (GAP-OFF02 integration)
     // ========================================================================
-
-    /**
-     * @brief Set the VRAM budget monitor for pressure-driven eviction
-     */
-    void SetVRAMBudgetMonitor(VRAMBudgetMonitor* monitor) { m_vramBudgetMonitor = monitor; }
 
     /**
      * @brief Mark a texture as used this frame (updates LRU data)
@@ -361,7 +361,7 @@ class TextureSystem
     std::unordered_map<std::string, TextureLRUData> m_lruData;
     uint64_t m_currentFrame = 0;
 
-    // VRAM budget monitor integration (non-owning)
+    // VRAM budget monitor (non-owning; lifetime managed by GraphicsEngine)
     VRAMBudgetMonitor* m_vramBudgetMonitor = nullptr;
 
     // Streaming
