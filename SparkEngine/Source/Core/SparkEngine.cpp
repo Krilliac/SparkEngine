@@ -1350,8 +1350,19 @@ static int RunHeadlessLinux(int argc, char* argv[])
     console.LogInfo("Starting headless server loop (60 Hz)...");
     console.LogInfo("Press Ctrl+C to stop.");
 
+    if (g_testFrameLimit > 0)
+        console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
+
+    int frameCount = 0;
+
     while (!g_shutdownRequested)
     {
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        {
+            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            break;
+        }
+
         SPARK_HEARTBEAT();
         auto tickStart = std::chrono::steady_clock::now();
         float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
@@ -1372,6 +1383,8 @@ static int RunHeadlessLinux(int argc, char* argv[])
             Spark::ConsoleProcessManager::GetInstance().ProcessCommands();
             console.Update();
         });
+
+        ++frameCount;
 
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
         if (elapsed < TICK_INTERVAL)
@@ -1744,24 +1757,61 @@ int main(int argc, char* argv[])
 {
     std::signal(SIGINT, SignalHandler);
     std::signal(SIGTERM, SignalHandler);
+#ifndef _WIN32
+    std::signal(SIGPIPE, SIG_IGN);
+#endif
 
-    g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
-    ParseWindowSizeOverrideArgs(argc, argv);
+    try
+    {
+        g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
+        ParseWindowSizeOverrideArgs(argc, argv);
 
 #ifdef SPARK_HEADLESS_SUPPORT
-    bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");
-    g_headlessMode = headless;
-    if (headless)
-        return RunHeadlessLinux(argc, argv);
+        bool headless = ParseFlag(argc, argv, "-headless") || ParseFlag(argc, argv, "-dedicated");
+        g_headlessMode = headless;
+        if (headless)
+            return RunHeadlessLinux(argc, argv);
 #endif
 
 #ifdef SPARK_SDL2_AVAILABLE
-    int result = RunSDL2Windowed(argc, argv);
+        int result = RunSDL2Windowed(argc, argv);
 #else
-    int result = RunNoSDL2Fallback(argc, argv);
+        int result = RunNoSDL2Fallback(argc, argv);
 #endif
 
-    Spark::SimpleConsole::GetInstance().LogInfo("Spark Engine shut down cleanly.");
-    return result;
+        Spark::SimpleConsole::GetInstance().LogInfo("Spark Engine shut down cleanly.");
+        return result;
+    }
+    catch (const std::system_error& e)
+    {
+        fprintf(stderr, "[FATAL] System error during engine execution: %s (code: %d)\n", e.what(), e.code().value());
+    }
+    catch (const std::bad_alloc&)
+    {
+        fprintf(stderr, "[FATAL] Out of memory during engine execution\n");
+    }
+    catch (const std::exception& e)
+    {
+        fprintf(stderr, "[FATAL] Unhandled exception: %s\n", e.what());
+    }
+
+    // Emergency cleanup: release globals to prevent segfault during static
+    // destruction. EventBus channels hold vtable pointers into module .so code;
+    // if modules are unloaded first, channel destructors will segfault.
+    // Under resource exhaustion, module shutdown itself may throw (from
+    // destructors calling thread join, etc.), so we leak rather than crash.
+    if (g_eventBus)
+    {
+        try
+        {
+            g_eventBus->ClearAll();
+        }
+        catch (...)
+        {
+        }
+    }
+    g_eventBus.release();
+    g_moduleManager.release();
+    return 1;
 }
 #endif // !SPARK_PLATFORM_WINDOWS
