@@ -79,6 +79,13 @@
 #include "FixedTimestepAccumulator.h"
 #include "PluginRegistry.h"
 #include "ResourceVersionTracker.h"
+#include "Engine/Animation/AnimNotify.h"
+#include "Engine/Gameplay/GameplayTags.h"
+#include "Utils/GameplayDebugger.h"
+#include "Graphics/ScreenCapture.h"
+#include "Engine/Cinematic/VideoPlayer.h"
+#include "Graphics/LightmapBaker.h"
+#include "Engine/Procedural/ProceduralGenerator.h"
 #include "Engine/Networking/DeltaSnapshotManager.h"
 #include "Engine/Networking/InstabilitySimulator.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
@@ -370,6 +377,14 @@ static void InitRenderingAndUtilitySystems()
     Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
     Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
     Spark::PluginRegistry::InitializeAll();
+
+    Spark::Animation::AnimNotifyManager::GetInstance().Initialize();
+    Spark::Gameplay::GameplayTagRegistry::GetInstance().Initialize();
+    Spark::Utils::GameplayDebugger::GetInstance().Initialize();
+    Spark::Graphics::ScreenCapture::GetInstance().Initialize();
+    Spark::Cinematic::VideoPlayer::GetInstance().Initialize();
+    Spark::Graphics::LightmapBaker::GetInstance().Initialize();
+    Spark::Procedural::ProceduralGenerator::GetInstance().Initialize();
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "RenderingAndUtility", 0.0);
 }
 
@@ -717,6 +732,9 @@ static void UpdateExtendedSystems(EngineContext* ctx, float dt)
         });
     }
 
+    SPARK_GUARDED_UPDATE("GameplayDebugger", "Core", { Spark::Utils::GameplayDebugger::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("VideoPlayer", "Core", { Spark::Cinematic::VideoPlayer::GetInstance().Update(dt); });
+
     SPARK_GUARDED_UPDATE("ECS_Executor", "Core", { Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt); });
 }
 
@@ -848,6 +866,14 @@ void ShutdownGameplaySystems()
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
     Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
     Spark::Gameplay::ConditionSystem::GetInstance().Shutdown();
+
+    Spark::Animation::AnimNotifyManager::GetInstance().Shutdown();
+    Spark::Gameplay::GameplayTagRegistry::GetInstance().Shutdown();
+    Spark::Utils::GameplayDebugger::GetInstance().Shutdown();
+    Spark::Graphics::ScreenCapture::GetInstance().Shutdown();
+    Spark::Cinematic::VideoPlayer::GetInstance().Shutdown();
+    Spark::Graphics::LightmapBaker::GetInstance().Shutdown();
+    Spark::Procedural::ProceduralGenerator::GetInstance().Shutdown();
 
     if (auto* as = AngelScriptEngine::GetInstance())
     {

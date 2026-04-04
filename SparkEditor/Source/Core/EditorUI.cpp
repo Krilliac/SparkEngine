@@ -551,6 +551,7 @@ namespace SparkEditor
         RenderStatusBar();
         RenderNotifications();
         RenderModalDialogs();
+        RenderWelcomeScreen();
 
         // Render project browser modal (on top of everything)
         SPARK_WARN_IF(Spark::LogCategory::Editor, m_projectBrowserPanel == nullptr,
@@ -912,6 +913,66 @@ namespace SparkEditor
 
                 ImGui::EndPopup();
             }
+        }
+    }
+
+    void EditorUI::RenderWelcomeScreen()
+    {
+        if (!m_showWelcomeScreen)
+            return;
+
+        // Skip welcome screen in test mode (automated testing)
+        if (m_config && m_config->testMode)
+        {
+            m_showWelcomeScreen = false;
+            return;
+        }
+
+        ImGui::OpenPopup("Welcome to SparkEngine");
+
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(560, 420), ImGuiCond_Appearing);
+
+        if (ImGui::BeginPopupModal("Welcome to SparkEngine", &m_showWelcomeScreen,
+                                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
+        {
+            ImGui::TextWrapped("Welcome! SparkEngine is a C++23 open-source 3D game engine.");
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::Text("Getting Started");
+            ImGui::BulletText("Scene View — navigate the 3D viewport (WASD + mouse)");
+            ImGui::BulletText("Hierarchy — view and select entities in the scene");
+            ImGui::BulletText("Inspector — edit properties of the selected entity");
+            ImGui::BulletText("Asset Browser — browse and import project assets");
+            ImGui::BulletText("Console — view logs and run debug commands");
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::Text("Quick Actions");
+            if (ImGui::Button("Open All Panels"))
+            {
+                for (auto& [name, panel] : m_panels)
+                    panel->SetVisible(true);
+                m_showWelcomeScreen = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Keep Minimal Layout"))
+            {
+                m_showWelcomeScreen = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("Tip: Open more panels from the Window menu at any time.");
+            ImGui::TextDisabled("Tip: Use Window > Reset Layout to restore the default.");
+
+            ImGui::EndPopup();
         }
     }
 

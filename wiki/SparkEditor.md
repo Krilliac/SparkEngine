@@ -2,11 +2,45 @@
 
 The SparkEditor is an ImGui-based visual editor for creating and editing game content. It provides a dockable workspace with multiple panels for [scene editing](Scene-Management), material authoring, [animation](Animation), and debugging.
 
+![SparkEditor default layout](../docs/screenshots/editor-overview.png)
+
+*SparkEditor default layout — Hierarchy, Scene View, Inspector, Asset Browser, and Console panels with the Spark Professional dark theme.*
+
+### Welcome Screen
+
+On first launch, a welcome screen introduces the core panels and offers quick actions:
+
+![Welcome screen](../docs/screenshots/editor-welcome.png)
+
+### Window Menu — All Available Panels
+
+Additional panels can be enabled from the **Window** menu at any time:
+
+![Window menu showing all panels](../docs/screenshots/editor-window-menu.png)
+
+### File Menu
+
+![File menu](../docs/screenshots/editor-file-menu.png)
+
+### GameObject Menu
+
+Create entities with pre-configured components:
+
+![GameObject creation menu](../docs/screenshots/editor-gameobject-menu.png)
+
+### FPS Tools Menu
+
+Weapon editor, spawn points, objectives, explosives, and cover points:
+
+![FPS Tools menu](../docs/screenshots/editor-fpstools-menu.png)
+
 **Source:** `SparkEditor/Source/`
 
-> **Note:** SparkEditor is Windows-only (requires Win32 + DirectX 11 ImGui backends). It is automatically disabled on non-Windows platforms.
+**Platforms:**
+- **Windows:** Win32 + DirectX 11 ImGui backends (primary)
+- **Linux:** SDL2 + OpenGL 3.3 ImGui backends (software rendering via Mesa llvmpipe supported)
 
-`ENABLE_EDITOR=ON` (Windows only)
+`ENABLE_EDITOR=ON`
 
 ## Architecture
 

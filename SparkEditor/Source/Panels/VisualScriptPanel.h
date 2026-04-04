@@ -98,6 +98,29 @@ namespace SparkEditor
         void Render() override;
         void Shutdown() override;
 
+        // -- Data types (public for undo/redo command access) --
+        struct NodeUI
+        {
+            Spark::Scripting::ScriptNode node;
+            float posX = 0.0f;
+            float posY = 0.0f;
+            float width = 160.0f;
+            float height = 80.0f;
+            bool selected = false;
+        };
+
+        struct ConnectionUI
+        {
+            Spark::Scripting::ScriptConnection connection;
+        };
+
+        struct VariableUI
+        {
+            char name[64] = {};
+            int typeIndex = 2; // Default: Float
+            char defaultValue[64] = {};
+        };
+
       private:
         // -- UI Sections --
         void RenderNodePalette();
@@ -127,28 +150,6 @@ namespace SparkEditor
         void LoadGraph(const std::string& path);
 
         // -- Internal graph state --
-        struct NodeUI
-        {
-            Spark::Scripting::ScriptNode node;
-            float posX = 0.0f;
-            float posY = 0.0f;
-            float width = 160.0f;
-            float height = 80.0f;
-            bool selected = false;
-        };
-
-        struct ConnectionUI
-        {
-            Spark::Scripting::ScriptConnection connection;
-        };
-
-        struct VariableUI
-        {
-            char name[64] = {};
-            int typeIndex = 2; // Default: Float
-            char defaultValue[64] = {};
-        };
-
         std::vector<NodeUI> m_nodes;
         std::vector<ConnectionUI> m_connections;
         std::vector<VariableUI> m_variables;

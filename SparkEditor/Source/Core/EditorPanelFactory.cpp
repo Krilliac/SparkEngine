@@ -221,28 +221,24 @@ namespace SparkEditor
 
     void EditorUI::SetDefaultPanelVisibility()
     {
-        const char* hiddenPanels[] = {
-            "WeaponEditor",       "FPSTools",           "DebugVisualizer",
-            "SceneStats",         "ObjectPlacement",    "BuildCook",
-            "UndoHistory",        "PrefabEditor",       "Search",
-            "DedicatedServer",    "TerrainEditor",      "PostProcessing",
-            "DialogueEditor",     "AIEditor",           "AIDebug",
-            "SplineEditor",       "ParticleEditor",     "EventMonitor",
-            "SaveSystem",         "Localization",       "WeatherFog",
-            "CinematicSequencer", "ProjectSettings",    "AudioMixer",
-            "ScriptEditor",       "DestructionEditor",  "Replay",
-            "VRConfig",           "Streaming",          "Modding",
-            "CoroutineDebug",     "GameModuleSelector", "Collaboration",
-            "TimeOfDay",          "AbilityEditor",      "TriggerEditor",
-            "ConditionEditor",    "DecalEditor",        "EventResponses",
-            "VisualScript",       "Workflows",          "Prototyping",
-            "UIDesigner",         "ScriptDebugger",
+        // On first launch, only show the essential panels that form a clean,
+        // non-overlapping workspace. All other panels can be enabled from the
+        // Window menu. This prevents the overwhelming "everything stacked on
+        // everything" experience for new users.
+        const char* visibleByDefault[] = {
+            "SceneView", "Hierarchy", "Inspector", "Console", "AssetBrowser", "GameView",
         };
 
-        for (const char* name : hiddenPanels)
+        // Start with everything hidden, then enable the defaults
+        for (auto& [name, panel] : m_panels)
+        {
+            panel->SetVisible(false);
+        }
+
+        for (const char* name : visibleByDefault)
         {
             if (m_panels.count(name))
-                m_panels[name]->SetVisible(false);
+                m_panels[name]->SetVisible(true);
         }
     }
 

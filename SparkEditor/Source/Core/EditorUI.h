@@ -178,6 +178,7 @@ namespace SparkEditor
         std::string m_currentTheme = "Spark Professional";
         bool m_showDemoWindow = false;
         bool m_firstFrame = true;
+        bool m_showWelcomeScreen = true;
         uint64_t m_frameNumber = 0;
 
         // Statistics tracking
@@ -298,6 +299,7 @@ namespace SparkEditor
         void RenderNotifications();
         void RenderPanels();
         void RenderModalDialogs();
+        void RenderWelcomeScreen();
         void SetupDefaultDockLayout(ImGuiID dockspaceId);
         void UpdateStats(float deltaTime);
         void CreatePanels();
