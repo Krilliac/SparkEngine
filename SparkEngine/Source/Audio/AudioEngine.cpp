@@ -750,6 +750,7 @@ std::string AudioEngine::Console_GetSourceInfo(uint32_t sourceID) const
 
 AudioSource* AudioEngine::GetAvailableSource()
 {
+    std::lock_guard<std::mutex> lock(m_sourceMutex);
     if (m_availableSources.empty())
         return nullptr;
     AudioSource* src = m_availableSources.back();
@@ -759,6 +760,7 @@ AudioSource* AudioEngine::GetAvailableSource()
 
 void AudioEngine::ReturnSource(AudioSource* source)
 {
+    std::lock_guard<std::mutex> lock(m_sourceMutex);
     SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Audio, source);
     source->IsPlaying = false;
     source->Sound = nullptr;
@@ -767,16 +769,22 @@ void AudioEngine::ReturnSource(AudioSource* source)
 
 void AudioEngine::UpdateSources()
 {
-    for (auto& s : m_audioSources)
+    std::vector<AudioSource*> toStop;
     {
-        if (s->IsPlaying && s->Voice)
+        std::lock_guard<std::mutex> lock(m_sourceMutex);
+        for (auto& s : m_audioSources)
         {
-            XAUDIO2_VOICE_STATE state;
-            s->Voice->GetState(&state);
-            if (state.BuffersQueued == 0)
-                StopSound(s.get());
+            if (s->IsPlaying && s->Voice)
+            {
+                XAUDIO2_VOICE_STATE state;
+                s->Voice->GetState(&state);
+                if (state.BuffersQueued == 0)
+                    toStop.push_back(s.get());
+            }
         }
     }
+    for (auto* s : toStop)
+        StopSound(s);
 }
 
 void AudioEngine::Update3DAudio()

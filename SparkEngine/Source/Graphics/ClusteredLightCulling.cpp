@@ -25,9 +25,15 @@ namespace Spark::Graphics
         m_config = config;
 
         uint32_t clusterCount = GetClusterCount();
+        if (clusterCount > 0 && clusterCount > UINT32_MAX / m_config.maxLightsPerCluster)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ClusteredLightCulling: cluster*light overflow (%u * %u)",
+                            clusterCount, m_config.maxLightsPerCluster);
+            return false;
+        }
         m_clusterAABBs.resize(clusterCount);
         m_clusterLightCounts.resize(clusterCount, 0);
-        m_clusterLightIndices.resize(clusterCount * m_config.maxLightsPerCluster, 0);
+        m_clusterLightIndices.resize(static_cast<size_t>(clusterCount) * m_config.maxLightsPerCluster, 0);
 
         m_lights.reserve(m_config.maxTotalLights);
         m_initialized = true;

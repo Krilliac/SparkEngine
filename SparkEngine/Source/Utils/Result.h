@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <string>
 #include <variant>
 #include <optional>
@@ -113,7 +114,11 @@ namespace Spark
         bool IsErr() const { return m_error.has_value(); }
         explicit operator bool() const { return IsOk(); }
 
-        const Error& GetError() const { return m_error.value(); }
+        const Error& GetError() const
+        {
+            assert(m_error.has_value() && "GetError() called on success Result");
+            return *m_error;
+        }
         std::string ErrorMessage() const
         {
             if (m_error)

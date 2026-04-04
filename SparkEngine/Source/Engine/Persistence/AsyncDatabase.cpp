@@ -545,6 +545,9 @@ namespace Spark::Persistence
 
     QueryResult AsyncDatabasePool::SyncQuery(PreparedStatementID id, std::vector<PreparedStatementParam> params)
     {
+        // Use connection[0] with a dedicated sync mutex to avoid contention with worker 0.
+        // In a production setup, a dedicated sync connection would be preferable.
+        std::lock_guard<std::mutex> lock(m_syncMutex);
         if (!m_open.load() || m_connections.empty())
         {
             QueryResult result;
@@ -552,10 +555,6 @@ namespace Spark::Persistence
             result.errorMessage = "Database pool is not open";
             return result;
         }
-
-        // Use connection[0] with a dedicated sync mutex to avoid contention with worker 0.
-        // In a production setup, a dedicated sync connection would be preferable.
-        std::lock_guard<std::mutex> lock(m_syncMutex);
         return m_connections[0]->Execute(id, params);
     }
 

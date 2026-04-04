@@ -572,8 +572,9 @@ class AudioEngine
     std::unordered_map<std::string, std::unique_ptr<SoundEffect>> m_soundEffects; ///< Loaded sound effects by name
 
     // Console integration state
-    AudioSettings m_settings;              ///< Current audio settings
-    mutable std::mutex m_metricsMutex;     ///< Thread safety for metrics access
+    AudioSettings m_settings;          ///< Current audio settings
+    mutable std::mutex m_metricsMutex; ///< Thread safety for metrics access
+    std::mutex m_sourceMutex;
     std::function<void()> m_stateCallback; ///< Callback for state changes
     uint32_t m_nextSourceID;               ///< Next unique source ID
 
