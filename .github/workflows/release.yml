@@ -192,10 +192,11 @@ jobs:
           --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
         echo "Current nightly downloads before reset: $CURRENT_DOWNLOADS"
 
-        # Read existing lifetime total from badge JSON
+        # Read existing lifetime total from data file
+        DATA_FILE=".github/badges/downloads-data.json"
         BADGE_FILE=".github/badges/downloads.json"
-        if [ -f "$BADGE_FILE" ]; then
-          LIFETIME=$(jq -r '.total // 0' "$BADGE_FILE")
+        if [ -f "$DATA_FILE" ]; then
+          LIFETIME=$(jq -r '.total // 0' "$DATA_FILE")
         else
           LIFETIME=0
         fi
@@ -208,8 +209,16 @@ jobs:
         # Format with commas for display
         FORMATTED=$(printf "%'d" "$NEW_TOTAL" 2>/dev/null || echo "$NEW_TOTAL")
 
-        # Write updated badge JSON
+        # Write data file (running total)
         mkdir -p .github/badges
+        cat > "$DATA_FILE" << EOF
+        {
+            "total": $NEW_TOTAL,
+            "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        EOF
+
+        # Write badge file (shields.io-compatible, no extra fields)
         cat > "$BADGE_FILE" << EOF
         {
             "schemaVersion": 1,
@@ -217,16 +226,14 @@ jobs:
             "message": "$FORMATTED",
             "color": "brightgreen",
             "namedLogo": "github",
-            "logoColor": "white",
-            "total": $NEW_TOTAL,
-            "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            "logoColor": "white"
         }
         EOF
 
         # Commit the updated counter
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add "$BADGE_FILE"
+        git add "$BADGE_FILE" "$DATA_FILE"
         git diff --cached --quiet && echo "No download count change" && exit 0
         git commit -m "chore: update lifetime download counter ($NEW_TOTAL) [skip ci]"
         git push origin HEAD:${{ github.ref_name }}
