@@ -1,0 +1,9 @@
+{
+    "modules": [
+        {
+            "name": "{{PROJECT_NAME}}",
+            "path": "{{PROJECT_NAME}}.dll",
+            "loadOrder": 1000
+        }
+    ]
+}

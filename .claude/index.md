@@ -34,13 +34,14 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Mac compatibility analysis (gaps, roadmap, changes) | [knowledge/mac-compatibility-analysis.md](knowledge/mac-compatibility-analysis.md) | Observation | Active | 2026-03-28 |
 | Third-party library evaluation (5 added, 7 rejected) | [knowledge/third-party-library-evaluation.md](knowledge/third-party-library-evaluation.md) | Decision | Active | 2026-03-31 |
 | Engine viability evaluation (can you make a game?) | [knowledge/engine-viability-evaluation.md](knowledge/engine-viability-evaluation.md) | Observation | Active | 2026-04-01 |
+| Project recommendations (13+3 production systems) | [knowledge/project-recommendations-2026-04-04.md](knowledge/project-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 ## Quick Reference
 
-### Current Engine State (2026-04-03)
+### Current Engine State (2026-04-04)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 244 test files, 3119 tests (all pass on native Linux)
+- **Tests**: 257 test files, 3311 tests (all pass on native Linux)
 - **Editor**: 57 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations. 6 RHI backends (D3D11, D3D12, Vulkan, OpenGL, Metal, NullRHI)
 - **Post-processing**: 14 passes (Bloom, AutoExposure, Tonemapping, ColorGrading, FXAA, DOF, MotionBlur, Vignette, ChromaticAberration, FilmGrain, LensDistortion, LightShafts, LensFlare, Sharpen)
@@ -48,7 +49,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides
 - **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame, WeatherSystem integration
-- **Codebase**: ~447K lines of C++ across 1384 source files, 88 wiki pages
+- **Codebase**: ~457K lines of C++ across 1410 source files, 88 wiki pages
 
 ### Before Writing Code
 

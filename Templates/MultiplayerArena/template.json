@@ -1,0 +1,7 @@
+{
+    "name": "MultiplayerArena",
+    "description": "Multiplayer arena with networking, lobby, and scoreboard",
+    "genre": "Multiplayer",
+    "gameModule": "SparkGameFPS",
+    "features": ["networking", "lobby", "scoreboard", "respawn", "team-system"]
+}

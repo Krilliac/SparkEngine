@@ -1,0 +1,7 @@
+{
+    "name": "RPGStarter",
+    "description": "RPG template with inventory, dialogue, and quest system",
+    "genre": "RPG",
+    "gameModule": "SparkGameRPG",
+    "features": ["inventory", "dialogue", "quests", "abilities", "save-system"]
+}
