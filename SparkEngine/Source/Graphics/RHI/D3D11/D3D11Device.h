@@ -266,6 +266,7 @@ namespace Spark
               private:
                 ID3D11DeviceContext* m_context = nullptr; ///< Non-owning; lifetime tied to parent D3D11Device
                 bool m_isImmediate;
+                IRHIPipelineState* m_currentPipeline = nullptr; ///< Last bound PSO for redundant bind elimination
             };
 
             // ============================================================================

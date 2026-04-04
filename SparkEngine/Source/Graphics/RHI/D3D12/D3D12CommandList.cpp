@@ -225,7 +225,11 @@ namespace Spark
                 auto* pso = static_cast<D3D12PipelineState*>(pipelineState);
                 if (!pso)
                     return;
-                m_commandList->SetPipelineState(pso->GetPSO());
+                ID3D12PipelineState* nativePSO = pso->GetPSO();
+                if (nativePSO == m_currentPSO)
+                    return; // Skip redundant PSO + root signature binds
+                m_currentPSO = nativePSO;
+                m_commandList->SetPipelineState(nativePSO);
                 if (pso->GetRootSignature() != m_currentRootSignature)
                 {
                     m_commandList->SetGraphicsRootSignature(pso->GetRootSignature());

@@ -322,7 +322,8 @@ namespace Spark
                 VkRenderPass m_activeRenderPass = VK_NULL_HANDLE;
                 VkFramebuffer m_activeFramebuffer = VK_NULL_HANDLE;
 
-                // Tracked pipeline layout for descriptor binding
+                // Tracked pipeline state for redundant bind elimination
+                VkPipeline m_currentPipeline = VK_NULL_HANDLE;
                 VkPipelineLayout m_currentPipelineLayout = VK_NULL_HANDLE;
 
                 // Pending resource bindings (flushed before draw/dispatch)
@@ -449,6 +450,9 @@ namespace Spark
                 uint32_t m_currentFrame = 0;
                 std::vector<VkFence> m_frameFences;
                 std::vector<VkSemaphore> m_renderFinishedSemaphores;
+
+                // Upload fence — used for async staging copies instead of vkQueueWaitIdle
+                VkFence m_uploadFence = VK_NULL_HANDLE;
 
                 // Debug utilities function pointers
                 PFN_vkCmdBeginDebugUtilsLabelEXT m_vkCmdBeginDebugUtilsLabel = nullptr;

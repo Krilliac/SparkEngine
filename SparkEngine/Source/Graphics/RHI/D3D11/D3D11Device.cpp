@@ -368,8 +368,9 @@ namespace Spark
 
             void D3D11CommandList::SetPipelineState(IRHIPipelineState* pipelineState)
             {
-                if (!pipelineState)
-                    return;
+                if (!pipelineState || pipelineState == m_currentPipeline)
+                    return; // Skip redundant pipeline bind (saves 7 D3D11 state calls)
+                m_currentPipeline = pipelineState;
                 auto* d3dPSO = static_cast<D3D11PipelineState*>(pipelineState);
 
                 m_context->IASetInputLayout(d3dPSO->GetInputLayout());

@@ -413,7 +413,9 @@ namespace Spark
             void GLCommandList::Begin() {}
             void GLCommandList::End()
             {
-                glFlush();
+                // Intentionally no glFlush() here — flushing every command list
+                // submission causes severe GPU pipeline stalls. GL commands are
+                // flushed implicitly by swap or explicitly by WaitForIdle().
             }
             void GLCommandList::Reset() {}
 
@@ -475,6 +477,9 @@ namespace Spark
                                    "GL: SetPipelineState called with null pipeline state");
                     return;
                 }
+                if (pipelineState == m_lastBoundPipeline)
+                    return; // Skip redundant GL state changes
+                m_lastBoundPipeline = pipelineState;
                 auto* glPSO = static_cast<GLPipelineState*>(pipelineState);
 
                 m_currentProgram = glPSO->GetGLProgram();

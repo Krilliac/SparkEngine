@@ -919,9 +919,15 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
     if (localDrawList.empty())
         return;
 
+    // Sort by material to minimize state changes (material binds are expensive).
+    // Grouping draws by material reduces shader/texture rebinds significantly.
+    std::sort(localDrawList.begin(), localDrawList.end(),
+              [](const MeshDrawCommand& a, const MeshDrawCommand& b) { return a.materialPath < b.materialPath; });
+
     // Set up shaders for ECS mesh rendering
     SetBasicShaders();
 
+    std::string_view lastMaterial;
     for (const auto& cmd : localDrawList)
     {
         XMMATRIX world = XMLoadFloat4x4(&cmd.worldMatrix);
@@ -933,7 +939,12 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
         if (m_assetPipeline)
         {
             m_assetPipeline->BindMesh(std::string(cmd.meshPath));
-            m_assetPipeline->BindMaterial(std::string(cmd.materialPath));
+            // Only rebind material when it changes (sorted order)
+            if (cmd.materialPath != lastMaterial)
+            {
+                m_assetPipeline->BindMaterial(std::string(cmd.materialPath));
+                lastMaterial = cmd.materialPath;
+            }
             m_assetPipeline->DrawBoundMesh();
         }
 
@@ -948,14 +959,15 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
 void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
                                  const std::vector<GameObject*>& objects)
 {
-    std::vector<GameObject*> culledObjects;
+    // Reuse persistent buffer to avoid per-frame allocation
+    m_culledObjectsBuffer.clear();
     const std::vector<GameObject*>* visibleObjectsPtr = &objects;
 
     if (m_settings.frustumCulling)
     {
-        culledObjects.reserve(objects.size());
-        CullObjects(objects, viewMatrix, projMatrix, culledObjects);
-        visibleObjectsPtr = &culledObjects;
+        m_culledObjectsBuffer.reserve(objects.size());
+        CullObjects(objects, viewMatrix, projMatrix, m_culledObjectsBuffer);
+        visibleObjectsPtr = &m_culledObjectsBuffer;
     }
 
     const auto& visibleObjects = *visibleObjectsPtr;

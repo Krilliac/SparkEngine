@@ -1097,15 +1097,16 @@ namespace Spark
                                                           D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 m_immediateCommandList->End();
 
-                // Execute and wait
+                // Execute with fence — only waits for this upload, not all GPU work
                 ID3D12CommandList* lists[] = {m_immediateCommandList->GetCommandList()};
                 m_directQueue->ExecuteCommandLists(1, lists);
-                WaitForIdle();
+                uint64_t uploadFenceVal = m_frameFence.Signal(m_directQueue.Get());
+                m_frameFence.WaitForValue(uploadFenceVal);
 
-                // Queue upload buffer for deferred release
+                // Queue upload buffer for deferred release at this fence value
                 {
                     std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                    m_deferredReleaseQueue.push({uploadBuffer, m_frameFence.GetCurrentValue()});
+                    m_deferredReleaseQueue.push({uploadBuffer, uploadFenceVal});
                 }
             }
 

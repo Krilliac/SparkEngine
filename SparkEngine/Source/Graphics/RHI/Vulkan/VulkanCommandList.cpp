@@ -391,7 +391,11 @@ namespace Spark
                 if (!pipelineState)
                     return;
                 auto* vkPSO = static_cast<VulkanPipelineState*>(pipelineState);
-                vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vkPSO->GetVkPipeline());
+                VkPipeline pipeline = vkPSO->GetVkPipeline();
+                if (pipeline == m_currentPipeline)
+                    return; // Skip redundant pipeline bind
+                vkCmdBindPipeline(m_commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                m_currentPipeline = pipeline;
                 m_currentPipelineLayout = vkPSO->GetVkLayout();
                 if (m_statistics)
                 {

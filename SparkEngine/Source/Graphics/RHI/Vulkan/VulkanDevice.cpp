@@ -225,6 +225,12 @@ namespace Spark
                         return false;
                 }
 
+                // Upload fence for async staging copies (avoids vkQueueWaitIdle stalls)
+                VkFenceCreateInfo uploadFenceInfo = {};
+                uploadFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+                if (vkCreateFence(m_device, &uploadFenceInfo, nullptr, &m_uploadFence) != VK_SUCCESS)
+                    return false;
+
                 // Load debug utility function pointers if validation is enabled
                 if (m_validationEnabled)
                 {
@@ -881,6 +887,11 @@ namespace Spark
 
                 m_immediateCommandList.reset();
 
+                // Destroy upload fence
+                if (m_uploadFence != VK_NULL_HANDLE)
+                    vkDestroyFence(m_device, m_uploadFence, nullptr);
+                m_uploadFence = VK_NULL_HANDLE;
+
                 // Destroy per-frame synchronization
                 for (auto fence : m_frameFences)
                 {
@@ -1078,8 +1089,9 @@ namespace Spark
                                 submitInfo.commandBufferCount = 1;
                                 submitInfo.pCommandBuffers = &cmdBuffer;
 
-                                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-                                vkQueueWaitIdle(m_graphicsQueue);
+                                vkResetFences(m_device, 1, &m_uploadFence);
+                                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
+                                vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, UINT64_MAX);
 
                                 vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
                                 vkFreeMemory(m_device, stagingMemory, nullptr);
@@ -1584,8 +1596,9 @@ namespace Spark
                 submitInfo.commandBufferCount = 1;
                 submitInfo.pCommandBuffers = &cmdBuffer;
 
-                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-                vkQueueWaitIdle(m_graphicsQueue);
+                vkResetFences(m_device, 1, &m_uploadFence);
+                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
+                vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, UINT64_MAX);
 
                 vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
                 vkDestroyBuffer(m_device, stagingBuffer, nullptr);
