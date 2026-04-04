@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*280 test files, 3534+ test cases*
+*283 test files, 3563+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -579,6 +579,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCoverSystem` | 4 |
 | `TestDatablockRegistry` | 10 |
 | `TestDayNightCycle` | 10 |
+| `TestDeadlockDetector` | 8 |
 | `TestDebugHookManager` | 27 |
 | `TestDebugTools` | 36 |
 | `TestDebugUtilities` | 28 |
@@ -702,6 +703,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestObjectPool` | 6 |
 | `TestOcclusionCulling` | 6 |
 | `TestOpaqueHandle` | 7 |
+| `TestPacketValidator` | 10 |
 | `TestParallelCulling` | 5 |
 | `TestPathCache` | 6 |
 | `TestPerceptionSystemMath` | 25 |
@@ -748,6 +750,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestScreenSpaceEffects` | 16 |
 | `TestScriptHookManager` | 15 |
 | `TestScriptHotReload` | 16 |
+| `TestScriptSandbox` | 11 |
 | `TestSeamlessAreaManager` | 12 |
 | `TestSelfRecovery` | 16 |
 | `TestSequencer` | 10 |

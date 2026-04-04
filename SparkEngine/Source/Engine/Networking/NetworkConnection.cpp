@@ -743,6 +743,18 @@ namespace Spark::Net
             if (!DeserializeMessage(rawData.data(), rawData.size(), msg))
                 continue;
 
+            // Validate the packet against registered schemas
+            {
+                bool isAuthenticated = (msg.senderID != INVALID_CLIENT);
+                bool isFromClient = (m_role == NetworkRole::Server);
+                auto validation = m_packetValidator.ValidatePacket(msg, isAuthenticated, isFromClient);
+                if (!validation.valid)
+                {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Packet rejected: %s", validation.reason.c_str());
+                    continue;
+                }
+            }
+
             // On the server, map sender address to a client ID
             if (m_role == NetworkRole::Server)
             {

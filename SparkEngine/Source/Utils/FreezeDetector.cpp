@@ -6,6 +6,7 @@
 #include "../Core/Platform.h"
 #include "Utils/FreezeDetector.h"
 #include "Utils/CrashHandler.h"
+#include "Utils/DeadlockDetector.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/StackTrace.h"
 
@@ -162,6 +163,13 @@ namespace Spark
         m_totalWarnings.fetch_add(1, std::memory_order_relaxed);
 
         std::fprintf(stderr, "[FreezeDetector] WARNING: Main loop unresponsive for %.1f seconds\n", elapsed);
+
+        // Check if the freeze is caused by a deadlock
+        auto deadlock = DeadlockDetector::GetInstance().CheckForDeadlock();
+        if (deadlock)
+        {
+            std::fprintf(stderr, "[FreezeDetector] %s", deadlock->description.c_str());
+        }
     }
 
     void FreezeDetector::OnRecoveryAttempt(float elapsed)
