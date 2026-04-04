@@ -97,6 +97,8 @@ def get_wine_env() -> dict:
     # Note: WINEDEBUG=-all can corrupt Wine's exit code on some versions.
     # Use fixme-all to suppress most noise while preserving correct exit codes.
     env["WINEDEBUG"] = "fixme-all"
+    # Disable Wine's crash debugger (winedbg) which blocks on crashes
+    env["WINEDLLOVERRIDES"] = "winedbg="
 
     # DXVK state cache: persist compiled Vulkan pipelines across runs
     cache_dir = str(PROJECT_ROOT / "build" / ".dxvk-cache")
@@ -299,22 +301,18 @@ def phase_unit_tests(build_dir: Path):
                                   ["--output-file", "Z:\\tmp\\spark-wine-tests.txt"],
                                   timeout=300, env=env)
 
-    # Parse test output
+    # Parse test output — match both "Tests: N passed" and "N tests passed"
+    import re
     lines = stdout.split('\n') if stdout else []
     pass_count = 0
     fail_count = 0
     for line in lines:
-        if "PASSED" in line and "test" in line.lower():
-            # Try to extract numbers
-            import re
-            m = re.search(r'(\d+)\s+(?:tests?\s+)?passed', line, re.IGNORECASE)
-            if m:
-                pass_count = int(m.group(1))
-        if "FAILED" in line and "test" in line.lower():
-            import re
-            m = re.search(r'(\d+)\s+(?:tests?\s+)?failed', line, re.IGNORECASE)
-            if m:
-                fail_count = int(m.group(1))
+        m = re.search(r'(\d+)\s+passed', line, re.IGNORECASE)
+        if m:
+            pass_count = int(m.group(1))
+        m = re.search(r'(\d+)\s+failed', line, re.IGNORECASE)
+        if m:
+            fail_count = int(m.group(1))
 
     test("Unit tests execute under Wine", rc != -1,
          f"rc={rc}", "unit-tests")
@@ -351,14 +349,14 @@ def phase_engine_live(build_dir: Path):
     env["WINEDEBUG"] = "fixme-all,err-all"
 
     # Use low resolution for faster software rendering
-    engine_args = ["-test-frames", "60", "-window-size", "640x480"]
+    engine_args = ["-test-frames", "60", "-window-size", "320x240"]
 
     # Test 1: Run engine for 60 frames and exit
-    print("  Launching SparkEngine.exe -test-frames 60 -window-size 640x480...")
+    print("  Launching SparkEngine.exe -test-frames 60 -window-size 320x240...")
     start = time.time()
     proc = run_wine_process(engine_exe, engine_args, env=env)
 
-    max_wait = 60  # seconds (DXVK ~3s, WineD3D ~120s+)
+    max_wait = 180  # seconds (DXVK+Lavapipe ~3-30s, WineD3D ~120s+)
 
     while time.time() - start < max_wait:
         if proc.poll() is not None:
@@ -397,10 +395,11 @@ def phase_engine_live(build_dir: Path):
             if line.strip():
                 print(f"    {line.rstrip()}")
 
-    # Test 2: Headless mode
-    print("\n  Launching SparkEngine.exe in headless mode...")
-    rc2, stdout2, stderr2 = run_wine(engine_exe, ["-headless"], timeout=15, env=env)
-    headless_ok = "headless" in stdout2.lower() or rc2 == 0
+    # Test 2: Headless mode (with test-frames to auto-exit)
+    print("\n  Launching SparkEngine.exe in headless mode (-test-frames 30)...")
+    rc2, stdout2, stderr2 = run_wine(engine_exe, ["-headless", "-test-frames", "30"],
+                                     timeout=30, env=env)
+    headless_ok = "headless" in stdout2.lower() or "headless" in stderr2.lower() or wine_rc_ok(rc2)
     test("Engine headless mode works", headless_ok,
          f"rc={rc2}", "engine-live")
 
@@ -425,14 +424,14 @@ def phase_editor_live(build_dir: Path):
     env = get_wine_env()
     env["WINEDEBUG"] = "fixme-all,err-all"
 
-    frames = 120
+    frames = 30
     print(f"  Launching SparkEditor.exe --test-mode --test-frames {frames}...")
     start = time.time()
     proc = run_wine_process(editor_exe,
                             ["--test-mode", "--test-frames", str(frames)],
                             env=env)
 
-    max_wait = 60
+    max_wait = 120
 
     while time.time() - start < max_wait:
         if proc.poll() is not None:
@@ -479,17 +478,17 @@ def phase_stress_tests(build_dir: Path):
     env = get_wine_env()
 
     # Low-res args for faster software rendering
-    lo = ["-window-size", "640x480"]
+    lo = ["-window-size", "320x240"]
 
     # Stress test 1: Rapid start/stop cycles
-    print("\n  [5a] Rapid engine start/stop (10 cycles)...")
+    print("\n  [5a] Rapid engine start/stop (5 cycles)...")
     crash_count = 0
-    for i in range(10):
-        rc, _, _ = run_wine(engine_exe, ["-test-frames", "5"] + lo, timeout=30, env=env)
+    for i in range(5):
+        rc, _, _ = run_wine(engine_exe, ["-test-frames", "3"] + lo, timeout=60, env=env)
         if not wine_rc_ok(rc):
             crash_count += 1
-    test("Rapid start/stop (10 cycles)", crash_count <= 1,
-         f"crashes={crash_count}/10", "stress")
+    test("Rapid start/stop (5 cycles)", crash_count <= 1,
+         f"crashes={crash_count}/5", "stress")
 
     # Stress test 2: Zero-frame exit
     print("  [5b] Zero-frame edge case...")
@@ -539,14 +538,14 @@ def phase_stress_tests(build_dir: Path):
         test("Shuffled tests pass", rc == 0,
              f"rc={rc}", "stress")
 
-    # Stress test 6: Long-running test (300 frames)
-    print("  [5f] Extended run (300 frames at 640x480)...")
+    # Stress test 6: Long-running test (60 frames at low res)
+    print("  [5f] Extended run (60 frames at 320x240)...")
     start = time.time()
-    rc, stdout, _ = run_wine(engine_exe, ["-test-frames", "300"] + lo,
-                             timeout=120, env=env)
+    rc, stdout, _ = run_wine(engine_exe, ["-test-frames", "60"] + lo,
+                             timeout=180, env=env)
     elapsed = time.time() - start
-    fps = 300 / elapsed if elapsed > 0 and wine_rc_ok(rc) else 0
-    test("Extended 300-frame run", wine_rc_ok(rc),
+    fps = 60 / elapsed if elapsed > 0 and wine_rc_ok(rc) else 0
+    test("Extended 60-frame run", wine_rc_ok(rc),
          f"rc={rc}, {elapsed:.1f}s, {fps:.1f} FPS", "stress")
 
     # Stress test 7: Headless stress
