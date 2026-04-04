@@ -129,6 +129,7 @@ add_executable(SparkTests
     TestSkyAtmosphere.cpp
     TestWaterRenderer.cpp
     TestOcclusionCulling.cpp
+    TestPortalCulling.cpp
     TestPoseModifier.cpp
     TestAnimationCompression.cpp
     TestBlendSpace.cpp

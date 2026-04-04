@@ -8,24 +8,24 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 240828 |
-| **SparkEditor/Source** | 82887 |
+| **SparkEngine/Source** | 241433 |
+| **SparkEditor/Source** | 82889 |
 | **GameModules** | 57421 |
-| **Tests** | 86358 |
+| **Tests** | 86860 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~469885** |
+| **Total C++ (excl. ThirdParty)** | **~470994** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 696 |
-| Implementation files (.cpp) | 768 |
+| Header files (.h/.hpp) | 697 |
+| Implementation files (.cpp) | 770 |
 | HLSL shader files | 32 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 280 |
+| Test files (.cpp) | 281 |
 | Wiki pages (.md) | 101 |
 
 ### Code Density
@@ -34,7 +34,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |--------|-------|
 | Average lines per .cpp file | ~860 |
 | Average lines per .h file | ~570 |
-| Largest codebase section | Graphics (95851 lines — 39% of SparkEngine/Source) |
+| Largest codebase section | Graphics (96453 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 95851 | 39.8% |
-| Engine (all subsystems) | 71184 | 29.5% |
+| Graphics | 96453 | 39.9% |
+| Engine (all subsystems) | 71184 | 29.4% |
 | Utils | 32004 | 13.2% |
-| Core | 17320 | 7.1% |
+| Core | 17323 | 7.1% |
 | Physics | 10087 | 4.1% |
 | Audio | 5520 | 2.2% |
 | Input | 3345 | 1.3% |
@@ -99,14 +99,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 57 |
-| Total editor lines | 82887 |
+| Total editor lines | 82889 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 280 |
-| TEST() definitions | 3520 |
+| Test files | 281 |
+| TEST() definitions | 3534 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
