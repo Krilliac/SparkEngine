@@ -64,8 +64,10 @@ struct asSMessageInfo;
 #endif // SPARK_ANGELSCRIPT_SUPPORT
 
 #include <unordered_map>
+#include <memory>
 #include <string>
 #include "../ECS/Components.h"
+#include "ScriptSandbox.h"
 
 /**
  * @brief High-level AngelScript engine wrapper for gameplay scripting
@@ -195,6 +197,12 @@ class AngelScriptEngine
     std::string GetLastError() const { return m_lastError; }
 
     /**
+     * @brief Get the script execution sandbox
+     * @return Pointer to the ScriptSandbox, or nullptr if not initialized
+     */
+    Spark::ScriptSandbox* GetSandbox() { return m_sandbox.get(); }
+
+    /**
      * @brief Get the global singleton instance
      * @return Pointer to the AngelScriptEngine instance, or nullptr if not created
      */
@@ -245,6 +253,7 @@ class AngelScriptEngine
 
     std::unordered_map<EntityID, ScriptInstance> m_entityScripts; ///< Active script instances by entity ID
     std::string m_lastError;                                      ///< Last error message from AS engine
+    std::unique_ptr<Spark::ScriptSandbox> m_sandbox;              ///< Script execution sandbox
 
     // ========================================================================
     // Engine API Registration (called during Initialize)

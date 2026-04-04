@@ -52,6 +52,7 @@
 #include "Utils/Logger.h"
 #include "Utils/JobSystem.h"
 #include "Utils/FreezeDetector.h"
+#include "Utils/DeadlockDetector.h"
 #include "Utils/HitchDetector.h"
 #include "Utils/AssetStallDetector.h"
 #include "Utils/NetworkHealthMonitor.h"
@@ -541,6 +542,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     LoadHeadlessModules(lpCmdLine);
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
     Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
@@ -730,6 +732,7 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
     Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
@@ -1344,6 +1347,7 @@ static int RunHeadlessLinux(int argc, char* argv[])
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
     Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();

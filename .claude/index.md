@@ -43,7 +43,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 281 test files, 3534 tests (all pass on native Linux)
+- **Tests**: 284 test files, 3563 tests (all pass on native Linux)
 - **Editor**: 57 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations. 6 RHI backends (D3D11, D3D12, Vulkan, OpenGL, Metal, NullRHI)
 - **Post-processing**: 14 passes (Bloom, AutoExposure, Tonemapping, ColorGrading, FXAA, DOF, MotionBlur, Vignette, ChromaticAberration, FilmGrain, LensDistortion, LightShafts, LensFlare, Sharpen)
@@ -51,7 +51,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides
 - **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame, WeatherSystem integration
-- **Codebase**: ~471K lines of C++ across 1457 source files, 101 wiki pages
+- **Codebase**: ~473K lines of C++ across 1466 source files, 101 wiki pages
 
 ### Before Writing Code
 

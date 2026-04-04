@@ -405,6 +405,11 @@ bool AngelScriptEngine::Initialize()
     RegisterStandardLibrary();
     RegisterEngineAPI();
 
+    // Initialize the script sandbox for execution limits and access control
+    m_sandbox = std::make_unique<Spark::ScriptSandbox>();
+    m_sandbox->RegisterConsoleCommands();
+    LogInfo("Script sandbox initialized (security level: Standard).");
+
     s_instance = this;
     LogInfo("Initialized successfully.");
     return true;
@@ -739,12 +744,29 @@ void AngelScriptEngine::CallStart(EntityID entity)
     if (!inst || !inst->startMethod || !inst->context)
         return;
 
+    if (m_sandbox)
+    {
+        m_sandbox->BeginExecution(inst->className + "::Start");
+        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
+    }
+
     inst->context->Prepare(inst->startMethod);
     inst->context->SetObject(inst->object);
     int result = inst->context->Execute();
+
+    if (m_sandbox)
+    {
+        m_sandbox->EndExecution();
+    }
+
     if (result == asEXECUTION_EXCEPTION)
     {
         SetLastError(std::string("Exception in Start(): ") + inst->context->GetExceptionString());
+        LogError(m_lastError);
+    }
+    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
+    {
+        SetLastError("Start() terminated by sandbox");
         LogError(m_lastError);
     }
 }
@@ -755,13 +777,30 @@ void AngelScriptEngine::CallUpdate(EntityID entity, float deltaTime)
     if (!inst || !inst->updateMethod || !inst->context)
         return;
 
+    if (m_sandbox)
+    {
+        m_sandbox->BeginExecution(inst->className + "::Update");
+        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
+    }
+
     inst->context->Prepare(inst->updateMethod);
     inst->context->SetObject(inst->object);
     inst->context->SetArgFloat(0, deltaTime);
     int result = inst->context->Execute();
+
+    if (m_sandbox)
+    {
+        m_sandbox->EndExecution();
+    }
+
     if (result == asEXECUTION_EXCEPTION)
     {
         SetLastError(std::string("Exception in Update(): ") + inst->context->GetExceptionString());
+        LogError(m_lastError);
+    }
+    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
+    {
+        SetLastError("Update() terminated by sandbox");
         LogError(m_lastError);
     }
 }
@@ -772,13 +811,30 @@ void AngelScriptEngine::CallOnCollision(EntityID entity, EntityID other)
     if (!inst || !inst->onCollisionMethod || !inst->context)
         return;
 
+    if (m_sandbox)
+    {
+        m_sandbox->BeginExecution(inst->className + "::OnCollision");
+        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
+    }
+
     inst->context->Prepare(inst->onCollisionMethod);
     inst->context->SetObject(inst->object);
     inst->context->SetArgDWord(0, static_cast<asDWORD>(other));
     int result = inst->context->Execute();
+
+    if (m_sandbox)
+    {
+        m_sandbox->EndExecution();
+    }
+
     if (result == asEXECUTION_EXCEPTION)
     {
         SetLastError(std::string("Exception in OnCollision(): ") + inst->context->GetExceptionString());
+        LogError(m_lastError);
+    }
+    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
+    {
+        SetLastError("OnCollision() terminated by sandbox");
         LogError(m_lastError);
     }
 }

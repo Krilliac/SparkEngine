@@ -34,6 +34,7 @@
 #include <atomic>
 #include <array>
 #include "NetworkInterpolation.h"
+#include "PacketValidator.h"
 
 #ifdef ENABLE_NETWORKING
 
@@ -436,6 +437,9 @@ namespace Spark::Net
             m_reconnectFailedCallback = std::move(callback);
         }
 
+        /// Get the packet validator for configuration
+        PacketValidator& GetPacketValidator() { return m_packetValidator; }
+
         /// Console integration
         std::string Console_GetStatus() const;
         std::string Console_ListClients() const;
@@ -500,6 +504,7 @@ namespace Spark::Net
 
         NetworkStats m_stats;
         LagCompensator m_lagCompensator;
+        PacketValidator m_packetValidator; ///< Validates incoming packets against schemas
 
         // Clients (server-side)
         std::unordered_map<ClientID, ClientInfo> m_clients;
