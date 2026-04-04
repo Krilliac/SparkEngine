@@ -63,7 +63,7 @@ namespace SparkEditor
             else
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Editor, "Entity %llu not found in scene for prefab creation",
-                               entityId);
+                               static_cast<unsigned long long>(entityId));
             }
         }
 
@@ -152,7 +152,7 @@ namespace SparkEditor
         static uint64_t nextFallbackId = 1000;
         uint64_t entityId = nextFallbackId++;
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Instantiated prefab '%s' as entity %llu (no scene)",
-                       prefabName.c_str(), entityId);
+                       prefabName.c_str(), static_cast<unsigned long long>(entityId));
         RegisterInstance(entityId, prefabName);
         return entityId;
     }

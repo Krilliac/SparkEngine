@@ -167,6 +167,8 @@ namespace Platformer
                 case CollectibleType::ExtraLife:
                     // These are handled by the player controller via callbacks
                     break;
+                default:
+                    break;
                 }
             }
         }
