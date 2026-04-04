@@ -651,3 +651,380 @@ namespace Spark
         } // namespace UpscalingUtils
     } // namespace Graphics
 } // namespace Spark
+
+// =============================================================================
+// UpscalingSystem — Out-of-line method definitions
+// =============================================================================
+
+void UpscalingSystem::DetectFeatures()
+{
+    // DLSS detection — requires NVIDIA GPU + runtime DLL
+    m_dlssFeatureInfo.isAvailable = Spark::Graphics::UpscalingUtils::DetectDLSSAvailability();
+
+    // XeSS detection — works on any DP4a GPU, accelerated on Intel Arc
+    m_xessFeatureInfo.isAvailable = Spark::Graphics::UpscalingUtils::DetectXeSSAvailability();
+
+    // FSR 2.0 is a software solution that works on any GPU (no DLL required)
+    m_fsr2Available = true;
+}
+
+bool UpscalingSystem::CreateGPUResources()
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    if (!m_device)
+    {
+        return false;
+    }
+
+    // Create constant buffers for FSR 1.0
+    D3D11_BUFFER_DESC cbDesc = {};
+    cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    cbDesc.MiscFlags = 0;
+
+    cbDesc.ByteWidth = sizeof(FSR1EASUConstants);
+    HRESULT hr = m_device->CreateBuffer(&cbDesc, nullptr, m_fsr1EASUConstantBuffer.ReleaseAndGetAddressOf());
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    cbDesc.ByteWidth = sizeof(FSR1RCASConstants);
+    hr = m_device->CreateBuffer(&cbDesc, nullptr, m_fsr1RCASConstantBuffer.ReleaseAndGetAddressOf());
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    // Create SparkSR constant buffer
+    cbDesc.ByteWidth = sizeof(SparkSRConstants);
+    hr = m_device->CreateBuffer(&cbDesc, nullptr, m_sparkSRConstantBuffer.ReleaseAndGetAddressOf());
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    // Create linear clamp sampler for upscaling shaders
+    D3D11_SAMPLER_DESC samplerDesc = {};
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+    hr = m_device->CreateSamplerState(&samplerDesc, m_linearClampSampler.ReleaseAndGetAddressOf());
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    // Compile upscaling compute shaders
+    if (!CompileUpscalingShaders())
+    {
+        return false;
+    }
+
+    // Create intermediate texture at display resolution
+    RecreateUpscalingResources();
+
+    return true;
+#else
+    // No GPU resources needed on non-Windows platforms
+    return true;
+#endif
+}
+
+bool UpscalingSystem::CompileUpscalingShaders()
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    if (!m_device)
+    {
+        return false;
+    }
+
+    // FSR 1.0 shaders
+    if (!Spark::Graphics::UpscalingUtils::CreateFSR1Shaders(m_device, m_fsr1EASUShader.ReleaseAndGetAddressOf(),
+                                                            m_fsr1RCASShader.ReleaseAndGetAddressOf()))
+    {
+        return false;
+    }
+
+    // SparkSR temporal shader
+    Spark::Graphics::UpscalingUtils::CreateSparkSRShader(m_device, m_sparkSRTemporalCS.ReleaseAndGetAddressOf());
+
+    m_shadersCompiled = true;
+    return true;
+#else
+    return true;
+#endif
+}
+
+void UpscalingSystem::RecreateUpscalingResources()
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    if (!m_device || m_displayWidth == 0 || m_displayHeight == 0)
+    {
+        return;
+    }
+
+    // Release existing intermediate resources
+    m_intermediateTexture.Reset();
+    m_intermediateSRV.Reset();
+    m_intermediateUAV.Reset();
+
+    // Create intermediate texture at display resolution for multi-pass upscaling
+    D3D11_TEXTURE2D_DESC texDesc = {};
+    texDesc.Width = m_displayWidth;
+    texDesc.Height = m_displayHeight;
+    texDesc.MipLevels = 1;
+    texDesc.ArraySize = 1;
+    texDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.Usage = D3D11_USAGE_DEFAULT;
+    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+
+    HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, m_intermediateTexture.ReleaseAndGetAddressOf());
+    if (FAILED(hr))
+    {
+        return;
+    }
+
+    m_device->CreateShaderResourceView(m_intermediateTexture.Get(), nullptr,
+                                       m_intermediateSRV.ReleaseAndGetAddressOf());
+    m_device->CreateUnorderedAccessView(m_intermediateTexture.Get(), nullptr,
+                                        m_intermediateUAV.ReleaseAndGetAddressOf());
+
+    // Recreate temporal history texture for FSR2/SparkSR
+    m_temporalHistoryTexture.Reset();
+    m_temporalHistorySRV.Reset();
+    m_temporalHistoryUAV.Reset();
+
+    hr = m_device->CreateTexture2D(&texDesc, nullptr, m_temporalHistoryTexture.ReleaseAndGetAddressOf());
+    if (SUCCEEDED(hr))
+    {
+        m_device->CreateShaderResourceView(m_temporalHistoryTexture.Get(), nullptr,
+                                           m_temporalHistorySRV.ReleaseAndGetAddressOf());
+        m_device->CreateUnorderedAccessView(m_temporalHistoryTexture.Get(), nullptr,
+                                            m_temporalHistoryUAV.ReleaseAndGetAddressOf());
+    }
+
+    // Recreate lock texture for luminance locking
+    m_lockTexture.Reset();
+    m_lockSRV.Reset();
+    m_lockUAV.Reset();
+
+    texDesc.Format = DXGI_FORMAT_R16_FLOAT;
+    hr = m_device->CreateTexture2D(&texDesc, nullptr, m_lockTexture.ReleaseAndGetAddressOf());
+    if (SUCCEEDED(hr))
+    {
+        m_device->CreateShaderResourceView(m_lockTexture.Get(), nullptr, m_lockSRV.ReleaseAndGetAddressOf());
+        m_device->CreateUnorderedAccessView(m_lockTexture.Get(), nullptr, m_lockUAV.ReleaseAndGetAddressOf());
+    }
+#endif
+}
+
+void UpscalingSystem::UnbindComputeResources()
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    if (!m_context)
+    {
+        return;
+    }
+
+    ID3D11ShaderResourceView* nullSRVs[4] = {nullptr, nullptr, nullptr, nullptr};
+    ID3D11UnorderedAccessView* nullUAVs[2] = {nullptr, nullptr};
+    ID3D11Buffer* nullCBs[1] = {nullptr};
+    ID3D11SamplerState* nullSamplers[1] = {nullptr};
+
+    m_context->CSSetShaderResources(0, 4, nullSRVs);
+    m_context->CSSetUnorderedAccessViews(0, 2, nullUAVs, nullptr);
+    m_context->CSSetConstantBuffers(0, 1, nullCBs);
+    m_context->CSSetSamplers(0, 1, nullSamplers);
+    m_context->CSSetShader(nullptr, nullptr, 0);
+#endif
+}
+
+// =============================================================================
+// Execute methods — per-backend upscaling dispatch
+// =============================================================================
+
+void UpscalingSystem::ExecuteFSR1([[maybe_unused]] ID3D11ShaderResourceView* inputColorSRV,
+                                  [[maybe_unused]] ID3D11UnorderedAccessView* outputUAV)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    if (!m_context || !m_fsr1EASUShader || !m_fsr1RCASShader || !inputColorSRV || !outputUAV)
+    {
+        return;
+    }
+
+    // Calculate EASU constants
+    auto easuConst = Spark::Graphics::UpscalingUtils::CalculateEASUConstants(m_renderWidth, m_renderHeight,
+                                                                             m_displayWidth, m_displayHeight);
+    auto rcasConst = Spark::Graphics::UpscalingUtils::CalculateRCASConstants(m_settings.sharpness);
+    UpdateFSR1Constants(&easuConst, &rcasConst);
+
+    auto [groupX, groupY] = Spark::Graphics::UpscalingUtils::CalculateDispatchGroups(m_displayWidth, m_displayHeight);
+
+    // Pass 1: EASU — edge-adaptive spatial upsampling (input → intermediate)
+    m_context->CSSetShader(m_fsr1EASUShader.Get(), nullptr, 0);
+    m_context->CSSetShaderResources(0, 1, &inputColorSRV);
+    ID3D11UnorderedAccessView* intermediateUAV = m_intermediateUAV.Get();
+    m_context->CSSetUnorderedAccessViews(0, 1, &intermediateUAV, nullptr);
+    ID3D11Buffer* easuCB = m_fsr1EASUConstantBuffer.Get();
+    m_context->CSSetConstantBuffers(0, 1, &easuCB);
+    ID3D11SamplerState* sampler = m_linearClampSampler.Get();
+    m_context->CSSetSamplers(0, 1, &sampler);
+    m_context->Dispatch(groupX, groupY, 1);
+
+    // Unbind between passes
+    UnbindComputeResources();
+
+    // Pass 2: RCAS — robust contrast-adaptive sharpening (intermediate → output)
+    m_context->CSSetShader(m_fsr1RCASShader.Get(), nullptr, 0);
+    ID3D11ShaderResourceView* intermediateSRV = m_intermediateSRV.Get();
+    m_context->CSSetShaderResources(0, 1, &intermediateSRV);
+    m_context->CSSetUnorderedAccessViews(0, 1, &outputUAV, nullptr);
+    ID3D11Buffer* rcasCB = m_fsr1RCASConstantBuffer.Get();
+    m_context->CSSetConstantBuffers(0, 1, &rcasCB);
+    m_context->CSSetSamplers(0, 1, &sampler);
+    m_context->Dispatch(groupX, groupY, 1);
+
+    UnbindComputeResources();
+#endif
+}
+
+void UpscalingSystem::ExecuteFSR2([[maybe_unused]] const FSR2DispatchDescription& desc)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    // FSR 2.0 requires the FidelityFX SDK which is not yet linked.
+    // Fall through to the built-in temporal upscaler as a placeholder.
+    if (!m_context || !desc.colorSRV || !desc.outputUAV)
+    {
+        return;
+    }
+
+    // Use SparkSR temporal path as FSR2 fallback
+    ExecuteSparkSR(desc.colorSRV, desc.depthSRV, desc.motionVectorsSRV, desc.exposureSRV, desc.reactiveMaskSRV,
+                   desc.outputUAV, desc.jitterOffset, desc.resetAccumulation);
+#endif
+}
+
+void UpscalingSystem::ExecuteDLSS([[maybe_unused]] ID3D11ShaderResourceView* colorSRV,
+                                  [[maybe_unused]] ID3D11ShaderResourceView* depthSRV,
+                                  [[maybe_unused]] ID3D11ShaderResourceView* motionVectorsSRV,
+                                  [[maybe_unused]] ID3D11ShaderResourceView* exposureSRV,
+                                  [[maybe_unused]] ID3D11UnorderedAccessView* outputUAV,
+                                  [[maybe_unused]] const XMFLOAT2& jitterOffset, [[maybe_unused]] bool resetHistory)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    // DLSS requires the NVIDIA NGX SDK which is not yet linked.
+    // Fall through to SparkSR temporal upscaler as a placeholder.
+    if (!m_context || !colorSRV || !outputUAV)
+    {
+        return;
+    }
+
+    ExecuteSparkSR(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, nullptr, outputUAV, jitterOffset, resetHistory);
+#endif
+}
+
+void UpscalingSystem::ExecuteXeSS([[maybe_unused]] ID3D11ShaderResourceView* colorSRV,
+                                  [[maybe_unused]] ID3D11ShaderResourceView* depthSRV,
+                                  [[maybe_unused]] ID3D11ShaderResourceView* motionVectorsSRV,
+                                  [[maybe_unused]] ID3D11ShaderResourceView* exposureSRV,
+                                  [[maybe_unused]] ID3D11UnorderedAccessView* outputUAV,
+                                  [[maybe_unused]] const XMFLOAT2& jitterOffset)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    // XeSS requires the Intel XeSS SDK which is not yet linked.
+    // Fall through to SparkSR temporal upscaler as a placeholder.
+    if (!m_context || !colorSRV || !outputUAV)
+    {
+        return;
+    }
+
+    ExecuteSparkSR(colorSRV, depthSRV, motionVectorsSRV, exposureSRV, nullptr, outputUAV, jitterOffset);
+#endif
+}
+
+void UpscalingSystem::ExecuteSparkSR([[maybe_unused]] ID3D11ShaderResourceView* colorSRV,
+                                     [[maybe_unused]] ID3D11ShaderResourceView* depthSRV,
+                                     [[maybe_unused]] ID3D11ShaderResourceView* motionVectorsSRV,
+                                     [[maybe_unused]] ID3D11ShaderResourceView* exposureSRV,
+                                     [[maybe_unused]] ID3D11ShaderResourceView* reactiveMaskSRV,
+                                     [[maybe_unused]] ID3D11UnorderedAccessView* outputUAV,
+                                     [[maybe_unused]] const XMFLOAT2& jitterOffset, [[maybe_unused]] bool resetHistory)
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    if (!m_context || !m_sparkSRTemporalCS || !colorSRV || !outputUAV)
+    {
+        return;
+    }
+
+    // Fill SparkSR constant buffer
+    float rW = static_cast<float>(m_renderWidth);
+    float rH = static_cast<float>(m_renderHeight);
+    float dW = static_cast<float>(m_displayWidth);
+    float dH = static_cast<float>(m_displayHeight);
+
+    SparkSRConstants constants = {};
+    constants.renderSize = {rW, rH, 1.0f / rW, 1.0f / rH};
+    constants.displaySize = {dW, dH, 1.0f / dW, 1.0f / dH};
+    constants.jitterOffset = {jitterOffset.x, jitterOffset.y, m_prevJitterX, m_prevJitterY};
+
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    HRESULT hr = m_context->Map(m_sparkSRConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (SUCCEEDED(hr) && mapped.pData)
+    {
+        memcpy(mapped.pData, &constants, sizeof(SparkSRConstants));
+        m_context->Unmap(m_sparkSRConstantBuffer.Get(), 0);
+    }
+
+    m_prevJitterX = jitterOffset.x;
+    m_prevJitterY = jitterOffset.y;
+    ++m_sparkSRFrameIndex;
+
+    // Bind resources and dispatch temporal upscaling
+    m_context->CSSetShader(m_sparkSRTemporalCS.Get(), nullptr, 0);
+
+    ID3D11ShaderResourceView* srvs[4] = {colorSRV, depthSRV, motionVectorsSRV, m_temporalHistorySRV.Get()};
+    m_context->CSSetShaderResources(0, 4, srvs);
+
+    ID3D11UnorderedAccessView* uavs[2] = {outputUAV, m_temporalHistoryUAV.Get()};
+    m_context->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
+
+    ID3D11Buffer* cb = m_sparkSRConstantBuffer.Get();
+    m_context->CSSetConstantBuffers(0, 1, &cb);
+
+    ID3D11SamplerState* sampler = m_linearClampSampler.Get();
+    m_context->CSSetSamplers(0, 1, &sampler);
+
+    auto [groupX, groupY] = Spark::Graphics::UpscalingUtils::CalculateDispatchGroups(m_displayWidth, m_displayHeight);
+    m_context->Dispatch(groupX, groupY, 1);
+
+    UnbindComputeResources();
+
+    // Apply RCAS sharpening pass on the output if sharpness > 0
+    if (m_settings.sharpness > 0.0f && m_fsr1RCASShader)
+    {
+        auto rcasConst = Spark::Graphics::UpscalingUtils::CalculateRCASConstants(m_settings.sharpness);
+        UpdateFSR1Constants(nullptr, &rcasConst);
+
+        // Copy output to intermediate for sharpening input
+        m_context->CopyResource(m_intermediateTexture.Get(), nullptr);
+
+        m_context->CSSetShader(m_fsr1RCASShader.Get(), nullptr, 0);
+        ID3D11ShaderResourceView* sharpSRV = m_intermediateSRV.Get();
+        m_context->CSSetShaderResources(0, 1, &sharpSRV);
+        m_context->CSSetUnorderedAccessViews(0, 1, &outputUAV, nullptr);
+        ID3D11Buffer* rcasCB = m_fsr1RCASConstantBuffer.Get();
+        m_context->CSSetConstantBuffers(0, 1, &rcasCB);
+        m_context->CSSetSamplers(0, 1, &sampler);
+        m_context->Dispatch(groupX, groupY, 1);
+
+        UnbindComputeResources();
+    }
+#endif
+}
