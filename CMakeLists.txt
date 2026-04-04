@@ -1991,3 +1991,10 @@ else()
     message(STATUS "All dependencies found. Full engine functionality available.")
 endif()
 message(STATUS "")
+
+# ---------------------------------------------------------------------
+# CPack packaging configuration
+# ---------------------------------------------------------------------
+if(EXISTS "${CMAKE_SOURCE_DIR}/cmake/SparkCPack.cmake")
+    include("${CMAKE_SOURCE_DIR}/cmake/SparkCPack.cmake")
+endif()
