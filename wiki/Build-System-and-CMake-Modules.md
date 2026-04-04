@@ -64,7 +64,7 @@ All flags can be set during CMake configuration with `-D<FLAG>=ON|OFF`.
 | `ENABLE_GRAPHICS` | ON | Graphics rendering engine (DX11, Vulkan, GL) |
 | `ENABLE_VULKAN` | ON | Vulkan backend |
 | `ENABLE_OPENGL` | ON | OpenGL backend (supports CPU software rendering via Mesa llvmpipe) |
-| `ENABLE_DXR` | OFF | DirectX Raytracing (requires D3D12) |
+| `ENABLE_DXR` | ON | DirectX Raytracing (Windows/D3D12; SDFGI fallback on other platforms) |
 | `SPARK_HEADLESS_SUPPORT` | ON | Headless/dedicated server mode support |
 | `ENABLE_POST_PROCESSING` | ON | Post-processing effects (bloom, SSAO, etc.) |
 | `ENABLE_LIGHTING_SYSTEM` | ON | Advanced lighting (PBR, IBL) |

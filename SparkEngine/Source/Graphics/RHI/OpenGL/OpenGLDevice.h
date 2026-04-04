@@ -340,6 +340,7 @@ namespace Spark
                 GLuint m_currentProgram = 0;
                 GLuint m_boundIndexBuffer = 0;
                 uint32_t m_indexStride = 4;
+                IRHIPipelineState* m_lastBoundPipeline = nullptr; ///< Redundant bind elimination
             };
 
             // ============================================================================

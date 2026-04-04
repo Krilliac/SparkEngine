@@ -35,6 +35,9 @@
 #include "TerrainRenderer.h"
 #include "GPUTimestampQuery.h"
 #include "RHI/RHIBridge.h"
+#ifdef SPARK_HARDWARE_RT
+#include "RHI/DXRSupport.h"
+#endif
 #include "RenderPipeline.h"
 #include <functional>
 #include <mutex>
@@ -530,6 +533,10 @@ class GraphicsEngine
     std::unique_ptr<Spark::Graphics::HybridRTManager> m_hybridRT;
 #endif
 
+#ifdef SPARK_HARDWARE_RT
+    std::vector<Spark::Graphics::BLASInstance> m_dxrInstances; ///< Per-frame TLAS instance list
+#endif
+
     // ========================================================================
     // DIRECTX RESOURCES
     // ========================================================================
@@ -641,6 +648,7 @@ class GraphicsEngine
     Spark::Graphics::GPUTimestampQuery m_gpuTimestampQuery;        ///< Per-pass GPU timing queries
 #endif                                                             // SPARK_PLATFORM_WINDOWS
     std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList;  ///< Sorted draw list per frame
+    std::vector<GameObject*> m_culledObjectsBuffer;                ///< Reusable culling output (avoids per-frame alloc)
 
     // Basic shader system resources (fallback rendering pipeline)
     ComPtr<ID3D11VertexShader> m_basicVertexShader;

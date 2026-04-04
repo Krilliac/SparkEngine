@@ -4,7 +4,7 @@
  * @author Spark Engine Team
  * @date 2025
  *
- * Complete Vulkan 1.3 device implementation with instance creation,
+ * Vulkan 1.4 device implementation (1.3 fallback) with instance creation,
  * physical device selection, logical device, command pools, and
  * all resource creation/management functionality.
  */
@@ -176,8 +176,8 @@ namespace Spark
                 QueryCapabilities();
 
                 // Create immediate command list with statistics tracking
-                m_immediateCommandList =
-                    std::make_unique<VulkanCommandList>(m_device, m_commandPool, true, &m_statistics);
+                m_immediateCommandList = std::make_unique<VulkanCommandList>(m_device, m_commandPool, true,
+                                                                             &m_statistics, m_vkCmdPushDescriptorSet);
 
                 // Create pipeline cache
                 VkPipelineCacheCreateInfo cacheInfo = {};
@@ -225,6 +225,12 @@ namespace Spark
                         return false;
                 }
 
+                // Upload fence for async staging copies (avoids vkQueueWaitIdle stalls)
+                VkFenceCreateInfo uploadFenceInfo = {};
+                uploadFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+                if (vkCreateFence(m_device, &uploadFenceInfo, nullptr, &m_uploadFence) != VK_SUCCESS)
+                    return false;
+
                 // Load debug utility function pointers if validation is enabled
                 if (m_validationEnabled)
                 {
@@ -234,6 +240,21 @@ namespace Spark
                         vkGetInstanceProcAddr(m_instance, "vkCmdEndDebugUtilsLabelEXT"));
                     m_vkCmdInsertDebugUtilsLabel = reinterpret_cast<PFN_vkCmdInsertDebugUtilsLabelEXT>(
                         vkGetInstanceProcAddr(m_instance, "vkCmdInsertDebugUtilsLabelEXT"));
+                }
+
+                // Load push descriptor function (Vulkan 1.4 core or VK_KHR_push_descriptor)
+                if (m_pushDescriptorSupported)
+                {
+                    m_vkCmdPushDescriptorSet = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(
+                        vkGetDeviceProcAddr(m_device, "vkCmdPushDescriptorSetKHR"));
+                    if (!m_vkCmdPushDescriptorSet)
+                        m_pushDescriptorSupported = false;
+                }
+
+                if (m_vulkan14Available)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Vulkan 1.4: push_desc=%s host_image_copy=%s",
+                                   m_pushDescriptorSupported ? "yes" : "no", m_hostImageCopySupported ? "yes" : "no");
                 }
 
                 return true;
@@ -247,7 +268,13 @@ namespace Spark
                 appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
                 appInfo.pEngineName = "SparkEngine";
                 appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+
+                // Try Vulkan 1.4 first, fall back to 1.3 if unavailable
+#ifdef VK_API_VERSION_1_4
+                appInfo.apiVersion = VK_API_VERSION_1_4;
+#else
                 appInfo.apiVersion = VK_API_VERSION_1_3;
+#endif
 
                 // Surface extensions are needed for windowed rendering but not for
                 // headless/software devices (e.g. Lavapipe in CI). We enumerate
@@ -295,6 +322,18 @@ namespace Spark
                 createInfo.ppEnabledLayerNames = layers.data();
 
                 VkResult result = vkCreateInstance(&createInfo, nullptr, &m_instance);
+#ifdef VK_API_VERSION_1_4
+                if (result == VK_ERROR_INCOMPATIBLE_DRIVER)
+                {
+                    // Vulkan 1.4 not supported by driver — fall back to 1.3
+                    appInfo.apiVersion = VK_API_VERSION_1_3;
+                    result = vkCreateInstance(&createInfo, nullptr, &m_instance);
+                }
+                else if (result == VK_SUCCESS)
+                {
+                    m_vulkan14Available = true;
+                }
+#endif
                 if (result != VK_SUCCESS)
                     return false;
 
@@ -423,7 +462,7 @@ namespace Spark
 
                 // Query what the physical device actually supports before enabling features.
                 // Software devices (Lavapipe) lack geometry shaders, tessellation, and some
-                // Vulkan 1.2/1.3 features that hardware GPUs provide.
+                // Vulkan 1.2/1.3/1.4 features that hardware GPUs provide.
                 VkPhysicalDeviceFeatures supportedFeatures = {};
                 vkGetPhysicalDeviceFeatures(m_physicalDevice, &supportedFeatures);
 
@@ -432,6 +471,12 @@ namespace Spark
                 VkPhysicalDeviceVulkan13Features supported13 = {};
                 supported13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
                 supported12.pNext = &supported13;
+
+#ifdef VK_API_VERSION_1_4
+                VkPhysicalDeviceVulkan14Features supported14 = {};
+                supported14.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+                supported13.pNext = &supported14;
+#endif
 
                 VkPhysicalDeviceFeatures2 features2 = {};
                 features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -459,6 +504,29 @@ namespace Spark
                 vulkan12Features.descriptorIndexing = supported12.descriptorIndexing;
                 vulkan12Features.timelineSemaphore = supported12.timelineSemaphore;
                 vulkan12Features.bufferDeviceAddress = supported12.bufferDeviceAddress;
+
+#ifdef VK_API_VERSION_1_4
+                // Vulkan 1.4 features — push descriptors, dynamic rendering local read,
+                // maintenance5/6, pipeline robustness, host image copy, index type uint8
+                VkPhysicalDeviceVulkan14Features vulkan14Features = {};
+                vulkan14Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+                if (m_vulkan14Available)
+                {
+                    vulkan14Features.pushDescriptor = supported14.pushDescriptor;
+                    vulkan14Features.dynamicRenderingLocalRead = supported14.dynamicRenderingLocalRead;
+                    vulkan14Features.maintenance5 = supported14.maintenance5;
+                    vulkan14Features.maintenance6 = supported14.maintenance6;
+                    vulkan14Features.pipelineRobustness = supported14.pipelineRobustness;
+                    vulkan14Features.hostImageCopy = supported14.hostImageCopy;
+                    vulkan14Features.indexTypeUint8 = supported14.indexTypeUint8;
+                    vulkan14Features.shaderExpectAssume = supported14.shaderExpectAssume;
+
+                    m_pushDescriptorSupported = (supported14.pushDescriptor == VK_TRUE);
+                    m_hostImageCopySupported = (supported14.hostImageCopy == VK_TRUE);
+
+                    vulkan13Features.pNext = &vulkan14Features;
+                }
+#endif
 
                 // Build extension list — software devices don't need VK_KHR_swapchain
                 std::vector<const char*> enabledExtensions;
@@ -490,6 +558,17 @@ namespace Spark
                     {
                         if (hasExt(ext))
                             enabledExtensions.push_back(ext);
+                    }
+
+                    // VRS for adaptive ray tracing resolution
+                    if (hasExt(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME))
+                        enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+
+                    // Push descriptors as extension fallback for pre-1.4 devices
+                    if (!m_vulkan14Available && hasExt(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME))
+                    {
+                        enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+                        m_pushDescriptorSupported = true;
                     }
                 }
 
@@ -576,15 +655,57 @@ namespace Spark
                 vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
 
                 m_capabilities.deviceName = properties.deviceName;
-                m_capabilities.apiVersion = "Vulkan " + std::to_string(VK_VERSION_MAJOR(properties.apiVersion)) + "." +
-                                            std::to_string(VK_VERSION_MINOR(properties.apiVersion)) + "." +
-                                            std::to_string(VK_VERSION_PATCH(properties.apiVersion));
+                // Report the effective API version (what we requested, not device max)
+                std::string apiStr = "Vulkan " + std::to_string(VK_VERSION_MAJOR(properties.apiVersion)) + "." +
+                                     std::to_string(VK_VERSION_MINOR(properties.apiVersion)) + "." +
+                                     std::to_string(VK_VERSION_PATCH(properties.apiVersion));
+                if (m_vulkan14Available)
+                    apiStr += " (1.4 features active)";
+                m_capabilities.apiVersion = apiStr;
                 m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
+
+                // Map Vulkan vendor ID to name
+                switch (properties.vendorID)
+                {
+                case 0x10DE:
+                    m_capabilities.vendorName = "NVIDIA";
+                    break;
+                case 0x1002:
+                    m_capabilities.vendorName = "AMD";
+                    break;
+                case 0x8086:
+                    m_capabilities.vendorName = "Intel";
+                    break;
+                case 0x13B5:
+                    m_capabilities.vendorName = "ARM";
+                    break;
+                case 0x5143:
+                    m_capabilities.vendorName = "Qualcomm";
+                    break;
+                case 0x10005:
+                    m_capabilities.vendorName = "Mesa";
+                    break;
+                default:
+                    m_capabilities.vendorName = "Unknown";
+                    break;
+                }
 
                 m_capabilities.maxTextureSize = properties.limits.maxImageDimension2D;
                 m_capabilities.maxRenderTargets = properties.limits.maxColorAttachments;
                 m_capabilities.maxSamplers = properties.limits.maxPerStageDescriptorSamplers;
                 m_capabilities.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+
+                // Query max MSAA sample count from device limits
+                VkSampleCountFlags msaaCounts =
+                    properties.limits.framebufferColorSampleCounts & properties.limits.framebufferDepthSampleCounts;
+                if (msaaCounts & VK_SAMPLE_COUNT_8_BIT)
+                    m_capabilities.maxMSAASamples = 8;
+                else if (msaaCounts & VK_SAMPLE_COUNT_4_BIT)
+                    m_capabilities.maxMSAASamples = 4;
+                else if (msaaCounts & VK_SAMPLE_COUNT_2_BIT)
+                    m_capabilities.maxMSAASamples = 2;
+                else
+                    m_capabilities.maxMSAASamples = 1;
 
                 VkPhysicalDeviceMemoryProperties memProperties;
                 vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
@@ -603,6 +724,9 @@ namespace Spark
                 m_capabilities.geometryShaderSupport = features.geometryShader;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.multiDrawIndirectSupport = features.multiDrawIndirect;
+                m_capabilities.pushDescriptorSupport = m_pushDescriptorSupported;
+                m_capabilities.hostImageCopySupport = m_hostImageCopySupported;
+                m_capabilities.enhancedBarrierSupport = true; // synchronization2 is Vulkan 1.3 core
 
                 // Probe Vulkan RT extensions per Vulkan-Hpp / KHR spec patterns.
                 // Full hardware RT requires these four extensions (Vulkan 1.1+):
@@ -626,6 +750,8 @@ namespace Spark
                     bool hasBufferAddr = false;
                     bool hasRayQuery = false;
                     bool hasVRS = false;
+                    bool hasConservativeRaster = false;
+                    bool hasMeshShader = false;
 
                     for (const auto& ext : exts)
                     {
@@ -641,7 +767,17 @@ namespace Spark
                             hasRayQuery = true;
                         else if (std::strcmp(ext.extensionName, "VK_KHR_fragment_shading_rate") == 0)
                             hasVRS = true;
+                        else if (std::strcmp(ext.extensionName, "VK_EXT_conservative_rasterization") == 0)
+                            hasConservativeRaster = true;
+                        else if (std::strcmp(ext.extensionName, "VK_EXT_mesh_shader") == 0)
+                            hasMeshShader = true;
                     }
+
+                    m_capabilities.conservativeRasterSupport = hasConservativeRaster;
+                    m_capabilities.meshShaderSupport = hasMeshShader;
+                    m_capabilities.variableRateShadingSupport = hasVRS;
+                    // descriptorIndexing is Vulkan 1.2 core — bindless is available
+                    m_capabilities.bindlessResourceSupport = true;
 
                     bool fullHWRT = hasAccelStruct && hasRTPipeline && hasDeferredOps && hasBufferAddr;
 
@@ -751,6 +887,11 @@ namespace Spark
 
                 m_immediateCommandList.reset();
 
+                // Destroy upload fence
+                if (m_uploadFence != VK_NULL_HANDLE)
+                    vkDestroyFence(m_device, m_uploadFence, nullptr);
+                m_uploadFence = VK_NULL_HANDLE;
+
                 // Destroy per-frame synchronization
                 for (auto fence : m_frameFences)
                 {
@@ -798,6 +939,10 @@ namespace Spark
                 m_device = VK_NULL_HANDLE;
                 m_debugMessenger = VK_NULL_HANDLE;
                 m_instance = VK_NULL_HANDLE;
+                m_vkCmdPushDescriptorSet = nullptr;
+                m_vulkan14Available = false;
+                m_pushDescriptorSupported = false;
+                m_hostImageCopySupported = false;
             }
 
             std::unique_ptr<IRHISwapChain> VulkanDevice::CreateSwapChain(const RHISwapChainDesc& desc)
@@ -944,8 +1089,9 @@ namespace Spark
                                 submitInfo.commandBufferCount = 1;
                                 submitInfo.pCommandBuffers = &cmdBuffer;
 
-                                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-                                vkQueueWaitIdle(m_graphicsQueue);
+                                vkResetFences(m_device, 1, &m_uploadFence);
+                                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
+                                vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, UINT64_MAX);
 
                                 vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
                                 vkFreeMemory(m_device, stagingMemory, nullptr);
@@ -1450,8 +1596,9 @@ namespace Spark
                 submitInfo.commandBufferCount = 1;
                 submitInfo.pCommandBuffers = &cmdBuffer;
 
-                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-                vkQueueWaitIdle(m_graphicsQueue);
+                vkResetFences(m_device, 1, &m_uploadFence);
+                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
+                vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, UINT64_MAX);
 
                 vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
                 vkDestroyBuffer(m_device, stagingBuffer, nullptr);
@@ -1467,7 +1614,8 @@ namespace Spark
 
             std::unique_ptr<IRHICommandList> VulkanDevice::CreateDeferredCommandList()
             {
-                return std::make_unique<VulkanCommandList>(m_device, m_commandPool, false);
+                return std::make_unique<VulkanCommandList>(m_device, m_commandPool, false, nullptr,
+                                                           m_vkCmdPushDescriptorSet);
             }
 
             void VulkanDevice::ExecuteCommandList(IRHICommandList* commandList)
@@ -1544,6 +1692,9 @@ namespace Spark
                 info += "Max Color Attachments: " + std::to_string(m_capabilities.maxRenderTargets) + "\n";
                 info += "Tessellation: " + std::string(m_capabilities.tessellationSupport ? "Yes" : "No") + "\n";
                 info += "Geometry Shaders: " + std::string(m_capabilities.geometryShaderSupport ? "Yes" : "No") + "\n";
+                info += "Vulkan 1.4: " + std::string(m_vulkan14Available ? "Yes" : "No") + "\n";
+                info += "Push Descriptors: " + std::string(m_pushDescriptorSupported ? "Yes" : "No") + "\n";
+                info += "Host Image Copy: " + std::string(m_hostImageCopySupported ? "Yes" : "No") + "\n";
                 return info;
             }
 

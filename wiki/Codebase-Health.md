@@ -34,7 +34,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 | Mesh LOD | **DONE** | Distance-based switching |
 | Decal system | **DONE** | Lifetime management |
 | GPU particles | **DONE** | Compute-based particle system |
-| DXR raytracing | **EXPERIMENTAL** | Requires D3D12, disabled by default |
+| DXR raytracing | **EXPERIMENTAL** | Requires D3D12 (Windows); enabled by default with SDFGI fallback |
 | DLSS/FSR upscaling | **EXPERIMENTAL** | Requires NVIDIA/AMD SDK |
 | Render graph | **DONE** | Pass dependency management |
 | NullRHIDevice (headless) | **DONE** | Auto-fallback when no GPU; tested with 5 integration tests |

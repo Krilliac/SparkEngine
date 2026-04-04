@@ -25,7 +25,7 @@ Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 | `ENABLE_NETWORKING` | ON | UDP multiplayer (raw sockets) |
 | `ENABLE_VULKAN` | ON | Vulkan (experimental) |
 | `ENABLE_OPENGL` | OFF | OpenGL (experimental) |
-| `ENABLE_DXR` | OFF | DXR (requires D3D12) |
+| `ENABLE_DXR` | ON | DXR (Windows/D3D12; SDFGI fallback elsewhere) |
 | `BUILD_TESTS` | ON | CTest unit tests |
 
 ### Build Targets
@@ -65,7 +65,7 @@ Builds on every push/PR: Windows MSVC + Linux GCC + Linux Clang (Debug + Release
 
 ## Testing
 
-3388 unit tests across 264 files in `Tests/` with internal framework + CTest.
+3389 unit tests across 264 files in `Tests/` with internal framework + CTest.
 
 ```bash
 cd build && ctest --output-on-failure          # all tests

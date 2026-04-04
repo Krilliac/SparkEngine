@@ -40,7 +40,7 @@ SparkConsole/        ← External debug console app (named pipe communication)
 
 Shaders/HLSL/        ← DirectX shaders (PBR, post-processing, compute)
 Shaders/GLSL/        ← OpenGL shaders (experimental)
-Tests/               ← 3388 unit tests across 264 files, CTest integration
+Tests/               ← 3389 unit tests across 264 files, CTest integration
 Templates/           ← Game module templates
 Assets/              ← Demo scenes, models, scripts
 ```
@@ -90,6 +90,6 @@ ECS execution order: Physics → Animation → AI → Audio → Lifecycle → Re
 
 These systems exist but are not yet production-ready:
 - **VR** — OpenXR-ready framework stub; needs OpenXR SDK for actual hardware
-- **DXR ray tracing** — Feature-complete but disabled by default (`ENABLE_DXR=OFF`)
+- **DXR ray tracing** — Feature-complete, enabled by default with SDFGI software fallback
 - **D3D12/Vulkan/OpenGL/Metal** — Experimental RHI backends via abstraction layer
 - **Mobile/Console** — Build targets defined but untested

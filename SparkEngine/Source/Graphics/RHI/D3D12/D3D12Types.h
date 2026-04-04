@@ -510,6 +510,9 @@ namespace Spark
 
                 /// Currently bound root signature (cached to avoid redundant sets).
                 ID3D12RootSignature* m_currentRootSignature = nullptr;
+
+                /// Currently bound PSO (cached to avoid redundant pipeline state binds).
+                ID3D12PipelineState* m_currentPSO = nullptr;
             };
 
             // ============================================================================

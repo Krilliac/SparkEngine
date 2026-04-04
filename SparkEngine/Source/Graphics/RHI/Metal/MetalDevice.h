@@ -388,6 +388,8 @@ namespace Spark
                 void DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) override;
                 void DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset) override;
 
+                void CopyTexture(IRHITexture* dst, IRHITexture* src) override;
+
                 void BeginEvent(const char* name) override;
                 void EndEvent() override;
                 void SetMarker(const char* name) override;

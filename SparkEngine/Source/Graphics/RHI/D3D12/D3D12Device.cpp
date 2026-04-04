@@ -439,6 +439,7 @@ namespace Spark
                 m_capabilities.tessellationSupport = true;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.geometryShaderSupport = true;
+                m_capabilities.multiDrawIndirectSupport = true; // Always available in D3D12
 
                 // Check feature levels
                 D3D12_FEATURE_DATA_D3D12_OPTIONS options = {};
@@ -455,6 +456,49 @@ namespace Spark
                 {
                     m_capabilities.meshShaderSupport =
                         (options7.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED);
+                }
+
+                // D3D12 root descriptors are the equivalent of Vulkan push descriptors —
+                // always available in D3D12 via root signature inline descriptors.
+                m_capabilities.pushDescriptorSupport = true;
+
+                // Enhanced Barriers (D3D12_OPTIONS12) — modern barrier model that
+                // parallels Vulkan's synchronization2. Available in Windows 11 22H2+
+                // with Agility SDK 1.706.4+ or compatible drivers.
+#ifdef __ID3D12Device10_FWD_DEFINED__
+                D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12 = {};
+                if (SUCCEEDED(
+                        m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))))
+                {
+                    m_capabilities.enhancedBarrierSupport = (options12.EnhancedBarriersSupported == TRUE);
+                }
+#endif
+
+                // GPU Upload Heaps (D3D12_OPTIONS16) — allows GPU to read directly from
+                // upload heaps, eliminating the copy step for frequently updated resources.
+                // Equivalent to Vulkan 1.4's host image copy capability.
+#ifdef __ID3D12Device12_FWD_DEFINED__
+                D3D12_FEATURE_DATA_D3D12_OPTIONS16 options16 = {};
+                if (SUCCEEDED(
+                        m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS16, &options16, sizeof(options16))))
+                {
+                    m_capabilities.hostImageCopySupport = (options16.GPUUploadHeapSupported == TRUE);
+                }
+#endif
+
+                // Query actual max MSAA sample count
+                for (uint32_t samples = 8; samples >= 2; samples /= 2)
+                {
+                    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msaaLevels = {};
+                    msaaLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                    msaaLevels.SampleCount = samples;
+                    if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaaLevels,
+                                                                sizeof(msaaLevels))) &&
+                        msaaLevels.NumQualityLevels > 0)
+                    {
+                        m_capabilities.maxMSAASamples = samples;
+                        break;
+                    }
                 }
             }
 
@@ -481,19 +525,19 @@ namespace Spark
                             m_dxrSupported ? 31 : 0; // DXR spec max recursion is 31
                         m_capabilities.rayTracing.bestBackend =
                             m_dxrSupported ? RayTracingBackend::HardwareDXR : RayTracingBackend::Software_SDFGI;
-
-                        // Check VRS support (D3D12_OPTIONS6) for adaptive RT resolution
-                        D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};
-                        if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6,
-                                                                    sizeof(options6))))
-                        {
-                            m_capabilities.rayTracing.supportsVRS =
-                                (options6.VariableShadingRateTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED);
-                        }
                     }
                 }
                 if (!m_dxrSupported)
                     m_dxrDevice.Reset();
+
+                // VRS detection (independent of DXR — VRS works for rasterization too)
+                D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};
+                if (SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6, sizeof(options6))))
+                {
+                    bool hasVRS = (options6.VariableShadingRateTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED);
+                    m_capabilities.variableRateShadingSupport = hasVRS;
+                    m_capabilities.rayTracing.supportsVRS = hasVRS;
+                }
             }
 
             // ============================================================================
@@ -1053,15 +1097,16 @@ namespace Spark
                                                           D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 m_immediateCommandList->End();
 
-                // Execute and wait
+                // Execute with fence — only waits for this upload, not all GPU work
                 ID3D12CommandList* lists[] = {m_immediateCommandList->GetCommandList()};
                 m_directQueue->ExecuteCommandLists(1, lists);
-                WaitForIdle();
+                uint64_t uploadFenceVal = m_frameFence.Signal(m_directQueue.Get());
+                m_frameFence.WaitForValue(uploadFenceVal);
 
-                // Queue upload buffer for deferred release
+                // Queue upload buffer for deferred release at this fence value
                 {
                     std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                    m_deferredReleaseQueue.push({uploadBuffer, m_frameFence.GetCurrentValue()});
+                    m_deferredReleaseQueue.push({uploadBuffer, uploadFenceVal});
                 }
             }
 
@@ -1151,6 +1196,8 @@ namespace Spark
                 ss << "DXR: " << (m_dxrSupported ? "Yes" : "No") << "\n";
                 ss << "Mesh Shaders: " << (m_capabilities.meshShaderSupport ? "Yes" : "No") << "\n";
                 ss << "Bindless: " << (m_capabilities.bindlessResourceSupport ? "Yes" : "No") << "\n";
+                ss << "Enhanced Barriers: " << (m_capabilities.enhancedBarrierSupport ? "Yes" : "No") << "\n";
+                ss << "GPU Upload Heaps: " << (m_capabilities.hostImageCopySupport ? "Yes" : "No") << "\n";
                 return ss.str();
             }
 

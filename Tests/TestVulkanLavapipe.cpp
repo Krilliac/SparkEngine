@@ -83,6 +83,57 @@ TEST(VulkanLavapipe_SoftwareDeviceFlag)
 }
 
 // ============================================================================
+// Vulkan 1.4 feature detection
+// ============================================================================
+
+TEST(VulkanLavapipe_Vulkan14FeatureDetection)
+{
+#ifndef SPARK_VULKAN_SUPPORT
+    EXPECT_TRUE(true);
+    return;
+#else
+    Spark::RHI::Vulkan::VulkanDevice device;
+    Spark::RHI::RHIDeviceDesc desc;
+    desc.enableDebugLayer = false;
+    desc.applicationName = "Vulkan14FeatureTest";
+
+    bool ok = device.Initialize(desc);
+    if (!ok)
+    {
+        EXPECT_TRUE(true);
+        return;
+    }
+
+    // Vulkan 1.4 availability depends on driver — either result is valid.
+    // We verify the flags are consistent and accessors work.
+    bool isVk14 = device.IsVulkan14();
+    bool hasPush = device.SupportsPushDescriptors();
+    bool hasHIC = device.SupportsHostImageCopy();
+
+    // Push descriptors and host image copy require Vulkan 1.4 or the extension
+    // If Vulkan 1.4 is not available, push descriptors may still be available
+    // via VK_KHR_push_descriptor extension
+    if (!isVk14)
+    {
+        // Host image copy requires 1.4 — must be false without it
+        EXPECT_TRUE(!hasHIC);
+    }
+
+    // Device info should mention Vulkan 1.4 status
+    std::string info = device.GetDeviceInfo();
+    EXPECT_TRUE(info.find("Vulkan 1.4") != std::string::npos);
+    EXPECT_TRUE(info.find("Push Descriptors") != std::string::npos);
+    EXPECT_TRUE(info.find("Host Image Copy") != std::string::npos);
+
+    // API version string should be populated
+    auto& caps = device.GetCapabilities();
+    EXPECT_TRUE(caps.apiVersion.find("Vulkan") != std::string::npos);
+
+    device.Shutdown();
+#endif
+}
+
+// ============================================================================
 // Resource creation on Vulkan (including Lavapipe)
 // ============================================================================
 

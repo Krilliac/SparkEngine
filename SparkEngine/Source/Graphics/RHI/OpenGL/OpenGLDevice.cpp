@@ -413,7 +413,9 @@ namespace Spark
             void GLCommandList::Begin() {}
             void GLCommandList::End()
             {
-                glFlush();
+                // Intentionally no glFlush() here — flushing every command list
+                // submission causes severe GPU pipeline stalls. GL commands are
+                // flushed implicitly by swap or explicitly by WaitForIdle().
             }
             void GLCommandList::Reset() {}
 
@@ -475,6 +477,9 @@ namespace Spark
                                    "GL: SetPipelineState called with null pipeline state");
                     return;
                 }
+                if (pipelineState == m_lastBoundPipeline)
+                    return; // Skip redundant GL state changes
+                m_lastBoundPipeline = pipelineState;
                 auto* glPSO = static_cast<GLPipelineState*>(pipelineState);
 
                 m_currentProgram = glPSO->GetGLProgram();
@@ -1198,6 +1203,12 @@ namespace Spark
                 m_capabilities.tessellationSupport = true;
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.geometryShaderSupport = true;
+                m_capabilities.multiDrawIndirectSupport = true; // GL 4.3+ core (GL_ARB_multi_draw_indirect)
+
+                // Query actual max MSAA sample count
+                GLint maxSamples = 8;
+                glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+                m_capabilities.maxMSAASamples = static_cast<uint32_t>(maxSamples);
             }
 
             std::unique_ptr<IRHISwapChain> GLDevice::CreateSwapChain(const RHISwapChainDesc& desc)

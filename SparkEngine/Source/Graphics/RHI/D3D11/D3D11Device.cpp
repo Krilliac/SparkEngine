@@ -368,8 +368,9 @@ namespace Spark
 
             void D3D11CommandList::SetPipelineState(IRHIPipelineState* pipelineState)
             {
-                if (!pipelineState)
-                    return;
+                if (!pipelineState || pipelineState == m_currentPipeline)
+                    return; // Skip redundant pipeline bind (saves 7 D3D11 state calls)
+                m_currentPipeline = pipelineState;
                 auto* d3dPSO = static_cast<D3D11PipelineState*>(pipelineState);
 
                 m_context->IASetInputLayout(d3dPSO->GetInputLayout());
@@ -691,14 +692,47 @@ namespace Spark
                 m_capabilities.dedicatedVideoMemory = adapterDesc.DedicatedVideoMemory;
                 m_capabilities.sharedSystemMemory = adapterDesc.SharedSystemMemory;
 
+                switch (adapterDesc.VendorId)
+                {
+                case 0x10DE:
+                    m_capabilities.vendorName = "NVIDIA";
+                    break;
+                case 0x1002:
+                    m_capabilities.vendorName = "AMD";
+                    break;
+                case 0x8086:
+                    m_capabilities.vendorName = "Intel";
+                    break;
+                case 0x1414:
+                    m_capabilities.vendorName = "Microsoft";
+                    break;
+                default:
+                    m_capabilities.vendorName = "Unknown";
+                    break;
+                }
+
                 m_capabilities.tessellationSupport = (achievedLevel >= D3D_FEATURE_LEVEL_11_0);
                 m_capabilities.computeShaderSupport = (achievedLevel >= D3D_FEATURE_LEVEL_11_0);
                 m_capabilities.geometryShaderSupport = (achievedLevel >= D3D_FEATURE_LEVEL_10_0);
+                m_capabilities.multiDrawIndirectSupport = (achievedLevel >= D3D_FEATURE_LEVEL_11_0);
                 m_capabilities.maxTextureSize = (achievedLevel >= D3D_FEATURE_LEVEL_11_0) ? 16384 : 8192;
                 m_capabilities.maxRenderTargets = 8;
                 m_capabilities.maxAnisotropy = 16.0f;
                 m_capabilities.apiVersion = "DirectX 11.1";
                 m_capabilities.isSoftwareDevice = m_isSoftwareDevice;
+
+                // Query actual MSAA support
+                UINT msaaQuality = 0;
+                for (uint32_t samples = 8; samples >= 2; samples /= 2)
+                {
+                    if (SUCCEEDED(m_device->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, samples,
+                                                                          &msaaQuality)) &&
+                        msaaQuality > 0)
+                    {
+                        m_capabilities.maxMSAASamples = samples;
+                        break;
+                    }
+                }
 
                 if (m_isSoftwareDevice)
                 {
