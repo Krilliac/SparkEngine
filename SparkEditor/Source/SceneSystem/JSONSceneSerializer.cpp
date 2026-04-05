@@ -11,6 +11,7 @@
 #include "SceneSerializer.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -450,6 +451,11 @@ namespace SparkEditor
         {
             result.success = false;
             result.errorMessage = "Write error while saving JSON: " + filePath;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Write error saving JSON scene, removing partial file: %s",
+                            filePath.c_str());
+            file.close();
+            std::error_code ec;
+            std::filesystem::remove(filePath, ec);
             return result;
         }
 

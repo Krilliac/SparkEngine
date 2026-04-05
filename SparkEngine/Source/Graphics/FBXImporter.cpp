@@ -87,6 +87,9 @@ namespace Spark::Graphics
         case FBXConstants::PROP_RAW:
         {
             uint32_t len = reader.Read<uint32_t>();
+            constexpr uint32_t kMaxStringLen = 16 * 1024 * 1024; // 16 MB sanity limit
+            if (len > kMaxStringLen)
+                break;
             prop.stringValue = reader.ReadString(len);
             break;
         }
@@ -95,10 +98,11 @@ namespace Spark::Graphics
             uint32_t count = reader.Read<uint32_t>();
             uint32_t encoding = reader.Read<uint32_t>();
             uint32_t compressedLen = reader.Read<uint32_t>();
-            if (encoding == 0 && count > 0)
+            constexpr uint32_t kMaxArrayCount = 1 << 26; // ~64M elements
+            if (encoding == 0 && count > 0 && count <= kMaxArrayCount)
             {
                 prop.floatArray.resize(count);
-                reader.ReadBytes(prop.floatArray.data(), count * sizeof(float));
+                reader.ReadBytes(prop.floatArray.data(), static_cast<size_t>(count) * sizeof(float));
             }
             else
             {
@@ -111,10 +115,11 @@ namespace Spark::Graphics
             uint32_t count = reader.Read<uint32_t>();
             uint32_t encoding = reader.Read<uint32_t>();
             uint32_t compressedLen = reader.Read<uint32_t>();
-            if (encoding == 0 && count > 0)
+            constexpr uint32_t kMaxArrayCount = 1 << 26;
+            if (encoding == 0 && count > 0 && count <= kMaxArrayCount)
             {
                 prop.doubleArray.resize(count);
-                reader.ReadBytes(prop.doubleArray.data(), count * sizeof(double));
+                reader.ReadBytes(prop.doubleArray.data(), static_cast<size_t>(count) * sizeof(double));
             }
             else
             {
@@ -127,10 +132,11 @@ namespace Spark::Graphics
             uint32_t count = reader.Read<uint32_t>();
             uint32_t encoding = reader.Read<uint32_t>();
             uint32_t compressedLen = reader.Read<uint32_t>();
-            if (encoding == 0 && count > 0)
+            constexpr uint32_t kMaxArrayCount = 1 << 26;
+            if (encoding == 0 && count > 0 && count <= kMaxArrayCount)
             {
                 prop.intArray.resize(count);
-                reader.ReadBytes(prop.intArray.data(), count * sizeof(int32_t));
+                reader.ReadBytes(prop.intArray.data(), static_cast<size_t>(count) * sizeof(int32_t));
             }
             else
             {
@@ -143,10 +149,11 @@ namespace Spark::Graphics
             uint32_t count = reader.Read<uint32_t>();
             uint32_t encoding = reader.Read<uint32_t>();
             uint32_t compressedLen = reader.Read<uint32_t>();
-            if (encoding == 0 && count > 0)
+            constexpr uint32_t kMaxArrayCount = 1 << 26;
+            if (encoding == 0 && count > 0 && count <= kMaxArrayCount)
             {
                 prop.longArray.resize(count);
-                reader.ReadBytes(prop.longArray.data(), count * sizeof(int64_t));
+                reader.ReadBytes(prop.longArray.data(), static_cast<size_t>(count) * sizeof(int64_t));
             }
             else
             {

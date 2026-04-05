@@ -634,20 +634,22 @@ namespace Spark::Net
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients.erase(clientID);
-        }
-
 #ifdef ENABLE_NETWORKING
-        m_clientAddresses.erase(clientID);
+            m_clientAddresses.erase(clientID);
 #endif
+        }
 
         // Remove entities owned by this client
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Cleaning up entities owned by client %u", clientID);
         std::vector<uint32_t> ownedEntities;
-        for (const auto& [netID, entity] : m_replicatedEntities)
         {
-            if (entity.ownerID == clientID)
+            std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
+            for (const auto& [netID, entity] : m_replicatedEntities)
             {
-                ownedEntities.push_back(netID);
+                if (entity.ownerID == clientID)
+                {
+                    ownedEntities.push_back(netID);
+                }
             }
         }
         for (uint32_t netID : ownedEntities)
@@ -691,10 +693,13 @@ namespace Spark::Net
 
                 // Clean up owned entities
                 std::vector<uint32_t> ownedEntities;
-                for (const auto& [netID, entity] : m_replicatedEntities)
                 {
-                    if (entity.ownerID == id)
-                        ownedEntities.push_back(netID);
+                    std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
+                    for (const auto& [netID, entity] : m_replicatedEntities)
+                    {
+                        if (entity.ownerID == id)
+                            ownedEntities.push_back(netID);
+                    }
                 }
                 for (uint32_t netID : ownedEntities)
                     UnregisterReplicatedEntity(netID);
@@ -702,10 +707,10 @@ namespace Spark::Net
                 {
                     std::lock_guard<std::mutex> lock(m_clientsMutex);
                     m_clients.erase(id);
-                }
 #ifdef ENABLE_NETWORKING
-                m_clientAddresses.erase(id);
+                    m_clientAddresses.erase(id);
 #endif
+                }
             }
         }
         else if (m_role == NetworkRole::Client)

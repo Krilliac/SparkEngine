@@ -73,6 +73,14 @@ namespace Spark
             m_maxExecutionTimeSec = 0.05f;
             m_maxMemoryBytes = 4 * 1024 * 1024; // 4 MB
             break;
+
+        default:
+            SPARK_LOG_WARN(Spark::LogCategory::Scripting, "Unknown security level %d, defaulting to Strict",
+                           static_cast<int>(level));
+            m_maxInstructions = 100'000;
+            m_maxExecutionTimeSec = 0.05f;
+            m_maxMemoryBytes = 4 * 1024 * 1024;
+            break;
         }
     }
 

@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 249851 |
-| **SparkEditor/Source** | 82920 |
+| **SparkEngine/Source** | 249882 |
+| **SparkEditor/Source** | 82942 |
 | **GameModules** | 57465 |
 | **Tests** | 94741 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~487368** |
+| **Total C++ (excl. ThirdParty)** | **~487421** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |--------|-------|
 | Average lines per .cpp file | ~857 |
 | Average lines per .h file | ~571 |
-| Largest codebase section | Graphics (100049 lines — 40% of SparkEngine/Source) |
+| Largest codebase section | Graphics (100057 lines — 40% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,8 +42,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 100049 | 40.0% |
-| Engine (all subsystems) | 74043 | 29.6% |
+| Graphics | 100057 | 40.0% |
+| Engine (all subsystems) | 74066 | 29.6% |
 | Utils | 33700 | 13.4% |
 | Core | 17549 | 7.0% |
 | Physics | 10101 | 4.0% |
@@ -58,12 +58,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines |
 |-----------|------:|
-| AI | 13124 |
-| Networking | 11626 |
+| AI | 13129 |
+| Networking | 11631 |
 | ECS | 8523 |
 | Gameplay | 7278 |
-| Animation | 6533 |
-| Scripting | 4531 |
+| Animation | 6538 |
+| Scripting | 4539 |
 | UI | 2524 |
 | SaveSystem | 2491 |
 | Streaming | 1763 |
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 57 |
-| Total editor lines | 82920 |
+| Total editor lines | 82942 |
 
 ## Testing Metrics
 
@@ -187,8 +187,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `VisualScriptPanel.cpp` | 1850 |
 | `EditorUI.cpp` | 1673 |
 | `CollaborativeEditSession.cpp` | 1382 |
+| `EditorTheme.cpp` | 1341 |
 | `PerformanceProfiler.cpp` | 1332 |
-| `EditorTheme.cpp` | 1325 |
 | `LevelStreamingSystem.cpp` | 1272 |
 | `MaterialEditor.cpp` | 1269 |
 | `InspectorPanel.cpp` | 1262 |

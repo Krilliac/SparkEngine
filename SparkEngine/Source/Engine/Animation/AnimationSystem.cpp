@@ -598,6 +598,11 @@ namespace Spark::Animation
             case IKType::FABRIK:
                 AnimationEvaluator::SolveFABRIK(blendResult.localTransforms, *skeleton, chain);
                 break;
+
+            default:
+                SPARK_LOG_WARN(LogCategory::Animation, "Unknown IK type %d, skipping chain",
+                               static_cast<int>(chain.type));
+                continue;
             }
 
             // Apply IK weight blending: blend between pre-IK and post-IK for affected bones
