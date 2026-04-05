@@ -90,6 +90,7 @@
 #include "Engine/Networking/DeltaSnapshotManager.h"
 #include "Engine/Networking/InstabilitySimulator.h"
 #include "Engine/Security/MemoryIntegrity.h"
+#include "Utils/InvalidStateDetector.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
 #include "Engine/Tween/TweenSystem.h"
 #include "Engine/Modding/VirtualFileSystem.h"
@@ -280,6 +281,7 @@ void InitDebugSystems()
     Spark::NetworkHealthMonitor::GetInstance().Initialize();
     Spark::GPUResourceLeakDetector::GetInstance().Initialize();
     Spark::Security::MemoryIntegritySystem::GetInstance().Initialize();
+    Spark::InvalidStateDetector::GetInstance().Initialize();
 
     // Register memory pressure response callbacks
     Spark::MemoryMonitor::GetInstance().RegisterPressureCallback(
@@ -332,6 +334,7 @@ static void InitCoreGameplaySystems(EngineContext* ctx)
     if (auto* world = ctx->GetWorld())
     {
         destruction.SetWorld(world);
+        Spark::InvalidStateDetector::GetInstance().SetWorld(world);
     }
     destruction.OnDestruction(
         [](const Spark::DestructionEvent& e)
@@ -912,6 +915,8 @@ void UpdateDebugSystems(float dt)
                          { Spark::GPUResourceLeakDetector::GetInstance().Update(dt); });
     SPARK_GUARDED_UPDATE("MemoryIntegrity", "Security",
                          { Spark::Security::MemoryIntegritySystem::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("InvalidStateDetector", "Debug",
+                         { Spark::InvalidStateDetector::GetInstance().Update(dt); });
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading
@@ -932,6 +937,7 @@ void ShutdownDebugSystems()
     Spark::NetworkHealthMonitor::GetInstance().Shutdown();
     Spark::GPUResourceLeakDetector::GetInstance().Shutdown();
     Spark::Security::MemoryIntegritySystem::GetInstance().Shutdown();
+    Spark::InvalidStateDetector::GetInstance().Shutdown();
 #ifndef NDEBUG
     Spark::MemoryDebugger::GetInstance().PrintLeakReport();
 #endif
