@@ -178,10 +178,45 @@ namespace Spark::Graphics::Neural
     void NeuralRadianceCache::QueryBatchCPU(const float* positions, const float* directions, float* outRadiance,
                                             uint32_t batchSize) const
     {
+        if (!m_initialized || !m_mlpHandle.IsValid() || batchSize == 0)
+        {
+            std::memset(outRadiance, 0, batchSize * 3 * sizeof(float));
+            return;
+        }
+
+        uint32_t mlpInputSize = m_mlpDesc.GetInputSize();
+
+        // Build all MLP inputs into a single contiguous buffer
+        std::vector<float> batchInput(batchSize * mlpInputSize);
+
         for (uint32_t i = 0; i < batchSize; ++i)
         {
-            QueryCPU(positions + i * 3, directions + i * 3, outRadiance + i * 3);
+            // Look up hash grid features for this position
+            float* dst = &batchInput[i * mlpInputSize];
+
+            for (uint32_t level = 0; level < kHashGridLevels; ++level)
+            {
+                uint32_t idx = HashPosition(positions + i * 3, level);
+                uint32_t featureOffset = level * kFeaturesPerEntry;
+                uint32_t gridOffset = idx * kFeaturesPerEntry;
+
+                for (uint32_t f = 0; f < kFeaturesPerEntry; ++f)
+                {
+                    dst[featureOffset + f] = m_hashGrid[level][gridOffset + f];
+                }
+            }
+
+            // Append direction
+            dst[m_totalFeatureSize + 0] = directions[i * 3 + 0];
+            dst[m_totalFeatureSize + 1] = directions[i * 3 + 1];
+            dst[m_totalFeatureSize + 2] = directions[i * 3 + 2];
         }
+
+        // Single batched inference call
+        auto& engine = NeuralInferenceEngine::GetInstance();
+        engine.EvaluateCPU(m_mlpHandle, batchInput.data(), outRadiance, batchSize);
+
+        m_stats.totalQueries += batchSize;
     }
 
     void NeuralRadianceCache::Update(const RadianceSample* samples, uint32_t sampleCount, float /*deltaTime*/)

@@ -46,6 +46,8 @@ namespace Spark::Graphics::Neural
         (void)context;
 #endif
 
+        CpuNeuralInference::Initialize();
+
         m_initialized = true;
         return true;
     }
@@ -61,6 +63,7 @@ namespace Spark::Graphics::Neural
 
         m_networks.clear();
         m_cpuWeights.clear();
+        m_alignedWeights.clear();
 
 #ifdef SPARK_PLATFORM_WINDOWS
         m_inferenceCS.Reset();
@@ -167,6 +170,9 @@ namespace Spark::Graphics::Neural
         // Store CPU copy for CPU evaluation path
         m_cpuWeights[handle.id] = weights;
 
+        // Prepare SIMD-optimized layout for accelerated CPU inference
+        m_alignedWeights[handle.id] = CpuNeuralInference::PrepareWeights(network.desc, weights.data());
+
 #ifdef SPARK_PLATFORM_WINDOWS
         // Upload to GPU buffer
         if (m_context && network.weightBuffer)
@@ -245,49 +251,19 @@ namespace Spark::Graphics::Neural
 
     void NeuralInferenceEngine::EvaluateCPU(NetworkHandle handle, const float* input, float* output, uint32_t batchSize)
     {
-        std::lock_guard lock(m_mutex);
-
-        auto netIt = m_networks.find(handle.id);
-        auto weightIt = m_cpuWeights.find(handle.id);
-        if (netIt == m_networks.end() || weightIt == m_cpuWeights.end())
+        // Look up layout under lock, then release before parallel dispatch
+        const AlignedWeightLayout* layout = nullptr;
         {
-            return;
-        }
-
-        const auto& desc = netIt->second.desc;
-        const float* allWeights = weightIt->second.data();
-
-        // Temporary buffers for intermediate activations
-        std::vector<float> bufA(kMaxNeuronsPerLayer);
-        std::vector<float> bufB(kMaxNeuronsPerLayer);
-
-        for (uint32_t sample = 0; sample < batchSize; ++sample)
-        {
-            // Load input
-            const float* sampleInput = input + sample * desc.GetInputSize();
-            std::copy_n(sampleInput, desc.GetInputSize(), bufA.data());
-
-            uint32_t weightOffset = 0;
-            for (uint32_t layer = 0; layer < desc.layers.size(); ++layer)
+            std::lock_guard lock(m_mutex);
+            auto it = m_alignedWeights.find(handle.id);
+            if (it == m_alignedWeights.end())
             {
-                const auto& layerDesc = desc.layers[layer];
-                const float* weights = allWeights + weightOffset;
-                const float* biases = weights + layerDesc.inputSize * layerDesc.outputSize;
-
-                float* src = (layer % 2 == 0) ? bufA.data() : bufB.data();
-                float* dst = (layer % 2 == 0) ? bufB.data() : bufA.data();
-
-                EvaluateLayerCPU(src, dst, weights, biases, layerDesc.inputSize, layerDesc.outputSize,
-                                 layerDesc.activation, 1);
-
-                weightOffset += layerDesc.inputSize * layerDesc.outputSize + layerDesc.outputSize;
+                return;
             }
-
-            // Copy output: layer 0 (even) writes to B, layer 1 (odd) writes to A, etc.
-            // After N layers, result is in B if N is odd, A if N is even.
-            float* finalBuf = (desc.layers.size() % 2 != 0) ? bufB.data() : bufA.data();
-            std::copy_n(finalBuf, desc.GetOutputSize(), output + sample * desc.GetOutputSize());
+            layout = &it->second;
         }
+
+        CpuNeuralInference::EvaluateBatch(*layout, input, output, batchSize);
     }
 
     void NeuralInferenceEngine::EvaluateLayerCPU(const float* input, float* output, const float* weights,
@@ -330,6 +306,7 @@ namespace Spark::Graphics::Neural
         std::lock_guard lock(m_mutex);
         m_networks.erase(handle.id);
         m_cpuWeights.erase(handle.id);
+        m_alignedWeights.erase(handle.id);
     }
 
     const NetworkDesc* NeuralInferenceEngine::GetNetworkDesc(NetworkHandle handle) const

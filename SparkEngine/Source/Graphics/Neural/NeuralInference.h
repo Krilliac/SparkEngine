@@ -29,6 +29,7 @@
 
 #pragma once
 
+#include "CpuNeuralInference.h"
 #include "NeuralTypes.h"
 #include "Core/Platform.h"
 
@@ -159,6 +160,9 @@ namespace Spark::Graphics::Neural
 
         // CPU-side weight storage for CPU evaluation path
         std::unordered_map<uint32_t, std::vector<float>> m_cpuWeights;
+
+        // SIMD-optimized weight layout for accelerated CPU inference
+        std::unordered_map<uint32_t, AlignedWeightLayout> m_alignedWeights;
 
 #ifdef SPARK_PLATFORM_WINDOWS
         ID3D11Device* m_device = nullptr;
