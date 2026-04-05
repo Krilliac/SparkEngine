@@ -300,6 +300,9 @@ class GraphicsEngine
     /** @brief Get the GPU timestamp query system for per-pass timing. */
     Spark::Graphics::GPUTimestampQuery* GetGPUTimestampQuery() { return &m_gpuTimestampQuery; }
     const Spark::Graphics::GPUTimestampQuery* GetGPUTimestampQuery() const { return &m_gpuTimestampQuery; }
+
+    /** @brief Get the depth buffer SRV for HiZ construction and post-process reads. */
+    ID3D11ShaderResourceView* GetDepthSRV() const { return m_depthStencilSRV.Get(); }
 #endif // SPARK_PLATFORM_WINDOWS
 
     /** @brief Set non-owning physics pointer (called by engine during init) */
@@ -556,6 +559,7 @@ class GraphicsEngine
     ComPtr<ID3D11RenderTargetView> m_hdrRTV;
     ComPtr<ID3D11ShaderResourceView> m_hdrSRV;
     ComPtr<ID3D11Texture2D> m_depthStencilTexture;
+    ComPtr<ID3D11ShaderResourceView> m_depthStencilSRV; ///< Depth SRV for HiZ / post-process reads
 
     // Enhanced render targets for deferred rendering
     std::unordered_map<std::string, std::unique_ptr<RenderTarget>> m_renderTargets;

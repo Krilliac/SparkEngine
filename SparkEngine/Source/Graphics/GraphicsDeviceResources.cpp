@@ -168,21 +168,22 @@ HRESULT GraphicsEngine::CreateRenderTargetView()
 
 HRESULT GraphicsEngine::CreateDepthStencilView()
 {
+    // Use typeless format so we can create both DSV and SRV views.
+    // The SRV is needed by GPUDrivenRenderer for HiZ mip chain construction.
     D3D11_TEXTURE2D_DESC depthStencilDesc = {};
     depthStencilDesc.Width = m_windowWidth;
     depthStencilDesc.Height = m_windowHeight;
     depthStencilDesc.MipLevels = 1;
     depthStencilDesc.ArraySize = 1;
-    depthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    depthStencilDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
     depthStencilDesc.SampleDesc.Count = 1;
     depthStencilDesc.SampleDesc.Quality = 0;
     depthStencilDesc.Usage = D3D11_USAGE_DEFAULT;
-    depthStencilDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    depthStencilDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
     depthStencilDesc.CPUAccessFlags = 0;
     depthStencilDesc.MiscFlags = 0;
 
-    ComPtr<ID3D11Texture2D> depthStencilTexture;
-    HRESULT hr = m_device->CreateTexture2D(&depthStencilDesc, nullptr, &depthStencilTexture);
+    HRESULT hr = m_device->CreateTexture2D(&depthStencilDesc, nullptr, &m_depthStencilTexture);
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create depth stencil texture", L"ERROR");
@@ -190,14 +191,28 @@ HRESULT GraphicsEngine::CreateDepthStencilView()
     }
 
     D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc = {};
-    depthStencilViewDesc.Format = depthStencilDesc.Format;
+    depthStencilViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     depthStencilViewDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
     depthStencilViewDesc.Texture2D.MipSlice = 0;
 
-    hr = m_device->CreateDepthStencilView(depthStencilTexture.Get(), &depthStencilViewDesc, &m_depthStencilView);
+    hr = m_device->CreateDepthStencilView(m_depthStencilTexture.Get(), &depthStencilViewDesc, &m_depthStencilView);
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create depth stencil view", L"ERROR");
+        return hr;
+    }
+
+    // Create SRV for depth reads (HiZ construction, post-processing)
+    D3D11_SHADER_RESOURCE_VIEW_DESC depthSRVDesc = {};
+    depthSRVDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    depthSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    depthSRVDesc.Texture2D.MipLevels = 1;
+    depthSRVDesc.Texture2D.MostDetailedMip = 0;
+
+    hr = m_device->CreateShaderResourceView(m_depthStencilTexture.Get(), &depthSRVDesc, &m_depthStencilSRV);
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create depth stencil SRV", L"ERROR");
         return hr;
     }
 

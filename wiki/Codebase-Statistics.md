@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 249070 |
+| **SparkEngine/Source** | 249232 |
 | **SparkEditor/Source** | 82920 |
 | **GameModules** | 57454 |
 | **Tests** | 94226 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~486061** |
+| **Total C++ (excl. ThirdParty)** | **~486223** |
 
 ### File Counts
 
@@ -32,9 +32,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~857 |
+| Average lines per .cpp file | ~858 |
 | Average lines per .h file | ~572 |
-| Largest codebase section | Graphics (99887 lines — 40% of SparkEngine/Source) |
+| Largest codebase section | Graphics (100049 lines — 40% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 99887 | 40.1% |
+| Graphics | 100049 | 40.1% |
 | Engine (all subsystems) | 73424 | 29.4% |
 | Utils | 33700 | 13.5% |
 | Core | 17549 | 7.0% |
@@ -157,11 +157,11 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `OpenGLDevice.cpp` | 1938 |
 | `SparkEngine.cpp` | 1889 |
 | `VulkanDevice.cpp` | 1728 |
-| `GraphicsEngine.cpp` | 1578 |
+| `GraphicsEngine.cpp` | 1695 |
 | `D3D12Device.cpp` | 1564 |
 | `D3D11Device.cpp` | 1470 |
+| `GraphicsDeviceResources.cpp` | 1334 |
 | `CrashHandler.cpp` | 1332 |
-| `GraphicsDeviceResources.cpp` | 1319 |
 | `LightingSystem.cpp` | 1283 |
 | `SaveSystem.cpp` | 1275 |
 
@@ -178,7 +178,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `SVGRenderer.h` | 803 |
 | `PhysicsTypes.h` | 779 |
 | `FastNoise2SIMD.h` | 749 |
-| `GraphicsEngine.h` | 725 |
+| `GraphicsEngine.h` | 729 |
 
 ### SparkEditor .cpp Files (by line count)
 

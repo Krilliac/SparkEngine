@@ -149,6 +149,7 @@ struct GraphicsSettings
     bool frustumCulling = true;
     bool occlusionCulling = false;
     bool levelOfDetail = true;
+    bool gpuDrivenRendering = false; ///< GPU-driven culling and indirect draw (Nanite-like)
     uint32_t maxDrawCalls = 1000;
 
     // Variable Rate Shading
