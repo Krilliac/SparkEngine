@@ -193,6 +193,13 @@ namespace Spark
          */
         template <typename E> void Publish(const E& event)
         {
+            // Guard against infinite recursion: if a handler re-publishes the same
+            // event type, the nested Publish is silently dropped.  Uses a thread_local
+            // flag so independent threads can publish concurrently.
+            thread_local bool publishing = false;
+            if (publishing)
+                return;
+
             ChannelOf<E>* ch = FindChannel<E>();
             if (!ch)
                 return;
@@ -205,6 +212,7 @@ namespace Spark
                     snapshot.push_back(entry.handler);
             }
 
+            publishing = true;
             for (auto& handler : snapshot)
             {
                 try
@@ -218,6 +226,7 @@ namespace Spark
                 {
                 }
             }
+            publishing = false;
         }
 
         /**

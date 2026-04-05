@@ -95,7 +95,7 @@ namespace GizmoTest
         }
         else
         {
-            result.axisParam = (b * d - a * e) / denom;
+            result.axisParam = (a * e - b * d) / denom;
         }
 
         result.closestOnAxis = axisOrigin + axisDir * result.axisParam;

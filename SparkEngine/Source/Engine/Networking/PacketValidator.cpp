@@ -95,7 +95,7 @@ namespace Spark::Net
         RegisterSchema(MessageType::EntityStateUpdate, {.minPayloadSize = 8,
                                                         .maxPayloadSize = 2048,
                                                         .requiresAuth = true,
-                                                        .allowedFromClient = false,
+                                                        .allowedFromClient = true,
                                                         .allowedFromServer = true});
 
         RegisterSchema(MessageType::EntityRPC, {.minPayloadSize = 4,
