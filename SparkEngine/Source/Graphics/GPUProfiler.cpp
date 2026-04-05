@@ -5,6 +5,8 @@
 
 #include "GPUProfiler.h"
 
+#include "Utils/LogMacros.h"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -21,6 +23,7 @@ namespace Spark::Graphics
 
     void GPUProfiler::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUProfiler::Initialize");
         m_frameIndex = 0;
         m_globalFrameCounter = 0;
         m_currentDepth = 0;

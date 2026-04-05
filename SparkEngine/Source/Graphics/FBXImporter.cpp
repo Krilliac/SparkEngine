@@ -5,6 +5,8 @@
 
 #include "FBXImporter.h"
 
+#include "Utils/LogMacros.h"
+
 #include <algorithm>
 #include <cstring>
 #include <fstream>
@@ -343,8 +345,18 @@ namespace Spark::Graphics
     {
         FBXImportResult result;
 
+        if (!data)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBXImporter::ImportFromMemory — null data pointer");
+            result.warnings.push_back("Null data pointer");
+            return result;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FBXImporter::ImportFromMemory — %zu bytes", size);
+
         if (!CanImportFromMemory(data, size))
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "FBXImporter: invalid FBX binary format (%zu bytes)", size);
             result.warnings.push_back("Invalid FBX binary format");
             return result;
         }
@@ -396,11 +408,13 @@ namespace Spark::Graphics
 
     FBXImportResult FBXImporter::Import(const std::string& filePath, const FBXImportOptions& options)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FBXImporter::Import — file='%s'", filePath.c_str());
         FBXImportResult result;
 
         std::ifstream file(filePath, std::ios::binary | std::ios::ate);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBXImporter: failed to open '%s'", filePath.c_str());
             result.warnings.push_back("Failed to open file: " + filePath);
             return result;
         }

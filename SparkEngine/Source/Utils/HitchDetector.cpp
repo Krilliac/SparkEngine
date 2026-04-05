@@ -5,6 +5,7 @@
 
 #include "Utils/HitchDetector.h"
 #include "../Core/Platform.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -22,8 +23,11 @@ namespace Spark
     void HitchDetector::Initialize()
     {
         if (m_initialized)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "HitchDetector already initialized");
             return;
-
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "HitchDetector::Initialize");
         Reset();
         m_initialized = true;
     }

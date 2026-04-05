@@ -5,6 +5,8 @@
 
 #include "SparkPakWriter.h"
 
+#include "Utils/LogMacros.h"
+
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -111,13 +113,18 @@ namespace Spark
 
     bool SparkPakWriter::Finalize(const std::string& outputPath) const
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SparkPakWriter::Finalize — writing %zu files to '%s'", m_files.size(),
+                       outputPath.c_str());
 #ifdef _WIN32
         FILE* file = _wfopen(std::filesystem::path(outputPath).wstring().c_str(), L"wb");
 #else
         FILE* file = std::fopen(outputPath.c_str(), "wb");
 #endif
         if (!file)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: failed to create '%s'", outputPath.c_str());
             return false;
+        }
 
         // Write placeholder header (will rewrite at end)
         PakHeader header;

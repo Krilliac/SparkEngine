@@ -44,6 +44,7 @@ namespace Spark::AI
 
     void CollisionAvoidanceSystem::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "CollisionAvoidanceSystem::Initialize");
         m_agents.clear();
         m_initialized = true;
     }

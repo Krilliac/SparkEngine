@@ -5,6 +5,8 @@
 
 #include "ArchiveResourceProvider.h"
 
+#include "Utils/LogMacros.h"
+
 #include <filesystem>
 
 namespace Spark
@@ -13,8 +15,13 @@ namespace Spark
     ArchiveResourceProvider::ArchiveResourceProvider(const std::string& archivePath)
         : m_reader(std::make_unique<SparkPakReader>())
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "ArchiveResourceProvider: opening '%s'", archivePath.c_str());
         if (!m_reader->Open(archivePath))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "ArchiveResourceProvider: failed to open '%s'",
+                            archivePath.c_str());
             m_reader.reset();
+        }
     }
 
     ArchiveResourceProvider::ArchiveResourceProvider(std::unique_ptr<SparkPakReader> reader)

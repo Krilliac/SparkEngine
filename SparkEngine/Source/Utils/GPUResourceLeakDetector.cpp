@@ -5,6 +5,7 @@
 
 #include "Utils/GPUResourceLeakDetector.h"
 #include "../Core/Platform.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 #include <cstdio>
@@ -22,7 +23,11 @@ namespace Spark
     void GPUResourceLeakDetector::Initialize()
     {
         if (m_initialized)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GPUResourceLeakDetector already initialized");
             return;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUResourceLeakDetector::Initialize");
 
         m_resources.clear();
         m_allocatedByType.fill(0);
@@ -42,8 +47,15 @@ namespace Spark
         // Report any still-alive resources at shutdown
         if (!m_resources.empty())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GPUResourceLeakDetector: %zu resources still alive at shutdown — potential leaks",
+                           m_resources.size());
             std::fprintf(stderr, "[GPUResourceLeakDetector] %zu resources still alive at shutdown\n",
                          m_resources.size());
+        }
+        else
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GPUResourceLeakDetector: clean shutdown, no leaks");
         }
 
         m_resources.clear();

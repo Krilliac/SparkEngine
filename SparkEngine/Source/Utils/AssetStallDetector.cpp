@@ -5,6 +5,7 @@
 
 #include "Utils/AssetStallDetector.h"
 #include "../Core/Platform.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 #include <cstdio>
@@ -22,7 +23,11 @@ namespace Spark
     void AssetStallDetector::Initialize()
     {
         if (m_initialized)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "AssetStallDetector already initialized");
             return;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "AssetStallDetector::Initialize");
 
         m_activeLoads.clear();
         m_nextId = 1;

@@ -18,6 +18,7 @@ namespace Spark::AI
 
     void TacticalPointSystem::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "TacticalPointSystem::Initialize");
         m_points.clear();
         m_buckets.clear();
         m_nextID = 1;
@@ -25,6 +26,7 @@ namespace Spark::AI
 
     void TacticalPointSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::AI, "TacticalPointSystem::Shutdown — %zu points", m_points.size());
         m_points.clear();
         m_buckets.clear();
         m_nextID = 1;

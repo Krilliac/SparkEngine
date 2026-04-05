@@ -7,6 +7,7 @@
 #include "../Core/Platform.h"
 #include "Utils/CrashHandler.h"
 #include "Utils/DeadlockDetector.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/StackTrace.h"
 
@@ -35,10 +36,16 @@ namespace Spark
     void FreezeDetector::Start()
     {
         if (!m_config.enabled)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FreezeDetector::Start — disabled by config");
             return;
+        }
 
         if (m_running.load(std::memory_order_relaxed))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "FreezeDetector::Start — already running");
             return; // Already running
+        }
 
         m_stopRequested.store(false, std::memory_order_relaxed);
         m_lastHeartbeat.store(std::chrono::steady_clock::now(), std::memory_order_release);

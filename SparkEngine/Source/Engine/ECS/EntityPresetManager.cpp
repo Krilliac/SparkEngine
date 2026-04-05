@@ -4,6 +4,7 @@
  */
 
 #include "EntityPresetManager.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 namespace Spark::ECS
@@ -17,14 +18,18 @@ namespace Spark::ECS
 
     void EntityPresetManager::Initialize()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::ECS, "EntityPresetManager::Initialize — registering built-in presets");
         RegisterBuiltinPresets();
 
         auto& console = SimpleConsole::GetInstance();
         console.LogInfo("[EntityPresetManager] Initialized with " + std::to_string(m_presets.size()) + " presets");
+        SPARK_LOG_INFO(Spark::LogCategory::ECS, "EntityPresetManager: %zu presets registered", m_presets.size());
     }
 
     void EntityPresetManager::RegisterPreset(EntityPreset preset)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "EntityPresetManager::RegisterPreset '%s' (category='%s')",
+                        preset.name.c_str(), preset.category.c_str());
         m_presets.push_back(std::move(preset));
     }
 
@@ -37,6 +42,7 @@ namespace Spark::ECS
                 return &preset;
             }
         }
+        SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "EntityPresetManager::FindPreset — '%s' not found", name.c_str());
         return nullptr;
     }
 

@@ -10,6 +10,7 @@
 #include "SeamlessAreaManager.h"
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/DebugHookManager.h"
+#include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
 #include "../../Utils/Validate.h"
 
@@ -29,8 +30,10 @@ namespace Spark::Streaming
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Streaming", 0.0);
         if (m_initialized)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Scene, "SeamlessAreaManager already initialized");
             return;
         }
+        SPARK_LOG_INFO(Spark::LogCategory::Scene, "SeamlessAreaManager::Initialize");
 
         m_areas.clear();
         m_loadedAreaIds.clear();

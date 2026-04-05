@@ -5,6 +5,7 @@
 
 #include "VisualScriptPanel.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
+#include "Utils/LogMacros.h"
 #include <imgui.h>
 
 #include <algorithm>
@@ -1295,9 +1296,14 @@ namespace SparkEditor
 
     void VisualScriptPanel::SaveGraph(const std::string& path)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "VisualScriptPanel::SaveGraph — '%s' (%zu nodes, %zu connections)",
+                       path.c_str(), m_nodes.size(), m_connections.size());
         std::ofstream file(path);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "SaveGraph: failed to open '%s' for writing", path.c_str());
             return;
+        }
 
         // Simple JSON serialization
         file << "{\n";
