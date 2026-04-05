@@ -454,7 +454,19 @@ static void SetupCrashHandler()
     crashCfg.githubRepo = cr.githubRepo;
     crashCfg.githubToken = cr.githubToken;
 
-    // Env var overrides (take precedence over settings file)
+    // Compile-time defaults (set via CMake -DSPARK_CRASH_GITHUB_REPO=... -DSPARK_CRASH_GITHUB_TOKEN=...)
+    // These are baked into release builds so end users can submit crash reports
+    // without needing any configuration.
+#ifdef SPARK_CRASH_GITHUB_REPO_DEFAULT
+    if (crashCfg.githubRepo.empty())
+        crashCfg.githubRepo = SPARK_CRASH_GITHUB_REPO_DEFAULT;
+#endif
+#ifdef SPARK_CRASH_GITHUB_TOKEN_DEFAULT
+    if (crashCfg.githubToken.empty())
+        crashCfg.githubToken = SPARK_CRASH_GITHUB_TOKEN_DEFAULT;
+#endif
+
+    // Env var overrides (take precedence over everything)
     const char* envRepo = std::getenv("SPARK_GITHUB_REPO");
     const char* envToken = std::getenv("SPARK_GITHUB_TOKEN");
     if (envRepo && envToken)
