@@ -285,6 +285,10 @@ add_executable(SparkTests
     # Asset pipeline and GPU profiling
     TestFBXImporter.cpp
     TestTextureCompressor.cpp
+    TestNeuralInference.cpp
+    TestNeuralTextureCompressor.cpp
+    TestNeuralRadianceCache.cpp
+    TestNeuralPostProcessing.cpp
     TestGPUProfiler.cpp
     TestShaderHotReloadCompilation.cpp
     # Editor, gameplay, LOD, AI debug

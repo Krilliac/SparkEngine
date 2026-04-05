@@ -37,6 +37,7 @@ namespace Spark::Graphics
         ASTC_4x4,    ///< ASTC 4x4 block, mobile-friendly
         ASTC_6x6,    ///< ASTC 6x6 block, higher compression
         ASTC_8x8,    ///< ASTC 8x8 block, maximum compression
+        Neural,      ///< Neural texture compression (MLP per block)
         Uncompressed ///< No compression (passthrough)
     };
 

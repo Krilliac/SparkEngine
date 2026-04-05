@@ -111,6 +111,7 @@ else()
 endif()
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
+option(ENABLE_NEURAL_RENDERING "Enable neural rendering features (NTC, radiance cache, neural post-processing)" ON)
 option(BUILD_TESTS "Build test suite" ON)
 option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)" ON)
 option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
@@ -1421,6 +1422,15 @@ if(APPLE)
     set(CMAKE_INSTALL_RPATH "@executable_path;@executable_path/../lib")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
     message(STATUS "SparkEngine: macOS frameworks linked (Cocoa, IOKit, CoreVideo)")
+endif()
+
+# --- Neural Rendering ---
+if(ENABLE_NEURAL_RENDERING)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_NEURAL_RENDERING=1)
+    message(STATUS "SparkEngine: Neural Rendering ENABLED (NTC, radiance cache, neural post-processing)")
+else()
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Neural/.*")
+    message(STATUS "SparkEngine: Neural Rendering DISABLED")
 endif()
 
 # --- Hybrid Ray Tracing ---
