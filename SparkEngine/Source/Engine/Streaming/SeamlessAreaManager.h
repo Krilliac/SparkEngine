@@ -36,6 +36,8 @@
 #pragma once
 
 #include "../../Core/Platform.h"
+#include "AreaAssetLoader.h"
+#include "SceneManifest.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -168,6 +170,20 @@ namespace Spark::Streaming
         void RegisterArea(const AreaDefinition& def);
 
         /**
+         * @brief Register an area with an associated asset manifest
+         * @param def The area definition
+         * @param manifest The scene manifest listing assets to load for this area
+         */
+        void RegisterArea(const AreaDefinition& def, SceneManifest manifest);
+
+        /**
+         * @brief Set or replace the scene manifest for an area
+         * @param areaId Area to set the manifest for
+         * @param manifest The scene manifest listing assets to load
+         */
+        void SetManifest(AreaID areaId, SceneManifest manifest);
+
+        /**
          * @brief Remove an area from the streaming system
          * @param areaId Area to remove
          */
@@ -201,6 +217,14 @@ namespace Spark::Streaming
 
         void RegisterStateCallback(AreaStateChangedCallback callback);
 
+        // -- Asset loader --
+
+        /**
+         * @brief Get the area asset loader (for diagnostics or direct access)
+         */
+        AreaAssetLoader& GetAssetLoader() { return m_assetLoader; }
+        const AreaAssetLoader& GetAssetLoader() const { return m_assetLoader; }
+
         // -- Diagnostics --
 
         std::string Console_GetStatus() const;
@@ -216,6 +240,9 @@ namespace Spark::Streaming
         void ProcessUnloadQueue();
         AreaID FindContainingArea(const XMFLOAT3& point) const;
         void TransitionAreaState(ManagedArea& area, AreaState newState);
+
+        // Asset loader bridge
+        AreaAssetLoader m_assetLoader;
 
         // Area database
         std::unordered_map<AreaID, ManagedArea> m_areas;

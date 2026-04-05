@@ -6,6 +6,7 @@
 #include "OWWorldSetup.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Engine/Streaming/SceneManifest.h"
 #include "Engine/Streaming/SeamlessAreaManager.h"
 
 #ifdef ENABLE_EDITOR
@@ -263,7 +264,17 @@ namespace OpenWorld
             def.scenePath = "Assets/Scenes/OpenWorld/" + region.name + ".scene";
             def.priority = (region.dangerLevel <= 2) ? 2 : 1;
 
-            streamingMgr.RegisterArea(def);
+            // Build a scene manifest for this biome's assets
+            Spark::Streaming::SceneManifest manifest;
+            manifest.name = region.name;
+            std::string basePath = "Assets/OpenWorld/" + region.name + "/";
+            manifest.meshPaths.push_back(basePath + "terrain.mesh");
+            manifest.meshPaths.push_back(basePath + "props.mesh");
+            manifest.texturePaths.push_back(basePath + "terrain_albedo.dds");
+            manifest.texturePaths.push_back(basePath + "terrain_normal.dds");
+            manifest.audioPaths.push_back(basePath + "ambience.wav");
+
+            streamingMgr.RegisterArea(def, std::move(manifest));
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world areas registered with SeamlessAreaManager");
