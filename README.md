@@ -522,6 +522,9 @@ All options are passed to CMake via `-D<OPTION>=ON/OFF`.
 | `ENABLE_DXR` | ON | DirectX Raytracing (Windows/D3D12; SDFGI fallback on other platforms) |
 | `ENABLE_HYBRID_RT` | ON | Hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT) |
 | `ENABLE_RECAST` | ON | Recast/Detour navmesh generation |
+| `ENABLE_NEURAL_RENDERING` | ON | Neural rendering features (NTC, radiance cache, neural post-processing) |
+| `ENABLE_VR` | OFF | VR/AR framework (OpenXR-ready stub) |
+| `ENABLE_MOBILE` | OFF | Mobile platform support (touch, gestures, battery-aware scaling) |
 | `ENABLE_SDL2` | OFF | SDL2 cross-platform input (auto-enabled on Linux) |
 | `SPARK_HEADLESS_SUPPORT` | ON | Headless/dedicated server mode support |
 | `BUILD_TESTS` | ON | Build test suite (CTest) |

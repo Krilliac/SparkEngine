@@ -1,6 +1,6 @@
 # Rendering and Graphics
 
-SparkEngine's rendering system is built on DirectX 11 with experimental Vulkan and OpenGL backends through a Render Hardware Interface (RHI) abstraction layer. The `GraphicsEngine` class manages the entire rendering pipeline including PBR materials, multiple render paths, post-processing, temporal effects, texture streaming, and comprehensive console integration.
+SparkEngine's rendering system supports six backends — DirectX 11 (stable), DirectX 12 (mesh shaders, DXR, VRS), Vulkan 1.4, OpenGL 4.6, Metal (in progress), and NullRHIDevice (headless) — through a Render Hardware Interface (RHI) abstraction layer. The `GraphicsEngine` class manages the entire rendering pipeline including PBR materials, multiple render paths (forward, deferred, forward+, clustered), a declarative RenderGraph, global illumination (DDGI + Adaptive Probe Volumes), GPU-driven rendering, mesh shaders, virtual texturing, DXR 1.1 ray tracing, post-processing, temporal effects, texture streaming, and comprehensive console integration.
 
 **Source:** `SparkEngine/Source/Graphics/`
 
@@ -29,13 +29,18 @@ SparkEngine's rendering system is built on DirectX 11 with experimental Vulkan a
 │  GPUSceneBuffer | ConstantBufferRing | GPUDebugMarkers               │
 │  GPUTimestampQuery | DrawSortKey                                     │
 ├──────────────────────────────────────────────────────────────────────┤
+│  Advanced Rendering Systems                                          │
+│  DDGIProbeSystem | AdaptiveProbeVolumes | HybridRTManager            │
+│  GPUDrivenRenderer | GPUOcclusionCulling | MeshShaderPipeline         │
+│  MeshClusterSystem | VirtualTexture | ShaderGraphCompiler             │
+├──────────────────────────────────────────────────────────────────────┤
 │                     RHI Abstraction Layer                            │
 │  IRHIDevice | IRHICommandList | IRHISwapChain                        │
-│  D3D11Device | VulkanDevice | OpenGLDevice | NullRHIDevice           │
+│  D3D11 | D3D12 | Vulkan | OpenGL | Metal (WIP) | NullRHI            │
 └──────────────────────────────────────────────────────────────────────┘
-         │                    │                    │              │
-         ▼                    ▼                    ▼              ▼
-   DirectX 11 API      Vulkan API (exp.)  OpenGL API (exp.)  No-op (headless)
+         │          │           │            │           │          │
+         ▼          ▼           ▼            ▼           ▼          ▼
+       DX11 API  DX12 API  Vulkan API  OpenGL API  Metal API   No-op
 ```
 
 ### Key Source Files
@@ -55,6 +60,19 @@ SparkEngine's rendering system is built on DirectX 11 with experimental Vulkan a
 | `MeshLOD.h` | Automatic LOD generation with distance-based switching |
 | `DecalSystem.h` | Projected decals (bullet holes, blood, scorch marks) |
 | `ParticleSystem.h` | GPU-accelerated particle system |
+| `DDGIProbeSystem.h` | Dynamic Diffuse GI with probe grids and spherical harmonics |
+| `AdaptiveProbeVolumes.h` | Brick-based hierarchical GI probes with 3 LOD levels |
+| `HybridRT/HybridRTManager.h` | Hybrid ray tracing pipeline with SDF fallback |
+| `VirtualTexture.h` | Feedback-driven virtual texture streaming with LRU cache |
+| `MeshShaderPipeline.h` | Meshlet pipeline with amplification/mesh shaders |
+| `GPUDrivenRenderer.h` | Compute-based frustum culling and indirect draw generation |
+| `GPUOcclusionCulling.h` | Hierarchical Z-buffer occlusion testing |
+| `MeshClusterSystem.h` | DAG-based cluster hierarchy for virtual geometry |
+| `LODGenerator.h` | Automatic mesh simplification via edge collapse |
+| `ShaderGraph/ShaderGraphCompiler.h` | Node-based shader graph to HLSL compilation |
+| `RHI/DXRSupport.h` | DXR 1.1 ray tracing (reflections, shadows, AO, GI) |
+| `RHI/D3D12Device.h` | DirectX 12 backend with mesh shaders, DXR, VRS |
+| `RenderGraph/RenderGraph.h` | Declarative render pass graph |
 
 ---
 
@@ -741,8 +759,18 @@ DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./SparkEngine
 
 ## See Also
 
-- [Entity Component System](Entity-Component-System) -- MeshRenderer, LightComponent, and ParticleEmitter components
+- [Global Illumination](Global-Illumination) -- DDGI, Adaptive Probe Volumes, hybrid ray tracing
+- [GPU Driven Rendering](GPU-Driven-Rendering) -- Compute culling, HiZ occlusion, indirect draws
+- [Mesh Shaders](Mesh-Shaders) -- Meshlet pipeline, amplification/mesh shaders
+- [Virtual Texturing](Virtual-Texturing) -- Feedback-driven page streaming
+- [DXR Raytracing](DXR-Raytracing) -- Ray-traced reflections, shadows, AO, GI
+- [Hybrid Ray Tracing](Hybrid-Ray-Tracing) -- Software SDF + hardware DXR pipeline
+- [Shader Graph](Shader-Graph) -- Node-based visual material authoring
+- [Render Graph](Render-Graph) -- Declarative render pass system
+- [RHI Abstraction Layer](RHI-Abstraction-Layer) -- Multi-backend device interface
+- [D3D12 Backend](D3D12-Backend) -- DirectX 12 features
 - [Shader Pipeline](Shader-Pipeline) -- Shader authoring and compilation
+- [Entity Component System](Entity-Component-System) -- MeshRenderer, LightComponent, and ParticleEmitter components
 - [Asset Pipeline](Asset-Pipeline) -- Model and texture loading
 - [SparkEditor](SparkEditor) -- Material editor and visual tools
 - [Animation](Animation) -- Skeletal animation and blending

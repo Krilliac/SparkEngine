@@ -114,8 +114,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| CMake option() declarations | 21 |
-| ENABLE_* feature toggles | 13 |
+| CMake option() declarations | 23 |
+| ENABLE_* feature toggles | 15 |
 | Game modules | 10 |
 | SDK public headers | 10 |
 | Supported compilers | MSVC v143/v144, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
