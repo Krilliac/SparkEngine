@@ -4,6 +4,11 @@
  * @file GraphicsEngine.cpp
  * @brief Central rendering orchestrator for SparkEngine (D3D11)
  *
+ * @note MEMORY INTEGRITY GUARDS: NOT INCLUDED in this file.
+ * Reason: The render loop is a per-frame hot path. Branch guards here would
+ * add overhead to every draw call. Graphics cheats (wallhacks, ESP) are better
+ * detected server-side via gameplay validation, not by guarding the renderer.
+ *
  * Core lifecycle: construction, initialization, shutdown, frame management,
  * scene rendering dispatch, ECS draw submission, and system accessors.
  *

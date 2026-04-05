@@ -3,6 +3,11 @@
  * @brief Implementation of the debug-only RHI validation layer
  * @author Spark Engine Team
  * @date 2026
+ *
+ * @note MEMORY INTEGRITY GUARDS: NOT INCLUDED in this file.
+ * Reason: This is a debug-only validation layer (compiled out in NDEBUG).
+ * It validates rendering API usage, not security-critical game logic.
+ * Attackers gain nothing by bypassing graphics validation checks.
  */
 
 #include "RHIValidationLayer.h"

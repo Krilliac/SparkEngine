@@ -7,6 +7,7 @@
 #include "../../Utils/DeferredDeletion.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
+#include "../Security/MemoryIntegrity.h"
 #include "../ECS/Components/GameplayComponents.h"
 #include "../Events/EventSystem.h"
 
@@ -123,13 +124,15 @@ namespace Spark::Gameplay
             return false;
         }
 
-        // Cooldown check
+        // Cooldown check — bypassing allows infinite ability spam
         auto& casterCooldowns = m_cooldowns[caster];
+        SPARK_BRANCH_GUARD_BEGIN("ability_cooldown_check")
         auto cdIt = casterCooldowns.find(abilityId);
         if (cdIt != casterCooldowns.end() && cdIt->second > 0.0f)
         {
             return false;
         }
+        SPARK_BRANCH_GUARD_END("ability_cooldown_check")
 
         // Target validation
         if (def->requiresTarget && def->targetType != AbilityTargetType::Self && target == 0)
@@ -375,6 +378,10 @@ namespace Spark::Gameplay
         {
         case EffectType::Damage:
         {
+            // Memory integrity: bypassing damage validation allows negative
+            // damage (healing via damage), infinite damage, or skipping death
+            SPARK_INTEGRITY_CHECKPOINT("ability_damage_validation");
+
             float amount = effect.baseValue * effect.scaling;
             if (amount <= 0.0f)
             {
@@ -404,7 +411,8 @@ namespace Spark::Gameplay
             ProcessProcs(world, static_cast<uint32_t>(ProcTrigger::OnDealDamage), caster, target, effect.school);
             ProcessProcs(world, static_cast<uint32_t>(ProcTrigger::OnTakeDamage), target, caster, effect.school);
 
-            // Kill check
+            // Kill check — bypassing prevents death processing (god mode exploit)
+            SPARK_BRANCH_GUARD_BEGIN("ability_kill_check")
             if (!wasDead && hp->isDead)
             {
                 if (m_eventBus)
@@ -418,6 +426,8 @@ namespace Spark::Gameplay
                 ProcessProcs(world, static_cast<uint32_t>(ProcTrigger::OnKill), caster, target, effect.school);
                 ProcessProcs(world, static_cast<uint32_t>(ProcTrigger::OnDeath), target, caster, effect.school);
             }
+            SPARK_BRANCH_GUARD_END("ability_kill_check")
+            SPARK_VERIFY_CHECKPOINT("ability_damage_validation");
             break;
         }
 
@@ -540,11 +550,13 @@ namespace Spark::Gameplay
             {
                 hp->maxHealth = 1.0f;
             }
-            // Clamp current health to new max
+            // Clamp current health to new max — bypassing allows infinite health
+            SPARK_BRANCH_GUARD_BEGIN("ability_health_cap")
             if (hp->health > hp->maxHealth)
             {
                 hp->health = hp->maxHealth;
             }
+            SPARK_BRANCH_GUARD_END("ability_health_cap")
 
             SPARK_LOG_DEBUG(Spark::LogCategory::Game, "AbilitySystem: Modified attribute on entity %u (maxHealth=%.1f)",
                             target, hp->maxHealth);

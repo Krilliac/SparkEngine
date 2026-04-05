@@ -9,6 +9,7 @@
  */
 
 #include "DedicatedServer.h"
+#include "../Security/MemoryIntegrity.h"
 
 #ifdef ENABLE_NETWORKING
 
@@ -132,7 +133,10 @@ namespace Spark::Net
                                    buf.WriteBytes(msg.payload.data(), msg.payload.size());
                                    std::string chatText = buf.ReadString();
 
-                                   // Check for RCON prefix
+                                   // Check for RCON prefix — bypassing this gate allows
+                                   // any client to execute server admin commands (kick, ban,
+                                   // map change, shutdown). Critical security boundary.
+                                   SPARK_BRANCH_GUARD_BEGIN("rcon_command_gate")
                                    if (chatText.size() > 1 && chatText[0] == '/')
                                    {
                                        std::string rconCmd = chatText.substr(1);
@@ -147,6 +151,7 @@ namespace Spark::Net
                                        NetworkManager::GetInstance().SendToClient(msg.senderID, reply);
                                        return;
                                    }
+                                   SPARK_BRANCH_GUARD_END("rcon_command_gate")
 
                                    // Broadcast chat to all clients
                                    NetworkMessage broadcast;

@@ -6,6 +6,7 @@
 #include "ScriptSandbox.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
+#include "../Security/MemoryIntegrity.h"
 
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
 #include <angelscript.h>
@@ -166,7 +167,13 @@ namespace Spark
 
         sandbox->m_instructionCount += LINE_CALLBACK_INTERVAL;
 
+        // Memory integrity: prove sandbox enforcement checks actually run.
+        // Bypassing these allows scripts to run indefinitely, exhaust memory,
+        // or escape the sandbox entirely.
+        SPARK_INTEGRITY_CHECKPOINT("sandbox_enforcement");
+
         // Check instruction limit
+        SPARK_BRANCH_GUARD_BEGIN("sandbox_instruction_limit")
         if (sandbox->m_maxInstructions > 0 && sandbox->m_instructionCount >= sandbox->m_maxInstructions)
         {
             sandbox->m_wasTerminated = true;
@@ -176,8 +183,10 @@ namespace Spark
             ctx->Abort();
             return;
         }
+        SPARK_BRANCH_GUARD_END("sandbox_instruction_limit")
 
         // Check execution timeout
+        SPARK_BRANCH_GUARD_BEGIN("sandbox_timeout")
         if (sandbox->m_maxExecutionTimeSec > 0)
         {
             auto elapsed = std::chrono::steady_clock::now() - sandbox->m_executionStart;
@@ -193,8 +202,10 @@ namespace Spark
                 return;
             }
         }
+        SPARK_BRANCH_GUARD_END("sandbox_timeout")
 
         // Check memory limit
+        SPARK_BRANCH_GUARD_BEGIN("sandbox_memory_limit")
         if (sandbox->m_maxMemoryBytes > 0 && sandbox->m_currentMemoryUsage > sandbox->m_maxMemoryBytes)
         {
             sandbox->m_wasTerminated = true;
@@ -204,6 +215,9 @@ namespace Spark
             ctx->Abort();
             return;
         }
+        SPARK_BRANCH_GUARD_END("sandbox_memory_limit")
+
+        SPARK_VERIFY_CHECKPOINT("sandbox_enforcement");
     }
 #endif
 

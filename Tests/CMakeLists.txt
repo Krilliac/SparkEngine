@@ -306,6 +306,8 @@ add_executable(SparkTests
     TestSparkGameRTS.cpp
     TestSparkGameRacing.cpp
     TestSparkGamePlatformer.cpp
+    # Security
+    TestMemoryIntegrity.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"

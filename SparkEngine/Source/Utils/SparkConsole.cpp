@@ -1,5 +1,6 @@
 #include "SparkConsole.h"
 #include "../Core/Platform.h"
+#include "../Engine/Security/MemoryIntegrity.h"
 #include "ConsoleVariable.h"
 #include "Hash.h"
 #include "Validate.h"
@@ -429,7 +430,8 @@ namespace Spark
                 return false;
             }
 
-            // Permission check
+            // Permission check — bypassing allows any user to run admin/dev commands
+            SPARK_BRANCH_GUARD_BEGIN("console_permission_check")
             if (m_currentPermission < it->second.requiredPermission)
             {
                 LogError("Permission denied: '" + command + "' requires " +
@@ -437,6 +439,7 @@ namespace Spark
                 m_stats.totalCommandsFailed++;
                 return false;
             }
+            SPARK_BRANCH_GUARD_END("console_permission_check")
             entry = it->second;
         }
 

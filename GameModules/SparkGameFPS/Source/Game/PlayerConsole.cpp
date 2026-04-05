@@ -1,4 +1,5 @@
 #include "Core/Platform.h"
+#include "Engine/Security/MemoryIntegrity.h"
 #include "Player.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "Utils/LogMacros.h"
@@ -66,6 +67,8 @@ void Player::Console_SetMaxHealth(float maxHealth)
 void Player::Console_SetSpeed(float speed)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
+    // Speed validation — bypassing allows speed hacking
+    SPARK_BRANCH_GUARD_BEGIN("fps_speed_validation")
     if (speed > 0.0f && speed <= 100.0f)
     {
         m_speed = speed;
@@ -76,11 +79,14 @@ void Player::Console_SetSpeed(float speed)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Invalid speed value. Must be between 0.1 and 100", L"ERROR");
     }
+    SPARK_BRANCH_GUARD_END("fps_speed_validation")
 }
 
 void Player::Console_SetJumpHeight(float height)
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
+    // Jump validation — bypassing allows infinite vertical flight
+    SPARK_BRANCH_GUARD_BEGIN("fps_jump_validation")
     if (height > 0.0f && height <= 50.0f)
     {
         m_jumpHeight = height;
@@ -92,6 +98,7 @@ void Player::Console_SetJumpHeight(float height)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Invalid jump height. Must be between 0.1 and 50", L"ERROR");
     }
+    SPARK_BRANCH_GUARD_END("fps_jump_validation")
 }
 
 void Player::Console_SetPosition(float x, float y, float z)

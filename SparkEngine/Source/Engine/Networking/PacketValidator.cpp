@@ -7,6 +7,7 @@
 #include "NetworkManager.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
+#include "../Security/MemoryIntegrity.h"
 
 #include <algorithm>
 #include <format>
@@ -162,11 +163,17 @@ namespace Spark::Net
     ValidationResult PacketValidator::ValidatePacket(const NetworkMessage& msg, bool senderIsAuthenticated,
                                                      bool senderIsClient) const
     {
+        // Memory integrity: prove the packet validation pipeline actually runs.
+        // If an attacker NOP's this function, the checkpoint will never fire and
+        // VerifyBranchExecuted will flag a bypass.
+        SPARK_INTEGRITY_CHECKPOINT("packet_validation_entry");
+
         m_stats.totalValidated++;
 
         size_t payloadSize = msg.payload.size();
 
         // Global max payload size
+        SPARK_BRANCH_GUARD_BEGIN("packet_size_check")
         if (payloadSize > m_maxPayloadSize)
         {
             m_stats.totalRejected++;
@@ -174,6 +181,7 @@ namespace Spark::Net
             return {false, PacketViolation::PayloadTooLarge,
                     std::format("Payload {} bytes exceeds global max {}", payloadSize, m_maxPayloadSize)};
         }
+        SPARK_BRANCH_GUARD_END("packet_size_check")
 
         // Look up per-type schema
         auto schemaIt = m_schemas.find(msg.type);
@@ -213,7 +221,8 @@ namespace Spark::Net
                                 static_cast<uint16_t>(msg.type))};
         }
 
-        // Authentication check
+        // Authentication check — bypassing this allows unauthenticated privilege escalation
+        SPARK_BRANCH_GUARD_BEGIN("packet_auth_check")
         if (schema.requiresAuth && !senderIsAuthenticated)
         {
             m_stats.totalRejected++;
@@ -221,8 +230,10 @@ namespace Spark::Net
             return {false, PacketViolation::Unauthenticated,
                     std::format("Message type {} requires authentication", static_cast<uint16_t>(msg.type))};
         }
+        SPARK_BRANCH_GUARD_END("packet_auth_check")
 
-        // Direction check
+        // Direction check — bypassing allows clients to send server-only commands
+        SPARK_BRANCH_GUARD_BEGIN("packet_direction_check")
         if (senderIsClient && !schema.allowedFromClient)
         {
             m_stats.totalRejected++;
@@ -238,7 +249,9 @@ namespace Spark::Net
             return {false, PacketViolation::DirectionViolation,
                     std::format("Message type {} not allowed from server", static_cast<uint16_t>(msg.type))};
         }
+        SPARK_BRANCH_GUARD_END("packet_direction_check")
 
+        SPARK_VERIFY_CHECKPOINT("packet_validation_entry");
         return {true, PacketViolation::None, ""};
     }
 

@@ -3,6 +3,12 @@
  * @brief Implementation of the enhanced editor application class
  * @author Spark Engine Team
  * @date 2025
+ *
+ * @note MEMORY INTEGRITY GUARDS: NOT INCLUDED in editor code.
+ * Reason: The editor is a development tool, not a shipping game client.
+ * Protecting editor branches would interfere with normal development
+ * workflows (breakpoints, hot-reload, live editing). Memory integrity
+ * is enforced in the engine runtime and game modules only.
  */
 
 #include "EditorApplication.h"
