@@ -163,6 +163,12 @@ void EngineSettings::ResetToDefaults()
     m_scripting = ScriptingSettings{};
     m_animation = AnimationSettings{};
     m_crashReporting = CrashReportingSettings{};
+    m_weather = WeatherSettings{};
+    m_timeOfDay = TimeOfDaySettings{};
+    m_streaming = StreamingSettings{};
+    m_performance = PerformanceSettings{};
+    m_world = WorldSettings{};
+    m_ui = UISettings{};
     m_logging = LoggingSettings{};
     PopulateDefaults();
 }
@@ -471,6 +477,73 @@ void EngineSettings::ReadFromConfig()
     // Debug
     m_debug.suppressFatalAsserts = m_config.GetBool("Debug", "SuppressFatalAsserts", false);
     m_debug.breakOnSuppressedAsserts = m_config.GetBool("Debug", "BreakOnSuppressedAsserts", true);
+
+    // Weather
+    m_weather.weatherType = m_config.GetInt("Weather", "WeatherType", 0);
+    m_weather.intensity = m_config.GetFloat("Weather", "Intensity", 0.0f);
+    m_weather.transitionTime = m_config.GetFloat("Weather", "TransitionTime", 5.0f);
+    m_weather.windSpeed = m_config.GetFloat("Weather", "WindSpeed", 0.0f);
+    m_weather.windDirectionX = m_config.GetFloat("Weather", "WindDirectionX", 1.0f);
+    m_weather.windDirectionY = m_config.GetFloat("Weather", "WindDirectionY", 0.0f);
+    m_weather.windDirectionZ = m_config.GetFloat("Weather", "WindDirectionZ", 0.0f);
+    m_weather.windGustiness = m_config.GetFloat("Weather", "WindGustiness", 0.0f);
+    m_weather.fogDensity = m_config.GetFloat("Weather", "FogDensity", 0.0f);
+    m_weather.fogStartDistance = m_config.GetFloat("Weather", "FogStartDistance", 10.0f);
+    m_weather.fogEndDistance = m_config.GetFloat("Weather", "FogEndDistance", 500.0f);
+    m_weather.precipitationRate = m_config.GetFloat("Weather", "PrecipitationRate", 100.0f);
+    m_weather.precipitationSize = m_config.GetFloat("Weather", "PrecipitationSize", 1.0f);
+    m_weather.lightningFrequency = m_config.GetFloat("Weather", "LightningFrequency", 0.0f);
+    m_weather.thunderDelay = m_config.GetFloat("Weather", "ThunderDelay", 2.0f);
+    m_weather.ambientMultiplier = m_config.GetFloat("Weather", "AmbientMultiplier", 1.0f);
+    m_weather.directionalMultiplier = m_config.GetFloat("Weather", "DirectionalMultiplier", 1.0f);
+
+    // TimeOfDay
+    m_timeOfDay.startHour = m_config.GetFloat("TimeOfDay", "StartHour", 12.0f);
+    m_timeOfDay.timeScale = m_config.GetFloat("TimeOfDay", "TimeScale", 60.0f);
+    m_timeOfDay.paused = m_config.GetBool("TimeOfDay", "Paused", false);
+    m_timeOfDay.sunriseHour = m_config.GetFloat("TimeOfDay", "SunriseHour", 6.0f);
+    m_timeOfDay.sunsetHour = m_config.GetFloat("TimeOfDay", "SunsetHour", 20.0f);
+    m_timeOfDay.moonIntensity = m_config.GetFloat("TimeOfDay", "MoonIntensity", 0.1f);
+    m_timeOfDay.ambientNightMultiplier = m_config.GetFloat("TimeOfDay", "AmbientNightMultiplier", 0.2f);
+
+    // Streaming
+    m_streaming.drawDistance = m_config.GetFloat("Streaming", "DrawDistance", 1000.0f);
+    m_streaming.lodDistanceMultiplier = m_config.GetFloat("Streaming", "LODDistanceMultiplier", 1.0f);
+    m_streaming.streamingDistance = m_config.GetFloat("Streaming", "StreamingDistance", 2000.0f);
+    m_streaming.maxLoadedAreas = m_config.GetInt("Streaming", "MaxLoadedAreas", 4);
+    m_streaming.lodBias = m_config.GetFloat("Streaming", "LODBias", 0.0f);
+    m_streaming.maxConcurrentLoads = m_config.GetInt("Streaming", "MaxConcurrentLoads", 2);
+    m_streaming.enableStreaming = m_config.GetBool("Streaming", "EnableStreaming", true);
+    m_streaming.shadowDrawDistance = m_config.GetFloat("Streaming", "ShadowDrawDistance", 200.0f);
+
+    // Performance
+    m_performance.targetFPS = m_config.GetInt("Performance", "TargetFPS", 0);
+    m_performance.workerThreadCount = m_config.GetInt("Performance", "WorkerThreadCount", 0);
+    m_performance.enableJobSystem = m_config.GetBool("Performance", "EnableJobSystem", true);
+    m_performance.maxParticles = m_config.GetInt("Performance", "MaxParticles", 10000);
+    m_performance.maxDecals = m_config.GetInt("Performance", "MaxDecals", 256);
+    m_performance.enableAsyncCompute = m_config.GetBool("Performance", "EnableAsyncCompute", false);
+    m_performance.enableAsyncLoading = m_config.GetBool("Performance", "EnableAsyncLoading", true);
+    m_performance.objectPoolGrowthFactor = m_config.GetFloat("Performance", "ObjectPoolGrowthFactor", 1.5f);
+
+    // World
+    m_world.originRebaseThreshold = m_config.GetFloat("World", "OriginRebaseThreshold", 5000.0f);
+    m_world.defaultGravityScale = m_config.GetFloat("World", "DefaultGravityScale", 1.0f);
+    m_world.enableOriginRebasing = m_config.GetBool("World", "EnableOriginRebasing", true);
+    m_world.worldBoundsMin = m_config.GetFloat("World", "WorldBoundsMin", -100000.0f);
+    m_world.worldBoundsMax = m_config.GetFloat("World", "WorldBoundsMax", 100000.0f);
+
+    // UI
+    m_ui.uiScale = m_config.GetFloat("UI", "UIScale", 1.0f);
+    m_ui.fontSize = m_config.GetFloat("UI", "FontSize", 14.0f);
+    m_ui.showCrosshair = m_config.GetBool("UI", "ShowCrosshair", true);
+    m_ui.showHUD = m_config.GetBool("UI", "ShowHUD", true);
+    m_ui.showMinimap = m_config.GetBool("UI", "ShowMinimap", true);
+    m_ui.showDamageNumbers = m_config.GetBool("UI", "ShowDamageNumbers", true);
+    m_ui.showSubtitles = m_config.GetBool("UI", "ShowSubtitles", true);
+    m_ui.hudOpacity = m_config.GetFloat("UI", "HUDOpacity", 1.0f);
+    m_ui.subtitleSize = m_config.GetFloat("UI", "SubtitleSize", 1.0f);
+    m_ui.showInteractionPrompts = m_config.GetBool("UI", "ShowInteractionPrompts", true);
 
     // Logging
     m_logging.globalLevel = m_config.GetString("Logging", "GlobalLevel", "Info");
@@ -802,6 +875,73 @@ void EngineSettings::WriteToConfig() const
     m_config.SetBool("Debug", "SuppressFatalAsserts", m_debug.suppressFatalAsserts);
     m_config.SetBool("Debug", "BreakOnSuppressedAsserts", m_debug.breakOnSuppressedAsserts);
 
+    // Weather
+    m_config.SetInt("Weather", "WeatherType", m_weather.weatherType);
+    m_config.SetFloat("Weather", "Intensity", m_weather.intensity);
+    m_config.SetFloat("Weather", "TransitionTime", m_weather.transitionTime);
+    m_config.SetFloat("Weather", "WindSpeed", m_weather.windSpeed);
+    m_config.SetFloat("Weather", "WindDirectionX", m_weather.windDirectionX);
+    m_config.SetFloat("Weather", "WindDirectionY", m_weather.windDirectionY);
+    m_config.SetFloat("Weather", "WindDirectionZ", m_weather.windDirectionZ);
+    m_config.SetFloat("Weather", "WindGustiness", m_weather.windGustiness);
+    m_config.SetFloat("Weather", "FogDensity", m_weather.fogDensity);
+    m_config.SetFloat("Weather", "FogStartDistance", m_weather.fogStartDistance);
+    m_config.SetFloat("Weather", "FogEndDistance", m_weather.fogEndDistance);
+    m_config.SetFloat("Weather", "PrecipitationRate", m_weather.precipitationRate);
+    m_config.SetFloat("Weather", "PrecipitationSize", m_weather.precipitationSize);
+    m_config.SetFloat("Weather", "LightningFrequency", m_weather.lightningFrequency);
+    m_config.SetFloat("Weather", "ThunderDelay", m_weather.thunderDelay);
+    m_config.SetFloat("Weather", "AmbientMultiplier", m_weather.ambientMultiplier);
+    m_config.SetFloat("Weather", "DirectionalMultiplier", m_weather.directionalMultiplier);
+
+    // TimeOfDay
+    m_config.SetFloat("TimeOfDay", "StartHour", m_timeOfDay.startHour);
+    m_config.SetFloat("TimeOfDay", "TimeScale", m_timeOfDay.timeScale);
+    m_config.SetBool("TimeOfDay", "Paused", m_timeOfDay.paused);
+    m_config.SetFloat("TimeOfDay", "SunriseHour", m_timeOfDay.sunriseHour);
+    m_config.SetFloat("TimeOfDay", "SunsetHour", m_timeOfDay.sunsetHour);
+    m_config.SetFloat("TimeOfDay", "MoonIntensity", m_timeOfDay.moonIntensity);
+    m_config.SetFloat("TimeOfDay", "AmbientNightMultiplier", m_timeOfDay.ambientNightMultiplier);
+
+    // Streaming
+    m_config.SetFloat("Streaming", "DrawDistance", m_streaming.drawDistance);
+    m_config.SetFloat("Streaming", "LODDistanceMultiplier", m_streaming.lodDistanceMultiplier);
+    m_config.SetFloat("Streaming", "StreamingDistance", m_streaming.streamingDistance);
+    m_config.SetInt("Streaming", "MaxLoadedAreas", m_streaming.maxLoadedAreas);
+    m_config.SetFloat("Streaming", "LODBias", m_streaming.lodBias);
+    m_config.SetInt("Streaming", "MaxConcurrentLoads", m_streaming.maxConcurrentLoads);
+    m_config.SetBool("Streaming", "EnableStreaming", m_streaming.enableStreaming);
+    m_config.SetFloat("Streaming", "ShadowDrawDistance", m_streaming.shadowDrawDistance);
+
+    // Performance
+    m_config.SetInt("Performance", "TargetFPS", m_performance.targetFPS);
+    m_config.SetInt("Performance", "WorkerThreadCount", m_performance.workerThreadCount);
+    m_config.SetBool("Performance", "EnableJobSystem", m_performance.enableJobSystem);
+    m_config.SetInt("Performance", "MaxParticles", m_performance.maxParticles);
+    m_config.SetInt("Performance", "MaxDecals", m_performance.maxDecals);
+    m_config.SetBool("Performance", "EnableAsyncCompute", m_performance.enableAsyncCompute);
+    m_config.SetBool("Performance", "EnableAsyncLoading", m_performance.enableAsyncLoading);
+    m_config.SetFloat("Performance", "ObjectPoolGrowthFactor", m_performance.objectPoolGrowthFactor);
+
+    // World
+    m_config.SetFloat("World", "OriginRebaseThreshold", m_world.originRebaseThreshold);
+    m_config.SetFloat("World", "DefaultGravityScale", m_world.defaultGravityScale);
+    m_config.SetBool("World", "EnableOriginRebasing", m_world.enableOriginRebasing);
+    m_config.SetFloat("World", "WorldBoundsMin", m_world.worldBoundsMin);
+    m_config.SetFloat("World", "WorldBoundsMax", m_world.worldBoundsMax);
+
+    // UI
+    m_config.SetFloat("UI", "UIScale", m_ui.uiScale);
+    m_config.SetFloat("UI", "FontSize", m_ui.fontSize);
+    m_config.SetBool("UI", "ShowCrosshair", m_ui.showCrosshair);
+    m_config.SetBool("UI", "ShowHUD", m_ui.showHUD);
+    m_config.SetBool("UI", "ShowMinimap", m_ui.showMinimap);
+    m_config.SetBool("UI", "ShowDamageNumbers", m_ui.showDamageNumbers);
+    m_config.SetBool("UI", "ShowSubtitles", m_ui.showSubtitles);
+    m_config.SetFloat("UI", "HUDOpacity", m_ui.hudOpacity);
+    m_config.SetFloat("UI", "SubtitleSize", m_ui.subtitleSize);
+    m_config.SetBool("UI", "ShowInteractionPrompts", m_ui.showInteractionPrompts);
+
     // Logging
     m_config.SetString("Logging", "GlobalLevel", m_logging.globalLevel);
     m_config.SetString("Logging", "StackTraceLevel", m_logging.stackTraceLevel);
@@ -881,10 +1021,11 @@ bool EngineSettings::SetValue(const std::string& section, const std::string& key
 
 std::vector<std::string> EngineSettings::GetSections() const
 {
-    return {"Graphics",      "Audio",   "Controls",   "Game",      "Rendering",      "PostProcess",
-            "SSAO",          "SSR",     "Volumetric", "TAA",       "MotionBlur",     "DynamicQuality",
-            "AudioExtended", "Physics", "AI",         "Player",    "GameMode",       "Camera",
-            "Editor",        "Network", "Scripting",  "Animation", "CrashReporting", "Logging"};
+    return {"Graphics",  "Audio",          "Controls", "Game",       "Rendering",      "PostProcess",   "SSAO",
+            "SSR",       "Volumetric",     "TAA",      "MotionBlur", "DynamicQuality", "AudioExtended", "Physics",
+            "AI",        "Player",         "GameMode", "Camera",     "Editor",         "Network",       "Scripting",
+            "Animation", "CrashReporting", "Weather",  "TimeOfDay",  "Streaming",      "Performance",   "World",
+            "UI",        "Logging"};
 }
 
 std::vector<std::string> EngineSettings::GetKeys(const std::string& section) const

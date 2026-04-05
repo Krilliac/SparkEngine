@@ -8,32 +8,32 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 250647 |
+| **SparkEngine/Source** | 252072 |
 | **SparkEditor/Source** | 82949 |
 | **GameModules** | 57824 |
-| **Tests** | 94741 |
+| **Tests** | 95210 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~488552** |
+| **Total C++ (excl. ThirdParty)** | **~490446** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 712 |
-| Implementation files (.cpp) | 805 |
+| Header files (.h/.hpp) | 713 |
+| Implementation files (.cpp) | 808 |
 | HLSL shader files | 38 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 304 |
+| Test files (.cpp) | 305 |
 | Wiki pages (.md) | 103 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~857 |
-| Average lines per .h file | ~572 |
+| Average lines per .cpp file | ~856 |
+| Average lines per .h file | ~573 |
 | Largest codebase section | Graphics (100057 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 100057 | 39.9% |
-| Engine (all subsystems) | 74066 | 29.5% |
-| Utils | 34413 | 13.7% |
-| Core | 17600 | 7.0% |
+| Graphics | 100057 | 39.6% |
+| Engine (all subsystems) | 74066 | 29.3% |
+| Utils | 34413 | 13.6% |
+| Core | 19025 | 7.5% |
 | Physics | 10101 | 4.0% |
 | Audio | 5547 | 2.2% |
 | Input | 3346 | 1.3% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 304 |
-| TEST() definitions | 3741 |
+| Test files | 305 |
+| TEST() definitions | 3755 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -177,8 +177,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `MeshClusterSystem.h` | 819 |
 | `SVGRenderer.h` | 803 |
 | `PhysicsTypes.h` | 779 |
+| `EngineSettings.h` | 758 |
 | `FastNoise2SIMD.h` | 749 |
-| `GraphicsEngine.h` | 729 |
 
 ### SparkEditor .cpp Files (by line count)
 
