@@ -48,6 +48,7 @@
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
 #include "ModuleHotReload.h"
+#include "Graphics/Neural/NeuralInference.h"
 #include "Utils/DebugHookManager.h"
 #include "Utils/Logger.h"
 #include "Utils/JobSystem.h"
@@ -676,6 +677,11 @@ static void InitEngineContext()
     {
         ctx->SetAssetPipeline(g_graphics->GetAssetPipeline());
     }
+
+    // Initialize neural inference engine (GPU compute-based, no external ML deps)
+    auto& neuralInference = Spark::Graphics::Neural::NeuralInferenceEngine::GetInstance();
+    neuralInference.Initialize();
+    ctx->RegisterSystem<Spark::Graphics::Neural::NeuralInferenceEngine>(&neuralInference);
 }
 
 static void InitGameplaySubsystems()
@@ -1289,6 +1295,11 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     {
         ctx->SetAssetPipeline(g_graphics->GetAssetPipeline());
     }
+
+    // Initialize neural inference engine (GPU compute-based, no external ML deps)
+    auto& neuralInference = Spark::Graphics::Neural::NeuralInferenceEngine::GetInstance();
+    neuralInference.Initialize();
+    ctx->RegisterSystem<Spark::Graphics::Neural::NeuralInferenceEngine>(&neuralInference);
 
     if (registerGameplay)
     {

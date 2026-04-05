@@ -139,7 +139,8 @@ struct UpscalingSettings
 {
     UpscalingMode mode = UpscalingMode::None;
     UpscalingQuality quality = UpscalingQuality::Quality;
-    float sharpness = 0.5f; ///< Post-upscale sharpening [0, 1]
+    float sharpness = 0.5f;         ///< Post-upscale sharpening [0, 1]
+    bool neuralEnhancement = false; ///< Apply neural SR refinement pass after upscaling
 
     /**
      * @brief Get the render scale factor for a quality preset

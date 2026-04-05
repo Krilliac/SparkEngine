@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -33,6 +35,7 @@ namespace Spark::Graphics
         OIDN_CPU, ///< Intel OIDN on CPU (SSE4.2/AVX2/AVX-512)
         OIDN_GPU, ///< Intel OIDN on GPU (CUDA/HIP/SYCL)
         OptiX,    ///< NVIDIA OptiX AI denoiser (CUDA)
+        Neural,   ///< Neural MLP-based denoiser (compute shader)
         Software  ///< Simple bilateral filter fallback
     };
 
