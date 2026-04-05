@@ -35,7 +35,17 @@ HRESULT Terrain::Initialize(ID3D11Device* device, ID3D11DeviceContext* ctx, cons
         return E_FAIL;
     }
     in.seekg(54);
+    if (!in)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to seek past BMP header in heightmap");
+        return E_FAIL;
+    }
     in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(w) * h);
+    if (!in)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to read heightmap data (%u x %u bytes)", w, h);
+        return E_FAIL;
+    }
     in.close();
 
     // 2) Build mesh
@@ -208,6 +218,10 @@ HRESULT Terrain::Initialize(ID3D11Device* /*device*/, ID3D11DeviceContext* /*ctx
         {
             in.seekg(54);
             in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(desc.width) * desc.height);
+            if (!in)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "Failed to read heightmap data, using flat terrain");
+            }
         }
     }
 
