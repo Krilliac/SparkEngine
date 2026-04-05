@@ -129,6 +129,13 @@ namespace SparkEditor
             }
         }
 
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Write error saving prefab '%s' to: %s", m_name.c_str(),
+                            path.c_str());
+            return false;
+        }
+
         m_filePath = path;
         m_isModified = false;
         return true;

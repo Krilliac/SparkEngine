@@ -26,6 +26,10 @@
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/NetworkComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -224,6 +228,41 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         }
     }
 #endif
+
+    // Register MMO-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule({"MMO.DeadWithNetwork", "MMO", Spark::StateViolationSeverity::Error, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent, NetworkIdentity>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   auto* ni = w.GetComponent<NetworkIdentity>(entity);
+                                   if (h && ni && h->isDead && !h->deathProcessed && ni->isLocalAuthority)
+                                   {
+                                       out.push_back({"MMO.DeadWithNetwork", static_cast<uint32_t>(entity),
+                                                      "Local-authority entity dead but deathProcessed=false",
+                                                      Spark::StateViolationSeverity::Error});
+                                   }
+                               }
+                           }});
+
+    stateDetector.AddRule({"MMO.HealthOverMax", "MMO", Spark::StateViolationSeverity::Warning, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   if (h && !h->isDead && h->health > h->maxHealth * 1.01f)
+                                   {
+                                       out.push_back({"MMO.HealthOverMax", static_cast<uint32_t>(entity),
+                                                      "health=" + std::to_string(h->health) +
+                                                          " exceeds maxHealth=" + std::to_string(h->maxHealth),
+                                                      Spark::StateViolationSeverity::Warning});
+                                   }
+                               }
+                           }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameMMO module loaded: 17 subsystems initialized");

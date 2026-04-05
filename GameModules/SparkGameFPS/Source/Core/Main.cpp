@@ -32,6 +32,11 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/AIComponents.h"
+#include "Engine/ECS/Components/PhysicsComponents.h"
 
 // Global game pointer used by SparkConsole (in SparkEngineLib) to call into
 // game systems.  Owned by SparkGameModule; set during Initialize, cleared
@@ -205,6 +210,47 @@ bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     // Register game-specific console commands
     RegisterGameConsoleCommands();
+
+    // Register FPS-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule(
+        {"FPS.DeadPlayerMoving", "FPS", Spark::StateViolationSeverity::Error, true,
+         [](World& w, std::vector<Spark::StateViolation>& out)
+         {
+             for (auto entity : w.GetEntitiesWith<HealthComponent, RigidBodyComponent>())
+             {
+                 auto* h = w.GetComponent<HealthComponent>(entity);
+                 auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                 if (!h || !rb || !h->isDead || rb->type != RigidBodyComponent::Type::Dynamic)
+                     continue;
+                 float speedSq =
+                     rb->linearVelocity.x * rb->linearVelocity.x + rb->linearVelocity.z * rb->linearVelocity.z;
+                 if (speedSq > 1.0f)
+                 {
+                     out.push_back({"FPS.DeadPlayerMoving", static_cast<uint32_t>(entity),
+                                    "Dead entity moving horizontally (speedSq=" + std::to_string(speedSq) + ")",
+                                    Spark::StateViolationSeverity::Error});
+                 }
+             }
+         }});
+
+    stateDetector.AddRule(
+        {"FPS.DeadAICombat", "FPS", Spark::StateViolationSeverity::Error, true,
+         [](World& w, std::vector<Spark::StateViolation>& out)
+         {
+             for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+             {
+                 auto* h = w.GetComponent<HealthComponent>(entity);
+                 auto* ai = w.GetComponent<AIComponent>(entity);
+                 if (h && ai && h->isDead &&
+                     (ai->state == AIComponent::State::Combat || ai->state == AIComponent::State::Alert))
+                 {
+                     out.push_back({"FPS.DeadAICombat", static_cast<uint32_t>(entity), "Dead AI in combat/alert state",
+                                    Spark::StateViolationSeverity::Error});
+                 }
+             }
+         }});
 
     m_initialized = true;
     console.LogSuccess("SparkGameFPS module initialized");

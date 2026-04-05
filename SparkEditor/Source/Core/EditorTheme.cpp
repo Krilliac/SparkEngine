@@ -1149,8 +1149,16 @@ namespace SparkEditor
 
             return true;
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to export theme to '%s': %s", filepath.c_str(),
+                            e.what());
+            return false;
+        }
         catch (...)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to export theme to '%s': unknown exception",
+                            filepath.c_str());
             return false;
         }
     }
@@ -1243,8 +1251,16 @@ namespace SparkEditor
 
             return !outTheme.name.empty();
         }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to import theme from '%s': %s", filepath.c_str(),
+                            e.what());
+            return false;
+        }
         catch (...)
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to import theme from '%s': unknown exception",
+                            filepath.c_str());
             return false;
         }
     }

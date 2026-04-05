@@ -257,6 +257,11 @@ namespace Spark::AI
             }
             break;
         }
+
+        default:
+            SPARK_LOG_WARN(Spark::LogCategory::AI, "Unknown formation type %d, returning default slots",
+                           static_cast<int>(type));
+            break;
         }
 
         return slots;

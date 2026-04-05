@@ -16,6 +16,9 @@
 #include "Engine/Scripting/AngelScriptEngine.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
 
 #include <filesystem>
 
@@ -70,6 +73,23 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
 
     // Step 2: Spawn entities and attach scripts
     SpawnGameEntities();
+
+    // Register VisualScript state validation rules
+    Spark::InvalidStateDetector::GetInstance().AddRule(
+        {"VS.ScriptEntityHealth", "VisualScript", Spark::StateViolationSeverity::Warning, true,
+         [](World& w, std::vector<Spark::StateViolation>& out)
+         {
+             for (auto entity : w.GetEntitiesWith<HealthComponent>())
+             {
+                 auto* h = w.GetComponent<HealthComponent>(entity);
+                 if (h && h->isDead && !h->deathProcessed)
+                 {
+                     out.push_back({"VS.ScriptEntityHealth", static_cast<uint32_t>(entity),
+                                    "Script entity dead but deathProcessed=false (script may have missed death event)",
+                                    Spark::StateViolationSeverity::Warning});
+                 }
+             }
+         }});
 
     m_initialized = true;
     console.LogInfo("[VisualScript] Module loaded — game is running entirely on visual scripts");

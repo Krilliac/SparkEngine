@@ -176,12 +176,21 @@ void Profiler::BeginGPUTimer(std::string_view name)
     {
         D3D11_QUERY_DESC desc = {};
         desc.Query = D3D11_QUERY_TIMESTAMP;
-        m_device->CreateQuery(&desc, timer.beginQuery.GetAddressOf());
-        m_device->CreateQuery(&desc, timer.endQuery.GetAddressOf());
+        HRESULT hr1 = m_device->CreateQuery(&desc, timer.beginQuery.GetAddressOf());
+        HRESULT hr2 = m_device->CreateQuery(&desc, timer.endQuery.GetAddressOf());
 
         D3D11_QUERY_DESC disjointDesc = {};
         disjointDesc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
-        m_device->CreateQuery(&disjointDesc, timer.disjointQuery.GetAddressOf());
+        HRESULT hr3 = m_device->CreateQuery(&disjointDesc, timer.disjointQuery.GetAddressOf());
+
+        if (FAILED(hr1) || FAILED(hr2) || FAILED(hr3))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Profiler: failed to create GPU timestamp queries");
+            timer.beginQuery.Reset();
+            timer.endQuery.Reset();
+            timer.disjointQuery.Reset();
+            return;
+        }
     }
 
     m_context->Begin(timer.disjointQuery.Get());

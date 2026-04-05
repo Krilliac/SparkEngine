@@ -58,6 +58,7 @@
 #include "Utils/AssetStallDetector.h"
 #include "Utils/NetworkHealthMonitor.h"
 #include "Utils/GPUResourceLeakDetector.h"
+#include "Utils/InvalidStateDetector.h"
 #include "FixedTimestepAccumulator.h"
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
@@ -592,6 +593,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
 
     // Fixed 60 Hz server loop
@@ -787,6 +789,7 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
     EngineSettings::GetInstance().RegisterConsoleCommands();
 
@@ -1408,6 +1411,7 @@ static int RunHeadlessLinux(int argc, char* argv[])
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
 
     // Fixed 60 Hz server loop
@@ -1646,6 +1650,7 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
 
     // Initialize console, debug, and gameplay systems in one call

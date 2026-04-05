@@ -126,10 +126,20 @@ namespace Spark
             return false;
         }
 
+        // Helper: write with error checking
+        auto writeBytes = [&](const void* data, size_t size) -> bool
+        { return std::fwrite(data, 1, size, file) == size; };
+
         // Write placeholder header (will rewrite at end)
         PakHeader header;
         header.fileCount = static_cast<uint32_t>(m_files.size());
-        std::fwrite(&header, sizeof(PakHeader), 1, file);
+        if (!writeBytes(&header, sizeof(PakHeader)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: failed to write header to '%s'",
+                            outputPath.c_str());
+            std::fclose(file);
+            return false;
+        }
 
         // Write file data blobs, tracking offsets
         struct WrittenEntry
@@ -157,12 +167,24 @@ namespace Spark
             if (staged.compression == PakCompression::Deflate && !staged.compressedData.empty())
             {
                 we.compressedSize = static_cast<uint32_t>(staged.compressedData.size());
-                std::fwrite(staged.compressedData.data(), 1, staged.compressedData.size(), file);
+                if (!writeBytes(staged.compressedData.data(), staged.compressedData.size()))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: write failed for '%s'",
+                                    staged.virtualPath.c_str());
+                    std::fclose(file);
+                    return false;
+                }
             }
             else
             {
                 we.compressedSize = static_cast<uint32_t>(staged.originalData.size());
-                std::fwrite(staged.originalData.data(), 1, staged.originalData.size(), file);
+                if (!writeBytes(staged.originalData.data(), staged.originalData.size()))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: write failed for '%s'",
+                                    staged.virtualPath.c_str());
+                    std::fclose(file);
+                    return false;
+                }
             }
 
             entries.push_back(std::move(we));
@@ -206,19 +228,37 @@ namespace Spark
         {
             tocCompressed.resize(destLen);
             header.tocSize = static_cast<uint32_t>(destLen);
-            std::fwrite(tocCompressed.data(), 1, destLen, file);
+            if (!writeBytes(tocCompressed.data(), destLen))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: failed to write TOC to '%s'",
+                                outputPath.c_str());
+                std::fclose(file);
+                return false;
+            }
         }
         else
 #endif
         {
             // Fallback: store TOC uncompressed
             header.tocSize = header.tocRawSize;
-            std::fwrite(tocRaw.data(), 1, tocRaw.size(), file);
+            if (!writeBytes(tocRaw.data(), tocRaw.size()))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: failed to write TOC to '%s'",
+                                outputPath.c_str());
+                std::fclose(file);
+                return false;
+            }
         }
 
         // Rewrite header with final values
         PAK_FSEEK(file, 0, SEEK_SET);
-        std::fwrite(&header, sizeof(PakHeader), 1, file);
+        if (!writeBytes(&header, sizeof(PakHeader)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakWriter: failed to rewrite header in '%s'",
+                            outputPath.c_str());
+            std::fclose(file);
+            return false;
+        }
 
         std::fclose(file);
         return true;

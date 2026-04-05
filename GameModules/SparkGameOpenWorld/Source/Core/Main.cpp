@@ -17,6 +17,10 @@
 #include "Events/OWDynamicEventSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/AIComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -138,6 +142,41 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
+
+    // Register OpenWorld-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule(
+        {"OpenWorld.DeadWildlife", "OpenWorld", Spark::StateViolationSeverity::Warning, true,
+         [](World& w, std::vector<Spark::StateViolation>& out)
+         {
+             for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+             {
+                 auto* h = w.GetComponent<HealthComponent>(entity);
+                 auto* ai = w.GetComponent<AIComponent>(entity);
+                 if (h && ai && h->isDead &&
+                     (ai->state == AIComponent::State::Patrolling || ai->state == AIComponent::State::Alert))
+                 {
+                     out.push_back({"OpenWorld.DeadWildlife", static_cast<uint32_t>(entity),
+                                    "Dead wildlife AI still patrolling/alert", Spark::StateViolationSeverity::Warning});
+                 }
+             }
+         }});
+
+    stateDetector.AddRule({"OpenWorld.MaxHealthZero", "OpenWorld", Spark::StateViolationSeverity::Error, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   if (h && h->maxHealth <= 0.0f)
+                                   {
+                                       out.push_back({"OpenWorld.MaxHealthZero", static_cast<uint32_t>(entity),
+                                                      "maxHealth=" + std::to_string(h->maxHealth) + " is not positive",
+                                                      Spark::StateViolationSeverity::Error});
+                                   }
+                               }
+                           }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Open World module loaded successfully - 8 subsystems active");

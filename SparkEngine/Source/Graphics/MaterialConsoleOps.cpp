@@ -793,7 +793,8 @@ std::string MaterialSystem::Console_DumpMaterialDetails(const std::string& mater
     std::stringstream ss;
     ss << mat->GetDetailedInfo();
     ss << "\n--- System Info ---\n";
-    ss << "  Ref count:     " << m_materials.at(materialName).use_count() << "\n";
+    auto matIt = m_materials.find(materialName);
+    ss << "  Ref count:     " << (matIt != m_materials.end() ? matIt->second.use_count() : 0) << "\n";
     ss << "  Hot reload:    " << (m_hotReloadEnabled ? "enabled" : "disabled") << "\n";
     ss << "  Platform:      Linux (CPU-side only)\n";
     return ss.str();

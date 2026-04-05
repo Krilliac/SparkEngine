@@ -17,6 +17,10 @@
 #include "NPC/RPGNPCSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/AIComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -138,6 +142,40 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
+
+    // Register RPG-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule({"RPG.DeadAIPatrolling", "RPG", Spark::StateViolationSeverity::Error, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   auto* ai = w.GetComponent<AIComponent>(entity);
+                                   if (h && ai && h->isDead && ai->state == AIComponent::State::Patrolling)
+                                   {
+                                       out.push_back({"RPG.DeadAIPatrolling", static_cast<uint32_t>(entity),
+                                                      "Dead NPC is still patrolling",
+                                                      Spark::StateViolationSeverity::Error});
+                                   }
+                               }
+                           }});
+
+    stateDetector.AddRule({"RPG.NegativeHealth", "RPG", Spark::StateViolationSeverity::Warning, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   if (h && h->health < 0.0f)
+                                   {
+                                       out.push_back({"RPG.NegativeHealth", static_cast<uint32_t>(entity),
+                                                      "health=" + std::to_string(h->health) + " is negative",
+                                                      Spark::StateViolationSeverity::Warning});
+                                   }
+                               }
+                           }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module loaded successfully — 8 subsystems active");

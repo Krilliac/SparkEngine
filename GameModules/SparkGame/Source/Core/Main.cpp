@@ -12,6 +12,9 @@
 #include "GameplayShowcase.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -79,6 +82,24 @@ bool SparkGameDefaultModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
+
+    // Register base game state validation rules
+    Spark::InvalidStateDetector::GetInstance().AddRule(
+        {"Base.HealthInvariant", "Base", Spark::StateViolationSeverity::Error, true,
+         [](World& w, std::vector<Spark::StateViolation>& out)
+         {
+             for (auto entity : w.GetEntitiesWith<HealthComponent>())
+             {
+                 auto* h = w.GetComponent<HealthComponent>(entity);
+                 if (h && h->maxHealth > 0.0f && h->health > h->maxHealth * 1.5f)
+                 {
+                     out.push_back({"Base.HealthInvariant", static_cast<uint32_t>(entity),
+                                    "health=" + std::to_string(h->health) +
+                                        " significantly exceeds maxHealth=" + std::to_string(h->maxHealth),
+                                    Spark::StateViolationSeverity::Error});
+                 }
+             }
+         }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGame showcase module loaded successfully");

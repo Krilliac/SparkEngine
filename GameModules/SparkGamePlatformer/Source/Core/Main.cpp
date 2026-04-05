@@ -16,6 +16,10 @@
 #include "Camera/PlatformerCameraSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/PhysicsComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -130,6 +134,30 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
+
+    // Register Platformer-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule({"Platformer.DeadEntityPhysics", "Platformer", Spark::StateViolationSeverity::Warning, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent, RigidBodyComponent>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                                   if (h && rb && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic)
+                                   {
+                                       float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                                       rb->linearVelocity.z * rb->linearVelocity.z;
+                                       if (speedSq > 4.0f)
+                                       {
+                                           out.push_back({"Platformer.DeadEntityPhysics", static_cast<uint32_t>(entity),
+                                                          "Dead platformer entity still moving horizontally",
+                                                          Spark::StateViolationSeverity::Warning});
+                                       }
+                                   }
+                               }
+                           }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer module loaded successfully");

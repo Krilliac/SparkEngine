@@ -16,6 +16,10 @@
 #include "HUD/RacingHUDSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/PhysicsComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -130,6 +134,30 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
+
+    // Register Racing-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule({"Racing.StaticVehicleMoving", "Racing", Spark::StateViolationSeverity::Warning, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<RigidBodyComponent>())
+                               {
+                                   auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                                   if (!rb || rb->type != RigidBodyComponent::Type::Static)
+                                       continue;
+                                   float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                                   rb->linearVelocity.y * rb->linearVelocity.y +
+                                                   rb->linearVelocity.z * rb->linearVelocity.z;
+                                   if (speedSq > 1.0f)
+                                   {
+                                       out.push_back(
+                                           {"Racing.StaticVehicleMoving", static_cast<uint32_t>(entity),
+                                            "Static body has velocity (speedSq=" + std::to_string(speedSq) + ")",
+                                            Spark::StateViolationSeverity::Warning});
+                                   }
+                               }
+                           }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module loaded successfully");
