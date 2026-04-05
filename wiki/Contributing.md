@@ -4,7 +4,7 @@ SparkEngine welcomes contributions of all kinds. This guide covers code style, a
 
 ## License
 
-SparkEngine is licensed under the **MIT License**. All contributions are subject to the same license.
+SparkEngine is licensed under the **Spark Open License 1.0**. All contributions are subject to the same license.
 
 ## Getting Started
 

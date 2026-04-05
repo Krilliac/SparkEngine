@@ -161,4 +161,4 @@ endif()
 
 ## License
 
-Part of the SparkEngine project. MIT License.
+Part of the SparkEngine project. Spark Open License 1.0.

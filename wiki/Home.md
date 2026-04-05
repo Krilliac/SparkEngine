@@ -171,7 +171,7 @@ See [Contributing](Contributing) for the full pre-commit checklist.
 
 ## License
 
-SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/SparkEngine/blob/master/LICENSE) — no royalties, no strings attached.
+SparkEngine is licensed under the [Spark Open License](https://github.com/Krilliac/SparkEngine/blob/master/LICENSE) — no royalties, no fees, anti-plagiarism protected.
 
 ## Project Statistics
 
@@ -185,5 +185,5 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | Test files | 302 |
 | Test cases | 3727+ |
 | Wiki pages | 103 |
-| *Last synced* | *2026-04-05 09:27* |
+| *Last synced* | *2026-04-05 11:27* |
 <!-- /AUTO:stats -->
