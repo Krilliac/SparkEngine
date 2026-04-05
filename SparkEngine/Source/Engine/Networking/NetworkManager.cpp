@@ -666,7 +666,6 @@ namespace Spark::Net
             XMVECTOR bmin = XMLoadFloat3(&entity.boundsMin);
             XMVECTOR bmax = XMLoadFloat3(&entity.boundsMax);
 
-            XMVECTOR invDir;
             XMFLOAT3 dir;
             XMStoreFloat3(&dir, direction);
             float invDirX = (dir.x != 0.0f) ? (1.0f / dir.x) : 1e30f;

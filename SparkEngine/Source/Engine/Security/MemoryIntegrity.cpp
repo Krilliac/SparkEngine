@@ -473,7 +473,6 @@ namespace Spark::Security
         if (hModule == nullptr)
             return;
 
-        MODULEINFO modInfo{};
         // GetModuleInformation requires psapi — use VirtualQuery walk instead
         auto baseAddr = reinterpret_cast<const uint8_t*>(hModule);
         MEMORY_BASIC_INFORMATION mbi{};
