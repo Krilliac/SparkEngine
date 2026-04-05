@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 245536 |
+| **SparkEngine/Source** | 245706 |
 | **SparkEditor/Source** | 82920 |
 | **GameModules** | 57454 |
 | **Tests** | 92813 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~481114** |
+| **Total C++ (excl. ThirdParty)** | **~481284** |
 
 ### File Counts
 
@@ -43,8 +43,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 96569 | 39.3% |
-| Engine (all subsystems) | 73426 | 29.9% |
-| Utils | 33530 | 13.6% |
+| Engine (all subsystems) | 73426 | 29.8% |
+| Utils | 33700 | 13.7% |
 | Core | 17501 | 7.1% |
 | Physics | 10101 | 4.1% |
 | Audio | 5547 | 2.2% |
@@ -160,10 +160,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `GraphicsEngine.cpp` | 1578 |
 | `D3D12Device.cpp` | 1564 |
 | `D3D11Device.cpp` | 1470 |
+| `CrashHandler.cpp` | 1332 |
 | `GraphicsDeviceResources.cpp` | 1319 |
 | `LightingSystem.cpp` | 1283 |
 | `SaveSystem.cpp` | 1275 |
-| `TextureSystem.cpp` | 1263 |
 
 ### SparkEngine .h Files (by line count)
 
