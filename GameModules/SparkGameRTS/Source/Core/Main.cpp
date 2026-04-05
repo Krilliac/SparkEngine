@@ -16,6 +16,10 @@
 #include "Match/RTSMatchSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/AIComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -129,6 +133,41 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
+
+    // Register RTS-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule({"RTS.DeadUnitAttacking", "RTS", Spark::StateViolationSeverity::Error, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   auto* ai = w.GetComponent<AIComponent>(entity);
+                                   if (h && ai && h->isDead && ai->state == AIComponent::State::Combat)
+                                   {
+                                       out.push_back({"RTS.DeadUnitAttacking", static_cast<uint32_t>(entity),
+                                                      "Dead RTS unit still in combat state",
+                                                      Spark::StateViolationSeverity::Error});
+                                   }
+                               }
+                           }});
+
+    stateDetector.AddRule({"RTS.IdleWithTarget", "RTS", Spark::StateViolationSeverity::Warning, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<AIComponent>())
+                               {
+                                   auto* ai = w.GetComponent<AIComponent>(entity);
+                                   if (ai && ai->state == AIComponent::State::Idle && ai->targetEntity != entt::null)
+                                   {
+                                       out.push_back(
+                                           {"RTS.IdleWithTarget", static_cast<uint32_t>(entity),
+                                            "Idle unit has target assigned — should be attacking or clearing target",
+                                            Spark::StateViolationSeverity::Warning});
+                                   }
+                               }
+                           }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS module loaded successfully — 7 subsystems active");

@@ -17,6 +17,11 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/InvalidStateDetector.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Components/AIComponents.h"
+#include "Engine/ECS/Components/PhysicsComponents.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -132,6 +137,48 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     }
 
     RegisterConsoleCommands();
+
+    // Register ARPG-specific state validation rules
+    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
+
+    stateDetector.AddRule({"ARPG.DeadMobTargeting", "ARPG", Spark::StateViolationSeverity::Error, true,
+                           [](World& w, std::vector<Spark::StateViolation>& out)
+                           {
+                               for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+                               {
+                                   auto* h = w.GetComponent<HealthComponent>(entity);
+                                   auto* ai = w.GetComponent<AIComponent>(entity);
+                                   if (h && ai && h->isDead && ai->targetEntity != entt::null)
+                                   {
+                                       out.push_back({"ARPG.DeadMobTargeting", static_cast<uint32_t>(entity),
+                                                      "Dead monster still has a target assigned",
+                                                      Spark::StateViolationSeverity::Error});
+                                   }
+                               }
+                           }});
+
+    stateDetector.AddRule(
+        {"ARPG.StaticBodyDynamic", "ARPG", Spark::StateViolationSeverity::Warning, true,
+         [](World& w, std::vector<Spark::StateViolation>& out)
+         {
+             for (auto entity : w.GetEntitiesWith<RigidBodyComponent, HealthComponent>())
+             {
+                 auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                 auto* h = w.GetComponent<HealthComponent>(entity);
+                 if (rb && h && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic && rb->mass > 0.0f)
+                 {
+                     float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                     rb->linearVelocity.y * rb->linearVelocity.y +
+                                     rb->linearVelocity.z * rb->linearVelocity.z;
+                     if (speedSq > 25.0f)
+                     {
+                         out.push_back({"ARPG.StaticBodyDynamic", static_cast<uint32_t>(entity),
+                                        "Dead entity moving at high speed (speedSq=" + std::to_string(speedSq) + ")",
+                                        Spark::StateViolationSeverity::Warning});
+                     }
+                 }
+             }
+         }});
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module loaded successfully — 7 subsystems active");
