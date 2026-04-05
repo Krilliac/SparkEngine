@@ -1,6 +1,6 @@
 // CoreComponents.cpp
-#include "../../../Core/Platform.h"
 #include "CoreComponents.h"
+#include "../../../Core/Platform.h"
 #include "../../../Utils/LogMacros.h"
 #include "../../../Utils/Validate.h"
 

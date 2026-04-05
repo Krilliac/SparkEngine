@@ -6,8 +6,8 @@
  * gameplay, rendering-utility, AI, scripting, and debug subsystems.
  */
 
-#include "Platform.h"
 #include "GameplaySystemLifecycle.h"
+#include "Platform.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Systems/ParallelSystemExecutor.h"
 #include "EngineContext.h"

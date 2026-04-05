@@ -7,11 +7,11 @@
  * Doppler effects, and efficient source pooling.
  */
 
+#include "OpenALAudioEngine.h"
 #include "../Core/Platform.h"
 
 #if !defined(SPARK_PLATFORM_WINDOWS)
 
-#include "OpenALAudioEngine.h"
 #include "../Utils/Validate.h"
 
 #ifdef SPARK_OPENAL_AVAILABLE

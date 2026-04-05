@@ -7,8 +7,8 @@
  *   - InverseKinematics.cpp   — TwoBoneIK, LookAtIK, FABRIK solvers
  *   - AnimationStateMachine.cpp — state machine transitions and crossfade
  */
-#include "../../Core/Platform.h"
 #include "AnimationSystem.h"
+#include "../../Core/Platform.h"
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/Validate.h"
 #include <sstream>

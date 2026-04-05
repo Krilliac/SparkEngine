@@ -1,5 +1,5 @@
-#include "Core/Platform.h"
 #include "SoundEffect.h"
+#include "Core/Platform.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"

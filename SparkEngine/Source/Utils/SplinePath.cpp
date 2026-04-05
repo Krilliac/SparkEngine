@@ -3,8 +3,8 @@
  * @brief Implementation of SplinePath — reusable spline path evaluation
  */
 
-#include "../Core/Platform.h"
 #include "SplinePath.h"
+#include "../Core/Platform.h"
 #include "SplineMath.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"

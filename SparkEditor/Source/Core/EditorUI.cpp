@@ -214,6 +214,7 @@ namespace SparkEditor
     }
 
     void EditorUI::WireCallbacks()
+    // NOTE: Intentionally exceeds 50-line guideline — linear event subscription wiring
     {
         if (!m_projectManager)
         {
@@ -508,6 +509,7 @@ namespace SparkEditor
     }
 
     void EditorUI::Render()
+    // NOTE: Intentionally exceeds 50-line guideline — linear rendering pipeline dispatch
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_isInitialized)
@@ -695,6 +697,7 @@ namespace SparkEditor
 
 
     void EditorUI::RenderStatusBar()
+    // NOTE: Intentionally exceeds 50-line guideline — linear UI layout code
     {
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         float statusBarHeight = 26.0f;
@@ -780,6 +783,7 @@ namespace SparkEditor
     }
 
     void EditorUI::RenderNotifications()
+    // NOTE: Intentionally exceeds 50-line guideline — linear UI layout code
     {
         const float NOTIFICATION_WIDTH = 340.0f;
         const float NOTIFICATION_HEIGHT = 56.0f;

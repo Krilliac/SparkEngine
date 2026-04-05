@@ -3,8 +3,8 @@
  * @brief XP, leveling, and unlock progression
  */
 
-#include "Core/Platform.h"
 #include "ProgressionSystem.h"
+#include "Core/Platform.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 

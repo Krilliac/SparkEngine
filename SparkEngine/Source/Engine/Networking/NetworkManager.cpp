@@ -639,4 +639,72 @@ namespace Spark::Net
         return (std::max)(0.2f, (std::min)(rto, 8.0f));
     }
 
+    // --------------------------------------------------------------------------
+    // Server-side hit validation (lag compensation integration)
+    // --------------------------------------------------------------------------
+
+    NetworkManager::HitValidationResult NetworkManager::ValidateHit(float clientTimestamp, float halfRTT,
+                                                                    const XMFLOAT3& rayOrigin,
+                                                                    const XMFLOAT3& rayDirection, float maxDistance)
+    {
+        HitValidationResult result;
+        float rewindTime = clientTimestamp - halfRTT;
+
+        // Rewind to the client's perceived time
+        HistorySnapshot rewoundSnapshot;
+        if (!m_lagCompensator.RewindToTime(rewindTime, rewoundSnapshot))
+            return result;
+
+        // Ray-AABB intersection against rewound hitboxes
+        XMVECTOR origin = XMLoadFloat3(&rayOrigin);
+        XMVECTOR direction = XMVector3Normalize(XMLoadFloat3(&rayDirection));
+
+        float closestDist = maxDistance;
+        for (const auto& entity : rewoundSnapshot.entities)
+        {
+            // Ray-AABB slab test
+            XMVECTOR bmin = XMLoadFloat3(&entity.boundsMin);
+            XMVECTOR bmax = XMLoadFloat3(&entity.boundsMax);
+
+            XMVECTOR invDir;
+            XMFLOAT3 dir;
+            XMStoreFloat3(&dir, direction);
+            float invDirX = (dir.x != 0.0f) ? (1.0f / dir.x) : 1e30f;
+            float invDirY = (dir.y != 0.0f) ? (1.0f / dir.y) : 1e30f;
+            float invDirZ = (dir.z != 0.0f) ? (1.0f / dir.z) : 1e30f;
+
+            XMFLOAT3 orig;
+            XMStoreFloat3(&orig, origin);
+            XMFLOAT3 bminF, bmaxF;
+            XMStoreFloat3(&bminF, bmin);
+            XMStoreFloat3(&bmaxF, bmax);
+
+            float t1 = (bminF.x - orig.x) * invDirX;
+            float t2 = (bmaxF.x - orig.x) * invDirX;
+            float tmin = (std::min)(t1, t2);
+            float tmax = (std::max)(t1, t2);
+
+            t1 = (bminF.y - orig.y) * invDirY;
+            t2 = (bmaxF.y - orig.y) * invDirY;
+            tmin = (std::max)(tmin, (std::min)(t1, t2));
+            tmax = (std::min)(tmax, (std::max)(t1, t2));
+
+            t1 = (bminF.z - orig.z) * invDirZ;
+            t2 = (bmaxF.z - orig.z) * invDirZ;
+            tmin = (std::max)(tmin, (std::min)(t1, t2));
+            tmax = (std::min)(tmax, (std::max)(t1, t2));
+
+            if (tmax >= tmin && tmax >= 0.0f && tmin < closestDist)
+            {
+                float hitT = (tmin >= 0.0f) ? tmin : tmax;
+                closestDist = hitT;
+                result.hit = true;
+                result.entityID = entity.networkID;
+                XMStoreFloat3(&result.hitPoint, XMVectorAdd(origin, XMVectorScale(direction, hitT)));
+            }
+        }
+
+        return result;
+    }
+
 } // namespace Spark::Net

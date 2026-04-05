@@ -1,5 +1,5 @@
-#include "../Core/Platform.h"
 #include "Utils/CrashHandler.h"
+#include "../Core/Platform.h"
 #include "Utils/CrashReportUploader.h"
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"

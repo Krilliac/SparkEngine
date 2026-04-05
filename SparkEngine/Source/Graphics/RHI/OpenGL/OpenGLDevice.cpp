@@ -6,6 +6,12 @@
  *
  * Modern OpenGL implementation using DSA (Direct State Access),
  * SPIR-V shader support, and GL 4.6 Core Profile features.
+ *
+ * RHI Ownership Model: Create*() methods return raw pointers. The RHI device
+ * owns the underlying GPU resource. Callers must call the corresponding
+ * Destroy*() method to release. This pattern is intentional — it matches
+ * the D3D11/D3D12/Vulkan/OpenGL resource lifecycle and avoids forcing
+ * std::unique_ptr across the backend-agnostic RHI boundary.
  */
 
 #ifdef SPARK_OPENGL_SUPPORT

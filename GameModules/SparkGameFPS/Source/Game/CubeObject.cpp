@@ -1,5 +1,5 @@
-#include "Core/Platform.h"
 #include "CubeObject.h"
+#include "Core/Platform.h"
 #include "Utils/Assert.h" // custom assert
 #include "Utils/Validate.h"
 #include "Game/PlaceholderMesh.h" // Add this include for LoadOrPlaceholderMesh

@@ -1,6 +1,6 @@
+#include "SphereObject.h"
 #include "Core/Platform.h"
 // SphereObject.cpp
-#include "SphereObject.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include <iostream>

@@ -3,8 +3,8 @@
  * @brief Frame hitch detection — rolling average analysis and spike classification
  */
 
-#include "../Core/Platform.h"
 #include "Utils/HitchDetector.h"
+#include "../Core/Platform.h"
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>

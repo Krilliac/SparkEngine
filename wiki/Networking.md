@@ -791,9 +791,26 @@ struct ClientInfo
 
 ### Reliable Message Delivery
 
-- Unacknowledged reliable messages are stored in `m_unacknowledgedMessages`
-- Retransmission interval: **0.5 seconds** (`m_reliableRetransmitInterval`)
-- Sequence numbers are monotonically increasing (`m_nextOutgoingSequence`)
+The reliable channel provides guaranteed delivery with duplicate detection and ordered delivery:
+
+- **ACK tracking**: Receiver tracks the highest received sequence number and a 32-bit bitfield encoding the previous 32 sequences. ACKs are sent at ~30 Hz.
+- **Retransmission**: Unacknowledged messages are retransmitted with exponential backoff (base interval doubles each retry, capped at 8x). Configurable via `SetMaxReliableRetries()` (default: 10).
+- **Duplicate detection**: Receiver maintains a set of recently received sequence numbers (pruned after 30 seconds). Duplicate packets are silently dropped.
+- **Ordered delivery**: `ReliableOrdered` messages are buffered and delivered in sequence order. Out-of-order packets are held until the gap is filled.
+- **RTT estimation**: Jacobson/Karels algorithm (RFC 6298) computes smoothed RTT and variance. Karn's algorithm skips retransmitted packets for RTT samples.
+- **Connection failure**: After `m_maxReliableRetries` retransmissions, the message is dropped and `packetsDropped` is incremented.
+
+### Server-Side Hit Validation (Lag Compensation)
+
+The `ValidateHit()` method integrates lag compensation with hit detection:
+
+1. Server receives a hitscan request from a client with the client's timestamp
+2. Rewinds entity positions to `clientTimestamp - halfRTT` using `LagCompensator::RewindToTime()`
+3. Interpolates hitbox positions between bracketing snapshots for sub-frame accuracy
+4. Performs a ray-AABB intersection test against rewound hitboxes
+5. Returns `HitValidationResult` with hit status, entity ID, and hit point
+
+This ensures clients see fair hit registration despite network latency.
 
 ### Bandwidth Tracking
 
@@ -829,6 +846,7 @@ struct ClientInfo
 | Heartbeat interval | 1.0s | `m_heartbeatInterval` |
 | Connection timeout | 10.0s | `m_connectionTimeout` |
 | Reliable retransmit | 0.5s | `m_reliableRetransmitInterval` |
+| Max reliable retries | 10 | `m_maxReliableRetries` |
 | Max clients | 32 | `m_maxClients` |
 | Lag history | 1.0s | `m_maxHistoryDuration` |
 | Socket buffer | 64 KB | Send and receive buffers |

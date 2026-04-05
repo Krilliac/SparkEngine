@@ -1,6 +1,6 @@
+#include "Console.h"
 #include "Core/Platform.h"
 // Console.cpp
-#include "Console.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"

@@ -7,6 +7,12 @@
  * Full D3D12 device implementation: DXGI factory, adapter enumeration,
  * device creation, command queues, descriptor heaps, resource management,
  * command list recording, swap chain, and frame synchronization.
+ *
+ * RHI Ownership Model: Create*() methods return raw pointers. The RHI device
+ * owns the underlying GPU resource. Callers must call the corresponding
+ * Destroy*() method to release. This pattern is intentional — it matches
+ * the D3D11/D3D12/Vulkan/OpenGL resource lifecycle and avoids forcing
+ * std::unique_ptr across the backend-agnostic RHI boundary.
  */
 
 #ifdef _WIN32

@@ -5,11 +5,11 @@
  * @date 2025
  */
 
+#include "DebugVisualizerPanel.h"
 #include <iostream>
 
 #include <imgui.h>
 
-#include "DebugVisualizerPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"

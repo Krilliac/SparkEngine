@@ -1,3 +1,4 @@
+#include "ModelObject.h"
 #include "Core/Platform.h"
 /**
  * @file ModelObject.cpp
@@ -6,7 +7,6 @@
  * @date 2025
  */
 
-#include "ModelObject.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include <iostream>

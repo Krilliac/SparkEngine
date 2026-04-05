@@ -57,8 +57,8 @@
 
 ## API Documentation (Doxygen)
 
-- **245/246 headers** have `@file` + `@brief` (99.6%)
-- **Missing**: UISystem.h (1 file, zero Doxygen)
+- **246/246 headers** have `@file` + `@brief` (100%)
+- UISystem.h Doxygen tags converted from `\` to `@` style to match codebase convention
 - **Auto-generated API docs**: `docs/api/` generated (370 pages from 382 headers)
 
 ---
@@ -92,8 +92,8 @@ docs/
 | 1 | ~~Networking protocol wire format~~ | ~~Can't build external clients~~ | **Resolved** (wiki page exists) |
 | 2 | ~~Asset format specifications~~ | ~~Can't build external tools~~ | **Resolved** (wiki page exists) |
 | 3 | ~~Plugin ABI stability & versioning~~ | ~~Breaking module changes~~ | **Resolved** (wiki page exists) |
-| 4 | **Physics solver tuning guide** | Instability in complex scenes | Partially covered in Physics.md |
-| 5 | **Migration/upgrade guide** | No formal version upgrade path | Not yet documented |
+| 4 | ~~Physics solver tuning guide~~ | ~~Instability in complex scenes~~ | **Resolved** (Solver Tuning section added to Physics.md) |
+| 5 | ~~Migration/upgrade guide~~ | ~~No formal version upgrade path~~ | **Resolved** (wiki/Migration-Guide.md created) |
 
 ---
 

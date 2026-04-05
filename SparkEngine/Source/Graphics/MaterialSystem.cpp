@@ -7,8 +7,8 @@
  * Console editing/texture/hot-reload commands are in MaterialConsoleEdit.cpp.
  */
 
-#include "Core/Platform.h"
 #include "MaterialSystem.h"
+#include "Core/Platform.h"
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"

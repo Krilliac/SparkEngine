@@ -1,5 +1,5 @@
-#include "Core/Platform.h"
 #include "InteractiveObject.h"
+#include "Core/Platform.h"
 #include "Player.h"
 #include "Input/InputManager.h"
 #include "Utils/Assert.h"

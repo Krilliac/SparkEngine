@@ -202,3 +202,181 @@ TEST(GraphicsSettings_CopySemantic)
     EXPECT_FALSE(original.vsync);
     EXPECT_TRUE(copy.vsync);
 }
+
+// ============================================================================
+// Render State Defaults
+// ============================================================================
+
+namespace TestGE
+{
+
+    enum class CullMode
+    {
+        None,
+        Front,
+        Back
+    };
+
+    struct RenderState
+    {
+        bool blendEnabled = false;
+        bool depthTestEnabled = true;
+        bool depthWriteEnabled = true;
+        CullMode cullMode = CullMode::Back;
+        bool scissorTestEnabled = false;
+    };
+
+    struct Viewport
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+
+        float AspectRatio() const { return (height != 0.0f) ? width / height : 0.0f; }
+    };
+
+    struct ShaderPermutationKey
+    {
+        bool normalMapping = false;
+        bool shadows = false;
+        bool skinning = false;
+        bool fog = false;
+
+        uint32_t Hash() const
+        {
+            uint32_t h = 0;
+            if (normalMapping)
+                h |= (1u << 0);
+            if (shadows)
+                h |= (1u << 1);
+            if (skinning)
+                h |= (1u << 2);
+            if (fog)
+                h |= (1u << 3);
+            return h;
+        }
+
+        bool operator==(const ShaderPermutationKey& other) const { return Hash() == other.Hash(); }
+        bool operator!=(const ShaderPermutationKey& other) const { return !(*this == other); }
+    };
+
+    struct DrawCallEntry
+    {
+        uint32_t materialId = 0;
+        float depth = 0.0f;
+        uint32_t meshId = 0;
+
+        bool operator<(const DrawCallEntry& other) const
+        {
+            if (materialId != other.materialId)
+                return materialId < other.materialId;
+            return depth < other.depth;
+        }
+    };
+
+} // namespace TestGE
+
+TEST(GraphicsEngine_RenderStateDefaults)
+{
+    TestGE::RenderState state;
+
+    EXPECT_FALSE(state.blendEnabled);
+    EXPECT_TRUE(state.depthTestEnabled);
+    EXPECT_TRUE(state.depthWriteEnabled);
+    EXPECT_TRUE(state.cullMode == TestGE::CullMode::Back);
+    EXPECT_FALSE(state.scissorTestEnabled);
+}
+
+// ============================================================================
+// Viewport Calculation
+// ============================================================================
+
+TEST(GraphicsEngine_ViewportCalculation)
+{
+    // 16:9 aspect ratio
+    TestGE::Viewport vp16x9;
+    vp16x9.width = 1920.0f;
+    vp16x9.height = 1080.0f;
+    EXPECT_NEAR(vp16x9.AspectRatio(), 16.0f / 9.0f, 0.01f);
+
+    // 4:3 aspect ratio
+    TestGE::Viewport vp4x3;
+    vp4x3.width = 1024.0f;
+    vp4x3.height = 768.0f;
+    EXPECT_NEAR(vp4x3.AspectRatio(), 4.0f / 3.0f, 0.01f);
+
+    // 21:9 ultrawide
+    TestGE::Viewport vp21x9;
+    vp21x9.width = 2560.0f;
+    vp21x9.height = 1080.0f;
+    EXPECT_NEAR(vp21x9.AspectRatio(), 2560.0f / 1080.0f, 0.01f);
+
+    // Zero height returns 0 (no division by zero)
+    TestGE::Viewport vpZero;
+    vpZero.width = 1920.0f;
+    vpZero.height = 0.0f;
+    EXPECT_NEAR(vpZero.AspectRatio(), 0.0f, 0.001f);
+}
+
+// ============================================================================
+// Shader Permutation Key
+// ============================================================================
+
+TEST(GraphicsEngine_ShaderPermutationKey)
+{
+    TestGE::ShaderPermutationKey keyA;
+    keyA.normalMapping = true;
+    keyA.shadows = false;
+
+    TestGE::ShaderPermutationKey keyB;
+    keyB.normalMapping = false;
+    keyB.shadows = true;
+
+    TestGE::ShaderPermutationKey keyC;
+    keyC.normalMapping = true;
+    keyC.shadows = true;
+
+    TestGE::ShaderPermutationKey keyD;
+    keyD.normalMapping = true;
+    keyD.shadows = false;
+
+    // Different combos produce different keys
+    EXPECT_TRUE(keyA != keyB);
+    EXPECT_TRUE(keyA != keyC);
+    EXPECT_TRUE(keyB != keyC);
+
+    // Same combo produces same key
+    EXPECT_TRUE(keyA == keyD);
+
+    // All hashes are unique for distinct combos
+    EXPECT_NE(keyA.Hash(), keyB.Hash());
+    EXPECT_NE(keyA.Hash(), keyC.Hash());
+    EXPECT_NE(keyB.Hash(), keyC.Hash());
+}
+
+// ============================================================================
+// Draw Call Sorting
+// ============================================================================
+
+TEST(GraphicsEngine_DrawCallSorting)
+{
+    std::vector<TestGE::DrawCallEntry> drawCalls = {
+        {2, 10.0f, 100}, {1, 5.0f, 101}, {1, 2.0f, 102}, {3, 1.0f, 103}, {2, 3.0f, 104},
+    };
+
+    std::sort(drawCalls.begin(), drawCalls.end());
+
+    // Sorted by materialId first
+    EXPECT_EQ(drawCalls[0].materialId, 1u);
+    EXPECT_EQ(drawCalls[1].materialId, 1u);
+    EXPECT_EQ(drawCalls[2].materialId, 2u);
+    EXPECT_EQ(drawCalls[3].materialId, 2u);
+    EXPECT_EQ(drawCalls[4].materialId, 3u);
+
+    // Within same material, sorted by depth
+    EXPECT_NEAR(drawCalls[0].depth, 2.0f, 0.001f);
+    EXPECT_NEAR(drawCalls[1].depth, 5.0f, 0.001f);
+    EXPECT_NEAR(drawCalls[2].depth, 3.0f, 0.001f);
+    EXPECT_NEAR(drawCalls[3].depth, 10.0f, 0.001f);
+}

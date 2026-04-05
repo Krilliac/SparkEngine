@@ -1,3 +1,4 @@
+#include "VehiclePhysics.h"
 #include "../Core/Platform.h"
 /**
  * @file VehiclePhysics.cpp
@@ -6,7 +7,6 @@
  * @date 2025
  */
 
-#include "VehiclePhysics.h"
 #include "PhysicsBody.h"
 #include "PhysicsSystem.h"
 #include "../Utils/Validate.h"

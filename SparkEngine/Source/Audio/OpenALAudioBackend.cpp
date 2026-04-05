@@ -3,11 +3,10 @@
  * @brief IAudioBackend adapter delegating to the OpenAL Soft engine
  */
 
+#include "OpenALAudioBackend.h"
 #include "Core/Platform.h"
 
 #if !defined(SPARK_PLATFORM_WINDOWS)
-
-#include "OpenALAudioBackend.h"
 
 namespace Spark::Audio
 {

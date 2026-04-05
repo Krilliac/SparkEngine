@@ -1,5 +1,5 @@
-#include "../Core/Platform.h"
 #include "SparkEngineCamera.h"
+#include "../Core/Platform.h"
 #include "Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/Validate.h"

@@ -1,3 +1,4 @@
+#include "SoftBodyPhysics.h"
 #include "../Core/Platform.h"
 /**
  * @file SoftBodyPhysics.cpp
@@ -6,7 +7,6 @@
  * @date 2025
  */
 
-#include "SoftBodyPhysics.h"
 #include "PhysicsSystem.h"
 #include "../Utils/Validate.h"
 

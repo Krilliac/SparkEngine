@@ -1,3 +1,4 @@
+#include "Mesh.h"
 #include "../Core/Platform.h"
 #include "../Utils/MathUtils.h"
 /**
@@ -10,7 +11,6 @@
  * Dual implementation: Windows uses DirectXMath + D3D11; Linux stores CPU-side
  * data for the RHI abstraction layer.
  */
-#include "Mesh.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include <tiny_obj_loader.h>

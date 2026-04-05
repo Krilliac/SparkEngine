@@ -97,9 +97,9 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 |--------|:------:|-------|
 | UDP client/server | **DONE** | WinSock2 + POSIX sockets |
 | Entity replication | **DONE** | Dirty-flag delta sync |
-| Lag compensation | **PARTIAL** | Snapshots recorded, RewindToTime() works; not integrated with hit detection |
-| Reliable channels | **PARTIAL** | Infrastructure present; ACK/retransmission incomplete |
-| Client-side prediction | **PARTIAL** | InputHistory exists; local simulation loop incomplete |
+| Lag compensation | **DONE** | Snapshots, RewindToTime(), ValidateHit() with ray-AABB intersection |
+| Reliable channels | **DONE** | ACK bitmask, retransmission with exponential backoff, duplicate detection, ordered delivery, RTT estimation |
+| Client-side prediction | **DONE** | Input recording, local simulation, server reconciliation with smooth correction |
 | Connection timeout | **DONE** | Heartbeat-based detection |
 | Area server architecture | **DONE** | WorldServer coordination, per-area instances |
 | Entity migration | **DONE** | Cross-area serialization and transfer |
@@ -174,20 +174,17 @@ These are areas identified during code audits where future improvement may be be
 
 3. **RHI integration depth** — D3D11 is the primary, fully-tested backend. D3D12/Vulkan/OpenGL are functional via RHI but have less test coverage.
 
-4. **Networking reliability** — Core UDP transport works well. Reliable channel retransmission and full client-side prediction are areas for continued development.
+4. **Networking** — All three formerly-partial networking systems (reliable channels, lag compensation, client-side prediction) are now fully implemented and tested.
 
 ## Priority Improvements
 
 ### High Priority
 
-- Complete reliable channel ACK/retransmission for networking
-- Integrate lag compensation with hit detection pipeline
-- Expand integration test coverage for networking subsystem
+- Investigate parallel ECS system execution via Job System
+- Expand RHI backend test coverage (D3D12, Vulkan, OpenGL)
 
 ### Medium Priority
 
-- Investigate parallel ECS system execution via Job System
-- Expand RHI backend test coverage (D3D12, Vulkan, OpenGL)
 - Add performance regression benchmarks to CI
 
 ### Lower Priority

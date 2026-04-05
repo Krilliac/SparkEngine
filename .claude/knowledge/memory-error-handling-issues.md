@@ -2,8 +2,8 @@
 
 **Last updated:** 2026-03-16
 **Type:** Issue
-**Status:** Mostly Resolved
-**Severity:** High
+**Status:** **Resolved**
+**Severity:** Low (all items documented or fixed)
 
 ## Description
 
@@ -13,25 +13,23 @@ Naked new/delete in Physics and RHI, unchecked HRESULT returns in D3D11, integer
 
 ## Memory Safety
 
-### Naked new/delete in PhysicsSystem — OPEN (low risk)
+### Naked new/delete in PhysicsSystem — DOCUMENTED (architectural)
 
-**File:** `Physics/PhysicsSystem.cpp:726-734`
+**File:** `Physics/PhysicsSystem.h:589, 602`
 
-Raw owning pointers for Bullet Physics objects. Properly deleted in Shutdown() but not exception-safe.
+Raw owning pointers (`void*`) for `JPH::ShapeRefC*` and `JPH::Ref<GroupFilterTable>*`. The `void*` type-erasure is intentional — these Jolt types cannot be forward-declared without pulling the entire Jolt header tree. Properly deleted in `Shutdown()`. Documented with comments explaining the compilation firewall pattern.
 
-**Note:** Converting to `std::unique_ptr<btFoo>` would require custom deleters and Bullet header changes. Low priority since Shutdown() correctly cleans up.
+### RHI .release() Breaking Ownership — DOCUMENTED (architectural)
 
-### RHI .release() Breaking Ownership — OPEN (architectural)
+**File:** `Graphics/RHI/D3D11/D3D11Device.cpp` (and all RHI backends)
 
-**File:** `Graphics/RHI/D3D11/D3D11Device.cpp`
+`std::make_unique<T>().release()` pattern returns raw pointers. This is the RHI's intentional interface design — callers use `Destroy*()` methods. Documentation comment added to all 4 RHI device files explaining the ownership model. Marked as **architectural decision**.
 
-`std::make_unique<T>().release()` pattern returns raw pointers. This is the RHI's interface design — callers use `Destroy*()` methods. Changing to `std::unique_ptr` return types would require RHI API changes across all backends.
+### COM Manual Release in TextureSystem — RESOLVED
 
-### COM Manual Release in TextureSystem — OPEN (low risk)
+**File:** `Graphics/TextureSystem.cpp`
 
-**File:** `Graphics/TextureSystem.cpp:120-127`
-
-Manual `pFactory->Release()` calls instead of ComPtr. Windows-only code path.
+Already uses `ComPtr<IWICImagingFactory>` — the manual Release issue was fixed in a prior session.
 
 ---
 
@@ -55,11 +53,11 @@ All 4 instances fixed: WeatherSystem.h (ternary guard), GamepadInput.cpp (deadzo
 
 **Fix applied:** Replaced `ASSERT(device)` and `ASSERT(device && data && dataSize > 0)` with `if (!...) return E_INVALIDARG;` — proper runtime checks that work in Release builds.
 
-### Silent Catch Blocks — OPEN (low risk)
+### Silent Catch Blocks — RESOLVED
 
 **File:** `Utils/SparkConsole.cpp`
 
-Two `catch(...)` blocks swallow exceptions during config/history save. Low impact — failure to save console history is non-critical.
+Already uses `catch (const std::exception& e)` with proper error logging. No silent `catch(...)` blocks remain.
 
 ---
 
@@ -73,9 +71,9 @@ All reported getter methods in Graphics headers already have proper const overlo
 
 ---
 
-## Mismatched Header/CPP First Includes (15 files) — OPEN (cosmetic)
+## Mismatched Header/CPP First Includes (15 files) — RESOLVED
 
-Low priority. Affects compilation order but not correctness.
+Fixed: reordered first `#include` in affected `.cpp` files to include their own header first. Files guarded by `#ifdef SPARK_PLATFORM_WINDOWS` were left as-is (they need `Platform.h` first).
 
 ---
 

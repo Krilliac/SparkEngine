@@ -5,7 +5,9 @@
  * @date 2025
  */
 
-// Standard library headers first (MSVC /Zc:preprocessor compatibility)
+#include "ConsolePanel.h"
+
+// Standard library headers
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -20,7 +22,6 @@
 #include <vector>
 
 // Project and third-party headers
-#include "ConsolePanel.h"
 #include "../Core/EditorLogger.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"

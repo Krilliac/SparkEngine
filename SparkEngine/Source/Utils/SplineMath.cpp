@@ -3,8 +3,8 @@
  * @brief Implementation of static spline math utility functions
  */
 
-#include "../Core/Platform.h"
 #include "SplineMath.h"
+#include "../Core/Platform.h"
 #include "Utils/Assert.h"
 #include "Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
