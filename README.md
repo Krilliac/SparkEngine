@@ -3,7 +3,7 @@
 [![SparkEngine DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Krilliac/SparkEngine)
 [![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml?query=branch%3AWorking)
 [![Publish](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml?query=branch%3AWorking)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Spark Open](https://img.shields.io/badge/License-Spark_Open-blue.svg)](LICENSE)
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![Lifetime Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/downloads.json)](https://github.com/Krilliac/SparkEngine/releases)
 [![Release Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/stable-downloads.json)](https://github.com/Krilliac/SparkEngine/releases/latest)
@@ -45,7 +45,7 @@
 [![Metal](https://img.shields.io/badge/Metal-Experimental-yellow?logo=apple&logoColor=white)](https://github.com/Krilliac/SparkEngine)
 [![NullRHI](https://img.shields.io/badge/NullRHI-Headless-blue)](https://github.com/Krilliac/SparkEngine)
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Multi-backend RHI rendering (DirectX 11/12, Vulkan, OpenGL, headless) with global illumination, GPU-driven rendering, mesh shaders, virtual texturing, and DXR ray tracing. Jolt Physics (vehicles, ragdoll, cloth, destruction), XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph editors, an ECS architecture (EnTT, 75 component types), and an ImGui-based editor with 57 specialized panels. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Multi-backend RHI rendering (DirectX 11/12, Vulkan, OpenGL, headless) with global illumination, GPU-driven rendering, mesh shaders, virtual texturing, and DXR ray tracing. Jolt Physics (vehicles, ragdoll, cloth, destruction), XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph editors, an ECS architecture (EnTT, 75 component types), and an ImGui-based editor with 57 specialized panels. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and licensed under the Spark Open License.
 
 > **v1.0.0 Released** — SparkEngine's first official release. Production-ready core systems with active feature development. See the [changelog](CHANGELOG.md) for details.
 
@@ -58,7 +58,7 @@
 - **Advanced rendering** — global illumination (DDGI/APV), GPU-driven rendering, mesh shaders, virtual texturing, DXR ray tracing, Shader Graph, and RenderGraph
 - **Scalable multiplayer** — from single-player to MMO-scale via HeroEngine-inspired area-based server architecture with seamless entity migration
 - **Large world support** — seamless area streaming and floating-point origin rebasing for worlds of any size
-- **Truly open-source** — MIT license, no royalties, no strings attached
+- **Truly open-source** — Spark Open License, no royalties, no fees, anti-plagiarism protected
 - **Built for learning and modding** — clean C++23 codebase with 30+ toggleable CMake modules, mod system, and visual scripting
 - **Ready-to-download binaries** — nightly Windows and Linux builds published on every commit
 
@@ -657,4 +657,4 @@ The networking system is **enabled by default** (`ENABLE_NETWORKING=ON`). It use
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+Spark Open License 1.0. See [LICENSE](LICENSE) for details.

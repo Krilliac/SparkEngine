@@ -1,4 +1,4 @@
-MIT License
+Spark Open License 1.0
 
 Copyright (c) 2024-2026 Krilliac
 
@@ -9,8 +9,41 @@ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. COPYRIGHT NOTICE
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+2. NAME AND TRADEMARK PROTECTION
+   The name "SparkEngine" (including the names "Spark Engine," "SparkEditor,"
+   and the Spark Engine logo) may not be used to identify or brand any
+   derivative work, fork, or modified version of this Software without prior
+   written permission from the copyright holder. Derivative works must use a
+   distinctly different name.
+
+   This restriction does not prevent you from accurately stating that your
+   project is "based on SparkEngine" or "derived from SparkEngine" for the
+   purpose of attribution.
+
+3. ANTI-PLAGIARISM
+   You may not present a substantially unmodified copy of this Software as
+   your own original work, whether under the original name or any other name.
+   A "substantially unmodified copy" means a version where the functional
+   source code has not been meaningfully changed beyond renaming, rebadging,
+   reformatting, or trivial modifications.
+
+   This clause does not restrict legitimate use, distribution, or forking.
+   If you make meaningful modifications or additions, you are free to
+   distribute your derivative work under any name (other than "SparkEngine"
+   per clause 2), provided you include attribution as described below.
+
+4. ATTRIBUTION
+   Derivative works and forks must include a readily visible acknowledgment
+   that the work originated from SparkEngine. The following notice (or
+   substantially similar language) must appear in the derivative work's
+   LICENSE file or README:
+
+       "This software is derived from SparkEngine by Krilliac
+        (https://github.com/Krilliac/SparkEngine)."
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
