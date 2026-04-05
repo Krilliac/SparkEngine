@@ -387,7 +387,8 @@ float GamepadInput::NormalizeTrigger(BYTE raw) const
     float value = raw / 255.0f;
     if (value < m_triggerThreshold)
         return 0.0f;
-    return (value - m_triggerThreshold) / (1.0f - m_triggerThreshold);
+    float range = 1.0f - m_triggerThreshold;
+    return (range > 0.0f) ? (value - m_triggerThreshold) / range : 1.0f;
 }
 
 // ============================================================================
