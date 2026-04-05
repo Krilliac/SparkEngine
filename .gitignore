@@ -439,6 +439,7 @@ credentials.json
 *.key
 *.pem
 *.pfx
+settings.local.ini
 
 # Coverage & reports
 coverage/

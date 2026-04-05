@@ -64,6 +64,34 @@ bool EngineSettings::Load(const std::string& path)
     if (m_config.Load(m_filePath))
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine settings loaded successfully");
+
+        // Load local override file (gitignored — safe for secrets)
+        std::string localPath = m_filePath;
+        auto dotPos = localPath.rfind('.');
+        if (dotPos != std::string::npos)
+            localPath = localPath.substr(0, dotPos) + ".local" + localPath.substr(dotPos);
+        else
+            localPath += ".local";
+
+        if (std::filesystem::exists(localPath))
+        {
+            Spark::ConfigParser localConfig;
+            if (localConfig.Load(localPath))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Loaded local settings override: %s", localPath.c_str());
+                // Merge local values into the main config (local takes precedence)
+                for (const auto& section : localConfig.GetSections())
+                {
+                    for (const auto& key : localConfig.GetKeys(section))
+                    {
+                        std::string val = localConfig.GetString(section, key, "");
+                        if (!val.empty())
+                            m_config.SetString(section, key, val);
+                    }
+                }
+            }
+        }
+
         ReadFromConfig();
         ApplyDebugSettings();
         return true;

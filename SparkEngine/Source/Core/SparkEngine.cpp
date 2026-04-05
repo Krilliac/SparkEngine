@@ -468,6 +468,15 @@ static void SetupCrashHandler()
     const char* envUpload = std::getenv("SPARK_CRASH_UPLOAD_URL");
     if (envUpload)
         crashCfg.uploadURL = envUpload;
+    const char* envSmtpUser = std::getenv("SPARK_SMTP_USER");
+    if (envSmtpUser)
+        crashCfg.smtpUser = envSmtpUser;
+    const char* envSmtpPass = std::getenv("SPARK_SMTP_PASS");
+    if (envSmtpPass)
+        crashCfg.smtpPass = envSmtpPass;
+    const char* envEmailTo = std::getenv("SPARK_CRASH_EMAIL_TO");
+    if (envEmailTo)
+        crashCfg.emailTo = envEmailTo;
     const char* envHeadless = std::getenv("SPARK_CRASH_HEADLESS");
     if (envHeadless && std::string(envHeadless) == "1")
         crashCfg.headlessMode = true;
