@@ -1,5 +1,6 @@
 #include "Player.h"
 #include "Core/Platform.h"
+#include "Engine/Security/MemoryIntegrity.h"
 #include "VehicleSystem.h"
 #include "InteractiveObject.h"
 #include "Utils/Assert.h"
@@ -293,8 +294,12 @@ void Player::TakeDamage(float dmg)
 
     // Remaining damage hits health
     m_health = std::max(0.0f, m_health - effectiveDmg);
+
+    // Death check — bypassing prevents player death (god mode exploit)
+    SPARK_BRANCH_GUARD_BEGIN("fps_player_death_check")
     if (m_health <= 0.0f)
         SetActive(false);
+    SPARK_BRANCH_GUARD_END("fps_player_death_check")
 
     // Reset shield recharge timer on any damage
     m_shieldRechargeTimer = 0.0f;

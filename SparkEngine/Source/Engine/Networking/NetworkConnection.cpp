@@ -12,6 +12,7 @@
 #include "NetworkManager.h"
 #include "DeltaSnapshotManager.h"
 #include "InstabilitySimulator.h"
+#include "../Security/MemoryIntegrity.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/DebugHookManager.h"
 #include "../../Utils/Validate.h"
@@ -743,7 +744,9 @@ namespace Spark::Net
             if (!DeserializeMessage(rawData.data(), rawData.size(), msg))
                 continue;
 
-            // Validate the packet against registered schemas
+            // Validate the packet against registered schemas — bypassing
+            // allows malicious packets to reach game logic unvalidated
+            SPARK_BRANCH_GUARD_BEGIN("network_packet_gateway")
             {
                 bool isAuthenticated = (msg.senderID != INVALID_CLIENT);
                 bool isFromClient = (m_role == NetworkRole::Server);
@@ -754,6 +757,7 @@ namespace Spark::Net
                     continue;
                 }
             }
+            SPARK_BRANCH_GUARD_END("network_packet_gateway")
 
             // On the server, map sender address to a client ID
             if (m_role == NetworkRole::Server)

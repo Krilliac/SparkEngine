@@ -1,6 +1,12 @@
 /**
  * @file ScriptHotReload.cpp
  * @brief Implementation of script hot-reload and file watching
+ *
+ * @note MEMORY INTEGRITY GUARDS: NOT INCLUDED in this file.
+ * Reason: Hot-reload intentionally modifies code at runtime (recompiling and
+ * reloading script modules). Branch guards here would produce false positives
+ * during normal development workflows. The ScriptSandbox — which enforces
+ * execution limits on reloaded scripts — IS guarded.
  */
 
 #include "ScriptHotReload.h"

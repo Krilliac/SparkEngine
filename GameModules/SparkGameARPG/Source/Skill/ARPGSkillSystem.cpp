@@ -4,6 +4,7 @@
  */
 
 #include "ARPGSkillSystem.h"
+#include "Engine/Security/MemoryIntegrity.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -173,7 +174,8 @@ namespace ARPG
         if (!skill)
             return false;
 
-        // Check if on cooldown
+        // Check if on cooldown — bypassing allows instant ability spam
+        SPARK_BRANCH_GUARD_BEGIN("arpg_cooldown_check")
         auto cdIt = m_cooldowns.find(heroId);
         if (cdIt != m_cooldowns.end())
         {
@@ -183,12 +185,15 @@ namespace ARPG
                     return false; // Still on cooldown
             }
         }
+        SPARK_BRANCH_GUARD_END("arpg_cooldown_check")
 
-        // Apply cooldown if skill has one
+        // Apply cooldown if skill has one — bypassing skips cooldown entirely
+        SPARK_BRANCH_GUARD_BEGIN("arpg_cooldown_apply")
         if (skill->cooldown > 0.0f)
         {
             m_cooldowns[heroId].push_back({skillId, skill->cooldown});
         }
+        SPARK_BRANCH_GUARD_END("arpg_cooldown_apply")
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG skill used: %s (cd=%.1fs)", skill->name.c_str(),
                         skill->cooldown);
 

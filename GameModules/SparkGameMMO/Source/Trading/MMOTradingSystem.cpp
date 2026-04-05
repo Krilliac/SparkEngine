@@ -4,6 +4,7 @@
  */
 
 #include "MMOTradingSystem.h"
+#include "Engine/Security/MemoryIntegrity.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -181,9 +182,13 @@ namespace MMO
     bool MMOTradingSystem::ExecuteTrade(uint32_t tradeId, InventoryData& invA, InventoryData& invB,
                                         MMOInventorySystem& invSys)
     {
+        // Memory integrity: bypassing trade state validation allows executing
+        // trades that weren't confirmed, or re-executing completed trades (dupe)
         auto* trade = GetTradeMut(tradeId);
+        SPARK_BRANCH_GUARD_BEGIN("mmo_trade_state_validation")
         if (!trade || trade->state != TradeState::Locked)
             return false;
+        SPARK_BRANCH_GUARD_END("mmo_trade_state_validation")
 
         // Transfer items A → B
         for (const auto& item : trade->sideA.items)

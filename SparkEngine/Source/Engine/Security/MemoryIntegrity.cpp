@@ -3,6 +3,11 @@
  * @brief Runtime memory integrity and branch protection implementation
  * @author Spark Engine Team
  * @date 2026
+ *
+ * @note MEMORY INTEGRITY GUARDS: NOT INCLUDED in this file.
+ * Reason: Self-referential — the integrity system cannot guard itself without
+ * creating a circular dependency. The system's own code regions are instead
+ * protected via auto-discovered code page scanning at startup.
  */
 
 #include "MemoryIntegrity.h"

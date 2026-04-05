@@ -6,6 +6,12 @@
  * @author Spark Engine Team
  * @date 2025
  *
+ * @note MEMORY INTEGRITY GUARDS: NOT INCLUDED in this file.
+ * Reason: Physics simulation runs every frame at high frequency. Adding branch
+ * guards to the inner step/collision loop would add unacceptable overhead.
+ * Server-authoritative physics validation (if needed) should be done at the
+ * network replication layer, not inside the simulation tick.
+ *
  * Body lifecycle, debug rendering, materials, serialization live in PhysicsSystemQueries.cpp.
  * Constraint creation lives in PhysicsConstraints.cpp.
  * Constraint motor control lives in PhysicsMotorControl.cpp.

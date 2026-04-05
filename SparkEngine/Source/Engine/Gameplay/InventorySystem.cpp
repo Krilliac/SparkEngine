@@ -6,6 +6,7 @@
 #include "InventorySystem.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/SparkConsole.h"
+#include "../Security/MemoryIntegrity.h"
 
 #include <algorithm>
 
@@ -78,6 +79,10 @@ namespace Spark::Gameplay
 
     bool InventorySystem::AddItem(uint32_t entityId, uint32_t itemId, uint32_t count)
     {
+        // Memory integrity: bypassing item validation allows adding
+        // non-existent items or bypassing stack/capacity limits
+        SPARK_INTEGRITY_CHECKPOINT("inventory_add_item");
+
         if (count == 0)
         {
             return true;
@@ -132,7 +137,8 @@ namespace Spark::Gameplay
 
             if (!emptySlot)
             {
-                // Need a new slot — check capacity
+                // Need a new slot — check capacity (bypassing allows unlimited inventory)
+                SPARK_BRANCH_GUARD_BEGIN("inventory_capacity_check")
                 if (static_cast<uint32_t>(slots.size()) >= maxSlots)
                 {
                     SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -140,6 +146,7 @@ namespace Spark::Gameplay
                                    entityId, static_cast<uint32_t>(slots.size()), maxSlots, remaining);
                     return false;
                 }
+                SPARK_BRANCH_GUARD_END("inventory_capacity_check")
                 slots.push_back({});
                 emptySlot = &slots.back();
             }
@@ -150,6 +157,7 @@ namespace Spark::Gameplay
             remaining -= toAdd;
         }
 
+        SPARK_VERIFY_CHECKPOINT("inventory_add_item");
         return true;
     }
 
@@ -166,11 +174,14 @@ namespace Spark::Gameplay
             return false;
         }
 
-        // Verify we have enough before modifying
+        // Verify we have enough before modifying — bypassing allows
+        // negative item counts and duplication exploits
+        SPARK_BRANCH_GUARD_BEGIN("inventory_remove_validation")
         if (GetItemCount(entityId, itemId) < count)
         {
             return false;
         }
+        SPARK_BRANCH_GUARD_END("inventory_remove_validation")
 
         auto& slots = invIt->second;
         uint32_t remaining = count;
