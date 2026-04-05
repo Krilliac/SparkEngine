@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <numeric>
 #include <vector>
 
@@ -214,7 +215,7 @@ TEST(NTC_SaveLoadNTEX)
 
     auto compressed = ntc.Compress(pixels.data(), size, size, opts);
 
-    const std::string path = "/tmp/test_neural_texture.ntex";
+    const std::string path = (std::filesystem::temp_directory_path() / "test_neural_texture.ntex").string();
     EXPECT_TRUE(ntc.SaveNTEX(compressed, path));
 
     auto loaded = ntc.LoadNTEX(path);
@@ -236,7 +237,7 @@ TEST(NTC_LoadInvalidFile)
     NeuralTextureCompressor ntc;
     ntc.Initialize();
 
-    auto loaded = ntc.LoadNTEX("/tmp/nonexistent_ntex_file.ntex");
+    auto loaded = ntc.LoadNTEX((std::filesystem::temp_directory_path() / "nonexistent_ntex_file.ntex").string());
     EXPECT_TRUE(loaded.blockWeights.empty());
 }
 

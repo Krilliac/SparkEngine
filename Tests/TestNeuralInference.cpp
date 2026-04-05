@@ -9,6 +9,7 @@
 #include "Graphics/Neural/NeuralWeights.h"
 
 #include <cmath>
+#include <filesystem>
 #include <vector>
 
 using namespace Spark::Graphics::Neural;
@@ -302,7 +303,7 @@ TEST(Neural_WeightsSaveLoad)
         network.weights[i] = static_cast<float>(i) * 0.01f;
     }
 
-    const std::string path = "/tmp/test_neural_weights.nnw";
+    const std::string path = (std::filesystem::temp_directory_path() / "test_neural_weights.nnw").string();
     EXPECT_TRUE(SaveWeights(network, path));
 
     auto loaded = LoadWeights(path);
@@ -317,7 +318,7 @@ TEST(Neural_WeightsSaveLoad)
 
 TEST(Neural_WeightsLoadInvalidFile)
 {
-    auto loaded = LoadWeights("/tmp/nonexistent_file_12345.nnw");
+    auto loaded = LoadWeights((std::filesystem::temp_directory_path() / "nonexistent_file_12345.nnw").string());
     EXPECT_TRUE(loaded.desc.layers.empty());
     EXPECT_TRUE(loaded.weights.empty());
 }
