@@ -9,6 +9,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "AudioEngine.h"
+#include "Utils/LogMacros.h"
 
 #include <string>
 
@@ -20,12 +21,17 @@ namespace Spark::Audio
     bool XAudio2AudioBackend::Initialize(size_t maxSources)
     {
         if (!m_engine)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "XAudio2AudioBackend::Initialize — null engine pointer");
             return false;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "XAudio2AudioBackend::Initialize — maxSources=%zu", maxSources);
         return SUCCEEDED(m_engine->Initialize(maxSources));
     }
 
     void XAudio2AudioBackend::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "XAudio2AudioBackend::Shutdown");
         if (m_engine)
             m_engine->Shutdown();
     }

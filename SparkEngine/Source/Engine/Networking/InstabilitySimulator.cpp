@@ -4,6 +4,7 @@
  */
 
 #include "InstabilitySimulator.h"
+#include "../../Utils/LogMacros.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>

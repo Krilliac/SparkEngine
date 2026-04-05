@@ -5,6 +5,8 @@
 
 #include "SparkPak.h"
 
+#include "Utils/LogMacros.h"
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -65,6 +67,7 @@ namespace Spark
     {
         Close();
 
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SparkPakReader::Open — '%s'", filePath.c_str());
         m_filePath = filePath;
 #ifdef _WIN32
         m_file = _wfopen(std::filesystem::path(filePath).wstring().c_str(), L"rb");
@@ -72,14 +75,20 @@ namespace Spark
         m_file = std::fopen(filePath.c_str(), "rb");
 #endif
         if (!m_file)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakReader: failed to open '%s'", filePath.c_str());
             return false;
+        }
 
         if (!ReadHeader() || !ReadTOC())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SparkPakReader: invalid header/TOC in '%s'", filePath.c_str());
             Close();
             return false;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "SparkPakReader: opened '%s' — %zu entries", filePath.c_str(),
+                       m_entryList.size());
         return true;
     }
 

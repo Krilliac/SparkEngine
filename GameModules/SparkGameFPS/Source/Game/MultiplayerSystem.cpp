@@ -4,6 +4,7 @@
  */
 
 #include "MultiplayerSystem.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -63,6 +64,8 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::Initialize(bool isServer)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "FPSMultiplayerSystem::Initialize — mode=%s",
+                       isServer ? "Server" : "Client");
         m_isServer = isServer;
         m_isActive = false;
         m_playerStates.clear();
@@ -97,6 +100,8 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "FPSMultiplayerSystem::Shutdown — %zu players active",
+                       m_playerStates.size());
         if (m_isServer)
             StopServer();
         else

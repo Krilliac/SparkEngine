@@ -4,6 +4,7 @@
  */
 
 #include "LODGenerator.h"
+#include "Utils/LogMacros.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -151,10 +152,17 @@ namespace Spark::Graphics
 
         if (!vertices || !indices || vertexCount == 0 || indexCount < 3)
         {
+            SPARK_LOG_WARN(
+                Spark::LogCategory::Graphics, "LODGenerator::Simplify — invalid input (verts=%p, idx=%p, vc=%u, ic=%u)",
+                static_cast<const void*>(vertices), static_cast<const void*>(indices), vertexCount, indexCount);
             result.triangleCount = 0;
             result.geometricError = 0.0f;
             return result;
         }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics,
+                        "LODGenerator::Simplify — %u verts, %u indices, target=%u tris, maxErr=%.4f", vertexCount,
+                        indexCount, targetTriangles, maxError);
 
         uint32_t triCount = indexCount / 3;
         if (triCount <= targetTriangles)
@@ -349,8 +357,12 @@ namespace Spark::Graphics
 
         if (!vertices || !indices || vertexCount == 0 || indexCount < 3)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "LODGenerator::Generate — invalid mesh data");
             return result;
         }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LODGenerator::Generate — %u verts, %u tris, %u LOD levels",
+                       vertexCount, indexCount / 3, options.lodCount);
 
         uint32_t originalTriCount = indexCount / 3;
         uint32_t lodCount = std::max(options.lodCount, 1u);

@@ -5,6 +5,9 @@
 
 #include "TextureCompressor.h"
 
+#include "Utils/LogMacros.h"
+#include "Utils/Validate.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -218,6 +221,22 @@ namespace Spark::Graphics
                                                   const CompressionOptions& options)
     {
         CompressedTexture result;
+
+        if (!rgba)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "TextureCompressor::Compress — null pixel data");
+            return result;
+        }
+        if (width == 0 || height == 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "TextureCompressor::Compress — invalid dimensions %ux%u",
+                            width, height);
+            return result;
+        }
+
+        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "TextureCompressor::Compress %ux%u format=%d mips=%s", width,
+                        height, static_cast<int>(options.format), options.generateMipmaps ? "yes" : "no");
+
         result.width = width;
         result.height = height;
         result.originalSize = static_cast<size_t>(width) * height * 4;

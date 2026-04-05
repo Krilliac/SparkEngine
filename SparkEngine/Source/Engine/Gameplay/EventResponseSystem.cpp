@@ -5,7 +5,9 @@
 
 #include "EventResponseSystem.h"
 #include "Core/EngineContext.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/Validate.h"
 
 #include <algorithm>
 #include <fstream>
@@ -24,9 +26,12 @@ namespace Spark::Gameplay
     {
         if (m_initialized)
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "EventResponseSystem::Initialize called while already initialized");
             return;
         }
 
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "EventResponseSystem::Initialize — subscribing to events");
         SubscribeToEvents();
         m_initialized = true;
 
@@ -36,6 +41,9 @@ namespace Spark::Gameplay
 
     void EventResponseSystem::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "EventResponseSystem::Shutdown — %zu rules, %zu pending delayed actions", m_rules.size(),
+                       m_delayedActions.size());
         UnsubscribeFromEvents();
         m_rules.clear();
         m_delayedActions.clear();
@@ -79,6 +87,10 @@ namespace Spark::Gameplay
 
     void EventResponseSystem::AddRule(EventResponseRule rule)
     {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "EventResponseSystem::AddRule '%s' trigger=%d", rule.name.c_str(),
+                        static_cast<int>(rule.trigger));
+        SPARK_WARN_IF(Spark::LogCategory::Game, rule.name.empty(), "Adding rule with empty name");
+
         // Set up timer state for OnTimer rules
         if (rule.trigger == EventTriggerType::OnTimer)
         {
@@ -666,9 +678,12 @@ namespace Spark::Gameplay
 
     bool EventResponseSystem::SaveToJson(const std::string& path) const
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "EventResponseSystem::SaveToJson — saving %zu rules to '%s'",
+                       m_rules.size(), path.c_str());
         std::ofstream file(path);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "SaveToJson: failed to open file '%s'", path.c_str());
             return false;
         }
 
@@ -735,11 +750,10 @@ namespace Spark::Gameplay
         return true;
     }
 
-    bool EventResponseSystem::LoadFromJson(const std::string& /*path*/)
+    bool EventResponseSystem::LoadFromJson(const std::string& path)
     {
-        // JSON parsing would require a JSON library or manual parser.
-        // For now, rules are created programmatically or via the editor.
-        // Full JSON loading can be added when a JSON library (nlohmann/json) is integrated.
+        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                       "EventResponseSystem::LoadFromJson('%s') — not yet implemented (no JSON library)", path.c_str());
         return false;
     }
 

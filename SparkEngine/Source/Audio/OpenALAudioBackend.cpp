@@ -5,6 +5,7 @@
 
 #include "OpenALAudioBackend.h"
 #include "Core/Platform.h"
+#include "Utils/LogMacros.h"
 
 #if !defined(SPARK_PLATFORM_WINDOWS)
 
@@ -21,11 +22,18 @@ namespace Spark::Audio
 
     bool OpenALAudioBackend::Initialize(size_t maxSources)
     {
-        return m_engine && m_engine->Initialize(maxSources);
+        if (!m_engine)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "OpenALAudioBackend::Initialize — null engine");
+            return false;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "OpenALAudioBackend::Initialize — maxSources=%zu", maxSources);
+        return m_engine->Initialize(maxSources);
     }
 
     void OpenALAudioBackend::Shutdown()
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Audio, "OpenALAudioBackend::Shutdown");
         if (m_engine)
             m_engine->Shutdown();
     }

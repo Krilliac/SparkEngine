@@ -5,6 +5,7 @@
 
 #include "Utils/NetworkHealthMonitor.h"
 #include "../Core/Platform.h"
+#include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
@@ -23,7 +24,11 @@ namespace Spark
     void NetworkHealthMonitor::Initialize()
     {
         if (m_initialized)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "NetworkHealthMonitor::Initialize — already initialized");
             return;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "NetworkHealthMonitor::Initialize");
 
         m_rttHistory.fill(0.0f);
         m_rttIndex = 0;

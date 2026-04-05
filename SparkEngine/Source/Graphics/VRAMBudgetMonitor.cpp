@@ -8,6 +8,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
+#include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
 #include <dxgi1_4.h>
 
@@ -17,12 +18,15 @@ HRESULT VRAMBudgetMonitor::Initialize(ID3D11Device* device)
 {
     if (m_initialized)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "VRAMBudgetMonitor::Initialize — already initialized");
         return S_FALSE;
     }
     if (!device)
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "VRAMBudgetMonitor::Initialize — null device");
         return E_INVALIDARG;
     }
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VRAMBudgetMonitor::Initialize");
 
     // Walk the DXGI chain: Device → DXGIDevice → Adapter → Adapter3
     ComPtr<IDXGIDevice> dxgiDevice;
