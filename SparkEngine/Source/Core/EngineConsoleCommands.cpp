@@ -8,6 +8,7 @@
  */
 
 #include "EngineConsoleCommands.h"
+#include "SubsystemConsoleCommands.h"
 #include "EngineDiagnostics.h"
 #include "EngineContext.h"
 #include "AssetIntegration.h"
@@ -966,6 +967,7 @@ namespace Spark
         RegisterMemoryMonitorCommands(console);
         RegisterPakCommands(console);
         RegisterDiagnosticCommands(console);
+        RegisterSubsystemConsoleCommands();
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine console commands registered successfully");
     }
 

@@ -416,6 +416,97 @@ class EngineSettings
         bool breakOnSuppressedAsserts = true; ///< Break into debugger on suppressed assertions
     };
 
+    // ---- Weather ----
+
+    struct WeatherSettings
+    {
+        int weatherType = 0; // 0=Clear, 1=Cloudy, 2=Rain, 3=Snow, 4=Fog, 5=Storm
+        float intensity = 0.0f;
+        float transitionTime = 5.0f;
+        float windSpeed = 0.0f;
+        float windDirectionX = 1.0f;
+        float windDirectionY = 0.0f;
+        float windDirectionZ = 0.0f;
+        float windGustiness = 0.0f;
+        float fogDensity = 0.0f;
+        float fogStartDistance = 10.0f;
+        float fogEndDistance = 500.0f;
+        float precipitationRate = 100.0f;
+        float precipitationSize = 1.0f;
+        float lightningFrequency = 0.0f;
+        float thunderDelay = 2.0f;
+        float ambientMultiplier = 1.0f;
+        float directionalMultiplier = 1.0f;
+    };
+
+    // ---- Time of Day ----
+
+    struct TimeOfDaySettings
+    {
+        float startHour = 12.0f;
+        float timeScale = 60.0f; // Game seconds per real second
+        bool paused = false;
+        float sunriseHour = 6.0f;
+        float sunsetHour = 20.0f;
+        float moonIntensity = 0.1f;
+        float ambientNightMultiplier = 0.2f;
+    };
+
+    // ---- Streaming / LOD ----
+
+    struct StreamingSettings
+    {
+        float drawDistance = 1000.0f;
+        float lodDistanceMultiplier = 1.0f;
+        float streamingDistance = 2000.0f;
+        int maxLoadedAreas = 4;
+        float lodBias = 0.0f; // Positive = lower quality at distance
+        int maxConcurrentLoads = 2;
+        bool enableStreaming = true;
+        float shadowDrawDistance = 200.0f;
+    };
+
+    // ---- Performance ----
+
+    struct PerformanceSettings
+    {
+        int targetFPS = 0;         // 0 = uncapped
+        int workerThreadCount = 0; // 0 = auto (hardware_concurrency - 1)
+        bool enableJobSystem = true;
+        int maxParticles = 10000;
+        int maxDecals = 256;
+        bool enableAsyncCompute = false;
+        bool enableAsyncLoading = true;
+        float objectPoolGrowthFactor = 1.5f;
+    };
+
+    // ---- World ----
+
+    struct WorldSettings
+    {
+        float originRebaseThreshold = 5000.0f;
+        float defaultGravityScale = 1.0f;
+        bool enableOriginRebasing = true;
+        float worldBoundsMin = -100000.0f;
+        float worldBoundsMax = 100000.0f;
+    };
+
+    // ---- UI ----
+
+    struct UISettings
+    {
+        float uiScale = 1.0f;
+        float fontSize = 14.0f;
+        bool showCrosshair = true;
+        bool showHUD = true;
+        bool showMinimap = true;
+        bool showDamageNumbers = true;
+        bool showSubtitles = true;
+        float hudOpacity = 1.0f;
+        float subtitleSize = 1.0f;
+        bool showInteractionPrompts = true;
+    };
+
     // ---- Logging ----
 
     struct LoggingSettings
@@ -553,6 +644,24 @@ class EngineSettings
     DebugSettings& Debug() { return m_debug; }
     const DebugSettings& Debug() const { return m_debug; }
 
+    WeatherSettings& Weather() { return m_weather; }
+    const WeatherSettings& Weather() const { return m_weather; }
+
+    TimeOfDaySettings& TimeOfDay() { return m_timeOfDay; }
+    const TimeOfDaySettings& TimeOfDay() const { return m_timeOfDay; }
+
+    StreamingSettings& Streaming() { return m_streaming; }
+    const StreamingSettings& Streaming() const { return m_streaming; }
+
+    PerformanceSettings& Performance() { return m_performance; }
+    const PerformanceSettings& Performance() const { return m_performance; }
+
+    WorldSettings& WorldConfig() { return m_world; }
+    const WorldSettings& WorldConfig() const { return m_world; }
+
+    UISettings& UI() { return m_ui; }
+    const UISettings& UI() const { return m_ui; }
+
     LoggingSettings& Logging() { return m_logging; }
     const LoggingSettings& Logging() const { return m_logging; }
 
@@ -636,6 +745,12 @@ class EngineSettings
     AnimationSettings m_animation;
     CrashReportingSettings m_crashReporting;
     DebugSettings m_debug;
+    WeatherSettings m_weather;
+    TimeOfDaySettings m_timeOfDay;
+    StreamingSettings m_streaming;
+    PerformanceSettings m_performance;
+    WorldSettings m_world;
+    UISettings m_ui;
     LoggingSettings m_logging;
 
     // Change listeners
