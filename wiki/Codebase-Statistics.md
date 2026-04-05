@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-04.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-05.
 
 ## Code Volume
 
@@ -8,24 +8,24 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 243226 |
+| **SparkEngine/Source** | 244113 |
 | **SparkEditor/Source** | 82908 |
 | **GameModules** | 57427 |
-| **Tests** | 92244 |
+| **Tests** | 92628 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~478196** |
+| **Total C++ (excl. ThirdParty)** | **~479467** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 700 |
-| Implementation files (.cpp) | 788 |
+| Header files (.h/.hpp) | 701 |
+| Implementation files (.cpp) | 790 |
 | HLSL shader files | 32 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 296 |
+| Test files (.cpp) | 297 |
 | Wiki pages (.md) | 102 |
 
 ### Code Density
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 96507 | 39.6% |
-| Engine (all subsystems) | 72425 | 29.7% |
+| Graphics | 96507 | 39.5% |
+| Engine (all subsystems) | 73307 | 30.0% |
 | Utils | 32470 | 13.3% |
-| Core | 17334 | 7.1% |
+| Core | 17339 | 7.1% |
 | Physics | 10095 | 4.1% |
 | Audio | 5533 | 2.2% |
 | Input | 3345 | 1.3% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 296 |
-| TEST() definitions | 3646 |
+| Test files | 297 |
+| TEST() definitions | 3662 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 

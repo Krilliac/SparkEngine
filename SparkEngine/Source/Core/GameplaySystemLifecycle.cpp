@@ -89,6 +89,7 @@
 #include "Engine/Procedural/ProceduralGenerator.h"
 #include "Engine/Networking/DeltaSnapshotManager.h"
 #include "Engine/Networking/InstabilitySimulator.h"
+#include "Engine/Security/MemoryIntegrity.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
 #include "Engine/Tween/TweenSystem.h"
 #include "Engine/Modding/VirtualFileSystem.h"
@@ -278,6 +279,7 @@ void InitDebugSystems()
     Spark::AssetStallDetector::GetInstance().Initialize();
     Spark::NetworkHealthMonitor::GetInstance().Initialize();
     Spark::GPUResourceLeakDetector::GetInstance().Initialize();
+    Spark::Security::MemoryIntegritySystem::GetInstance().Initialize();
 
     // Register memory pressure response callbacks
     Spark::MemoryMonitor::GetInstance().RegisterPressureCallback(
@@ -908,6 +910,8 @@ void UpdateDebugSystems(float dt)
     SPARK_GUARDED_UPDATE("NetworkHealthMonitor", "Debug", { Spark::NetworkHealthMonitor::GetInstance().Update(dt); });
     SPARK_GUARDED_UPDATE("GPUResourceLeakDetector", "Debug",
                          { Spark::GPUResourceLeakDetector::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("MemoryIntegrity", "Security",
+                         { Spark::Security::MemoryIntegritySystem::GetInstance().Update(dt); });
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading
@@ -927,6 +931,7 @@ void ShutdownDebugSystems()
     Spark::AssetStallDetector::GetInstance().Shutdown();
     Spark::NetworkHealthMonitor::GetInstance().Shutdown();
     Spark::GPUResourceLeakDetector::GetInstance().Shutdown();
+    Spark::Security::MemoryIntegritySystem::GetInstance().Shutdown();
 #ifndef NDEBUG
     Spark::MemoryDebugger::GetInstance().PrintLeakReport();
 #endif
