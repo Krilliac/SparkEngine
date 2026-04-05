@@ -915,8 +915,7 @@ void UpdateDebugSystems(float dt)
                          { Spark::GPUResourceLeakDetector::GetInstance().Update(dt); });
     SPARK_GUARDED_UPDATE("MemoryIntegrity", "Security",
                          { Spark::Security::MemoryIntegritySystem::GetInstance().Update(dt); });
-    SPARK_GUARDED_UPDATE("InvalidStateDetector", "Debug",
-                         { Spark::InvalidStateDetector::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("InvalidStateDetector", "Debug", { Spark::InvalidStateDetector::GetInstance().Update(dt); });
     Spark::FrameInspector::GetInstance().OnFrameEnd();
 
     // Update decal fading
