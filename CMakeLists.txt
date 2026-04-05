@@ -112,6 +112,8 @@ endif()
 option(SPARK_HEADLESS_SUPPORT "Enable headless/dedicated server mode support" ON)
 option(ENABLE_RECAST "Enable Recast/Detour navmesh generation (improved voxel-based builder)" ON)
 option(ENABLE_NEURAL_RENDERING "Enable neural rendering features (NTC, radiance cache, neural post-processing)" ON)
+option(ENABLE_VR "Enable VR/AR framework (OpenXR-ready stub)" OFF)
+option(ENABLE_MOBILE "Enable mobile platform support (touch, gestures, battery-aware scaling)" OFF)
 option(BUILD_TESTS "Build test suite" ON)
 option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)" ON)
 option(SPARK_STRICT_DEPS "FATAL_ERROR on missing critical dependencies (Jolt, ImGui, EnTT)" OFF)
@@ -1472,6 +1474,18 @@ if(SPARK_HEADLESS_SUPPORT)
     list(APPEND FEATURE_DEFINITIONS "SPARK_HEADLESS_SUPPORT")
 endif()
 
+if(ENABLE_VR)
+    list(APPEND FEATURE_DEFINITIONS "SPARK_VR_ENABLED")
+else()
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/VR/VRSystem\\.cpp$")
+endif()
+
+if(ENABLE_MOBILE)
+    list(APPEND FEATURE_DEFINITIONS "SPARK_MOBILE_ENABLED")
+else()
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Mobile/MobilePlatform\\.cpp$")
+endif()
+
 
 
 
@@ -1737,6 +1751,8 @@ message(STATUS "Networking: ${ENABLE_NETWORKING}")
 message(STATUS "  DXR RayTracing : ${ENABLE_DXR}")
 message(STATUS "  SDL2 Input     : ${ENABLE_SDL2}")
 message(STATUS "  Headless Mode  : ${SPARK_HEADLESS_SUPPORT}")
+message(STATUS "  VR Framework   : ${ENABLE_VR}")
+message(STATUS "  Mobile Platform: ${ENABLE_MOBILE}")
 
 # ---------------------------------------------------------------------
 # 19) Third-party dependency status — detailed diagnostics

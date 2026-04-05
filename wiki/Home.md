@@ -1,8 +1,8 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an EnTT-based ECS architecture, an ImGui visual editor, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), global illumination, GPU-driven rendering, mesh shaders, DXR ray tracing, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph, an EnTT-based ECS architecture (75 component types), an ImGui visual editor with 57 dockable panels, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
 
-> **Early Development** — SparkEngine is under active development. Expect rough edges.
+> **v1.0.0 Released** — SparkEngine's first official release. Production-ready core systems with active feature development.
 
 ![SparkEditor — ImGui-based visual editor](../docs/screenshots/editor-overview.png)
 
@@ -18,15 +18,15 @@
 
 ## Feature Highlights
 
-- **Rendering** — DirectX 11 with forward, deferred, forward+, and clustered pipelines. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, fog, and quality presets. Experimental Vulkan and OpenGL backends via RHI abstraction.
-- **Physics** — Jolt Physics with rigid bodies, 15 collision shape types, 12 constraint types, raycasting, overlap queries, physics materials, character controller, vehicle physics, ragdoll, soft body/cloth, and debug draw.
-- **Audio** — XAudio2 3D spatial audio with Doppler effects, distance attenuation, volume channels, and object pooling. Miniaudio as cross-platform fallback.
-- **Gameplay** — ECS architecture (EnTT), FPS player controller, weapons, vehicles, inventory, quests, day/night cycle, weather, terrain with quadtree LOD.
-- **AI** — Behavior trees, NavMesh A* pathfinding, perception system, steering behaviors.
-- **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, FBX/glTF import.
-- **Scripting** — AngelScript with hot-reload, lifecycle callbacks, and full engine API bindings.
-- **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation.
-- **Editor** — ImGui-powered visual editor with scene hierarchy, inspector, gizmos, material editor, animation timeline, and 200+ debug console commands.
+- **Rendering** — Multi-backend RHI (DirectX 11/12, Vulkan 1.4, OpenGL 4.6, Metal, NullRHI) with forward, deferred, forward+, and clustered pipelines via a declarative RenderGraph. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting/fog, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, water rendering, sky atmosphere, and quality presets. [Global illumination](Global-Illumination) (DDGI + Adaptive Probe Volumes), [GPU-driven rendering](GPU-Driven-Rendering) (compute culling, HiZ occlusion), [mesh shaders](Mesh-Shaders) (meshlet pipeline), [virtual texturing](Virtual-Texturing), [DXR 1.1 ray tracing](DXR-Raytracing) (reflections, shadows, AO, GI), [Shader Graph](Shader-Graph) (35+ nodes, HLSL generation), and FSR upscaling.
+- **Physics** — Jolt Physics with rigid bodies, 15 collision shape types, 12 constraint types, raycasting, overlap queries, physics materials, character controller, vehicle physics (wheeled/tracked/motorcycle), ragdoll, soft body/cloth, destruction/fracture, deterministic mode, and debug draw.
+- **Audio** — XAudio2 3D spatial audio with Doppler effects, distance attenuation, volume channels, audio mixer, and object pooling. Miniaudio as cross-platform fallback.
+- **Gameplay** — ECS architecture (EnTT, 75 component types, 25 systems), FPS player controller, weapons, vehicles, inventory, quests, achievements, abilities/conditions, event response system, dialogue, destruction, replay, day/night cycle, weather, terrain with quadtree LOD, tween/coroutine systems, and [accessibility](Accessibility) (colorblind modes, subtitles, reduced motion).
+- **AI** — Behavior trees, NavMesh A* pathfinding (Recast/Detour), perception system (vision/hearing/memory), steering behaviors (seek/flee/pursue/evade/flocking), tactical points (EQS-like), cover/formation system, AI budget limiter for 100+ agents, and AI director.
+- **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, retargeting, ragdoll blending, cloth simulation, [cinematic sequencer](Cinematic-Sequencer), FBX/glTF import.
+- **Scripting** — AngelScript with hot-reload, lifecycle callbacks, full engine API bindings, client/server separation. [Visual scripting](Visual-Scripting) with 60 node types that compiles to AngelScript. Lua also supported. [Mod system](Mod-System).
+- **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation (hitbox rewinding), delta snapshots. [HeroEngine-inspired MMO architecture](Area-Server-Architecture) with AreaServers, WorldServer, seamless entity migration, and dynamic load balancing.
+- **Editor** — ImGui-powered visual editor with 57 dockable panels: scene hierarchy, inspector, gizmos, [Shader Graph](Shader-Graph) material editor, [visual script editor](Visual-Scripting), cinematic sequencer, dialogue editor, AI debugger, command palette (Ctrl+P), collaborative multi-user editing, and 200+ debug console commands.
 
 ## Downloads
 
@@ -109,8 +109,10 @@ Pick the path that matches your role:
 - [Asset Pipeline](Asset-Pipeline) — Asset loading and formats
 
 ### Platform Support
+- [Accessibility](Accessibility) — Colorblind modes, subtitles, reduced motion, one-handed input
 - [VR Support](VR-Support) — OpenXR virtual reality framework
 - [Mobile Platform](Mobile-Platform) — iOS and Android platform abstraction
+- [Platform Input](Platform-Input) — Cross-platform input abstraction
 - [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) — MinGW cross-compile and Wine testing
 
 ### Graphics
@@ -183,5 +185,5 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | Test files | 302 |
 | Test cases | 3727+ |
 | Wiki pages | 103 |
-| *Last synced* | *2026-04-05 07:26* |
+| *Last synced* | *2026-04-05 09:27* |
 <!-- /AUTO:stats -->

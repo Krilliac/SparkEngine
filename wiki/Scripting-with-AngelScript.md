@@ -1,6 +1,6 @@
 # Scripting with AngelScript
 
-SparkEngine integrates **AngelScript** as its gameplay scripting language, supporting hot-reload, entity binding, visual scripting, and full engine API access.
+SparkEngine integrates **AngelScript** as its primary gameplay scripting language, supporting hot-reload, entity binding, [visual scripting](Visual-Scripting) (60 node types that compile to AngelScript), and full engine API access. **Lua** is also supported as an alternative scripting engine via `LuaScriptEngine`. A [mod system](Mod-System) enables user-created content.
 
 **Source:** `SparkEngine/Source/Engine/Scripting/`
 
