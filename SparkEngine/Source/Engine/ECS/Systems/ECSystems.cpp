@@ -13,8 +13,8 @@
  * - Lifecycle runs near the end so death processing sees the final frame state.
  * - Render runs last to submit draw commands with fully resolved transforms.
  */
-#include "../../../Core/Platform.h"
 #include "ECSystems.h"
+#include "../../../Core/Platform.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Physics/PhysicsSystem.h"
 #include "Audio/AudioEngine.h"

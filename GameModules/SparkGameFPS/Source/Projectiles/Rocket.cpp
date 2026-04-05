@@ -1,6 +1,6 @@
+#include "Rocket.h"
 #include "Core/Platform.h"
 // Rocket.cpp
-#include "Rocket.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/MathUtils.h"

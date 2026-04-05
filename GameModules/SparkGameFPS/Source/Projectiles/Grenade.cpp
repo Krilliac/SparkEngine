@@ -1,6 +1,6 @@
+#include "Grenade.h"
 #include "Core/Platform.h"
 // Grenade.cpp
-#include "Grenade.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"

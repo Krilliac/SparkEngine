@@ -16,8 +16,8 @@
  * are referenced by the rest of the graphics pipeline.
  */
 
-#include "../Core/Platform.h"
 #include "UpscalingSystem.h"
+#include "../Core/Platform.h"
 #include "UpscalingShaders.h"
 #include "../Utils/Validate.h"
 

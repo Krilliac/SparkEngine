@@ -3,8 +3,8 @@
  * @brief Watchdog thread implementation for main-loop freeze detection and recovery
  */
 
-#include "../Core/Platform.h"
 #include "Utils/FreezeDetector.h"
+#include "../Core/Platform.h"
 #include "Utils/CrashHandler.h"
 #include "Utils/DeadlockDetector.h"
 #include "Utils/SparkConsole.h"

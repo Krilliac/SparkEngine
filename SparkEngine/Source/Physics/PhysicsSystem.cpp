@@ -1,3 +1,4 @@
+#include "PhysicsSystem.h"
 #include "../Core/Platform.h"
 /**
  * @file PhysicsSystem.cpp
@@ -13,7 +14,6 @@
  * PhysicsBody and PhysicsConstraint methods live in PhysicsBodyImpl.cpp.
  */
 
-#include "PhysicsSystem.h"
 #include "Engine/Events/EventSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"

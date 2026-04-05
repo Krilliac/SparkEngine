@@ -1,10 +1,10 @@
+#include "D3DUtils.h"
 #include "Core/Platform.h"
 #include "Utils/LogMacros.h"
 #include "Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
-#include "D3DUtils.h"
 #include "../Graphics/GraphicsEngine.h"
 #include <iostream>
 

@@ -1,6 +1,6 @@
+#include "Terrain.h"
 #include "Core/Platform.h"
 // Terrain.cpp
-#include "Terrain.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"

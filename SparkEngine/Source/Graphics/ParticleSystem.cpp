@@ -1,3 +1,4 @@
+#include "ParticleSystem.h"
 #include "Core/Platform.h"
 #include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -10,7 +11,6 @@
  * interpolation, size scaling) then uploaded to a dynamic vertex buffer for
  * rendering. Thread-local RNG ensures safe parallel emission.
  */
-#include "ParticleSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include <algorithm>

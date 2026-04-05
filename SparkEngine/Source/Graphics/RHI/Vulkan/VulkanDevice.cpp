@@ -7,6 +7,12 @@
  * Vulkan 1.4 device implementation (1.3 fallback) with instance creation,
  * physical device selection, logical device, command pools, and
  * all resource creation/management functionality.
+ *
+ * RHI Ownership Model: Create*() methods return raw pointers. The RHI device
+ * owns the underlying GPU resource. Callers must call the corresponding
+ * Destroy*() method to release. This pattern is intentional — it matches
+ * the D3D11/D3D12/Vulkan/OpenGL resource lifecycle and avoids forcing
+ * std::unique_ptr across the backend-agnostic RHI boundary.
  */
 
 #ifdef SPARK_VULKAN_SUPPORT

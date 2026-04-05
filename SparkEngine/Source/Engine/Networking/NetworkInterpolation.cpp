@@ -5,8 +5,8 @@
  * @date 2025
  */
 
-#include "../../Core/Platform.h"
 #include "NetworkInterpolation.h"
+#include "../../Core/Platform.h"
 #include "../../Utils/Validate.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS

@@ -1,6 +1,6 @@
+#include "Primitives.h"
 #include "../Core/Platform.h"
 // Primitives.cpp
-#include "Primitives.h"
 #include "../Utils/Assert.h"
 #include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"

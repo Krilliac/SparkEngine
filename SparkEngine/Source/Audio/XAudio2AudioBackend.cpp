@@ -3,11 +3,11 @@
  * @brief IAudioBackend adapter delegating to the XAudio2 AudioEngine
  */
 
+#include "XAudio2AudioBackend.h"
 #include "Core/Platform.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
-#include "XAudio2AudioBackend.h"
 #include "AudioEngine.h"
 
 #include <string>

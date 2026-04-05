@@ -12,8 +12,8 @@
  *   - ConsoleProcessManagerStub.cpp   (unsupported platforms)
  */
 
-#include "Core/Platform.h"
 #include "ConsoleProcessManager.h"
+#include "Core/Platform.h"
 #include "Utils/Assert.h"
 #include "Utils/CrashHandler.h"
 #include "Validate.h"

@@ -1,3 +1,4 @@
+#include "CharacterController.h"
 #include "../Core/Platform.h"
 /**
  * @file CharacterController.cpp
@@ -6,7 +7,6 @@
  * @date 2025
  */
 
-#include "CharacterController.h"
 #include "PhysicsSystem.h"
 #include "../Utils/Validate.h"
 

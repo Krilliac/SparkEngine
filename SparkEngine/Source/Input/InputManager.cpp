@@ -6,8 +6,8 @@
  * before the platform-specific sections to avoid duplication.
  */
 
-#include "../Core/Platform.h"
 #include "InputManager.h"
+#include "../Core/Platform.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"

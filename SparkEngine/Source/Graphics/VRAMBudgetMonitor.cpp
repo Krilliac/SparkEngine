@@ -3,11 +3,11 @@
  * @brief GPU memory budget monitoring implementation
  */
 
+#include "VRAMBudgetMonitor.h"
 #include "../Core/Platform.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
-#include "VRAMBudgetMonitor.h"
 #include "../Utils/SparkConsole.h"
 #include <dxgi1_4.h>
 

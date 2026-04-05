@@ -3,8 +3,8 @@
  * @brief GPU resource lifecycle tracking — leak detection and budget monitoring
  */
 
-#include "../Core/Platform.h"
 #include "Utils/GPUResourceLeakDetector.h"
+#include "../Core/Platform.h"
 #include "Utils/SparkConsole.h"
 
 #include <cstdio>

@@ -1,6 +1,6 @@
+#include "CollisionSystem.h"
 #include "../Core/Platform.h"
 // CollisionSystem.cpp
-#include "CollisionSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS

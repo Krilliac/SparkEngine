@@ -1,3 +1,4 @@
+#include "LightingSystem.h"
 #include "Core/Platform.h"
 #include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -6,7 +7,6 @@
  * @brief Complete lighting system implementation with PBR support
  */
 
-#include "LightingSystem.h"
 #include "Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"

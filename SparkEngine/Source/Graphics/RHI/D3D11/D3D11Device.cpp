@@ -5,6 +5,12 @@
  * @brief DirectX 11 RHI backend implementation
  * @author Spark Engine Team
  * @date 2025
+ *
+ * RHI Ownership Model: Create*() methods return raw pointers. The RHI device
+ * owns the underlying GPU resource. Callers must call the corresponding
+ * Destroy*() method to release. This pattern is intentional — it matches
+ * the D3D11/D3D12/Vulkan/OpenGL resource lifecycle and avoids forcing
+ * std::unique_ptr across the backend-agnostic RHI boundary.
  */
 
 #include "D3D11Device.h"

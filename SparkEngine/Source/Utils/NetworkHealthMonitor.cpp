@@ -3,8 +3,8 @@
  * @brief Network health monitoring — RTT/loss tracking and health state classification
  */
 
-#include "../Core/Platform.h"
 #include "Utils/NetworkHealthMonitor.h"
+#include "../Core/Platform.h"
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>

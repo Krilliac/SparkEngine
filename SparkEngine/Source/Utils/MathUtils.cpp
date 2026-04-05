@@ -1,6 +1,6 @@
+#include "MathUtils.h"
 #include "../Core/Platform.h"
 // MathUtils.cpp
-#include "MathUtils.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
 #include "Validate.h"

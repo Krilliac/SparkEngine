@@ -1,13 +1,15 @@
-#include "Core/Platform.h"
 /**
  * @file AdvancedConsoleCommands.cpp
  * @brief Complete console command integration for all advanced systems
  * @author Spark Engine Team
  * @date 2025
- * 
+ *
  * This file provides comprehensive console integration for all the advanced
  * systems in the Spark Engine, now integrated into the main GraphicsEngine.
  */
+
+#include "AdvancedConsoleCommands.h"
+#include "Core/Platform.h"
 
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"

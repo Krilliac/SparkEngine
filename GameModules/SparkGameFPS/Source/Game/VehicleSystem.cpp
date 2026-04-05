@@ -1,5 +1,5 @@
-#include "Core/Platform.h"
 #include "VehicleSystem.h"
+#include "Core/Platform.h"
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
 #include "Input/InputManager.h"

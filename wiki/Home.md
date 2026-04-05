@@ -49,6 +49,7 @@ Pick the path that matches your role:
 | **Gameplay Designer** | [Making Your First Game](Making-Your-First-Game) → [Gameplay Systems](Gameplay-Systems) → [Scripting with AngelScript](Scripting-with-AngelScript) |
 | **Multiplayer Developer** | [Multiplayer Quick Start](Multiplayer-Quick-Start) → [Networking](Networking) → [Dedicated Server](Dedicated-Server) |
 | **Optimizer / QA** | [Performance Tips](Performance-Tips) → [Configuration Reference](Configuration-Reference) → [Profiler and Debugging](Profiler-and-Debugging) |
+| **Upgrading** | [Migration Guide](Migration-Guide) → [Asset Migration](Asset-Migration) |
 
 ## Wiki Navigation
 
@@ -179,8 +180,8 @@ SparkEngine is licensed under the [MIT License](https://github.com/Krilliac/Spar
 | ECS Components | 79 |
 | ECS Systems | 69 |
 | Editor Panels | 57 |
-| Test files | 283 |
-| Test cases | 3563+ |
-| Wiki pages | 101 |
-| *Last synced* | *2026-04-04 22:14* |
+| Test files | 295 |
+| Test cases | 3646+ |
+| Wiki pages | 102 |
+| *Last synced* | *2026-04-04 23:58* |
 <!-- /AUTO:stats -->

@@ -3,8 +3,8 @@
  * @brief Asset loading stall detection — timeout tracking and queue monitoring
  */
 
-#include "../Core/Platform.h"
 #include "Utils/AssetStallDetector.h"
+#include "../Core/Platform.h"
 #include "Utils/SparkConsole.h"
 
 #include <cstdio>

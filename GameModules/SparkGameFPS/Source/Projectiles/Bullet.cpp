@@ -1,6 +1,6 @@
+#include "Bullet.h"
 #include "Core/Platform.h"
 // Bullet.cpp
-#include "Bullet.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"

@@ -3,8 +3,8 @@
  * @brief Platform-aware factory for audio backend selection
  */
 
-#include "Core/Platform.h"
 #include "AudioBackendFactory.h"
+#include "Core/Platform.h"
 #include "NullAudioBackend.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS

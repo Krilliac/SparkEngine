@@ -1,6 +1,6 @@
+#include "Projectile.h"
 #include "Core/Platform.h"
 // Projectile.cpp
-#include "Projectile.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"
 #include "Utils/MathUtils.h"

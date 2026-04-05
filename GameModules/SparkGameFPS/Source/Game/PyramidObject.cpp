@@ -1,5 +1,5 @@
-#include "Core/Platform.h"
 #include "PyramidObject.h"
+#include "Core/Platform.h"
 #include "Utils/Validate.h"
 #include <string>
 #include <iostream>

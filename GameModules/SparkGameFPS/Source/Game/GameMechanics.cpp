@@ -1,5 +1,5 @@
-#include "Core/Platform.h"
 #include "GameMechanics.h"
+#include "Core/Platform.h"
 #include "Player.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"

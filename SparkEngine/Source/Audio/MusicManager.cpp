@@ -1,10 +1,10 @@
+#include "MusicManager.h"
 #include "Core/Platform.h"
 /**
  * @file MusicManager.cpp
  * @brief Music system implementation — crossfading, playlists, dynamic music, reverb
  */
 
-#include "MusicManager.h"
 #include "../Core/FaultIsolation.h"
 #include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"

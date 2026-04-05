@@ -8,6 +8,7 @@
  * routed through CommandHistory so that every operation is undoable.
  */
 
+#include "HierarchyPanel.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -15,7 +16,6 @@
 
 #include <imgui.h>
 
-#include "HierarchyPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../CommandHistory.h"
 #include "Engine/ECS/EntityPresetManager.h"

@@ -11,6 +11,7 @@
  * Similar to Unreal Engine's module loading or Unity's player runtime.
  */
 
+#include "SparkEngine.h"
 #include "Platform.h"
 
 // On Windows, framework.h must come before any header that uses Win32 types
@@ -22,7 +23,6 @@
 // ============================================================================
 // Common includes (shared between all platforms)
 // ============================================================================
-#include "SparkEngine.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
@@ -756,6 +756,7 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
  * Returns the wParam from the WM_QUIT message for use as the process exit code.
  */
 static int RunWindowedMainLoop(HINSTANCE hInstance)
+// NOTE: Intentionally exceeds 50-line guideline — linear main loop dispatch
 {
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
     MSG msg = {};

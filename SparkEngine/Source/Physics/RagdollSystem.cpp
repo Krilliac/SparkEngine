@@ -1,3 +1,4 @@
+#include "RagdollSystem.h"
 #include "../Core/Platform.h"
 /**
  * @file RagdollSystem.cpp
@@ -6,7 +7,6 @@
  * @date 2025
  */
 
-#include "RagdollSystem.h"
 #include "PhysicsBody.h"
 #include "PhysicsSystem.h"
 #include "../Utils/Validate.h"

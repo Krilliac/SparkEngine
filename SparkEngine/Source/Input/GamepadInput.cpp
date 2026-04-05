@@ -1,6 +1,6 @@
+#include "GamepadInput.h"
 #include "Core/Platform.h"
 // GamepadInput.cpp
-#include "GamepadInput.h"
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>

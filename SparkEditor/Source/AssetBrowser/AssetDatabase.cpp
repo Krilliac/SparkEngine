@@ -5,6 +5,7 @@
  * @date 2025
  */
 
+#include "AssetDatabase.h"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -13,7 +14,6 @@
 #include <random>
 #include <sstream>
 
-#include "AssetDatabase.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"

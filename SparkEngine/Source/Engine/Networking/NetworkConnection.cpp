@@ -961,13 +961,12 @@ namespace Spark::Net
             if (it == m_unacknowledgedMessages.end())
                 continue;
 
-            // Check total age since original send (not last retransmit)
-            auto origIt = m_reliableOriginalSendTime.find(seq);
-            float originalSendTime = (origIt != m_reliableOriginalSendTime.end()) ? origIt->second : 0.0f;
-            float totalAge = m_serverTime - originalSendTime;
+            // Increment retry count for exponential backoff
+            int& retryCount = m_retransmitCounts[seq];
+            retryCount++;
 
-            // Drop if total time since first send exceeds connection timeout
-            if (totalAge > m_connectionTimeout)
+            // Drop if max retries exceeded
+            if (retryCount > m_maxReliableRetries)
             {
                 m_unacknowledgedMessages.erase(it);
                 m_reliableOriginalSendTime.erase(seq);
@@ -975,9 +974,6 @@ namespace Spark::Net
                 m_stats.packetsDropped++;
                 continue;
             }
-
-            // Increment retry count for exponential backoff
-            m_retransmitCounts[seq]++;
 
             auto& retransmitMsg = it->second;
             retransmitMsg.timestamp = m_serverTime; // Reset retransmit timer

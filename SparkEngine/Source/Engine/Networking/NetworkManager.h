@@ -437,6 +437,40 @@ namespace Spark::Net
             m_reconnectFailedCallback = std::move(callback);
         }
 
+        /// Set the maximum number of retransmissions before a reliable message is dropped
+        void SetMaxReliableRetries(int maxRetries) { m_maxReliableRetries = maxRetries; }
+
+        /// Get the maximum number of retransmissions
+        int GetMaxReliableRetries() const { return m_maxReliableRetries; }
+
+        // ====================================================================
+        // Server-side hit validation (lag compensation integration)
+        // ====================================================================
+
+        /** @brief Result of a server-side hit validation check */
+        struct HitValidationResult
+        {
+            bool hit = false;           ///< True if the raycast hit an entity
+            uint32_t entityID = 0;      ///< Network ID of the entity hit (0 if miss)
+            XMFLOAT3 hitPoint{0, 0, 0}; ///< World-space hit point
+        };
+
+        /**
+         * @brief Validate a client's hitscan request using lag compensation.
+         *
+         * Rewinds world state to the client's perceived time, performs a raycast
+         * against rewound hitboxes, then restores the current state.
+         *
+         * @param clientTimestamp Client-local time when the shot was fired.
+         * @param halfRTT        Half the round-trip time to this client.
+         * @param rayOrigin      Origin of the hitscan ray (client's weapon muzzle).
+         * @param rayDirection   Normalized direction of the hitscan ray.
+         * @param maxDistance     Maximum raycast distance.
+         * @return HitValidationResult with hit status and entity ID.
+         */
+        HitValidationResult ValidateHit(float clientTimestamp, float halfRTT, const XMFLOAT3& rayOrigin,
+                                        const XMFLOAT3& rayDirection, float maxDistance = 1000.0f);
+
         /// Get the packet validator for configuration
         PacketValidator& GetPacketValidator() { return m_packetValidator; }
 
@@ -527,6 +561,7 @@ namespace Spark::Net
         /// @brief Per-message retransmit count for exponential backoff.
         std::unordered_map<SequenceNumber, int> m_retransmitCounts;
         float m_reliableRetransmitInterval = 0.5f; ///< Base interval; doubles per retry
+        int m_maxReliableRetries = 10;             ///< Max retransmissions before marking connection failed
 
         // RTT estimation (Jacobson/Karels algorithm)
         float m_smoothedRTT = 0.0f;    ///< SRTT (smoothed round-trip time)

@@ -1,3 +1,4 @@
+#include "PhysicsDebugRenderer.h"
 #include "../Core/Platform.h"
 /**
  * @file PhysicsDebugRenderer.cpp
@@ -6,7 +7,6 @@
  * @date 2025
  */
 
-#include "PhysicsDebugRenderer.h"
 #include "../Utils/Validate.h"
 
 void PhysicsDebugRenderer::Clear()

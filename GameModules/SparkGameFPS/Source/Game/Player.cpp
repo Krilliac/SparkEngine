@@ -1,5 +1,5 @@
-#include "Core/Platform.h"
 #include "Player.h"
+#include "Core/Platform.h"
 #include "VehicleSystem.h"
 #include "InteractiveObject.h"
 #include "Utils/Assert.h"

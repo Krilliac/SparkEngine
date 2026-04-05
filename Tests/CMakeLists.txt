@@ -93,6 +93,7 @@ add_executable(SparkTests
     TestShadowAtlas.cpp
     TestHybridRT.cpp
     TestReliableChannel.cpp
+    TestLagCompensationIntegration.cpp
     TestModuleDependency.cpp
     TestModuleDiscovery.cpp
     TestReflection.cpp
@@ -293,6 +294,18 @@ add_executable(SparkTests
     TestLODGenerator.cpp
     TestAIDebugRenderer.cpp
     TestAssertSuppression.cpp
+    TestCrossSystemIntegration.cpp
+    TestUndoRedoManager.cpp
+    TestPrefabManager.cpp
+    TestEditorLayoutManager.cpp
+    TestGizmoMath.cpp
+    # Asset database and game module tests
+    TestAssetDatabase.cpp
+    TestSparkGameRPG.cpp
+    TestSparkGameARPG.cpp
+    TestSparkGameRTS.cpp
+    TestSparkGameRacing.cpp
+    TestSparkGamePlatformer.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"

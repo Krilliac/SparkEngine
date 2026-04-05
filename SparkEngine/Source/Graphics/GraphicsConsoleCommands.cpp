@@ -7,8 +7,8 @@
  * console logic co-located with the graphics subsystem.
  */
 
-#include "../Core/Platform.h"
 #include "GraphicsConsoleCommands.h"
+#include "../Core/Platform.h"
 #include "GraphicsEngine.h"
 #include "../Utils/SparkConsole.h"
 #ifdef SPARK_HYBRID_RT

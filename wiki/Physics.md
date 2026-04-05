@@ -652,6 +652,83 @@ ClothSimulation should only be called from the main thread, similar to PhysicsSy
 
 ---
 
+## Solver Tuning
+
+Jolt Physics uses an iterative constraint solver. Tuning solver parameters affects the trade-off between simulation accuracy, stability, and performance.
+
+### Solver Iteration Counts
+
+The constraint solver runs multiple iterations per physics step. More iterations produce more accurate results but cost more CPU time.
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| Velocity iterations | 10 | Accuracy of velocity-level constraints (contacts, joints) |
+| Position iterations | 2 | Accuracy of position correction (penetration resolution) |
+
+**Recommended settings by scene complexity:**
+
+| Scene Type | Velocity Iters | Position Iters | Notes |
+|------------|---------------|----------------|-------|
+| Simple (few objects) | 6 | 1 | Fastest, acceptable for most games |
+| Standard (< 500 bodies) | 10 | 2 | Good balance for typical FPS/RPG |
+| Complex stacking | 15-20 | 4 | Required for tall stacks of objects |
+| Vehicle physics | 12-15 | 3 | Wheel contacts need extra precision |
+| Ragdoll chains | 15 | 3 | Long constraint chains need more iterations |
+
+### Common Instability Causes
+
+1. **Too-thin colliders** — Colliders thinner than the physics step distance cause tunneling. Minimum recommended thickness: 5 cm for dynamic bodies at default timestep.
+
+2. **Extreme mass ratios** — A 0.1 kg box on a 10,000 kg platform creates a 100,000:1 ratio. Keep mass ratios below 100:1 for stable contact resolution. Use kinematic bodies for immovable objects instead of very heavy dynamic bodies.
+
+3. **Long constraint chains** — A chain of 10+ hinged bodies requires more solver iterations to propagate forces. Increase velocity iterations to 15-20, or break long chains into sub-chains.
+
+4. **High restitution** — Values above 0.8 can cause energy gain in stacked scenarios. Use restitution < 0.5 for gameplay objects.
+
+5. **Missing damping** — Zero damping allows objects to oscillate indefinitely. Use `linearDamping = 0.05-0.1` and `angularDamping = 0.05-0.1` as baseline.
+
+### Debug Visualization
+
+Use the physics debug overlay to diagnose instability:
+
+```
+physics_debug on           # Enable wireframe visualization
+physics_info               # Show body count, active count, constraints
+physics_pause              # Freeze simulation to inspect state
+physics_step               # Advance one frame at a time
+```
+
+Color coding in debug draw:
+- **Green** — Active dynamic bodies
+- **Gray** — Sleeping bodies
+- **Blue** — Kinematic bodies
+- **Red** — Contact points (with normal arrows)
+- **Yellow** — Constraint frames
+
+### Performance vs Accuracy
+
+| Tunable | Performance Impact | Accuracy Impact |
+|---------|-------------------|----------------|
+| Velocity iterations | Linear | Diminishing returns above 15 |
+| Position iterations | Linear | Diminishing returns above 4 |
+| Fixed timestep (smaller) | Quadratic (more sub-steps) | Better tunneling prevention |
+| Max sub-steps | Linear (caps spiral-of-death) | Lower = more time debt |
+| Body sleeping threshold | Saves CPU for resting objects | May cause pop-in artifacts |
+
+### Timestep Configuration
+
+```cpp
+// In PhysicsSystem — configurable via console
+float m_timeStep = 1.0f / 60.0f;  // Fixed timestep (default: 60 Hz)
+int m_maxSubSteps = 10;            // Max sub-steps per frame
+
+// For high-precision scenarios (e.g., small fast projectiles):
+physics.SetTimeStep(1.0f / 120.0f);  // 120 Hz physics
+physics.SetMaxSubSteps(20);
+```
+
+---
+
 ## See Also
 
 - [Entity Component System](Entity-Component-System) -- RigidBody and Collider components

@@ -1,3 +1,4 @@
+#include "DecalSystem.h"
 #include "Core/Platform.h"
 #include "Utils/MathUtils.h"
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -6,7 +7,6 @@
  * @brief Decal system implementation — spawning, pooling, fading, rendering data
  */
 
-#include "DecalSystem.h"
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <cmath>

@@ -1,5 +1,5 @@
-#include "../Core/Platform.h"
 #include "SparkConsole.h"
+#include "../Core/Platform.h"
 #include "ConsoleVariable.h"
 #include "Hash.h"
 #include "Validate.h"

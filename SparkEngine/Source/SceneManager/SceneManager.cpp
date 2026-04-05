@@ -1,5 +1,5 @@
-#include "../Core/Platform.h"
 #include "SceneManager.h"
+#include "../Core/Platform.h"
 #include "Game/GameObject.h"
 #include "Game/CubeObject.h"
 #include "Game/PlaneObject.h"

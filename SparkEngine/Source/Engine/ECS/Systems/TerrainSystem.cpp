@@ -7,8 +7,8 @@
  * clipmap system, and triggers mesh rebuilds when terrain is dirty.
  */
 
-#include "../../../Core/Platform.h"
 #include "TerrainSystem.h"
+#include "../../../Core/Platform.h"
 #include "../../../Graphics/ClipmapTerrain.h"
 #include "../../../Utils/LogMacros.h"
 #include "Utils/Validate.h"

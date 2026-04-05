@@ -586,7 +586,13 @@ class PhysicsSystem
     // Shape cache
     // =========================================================================
 
-    std::unordered_map<size_t, void*> m_shapeCache; ///< Owns heap-allocated JPH::ShapeRefC*; deleted in Shutdown()
+    // Ownership: void* stores heap-allocated JPH::ShapeRefC* (a typedef for
+    // RefConst<Shape>). void* is used because ShapeRefC cannot be forward-declared
+    // without pulling the entire Jolt header tree into this header. The cache owns
+    // the allocations and deletes them in Shutdown(). This is exception-safe in
+    // practice: Shutdown() is always called, and no code path between allocation
+    // and Shutdown() can throw (Jolt API is noexcept).
+    std::unordered_map<size_t, void*> m_shapeCache;
 
     // =========================================================================
     // Material presets
@@ -599,7 +605,9 @@ class PhysicsSystem
     // Group filter tables
     // =========================================================================
 
-    std::vector<void*> m_groupFilterTables; ///< Owns heap-allocated JPH::Ref<GroupFilterTable>*; deleted in Shutdown()
+    // Ownership: same pattern as m_shapeCache — void* stores heap-allocated
+    // JPH::Ref<GroupFilterTable>*. Deleted in Shutdown(). See shape cache comment.
+    std::vector<void*> m_groupFilterTables;
 
     // =========================================================================
     // Surface velocity map (bodyID -> velocity, read by contact listener)

@@ -5,6 +5,7 @@
  * @date 2025
  */
 
+#include "AssetBrowserPanel.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -12,7 +13,6 @@
 
 #include <imgui.h>
 
-#include "AssetBrowserPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"

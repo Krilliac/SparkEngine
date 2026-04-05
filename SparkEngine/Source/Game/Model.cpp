@@ -1,5 +1,5 @@
-#include "../Core/Platform.h"
 #include "Model.h"
+#include "../Core/Platform.h"
 #include "ModelVertex.h"
 #include "../Utils/Assert.h"
 #include "../Utils/LogMacros.h"
