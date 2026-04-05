@@ -812,6 +812,12 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkShaderCompiler/CMakeLists.txt")
     add_subdirectory(SparkShaderCompiler)
 endif()
 
+# Build SparkCrashReporter (out-of-process crash report handler)
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkCrashReporter/CMakeLists.txt")
+    message(STATUS "Building SparkCrashReporter...")
+    add_subdirectory(SparkCrashReporter)
+endif()
+
 # ---------------------------------------------------------------------
 # 9) SparkEngine - Static library + Executable
 # ---------------------------------------------------------------------
@@ -1455,6 +1461,10 @@ endif()
 if(SPARK_HEADLESS_SUPPORT)
     list(APPEND FEATURE_DEFINITIONS "SPARK_HEADLESS_SUPPORT")
 endif()
+
+
+
+
 
 if(ENABLE_SDL2)
     # Prefer the ThirdParty submodule target, then system SDL2, then pkg-config

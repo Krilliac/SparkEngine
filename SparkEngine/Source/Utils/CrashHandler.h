@@ -60,6 +60,29 @@ struct CrashConfig
     std::string githubToken = "";              ///< GitHub personal access token (PAT) with repo/issues scope
     std::string githubLabels = "crash-report"; ///< Comma-separated labels to apply to the created issue
     bool githubAttachDump = true;              ///< Whether to upload the zip/dump as a release asset and link it
+
+    // Upload configuration — supports multiple backends
+    // The uploadURL is auto-detected by prefix:
+    //   "https://api.github.com/..."  or githubRepo set → GitHub Issues (direct API, needs token)
+    //   "https://dropbox.com/..." or "dbx://..."        → Dropbox shared upload link
+    //   "ftp://..." or "ftps://..."                      → FTP/FTPS upload
+    //   Any other "https://..." or "http://..."          → Generic HTTP POST (multipart)
+    // The proxyURL is a dedicated crash relay that holds credentials server-side.
+    std::string proxyURL = "";          ///< Crash report proxy endpoint (release builds, empty = disabled)
+    bool enableCrashReporting = true;   ///< Master switch for crash report uploading
+    bool requireConsent = true;         ///< Show a consent dialog before uploading (default for releases)
+    bool headlessMode = false;          ///< Skip all dialog boxes (CI/testing/headless — auto-consent)
+    bool promptUserDescription = true;  ///< Show "what were you doing" text input after crash
+    bool allowScreenshotRefusal = true; ///< Let users refuse screenshots in consent dialog
+
+    // Email backend (smtp:// URL)
+    std::string smtpUser = "";                               ///< SMTP username
+    std::string smtpPass = "";                               ///< SMTP password
+    std::string emailTo = "";                                ///< Recipient email
+    std::string emailFrom = "crashreporter@sparkengine.dev"; ///< Sender address
+
+    // Populated at crash time by user input (not configured in settings)
+    std::string userDescription = ""; ///< User-provided crash description (filled at crash time)
 };
 
 /**

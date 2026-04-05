@@ -419,27 +419,71 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
 // ===================================================================================
 
 /**
- * @brief Configure and install the crash handler with GitHub upload support.
+ * @brief Configure and install the crash handler from EngineSettings + env vars.
+ *
+ * Settings are read from [CrashReporting] in settings.ini, with env var overrides:
+ *   SPARK_GITHUB_REPO, SPARK_GITHUB_TOKEN, SPARK_CRASH_PROXY_URL, SPARK_CRASH_UPLOAD_URL
  */
 static void SetupCrashHandler()
 {
+    const auto& cr = EngineSettings::GetInstance().CrashReporting();
+
     CrashConfig crashCfg{};
     crashCfg.dumpPrefix = L"SparkCrash";
-    crashCfg.uploadURL = "";
-    crashCfg.captureScreenshot = true;
-    crashCfg.captureSystemInfo = true;
-    crashCfg.captureAllThreads = true;
+    crashCfg.captureScreenshot = cr.captureScreenshot;
+    crashCfg.captureSystemInfo = cr.captureSystemInfo;
+    crashCfg.captureAllThreads = cr.captureAllThreads;
     crashCfg.zipBeforeUpload = true;
     crashCfg.triggerCrashOnAssert = false;
+    crashCfg.connectTimeoutSeconds = cr.timeoutSeconds;
+    crashCfg.enableCrashReporting = cr.enabled;
+    crashCfg.requireConsent = cr.requireConsent;
+    crashCfg.headlessMode = cr.headlessMode;
+    crashCfg.promptUserDescription = cr.promptUserDescription;
+    crashCfg.allowScreenshotRefusal = cr.allowScreenshotRefusal;
+    crashCfg.githubLabels = cr.githubLabels;
+    crashCfg.githubAttachDump = cr.attachDump;
+    crashCfg.smtpUser = cr.smtpUser;
+    crashCfg.smtpPass = cr.smtpPass;
+    crashCfg.emailTo = cr.emailTo;
+    crashCfg.emailFrom = cr.emailFrom;
 
-    // GitHub Issue upload — reads token from SPARK_GITHUB_TOKEN env var
-    const char* ghRepo = std::getenv("SPARK_GITHUB_REPO");
-    const char* ghToken = std::getenv("SPARK_GITHUB_TOKEN");
-    if (ghRepo && ghToken)
+    // Settings file / local override values
+    crashCfg.uploadURL = cr.uploadURL;
+    crashCfg.proxyURL = cr.proxyURL;
+    crashCfg.githubRepo = cr.githubRepo;
+    crashCfg.githubToken = cr.githubToken;
+
+    // Env var overrides (take precedence over settings file / local override)
+    const char* envRepo = std::getenv("SPARK_GITHUB_REPO");
+    const char* envToken = std::getenv("SPARK_GITHUB_TOKEN");
+    if (envRepo && envToken)
     {
-        crashCfg.githubRepo = ghRepo;
-        crashCfg.githubToken = ghToken;
+        crashCfg.githubRepo = envRepo;
+        crashCfg.githubToken = envToken;
     }
+    const char* envProxy = std::getenv("SPARK_CRASH_PROXY_URL");
+    if (envProxy)
+        crashCfg.proxyURL = envProxy;
+    const char* envUpload = std::getenv("SPARK_CRASH_UPLOAD_URL");
+    if (envUpload)
+        crashCfg.uploadURL = envUpload;
+    const char* envSmtpUser = std::getenv("SPARK_SMTP_USER");
+    if (envSmtpUser)
+        crashCfg.smtpUser = envSmtpUser;
+    const char* envSmtpPass = std::getenv("SPARK_SMTP_PASS");
+    if (envSmtpPass)
+        crashCfg.smtpPass = envSmtpPass;
+    const char* envEmailTo = std::getenv("SPARK_CRASH_EMAIL_TO");
+    if (envEmailTo)
+        crashCfg.emailTo = envEmailTo;
+    const char* envHeadless = std::getenv("SPARK_CRASH_HEADLESS");
+    if (envHeadless && std::string(envHeadless) == "1")
+        crashCfg.headlessMode = true;
+
+    // Auto-detect CI environments — skip dialogs
+    if (std::getenv("CI") || std::getenv("GITHUB_ACTIONS") || std::getenv("JENKINS_URL"))
+        crashCfg.headlessMode = true;
 
     InstallCrashHandler(crashCfg);
 }

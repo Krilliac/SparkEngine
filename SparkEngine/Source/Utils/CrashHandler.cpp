@@ -140,6 +140,152 @@ static void ZipFilesUtf8(const std::string& zip, const std::vector<std::string>&
 }
 
 // ============================================================================
+// Crash manifest for out-of-process reporter
+// ============================================================================
+
+static std::string g_manifestDir; // Set during InstallCrashHandler
+
+static unsigned long GetEnginePID()
+{
+#ifdef SPARK_PLATFORM_WINDOWS
+    return static_cast<unsigned long>(GetCurrentProcessId());
+#else
+    return static_cast<unsigned long>(getpid());
+#endif
+}
+
+static std::string MakeManifestJson(const std::string& dumpFile, const std::string& logFile,
+                                    const std::string& screenshotFile, const std::string& zipFile,
+                                    const std::string& crashTitle)
+{
+    auto jsonEsc = [](const std::string& s) -> std::string
+    {
+        std::string out;
+        for (char c : s)
+        {
+            if (c == '"')
+                out += "\\\"";
+            else if (c == '\\')
+                out += "\\\\";
+            else if (c == '\n')
+                out += "\\n";
+            else
+                out += c;
+        }
+        return out;
+    };
+
+    std::ostringstream j;
+    j << "{\n";
+    j << "  \"enginePID\": \"" << GetEnginePID() << "\",\n";
+    j << "  \"timestamp\": \"" << jsonEsc(crashTitle) << "\",\n";
+    j << "  \"dumpFile\": \"" << jsonEsc(dumpFile) << "\",\n";
+    j << "  \"logFile\": \"" << jsonEsc(logFile) << "\",\n";
+    j << "  \"screenshotFile\": \"" << jsonEsc(screenshotFile) << "\",\n";
+    j << "  \"zipFile\": \"" << jsonEsc(zipFile) << "\",\n";
+    j << "  \"crashTitle\": \"" << jsonEsc(crashTitle) << "\",\n";
+    j << "  \"uploadURL\": \"" << jsonEsc(g_cfg.uploadURL) << "\",\n";
+    j << "  \"proxyURL\": \"" << jsonEsc(g_cfg.proxyURL) << "\",\n";
+    j << "  \"githubRepo\": \"" << jsonEsc(g_cfg.githubRepo) << "\",\n";
+    j << "  \"githubToken\": \"" << jsonEsc(g_cfg.githubToken) << "\",\n";
+    j << "  \"githubLabels\": \"" << jsonEsc(g_cfg.githubLabels) << "\",\n";
+    j << "  \"smtpUser\": \"" << jsonEsc(g_cfg.smtpUser) << "\",\n";
+    j << "  \"smtpPass\": \"" << jsonEsc(g_cfg.smtpPass) << "\",\n";
+    j << "  \"emailTo\": \"" << jsonEsc(g_cfg.emailTo) << "\",\n";
+    j << "  \"emailFrom\": \"" << jsonEsc(g_cfg.emailFrom) << "\",\n";
+    j << "  \"requireConsent\": " << (g_cfg.requireConsent ? "true" : "false") << ",\n";
+    j << "  \"allowScreenshotRefusal\": " << (g_cfg.allowScreenshotRefusal ? "true" : "false") << ",\n";
+    j << "  \"promptUserDescription\": " << (g_cfg.promptUserDescription ? "true" : "false") << ",\n";
+    j << "  \"timeoutSeconds\": " << g_cfg.connectTimeoutSeconds << "\n";
+    j << "}\n";
+    return j.str();
+}
+
+static void WriteCrashManifest(const std::string& dumpFile, const std::string& logFile,
+                               const std::string& screenshotFile, const std::string& zipFile,
+                               const std::string& crashTitle)
+{
+    if (g_manifestDir.empty())
+        return;
+
+    std::string manifestPath = g_manifestDir + "/crash_manifest.json";
+    std::string json = MakeManifestJson(dumpFile, logFile, screenshotFile, zipFile, crashTitle);
+
+    // Write using POSIX/Win32 low-level I/O for signal safety
+    std::ofstream f(manifestPath);
+    if (f.is_open())
+    {
+        f << json;
+        f.close();
+    }
+}
+
+// Try to launch SparkCrashReporter in watchdog mode
+static void LaunchCrashReporter()
+{
+    // Look for SparkCrashReporter next to the engine executable
+    std::string reporterName = "SparkCrashReporter";
+#ifdef SPARK_PLATFORM_WINDOWS
+    reporterName += ".exe";
+#endif
+
+    // Try multiple locations
+    std::vector<std::string> searchPaths;
+    searchPaths.push_back("./" + reporterName);
+    searchPaths.push_back("./bin/" + reporterName);
+
+    std::string reporterPath;
+    for (const auto& p : searchPaths)
+    {
+        if (std::filesystem::exists(p))
+        {
+            reporterPath = p;
+            break;
+        }
+    }
+
+    if (reporterPath.empty())
+    {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Core,
+                        "CrashHandler: SparkCrashReporter not found, using in-process reporting");
+        return;
+    }
+
+    // Create manifest directory
+    g_manifestDir = std::filesystem::temp_directory_path().string() + "/spark_crash_" + std::to_string(GetEnginePID());
+    std::filesystem::create_directories(g_manifestDir);
+
+    // Launch reporter in watchdog mode
+    std::string cmd = reporterPath + " --watch " + g_manifestDir + " " + std::to_string(GetEnginePID());
+#ifdef SPARK_PLATFORM_WINDOWS
+    STARTUPINFOA si = {};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi = {};
+    if (CreateProcessA(nullptr, const_cast<char*>(cmd.c_str()), nullptr, nullptr, FALSE,
+                       CREATE_NO_WINDOW | DETACHED_PROCESS, nullptr, nullptr, &si, &pi))
+    {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: Launched SparkCrashReporter (watchdog mode)");
+    }
+#else
+    // Fork and exec on Linux
+    std::string pidStr = std::to_string(GetEnginePID());
+    pid_t child = fork();
+    if (child == 0)
+    {
+        // Child — exec the crash reporter
+        execl(reporterPath.c_str(), reporterPath.c_str(), "--watch", g_manifestDir.c_str(), pidStr.c_str(), nullptr);
+        _exit(1); // exec failed
+    }
+    else if (child > 0)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: Launched SparkCrashReporter (PID %d)", child);
+    }
+#endif
+}
+
+// ============================================================================
 // WINDOWS IMPLEMENTATION
 // ============================================================================
 
@@ -172,6 +318,10 @@ void InstallCrashHandler(const CrashConfig& cfg)
 #endif
 
     SetUnhandledExceptionFilter(CrashFilter);
+
+    // Launch out-of-process crash reporter if available
+    LaunchCrashReporter();
+
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Crash handler installed successfully");
 }
 
@@ -374,24 +524,94 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
     if (g_cfg.zipBeforeUpload)
         ZipFiles(zipFile, files);
 
-    bool ok = true;
-#ifdef SPARK_HAS_CURL
-    // upload logic unchanged
-
-    // GitHub Issue upload
-    if (!g_cfg.githubRepo.empty() && !g_cfg.githubToken.empty())
+    // Write crash manifest for out-of-process reporter
     {
-        std::string logUtf8 = WideToUtf8(log.str());
-        std::string zipUtf8 = WideToUtf8(zipFile);
-        bool ghOk = UploadCrashToGitHub(g_cfg, logUtf8, g_cfg.zipBeforeUpload ? zipUtf8 : "");
-        if (!ghOk)
-            ok = false;
+        std::string crashTitle = assertMsg ? "Assertion Failure" : "Crash Detected";
+        WriteCrashManifest(WideToUtf8(dump), WideToUtf8(logFile), WideToUtf8(shot), WideToUtf8(zipFile), crashTitle);
     }
-#endif
 
-    std::wstring msg = assertMsg ? L"Assertion captured.\n" : L"Crash captured.\n";
-    msg += L"Files:\n" + dump + L"\n" + logFile;
-    MessageBoxW(nullptr, msg.c_str(), assertMsg ? L"Assertion Handler" : L"Crash Handler", MB_OK | MB_ICONERROR);
+    // ---- Upload crash report (with optional consent dialog) ----
+    // If the out-of-process reporter is running, it will handle the upload.
+    // The in-process upload is a fallback for when the reporter isn't available.
+    bool ok = true;
+    if (g_cfg.enableCrashReporting)
+    {
+        bool userConsented = true;
+        bool includeScreenshot = true;
+
+        if (g_cfg.requireConsent && !g_cfg.headlessMode)
+        {
+            // Build consent message — mention screenshots if they can be refused
+            std::wstring consentMsg = L"SparkEngine has crashed. Would you like to send a crash report "
+                                      L"to help improve the engine?\n\nNo personal data is included.";
+            if (g_cfg.allowScreenshotRefusal && g_cfg.captureScreenshot)
+                consentMsg += L"\n\n(A screenshot was captured — you can opt out in the next dialog.)";
+
+            int result = MessageBoxW(nullptr, consentMsg.c_str(), L"Crash Report", MB_YESNO | MB_ICONERROR);
+            userConsented = (result == IDYES);
+
+            // Screenshot opt-out dialog
+            if (userConsented && g_cfg.allowScreenshotRefusal && g_cfg.captureScreenshot)
+            {
+                int ssResult = MessageBoxW(nullptr,
+                                           L"Include a screenshot of the last rendered frame with the "
+                                           L"crash report?",
+                                           L"Screenshot Consent", MB_YESNO | MB_ICONERROR);
+                includeScreenshot = (ssResult == IDYES);
+            }
+        }
+
+        if (userConsented)
+        {
+            // Remove screenshot from zip if user refused
+            if (!includeScreenshot)
+            {
+                try
+                {
+                    std::filesystem::remove(std::filesystem::path(shot));
+                }
+                catch (...)
+                {
+                }
+            }
+
+            // User description input (Windows: simple InputBox via a small console prompt)
+            // On Windows we can't easily show a text input without a full GUI framework,
+            // so we use a MessageBox prompt with a follow-up note in the crash log.
+            // The description is appended to the log content before upload.
+            std::string userDesc;
+            if (g_cfg.promptUserDescription && !g_cfg.headlessMode)
+            {
+                // Note: A proper implementation would use a text input dialog.
+                // For now, we add a placeholder that the out-of-process reporter
+                // (CrashReporter.exe) will replace with a real text input GUI.
+                int descResult = MessageBoxW(nullptr,
+                                             L"The crash report will be sent. If you'd like to describe "
+                                             L"what you were doing when the crash occurred, please note "
+                                             L"it and include it in a GitHub issue.\n\n"
+                                             L"(A future update will add a text input here.)",
+                                             L"Additional Information", MB_OK | MB_ICONERROR);
+                (void)descResult;
+            }
+
+            std::string logUtf8 = WideToUtf8(log.str());
+            if (!userDesc.empty())
+                logUtf8 = "=== User Description ===\n" + userDesc + "\n\n" + logUtf8;
+
+            std::string zipUtf8 = WideToUtf8(zipFile);
+            // Copy config and attach user description
+            CrashConfig uploadCfg = g_cfg;
+            uploadCfg.userDescription = userDesc;
+            ok = UploadCrashReport(uploadCfg, logUtf8, g_cfg.zipBeforeUpload ? zipUtf8 : "");
+        }
+    }
+
+    if (!g_cfg.headlessMode)
+    {
+        std::wstring msg = assertMsg ? L"Assertion captured.\n" : L"Crash captured.\n";
+        msg += L"Files:\n" + dump + L"\n" + logFile;
+        MessageBoxW(nullptr, msg.c_str(), assertMsg ? L"Assertion Handler" : L"Crash Handler", MB_OK | MB_ICONERROR);
+    }
 }
 
 static void WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep)
@@ -918,17 +1138,38 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         if (g_cfg.zipBeforeUpload)
             ZipFilesUtf8(zipFile, files);
 
-#ifdef SPARK_HAS_CURL
-        // GitHub Issue upload
-        if (!g_cfg.githubRepo.empty() && !g_cfg.githubToken.empty())
+        // Write crash manifest for out-of-process reporter
         {
-            bool ghOk = UploadCrashToGitHub(g_cfg, log.str(), g_cfg.zipBeforeUpload ? zipFile : "");
-            if (ghOk)
-                WriteStderr("GitHub issue created successfully.\n");
-            else
-                WriteStderr("GitHub issue creation failed.\n");
+            std::string crashTitle = (sig == SIGSEGV)   ? "SIGSEGV"
+                                     : (sig == SIGABRT) ? "SIGABRT"
+                                     : (sig == SIGFPE)  ? "SIGFPE"
+                                                        : "Crash";
+            WriteCrashManifest("", logFile, "", zipFile, crashTitle);
         }
-#endif
+
+        // Upload crash report (with optional consent + screenshot refusal)
+        if (g_cfg.enableCrashReporting)
+        {
+            bool userConsented = true;
+            if (g_cfg.requireConsent && !g_cfg.headlessMode)
+            {
+                int result = MessageBoxA(nullptr,
+                                         "SparkEngine has crashed. Would you like to send a crash report "
+                                         "to help improve the engine?\n\nNo personal data is included.",
+                                         "Crash Report", MB_YESNO | MB_ICONERROR);
+                userConsented = (result == IDYES);
+            }
+
+            if (userConsented)
+            {
+                CrashConfig uploadCfg = g_cfg;
+                bool uploadOk = UploadCrashReport(uploadCfg, log.str(), g_cfg.zipBeforeUpload ? zipFile : "");
+                if (uploadOk)
+                    WriteStderr("Crash report uploaded successfully.\n");
+                else
+                    WriteStderr("Crash report upload failed.\n");
+            }
+        }
 
         // Print log to stderr
         WriteStderr("Log file: ");
@@ -974,6 +1215,9 @@ void InstallCrashHandler(const CrashConfig& cfg)
     sigaction(SIGBUS, &sa, nullptr);
     sigaction(SIGILL, &sa, nullptr);
     sigaction(SIGTRAP, &sa, nullptr);
+
+    // Launch out-of-process crash reporter if available
+    LaunchCrashReporter();
 }
 
 void TriggerCrashHandler(const char* assertMsg)

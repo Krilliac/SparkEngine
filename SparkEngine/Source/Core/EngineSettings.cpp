@@ -64,6 +64,34 @@ bool EngineSettings::Load(const std::string& path)
     if (m_config.Load(m_filePath))
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine settings loaded successfully");
+
+        // Load local override file (gitignored — safe for secrets)
+        std::string localPath = m_filePath;
+        auto dotPos = localPath.rfind('.');
+        if (dotPos != std::string::npos)
+            localPath = localPath.substr(0, dotPos) + ".local" + localPath.substr(dotPos);
+        else
+            localPath += ".local";
+
+        if (std::filesystem::exists(localPath))
+        {
+            Spark::ConfigParser localConfig;
+            if (localConfig.Load(localPath))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Loaded local settings override: %s", localPath.c_str());
+                // Merge local values into the main config (local takes precedence)
+                for (const auto& section : localConfig.GetSections())
+                {
+                    for (const auto& key : localConfig.GetKeys(section))
+                    {
+                        std::string val = localConfig.GetString(section, key, "");
+                        if (!val.empty())
+                            m_config.SetString(section, key, val);
+                    }
+                }
+            }
+        }
+
         ReadFromConfig();
         ApplyDebugSettings();
         return true;
@@ -134,6 +162,7 @@ void EngineSettings::ResetToDefaults()
     m_network = NetworkSettings{};
     m_scripting = ScriptingSettings{};
     m_animation = AnimationSettings{};
+    m_crashReporting = CrashReportingSettings{};
     m_logging = LoggingSettings{};
     PopulateDefaults();
 }
@@ -417,6 +446,27 @@ void EngineSettings::ReadFromConfig()
     m_animation.lodDistanceMultiplier = m_config.GetFloat("Animation", "LODDistanceMultiplier", 1.0f);
     m_animation.compressionQuality = m_config.GetInt("Animation", "CompressionQuality", 2);
     m_animation.enableAnimationEvents = m_config.GetBool("Animation", "EnableAnimationEvents", true);
+
+    // CrashReporting
+    m_crashReporting.enabled = m_config.GetBool("CrashReporting", "Enabled", true);
+    m_crashReporting.requireConsent = m_config.GetBool("CrashReporting", "RequireConsent", true);
+    m_crashReporting.uploadURL = m_config.GetString("CrashReporting", "UploadURL", "");
+    m_crashReporting.proxyURL = m_config.GetString("CrashReporting", "ProxyURL", "");
+    m_crashReporting.githubRepo = m_config.GetString("CrashReporting", "GitHubRepo", "");
+    m_crashReporting.githubToken = m_config.GetString("CrashReporting", "GitHubToken", "");
+    m_crashReporting.githubLabels = m_config.GetString("CrashReporting", "GitHubLabels", "crash-report");
+    m_crashReporting.attachDump = m_config.GetBool("CrashReporting", "AttachDump", true);
+    m_crashReporting.captureScreenshot = m_config.GetBool("CrashReporting", "CaptureScreenshot", true);
+    m_crashReporting.captureSystemInfo = m_config.GetBool("CrashReporting", "CaptureSystemInfo", true);
+    m_crashReporting.captureAllThreads = m_config.GetBool("CrashReporting", "CaptureAllThreads", true);
+    m_crashReporting.timeoutSeconds = m_config.GetInt("CrashReporting", "TimeoutSeconds", 5);
+    m_crashReporting.headlessMode = m_config.GetBool("CrashReporting", "HeadlessMode", false);
+    m_crashReporting.promptUserDescription = m_config.GetBool("CrashReporting", "PromptUserDescription", true);
+    m_crashReporting.allowScreenshotRefusal = m_config.GetBool("CrashReporting", "AllowScreenshotRefusal", true);
+    m_crashReporting.smtpUser = m_config.GetString("CrashReporting", "SmtpUser", "");
+    m_crashReporting.smtpPass = m_config.GetString("CrashReporting", "SmtpPass", "");
+    m_crashReporting.emailTo = m_config.GetString("CrashReporting", "EmailTo", "");
+    m_crashReporting.emailFrom = m_config.GetString("CrashReporting", "EmailFrom", "crashreporter@sparkengine.dev");
 
     // Debug
     m_debug.suppressFatalAsserts = m_config.GetBool("Debug", "SuppressFatalAsserts", false);
@@ -727,6 +777,27 @@ void EngineSettings::WriteToConfig() const
     m_config.SetInt("Animation", "CompressionQuality", m_animation.compressionQuality);
     m_config.SetBool("Animation", "EnableAnimationEvents", m_animation.enableAnimationEvents);
 
+    // CrashReporting
+    m_config.SetBool("CrashReporting", "Enabled", m_crashReporting.enabled);
+    m_config.SetBool("CrashReporting", "RequireConsent", m_crashReporting.requireConsent);
+    m_config.SetString("CrashReporting", "UploadURL", m_crashReporting.uploadURL);
+    m_config.SetString("CrashReporting", "ProxyURL", m_crashReporting.proxyURL);
+    m_config.SetString("CrashReporting", "GitHubRepo", m_crashReporting.githubRepo);
+    m_config.SetString("CrashReporting", "GitHubToken", m_crashReporting.githubToken);
+    m_config.SetString("CrashReporting", "GitHubLabels", m_crashReporting.githubLabels);
+    m_config.SetBool("CrashReporting", "AttachDump", m_crashReporting.attachDump);
+    m_config.SetBool("CrashReporting", "CaptureScreenshot", m_crashReporting.captureScreenshot);
+    m_config.SetBool("CrashReporting", "CaptureSystemInfo", m_crashReporting.captureSystemInfo);
+    m_config.SetBool("CrashReporting", "CaptureAllThreads", m_crashReporting.captureAllThreads);
+    m_config.SetInt("CrashReporting", "TimeoutSeconds", m_crashReporting.timeoutSeconds);
+    m_config.SetBool("CrashReporting", "HeadlessMode", m_crashReporting.headlessMode);
+    m_config.SetBool("CrashReporting", "PromptUserDescription", m_crashReporting.promptUserDescription);
+    m_config.SetBool("CrashReporting", "AllowScreenshotRefusal", m_crashReporting.allowScreenshotRefusal);
+    m_config.SetString("CrashReporting", "SmtpUser", m_crashReporting.smtpUser);
+    m_config.SetString("CrashReporting", "SmtpPass", m_crashReporting.smtpPass);
+    m_config.SetString("CrashReporting", "EmailTo", m_crashReporting.emailTo);
+    m_config.SetString("CrashReporting", "EmailFrom", m_crashReporting.emailFrom);
+
     // Debug
     m_config.SetBool("Debug", "SuppressFatalAsserts", m_debug.suppressFatalAsserts);
     m_config.SetBool("Debug", "BreakOnSuppressedAsserts", m_debug.breakOnSuppressedAsserts);
@@ -810,9 +881,10 @@ bool EngineSettings::SetValue(const std::string& section, const std::string& key
 
 std::vector<std::string> EngineSettings::GetSections() const
 {
-    return {"Graphics",   "Audio",  "Controls",   "Game",           "Rendering",     "PostProcess", "SSAO",   "SSR",
-            "Volumetric", "TAA",    "MotionBlur", "DynamicQuality", "AudioExtended", "Physics",     "AI",     "Player",
-            "GameMode",   "Camera", "Editor",     "Network",        "Scripting",     "Animation",   "Logging"};
+    return {"Graphics",      "Audio",   "Controls",   "Game",      "Rendering",      "PostProcess",
+            "SSAO",          "SSR",     "Volumetric", "TAA",       "MotionBlur",     "DynamicQuality",
+            "AudioExtended", "Physics", "AI",         "Player",    "GameMode",       "Camera",
+            "Editor",        "Network", "Scripting",  "Animation", "CrashReporting", "Logging"};
 }
 
 std::vector<std::string> EngineSettings::GetKeys(const std::string& section) const
