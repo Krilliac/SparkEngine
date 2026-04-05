@@ -40,10 +40,12 @@
 
 [![DirectX 11](https://img.shields.io/badge/DX11-Stable-brightgreen)](https://github.com/Krilliac/SparkEngine)
 [![DirectX 12](https://img.shields.io/badge/DX12-Experimental-yellow)](https://github.com/Krilliac/SparkEngine)
-[![Vulkan](https://img.shields.io/badge/Vulkan-Experimental-yellow?logo=vulkan&logoColor=white)](https://github.com/Krilliac/SparkEngine)
-[![OpenGL](https://img.shields.io/badge/OpenGL_4.5-Experimental-yellow?logo=opengl&logoColor=white)](https://github.com/Krilliac/SparkEngine)
+[![Vulkan](https://img.shields.io/badge/Vulkan_1.4-Experimental-yellow?logo=vulkan&logoColor=white)](https://github.com/Krilliac/SparkEngine)
+[![OpenGL](https://img.shields.io/badge/OpenGL_4.6-Experimental-yellow?logo=opengl&logoColor=white)](https://github.com/Krilliac/SparkEngine)
+[![Metal](https://img.shields.io/badge/Metal-Experimental-yellow?logo=apple&logoColor=white)](https://github.com/Krilliac/SparkEngine)
+[![NullRHI](https://img.shields.io/badge/NullRHI-Headless-blue)](https://github.com/Krilliac/SparkEngine)
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Built-in support for DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting, an ECS architecture (EnTT), and an ImGui-based visual editor. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Multi-backend RHI rendering (DirectX 11/12, Vulkan, OpenGL, headless) with global illumination, GPU-driven rendering, mesh shaders, virtual texturing, and DXR ray tracing. Jolt Physics (vehicles, ragdoll, cloth, destruction), XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph editors, an ECS architecture (EnTT, 75 component types), and an ImGui-based editor with 57 specialized panels. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and MIT-licensed.
 
 > **v1.0.0 Released** — SparkEngine's first official release. Production-ready core systems with active feature development. See the [changelog](CHANGELOG.md) for details.
 
@@ -51,17 +53,18 @@
 
 ### Why Spark Engine?
 
-- **Complete game engine** — rendering, physics, audio, AI, animation, networking, scripting, and editor all in one package
-- **General-purpose** — FPS, RPG, MMO, battle royale, open-world — build any genre with one engine
-- **Scalable multiplayer** — from single-player to MMO-scale via area-based server architecture
+- **Complete game engine** — rendering (6 backends), physics, audio, AI, animation, networking, scripting, visual scripting, and a 57-panel editor all in one package
+- **General-purpose** — FPS, RPG, MMO, battle royale, open-world, RTS, racing, platformer — build any genre with 10 built-in game module templates
+- **Advanced rendering** — global illumination (DDGI/APV), GPU-driven rendering, mesh shaders, virtual texturing, DXR ray tracing, Shader Graph, and RenderGraph
+- **Scalable multiplayer** — from single-player to MMO-scale via HeroEngine-inspired area-based server architecture with seamless entity migration
 - **Large world support** — seamless area streaming and floating-point origin rebasing for worlds of any size
 - **Truly open-source** — MIT license, no royalties, no strings attached
-- **Built for learning and modding** — clean C++23 codebase with 30+ toggleable CMake modules
+- **Built for learning and modding** — clean C++23 codebase with 30+ toggleable CMake modules, mod system, and visual scripting
 - **Ready-to-download binaries** — nightly Windows and Linux builds published on every commit
 
 ## Editor Preview
 
-![SparkEditor — ImGui-based visual editor with 57+ dockable panels](docs/screenshots/editor-overview.png)
+![SparkEditor — ImGui-based visual editor with 57 dockable panels](docs/screenshots/editor-overview.png)
 
 *SparkEditor default layout — Hierarchy, Scene View, Inspector, Console, and Asset Browser. Additional panels available from the Window menu. Spark Professional dark theme.*
 
@@ -72,7 +75,7 @@
 
 ![Welcome screen](docs/screenshots/editor-welcome.png)
 
-**Window Menu** (57+ panels available)
+**Window Menu** (57 panels available)
 
 ![Window menu](docs/screenshots/editor-window-menu.png)
 
@@ -146,7 +149,7 @@ Per-commit build artifacts from CI on the `Working` branch via [nightly.link](ht
 
 ### Rendering
 
-DirectX 11 with multiple render paths (forward, deferred, forward+, clustered). PBR metallic/roughness materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting, bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), temporal anti-aliasing, FXAA, MSAA (2x/4x/8x), IBL lighting, GPU particle system, decals, fog, and quality presets (Low/Medium/High/Ultra). Experimental Vulkan and OpenGL backends via an RHI abstraction layer. Optional DirectX Raytracing (DXR) support. Automatic fallback to NullRHIDevice for headless servers, plus full CPU software rendering via OpenGL + Mesa llvmpipe for GPU-less environments.
+Multi-backend RHI abstraction with DirectX 11 (stable), DirectX 12 (mesh shaders, DXR, VRS), Vulkan 1.4, OpenGL 4.6, and NullRHIDevice (headless). Multiple render paths (forward, deferred, forward+, clustered) with a declarative RenderGraph. PBR metallic/roughness materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting/fog, bloom, HDR tone mapping (Reinhard/ACES/Uncharted 2), TAA, FXAA, MSAA (2x/4x/8x), depth of field, motion blur, chromatic aberration, film grain, lens flares, light shafts, IBL, GPU particle system, decals, water rendering, sky atmosphere, and quality presets (Low/Medium/High/Ultra). Global illumination via DDGI probe grids, Adaptive Probe Volumes (brick-based hierarchical LOD), and a hybrid ray tracing pipeline with SDF fallback. GPU-driven rendering with compute-based frustum culling, hierarchical Z-buffer occlusion, and indirect draw generation. Mesh shader pipeline with meshlet clustering (64-128 tri), amplification/mesh shaders, and software rasterizer fallback. Cluster-based virtual geometry system (DAG hierarchy with screen-space error traversal). Virtual texturing with feedback-driven page streaming and LRU cache. DXR 1.1 ray tracing (reflections, soft shadows, AO, multi-bounce GI) with temporal denoising. FSR upscaling. Node-based Shader Graph (35+ nodes, HLSL generation, live material preview). Full CPU software rendering via OpenGL + Mesa llvmpipe for GPU-less environments.
 
 ### Physics
 
@@ -158,7 +161,7 @@ XAudio2 hardware-accelerated 3D spatial audio with distance attenuation, Doppler
 
 ### Gameplay
 
-ECS architecture (EnTT) with FPS player controller, weapon system (bullet/rocket/grenade), class system, vehicle mechanics, gravity system, HUD (crosshairs, health bars, kill feed, minimap, compass), interactive objects, inventory system, quest system, day/night cycle, weather system, game mode management, heightmap terrain with quadtree LOD and texture splatting, mesh LOD, and decal system.
+ECS architecture (EnTT) with 75 component types across 17 headers and 25 systems. FPS player controller, weapon system (bullet/rocket/grenade), class system, vehicle mechanics (wheeled/tracked/motorcycle), gravity system, HUD (crosshairs, health bars, kill feed, minimap, compass), interactive objects, inventory system, quest system, achievement system, ability/condition system, event response system (data-driven When/If/Then rules), day/night cycle, weather system, game mode management, heightmap terrain with quadtree LOD and texture splatting, mesh LOD, decal system, destruction/fracture system, branching dialogue system, replay record/playback, tween system with easing functions, coroutine scheduler, and accessibility (5 colorblind modes with daltonization, subtitles, high-contrast UI, reduced motion, one-handed input, screen reader hooks).
 
 ### AI & Navigation
 
@@ -166,7 +169,7 @@ Behavior tree framework (composite, decorator, and action nodes), NavMesh A* pat
 
 ### Animation
 
-Skeletal animation with bone hierarchies, keyframe clips, state machines with cross-fading, multi-layer blending (override/additive/layered with per-bone masks), inverse kinematics (two-bone, look-at, FABRIK), and root motion extraction. Supports FBX and glTF via Assimp.
+Skeletal animation with bone hierarchies, keyframe clips, state machines with cross-fading, multi-layer blending (override/additive/layered with per-bone masks), inverse kinematics (two-bone, look-at, FABRIK), root motion extraction, animation retargeting, ragdoll blending, and soft body/cloth simulation. Cinematic sequencer with timeline tracks (camera, entity, animation, events), Bezier/Catmull-Rom interpolation, and a dedicated editor panel. Supports FBX and glTF via Assimp.
 
 ### Networking
 
@@ -174,11 +177,11 @@ UDP client/server architecture with entity replication, client-side prediction w
 
 ### Scripting
 
-AngelScript with Unity-style hot-reload (file watcher with debouncing and state preservation), lifecycle callbacks (Start, Update, OnCollision), full engine API bindings (math, components, input, entities), per-file module isolation, client/server script context separation for multiplayer, and runtime error reporting.
+AngelScript with Unity-style hot-reload (file watcher with debouncing and state preservation), lifecycle callbacks (Start, Update, OnCollision), full engine API bindings (math, components, input, entities), per-file module isolation, client/server script context separation for multiplayer, and runtime error reporting. Visual scripting system with 60 node types across 8 categories that compiles node graphs to AngelScript (no separate runtime needed). Node-based Shader Graph for visual material authoring (35+ nodes, HLSL output). Lua scripting also supported. Mod system for user-created content.
 
 ### Editor
 
-ImGui-powered visual editor with 57 specialized panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor, terrain editing, weapon editor, profiler, AI editor, physics debug, 2D editors, FPS tools, version control integration, build/deployment system, level streaming, search, prefab system, project management, scene statistics, collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness), docking, and theming. Full undo/redo support and play-mode editing.
+ImGui-powered visual editor with 57 specialized dockable panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor with Shader Graph, visual script editor (node-based, compiles to AngelScript), terrain editing, weapon editor, profiler, AI editor/debugger, physics debug, cinematic sequencer, dialogue editor, ability/condition/trigger editors, destruction editor, 2D/sprite/tilemap editors, FPS tools, audio mixer, replay panel, save system panel, dedicated server panel, version control integration, build/deployment pipeline, level streaming, search panel, command palette (Ctrl+P), prefab system, event monitor, coroutine debugger, collaboration panel, project management, scene statistics, accessibility settings, VR configuration, and theming. Collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness). Full undo/redo support, play-mode editing, and plugin system (built-in + DLL).
 
 ### Procedural Generation
 
@@ -222,7 +225,7 @@ chmod +x generate.sh
 - **Compiler**: MSVC v143 (Visual Studio 2022 17.6+), GCC 13+, or Clang 17+ with C++23 support
 - **Build System**: CMake 3.25+, Ninja (recommended on Linux)
 - **Linux packages**: `build-essential`, `ninja-build`, `cmake` (e.g. `sudo apt install build-essential ninja-build cmake`)
-- **Graphics**: DirectX 11 capable GPU (Windows), Vulkan SDK (optional), OpenGL 4.5 (optional)
+- **Graphics**: DirectX 11 capable GPU (Windows), Vulkan SDK (optional), OpenGL 4.5+ (optional), or NullRHIDevice for headless
 - **Platform**: Windows 10+ (primary), Linux (experimental)
 
 ### Platform Support Matrix
@@ -235,9 +238,12 @@ chmod +x generate.sh
 | **Linux (Clang 17+)** | Experimental | CI tested; some platform-specific features may be missing |
 | **macOS (Apple Clang)** | Experimental | Builds with C++23 support; no CI or pre-built binaries yet |
 | **DirectX 11** | **Stable** | Primary rendering backend |
-| **Vulkan** | Experimental | Via RHI abstraction layer; requires Vulkan SDK |
-| **OpenGL 4.5** | Experimental | Via RHI abstraction layer; GLSL shaders in `Shaders/GLSL/` |
+| **DirectX 12** | Experimental | Mesh shaders, DXR, Variable Rate Shading; requires Windows 10+ |
+| **Vulkan 1.4** | Experimental | Via RHI abstraction layer; requires Vulkan SDK |
+| **OpenGL 4.6** | Experimental | Via RHI abstraction layer; GLSL shaders in `Shaders/GLSL/` |
+| **Metal** | Experimental | macOS; API layer designed, implementation in progress |
 | **DirectX Raytracing (DXR)** | Experimental | Requires D3D12 (Windows); enabled by default with SDFGI software fallback |
+| **NullRHIDevice** | **Stable** | Headless mode — no GPU required; automatic fallback |
 | **Networking (UDP)** | Experimental | Enabled by default (`ENABLE_NETWORKING=ON`); see [Networking](#networking-configuration) |
 
 > **What does "Experimental" mean?** These platforms and backends compile and have basic functionality, but are not yet fully tested, may have missing features, and are not guaranteed to work in all configurations. Bug reports are welcome!
@@ -295,34 +301,40 @@ Standalone debug console application that communicates with SparkEngine via name
 +-------------------+-------------------+-------------------+
 |    Rendering      |     Physics       |      Audio        |
 |                   |                   |                   |
-|  GraphicsEngine   |  PhysicsSystem    |  AudioEngine      |
-|  ShaderManager    |  Jolt Physics     |  XAudio2 / mini   |
-|  PostProcessing   |  Collision        |  3D Spatial       |
-|  PBR Materials    |  Raycasting       |  Object Pool      |
+|  RHI (6 backends) |  Jolt Physics     |  XAudio2 / mini   |
+|  RenderGraph      |  Vehicles/Ragdoll |  3D Spatial       |
+|  GI / GPU-Driven  |  Cloth / Destruct |  Mixer / Music    |
+|  PBR / ShaderGraph|  Deterministic    |  Object Pool      |
 +-------------------+-------------------+-------------------+
 |    Scripting      |    Input & UI     |    Core & ECS     |
 |                   |                   |                   |
-|  AngelScript VM   |  InputManager     |  EnTT ECS         |
-|  Hot Reload       |  Gamepad Support  |  SceneManager     |
-|  Engine Bindings  |  ImGui Editor     |  AssetPipeline    |
+|  AngelScript VM   |  InputManager     |  EnTT ECS (75+)   |
+|  Visual Scripting |  Gamepad / SDL2   |  SceneManager     |
+|  Hot Reload / Lua |  ImGui Editor(57) |  AssetPipeline    |
 +-------------------+-------------------+-------------------+
 |    Gameplay       |    AI & Nav       |    Networking     |
 |                   |                   |                   |
-|  PlayerController |  BehaviorTree     |  UDP Client/Srv   |
-|  WeaponSystem     |  NavMesh (A*)     |  AreaServer       |
-|  VehicleSystem    |  Perception       |  WorldServer      |
+|  Weapons/Vehicles |  BehaviorTree     |  UDP Client/Srv   |
+|  Quests/Inventory |  NavMesh (A*)     |  AreaServer       |
+|  Abilities/Events |  Perception/EQS   |  WorldServer      |
 +-------------------+-------------------+-------------------+
 |    Procedural     |    Animation      |  Large Worlds     |
 |                   |                   |                   |
-|  Noise (Perlin+)  |  Skeletal Anim    |  Origin Rebasing  |
-|  Erosion / WFC    |  IK / Blending    |  Seamless Areas   |
-|  Mesh Generation  |  State Machines   |  Scene Streaming  |
+|  Noise (Perlin+)  |  Skeletal / IK    |  Origin Rebasing  |
+|  Erosion / WFC    |  Sequencer        |  Seamless Areas   |
+|  Mesh / Terrain   |  Ragdoll / Cloth  |  Scene Streaming  |
 +-------------------+-------------------+-------------------+
-|   Collaboration   |                   |    Utilities      |
+|   Collaboration   |  Save / Replay    |    Utilities      |
 |                   |                   |                   |
-|  Multi-User Edit  |                   |  CrashHandler     |
-|  Node Locking     |                   |  Console (200+)   |
-|  Edit Broadcast   |                   |  Profiler / Debug |
+|  Multi-User Edit  |  ECS Serializer   |  CrashHandler     |
+|  Node Locking     |  Replay System    |  Console (200+)   |
+|  Edit Broadcast   |  Autosave / Slots |  Profiler / Debug |
++-------------------+-------------------+-------------------+
+|   Accessibility   |  Dialogue / UI    |  Modding / Loc    |
+|                   |                   |                   |
+|  Colorblind (5)   |  Dialogue Trees   |  Mod System       |
+|  Subtitles / TTS  |  UI Extensions    |  Localization     |
+|  Reduced Motion   |  Achievements     |  Tween / Coroutine|
 +-------------------+-------------------+-------------------+
 ```
 
@@ -337,25 +349,43 @@ SparkEngine/
 |       |-- Console/         # Debug console integration
 |       |-- Core/            # Entry point, engine framework
 |       |-- Engine/
-|       |   |-- AI/          # Behavior trees, NavMesh, perception, steering
-|       |   |-- Animation/   # Skeletal animation, IK, state machines
-|       |   |-- ECS/         # Entity component system (EnTT)
+|       |   |-- 2D/          # 2D rendering and sprite systems
+|       |   |-- Accessibility/ # Colorblind, subtitles, reduced motion, input remap
+|       |   |-- AI/          # Behavior trees, NavMesh, perception, steering, EQS
+|       |   |-- Animation/   # Skeletal animation, IK, state machines, retargeting
+|       |   |-- Cinematic/   # Sequencer, timeline tracks, playback
+|       |   |-- Coroutine/   # Async coroutine scheduler
+|       |   |-- Destruction/  # Destructible objects and fracture
+|       |   |-- Dialogue/    # Branching dialogue system
+|       |   |-- ECS/         # Entity component system (EnTT, 75 component types)
+|       |   |-- Events/      # Event bus / event response system
+|       |   |-- Gameplay/    # Inventory, quests, achievements, abilities, weapons
+|       |   |-- Loading/     # Loading screens and management
+|       |   |-- Localization/ # Localization system
+|       |   |-- Mobile/      # Mobile platform support (touch, gestures, battery)
+|       |   |-- Modding/     # Game modding support
 |       |   |-- Networking/  # UDP multiplayer, replication, AreaServer, WorldServer
+|       |   |-- Persistence/ # Async database-backed persistence
+|       |   |-- Physics/     # Physics-specific engine utilities
 |       |   |-- Procedural/  # Noise, erosion, mesh generation, WFC
+|       |   |-- Replay/      # Record/playback system
 |       |   |-- SaveSystem/  # Serialization, compression, save slots
-|       |   |-- Scripting/   # AngelScript VM, hot-reload, API bindings
+|       |   |-- Scripting/   # AngelScript VM, hot-reload, visual scripting compiler
 |       |   |-- Streaming/   # SeamlessAreaManager, SceneTransitionManager
+|       |   |-- Tween/       # Tween system with easing functions
+|       |   |-- UI/          # UI system and layout extensions
+|       |   |-- VR/          # VR headset/controller/tracking (OpenXR-ready)
 |       |   |-- World/       # WorldOriginSystem (floating-point origin rebasing)
 |       |-- Enums/           # Shared enumerations
 |       |-- Game/            # Player, weapons, vehicles, HUD, terrain, inventory
-|       |-- Graphics/        # DX11 renderer, PBR, post-processing, particles, RHI
+|       |-- Graphics/        # Multi-backend RHI, PBR, GI, GPU-driven, RenderGraph
 |       |-- Input/           # Keyboard, mouse, gamepad input
 |       |-- Physics/         # Jolt Physics integration
 |       |-- Projectiles/     # Weapon projectile system
 |       |-- SceneManager/    # Scene and level management
 |       |-- Utils/           # Logging, profiler, crash handler, console, debug tools
 |-- SparkEditor/
-|   |-- Source/              # ImGui editor (57 panels)
+|   |-- Source/              # ImGui editor (57 panels, collaborative editing)
 |-- SparkConsole/
 |   |-- src/                 # Standalone debug console application
 |-- SparkShaderCompiler/
