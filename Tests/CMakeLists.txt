@@ -252,6 +252,7 @@ add_executable(SparkTests
     TestScriptHotReload.cpp
     TestVRSystem.cpp
     TestSeamlessAreaManager.cpp
+    TestAreaAssetLoader.cpp
     TestEventResponseSystem.cpp
     TestVisualScriptCompiler.cpp
     TestEntityPresetManager.cpp

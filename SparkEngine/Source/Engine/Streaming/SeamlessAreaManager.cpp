@@ -8,6 +8,7 @@
  */
 
 #include "SeamlessAreaManager.h"
+#include "DirectStorageLoader.h"
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/DebugHookManager.h"
 #include "../../Utils/LogMacros.h"
@@ -41,6 +42,13 @@ namespace Spark::Streaming
         m_currentAreaId = INVALID_AREA_ID;
         m_activeLoadCount = 0;
         m_timeSinceLastUpdate = 0.0f;
+
+        // Initialize DirectStorageLoader for async I/O
+        DirectStorageLoader::GetInstance().Initialize();
+
+        // Initialize the asset loader bridge
+        m_assetLoader.Initialize();
+
         m_initialized = true;
 
         Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Initialized");
@@ -55,9 +63,13 @@ namespace Spark::Streaming
             return;
         }
 
+        // Poll async I/O completions every frame (not gated by updateInterval)
+        m_assetLoader.Update();
+
         m_timeSinceLastUpdate += dt;
         if (m_timeSinceLastUpdate < m_config.updateInterval)
         {
+            SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Streaming", 0.0);
             return;
         }
         m_timeSinceLastUpdate = 0.0f;
@@ -102,6 +114,11 @@ namespace Spark::Streaming
         m_loadedAreaIds.clear();
         m_loadQueue.clear();
         m_stateCallbacks.clear();
+
+        // Shutdown asset loader and DirectStorageLoader
+        m_assetLoader.Shutdown();
+        DirectStorageLoader::GetInstance().Shutdown();
+
         m_initialized = false;
 
         Spark::SimpleConsole::GetInstance().LogInfo("[SeamlessAreaManager] Shutdown");
@@ -119,6 +136,17 @@ namespace Spark::Streaming
         managed.state = AreaState::Unloaded;
         m_areas[def.areaId] = std::move(managed);
         m_registeredHistory.insert(def.areaId);
+    }
+
+    void SeamlessAreaManager::RegisterArea(const AreaDefinition& def, SceneManifest manifest)
+    {
+        RegisterArea(def);
+        m_assetLoader.SetManifest(def.areaId, std::move(manifest));
+    }
+
+    void SeamlessAreaManager::SetManifest(AreaID areaId, SceneManifest manifest)
+    {
+        m_assetLoader.SetManifest(areaId, std::move(manifest));
     }
 
     void SeamlessAreaManager::UnregisterArea(AreaID areaId)
@@ -324,11 +352,19 @@ namespace Spark::Streaming
             TransitionAreaState(area, AreaState::Loading);
             ++m_activeLoadCount;
 
-            // Simulate immediate load completion for now (actual async loading
-            // would integrate with the asset pipeline here)
-            TransitionAreaState(area, AreaState::Loaded);
-            m_loadedAreaIds.push_back(id);
-            --m_activeLoadCount;
+            // Submit async load via AreaAssetLoader — callback fires when done
+            m_assetLoader.BeginAreaLoad(id,
+                                        [this](AreaID loadedId)
+                                        {
+                                            auto it = m_areas.find(loadedId);
+                                            if (it != m_areas.end() && it->second.state == AreaState::Loading)
+                                            {
+                                                TransitionAreaState(it->second, AreaState::Loaded);
+                                                m_loadedAreaIds.push_back(loadedId);
+                                            }
+                                            if (m_activeLoadCount > 0)
+                                                --m_activeLoadCount;
+                                        });
         }
     }
 
@@ -348,7 +384,19 @@ namespace Spark::Streaming
             if (area.distanceToPlayer > m_config.unloadRadius && *it != m_currentAreaId)
             {
                 TransitionAreaState(area, AreaState::Unloading);
-                TransitionAreaState(area, AreaState::Unloaded);
+
+                // Release loaded assets via AreaAssetLoader
+                AreaID unloadId = *it;
+                m_assetLoader.BeginAreaUnload(unloadId,
+                                              [this, unloadId](AreaID /*id*/)
+                                              {
+                                                  auto aIt = m_areas.find(unloadId);
+                                                  if (aIt != m_areas.end())
+                                                  {
+                                                      TransitionAreaState(aIt->second, AreaState::Unloaded);
+                                                  }
+                                              });
+
                 it = m_loadedAreaIds.erase(it);
             }
             else

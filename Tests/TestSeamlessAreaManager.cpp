@@ -497,3 +497,50 @@ TEST(SeamlessArea_PlayerStateThreadSafety)
 
     mgr.Shutdown();
 }
+
+TEST(SeamlessArea_AsyncLoadNotInstant)
+{
+    // Verifies that with a manifest, areas stay in Loading state
+    // until explicitly completed (not instant like the old behavior)
+    SeamlessAreaManager mgr;
+    mgr.Initialize();
+    mgr.SetConfig(MakeCfg(100.0f, 200.0f, 0.0f, 10));
+
+    mgr.RegisterArea(MakeArea(1, "Town", {10, 0, 10}, {30, 10, 30}));
+
+    // Player inside the area — triggers load
+    mgr.SetPlayerState({20, 5, 20}, {0, 0, 0}, {1, 0, 0});
+    mgr.Update(0.0f);
+
+    // Area should be in Loading state (test's standalone manager doesn't
+    // auto-complete like the old simulated behavior)
+    EXPECT_EQ(static_cast<int>(mgr.GetAreaState(1)), static_cast<int>(AreaState::Loading));
+
+    // Simulate load completion
+    mgr.SimulateLoadComplete(1);
+    EXPECT_EQ(static_cast<int>(mgr.GetAreaState(1)), static_cast<int>(AreaState::Loaded));
+
+    mgr.Shutdown();
+}
+
+TEST(SeamlessArea_LoadedAreasListUpdated)
+{
+    SeamlessAreaManager mgr;
+    mgr.Initialize();
+    mgr.SetConfig(MakeCfg(100.0f, 200.0f, 0.0f, 10));
+
+    mgr.RegisterArea(MakeArea(1, "ZoneA", {10, 0, 10}, {30, 10, 30}));
+    mgr.RegisterArea(MakeArea(2, "ZoneB", {50, 0, 50}, {70, 10, 70}));
+
+    mgr.SetPlayerState({20, 5, 20}, {0, 0, 0}, {1, 0, 0});
+    mgr.Update(0.0f);
+
+    // Both should start loading (within range)
+    mgr.SimulateLoadComplete(1);
+    mgr.SimulateLoadComplete(2);
+
+    const auto& loaded = mgr.GetLoadedAreas();
+    EXPECT_EQ(loaded.size(), 2u);
+
+    mgr.Shutdown();
+}
