@@ -1,8 +1,8 @@
 # Physics
 
-SparkEngine integrates **Jolt Physics** for rigid body dynamics, collision detection, raycasting, constraints, cloth simulation, and soft body physics. The `PhysicsSystem` wraps Jolt with a DirectX Math-native API, transparently converting between `XMFLOAT3` / `XMMATRIX` and Jolt's native types.
+SparkEngine integrates **Jolt Physics** for rigid body dynamics, collision detection, raycasting, constraints, cloth simulation, soft body physics, vehicle physics (wheeled/tracked/motorcycle), ragdoll, destruction/fracture, and deterministic simulation (for replay and networking). The `PhysicsSystem` wraps Jolt with a DirectX Math-native API, transparently converting between `XMFLOAT3` / `XMMATRIX` and Jolt's native types. Multi-threaded job dispatch for physics simulation.
 
-**Source:** `SparkEngine/Source/Physics/`
+**Source:** `SparkEngine/Source/Physics/`, `SparkEngine/Source/Engine/Physics/`
 
 ---
 
@@ -15,8 +15,13 @@ SparkEngine integrates **Jolt Physics** for rigid body dynamics, collision detec
 │                                                                 │
 │  ┌──────────────┐  ┌───────────────────┐  ┌─────────────────┐  │
 │  │  PhysicsBody │  │ PhysicsConstraint │  │ ClothSimulation │  │
-│  │  (btRigidBody│  │ (btTypedConstraint│  │ (PBD solver)    │  │
+│  │  (Jolt Body  │  │ (Jolt Constraint  │  │ (PBD solver)    │  │
 │  │   wrapper)   │  │   wrapper)        │  │                 │  │
+│  └──────────────┘  └───────────────────┘  └─────────────────┘  │
+│  ┌──────────────┐  ┌───────────────────┐  ┌─────────────────┐  │
+│  │VehiclePhysics│  │  RagdollSystem   │  │ DestructionSys  │  │
+│  │ (wheel/track │  │  (physics-driven │  │ (fracture,      │  │
+│  │  /motorcycle)│  │   ragdoll blend) │  │  debris)        │  │
 │  └──────────────┘  └───────────────────┘  └─────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                    CollisionSystem                              │
@@ -26,8 +31,8 @@ SparkEngine integrates **Jolt Physics** for rigid body dynamics, collision detec
          │                    │                    │
          ▼                    ▼                    ▼
 ┌─────────────────┐  ┌──────────────┐  ┌────────────────────┐
-│ btDynamicsWorld │  │ btBroadphase │  │ btConstraintSolver │
-│ (Jolt core)   │  │ (DBVT)       │  │ (Sequential Imp.)  │
+│ Jolt PhysicsSys │  │ Jolt Broad-  │  │ Jolt Constraint    │
+│ (JPH::Physics   │  │ PhaseLayer   │  │ Solver (multi-     │
 └─────────────────┘  └──────────────┘  └────────────────────┘
 ```
 

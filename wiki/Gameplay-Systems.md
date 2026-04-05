@@ -1,8 +1,8 @@
 # Gameplay Systems
 
-SparkEngine includes a comprehensive set of FPS gameplay systems built on top of the [Entity Component System](Entity-Component-System) architecture.
+SparkEngine includes a comprehensive set of gameplay systems built on top of the [Entity Component System](Entity-Component-System) architecture. Beyond the FPS-focused player controller and weapon system, the engine provides: [achievement tracking](Achievement-System), [ability/condition systems](Entity-Component-System), [event response system](Event-System) (data-driven When/If/Then rules), [branching dialogue](Dialogue-System), [destructible objects](Destruction-System), [replay record/playback](Replay-System), [inventory and quests](Entity-Component-System), [day/night cycle and weather](Day-Night-Cycle-and-Weather), [tween/coroutine](Tween-System) systems, and [accessibility](Accessibility) (5 colorblind modes, subtitles, reduced motion, one-handed input).
 
-**Source:** `SparkEngine/Source/Game/`, `SparkEngine/Source/Engine/Gameplay/WeaponManager.h`, `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h`
+**Source:** `SparkEngine/Source/Game/`, `SparkEngine/Source/Engine/Gameplay/`, `SparkEngine/Source/Engine/ECS/Components/`
 
 ## Player Controller
 
