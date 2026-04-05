@@ -9,6 +9,8 @@
 #include "TestFramework.h"
 #include "Graphics/GraphicsEngineTypes.h"
 
+#include <algorithm>
+
 // ============================================================================
 // GraphicsSettings Defaults
 // ============================================================================
