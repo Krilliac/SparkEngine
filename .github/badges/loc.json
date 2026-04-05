@@ -1,8 +1,8 @@
 {
-    "schemaVersion": 1,
-    "label": "C++ lines of code",
-    "message": "486057",
-    "color": "blue",
-    "namedLogo": "cplusplus",
-    "logoColor": "white"
+  "schemaVersion": 1,
+  "label": "C++ lines of code",
+  "message": "486061",
+  "color": "blue",
+  "namedLogo": "cplusplus",
+  "logoColor": "white"
 }
