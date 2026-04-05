@@ -286,6 +286,7 @@ add_executable(SparkTests
     TestFBXImporter.cpp
     TestTextureCompressor.cpp
     TestNeuralInference.cpp
+    TestCpuNeuralInference.cpp
     TestNeuralTextureCompressor.cpp
     TestNeuralRadianceCache.cpp
     TestNeuralPostProcessing.cpp

@@ -8,33 +8,33 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 245706 |
+| **SparkEngine/Source** | 249070 |
 | **SparkEditor/Source** | 82920 |
 | **GameModules** | 57454 |
-| **Tests** | 92813 |
+| **Tests** | 94222 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~481284** |
+| **Total C++ (excl. ThirdParty)** | **~486057** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 701 |
-| Implementation files (.cpp) | 791 |
-| HLSL shader files | 32 |
+| Header files (.h/.hpp) | 709 |
+| Implementation files (.cpp) | 802 |
+| HLSL shader files | 38 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 298 |
+| Test files (.cpp) | 303 |
 | Wiki pages (.md) | 103 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~862 |
-| Average lines per .h file | ~574 |
-| Largest codebase section | Graphics (96569 lines — 39% of SparkEngine/Source) |
+| Average lines per .cpp file | ~857 |
+| Average lines per .h file | ~572 |
+| Largest codebase section | Graphics (99887 lines — 40% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,11 +42,11 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 96569 | 39.3% |
-| Engine (all subsystems) | 73426 | 29.8% |
-| Utils | 33700 | 13.7% |
-| Core | 17501 | 7.1% |
-| Physics | 10101 | 4.1% |
+| Graphics | 99887 | 40.1% |
+| Engine (all subsystems) | 73424 | 29.4% |
+| Utils | 33700 | 13.5% |
+| Core | 17549 | 7.0% |
+| Physics | 10101 | 4.0% |
 | Audio | 5547 | 2.2% |
 | Input | 3345 | 1.3% |
 | SceneManager | 1886 | 0.7% |
@@ -59,7 +59,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Subsystem | Lines |
 |-----------|------:|
 | AI | 13124 |
-| Networking | 11627 |
+| Networking | 11626 |
 | ECS | 8523 |
 | Gameplay | 7278 |
 | Animation | 6533 |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 298 |
-| TEST() definitions | 3670 |
+| Test files | 303 |
+| TEST() definitions | 3727 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -114,8 +114,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| CMake option() declarations | 20 |
-| ENABLE_* feature toggles | 12 |
+| CMake option() declarations | 21 |
+| ENABLE_* feature toggles | 13 |
 | Game modules | 10 |
 | SDK public headers | 10 |
 | Supported compilers | MSVC v143/v144, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
@@ -155,7 +155,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | File | Lines |
 |------|------:|
 | `OpenGLDevice.cpp` | 1938 |
-| `SparkEngine.cpp` | 1869 |
+| `SparkEngine.cpp` | 1889 |
 | `VulkanDevice.cpp` | 1728 |
 | `GraphicsEngine.cpp` | 1578 |
 | `D3D12Device.cpp` | 1564 |
@@ -199,7 +199,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Type | Count | Location |
 |------|------:|----------|
-| HLSL shaders | 32 | `Shaders/HLSL/` (includes Compute, MeshShaders, RayTracing) |
+| HLSL shaders | 38 | `Shaders/HLSL/` (includes Compute, MeshShaders, RayTracing) |
 | GLSL shaders | 14 | `Shaders/GLSL/` |
 | Compiled bytecode (.cso) | varies | `Shaders/Compiled/` |
 

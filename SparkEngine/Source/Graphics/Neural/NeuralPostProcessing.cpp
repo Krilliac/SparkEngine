@@ -101,47 +101,46 @@ namespace Spark::Graphics::Neural
     {
         auto& engine = NeuralInferenceEngine::GetInstance();
         uint32_t inputSize = m_networkDesc.GetInputSize();
+        constexpr uint32_t patchPixels = kDenoisePatchSize * kDenoisePatchSize;
+
+        // Build all pixel inputs into a single contiguous batch buffer
+        std::vector<float> batchInput(patchPixels * inputSize);
 
         for (uint32_t py = 0; py < kDenoisePatchSize; ++py)
         {
             for (uint32_t px = 0; px < kDenoisePatchSize; ++px)
             {
                 uint32_t pixelIdx = py * kDenoisePatchSize + px;
-
-                std::vector<float> mlpInput;
-                mlpInput.reserve(inputSize);
+                float* dst = &batchInput[pixelIdx * inputSize];
+                uint32_t offset = 0;
 
                 // Patch position
-                mlpInput.push_back(static_cast<float>(px) / static_cast<float>(kDenoisePatchSize));
-                mlpInput.push_back(static_cast<float>(py) / static_cast<float>(kDenoisePatchSize));
+                dst[offset++] = static_cast<float>(px) / static_cast<float>(kDenoisePatchSize);
+                dst[offset++] = static_cast<float>(py) / static_cast<float>(kDenoisePatchSize);
 
                 // Noisy color
-                mlpInput.push_back(colorPatch[pixelIdx * 3 + 0]);
-                mlpInput.push_back(colorPatch[pixelIdx * 3 + 1]);
-                mlpInput.push_back(colorPatch[pixelIdx * 3 + 2]);
+                dst[offset++] = colorPatch[pixelIdx * 3 + 0];
+                dst[offset++] = colorPatch[pixelIdx * 3 + 1];
+                dst[offset++] = colorPatch[pixelIdx * 3 + 2];
 
                 // Optional guides
                 if (m_settings.useAlbedoGuide && albedoPatch)
                 {
-                    mlpInput.push_back(albedoPatch[pixelIdx * 3 + 0]);
-                    mlpInput.push_back(albedoPatch[pixelIdx * 3 + 1]);
-                    mlpInput.push_back(albedoPatch[pixelIdx * 3 + 2]);
+                    dst[offset++] = albedoPatch[pixelIdx * 3 + 0];
+                    dst[offset++] = albedoPatch[pixelIdx * 3 + 1];
+                    dst[offset++] = albedoPatch[pixelIdx * 3 + 2];
                 }
                 if (m_settings.useNormalGuide && normalPatch)
                 {
-                    mlpInput.push_back(normalPatch[pixelIdx * 3 + 0]);
-                    mlpInput.push_back(normalPatch[pixelIdx * 3 + 1]);
-                    mlpInput.push_back(normalPatch[pixelIdx * 3 + 2]);
+                    dst[offset++] = normalPatch[pixelIdx * 3 + 0];
+                    dst[offset++] = normalPatch[pixelIdx * 3 + 1];
+                    dst[offset++] = normalPatch[pixelIdx * 3 + 2];
                 }
-
-                float output[3];
-                engine.EvaluateCPU(m_mlpHandle, mlpInput.data(), output, 1);
-
-                outputPatch[pixelIdx * 3 + 0] = output[0];
-                outputPatch[pixelIdx * 3 + 1] = output[1];
-                outputPatch[pixelIdx * 3 + 2] = output[2];
             }
         }
+
+        // Single batched inference call for all pixels in the patch
+        engine.EvaluateCPU(m_mlpHandle, batchInput.data(), outputPatch, patchPixels);
     }
 
     bool NeuralDenoiser::Execute()
@@ -308,18 +307,25 @@ namespace Spark::Graphics::Neural
 
         auto& engine = NeuralInferenceEngine::GetInstance();
         uint32_t inputSize = m_networkDesc.GetInputSize();
+        constexpr uint32_t outPixels = kSROutputPatchSize * kSROutputPatchSize;
+
+        // Build all output-pixel inputs into a single contiguous batch buffer
+        std::vector<float> batchInput(outPixels * inputSize);
 
         for (uint32_t oy = 0; oy < kSROutputPatchSize; ++oy)
         {
             for (uint32_t ox = 0; ox < kSROutputPatchSize; ++ox)
             {
+                uint32_t pixelIdx = oy * kSROutputPatchSize + ox;
+                float* dst = &batchInput[pixelIdx * inputSize];
+                uint32_t offset = 0;
+
                 // Map output pixel to input coordinate
                 float u = (static_cast<float>(ox) + 0.5f) / static_cast<float>(kSROutputPatchSize);
                 float v = (static_cast<float>(oy) + 0.5f) / static_cast<float>(kSROutputPatchSize);
                 float inX = u * kSRInputPatchSize - 0.5f;
                 float inY = v * kSRInputPatchSize - 0.5f;
 
-                // Clamp to input patch bounds
                 int32_t cx = std::clamp(static_cast<int32_t>(inX), 0, static_cast<int32_t>(kSRInputPatchSize - 1));
                 int32_t cy = std::clamp(static_cast<int32_t>(inY), 0, static_cast<int32_t>(kSRInputPatchSize - 1));
 
@@ -336,41 +342,33 @@ namespace Spark::Graphics::Neural
                 const float* up = sampleInput(cx, cy - 1);
                 const float* down = sampleInput(cx, cy + 1);
 
-                std::vector<float> mlpInput;
-                mlpInput.reserve(inputSize);
-
                 // Sub-pixel position
-                mlpInput.push_back(static_cast<float>(ox) / static_cast<float>(kSROutputPatchSize));
-                mlpInput.push_back(static_cast<float>(oy) / static_cast<float>(kSROutputPatchSize));
+                dst[offset++] = static_cast<float>(ox) / static_cast<float>(kSROutputPatchSize);
+                dst[offset++] = static_cast<float>(oy) / static_cast<float>(kSROutputPatchSize);
 
                 // Center color
-                mlpInput.push_back(center[0]);
-                mlpInput.push_back(center[1]);
-                mlpInput.push_back(center[2]);
+                dst[offset++] = center[0];
+                dst[offset++] = center[1];
+                dst[offset++] = center[2];
 
                 // Optional depth
                 if (m_config.useDepthInput && depthPatch)
                 {
-                    mlpInput.push_back(depthPatch[cy * kSRInputPatchSize + cx]);
+                    dst[offset++] = depthPatch[cy * kSRInputPatchSize + cx];
                 }
 
                 // Neighbor colors
                 for (const float* n : {left, right, up, down})
                 {
-                    mlpInput.push_back(n[0]);
-                    mlpInput.push_back(n[1]);
-                    mlpInput.push_back(n[2]);
+                    dst[offset++] = n[0];
+                    dst[offset++] = n[1];
+                    dst[offset++] = n[2];
                 }
-
-                float output[3];
-                engine.EvaluateCPU(m_mlpHandle, mlpInput.data(), output, 1);
-
-                uint32_t outIdx = (oy * kSROutputPatchSize + ox) * 3;
-                outputPatch[outIdx + 0] = output[0];
-                outputPatch[outIdx + 1] = output[1];
-                outputPatch[outIdx + 2] = output[2];
             }
         }
+
+        // Single batched inference call for all output pixels
+        engine.EvaluateCPU(m_mlpHandle, batchInput.data(), outputPatch, outPixels);
 
         m_patchesProcessed++;
     }
