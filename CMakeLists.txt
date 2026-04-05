@@ -1462,18 +1462,9 @@ if(SPARK_HEADLESS_SUPPORT)
     list(APPEND FEATURE_DEFINITIONS "SPARK_HEADLESS_SUPPORT")
 endif()
 
-# Crash reporting — GitHub Issue upload token (set at build time, not in source)
-# Usage: cmake -DSPARK_CRASH_GITHUB_REPO="owner/repo" -DSPARK_CRASH_GITHUB_TOKEN="ghp_xxx" ...
-set(SPARK_CRASH_GITHUB_REPO "" CACHE STRING "GitHub repo for crash report Issues (owner/repo)")
-set(SPARK_CRASH_GITHUB_TOKEN "" CACHE STRING "GitHub PAT for crash report Issues (fine-grained, issues-only)")
-if(SPARK_CRASH_GITHUB_REPO AND SPARK_CRASH_GITHUB_TOKEN)
-    list(APPEND FEATURE_DEFINITIONS
-        "SPARK_CRASH_GITHUB_REPO_DEFAULT=\"${SPARK_CRASH_GITHUB_REPO}\""
-        "SPARK_CRASH_GITHUB_TOKEN_DEFAULT=\"${SPARK_CRASH_GITHUB_TOKEN}\"")
-    message(STATUS "Crash reporting: GitHub Issues enabled for ${SPARK_CRASH_GITHUB_REPO}")
-else()
-    message(STATUS "Crash reporting: GitHub Issues disabled (set SPARK_CRASH_GITHUB_REPO and SPARK_CRASH_GITHUB_TOKEN to enable)")
-endif()
+
+
+
 
 if(ENABLE_SDL2)
     # Prefer the ThirdParty submodule target, then system SDL2, then pkg-config
