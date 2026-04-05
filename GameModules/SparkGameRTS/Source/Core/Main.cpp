@@ -163,7 +163,7 @@ bool SparkGameRTSModule::OnLoad(Spark::IEngineContext* context)
                                    {
                                        out.push_back(
                                            {"RTS.IdleWithTarget", static_cast<uint32_t>(entity),
-                                            "Idle unit has target assigned — should be attacking or clearing target",
+                                            "Idle unit has target assigned, should be attacking or clearing target",
                                             Spark::StateViolationSeverity::Warning});
                                    }
                                }
