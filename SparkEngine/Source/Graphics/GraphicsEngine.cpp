@@ -47,6 +47,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #endif
 #include "Shader.h"
 #include "RenderTarget.h"
+#include "GPUDrivenRenderer.h"
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
 
@@ -375,6 +376,20 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_gpuDebugMarkers.Initialize(m_context.Get());
     m_gpuTimestampQuery.Initialize(m_device.Get());
 
+    // Initialize GPU-driven renderer (Nanite-like culling pipeline)
+    if (m_settings.gpuDrivenRendering)
+    {
+        auto& gpuRenderer = Spark::Graphics::GPUDrivenRenderer::GetInstance();
+        if (gpuRenderer.Initialize(m_device.Get(), m_context.Get()))
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"GPUDrivenRenderer initialized", L"SUCCESS");
+        }
+        else
+        {
+            LOG_TO_CONSOLE_IMMEDIATE(L"GPUDrivenRenderer init failed — falling back to CPU draw", L"WARNING");
+        }
+    }
+
     // Initialize hybrid ray tracing system (SDFGI software fallback or hardware DXR)
 #ifdef SPARK_HYBRID_RT
     if (m_rhiBridge)
@@ -524,6 +539,16 @@ void GraphicsEngine::Shutdown()
         LOG_TO_CONSOLE_IMMEDIATE(L"VRAMBudgetMonitor shutdown complete", L"INFO");
     }
 
+    // Shutdown GPU-driven renderer
+    {
+        auto& gpuRenderer = Spark::Graphics::GPUDrivenRenderer::GetInstance();
+        if (gpuRenderer.IsInitialized())
+        {
+            gpuRenderer.Shutdown();
+            LOG_TO_CONSOLE_IMMEDIATE(L"GPUDrivenRenderer shutdown complete", L"INFO");
+        }
+    }
+
     // PhysicsSystem lifecycle is now managed by SparkEngine.cpp / EngineContext
     m_physicsSystem = nullptr;
 
@@ -596,6 +621,7 @@ void GraphicsEngine::Shutdown()
     m_gpuTimingQuery.Reset();
     m_wireframeRasterState.Reset();
     m_solidRasterState.Reset();
+    m_depthStencilSRV.Reset();
     m_depthStencilView.Reset();
     m_renderTargetView.Reset();
     m_swapChain.Reset();
@@ -648,6 +674,7 @@ void GraphicsEngine::ReleaseAllDeviceResources()
     m_solidRasterState.Reset();
 
     // Release core device resources
+    m_depthStencilSRV.Reset();
     m_depthStencilView.Reset();
     m_depthStencilTexture.Reset();
     m_renderTargetView.Reset();
@@ -766,6 +793,16 @@ void GraphicsEngine::BeginFrame()
         LOG_TO_CONSOLE_IMMEDIATE(L"Error: Invalid render targets in BeginFrame", L"ERROR");
         m_frameInProgress = false;
         return;
+    }
+
+    // Build HiZ mip chain from previous frame's depth (must run before clear)
+    if (m_settings.gpuDrivenRendering && m_depthStencilSRV)
+    {
+        auto& gpuRenderer = Spark::Graphics::GPUDrivenRenderer::GetInstance();
+        if (gpuRenderer.IsInitialized())
+        {
+            gpuRenderer.BeginFrame(m_depthStencilSRV.Get(), m_windowWidth, m_windowHeight);
+        }
     }
 
     // Clear render targets
@@ -927,8 +964,88 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
     if (localDrawList.empty())
         return;
 
-    // Sort by material to minimize state changes (material binds are expensive).
-    // Grouping draws by material reduces shader/texture rebinds significantly.
+    // GPU-driven culling: group draws by mesh and use indirect draw per batch.
+    // When enabled, instances sharing the same mesh are culled on the GPU via
+    // frustum + HiZ compute shaders, then drawn with DrawIndexedInstancedIndirect.
+    // Unique-mesh draws that can't batch fall through to the CPU path below.
+    if (m_settings.gpuDrivenRendering && m_assetPipeline)
+    {
+        auto& gpuRenderer = Spark::Graphics::GPUDrivenRenderer::GetInstance();
+        if (gpuRenderer.IsInitialized())
+        {
+            // Sort by mesh path to batch instances of the same mesh
+            std::sort(localDrawList.begin(), localDrawList.end(),
+                      [](const MeshDrawCommand& a, const MeshDrawCommand& b) { return a.meshPath < b.meshPath; });
+
+            SetBasicShaders();
+            size_t i = 0;
+            while (i < localDrawList.size())
+            {
+                // Find the range of commands sharing the same mesh
+                size_t batchStart = i;
+                std::string_view batchMesh = localDrawList[i].meshPath;
+                while (i < localDrawList.size() && localDrawList[i].meshPath == batchMesh)
+                    ++i;
+                uint32_t batchCount = static_cast<uint32_t>(i - batchStart);
+
+                // Look up the mesh asset for vertex/index buffers and AABB
+                auto meshAsset = m_assetPipeline->LoadMesh(std::string(batchMesh));
+                if (!meshAsset || !meshAsset->GetVertexBuffer() || !meshAsset->GetIndexBuffer())
+                    continue;
+
+                const auto& meshData = meshAsset->GetMeshData();
+                XMFLOAT3 bbMin = meshData.boundingBoxMin;
+                XMFLOAT3 bbMax = meshData.boundingBoxMax;
+
+                // Build per-instance AABBs by transforming the mesh AABB
+                std::vector<Spark::Graphics::GPUInstanceAABB> aabbs;
+                aabbs.reserve(batchCount);
+                for (size_t j = batchStart; j < batchStart + batchCount; ++j)
+                {
+                    XMMATRIX world = XMLoadFloat4x4(&localDrawList[j].worldMatrix);
+
+                    // Conservative AABB transform: project all 8 corners
+                    XMFLOAT3 corners[8] = {
+                        {bbMin.x, bbMin.y, bbMin.z}, {bbMax.x, bbMin.y, bbMin.z}, {bbMin.x, bbMax.y, bbMin.z},
+                        {bbMax.x, bbMax.y, bbMin.z}, {bbMin.x, bbMin.y, bbMax.z}, {bbMax.x, bbMin.y, bbMax.z},
+                        {bbMin.x, bbMax.y, bbMax.z}, {bbMax.x, bbMax.y, bbMax.z},
+                    };
+
+                    Spark::Graphics::GPUInstanceAABB aabb;
+                    aabb.minX = aabb.minY = aabb.minZ = FLT_MAX;
+                    aabb.maxX = aabb.maxY = aabb.maxZ = -FLT_MAX;
+                    for (const auto& c : corners)
+                    {
+                        XMVECTOR pt = XMVector3Transform(XMLoadFloat3(&c), world);
+                        XMFLOAT3 tp;
+                        XMStoreFloat3(&tp, pt);
+                        aabb.minX = std::min(aabb.minX, tp.x);
+                        aabb.minY = std::min(aabb.minY, tp.y);
+                        aabb.minZ = std::min(aabb.minZ, tp.z);
+                        aabb.maxX = std::max(aabb.maxX, tp.x);
+                        aabb.maxY = std::max(aabb.maxY, tp.y);
+                        aabb.maxZ = std::max(aabb.maxZ, tp.z);
+                    }
+                    aabbs.push_back(aabb);
+                }
+
+                // Bind material from first instance (batch shares mesh, material may vary)
+                m_assetPipeline->BindMaterial(std::string(localDrawList[batchStart].materialPath));
+
+                // GPU cull + indirect draw
+                ID3D11Buffer* vb = meshAsset->GetVertexBuffer();
+                ID3D11Buffer* ib = meshAsset->GetIndexBuffer();
+                uint32_t vertexStride = static_cast<uint32_t>(sizeof(MeshAssetData::Vertex));
+                gpuRenderer.CullAndDraw(aabbs.data(), batchCount, viewMatrix, projMatrix, ib, vb, vertexStride,
+                                        meshAsset->GetIndexCount());
+
+                m_statistics.drawCalls += gpuRenderer.GetVisibleCount();
+            }
+            return;
+        }
+    }
+
+    // CPU draw path: sort by material to minimize state changes
     std::sort(localDrawList.begin(), localDrawList.end(),
               [](const MeshDrawCommand& a, const MeshDrawCommand& b) { return a.materialPath < b.materialPath; });
 

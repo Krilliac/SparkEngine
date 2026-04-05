@@ -11,6 +11,7 @@
 #include "../Core/Platform.h"
 #include "GraphicsEngine.h"
 #include "../Utils/SparkConsole.h"
+#include "GPUDrivenRenderer.h"
 #ifdef SPARK_HYBRID_RT
 #include "HybridRT/HybridRTManager.h"
 #endif
@@ -395,6 +396,30 @@ namespace Spark::Graphics
             },
             "Enable/disable RT soft shadows");
 #endif // SPARK_HYBRID_RT
+
+        // ====================================================================
+        // GPU-Driven Rendering Console Commands
+        // ====================================================================
+
+        console.RegisterCommand(
+            "gpurender.status",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto& renderer = Spark::Graphics::GPUDrivenRenderer::GetInstance();
+                return renderer.Console_GetStatus();
+            },
+            "Display GPU-driven renderer status and culling statistics");
+
+        console.RegisterCommand(
+            "gpurender.toggle",
+            [&engine](const std::vector<std::string>&) -> std::string
+            {
+                auto settings = engine.GetGraphicsSettings();
+                settings.gpuDrivenRendering = !settings.gpuDrivenRendering;
+                engine.SetGraphicsSettings(settings);
+                return settings.gpuDrivenRendering ? "GPU-driven rendering enabled" : "GPU-driven rendering disabled";
+            },
+            "Toggle GPU-driven culling and indirect draw");
     }
 
 } // namespace Spark::Graphics
