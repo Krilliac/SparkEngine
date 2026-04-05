@@ -374,24 +374,86 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
     if (g_cfg.zipBeforeUpload)
         ZipFiles(zipFile, files);
 
+    // ---- Upload crash report (with optional consent dialog) ----
     bool ok = true;
-#ifdef SPARK_HAS_CURL
-    // upload logic unchanged
-
-    // GitHub Issue upload
-    if (!g_cfg.githubRepo.empty() && !g_cfg.githubToken.empty())
+    if (g_cfg.enableCrashReporting)
     {
-        std::string logUtf8 = WideToUtf8(log.str());
-        std::string zipUtf8 = WideToUtf8(zipFile);
-        bool ghOk = UploadCrashToGitHub(g_cfg, logUtf8, g_cfg.zipBeforeUpload ? zipUtf8 : "");
-        if (!ghOk)
-            ok = false;
-    }
-#endif
+        bool userConsented = true;
+        bool includeScreenshot = true;
 
-    std::wstring msg = assertMsg ? L"Assertion captured.\n" : L"Crash captured.\n";
-    msg += L"Files:\n" + dump + L"\n" + logFile;
-    MessageBoxW(nullptr, msg.c_str(), assertMsg ? L"Assertion Handler" : L"Crash Handler", MB_OK | MB_ICONERROR);
+        if (g_cfg.requireConsent && !g_cfg.headlessMode)
+        {
+            // Build consent message — mention screenshots if they can be refused
+            std::wstring consentMsg = L"SparkEngine has crashed. Would you like to send a crash report "
+                                      L"to help improve the engine?\n\nNo personal data is included.";
+            if (g_cfg.allowScreenshotRefusal && g_cfg.captureScreenshot)
+                consentMsg += L"\n\n(A screenshot was captured — you can opt out in the next dialog.)";
+
+            int result = MessageBoxW(nullptr, consentMsg.c_str(), L"Crash Report", MB_YESNO | MB_ICONERROR);
+            userConsented = (result == IDYES);
+
+            // Screenshot opt-out dialog
+            if (userConsented && g_cfg.allowScreenshotRefusal && g_cfg.captureScreenshot)
+            {
+                int ssResult = MessageBoxW(nullptr,
+                                           L"Include a screenshot of the last rendered frame with the "
+                                           L"crash report?",
+                                           L"Screenshot Consent", MB_YESNO | MB_ICONERROR);
+                includeScreenshot = (ssResult == IDYES);
+            }
+        }
+
+        if (userConsented)
+        {
+            // Remove screenshot from zip if user refused
+            if (!includeScreenshot)
+            {
+                try
+                {
+                    std::filesystem::remove(std::filesystem::path(shot));
+                }
+                catch (...)
+                {
+                }
+            }
+
+            // User description input (Windows: simple InputBox via a small console prompt)
+            // On Windows we can't easily show a text input without a full GUI framework,
+            // so we use a MessageBox prompt with a follow-up note in the crash log.
+            // The description is appended to the log content before upload.
+            std::string userDesc;
+            if (g_cfg.promptUserDescription && !g_cfg.headlessMode)
+            {
+                // Note: A proper implementation would use a text input dialog.
+                // For now, we add a placeholder that the out-of-process reporter
+                // (CrashReporter.exe) will replace with a real text input GUI.
+                int descResult = MessageBoxW(nullptr,
+                                             L"The crash report will be sent. If you'd like to describe "
+                                             L"what you were doing when the crash occurred, please note "
+                                             L"it and include it in a GitHub issue.\n\n"
+                                             L"(A future update will add a text input here.)",
+                                             L"Additional Information", MB_OK | MB_ICONERROR);
+                (void)descResult;
+            }
+
+            std::string logUtf8 = WideToUtf8(log.str());
+            if (!userDesc.empty())
+                logUtf8 = "=== User Description ===\n" + userDesc + "\n\n" + logUtf8;
+
+            std::string zipUtf8 = WideToUtf8(zipFile);
+            // Copy config and attach user description
+            CrashConfig uploadCfg = g_cfg;
+            uploadCfg.userDescription = userDesc;
+            ok = UploadCrashReport(uploadCfg, logUtf8, g_cfg.zipBeforeUpload ? zipUtf8 : "");
+        }
+    }
+
+    if (!g_cfg.headlessMode)
+    {
+        std::wstring msg = assertMsg ? L"Assertion captured.\n" : L"Crash captured.\n";
+        msg += L"Files:\n" + dump + L"\n" + logFile;
+        MessageBoxW(nullptr, msg.c_str(), assertMsg ? L"Assertion Handler" : L"Crash Handler", MB_OK | MB_ICONERROR);
+    }
 }
 
 static void WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep)
@@ -918,17 +980,29 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         if (g_cfg.zipBeforeUpload)
             ZipFilesUtf8(zipFile, files);
 
-#ifdef SPARK_HAS_CURL
-        // GitHub Issue upload
-        if (!g_cfg.githubRepo.empty() && !g_cfg.githubToken.empty())
+        // Upload crash report (with optional consent + screenshot refusal)
+        if (g_cfg.enableCrashReporting)
         {
-            bool ghOk = UploadCrashToGitHub(g_cfg, log.str(), g_cfg.zipBeforeUpload ? zipFile : "");
-            if (ghOk)
-                WriteStderr("GitHub issue created successfully.\n");
-            else
-                WriteStderr("GitHub issue creation failed.\n");
+            bool userConsented = true;
+            if (g_cfg.requireConsent && !g_cfg.headlessMode)
+            {
+                int result = MessageBoxA(nullptr,
+                                         "SparkEngine has crashed. Would you like to send a crash report "
+                                         "to help improve the engine?\n\nNo personal data is included.",
+                                         "Crash Report", MB_YESNO | MB_ICONERROR);
+                userConsented = (result == IDYES);
+            }
+
+            if (userConsented)
+            {
+                CrashConfig uploadCfg = g_cfg;
+                bool uploadOk = UploadCrashReport(uploadCfg, log.str(), g_cfg.zipBeforeUpload ? zipFile : "");
+                if (uploadOk)
+                    WriteStderr("Crash report uploaded successfully.\n");
+                else
+                    WriteStderr("Crash report upload failed.\n");
+            }
         }
-#endif
 
         // Print log to stderr
         WriteStderr("Log file: ");

@@ -268,6 +268,44 @@ inline void OutputDebugStringW(const wchar_t*) {}
 #ifndef MB_YESNO
 #define MB_YESNO 0x04
 #endif
+#ifndef IDYES
+#define IDYES 6
+#endif
+#ifndef IDNO
+#define IDNO 7
+#endif
+#ifndef IDOK
+#define IDOK 1
+#endif
+
+// Internal helper for SDL2 MessageBox with Yes/No buttons
+#ifdef SPARK_SDL2_AVAILABLE
+inline int SparkSDL2MessageBox(Uint32 flags, const char* caption, const char* text, unsigned int type)
+{
+    if (type & MB_YESNO)
+    {
+        // Use SDL_ShowMessageBox for Yes/No button support
+        SDL_MessageBoxButtonData buttons[2] = {
+            {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, IDNO, "No"},
+            {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, IDYES, "Yes"},
+        };
+        SDL_MessageBoxData data{};
+        data.flags = flags;
+        data.window = nullptr;
+        data.title = caption;
+        data.message = text;
+        data.numbuttons = 2;
+        data.buttons = buttons;
+        int buttonId = IDNO;
+        if (SDL_ShowMessageBox(&data, &buttonId) < 0)
+            return IDNO; // SDL error — treat as "No"
+        return buttonId;
+    }
+    SDL_ShowSimpleMessageBox(flags, caption, text, nullptr);
+    return IDOK;
+}
+#endif
+
 inline int MessageBoxW(void*, const wchar_t* text, const wchar_t* caption, unsigned int type)
 {
 #ifdef SPARK_SDL2_AVAILABLE
@@ -289,7 +327,7 @@ inline int MessageBoxW(void*, const wchar_t* text, const wchar_t* caption, unsig
     if (type & MB_ICONERROR)
         flags = SDL_MESSAGEBOX_ERROR;
 
-    SDL_ShowSimpleMessageBox(flags, captionBuf, textBuf, nullptr);
+    return SparkSDL2MessageBox(flags, captionBuf, textBuf, type);
 #else
     (void)text;
     (void)caption;
@@ -303,7 +341,7 @@ inline int MessageBoxA(void*, const char* text, const char* caption, unsigned in
     Uint32 flags = SDL_MESSAGEBOX_INFORMATION;
     if (type & MB_ICONERROR)
         flags = SDL_MESSAGEBOX_ERROR;
-    SDL_ShowSimpleMessageBox(flags, caption ? caption : "", text ? text : "", nullptr);
+    return SparkSDL2MessageBox(flags, caption ? caption : "", text ? text : "", type);
 #else
     (void)text;
     (void)caption;

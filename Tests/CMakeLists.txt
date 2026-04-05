@@ -306,6 +306,8 @@ add_executable(SparkTests
     TestSparkGameRTS.cpp
     TestSparkGameRacing.cpp
     TestSparkGamePlatformer.cpp
+    # Crash reporting
+    TestCrashReportUploader.cpp
     # Security
     TestMemoryIntegrity.cpp
     # Editor sources needed by TestCollaborativeEditing
