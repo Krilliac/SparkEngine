@@ -203,8 +203,7 @@ TEST(CSGSystem_UnionCombinesFaces)
     auto result = csg.Union(*a, *b);
 
     // Union should at least return a valid solid (faces may vary by implementation)
-    EXPECT_TRUE(result.operation == Spark::LevelDesign::CSGOperation::Additive ||
-                result.faces.size() >= 0);
+    EXPECT_TRUE(result.operation == Spark::LevelDesign::CSGOperation::Additive);
 
     csg.ClearAll();
 }
@@ -400,14 +399,14 @@ TEST(Reflection_TypeRegistryCount)
     auto& reg = Spark::TypeRegistry::Get();
     // Registry exists and has some count (may be zero or populated by static init)
     size_t count = reg.GetTypeCount();
-    EXPECT_TRUE(count >= 0); // Always true, but confirms no crash
+    (void)count; // confirms no crash
 }
 
 TEST(Reflection_ComponentFactoryCount)
 {
     auto& factory = Spark::ComponentFactory::Get();
     size_t count = factory.GetRegisteredCount();
-    EXPECT_TRUE(count >= 0);
+    (void)count; // confirms no crash
 }
 
 TEST(Reflection_ComponentFactoryGetNames)

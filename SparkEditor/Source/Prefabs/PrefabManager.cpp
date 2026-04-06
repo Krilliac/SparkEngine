@@ -10,6 +10,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
+#include <cinttypes>
 #include <filesystem>
 #include <iostream>
 #include <set>
@@ -79,7 +80,7 @@ namespace SparkEditor
         }
 
         m_prefabs[prefabName] = std::move(prefab);
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created prefab from entity %llu: '%s'", entityId,
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created prefab from entity %" PRIu64 ": '%s'", entityId,
                        prefabName.c_str());
         NotifyPrefabsChanged();
         return &m_prefabs[prefabName];

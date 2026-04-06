@@ -254,7 +254,7 @@ namespace Spark::AI
             from.y += 0.1f;
             to.y += 0.1f;
 
-            DebugColor segColor = (i < currentIndex) ? visitedColor : pathColor;
+            [[maybe_unused]] DebugColor segColor = (i < currentIndex) ? visitedColor : pathColor;
             DEBUG_DRAW_LINE(from, to, segColor);
         }
 
@@ -263,7 +263,7 @@ namespace Spark::AI
             XMFLOAT3 pos = path[i].position;
             pos.y += 0.1f;
 
-            DebugColor color = (i == currentIndex) ? activeColor : pathColor;
+            [[maybe_unused]] DebugColor color = (i == currentIndex) ? activeColor : pathColor;
             float size = (i == currentIndex) ? 0.3f : 0.15f;
             DEBUG_DRAW_SPHERE(pos, size, color);
         }
