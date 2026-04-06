@@ -11,6 +11,7 @@
  * rendering.
  */
 
+#include "Contracts.h"
 #include "Platform.h"
 
 #include <cstdint>

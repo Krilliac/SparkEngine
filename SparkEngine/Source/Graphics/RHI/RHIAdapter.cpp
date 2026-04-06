@@ -6,6 +6,7 @@
  */
 
 #include "RHIAdapter.h"
+#include "../../Core/Contracts.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
@@ -27,6 +28,7 @@ namespace Spark::RHI
 
     bool RHIAdapter::Initialize(IRHIDevice* device)
     {
+        SPARK_EXPECTS(device != nullptr);
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
         SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
         if (!device)

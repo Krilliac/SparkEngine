@@ -4,6 +4,7 @@
  */
 
 #include "Sequencer.h"
+#include "../../Core/SafeCast.h"
 #include "../../Utils/LogMacros.h"
 
 #include <sstream>
@@ -559,7 +560,7 @@ namespace Spark::Cinematic
 
             if (track->GetType() == TrackType::Event && m_eventCallback)
             {
-                auto* eventTrack = static_cast<EventTrack*>(track.get());
+                auto* eventTrack = Spark::CheckedCast<EventTrack*>(track.get());
                 auto triggered = eventTrack->GetTriggeredCues(m_previousTime, m_currentTime);
                 for (const auto* cue : triggered)
                     m_eventCallback(cue->eventName, cue->parameters);
@@ -574,7 +575,7 @@ namespace Spark::Cinematic
                 continue;
             if (track->GetType() == TrackType::CameraPath)
             {
-                auto* camTrack = static_cast<CameraPathTrack*>(track.get());
+                auto* camTrack = Spark::CheckedCast<CameraPathTrack*>(track.get());
                 if (!camTrack->GetKeyframes().empty())
                 {
                     m_cachedCamera = camTrack->Evaluate(m_currentTime);
@@ -627,7 +628,7 @@ namespace Spark::Cinematic
         {
             if (!track->enabled || track->GetType() != TrackType::Subtitle)
                 continue;
-            auto* subTrack = static_cast<SubtitleTrack*>(track.get());
+            auto* subTrack = Spark::CheckedCast<SubtitleTrack*>(track.get());
             const SubtitleCue* active = subTrack->GetActiveSubtitle(m_currentTime);
             if (active)
                 return active;
@@ -641,7 +642,7 @@ namespace Spark::Cinematic
         {
             if (!track->enabled || track->GetType() != TrackType::Fade)
                 continue;
-            auto* fadeTrack = static_cast<FadeTrack*>(track.get());
+            auto* fadeTrack = Spark::CheckedCast<FadeTrack*>(track.get());
             return fadeTrack->Evaluate(m_currentTime);
         }
         return {0.0f, 0.0f, {0, 0, 0}, InterpolationMode::Linear};

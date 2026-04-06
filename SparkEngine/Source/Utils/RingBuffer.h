@@ -25,6 +25,8 @@
 
 #pragma once
 
+#include "Core/Contracts.h"
+
 #include <cstddef>
 #include <vector>
 #include <stdexcept>
@@ -60,12 +62,14 @@ namespace Spark
         /// Access by reverse index: 0 = most recent, 1 = second most recent, etc.
         const T& operator[](size_t index) const
         {
+            SPARK_EXPECTS(index < m_count);
             size_t i = (m_head + N - 1 - index) % N;
             return m_data[i];
         }
 
         T& operator[](size_t index)
         {
+            SPARK_EXPECTS(index < m_count);
             size_t i = (m_head + N - 1 - index) % N;
             return m_data[i];
         }

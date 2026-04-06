@@ -5,6 +5,7 @@
 
 #include "SplinePath.h"
 #include "../Core/Platform.h"
+#include "../Core/SafeCast.h"
 #include "SplineMath.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
@@ -36,7 +37,7 @@ void SplinePath::AddPoint(const XMFLOAT3& point)
 
 void SplinePath::InsertPoint(int index, const XMFLOAT3& point)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index <= static_cast<int>(m_points.size()),
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index <= Spark::NarrowCast<int>(m_points.size()),
                       "InsertPoint index out of range");
     m_points.insert(m_points.begin() + index, point);
     MarkDirty();
@@ -44,7 +45,7 @@ void SplinePath::InsertPoint(int index, const XMFLOAT3& point)
 
 void SplinePath::RemovePoint(int index)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < static_cast<int>(m_points.size()),
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < Spark::NarrowCast<int>(m_points.size()),
                       "RemovePoint index out of range");
     m_points.erase(m_points.begin() + index);
     MarkDirty();
@@ -52,7 +53,7 @@ void SplinePath::RemovePoint(int index)
 
 void SplinePath::SetPoint(int index, const XMFLOAT3& point)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < static_cast<int>(m_points.size()),
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < Spark::NarrowCast<int>(m_points.size()),
                       "SetPoint index out of range");
     m_points[index] = point;
     MarkDirty();
@@ -60,14 +61,14 @@ void SplinePath::SetPoint(int index, const XMFLOAT3& point)
 
 const XMFLOAT3& SplinePath::GetPoint(int index) const
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < static_cast<int>(m_points.size()),
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Core, index >= 0 && index < Spark::NarrowCast<int>(m_points.size()),
                       "GetPoint index out of range");
     return m_points[index];
 }
 
 int SplinePath::GetPointCount() const
 {
-    return static_cast<int>(m_points.size());
+    return Spark::NarrowCast<int>(m_points.size());
 }
 
 void SplinePath::ClearPoints()
@@ -118,7 +119,7 @@ void SplinePath::SetClosed(bool closed)
 
 int SplinePath::GetSegmentCount() const
 {
-    int count = static_cast<int>(m_points.size());
+    int count = Spark::NarrowCast<int>(m_points.size());
     if (count < 2)
         return 0;
 
@@ -160,7 +161,7 @@ void SplinePath::GetSegmentAndLocalT(float globalT, int& outSegment, float& outL
 
 void SplinePath::GetCatmullRomControlPoints(int segment, XMFLOAT3& p0, XMFLOAT3& p1, XMFLOAT3& p2, XMFLOAT3& p3) const
 {
-    int count = static_cast<int>(m_points.size());
+    int count = Spark::NarrowCast<int>(m_points.size());
 
     if (m_closed)
     {
@@ -192,7 +193,7 @@ void SplinePath::GetCatmullRomControlPoints(int segment, XMFLOAT3& p0, XMFLOAT3&
 
 XMFLOAT3 SplinePath::Evaluate(float t) const
 {
-    int count = static_cast<int>(m_points.size());
+    int count = Spark::NarrowCast<int>(m_points.size());
     if (count == 0)
     {
         SPARK_LOG_WARN(Spark::LogCategory::Core, "SplinePath::Evaluate: No points defined, returning zero");
@@ -231,7 +232,7 @@ XMFLOAT3 SplinePath::Evaluate(float t) const
 
 XMFLOAT3 SplinePath::EvaluateTangent(float t) const
 {
-    int count = static_cast<int>(m_points.size());
+    int count = Spark::NarrowCast<int>(m_points.size());
     if (count < 2)
     {
         SPARK_LOG_WARN(Spark::LogCategory::Core, "SplinePath::EvaluateTangent: Need at least 2 points, have %d", count);

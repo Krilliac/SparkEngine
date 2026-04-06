@@ -417,7 +417,7 @@ SparkEngine/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
 |-- docs/                    # Doxygen docs, wiki, API reference
-|-- wiki/                    # 116 wiki pages covering all subsystems
+|-- wiki/                    # 117 wiki pages covering all subsystems
 |-- cmake/                   # CMake utility modules
 |-- .github/
 |   |-- workflows/          # CI/CD (build + release)

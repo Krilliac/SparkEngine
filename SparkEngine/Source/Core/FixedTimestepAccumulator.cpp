@@ -4,6 +4,7 @@
  */
 
 #include "FixedTimestepAccumulator.h"
+#include "Contracts.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
@@ -20,6 +21,7 @@ namespace Spark
 
     bool FixedTimestepAccumulator::Initialize(float fixedDt)
     {
+        SPARK_EXPECTS(fixedDt > 0.0f);
         if (fixedDt <= 0.0f)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "FixedTimestepAccumulator::Initialize failed: invalid dt %.4f",
@@ -38,6 +40,7 @@ namespace Spark
 
     void FixedTimestepAccumulator::SetFixedTimestep(float dt)
     {
+        SPARK_EXPECTS(dt > 0.0f);
         if (dt > 0.0f)
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Fixed timestep changed: %.4fs -> %.4fs", m_fixedDt, dt);
@@ -56,6 +59,7 @@ namespace Spark
 
     void FixedTimestepAccumulator::Advance(float frameDt)
     {
+        SPARK_EXPECTS(frameDt >= 0.0f);
         // Clamp to prevent spiral-of-death on long frames (e.g. breakpoint, loading)
         float clampedDt = std::min(frameDt, MAX_FRAME_DT);
         m_accumulator += clampedDt;

@@ -38,6 +38,30 @@ Evaluated whether SparkEngine should wait for C++26 memory safety features or bu
 - SPARK_EXPECTS on EngineContext::RegisterSystem() (null check)
 - SPARK_EXPECTS on FrameAllocator::AllocRaw() (alignment power-of-2 check)
 
+## Codebase Integration (Phase 2)
+
+Contracts, NonNull, and SafeCast are wired in across 15+ files:
+
+**Contracts (SPARK_EXPECTS):**
+- FixedTimestepAccumulator (Initialize, SetFixedTimestep, Advance)
+- ModuleManager (LoadModule, InitializeAll, ResizeAll)
+- EngineContext (RegisterSystem), FrameAllocator (AllocRaw)
+- ObjectPool (constructor), RingBuffer (operator[])
+- ConstantBufferRing (Initialize), RHIAdapter (Initialize)
+- MaterialSystem (Initialize)
+
+**NonNull<T*>:**
+- ECSystems.h: RenderSystem, PhysicsUpdateSystem, AudioUpdateSystem constructors
+
+**CheckedCast:**
+- MovementSystem.cpp: 10 generator downcasts
+- Sequencer.cpp: 4 track downcasts
+
+**NarrowCast:**
+- SplinePath.cpp: 9 size_t→int conversions
+
+**Wiki:** wiki/Memory-Safety.md (comprehensive, linked from sidebar and Memory-Management-Patterns.md)
+
 ## Known Gaps (Not Addressed — By Design)
 
 - **Borrow checker/lifetime tracker** — poor C++ fit, wait for C++26 Profiles
