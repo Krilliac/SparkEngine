@@ -40,13 +40,15 @@ jobs:
 
     - name: Check formatting
       run: |
-        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+        VIOLATIONS=$(find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-          xargs clang-format --dry-run --Werror 2>&1 || {
-            echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
-            exit 1
-          }
+          xargs clang-format --dry-run --Werror 2>&1 | grep -v "does not support Objective-C" || true)
+        if [ -n "$VIOLATIONS" ]; then
+          echo "$VIOLATIONS"
+          echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
+          exit 1
+        fi
 
   # ===========================================================================
   # Prompt System Validation — anti-drift, overload prevention, stale detection
