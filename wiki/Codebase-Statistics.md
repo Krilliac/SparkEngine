@@ -8,24 +8,24 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 261074 |
+| **SparkEngine/Source** | 261079 |
 | **SparkEditor/Source** | 85303 |
-| **GameModules** | 57841 |
-| **Tests** | 104329 |
+| **GameModules** | 57813 |
+| **Tests** | 104671 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~510938** |
+| **Total C++ (excl. ThirdParty)** | **~511257** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hpp) | 740 |
-| Implementation files (.cpp) | 844 |
+| Implementation files (.cpp) | 845 |
 | HLSL shader files | 38 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 338 |
+| Test files (.cpp) | 339 |
 | Wiki pages (.md) | 117 |
 
 ### Code Density
@@ -44,7 +44,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |-----------|------:|:----------:|
 | Graphics | 100686 | 38.5% |
 | Engine (all subsystems) | 79696 | 30.5% |
-| Utils | 36271 | 13.8% |
+| Utils | 36276 | 13.8% |
 | Core | 19367 | 7.4% |
 | Physics | 10101 | 3.8% |
 | Audio | 5548 | 2.1% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 338 |
-| TEST() definitions | 4290 |
+| Test files | 339 |
+| TEST() definitions | 4312 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
