@@ -332,15 +332,24 @@ add_executable(SparkTests
     TestNetworkDebugPanel.cpp
     TestContracts.cpp
     TestSafetyCoreUtils.cpp
-    # Editor sources needed by TestCollaborativeEditing
+    # Comprehensive subsystem coverage
+    TestGraphicsSubsystems.cpp
+    TestEditorSubsystems.cpp
+    TestCoreAndBuildSystems.cpp
+    TestOpenWorldModule.cpp
+    # Editor sources needed by tests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Workflow/EditorWorkflow.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Prototyping/PrototypingSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UIDesigner/UIDesignerSystem.cpp"
 )
 
 target_include_directories(SparkTests PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source"
     "${CMAKE_SOURCE_DIR}/ThirdParty"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source"
 )
 
 # Link engine static library so tests can call .cpp-backed implementations

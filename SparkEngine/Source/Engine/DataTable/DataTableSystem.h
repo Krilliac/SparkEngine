@@ -355,7 +355,7 @@ namespace Spark::Data
                     {
                         try
                         {
-                            std::stoi(v);
+                            (void)std::stoi(v);
                         }
                         catch (...)
                         {
@@ -368,7 +368,7 @@ namespace Spark::Data
                     {
                         try
                         {
-                            std::stof(v);
+                            (void)std::stof(v);
                         }
                         catch (...)
                         {
@@ -497,7 +497,7 @@ namespace Spark::Data
                     try
                     {
                         size_t p = 0;
-                        std::stoi(v, &p);
+                        (void)std::stoi(v, &p);
                         if (p != v.size())
                             aI = false;
                     }
@@ -511,7 +511,7 @@ namespace Spark::Data
                     try
                     {
                         size_t p = 0;
-                        std::stof(v, &p);
+                        (void)std::stof(v, &p);
                         if (p != v.size())
                             aF = false;
                     }
@@ -626,7 +626,7 @@ namespace Spark::Data
                     try
                     {
                         size_t p = 0;
-                        std::stoi(v, &p);
+                        (void)std::stoi(v, &p);
                         if (p != v.size())
                             aI = false;
                     }
@@ -640,7 +640,7 @@ namespace Spark::Data
                     try
                     {
                         size_t p = 0;
-                        std::stof(v, &p);
+                        (void)std::stof(v, &p);
                         if (p != v.size())
                             aF = false;
                     }
