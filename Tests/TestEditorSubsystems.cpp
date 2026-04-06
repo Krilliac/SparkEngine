@@ -15,6 +15,10 @@
 #include "../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h"
 #include "../SparkEditor/Source/VersionControl/VersionControlTypes.h"
 // Note: CommandPalette excluded — its .cpp requires ImGui
+#include "../SparkEditor/Source/Core/EditorLogger.h"
+#include "../SparkEditor/Source/Core/EditorCrashHandler.h"
+#include "../SparkEditor/Source/Core/ProjectManager.h"
+#include "../SparkEditor/Source/Core/EditorPluginManager.h"
 #include <cmath>
 
 using namespace SparkEditor;
@@ -528,6 +532,255 @@ TEST(VCS_OperationResultDefaults)
     EXPECT_EQ(result.exitCode, 0);
     EXPECT_NEAR(result.duration, 0.0f, 0.01f);
     EXPECT_TRUE(result.warnings.empty());
+}
+
+// ============================================================================
+// EditorLogger Tests
+// ============================================================================
+
+TEST(EditorLogger_LogAndGetMemoryLogs)
+{
+    auto& logger = EditorLogger::GetInstance();
+    logger.Initialize("TestLogs");
+    logger.Clear();
+
+    logger.Log(LogLevel::INFO, "General", "Message 1");
+    logger.Log(LogLevel::INFO, "General", "Message 2");
+    logger.Log(LogLevel::INFO, "General", "Message 3");
+
+    auto& logs = logger.GetMemoryLogs();
+    EXPECT_TRUE(logs.size() >= 3);
+    logger.Shutdown();
+}
+
+TEST(EditorLogger_SetCategoryEnabled)
+{
+    auto& logger = EditorLogger::GetInstance();
+    logger.Initialize("TestLogs");
+
+    logger.SetCategoryEnabled("Rendering", false);
+    EXPECT_FALSE(logger.IsCategoryEnabled("Rendering"));
+
+    logger.SetCategoryEnabled("Rendering", true);
+    EXPECT_TRUE(logger.IsCategoryEnabled("Rendering"));
+    logger.Shutdown();
+}
+
+TEST(EditorLogger_GetStatistics)
+{
+    auto& logger = EditorLogger::GetInstance();
+    logger.Initialize("TestLogs");
+    logger.Clear();
+
+    logger.Log(LogLevel::INFO, "General", "stat test 1");
+    logger.Log(LogLevel::WARNING, "General", "stat test 2");
+
+    LogStatistics stats = logger.GetStatistics();
+    EXPECT_TRUE(stats.stats.totalEntries >= 2);
+    logger.Shutdown();
+}
+
+TEST(EditorLogger_MultipleCategories)
+{
+    auto& logger = EditorLogger::GetInstance();
+    logger.Initialize("TestLogs");
+    logger.Clear();
+
+    logger.Log(LogLevel::INFO, "Asset", "asset msg");
+    logger.Log(LogLevel::INFO, "Rendering", "render msg");
+    logger.Log(LogLevel::INFO, "Physics", "physics msg");
+
+    LogStatistics stats = logger.GetStatistics();
+    EXPECT_TRUE(stats.stats.entriesByCategory.size() >= 3);
+    logger.Shutdown();
+}
+
+TEST(EditorLogger_ExportLogs)
+{
+    auto& logger = EditorLogger::GetInstance();
+    logger.Initialize("TestLogs");
+    logger.Clear();
+
+    logger.Log(LogLevel::INFO, "General", "export test");
+    bool result = logger.ExportLogs("TestLogs/test_export.log", nullptr);
+    EXPECT_TRUE(result);
+    logger.Shutdown();
+}
+
+TEST(EditorLogger_LogLevels)
+{
+    auto& logger = EditorLogger::GetInstance();
+    logger.Initialize("TestLogs");
+    logger.Clear();
+
+    logger.Log(LogLevel::INFO, "General", "info msg");
+    logger.Log(LogLevel::WARNING, "General", "warn msg");
+    logger.Log(LogLevel::ERROR_, "General", "error msg");
+
+    LogStatistics stats = logger.GetStatistics();
+    EXPECT_TRUE(stats.stats.totalEntries >= 3);
+    logger.Shutdown();
+}
+
+// ============================================================================
+// EditorCrashHandler Tests
+// ============================================================================
+
+TEST(CrashHandler_Initialize)
+{
+    auto& handler = EditorCrashHandler::GetInstance();
+    bool ok = handler.Initialize("TestCrashes");
+    EXPECT_TRUE(ok);
+    handler.Shutdown();
+}
+
+TEST(CrashHandler_RecordOperation)
+{
+    auto& handler = EditorCrashHandler::GetInstance();
+    handler.Initialize("TestCrashes");
+
+    handler.RecordOperation("OpenScene");
+    handler.RecordOperation("PlaceActor");
+    handler.RecordOperation("SaveScene");
+    // No crash — just verifying it doesn't throw
+    EXPECT_TRUE(true);
+    handler.Shutdown();
+}
+
+TEST(CrashHandler_SaveAndHasRecoveryData)
+{
+    auto& handler = EditorCrashHandler::GetInstance();
+    handler.Initialize("TestCrashes");
+
+    handler.SetRecoveryCallback(
+        []() -> RecoveryData
+        {
+            RecoveryData data;
+            data.currentProject = "TestProject";
+            data.openFiles.push_back("scene.spark");
+            return data;
+        });
+
+    bool saved = handler.SaveRecoveryData();
+    EXPECT_TRUE(saved);
+    EXPECT_TRUE(handler.HasRecoveryData());
+    handler.Shutdown();
+}
+
+TEST(CrashHandler_ClearRecoveryData)
+{
+    auto& handler = EditorCrashHandler::GetInstance();
+    handler.Initialize("TestCrashes");
+
+    handler.SetRecoveryCallback(
+        []() -> RecoveryData
+        {
+            RecoveryData data;
+            data.currentProject = "ClearTest";
+            return data;
+        });
+
+    handler.SaveRecoveryData();
+    handler.ClearRecoveryData();
+    EXPECT_FALSE(handler.HasRecoveryData());
+    handler.Shutdown();
+}
+
+TEST(CrashHandler_GetStats)
+{
+    auto& handler = EditorCrashHandler::GetInstance();
+    handler.Initialize("TestCrashes");
+
+    auto stats = handler.GetStats();
+    EXPECT_EQ(stats.totalCrashes, 0);
+    EXPECT_EQ(stats.assertionFailures, 0);
+    EXPECT_EQ(stats.accessViolations, 0);
+    handler.Shutdown();
+}
+
+// ============================================================================
+// ProjectManager Tests
+// ============================================================================
+
+TEST(ProjectManager_TemplateName)
+{
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::Empty).empty());
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::FirstPerson).empty());
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::ThirdPerson).empty());
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::TopDown).empty());
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::Blank3D).empty());
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::MMO).empty());
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::Platformer).empty());
+    EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::RPG).empty());
+}
+
+TEST(ProjectManager_Initialize)
+{
+    ProjectManager pm;
+    bool ok = pm.Initialize();
+    EXPECT_TRUE(ok);
+    pm.Shutdown();
+}
+
+TEST(ProjectManager_NoOpenProject)
+{
+    ProjectManager pm;
+    pm.Initialize();
+    EXPECT_FALSE(pm.HasOpenProject());
+    pm.Shutdown();
+}
+
+TEST(ProjectManager_PathHelpers)
+{
+    ProjectManager pm;
+    pm.Initialize();
+
+    std::string assets = pm.GetProjectAssetsPath();
+    std::string scenes = pm.GetProjectScenesPath();
+    std::string scripts = pm.GetProjectScriptsPath();
+    std::string config = pm.GetProjectConfigPath();
+    // Path helpers return strings (may be empty with no project open)
+    (void)assets;
+    (void)scenes;
+    (void)scripts;
+    (void)config;
+    EXPECT_TRUE(true);
+    pm.Shutdown();
+}
+
+TEST(ProjectManager_RecentProjects)
+{
+    ProjectManager pm;
+    pm.Initialize();
+
+    auto recent = pm.GetRecentProjects();
+    // May be empty — just verify it returns without crashing
+    EXPECT_TRUE(recent.size() >= 0);
+    pm.Shutdown();
+}
+
+// ============================================================================
+// EditorPluginManager Tests
+// ============================================================================
+
+TEST(PluginManager_InitialState)
+{
+    EditorPluginManager mgr;
+    EXPECT_EQ(mgr.GetPluginCount(), 0u);
+}
+
+TEST(PluginManager_GetPluginNames)
+{
+    EditorPluginManager mgr;
+    auto names = mgr.GetPluginNames();
+    EXPECT_TRUE(names.empty());
+}
+
+TEST(PluginManager_GetPluginNull)
+{
+    EditorPluginManager mgr;
+    IEditorPlugin* plugin = mgr.GetPlugin("NonExistent");
+    EXPECT_TRUE(plugin == nullptr);
 }
 
 // ============================================================================

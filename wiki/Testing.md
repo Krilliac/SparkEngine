@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*326 test files, 4154+ test cases*
+*331 test files, 4261+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -614,7 +614,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorAutomation` | 9 |
 | `TestEditorCommands` | 8 |
 | `TestEditorLayoutManager` | 3 |
-| `TestEditorSubsystems` | 64 |
+| `TestEditorSubsystems` | 83 |
 | `TestEditorWindowManager` | 7 |
 | `TestEngineContext` | 18 |
 | `TestEngineDiagnostics` | 4 |
@@ -653,6 +653,11 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGPUResourceLeakDetector` | 0 |
 | `TestGPUSkinning` | 9 |
 | `TestGameMode` | 5 |
+| `TestGameModuleMMO` | 23 |
+| `TestGameModulePlatformerARPG` | 0 |
+| `TestGameModuleRPG` | 26 |
+| `TestGameModuleRTS` | 24 |
+| `TestGameModuleRacing` | 15 |
 | `TestGameObjectTransforms` | 24 |
 | `TestGamePackager` | 10 |
 | `TestGamepadInputProcessing` | 23 |

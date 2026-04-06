@@ -337,6 +337,16 @@ add_executable(SparkTests
     TestEditorSubsystems.cpp
     TestCoreAndBuildSystems.cpp
     TestOpenWorldModule.cpp
+    TestGameModuleRTS.cpp
+    TestGameModuleMMO.cpp
+    TestGameModuleRPG.cpp
+    TestGameModuleRacing.cpp
+    TestGameModulePlatformerARPG.cpp
+    # Editor core sources (no ImGui dependency)
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
     # Editor sources needed by tests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
@@ -350,10 +360,23 @@ target_include_directories(SparkTests PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source"
     "${CMAKE_SOURCE_DIR}/ThirdParty"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source"
 )
 
 # Link engine static library so tests can call .cpp-backed implementations
 target_link_libraries(SparkTests PRIVATE SparkEngineLib)
+
+# Editor version defines needed by ProjectManager.cpp
+target_compile_definitions(SparkTests PRIVATE
+    EDITOR_VERSION_MAJOR=1
+    EDITOR_VERSION_MINOR=0
+    EDITOR_VERSION_PATCH=0
+)
 
 # Link with EnTT (header-only)
 if(EXISTS "${CMAKE_SOURCE_DIR}/ThirdParty/ECS/entt")
@@ -381,18 +404,6 @@ if(TARGET imgui)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_IMGUI)
     target_link_libraries(SparkTests PRIVATE imgui)
 
-    # Editor sources that require ImGui
-    target_sources(SparkTests PRIVATE
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Search/CommandPalette.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlSystem.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlConflicts.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlGitOps.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlHelpers.cpp"
-        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlRender.cpp"
-    )
-
     # OpenWorld module sources (all use ImGui for RenderDebugUI)
     target_sources(SparkTests PRIVATE
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Player/OWPlayerSystem.cpp"
@@ -405,7 +416,66 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp"
     )
 
-    message(STATUS "[Tests] ImGui available — gated editor & OpenWorld tests enabled")
+    # RTS module sources (all use ImGui for RenderDebugUI)
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Unit/RTSUnitSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
+    )
+
+    # MMO module sources
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
+    )
+
+    # RPG module sources
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Character/RPGCharacterSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Combat/RPGCombatSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Quest/RPGQuestSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
+    )
+
+    # Racing module sources
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Track/RacingTrackSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Race/RacingRaceManager.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp"
+    )
+
+    # Platformer module sources
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
+    )
+
+    # ARPG module sources
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Hero/ARPGHeroSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp"
+    )
+
+    # Editor sources that require ImGui
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Search/CommandPalette.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlConflicts.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlGitOps.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlHelpers.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlRender.cpp"
+    )
+
+    message(STATUS "[Tests] ImGui available — gated editor + 6 game module tests enabled")
 else()
     message(STATUS "[Tests] ImGui not available — gated editor & OpenWorld tests disabled")
 endif()
