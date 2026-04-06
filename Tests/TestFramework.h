@@ -5,6 +5,9 @@
  * Simple test framework without external dependencies.
  * Include this header in all test files, and include TestMain.cpp
  * in the build to get the main runner.
+ *
+ * Registration uses an intrusive linked list with const char* and function
+ * pointers — zero heap allocations at static-init time.
  */
 
 #pragma once
@@ -15,6 +18,7 @@
 #include <functional>
 #include <cstdlib>
 #include <cmath>
+#include <algorithm>
 #include <exception>
 
 // ============================================================================
@@ -23,23 +27,48 @@
 
 struct TestCase
 {
-    std::string name;
-    std::string file;
+    const char* name;
+    const char* file;
     int line;
-    std::function<void()> func;
+    void (*func)();
+    TestCase* next = nullptr;
 };
 
-inline std::vector<TestCase>& GetTestRegistry()
+// Intrusive linked-list head — O(1) registration, no heap allocation
+inline TestCase*& GetTestListHead()
 {
-    static std::vector<TestCase> tests;
+    static TestCase* head = nullptr;
+    return head;
+}
+
+// Build a flat vector from the linked list on first call (once, from main).
+// The linked list is LIFO, so we reverse to get registration order.
+inline std::vector<TestCase*>& GetTestRegistry()
+{
+    static std::vector<TestCase*> tests;
+    static bool built = false;
+    if (!built)
+    {
+        built = true;
+        for (TestCase* p = GetTestListHead(); p; p = p->next)
+            tests.push_back(p);
+        std::reverse(tests.begin(), tests.end());
+    }
     return tests;
 }
 
 struct TestRegistrar
 {
-    TestRegistrar(const char* name, const char* file, int line, std::function<void()> func)
+    TestCase entry;
+
+    TestRegistrar(const char* name, const char* file, int line, void (*func)())
     {
-        GetTestRegistry().push_back({name, file, line, std::move(func)});
+        entry.name = name;
+        entry.file = file;
+        entry.line = line;
+        entry.func = func;
+        entry.next = GetTestListHead();
+        GetTestListHead() = &entry;
     }
 };
 
@@ -59,23 +88,23 @@ extern std::string g_currentTest;
     {                                                                                                                  \
         void Run();                                                                                                    \
     };                                                                                                                 \
-    static TestRegistrar registrar_fixture_##FixtureClass##_##testName(                                                \
-        #FixtureClass "." #testName, __FILE__, __LINE__,                                                               \
-        []                                                                                                             \
+    static void testfn_fixture_##FixtureClass##_##testName()                                                           \
+    {                                                                                                                  \
+        TestFixture_##FixtureClass##_##testName fixture;                                                               \
+        fixture.SetUp();                                                                                               \
+        try                                                                                                            \
         {                                                                                                              \
-            TestFixture_##FixtureClass##_##testName fixture;                                                           \
-            fixture.SetUp();                                                                                           \
-            try                                                                                                        \
-            {                                                                                                          \
-                fixture.Run();                                                                                         \
-            }                                                                                                          \
-            catch (...)                                                                                                \
-            {                                                                                                          \
-                fixture.TearDown();                                                                                    \
-                throw;                                                                                                 \
-            }                                                                                                          \
+            fixture.Run();                                                                                             \
+        }                                                                                                              \
+        catch (...)                                                                                                    \
+        {                                                                                                              \
             fixture.TearDown();                                                                                        \
-        });                                                                                                            \
+            throw;                                                                                                     \
+        }                                                                                                              \
+        fixture.TearDown();                                                                                            \
+    }                                                                                                                  \
+    static TestRegistrar registrar_fixture_##FixtureClass##_##testName(                                                \
+        #FixtureClass "." #testName, __FILE__, __LINE__, testfn_fixture_##FixtureClass##_##testName);                  \
     void TestFixture_##FixtureClass##_##testName::Run()
 
 #define EXPECT_TRUE(expr)                                                                                              \

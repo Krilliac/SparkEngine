@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <numeric>
 #include <random>
@@ -35,7 +36,6 @@
 #else
 #include <csignal>
 #include <cstdio>
-#include <cstring>
 #include <unistd.h>
 #endif
 
@@ -427,18 +427,18 @@ int main(int argc, char** argv)
     auto suiteStart = std::chrono::steady_clock::now();
 
     int ranCount = 0;
-    for (auto& test : tests)
+    for (auto* test : tests)
     {
         if (ranCount >= testLimit)
             break;
-        if (fileFilter && test.file.find(fileFilter) == std::string::npos)
+        if (fileFilter && !std::strstr(test->file, fileFilter))
             continue;
-        if (nameFilter && test.name.find(nameFilter) == std::string::npos)
+        if (nameFilter && !std::strstr(test->name, nameFilter))
             continue;
         bool excluded = false;
         for (const auto& pat : excludePatterns)
         {
-            if (test.name.find(pat) != std::string::npos)
+            if (std::strstr(test->name, pat.c_str()))
             {
                 excluded = true;
                 break;
@@ -447,7 +447,7 @@ int main(int argc, char** argv)
         if (excluded)
             continue;
         ++ranCount;
-        g_currentTest = test.name;
+        g_currentTest = test->name;
         int prevFailed = g_assertionsFailed;
         int prevPassed = g_assertionsPassed;
 
@@ -458,13 +458,13 @@ int main(int argc, char** argv)
             cerrCapture.clear();
         }
 
-        out.Print("[ RUN    ] " + test.name + "\n");
+        out.Print("[ RUN    ] " + g_currentTest + "\n");
 
         auto testStart = std::chrono::steady_clock::now();
 
         try
         {
-            test.func();
+            test->func();
         }
         catch (const std::exception& e)
         {
@@ -513,16 +513,16 @@ int main(int argc, char** argv)
 
         if (!testFailed)
         {
-            out.Print("[   OK   ] " + test.name + suffix + "\n");
+            out.Print("[   OK   ] " + g_currentTest + suffix + "\n");
             passed++;
         }
         else
         {
-            out.Print("[ FAILED ] " + test.name + suffix + "\n", true);
+            out.Print("[ FAILED ] " + g_currentTest + suffix + "\n", true);
             failed++;
         }
 
-        results.push_back({test.name, durationMs, testAssertions, !testFailed, capturedErrors});
+        results.push_back({test->name, durationMs, testAssertions, !testFailed, capturedErrors});
     }
 
     // Retry failed tests if --retries was specified
@@ -548,11 +548,11 @@ int main(int argc, char** argv)
 
             // Find the matching test entry
             TestCase* matchedTest = nullptr;
-            for (auto& t : tests)
+            for (auto* t : tests)
             {
-                if (t.name == testName)
+                if (testName == t->name)
                 {
-                    matchedTest = &t;
+                    matchedTest = t;
                     break;
                 }
             }

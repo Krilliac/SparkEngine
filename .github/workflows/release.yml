@@ -3,6 +3,9 @@ name: Publish Builds
 on:
   push:
     tags: [ 'v*' ]
+  schedule:
+    # Nightly at 04:00 UTC — after the day's merges settle
+    - cron: '0 4 * * *'
   workflow_dispatch:
     inputs:
       release_tag:
