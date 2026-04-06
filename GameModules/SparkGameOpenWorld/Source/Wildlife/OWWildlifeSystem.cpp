@@ -293,8 +293,9 @@ namespace OpenWorld
         }
     }
 
-    void OWWildlifeSystem::Update(float deltaTime, float playerX, float playerZ,
-                                  [[maybe_unused]] uint32_t currentRegionId)
+    void OWWildlifeSystem::Update(
+        float deltaTime, float playerX, float playerZ,
+        [[maybe_unused]] uint32_t currentRegionId) // Intentional: reserved for future region-based wildlife culling
     {
         if (!m_initialized)
             return;
@@ -376,6 +377,7 @@ namespace OpenWorld
         }
     }
 
+    // Intentional: deltaTime reserved for future time-scaled predator-prey simulation
     void OWWildlifeSystem::UpdatePredatorPrey([[maybe_unused]] float deltaTime)
     {
         // Simplified: carnivores near herbivores trigger flee response

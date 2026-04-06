@@ -297,6 +297,7 @@ namespace Spark::Rendering
         void SetRenderCompleteCallback(RenderCompleteCallback cb) { m_renderCompleteCallback = std::move(cb); }
 
         /// @brief Main update -- call each frame. Uses fixed dt when rendering.
+        // Intentional: uses internal fixed timestep via UpdateElapsedTime(), deltaTime for interface conformance
         void Update([[maybe_unused]] float deltaTime)
         {
             if (!m_initialized || !IsRendering())

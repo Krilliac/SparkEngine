@@ -111,6 +111,7 @@ namespace Spark::AI
     // ORCA Solver
     // =========================================================================
 
+    // Intentional: deltaTime reserved for future dynamic time-horizon scaling
     std::vector<AvoidanceResult> CollisionAvoidanceSystem::Solve([[maybe_unused]] float deltaTime) const
     {
         std::vector<AvoidanceResult> results;

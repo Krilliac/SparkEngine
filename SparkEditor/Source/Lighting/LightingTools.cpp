@@ -299,18 +299,21 @@ namespace SparkEditor
                 float bakedValue = lightContribution * aoFactor;
 
                 // Compute radiance for each texel and accumulate into lightmap
-                int texelCount = resolution * resolution;
+                int safeResolution = std::max(1, resolution);
+                int texelCount = safeResolution * safeResolution;
                 for (int texel = 0; texel < texelCount; texel += 1024)
                 {
                     int blockEnd = std::min(texel + 1024, texelCount);
                     for (int t = texel; t < blockEnd; ++t)
                     {
-                        float u = static_cast<float>(t % resolution) / static_cast<float>(resolution);
-                        float v = static_cast<float>(t / resolution) / static_cast<float>(resolution);
+                        float u = static_cast<float>(t % safeResolution) / static_cast<float>(safeResolution);
+                        float v = static_cast<float>(t / safeResolution) / static_cast<float>(safeResolution);
                         // Distance-based AO approximation
                         float dist = std::sqrt(u * u + v * v);
                         float radiance = (1.0f - dist * 0.5f) * bakedValue;
                         size_t idx = static_cast<size_t>(t) * 4;
+                        if (idx + 3 >= m_bakedLightmapData.size())
+                            break;
                         m_bakedLightmapData[idx + 0] += radiance * light->color.x;
                         m_bakedLightmapData[idx + 1] += radiance * light->color.y;
                         m_bakedLightmapData[idx + 2] += radiance * light->color.z;

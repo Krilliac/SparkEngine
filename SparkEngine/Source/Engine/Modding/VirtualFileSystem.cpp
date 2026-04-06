@@ -32,6 +32,12 @@ namespace Spark
 
     std::string LocalFileProvider::ResolvePath(const std::string& virtualPath) const
     {
+        // Reject path traversal attempts
+        if (virtualPath.find("..") != std::string::npos)
+            return m_rootPath;
+        // Reject absolute paths
+        if (!virtualPath.empty() && (virtualPath[0] == '/' || virtualPath[0] == '\\'))
+            return m_rootPath;
         return m_rootPath + virtualPath;
     }
 

@@ -47,6 +47,7 @@ namespace ARPG
         ProcessDots(deltaTime);
     }
 
+    // Intentional: fixedDeltaTime reserved for future collision-based hit detection
     void ARPGCombatSystem::FixedUpdate([[maybe_unused]] float fixedDeltaTime)
     {
         // Future: collision-based hit detection in fixed timestep

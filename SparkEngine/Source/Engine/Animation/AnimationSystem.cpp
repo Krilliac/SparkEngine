@@ -287,9 +287,6 @@ namespace Spark::Animation
             blendResult.localTransforms[i] = skeleton->bones[i].localBindPose;
         }
 
-        // Track whether the base layer has been established (used for debugging)
-        [[maybe_unused]] bool baseLayerSet = false;
-
         // Process layers bottom-to-top (index 0 = base layer)
         for (auto& layer : layers)
         {
@@ -374,7 +371,6 @@ namespace Spark::Animation
                         }
                     }
                 }
-                baseLayerSet = true;
                 break;
             }
 

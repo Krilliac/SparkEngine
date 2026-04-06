@@ -227,6 +227,7 @@ namespace OpenWorld
         }
     }
 
+    // Intentional: deltaTime reserved for future NPC AI and shop restocking
     void OWSettlementSystem::Update([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized)

@@ -130,10 +130,41 @@ namespace SparkEditor
         }
         m_progress.store(0.05f);
 
+        // Validate preset name (alphanumeric, dash, underscore only)
+        for (char c : cmakePreset)
+        {
+            if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_')
+            {
+                PushLog(BuildLogLine::Level::Error, "Invalid preset name: " + cmakePreset);
+                m_result.store(BuildResult::Failed);
+                m_running.store(false);
+                return;
+            }
+        }
+
         std::ostringstream configCmd;
         configCmd << "cmake --preset " << cmakePreset;
         for (const auto& def : extraDefines)
+        {
+            // Validate defines contain no shell metacharacters
+            bool safe = true;
+            for (char c : def)
+            {
+                if (c == ';' || c == '|' || c == '&' || c == '$' || c == '`' || c == '\n')
+                {
+                    safe = false;
+                    break;
+                }
+            }
+            if (!safe)
+            {
+                PushLog(BuildLogLine::Level::Error, "Unsafe characters in define: " + def);
+                m_result.store(BuildResult::Failed);
+                m_running.store(false);
+                return;
+            }
             configCmd << " -D" << def;
+        }
         configCmd << " 2>&1";
 
         PushLog(BuildLogLine::Level::Info, "> " + configCmd.str());

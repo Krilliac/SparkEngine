@@ -18,6 +18,28 @@
 namespace SparkEditor
 {
 
+    // Shell metacharacter validation (matches VersionControlGitOps.cpp)
+    static bool ContainsShellMetachars(const std::string& str)
+    {
+        for (char c : str)
+        {
+            switch (c)
+            {
+            case ';':
+            case '|':
+            case '&':
+            case '$':
+            case '`':
+            case '\n':
+            case '\r':
+                return true;
+            default:
+                break;
+            }
+        }
+        return false;
+    }
+
     // ============================================================================
     // SceneMergeHandler
     // ============================================================================
@@ -318,6 +340,11 @@ namespace SparkEditor
                                                              const std::string& localPath,
                                                              std::function<void(float)> progressCallback)
     {
+        // Validate inputs to prevent command injection
+        if (ContainsShellMetachars(repositoryURL) || ContainsShellMetachars(localPath))
+        {
+            return {false, "Repository URL or local path contains unsafe characters", "", -1, 0.0f, {}};
+        }
         std::string cmd = "git clone \"" + repositoryURL + "\" \"" + localPath + "\" --progress";
         if (progressCallback)
             progressCallback(0.0f);

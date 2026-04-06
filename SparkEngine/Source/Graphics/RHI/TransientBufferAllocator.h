@@ -95,6 +95,7 @@ namespace Spark::RHI
         /**
          * @brief Destroy GPU buffers. Call at shutdown.
          */
+        // Intentional: device reserved for GPU resource cleanup in backends that need it
         void Shutdown([[maybe_unused]] IRHIDevice* device)
         {
             m_vertexBuffer.reset();

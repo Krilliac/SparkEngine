@@ -275,7 +275,8 @@ XMFLOAT4 ParticleEmitter::SampleColorGradient(float t) const
     {
         if (t >= keys[i].time && t <= keys[i + 1].time)
         {
-            float localT = (t - keys[i].time) / (keys[i + 1].time - keys[i].time);
+            float timeDelta = keys[i + 1].time - keys[i].time;
+            float localT = (std::abs(timeDelta) > 1e-6f) ? (t - keys[i].time) / timeDelta : 0.0f;
             return {keys[i].color.x + localT * (keys[i + 1].color.x - keys[i].color.x),
                     keys[i].color.y + localT * (keys[i + 1].color.y - keys[i].color.y),
                     keys[i].color.z + localT * (keys[i + 1].color.z - keys[i].color.z),
@@ -877,7 +878,8 @@ XMFLOAT4 ParticleEmitter::SampleColorGradient(float t) const
     {
         if (t >= keys[i].time && t <= keys[i + 1].time)
         {
-            float localT = (t - keys[i].time) / (keys[i + 1].time - keys[i].time);
+            float timeDelta = keys[i + 1].time - keys[i].time;
+            float localT = (std::abs(timeDelta) > 1e-6f) ? (t - keys[i].time) / timeDelta : 0.0f;
             return {keys[i].color.x + localT * (keys[i + 1].color.x - keys[i].color.x),
                     keys[i].color.y + localT * (keys[i + 1].color.y - keys[i].color.y),
                     keys[i].color.z + localT * (keys[i + 1].color.z - keys[i].color.z),

@@ -33,6 +33,7 @@ namespace SparkEditor
         return true;
     }
 
+    // Intentional: deltaTime reserved for future UI animation preview
     void UIDesignerPanel::Update([[maybe_unused]] float deltaTime) {}
 
     void UIDesignerPanel::Render()

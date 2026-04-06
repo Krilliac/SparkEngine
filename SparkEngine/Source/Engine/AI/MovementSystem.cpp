@@ -72,6 +72,7 @@ namespace Spark::AI
     // IdleGenerator
     // =============================================================================
 
+    // Intentional: entity/deltaTime params on generators match IMovementGenerator interface
     void IdleGenerator::Initialize([[maybe_unused]] EntityID entity) {}
 
     bool IdleGenerator::Update([[maybe_unused]] EntityID entity, [[maybe_unused]] float deltaTime)

@@ -183,6 +183,12 @@ namespace Spark
         }
 
         file << "\n  }\n}\n";
+        file.flush();
+        if (!file.good())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Input, "Error writing bindings to file: %s", filePath.c_str());
+            return false;
+        }
         return true;
     }
 

@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 260922 |
-| **SparkEditor/Source** | 85186 |
-| **GameModules** | 57825 |
+| **SparkEngine/Source** | 261076 |
+| **SparkEditor/Source** | 85269 |
+| **GameModules** | 57841 |
 | **Tests** | 104301 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~510625** |
+| **Total C++ (excl. ThirdParty)** | **~510878** |
 
 ### File Counts
 
@@ -32,9 +32,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~878 |
+| Average lines per .cpp file | ~879 |
 | Average lines per .h file | ~566 |
-| Largest codebase section | Graphics (100628 lines — 38% of SparkEngine/Source) |
+| Largest codebase section | Graphics (100686 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,13 +42,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 100628 | 38.5% |
-| Engine (all subsystems) | 79613 | 30.5% |
-| Utils | 36268 | 13.8% |
-| Core | 19371 | 7.4% |
+| Graphics | 100686 | 38.5% |
+| Engine (all subsystems) | 79690 | 30.5% |
+| Utils | 36271 | 13.8% |
+| Core | 19375 | 7.4% |
 | Physics | 10101 | 3.8% |
 | Audio | 5548 | 2.1% |
-| Input | 3876 | 1.4% |
+| Input | 3888 | 1.4% |
 | SceneManager | 1886 | 0.7% |
 | Enums | 1423 | 0.5% |
 | Game | 1272 | 0.4% |
@@ -58,23 +58,23 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines |
 |-----------|------:|
-| AI | 13130 |
+| AI | 13133 |
 | Networking | 11631 |
 | ECS | 8545 |
-| Gameplay | 7278 |
-| Animation | 6538 |
+| Gameplay | 7281 |
+| Animation | 6534 |
 | Scripting | 4539 |
 | UI | 2524 |
 | SaveSystem | 2491 |
 | Streaming | 1763 |
 | World | 1588 |
 | Cinematic | 1526 |
-| Editor | 1468 |
+| Editor | 1495 |
 | Dialogue | 1359 |
 | Modding | 1257 |
 | 2D | 979 |
-| Persistence | 943 |
-| Coroutine | 785 |
+| Persistence | 955 |
+| Coroutine | 786 |
 | Replay | 705 |
 | Tween | 516 |
 | Destruction | 509 |
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 85186 |
+| Total editor lines | 85269 |
 
 ## Testing Metrics
 
@@ -160,7 +160,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `GraphicsEngine.cpp` | 1695 |
 | `D3D12Device.cpp` | 1564 |
 | `D3D11Device.cpp` | 1470 |
-| `GraphicsDeviceResources.cpp` | 1334 |
+| `GraphicsDeviceResources.cpp` | 1335 |
 | `CrashHandler.cpp` | 1332 |
 | `LightingSystem.cpp` | 1283 |
 | `SaveSystem.cpp` | 1275 |
@@ -193,7 +193,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `MaterialEditor.cpp` | 1269 |
 | `InspectorPanel.cpp` | 1262 |
 | `GameViewPanel.cpp` | 1172 |
-| `LightingTools.cpp` | 1160 |
+| `LightingTools.cpp` | 1163 |
 
 ## Shader Inventory
 

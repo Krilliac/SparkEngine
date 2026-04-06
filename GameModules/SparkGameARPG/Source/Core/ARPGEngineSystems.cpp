@@ -61,6 +61,7 @@ namespace ARPG
         return true;
     }
 
+    // Intentional: deltaTime reserved for future ARPG tick updates
     void ARPGEngineSystems::Update([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized)

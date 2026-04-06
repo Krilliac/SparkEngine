@@ -141,6 +141,7 @@ namespace OpenWorld
         UpdateActiveEvents(deltaTime, playerX, playerZ);
     }
 
+    // Intentional: playerX/playerZ reserved for future distance-based event spawning
     void OWDynamicEventSystem::CheckForNewEvents([[maybe_unused]] float playerX, [[maybe_unused]] float playerZ,
                                                  uint32_t playerRegionId)
     {
@@ -226,6 +227,7 @@ namespace OpenWorld
         return true;
     }
 
+    // Intentional: playerX/playerZ reserved for future proximity-based event updates
     void OWDynamicEventSystem::UpdateActiveEvents(float deltaTime, [[maybe_unused]] float playerX,
                                                   [[maybe_unused]] float playerZ)
     {

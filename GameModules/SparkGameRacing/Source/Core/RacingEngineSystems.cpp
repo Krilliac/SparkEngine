@@ -53,6 +53,7 @@ namespace Racing
         return true;
     }
 
+    // Intentional: deltaTime reserved for future frame-rate-dependent track updates
     void RacingEngineSystems::Update([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized)

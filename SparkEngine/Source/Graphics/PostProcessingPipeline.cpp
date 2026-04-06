@@ -859,7 +859,7 @@ namespace Spark::Graphics
 #endif
     }
 
-    void PostProcessingPipeline::ProcessPass(PostProcessPass pass, [[maybe_unused]] float deltaTime)
+    void PostProcessingPipeline::ProcessPass(PostProcessPass pass, float deltaTime)
     {
         auto startTime = std::chrono::high_resolution_clock::now();
 

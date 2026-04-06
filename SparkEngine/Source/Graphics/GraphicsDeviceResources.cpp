@@ -1072,6 +1072,7 @@ void GraphicsEngine::SetupForwardPlusPipeline()
                               "Shaders/ForwardPlus/Shading.hlsl", "Shaders/ForwardPlus/Shading.frag.glsl");
 
     // Create depth pre-pass render target
+    // Intentional: CreateDepthBuffer registers the resource internally; local handle unused
     [[maybe_unused]] auto depthPrePass = rhi.bridge.CreateDepthBuffer(rhi.width, rhi.height);
 }
 

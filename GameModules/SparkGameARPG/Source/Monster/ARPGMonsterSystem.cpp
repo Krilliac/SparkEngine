@@ -41,6 +41,7 @@ namespace ARPG
         m_activeMonsters.clear();
     }
 
+    // Intentional: deltaTime reserved for future monster respawn timers
     void ARPGMonsterSystem::Update([[maybe_unused]] float deltaTime)
     {
         // Remove dead monsters (health <= 0)

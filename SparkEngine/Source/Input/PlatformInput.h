@@ -249,8 +249,14 @@ namespace Spark::Input
         bool Initialize() override { return true; }
         void Shutdown() override {}
         void PollEvents() override {}
-        bool IsKeyDown([[maybe_unused]] PlatformKeyCode key) const override { return false; }
-        float GetAnalogValue([[maybe_unused]] PlatformKeyCode key) const override { return 0.0f; }
+        bool IsKeyDown([[maybe_unused]] PlatformKeyCode key) const override
+        {
+            return false;
+        } // Intentional: null backend
+        float GetAnalogValue([[maybe_unused]] PlatformKeyCode key) const override
+        {
+            return 0.0f;
+        } // Intentional: null backend
         void GetMousePosition(float& x, float& y) const override
         {
             x = 0.0f;
@@ -261,7 +267,7 @@ namespace Spark::Input
             dx = 0.0f;
             dy = 0.0f;
         }
-        void SetCursorVisible([[maybe_unused]] bool visible) override {}
+        void SetCursorVisible([[maybe_unused]] bool visible) override {} // Intentional: null backend
         std::string_view GetBackendName() const override { return "Null"; }
     };
 

@@ -99,8 +99,11 @@ namespace Spark::Gameplay
             {
                 interval = std::stof(rule.triggerParam);
             }
-            catch (...)
+            catch (const std::exception& e)
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "EventResponseSystem: invalid timer interval '%s' for rule '%s': %s",
+                               rule.triggerParam.c_str(), rule.name.c_str(), e.what());
                 interval = 1.0f;
             }
             m_timers[rule.name] = TimerState{interval, 0.0f};
