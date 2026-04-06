@@ -35,8 +35,9 @@ namespace Spark
 
     namespace Animation
     {
-        class AnimationSystem;
-    }
+        class AnimationManager;
+        using AnimationSystem = AnimationManager;
+    } // namespace Animation
 
     namespace AI
     {
@@ -72,7 +73,12 @@ namespace Spark
     }
 
     class VirtualFileSystem;
-    class NetworkManager;
+
+    namespace Net
+    {
+        class NetworkManager;
+    }
+    using NetworkManager = Net::NetworkManager;
     class SaveSystem;
     class CoroutineScheduler;
     class LocalFileCache;
