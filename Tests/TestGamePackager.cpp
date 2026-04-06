@@ -1,162 +1,156 @@
-// TestGamePackager.cpp - Tests for Spark::GamePackager
+// TestGamePackager.cpp - Tests for Spark::Build::GamePackager
 #include "TestFramework.h"
-#include "Core/GamePackager.h"
+#include "Engine/Build/GamePackager.h"
 
-// ============================================================================
-// PackageConfig validation
-// ============================================================================
+#include <filesystem>
+#include <fstream>
 
-TEST(GamePackager_ValidateConfig_DefaultConfig_Valid)
+// Helper: create a temp file
+static std::string CreateTempFile(const std::string& dir, const std::string& name, const std::string& content)
 {
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
-
-    Spark::PackageConfig cfg;
-    auto errors = packager.ValidateConfig(cfg);
-    EXPECT_TRUE(errors.empty());
-
-    packager.Shutdown();
+    std::filesystem::create_directories(dir);
+    std::string path = dir + "/" + name;
+    std::ofstream out(path);
+    out << content;
+    return path;
 }
 
-TEST(GamePackager_ValidateConfig_EmptyOutputDir)
+static void CleanupDir(const std::string& dir)
 {
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
-
-    Spark::PackageConfig cfg;
-    cfg.outputDir = "";
-    auto errors = packager.ValidateConfig(cfg);
-    EXPECT_FALSE(errors.empty());
-
-    bool foundError = false;
-    for (const auto& e : errors)
-    {
-        if (e.find("Output directory") != std::string::npos)
-            foundError = true;
-    }
-    EXPECT_TRUE(foundError);
-
-    packager.Shutdown();
-}
-
-TEST(GamePackager_ValidateConfig_EmptyProjectName)
-{
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
-
-    Spark::PackageConfig cfg;
-    cfg.projectName = "";
-    auto errors = packager.ValidateConfig(cfg);
-    EXPECT_FALSE(errors.empty());
-
-    packager.Shutdown();
-}
-
-TEST(GamePackager_ValidateConfig_InvalidProjectNameChars)
-{
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
-
-    Spark::PackageConfig cfg;
-    cfg.projectName = "My:Game";
-    auto errors = packager.ValidateConfig(cfg);
-    EXPECT_FALSE(errors.empty());
-
-    bool foundCharError = false;
-    for (const auto& e : errors)
-    {
-        if (e.find("invalid filesystem characters") != std::string::npos)
-            foundCharError = true;
-    }
-    EXPECT_TRUE(foundCharError);
-
-    packager.Shutdown();
-}
-
-TEST(GamePackager_ValidateConfig_NotInitialized)
-{
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Shutdown(); // Ensure not initialized
-
-    Spark::PackageConfig cfg;
-    auto errors = packager.ValidateConfig(cfg);
-    EXPECT_FALSE(errors.empty());
-
-    bool foundInitError = false;
-    for (const auto& e : errors)
-    {
-        if (e.find("not been initialized") != std::string::npos)
-            foundInitError = true;
-    }
-    EXPECT_TRUE(foundInitError);
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
 }
 
 // ============================================================================
-// GetSupportedPlatforms
+// Initialization
 // ============================================================================
 
-TEST(GamePackager_GetSupportedPlatforms_AfterInit_NonEmpty)
+TEST(GamePackager_Initialize)
 {
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
-
-    auto platforms = packager.GetSupportedPlatforms();
-    EXPECT_FALSE(platforms.empty());
-
-    packager.Shutdown();
-}
-
-TEST(GamePackager_GetSupportedPlatforms_AfterShutdown_Empty)
-{
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
-    packager.Shutdown();
-
-    auto platforms = packager.GetSupportedPlatforms();
-    EXPECT_TRUE(platforms.empty());
+    auto& pkg = Spark::Build::GamePackager::GetInstance();
+    pkg.Initialize();
+    EXPECT_EQ(pkg.GetPackageCount(), static_cast<uint32_t>(0));
+    pkg.Shutdown();
 }
 
 // ============================================================================
-// Package with invalid config
+// Config validation
 // ============================================================================
 
-TEST(GamePackager_Package_InvalidConfig_ReturnsErrors)
+TEST(GamePackager_ValidateConfig_EmptyName)
 {
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
+    auto& pkg = Spark::Build::GamePackager::GetInstance();
+    pkg.Initialize();
+    Spark::Build::PackageConfig config;
+    config.projectName = "";
+    auto errors = pkg.ValidateConfig(config);
+    EXPECT_TRUE(errors.size() > 0);
+    pkg.Shutdown();
+}
 
-    Spark::PackageConfig cfg;
-    cfg.projectName = ""; // Invalid
-    auto result = packager.Package(cfg);
+TEST(GamePackager_ValidateConfig_MissingExe)
+{
+    auto& pkg = Spark::Build::GamePackager::GetInstance();
+    pkg.Initialize();
+    Spark::Build::PackageConfig config;
+    config.projectName = "Test";
+    config.executablePath = "/nonexistent/game.exe";
+    auto errors = pkg.ValidateConfig(config);
+    EXPECT_TRUE(errors.size() > 0);
+    pkg.Shutdown();
+}
+
+// ============================================================================
+// Packaging
+// ============================================================================
+
+TEST(GamePackager_Package_Success)
+{
+    std::string tmpDir = "/tmp/spark_test_packager";
+    CleanupDir(tmpDir);
+
+    // Create fake build output
+    auto exePath = CreateTempFile(tmpDir + "/build", "game.exe", "fake_exe_data");
+    CreateTempFile(tmpDir + "/assets", "texture.png", "fake_texture");
+    CreateTempFile(tmpDir + "/assets/models", "hero.obj", "fake_model");
+
+    auto& pkg = Spark::Build::GamePackager::GetInstance();
+    pkg.Initialize();
+
+    Spark::Build::PackageConfig config;
+    config.projectName = "TestGame";
+    config.executablePath = exePath;
+    config.outputDirectory = tmpDir + "/output";
+    config.assetDirectory = tmpDir + "/assets";
+    config.moduleDirectory = ""; // No modules for this test
+    config.dataDirectory = "";
+
+    auto result = pkg.Package(config);
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(result.filesCopied >= 3); // exe + 2 assets
+    EXPECT_TRUE(result.totalSizeBytes > 0);
+    EXPECT_TRUE(result.durationSeconds >= 0.0);
+    EXPECT_EQ(pkg.GetPackageCount(), static_cast<uint32_t>(1));
+
+    // Verify output exists
+    std::error_code ec;
+    EXPECT_TRUE(std::filesystem::exists(result.outputPath, ec));
+
+    CleanupDir(tmpDir);
+    pkg.Shutdown();
+}
+
+TEST(GamePackager_Package_MissingExe_Fails)
+{
+    auto& pkg = Spark::Build::GamePackager::GetInstance();
+    pkg.Initialize();
+
+    Spark::Build::PackageConfig config;
+    config.projectName = "Test";
+    config.executablePath = "/nonexistent/game.exe";
+    config.outputDirectory = "/tmp/spark_test_pkg_fail";
+
+    auto result = pkg.Package(config);
     EXPECT_FALSE(result.success);
-    EXPECT_FALSE(result.errors.empty());
-
-    packager.Shutdown();
+    EXPECT_TRUE(result.errorMessage.find("not found") != std::string::npos);
+    pkg.Shutdown();
 }
 
 // ============================================================================
-// Console_GetStatus
+// Platform extensions
 // ============================================================================
 
-TEST(GamePackager_Console_GetStatus_NotInitialized)
+TEST(GamePackager_ModuleExtension_Windows)
 {
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Shutdown();
-
-    auto status = packager.Console_GetStatus();
-    EXPECT_FALSE(status.empty());
-    EXPECT_STR_CONTAINS(status, "not initialized");
+    auto ext = Spark::Build::GamePackager::GetModuleExtension(Spark::Build::PackagePlatform::WindowsX64);
+    EXPECT_EQ(ext, std::string(".dll"));
 }
 
-TEST(GamePackager_Console_GetStatus_Initialized)
+TEST(GamePackager_ModuleExtension_Linux)
 {
-    auto& packager = Spark::GamePackager::GetInstance();
-    packager.Initialize();
+    auto ext = Spark::Build::GamePackager::GetModuleExtension(Spark::Build::PackagePlatform::LinuxX64);
+    EXPECT_EQ(ext, std::string(".so"));
+}
 
-    auto status = packager.Console_GetStatus();
-    EXPECT_FALSE(status.empty());
-    EXPECT_STR_CONTAINS(status, "initialized");
-    EXPECT_STR_CONTAINS(status, "supported platform");
+TEST(GamePackager_ModuleExtension_MacOS)
+{
+    auto ext = Spark::Build::GamePackager::GetModuleExtension(Spark::Build::PackagePlatform::MacOSX64);
+    EXPECT_EQ(ext, std::string(".dylib"));
+}
 
-    packager.Shutdown();
+TEST(GamePackager_ExecutableExtension)
+{
+    auto win = Spark::Build::GamePackager::GetExecutableExtension(Spark::Build::PackagePlatform::WindowsX64);
+    EXPECT_EQ(win, std::string(".exe"));
+    auto lin = Spark::Build::GamePackager::GetExecutableExtension(Spark::Build::PackagePlatform::LinuxX64);
+    EXPECT_EQ(lin, std::string(""));
+}
+
+TEST(GamePackager_ConsoleGetStatus)
+{
+    auto& pkg = Spark::Build::GamePackager::GetInstance();
+    pkg.Initialize();
+    auto status = pkg.Console_GetStatus();
+    EXPECT_TRUE(status.find("Packages built: 0") != std::string::npos);
+    pkg.Shutdown();
 }

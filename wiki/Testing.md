@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*304 test files, 3755+ test cases*
+*308 test files, 3797+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -555,6 +555,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestBitFlags` | 14 |
 | `TestBitUtils` | 10 |
 | `TestBlendSpace` | 6 |
+| `TestCSGSystem` | 12 |
 | `TestCameraInterpolation` | 9 |
 | `TestCameraTransforms` | 26 |
 | `TestChromeTracing` | 5 |
@@ -630,6 +631,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFileUtils` | 15 |
 | `TestFixtures` | 0 |
 | `TestFogSystem` | 17 |
+| `TestFontSystem` | 13 |
 | `TestFormationSystem` | 4 |
 | `TestFrameAllocator` | 8 |
 | `TestFreezeDetector` | 10 |
@@ -661,6 +663,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestHash` | 18 |
 | `TestHitchDetector` | 0 |
 | `TestHybridRT` | 20 |
+| `TestInputActionSystem` | 12 |
 | `TestInputBindings` | 5 |
 | `TestInputManagerState` | 21 |
 | `TestInputSystem` | 11 |
@@ -690,13 +693,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModSystem` | 9 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
-| `TestModuleHotReload` | 15 |
+| `TestModuleHotReload` | 11 |
 | `TestMovementSystem` | 18 |
 | `TestMultiISADispatch` | 2 |
 | `TestMusicManager` | 24 |
 | `TestNavMesh` | 11 |
 | `TestNavMeshObstacles` | 7 |
 | `TestNetBuffer` | 29 |
+| `TestNetworkDebugPanel` | 9 |
 | `TestNetworkEncryption` | 17 |
 | `TestNetworkHealthMonitor` | 0 |
 | `TestNetworkIntegration` | 31 |

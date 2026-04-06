@@ -28,7 +28,7 @@ SparkEngine/         ← Executable host (like Unreal's runtime)
       Cinematic/     ← Sequencer system
     Utils/           ← SparkConsole.h, Logger, Profiler, CrashHandler, Assert.h
 
-SparkEditor/         ← ImGui-based editor (57 panels)
+SparkEditor/         ← ImGui-based editor (59 panels)
   Source/            ← Animation, AssetBrowser, BuildSystem, Gizmos, LevelStreaming,
                        MaterialEditor, Profiler, VersionControl, etc.
 
@@ -40,7 +40,7 @@ SparkConsole/        ← External debug console app (named pipe communication)
 
 Shaders/HLSL/        ← DirectX shaders (PBR, post-processing, compute)
 Shaders/GLSL/        ← OpenGL shaders (experimental)
-Tests/               ← 3755 unit tests across 305 files, CTest integration
+Tests/               ← 3797 unit tests across 309 files, CTest integration
 Templates/           ← Game module templates
 Assets/              ← Demo scenes, models, scripts
 ```

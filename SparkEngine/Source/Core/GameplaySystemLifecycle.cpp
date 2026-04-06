@@ -93,6 +93,11 @@
 #include "Utils/InvalidStateDetector.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
 #include "Engine/Tween/TweenSystem.h"
+#include "Engine/HotReload/ModuleHotReload.h"
+#include "Engine/LevelDesign/CSGSystem.h"
+#include "Engine/Text/FontSystem.h"
+#include "Input/InputActionSystem.h"
+#include "Engine/Build/GamePackager.h"
 #include "Engine/Modding/VirtualFileSystem.h"
 #include "Engine/Modding/ArchiveResourceProvider.h"
 #include "Engine/UI/UIFactory.h"
@@ -392,6 +397,12 @@ static void InitRenderingAndUtilitySystems()
     Spark::Graphics::LightmapBaker::GetInstance().Initialize();
     Spark::Procedural::ProceduralGenerator::GetInstance().Initialize();
     Spark::Graphics::GPUProfiler::GetInstance().Initialize();
+
+    Spark::HotReload::ModuleHotReload::GetInstance().Initialize();
+    Spark::LevelDesign::CSGSystem::GetInstance().Initialize();
+    Spark::Text::FontSystem::GetInstance().Initialize();
+    Spark::Input::InputActionSystem::GetInstance().Initialize();
+    Spark::Build::GamePackager::GetInstance().Initialize();
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "RenderingAndUtility", 0.0);
 }
 
@@ -778,6 +789,9 @@ void UpdateGameplaySystems(float dt)
         bus->Publish(Spark::FrameBeginEvent{dt});
     }
 
+    SPARK_GUARDED_UPDATE("ModuleHotReload", "Core", { Spark::HotReload::ModuleHotReload::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("InputActions", "Core", { Spark::Input::InputActionSystem::GetInstance().Update(); });
+
     UpdateNonECSSystems(ctx, dt);
 
     auto* world = ctx->GetWorld();
@@ -884,6 +898,11 @@ void ShutdownGameplaySystems()
     Spark::Graphics::LightmapBaker::GetInstance().Shutdown();
     Spark::Procedural::ProceduralGenerator::GetInstance().Shutdown();
     Spark::Graphics::GPUProfiler::GetInstance().Shutdown();
+    Spark::HotReload::ModuleHotReload::GetInstance().Shutdown();
+    Spark::LevelDesign::CSGSystem::GetInstance().Shutdown();
+    Spark::Text::FontSystem::GetInstance().Shutdown();
+    Spark::Input::InputActionSystem::GetInstance().Shutdown();
+    Spark::Build::GamePackager::GetInstance().Shutdown();
 
     if (auto* as = AngelScriptEngine::GetInstance())
     {

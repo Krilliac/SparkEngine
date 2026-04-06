@@ -557,6 +557,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `AchievementSystem` | `SparkEngine/Source/Engine/Gameplay/AchievementSystem.h` |
 | `AnimationUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AudioUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
+| `CSGSystem` | `SparkEngine/Source/Engine/LevelDesign/CSGSystem.h` |
 | `Camera2DFollowSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
 | `ConditionSystem` | `SparkEngine/Source/Engine/Gameplay/ConditionSystem.h` |
@@ -569,9 +570,11 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `DynamicResponseSystem` | `SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.h` |
 | `EventResponseSystem` | `SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h` |
 | `FogSystem` | `SparkEngine/Source/Graphics/FogSystem.h` |
+| `FontSystem` | `SparkEngine/Source/Engine/Text/FontSystem.h` |
 | `FormationSystem` | `SparkEngine/Source/Engine/AI/FormationSystem.h` |
 | `FreezeSystem` | `SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h` |
 | `GPUParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
+| `InputActionSystem` | `SparkEngine/Source/Input/InputActionSystem.h` |
 | `InventorySystem` | `SparkEngine/Source/Engine/Gameplay/InventorySystem.h` |
 | `JobSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
