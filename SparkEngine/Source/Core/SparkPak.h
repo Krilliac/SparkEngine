@@ -50,6 +50,7 @@ namespace Spark
     {
         Stored = 0,  ///< No compression
         Deflate = 1, ///< zlib/deflate via miniz
+        Zstd = 2,    ///< Zstandard compression (faster decompression, better ratios)
     };
 
     // =========================================================================

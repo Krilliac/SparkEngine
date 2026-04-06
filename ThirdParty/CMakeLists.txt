@@ -192,6 +192,36 @@ else()
 endif()
 
 # =========================================================================
+# zstd - Zstandard compression (BSD + GPLv2 dual license)
+# =========================================================================
+set(ZSTD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Utils/zstd")
+if(EXISTS "${ZSTD_DIR}/zstd.h")
+    add_library(zstd STATIC "${ZSTD_DIR}/zstd_impl.cpp")
+    target_include_directories(zstd PUBLIC "${ZSTD_DIR}")
+    if(MSVC)
+        target_compile_options(zstd PRIVATE /W0)
+        set_property(TARGET zstd PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    else()
+        target_compile_options(zstd PRIVATE -w)
+    endif()
+    message(STATUS "ThirdParty: zstd configured (Zstandard compression)")
+else()
+    message(STATUS "ThirdParty: zstd not found")
+endif()
+
+# =========================================================================
+# Vulkan Memory Allocator (VMA) - AMD GPU memory allocator (MIT)
+# =========================================================================
+set(VMA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../ThirdParty/VulkanMemoryAllocator")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../ThirdParty/VulkanMemoryAllocator/vk_mem_alloc.h")
+    add_library(VulkanMemoryAllocator INTERFACE)
+    target_include_directories(VulkanMemoryAllocator INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../ThirdParty/VulkanMemoryAllocator")
+    message(STATUS "ThirdParty: VulkanMemoryAllocator configured (header-only)")
+else()
+    message(STATUS "ThirdParty: VulkanMemoryAllocator not found")
+endif()
+
+# =========================================================================
 # tinyexr - OpenEXR loader/saver (BSD 3-Clause)
 # =========================================================================
 set(TINYEXR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Utils/tinyexr")

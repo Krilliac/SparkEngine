@@ -8,33 +8,33 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 259479 |
+| **SparkEngine/Source** | 260922 |
 | **SparkEditor/Source** | 85186 |
 | **GameModules** | 57825 |
-| **Tests** | 103504 |
+| **Tests** | 104301 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~508385** |
+| **Total C++ (excl. ThirdParty)** | **~510625** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 735 |
-| Implementation files (.cpp) | 835 |
+| Header files (.h/.hpp) | 740 |
+| Implementation files (.cpp) | 844 |
 | HLSL shader files | 38 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 332 |
+| Test files (.cpp) | 338 |
 | Wiki pages (.md) | 117 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~881 |
-| Average lines per .h file | ~568 |
-| Largest codebase section | Graphics (99806 lines — 38% of SparkEngine/Source) |
+| Average lines per .cpp file | ~878 |
+| Average lines per .h file | ~566 |
+| Largest codebase section | Graphics (100628 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 99806 | 38.4% |
-| Engine (all subsystems) | 79613 | 30.6% |
-| Utils | 35697 | 13.7% |
-| Core | 19321 | 7.4% |
+| Graphics | 100628 | 38.5% |
+| Engine (all subsystems) | 79613 | 30.5% |
+| Utils | 36268 | 13.8% |
+| Core | 19371 | 7.4% |
 | Physics | 10101 | 3.8% |
 | Audio | 5548 | 2.1% |
 | Input | 3876 | 1.4% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 332 |
-| TEST() definitions | 4261 |
+| Test files | 338 |
+| TEST() definitions | 4290 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 

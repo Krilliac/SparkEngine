@@ -546,6 +546,36 @@ else()
     message(STATUS "MINIZ not found (directory empty or missing)")
 endif()
 
+# ============================================================================
+# zstd — Zstandard compression library (faster decompression than miniz)
+# ============================================================================
+set(ZSTD_ROOT "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/zstd")
+if(EXISTS "${ZSTD_ROOT}/zstd.h")
+    add_library(zstd STATIC "${ZSTD_ROOT}/zstd_impl.cpp")
+    target_include_directories(zstd PUBLIC "${ZSTD_ROOT}")
+    if(MSVC)
+        target_compile_options(zstd PRIVATE /W0)
+        set_property(TARGET zstd PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    else()
+        target_compile_options(zstd PRIVATE -w)
+    endif()
+    message(STATUS "Found zstd at: ${ZSTD_ROOT}")
+else()
+    message(STATUS "zstd not found (directory empty or missing)")
+endif()
+
+# ============================================================================
+# VMA — Vulkan Memory Allocator (header-only, AMD GPUOpen)
+# ============================================================================
+set(VMA_ROOT "${CMAKE_SOURCE_DIR}/ThirdParty/VulkanMemoryAllocator")
+if(EXISTS "${VMA_ROOT}/vk_mem_alloc.h")
+    add_library(VulkanMemoryAllocator INTERFACE)
+    target_include_directories(VulkanMemoryAllocator INTERFACE "${VMA_ROOT}")
+    message(STATUS "Found VMA at: ${VMA_ROOT}")
+else()
+    message(STATUS "VMA not found (directory missing)")
+endif()
+
 # TinyObjLoader - Proper static library implementation
 find_path(TINYOBJLOADER_INCLUDE_DIR
     NAMES tiny_obj_loader.h
@@ -937,6 +967,20 @@ if(MINIZ_FOUND)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_MINIZ_AVAILABLE=1)
     target_compile_definitions(SparkEngine PRIVATE SPARK_MINIZ_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with MINIZ")
+endif()
+
+# zstd — Zstandard compression (faster than miniz, used alongside it)
+if(TARGET zstd)
+    target_link_libraries(SparkEngineLib PRIVATE zstd)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_ZSTD_AVAILABLE=1)
+    target_compile_definitions(SparkEngine PRIVATE SPARK_ZSTD_AVAILABLE=1)
+    message(STATUS "Linking SparkEngineLib with zstd")
+endif()
+
+# VMA — Vulkan Memory Allocator (header-only, Vulkan only)
+if(TARGET VulkanMemoryAllocator AND SPARK_VULKAN_AVAILABLE)
+    target_link_libraries(SparkEngineLib PRIVATE VulkanMemoryAllocator)
+    message(STATUS "Linking SparkEngineLib with VulkanMemoryAllocator")
 endif()
 
 if(CURL_FOUND)
@@ -1822,6 +1866,20 @@ else()
         "Install: git submodule update --init ThirdParty/Utils/miniz"
         "Docs:    https://github.com/richgel999/miniz"
     )
+endif()
+
+# zstd
+if(TARGET zstd)
+    message(STATUS "  [OK]      zstd            — Zstandard compression (fast decompression)")
+else()
+    message(STATUS "  [STUB]    zstd            — Zstandard compression (using stub)")
+endif()
+
+# VMA
+if(TARGET VulkanMemoryAllocator)
+    message(STATUS "  [OK]      VMA             — Vulkan Memory Allocator (GPU memory management)")
+else()
+    message(STATUS "  [STUB]    VMA             — Vulkan Memory Allocator (using stub)")
 endif()
 
 # EnTT

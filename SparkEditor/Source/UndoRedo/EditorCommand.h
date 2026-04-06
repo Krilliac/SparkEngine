@@ -257,7 +257,7 @@ namespace SparkEditor
             auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
-            Spark::SceneNode node;
+            SceneNode node;
             node.name = m_entityName;
             m_createdEntityId = static_cast<uint64_t>(scene->AddNode(node));
         }
@@ -321,7 +321,7 @@ namespace SparkEditor
       private:
         uint64_t m_entityId;
         std::string m_entityName;
-        Spark::SceneNode m_savedNode;
+        SceneNode m_savedNode;
         // Snapshot of the entity's components for restoration
         std::unordered_map<std::string, std::unordered_map<std::string, PropertyValue>> m_componentSnapshot;
     };

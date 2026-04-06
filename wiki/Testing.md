@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*331 test files, 4261+ test cases*
+*337 test files, 4290+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -549,6 +549,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAssetValidator` | 7 |
 | `TestAsyncComputeScheduler` | 9 |
 | `TestAsyncDatabase` | 23 |
+| `TestAtomicSharedPtr` | 3 |
 | `TestAudioEngine` | 18 |
 | `TestAudioMixerBus` | 17 |
 | `TestBehaviorTreeNodes` | 22 |
@@ -569,6 +570,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCollisionSystem` | 22 |
 | `TestColorUtils` | 18 |
 | `TestCommandHistory` | 10 |
+| `TestCompressionUtils` | 4 |
 | `TestConditionSystem` | 12 |
 | `TestConfigParser` | 16 |
 | `TestConnectionScope` | 8 |
@@ -599,6 +601,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDeferredQueue` | 6 |
 | `TestDelegate` | 9 |
 | `TestDeltaSmoother` | 10 |
+| `TestDescriptorCache` | 4 |
 | `TestDestructionSystem` | 5 |
 | `TestDialogueStress` | 10 |
 | `TestDialogueSystem` | 8 |
@@ -652,6 +655,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGPUProfiler` | 8 |
 | `TestGPUResourceLeakDetector` | 0 |
 | `TestGPUSkinning` | 9 |
+| `TestGPUStallProfiler` | 6 |
 | `TestGameMode` | 5 |
 | `TestGameModuleMMO` | 23 |
 | `TestGameModulePlatformerARPG` | 0 |
@@ -797,6 +801,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSerializer` | 17 |
 | `TestServerLiveMockClient` | 10 |
 | `TestServerMockClient` | 31 |
+| `TestShaderDiskCache` | 6 |
 | `TestShaderGraphCompiler` | 8 |
 | `TestShaderHotReload` | 8 |
 | `TestShaderHotReloadCompilation` | 7 |
@@ -825,6 +830,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |
 | `TestTextureCompressor` | 9 |
+| `TestTextureZombiePool` | 6 |
 | `TestThirdPartyIntegration` | 22 |
 | `TestThreadSafeQueue` | 10 |
 | `TestTimeOfDaySystem` | 18 |

@@ -16,6 +16,10 @@
 #include <miniz.h>
 #endif
 
+#ifdef SPARK_ZSTD_AVAILABLE
+#include <zstd.h>
+#endif
+
 // Use 64-bit file offset functions on Windows (long is 32-bit on MSVC)
 #ifdef _WIN32
 #define PAK_FSEEK(f, off, whence) _fseeki64((f), static_cast<int64_t>(off), (whence))
@@ -232,15 +236,34 @@ namespace Spark
         if (entry.compression == PakCompression::Stored)
             return compressed;
 
+        if (entry.compression == PakCompression::Deflate)
+        {
 #ifdef SPARK_MINIZ_AVAILABLE
-        std::vector<uint8_t> decompressed(entry.originalSize);
-        mz_ulong destLen = entry.originalSize;
-        if (mz_uncompress(decompressed.data(), &destLen, compressed.data(), entry.compressedSize) != MZ_OK)
-            return {};
-        return decompressed;
+            std::vector<uint8_t> decompressed(entry.originalSize);
+            mz_ulong destLen = entry.originalSize;
+            if (mz_uncompress(decompressed.data(), &destLen, compressed.data(), entry.compressedSize) != MZ_OK)
+                return {};
+            return decompressed;
 #else
-        return {};
+            return {};
 #endif
+        }
+
+        if (entry.compression == PakCompression::Zstd)
+        {
+#ifdef SPARK_ZSTD_AVAILABLE
+            std::vector<uint8_t> decompressed(entry.originalSize);
+            size_t result =
+                ZSTD_decompress(decompressed.data(), entry.originalSize, compressed.data(), entry.compressedSize);
+            if (ZSTD_isError(result))
+                return {};
+            return decompressed;
+#else
+            return {};
+#endif
+        }
+
+        return {};
     }
 
     std::string SparkPakReader::ReadTextFile(const std::string& virtualPath) const

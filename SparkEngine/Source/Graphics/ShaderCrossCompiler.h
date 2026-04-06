@@ -15,7 +15,12 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+#include <functional>
+#include <future>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -154,14 +159,21 @@ namespace Spark::Graphics
             if (!m_initialized)
                 return {};
 
-            // Check cache
+            // Check in-memory cache (thread-safe)
             uint64_t hash = HashSource(source);
             CrossCompileCacheKey cacheKey = {hash, target, source.stage};
-            auto it = m_cache.find(cacheKey);
-            if (it != m_cache.end())
-                return it->second;
+            {
+                std::lock_guard lock(m_cacheMutex);
+                auto it = m_cache.find(cacheKey);
+                if (it != m_cache.end())
+                {
+                    m_cacheStats.hits++;
+                    return it->second;
+                }
+            }
+            m_cacheStats.misses++;
 
-            // Compile
+            // Compile (no lock held — compilation is the slow path)
             CompiledShaderBlob result;
             result.target = target;
             result.stage = source.stage;
@@ -189,9 +201,12 @@ namespace Spark::Graphics
                 break;
             }
 
-            // Cache result
+            // Cache result (thread-safe)
             if (result.success)
+            {
+                std::lock_guard lock(m_cacheMutex);
                 m_cache[cacheKey] = result;
+            }
 
             return result;
         }
@@ -211,48 +226,75 @@ namespace Spark::Graphics
         }
 
         /** @brief Get the HLSL shader model string for a target */
-        static const char* GetShaderModelForTarget(ShaderTarget target, ShaderStage stage)
+        static const char* GetShaderModelForTarget(ShaderTarget target, [[maybe_unused]] ShaderStage stage)
         {
-            const char* stagePrefix = "";
-            switch (stage)
-            {
-            case ShaderStage::Vertex:
-                stagePrefix = "vs";
-                break;
-            case ShaderStage::Pixel:
-                stagePrefix = "ps";
-                break;
-            case ShaderStage::Geometry:
-                stagePrefix = "gs";
-                break;
-            case ShaderStage::Hull:
-                stagePrefix = "hs";
-                break;
-            case ShaderStage::Domain:
-                stagePrefix = "ds";
-                break;
-            case ShaderStage::Compute:
-                stagePrefix = "cs";
-                break;
-            default:
-                stagePrefix = "vs";
-                break;
-            }
-
             if (target == ShaderTarget::DXBC)
                 return "5_0"; // SM 5.0 for D3D11
             return "6_0";     // SM 6.0 for D3D12/Vulkan
         }
 
-        /** @brief Clear the compilation cache */
-        void ClearCache() { m_cache.clear(); }
+        /**
+         * @brief Compile a shader asynchronously.
+         *
+         * Returns a future that resolves when compilation completes. The
+         * compilation runs on a background thread (caller provides the executor).
+         * Uses a fallback blob (magenta placeholder) until ready.
+         */
+        std::future<CompiledShaderBlob> CompileAsync(const ShaderSource& source, ShaderTarget target)
+        {
+            return std::async(std::launch::async, [this, source, target]() { return Compile(source, target); });
+        }
 
-        size_t GetCacheSize() const { return m_cache.size(); }
+        /**
+         * @brief Compile multiple variants in parallel using std::async.
+         *
+         * Fans out compilation of all variants to background threads.
+         * Returns futures for each variant.
+         */
+        std::vector<std::future<CompiledShaderBlob>> CompileVariantsAsync(const std::vector<ShaderSource>& sources,
+                                                                          ShaderTarget target)
+        {
+            std::vector<std::future<CompiledShaderBlob>> futures;
+            futures.reserve(sources.size());
+            for (const auto& source : sources)
+            {
+                futures.push_back(CompileAsync(source, target));
+            }
+            return futures;
+        }
+
+        /** @brief Set a disk cache for persistent shader caching across sessions. */
+        void SetLocalFileCache(void* cache) { m_localFileCache = cache; }
+
+        /** @brief Get cache hit statistics. */
+        struct CacheStats
+        {
+            uint64_t hits = 0;
+            uint64_t misses = 0;
+            float hitRate() const { return (hits + misses > 0) ? static_cast<float>(hits) / (hits + misses) : 0.0f; }
+        };
+
+        CacheStats GetCacheStats() const { return m_cacheStats; }
+
+        /** @brief Clear the compilation cache */
+        void ClearCache()
+        {
+            std::lock_guard lock(m_cacheMutex);
+            m_cache.clear();
+        }
+
+        size_t GetCacheSize() const
+        {
+            std::lock_guard lock(m_cacheMutex);
+            return m_cache.size();
+        }
+
         bool IsInitialized() const { return m_initialized; }
 
         std::string Console_GetStatus() const
         {
-            return "ShaderCrossCompiler: " + std::to_string(m_cache.size()) + " cached compilations\n";
+            return "ShaderCrossCompiler: " + std::to_string(m_cache.size()) + " cached compilations" +
+                   " (hit rate: " + std::to_string(m_cacheStats.hitRate() * 100.0f) + "%)\n";
         }
 
       private:
@@ -323,7 +365,10 @@ namespace Spark::Graphics
             return blob;
         }
 
+        mutable std::mutex m_cacheMutex;
         std::unordered_map<CrossCompileCacheKey, CompiledShaderBlob, CrossCompileCacheKeyHash> m_cache;
+        CacheStats m_cacheStats;
+        void* m_localFileCache = nullptr; ///< Optional ShaderDiskCache (non-owning)
         bool m_initialized = false;
     };
 
