@@ -853,6 +853,7 @@ cmake --build build --config Release
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `AudioMixerPanel` | `SparkEditor/Source/Panels/AudioMixerPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
+| `CSGEditorPanel` | `SparkEditor/Source/Panels/CSGEditorPanel.h` |
 | `CinematicSequencerPanel` | `SparkEditor/Source/Panels/CinematicSequencerPanel.h` |
 | `CollaborationPanel` | `SparkEditor/Source/Panels/CollaborationPanel.h` |
 | `ConditionEditorPanel` | `SparkEditor/Source/Panels/ConditionEditorPanel.h` |
@@ -873,6 +874,7 @@ cmake --build build --config Release
 | `LocalizationPanel` | `SparkEditor/Source/Panels/LocalizationPanel.h` |
 | `MaterialEditorPanel` | `SparkEditor/Source/Panels/MaterialEditorPanel.h` |
 | `ModdingPanel` | `SparkEditor/Source/Panels/ModdingPanel.h` |
+| `NetworkDebugPanel` | `SparkEditor/Source/Panels/NetworkDebugPanel.h` |
 | `ObjectPlacementPanel` | `SparkEditor/Source/Panels/ObjectPlacementPanel.h` |
 | `ParticleEditorPanel` | `SparkEditor/Source/Panels/ParticleEditorPanel.h` |
 | `Physics2DPanel` | `SparkEditor/Source/Panels/Physics2DPanel.h` |

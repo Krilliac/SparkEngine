@@ -1,250 +1,126 @@
-// TestModuleHotReload.cpp - Tests for Spark::ModuleHotReloadManager
-// Standalone reimplementation to avoid platform-specific header dependencies
-
+// TestModuleHotReload.cpp - Tests for Spark::HotReload::ModuleHotReload
 #include "TestFramework.h"
-#include <chrono>
-#include <cstdint>
-#include <string>
+#include "Engine/HotReload/ModuleHotReload.h"
 
 // ============================================================================
-// Standalone reimplementation of Spark::ModuleHotReloadManager
+// Initialization
 // ============================================================================
 
-namespace
+TEST(ModuleHotReload_Initialize)
 {
-
-    enum class ModuleChangeType : uint8_t
-    {
-        Modified,
-        Added,
-        Removed
-    };
-
-    struct ModuleChangeEvent
-    {
-        std::string modulePath;
-        ModuleChangeType type = ModuleChangeType::Modified;
-        uint64_t timestampMs = 0;
-    };
-
-    class ModuleHotReloadManager
-    {
-      public:
-        void SetEnabled(bool enabled) { m_enabled = enabled; }
-        bool IsEnabled() const { return m_enabled; }
-
-        void SetDebounceMs(uint64_t ms) { m_debounceMs = ms; }
-        uint64_t GetDebounceMs() const { return m_debounceMs; }
-
-        /// Returns true if the event should trigger a reload (respects debounce).
-        bool ShouldReload(const ModuleChangeEvent& event)
-        {
-            if (!m_enabled)
-                return false;
-
-            if (event.timestampMs < m_lastReloadTimestampMs + m_debounceMs)
-                return false;
-
-            return true;
-        }
-
-        /// Record that a reload occurred at the given timestamp.
-        void RecordReload(uint64_t timestampMs)
-        {
-            m_lastReloadTimestampMs = timestampMs;
-            m_reloadCount++;
-        }
-
-        uint32_t GetReloadCount() const { return m_reloadCount; }
-
-        std::string GetStatusString() const
-        {
-            if (!m_enabled)
-                return "Hot reload: disabled";
-
-            if (m_reloadCount == 0)
-                return "Hot reload: enabled (no reloads)";
-
-            return "Hot reload: enabled (" + std::to_string(m_reloadCount) + " reload" +
-                   (m_reloadCount == 1 ? "" : "s") + ")";
-        }
-
-      private:
-        bool m_enabled = false;
-        uint64_t m_debounceMs = 500;
-        uint64_t m_lastReloadTimestampMs = 0;
-        uint32_t m_reloadCount = 0;
-    };
-
-} // namespace
-
-// ============================================================================
-// ModuleChangeEvent struct
-// ============================================================================
-
-TEST(ModuleHotReload_ChangeEvent_Defaults)
-{
-    ModuleChangeEvent event;
-    EXPECT_TRUE(event.modulePath.empty());
-    EXPECT_TRUE(event.type == ModuleChangeType::Modified);
-    EXPECT_EQ(event.timestampMs, 0u);
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    EXPECT_TRUE(hr.IsEnabled());
+    EXPECT_EQ(hr.GetWatchedModuleCount(), static_cast<size_t>(0));
+    EXPECT_EQ(hr.GetTotalReloadCount(), static_cast<uint32_t>(0));
+    hr.Shutdown();
 }
 
-TEST(ModuleHotReload_ChangeEvent_Values)
+TEST(ModuleHotReload_Shutdown_ClearsState)
 {
-    ModuleChangeEvent event;
-    event.modulePath = "Scripts/Player.as";
-    event.type = ModuleChangeType::Added;
-    event.timestampMs = 12345;
-
-    EXPECT_EQ(event.modulePath, std::string("Scripts/Player.as"));
-    EXPECT_TRUE(event.type == ModuleChangeType::Added);
-    EXPECT_EQ(event.timestampMs, 12345u);
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    hr.RegisterModule("TestModule", "/tmp/test.dll");
+    hr.Shutdown();
+    EXPECT_EQ(hr.GetWatchedModuleCount(), static_cast<size_t>(0));
+    EXPECT_FALSE(hr.IsEnabled());
 }
 
 // ============================================================================
-// Enable / disable state
+// Module registration
 // ============================================================================
 
-TEST(ModuleHotReload_DefaultDisabled)
+TEST(ModuleHotReload_RegisterModule)
 {
-    ModuleHotReloadManager manager;
-    EXPECT_FALSE(manager.IsEnabled());
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    EXPECT_TRUE(hr.RegisterModule("GameFPS", "/tmp/SparkGameFPS.dll"));
+    EXPECT_EQ(hr.GetWatchedModuleCount(), static_cast<size_t>(1));
+    auto names = hr.GetWatchedModuleNames();
+    EXPECT_EQ(names.size(), static_cast<size_t>(1));
+    EXPECT_EQ(names[0], std::string("GameFPS"));
+    hr.Shutdown();
 }
 
-TEST(ModuleHotReload_EnableDisable)
+TEST(ModuleHotReload_RegisterModule_EmptyName_Fails)
 {
-    ModuleHotReloadManager manager;
-
-    manager.SetEnabled(true);
-    EXPECT_TRUE(manager.IsEnabled());
-
-    manager.SetEnabled(false);
-    EXPECT_FALSE(manager.IsEnabled());
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    EXPECT_FALSE(hr.RegisterModule("", "/tmp/test.dll"));
+    EXPECT_EQ(hr.GetWatchedModuleCount(), static_cast<size_t>(0));
+    hr.Shutdown();
 }
 
-TEST(ModuleHotReload_DisabledBlocksReload)
+TEST(ModuleHotReload_UnregisterModule)
 {
-    ModuleHotReloadManager manager;
-    manager.SetEnabled(false);
-
-    ModuleChangeEvent event;
-    event.timestampMs = 10000;
-    EXPECT_FALSE(manager.ShouldReload(event));
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    hr.RegisterModule("TestMod", "/tmp/test.dll");
+    hr.UnregisterModule("TestMod");
+    EXPECT_EQ(hr.GetWatchedModuleCount(), static_cast<size_t>(0));
+    hr.Shutdown();
 }
 
-// ============================================================================
-// Debounce timing logic
-// ============================================================================
-
-TEST(ModuleHotReload_DebounceDefault)
+TEST(ModuleHotReload_GetModule_Exists)
 {
-    ModuleHotReloadManager manager;
-    EXPECT_EQ(manager.GetDebounceMs(), 500u);
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    hr.RegisterModule("MyMod", "/tmp/mymod.dll");
+    auto* mod = hr.GetModule("MyMod");
+    EXPECT_TRUE(mod != nullptr);
+    EXPECT_EQ(mod->name, std::string("MyMod"));
+    EXPECT_EQ(mod->reloadCount, static_cast<uint32_t>(0));
+    hr.Shutdown();
 }
 
-TEST(ModuleHotReload_DebounceCustom)
+TEST(ModuleHotReload_GetModule_NotExists)
 {
-    ModuleHotReloadManager manager;
-    manager.SetDebounceMs(1000);
-    EXPECT_EQ(manager.GetDebounceMs(), 1000u);
-}
-
-TEST(ModuleHotReload_DebounceRejectsEarlyEvent)
-{
-    ModuleHotReloadManager manager;
-    manager.SetEnabled(true);
-    manager.SetDebounceMs(500);
-
-    // First reload at t=1000
-    ModuleChangeEvent first;
-    first.timestampMs = 1000;
-    EXPECT_TRUE(manager.ShouldReload(first));
-    manager.RecordReload(first.timestampMs);
-
-    // Second event at t=1200, within debounce window
-    ModuleChangeEvent tooSoon;
-    tooSoon.timestampMs = 1200;
-    EXPECT_FALSE(manager.ShouldReload(tooSoon));
-
-    // Third event at t=1600, after debounce window
-    ModuleChangeEvent afterDebounce;
-    afterDebounce.timestampMs = 1600;
-    EXPECT_TRUE(manager.ShouldReload(afterDebounce));
-}
-
-TEST(ModuleHotReload_DebounceZeroAllowsAll)
-{
-    ModuleHotReloadManager manager;
-    manager.SetEnabled(true);
-    manager.SetDebounceMs(0);
-
-    ModuleChangeEvent event1;
-    event1.timestampMs = 100;
-    EXPECT_TRUE(manager.ShouldReload(event1));
-    manager.RecordReload(event1.timestampMs);
-
-    ModuleChangeEvent event2;
-    event2.timestampMs = 100;
-    EXPECT_TRUE(manager.ShouldReload(event2));
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    EXPECT_TRUE(hr.GetModule("NoSuchMod") == nullptr);
+    hr.Shutdown();
 }
 
 // ============================================================================
-// Reload count tracking
+// Configuration
 // ============================================================================
 
-TEST(ModuleHotReload_ReloadCountInitiallyZero)
+TEST(ModuleHotReload_SetWatchDirectory)
 {
-    ModuleHotReloadManager manager;
-    EXPECT_EQ(manager.GetReloadCount(), 0u);
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    hr.SetWatchDirectory("/game/modules");
+    auto status = hr.Console_GetStatus();
+    EXPECT_TRUE(status.find("/game/modules") != std::string::npos);
+    hr.Shutdown();
 }
 
-TEST(ModuleHotReload_ReloadCountIncrements)
+TEST(ModuleHotReload_SetEnabled)
 {
-    ModuleHotReloadManager manager;
-    manager.SetEnabled(true);
-
-    manager.RecordReload(1000);
-    EXPECT_EQ(manager.GetReloadCount(), 1u);
-
-    manager.RecordReload(2000);
-    EXPECT_EQ(manager.GetReloadCount(), 2u);
-
-    manager.RecordReload(3000);
-    EXPECT_EQ(manager.GetReloadCount(), 3u);
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    hr.SetEnabled(false);
+    EXPECT_FALSE(hr.IsEnabled());
+    hr.SetEnabled(true);
+    EXPECT_TRUE(hr.IsEnabled());
+    hr.Shutdown();
 }
 
-// ============================================================================
-// Status string generation
-// ============================================================================
-
-TEST(ModuleHotReload_StatusString_Disabled)
+TEST(ModuleHotReload_ConsoleGetStatus)
 {
-    ModuleHotReloadManager manager;
-    EXPECT_EQ(manager.GetStatusString(), std::string("Hot reload: disabled"));
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    auto status = hr.Console_GetStatus();
+    EXPECT_TRUE(status.find("ENABLED") != std::string::npos);
+    EXPECT_TRUE(status.find("Watching: 0") != std::string::npos);
+    hr.Shutdown();
 }
 
-TEST(ModuleHotReload_StatusString_EnabledNoReloads)
+TEST(ModuleHotReload_ForceReload_UnknownModule)
 {
-    ModuleHotReloadManager manager;
-    manager.SetEnabled(true);
-    EXPECT_EQ(manager.GetStatusString(), std::string("Hot reload: enabled (no reloads)"));
-}
-
-TEST(ModuleHotReload_StatusString_SingleReload)
-{
-    ModuleHotReloadManager manager;
-    manager.SetEnabled(true);
-    manager.RecordReload(1000);
-    EXPECT_EQ(manager.GetStatusString(), std::string("Hot reload: enabled (1 reload)"));
-}
-
-TEST(ModuleHotReload_StatusString_MultipleReloads)
-{
-    ModuleHotReloadManager manager;
-    manager.SetEnabled(true);
-    manager.RecordReload(1000);
-    manager.RecordReload(2000);
-    manager.RecordReload(3000);
-    EXPECT_EQ(manager.GetStatusString(), std::string("Hot reload: enabled (3 reloads)"));
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+    auto result = hr.ForceReload("NonExistent");
+    EXPECT_TRUE(result == Spark::HotReload::ReloadResult::FileNotFound);
+    hr.Shutdown();
 }

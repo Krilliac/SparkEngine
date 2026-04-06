@@ -316,6 +316,20 @@ add_executable(SparkTests
     TestCrashReportUploader.cpp
     # Security
     TestMemoryIntegrity.cpp
+    # Online Services, DataTable, MovieRender, Selection, RemoteDebug, HLOD, Crafting
+    TestOnlineServices.cpp
+    TestDataTableSystem.cpp
+    TestMovieRenderPipeline.cpp
+    TestSelectionManager.cpp
+    TestRemoteDebugSystem.cpp
+    TestHLODSystem.cpp
+    TestLootAndCrafting.cpp
+    TestAssetDependencyGraph.cpp
+    TestEditorAutomation.cpp
+    TestFileWatcher.cpp
+    TestTimerManager.cpp
+    TestInGameConsole.cpp
+    TestNetworkDebugPanel.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"

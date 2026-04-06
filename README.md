@@ -23,7 +23,7 @@
 
 **Quality & Testing:**
 
-[![Tests](https://img.shields.io/badge/tests-3755_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/Working/Tests)
+[![Tests](https://img.shields.io/badge/tests-3920_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/Working/Tests)
 [![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-format)
 [![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-tidy)
 
@@ -45,7 +45,7 @@
 [![Metal](https://img.shields.io/badge/Metal-Experimental-yellow?logo=apple&logoColor=white)](https://github.com/Krilliac/SparkEngine)
 [![NullRHI](https://img.shields.io/badge/NullRHI-Headless-blue)](https://github.com/Krilliac/SparkEngine)
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Multi-backend RHI rendering (DirectX 11/12, Vulkan, OpenGL, headless) with global illumination, GPU-driven rendering, mesh shaders, virtual texturing, and DXR ray tracing. Jolt Physics (vehicles, ragdoll, cloth, destruction), XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph editors, an ECS architecture (EnTT, 75 component types), and an ImGui-based editor with 57 specialized panels. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and licensed under the Spark Open License.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. While originally built for first-person shooters, Spark Engine is evolving into a general-purpose game engine capable of supporting a wide range of genres — from FPS and action games to open-world RPGs, MMOs, battle royales, and more. Multi-backend RHI rendering (DirectX 11/12, Vulkan, OpenGL, headless) with global illumination, GPU-driven rendering, mesh shaders, virtual texturing, and DXR ray tracing. Jolt Physics (vehicles, ragdoll, cloth, destruction), XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph editors, an ECS architecture (EnTT, 75 component types), and an ImGui-based editor with 59 specialized panels. Features inspired by HeroEngine's MMO technology include seamless world streaming, area-based server architecture, floating-point origin rebasing for large worlds, and collaborative multi-user editing. Cross-platform (Windows and Linux), modular, and licensed under the Spark Open License.
 
 > **v1.0.0 Released** — SparkEngine's first official release. Production-ready core systems with active feature development. See the [changelog](CHANGELOG.md) for details.
 
@@ -412,12 +412,12 @@ SparkEngine/
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
 |-- Templates/               # Game module project templates
-|-- Tests/                   # 3755 unit tests across 305 files (CTest + 5 sanitizers)
+|-- Tests/                   # 3920 unit tests across 321 files (CTest + 5 sanitizers)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
 |-- docs/                    # Doxygen docs, wiki, API reference
-|-- wiki/                    # 103 wiki pages covering all subsystems
+|-- wiki/                    # 116 wiki pages covering all subsystems
 |-- cmake/                   # CMake utility modules
 |-- .github/
 |   |-- workflows/          # CI/CD (build + release)
@@ -457,7 +457,7 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-3755 unit tests across 305 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+3920 unit tests across 321 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests
