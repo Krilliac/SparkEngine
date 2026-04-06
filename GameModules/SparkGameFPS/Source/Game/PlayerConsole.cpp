@@ -13,6 +13,7 @@
 
 using namespace DirectX;
 
+#undef LOG_TO_CONSOLE_IMMEDIATE
 #define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
 
 // ============================================================================

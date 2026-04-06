@@ -211,7 +211,7 @@ namespace Spark::RemoteDebug
             m_session.SetPort(port);
             m_session.SetState(SessionState::Listening);
             RegisterBuiltinHandlers();
-            SPARK_LOG_INFO(Spark::LogCategory::Network, "RemoteDebugServer: listening on port {}", port);
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "RemoteDebugServer: listening on port %d", port);
             return true;
         }
 
@@ -237,7 +237,8 @@ namespace Spark::RemoteDebug
      */
         RemoteCommand ProcessCommand(const RemoteCommand& cmd)
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "RemoteDebugServer: processing command type='{}'", cmd.type);
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "RemoteDebugServer: processing command type='%s'",
+                            cmd.type.c_str());
             auto it = m_handlers.find(cmd.type);
             if (it != m_handlers.end())
                 return it->second(cmd);

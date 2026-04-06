@@ -104,7 +104,8 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
         return E_FAIL;
 
     m_audioDataSize = dataSize;
-    SPARK_LOG_INFO(Spark::LogCategory::Audio, "SoundEffect: WAV loaded successfully, data size: %u bytes", dataSize);
+    SPARK_LOG_INFO(Spark::LogCategory::Audio, "SoundEffect: WAV loaded successfully, data size: %lu bytes",
+                   static_cast<unsigned long>(dataSize));
     return S_OK;
 }
 

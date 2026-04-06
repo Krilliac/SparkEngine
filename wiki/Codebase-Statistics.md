@@ -34,7 +34,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |--------|-------|
 | Average lines per .cpp file | ~881 |
 | Average lines per .h file | ~568 |
-| Largest codebase section | Graphics (99805 lines — 38% of SparkEngine/Source) |
+| Largest codebase section | Graphics (99806 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -47,7 +47,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Utils | 35694 | 13.7% |
 | Core | 19321 | 7.4% |
 | Physics | 10101 | 3.8% |
-| Audio | 5547 | 2.1% |
+| Audio | 5548 | 2.1% |
 | Input | 3876 | 1.4% |
 | SceneManager | 1886 | 0.7% |
 | Enums | 1423 | 0.5% |
@@ -176,7 +176,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `ECSystems.h` | 849 |
 | `MeshClusterSystem.h` | 819 |
 | `SVGRenderer.h` | 803 |
-| `DataTableSystem.h` | 799 |
+| `DataTableSystem.h` | 800 |
 | `PhysicsTypes.h` | 779 |
 | `EngineSettings.h` | 758 |
 
