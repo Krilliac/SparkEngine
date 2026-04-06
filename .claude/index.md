@@ -10,7 +10,6 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | 11-engine + 3-framework analysis (30 recommendations) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
 | 13 closed/proprietary engine analysis (15 recommendations) | [knowledge/closed-engines-analysis.md](knowledge/closed-engines-analysis.md) | Decision | **Resolved** | 2026-03-21 |
 | ThorVG + Unity Graphics + 33 libraries analysis | [knowledge/thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) | Decision | Active | 2026-03-22 |
-| Engine next steps: 5-phase roadmap (Phases 1-4 complete) | [knowledge/engine-next-steps-2026-03-22.md](knowledge/engine-next-steps-2026-03-22.md) | Decision | Mostly Resolved | 2026-03-22 |
 | Jolt Physics integration (migrated from Bullet3) | [knowledge/jolt-physics-integration.md](knowledge/jolt-physics-integration.md) | Observation | Active | 2026-03-22 |
 | CI reproducible builds (local reproduction commands) | [knowledge/ci-reproducible-builds.md](knowledge/ci-reproducible-builds.md) | Pattern | Active | 2026-03-30 |
 | Effective dev workflows | [knowledge/workflow-patterns.md](knowledge/workflow-patterns.md) | Pattern | Active | 2026-03-14 |
@@ -20,8 +19,6 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Comprehensive bloat audit | [knowledge/codebase-bloat-audit-2026-03-15.md](knowledge/codebase-bloat-audit-2026-03-15.md) | Observation | Active | 2026-03-18 |
 | Deep test coverage analysis (297 files, 3647 tests) | [knowledge/test-suite-audit.md](knowledge/test-suite-audit.md) | Observation | Active | 2026-04-04 |
 | 66 oversized functions, 7 private-method violations | [knowledge/code-quality-violations.md](knowledge/code-quality-violations.md) | Observation | Active | 2026-03-16 |
-| Memory/error handling (all items resolved/documented) | [knowledge/memory-error-handling-issues.md](knowledge/memory-error-handling-issues.md) | Issue | **Resolved** | 2026-04-04 |
-| Rendering pipeline (all 12 stubs now implemented) | [knowledge/rendering-pipeline-status.md](knowledge/rendering-pipeline-status.md) | Observation | **Resolved** | 2026-03-22 |
 | Engine systems (29+ working, all wired) | [knowledge/gameplay-systems-status.md](knowledge/gameplay-systems-status.md) | Observation | Active | 2026-03-22 |
 | SparkGame module (AI enemies now wired) | [knowledge/sparkgame-module-status.md](knowledge/sparkgame-module-status.md) | Observation | Active | 2026-03-22 |
 | Documentation coverage (89 wiki pages, 100% Doxygen) | [knowledge/documentation-coverage-audit.md](knowledge/documentation-coverage-audit.md) | Observation | Active | 2026-04-04 |
@@ -30,7 +27,6 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Live editor testing (Xvfb + Mesa llvmpipe) | [knowledge/live-editor-testing.md](knowledge/live-editor-testing.md) | Pattern | Active | 2026-03-28 |
 | MinGW + Wine cross-compilation (D3D11 on Linux, 64 fixes) | [knowledge/mingw-wine-cross-compilation.md](knowledge/mingw-wine-cross-compilation.md) | Pattern | Active | 2026-03-29 |
 | Hardware acceleration (8 GPU systems, 72 tests) | [knowledge/hardware-acceleration-systems.md](knowledge/hardware-acceleration-systems.md) | Decision | Active | 2026-03-28 |
-| RAII deep analysis (all subsystems, all items resolved) | [knowledge/raii-codebase-analysis.md](knowledge/raii-codebase-analysis.md) | Observation | **Resolved** | 2026-03-28 |
 | Mac compatibility analysis (gaps, roadmap, changes) | [knowledge/mac-compatibility-analysis.md](knowledge/mac-compatibility-analysis.md) | Observation | Active | 2026-03-28 |
 | Third-party library evaluation (5 added, 7 rejected) | [knowledge/third-party-library-evaluation.md](knowledge/third-party-library-evaluation.md) | Decision | Active | 2026-03-31 |
 | Engine viability evaluation (can you make a game?) | [knowledge/engine-viability-evaluation.md](knowledge/engine-viability-evaluation.md) | Observation | Active | 2026-04-01 |
@@ -38,10 +34,10 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine feature recommendations (7 new game-making systems) | [knowledge/engine-feature-recommendations-2026-04-04.md](knowledge/engine-feature-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 | Engine next steps (15 recommendations, 4 tiers) | [knowledge/engine-recommendations-2026-04-04.md](knowledge/engine-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 | Memory integrity system (branch guards, code scanning) | [knowledge/memory-integrity-system.md](knowledge/memory-integrity-system.md) | Observation | Active | 2026-04-05 |
-| Header namespace issues (Animation, Network, PostProcess) | [knowledge/header-namespace-issues.md](knowledge/header-namespace-issues.md) | Observation | Active | 2026-04-05 |
+| Header namespace issues (Animation, Network, PostProcess) | [knowledge/header-namespace-issues.md](knowledge/header-namespace-issues.md) | Observation | **Resolved** | 2026-04-05 |
 ## Quick Reference
 
-### Current Engine State (2026-04-05)
+### Current Engine State (2026-04-06)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps

@@ -31,23 +31,13 @@ class Timer;
 class SceneManager;
 class AngelScriptEngine;
 
+// Additional forward declarations beyond what IEngineContext.h provides
 namespace Spark
 {
-    namespace Animation
-    {
-        class AnimationSystem;
-    }
-    namespace AI
-    {
-        class AISystem;
-    }
-    namespace UI
-    {
-        class UISystem;
-    }
+    // AnimationSystem, NetworkManager, AISystem, UISystem already
+    // forward-declared via IEngineContext.h (included by EngineContext.h)
     class SaveSystem;
     class CoroutineScheduler;
-    class NetworkManager;
     class WeatherSystem;
     class DialogueSystem;
     class ModSystem;
