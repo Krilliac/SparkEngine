@@ -40,13 +40,18 @@ jobs:
 
     - name: Check formatting
       run: |
-        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+        # clang-format 18+ warns about missing Objective-C config and returns
+        # exit code 1 even with zero violations.  Capture output and check for
+        # actual violation markers instead of relying on the exit code.
+        OUTPUT=$(find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-          xargs clang-format --dry-run --Werror 2>&1 || {
-            echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
-            exit 1
-          }
+          xargs clang-format --dry-run --Werror 2>&1 || true)
+        if echo "$OUTPUT" | grep -q "\-Wclang-format-violations"; then
+          echo "$OUTPUT"
+          echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
+          exit 1
+        fi
 
   # ===========================================================================
   # Prompt System Validation — anti-drift, overload prevention, stale detection

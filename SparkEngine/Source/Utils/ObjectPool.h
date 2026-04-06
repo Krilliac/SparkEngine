@@ -26,6 +26,7 @@
 #pragma once
 
 #include "LogMacros.h"
+#include "Core/Contracts.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -54,6 +55,7 @@ namespace Spark
          */
         explicit ObjectPool(size_t capacity)
         {
+            SPARK_EXPECTS(capacity > 0);
             m_storage.reserve(capacity);
             m_freeList.reserve(capacity);
             for (size_t i = 0; i < capacity; ++i)

@@ -33,6 +33,8 @@
 #include "../Core/Platform.h"
 #include "../Utils/Logger.h"
 
+#include "Core/Contracts.h"
+
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>
 #include <wrl/client.h>
@@ -99,6 +101,8 @@ namespace Spark::Graphics
      */
         bool Initialize(ID3D11Device* device, uint32_t capacityBytes = 2 * 1024 * 1024)
         {
+            SPARK_EXPECTS(device != nullptr);
+            SPARK_EXPECTS(capacityBytes > 0);
             if (!device || capacityBytes == 0)
             {
                 return false;

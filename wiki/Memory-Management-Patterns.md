@@ -244,3 +244,5 @@ HRESULT hr = device->CreateBuffer(&desc, &initData, buffer.GetAddressOf());
 8. **Never use raw `new`/`delete`** — always wrap in a smart pointer or pool
 
 See [Profiler and Debugging](Profiler-and-Debugging) for runtime memory profiling tools.
+
+See [Memory Safety](Memory-Safety) for type-safe utilities (NonNull, SafeCast, Contracts) and compiler hardening.

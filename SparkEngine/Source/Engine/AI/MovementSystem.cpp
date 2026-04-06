@@ -5,6 +5,7 @@
 
 #include "MovementSystem.h"
 #include "../../Core/FaultIsolation.h"
+#include "../../Core/SafeCast.h"
 #include "../ECS/Components.h"
 #include "../ECS/Components/CoreComponents.h"
 #include "../../Utils/AngleUtils.h"
@@ -465,7 +466,7 @@ namespace Spark::AI
             {
             case MovementType::RandomWander:
             {
-                auto* wander = static_cast<RandomWanderGenerator*>(gen);
+                auto* wander = Spark::CheckedCast<RandomWanderGenerator*>(gen);
                 if (!wander->hasTarget)
                     break;
                 float step = speed * deltaTime;
@@ -485,7 +486,7 @@ namespace Spark::AI
 
             case MovementType::Chase:
             {
-                auto* chase = static_cast<ChaseGenerator*>(gen);
+                auto* chase = Spark::CheckedCast<ChaseGenerator*>(gen);
                 auto* targetTf = world.GetComponent<Transform>(static_cast<entt::entity>(chase->target));
                 if (!targetTf)
                     break;
@@ -507,7 +508,7 @@ namespace Spark::AI
 
             case MovementType::Follow:
             {
-                auto* follow = static_cast<FollowGenerator*>(gen);
+                auto* follow = Spark::CheckedCast<FollowGenerator*>(gen);
                 auto* targetTf = world.GetComponent<Transform>(static_cast<entt::entity>(follow->target));
                 if (!targetTf)
                     break;
@@ -529,7 +530,7 @@ namespace Spark::AI
 
             case MovementType::Flee:
             {
-                auto* flee = static_cast<FleeGenerator*>(gen);
+                auto* flee = Spark::CheckedCast<FleeGenerator*>(gen);
                 auto* threatTf = world.GetComponent<Transform>(static_cast<entt::entity>(flee->threatEntity));
                 if (!threatTf)
                     break;
@@ -554,7 +555,7 @@ namespace Spark::AI
 
             case MovementType::Point:
             {
-                auto* point = static_cast<PointGenerator*>(gen);
+                auto* point = Spark::CheckedCast<PointGenerator*>(gen);
                 float step = point->speed * deltaTime;
                 float remaining = MoveToward(transform->position.x, transform->position.y, transform->position.z,
                                              point->targetX, point->targetY, point->targetZ, step);
@@ -569,7 +570,7 @@ namespace Spark::AI
 
             case MovementType::Patrol:
             {
-                auto* patrol = static_cast<PatrolGenerator*>(gen);
+                auto* patrol = Spark::CheckedCast<PatrolGenerator*>(gen);
                 if (patrol->waypoints.empty())
                     break;
                 int idx = patrol->currentIndex % static_cast<int>(patrol->waypoints.size());
@@ -599,7 +600,7 @@ namespace Spark::AI
 
             case MovementType::Home:
             {
-                auto* home = static_cast<HomeGenerator*>(gen);
+                auto* home = Spark::CheckedCast<HomeGenerator*>(gen);
                 float step = home->speed * deltaTime;
                 MoveToward(transform->position.x, transform->position.y, transform->position.z, home->homeX,
                            home->homeY, home->homeZ, step);
@@ -612,7 +613,7 @@ namespace Spark::AI
 
             case MovementType::Charge:
             {
-                auto* charge = static_cast<ChargeGenerator*>(gen);
+                auto* charge = Spark::CheckedCast<ChargeGenerator*>(gen);
                 auto* targetTf = world.GetComponent<Transform>(static_cast<entt::entity>(charge->target));
                 if (!targetTf)
                     break;
@@ -639,7 +640,7 @@ namespace Spark::AI
 
             case MovementType::Spline:
             {
-                auto* spline = static_cast<SplineGenerator*>(gen);
+                auto* spline = Spark::CheckedCast<SplineGenerator*>(gen);
                 int numPts = static_cast<int>(spline->controlPoints.size());
                 if (numPts < 2)
                     break;
@@ -701,7 +702,7 @@ namespace Spark::AI
 
             case MovementType::Waypoint:
             {
-                auto* wp = static_cast<WaypointGenerator*>(gen);
+                auto* wp = Spark::CheckedCast<WaypointGenerator*>(gen);
                 float step = wp->speed * deltaTime;
                 float remaining = MoveToward(transform->position.x, transform->position.y, transform->position.z,
                                              wp->targetX, wp->targetY, wp->targetZ, step);

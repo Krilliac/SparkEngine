@@ -109,6 +109,7 @@
 - [Performance Tips](Performance-Tips)
 - [Benchmark Framework](Benchmark-Framework)
 - [Threading Model](Threading-Model)
+- [Memory Safety](Memory-Safety)
 - [Memory Management Patterns](Memory-Management-Patterns)
 - [Build System and CMake Modules](Build-System-and-CMake-Modules)
 - [Profiler and Debugging](Profiler-and-Debugging)

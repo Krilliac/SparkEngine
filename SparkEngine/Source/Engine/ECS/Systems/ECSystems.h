@@ -56,6 +56,8 @@
 
 #include "ECSystemTypes.h"
 #include "../Components.h"
+#include "../../../Core/Contracts.h"
+#include "../../../Core/NonNull.h"
 #include "../../../Utils/Assert.h"
 #include "../../../Utils/DeferredDeletion.h"
 #include "../../../Utils/Validate.h"
@@ -110,7 +112,7 @@ namespace Spark::ECS
      * @param graphics  Non-owning pointer to the active GraphicsEngine. Must not be null.
      *                  The engine must remain alive for the lifetime of this system.
      */
-        RenderSystem(GraphicsEngine* graphics) : m_graphics(graphics) { ASSERT_NOT_NULL(graphics); }
+        RenderSystem(Spark::NonNull<GraphicsEngine*> graphics) : m_graphics(graphics) {}
 
         /**
      * @brief Iterate all (MeshRenderer, Transform) entities and submit draw calls.
@@ -185,10 +187,10 @@ namespace Spark::ECS
      * @param physics  Non-owning pointer to the PhysicsSystem. Must not be null.
      *                 The physics system must remain alive for the lifetime of this object.
      */
-        explicit PhysicsUpdateSystem(PhysicsSystem* physics, float fixedTimestep = 1.0f / 60.0f)
+        explicit PhysicsUpdateSystem(Spark::NonNull<PhysicsSystem*> physics, float fixedTimestep = 1.0f / 60.0f)
             : m_physics(physics), m_fixedTimestep(fixedTimestep)
         {
-            ASSERT_NOT_NULL(physics);
+            SPARK_EXPECTS(fixedTimestep > 0.0f);
         }
 
         /**
@@ -247,7 +249,7 @@ namespace Spark::ECS
      *
      * @param audio  Non-owning pointer to the AudioEngine. Must not be null.
      */
-        AudioUpdateSystem(AudioEngine* audio) : m_audio(audio) { ASSERT_NOT_NULL(audio); }
+        AudioUpdateSystem(Spark::NonNull<AudioEngine*> audio) : m_audio(audio) {}
 
         /**
      * @brief Sync 3D audio source positions from entity transforms.

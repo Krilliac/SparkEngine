@@ -4,6 +4,7 @@
  */
 
 #include "ModuleManager.h"
+#include "Contracts.h"
 #include "FaultIsolation.h"
 #include "IGameModule.h"
 #include "Spark/Version.h"
@@ -109,6 +110,7 @@ ModuleManager::~ModuleManager()
 
 bool ModuleManager::LoadModule(const std::string& path)
 {
+    SPARK_EXPECTS(!path.empty());
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
     SPARK_VALIDATE_RET(Spark::LogCategory::Core, !path.empty(), false);
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading module: %s", path.c_str());
@@ -386,6 +388,7 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
 
 void ModuleManager::InitializeAll(Spark::IEngineContext* context)
 {
+    SPARK_EXPECTS(context != nullptr);
     auto& console = Spark::SimpleConsole::GetInstance();
 
     if (!context)
@@ -450,6 +453,7 @@ void ModuleManager::RenderAll()
 
 void ModuleManager::ResizeAll(int width, int height)
 {
+    SPARK_EXPECTS(width > 0 && height > 0);
     for (auto& entry : m_modules)
     {
         if (entry.initialized && entry.instance)

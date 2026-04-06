@@ -330,6 +330,8 @@ add_executable(SparkTests
     TestTimerManager.cpp
     TestInGameConsole.cpp
     TestNetworkDebugPanel.cpp
+    TestContracts.cpp
+    TestSafetyCoreUtils.cpp
     # Editor sources needed by TestCollaborativeEditing
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"

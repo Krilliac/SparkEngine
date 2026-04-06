@@ -16,6 +16,8 @@
 
 #include "Spark/IEngineContext.h"
 
+#include "Core/Contracts.h"
+
 #include <algorithm>
 #include <any>
 #include <cstdint>
@@ -303,7 +305,11 @@ class EngineContext : public Spark::IEngineContext
      * lifetime. This is the single source of truth for all subsystem pointers.
      * Works with incomplete (forward-declared) types.
      */
-    template <typename T> void RegisterSystem(T* system) { m_systems[GetTypeId<T>()] = static_cast<void*>(system); }
+    template <typename T> void RegisterSystem(T* system)
+    {
+        SPARK_EXPECTS(system != nullptr);
+        m_systems[GetTypeId<T>()] = static_cast<void*>(system);
+    }
 
     /**
      * @brief Retrieve a previously registered subsystem by type

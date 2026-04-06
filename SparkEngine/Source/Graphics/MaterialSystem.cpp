@@ -8,6 +8,7 @@
  */
 
 #include "MaterialSystem.h"
+#include "Core/Contracts.h"
 #include "Core/Platform.h"
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
@@ -47,6 +48,8 @@ MaterialSystem::~MaterialSystem()
 
 HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
+    SPARK_EXPECTS(device != nullptr);
+    SPARK_EXPECTS(context != nullptr);
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
 #ifdef SPARK_PLATFORM_WINDOWS
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);

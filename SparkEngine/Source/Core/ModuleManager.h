@@ -19,6 +19,7 @@
 
 #include "Spark/IModule.h"
 #include "Spark/IEngineContext.h"
+#include "Core/Contracts.h"
 #include <string>
 #include <vector>
 #include <memory>
