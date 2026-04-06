@@ -46,9 +46,11 @@
 // but for body-level usage we use [[assert:]] uniformly. When compilers ship
 // full contract support with function-declaration syntax, these macros can
 // be revisited to use [[pre:]] / [[post:]] in their proper position.
-#define SPARK_EXPECTS(expr) [[assert : expr]]
-#define SPARK_ENSURES(expr) [[assert : expr]]
+// clang-format off
+#define SPARK_EXPECTS(expr)   [[assert : expr]]
+#define SPARK_ENSURES(expr)   [[assert : expr]]
 #define SPARK_INVARIANT(expr) [[assert : expr]]
+// clang-format on
 
 #elif defined(_DEBUG) || defined(DEBUG)
 
