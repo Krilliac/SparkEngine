@@ -562,6 +562,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
 | `ConditionSystem` | `SparkEngine/Source/Engine/Gameplay/ConditionSystem.h` |
 | `CoverSystem` | `SparkEngine/Source/Engine/AI/CoverSystem.h` |
+| `CraftingSystem` | `SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h` |
 | `DDGIProbeSystem` | `SparkEngine/Source/Graphics/DDGIProbeSystem.h` |
 | `DecalSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
@@ -574,6 +575,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `FormationSystem` | `SparkEngine/Source/Engine/AI/FormationSystem.h` |
 | `FreezeSystem` | `SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h` |
 | `GPUParticleSystem` | `SparkEngine/Source/Graphics/GPUParticleSystem.h` |
+| `HLODSystem` | `SparkEngine/Source/Engine/HLOD/HLODSystem.h` |
 | `InputActionSystem` | `SparkEngine/Source/Input/InputActionSystem.h` |
 | `InventorySystem` | `SparkEngine/Source/Engine/Gameplay/InventorySystem.h` |
 | `JobSystem` | `SparkEngine/Source/Physics/PhysicsSystem.h` |
@@ -602,6 +604,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `QuestSystem` | `SparkEngine/Source/Engine/Gameplay/QuestSystem.h` |
 | `RTHandleSystem` | `SparkEngine/Source/Graphics/RTHandleSystem.h` |
 | `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
+| `RemoteDebugSystem` | `SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
 | `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |

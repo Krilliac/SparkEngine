@@ -98,6 +98,15 @@
 #include "Engine/Text/FontSystem.h"
 #include "Input/InputActionSystem.h"
 #include "Engine/Build/GamePackager.h"
+#include "Engine/OnlineServices/OnlineServices.h"
+#include "Engine/DataTable/DataTableSystem.h"
+#include "Engine/Rendering/MovieRenderPipeline.h"
+#include "Engine/RemoteDebug/RemoteDebugSystem.h"
+#include "Engine/HLOD/HLODSystem.h"
+#include "Engine/Crafting/LootAndCraftingSystem.h"
+#include "Utils/FileWatcher/FileWatcher.h"
+#include "Utils/TimerManager.h"
+#include "Utils/InGameConsole.h"
 #include "Engine/Modding/VirtualFileSystem.h"
 #include "Engine/Modding/ArchiveResourceProvider.h"
 #include "Engine/UI/UIFactory.h"
@@ -403,6 +412,16 @@ static void InitRenderingAndUtilitySystems()
     Spark::Text::FontSystem::GetInstance().Initialize();
     Spark::Input::InputActionSystem::GetInstance().Initialize();
     Spark::Build::GamePackager::GetInstance().Initialize();
+    Spark::OnlineServices::OnlineServiceManager::GetInstance().Initialize();
+    Spark::Data::DataTableRegistry::GetInstance().Initialize();
+    Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
+    Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
+    Spark::HLOD::HLODSystem::GetInstance().Initialize();
+    Spark::Gameplay::LootTableManager::GetInstance().Initialize();
+    Spark::Gameplay::CraftingSystem::GetInstance().Initialize();
+    Spark::Utils::FileWatcher::GetInstance().Initialize();
+    Spark::TimerManager::GetInstance().Initialize();
+    Spark::InGameConsole::GetInstance().Initialize();
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "RenderingAndUtility", 0.0);
 }
 
@@ -791,6 +810,14 @@ void UpdateGameplaySystems(float dt)
 
     SPARK_GUARDED_UPDATE("ModuleHotReload", "Core", { Spark::HotReload::ModuleHotReload::GetInstance().Update(dt); });
     SPARK_GUARDED_UPDATE("InputActions", "Core", { Spark::Input::InputActionSystem::GetInstance().Update(); });
+    SPARK_GUARDED_UPDATE("OnlineServices", "Core",
+                         { Spark::OnlineServices::OnlineServiceManager::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("MovieRender", "Core", { Spark::Rendering::MovieRenderPipeline::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("RemoteDebug", "Core", { Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("Crafting", "Core", { Spark::Gameplay::CraftingSystem::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("FileWatcher", "Core", { Spark::Utils::FileWatcher::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("TimerManager", "Core", { Spark::TimerManager::GetInstance().Update(dt); });
+    SPARK_GUARDED_UPDATE("InGameConsole", "Core", { Spark::InGameConsole::GetInstance().Update(dt); });
 
     UpdateNonECSSystems(ctx, dt);
 
@@ -903,6 +930,16 @@ void ShutdownGameplaySystems()
     Spark::Text::FontSystem::GetInstance().Shutdown();
     Spark::Input::InputActionSystem::GetInstance().Shutdown();
     Spark::Build::GamePackager::GetInstance().Shutdown();
+    Spark::InGameConsole::GetInstance().Shutdown();
+    Spark::TimerManager::GetInstance().Shutdown();
+    Spark::Utils::FileWatcher::GetInstance().Shutdown();
+    Spark::Gameplay::CraftingSystem::GetInstance().Shutdown();
+    Spark::Gameplay::LootTableManager::GetInstance().Shutdown();
+    Spark::HLOD::HLODSystem::GetInstance().Shutdown();
+    Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Shutdown();
+    Spark::Rendering::MovieRenderPipeline::GetInstance().Shutdown();
+    Spark::Data::DataTableRegistry::GetInstance().Shutdown();
+    Spark::OnlineServices::OnlineServiceManager::GetInstance().Shutdown();
 
     if (auto* as = AngelScriptEngine::GetInstance())
     {
