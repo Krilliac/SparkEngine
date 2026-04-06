@@ -415,7 +415,9 @@ namespace SparkEditor
         if (!initialized)
         {
             strncpy(userName, m_userInfo.name.c_str(), sizeof(userName) - 1);
+            userName[sizeof(userName) - 1] = '\0';
             strncpy(userEmail, m_userInfo.email.c_str(), sizeof(userEmail) - 1);
+            userEmail[sizeof(userEmail) - 1] = '\0';
             initialized = true;
         }
 
