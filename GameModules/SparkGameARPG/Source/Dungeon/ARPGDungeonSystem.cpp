@@ -41,6 +41,7 @@ namespace ARPG
         m_currentFloorIndex = -1;
     }
 
+    // Intentional: deltaTime reserved for future dungeon event timers
     void ARPGDungeonSystem::Update([[maybe_unused]] float deltaTime)
     {
         // Future: dungeon event timers, trap triggers, ambient spawning

@@ -53,6 +53,7 @@ namespace RPG
         return true;
     }
 
+    // Intentional: deltaTime reserved for future RPG engine integration ticks
     void RPGEngineSystems::Update([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized)

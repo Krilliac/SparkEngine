@@ -226,6 +226,7 @@ namespace Spark::Graphics
         }
 
         /** @brief Get the HLSL shader model string for a target */
+        // Intentional: stage reserved for future per-stage SM selection (e.g. mesh/amplification shaders)
         static const char* GetShaderModelForTarget(ShaderTarget target, [[maybe_unused]] ShaderStage stage)
         {
             if (target == ShaderTarget::DXBC)

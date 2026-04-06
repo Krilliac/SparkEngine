@@ -337,10 +337,8 @@ void MaterialSystem::UpdateMetrics()
     m_metrics.hotReloadEnabled = m_hotReloadEnabled;
 
     size_t totalTextureMemory = 0;
-    for ([[maybe_unused]] const auto& pair : m_textureCache)
-    {
-        totalTextureMemory += 1024 * 1024; // 1MB per texture (rough estimate)
-    }
+    // Estimate total texture memory from cache size (rough 1MB/texture)
+    totalTextureMemory = m_textureCache.size() * 1024 * 1024;
     m_metrics.textureMemory = totalTextureMemory;
 
     int totalVariants = 0;

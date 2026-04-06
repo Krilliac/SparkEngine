@@ -10,6 +10,7 @@
  */
 
 #include "SkyAtmosphere.h"
+#include "../Engine/World/TimeOfDaySystem.h"
 #include "../Utils/AngleUtils.h"
 #include "../Utils/Validate.h"
 
@@ -250,17 +251,22 @@ namespace Spark::Graphics
     // Update
     // =========================================================================
 
-    void SkyAtmosphereSystem::Update([[maybe_unused]] float deltaTime)
+    void SkyAtmosphereSystem::Update(float deltaTime)
     {
-        // Placeholder for time-of-day animation.
-        // When linked to a DayNightCycle system, this would advance the sun
-        // direction and recompute zenith values each frame.
+        if (!m_initialized || !m_settings.enabled)
+            return;
+
+        // Sync sun direction from the TimeOfDaySystem each frame
+        auto& tod = Spark::TimeOfDaySystem::GetInstance();
+        tod.Update(deltaTime);
+        SetSunDirection(tod.GetSunDirection());
     }
 
     // =========================================================================
     // GPU Rendering
     // =========================================================================
 
+    // Intentional: deltaTime reserved for future animated sky effects (clouds, aurora)
     void SkyAtmosphereSystem::RenderGPU([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized || !m_settings.enabled)

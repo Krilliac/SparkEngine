@@ -126,10 +126,10 @@ std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateSliderConstraint(std::sh
     return constraint;
 }
 
-std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(std::shared_ptr<PhysicsBody> bodyA,
-                                                                        std::shared_ptr<PhysicsBody> bodyB,
-                                                                        const XMMATRIX& frameA,
-                                                                        [[maybe_unused]] const XMMATRIX& frameB)
+std::shared_ptr<PhysicsConstraint> PhysicsSystem::CreateFixedConstraint(
+    std::shared_ptr<PhysicsBody> bodyA, std::shared_ptr<PhysicsBody> bodyB, const XMMATRIX& frameA,
+    [[maybe_unused]] const XMMATRIX&
+        frameB) // Intentional: Jolt fixed constraint uses point1==point2; frameB reserved for future axis-aligned constraints
 {
     if (!m_joltSystem || !bodyA || !bodyB)
         return nullptr;

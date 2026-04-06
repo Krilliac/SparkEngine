@@ -137,6 +137,8 @@ namespace SparkEditor
             return {false, "No repository open", "", -1, 0.0f, {}};
 
         std::string branch = branchName.empty() ? m_repositoryInfo->currentBranch.name : branchName;
+        if (ContainsShellMetachars(remoteName) || ContainsShellMetachars(branch))
+            return {false, "Remote or branch name contains unsafe characters", "", -1, 0.0f, {}};
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Pushing to %s/%s", remoteName.c_str(), branch.c_str());
         std::string cmd = "git push " + remoteName + " " + branch;
         if (progressCallback)
@@ -154,6 +156,8 @@ namespace SparkEditor
             return {false, "No repository open", "", -1, 0.0f, {}};
 
         std::string branch = branchName.empty() ? m_repositoryInfo->currentBranch.name : branchName;
+        if (ContainsShellMetachars(remoteName) || ContainsShellMetachars(branch))
+            return {false, "Remote or branch name contains unsafe characters", "", -1, 0.0f, {}};
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Pulling from %s/%s", remoteName.c_str(), branch.c_str());
         std::string cmd = "git pull " + remoteName + " " + branch;
         if (progressCallback)
@@ -174,6 +178,8 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        if (ContainsShellMetachars(remoteName))
+            return {false, "Remote name contains unsafe characters", "", -1, 0.0f, {}};
         std::string cmd = "git fetch " + remoteName;
         return ExecuteCommand(cmd, m_repositoryInfo->path);
     }
@@ -187,6 +193,8 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        if (ContainsShellMetachars(branchName) || ContainsShellMetachars(baseBranch))
+            return {false, "Branch name contains unsafe characters", "", -1, 0.0f, {}};
         std::string cmd;
         if (baseBranch.empty())
         {
@@ -209,6 +217,8 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        if (ContainsShellMetachars(branchName))
+            return {false, "Branch name contains unsafe characters", "", -1, 0.0f, {}};
         std::string cmd = "git checkout " + branchName;
         VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
         if (result.success)
@@ -224,6 +234,8 @@ namespace SparkEditor
         if (!m_repositoryInfo)
             return {false, "No repository open", "", -1, 0.0f, {}};
 
+        if (ContainsShellMetachars(branchName))
+            return {false, "Branch name contains unsafe characters", "", -1, 0.0f, {}};
         std::string cmd = "git merge " + branchName;
         VCSOperationResult result = ExecuteCommand(cmd, m_repositoryInfo->path);
         if (result.success)

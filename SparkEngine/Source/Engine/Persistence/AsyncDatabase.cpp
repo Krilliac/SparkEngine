@@ -212,7 +212,19 @@ namespace Spark::Persistence
                     }
                     else if constexpr (std::is_same_v<T, std::string>)
                     {
-                        replacement = arg;
+                        // Escape single quotes to prevent SQL injection
+                        std::string escaped;
+                        escaped.reserve(arg.size() + 2);
+                        escaped += '\'';
+                        for (char c : arg)
+                        {
+                            if (c == '\'')
+                                escaped += "''";
+                            else
+                                escaped += c;
+                        }
+                        escaped += '\'';
+                        replacement = escaped;
                     }
                     else if constexpr (std::is_same_v<T, std::vector<uint8_t>>)
                     {

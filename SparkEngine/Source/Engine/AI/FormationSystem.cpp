@@ -166,6 +166,7 @@ namespace Spark::AI
     // Update
     // =========================================================================
 
+    // Intentional: deltaTime reserved for future ECS-driven formation center updates
     void FormationSystem::Update([[maybe_unused]] float deltaTime)
     {
         // In a full integration, this would query the ECS world for each

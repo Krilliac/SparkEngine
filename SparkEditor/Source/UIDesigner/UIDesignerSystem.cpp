@@ -102,7 +102,7 @@ namespace SparkEditor
         widget.widgetId = m_nextWidgetId++;
         widget.name = name;
         widget.type = type;
-        widget.parentId = parentId > 0 ? parentId : screen->widgets.front().widgetId;
+        widget.parentId = parentId > 0 ? parentId : (screen->widgets.empty() ? 0 : screen->widgets.front().widgetId);
         SetDefaultWidgetSize(widget);
 
         screen->widgets.push_back(widget);

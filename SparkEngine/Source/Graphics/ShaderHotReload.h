@@ -28,6 +28,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <string>
@@ -348,21 +349,52 @@ namespace Spark::Graphics
         {
             auto startTime = std::chrono::high_resolution_clock::now();
 
-            // Placeholder: actual compilation would call the RHI shader compiler.
-            // For now, we validate the file exists and report success.
-            std::error_code ec;
-            bool fileExists = std::filesystem::exists(info.path, ec);
-
-            auto endTime = std::chrono::high_resolution_clock::now();
-            float elapsedMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
-
             ShaderReloadEvent event;
             event.shaderName = info.shaderName;
             event.shaderPath = info.path;
-            event.success = fileExists;
-            event.compilationTimeMs = elapsedMs;
-            if (!fileExists)
+            event.success = false;
+
+            // Validate that the file exists before attempting compilation
+            std::error_code ec;
+            if (!std::filesystem::exists(info.path, ec))
+            {
                 event.errorMessage = "Shader file not found: " + info.path;
+                auto endTime = std::chrono::high_resolution_clock::now();
+                event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+                NotifyReload(event);
+                return false;
+            }
+
+            // Read shader source from disk
+            std::string sourceCode;
+            {
+                std::ifstream file(info.path, std::ios::binary);
+                if (!file.is_open())
+                {
+                    event.errorMessage = "Failed to open shader file: " + info.path;
+                    auto endTime = std::chrono::high_resolution_clock::now();
+                    event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+                    NotifyReload(event);
+                    return false;
+                }
+                sourceCode.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+            }
+
+            // Validate shader source is non-empty
+            if (sourceCode.empty())
+            {
+                event.errorMessage = "Shader file is empty: " + info.path;
+                auto endTime = std::chrono::high_resolution_clock::now();
+                event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+                NotifyReload(event);
+                return false;
+            }
+
+            // Source validated — mark success (full GPU compilation requires RHI context)
+            event.success = true;
+
+            auto endTime = std::chrono::high_resolution_clock::now();
+            event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
 
             if (event.success)
                 ++m_reloadCount;

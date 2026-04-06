@@ -66,7 +66,10 @@ namespace Spark::Editor
         w.WriteU32(0); // placeholder count
         for (auto entity : view)
         {
-            const auto& comp = *registry.try_get<NameComponent>(entity);
+            const auto* compPtr = registry.try_get<NameComponent>(entity);
+            if (!compPtr)
+                continue;
+            const auto& comp = *compPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteString(comp.name);
             ++count;
@@ -99,7 +102,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& comp = *registry.try_get<ActiveComponent>(entity);
+            const auto* compPtr = registry.try_get<ActiveComponent>(entity);
+            if (!compPtr)
+                continue;
+            const auto& comp = *compPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteBool(comp.active);
             ++count;
@@ -131,7 +137,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& t = *registry.try_get<Transform>(entity);
+            const auto* tPtr = registry.try_get<Transform>(entity);
+            if (!tPtr)
+                continue;
+            const auto& t = *tPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteFloat3(t.position.x, t.position.y, t.position.z);
             w.WriteFloat3(t.rotation.x, t.rotation.y, t.rotation.z);
@@ -178,7 +187,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& l = *registry.try_get<LightComponent>(entity);
+            const auto* lPtr = registry.try_get<LightComponent>(entity);
+            if (!lPtr)
+                continue;
+            const auto& l = *lPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteU32(static_cast<uint32_t>(l.type));
             w.WriteFloat3(l.color.x, l.color.y, l.color.z);
@@ -226,7 +238,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& c = *registry.try_get<Camera>(entity);
+            const auto* cPtr = registry.try_get<Camera>(entity);
+            if (!cPtr)
+                continue;
+            const auto& c = *cPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteFloat(c.fov);
             w.WriteFloat(c.nearPlane);
@@ -266,7 +281,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& m = *registry.try_get<MeshRenderer>(entity);
+            const auto* mPtr = registry.try_get<MeshRenderer>(entity);
+            if (!mPtr)
+                continue;
+            const auto& m = *mPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteString(m.meshPath);
             w.WriteString(m.materialPath);
@@ -308,7 +326,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& a = *registry.try_get<AudioSourceComponent>(entity);
+            const auto* aPtr = registry.try_get<AudioSourceComponent>(entity);
+            if (!aPtr)
+                continue;
+            const auto& a = *aPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteString(a.soundName);
             w.WriteFloat(a.volume);
@@ -356,7 +377,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& rb = *registry.try_get<RigidBodyComponent>(entity);
+            const auto* rbPtr = registry.try_get<RigidBodyComponent>(entity);
+            if (!rbPtr)
+                continue;
+            const auto& rb = *rbPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteU32(static_cast<uint32_t>(rb.type));
             w.WriteFloat(rb.mass);
@@ -404,7 +428,10 @@ namespace Spark::Editor
         w.WriteU32(0);
         for (auto entity : view)
         {
-            const auto& col = *registry.try_get<ColliderComponent>(entity);
+            const auto* colPtr = registry.try_get<ColliderComponent>(entity);
+            if (!colPtr)
+                continue;
+            const auto& col = *colPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteU32(static_cast<uint32_t>(col.shape));
             w.WriteFloat3(col.halfExtents.x, col.halfExtents.y, col.halfExtents.z);

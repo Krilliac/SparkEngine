@@ -52,6 +52,7 @@ namespace MMO
         return true;
     }
 
+    // Intentional: deltaTime reserved for future tick-rate-dependent updates
     void MMOEngineSystems::Update([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized)

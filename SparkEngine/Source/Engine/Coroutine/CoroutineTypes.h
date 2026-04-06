@@ -200,6 +200,7 @@ namespace Spark
             void unhandled_exception() { finished = true; }
 
             /// Supports co_yield for yielding one frame
+            // Intentional: nullptr_t required by coroutine protocol, value semantically unused
             std::suspend_always yield_value([[maybe_unused]] std::nullptr_t)
             {
                 currentYield = std::make_unique<WaitForEndOfFrame>();

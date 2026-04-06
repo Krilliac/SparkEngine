@@ -49,6 +49,7 @@ namespace OpenWorld
         return true;
     }
 
+    // Intentional: deltaTime reserved for future per-frame open-world updates
     void OWEngineSystems::Update([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized)
@@ -96,6 +97,7 @@ namespace OpenWorld
                     sc.properties["placeholder"] = typeName;
                     return sc;
                 },
+                // Intentional: deserialization callback params for future save/load implementation
                 []([[maybe_unused]] World& world, [[maybe_unused]] EntityID entity,
                    [[maybe_unused]] const Spark::SerializedComponent& data) {});
         };

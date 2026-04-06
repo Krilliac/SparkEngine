@@ -98,6 +98,7 @@ namespace OpenWorld
         ApplySurvivalEffects(deltaTime);
     }
 
+    // Intentional: deltaTime reserved for future time-scaled temperature changes
     void OWPlayerSystem::UpdateTemperature([[maybe_unused]] float deltaTime)
     {
         // Temperature is influenced by biome base temp and clothing warmth

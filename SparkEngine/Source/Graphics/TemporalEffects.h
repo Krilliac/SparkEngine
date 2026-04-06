@@ -127,9 +127,21 @@ class TemporalEffects
         frameData.frameIndex = m_frameIndex;
         frameData.deltaTime = deltaTime;
 
-        // Compute viewProj (simplified - in production use XMMatrixMultiply)
-        frameData.viewProjMatrix = viewMatrix;    // Placeholder - caller should set
-        frameData.invViewProjMatrix = viewMatrix; // Placeholder
+        // Compute viewProj and its inverse for reprojection
+#ifdef SPARK_PLATFORM_WINDOWS
+        {
+            XMMATRIX vMat = XMLoadFloat4x4(&viewMatrix);
+            XMMATRIX pMat = XMLoadFloat4x4(&projMatrix);
+            XMMATRIX vp = XMMatrixMultiply(vMat, pMat);
+            XMStoreFloat4x4(&frameData.viewProjMatrix, vp);
+            XMVECTOR det;
+            XMMATRIX invVP = XMMatrixInverse(&det, vp);
+            XMStoreFloat4x4(&frameData.invViewProjMatrix, invVP);
+        }
+#else
+        frameData.viewProjMatrix = viewMatrix;
+        frameData.invViewProjMatrix = viewMatrix;
+#endif
 
         m_frameHistory.PushFrame(frameData);
     }

@@ -850,6 +850,7 @@ void UpscalingSystem::UnbindComputeResources()
 // Execute methods — per-backend upscaling dispatch
 // =============================================================================
 
+// Intentional: params used only inside #ifdef SPARK_PLATFORM_WINDOWS
 void UpscalingSystem::ExecuteFSR1([[maybe_unused]] ID3D11ShaderResourceView* inputColorSRV,
                                   [[maybe_unused]] ID3D11UnorderedAccessView* outputUAV)
 {
@@ -895,7 +896,7 @@ void UpscalingSystem::ExecuteFSR1([[maybe_unused]] ID3D11ShaderResourceView* inp
 #endif
 }
 
-void UpscalingSystem::ExecuteFSR2([[maybe_unused]] const FSR2DispatchDescription& desc)
+void UpscalingSystem::ExecuteFSR2(const FSR2DispatchDescription& desc)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     // FSR 2.0 requires the FidelityFX SDK which is not yet linked.
@@ -911,6 +912,7 @@ void UpscalingSystem::ExecuteFSR2([[maybe_unused]] const FSR2DispatchDescription
 #endif
 }
 
+// Intentional: params used only inside #ifdef SPARK_PLATFORM_WINDOWS
 void UpscalingSystem::ExecuteDLSS([[maybe_unused]] ID3D11ShaderResourceView* colorSRV,
                                   [[maybe_unused]] ID3D11ShaderResourceView* depthSRV,
                                   [[maybe_unused]] ID3D11ShaderResourceView* motionVectorsSRV,
@@ -930,6 +932,7 @@ void UpscalingSystem::ExecuteDLSS([[maybe_unused]] ID3D11ShaderResourceView* col
 #endif
 }
 
+// Intentional: params used only inside #ifdef SPARK_PLATFORM_WINDOWS
 void UpscalingSystem::ExecuteXeSS([[maybe_unused]] ID3D11ShaderResourceView* colorSRV,
                                   [[maybe_unused]] ID3D11ShaderResourceView* depthSRV,
                                   [[maybe_unused]] ID3D11ShaderResourceView* motionVectorsSRV,
@@ -949,6 +952,7 @@ void UpscalingSystem::ExecuteXeSS([[maybe_unused]] ID3D11ShaderResourceView* col
 #endif
 }
 
+// Intentional: params used only inside #ifdef SPARK_PLATFORM_WINDOWS
 void UpscalingSystem::ExecuteSparkSR([[maybe_unused]] ID3D11ShaderResourceView* colorSRV,
                                      [[maybe_unused]] ID3D11ShaderResourceView* depthSRV,
                                      [[maybe_unused]] ID3D11ShaderResourceView* motionVectorsSRV,

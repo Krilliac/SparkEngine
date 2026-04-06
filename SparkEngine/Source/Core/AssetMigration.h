@@ -58,6 +58,7 @@ namespace Spark
     /// @brief Discriminator for the kind of asset stored in a binary file.
     enum class AssetType : uint8_t
     {
+        Unknown,    ///< Unspecified / applies to all types
         Scene,      ///< World / level scene
         Material,   ///< Material definition
         Prefab,     ///< Entity prefab template
@@ -131,6 +132,9 @@ namespace Spark
 
         /// @brief Human-readable description of what this step changes.
         virtual std::string_view GetDescription() const = 0;
+
+        /// @brief Asset type this step applies to (Unknown = applies to all).
+        virtual AssetType GetAssetType() const { return AssetType::Unknown; }
     };
 
     // =========================================================================
@@ -309,15 +313,14 @@ namespace Spark
          * @return Ordered vector of step pointers. Empty if no path exists or
          *         from >= to.
          */
-        std::vector<IMigrationStep*> GetMigrationPath(AssetVersion from, AssetVersion to,
-                                                      [[maybe_unused]] AssetType type) const
+        std::vector<IMigrationStep*> GetMigrationPath(AssetVersion from, AssetVersion to, AssetType type) const
         {
             if (from >= to)
                 return {};
 
             // Greedy forward search: at each step, find a registered migration
             // whose source matches the current version and whose target is closest
-            // to (but not exceeding) the goal.
+            // to (but not exceeding) the goal. Steps are filtered by asset type.
             std::vector<IMigrationStep*> path;
             AssetVersion current = from;
 
@@ -328,7 +331,8 @@ namespace Spark
 
                 for (const auto& step : m_steps)
                 {
-                    if (step->GetSourceVersion() == current && step->GetTargetVersion() <= to)
+                    if (step->GetSourceVersion() == current && step->GetTargetVersion() <= to &&
+                        (step->GetAssetType() == type || step->GetAssetType() == AssetType::Unknown))
                     {
                         if (!bestStep || step->GetTargetVersion() > bestTarget)
                         {

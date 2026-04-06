@@ -33,6 +33,7 @@ namespace ARPG
         m_heroes.clear();
     }
 
+    // Intentional: deltaTime reserved for future health/mana regeneration
     void ARPGHeroSystem::Update([[maybe_unused]] float deltaTime)
     {
         // Future: health/mana regeneration over time

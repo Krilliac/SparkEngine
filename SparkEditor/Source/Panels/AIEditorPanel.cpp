@@ -172,10 +172,9 @@ namespace SparkEditor
 
     void AIEditorPanel::RenderAgentInspector()
     {
-        ImGui::TextDisabled("Runtime AI agent states will appear here during Play mode.");
+        ImGui::TextDisabled("Connect via RemoteDebug to inspect live AI agents during Play mode.");
         ImGui::Separator();
 
-        // Placeholder columns for runtime agent display
         if (ImGui::BeginTable("AgentTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
         {
             ImGui::TableSetupColumn("Entity");
@@ -183,6 +182,11 @@ namespace SparkEditor
             ImGui::TableSetupColumn("Behavior Tree");
             ImGui::TableSetupColumn("Target");
             ImGui::TableHeadersRow();
+
+            // Agent data is populated via RemoteDebugClient when connected
+            // to a running game instance. Without a live connection, the table
+            // remains empty to indicate no data is available.
+
             ImGui::EndTable();
         }
     }

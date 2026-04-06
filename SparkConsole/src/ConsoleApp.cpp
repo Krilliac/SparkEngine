@@ -89,9 +89,9 @@ ConsoleApp::~ConsoleApp()
 void ConsoleApp::PrintBanner()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
-    [[maybe_unused]] int rc_ = system("cls");
+    [[maybe_unused]] int rc_ = system("cls"); // Intentional: side-effect only
 #else
-    [[maybe_unused]] int rc_ = system("clear");
+    [[maybe_unused]] int rc_ = system("clear"); // Intentional: side-effect only
 #endif
     std::wcout << L"========================================" << std::endl;
     std::wcout << L"   Spark Engine Console v2.0.0" << std::endl;
@@ -1035,12 +1035,12 @@ void ConsoleApp::RegisterCoreCommands()
                                       [this](const std::vector<std::string>& args) -> std::string
                                       {
 #ifdef SPARK_PLATFORM_WINDOWS
-                                          [[maybe_unused]] int rc_ = system("cls");
+                                          [[maybe_unused]] int rc_ = system("cls"); // Intentional: side-effect only
 
                                           HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
                                           DWORD fileType = GetFileType(hStdin);
 #else
-            [[maybe_unused]] int rc_ = system("clear");
+            [[maybe_unused]] int rc_ = system("clear"); // Intentional: side-effect only
 #endif
 
                                           std::wcout << L"========================================" << std::endl;

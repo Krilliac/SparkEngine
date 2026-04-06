@@ -9,10 +9,12 @@
 #include <cstdio>
 #include <cstring>
 #include <array>
+#include <filesystem>
 
 #ifdef _WIN32
 #define popen _popen
 #define pclose _pclose
+#include <shlobj.h>
 #endif
 
 namespace SparkEditor
@@ -51,7 +53,41 @@ namespace SparkEditor
             ImGui::Text("No repository open.");
             if (ImGui::Button("Open Repository..."))
             {
-                // Placeholder: would open a file dialog
+                std::string selectedPath;
+                bool selected = false;
+#ifdef _WIN32
+                BROWSEINFOA bi = {};
+                bi.lpszTitle = "Select Repository Folder";
+                bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
+                LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
+                if (pidl)
+                {
+                    char path[MAX_PATH];
+                    if (SHGetPathFromIDListA(pidl, path))
+                    {
+                        selectedPath = path;
+                        selected = true;
+                    }
+                    CoTaskMemFree(pidl);
+                }
+#else
+                FILE* pipe =
+                    popen("zenity --file-selection --directory --title=\"Select Repository\" 2>/dev/null", "r");
+                if (!pipe)
+                    pipe = popen("kdialog --getexistingdirectory ~ 2>/dev/null", "r");
+                if (pipe)
+                {
+                    char buf[1024];
+                    while (fgets(buf, sizeof(buf), pipe) != nullptr)
+                        selectedPath += buf;
+                    int status = pclose(pipe);
+                    while (!selectedPath.empty() && (selectedPath.back() == '\n' || selectedPath.back() == '\r'))
+                        selectedPath.pop_back();
+                    selected = (status == 0 && !selectedPath.empty() && std::filesystem::is_directory(selectedPath));
+                }
+#endif
+                if (selected)
+                    OpenRepository(selectedPath);
             }
             return;
         }

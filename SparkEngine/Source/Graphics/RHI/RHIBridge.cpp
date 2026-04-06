@@ -106,6 +106,7 @@ namespace Spark
             }
         }
 
+        // Intentional: device reserved for GPU resource cleanup in backends that need it
         void ShaderCache::Clear([[maybe_unused]] IRHIDevice* device)
         {
             m_loadedShaders.clear();

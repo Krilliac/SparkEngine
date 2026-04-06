@@ -303,6 +303,7 @@ double Profiler::GetSectionTimeMs(std::string_view name) const
     return 0.0;
 }
 
+// Intentional: name used only inside #ifdef SPARK_PLATFORM_WINDOWS
 double Profiler::GetGPUTimeMs([[maybe_unused]] std::string_view name) const
 {
 #ifdef SPARK_PLATFORM_WINDOWS
