@@ -134,7 +134,8 @@ namespace Spark::Gameplay
             const auto* table = GetTable(tableName);
             if (!table)
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Game, "LootTableManager::RollLoot: table '{}' not found", tableName);
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "LootTableManager::RollLoot: table '%s' not found",
+                               tableName.c_str());
                 return results;
             }
 
@@ -179,8 +180,8 @@ namespace Spark::Gameplay
                     }
                 }
             }
-            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "LootTableManager::RollLoot: table='{}', {} drops", tableName,
-                            results.size());
+            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "LootTableManager::RollLoot: table='%s', %zu drops",
+                            tableName.c_str(), results.size());
             return results;
         }
 
@@ -350,7 +351,7 @@ namespace Spark::Gameplay
             const auto* recipe = GetRecipe(recipeId);
             if (!recipe)
                 return false;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "CraftingSystem: starting craft '{}'", recipe->name);
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "CraftingSystem: starting craft '%s'", recipe->name.c_str());
             CraftingQueue entry;
             entry.recipeId = recipeId;
             entry.startTime = m_elapsedTime;
@@ -382,7 +383,8 @@ namespace Spark::Gameplay
                     if (entry.progress >= 1.0f)
                     {
                         entry.state = CraftState::Complete;
-                        SPARK_LOG_INFO(Spark::LogCategory::Game, "CraftingSystem: craft '{}' complete", entry.recipeId);
+                        SPARK_LOG_INFO(Spark::LogCategory::Game, "CraftingSystem: craft '%s' complete",
+                                       entry.recipeId.c_str());
                     }
                 }
             }

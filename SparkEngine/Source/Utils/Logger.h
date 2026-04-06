@@ -17,7 +17,7 @@
  *   auto& logger = Spark::Logger::Get();
  *   logger.Initialize();
  *   logger.SetGlobalLevel(Spark::LogLevel::Debug);
- *   SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine started version {}", 1);
+ *   SPARK_LOG_INFO(Spark::LogCategory::Core, "Engine started version %d", 1);
  *   logger.Shutdown();
  * @endcode
  */
