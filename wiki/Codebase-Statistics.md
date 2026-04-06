@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 260942 |
+| **SparkEngine/Source** | 260922 |
 | **SparkEditor/Source** | 85186 |
 | **GameModules** | 57825 |
 | **Tests** | 104301 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~510645** |
+| **Total C++ (excl. ThirdParty)** | **~510625** |
 
 ### File Counts
 
@@ -34,7 +34,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |--------|-------|
 | Average lines per .cpp file | ~878 |
 | Average lines per .h file | ~566 |
-| Largest codebase section | Graphics (100654 lines — 38% of SparkEngine/Source) |
+| Largest codebase section | Graphics (100628 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 100654 | 38.5% |
+| Graphics | 100628 | 38.5% |
 | Engine (all subsystems) | 79613 | 30.5% |
 | Utils | 36268 | 13.8% |
-| Core | 19365 | 7.4% |
+| Core | 19371 | 7.4% |
 | Physics | 10101 | 3.8% |
 | Audio | 5548 | 2.1% |
 | Input | 3876 | 1.4% |
