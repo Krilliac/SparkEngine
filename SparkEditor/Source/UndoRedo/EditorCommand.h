@@ -106,7 +106,7 @@ namespace SparkEditor
 
         void Execute() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -118,7 +118,7 @@ namespace SparkEditor
 
         void Undo() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -181,7 +181,7 @@ namespace SparkEditor
 
         void Execute() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -205,7 +205,7 @@ namespace SparkEditor
 
         void Undo() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -254,7 +254,7 @@ namespace SparkEditor
 
         void Execute() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             Spark::SceneNode node;
@@ -264,7 +264,7 @@ namespace SparkEditor
 
         void Undo() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene || m_createdEntityId == 0)
                 return;
             scene->RemoveNode(static_cast<int>(m_createdEntityId));
@@ -297,7 +297,7 @@ namespace SparkEditor
 
         void Execute() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             const auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -310,7 +310,7 @@ namespace SparkEditor
 
         void Undo() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             scene->AddNode(m_savedNode);
@@ -344,7 +344,7 @@ namespace SparkEditor
 
         void Execute() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -354,7 +354,7 @@ namespace SparkEditor
 
         void Undo() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -390,7 +390,7 @@ namespace SparkEditor
 
         void Execute() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));
@@ -403,7 +403,7 @@ namespace SparkEditor
 
         void Undo() override
         {
-            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            auto* scene = EngineContext::Get() ? EngineContext::Get()->GetSceneManager() : nullptr;
             if (!scene)
                 return;
             auto* node = scene->GetNode(static_cast<int>(m_entityId));

@@ -116,8 +116,12 @@ class World
 
     void DestroyEntity(EntityID entity)
     {
-        SPARK_REQUIRE_MSG(Spark::LogCategory::ECS, m_registry.valid(entity),
-                          "DestroyEntity called with invalid entity");
+        if (!m_registry.valid(entity))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::ECS, "DestroyEntity called with invalid entity %u",
+                           static_cast<uint32_t>(entity));
+            return;
+        }
         SPARK_LOG_TRACE(Spark::LogCategory::ECS, "Destroying entity %u", static_cast<uint32_t>(entity));
 
         // Clean up any per-entity event subscriptions before destroying

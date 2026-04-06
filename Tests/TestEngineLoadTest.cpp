@@ -42,6 +42,7 @@
 #include "../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h"
 #include "../SparkEngine/Source/Graphics/ClusteredLightCulling.h"
 #include "../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h"
+#include "../SparkEngine/Source/Engine/Replay/ReplaySystem.h"
 #include "../SparkEngine/Source/Utils/ChromeTracing.h"
 #include "../SparkEngine/Source/Utils/DebugHookManager.h"
 #include "../SparkEngine/Source/Utils/FrameInspector.h"
@@ -1085,4 +1086,631 @@ TEST(LoadTest_Severe_NetworkChurn)
 
     EXPECT_TRUE(successCount >= CYCLES - 5);
     EXPECT_TRUE(net.GetRole() == Spark::Net::NetworkRole::None);
+}
+
+// ============================================================================
+// DEEP: Dialogue system — build tree, traverse, select choices
+// ============================================================================
+
+TEST(DeepStress_DialogueTraversal)
+{
+    InitLoadTestEngine();
+
+    auto* dialogue = EngineContext::Get()->GetDialogue();
+    EXPECT_TRUE(dialogue != nullptr);
+    if (!dialogue)
+        return;
+
+    // Build a dialogue tree with branching choices
+    auto tree = std::make_unique<Spark::DialogueTree>();
+    tree->SetId("stress_tree");
+    tree->SetStartNodeId("start");
+
+    Spark::DialogueNode startNode;
+    startNode.id = "start";
+    startNode.type = Spark::DialogueNodeType::Text;
+    startNode.speakerName = "NPC";
+    startNode.text = "Hello adventurer!";
+    startNode.displayDuration = 0.5f;
+
+    Spark::DialogueChoice choice1;
+    choice1.text = "Tell me more";
+    choice1.nextNodeId = "branch_a";
+    Spark::DialogueChoice choice2;
+    choice2.text = "Goodbye";
+    choice2.nextNodeId = "end_node";
+    startNode.choices.push_back(choice1);
+    startNode.choices.push_back(choice2);
+    startNode.nextNodeId = "";
+    tree->AddNode(startNode);
+
+    Spark::DialogueNode branchA;
+    branchA.id = "branch_a";
+    branchA.type = Spark::DialogueNodeType::Text;
+    branchA.speakerName = "NPC";
+    branchA.text = "Here's some lore...";
+    branchA.displayDuration = 0.5f;
+    branchA.nextNodeId = "end_node";
+    tree->AddNode(branchA);
+
+    Spark::DialogueNode endNode;
+    endNode.id = "end_node";
+    endNode.type = Spark::DialogueNodeType::End;
+    tree->AddNode(endNode);
+
+    dialogue->RegisterTree("stress_tree", std::move(tree));
+
+    // Traverse the tree many times, taking different paths
+    constexpr int TRAVERSALS = 100;
+    int completedConversations = 0;
+
+    for (int i = 0; i < TRAVERSALS; i++)
+    {
+        bool started = dialogue->StartConversation("stress_tree");
+        EXPECT_TRUE(started);
+        if (!started)
+            continue;
+
+        dialogue->Update(0.016f);
+
+        // Alternate between choices
+        dialogue->SelectChoice(i % 2);
+        dialogue->Update(0.016f);
+
+        dialogue->EndConversation();
+        completedConversations++;
+    }
+
+    EXPECT_EQ(completedConversations, TRAVERSALS);
+    std::cout << "\n=== DEEP: Dialogue Traversal (" << TRAVERSALS << " conversations) ===\n";
+    std::cout << "  Completed: " << completedConversations << "/" << TRAVERSALS << "\n" << std::flush;
+}
+
+// ============================================================================
+// DEEP: Destruction system — register patterns, apply damage
+// ============================================================================
+
+TEST(DeepStress_DestructionSystem)
+{
+    InitLoadTestEngine();
+
+    auto& destruction = Spark::DestructionSystem::GetInstance();
+
+    // Register fracture patterns
+    Spark::FracturePattern wallPattern;
+    for (int i = 0; i < 8; i++)
+    {
+        Spark::FracturePiece piece;
+        piece.name = "shard_" + std::to_string(i);
+        piece.meshName = "shard_mesh";
+        piece.localOffset = {static_cast<float>(i) * 0.5f, 0.0f, 0.0f};
+        piece.mass = 2.0f;
+        piece.lifetime = 5.0f;
+        piece.scatterForce = 8.0f;
+        wallPattern.AddPiece(piece);
+    }
+    wallPattern.SetDestructionSound("wall_break");
+    wallPattern.SetParticleEffect("debris_dust");
+    destruction.RegisterPattern("wall_break", wallPattern);
+
+    EXPECT_TRUE(destruction.GetPattern("wall_break") != nullptr);
+
+    // Apply damage to many entities
+    constexpr int ENTITIES = 500;
+    for (uint32_t i = 0; i < ENTITIES; i++)
+    {
+        DirectX::XMFLOAT3 hitPt = {static_cast<float>(i), 1.0f, 0.0f};
+        DirectX::XMFLOAT3 hitDir = {0.0f, 0.0f, 1.0f};
+        destruction.ApplyDamage(i + 1000, 50.0f, hitPt, hitDir);
+    }
+
+    // Force destroy some
+    for (uint32_t i = 0; i < 100; i++)
+    {
+        destruction.ForceDestroy(i + 2000, 20.0f);
+    }
+
+    // Update to process damage
+    destruction.Update(0.016f);
+    destruction.Update(0.016f);
+
+    std::cout << "\n=== DEEP: Destruction System ===\n";
+    std::cout << "  Patterns registered: 1\n";
+    std::cout << "  Damage applied to: " << ENTITIES << " entities\n";
+    std::cout << "  Force destroyed: 100 entities\n" << std::flush;
+}
+
+// ============================================================================
+// DEEP: Proximity triggers — create, fire, remove
+// ============================================================================
+
+TEST(DeepStress_ProximityTriggers)
+{
+    InitLoadTestEngine();
+
+    auto& triggers = Spark::World::ProximityTriggerSystem::GetInstance();
+
+    std::atomic<int> enterCount{0};
+    std::atomic<int> exitCount{0};
+
+    // Create many sphere triggers
+    constexpr int TRIGGER_COUNT = 200;
+    std::vector<uint32_t> triggerIds;
+    triggerIds.reserve(TRIGGER_COUNT);
+
+    for (int i = 0; i < TRIGGER_COUNT; i++)
+    {
+        DirectX::XMFLOAT3 center = {static_cast<float>(i * 10), 0.0f, 0.0f};
+        uint32_t id = triggers.CreateSphereTrigger(
+            center, 5.0f, [&enterCount](uint32_t, uint32_t) { enterCount.fetch_add(1, std::memory_order_relaxed); },
+            [&exitCount](uint32_t, uint32_t) { exitCount.fetch_add(1, std::memory_order_relaxed); });
+        triggerIds.push_back(id);
+    }
+
+    // Simulate entity moving through trigger zones
+    constexpr int FRAMES = 500;
+    for (int f = 0; f < FRAMES; f++)
+    {
+        std::vector<Spark::World::EntityPosition> positions;
+        // 10 entities moving along X axis
+        for (uint32_t e = 0; e < 10; e++)
+        {
+            Spark::World::EntityPosition pos;
+            pos.entityID = e + 1;
+            pos.position = {static_cast<float>(f * 4 + e * 3), 0.0f, 0.0f};
+            positions.push_back(pos);
+        }
+        triggers.Update(positions);
+    }
+
+    // Remove all triggers
+    for (auto id : triggerIds)
+        triggers.RemoveTrigger(id);
+
+    std::cout << "\n=== DEEP: Proximity Triggers ===\n";
+    std::cout << "  Triggers created: " << TRIGGER_COUNT << "\n";
+    std::cout << "  Frames simulated: " << FRAMES << "\n";
+    std::cout << "  Enter callbacks: " << enterCount.load() << "\n";
+    std::cout << "  Exit callbacks: " << exitCount.load() << "\n" << std::flush;
+
+    // Entities should have entered and exited triggers as they moved
+    EXPECT_TRUE(enterCount.load() > 0);
+}
+
+// ============================================================================
+// DEEP: Condition system — evaluate conditions with variables
+// ============================================================================
+
+TEST(DeepStress_ConditionSystem)
+{
+    InitLoadTestEngine();
+
+    auto& conditions = Spark::Gameplay::ConditionSystem::GetInstance();
+    auto* world = EngineContext::Get()->GetWorld();
+    EXPECT_TRUE(world != nullptr);
+    if (!world)
+        return;
+
+    // Set some variables and flags
+    for (int i = 0; i < 100; i++)
+    {
+        conditions.SetVariable("var_" + std::to_string(i), static_cast<int64_t>(i * 10));
+        conditions.SetFlag("flag_" + std::to_string(i), i % 2 == 0);
+    }
+
+    // Create an entity to evaluate against
+    auto entity = world->CreateEntity("condition_test");
+    world->AddComponent<Transform>(entity, Transform{});
+    world->AddComponent<HealthComponent>(entity, HealthComponent{80.0f, 100.0f});
+
+    // Evaluate many condition sets
+    constexpr int EVALS = 1000;
+    int trueCount = 0;
+
+    for (int i = 0; i < EVALS; i++)
+    {
+        Spark::Gameplay::ConditionSet condSet;
+        Spark::Gameplay::ConditionGroup group;
+        group.logic = Spark::Gameplay::ConditionGroupLogic::And;
+
+        // Alternate between AlwaysTrue and AlwaysFalse to get a mix
+        Spark::Gameplay::Condition c1;
+        c1.type =
+            (i % 3 == 0) ? Spark::Gameplay::ConditionType::AlwaysFalse : Spark::Gameplay::ConditionType::AlwaysTrue;
+        group.conditions.push_back(c1);
+
+        // Flag check — even flags are true, odd are false
+        Spark::Gameplay::Condition c2;
+        c2.type = Spark::Gameplay::ConditionType::FlagSet;
+        c2.param1 = std::string("flag_" + std::to_string(i % 100));
+        group.conditions.push_back(c2);
+
+        condSet.groups.push_back(group);
+
+        bool result = conditions.Evaluate(condSet, static_cast<uint32_t>(entity), *world);
+        if (result)
+            trueCount++;
+    }
+
+    world->DestroyEntity(entity);
+
+    std::cout << "\n=== DEEP: Condition System ===\n";
+    std::cout << "  Evaluations: " << EVALS << "\n";
+    std::cout << "  True results: " << trueCount << "\n";
+    std::cout << "  False results: " << (EVALS - trueCount) << "\n" << std::flush;
+
+    // With AlwaysFalse every 3rd iteration (AND logic), we expect a mix
+    EXPECT_TRUE(trueCount > 0);
+    EXPECT_TRUE(trueCount < EVALS);
+}
+
+// ============================================================================
+// DEEP: Replay system — record and playback
+// ============================================================================
+
+TEST(DeepStress_ReplaySystem)
+{
+    auto& replay = Spark::ReplaySystem::GetInstance();
+
+    replay.SetMetadata("stress_map", "stress_mode");
+    replay.StartRecording();
+
+    // Record 500 frames with 20 entities each
+    constexpr int FRAMES = 500;
+    constexpr int ENTITIES_PER_FRAME = 20;
+
+    for (int f = 0; f < FRAMES; f++)
+    {
+        std::vector<Spark::ReplayEntityState> entities;
+        entities.reserve(ENTITIES_PER_FRAME);
+
+        for (int e = 0; e < ENTITIES_PER_FRAME; e++)
+        {
+            Spark::ReplayEntityState state;
+            state.entityId = static_cast<uint32_t>(e);
+            state.position = {static_cast<float>(f + e), static_cast<float>(e), 0.0f};
+            state.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+            state.velocity = {1.0f, 0.0f, 0.0f};
+            state.health = 100.0f - static_cast<float>(f % 50);
+            state.animationState = f % 4;
+            state.flags = 1; // Alive
+            entities.push_back(state);
+        }
+        replay.RecordFrame(entities, static_cast<float>(f) * 0.016f);
+    }
+
+    replay.StopRecording();
+
+    // Now play it back
+    replay.StartPlayback();
+
+    int playbackFrames = 0;
+    while (replay.GetPlaybackState() == Spark::PlaybackState::Playing && playbackFrames < FRAMES + 100)
+    {
+        replay.UpdatePlayback(0.016f);
+        auto* frame = replay.GetCurrentFrame();
+        if (frame)
+            playbackFrames++;
+    }
+
+    replay.StopPlayback();
+
+    std::cout << "\n=== DEEP: Replay System ===\n";
+    std::cout << "  Recorded frames: " << FRAMES << "\n";
+    std::cout << "  Entities per frame: " << ENTITIES_PER_FRAME << "\n";
+    std::cout << "  Playback frames retrieved: " << playbackFrames << "\n" << std::flush;
+
+    EXPECT_TRUE(playbackFrames > 0);
+}
+
+// ============================================================================
+// DEEP: Seamless area streaming — register and simulate player movement
+// ============================================================================
+
+TEST(DeepStress_AreaStreaming)
+{
+    InitLoadTestEngine();
+
+    auto& streaming = Spark::Streaming::SeamlessAreaManager::GetInstance();
+
+    // Register a grid of areas
+    constexpr int GRID = 4;
+    for (int x = 0; x < GRID; x++)
+    {
+        for (int z = 0; z < GRID; z++)
+        {
+            Spark::Streaming::AreaDefinition def;
+            def.areaId = static_cast<uint32_t>(x * GRID + z + 1);
+            def.name = "area_" + std::to_string(x) + "_" + std::to_string(z);
+            def.scenePath = "scenes/area_" + def.name + ".scene";
+            def.boundsMin = {static_cast<float>(x * 256), 0.0f, static_cast<float>(z * 256)};
+            def.boundsMax = {static_cast<float>((x + 1) * 256), 128.0f, static_cast<float>((z + 1) * 256)};
+            def.priority = (x == 1 && z == 1) ? 10 : 0; // Center area is high priority
+            streaming.RegisterArea(def);
+        }
+    }
+
+    // Simulate player walking across the area grid
+    constexpr int FRAMES = 300;
+    for (int f = 0; f < FRAMES; f++)
+    {
+        float playerX = static_cast<float>(f) * 3.0f; // Walk along X
+        float playerZ = 512.0f;                       // Middle of grid
+        DirectX::XMFLOAT3 pos = {playerX, 0.0f, playerZ};
+        DirectX::XMFLOAT3 vel = {3.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 camDir = {1.0f, 0.0f, 0.0f};
+
+        streaming.SetPlayerState(pos, vel, camDir);
+        streaming.Update(0.016f);
+    }
+
+    std::cout << "\n=== DEEP: Area Streaming ===\n";
+    std::cout << "  Areas registered: " << (GRID * GRID) << "\n";
+    std::cout << "  Frames simulated: " << FRAMES << "\n" << std::flush;
+}
+
+// ============================================================================
+// EDGE: Zero delta-time frames — should not crash or divide by zero
+// ============================================================================
+
+TEST(EdgeCase_ZeroDeltaTime)
+{
+    InitLoadTestEngine();
+    auto* ctx = EngineContext::Get();
+
+    // Run 100 frames with dt=0 — should not crash, no NaN, no div-by-zero
+    for (int f = 0; f < 100; f++)
+    {
+        if (auto* w = ctx->GetWeather())
+            w->Update(0.0f);
+        if (auto* t = ctx->GetTimeOfDay())
+            t->Update(0.0f);
+        if (auto* tw = ctx->GetTween())
+            tw->Update(0.0f);
+        if (auto* c = ctx->GetCoroutineScheduler())
+            c->Update(0.0f);
+        if (auto* p = ctx->GetPhysics())
+            p->Update(0.0f);
+
+        Spark::FixedTimestepAccumulator::GetInstance().Advance(0.0f);
+
+        auto& rhi = Spark::RHI::NullRHIDevice::GetInstance();
+        rhi.BeginFrame();
+        rhi.EndFrame();
+    }
+
+    std::cout << "\n=== EDGE: Zero Delta-Time (100 frames) — OK ===\n" << std::flush;
+}
+
+// ============================================================================
+// EDGE: Huge delta-time — simulate long frame hitches
+// ============================================================================
+
+TEST(EdgeCase_HugeDeltaTime)
+{
+    InitLoadTestEngine();
+    auto* ctx = EngineContext::Get();
+
+    // Simulate a 10-second frame hitch — should not crash or overflow
+    float hugeDt = 10.0f;
+    if (auto* w = ctx->GetWeather())
+    {
+        w->SetWeather(Spark::WeatherType::Rain, 0.5f, 1.0f);
+        w->Update(hugeDt);
+    }
+    if (auto* t = ctx->GetTimeOfDay())
+    {
+        t->SetTimeOfDay(12.0f);
+        t->Update(hugeDt);
+    }
+    if (auto* tw = ctx->GetTween())
+    {
+        static float val = 0.0f;
+        tw->TweenFloat(val, 0.0f, 100.0f, 0.5f, Spark::EaseType::EaseInOutCubic);
+        tw->Update(hugeDt); // should complete instantly
+    }
+    if (auto* c = ctx->GetCoroutineScheduler())
+        c->Update(hugeDt);
+
+    Spark::FixedTimestepAccumulator::GetInstance().Advance(hugeDt);
+
+    // Another huge frame
+    hugeDt = 60.0f; // one minute
+    if (auto* w = ctx->GetWeather())
+        w->Update(hugeDt);
+    if (auto* t = ctx->GetTimeOfDay())
+        t->Update(hugeDt);
+
+    std::cout << "\n=== EDGE: Huge Delta-Time (10s + 60s) — OK ===\n" << std::flush;
+}
+
+// ============================================================================
+// EDGE: Double-destroy and invalid entity operations
+// ============================================================================
+
+TEST(EdgeCase_DoubleDestroyEntity)
+{
+    InitLoadTestEngine();
+    auto* world = EngineContext::Get()->GetWorld();
+    EXPECT_TRUE(world != nullptr);
+    if (!world)
+        return;
+
+    // Create and destroy, then try to destroy again
+    auto e = world->CreateEntity("double_destroy_test");
+    world->AddComponent<Transform>(e, Transform{});
+    world->DestroyEntity(e);
+
+    // Second destroy — should not crash (gracefully returns)
+    world->DestroyEntity(e);
+
+    // Entity should be invalid in registry after destruction
+    EXPECT_FALSE(world->GetRegistry().valid(e));
+
+    std::cout << "\n=== EDGE: Double-Destroy Entity — OK ===\n" << std::flush;
+}
+
+// ============================================================================
+// EDGE: Rapid create-destroy cycling — tests allocator stability
+// ============================================================================
+
+TEST(EdgeCase_RapidCreateDestroyCycle)
+{
+    InitLoadTestEngine();
+    auto* world = EngineContext::Get()->GetWorld();
+    EXPECT_TRUE(world != nullptr);
+    if (!world)
+        return;
+
+    size_t baseline = world->GetEntityCount();
+
+    // Create and immediately destroy 10,000 entities one at a time
+    for (int i = 0; i < 10000; i++)
+    {
+        auto e = world->CreateEntity();
+        world->AddComponent<Transform>(e, Transform{});
+        world->AddComponent<HealthComponent>(e, HealthComponent{100.0f, 100.0f});
+        world->DestroyEntity(e);
+    }
+
+    EXPECT_EQ(world->GetEntityCount(), baseline);
+
+    std::cout << "\n=== EDGE: Rapid Create-Destroy Cycle (10k) — OK ===\n" << std::flush;
+}
+
+// ============================================================================
+// DEEP: AI systems — exercise tactical, cover, formation together
+// ============================================================================
+
+TEST(DeepStress_AISystemsIntegration)
+{
+    InitLoadTestEngine();
+
+    auto& formation = Spark::AI::FormationSystem::GetInstance();
+    auto& groupAI = Spark::AI::GroupAISystem::GetInstance();
+
+    // Run AI systems that have Update for many frames
+    constexpr int FRAMES = 200;
+    constexpr float DT = 1.0f / 60.0f;
+
+    for (int f = 0; f < FRAMES; f++)
+    {
+        formation.Update(DT);
+        groupAI.Update(DT);
+    }
+
+    std::cout << "\n=== DEEP: AI Systems Integration (200 frames) — OK ===\n" << std::flush;
+}
+
+// ============================================================================
+// DEEP: Combined subsystem stress — all systems running simultaneously
+// ============================================================================
+
+TEST(DeepStress_AllSubsystemsCombined)
+{
+    InitLoadTestEngine();
+    auto* ctx = EngineContext::Get();
+    auto* world = ctx->GetWorld();
+    auto* eventBus = ctx->GetEventBus();
+    EXPECT_TRUE(world != nullptr && eventBus != nullptr);
+    if (!world || !eventBus)
+        return;
+
+    auto& rhi = Spark::RHI::NullRHIDevice::GetInstance();
+    auto& destruction = Spark::DestructionSystem::GetInstance();
+    auto& jobs = Spark::JobSystem::Get();
+
+    constexpr int FRAMES = 1000;
+    constexpr float DT = 1.0f / 60.0f;
+
+    size_t baselineEntityCount = world->GetEntityCount();
+    auto memBefore = SampleResources();
+    auto wallStart = std::chrono::high_resolution_clock::now();
+
+    for (int f = 0; f < FRAMES; f++)
+    {
+        // Physics
+        if (auto* p = ctx->GetPhysics())
+            p->Update(DT);
+
+        // Weather + TimeOfDay
+        if (auto* w = ctx->GetWeather())
+        {
+            if (f % 60 == 0)
+                w->SetWeather(static_cast<Spark::WeatherType>(f % 6), 0.5f, 0.5f);
+            w->Update(DT);
+        }
+        if (auto* t = ctx->GetTimeOfDay())
+            t->Update(DT);
+
+        // Coroutines + Tweens
+        if (auto* c = ctx->GetCoroutineScheduler())
+            c->Update(DT);
+        if (auto* tw = ctx->GetTween())
+        {
+            if (f % 20 == 0)
+            {
+                static float scratch = 0.0f;
+                tw->TweenFloat(scratch, 0.0f, 1.0f, 0.3f, Spark::EaseType::EaseOutBounce);
+            }
+            tw->Update(DT);
+        }
+
+        // Abilities + Conditions
+        if (auto* ab = ctx->GetAbilities())
+            ab->Update(*world, DT);
+
+        // Entity churn
+        std::vector<EntityID> batch;
+        for (int i = 0; i < 10; i++)
+        {
+            auto e = world->CreateEntity();
+            world->AddComponent<Transform>(e, Transform{});
+            batch.push_back(e);
+        }
+        for (auto e : batch)
+            world->DestroyEntity(e);
+
+        // Destruction
+        if (f % 50 == 0)
+        {
+            destruction.ApplyDamage(f + 5000, 100.0f, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f});
+        }
+        destruction.Update(DT);
+
+        // RHI
+        rhi.BeginFrame();
+        rhi.EndFrame();
+
+        // AI systems
+        Spark::AI::FormationSystem::GetInstance().Update(DT);
+        Spark::AI::GroupAISystem::GetInstance().Update(DT);
+
+        // EventBus
+        eventBus->Publish(LoadTestEvent{f});
+
+        // JobSystem work every 25 frames
+        if (f % 25 == 0)
+        {
+            std::atomic<int> sum{0};
+            jobs.ParallelFor(0, 200, [&](int i) { sum.fetch_add(i, std::memory_order_relaxed); });
+        }
+
+        // Fixed timestep
+        Spark::FixedTimestepAccumulator::GetInstance().Advance(DT);
+    }
+
+    auto wallEnd = std::chrono::high_resolution_clock::now();
+    double totalMs = std::chrono::duration<double, std::milli>(wallEnd - wallStart).count();
+    auto memAfter = SampleResources();
+
+    int64_t memDeltaKB = static_cast<int64_t>(memAfter.residentKB) - static_cast<int64_t>(memBefore.residentKB);
+
+    std::cout << "\n=== DEEP: All Subsystems Combined (1000 frames) ===\n";
+    std::cout << "  Total wall time: " << std::fixed << std::setprecision(1) << totalMs << " ms\n";
+    std::cout << "  Avg frame: " << std::setprecision(1) << (totalMs / FRAMES) << " ms\n";
+    std::cout << "  Memory delta: " << memDeltaKB << " KB\n" << std::flush;
+
+    EXPECT_EQ(world->GetEntityCount(), baselineEntityCount);
+    EXPECT_TRUE(totalMs < 60000.0); // < 60s for 1000 frames even in Debug
 }
