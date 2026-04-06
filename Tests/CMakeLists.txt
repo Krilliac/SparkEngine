@@ -370,6 +370,63 @@ if(NOT WIN32)
     set_target_properties(SparkTests PROPERTIES ENABLE_EXPORTS ON)
 endif()
 
+# =============================================================================
+# Feature-gated test support
+# When optional dependencies (ImGui, SDL2, Vulkan, etc.) are available, extra
+# tests activate automatically. Tests use #ifdef SPARK_TEST_HAS_* guards.
+# =============================================================================
+
+# ImGui — enables full editor tests, OpenWorld module tests, CommandPalette, etc.
+if(TARGET imgui)
+    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_IMGUI)
+    target_link_libraries(SparkTests PRIVATE imgui)
+
+    # Editor sources that require ImGui
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Search/CommandPalette.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/LevelStreaming/LevelStreamingSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlConflicts.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlGitOps.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlHelpers.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlRender.cpp"
+    )
+
+    # OpenWorld module sources (all use ImGui for RenderDebugUI)
+    target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Player/OWPlayerSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Exploration/OWExplorationSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Gathering/OWGatheringSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Wildlife/OWWildlifeSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Events/OWDynamicEventSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Settlement/OWSettlementSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/World/OWWorldSetup.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp"
+    )
+
+    message(STATUS "[Tests] ImGui available — gated editor & OpenWorld tests enabled")
+else()
+    message(STATUS "[Tests] ImGui not available — gated editor & OpenWorld tests disabled")
+endif()
+
+# Propagate engine feature defines so tests can gate on them
+if(ENABLE_NETWORKING)
+    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_NETWORKING)
+endif()
+if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
+    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)
+endif()
+if(SPARK_VULKAN_SUPPORT OR ENABLE_VULKAN)
+    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_VULKAN)
+endif()
+if(SPARK_OPENGL_SUPPORT OR ENABLE_OPENGL)
+    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_OPENGL)
+endif()
+if(ENABLE_MOBILE)
+    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_MOBILE)
+endif()
+
 # Add to CTest
 enable_testing()
 add_test(NAME SparkEngineTests COMMAND SparkTests)

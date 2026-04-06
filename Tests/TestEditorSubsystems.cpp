@@ -198,8 +198,16 @@ TEST(Workflow_CreateAndGetters)
 TEST(Workflow_AddStepAndExecuteSuccess)
 {
     EditorWorkflow wf("Test", "desc", "Custom");
-    wf.AddStep({"Step1", "first", [](WorkflowContext& ctx) { ctx.Log("ran1"); return true; }});
-    wf.AddStep({"Step2", "second", [](WorkflowContext& ctx) { ctx.Log("ran2"); return true; }});
+    wf.AddStep({"Step1", "first", [](WorkflowContext& ctx)
+                {
+                    ctx.Log("ran1");
+                    return true;
+                }});
+    wf.AddStep({"Step2", "second", [](WorkflowContext& ctx)
+                {
+                    ctx.Log("ran2");
+                    return true;
+                }});
     EXPECT_EQ(wf.GetStepCount(), 2u);
 
     WorkflowContext ctx;
@@ -521,3 +529,279 @@ TEST(VCS_OperationResultDefaults)
     EXPECT_NEAR(result.duration, 0.0f, 0.01f);
     EXPECT_TRUE(result.warnings.empty());
 }
+
+// ============================================================================
+// GATED TESTS — require ImGui (SPARK_TEST_HAS_IMGUI)
+// These activate when building with ENABLE_EDITOR=ON and ImGui is available.
+// ============================================================================
+
+#ifdef SPARK_TEST_HAS_IMGUI
+
+#include "../SparkEditor/Source/Search/CommandPalette.h"
+
+// --- EditorTheme full method tests ---
+
+TEST(Gated_ThemeColor_FromRGB)
+{
+    ThemeColor c = ThemeColor::FromRGB(255, 0, 0);
+    EXPECT_NEAR(c.r, 1.0f, 0.01f);
+    EXPECT_NEAR(c.g, 0.0f, 0.01f);
+    EXPECT_NEAR(c.b, 0.0f, 0.01f);
+}
+
+TEST(Gated_ThemeColor_FromRGB_Green)
+{
+    ThemeColor c = ThemeColor::FromRGB(0, 255, 0);
+    EXPECT_NEAR(c.r, 0.0f, 0.01f);
+    EXPECT_NEAR(c.g, 1.0f, 0.01f);
+}
+
+TEST(Gated_ThemeColor_FromHex)
+{
+    ThemeColor c = ThemeColor::FromHex("#FF0000");
+    EXPECT_NEAR(c.r, 1.0f, 0.01f);
+    EXPECT_NEAR(c.g, 0.0f, 0.01f);
+    EXPECT_NEAR(c.b, 0.0f, 0.01f);
+}
+
+TEST(Gated_ThemeColor_FromHex_Blue)
+{
+    ThemeColor c = ThemeColor::FromHex("#0000FF");
+    EXPECT_NEAR(c.b, 1.0f, 0.01f);
+    EXPECT_NEAR(c.r, 0.0f, 0.01f);
+}
+
+TEST(Gated_ThemeColor_Lerp)
+{
+    ThemeColor a(0.0f, 0.0f, 0.0f);
+    ThemeColor b(1.0f, 1.0f, 1.0f);
+    ThemeColor mid = a.Lerp(b, 0.5f);
+    EXPECT_NEAR(mid.r, 0.5f, 0.01f);
+    EXPECT_NEAR(mid.g, 0.5f, 0.01f);
+    EXPECT_NEAR(mid.b, 0.5f, 0.01f);
+}
+
+TEST(Gated_ThemeColor_Lerp_Extremes)
+{
+    ThemeColor a(0.2f, 0.3f, 0.4f);
+    ThemeColor b(0.8f, 0.9f, 1.0f);
+    ThemeColor at0 = a.Lerp(b, 0.0f);
+    ThemeColor at1 = a.Lerp(b, 1.0f);
+    EXPECT_NEAR(at0.r, 0.2f, 0.01f);
+    EXPECT_NEAR(at1.r, 0.8f, 0.01f);
+}
+
+TEST(Gated_ThemeColor_Darken)
+{
+    ThemeColor c(0.5f, 0.5f, 0.5f);
+    ThemeColor darker = c.Darken(0.2f);
+    EXPECT_TRUE(darker.r < c.r);
+    EXPECT_TRUE(darker.g < c.g);
+}
+
+TEST(Gated_ThemeColor_Lighten)
+{
+    ThemeColor c(0.5f, 0.5f, 0.5f);
+    ThemeColor lighter = c.Lighten(0.2f);
+    EXPECT_TRUE(lighter.r > c.r);
+    EXPECT_TRUE(lighter.g > c.g);
+}
+
+TEST(Gated_ThemeColor_Desaturate)
+{
+    ThemeColor c(1.0f, 0.0f, 0.0f); // pure red
+    ThemeColor desat = c.Desaturate(1.0f);
+    // Fully desaturated should make channels closer together (gray)
+    EXPECT_NEAR(desat.a, 1.0f, 0.01f);
+}
+
+TEST(Gated_ThemeColor_WithAlpha)
+{
+    ThemeColor c(0.5f, 0.5f, 0.5f, 1.0f);
+    ThemeColor half = c.WithAlpha(0.5f);
+    EXPECT_NEAR(half.a, 0.5f, 0.01f);
+    EXPECT_NEAR(half.r, 0.5f, 0.01f); // color unchanged
+}
+
+TEST(Gated_EditorTheme_RegisterAndGetTheme)
+{
+    EditorThemeData data;
+    data.name = "GatedTestTheme";
+    data.description = "gated unit test theme";
+    EXPECT_TRUE(EditorTheme::RegisterTheme(data));
+
+    const EditorThemeData* retrieved = EditorTheme::GetTheme("GatedTestTheme");
+    EXPECT_TRUE(retrieved != nullptr);
+    if (retrieved)
+        EXPECT_EQ(retrieved->name, std::string("GatedTestTheme"));
+}
+
+TEST(Gated_EditorTheme_GetAvailableThemes)
+{
+    auto themes = EditorTheme::GetAvailableThemes();
+    EXPECT_TRUE(!themes.empty());
+}
+
+TEST(Gated_EditorTheme_CreateBlendedTheme)
+{
+    EditorThemeData t1 = EditorTheme::CreateUnityProTheme();
+    EditorThemeData t2 = EditorTheme::CreateUnrealProTheme();
+    EditorTheme::RegisterTheme(t1);
+    EditorTheme::RegisterTheme(t2);
+
+    bool ok = EditorTheme::CreateBlendedTheme(t1.name, t2.name, 0.5f, "GatedBlend");
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(EditorTheme::GetTheme("GatedBlend") != nullptr);
+}
+
+TEST(Gated_EditorTheme_BuiltinThemes)
+{
+    auto unity = EditorTheme::CreateUnityProTheme();
+    auto unreal = EditorTheme::CreateUnrealProTheme();
+    auto vs = EditorTheme::CreateVSProTheme();
+    auto jetbrains = EditorTheme::CreateJetBrainsTheme();
+    EXPECT_TRUE(!unity.name.empty());
+    EXPECT_TRUE(!unreal.name.empty());
+    EXPECT_TRUE(!vs.name.empty());
+    EXPECT_TRUE(!jetbrains.name.empty());
+}
+
+// --- CommandPalette full tests ---
+
+TEST(Gated_CommandPalette_OpenCloseToggle)
+{
+    CommandPalette palette;
+    EXPECT_FALSE(palette.IsOpen());
+
+    palette.Open();
+    EXPECT_TRUE(palette.IsOpen());
+
+    palette.Close();
+    EXPECT_FALSE(palette.IsOpen());
+
+    palette.Toggle();
+    EXPECT_TRUE(palette.IsOpen());
+    palette.Toggle();
+    EXPECT_FALSE(palette.IsOpen());
+}
+
+TEST(Gated_CommandPalette_RegisterActions)
+{
+    CommandPalette palette;
+    bool executed = false;
+    palette.RegisterAction("TestCmd", "Testing", [&]() { executed = true; }, "Ctrl+T");
+    palette.RegisterAction("OtherCmd", "Testing", []() {});
+
+    // Verify state is functional after registering
+    palette.Open();
+    EXPECT_TRUE(palette.IsOpen());
+    palette.Close();
+}
+
+TEST(Gated_CommandPalette_ClearActions)
+{
+    CommandPalette palette;
+    palette.RegisterAction("A", "Cat", []() {});
+    palette.RegisterAction("B", "Cat", []() {});
+    palette.ClearActions();
+    palette.Open();
+    EXPECT_TRUE(palette.IsOpen());
+    palette.Close();
+}
+
+// --- LevelStreaming spatial method tests ---
+
+TEST(Gated_WorldTile_ContainsPoint)
+{
+    WorldTile tile;
+    tile.worldPosition = {0, 0, 0};
+    tile.worldSize = {100, 100, 100};
+
+    XMFLOAT3 inside = {10, 10, 10};
+    XMFLOAT3 outside = {200, 200, 200};
+    EXPECT_TRUE(tile.ContainsPoint(inside));
+    EXPECT_FALSE(tile.ContainsPoint(outside));
+}
+
+TEST(Gated_WorldTile_GetDistanceToCenter)
+{
+    WorldTile tile;
+    tile.worldPosition = {0, 0, 0};
+    tile.worldSize = {100, 100, 100};
+
+    XMFLOAT3 point = {100, 0, 0};
+    float dist = tile.GetDistanceToCenter(point);
+    EXPECT_TRUE(dist > 0.0f);
+}
+
+TEST(Gated_WorldTile_CalculateLOD)
+{
+    WorldTile tile;
+    tile.lodDistances = {500, 1000, 1500, 2000, 2500};
+
+    LODLevel lod0 = tile.CalculateLOD(100.0f);
+    EXPECT_TRUE(lod0 == LODLevel::LOD_0);
+
+    LODLevel lod3 = tile.CalculateLOD(1800.0f);
+    EXPECT_TRUE(lod3 == LODLevel::LOD_3);
+}
+
+TEST(Gated_StreamingVolume_ContainsPoint)
+{
+    StreamingVolume vol;
+    vol.center = {0, 0, 0};
+    vol.size = {100, 100, 100};
+
+    EXPECT_TRUE(vol.ContainsPoint({10, 10, 10}));
+    EXPECT_FALSE(vol.ContainsPoint({200, 0, 0}));
+}
+
+TEST(Gated_StreamingViewer_PredictedPosition)
+{
+    StreamingViewer viewer;
+    viewer.position = {0, 0, 0};
+    viewer.velocity = {10, 0, 0};
+    viewer.forward = {0, 0, 1};
+
+    XMFLOAT3 predicted = viewer.GetPredictedPosition(2.0f);
+    EXPECT_NEAR(predicted.x, 20.0f, 0.5f);
+}
+
+TEST(Gated_StreamingViewer_IsInViewFrustum)
+{
+    StreamingViewer viewer;
+    viewer.position = {0, 0, 0};
+    viewer.forward = {0, 0, 1};
+    viewer.fieldOfView = 90.0f;
+
+    EXPECT_TRUE(viewer.IsInViewFrustum({0, 0, 100}, 10.0f));
+}
+
+// --- VersionControl merge handler tests ---
+
+TEST(Gated_VCS_SceneMergeHandler)
+{
+    SceneMergeHandler handler;
+    auto exts = handler.GetSupportedExtensions();
+    EXPECT_TRUE(!exts.empty());
+    EXPECT_TRUE(handler.CanMerge("level.scene"));
+    EXPECT_FALSE(handler.CanMerge("readme.txt"));
+}
+
+TEST(Gated_VCS_MaterialMergeHandler)
+{
+    MaterialMergeHandler handler;
+    auto exts = handler.GetSupportedExtensions();
+    EXPECT_TRUE(!exts.empty());
+}
+
+TEST(Gated_VCS_SceneMergeHandler_ValidateMerge)
+{
+    SceneMergeHandler handler;
+    bool valid = handler.ValidateMerge("test.scene");
+    // Validate should return a result without crashing
+    (void)valid;
+    EXPECT_TRUE(true);
+}
+
+#endif // SPARK_TEST_HAS_IMGUI

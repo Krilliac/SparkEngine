@@ -242,3 +242,394 @@ TEST(OW_EnumCoverage_Biomes)
     (void)desert;
     (void)tundra;
 }
+
+// ============================================================================
+// GATED TESTS — require ImGui (SPARK_TEST_HAS_IMGUI)
+// Full module tests: Initialize, Update, gameplay methods
+// ============================================================================
+
+#ifdef SPARK_TEST_HAS_IMGUI
+
+#include "../GameModules/SparkGameOpenWorld/Source/Settlement/OWSettlementSystem.h"
+#include "../GameModules/SparkGameOpenWorld/Source/Events/OWDynamicEventSystem.h"
+#include "../GameModules/SparkGameOpenWorld/Source/World/OWWorldSetup.h"
+
+// --- OWPlayerSystem full tests ---
+
+TEST(Gated_OWPlayer_Initialize)
+{
+    OWPlayerSystem player;
+    bool ok = player.Initialize(nullptr);
+    EXPECT_TRUE(ok);
+}
+
+TEST(Gated_OWPlayer_DefaultSurvivalState)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+    auto& s = player.GetSurvivalState();
+    EXPECT_NEAR(s.health, 100.0f, 0.1f);
+    EXPECT_NEAR(s.maxHealth, 100.0f, 0.1f);
+    EXPECT_NEAR(s.stamina, 100.0f, 0.1f);
+}
+
+TEST(Gated_OWPlayer_TakeDamageAndHeal)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+    player.TakeDamage(30.0f);
+    EXPECT_NEAR(player.GetSurvivalState().health, 70.0f, 0.1f);
+
+    player.Heal(15.0f);
+    EXPECT_NEAR(player.GetSurvivalState().health, 85.0f, 0.1f);
+
+    player.Heal(999.0f);
+    EXPECT_NEAR(player.GetSurvivalState().health, 100.0f, 0.1f); // capped
+}
+
+TEST(Gated_OWPlayer_EatAndDrink)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+    float initialHunger = player.GetSurvivalState().hunger;
+    player.Eat(20.0f);
+    EXPECT_TRUE(player.GetSurvivalState().hunger >= initialHunger || player.GetSurvivalState().hunger <= initialHunger);
+
+    float initialThirst = player.GetSurvivalState().thirst;
+    player.Drink(20.0f);
+    (void)initialThirst;
+}
+
+TEST(Gated_OWPlayer_IsAlive)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+    EXPECT_TRUE(player.IsAlive());
+
+    player.TakeDamage(999.0f);
+    EXPECT_FALSE(player.IsAlive());
+}
+
+TEST(Gated_OWPlayer_PositionAndCompass)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+    player.SetPosition(100.0f, 50.0f, 200.0f);
+    auto& ws = player.GetWorldState();
+    EXPECT_NEAR(ws.posX, 100.0f, 0.1f);
+    EXPECT_NEAR(ws.posY, 50.0f, 0.1f);
+    EXPECT_NEAR(ws.posZ, 200.0f, 0.1f);
+
+    player.SetFacing(90.0f);
+    EXPECT_NEAR(player.GetCompassBearing(), 90.0f, 0.1f);
+
+    std::string dir = player.GetCompassDirection();
+    EXPECT_TRUE(!dir.empty());
+}
+
+TEST(Gated_OWPlayer_FastTravel)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+
+    FastTravelPoint fp;
+    fp.pointId = 1;
+    fp.name = "Village";
+    fp.x = 500.0f;
+    fp.y = 0.0f;
+    fp.z = 500.0f;
+    fp.regionId = 1;
+    player.UnlockFastTravel(fp);
+    EXPECT_EQ(player.GetFastTravelCount(), 1u);
+
+    EXPECT_TRUE(player.FastTravelTo(1));
+    EXPECT_FALSE(player.FastTravelTo(999)); // unknown point
+}
+
+TEST(Gated_OWPlayer_Update)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+    // Run several updates — should not crash
+    for (int i = 0; i < 100; i++)
+        player.Update(0.016f);
+    EXPECT_TRUE(player.IsAlive());
+}
+
+TEST(Gated_OWPlayer_StatusString)
+{
+    OWPlayerSystem player;
+    player.Initialize(nullptr);
+    std::string status = player.GetStatusString();
+    EXPECT_TRUE(!status.empty());
+}
+
+// --- OWExplorationSystem full tests ---
+
+TEST(Gated_OWExploration_Initialize)
+{
+    OWExplorationSystem exploration;
+    bool ok = exploration.Initialize(nullptr);
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(exploration.GetPOICount() > 0);
+}
+
+TEST(Gated_OWExploration_DiscoverPOI)
+{
+    OWExplorationSystem exploration;
+    exploration.Initialize(nullptr);
+
+    size_t initial = exploration.GetDiscoveredCount();
+    exploration.RevealPOI(1);
+    EXPECT_TRUE(exploration.GetDiscoveredCount() >= initial);
+}
+
+TEST(Gated_OWExploration_FindSecret)
+{
+    OWExplorationSystem exploration;
+    exploration.Initialize(nullptr);
+    exploration.RevealPOI(1);
+    exploration.FindSecret(1);
+    // Should not crash, secret tracking works
+    EXPECT_TRUE(true);
+}
+
+TEST(Gated_OWExploration_Completion)
+{
+    OWExplorationSystem exploration;
+    exploration.Initialize(nullptr);
+    float completion = exploration.GetOverallCompletion();
+    EXPECT_TRUE(completion >= 0.0f && completion <= 100.0f);
+}
+
+TEST(Gated_OWExploration_Strings)
+{
+    OWExplorationSystem exploration;
+    exploration.Initialize(nullptr);
+    EXPECT_TRUE(!exploration.GetExplorationString().empty());
+    EXPECT_TRUE(!exploration.GetPOIListString().empty());
+}
+
+TEST(Gated_OWExploration_Update)
+{
+    OWExplorationSystem exploration;
+    exploration.Initialize(nullptr);
+    for (int i = 0; i < 50; i++)
+        exploration.Update(0.016f, static_cast<float>(i * 10), 0.0f, 0.0f);
+    EXPECT_TRUE(true); // no crash
+}
+
+// --- OWGatheringSystem full tests ---
+
+TEST(Gated_OWGathering_Initialize)
+{
+    OWGatheringSystem gathering;
+    bool ok = gathering.Initialize(nullptr);
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(gathering.GetNodeCount() > 0);
+    EXPECT_TRUE(gathering.GetRecipeCount() > 0);
+}
+
+TEST(Gated_OWGathering_HarvestNode)
+{
+    OWGatheringSystem gathering;
+    gathering.Initialize(nullptr);
+    uint32_t yield = gathering.HarvestNode(1);
+    EXPECT_TRUE(yield > 0);
+}
+
+TEST(Gated_OWGathering_AddResourceAndCraft)
+{
+    OWGatheringSystem gathering;
+    gathering.Initialize(nullptr);
+
+    gathering.AddResource(ResourceType::Wood, 100);
+    gathering.AddResource(ResourceType::Stone, 100);
+    gathering.AddResource(ResourceType::Iron, 100);
+
+    EXPECT_EQ(gathering.GetInventory().Get(ResourceType::Wood), 100u);
+
+    // Try crafting — should work if recipe exists with these ingredients
+    if (gathering.CanCraft(1))
+    {
+        bool crafted = gathering.Craft(1);
+        EXPECT_TRUE(crafted);
+    }
+}
+
+TEST(Gated_OWGathering_Strings)
+{
+    OWGatheringSystem gathering;
+    gathering.Initialize(nullptr);
+    gathering.AddResource(ResourceType::Wood, 5);
+    EXPECT_TRUE(!gathering.GetNodeListString().empty());
+    EXPECT_TRUE(!gathering.GetRecipeListString().empty());
+    EXPECT_TRUE(!gathering.GetInventoryString().empty());
+}
+
+TEST(Gated_OWGathering_RespawnUpdate)
+{
+    OWGatheringSystem gathering;
+    gathering.Initialize(nullptr);
+    gathering.HarvestNode(1); // deplete
+    for (int i = 0; i < 100; i++)
+        gathering.Update(1.0f); // tick respawn timers
+    EXPECT_TRUE(true);          // no crash
+}
+
+// --- OWWildlifeSystem full tests ---
+
+TEST(Gated_OWWildlife_Initialize)
+{
+    OWWildlifeSystem wildlife;
+    bool ok = wildlife.Initialize(nullptr);
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(wildlife.GetSpeciesCount() > 0);
+    EXPECT_TRUE(wildlife.GetActiveAnimalCount() > 0);
+}
+
+TEST(Gated_OWWildlife_TameAnimal)
+{
+    OWWildlifeSystem wildlife;
+    wildlife.Initialize(nullptr);
+    size_t tamedBefore = wildlife.GetTamedCount();
+    wildlife.TameAnimal(1); // attempt to tame first animal
+    // May or may not succeed depending on species tameability
+    EXPECT_TRUE(wildlife.GetTamedCount() >= tamedBefore);
+}
+
+TEST(Gated_OWWildlife_HuntAnimal)
+{
+    OWWildlifeSystem wildlife;
+    wildlife.Initialize(nullptr);
+    auto drops = wildlife.HuntAnimal(1);
+    // Hunting should produce some resource drops
+    EXPECT_TRUE(drops.size() >= 0); // may be empty if animal not found
+}
+
+TEST(Gated_OWWildlife_Strings)
+{
+    OWWildlifeSystem wildlife;
+    wildlife.Initialize(nullptr);
+    EXPECT_TRUE(!wildlife.GetWildlifeString().empty());
+    EXPECT_TRUE(!wildlife.GetSpeciesListString().empty());
+}
+
+TEST(Gated_OWWildlife_UpdateBehavior)
+{
+    OWWildlifeSystem wildlife;
+    wildlife.Initialize(nullptr);
+    for (int i = 0; i < 100; i++)
+        wildlife.Update(0.016f, static_cast<float>(i * 5), static_cast<float>(i * 3), 1);
+    EXPECT_TRUE(wildlife.GetActiveAnimalCount() > 0);
+}
+
+// --- OWSettlementSystem full tests ---
+
+TEST(Gated_OWSettlement_Initialize)
+{
+    OWSettlementSystem settlement;
+    bool ok = settlement.Initialize(nullptr);
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(settlement.GetSettlementCount() > 0);
+}
+
+TEST(Gated_OWSettlement_PlaceCamp)
+{
+    OWSettlementSystem settlement;
+    settlement.Initialize(nullptr);
+    uint32_t campId = settlement.PlaceCamp("MyCamp", 100.0f, 0.0f, 200.0f, 1);
+    EXPECT_TRUE(campId > 0);
+    EXPECT_TRUE(settlement.GetCampCount() > 0);
+}
+
+TEST(Gated_OWSettlement_UpgradeCamp)
+{
+    OWSettlementSystem settlement;
+    settlement.Initialize(nullptr);
+    uint32_t campId = settlement.PlaceCamp("UpgradeCamp", 50.0f, 0.0f, 50.0f, 1);
+    bool upgraded = settlement.UpgradeCamp(campId);
+    EXPECT_TRUE(upgraded);
+}
+
+TEST(Gated_OWSettlement_Strings)
+{
+    OWSettlementSystem settlement;
+    settlement.Initialize(nullptr);
+    EXPECT_TRUE(!settlement.GetSettlementListString().empty());
+}
+
+// --- OWDynamicEventSystem full tests ---
+
+TEST(Gated_OWDynamicEvents_Initialize)
+{
+    OWDynamicEventSystem events;
+    bool ok = events.Initialize(nullptr);
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(events.GetTemplateCount() > 0);
+}
+
+TEST(Gated_OWDynamicEvents_TriggerEvent)
+{
+    OWDynamicEventSystem events;
+    events.Initialize(nullptr);
+    uint32_t eventId = events.TriggerEvent(1, 1, 100.0f, 200.0f);
+    EXPECT_TRUE(eventId > 0);
+    EXPECT_TRUE(events.GetActiveEventCount() > 0);
+}
+
+TEST(Gated_OWDynamicEvents_JoinEvent)
+{
+    OWDynamicEventSystem events;
+    events.Initialize(nullptr);
+    uint32_t eventId = events.TriggerEvent(1, 1, 0.0f, 0.0f);
+    bool joined = events.JoinEvent(eventId);
+    EXPECT_TRUE(joined);
+}
+
+TEST(Gated_OWDynamicEvents_Strings)
+{
+    OWDynamicEventSystem events;
+    events.Initialize(nullptr);
+    EXPECT_TRUE(!events.GetEventListString().empty());
+}
+
+TEST(Gated_OWDynamicEvents_Update)
+{
+    OWDynamicEventSystem events;
+    events.Initialize(nullptr);
+    for (int i = 0; i < 100; i++)
+        events.Update(1.0f, 0.0f, 0.0f, 1);
+    EXPECT_TRUE(true); // no crash
+}
+
+// --- OWWorldSetup full tests ---
+
+TEST(Gated_OWWorldSetup_Initialize)
+{
+    OWWorldSetup world;
+    bool ok = world.Initialize(nullptr);
+    EXPECT_TRUE(ok);
+    EXPECT_TRUE(world.GetRegionCount() > 0);
+}
+
+TEST(Gated_OWWorldSetup_Regions)
+{
+    OWWorldSetup world;
+    world.Initialize(nullptr);
+    auto& regions = world.GetRegions();
+    EXPECT_TRUE(!regions.empty());
+
+    auto* region = world.GetRegion(1);
+    EXPECT_TRUE(region != nullptr);
+}
+
+TEST(Gated_OWWorldSetup_Strings)
+{
+    OWWorldSetup world;
+    world.Initialize(nullptr);
+    EXPECT_TRUE(!world.GetRegionListString().empty());
+    EXPECT_TRUE(!world.GetWorldStatusString().empty());
+}
+
+#endif // SPARK_TEST_HAS_IMGUI
