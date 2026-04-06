@@ -129,7 +129,7 @@ namespace Platformer
         player.Initialize(nullptr, &checkpoints);
 
         player.UnlockAbility(PowerUpType::DoubleJump);
-        player.UnlockAbility(PowerUpType::Dash);
+        player.UnlockAbility(PowerUpType::SpeedBoost);
 
         std::string status = player.GetPlayerStatusString();
         EXPECT_FALSE(status.empty());
@@ -171,7 +171,7 @@ namespace ARPG
         const HeroData* hero = heroes.GetHero(id);
         EXPECT_TRUE(hero != nullptr);
         EXPECT_EQ(hero->name, std::string("Kratos"));
-        EXPECT_EQ(hero->heroClass, ARPGHeroClass::Barbarian);
+        EXPECT_TRUE(hero->heroClass == ARPGHeroClass::Barbarian);
         heroes.Shutdown();
     }
 
@@ -255,7 +255,7 @@ namespace ARPG
         ResistanceProfile noResist;
         DamageResult result = combat.PerformAttack(attack, noResist);
         EXPECT_GT(result.finalDamage, 0.0f);
-        EXPECT_EQ(result.damageType, ARPGDamageType::Fire);
+        EXPECT_TRUE(result.damageType == ARPGDamageType::Fire);
 
         EXPECT_EQ(combat.GetAttacksProcessed(), 1u);
         combat.Shutdown();
@@ -297,7 +297,7 @@ namespace ARPG
 
         ItemData item = loot.GenerateItem(10, ARPGItemRarity::Rare);
         EXPECT_GT(item.itemId, 0u);
-        EXPECT_EQ(item.rarity, ARPGItemRarity::Rare);
+        EXPECT_TRUE(item.rarity == ARPGItemRarity::Rare);
         EXPECT_EQ(item.itemLevel, 10);
         // Rare items should have 3-6 affixes
         EXPECT_GE(item.affixes.size(), 3u);

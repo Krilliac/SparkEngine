@@ -47,6 +47,8 @@ class World;
  * Uses the address of a per-type static variable as a unique key.
  * Unlike std::type_index / typeid, this works with forward-declared types.
  */
+#ifndef SPARK_TYPEID_DEFINED
+#define SPARK_TYPEID_DEFINED
 using TypeId = const void*;
 
 template <typename T> TypeId GetTypeId()
@@ -54,6 +56,7 @@ template <typename T> TypeId GetTypeId()
     static const char id = 0;
     return &id;
 }
+#endif
 
 // ============================================================================
 // Dependency declaration helpers (R1.2)

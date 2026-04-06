@@ -163,7 +163,7 @@ TEST(Racing_RaceManager_StartRace)
     mgr.RegisterRacer(1, "Player 1", true);
     mgr.StartRace(RaceMode::SingleRace, 3);
 
-    EXPECT_EQ(mgr.GetState(), RaceState::Countdown);
+    EXPECT_TRUE(mgr.GetState() == RaceState::Countdown);
     EXPECT_EQ(mgr.GetTotalLaps(), 3u);
     mgr.Shutdown();
 }
@@ -174,7 +174,7 @@ TEST(Racing_RaceManager_GetState)
     mgr.Initialize(nullptr);
 
     // Before starting, state should be Countdown (default)
-    EXPECT_EQ(mgr.GetState(), RaceState::Countdown);
+    EXPECT_TRUE(mgr.GetState() == RaceState::Countdown);
     mgr.Shutdown();
 }
 

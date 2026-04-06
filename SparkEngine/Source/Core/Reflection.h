@@ -43,6 +43,8 @@
 #include <vector>
 
 // Reuse the EngineContext TypeId pattern
+#ifndef SPARK_TYPEID_DEFINED
+#define SPARK_TYPEID_DEFINED
 using TypeId = const void*;
 
 template <typename T> TypeId GetTypeId()
@@ -50,6 +52,7 @@ template <typename T> TypeId GetTypeId()
     static const char id = 0;
     return &id;
 }
+#endif
 
 namespace Spark
 {

@@ -226,34 +226,8 @@ namespace Spark::Graphics
         }
 
         /** @brief Get the HLSL shader model string for a target */
-        static const char* GetShaderModelForTarget(ShaderTarget target, ShaderStage stage)
+        static const char* GetShaderModelForTarget(ShaderTarget target, [[maybe_unused]] ShaderStage stage)
         {
-            const char* stagePrefix = "";
-            switch (stage)
-            {
-            case ShaderStage::Vertex:
-                stagePrefix = "vs";
-                break;
-            case ShaderStage::Pixel:
-                stagePrefix = "ps";
-                break;
-            case ShaderStage::Geometry:
-                stagePrefix = "gs";
-                break;
-            case ShaderStage::Hull:
-                stagePrefix = "hs";
-                break;
-            case ShaderStage::Domain:
-                stagePrefix = "ds";
-                break;
-            case ShaderStage::Compute:
-                stagePrefix = "cs";
-                break;
-            default:
-                stagePrefix = "vs";
-                break;
-            }
-
             if (target == ShaderTarget::DXBC)
                 return "5_0"; // SM 5.0 for D3D11
             return "6_0";     // SM 6.0 for D3D12/Vulkan
