@@ -17,6 +17,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::Gameplay
 {
 
@@ -100,6 +102,7 @@ namespace Spark::Gameplay
             m_tables.clear();
             m_rng.seed(std::random_device{}());
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "LootTableManager initialized");
         }
 
         /// @brief Shut down and release all loot tables
@@ -130,7 +133,10 @@ namespace Spark::Gameplay
             std::vector<LootDrop> results;
             const auto* table = GetTable(tableName);
             if (!table)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "LootTableManager::RollLoot: table '{}' not found", tableName);
                 return results;
+            }
 
             for (const auto& entry : table->guaranteedDrops)
             {
@@ -173,6 +179,8 @@ namespace Spark::Gameplay
                     }
                 }
             }
+            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "LootTableManager::RollLoot: table='{}', {} drops", tableName,
+                            results.size());
             return results;
         }
 
@@ -291,6 +299,7 @@ namespace Spark::Gameplay
             m_queue.clear();
             m_elapsedTime = 0.0f;
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "CraftingSystem initialized");
         }
 
         /// @brief Shut down and release all state
@@ -341,6 +350,7 @@ namespace Spark::Gameplay
             const auto* recipe = GetRecipe(recipeId);
             if (!recipe)
                 return false;
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "CraftingSystem: starting craft '{}'", recipe->name);
             CraftingQueue entry;
             entry.recipeId = recipeId;
             entry.startTime = m_elapsedTime;
@@ -370,7 +380,10 @@ namespace Spark::Gameplay
                 {
                     entry.progress = std::clamp((m_elapsedTime - entry.startTime) / duration, 0.0f, 1.0f);
                     if (entry.progress >= 1.0f)
+                    {
                         entry.state = CraftState::Complete;
+                        SPARK_LOG_INFO(Spark::LogCategory::Game, "CraftingSystem: craft '{}' complete", entry.recipeId);
+                    }
                 }
             }
         }

@@ -35,6 +35,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::HotReload
 {
 
@@ -112,6 +114,7 @@ namespace Spark::HotReload
             m_initialized = true;
             m_modules.clear();
             m_history.clear();
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "ModuleHotReload initialized (poll: %.1fs)", pollIntervalSeconds);
         }
 
         /** @brief Shut down and clear all watched modules */
@@ -152,6 +155,7 @@ namespace Spark::HotReload
             }
 
             m_modules[name] = std::move(mod);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "HotReload: Registered module '%s'", name.c_str());
             return true;
         }
 
@@ -208,6 +212,7 @@ namespace Spark::HotReload
                     continue;
 
                 // File changed — attempt reload
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Module '%s' changed on disk, reloading...", name.c_str());
                 auto result = PerformReload(mod);
                 mod.lastReloadTime = now;
                 mod.lastWriteTime = currentWriteTime;
@@ -321,7 +326,11 @@ namespace Spark::HotReload
             std::filesystem::copy_file(mod.dllPath, mod.shadowPath, std::filesystem::copy_options::overwrite_existing,
                                        ec);
             if (ec)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "HotReload: Failed to copy DLL for module '%s'",
+                               mod.name.c_str());
                 return ReloadResult::CopyFailed;
+            }
 
             // Step 2: Unload the current module
             if (m_onUnload)
@@ -331,10 +340,16 @@ namespace Spark::HotReload
             if (m_onReload)
             {
                 if (!m_onReload(mod.name, mod.shadowPath))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "HotReload: Failed to load module '%s'",
+                                    mod.name.c_str());
                     return ReloadResult::LoadFailed;
+                }
             }
 
             mod.reloadCount++;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "HotReload: Successfully reloaded module '%s' (count: %u)",
+                           mod.name.c_str(), mod.reloadCount);
             return ReloadResult::Success;
         }
 

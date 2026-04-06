@@ -43,6 +43,8 @@
 
 #pragma once
 
+#include "LogMacros.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -125,6 +127,8 @@ namespace Spark
 
             RegisterBuiltInCommands();
 
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "InGameConsole initialized (%zu built-in commands)",
+                           m_commands.size());
             Print("SparkEngine In-Game Console initialized. Type 'help' for commands.");
         }
 
@@ -158,6 +162,7 @@ namespace Spark
             info.usage = usage.empty() ? name : usage;
             m_commands[name] = std::move(info);
             m_handlers[name] = std::move(handler);
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "InGameConsole: RegisterCommand '%s'", name.c_str());
         }
 
         /** @brief Unregister a command */
@@ -313,7 +318,10 @@ namespace Spark
 
             auto it = m_handlers.find(name);
             if (it == m_handlers.end())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "InGameConsole: Unknown command '%s'", name.c_str());
                 return "Unknown command: " + name + ". Type 'help' for available commands.";
+            }
 
             return it->second(args);
         }
@@ -384,6 +392,7 @@ namespace Spark
             m_historyIndex = -1;
 
             // Execute
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "InGameConsole: ExecuteInput '%s'", m_inputBuffer.c_str());
             std::string output = Execute(m_inputBuffer);
             if (!output.empty())
             {

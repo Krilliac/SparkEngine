@@ -46,6 +46,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::OnlineServices
 {
 
@@ -184,11 +186,13 @@ namespace Spark::OnlineServices
             m_player.displayName = username;
             m_player.isOnline = true;
             m_loggedIn = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: Login as '%s' (offline mode)", username.c_str());
             return true;
         }
 
         void Logout() override
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: Logout (offline mode)");
             m_loggedIn = false;
             m_player.isOnline = false;
         }
@@ -224,6 +228,8 @@ namespace Spark::OnlineServices
 
         bool SubmitScore(const std::string& boardName, int64_t score) override
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: SubmitScore '%s' = %lld (offline mode)",
+                           boardName.c_str(), static_cast<long long>(score));
             auto& board = m_leaderboards[boardName];
             LeaderboardEntry entry;
             entry.playerId = m_player.playerId;
@@ -249,6 +255,8 @@ namespace Spark::OnlineServices
 
         bool UnlockAchievement(const std::string& achievementId) override
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: UnlockAchievement '%s' (offline mode)",
+                           achievementId.c_str());
             m_achievements[achievementId] = 1.0f;
             return true;
         }
@@ -276,6 +284,8 @@ namespace Spark::OnlineServices
 
         bool SaveToCloud(const std::string& slotName, const std::vector<uint8_t>& data) override
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: SaveToCloud slot '%s' (%zu bytes, offline mode)",
+                           slotName.c_str(), data.size());
             m_cloudSaves[slotName] = data;
             return true;
         }
@@ -520,11 +530,13 @@ namespace Spark::OnlineServices
             m_nullPlatform = std::make_unique<NullOnlinePlatform>();
             m_activePlatform = m_nullPlatform.get();
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "OnlineServiceManager initialized (Null platform)");
         }
 
         /** @brief Shut down and release all platforms */
         void Shutdown()
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "OnlineServiceManager shutting down");
             if (m_activePlatform)
                 m_activePlatform->Logout();
             m_activePlatform = nullptr;
@@ -550,6 +562,8 @@ namespace Spark::OnlineServices
         {
             m_customPlatform = std::move(platform);
             m_activePlatform = m_customPlatform.get();
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Online platform changed to: %s",
+                           m_activePlatform->GetPlatformName().c_str());
         }
 
         /** @brief Reset to the default Null platform */

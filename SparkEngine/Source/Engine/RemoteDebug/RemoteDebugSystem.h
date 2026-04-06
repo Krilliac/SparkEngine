@@ -21,6 +21,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::RemoteDebug
 {
 
@@ -151,6 +153,47 @@ namespace Spark::RemoteDebug
     // RemoteDebugServer — runs in the game runtime
     // ============================================================================
 
+    /** @brief Escape a string for safe embedding in JSON values */
+    inline std::string EscapeJson(const std::string& s)
+    {
+        std::string out;
+        out.reserve(s.size());
+        for (char c : s)
+        {
+            switch (c)
+            {
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20)
+                {
+                    char buf[8];
+                    std::snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                    out += buf;
+                }
+                else
+                {
+                    out += c;
+                }
+                break;
+            }
+        }
+        return out;
+    }
+
     /** @brief Command handler callback: receives a command, returns a response */
     using CommandHandler = std::function<RemoteCommand(const RemoteCommand&)>;
 
@@ -168,6 +211,7 @@ namespace Spark::RemoteDebug
             m_session.SetPort(port);
             m_session.SetState(SessionState::Listening);
             RegisterBuiltinHandlers();
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "RemoteDebugServer: listening on port {}", port);
             return true;
         }
 
@@ -193,10 +237,12 @@ namespace Spark::RemoteDebug
      */
         RemoteCommand ProcessCommand(const RemoteCommand& cmd)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "RemoteDebugServer: processing command type='{}'", cmd.type);
             auto it = m_handlers.find(cmd.type);
             if (it != m_handlers.end())
                 return it->second(cmd);
-            return {"error", "{\"error\":\"unknown_command\",\"type\":\"" + cmd.type + "\"}", cmd.requestId, 0.0f};
+            return {"error", "{\"error\":\"unknown_command\",\"type\":\"" + EscapeJson(cmd.type) + "\"}", cmd.requestId,
+                    0.0f};
         }
 
         /** @brief Queue a response for the connected editor */
@@ -229,7 +275,7 @@ namespace Spark::RemoteDebug
             };
             m_handlers["property_get"] = [](const RemoteCommand& c)
             {
-                std::string payload = "{\"path\":\"" + c.payload + "\",\"value\":null}";
+                std::string payload = "{\"path\":\"" + EscapeJson(c.payload) + "\",\"value\":null}";
                 return RemoteCommand{"property_value", payload, c.requestId, 0.0f};
             };
             m_handlers["property_set"] = [](const RemoteCommand& c)
@@ -294,7 +340,7 @@ namespace Spark::RemoteDebug
         uint32_t ExecuteConsoleCommand(const std::string& command)
         {
             uint32_t id = m_nextRequestId++;
-            SendCommand({"console_cmd", "{\"command\":\"" + command + "\"}", id, 0.0f});
+            SendCommand({"console_cmd", "{\"command\":\"" + EscapeJson(command) + "\"}", id, 0.0f});
             return id;
         }
 
@@ -319,7 +365,7 @@ namespace Spark::RemoteDebug
         uint32_t SetProperty(const std::string& path, const std::string& value)
         {
             uint32_t id = m_nextRequestId++;
-            SendCommand({"property_set", "{\"path\":\"" + path + "\",\"value\":" + value + "}", id, 0.0f});
+            SendCommand({"property_set", "{\"path\":\"" + EscapeJson(path) + "\",\"value\":" + value + "}", id, 0.0f});
             return id;
         }
 
@@ -365,6 +411,7 @@ namespace Spark::RemoteDebug
             m_server = std::make_unique<RemoteDebugServer>();
             m_client = std::make_unique<RemoteDebugClient>();
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "RemoteDebugSystem initialized");
             return true;
         }
 
@@ -448,6 +495,7 @@ namespace Spark::RemoteDebug
             m_server->GetSession().SetState(SessionState::Connected);
             m_client->GetSession().SetState(SessionState::Connected);
             m_loopbackEnabled = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "RemoteDebugSystem: loopback enabled");
         }
 
         RemoteDebugServer* GetServer() { return m_server.get(); } ///< @brief Get server (may be null)

@@ -37,6 +37,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../LogMacros.h"
+
 namespace Spark::Utils
 {
 
@@ -110,6 +112,8 @@ namespace Spark::Utils
             m_pollInterval = pollIntervalSeconds;
             m_timeSinceLastPoll = 0.0f;
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher initialized (poll interval: {}s)",
+                           pollIntervalSeconds);
         }
 
         /** @brief Shut down and remove all watches */
@@ -144,6 +148,7 @@ namespace Spark::Utils
             // Initial scan
             ScanDirectory(entry);
 
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching directory '{}'", directoryPath);
             m_watches[entry.id] = std::move(entry);
             return entry.id;
         }
@@ -177,6 +182,7 @@ namespace Spark::Utils
                 entry.files[filePath] = tf;
             }
 
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching file '{}'", filePath);
             m_watches[entry.id] = std::move(entry);
             return entry.id;
         }
@@ -297,13 +303,33 @@ namespace Spark::Utils
 
             if (entry.recursive)
             {
-                for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(entry.path, ec))
+                for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(
+                         entry.path, std::filesystem::directory_options::skip_permission_denied, ec))
+                {
+                    if (ec)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "FileWatcher: error iterating '{}': {}", entry.path,
+                                       ec.message());
+                        ec.clear();
+                        continue;
+                    }
                     iterate(dirEntry);
+                }
             }
             else
             {
-                for (const auto& dirEntry : std::filesystem::directory_iterator(entry.path, ec))
+                for (const auto& dirEntry : std::filesystem::directory_iterator(
+                         entry.path, std::filesystem::directory_options::skip_permission_denied, ec))
+                {
+                    if (ec)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "FileWatcher: error iterating '{}': {}", entry.path,
+                                       ec.message());
+                        ec.clear();
+                        continue;
+                    }
                     iterate(dirEntry);
+                }
             }
 
             // Check for new and modified files
@@ -365,8 +391,24 @@ namespace Spark::Utils
             }
         }
 
+        static const char* ChangeTypeToString(FileChangeType type)
+        {
+            switch (type)
+            {
+            case FileChangeType::Created:
+                return "Created";
+            case FileChangeType::Modified:
+                return "Modified";
+            case FileChangeType::Deleted:
+                return "Deleted";
+            }
+            return "Unknown";
+        }
+
         void NotifyChange(const WatchEntry& entry, const std::string& filePath, FileChangeType type, uint64_t newSize)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: {} '{}'", ChangeTypeToString(type), filePath);
+
             if (!entry.callback)
                 return;
 

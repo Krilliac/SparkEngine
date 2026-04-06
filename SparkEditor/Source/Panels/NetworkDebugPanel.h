@@ -12,6 +12,9 @@
 
 #include "../Core/EditorPanel.h"
 
+#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -98,6 +101,7 @@ namespace SparkEditor
             m_accumulatedPacketsSent = 0;
             m_accumulatedPacketsRecv = 0;
             m_accumulatedPacketsDropped = 0;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "NetworkDebugPanel initialized");
             return true;
         }
 
@@ -234,6 +238,7 @@ namespace SparkEditor
       private:
         void TakeSnapshot()
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "NetworkDebugPanel: TakeSnapshot at t=%.2f", m_totalTime);
             float interval = std::max(m_sampleInterval, 0.001f);
             NetworkSnapshot snapshot;
             snapshot.timestamp = m_totalTime;

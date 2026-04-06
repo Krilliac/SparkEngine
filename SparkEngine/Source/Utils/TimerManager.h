@@ -46,6 +46,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "LogMacros.h"
+
 namespace Spark
 {
 
@@ -96,6 +98,7 @@ namespace Spark
             m_timers.clear();
             m_pendingRemovals.clear();
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "TimerManager initialized");
         }
 
         /** @brief Shut down and clear all timers */
@@ -114,8 +117,24 @@ namespace Spark
          */
         void SetTimer(const std::string& name, float rate, bool looping, TimerCallback callback)
         {
-            if (name.empty() || rate <= 0.0f || !callback)
+            if (name.empty())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "TimerManager::SetTimer: empty timer name");
                 return;
+            }
+            if (rate <= 0.0f)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "TimerManager::SetTimer: invalid rate {} for timer '{}'", rate,
+                               name);
+                return;
+            }
+            if (!callback)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "TimerManager::SetTimer: null callback for timer '{}'", name);
+                return;
+            }
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: set timer '{}' rate={}s looping={}", name, rate,
+                            looping);
 
             ManagedTimer timer;
             timer.name = name;
@@ -129,7 +148,11 @@ namespace Spark
         }
 
         /** @brief Remove a timer */
-        void ClearTimer(const std::string& name) { m_pendingRemovals.push_back(name); }
+        void ClearTimer(const std::string& name)
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: clearing timer '{}'", name);
+            m_pendingRemovals.push_back(name);
+        }
 
         /** @brief Clear all timers */
         void ClearAllTimers() { m_timers.clear(); }
@@ -205,6 +228,7 @@ namespace Spark
                     }
                     else
                     {
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: one-shot timer '{}' fired", name);
                         timer.state = TimerState::Expired;
                         m_pendingRemovals.push_back(name);
                     }

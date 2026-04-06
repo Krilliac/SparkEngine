@@ -18,6 +18,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::Data
 {
 
@@ -203,6 +205,8 @@ namespace Spark::Data
                     row.SetValue(hdrs[c], fields[c]);
                 AddRow(std::move(row));
             }
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "DataTable loaded from CSV: {} rows, {} columns", m_rows.size(),
+                           m_columns.size());
             return !m_rows.empty();
         }
 
@@ -342,7 +346,9 @@ namespace Spark::Data
                     auto v = m_rows[r].GetString(col.name);
                     if (v.empty())
                     {
-                        errs.push_back("Row " + std::to_string(r) + ": missing '" + col.name + "'");
+                        std::string msg = "Row " + std::to_string(r) + ": missing '" + col.name + "'";
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "DataTable validation: {}", msg);
+                        errs.push_back(std::move(msg));
                         continue;
                     }
                     if (col.type == ColumnType::Int)
@@ -353,7 +359,9 @@ namespace Spark::Data
                         }
                         catch (...)
                         {
-                            errs.push_back("Row " + std::to_string(r) + ": '" + col.name + "' not int");
+                            std::string msg = "Row " + std::to_string(r) + ": '" + col.name + "' not int";
+                            SPARK_LOG_WARN(Spark::LogCategory::Core, "DataTable validation: {}", msg);
+                            errs.push_back(std::move(msg));
                         }
                     }
                     if (col.type == ColumnType::Float)
@@ -364,7 +372,9 @@ namespace Spark::Data
                         }
                         catch (...)
                         {
-                            errs.push_back("Row " + std::to_string(r) + ": '" + col.name + "' not float");
+                            std::string msg = "Row " + std::to_string(r) + ": '" + col.name + "' not float";
+                            SPARK_LOG_WARN(Spark::LogCategory::Core, "DataTable validation: {}", msg);
+                            errs.push_back(std::move(msg));
                         }
                     }
                 }
@@ -681,6 +691,7 @@ namespace Spark::Data
         {
             m_tables.clear();
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "DataTableRegistry initialized");
             return true;
         }
         /// @brief Shut down and release all tables.
@@ -712,9 +723,13 @@ namespace Spark::Data
         /// @brief Load a table from file, auto-detecting CSV vs JSON by extension.
         bool LoadTableFromFile(const std::string& name, const std::string& filePath)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading data table '{}' from '{}'", name, filePath);
             std::ifstream file(filePath);
             if (!file.is_open())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Data table file not found: '{}'", filePath);
                 return false;
+            }
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             DataTable table;
             table.SetSourcePath(filePath);
@@ -727,6 +742,7 @@ namespace Spark::Data
         /// @brief Reload a table from its original source file (hot-reload).
         bool ReloadTable(const std::string& name)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Reloading data table '{}'", name);
             auto it = m_tables.find(name);
             if (it == m_tables.end())
                 return false;

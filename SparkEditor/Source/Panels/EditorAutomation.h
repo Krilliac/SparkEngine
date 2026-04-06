@@ -84,6 +84,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
+
 namespace SparkEditor
 {
 
@@ -182,6 +185,8 @@ namespace SparkEditor
             m_initialized = true;
 
             RegisterBuiltInCommands();
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorAutomation initialized with %zu built-in commands",
+                           m_commands.size());
         }
 
         /** @brief Shut down */
@@ -216,6 +221,7 @@ namespace SparkEditor
             info.category = category;
             m_commands[name] = std::move(info);
             m_handlers[name] = std::move(handler);
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "EditorAutomation: RegisterCommand '%s'", name.c_str());
             return true;
         }
 
@@ -236,8 +242,12 @@ namespace SparkEditor
         {
             auto it = m_handlers.find(name);
             if (it == m_handlers.end())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "EditorAutomation: Unknown command '%s'", name.c_str());
                 return {false, "Unknown command: " + name, ""};
+            }
 
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorAutomation: ExecuteCommand '%s'", name.c_str());
             auto result = it->second(args);
 
             // Record in history
@@ -274,6 +284,7 @@ namespace SparkEditor
          */
         ScriptResult RunScript(const std::string& script)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorAutomation: RunScript started");
             ScriptResult result;
             std::istringstream stream(script);
             std::string line;
@@ -301,6 +312,8 @@ namespace SparkEditor
             }
 
             result.success = (result.commandsFailed == 0);
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorAutomation: RunScript completed — %u executed, %u failed",
+                           result.commandsExecuted, result.commandsFailed);
             return result;
         }
 

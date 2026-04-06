@@ -40,6 +40,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
+
 namespace SparkEditor
 {
 
@@ -124,6 +127,7 @@ namespace SparkEditor
         {
             m_nodes.clear();
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "AssetDependencyGraph initialized");
         }
 
         /** @brief Shut down and clear all data */
@@ -143,6 +147,7 @@ namespace SparkEditor
         {
             if (!m_initialized || path.empty())
                 return;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AssetDependencyGraph: RegisterAsset '%s'", path.c_str());
             auto& node = m_nodes[path];
             node.path = path;
             node.type = type;
@@ -279,6 +284,11 @@ namespace SparkEditor
                 std::vector<std::string> pathStack;
                 DetectCycles(path, pathSet, pathStack, globalVisited, cycles);
             }
+            if (!cycles.empty())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "AssetDependencyGraph: Found %zu circular dependencies",
+                               cycles.size());
+            }
             return cycles;
         }
 
@@ -344,6 +354,9 @@ namespace SparkEditor
             for (const auto& [type, count] : countByType)
                 report.countByType.push_back({type, count});
 
+            SPARK_LOG_INFO(Spark::LogCategory::Editor,
+                           "AssetDependencyGraph: GenerateAudit — %u assets, %u unused, %u circular deps",
+                           report.totalAssets, report.unusedAssets, report.circularDependencyCount);
             return report;
         }
 

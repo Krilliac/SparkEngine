@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 258908 |
-| **SparkEditor/Source** | 84971 |
+| **SparkEngine/Source** | 259177 |
+| **SparkEditor/Source** | 85014 |
 | **GameModules** | 57824 |
 | **Tests** | 98334 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~502428** |
+| **Total C++ (excl. ThirdParty)** | **~502740** |
 
 ### File Counts
 
@@ -26,13 +26,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
 | Test files (.cpp) | 321 |
-| Wiki pages (.md) | 103 |
+| Wiki pages (.md) | 116 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~879 |
+| Average lines per .cpp file | ~880 |
 | Average lines per .h file | ~570 |
 | Largest codebase section | Graphics (99796 lines — 38% of SparkEngine/Source) |
 
@@ -43,12 +43,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 99796 | 38.5% |
-| Engine (all subsystems) | 79404 | 30.6% |
-| Utils | 35609 | 13.7% |
+| Engine (all subsystems) | 79585 | 30.7% |
+| Utils | 35684 | 13.7% |
 | Core | 19071 | 7.3% |
-| Physics | 10101 | 3.9% |
+| Physics | 10101 | 3.8% |
 | Audio | 5547 | 2.1% |
-| Input | 3863 | 1.4% |
+| Input | 3876 | 1.4% |
 | SceneManager | 1886 | 0.7% |
 | Enums | 1423 | 0.5% |
 | Game | 1272 | 0.4% |
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 84971 |
+| Total editor lines | 85014 |
 
 ## Testing Metrics
 
@@ -176,7 +176,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `ECSystems.h` | 847 |
 | `MeshClusterSystem.h` | 819 |
 | `SVGRenderer.h` | 803 |
-| `DataTableSystem.h` | 783 |
+| `DataTableSystem.h` | 799 |
 | `PhysicsTypes.h` | 779 |
 | `EngineSettings.h` | 758 |
 

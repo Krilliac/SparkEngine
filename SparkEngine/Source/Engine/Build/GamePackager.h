@@ -37,6 +37,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::Build
 {
 
@@ -117,6 +119,7 @@ namespace Spark::Build
             m_initialized = true;
             m_lastResult = {};
             m_packageCount = 0;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "GamePackager initialized");
         }
 
         /** @brief Shut down */
@@ -130,15 +133,20 @@ namespace Spark::Build
         PackageResult Package(const PackageConfig& config)
         {
             if (!m_initialized)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: Package called but not initialized");
                 return {false, "", 0, 0, 0.0, "GamePackager not initialized", {}};
+            }
 
             auto startTime = std::chrono::steady_clock::now();
             PackageResult result;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "GamePackager: Packaging '%s'...", config.projectName.c_str());
 
             // Validate config
             if (config.projectName.empty())
             {
                 result.errorMessage = "Project name is empty";
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
                 m_lastResult = result;
                 return result;
             }
@@ -194,6 +202,7 @@ namespace Spark::Build
             if (ec)
             {
                 result.errorMessage = "Failed to create output directory: " + ec.message();
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
                 m_lastResult = result;
                 return result;
             }
@@ -219,8 +228,11 @@ namespace Spark::Build
             auto endTime = std::chrono::steady_clock::now();
             result.durationSeconds = std::chrono::duration<double>(endTime - startTime).count();
             result.outputPath = outDir.string();
-            result.success = (result.filesCopied > 0);
+            result.success = (result.filesCopied > 0) && result.errorMessage.empty();
 
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "GamePackager: Packaging complete (%u files, %llu bytes, %.2fs)",
+                           result.filesCopied, static_cast<unsigned long long>(result.totalSizeBytes),
+                           result.durationSeconds);
             m_lastResult = result;
             m_packageCount++;
             return result;
@@ -306,9 +318,12 @@ namespace Spark::Build
             if (!std::filesystem::exists(config.executablePath, ec))
             {
                 result.errorMessage = "Executable not found: " + config.executablePath;
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
                 return false;
             }
 
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "GamePackager: Collecting executable '%s'",
+                           config.executablePath.c_str());
             ManifestEntry entry;
             entry.sourcePath = config.executablePath;
             entry.relativePath = std::filesystem::path(config.executablePath).filename().string();

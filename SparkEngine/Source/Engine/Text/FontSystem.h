@@ -35,6 +35,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::Text
 {
 
@@ -165,6 +167,7 @@ namespace Spark::Text
             m_activeFontId = INVALID_FONT_ID;
             m_defaultAtlasSize = 1024;
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FontSystem initialized");
         }
 
         /** @brief Shut down and release all fonts */
@@ -185,7 +188,10 @@ namespace Spark::Text
         FontId LoadFont(const std::string& filePath, float fontSize, bool preloadAscii = true)
         {
             if (!m_initialized || filePath.empty() || fontSize <= 0.0f)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "FontSystem: LoadFont failed (empty path or zero size)");
                 return INVALID_FONT_ID;
+            }
 
             FontId id = m_nextFontId++;
             LoadedFont font;
@@ -226,6 +232,8 @@ namespace Spark::Text
                 m_activeFontId = id;
 
             m_fonts[id] = std::move(font);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FontSystem: Loaded font '%s' (id=%u, size=%.1f)",
+                           filePath.c_str(), id, fontSize);
             return id;
         }
 
@@ -235,6 +243,7 @@ namespace Spark::Text
          */
         void UnloadFont(FontId fontId)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FontSystem: Unloading font id=%u", fontId);
             m_fonts.erase(fontId);
             if (m_activeFontId == fontId)
                 m_activeFontId = m_fonts.empty() ? INVALID_FONT_ID : m_fonts.begin()->first;
@@ -495,7 +504,11 @@ namespace Spark::Text
 
             // Check if atlas is full
             if (atlas.usedHeight + paddedH > atlas.height)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "FontSystem: Glyph atlas full (%ux%u)", atlas.width,
+                               atlas.height);
                 return false;
+            }
 
             // Record UV coordinates
             float invW = 1.0f / static_cast<float>(atlas.width);

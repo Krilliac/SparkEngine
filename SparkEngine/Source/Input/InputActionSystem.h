@@ -44,6 +44,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::Input
 {
 
@@ -140,6 +142,7 @@ namespace Spark::Input
             m_contexts.clear();
             m_contextStack.clear();
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "InputActionSystem initialized");
         }
 
         /** @brief Shut down and clear all actions and contexts */
@@ -174,12 +177,16 @@ namespace Spark::Input
         bool RegisterAction(const std::string& name, ActionType type)
         {
             if (name.empty() || m_actions.count(name))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Input, "InputAction: Duplicate or empty action '%s'", name.c_str());
                 return false;
+            }
 
             ActionState state;
             state.name = name;
             state.type = type;
             m_actions[name] = std::move(state);
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "InputAction: Registered action '%s'", name.c_str());
             return true;
         }
 
@@ -206,6 +213,7 @@ namespace Spark::Input
             binding.trigger = trigger;
             binding.modifierKey = modifierKey;
             it->second.bindings.push_back(binding);
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "InputAction: Bound key %d to '%s'", keyCode, actionName.c_str());
             return true;
         }
 
@@ -300,6 +308,7 @@ namespace Spark::Input
             if (!m_contexts.count(name))
                 return false;
             m_contextStack.push_back(name);
+            SPARK_LOG_INFO(Spark::LogCategory::Input, "InputAction: Pushed context '%s'", name.c_str());
             return true;
         }
 
@@ -307,7 +316,11 @@ namespace Spark::Input
         void PopContext()
         {
             if (!m_contextStack.empty())
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Input, "InputAction: Popped context '%s'",
+                               m_contextStack.back().c_str());
                 m_contextStack.pop_back();
+            }
         }
 
         /** @brief Get the name of the active (top) context */

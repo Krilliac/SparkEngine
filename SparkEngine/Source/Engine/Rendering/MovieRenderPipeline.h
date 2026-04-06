@@ -20,6 +20,8 @@
 #include <utility>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::Rendering
 {
 
@@ -212,6 +214,7 @@ namespace Spark::Rendering
             m_initialized = true;
             m_activeJob = MovieRenderJob{};
             m_completedJobs.clear();
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MovieRenderPipeline initialized");
         }
 
         /// @brief Shut down, cancelling any active render
@@ -262,6 +265,10 @@ namespace Spark::Rendering
                 (m_activeJob.warmUpFramesRemaining > 0) ? RenderJobState::WarmingUp : RenderJobState::Rendering;
             m_renderStartTime = std::chrono::steady_clock::now();
             m_accumulationBuffer.clear();
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                           "MovieRenderPipeline: started render {}x{}, {} frames, quality={}",
+                           m_activeJob.settings.width, m_activeJob.settings.height, m_activeJob.totalFrames,
+                           static_cast<int>(m_activeJob.settings.qualityPreset));
             return true;
         }
 
@@ -270,6 +277,8 @@ namespace Spark::Rendering
         {
             if (!IsRendering())
                 return;
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "MovieRenderPipeline: render cancelled at frame {}/{}",
+                           m_activeJob.currentFrame, m_activeJob.totalFrames);
             m_activeJob.state = RenderJobState::Cancelled;
             m_timeController.End();
             FinalizeJob();
@@ -360,6 +369,8 @@ namespace Spark::Rendering
         {
             m_timeController.Step();
             ++m_activeJob.currentSubFrame;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "MovieRenderPipeline: step sub-frame {}/{}",
+                            m_activeJob.currentSubFrame, m_activeJob.totalSubFramesPerFrame);
 
             if (m_activeJob.currentSubFrame >= m_activeJob.totalSubFramesPerFrame)
             {
@@ -381,8 +392,12 @@ namespace Spark::Rendering
         void CaptureFrame()
         {
             const int32_t absoluteFrame = m_activeJob.settings.startFrame + m_activeJob.currentFrame;
-            const std::string filename = std::format("frame_{:06d}{}", absoluteFrame, GetFormatExtension());
+            const std::string filename =
+                std::vformat(m_activeJob.settings.filenamePattern, std::make_format_args(absoluteFrame));
             const std::string filePath = m_activeJob.settings.outputDirectory + "/" + filename;
+
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "MovieRenderPipeline: captured frame {} -> {}", absoluteFrame,
+                            filePath);
 
             // In production: resolve accumulation buffer, call ScreenCapture::CaptureFrame()
             m_activeJob.outputFiles.push_back(filePath);
@@ -396,6 +411,8 @@ namespace Spark::Rendering
         void CompleteRender()
         {
             m_activeJob.state = RenderJobState::Complete;
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MovieRenderPipeline: render complete, {} frames in {:.1f}s",
+                           m_activeJob.totalFrames, m_activeJob.elapsedSeconds);
             FinalizeJob();
         }
 

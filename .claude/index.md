@@ -49,7 +49,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides
 - **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame, WeatherSystem integration
-- **Codebase**: ~502K lines of C++ across 1546 source files, 103 wiki pages
+- **Codebase**: ~502K lines of C++ across 1546 source files, 116 wiki pages
 
 ### Before Writing Code
 

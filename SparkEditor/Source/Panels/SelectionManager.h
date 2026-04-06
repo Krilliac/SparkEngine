@@ -55,6 +55,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
+
 namespace SparkEditor
 {
 
@@ -161,6 +164,7 @@ namespace SparkEditor
             m_marquee = {};
             m_nextCallbackId = 1;
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "SelectionManager initialized");
         }
 
         /** @brief Shut down and clear all state */
@@ -188,6 +192,7 @@ namespace SparkEditor
             if (IsLocked(entityId))
                 return;
 
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "SelectionManager: Select entity %u", entityId);
             auto oldSelection = GetSelectionVector();
             m_selection.clear();
             m_selectionOrder.clear();
@@ -246,6 +251,7 @@ namespace SparkEditor
         {
             if (m_selection.empty())
                 return;
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "SelectionManager: ClearSelection");
             auto oldSelection = GetSelectionVector();
             m_selection.clear();
             m_selectionOrder.clear();
@@ -344,6 +350,9 @@ namespace SparkEditor
                     marqueeHits.push_back(id);
             }
 
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "SelectionManager: EndMarquee selected %zu entities",
+                           marqueeHits.size());
+
             if (additive)
             {
                 for (auto id : marqueeHits)
@@ -436,6 +445,7 @@ namespace SparkEditor
         /** @brief Save current selection as a named group */
         void SaveSelectionGroup(const std::string& name)
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "SelectionManager: SaveSelectionGroup '%s'", name.c_str());
             SelectionGroup group;
             group.name = name;
             group.entities = m_selectionOrder;
@@ -554,7 +564,8 @@ namespace SparkEditor
                     event.removed.push_back(id);
             }
 
-            for (const auto& [cbId, cb] : m_callbacks)
+            auto callbacksCopy = m_callbacks;
+            for (const auto& [cbId, cb] : callbacksCopy)
                 cb(event);
         }
 
@@ -576,7 +587,8 @@ namespace SparkEditor
                     event.removed.push_back(id);
             }
 
-            for (const auto& [cbId, cb] : m_callbacks)
+            auto callbacksCopy = m_callbacks;
+            for (const auto& [cbId, cb] : callbacksCopy)
                 cb(event);
         }
 

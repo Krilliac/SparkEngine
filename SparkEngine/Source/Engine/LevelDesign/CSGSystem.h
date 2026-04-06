@@ -35,6 +35,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::LevelDesign
 {
 
@@ -152,6 +154,7 @@ namespace Spark::LevelDesign
             m_sphereRings = 8;
             m_sphereSegments = 16;
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "CSGSystem initialized");
         }
 
         /** @brief Shutdown and clear all brushes */
@@ -196,6 +199,7 @@ namespace Spark::LevelDesign
 
             solid.sourceShape = shape;
             uint32_t id = m_nextBrushId++;
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "CSG: Created brush %u (shape: %d)", id, static_cast<int>(shape));
             m_brushes[id] = std::move(solid);
             return id;
         }
@@ -360,7 +364,9 @@ namespace Spark::LevelDesign
                 }
             }
 
-            return GenerateMesh(result);
+            auto mesh = GenerateMesh(result);
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "CSG: BuildAll complete (%u triangles)", mesh.triangleCount);
+            return mesh;
         }
 
         /** @brief Remove a brush */
@@ -694,6 +700,8 @@ namespace Spark::LevelDesign
                 // If the edge crosses the plane, compute intersection
                 if ((dc > EPSILON && dn < -EPSILON) || (dc < -EPSILON && dn > EPSILON))
                 {
+                    if (std::abs(dc - dn) < EPSILON)
+                        continue;
                     float t = dc / (dc - dn);
                     CSGVertex interp;
                     interp.position = current.position + (next.position - current.position) * t;

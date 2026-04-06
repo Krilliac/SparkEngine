@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Utils/LogMacros.h"
+
 namespace Spark::HLOD
 {
 
@@ -221,6 +223,20 @@ namespace Spark::HLOD
         /// @brief Create the grid over the given world bounds with given cell size
         void Initialize(const WorldBounds& bounds, float cellSize)
         {
+            if (cellSize <= 0.0f)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Scene,
+                                "WorldPartitionGrid::Initialize: cellSize must be > 0 (got {}), defaulting to 256",
+                                cellSize);
+                cellSize = 256.0f;
+            }
+            Vec3 worldExtent = bounds.max - bounds.min;
+            if (worldExtent.x <= 0.0f || worldExtent.y <= 0.0f || worldExtent.z <= 0.0f)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                               "WorldPartitionGrid::Initialize: degenerate world bounds (extent {},{},{})",
+                               worldExtent.x, worldExtent.y, worldExtent.z);
+            }
             m_bounds = bounds;
             m_cellSize = cellSize;
             m_cells.clear();
@@ -283,10 +299,14 @@ namespace Spark::HLOD
                 if (distXZ <= loadRadius && cell.loadState == CellLoadState::Unloaded)
                 {
                     cell.loadState = CellLoadState::Loaded;
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "WorldPartitionGrid: loaded cell ({},{})", cell.cellX,
+                                    cell.cellZ);
                 }
                 else if (distXZ > unloadRadius && cell.loadState == CellLoadState::Loaded)
                 {
                     cell.loadState = CellLoadState::Unloaded;
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "WorldPartitionGrid: unloaded cell ({},{})", cell.cellX,
+                                    cell.cellZ);
                 }
 
                 if (cell.loadState == CellLoadState::Loaded)
@@ -357,6 +377,7 @@ namespace Spark::HLOD
             m_unloadRadius = 1500.0f;
             m_viewDistance = 2000.0f;
             m_initialized = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "HLODSystem initialized");
         }
 
         /// @brief Per-frame update — advances streaming and LOD selection
@@ -383,6 +404,7 @@ namespace Spark::HLOD
         {
             m_buildSettings = settings;
             m_clusters = m_builder.GetClusters();
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "HLODSystem: built HLOD with {} clusters", m_clusters.size());
         }
 
         /// @brief Get clusters visible from a position within a view distance
