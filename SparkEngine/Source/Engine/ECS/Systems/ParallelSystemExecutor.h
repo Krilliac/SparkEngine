@@ -217,9 +217,14 @@ namespace Spark::ECS
          * String-based declarations are stored for analysis; batching uses
          * the pointer-based DeclareAccess overload at runtime.
          */
-        void DeclareAccess(const std::string& /*systemName*/, std::initializer_list<std::string> /*writes*/,
-                           std::initializer_list<std::string> /*reads*/)
+        void DeclareAccess(const std::string& systemName, std::initializer_list<std::string> writes,
+                           std::initializer_list<std::string> reads)
         {
+            StringAccessDecl decl;
+            decl.systemName = systemName;
+            decl.writes.insert(writes.begin(), writes.end());
+            decl.reads.insert(reads.begin(), reads.end());
+            m_stringDeclarations.push_back(std::move(decl));
         }
 
         /**
@@ -311,8 +316,19 @@ namespace Spark::ECS
             return true;
         }
 
+        /**
+         * @brief String-based access declaration for documentation and analysis.
+         */
+        struct StringAccessDecl
+        {
+            std::string systemName;
+            std::unordered_set<std::string> writes;
+            std::unordered_set<std::string> reads;
+        };
+
         std::vector<SystemAccessDecl> m_declarations;
         std::vector<SystemBatch> m_batches;
+        std::vector<StringAccessDecl> m_stringDeclarations;
         bool m_scheduleDirty = true;
     };
 

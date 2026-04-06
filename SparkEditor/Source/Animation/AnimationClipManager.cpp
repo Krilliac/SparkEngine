@@ -191,9 +191,13 @@ namespace SparkEditor
 
                 if (std::getline(file, propPath))
                 {
+                    if (!propPath.empty() && propPath.back() == '\r')
+                        propPath.pop_back();
                 }
                 if (std::getline(file, displayName))
                 {
+                    if (!displayName.empty() && displayName.back() == '\r')
+                        displayName.pop_back();
                 }
                 if (std::getline(file, line))
                 {

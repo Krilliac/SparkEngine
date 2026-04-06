@@ -190,6 +190,8 @@ namespace SparkEditor
             // Mute/lock icons
             if (ImGui::Checkbox("##mute", &track.muted))
             {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Track '%s' %s", track.name,
+                                track.muted ? "muted" : "unmuted");
             }
             ImGui::SameLine();
 
