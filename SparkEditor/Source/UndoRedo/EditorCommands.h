@@ -50,14 +50,24 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Set entity parent to m_newParentId
-            // Adjust local transform to m_newLocalPos to preserve world position
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            scene->SetParent(static_cast<int>(m_entityId), static_cast<int>(m_newParentId));
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+                node->position = m_newLocalPos;
         }
 
         void Undo() override
         {
-            // Restore entity parent to m_oldParentId
-            // Restore local transform to m_oldLocalPos
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            scene->SetParent(static_cast<int>(m_entityId), static_cast<int>(m_oldParentId));
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+                node->position = m_oldLocalPos;
         }
 
         std::string GetDescription() const override
@@ -108,12 +118,54 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Apply m_newValue to the material property
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+            {
+                std::string key = "material." + std::to_string(m_materialSlot) + "." + m_propertyName;
+                node->properties[key] = std::visit(
+                    [](const auto& v) -> std::string
+                    {
+                        using T = std::decay_t<decltype(v)>;
+                        if constexpr (std::is_same_v<T, std::string>)
+                            return v;
+                        else if constexpr (std::is_same_v<T, bool>)
+                            return v ? "true" : "false";
+                        else if constexpr (std::is_arithmetic_v<T>)
+                            return std::to_string(v);
+                        else
+                            return {};
+                    },
+                    m_newValue);
+            }
         }
 
         void Undo() override
         {
-            // Restore m_oldValue to the material property
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+            {
+                std::string key = "material." + std::to_string(m_materialSlot) + "." + m_propertyName;
+                node->properties[key] = std::visit(
+                    [](const auto& v) -> std::string
+                    {
+                        using T = std::decay_t<decltype(v)>;
+                        if constexpr (std::is_same_v<T, std::string>)
+                            return v;
+                        else if constexpr (std::is_same_v<T, bool>)
+                            return v ? "true" : "false";
+                        else if constexpr (std::is_arithmetic_v<T>)
+                            return std::to_string(v);
+                        else
+                            return {};
+                    },
+                    m_oldValue);
+            }
         }
 
         std::string GetDescription() const override

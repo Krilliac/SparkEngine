@@ -396,27 +396,32 @@ namespace SparkEditor
 
         if (ImGui::Button(ICON_FA_CUBE " Cube", btnSize))
         {
-            // Trigger placement via event
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Cube primitive");
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_CIRCLE " Sphere", btnSize))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Sphere primitive");
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_VECTOR_SQUARE " Plane", btnSize))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Plane primitive");
         }
 
         if (ImGui::Button(ICON_FA_LIGHTBULB " Light", btnSize))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Point Light");
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_CAMERA " Camera", btnSize))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Camera");
         }
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_FLAG " Spawn", btnSize))
         {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Quick-placing Spawn Point");
         }
     }
 

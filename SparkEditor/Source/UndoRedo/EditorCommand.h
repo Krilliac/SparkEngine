@@ -25,6 +25,9 @@
 #endif
 using namespace DirectX;
 
+#include "Core/EngineContext.h"
+#include "SceneManager/SceneManager.h"
+
 namespace SparkEditor
 {
 
@@ -103,14 +106,26 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Apply new transform values to the entity
-            // In a full implementation, this would update the ECS component
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (!node)
+                return;
+            node->position = m_newPosition;
+            node->scale = m_newScale;
         }
 
         void Undo() override
         {
-            // Restore old transform values to the entity
-            // In a full implementation, this would update the ECS component
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (!node)
+                return;
+            node->position = m_oldPosition;
+            node->scale = m_oldScale;
         }
 
         std::string GetDescription() const override
@@ -166,12 +181,50 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Apply new property value to the component
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (!node)
+                return;
+            node->properties[m_componentType + "." + m_propertyName] = std::visit(
+                [](const auto& v) -> std::string
+                {
+                    using T = std::decay_t<decltype(v)>;
+                    if constexpr (std::is_same_v<T, std::string>)
+                        return v;
+                    else if constexpr (std::is_same_v<T, bool>)
+                        return v ? "true" : "false";
+                    else if constexpr (std::is_arithmetic_v<T>)
+                        return std::to_string(v);
+                    else
+                        return {};
+                },
+                m_newValue);
         }
 
         void Undo() override
         {
-            // Restore old property value to the component
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (!node)
+                return;
+            node->properties[m_componentType + "." + m_propertyName] = std::visit(
+                [](const auto& v) -> std::string
+                {
+                    using T = std::decay_t<decltype(v)>;
+                    if constexpr (std::is_same_v<T, std::string>)
+                        return v;
+                    else if constexpr (std::is_same_v<T, bool>)
+                        return v ? "true" : "false";
+                    else if constexpr (std::is_arithmetic_v<T>)
+                        return std::to_string(v);
+                    else
+                        return {};
+                },
+                m_oldValue);
         }
 
         std::string GetDescription() const override
@@ -201,13 +254,20 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Create the entity in the scene
-            // Store the assigned ID for undo
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            Spark::SceneNode node;
+            node.name = m_entityName;
+            m_createdEntityId = static_cast<uint64_t>(scene->AddNode(node));
         }
 
         void Undo() override
         {
-            // Remove the created entity from the scene
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene || m_createdEntityId == 0)
+                return;
+            scene->RemoveNode(static_cast<int>(m_createdEntityId));
         }
 
         std::string GetDescription() const override { return "Create Entity '" + m_entityName + "'"; }
@@ -237,12 +297,23 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Snapshot entity state for undo, then delete
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            const auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+            {
+                m_savedNode = *node;
+                scene->RemoveNode(static_cast<int>(m_entityId));
+            }
         }
 
         void Undo() override
         {
-            // Recreate the entity with its stored state
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            scene->AddNode(m_savedNode);
         }
 
         std::string GetDescription() const override { return "Delete Entity '" + m_entityName + "'"; }
@@ -250,6 +321,7 @@ namespace SparkEditor
       private:
         uint64_t m_entityId;
         std::string m_entityName;
+        Spark::SceneNode m_savedNode;
         // Snapshot of the entity's components for restoration
         std::unordered_map<std::string, std::unordered_map<std::string, PropertyValue>> m_componentSnapshot;
     };
@@ -272,12 +344,22 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Add the component to the entity with default values
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+                node->properties["component:" + m_componentType] = "1";
         }
 
         void Undo() override
         {
-            // Remove the component from the entity
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+                node->properties.erase("component:" + m_componentType);
         }
 
         std::string GetDescription() const override
@@ -308,12 +390,25 @@ namespace SparkEditor
 
         void Execute() override
         {
-            // Snapshot component state, then remove it
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node)
+            {
+                m_hadComponent = node->properties.count("component:" + m_componentType) > 0;
+                node->properties.erase("component:" + m_componentType);
+            }
         }
 
         void Undo() override
         {
-            // Recreate the component with its stored state
+            auto* scene = Spark::EngineContext::Get() ? Spark::EngineContext::Get()->GetSceneManager() : nullptr;
+            if (!scene)
+                return;
+            auto* node = scene->GetNode(static_cast<int>(m_entityId));
+            if (node && m_hadComponent)
+                node->properties["component:" + m_componentType] = "1";
         }
 
         std::string GetDescription() const override
@@ -324,6 +419,7 @@ namespace SparkEditor
       private:
         uint64_t m_entityId;
         std::string m_componentType;
+        bool m_hadComponent = false;
         std::unordered_map<std::string, PropertyValue> m_componentSnapshot;
     };
 

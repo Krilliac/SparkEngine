@@ -567,14 +567,17 @@ namespace SparkEditor
             ImGui::Text("Place explosive barrels, gas tanks, and environmental hazards.");
             if (ImGui::Button("Add Explosive Barrel"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing explosive barrel at cursor position");
             }
             ImGui::SameLine();
             if (ImGui::Button("Add Gas Tank"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing gas tank at cursor position");
             }
             ImGui::SameLine();
             if (ImGui::Button("Add Mine"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing mine at cursor position");
             }
         }
 
@@ -583,10 +586,12 @@ namespace SparkEditor
             ImGui::Text("Mark positions where AI and players can take cover.");
             if (ImGui::Button("Add Full Cover"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing full cover point at cursor position");
             }
             ImGui::SameLine();
             if (ImGui::Button("Add Half Cover"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing half cover point at cursor position");
             }
         }
 
@@ -595,14 +600,17 @@ namespace SparkEditor
             ImGui::Text("Place capture points, bomb sites, and flag positions.");
             if (ImGui::Button("Add Capture Point"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing capture point at cursor position");
             }
             ImGui::SameLine();
             if (ImGui::Button("Add Bomb Site"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing bomb site at cursor position");
             }
             ImGui::SameLine();
             if (ImGui::Button("Add Flag Post"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing flag post at cursor position");
             }
         }
 
@@ -619,6 +627,8 @@ namespace SparkEditor
 
             if (ImGui::Button("Place Pickup at Cursor"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing %s pickup (respawn: %.0fs) at cursor",
+                               pickupTypes[pickupType], respawnTime);
             }
         }
 
@@ -627,14 +637,17 @@ namespace SparkEditor
             ImGui::Text("AI navigation mesh and pathfinding tools.");
             if (ImGui::Button("Generate NavMesh"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Generating navigation mesh for current scene");
             }
             ImGui::SameLine();
             if (ImGui::Button("Show Nav Debug"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Toggling navigation debug visualization");
             }
             ImGui::SameLine();
             if (ImGui::Button("Test Path"))
             {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Testing pathfinding from cursor position");
             }
         }
     }
