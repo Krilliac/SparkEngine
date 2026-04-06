@@ -158,6 +158,7 @@ endforeach()
 # 6) Compiler options (platform-specific)
 # ---------------------------------------------------------------------
 if(MSVC)
+    # Note: /GS (buffer security check) is enabled by default in MSVC — no explicit flag needed.
     add_compile_options(
         /W3 /MP /bigobj
         /Zi          # Always generate PDB debug info (enables stack trace symbol resolution)
@@ -205,7 +206,21 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
         -Wno-reorder
         -Wno-ignored-qualifiers
         -fno-omit-frame-pointer  # Preserve frame pointers so backtrace() can walk the full call stack
+        -fstack-protector-strong # Stack buffer overflow detection (guards functions with local arrays/alloca)
     )
+
+    # FORTIFY_SOURCE — compile-time and runtime buffer overflow checks for libc functions.
+    # Requires -O1 or higher, so only enable for optimized builds.
+    add_compile_definitions(
+        $<$<NOT:$<CONFIG:Debug>>:_FORTIFY_SOURCE=2>
+    )
+
+    # Full RELRO — mark the GOT read-only after relocation (Linux ELF only).
+    # Prevents GOT overwrite attacks. -z,now forces immediate binding (no lazy PLT).
+    if(NOT APPLE)
+        add_link_options(-Wl,-z,relro,-z,now)
+    endif()
+
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         add_compile_options(
             -Wno-class-memaccess

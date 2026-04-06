@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include "Core/Contracts.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -78,6 +80,7 @@ namespace Spark
      */
         void* AllocRaw(size_t bytes, size_t alignment = alignof(std::max_align_t))
         {
+            SPARK_EXPECTS(alignment > 0 && (alignment & (alignment - 1)) == 0); // must be power of 2
             if (!m_buffer)
                 return nullptr;
 

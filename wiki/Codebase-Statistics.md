@@ -8,24 +8,24 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 259177 |
+| **SparkEngine/Source** | 259418 |
 | **SparkEditor/Source** | 85014 |
 | **GameModules** | 57824 |
-| **Tests** | 98334 |
+| **Tests** | 98579 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~502740** |
+| **Total C++ (excl. ThirdParty)** | **~503226** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 732 |
-| Implementation files (.cpp) | 824 |
+| Header files (.h/.hpp) | 735 |
+| Implementation files (.cpp) | 826 |
 | HLSL shader files | 38 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 321 |
+| Test files (.cpp) | 323 |
 | Wiki pages (.md) | 116 |
 
 ### Code Density
@@ -33,7 +33,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Value |
 |--------|-------|
 | Average lines per .cpp file | ~880 |
-| Average lines per .h file | ~570 |
+| Average lines per .h file | ~568 |
 | Largest codebase section | Graphics (99796 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 99796 | 38.5% |
-| Engine (all subsystems) | 79585 | 30.7% |
-| Utils | 35684 | 13.7% |
-| Core | 19071 | 7.3% |
+| Graphics | 99796 | 38.4% |
+| Engine (all subsystems) | 79585 | 30.6% |
+| Utils | 35687 | 13.7% |
+| Core | 19309 | 7.4% |
 | Physics | 10101 | 3.8% |
 | Audio | 5547 | 2.1% |
 | Input | 3876 | 1.4% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 321 |
-| TEST() definitions | 3920 |
+| Test files | 323 |
+| TEST() definitions | 3943 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 

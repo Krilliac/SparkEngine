@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*320 test files, 3920+ test cases*
+*322 test files, 3943+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -578,6 +578,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestConsoleVariables` | 31 |
 | `TestConstantBufferDiff` | 2 |
 | `TestContainerUtils` | 10 |
+| `TestContracts` | 6 |
 | `TestCooldown` | 14 |
 | `TestCoroutineScheduler` | 10 |
 | `TestCoverSystem` | 4 |
@@ -764,6 +765,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRingBuffer` | 14 |
 | `TestRuntimePrefab` | 19 |
 | `TestSHLighting` | 7 |
+| `TestSafetyCoreUtils` | 17 |
 | `TestSaveSystem` | 7 |
 | `TestSceneConfigDatabase` | 3 |
 | `TestSceneGraph2D` | 14 |
