@@ -412,7 +412,7 @@ SparkEngine/
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
 |-- Templates/               # Game module project templates
-|-- Tests/                   # 4290 unit tests across 333 files (CTest + 5 sanitizers)
+|-- Tests/                   # 4290 unit tests across 338 files (CTest + 5 sanitizers)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
@@ -457,7 +457,7 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-4290 unit tests across 333 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+4290 unit tests across 338 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests
