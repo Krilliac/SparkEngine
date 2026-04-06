@@ -49,6 +49,7 @@ namespace Spark::Graphics
         case TextureCompressionFormat::ASTC_8x8:
             return 16;
         case TextureCompressionFormat::Uncompressed:
+        case TextureCompressionFormat::Neural:
             return 0;
         }
         return 0;

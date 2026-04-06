@@ -112,7 +112,7 @@ namespace Spark::Utils
             m_pollInterval = pollIntervalSeconds;
             m_timeSinceLastPoll = 0.0f;
             m_initialized = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher initialized (poll interval: {}s)",
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher initialized (poll interval: %.1fs)",
                            pollIntervalSeconds);
         }
 
@@ -148,7 +148,7 @@ namespace Spark::Utils
             // Initial scan
             ScanDirectory(entry);
 
-            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching directory '{}'", directoryPath);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching directory '%s'", directoryPath.c_str());
             m_watches[entry.id] = std::move(entry);
             return entry.id;
         }
@@ -182,7 +182,7 @@ namespace Spark::Utils
                 entry.files[filePath] = tf;
             }
 
-            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching file '{}'", filePath);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching file '%s'", filePath.c_str());
             m_watches[entry.id] = std::move(entry);
             return entry.id;
         }
@@ -308,8 +308,8 @@ namespace Spark::Utils
                 {
                     if (ec)
                     {
-                        SPARK_LOG_WARN(Spark::LogCategory::Core, "FileWatcher: error iterating '{}': {}", entry.path,
-                                       ec.message());
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "FileWatcher: error iterating '%s': %s",
+                                       entry.path.c_str(), ec.message().c_str());
                         ec.clear();
                         continue;
                     }
@@ -323,8 +323,8 @@ namespace Spark::Utils
                 {
                     if (ec)
                     {
-                        SPARK_LOG_WARN(Spark::LogCategory::Core, "FileWatcher: error iterating '{}': {}", entry.path,
-                                       ec.message());
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "FileWatcher: error iterating '%s': %s",
+                                       entry.path.c_str(), ec.message().c_str());
                         ec.clear();
                         continue;
                     }
@@ -407,7 +407,8 @@ namespace Spark::Utils
 
         void NotifyChange(const WatchEntry& entry, const std::string& filePath, FileChangeType type, uint64_t newSize)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: {} '{}'", ChangeTypeToString(type), filePath);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: %s '%s'", ChangeTypeToString(type),
+                           filePath.c_str());
 
             if (!entry.callback)
                 return;

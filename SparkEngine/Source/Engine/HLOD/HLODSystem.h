@@ -226,7 +226,7 @@ namespace Spark::HLOD
             if (cellSize <= 0.0f)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Scene,
-                                "WorldPartitionGrid::Initialize: cellSize must be > 0 (got {}), defaulting to 256",
+                                "WorldPartitionGrid::Initialize: cellSize must be > 0 (got %f), defaulting to 256",
                                 cellSize);
                 cellSize = 256.0f;
             }
@@ -234,7 +234,7 @@ namespace Spark::HLOD
             if (worldExtent.x <= 0.0f || worldExtent.y <= 0.0f || worldExtent.z <= 0.0f)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Scene,
-                               "WorldPartitionGrid::Initialize: degenerate world bounds (extent {},{},{})",
+                               "WorldPartitionGrid::Initialize: degenerate world bounds (extent %f,%f,%f)",
                                worldExtent.x, worldExtent.y, worldExtent.z);
             }
             m_bounds = bounds;
@@ -299,13 +299,13 @@ namespace Spark::HLOD
                 if (distXZ <= loadRadius && cell.loadState == CellLoadState::Unloaded)
                 {
                     cell.loadState = CellLoadState::Loaded;
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "WorldPartitionGrid: loaded cell ({},{})", cell.cellX,
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "WorldPartitionGrid: loaded cell (%d,%d)", cell.cellX,
                                     cell.cellZ);
                 }
                 else if (distXZ > unloadRadius && cell.loadState == CellLoadState::Loaded)
                 {
                     cell.loadState = CellLoadState::Unloaded;
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "WorldPartitionGrid: unloaded cell ({},{})", cell.cellX,
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "WorldPartitionGrid: unloaded cell (%d,%d)", cell.cellX,
                                     cell.cellZ);
                 }
 
@@ -404,7 +404,7 @@ namespace Spark::HLOD
         {
             m_buildSettings = settings;
             m_clusters = m_builder.GetClusters();
-            SPARK_LOG_INFO(Spark::LogCategory::Scene, "HLODSystem: built HLOD with {} clusters", m_clusters.size());
+            SPARK_LOG_INFO(Spark::LogCategory::Scene, "HLODSystem: built HLOD with %zu clusters", m_clusters.size());
         }
 
         /// @brief Get clusters visible from a position within a view distance

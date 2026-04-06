@@ -124,17 +124,18 @@ namespace Spark
             }
             if (rate <= 0.0f)
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "TimerManager::SetTimer: invalid rate {} for timer '{}'", rate,
-                               name);
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "TimerManager::SetTimer: invalid rate %f for timer '%s'", rate,
+                               name.c_str());
                 return;
             }
             if (!callback)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "TimerManager::SetTimer: null callback for timer '{}'", name);
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "TimerManager::SetTimer: null callback for timer '%s'",
+                                name.c_str());
                 return;
             }
-            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: set timer '{}' rate={}s looping={}", name, rate,
-                            looping);
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: set timer '%s' rate=%fs looping=%d", name.c_str(),
+                            rate, looping);
 
             ManagedTimer timer;
             timer.name = name;
@@ -150,7 +151,7 @@ namespace Spark
         /** @brief Remove a timer */
         void ClearTimer(const std::string& name)
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: clearing timer '{}'", name);
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: clearing timer '%s'", name.c_str());
             m_pendingRemovals.push_back(name);
         }
 
@@ -228,7 +229,8 @@ namespace Spark
                     }
                     else
                     {
-                        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: one-shot timer '{}' fired", name);
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "TimerManager: one-shot timer '%s' fired",
+                                        name.c_str());
                         timer.state = TimerState::Expired;
                         m_pendingRemovals.push_back(name);
                     }
