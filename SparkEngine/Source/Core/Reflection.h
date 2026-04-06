@@ -42,17 +42,9 @@
 #include <unordered_map>
 #include <vector>
 
-// Reuse the EngineContext TypeId pattern
-#ifndef SPARK_TYPEID_DEFINED
-#define SPARK_TYPEID_DEFINED
-using TypeId = const void*;
-
-template <typename T> TypeId GetTypeId()
-{
-    static const char id = 0;
-    return &id;
-}
-#endif
+// TypeId and GetTypeId are defined in EngineContext.h — include it rather than
+// duplicating the definition, which causes "already defined" errors on MSVC.
+#include "Core/EngineContext.h"
 
 namespace Spark
 {
