@@ -20,6 +20,8 @@
 #include "../SparkEditor/Source/Core/ProjectManager.h"
 #include "../SparkEditor/Source/Core/EditorPluginManager.h"
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
 
 using namespace SparkEditor;
 
@@ -602,8 +604,10 @@ TEST(EditorLogger_ExportLogs)
     logger.Clear();
 
     logger.Log(LogLevel::INFO, "General", "export test");
-    bool result = logger.ExportLogs("TestLogs/test_export.log", nullptr);
+    // Export to a file in the current directory (TestLogs/ may not exist)
+    bool result = logger.ExportLogs("test_export.log", nullptr);
     EXPECT_TRUE(result);
+    std::remove("test_export.log");
     logger.Shutdown();
 }
 
@@ -649,6 +653,7 @@ TEST(CrashHandler_RecordOperation)
 
 TEST(CrashHandler_SaveAndHasRecoveryData)
 {
+    std::filesystem::create_directories("TestCrashes");
     auto& handler = EditorCrashHandler::GetInstance();
     handler.Initialize("TestCrashes");
 
@@ -665,6 +670,7 @@ TEST(CrashHandler_SaveAndHasRecoveryData)
     EXPECT_TRUE(saved);
     EXPECT_TRUE(handler.HasRecoveryData());
     handler.Shutdown();
+    std::filesystem::remove_all("TestCrashes");
 }
 
 TEST(CrashHandler_ClearRecoveryData)
@@ -755,7 +761,7 @@ TEST(ProjectManager_RecentProjects)
 
     auto recent = pm.GetRecentProjects();
     // May be empty — just verify it returns without crashing
-    EXPECT_TRUE(recent.size() >= 0);
+    (void)recent; // just verify it returns without crashing
     pm.Shutdown();
 }
 
@@ -1037,7 +1043,7 @@ TEST(Gated_VCS_SceneMergeHandler)
     SceneMergeHandler handler;
     auto exts = handler.GetSupportedExtensions();
     EXPECT_TRUE(!exts.empty());
-    EXPECT_TRUE(handler.CanMerge("level.scene"));
+    EXPECT_TRUE(handler.CanMerge("level.sparkscene"));
     EXPECT_FALSE(handler.CanMerge("readme.txt"));
 }
 

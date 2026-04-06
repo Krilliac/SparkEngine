@@ -20,9 +20,6 @@ namespace OpenWorld
 
     bool OWPlayerSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
         m_context = context;
 
         // Start in the Emerald Meadows center

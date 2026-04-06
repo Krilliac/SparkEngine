@@ -19,9 +19,6 @@ namespace OpenWorld
 
     bool OWSettlementSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
         m_context = context;
 
         DefineSettlements();

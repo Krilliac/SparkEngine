@@ -21,9 +21,6 @@ namespace OpenWorld
 
     bool OWWorldSetup::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
         m_context = context;
 
         DefineBiomeRegions();

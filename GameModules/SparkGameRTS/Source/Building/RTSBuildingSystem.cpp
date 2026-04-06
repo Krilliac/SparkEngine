@@ -82,7 +82,7 @@ namespace RTS
     {
         auto it = m_buildings.find(buildingId);
         if (it != m_buildings.end())
-            it->second.health = 0.0f;
+            m_buildings.erase(it);
     }
 
     // === Production ===

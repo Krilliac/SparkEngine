@@ -110,25 +110,25 @@ namespace SparkEditor
 
     bool EditorLogger::Initialize(const std::string& logDirectory, size_t maxMemoryEntries)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-
-        if (m_initialized)
         {
-            return true;
+            std::lock_guard<std::mutex> lock(m_mutex);
+
+            if (m_initialized)
+            {
+                return true;
+            }
+
+            // Push targets directly — calling AddTarget() would deadlock on m_mutex
+            m_targets.push_back(std::make_unique<ConsoleLogTarget>());
+            m_targets.push_back(std::make_unique<MemoryLogTarget>(maxMemoryEntries));
+
+            std::string logFile = logDirectory + "/editor.log";
+            m_targets.push_back(std::make_unique<FileLogTarget>(logFile));
+
+            m_initialized = true;
         }
 
-        // Add console target
-        AddTarget(std::make_unique<ConsoleLogTarget>());
-
-        // Add memory target
-        AddTarget(std::make_unique<MemoryLogTarget>(maxMemoryEntries));
-
-        // Add file target
-        std::string logFile = logDirectory + "/editor.log";
-        AddTarget(std::make_unique<FileLogTarget>(logFile));
-
-        m_initialized = true;
-
+        // Log after releasing m_mutex — Log() acquires it internally
         Log(LogLevel::INFO, "Logger", "Editor logger initialized");
         return true;
     }
@@ -142,7 +142,7 @@ namespace SparkEditor
             return;
         }
 
-        Log(LogLevel::INFO, "Logger", "Editor logger shutting down");
+        // Don't call Log() here — it would deadlock on m_mutex
 
         // Flush all targets
         for (auto& target : m_targets)

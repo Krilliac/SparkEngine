@@ -20,9 +20,6 @@ namespace OpenWorld
 
     bool OWWildlifeSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
         m_context = context;
 
         DefineSpecies();
