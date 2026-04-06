@@ -87,9 +87,8 @@ namespace RTS
         auto it = m_units.find(unitId);
         if (it != m_units.end())
         {
-            it->second.state = RTSUnitState::Dead;
-            it->second.health = 0.0f;
             SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS unit %u killed", unitId);
+            m_units.erase(it);
         }
     }
 
