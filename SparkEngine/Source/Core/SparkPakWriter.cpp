@@ -15,6 +15,10 @@
 #include <miniz.h>
 #endif
 
+#ifdef SPARK_ZSTD_AVAILABLE
+#include <zstd.h>
+#endif
+
 // Use 64-bit file offset functions on Windows (long is 32-bit on MSVC)
 #ifdef _WIN32
 #define PAK_FSEEK(f, off, whence) _fseeki64((f), static_cast<int64_t>(off), (whence))
@@ -37,39 +41,55 @@ namespace Spark
         staged.virtualPath = virtualPath;
         staged.originalData = data;
 
-#ifdef SPARK_MINIZ_AVAILABLE
         if (compress && !data.empty())
         {
-            mz_ulong compBound = mz_compressBound(static_cast<mz_ulong>(data.size()));
-            staged.compressedData.resize(compBound);
-            mz_ulong destLen = compBound;
+            bool compressed_ok = false;
 
-            if (mz_compress(staged.compressedData.data(), &destLen, data.data(), static_cast<mz_ulong>(data.size())) ==
-                MZ_OK)
+            // Try zstd first (faster decompression, better ratios)
+#ifdef SPARK_ZSTD_AVAILABLE
             {
-                staged.compressedData.resize(destLen);
-
-                // Only use compression if it saves at least 5%
-                if (destLen < data.size() * 95 / 100)
+                size_t compBound = ZSTD_compressBound(data.size());
+                staged.compressedData.resize(compBound);
+                size_t result = ZSTD_compress(staged.compressedData.data(), compBound, data.data(), data.size(), 3);
+                if (!ZSTD_isError(result))
                 {
-                    staged.compression = PakCompression::Deflate;
-                }
-                else
-                {
-                    staged.compressedData.clear();
-                    staged.compression = PakCompression::Stored;
+                    staged.compressedData.resize(result);
+                    if (result < data.size() * 95 / 100)
+                    {
+                        staged.compression = PakCompression::Zstd;
+                        compressed_ok = true;
+                    }
                 }
             }
-            else
+#endif
+
+            // Fall back to deflate if zstd unavailable or didn't help
+#ifdef SPARK_MINIZ_AVAILABLE
+            if (!compressed_ok)
+            {
+                mz_ulong compBound = mz_compressBound(static_cast<mz_ulong>(data.size()));
+                staged.compressedData.resize(compBound);
+                mz_ulong destLen = compBound;
+                if (mz_compress(staged.compressedData.data(), &destLen, data.data(),
+                                static_cast<mz_ulong>(data.size())) == MZ_OK)
+                {
+                    staged.compressedData.resize(destLen);
+                    if (destLen < data.size() * 95 / 100)
+                    {
+                        staged.compression = PakCompression::Deflate;
+                        compressed_ok = true;
+                    }
+                }
+            }
+#endif
+
+            if (!compressed_ok)
             {
                 staged.compressedData.clear();
                 staged.compression = PakCompression::Stored;
             }
         }
         else
-#else
-        (void)compress;
-#endif
         {
             staged.compression = PakCompression::Stored;
         }

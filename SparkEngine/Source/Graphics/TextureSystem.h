@@ -324,6 +324,27 @@ class TextureSystem
      */
     bool GetTextureLRUData(const std::string& name, TextureLRUData& outData) const;
 
+    // ========================================================================
+    // ZOMBIE POOL & THRASH DETECTION (inspired by RPCS3 texture cache)
+    // ========================================================================
+
+    /**
+     * @brief Attempt to resurrect a recently-evicted texture from the zombie pool.
+     * @return Resurrected texture, or nullptr if not in zombie pool.
+     */
+    std::shared_ptr<Texture> TryResurrectZombie(const std::string& name);
+
+    /**
+     * @brief Get zombie pool diagnostics.
+     */
+    struct ZombiePoolStats
+    {
+        uint32_t zombieCount = 0;       ///< Textures currently in zombie pool
+        uint32_t resurrections = 0;     ///< Total times a zombie was resurrected
+        uint32_t thrashingTextures = 0; ///< Textures currently marked as thrashing
+    };
+    ZombiePoolStats GetZombiePoolStats() const;
+
     // Streaming
     void EnableStreaming(bool enabled) { m_streamingEnabled = enabled; }
     bool IsStreamingEnabled() const { return m_streamingEnabled; }
@@ -375,6 +396,41 @@ class TextureSystem
     // Metrics
     mutable std::mutex m_metricsMutex;
     TextureMetrics m_metrics;
+
+    // ========================================================================
+    // Zombie pool — recently evicted textures kept for quick resurrection
+    // ========================================================================
+
+    static constexpr uint32_t MAX_ZOMBIE_TEXTURES = 64;
+    static constexpr uint32_t ZOMBIE_EXPIRY_FRAMES = 300; ///< ~5s at 60fps
+
+    struct ZombieEntry
+    {
+        std::string name;
+        std::shared_ptr<Texture> texture;
+        uint64_t evictedFrame = 0;
+    };
+    std::vector<ZombieEntry> m_zombiePool;
+    uint32_t m_totalResurrections = 0;
+
+    // ========================================================================
+    // Thrash detection — tracks evict/reload frequency per texture
+    // ========================================================================
+
+    static constexpr uint32_t THRASH_THRESHOLD = 3;       ///< Evict+reload cycles
+    static constexpr uint32_t THRASH_WINDOW_FRAMES = 120; ///< Window size (~2s at 60fps)
+
+    struct ThrashTracker
+    {
+        uint64_t firstEvictFrame = 0;
+        uint32_t evictReloadCount = 0;
+        bool promoted = false; ///< Already auto-promoted priority
+    };
+    std::unordered_map<std::string, ThrashTracker> m_thrashTrackers;
+
+    void EvictToZombiePool(const std::string& name, std::shared_ptr<Texture> texture);
+    void PurgeExpiredZombies();
+    void RecordThrashEvent(const std::string& name);
 
     // Helper methods
     HRESULT CreateDefaultTextures();
