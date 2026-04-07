@@ -213,16 +213,14 @@ jobs:
           SNAPSHOT=$NIGHTLY_DL
 
           # Reset nightly badge to 0 (release is being replaced)
-          cat > "$NIGHTLY_BADGE" << BADGE_EOF
-{
-    "schemaVersion": 1,
-    "label": "nightly downloads",
-    "message": "0",
-    "color": "brightgreen",
-    "namedLogo": "github",
-    "logoColor": "white"
-}
-BADGE_EOF
+          echo '{
+            "schemaVersion": 1,
+            "label": "nightly downloads",
+            "message": "0",
+            "color": "brightgreen",
+            "namedLogo": "github",
+            "logoColor": "white"
+          }' > "$NIGHTLY_BADGE"
         else
           # Stable release: snapshot current stable downloads before new version
           STABLE_DL=$(gh api repos/${{ github.repository }}/releases/latest \
@@ -231,16 +229,14 @@ BADGE_EOF
           SNAPSHOT=$STABLE_DL
 
           # Reset stable badge to 0 (new release is being published)
-          cat > "$STABLE_BADGE" << BADGE_EOF
-{
-    "schemaVersion": 1,
-    "label": "release downloads",
-    "message": "0",
-    "color": "blue",
-    "namedLogo": "github",
-    "logoColor": "white"
-}
-BADGE_EOF
+          echo '{
+            "schemaVersion": 1,
+            "label": "release downloads",
+            "message": "0",
+            "color": "blue",
+            "namedLogo": "github",
+            "logoColor": "white"
+          }' > "$STABLE_BADGE"
         fi
 
         # Accumulate into lifetime total
@@ -249,24 +245,12 @@ BADGE_EOF
         FORMATTED=$(printf "%'d" "$NEW_TOTAL" 2>/dev/null || echo "$NEW_TOTAL")
 
         # Write data file
-        cat > "$DATA_FILE" << DATA_EOF
-{
-    "total": $NEW_TOTAL,
-    "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-}
-DATA_EOF
+        printf '{\n    "total": %d,\n    "updated": "%s"\n}\n' \
+          "$NEW_TOTAL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DATA_FILE"
 
         # Write lifetime badge
-        cat > "$LIFETIME_BADGE" << BADGE_EOF
-{
-    "schemaVersion": 1,
-    "label": "lifetime downloads",
-    "message": "$FORMATTED",
-    "color": "brightgreen",
-    "namedLogo": "github",
-    "logoColor": "white"
-}
-BADGE_EOF
+        printf '{\n    "schemaVersion": 1,\n    "label": "lifetime downloads",\n    "message": "%s",\n    "color": "brightgreen",\n    "namedLogo": "github",\n    "logoColor": "white"\n}\n' \
+          "$FORMATTED" > "$LIFETIME_BADGE"
 
         # Commit updated counters
         git config user.name "github-actions[bot]"
