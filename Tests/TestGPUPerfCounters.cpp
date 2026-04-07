@@ -76,3 +76,80 @@ TEST(GPUPerfCounters_Reset)
     EXPECT_EQ(counters.GetLastFrame(TestGPUCounter::Barriers), 0u);
     EXPECT_EQ(counters.GetFrameCount(), 0u);
 }
+
+TEST(GPUPerfCounters_MultipleFrames)
+{
+    TestGPUCounters counters;
+    counters.Increment(TestGPUCounter::DrawCalls, 100);
+    counters.EndFrame();
+    counters.Increment(TestGPUCounter::DrawCalls, 200);
+    counters.EndFrame();
+
+    // LastFrame should reflect the most recent completed frame
+    EXPECT_EQ(counters.GetLastFrame(TestGPUCounter::DrawCalls), 200u);
+    EXPECT_EQ(counters.GetFrameCount(), 2u);
+}
+
+TEST(GPUPerfCounters_AllCategories)
+{
+    TestGPUCounters counters;
+    counters.Increment(TestGPUCounter::DrawCalls, 50);
+    counters.Increment(TestGPUCounter::Primitives, 10000);
+    counters.Increment(TestGPUCounter::StateChanges, 25);
+    counters.Increment(TestGPUCounter::TextureUploads, 8);
+    counters.Increment(TestGPUCounter::Barriers, 12);
+
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::DrawCalls), 50u);
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::Primitives), 10000u);
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::StateChanges), 25u);
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::TextureUploads), 8u);
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::Barriers), 12u);
+}
+
+TEST(GPUPerfCounters_IncrementMultipleTimes)
+{
+    TestGPUCounters counters;
+    counters.Increment(TestGPUCounter::DrawCalls, 10);
+    counters.Increment(TestGPUCounter::DrawCalls, 20);
+    counters.Increment(TestGPUCounter::DrawCalls, 30);
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::DrawCalls), 60u);
+}
+
+TEST(GPUPerfCounters_CurrentResetAfterEndFrame)
+{
+    TestGPUCounters counters;
+    counters.Increment(TestGPUCounter::Primitives, 5000);
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::Primitives), 5000u);
+
+    counters.EndFrame();
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::Primitives), 0u);
+    EXPECT_EQ(counters.GetLastFrame(TestGPUCounter::Primitives), 5000u);
+}
+
+TEST(GPUPerfCounters_InitiallyZero)
+{
+    TestGPUCounters counters;
+    for (int i = 0; i < static_cast<int>(TestGPUCounter::Count); ++i)
+    {
+        EXPECT_EQ(counters.GetCurrent(static_cast<TestGPUCounter>(i)), 0u);
+        EXPECT_EQ(counters.GetLastFrame(static_cast<TestGPUCounter>(i)), 0u);
+    }
+    EXPECT_EQ(counters.GetFrameCount(), 0u);
+}
+
+TEST(GPUPerfCounters_LargeValues)
+{
+    TestGPUCounters counters;
+    counters.Increment(TestGPUCounter::Primitives, 1'000'000'000ULL);
+    counters.Increment(TestGPUCounter::Primitives, 1'000'000'000ULL);
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::Primitives), 2'000'000'000ULL);
+}
+
+TEST(GPUPerfCounters_ResetMidFrame)
+{
+    TestGPUCounters counters;
+    counters.Increment(TestGPUCounter::DrawCalls, 50);
+    counters.Reset();
+    EXPECT_EQ(counters.GetCurrent(TestGPUCounter::DrawCalls), 0u);
+    EXPECT_EQ(counters.GetFrameCount(), 0u);
+}

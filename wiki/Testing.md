@@ -565,7 +565,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestClothSimulation` | 7 |
 | `TestClusteredLightGPU` | 7 |
 | `TestCollaborativeEditing` | 20 |
-| `TestCollisionAvoidance` | 4 |
+| `TestCollisionAvoidance` | 8 |
 | `TestCollisionLayers` | 10 |
 | `TestCollisionSystem` | 22 |
 | `TestColorUtils` | 18 |
@@ -578,7 +578,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestConnectionTimeout` | 9 |
 | `TestConsoleRBAC` | 21 |
 | `TestConsoleVariables` | 31 |
-| `TestConstantBufferDiff` | 2 |
+| `TestConstantBufferDiff` | 8 |
 | `TestContainerUtils` | 10 |
 | `TestContracts` | 6 |
 | `TestCooldown` | 14 |
@@ -606,7 +606,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDialogueStress` | 10 |
 | `TestDialogueSystem` | 8 |
 | `TestDirectStorageLoader` | 11 |
-| `TestDirtyRectTracker` | 4 |
+| `TestDirtyRectTracker` | 9 |
 | `TestDrawIndirect` | 6 |
 | `TestDynamicResponseSystem` | 6 |
 | `TestECSIntegration` | 9 |
@@ -642,7 +642,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFixtures` | 0 |
 | `TestFogSystem` | 17 |
 | `TestFontSystem` | 13 |
-| `TestFormationSystem` | 4 |
+| `TestFormationSystem` | 9 |
 | `TestFrameAllocator` | 8 |
 | `TestFreezeDetector` | 10 |
 | `TestFreezeSystem` | 5 |
@@ -651,7 +651,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 13 |
 | `TestGPUParticleSystem` | 11 |
-| `TestGPUPerfCounters` | 2 |
+| `TestGPUPerfCounters` | 9 |
 | `TestGPUProfiler` | 8 |
 | `TestGPUResourceLeakDetector` | 0 |
 | `TestGPUSkinning` | 9 |
@@ -694,10 +694,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLagCompensationIntegration` | 4 |
 | `TestLightManager` | 13 |
 | `TestLightmapBaker` | 9 |
-| `TestLoadingScreen` | 4 |
+| `TestLoadingScreen` | 11 |
 | `TestLocalFileCache` | 15 |
 | `TestLocalizationSystem` | 6 |
-| `TestLockFreeRingAllocator` | 3 |
+| `TestLockFreeRingAllocator` | 8 |
 | `TestLogger` | 18 |
 | `TestLootAndCrafting` | 11 |
 | `TestMaterialDefinition` | 10 |
@@ -716,7 +716,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestModuleHotReload` | 11 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
-| `TestMultiISADispatch` | 2 |
+| `TestMultiISADispatch` | 7 |
 | `TestMusicManager` | 24 |
 | `TestNavMesh` | 11 |
 | `TestNavMeshObstacles` | 7 |
@@ -737,7 +737,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNeuralRadianceCache` | 7 |
 | `TestNeuralTextureCompressor` | 10 |
 | `TestNoiseGenerator` | 7 |
-| `TestNullRHIDevice` | 3 |
+| `TestNullRHIDevice` | 7 |
 | `TestObjectPool` | 6 |
 | `TestOcclusionCulling` | 6 |
 | `TestOnlineServices` | 10 |
@@ -770,7 +770,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestReflection` | 18 |
 | `TestReliableChannel` | 15 |
 | `TestRemoteDebugSystem` | 11 |
-| `TestRenderCommandRing` | 4 |
+| `TestRenderCommandRing` | 8 |
 | `TestRenderECSIntegration` | 8 |
 | `TestRenderGraph` | 25 |
 | `TestReplaySystem` | 8 |
@@ -789,7 +789,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSceneSnapshotSerializer` | 19 |
 | `TestScheduledCallback` | 8 |
 | `TestScopeGuard` | 13 |
-| `TestScopedTimer` | 3 |
+| `TestScopedTimer` | 7 |
 | `TestScreenCapture` | 9 |
 | `TestScreenSpaceEffects` | 16 |
 | `TestScriptHookManager` | 15 |
@@ -857,7 +857,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestWeaponMechanics` | 29 |
 | `TestWeaponSystem` | 18 |
 | `TestWeatherSystem` | 8 |
-| `TestWorkSema` | 2 |
+| `TestWorkSema` | 7 |
 | `TestWorldOriginSystem` | 8 |
 | `TestWorldServerRouting` | 22 |
 <!-- /AUTO:test_inventory -->

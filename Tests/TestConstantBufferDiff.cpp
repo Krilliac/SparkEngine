@@ -73,3 +73,84 @@ TEST(CBDiff_MultipleSlots)
     EXPECT_FALSE(mgr.ShouldUpdate("PS_Slot0", &data2, sizeof(data2)));
     EXPECT_EQ(mgr.GetSkips(), 2u);
 }
+
+TEST(CBDiff_EmptyToNonEmpty)
+{
+    TestCBDiffManager mgr;
+    uint8_t small = 42;
+    EXPECT_TRUE(mgr.ShouldUpdate("slot", &small, sizeof(small)));
+    EXPECT_FALSE(mgr.ShouldUpdate("slot", &small, sizeof(small)));
+    EXPECT_EQ(mgr.GetUpdates(), 1u);
+    EXPECT_EQ(mgr.GetSkips(), 1u);
+}
+
+TEST(CBDiff_SizeChange)
+{
+    TestCBDiffManager mgr;
+    float f = 1.0f;
+    double d = 1.0;
+
+    EXPECT_TRUE(mgr.ShouldUpdate("slot", &f, sizeof(f)));
+    // Different size triggers update even if first bytes match
+    EXPECT_TRUE(mgr.ShouldUpdate("slot", &d, sizeof(d)));
+    EXPECT_EQ(mgr.GetUpdates(), 2u);
+}
+
+TEST(CBDiff_LargeBuffer)
+{
+    TestCBDiffManager mgr;
+    std::vector<float> buf(256, 0.0f);
+    EXPECT_TRUE(mgr.ShouldUpdate("big", buf.data(), buf.size() * sizeof(float)));
+    EXPECT_FALSE(mgr.ShouldUpdate("big", buf.data(), buf.size() * sizeof(float)));
+
+    buf[255] = 1.0f; // Change last element
+    EXPECT_TRUE(mgr.ShouldUpdate("big", buf.data(), buf.size() * sizeof(float)));
+    EXPECT_EQ(mgr.GetUpdates(), 2u);
+}
+
+TEST(CBDiff_SingleByteChange)
+{
+    TestCBDiffManager mgr;
+    uint8_t data[4] = {0, 0, 0, 0};
+    EXPECT_TRUE(mgr.ShouldUpdate("slot", data, sizeof(data)));
+    EXPECT_FALSE(mgr.ShouldUpdate("slot", data, sizeof(data)));
+
+    data[2] = 1; // Flip one byte
+    EXPECT_TRUE(mgr.ShouldUpdate("slot", data, sizeof(data)));
+}
+
+TEST(CBDiff_ManySlots)
+{
+    TestCBDiffManager mgr;
+    constexpr int N = 32;
+    float values[N];
+    for (int i = 0; i < N; ++i)
+    {
+        values[i] = static_cast<float>(i);
+        std::string key = "Slot_" + std::to_string(i);
+        EXPECT_TRUE(mgr.ShouldUpdate(key, &values[i], sizeof(float)));
+    }
+    EXPECT_EQ(mgr.GetUpdates(), static_cast<uint64_t>(N));
+
+    // All should skip on second pass
+    for (int i = 0; i < N; ++i)
+    {
+        std::string key = "Slot_" + std::to_string(i);
+        EXPECT_FALSE(mgr.ShouldUpdate(key, &values[i], sizeof(float)));
+    }
+    EXPECT_EQ(mgr.GetSkips(), static_cast<uint64_t>(N));
+}
+
+TEST(CBDiff_ZeroSizedData)
+{
+    TestCBDiffManager mgr;
+    uint8_t dummy = 0;
+    // Zero-size data matches empty slot (both size 0), so skips immediately
+    EXPECT_FALSE(mgr.ShouldUpdate("empty", &dummy, 0));
+    EXPECT_EQ(mgr.GetSkips(), 1u);
+
+    // Changing from zero to non-zero size should trigger update
+    float val = 1.0f;
+    EXPECT_TRUE(mgr.ShouldUpdate("empty", &val, sizeof(val)));
+    EXPECT_EQ(mgr.GetUpdates(), 1u);
+}
