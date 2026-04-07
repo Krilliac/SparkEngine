@@ -333,6 +333,8 @@ add_executable(SparkTests
     TestNetworkDebugPanel.cpp
     TestContracts.cpp
     TestSafetyCoreUtils.cpp
+    # Subprocess spawning and piping
+    TestProcess.cpp
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp

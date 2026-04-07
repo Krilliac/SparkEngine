@@ -231,14 +231,25 @@ Log messages are queued and written by a background thread. This prevents loggin
 
 ---
 
-## 7. Console Process Manager
+## 7. Subprocess Spawning & Console Process Manager
+
+### Process (general-purpose subprocess utility)
+
+**Source:** `SparkEngine/Source/Utils/Process.h`
+
+Cross-platform RAII wrapper for child processes with optional stdin/stdout/stderr piping. Uses `CreateProcessW` on Windows and `fork`/`execvp` on Linux/macOS. Provides a fluent `Process::Builder` API for launching subprocesses, capturing output, and managing lifecycle (wait, poll, kill).
+
+Used by `ConsoleProcessManager` for SparkConsole IPC and `CrashHandler` for the detached crash reporter.
+
+### ConsoleProcessManager
 
 **Source:** `SparkEngine/Source/Utils/ConsoleProcessManager.h`
 
-Manages the SparkConsole.exe subprocess via stdin/stdout pipes.
+Manages the SparkConsole.exe subprocess via `Spark::Process` with stdin/stdout pipes.
 
 | Primitive | Purpose |
 |-----------|---------|
+| `std::optional<Process> m_process` | Subprocess handle (piped stdin/stdout) |
 | `std::thread m_consoleThread` | Pipe reader thread |
 | `std::atomic<bool> m_shouldStopThread` | Shutdown flag |
 | `std::atomic<bool> m_initialized` | Init guard |

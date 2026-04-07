@@ -2,6 +2,7 @@
 #include "../Core/Platform.h"
 #include "Utils/CrashReportUploader.h"
 #include "Utils/Assert.h"
+#include "Utils/Process.h"
 #include "Utils/SparkError.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "Validate.h"
@@ -255,34 +256,23 @@ static void LaunchCrashReporter()
     g_manifestDir = std::filesystem::temp_directory_path().string() + "/spark_crash_" + std::to_string(GetEnginePID());
     std::filesystem::create_directories(g_manifestDir);
 
-    // Launch reporter in watchdog mode
-    std::string cmd = reporterPath + " --watch " + g_manifestDir + " " + std::to_string(GetEnginePID());
-#ifdef SPARK_PLATFORM_WINDOWS
-    STARTUPINFOA si = {};
-    si.cb = sizeof(si);
-    PROCESS_INFORMATION pi = {};
-    if (CreateProcessA(nullptr, const_cast<char*>(cmd.c_str()), nullptr, nullptr, FALSE,
-                       CREATE_NO_WINDOW | DETACHED_PROCESS, nullptr, nullptr, &si, &pi))
+    // Launch reporter in watchdog mode (detached — survives engine crash)
+    auto result = Spark::Process::Builder(reporterPath)
+                      .Arg("--watch")
+                      .Arg(g_manifestDir)
+                      .Arg(std::to_string(GetEnginePID()))
+                      .Detached()
+                      .Launch();
+
+    if (result)
     {
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: Launched SparkCrashReporter (watchdog mode)");
     }
-#else
-    // Fork and exec on Linux
-    std::string pidStr = std::to_string(GetEnginePID());
-    pid_t child = fork();
-    if (child == 0)
+    else
     {
-        // Child — exec the crash reporter
-        execl(reporterPath.c_str(), reporterPath.c_str(), "--watch", g_manifestDir.c_str(), pidStr.c_str(), nullptr);
-        _exit(1); // exec failed
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "CrashHandler: Failed to launch SparkCrashReporter: %s",
+                       result.error().c_str());
     }
-    else if (child > 0)
-    {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: Launched SparkCrashReporter (PID %d)", child);
-    }
-#endif
 }
 
 // ============================================================================
