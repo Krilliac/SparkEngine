@@ -922,7 +922,7 @@ jobs:
         run: cd build && ./bin/SparkTests --verbose 2>&1 | tee ../test-output.log; tail -5 ../test-output.log
       - name: Generate coverage
         run: |
-          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
+          lcov --capture --directory build --output-file coverage.info --gcov-tool gcov-14 --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
       - name: Per-subsystem coverage analysis
