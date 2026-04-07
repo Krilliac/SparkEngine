@@ -189,6 +189,10 @@ namespace Spark::Net
         setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize), sizeof(sendBufSize));
         setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize));
 
+        // Allow port reuse so rapid server restarts don't fail with EADDRINUSE
+        int reuseAddr = 1;
+        setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuseAddr), sizeof(reuseAddr));
+
         // Bind to the specified port (0 = OS-assigned ephemeral port for clients)
         // If the requested port is in use, try up to 5 consecutive ports
         constexpr int kMaxPortRetries = 5;
