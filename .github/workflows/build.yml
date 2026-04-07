@@ -755,7 +755,7 @@ jobs:
   # Code Coverage — GCC with lcov
   # ===========================================================================
   coverage:
-    name: "Code Coverage (GCC)"
+    name: "Code Coverage (GCC + per-subsystem thresholds)"
     permissions:
       contents: read
       pull-requests: write
@@ -780,7 +780,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
-            -DBUILD_TESTS=ON
+            -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
       - name: Build
         env:
           CCACHE_COMPRESS: "true"
@@ -789,12 +789,16 @@ jobs:
       - name: Test
         env:
           SPARK_TEST_EXCLUDE: "LoadTest_"
-        run: cd build && ./bin/SparkTests 2>&1 | tee ../test-output.log; tail -5 ../test-output.log
+        run: cd build && ./bin/SparkTests --verbose 2>&1 | tee ../test-output.log; tail -5 ../test-output.log
       - name: Generate coverage
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
           lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
           lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
+      - name: Per-subsystem coverage analysis
+        run: |
+          chmod +x scripts/coverage-report.sh
+          scripts/coverage-report.sh coverage.info --json coverage.json 2>&1 | tee subsystem-coverage.txt || true
       - name: Extract error summary
         if: failure()
         run: |
@@ -820,12 +824,25 @@ jobs:
             try {
               const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
               const lines = summary.split('\n');
-              // Extract the total line (last non-empty line with a percentage)
-              const totalLine = lines.filter(l => /Total:/.test(l) || /\d+\.\d+%/.test(l)).pop() || '';
-              let body = `## Code Coverage (GCC + lcov)\n\n`;
-              // Get the last 30 lines which contain the per-directory breakdown
               const table = lines.slice(-35).join('\n');
+              let body = `## Code Coverage (GCC + lcov)\n\n`;
               body += `\`\`\`\n${table}\n\`\`\`\n`;
+
+              // Append per-subsystem breakdown if available
+              try {
+                const json = JSON.parse(fs.readFileSync('coverage.json', 'utf8'));
+                body += `\n### Per-Subsystem Coverage\n\n`;
+                body += `| Subsystem | Lines | Hit | Coverage | Threshold | Status |\n`;
+                body += `|-----------|-------|-----|----------|-----------|--------|\n`;
+                for (const s of json.subsystems) {
+                  const icon = s.pass ? ':white_check_mark:' : ':x:';
+                  body += `| ${s.subsystem} | ${s.lines} | ${s.hit} | ${s.coverage}% | ${s.threshold}% | ${icon} |\n`;
+                }
+                body += `\n**Total: ${json.total_coverage}%** (${json.total_hit}/${json.total_lines} lines)\n`;
+              } catch (e2) {
+                // subsystem data not available
+              }
+
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -839,7 +856,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
-          path: coverage.info
+          path: |
+            coverage.info
+            coverage.json
+            subsystem-coverage.txt
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================

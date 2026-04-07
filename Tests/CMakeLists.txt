@@ -202,6 +202,7 @@ add_executable(SparkTests
     TestJobSystem.cpp
     TestOpaqueHandle.cpp
     TestSparkError.cpp
+    TestThreadDebugger.cpp
     TestCollisionSystem.cpp
     TestNetworkSecurity.cpp
     TestSubTickInput.cpp
