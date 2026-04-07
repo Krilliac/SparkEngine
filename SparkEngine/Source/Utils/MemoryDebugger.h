@@ -180,8 +180,19 @@ namespace Spark
             {
                 // Potential double-free or freeing untracked memory
                 m_doubleFreeCount++;
-                fprintf(stderr, "[MemoryDebugger] WARNING: Freeing untracked pointer %p (possible double-free #%llu)\n",
-                        ptr, static_cast<unsigned long long>(m_doubleFreeCount));
+                // Rate-limit stderr output to avoid log spam from repeated double-frees
+                if (m_doubleFreeCount <= MAX_DOUBLE_FREE_WARNINGS)
+                {
+                    fprintf(stderr,
+                            "[MemoryDebugger] WARNING: Freeing untracked pointer %p (possible double-free #%llu)\n",
+                            ptr, static_cast<unsigned long long>(m_doubleFreeCount));
+                    if (m_doubleFreeCount == MAX_DOUBLE_FREE_WARNINGS)
+                    {
+                        fprintf(stderr,
+                                "[MemoryDebugger] WARNING: Suppressing further double-free warnings (count: %llu)\n",
+                                static_cast<unsigned long long>(m_doubleFreeCount));
+                    }
+                }
                 return false;
             }
 
@@ -392,6 +403,7 @@ namespace Spark
         uint64_t m_totalAllocationCount = 0;
         uint64_t m_totalDeallocationCount = 0;
         uint64_t m_doubleFreeCount = 0;
+        static constexpr uint64_t MAX_DOUBLE_FREE_WARNINGS = 3; ///< Suppress stderr after this many warnings
         uint64_t m_nextAllocIndex = 1;
 
         bool m_enabled =
