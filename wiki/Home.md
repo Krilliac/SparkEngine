@@ -1,6 +1,6 @@
 # Spark Engine
 
-**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), global illumination, GPU-driven rendering, mesh shaders, DXR ray tracing, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph, an EnTT-based ECS architecture (75 component types), an ImGui visual editor with 57 dockable panels, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
+**Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), global illumination, GPU-driven rendering, mesh shaders, DXR ray tracing, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph, an EnTT-based ECS architecture (75 component types), an ImGui visual editor with 59 dockable panels, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
 
 > **v1.0.0 Released** — SparkEngine's first official release. Production-ready core systems with active feature development.
 
@@ -26,7 +26,7 @@
 - **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, retargeting, ragdoll blending, cloth simulation, [cinematic sequencer](Cinematic-Sequencer), FBX/glTF import.
 - **Scripting** — AngelScript with hot-reload, lifecycle callbacks, full engine API bindings, client/server separation. [Visual scripting](Visual-Scripting) with 60 node types that compiles to AngelScript. Lua also supported. [Mod system](Mod-System).
 - **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation (hitbox rewinding), delta snapshots. [HeroEngine-inspired MMO architecture](Area-Server-Architecture) with AreaServers, WorldServer, seamless entity migration, and dynamic load balancing.
-- **Editor** — ImGui-powered visual editor with 57 dockable panels: scene hierarchy, inspector, gizmos, [Shader Graph](Shader-Graph) material editor, [visual script editor](Visual-Scripting), cinematic sequencer, dialogue editor, AI debugger, command palette (Ctrl+P), collaborative multi-user editing, and 200+ debug console commands.
+- **Editor** — ImGui-powered visual editor with 59 dockable panels: scene hierarchy, inspector, gizmos, [Shader Graph](Shader-Graph) material editor, [visual script editor](Visual-Scripting), cinematic sequencer, dialogue editor, AI debugger, command palette (Ctrl+P), collaborative multi-user editing, and 200+ debug console commands.
 
 ## Downloads
 
@@ -184,6 +184,6 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 | Editor Panels | 59 |
 | Test files | 337 |
 | Test cases | 4290+ |
-| Wiki pages | 117 |
-| *Last synced* | *2026-04-06 14:23* |
+| Wiki pages | 125 |
+| *Last synced* | *2026-04-07 00:10* |
 <!-- /AUTO:stats -->

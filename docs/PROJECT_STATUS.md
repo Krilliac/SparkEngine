@@ -111,7 +111,7 @@ Current status of all major subsystems as of v1.0.0 (April 2026).
 
 | System | Status | Notes |
 |--------|--------|-------|
-| Panel System | **Stable** | 57 dockable panels, layout save/load |
+| Panel System | **Stable** | 59 dockable panels, layout save/load |
 | Gizmos | **Stable** | Translate/rotate/scale (ImGuizmo) |
 | Node Graphs | **Stable** | Visual scripting, shader graph (imnodes) |
 | Command Palette | **Stable** | Ctrl+P quick access |
@@ -151,7 +151,7 @@ Current status of all major subsystems as of v1.0.0 (April 2026).
 
 | System | Status | Notes |
 |--------|--------|-------|
-| Unit Tests | **Stable** | 3727 tests, 303 files |
+| Unit Tests | **Stable** | 4290 tests, 338 files |
 | ASan / UBSan / LSan | **Stable** | CI enforced |
 | TSan | **Stable** | CI enforced |
 | MSan | Experimental | Advisory (uninstru mented libc++) |
@@ -162,4 +162,4 @@ Current status of all major subsystems as of v1.0.0 (April 2026).
 
 ---
 
-*Last updated: 2026-04-05*
+*Last updated: 2026-04-06*

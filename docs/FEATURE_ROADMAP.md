@@ -34,7 +34,7 @@ Features being evaluated but not yet committed to.
 |---------|-------|
 | **WebGPU Backend** | Browser-based rendering via WebGPU API. |
 | **Additional VR Runtimes** | Beyond OpenXR (native Oculus, SteamVR). |
-| **Machine Learning Integration** | Neural rendering, AI upscaling, procedural content via ML. |
+| **Machine Learning Integration** | **Shipped** (v1.0.0) — Neural texture compression, radiance cache, denoiser, super-resolution. See `ENABLE_NEURAL_RENDERING`. |
 | **Deterministic Lockstep Networking** | Alternative to current snapshot-based replication. |
 
 ## Completed (v1.0.0)
@@ -50,12 +50,12 @@ Major features shipped in the initial release:
 - Shader Graph (35+ nodes, HLSL generation)
 - Visual Scripting (60 node types, compiles to AngelScript)
 - HeroEngine-inspired MMO networking (AreaServers, WorldServer, seamless migration)
-- 57-panel ImGui editor with collaborative multi-user editing
+- 59-panel ImGui editor with collaborative multi-user editing
 - Jolt Physics (vehicles, ragdoll, cloth, destruction)
 - 10 game module templates (FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript, Base)
 - Accessibility (colorblind modes, subtitles, reduced motion, one-handed input)
-- 3727 unit tests, 5 sanitizer CI jobs, code coverage
+- 4290 unit tests across 338 files, 5 sanitizer CI jobs, code coverage
 
 ---
 
-*Last updated: 2026-04-05*
+*Last updated: 2026-04-06*
