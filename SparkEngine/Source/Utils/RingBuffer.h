@@ -62,14 +62,14 @@ namespace Spark
         /// Access by reverse index: 0 = most recent, 1 = second most recent, etc.
         const T& operator[](size_t index) const
         {
-            SPARK_EXPECTS(index < m_count);
+            SPARK_EXPECTS(index < N);
             size_t i = (m_head + N - 1 - index) % N;
             return m_data[i];
         }
 
         T& operator[](size_t index)
         {
-            SPARK_EXPECTS(index < m_count);
+            SPARK_EXPECTS(index < N);
             size_t i = (m_head + N - 1 - index) % N;
             return m_data[i];
         }
@@ -144,12 +144,14 @@ namespace Spark
 
         const T& operator[](size_t index) const
         {
+            SPARK_EXPECTS(index < m_capacity);
             size_t i = (m_head + m_capacity - 1 - index) % m_capacity;
             return m_data[i];
         }
 
         T& operator[](size_t index)
         {
+            SPARK_EXPECTS(index < m_capacity);
             size_t i = (m_head + m_capacity - 1 - index) % m_capacity;
             return m_data[i];
         }
