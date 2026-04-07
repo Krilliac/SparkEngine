@@ -19,9 +19,6 @@ namespace Racing
 
     bool RacingTrackSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
         m_context = context;
 
         BuildDemoTracks();
