@@ -92,3 +92,64 @@ TEST(NullRHIDevice_FrameAndDraw)
     EXPECT_EQ(device.GetStats().framesRendered, 2u);
     EXPECT_EQ(device.GetStats().drawCalls, 4u);
 }
+
+TEST(NullRHIDevice_ShutdownResetsStats)
+{
+    TestNullDevice device;
+    device.Initialize();
+    device.CreateBuffer();
+    device.CreateTexture();
+    device.BeginFrame();
+    device.Draw();
+
+    device.Shutdown();
+    EXPECT_EQ(device.GetStats().buffersCreated, 0u);
+    EXPECT_EQ(device.GetStats().texturesCreated, 0u);
+    EXPECT_EQ(device.GetStats().framesRendered, 0u);
+    EXPECT_EQ(device.GetStats().drawCalls, 0u);
+}
+
+TEST(NullRHIDevice_ReinitializeAfterShutdown)
+{
+    TestNullDevice device;
+    EXPECT_TRUE(device.Initialize());
+    device.CreateBuffer();
+    device.Shutdown();
+    EXPECT_FALSE(device.IsInitialized());
+
+    EXPECT_TRUE(device.Initialize());
+    EXPECT_TRUE(device.IsInitialized());
+    EXPECT_EQ(device.GetStats().buffersCreated, 0u); // Reset on shutdown
+}
+
+TEST(NullRHIDevice_AllResourceTypes)
+{
+    TestNullDevice device;
+    device.Initialize();
+
+    device.CreateBuffer();
+    device.CreateTexture();
+    device.CreateShader();
+    device.CreatePipeline();
+
+    const auto& stats = device.GetStats();
+    EXPECT_EQ(stats.buffersCreated, 1u);
+    EXPECT_EQ(stats.texturesCreated, 1u);
+    EXPECT_EQ(stats.shadersCreated, 1u);
+    EXPECT_EQ(stats.pipelinesCreated, 1u);
+}
+
+TEST(NullRHIDevice_ManyFrames)
+{
+    TestNullDevice device;
+    device.Initialize();
+
+    for (int i = 0; i < 100; ++i)
+    {
+        device.BeginFrame();
+        device.Draw();
+    }
+
+    EXPECT_EQ(device.GetStats().framesRendered, 100u);
+    EXPECT_EQ(device.GetStats().drawCalls, 100u);
+}

@@ -156,3 +156,61 @@ TEST(CollisionAvoidance_SolveWithOverlap)
     EXPECT_LT(sys.agents[id1].resolvedVelocity.x, 0.0f);
     EXPECT_GT(sys.agents[id2].resolvedVelocity.x, 0.0f);
 }
+
+TEST(CollisionAvoidance_MaxSpeedClamp)
+{
+    TestCollAvoid::CollisionAvoidanceSystem sys;
+    // Severely overlapping agents with low max speed
+    auto id1 = sys.RegisterAgent({0, 0}, 1.0f, 2.0f);
+    auto id2 = sys.RegisterAgent({0.1f, 0}, 1.0f, 2.0f);
+    sys.SetPreferredVelocity(id1, {0, 0});
+    sys.SetPreferredVelocity(id2, {0, 0});
+
+    sys.Solve();
+    float speed1 = sys.agents[id1].resolvedVelocity.Length();
+    float speed2 = sys.agents[id2].resolvedVelocity.Length();
+    EXPECT_LE(speed1, 2.0f + 0.01f);
+    EXPECT_LE(speed2, 2.0f + 0.01f);
+}
+
+TEST(CollisionAvoidance_UnregisterAll)
+{
+    TestCollAvoid::CollisionAvoidanceSystem sys;
+    auto id1 = sys.RegisterAgent({0, 0}, 0.5f, 5.0f);
+    auto id2 = sys.RegisterAgent({5, 0}, 0.5f, 5.0f);
+    auto id3 = sys.RegisterAgent({10, 0}, 0.5f, 5.0f);
+
+    EXPECT_TRUE(sys.UnregisterAgent(id1));
+    EXPECT_TRUE(sys.UnregisterAgent(id2));
+    EXPECT_TRUE(sys.UnregisterAgent(id3));
+    EXPECT_TRUE(sys.agents.empty());
+}
+
+TEST(CollisionAvoidance_ThreeAgentsOverlap)
+{
+    TestCollAvoid::CollisionAvoidanceSystem sys;
+    auto id1 = sys.RegisterAgent({0, 0}, 1.0f, 10.0f);
+    auto id2 = sys.RegisterAgent({0.5f, 0}, 1.0f, 10.0f);
+    auto id3 = sys.RegisterAgent({0.25f, 0.5f}, 1.0f, 10.0f);
+
+    sys.SetPreferredVelocity(id1, {0, 0});
+    sys.SetPreferredVelocity(id2, {0, 0});
+    sys.SetPreferredVelocity(id3, {0, 0});
+
+    sys.Solve();
+    // All agents should have non-zero resolved velocity (pushed apart)
+    EXPECT_GT(sys.agents[id1].resolvedVelocity.Length(), 0.001f);
+    EXPECT_GT(sys.agents[id2].resolvedVelocity.Length(), 0.001f);
+    EXPECT_GT(sys.agents[id3].resolvedVelocity.Length(), 0.001f);
+}
+
+TEST(CollisionAvoidance_SolvePreservesPreferred)
+{
+    TestCollAvoid::CollisionAvoidanceSystem sys;
+    auto id = sys.RegisterAgent({0, 0}, 0.5f, 5.0f);
+    sys.SetPreferredVelocity(id, {3.0f, 4.0f});
+
+    sys.Solve(); // Single agent, no collisions
+    EXPECT_NEAR(sys.agents[id].resolvedVelocity.x, 3.0f, 0.001f);
+    EXPECT_NEAR(sys.agents[id].resolvedVelocity.y, 4.0f, 0.001f);
+}

@@ -110,3 +110,50 @@ TEST(DirtyRect_ContainedSkipped)
     tracker.AddDirtyRect({10, 10, 20, 20}); // Fully contained
     EXPECT_EQ(tracker.GetRectCount(), 1u);
 }
+
+TEST(DirtyRect_ZeroSizeIgnored)
+{
+    TestDirtyRectTracker tracker;
+    tracker.AddDirtyRect({10, 10, 0, 50}); // Zero width
+    tracker.AddDirtyRect({10, 10, 50, 0}); // Zero height
+    EXPECT_FALSE(tracker.IsDirty());
+    EXPECT_EQ(tracker.GetRectCount(), 0u);
+}
+
+TEST(DirtyRect_AdjacentNotMerged)
+{
+    TestDirtyRectTracker tracker;
+    tracker.AddDirtyRect({0, 0, 10, 10});
+    tracker.AddDirtyRect({10, 0, 10, 10}); // Adjacent, not overlapping
+    EXPECT_EQ(tracker.GetRectCount(), 2u);
+}
+
+TEST(DirtyRect_IdenticalRect)
+{
+    TestDirtyRectTracker tracker;
+    tracker.AddDirtyRect({5, 5, 20, 20});
+    tracker.AddDirtyRect({5, 5, 20, 20}); // Identical = contained
+    EXPECT_EQ(tracker.GetRectCount(), 1u);
+}
+
+TEST(DirtyRect_ClearAndReuse)
+{
+    TestDirtyRectTracker tracker;
+    tracker.AddDirtyRect({0, 0, 50, 50});
+    EXPECT_TRUE(tracker.IsDirty());
+
+    tracker.Clear();
+    EXPECT_FALSE(tracker.IsDirty());
+
+    tracker.AddDirtyRect({100, 100, 10, 10});
+    EXPECT_EQ(tracker.GetRectCount(), 1u);
+    EXPECT_EQ(tracker.GetRects()[0].x, 100u);
+}
+
+TEST(DirtyRect_ManyNonOverlapping)
+{
+    TestDirtyRectTracker tracker;
+    for (uint32_t i = 0; i < 10; ++i)
+        tracker.AddDirtyRect({i * 100, 0, 10, 10});
+    EXPECT_EQ(tracker.GetRectCount(), 10u);
+}
