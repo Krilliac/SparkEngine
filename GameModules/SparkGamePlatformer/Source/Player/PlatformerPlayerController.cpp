@@ -20,9 +20,6 @@ namespace Platformer
 
     bool PlatformerPlayerController::Initialize(Spark::IEngineContext* context, PlatformerCheckpointSystem* checkpoints)
     {
-        if (!context)
-            return false;
-
         m_context = context;
         m_checkpoints = checkpoints;
 
@@ -414,7 +411,7 @@ namespace Platformer
         if (m_checkpoints)
         {
             auto spawnPos = m_checkpoints->GetLastCheckpointPosition();
-            m_position = {spawnPos.x, spawnPos.y + 1.0f, spawnPos.z};
+            m_position = {spawnPos.x, spawnPos.y, spawnPos.z};
         }
         else
         {

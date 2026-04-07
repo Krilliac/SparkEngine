@@ -18,9 +18,6 @@ namespace Platformer
 
     bool PlatformerCheckpointSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
         m_context = context;
 
         BuildDemoCheckpoints();
