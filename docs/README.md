@@ -56,7 +56,7 @@ This `docs/` directory also contains tooling for Doxygen-based API documentation
 | Directory | Description |
 |-----------|-------------|
 | `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (57 panels) |
+| `SparkEditor/Source/` | ImGui visual editor (59 panels) |
 | `SparkConsole/src/` | Standalone debug console application |
 | `SparkShaderCompiler/src/` | Offline shader compilation tool |
 | `GameModules/*/Source/` | 10 game modules (FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript) |

@@ -1,24 +1,37 @@
 # Documentation Coverage Audit
 
-**Last updated:** 2026-04-03
+**Last updated:** 2026-04-06
 **Type:** Observation
 **Status:** Active
 **Severity:** Low
 
 ## Description
 
-88 wiki pages (excluding _Sidebar.md), 245/246 headers with Doxygen comments, near-complete API coverage. Added 5 new user-facing wiki pages: FAQ, Quick-Start Tutorial, Editor Walkthrough, Configuration Reference, Performance Tips. Updated Home.md with role-based reading paths.
+125 wiki pages (excluding _Sidebar.md), 246/246 headers with Doxygen comments, complete API coverage. Added 8 new graphics/rendering wiki pages: Post-Processing, Neural Rendering, Material System, Decal System, Particle System, Sky and Atmosphere, Shadow System, Foliage System. Fixed stale counts across README, PROJECT_STATUS, FEATURE_ROADMAP, CHANGELOG, and editor references (57→59 panels, test counts updated to 4290).
 
 ---
 
-## Wiki Coverage (83 pages)
+## Wiki Coverage (125 pages)
 
 ### Statistics
-- **Total pages**: 88 (excluding _Sidebar.md)
-- All engine subsystems have wiki pages (including Tween System, previously missing)
-- All major graphics subsystems documented (Render Graph, GPU Particles, GPU-Driven Rendering, Volumetric Fog, Global Illumination, Virtual Texturing, Water Rendering, Clustered Lighting, Mesh Shaders, Shader Graph)
-- Broad topic pages added: Error Handling Patterns, Hot Reload Overview
-- User-facing docs added: FAQ, Quick-Start Tutorial, Editor Walkthrough, Configuration Reference, Performance Tips
+- **Total pages**: 125 (excluding _Sidebar.md)
+- All engine subsystems have wiki pages
+- All graphics subsystems documented (Render Graph, GPU Particles, GPU-Driven Rendering, Volumetric Fog, Global Illumination, Virtual Texturing, Water Rendering, Clustered Lighting, Mesh Shaders, Shader Graph, Post-Processing, Neural Rendering, Material System, Decal System, Particle System, Sky and Atmosphere, Shadow System, Foliage System)
+- Broad topic pages: Error Handling Patterns, Hot Reload Overview
+- User-facing docs: FAQ, Quick-Start Tutorial, Editor Walkthrough, Configuration Reference, Performance Tips
+
+### New Pages Added (2026-04-06)
+
+| Page | Category | Coverage |
+|------|----------|----------|
+| `Post-Processing.md` | Graphics | 14-pass pipeline, per-effect settings, performance metrics |
+| `Neural-Rendering.md` | Graphics | Inference engine, radiance cache, NTC, neural denoiser/SR |
+| `Material-System.md` | Graphics | PBR metallic/roughness, 18 texture slots, advanced properties |
+| `Decal-System.md` | Graphics | Deferred decals, surface types, weapon integration |
+| `Particle-System.md` | Graphics | CPU particles, emitter shapes, blend modes |
+| `Sky-and-Atmosphere.md` | Graphics | Preetham sky model, turbidity, sun direction |
+| `Shadow-System.md` | Graphics | Shadow atlas, PCSS, temporal caching |
+| `Foliage-System.md` | Graphics | Instanced vegetation, terrain-aware placement |
 
 ### New Pages Added (2026-04-03)
 
@@ -99,8 +112,8 @@ docs/
 
 ## What's Done Right
 
-- 83 wiki pages covering all major subsystems and advanced graphics
-- 99.6% header Doxygen coverage
+- 125 wiki pages covering all major subsystems, graphics, and rendering
+- 100% header Doxygen coverage (246/246)
 - Codebase-Statistics.md with comprehensive metrics
 - Codebase-Health.md with system maturity status
 - Unified error handling and hot-reload documentation

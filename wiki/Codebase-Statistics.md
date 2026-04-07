@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-06.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-07.
 
 ## Code Volume
 
@@ -10,11 +10,11 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |---------|------:|
 | **SparkEngine/Source** | 261074 |
 | **SparkEditor/Source** | 85303 |
-| **GameModules** | 57841 |
-| **Tests** | 104329 |
+| **GameModules** | 57813 |
+| **Tests** | 104335 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~510938** |
+| **Total C++ (excl. ThirdParty)** | **~510916** |
 
 ### File Counts
 
@@ -26,7 +26,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
 | Test files (.cpp) | 338 |
-| Wiki pages (.md) | 117 |
+| Wiki pages (.md) | 125 |
 
 ### Code Density
 

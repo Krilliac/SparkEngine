@@ -53,7 +53,7 @@
 
 ### Why Spark Engine?
 
-- **Complete game engine** — rendering (6 backends), physics, audio, AI, animation, networking, scripting, visual scripting, and a 57-panel editor all in one package
+- **Complete game engine** — rendering (6 backends), physics, audio, AI, animation, networking, scripting, visual scripting, and a 59-panel editor all in one package
 - **General-purpose** — FPS, RPG, MMO, battle royale, open-world, RTS, racing, platformer — build any genre with 10 built-in game module templates
 - **Advanced rendering** — global illumination (DDGI/APV), GPU-driven rendering, mesh shaders, virtual texturing, DXR ray tracing, Shader Graph, and RenderGraph
 - **Scalable multiplayer** — from single-player to MMO-scale via HeroEngine-inspired area-based server architecture with seamless entity migration
@@ -64,7 +64,7 @@
 
 ## Editor Preview
 
-![SparkEditor — ImGui-based visual editor with 57 dockable panels](docs/screenshots/editor-overview.png)
+![SparkEditor — ImGui-based visual editor with 59 dockable panels](docs/screenshots/editor-overview.png)
 
 *SparkEditor default layout — Hierarchy, Scene View, Inspector, Console, and Asset Browser. Additional panels available from the Window menu. Spark Professional dark theme.*
 
@@ -75,7 +75,7 @@
 
 ![Welcome screen](docs/screenshots/editor-welcome.png)
 
-**Window Menu** (57 panels available)
+**Window Menu** (59 panels available)
 
 ![Window menu](docs/screenshots/editor-window-menu.png)
 
@@ -181,7 +181,7 @@ AngelScript with Unity-style hot-reload (file watcher with debouncing and state 
 
 ### Editor
 
-ImGui-powered visual editor with 57 specialized dockable panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor with Shader Graph, visual script editor (node-based, compiles to AngelScript), terrain editing, weapon editor, profiler, AI editor/debugger, physics debug, cinematic sequencer, dialogue editor, ability/condition/trigger editors, destruction editor, 2D/sprite/tilemap editors, FPS tools, audio mixer, replay panel, save system panel, dedicated server panel, version control integration, build/deployment pipeline, level streaming, search panel, command palette (Ctrl+P), prefab system, event monitor, coroutine debugger, collaboration panel, project management, scene statistics, accessibility settings, VR configuration, and theming. Collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness). Full undo/redo support, play-mode editing, and plugin system (built-in + DLL).
+ImGui-powered visual editor with 59 specialized dockable panels: scene hierarchy, inspector, asset browser, game viewport, gizmos (ImGuizmo), node graphs (imnodes), animation timeline, material editor with Shader Graph, visual script editor (node-based, compiles to AngelScript), terrain editing, weapon editor, profiler, AI editor/debugger, physics debug, cinematic sequencer, dialogue editor, ability/condition/trigger editors, destruction editor, 2D/sprite/tilemap editors, FPS tools, audio mixer, replay panel, save system panel, dedicated server panel, version control integration, build/deployment pipeline, level streaming, search panel, command palette (Ctrl+P), prefab system, event monitor, coroutine debugger, collaboration panel, project management, scene statistics, accessibility settings, VR configuration, and theming. Collaborative multi-user editing (HeroEngine-inspired node locking, edit broadcasting, peer presence awareness). Full undo/redo support, play-mode editing, and plugin system (built-in + DLL).
 
 ### Procedural Generation
 
@@ -310,7 +310,7 @@ Standalone debug console application that communicates with SparkEngine via name
 |                   |                   |                   |
 |  AngelScript VM   |  InputManager     |  EnTT ECS (75+)   |
 |  Visual Scripting |  Gamepad / SDL2   |  SceneManager     |
-|  Hot Reload / Lua |  ImGui Editor(57) |  AssetPipeline    |
+|  Hot Reload / Lua |  ImGui Editor(59) |  AssetPipeline    |
 +-------------------+-------------------+-------------------+
 |    Gameplay       |    AI & Nav       |    Networking     |
 |                   |                   |                   |
@@ -385,7 +385,7 @@ SparkEngine/
 |       |-- SceneManager/    # Scene and level management
 |       |-- Utils/           # Logging, profiler, crash handler, console, debug tools
 |-- SparkEditor/
-|   |-- Source/              # ImGui editor (57 panels, collaborative editing)
+|   |-- Source/              # ImGui editor (59 panels, collaborative editing)
 |-- SparkConsole/
 |   |-- src/                 # Standalone debug console application
 |-- SparkShaderCompiler/
@@ -417,7 +417,7 @@ SparkEngine/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
 |-- docs/                    # Doxygen docs, wiki, API reference
-|-- wiki/                    # 117 wiki pages covering all subsystems
+|-- wiki/                    # 125 wiki pages covering all subsystems
 |-- cmake/                   # CMake utility modules
 |-- .github/
 |   |-- workflows/          # CI/CD (build + release)
