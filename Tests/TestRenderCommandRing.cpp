@@ -159,3 +159,81 @@ TEST(RenderCommandRing_SPSC_Threading)
     EXPECT_EQ(consumed.load(), NUM_ITEMS);
     EXPECT_TRUE(ring.IsEmpty());
 }
+
+TEST(RenderCommandRing_EmptyConsume)
+{
+    TestCommandRing<4> ring;
+    TestCommand out;
+    EXPECT_FALSE(ring.Consume(out));
+    EXPECT_TRUE(ring.IsEmpty());
+    EXPECT_EQ(ring.GetPendingCount(), 0u);
+}
+
+TEST(RenderCommandRing_FillDrainRefill)
+{
+    TestCommandRing<2> ring; // 4 entries
+    TestCommand cmd;
+    cmd.type = TestRenderCmd::Draw;
+
+    // Fill completely
+    for (int i = 0; i < 4; ++i)
+        EXPECT_TRUE(ring.Post(cmd));
+    EXPECT_FALSE(ring.Post(cmd));
+
+    // Drain completely
+    TestCommand out;
+    for (int i = 0; i < 4; ++i)
+        EXPECT_TRUE(ring.Consume(out));
+    EXPECT_TRUE(ring.IsEmpty());
+
+    // Refill
+    for (int i = 0; i < 4; ++i)
+        EXPECT_TRUE(ring.Post(cmd));
+    EXPECT_EQ(ring.GetPendingCount(), 4u);
+}
+
+TEST(RenderCommandRing_OrderPreserved)
+{
+    TestCommandRing<4> ring;
+    for (uint32_t i = 0; i < 10; ++i)
+    {
+        TestCommand cmd;
+        cmd.type = TestRenderCmd::Draw;
+        cmd.param = i;
+        ring.Post(cmd);
+    }
+
+    for (uint32_t i = 0; i < 10; ++i)
+    {
+        TestCommand out;
+        EXPECT_TRUE(ring.Consume(out));
+        EXPECT_EQ(out.param, i);
+    }
+}
+
+TEST(RenderCommandRing_MixedCommandTypes)
+{
+    TestCommandRing<4> ring;
+
+    TestCommand begin;
+    begin.type = TestRenderCmd::BeginFrame;
+    TestCommand draw;
+    draw.type = TestRenderCmd::Draw;
+    draw.param = 7;
+    TestCommand end;
+    end.type = TestRenderCmd::EndFrame;
+
+    EXPECT_TRUE(ring.Post(begin));
+    EXPECT_TRUE(ring.Post(draw));
+    EXPECT_TRUE(ring.Post(end));
+    EXPECT_EQ(ring.GetPendingCount(), 3u);
+
+    TestCommand out;
+    ring.Consume(out);
+    EXPECT_EQ(static_cast<int>(out.type), static_cast<int>(TestRenderCmd::BeginFrame));
+    ring.Consume(out);
+    EXPECT_EQ(static_cast<int>(out.type), static_cast<int>(TestRenderCmd::Draw));
+    EXPECT_EQ(out.param, 7u);
+    ring.Consume(out);
+    EXPECT_EQ(static_cast<int>(out.type), static_cast<int>(TestRenderCmd::EndFrame));
+}
