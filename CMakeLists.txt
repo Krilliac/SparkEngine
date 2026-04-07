@@ -319,20 +319,23 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
     )
 
     # LTO for Release and MinSizeRel (not RelWithDebInfo — it bloats debug info)
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        add_compile_options(
-            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=auto>
-        )
-        add_link_options(
-            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=auto>
-        )
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
-        add_compile_options(
-            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=thin>
-        )
-        add_link_options(
-            $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=thin>
-        )
+    option(ENABLE_LTO "Enable link-time optimization in Release/MinSizeRel builds" ON)
+    if(ENABLE_LTO)
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+            add_compile_options(
+                $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=auto>
+            )
+            add_link_options(
+                $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=auto>
+            )
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|IntelLLVM")
+            add_compile_options(
+                $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=thin>
+            )
+            add_link_options(
+                $<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-flto=thin>
+            )
+        endif()
     endif()
 
     # Linker dead-code elimination (pairs with -ffunction-sections/-fdata-sections)
