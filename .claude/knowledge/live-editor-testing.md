@@ -1,6 +1,6 @@
 # Live Editor Testing on Linux (Software Rendering)
 
-**Last updated:** 2026-03-28
+**Last updated:** 2026-04-07
 **Type:** Pattern
 **Status:** Active
 
@@ -21,6 +21,15 @@ The editor (SparkEditor) uses SDL2 + OpenGL 3.3 + ImGui on Linux. The engine run
 - `python3-pillow` — Screenshot capture via Python
 
 SDL2 is bundled as a git submodule at `ThirdParty/SDL2` (release-2.30.0) and built automatically by CMake. **Critical:** `libgl-dev` must be installed *before* running `cmake -B build`, otherwise SDL2 compiles without OpenGL/GLX support (`SDL not configured with OpenGL/GLX support` error). If this happens, install `libgl-dev`, delete the build directory, and reconfigure.
+
+**Fallback when `libgl-dev` is unavailable** (no network, sandboxed environment):
+The repo bundles GL headers in `ThirdParty/OpenGL/GL/`. Copy them to the system include path and create the dev symlink manually:
+```bash
+sudo cp ThirdParty/OpenGL/GL/*.h /usr/include/GL/
+sudo ln -sf /usr/lib/x86_64-linux-gnu/libGL.so.1 /usr/lib/x86_64-linux-gnu/libGL.so
+sudo ln -sf /usr/lib/x86_64-linux-gnu/libGLX.so.0 /usr/lib/x86_64-linux-gnu/libGLX.so
+```
+This works as long as the Mesa runtime libraries (`libgl1`, `libglx-mesa0`) are already installed (they usually are).
 
 ### Build
 ```bash
@@ -73,9 +82,15 @@ The `tools/test-editor-live.py` script includes X11 screenshot capture via ctype
 
 4. **Engine runtime needs SDL GL context** — Added `SDL_GL_CreateContext` + `SDL_GL_MakeCurrent` in `RunSDL2Windowed()` before calling `GraphicsEngine::Initialize`, so the RHI can detect and reuse the existing context.
 
+5. **GLXBadContext on engine shutdown** — When SDL2 creates the GL context, GLDevice stored the context handle but called `glXDestroyContext()` during shutdown, destroying SDL2's context before SDL2 could clean it up. Fixed by adding `m_ownsGLXContext` flag — only destroy the GLX context if the engine created it (bootstrap path).
+
+6. **Process pipe fd aliasing breaks stderr capture** — `pipe()` can allocate fds overlapping with stdin/stdout/stderr (0-2) when previous tests close those fds. When `stderrPipe[0]` was fd 2, `dup2(stderrPipe[1], STDERR_FILENO)` would destroy the pipe read-end, then the child's `close(stderrPipe[0])` would close the newly-redirected stderr. Fixed by using `pipe2(O_CLOEXEC)` and a `redirectFd` helper that handles fd aliasing safely.
+
 ## Files Modified
 - `SparkEngine/Source/Core/SparkEngine.cpp` — SDL GL attributes + context creation in `RunSDL2Windowed()`
-- `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp` — Detect existing GL context, skip GLX bootstrap
+- `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp` — Detect existing GL context, skip GLX bootstrap, ownership-aware shutdown
+- `SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h` — `m_ownsGLXContext` flag
+- `SparkEngine/Source/Utils/ProcessLinux.cpp` — `pipe2(O_CLOEXEC)` + safe fd redirect in child
 - `SparkEditor/Source/Core/EditorApplication.h` — `testMode` and `testFrameLimit` in `EditorConfig`
 - `SparkEditor/Source/Core/EditorApplication.cpp` — Test mode frame limit in `Run()`
 - `SparkEditor/Source/Core/EditorUI.cpp` — Skip project browser in test mode

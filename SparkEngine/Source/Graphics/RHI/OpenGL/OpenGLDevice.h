@@ -408,6 +408,7 @@ namespace Spark
                 Display* m_glxDisplay = nullptr;
                 GLXContext m_glxContext = nullptr;
                 GLXPbuffer m_glxPbuffer = 0;
+                bool m_ownsGLXContext = false; ///< False when SDL2 created the context
 #elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
                 EGLDisplay m_bootstrapDisplay = EGL_NO_DISPLAY;
                 EGLContext m_bootstrapContext = EGL_NO_CONTEXT;

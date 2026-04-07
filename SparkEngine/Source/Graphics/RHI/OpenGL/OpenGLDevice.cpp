@@ -896,6 +896,7 @@ namespace Spark
                                    "Existing GLX context detected (SDL2) — skipping GLX bootstrap");
                     m_glxDisplay = XOpenDisplay(nullptr);
                     m_glxContext = glXGetCurrentContext();
+                    m_ownsGLXContext = false; // SDL2 owns this context
                     // Load GLAD using the existing context
                     if (!gladLoadGL())
                     {
@@ -998,6 +999,7 @@ namespace Spark
                 m_glxDisplay = bootstrapDpy;
                 m_glxContext = bootstrapCtx;
                 m_glxPbuffer = bootstrapPbuffer;
+                m_ownsGLXContext = true; // We created this context
 
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics,
                                "GLX bootstrap context created (software rendering via Xvfb)");
@@ -1158,11 +1160,16 @@ namespace Spark
 #if defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
                 if (m_glxDisplay)
                 {
-                    glXMakeCurrent(m_glxDisplay, 0, nullptr);
-                    if (m_glxContext)
-                        glXDestroyContext(m_glxDisplay, m_glxContext);
-                    if (m_glxPbuffer)
-                        glXDestroyPbuffer(m_glxDisplay, m_glxPbuffer);
+                    if (m_ownsGLXContext)
+                    {
+                        // Only destroy resources we created (GLX bootstrap path).
+                        // When SDL2 created the context, SDL2 owns it and will destroy it.
+                        glXMakeCurrent(m_glxDisplay, 0, nullptr);
+                        if (m_glxContext)
+                            glXDestroyContext(m_glxDisplay, m_glxContext);
+                        if (m_glxPbuffer)
+                            glXDestroyPbuffer(m_glxDisplay, m_glxPbuffer);
+                    }
                     XCloseDisplay(m_glxDisplay);
                     m_glxDisplay = nullptr;
                     m_glxContext = nullptr;

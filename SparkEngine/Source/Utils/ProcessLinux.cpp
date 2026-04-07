@@ -187,7 +187,7 @@ namespace Spark
 
         auto makePipe = [](int fds[2], const char* name) -> std::expected<void, std::string>
         {
-            if (pipe(fds) == -1)
+            if (pipe2(fds, O_CLOEXEC) == -1)
                 return std::unexpected(std::string("pipe() failed for ") + name + ": " + strerror(errno));
             return {};
         };
@@ -238,29 +238,33 @@ namespace Spark
             if (m_detached)
                 setsid(); // Detach from parent's session
 
-            // Redirect stdin
+            // Redirect stdin/stdout/stderr via dup2.
+            // Pipes are O_CLOEXEC so originals auto-close on exec;
+            // we only need dup2 (which clears CLOEXEC on the target fd).
+            // Guard against the case where a pipe fd IS already the
+            // target fd (e.g. stderrPipe[0]==2) — dup2(fd,fd) is a no-op
+            // that would leave the original CLOEXEC, so use fcntl instead.
+            auto redirectFd = [](int srcFd, int targetFd)
+            {
+                if (srcFd == targetFd)
+                {
+                    // Already the right fd — just clear CLOEXEC so it survives exec
+                    int flags = fcntl(srcFd, F_GETFD);
+                    if (flags != -1)
+                        fcntl(srcFd, F_SETFD, flags & ~FD_CLOEXEC);
+                }
+                else
+                {
+                    dup2(srcFd, targetFd); // target fd gets CLOEXEC cleared
+                }
+            };
+
             if (stdinPipe[0] >= 0)
-            {
-                dup2(stdinPipe[0], STDIN_FILENO);
-                close(stdinPipe[0]);
-                close(stdinPipe[1]); // Child doesn't write to its own stdin pipe
-            }
-
-            // Redirect stdout
+                redirectFd(stdinPipe[0], STDIN_FILENO);
             if (stdoutPipe[1] >= 0)
-            {
-                dup2(stdoutPipe[1], STDOUT_FILENO);
-                close(stdoutPipe[0]); // Child doesn't read from its own stdout pipe
-                close(stdoutPipe[1]);
-            }
-
-            // Redirect stderr
+                redirectFd(stdoutPipe[1], STDOUT_FILENO);
             if (stderrPipe[1] >= 0)
-            {
-                dup2(stderrPipe[1], STDERR_FILENO);
-                close(stderrPipe[0]);
-                close(stderrPipe[1]);
-            }
+                redirectFd(stderrPipe[1], STDERR_FILENO);
 
             execvp(m_executable.c_str(), const_cast<char* const*>(argv.data()));
             _exit(127); // exec failed
