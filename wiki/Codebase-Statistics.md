@@ -8,31 +8,31 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 261079 |
+| **SparkEngine/Source** | 261631 |
 | **SparkEditor/Source** | 85303 |
 | **GameModules** | 57813 |
-| **Tests** | 104335 |
+| **Tests** | 104971 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~510916** |
+| **Total C++ (excl. ThirdParty)** | **~512109** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 740 |
-| Implementation files (.cpp) | 845 |
+| Header files (.h/.hpp) | 741 |
+| Implementation files (.cpp) | 849 |
 | HLSL shader files | 38 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 338 |
+| Test files (.cpp) | 340 |
 | Wiki pages (.md) | 125 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~879 |
+| Average lines per .cpp file | ~873 |
 | Average lines per .h file | ~566 |
 | Largest codebase section | Graphics (100686 lines — 38% of SparkEngine/Source) |
 
@@ -42,9 +42,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 100686 | 38.5% |
-| Engine (all subsystems) | 79696 | 30.5% |
-| Utils | 36276 | 13.8% |
+| Graphics | 100686 | 38.4% |
+| Engine (all subsystems) | 79696 | 30.4% |
+| Utils | 36828 | 14.0% |
 | Core | 19367 | 7.4% |
 | Physics | 10101 | 3.8% |
 | Audio | 5548 | 2.1% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 339 |
-| TEST() definitions | 4312 |
+| Test files | 340 |
+| TEST() definitions | 4327 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -161,7 +161,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `D3D12Device.cpp` | 1564 |
 | `D3D11Device.cpp` | 1470 |
 | `GraphicsDeviceResources.cpp` | 1335 |
-| `CrashHandler.cpp` | 1332 |
+| `CrashHandler.cpp` | 1322 |
 | `LightingSystem.cpp` | 1283 |
 | `SaveSystem.cpp` | 1275 |
 
