@@ -24,6 +24,12 @@ permissions:
 env:
   ARTIFACT_RETENTION_DAYS: 14
   ERROR_RETENTION_DAYS: 1
+  # ── Compiler cache (ccache) tuning for incremental CI builds ──
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPRESSLEVEL: "6"
+  CCACHE_MAXSIZE: "1G"
+  CCACHE_SLOPPINESS: "pch_defines,time_macros,include_file_mtime,file_stat_matches"
+  CCACHE_BASEDIR: ${{ github.workspace }}
 
 jobs:
   # ===========================================================================
@@ -85,11 +91,23 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.ccache
-        key: ccache-linux-asan-${{ github.sha }}
-        restore-keys: ccache-linux-asan-
+        key: ccache-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-asan-
+
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-asan-
 
     - name: Configure CMake (ASan + UBSan + LSan)
       run: |
+        ccache --zero-stats
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
@@ -103,10 +121,11 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
-      env:
-        CCACHE_COMPRESS: "true"
-        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: ccache --show-stats
 
     - name: Run Tests under ASan + UBSan + LSan
       env:
@@ -162,11 +181,23 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.ccache
-        key: ccache-linux-tsan-${{ github.sha }}
-        restore-keys: ccache-linux-tsan-
+        key: ccache-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-tsan-
+
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-tsan-
 
     - name: Configure CMake (TSan)
       run: |
+        ccache --zero-stats
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
@@ -180,10 +211,11 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 
     - name: Build
-      env:
-        CCACHE_COMPRESS: "true"
-        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: ccache --show-stats
 
     - name: Run Tests under TSan
       env:
@@ -244,11 +276,23 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.ccache
-        key: ccache-linux-msan-${{ github.sha }}
-        restore-keys: ccache-linux-msan-
+        key: ccache-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-msan-
+
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-msan-
 
     - name: Configure CMake (MSan)
       run: |
+        ccache --zero-stats
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
@@ -262,10 +306,11 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
 
     - name: Build (SparkTests only)
-      env:
-        CCACHE_COMPRESS: "true"
-        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: ccache --show-stats
 
     - name: Extract error summary
       if: failure()
@@ -323,11 +368,24 @@ jobs:
     - name: Setup sccache
       uses: mozilla-actions/sccache-action@v0.0.9
 
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-windows-vs2022-${{ matrix.config }}-
+
     - name: Configure CMake (VS 2022 / v143)
       run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 2>&1 | tee cmake-configure.log
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
+
+    - name: Print sccache stats
+      if: always()
+      run: sccache --show-stats
 
     - name: Run Tests
       if: matrix.config == 'Release'
@@ -396,6 +454,15 @@ jobs:
     - name: Setup sccache
       uses: mozilla-actions/sccache-action@v0.0.9
 
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-windows-vs2026-${{ matrix.config }}-
+
     - name: Check v144 toolset availability
       id: check-v144
       shell: pwsh
@@ -456,11 +523,23 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.ccache
-        key: ccache-linux-gcc-${{ matrix.config }}-${{ github.sha }}
-        restore-keys: ccache-linux-gcc-${{ matrix.config }}-
+        key: ccache-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-gcc-${{ matrix.config }}-
+
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-gcc-${{ matrix.config }}-
 
     - name: Configure CMake
       run: |
+        ccache --zero-stats
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
@@ -470,10 +549,11 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      env:
-        CCACHE_COMPRESS: "true"
-        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: ccache --show-stats
 
     - name: Run Tests
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
@@ -535,11 +615,23 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.ccache
-        key: ccache-linux-clang-${{ matrix.config }}-${{ github.sha }}
-        restore-keys: ccache-linux-clang-${{ matrix.config }}-
+        key: ccache-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-clang-${{ matrix.config }}-
+
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-clang-${{ matrix.config }}-
 
     - name: Configure CMake
       run: |
+        ccache --zero-stats
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
@@ -549,10 +641,11 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      env:
-        CCACHE_COMPRESS: "true"
-        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: ccache --show-stats
 
     - name: Run Tests
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
@@ -616,11 +709,23 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.ccache
-        key: ccache-linux-mingw-${{ github.sha }}
-        restore-keys: ccache-linux-mingw-
+        key: ccache-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-mingw-
+
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-mingw-
 
     - name: Configure CMake (MinGW cross-compilation)
       run: |
+        ccache --zero-stats
         cmake -B build \
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
           -DCMAKE_BUILD_TYPE=Release \
@@ -632,10 +737,11 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build (Windows .exe via MinGW)
-      env:
-        CCACHE_COMPRESS: "true"
-        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: ccache --show-stats
 
     - name: Setup Wine prefix and DXVK
       run: |
@@ -703,11 +809,23 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/Library/Caches/ccache
-        key: ccache-macos-${{ matrix.config }}-${{ github.sha }}
-        restore-keys: ccache-macos-${{ matrix.config }}-
+        key: ccache-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-macos-${{ matrix.config }}-
+
+    - name: Restore build directory
+      uses: actions/cache@v5
+      with:
+        path: build
+        key: build-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-macos-${{ matrix.config }}-
 
     - name: Configure CMake
       run: |
+        ccache --zero-stats
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
@@ -718,10 +836,11 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build
-      env:
-        CCACHE_COMPRESS: "true"
-        CCACHE_COMPRESSLEVEL: "6"
       run: cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: ccache --show-stats
 
     - name: Run Tests
       if: matrix.config == 'Release'
@@ -771,10 +890,21 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.ccache
-          key: ccache-coverage-${{ github.sha }}
-          restore-keys: ccache-coverage-
+          key: ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+            ccache-coverage-
+      - name: Restore build directory
+        uses: actions/cache@v5
+        with:
+          path: build
+          key: build-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+          restore-keys: |
+            build-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+            build-coverage-
       - name: Configure
         run: |
+          ccache --zero-stats
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -782,10 +912,10 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
       - name: Build
-        env:
-          CCACHE_COMPRESS: "true"
-          CCACHE_COMPRESSLEVEL: "6"
         run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      - name: Print ccache stats
+        if: always()
+        run: ccache --show-stats
       - name: Test
         env:
           SPARK_TEST_EXCLUDE: "LoadTest_"
@@ -880,8 +1010,18 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.ccache
-          key: ccache-clang-tidy-${{ github.sha }}
-          restore-keys: ccache-clang-tidy-
+          key: ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+            ccache-clang-tidy-
+      - name: Restore build directory
+        uses: actions/cache@v5
+        with:
+          path: build
+          key: build-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+          restore-keys: |
+            build-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+            build-clang-tidy-
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
