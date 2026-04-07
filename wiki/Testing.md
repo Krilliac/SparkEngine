@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*339 test files, 4327+ test cases*
+*339 test files, 4388+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
