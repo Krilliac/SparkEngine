@@ -263,6 +263,8 @@ namespace Spark
 
         // Double-free tracking
         uint64_t m_lastDoubleFreeCount = 0;
+        uint64_t m_totalDoubleFreeAnomalies = 0;
+        static constexpr uint64_t MAX_DOUBLE_FREE_LOG_COUNT = 3; ///< Suppress anomaly logs after this many
 
         // Budgets
         mutable std::mutex m_mutex;

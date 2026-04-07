@@ -53,6 +53,7 @@ namespace Spark
         m_lastFrameBytes = debugger.GetCurrentBytes();
         m_lastFrameAllocCount = debugger.GetTotalAllocationCount();
         m_lastDoubleFreeCount = debugger.GetDoubleFreeCount();
+        m_totalDoubleFreeAnomalies = 0;
         m_lastFragAllocCount = debugger.GetActiveAllocationCount();
         m_lastFragTotalBytes = debugger.GetCurrentBytes();
 
@@ -398,10 +399,29 @@ namespace Spark
         if (current > m_lastDoubleFreeCount)
         {
             uint64_t newCount = current - m_lastDoubleFreeCount;
-            char desc[256];
-            snprintf(desc, sizeof(desc), "Double-free detected: %llu new event(s) (total: %llu)",
-                     static_cast<unsigned long long>(newCount), static_cast<unsigned long long>(current));
-            RecordAnomaly(MemoryAnomalyType::DoubleFree, desc);
+            m_totalDoubleFreeAnomalies += newCount;
+
+            // Rate-limit anomaly recording to avoid log spam from repeated double-frees.
+            // Log the first few individually, then batch subsequent detections.
+            if (m_totalDoubleFreeAnomalies <= MAX_DOUBLE_FREE_LOG_COUNT)
+            {
+                char desc[256];
+                snprintf(desc, sizeof(desc), "Double-free detected: %llu new event(s) (total: %llu)",
+                         static_cast<unsigned long long>(newCount), static_cast<unsigned long long>(current));
+                RecordAnomaly(MemoryAnomalyType::DoubleFree, desc);
+            }
+            else if (m_totalDoubleFreeAnomalies == MAX_DOUBLE_FREE_LOG_COUNT + newCount)
+            {
+                // Log one final summary message when we first exceed the threshold
+                char desc[256];
+                snprintf(desc, sizeof(desc),
+                         "Double-free log suppressed after %llu events (total: %llu). "
+                         "Check MemoryDebugger for full count.",
+                         static_cast<unsigned long long>(m_totalDoubleFreeAnomalies),
+                         static_cast<unsigned long long>(current));
+                RecordAnomaly(MemoryAnomalyType::DoubleFree, desc);
+            }
+            // else: silently count — anomaly ring buffer and debugger still track the full count
         }
         m_lastDoubleFreeCount = current;
     }
