@@ -46,6 +46,14 @@ namespace SparkEditor
         void RenderAnimationTab();
         void RenderEditorTab();
         void RenderLoggingTab();
+        void RenderAccessibilityTab();
+        void RenderVRTab();
+        void RenderDestructionDialogueTab();
+        void RenderModdingLocalizationTab();
+        void RenderSaveReplayTab();
+        void RenderParticlesDecalsTab();
+        void RenderMemoryTab();
+        void RenderOnlineServicesTab();
         void RenderProjectInfoTab();
 
         int m_activeTab = 0;

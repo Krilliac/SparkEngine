@@ -604,3 +604,128 @@ TEST(EngineSettings_MultipleSectionsParsed)
     EXPECT_NEAR(settings.Controls().mouseSensitivity, 1.5f, 0.01f);
     EXPECT_NEAR(settings.Game().fieldOfView, 120.0f, 0.1f);
 }
+
+// ============================================================================
+// New Category Section Parsing Tests
+// ============================================================================
+
+TEST(EngineSettings_AccessibilitySectionParsed)
+{
+    EngineSettings settings;
+    settings.Load("[Accessibility]\n"
+                  "colorblindMode=2\n"
+                  "colorblindStrength=0.8\n"
+                  "reduceMotion=true\n"
+                  "highContrast=true\n"
+                  "autoAim=true\n"
+                  "autoAimStrength=0.7\n");
+
+    EXPECT_EQ(settings.GetValue("Accessibility", "colorblindMode"), "2");
+    EXPECT_EQ(settings.GetValue("Accessibility", "reduceMotion"), "true");
+    EXPECT_EQ(settings.GetValue("Accessibility", "autoAim"), "true");
+}
+
+TEST(EngineSettings_VRSectionParsed)
+{
+    EngineSettings settings;
+    settings.Load("[VR]\n"
+                  "enabled=true\n"
+                  "renderTargetWidth=2160\n"
+                  "renderTargetHeight=2160\n"
+                  "renderScale=1.4\n"
+                  "trackingSpace=0\n"
+                  "ipd=0.065\n");
+
+    EXPECT_EQ(settings.GetValue("VR", "enabled"), "true");
+    EXPECT_EQ(settings.GetValue("VR", "renderTargetWidth"), "2160");
+    EXPECT_EQ(settings.GetValue("VR", "trackingSpace"), "0");
+}
+
+TEST(EngineSettings_DestructionSectionParsed)
+{
+    EngineSettings settings;
+    settings.Load("[Destruction]\n"
+                  "debrisLifetime=15\n"
+                  "damageThreshold=75\n"
+                  "maxDebrisPieces=200\n");
+
+    EXPECT_EQ(settings.GetValue("Destruction", "debrisLifetime"), "15");
+    EXPECT_EQ(settings.GetValue("Destruction", "maxDebrisPieces"), "200");
+}
+
+TEST(EngineSettings_SaveSystemSectionParsed)
+{
+    EngineSettings settings;
+    settings.Load("[SaveSystem]\n"
+                  "maxAutoSaveSlots=5\n"
+                  "autoSaveInterval=600\n"
+                  "compressSaves=false\n");
+
+    EXPECT_EQ(settings.GetValue("SaveSystem", "maxAutoSaveSlots"), "5");
+    EXPECT_EQ(settings.GetValue("SaveSystem", "compressSaves"), "false");
+}
+
+TEST(EngineSettings_MemorySectionParsed)
+{
+    EngineSettings settings;
+    settings.Load("[Memory]\n"
+                  "textureStreamingBudgetMB=1024\n"
+                  "gcInterval=30\n"
+                  "gcAggressiveness=0.8\n");
+
+    EXPECT_EQ(settings.GetValue("Memory", "textureStreamingBudgetMB"), "1024");
+    EXPECT_EQ(settings.GetValue("Memory", "gcAggressiveness"), "0.8");
+}
+
+TEST(EngineSettings_ParticlesSectionParsed)
+{
+    EngineSettings settings;
+    settings.Load("[Particles]\n"
+                  "maxParticles=50000\n"
+                  "maxEmitters=512\n"
+                  "gpuParticles=true\n");
+
+    EXPECT_EQ(settings.GetValue("Particles", "maxParticles"), "50000");
+    EXPECT_EQ(settings.GetValue("Particles", "gpuParticles"), "true");
+}
+
+TEST(EngineSettings_AllNewSectionsParsed)
+{
+    EngineSettings settings;
+    settings.Load("[Accessibility]\ncolorblindMode=0\n"
+                  "[VR]\nenabled=false\n"
+                  "[Destruction]\ndebrisLifetime=10\n"
+                  "[Dialogue]\ndefaultCooldown=5\n"
+                  "[Modding]\nenableModding=false\n"
+                  "[Localization]\ndefaultLanguage=en\n"
+                  "[SaveSystem]\nmaxAutoSaveSlots=3\n"
+                  "[Replay]\nrecordInterval=0.05\n"
+                  "[Persistence]\ndatabasePath=db.sqlite\n"
+                  "[Particles]\nmaxParticles=10000\n"
+                  "[Decals]\nmaxDecals=256\n"
+                  "[Memory]\ntextureStreamingBudgetMB=512\n"
+                  "[OnlineServices]\nenableOnlineServices=false\n");
+
+    auto sections = settings.GetSections();
+    auto hasSection = [&](const std::string& name)
+    {
+        for (const auto& s : sections)
+            if (s == name)
+                return true;
+        return false;
+    };
+
+    EXPECT_TRUE(hasSection("Accessibility"));
+    EXPECT_TRUE(hasSection("VR"));
+    EXPECT_TRUE(hasSection("Destruction"));
+    EXPECT_TRUE(hasSection("Dialogue"));
+    EXPECT_TRUE(hasSection("Modding"));
+    EXPECT_TRUE(hasSection("Localization"));
+    EXPECT_TRUE(hasSection("SaveSystem"));
+    EXPECT_TRUE(hasSection("Replay"));
+    EXPECT_TRUE(hasSection("Persistence"));
+    EXPECT_TRUE(hasSection("Particles"));
+    EXPECT_TRUE(hasSection("Decals"));
+    EXPECT_TRUE(hasSection("Memory"));
+    EXPECT_TRUE(hasSection("OnlineServices"));
+}

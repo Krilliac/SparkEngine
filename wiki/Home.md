@@ -183,7 +183,7 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 | ECS Systems | 75 |
 | Editor Panels | 59 |
 | Test files | 339 |
-| Test cases | 4388+ |
+| Test cases | 4413+ |
 | Wiki pages | 125 |
-| *Last synced* | *2026-04-07 08:09* |
+| *Last synced* | *2026-04-07 13:05* |
 <!-- /AUTO:stats -->

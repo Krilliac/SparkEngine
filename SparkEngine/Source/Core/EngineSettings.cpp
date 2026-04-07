@@ -170,6 +170,19 @@ void EngineSettings::ResetToDefaults()
     m_world = WorldSettings{};
     m_ui = UISettings{};
     m_logging = LoggingSettings{};
+    m_accessibility = AccessibilitySettings{};
+    m_vr = VRSettings{};
+    m_destruction = DestructionSettings{};
+    m_dialogue = DialogueSettings{};
+    m_modding = ModdingSettings{};
+    m_localization = LocalizationSettings{};
+    m_saveSystem = SaveSystemSettings{};
+    m_replay = ReplaySettings{};
+    m_persistence = PersistenceSettings{};
+    m_particles = ParticleSettings{};
+    m_decals = DecalSettings{};
+    m_memory = MemorySettings{};
+    m_onlineServices = OnlineServicesSettings{};
     PopulateDefaults();
 }
 
@@ -196,13 +209,20 @@ void EngineSettings::ReadFromConfig()
     m_graphics.shadowQuality = m_config.GetInt("Graphics", "ShadowQuality", 2);
     m_graphics.renderScale = m_config.GetFloat("Graphics", "RenderScale", 1.0f);
     m_graphics.hdr = m_config.GetBool("Graphics", "HDR", false);
+    m_graphics.refreshRate = m_config.GetInt("Graphics", "RefreshRate", 0);
+    m_graphics.borderlessWindowed = m_config.GetBool("Graphics", "BorderlessWindowed", false);
+    m_graphics.monitor = m_config.GetInt("Graphics", "Monitor", 0);
+    m_graphics.tripleBuffering = m_config.GetBool("Graphics", "TripleBuffering", false);
+    m_graphics.maxFrameLatency = m_config.GetInt("Graphics", "MaxFrameLatency", 2);
 
     // Audio
     m_audio.masterVolume = m_config.GetFloat("Audio", "MasterVolume", 1.0f);
     m_audio.sfxVolume = m_config.GetFloat("Audio", "SFXVolume", 0.8f);
     m_audio.musicVolume = m_config.GetFloat("Audio", "MusicVolume", 0.6f);
     m_audio.voiceVolume = m_config.GetFloat("Audio", "VoiceVolume", 1.0f);
+    m_audio.ambienceVolume = m_config.GetFloat("Audio", "AmbienceVolume", 0.7f);
     m_audio.muteOnFocusLoss = m_config.GetBool("Audio", "MuteOnFocusLoss", true);
+    m_audio.muteAll = m_config.GetBool("Audio", "MuteAll", false);
 
     // Controls
     m_controls.mouseSensitivity = m_config.GetFloat("Controls", "MouseSensitivity", 1.0f);
@@ -210,12 +230,19 @@ void EngineSettings::ReadFromConfig()
     m_controls.mouseDeadZone = m_config.GetFloat("Controls", "MouseDeadZone", 0.0f);
     m_controls.rawMouseInput = m_config.GetBool("Controls", "RawMouseInput", false);
     m_controls.mouseAcceleration = m_config.GetBool("Controls", "MouseAcceleration", false);
+    m_controls.controllerDeadZoneLeft = m_config.GetFloat("Controls", "ControllerDeadZoneLeft", 0.15f);
+    m_controls.controllerDeadZoneRight = m_config.GetFloat("Controls", "ControllerDeadZoneRight", 0.1f);
+    m_controls.controllerSensitivity = m_config.GetFloat("Controls", "ControllerSensitivity", 1.0f);
+    m_controls.controllerVibration = m_config.GetBool("Controls", "ControllerVibration", true);
+    m_controls.invertControllerY = m_config.GetBool("Controls", "InvertControllerY", false);
 
     // Game
     m_game.difficulty = m_config.GetString("Game", "Difficulty", "Normal");
     m_game.showFPS = m_config.GetBool("Game", "ShowFPS", true);
     m_game.showDebugInfo = m_config.GetBool("Game", "ShowDebugInfo", false);
     m_game.fieldOfView = m_config.GetFloat("Game", "FieldOfView", 90.0f);
+    m_game.language = m_config.GetString("Game", "Language", "en");
+    m_game.pauseOnFocusLoss = m_config.GetBool("Game", "PauseOnFocusLoss", true);
 
     // Rendering
     m_rendering.renderPath = m_config.GetInt("Rendering", "RenderPath", 1);
@@ -416,6 +443,17 @@ void EngineSettings::ReadFromConfig()
     m_editor.autosaveEnabled = m_config.GetBool("Editor", "AutosaveEnabled", true);
     m_editor.autosaveIntervalSeconds = m_config.GetFloat("Editor", "AutosaveIntervalSeconds", 300.0f);
     m_editor.undoHistorySize = m_config.GetInt("Editor", "UndoHistorySize", 100);
+    m_editor.rotationSnap = m_config.GetFloat("Editor", "RotationSnap", 15.0f);
+    m_editor.scaleSnap = m_config.GetFloat("Editor", "ScaleSnap", 0.25f);
+    m_editor.showGizmoLabels = m_config.GetBool("Editor", "ShowGizmoLabels", true);
+    m_editor.showWireframeOverlay = m_config.GetBool("Editor", "ShowWireframeOverlay", false);
+    m_editor.showBounds = m_config.GetBool("Editor", "ShowBounds", false);
+    m_editor.showColliders = m_config.GetBool("Editor", "ShowColliders", false);
+    m_editor.showNavMesh = m_config.GetBool("Editor", "ShowNavMesh", false);
+    m_editor.showLightRadius = m_config.GetBool("Editor", "ShowLightRadius", true);
+    m_editor.cameraSpeedMultiplier = m_config.GetFloat("Editor", "CameraSpeedMultiplier", 1.0f);
+    m_editor.recentFilesMax = m_config.GetInt("Editor", "RecentFilesMax", 10);
+    m_editor.enableCollaboration = m_config.GetBool("Editor", "EnableCollaboration", false);
 
     // Network
     m_network.serverPort = m_config.GetInt("Network", "ServerPort", 27015);
@@ -577,6 +615,130 @@ void EngineSettings::ReadFromConfig()
     m_logging.proceduralLevel = m_config.GetString("Logging", "ProceduralLevel", "");
     m_logging.editorLevel = m_config.GetString("Logging", "EditorLevel", "");
     m_logging.gameLevel = m_config.GetString("Logging", "GameLevel", "");
+
+    // Accessibility
+    m_accessibility.colorblindMode = m_config.GetInt("Accessibility", "ColorblindMode", 0);
+    m_accessibility.colorblindStrength = m_config.GetFloat("Accessibility", "ColorblindStrength", 1.0f);
+    m_accessibility.screenReader = m_config.GetBool("Accessibility", "ScreenReader", false);
+    m_accessibility.reduceMotion = m_config.GetBool("Accessibility", "ReduceMotion", false);
+    m_accessibility.highContrast = m_config.GetBool("Accessibility", "HighContrast", false);
+    m_accessibility.textToSpeechRate = m_config.GetFloat("Accessibility", "TextToSpeechRate", 1.0f);
+    m_accessibility.largeText = m_config.GetBool("Accessibility", "LargeText", false);
+    m_accessibility.closedCaptions = m_config.GetBool("Accessibility", "ClosedCaptions", false);
+    m_accessibility.holdTimeMultiplier = m_config.GetFloat("Accessibility", "HoldTimeMultiplier", 1.0f);
+    m_accessibility.toggleAim = m_config.GetBool("Accessibility", "ToggleAim", false);
+    m_accessibility.toggleSprint = m_config.GetBool("Accessibility", "ToggleSprint", false);
+    m_accessibility.toggleCrouch = m_config.GetBool("Accessibility", "ToggleCrouch", false);
+    m_accessibility.autoAim = m_config.GetBool("Accessibility", "AutoAim", false);
+    m_accessibility.autoAimStrength = m_config.GetFloat("Accessibility", "AutoAimStrength", 0.5f);
+
+    // VR
+    m_vr.enabled = m_config.GetBool("VR", "Enabled", false);
+    m_vr.renderTargetWidth = m_config.GetInt("VR", "RenderTargetWidth", 1440);
+    m_vr.renderTargetHeight = m_config.GetInt("VR", "RenderTargetHeight", 1600);
+    m_vr.renderScale = m_config.GetFloat("VR", "RenderScale", 1.0f);
+    m_vr.trackingSpace = m_config.GetInt("VR", "TrackingSpace", 1);
+    m_vr.headTrackingEnabled = m_config.GetBool("VR", "HeadTrackingEnabled", true);
+    m_vr.controllerTrackingEnabled = m_config.GetBool("VR", "ControllerTrackingEnabled", true);
+    m_vr.hapticAmplitude = m_config.GetFloat("VR", "HapticAmplitude", 1.0f);
+    m_vr.hapticDuration = m_config.GetFloat("VR", "HapticDuration", 0.1f);
+    m_vr.ipd = m_config.GetFloat("VR", "IPD", 0.064f);
+    m_vr.comfortMode = m_config.GetInt("VR", "ComfortMode", 0);
+    m_vr.snapTurnAngle = m_config.GetFloat("VR", "SnapTurnAngle", 45.0f);
+    m_vr.reprojection = m_config.GetBool("VR", "Reprojection", true);
+
+    // Destruction
+    m_destruction.debrisLifetime = m_config.GetFloat("Destruction", "DebrisLifetime", 10.0f);
+    m_destruction.damageThreshold = m_config.GetFloat("Destruction", "DamageThreshold", 50.0f);
+    m_destruction.damageMultiplier = m_config.GetFloat("Destruction", "DamageMultiplier", 1.0f);
+    m_destruction.maxDamageStages = m_config.GetInt("Destruction", "MaxDamageStages", 3);
+    m_destruction.scatterForce = m_config.GetFloat("Destruction", "ScatterForce", 5.0f);
+    m_destruction.maxDebrisPieces = m_config.GetInt("Destruction", "MaxDebrisPieces", 100);
+    m_destruction.enablePhysicsDebris = m_config.GetBool("Destruction", "EnablePhysicsDebris", true);
+
+    // Dialogue
+    m_dialogue.defaultCooldown = m_config.GetFloat("Dialogue", "DefaultCooldown", 5.0f);
+    m_dialogue.defaultPriority = m_config.GetInt("Dialogue", "DefaultPriority", 50);
+    m_dialogue.maxRulesPerSignal = m_config.GetInt("Dialogue", "MaxRulesPerSignal", 16);
+    m_dialogue.typingSpeed = m_config.GetFloat("Dialogue", "TypingSpeed", 40.0f);
+    m_dialogue.enableBarks = m_config.GetBool("Dialogue", "EnableBarks", true);
+    m_dialogue.barkRange = m_config.GetFloat("Dialogue", "BarkRange", 15.0f);
+    m_dialogue.barkCooldown = m_config.GetFloat("Dialogue", "BarkCooldown", 10.0f);
+
+    // Modding
+    m_modding.enableModding = m_config.GetBool("Modding", "EnableModding", false);
+    m_modding.modsDirectory = m_config.GetString("Modding", "ModsDirectory", "Mods");
+    m_modding.allowScriptMods = m_config.GetBool("Modding", "AllowScriptMods", false);
+    m_modding.allowAssetOverrides = m_config.GetBool("Modding", "AllowAssetOverrides", true);
+    m_modding.maxLoadedMods = m_config.GetInt("Modding", "MaxLoadedMods", 32);
+    m_modding.sandboxMods = m_config.GetBool("Modding", "SandboxMods", true);
+
+    // Localization
+    m_localization.defaultLanguage = m_config.GetString("Localization", "DefaultLanguage", "en");
+    m_localization.fallbackLanguage = m_config.GetString("Localization", "FallbackLanguage", "en");
+    m_localization.autoDetectLanguage = m_config.GetBool("Localization", "AutoDetectLanguage", true);
+    m_localization.loadAllLanguages = m_config.GetBool("Localization", "LoadAllLanguages", false);
+    m_localization.localizationDir = m_config.GetString("Localization", "LocalizationDir", "Localization");
+
+    // SaveSystem
+    m_saveSystem.savesDirectory = m_config.GetString("SaveSystem", "SavesDirectory", "Saves");
+    m_saveSystem.maxAutoSaveSlots = m_config.GetInt("SaveSystem", "MaxAutoSaveSlots", 3);
+    m_saveSystem.autoSaveInterval = m_config.GetFloat("SaveSystem", "AutoSaveInterval", 300.0f);
+    m_saveSystem.enableCloudSaves = m_config.GetBool("SaveSystem", "EnableCloudSaves", false);
+    m_saveSystem.compressSaves = m_config.GetBool("SaveSystem", "CompressSaves", true);
+    m_saveSystem.backupOnSave = m_config.GetBool("SaveSystem", "BackupOnSave", true);
+    m_saveSystem.maxManualSaves = m_config.GetInt("SaveSystem", "MaxManualSaves", 100);
+
+    // Replay
+    m_replay.recordInterval = m_config.GetFloat("Replay", "RecordInterval", 0.05f);
+    m_replay.maxFrameCount = m_config.GetInt("Replay", "MaxFrameCount", 1000000);
+    m_replay.maxEntityCount = m_config.GetInt("Replay", "MaxEntityCount", 100000);
+    m_replay.maxEventCount = m_config.GetInt("Replay", "MaxEventCount", 500000);
+    m_replay.maxStringLength = m_config.GetInt("Replay", "MaxStringLength", 256);
+    m_replay.replayDirectory = m_config.GetString("Replay", "ReplayDirectory", "Replays");
+    m_replay.autoRecord = m_config.GetBool("Replay", "AutoRecord", false);
+
+    // Persistence
+    m_persistence.databasePath = m_config.GetString("Persistence", "DatabasePath", "Data/persistence.db");
+    m_persistence.connectionPoolSize = m_config.GetInt("Persistence", "ConnectionPoolSize", 4);
+    m_persistence.workerThreadCount = m_config.GetInt("Persistence", "WorkerThreadCount", 2);
+    m_persistence.queryTimeoutMs = m_config.GetFloat("Persistence", "QueryTimeoutMs", 5000.0f);
+    m_persistence.enableWAL = m_config.GetBool("Persistence", "EnableWAL", true);
+    m_persistence.maxRetries = m_config.GetInt("Persistence", "MaxRetries", 3);
+
+    // Particles
+    m_particles.maxParticles = m_config.GetInt("Particles", "MaxParticles", 10000);
+    m_particles.maxEmitters = m_config.GetInt("Particles", "MaxEmitters", 256);
+    m_particles.simulationRate = m_config.GetFloat("Particles", "SimulationRate", 60.0f);
+    m_particles.lodDistanceMultiplier = m_config.GetFloat("Particles", "LODDistanceMultiplier", 1.0f);
+    m_particles.gpuParticles = m_config.GetBool("Particles", "GPUParticles", false);
+    m_particles.globalScale = m_config.GetFloat("Particles", "GlobalScale", 1.0f);
+    m_particles.softParticles = m_config.GetBool("Particles", "SoftParticles", true);
+
+    // Decals
+    m_decals.maxDecals = m_config.GetInt("Decals", "MaxDecals", 256);
+    m_decals.defaultLifetime = m_config.GetFloat("Decals", "DefaultLifetime", 30.0f);
+    m_decals.fadeTime = m_config.GetFloat("Decals", "FadeTime", 2.0f);
+    m_decals.atlasSize = m_config.GetInt("Decals", "AtlasSize", 2048);
+    m_decals.enableDecals = m_config.GetBool("Decals", "EnableDecals", true);
+
+    // Memory
+    m_memory.textureStreamingBudgetMB = m_config.GetInt("Memory", "TextureStreamingBudgetMB", 512);
+    m_memory.meshStreamingBudgetMB = m_config.GetInt("Memory", "MeshStreamingBudgetMB", 256);
+    m_memory.audioStreamingBudgetMB = m_config.GetInt("Memory", "AudioStreamingBudgetMB", 128);
+    m_memory.shaderCacheSizeMB = m_config.GetInt("Memory", "ShaderCacheSizeMB", 64);
+    m_memory.enableMemoryTracking = m_config.GetBool("Memory", "EnableMemoryTracking", false);
+    m_memory.gcInterval = m_config.GetFloat("Memory", "GCInterval", 60.0f);
+    m_memory.gcAggressiveness = m_config.GetFloat("Memory", "GCAggressiveness", 0.5f);
+
+    // OnlineServices
+    m_onlineServices.platformBackend = m_config.GetInt("OnlineServices", "PlatformBackend", 0);
+    m_onlineServices.enableOnlineServices = m_config.GetBool("OnlineServices", "EnableOnlineServices", false);
+    m_onlineServices.sessionTimeout = m_config.GetFloat("OnlineServices", "SessionTimeout", 300.0f);
+    m_onlineServices.maxSessionSearchResults = m_config.GetInt("OnlineServices", "MaxSessionSearchResults", 50);
+    m_onlineServices.enableVoiceChat = m_config.GetBool("OnlineServices", "EnableVoiceChat", false);
+    m_onlineServices.voiceChatVolume = m_config.GetFloat("OnlineServices", "VoiceChatVolume", 0.8f);
+    m_onlineServices.pushToTalk = m_config.GetBool("OnlineServices", "PushToTalk", true);
 }
 
 // =============================================================================
@@ -593,13 +755,20 @@ void EngineSettings::WriteToConfig() const
     m_config.SetInt("Graphics", "ShadowQuality", m_graphics.shadowQuality);
     m_config.SetFloat("Graphics", "RenderScale", m_graphics.renderScale);
     m_config.SetBool("Graphics", "HDR", m_graphics.hdr);
+    m_config.SetInt("Graphics", "RefreshRate", m_graphics.refreshRate);
+    m_config.SetBool("Graphics", "BorderlessWindowed", m_graphics.borderlessWindowed);
+    m_config.SetInt("Graphics", "Monitor", m_graphics.monitor);
+    m_config.SetBool("Graphics", "TripleBuffering", m_graphics.tripleBuffering);
+    m_config.SetInt("Graphics", "MaxFrameLatency", m_graphics.maxFrameLatency);
 
     // Audio
     m_config.SetFloat("Audio", "MasterVolume", m_audio.masterVolume);
     m_config.SetFloat("Audio", "SFXVolume", m_audio.sfxVolume);
     m_config.SetFloat("Audio", "MusicVolume", m_audio.musicVolume);
     m_config.SetFloat("Audio", "VoiceVolume", m_audio.voiceVolume);
+    m_config.SetFloat("Audio", "AmbienceVolume", m_audio.ambienceVolume);
     m_config.SetBool("Audio", "MuteOnFocusLoss", m_audio.muteOnFocusLoss);
+    m_config.SetBool("Audio", "MuteAll", m_audio.muteAll);
 
     // Controls
     m_config.SetFloat("Controls", "MouseSensitivity", m_controls.mouseSensitivity);
@@ -607,12 +776,19 @@ void EngineSettings::WriteToConfig() const
     m_config.SetFloat("Controls", "MouseDeadZone", m_controls.mouseDeadZone);
     m_config.SetBool("Controls", "RawMouseInput", m_controls.rawMouseInput);
     m_config.SetBool("Controls", "MouseAcceleration", m_controls.mouseAcceleration);
+    m_config.SetFloat("Controls", "ControllerDeadZoneLeft", m_controls.controllerDeadZoneLeft);
+    m_config.SetFloat("Controls", "ControllerDeadZoneRight", m_controls.controllerDeadZoneRight);
+    m_config.SetFloat("Controls", "ControllerSensitivity", m_controls.controllerSensitivity);
+    m_config.SetBool("Controls", "ControllerVibration", m_controls.controllerVibration);
+    m_config.SetBool("Controls", "InvertControllerY", m_controls.invertControllerY);
 
     // Game
     m_config.SetString("Game", "Difficulty", m_game.difficulty);
     m_config.SetBool("Game", "ShowFPS", m_game.showFPS);
     m_config.SetBool("Game", "ShowDebugInfo", m_game.showDebugInfo);
     m_config.SetFloat("Game", "FieldOfView", m_game.fieldOfView);
+    m_config.SetString("Game", "Language", m_game.language);
+    m_config.SetBool("Game", "PauseOnFocusLoss", m_game.pauseOnFocusLoss);
 
     // Rendering
     m_config.SetInt("Rendering", "RenderPath", m_rendering.renderPath);
@@ -813,6 +989,17 @@ void EngineSettings::WriteToConfig() const
     m_config.SetBool("Editor", "AutosaveEnabled", m_editor.autosaveEnabled);
     m_config.SetFloat("Editor", "AutosaveIntervalSeconds", m_editor.autosaveIntervalSeconds);
     m_config.SetInt("Editor", "UndoHistorySize", m_editor.undoHistorySize);
+    m_config.SetFloat("Editor", "RotationSnap", m_editor.rotationSnap);
+    m_config.SetFloat("Editor", "ScaleSnap", m_editor.scaleSnap);
+    m_config.SetBool("Editor", "ShowGizmoLabels", m_editor.showGizmoLabels);
+    m_config.SetBool("Editor", "ShowWireframeOverlay", m_editor.showWireframeOverlay);
+    m_config.SetBool("Editor", "ShowBounds", m_editor.showBounds);
+    m_config.SetBool("Editor", "ShowColliders", m_editor.showColliders);
+    m_config.SetBool("Editor", "ShowNavMesh", m_editor.showNavMesh);
+    m_config.SetBool("Editor", "ShowLightRadius", m_editor.showLightRadius);
+    m_config.SetFloat("Editor", "CameraSpeedMultiplier", m_editor.cameraSpeedMultiplier);
+    m_config.SetInt("Editor", "RecentFilesMax", m_editor.recentFilesMax);
+    m_config.SetBool("Editor", "EnableCollaboration", m_editor.enableCollaboration);
 
     // Network
     m_config.SetInt("Network", "ServerPort", m_network.serverPort);
@@ -969,6 +1156,130 @@ void EngineSettings::WriteToConfig() const
     m_config.SetString("Logging", "ProceduralLevel", m_logging.proceduralLevel);
     m_config.SetString("Logging", "EditorLevel", m_logging.editorLevel);
     m_config.SetString("Logging", "GameLevel", m_logging.gameLevel);
+
+    // Accessibility
+    m_config.SetInt("Accessibility", "ColorblindMode", m_accessibility.colorblindMode);
+    m_config.SetFloat("Accessibility", "ColorblindStrength", m_accessibility.colorblindStrength);
+    m_config.SetBool("Accessibility", "ScreenReader", m_accessibility.screenReader);
+    m_config.SetBool("Accessibility", "ReduceMotion", m_accessibility.reduceMotion);
+    m_config.SetBool("Accessibility", "HighContrast", m_accessibility.highContrast);
+    m_config.SetFloat("Accessibility", "TextToSpeechRate", m_accessibility.textToSpeechRate);
+    m_config.SetBool("Accessibility", "LargeText", m_accessibility.largeText);
+    m_config.SetBool("Accessibility", "ClosedCaptions", m_accessibility.closedCaptions);
+    m_config.SetFloat("Accessibility", "HoldTimeMultiplier", m_accessibility.holdTimeMultiplier);
+    m_config.SetBool("Accessibility", "ToggleAim", m_accessibility.toggleAim);
+    m_config.SetBool("Accessibility", "ToggleSprint", m_accessibility.toggleSprint);
+    m_config.SetBool("Accessibility", "ToggleCrouch", m_accessibility.toggleCrouch);
+    m_config.SetBool("Accessibility", "AutoAim", m_accessibility.autoAim);
+    m_config.SetFloat("Accessibility", "AutoAimStrength", m_accessibility.autoAimStrength);
+
+    // VR
+    m_config.SetBool("VR", "Enabled", m_vr.enabled);
+    m_config.SetInt("VR", "RenderTargetWidth", m_vr.renderTargetWidth);
+    m_config.SetInt("VR", "RenderTargetHeight", m_vr.renderTargetHeight);
+    m_config.SetFloat("VR", "RenderScale", m_vr.renderScale);
+    m_config.SetInt("VR", "TrackingSpace", m_vr.trackingSpace);
+    m_config.SetBool("VR", "HeadTrackingEnabled", m_vr.headTrackingEnabled);
+    m_config.SetBool("VR", "ControllerTrackingEnabled", m_vr.controllerTrackingEnabled);
+    m_config.SetFloat("VR", "HapticAmplitude", m_vr.hapticAmplitude);
+    m_config.SetFloat("VR", "HapticDuration", m_vr.hapticDuration);
+    m_config.SetFloat("VR", "IPD", m_vr.ipd);
+    m_config.SetInt("VR", "ComfortMode", m_vr.comfortMode);
+    m_config.SetFloat("VR", "SnapTurnAngle", m_vr.snapTurnAngle);
+    m_config.SetBool("VR", "Reprojection", m_vr.reprojection);
+
+    // Destruction
+    m_config.SetFloat("Destruction", "DebrisLifetime", m_destruction.debrisLifetime);
+    m_config.SetFloat("Destruction", "DamageThreshold", m_destruction.damageThreshold);
+    m_config.SetFloat("Destruction", "DamageMultiplier", m_destruction.damageMultiplier);
+    m_config.SetInt("Destruction", "MaxDamageStages", m_destruction.maxDamageStages);
+    m_config.SetFloat("Destruction", "ScatterForce", m_destruction.scatterForce);
+    m_config.SetInt("Destruction", "MaxDebrisPieces", m_destruction.maxDebrisPieces);
+    m_config.SetBool("Destruction", "EnablePhysicsDebris", m_destruction.enablePhysicsDebris);
+
+    // Dialogue
+    m_config.SetFloat("Dialogue", "DefaultCooldown", m_dialogue.defaultCooldown);
+    m_config.SetInt("Dialogue", "DefaultPriority", m_dialogue.defaultPriority);
+    m_config.SetInt("Dialogue", "MaxRulesPerSignal", m_dialogue.maxRulesPerSignal);
+    m_config.SetFloat("Dialogue", "TypingSpeed", m_dialogue.typingSpeed);
+    m_config.SetBool("Dialogue", "EnableBarks", m_dialogue.enableBarks);
+    m_config.SetFloat("Dialogue", "BarkRange", m_dialogue.barkRange);
+    m_config.SetFloat("Dialogue", "BarkCooldown", m_dialogue.barkCooldown);
+
+    // Modding
+    m_config.SetBool("Modding", "EnableModding", m_modding.enableModding);
+    m_config.SetString("Modding", "ModsDirectory", m_modding.modsDirectory);
+    m_config.SetBool("Modding", "AllowScriptMods", m_modding.allowScriptMods);
+    m_config.SetBool("Modding", "AllowAssetOverrides", m_modding.allowAssetOverrides);
+    m_config.SetInt("Modding", "MaxLoadedMods", m_modding.maxLoadedMods);
+    m_config.SetBool("Modding", "SandboxMods", m_modding.sandboxMods);
+
+    // Localization
+    m_config.SetString("Localization", "DefaultLanguage", m_localization.defaultLanguage);
+    m_config.SetString("Localization", "FallbackLanguage", m_localization.fallbackLanguage);
+    m_config.SetBool("Localization", "AutoDetectLanguage", m_localization.autoDetectLanguage);
+    m_config.SetBool("Localization", "LoadAllLanguages", m_localization.loadAllLanguages);
+    m_config.SetString("Localization", "LocalizationDir", m_localization.localizationDir);
+
+    // SaveSystem
+    m_config.SetString("SaveSystem", "SavesDirectory", m_saveSystem.savesDirectory);
+    m_config.SetInt("SaveSystem", "MaxAutoSaveSlots", m_saveSystem.maxAutoSaveSlots);
+    m_config.SetFloat("SaveSystem", "AutoSaveInterval", m_saveSystem.autoSaveInterval);
+    m_config.SetBool("SaveSystem", "EnableCloudSaves", m_saveSystem.enableCloudSaves);
+    m_config.SetBool("SaveSystem", "CompressSaves", m_saveSystem.compressSaves);
+    m_config.SetBool("SaveSystem", "BackupOnSave", m_saveSystem.backupOnSave);
+    m_config.SetInt("SaveSystem", "MaxManualSaves", m_saveSystem.maxManualSaves);
+
+    // Replay
+    m_config.SetFloat("Replay", "RecordInterval", m_replay.recordInterval);
+    m_config.SetInt("Replay", "MaxFrameCount", m_replay.maxFrameCount);
+    m_config.SetInt("Replay", "MaxEntityCount", m_replay.maxEntityCount);
+    m_config.SetInt("Replay", "MaxEventCount", m_replay.maxEventCount);
+    m_config.SetInt("Replay", "MaxStringLength", m_replay.maxStringLength);
+    m_config.SetString("Replay", "ReplayDirectory", m_replay.replayDirectory);
+    m_config.SetBool("Replay", "AutoRecord", m_replay.autoRecord);
+
+    // Persistence
+    m_config.SetString("Persistence", "DatabasePath", m_persistence.databasePath);
+    m_config.SetInt("Persistence", "ConnectionPoolSize", m_persistence.connectionPoolSize);
+    m_config.SetInt("Persistence", "WorkerThreadCount", m_persistence.workerThreadCount);
+    m_config.SetFloat("Persistence", "QueryTimeoutMs", m_persistence.queryTimeoutMs);
+    m_config.SetBool("Persistence", "EnableWAL", m_persistence.enableWAL);
+    m_config.SetInt("Persistence", "MaxRetries", m_persistence.maxRetries);
+
+    // Particles
+    m_config.SetInt("Particles", "MaxParticles", m_particles.maxParticles);
+    m_config.SetInt("Particles", "MaxEmitters", m_particles.maxEmitters);
+    m_config.SetFloat("Particles", "SimulationRate", m_particles.simulationRate);
+    m_config.SetFloat("Particles", "LODDistanceMultiplier", m_particles.lodDistanceMultiplier);
+    m_config.SetBool("Particles", "GPUParticles", m_particles.gpuParticles);
+    m_config.SetFloat("Particles", "GlobalScale", m_particles.globalScale);
+    m_config.SetBool("Particles", "SoftParticles", m_particles.softParticles);
+
+    // Decals
+    m_config.SetInt("Decals", "MaxDecals", m_decals.maxDecals);
+    m_config.SetFloat("Decals", "DefaultLifetime", m_decals.defaultLifetime);
+    m_config.SetFloat("Decals", "FadeTime", m_decals.fadeTime);
+    m_config.SetInt("Decals", "AtlasSize", m_decals.atlasSize);
+    m_config.SetBool("Decals", "EnableDecals", m_decals.enableDecals);
+
+    // Memory
+    m_config.SetInt("Memory", "TextureStreamingBudgetMB", m_memory.textureStreamingBudgetMB);
+    m_config.SetInt("Memory", "MeshStreamingBudgetMB", m_memory.meshStreamingBudgetMB);
+    m_config.SetInt("Memory", "AudioStreamingBudgetMB", m_memory.audioStreamingBudgetMB);
+    m_config.SetInt("Memory", "ShaderCacheSizeMB", m_memory.shaderCacheSizeMB);
+    m_config.SetBool("Memory", "EnableMemoryTracking", m_memory.enableMemoryTracking);
+    m_config.SetFloat("Memory", "GCInterval", m_memory.gcInterval);
+    m_config.SetFloat("Memory", "GCAggressiveness", m_memory.gcAggressiveness);
+
+    // OnlineServices
+    m_config.SetInt("OnlineServices", "PlatformBackend", m_onlineServices.platformBackend);
+    m_config.SetBool("OnlineServices", "EnableOnlineServices", m_onlineServices.enableOnlineServices);
+    m_config.SetFloat("OnlineServices", "SessionTimeout", m_onlineServices.sessionTimeout);
+    m_config.SetInt("OnlineServices", "MaxSessionSearchResults", m_onlineServices.maxSessionSearchResults);
+    m_config.SetBool("OnlineServices", "EnableVoiceChat", m_onlineServices.enableVoiceChat);
+    m_config.SetFloat("OnlineServices", "VoiceChatVolume", m_onlineServices.voiceChatVolume);
+    m_config.SetBool("OnlineServices", "PushToTalk", m_onlineServices.pushToTalk);
 }
 
 // =============================================================================
@@ -1021,11 +1332,46 @@ bool EngineSettings::SetValue(const std::string& section, const std::string& key
 
 std::vector<std::string> EngineSettings::GetSections() const
 {
-    return {"Graphics",  "Audio",          "Controls", "Game",       "Rendering",      "PostProcess",   "SSAO",
-            "SSR",       "Volumetric",     "TAA",      "MotionBlur", "DynamicQuality", "AudioExtended", "Physics",
-            "AI",        "Player",         "GameMode", "Camera",     "Editor",         "Network",       "Scripting",
-            "Animation", "CrashReporting", "Weather",  "TimeOfDay",  "Streaming",      "Performance",   "World",
-            "UI",        "Logging"};
+    return {// Display & Window
+            "Graphics",
+            // Rendering Pipeline
+            "Rendering", "PostProcess", "SSAO", "SSR", "Volumetric", "TAA", "MotionBlur", "DynamicQuality",
+            // Audio
+            "Audio", "AudioExtended",
+            // Input & Controls
+            "Controls",
+            // Game
+            "Game", "Player", "GameMode",
+            // Camera
+            "Camera",
+            // Physics
+            "Physics",
+            // AI
+            "AI",
+            // Animation
+            "Animation",
+            // Network & Online
+            "Network", "OnlineServices",
+            // Scripting
+            "Scripting",
+            // Environment
+            "Weather", "TimeOfDay", "World",
+            // Streaming & Performance
+            "Streaming", "Performance", "Memory", "Particles", "Decals",
+            // Editor
+            "Editor",
+            // Destruction & Dialogue
+            "Destruction", "Dialogue",
+            // Modding & Localization
+            "Modding", "Localization",
+            // Save & Replay
+            "SaveSystem", "Replay", "Persistence",
+            // Accessibility & VR
+            "Accessibility", "VR",
+            // UI
+            "UI",
+            // Diagnostics
+            "Logging", "CrashReporting", "Debug"};
 }
 
 std::vector<std::string> EngineSettings::GetKeys(const std::string& section) const
