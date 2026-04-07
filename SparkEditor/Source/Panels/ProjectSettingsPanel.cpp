@@ -106,6 +106,46 @@ namespace SparkEditor
                     RenderEditorTab();
                     ImGui::EndTabItem();
                 }
+                if (ImGui::BeginTabItem(ICON_FA_UNIVERSAL_ACCESS " Accessibility"))
+                {
+                    RenderAccessibilityTab();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem(ICON_FA_VR_CARDBOARD " VR"))
+                {
+                    RenderVRTab();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem(ICON_FA_BOMB " Destruction"))
+                {
+                    RenderDestructionDialogueTab();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem(ICON_FA_PUZZLE_PIECE " Modding"))
+                {
+                    RenderModdingLocalizationTab();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem(ICON_FA_SAVE " Save/Replay"))
+                {
+                    RenderSaveReplayTab();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem(ICON_FA_FIRE " Particles"))
+                {
+                    RenderParticlesDecalsTab();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem(ICON_FA_MEMORY " Memory"))
+                {
+                    RenderMemoryTab();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem(ICON_FA_GLOBE " Online"))
+                {
+                    RenderOnlineServicesTab();
+                    ImGui::EndTabItem();
+                }
                 if (ImGui::BeginTabItem(ICON_FA_LIST " Logging"))
                 {
                     RenderLoggingTab();
@@ -583,6 +623,20 @@ namespace SparkEditor
                 m_modified = true;
         }
 
+        if (ImGui::CollapsingHeader("Controller"))
+        {
+            if (ImGui::DragFloat("Left Stick Dead Zone", &ctrl.controllerDeadZoneLeft, 0.01f, 0.0f, 0.5f))
+                m_modified = true;
+            if (ImGui::DragFloat("Right Stick Dead Zone", &ctrl.controllerDeadZoneRight, 0.01f, 0.0f, 0.5f))
+                m_modified = true;
+            if (ImGui::DragFloat("Controller Sensitivity", &ctrl.controllerSensitivity, 0.1f, 0.1f, 10.0f))
+                m_modified = true;
+            if (ImGui::Checkbox("Controller Vibration", &ctrl.controllerVibration))
+                m_modified = true;
+            if (ImGui::Checkbox("Invert Controller Y", &ctrl.invertControllerY))
+                m_modified = true;
+        }
+
         if (ImGui::CollapsingHeader("Game Display"))
         {
             const char* diffItems[] = {"Easy", "Normal", "Hard", "Nightmare"};
@@ -799,20 +853,62 @@ namespace SparkEditor
     {
         auto& ed = EngineSettings::GetInstance().Editor();
 
-        if (ImGui::DragFloat("Grid Size", &ed.gridSize, 0.1f, 0.1f, 100.0f))
-            m_modified = true;
-        if (ImGui::Checkbox("Snap to Grid", &ed.snapToGrid))
-            m_modified = true;
-        if (ImGui::Checkbox("Show Grid", &ed.showGrid))
-            m_modified = true;
-        if (ImGui::DragFloat("Gizmo Scale", &ed.gizmoScale, 0.1f, 0.1f, 10.0f))
-            m_modified = true;
-        if (ImGui::Checkbox("Autosave Enabled", &ed.autosaveEnabled))
-            m_modified = true;
-        if (ImGui::DragFloat("Autosave Interval", &ed.autosaveIntervalSeconds, 10.0f, 30.0f, 3600.0f, "%.0f s"))
-            m_modified = true;
-        if (ImGui::DragInt("Undo History Size", &ed.undoHistorySize, 1, 10, 1000))
-            m_modified = true;
+        if (ImGui::CollapsingHeader("Grid & Snapping", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::DragFloat("Grid Size", &ed.gridSize, 0.1f, 0.1f, 100.0f))
+                m_modified = true;
+            if (ImGui::Checkbox("Snap to Grid", &ed.snapToGrid))
+                m_modified = true;
+            if (ImGui::Checkbox("Show Grid", &ed.showGrid))
+                m_modified = true;
+            if (ImGui::DragFloat("Rotation Snap", &ed.rotationSnap, 1.0f, 0.0f, 90.0f, "%.0f deg"))
+                m_modified = true;
+            if (ImGui::DragFloat("Scale Snap", &ed.scaleSnap, 0.05f, 0.0f, 1.0f))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Gizmo & Visualization", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::DragFloat("Gizmo Scale", &ed.gizmoScale, 0.1f, 0.1f, 10.0f))
+                m_modified = true;
+            if (ImGui::Checkbox("Show Gizmo Labels", &ed.showGizmoLabels))
+                m_modified = true;
+            if (ImGui::Checkbox("Wireframe Overlay", &ed.showWireframeOverlay))
+                m_modified = true;
+            if (ImGui::Checkbox("Show Bounds", &ed.showBounds))
+                m_modified = true;
+            if (ImGui::Checkbox("Show Colliders", &ed.showColliders))
+                m_modified = true;
+            if (ImGui::Checkbox("Show NavMesh", &ed.showNavMesh))
+                m_modified = true;
+            if (ImGui::Checkbox("Show Light Radius", &ed.showLightRadius))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Autosave & History"))
+        {
+            if (ImGui::Checkbox("Autosave Enabled", &ed.autosaveEnabled))
+                m_modified = true;
+            if (ImGui::DragFloat("Autosave Interval", &ed.autosaveIntervalSeconds, 10.0f, 30.0f, 3600.0f, "%.0f s"))
+                m_modified = true;
+            if (ImGui::DragInt("Undo History Size", &ed.undoHistorySize, 1, 10, 1000))
+                m_modified = true;
+            if (ImGui::DragInt("Recent Files Max", &ed.recentFilesMax, 1, 1, 50))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Navigation"))
+        {
+            if (ImGui::DragFloat("Camera Speed Multiplier", &ed.cameraSpeedMultiplier, 0.1f, 0.1f, 10.0f))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Collaboration"))
+        {
+            if (ImGui::Checkbox("Enable Collaboration", &ed.enableCollaboration))
+                m_modified = true;
+            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+        }
     }
 
     // =========================================================================
@@ -1030,6 +1126,361 @@ namespace SparkEditor
             levelCombo("Procedural", log.proceduralLevel, true);
             levelCombo("Editor##Log", log.editorLevel, true);
             levelCombo("Game##Log", log.gameLevel, true);
+        }
+    }
+
+    // =========================================================================
+    // Accessibility Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderAccessibilityTab()
+    {
+        auto& a = EngineSettings::GetInstance().Accessibility();
+
+        if (ImGui::CollapsingHeader("Vision", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            const char* cbItems[] = {"Off", "Protanopia", "Deuteranopia", "Tritanopia"};
+            if (ImGui::Combo("Colorblind Mode", &a.colorblindMode, cbItems, 4))
+                m_modified = true;
+            if (a.colorblindMode > 0)
+            {
+                if (ImGui::SliderFloat("Colorblind Strength", &a.colorblindStrength, 0.0f, 1.0f))
+                    m_modified = true;
+            }
+            if (ImGui::Checkbox("High Contrast", &a.highContrast))
+                m_modified = true;
+            if (ImGui::Checkbox("Large Text", &a.largeText))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Audio Accessibility"))
+        {
+            if (ImGui::Checkbox("Closed Captions", &a.closedCaptions))
+                m_modified = true;
+            if (ImGui::Checkbox("Screen Reader", &a.screenReader))
+                m_modified = true;
+            if (a.screenReader)
+            {
+                if (ImGui::DragFloat("TTS Rate", &a.textToSpeechRate, 0.1f, 0.5f, 3.0f))
+                    m_modified = true;
+            }
+        }
+
+        if (ImGui::CollapsingHeader("Motor Accessibility"))
+        {
+            if (ImGui::Checkbox("Reduce Motion", &a.reduceMotion))
+                m_modified = true;
+            if (ImGui::DragFloat("Hold Time Multiplier", &a.holdTimeMultiplier, 0.1f, 0.5f, 5.0f))
+                m_modified = true;
+            if (ImGui::Checkbox("Toggle Aim", &a.toggleAim))
+                m_modified = true;
+            if (ImGui::Checkbox("Toggle Sprint", &a.toggleSprint))
+                m_modified = true;
+            if (ImGui::Checkbox("Toggle Crouch", &a.toggleCrouch))
+                m_modified = true;
+            if (ImGui::Checkbox("Auto-Aim", &a.autoAim))
+                m_modified = true;
+            if (a.autoAim)
+            {
+                if (ImGui::SliderFloat("Auto-Aim Strength", &a.autoAimStrength, 0.0f, 1.0f))
+                    m_modified = true;
+            }
+        }
+    }
+
+    // =========================================================================
+    // VR Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderVRTab()
+    {
+        auto& vr = EngineSettings::GetInstance().VR();
+
+        if (ImGui::Checkbox("Enable VR", &vr.enabled))
+            m_modified = true;
+        if (vr.enabled)
+        {
+            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "VR mode changes require restart");
+
+            if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (ImGui::DragInt("Render Target Width", &vr.renderTargetWidth, 1, 640, 4096))
+                    m_modified = true;
+                if (ImGui::DragInt("Render Target Height", &vr.renderTargetHeight, 1, 640, 4096))
+                    m_modified = true;
+                if (ImGui::SliderFloat("Render Scale##VR", &vr.renderScale, 0.5f, 2.0f))
+                    m_modified = true;
+                if (ImGui::DragFloat("IPD", &vr.ipd, 0.001f, 0.050f, 0.080f, "%.3f m"))
+                    m_modified = true;
+                if (ImGui::Checkbox("Reprojection", &vr.reprojection))
+                    m_modified = true;
+            }
+
+            if (ImGui::CollapsingHeader("Tracking"))
+            {
+                const char* trackItems[] = {"Seated", "Room Scale"};
+                if (ImGui::Combo("Tracking Space", &vr.trackingSpace, trackItems, 2))
+                    m_modified = true;
+                if (ImGui::Checkbox("Head Tracking", &vr.headTrackingEnabled))
+                    m_modified = true;
+                if (ImGui::Checkbox("Controller Tracking", &vr.controllerTrackingEnabled))
+                    m_modified = true;
+            }
+
+            if (ImGui::CollapsingHeader("Comfort"))
+            {
+                const char* comfortItems[] = {"Off", "Vignette", "Snap Turn"};
+                if (ImGui::Combo("Comfort Mode", &vr.comfortMode, comfortItems, 3))
+                    m_modified = true;
+                if (vr.comfortMode == 2)
+                {
+                    if (ImGui::DragFloat("Snap Turn Angle", &vr.snapTurnAngle, 5.0f, 15.0f, 90.0f, "%.0f deg"))
+                        m_modified = true;
+                }
+                if (ImGui::SliderFloat("Haptic Amplitude", &vr.hapticAmplitude, 0.0f, 1.0f))
+                    m_modified = true;
+                if (ImGui::DragFloat("Haptic Duration", &vr.hapticDuration, 0.01f, 0.01f, 1.0f, "%.2f s"))
+                    m_modified = true;
+            }
+        }
+    }
+
+    // =========================================================================
+    // Destruction & Dialogue Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderDestructionDialogueTab()
+    {
+        auto& d = EngineSettings::GetInstance().Destruction();
+        auto& dl = EngineSettings::GetInstance().Dialogue();
+
+        if (ImGui::CollapsingHeader("Destruction", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::DragFloat("Debris Lifetime", &d.debrisLifetime, 0.5f, 0.0f, 60.0f, "%.1f s"))
+                m_modified = true;
+            if (ImGui::DragFloat("Damage Threshold", &d.damageThreshold, 1.0f, 0.0f, 500.0f))
+                m_modified = true;
+            if (ImGui::DragFloat("Damage Multiplier##Dest", &d.damageMultiplier, 0.1f, 0.0f, 10.0f))
+                m_modified = true;
+            if (ImGui::DragInt("Max Damage Stages", &d.maxDamageStages, 1, 1, 10))
+                m_modified = true;
+            if (ImGui::DragFloat("Scatter Force", &d.scatterForce, 0.5f, 0.0f, 50.0f))
+                m_modified = true;
+            if (ImGui::DragInt("Max Debris Pieces", &d.maxDebrisPieces, 1, 1, 500))
+                m_modified = true;
+            if (ImGui::Checkbox("Physics Debris", &d.enablePhysicsDebris))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Dialogue & DRS"))
+        {
+            if (ImGui::DragFloat("Default Cooldown", &dl.defaultCooldown, 0.5f, 0.0f, 60.0f, "%.1f s"))
+                m_modified = true;
+            if (ImGui::DragInt("Default Priority", &dl.defaultPriority, 1, 0, 100))
+                m_modified = true;
+            if (ImGui::DragInt("Max Rules Per Signal", &dl.maxRulesPerSignal, 1, 1, 64))
+                m_modified = true;
+            if (ImGui::DragFloat("Typing Speed", &dl.typingSpeed, 1.0f, 5.0f, 200.0f, "%.0f chars/s"))
+                m_modified = true;
+            if (ImGui::Checkbox("Enable Barks", &dl.enableBarks))
+                m_modified = true;
+            if (dl.enableBarks)
+            {
+                if (ImGui::DragFloat("Bark Range", &dl.barkRange, 0.5f, 1.0f, 100.0f))
+                    m_modified = true;
+                if (ImGui::DragFloat("Bark Cooldown", &dl.barkCooldown, 0.5f, 0.0f, 60.0f, "%.1f s"))
+                    m_modified = true;
+            }
+        }
+    }
+
+    // =========================================================================
+    // Modding & Localization Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderModdingLocalizationTab()
+    {
+        auto& mod = EngineSettings::GetInstance().Modding();
+        auto& loc = EngineSettings::GetInstance().Localization();
+
+        if (ImGui::CollapsingHeader("Modding", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::Checkbox("Enable Modding", &mod.enableModding))
+                m_modified = true;
+            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+            if (mod.enableModding)
+            {
+                if (ImGui::Checkbox("Allow Script Mods", &mod.allowScriptMods))
+                    m_modified = true;
+                if (ImGui::Checkbox("Allow Asset Overrides", &mod.allowAssetOverrides))
+                    m_modified = true;
+                if (ImGui::Checkbox("Sandbox Mods", &mod.sandboxMods))
+                    m_modified = true;
+                if (ImGui::DragInt("Max Loaded Mods", &mod.maxLoadedMods, 1, 1, 128))
+                    m_modified = true;
+            }
+        }
+
+        if (ImGui::CollapsingHeader("Localization"))
+        {
+            if (ImGui::Checkbox("Auto-Detect Language", &loc.autoDetectLanguage))
+                m_modified = true;
+            if (ImGui::Checkbox("Load All Languages", &loc.loadAllLanguages))
+                m_modified = true;
+        }
+    }
+
+    // =========================================================================
+    // Save & Replay Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderSaveReplayTab()
+    {
+        auto& sv = EngineSettings::GetInstance().SaveSystem();
+        auto& rp = EngineSettings::GetInstance().Replay();
+
+        if (ImGui::CollapsingHeader("Save System", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::DragInt("Max Auto-Save Slots", &sv.maxAutoSaveSlots, 1, 1, 10))
+                m_modified = true;
+            if (ImGui::DragFloat("Auto-Save Interval", &sv.autoSaveInterval, 10.0f, 0.0f, 3600.0f, "%.0f s"))
+                m_modified = true;
+            if (ImGui::DragInt("Max Manual Saves", &sv.maxManualSaves, 1, 1, 1000))
+                m_modified = true;
+            if (ImGui::Checkbox("Compress Saves", &sv.compressSaves))
+                m_modified = true;
+            if (ImGui::Checkbox("Backup on Save", &sv.backupOnSave))
+                m_modified = true;
+            if (ImGui::Checkbox("Enable Cloud Saves", &sv.enableCloudSaves))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Replay"))
+        {
+            if (ImGui::Checkbox("Auto-Record", &rp.autoRecord))
+                m_modified = true;
+            if (ImGui::DragFloat("Record Interval", &rp.recordInterval, 0.01f, 0.01f, 1.0f, "%.3f s"))
+                m_modified = true;
+            if (ImGui::DragInt("Max Frame Count", &rp.maxFrameCount, 1000, 1000, 10000000))
+                m_modified = true;
+            if (ImGui::DragInt("Max Entity Count", &rp.maxEntityCount, 1000, 100, 1000000))
+                m_modified = true;
+        }
+    }
+
+    // =========================================================================
+    // Particles & Decals Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderParticlesDecalsTab()
+    {
+        auto& p = EngineSettings::GetInstance().Particles();
+        auto& d = EngineSettings::GetInstance().Decals();
+
+        if (ImGui::CollapsingHeader("Particles", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::DragInt("Max Particles", &p.maxParticles, 100, 100, 100000))
+                m_modified = true;
+            if (ImGui::DragInt("Max Emitters", &p.maxEmitters, 1, 1, 1024))
+                m_modified = true;
+            if (ImGui::DragFloat("Simulation Rate", &p.simulationRate, 1.0f, 15.0f, 120.0f, "%.0f Hz"))
+                m_modified = true;
+            if (ImGui::DragFloat("LOD Distance Mult##Part", &p.lodDistanceMultiplier, 0.1f, 0.1f, 5.0f))
+                m_modified = true;
+            if (ImGui::DragFloat("Global Scale##Part", &p.globalScale, 0.1f, 0.1f, 5.0f))
+                m_modified = true;
+            if (ImGui::Checkbox("Soft Particles", &p.softParticles))
+                m_modified = true;
+            if (ImGui::Checkbox("GPU Particles", &p.gpuParticles))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Decals"))
+        {
+            if (ImGui::Checkbox("Enable Decals", &d.enableDecals))
+                m_modified = true;
+            if (d.enableDecals)
+            {
+                if (ImGui::DragInt("Max Decals", &d.maxDecals, 1, 1, 1024))
+                    m_modified = true;
+                if (ImGui::DragFloat("Default Lifetime", &d.defaultLifetime, 1.0f, 0.0f, 300.0f, "%.0f s"))
+                    m_modified = true;
+                if (ImGui::DragFloat("Fade Time", &d.fadeTime, 0.1f, 0.0f, 10.0f, "%.1f s"))
+                    m_modified = true;
+            }
+        }
+    }
+
+    // =========================================================================
+    // Memory Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderMemoryTab()
+    {
+        auto& mem = EngineSettings::GetInstance().Memory();
+
+        if (ImGui::CollapsingHeader("Streaming Budgets", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if (ImGui::DragInt("Texture Budget", &mem.textureStreamingBudgetMB, 32, 64, 4096, "%d MB"))
+                m_modified = true;
+            if (ImGui::DragInt("Mesh Budget", &mem.meshStreamingBudgetMB, 32, 32, 2048, "%d MB"))
+                m_modified = true;
+            if (ImGui::DragInt("Audio Budget", &mem.audioStreamingBudgetMB, 16, 16, 1024, "%d MB"))
+                m_modified = true;
+            if (ImGui::DragInt("Shader Cache", &mem.shaderCacheSizeMB, 16, 16, 512, "%d MB"))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Garbage Collection"))
+        {
+            if (ImGui::DragFloat("GC Interval", &mem.gcInterval, 5.0f, 5.0f, 600.0f, "%.0f s"))
+                m_modified = true;
+            if (ImGui::SliderFloat("GC Aggressiveness", &mem.gcAggressiveness, 0.0f, 1.0f))
+                m_modified = true;
+        }
+
+        if (ImGui::CollapsingHeader("Debug"))
+        {
+            if (ImGui::Checkbox("Memory Tracking", &mem.enableMemoryTracking))
+                m_modified = true;
+            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+        }
+    }
+
+    // =========================================================================
+    // Online Services Tab
+    // =========================================================================
+
+    void ProjectSettingsPanel::RenderOnlineServicesTab()
+    {
+        auto& os = EngineSettings::GetInstance().OnlineServices();
+
+        if (ImGui::Checkbox("Enable Online Services", &os.enableOnlineServices))
+            m_modified = true;
+        ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+
+        if (os.enableOnlineServices)
+        {
+            const char* backendItems[] = {"Null", "Steam", "Epic", "Custom"};
+            if (ImGui::Combo("Platform Backend", &os.platformBackend, backendItems, 4))
+                m_modified = true;
+            if (ImGui::DragFloat("Session Timeout", &os.sessionTimeout, 10.0f, 30.0f, 3600.0f, "%.0f s"))
+                m_modified = true;
+            if (ImGui::DragInt("Max Search Results", &os.maxSessionSearchResults, 1, 5, 200))
+                m_modified = true;
+
+            if (ImGui::CollapsingHeader("Voice Chat"))
+            {
+                if (ImGui::Checkbox("Enable Voice Chat", &os.enableVoiceChat))
+                    m_modified = true;
+                if (os.enableVoiceChat)
+                {
+                    if (ImGui::SliderFloat("Voice Volume", &os.voiceChatVolume, 0.0f, 1.0f))
+                        m_modified = true;
+                    if (ImGui::Checkbox("Push to Talk", &os.pushToTalk))
+                        m_modified = true;
+                }
+            }
         }
     }
 

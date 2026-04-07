@@ -509,14 +509,196 @@ namespace Spark
                 static const std::unordered_map<std::string, std::string> keys = {{"master", "MasterVolume"},
                                                                                   {"sfx", "SFXVolume"},
                                                                                   {"music", "MusicVolume"},
-                                                                                  {"voice", "VoiceVolume"}};
+                                                                                  {"voice", "VoiceVolume"},
+                                                                                  {"ambience", "AmbienceVolume"}};
                 auto it = keys.find(args[0]);
                 if (it == keys.end())
-                    return "Unknown channel. Options: master, sfx, music, voice";
+                    return "Unknown channel. Options: master, sfx, music, voice, ambience";
                 EngineSettings::GetInstance().SetValue("Audio", it->second, args[1]);
                 return args[0] + " volume set to " + args[1];
             },
-            "Get/set audio volume (master/sfx/music/voice)", "Audio");
+            "Get/set audio volume (master/sfx/music/voice/ambience)", "Audio");
+    }
+
+    // ========================================================================
+    // Accessibility commands
+    // ========================================================================
+
+    static void RegisterAccessibilityCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "accessibility_info",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto& a = EngineSettings::GetInstance().Accessibility();
+                const char* cbNames[] = {"Off", "Protanopia", "Deuteranopia", "Tritanopia"};
+                std::stringstream ss;
+                ss << "Accessibility Settings:\n";
+                ss << "  Colorblind Mode: " << cbNames[a.colorblindMode] << "\n";
+                ss << "  High Contrast: " << (a.highContrast ? "on" : "off") << "\n";
+                ss << "  Large Text: " << (a.largeText ? "on" : "off") << "\n";
+                ss << "  Reduce Motion: " << (a.reduceMotion ? "on" : "off") << "\n";
+                ss << "  Closed Captions: " << (a.closedCaptions ? "on" : "off") << "\n";
+                ss << "  Toggle Aim/Sprint/Crouch: " << (a.toggleAim ? "on" : "off") << "/"
+                   << (a.toggleSprint ? "on" : "off") << "/" << (a.toggleCrouch ? "on" : "off") << "\n";
+                ss << "  Auto-Aim: " << (a.autoAim ? "on" : "off") << " (strength " << a.autoAimStrength << ")\n";
+                return ss.str();
+            },
+            "Show accessibility settings status", "Accessibility");
+
+        console.RegisterCommand(
+            "colorblind",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                    return "Usage: colorblind <off|protanopia|deuteranopia|tritanopia>";
+                auto& a = EngineSettings::GetInstance().Accessibility();
+                if (args[0] == "off")
+                    a.colorblindMode = 0;
+                else if (args[0] == "protanopia")
+                    a.colorblindMode = 1;
+                else if (args[0] == "deuteranopia")
+                    a.colorblindMode = 2;
+                else if (args[0] == "tritanopia")
+                    a.colorblindMode = 3;
+                else
+                    return "Unknown mode. Options: off, protanopia, deuteranopia, tritanopia";
+                return "Colorblind mode set to " + args[0];
+            },
+            "Set colorblind mode", "Accessibility");
+
+        console.RegisterCommand(
+            "reduce_motion",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                auto& a = EngineSettings::GetInstance().Accessibility();
+                if (args.empty())
+                    return std::string("Reduce motion: ") + (a.reduceMotion ? "on" : "off");
+                a.reduceMotion = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+                return std::string("Reduce motion ") + (a.reduceMotion ? "enabled" : "disabled");
+            },
+            "Toggle reduce motion (screen shake, camera bob)", "Accessibility");
+    }
+
+    // ========================================================================
+    // VR commands
+    // ========================================================================
+
+    static void RegisterVRCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "vr_info",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto& vr = EngineSettings::GetInstance().VR();
+                const char* trackNames[] = {"Seated", "Room Scale"};
+                const char* comfortNames[] = {"Off", "Vignette", "Snap Turn"};
+                std::stringstream ss;
+                ss << "VR Settings:\n";
+                ss << "  Enabled: " << (vr.enabled ? "yes" : "no") << "\n";
+                ss << "  Render Target: " << vr.renderTargetWidth << "x" << vr.renderTargetHeight << "\n";
+                ss << "  Render Scale: " << vr.renderScale << "\n";
+                ss << "  Tracking: " << trackNames[vr.trackingSpace] << "\n";
+                ss << "  IPD: " << vr.ipd << " m\n";
+                ss << "  Comfort Mode: " << comfortNames[vr.comfortMode] << "\n";
+                ss << "  Reprojection: " << (vr.reprojection ? "on" : "off") << "\n";
+                return ss.str();
+            },
+            "Show VR system settings", "VR");
+
+        console.RegisterCommand(
+            "vr_renderscale",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                auto& vr = EngineSettings::GetInstance().VR();
+                if (args.empty())
+                    return "VR render scale: " + std::to_string(vr.renderScale);
+                vr.renderScale = std::clamp(std::stof(args[0]), 0.5f, 2.0f);
+                return "VR render scale set to " + std::to_string(vr.renderScale);
+            },
+            "Get/set VR supersampling scale (0.5-2.0)", "VR");
+    }
+
+    // ========================================================================
+    // Memory commands
+    // ========================================================================
+
+    static void RegisterMemoryCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "memory_budget",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto& mem = EngineSettings::GetInstance().Memory();
+                std::stringstream ss;
+                ss << "Memory Budgets:\n";
+                ss << "  Texture Streaming: " << mem.textureStreamingBudgetMB << " MB\n";
+                ss << "  Mesh Streaming: " << mem.meshStreamingBudgetMB << " MB\n";
+                ss << "  Audio Streaming: " << mem.audioStreamingBudgetMB << " MB\n";
+                ss << "  Shader Cache: " << mem.shaderCacheSizeMB << " MB\n";
+                ss << "  GC Interval: " << mem.gcInterval << " s\n";
+                ss << "  GC Aggressiveness: " << mem.gcAggressiveness << "\n";
+                return ss.str();
+            },
+            "Show memory budget settings", "Memory");
+
+        console.RegisterCommand(
+            "texture_budget",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                auto& mem = EngineSettings::GetInstance().Memory();
+                if (args.empty())
+                    return "Texture budget: " + std::to_string(mem.textureStreamingBudgetMB) + " MB";
+                mem.textureStreamingBudgetMB = std::clamp(std::stoi(args[0]), 64, 4096);
+                return "Texture budget set to " + std::to_string(mem.textureStreamingBudgetMB) + " MB";
+            },
+            "Get/set texture streaming budget (MB)", "Memory");
+    }
+
+    // ========================================================================
+    // Particle & decal commands
+    // ========================================================================
+
+    static void RegisterParticleCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "particle_info",
+            [](const std::vector<std::string>&) -> std::string
+            {
+                auto& p = EngineSettings::GetInstance().Particles();
+                auto& d = EngineSettings::GetInstance().Decals();
+                std::stringstream ss;
+                ss << "Particle Settings:\n";
+                ss << "  Max Particles: " << p.maxParticles << "\n";
+                ss << "  Max Emitters: " << p.maxEmitters << "\n";
+                ss << "  Sim Rate: " << p.simulationRate << " Hz\n";
+                ss << "  GPU Particles: " << (p.gpuParticles ? "on" : "off") << "\n";
+                ss << "Decal Settings:\n";
+                ss << "  Enabled: " << (d.enableDecals ? "on" : "off") << "\n";
+                ss << "  Max Decals: " << d.maxDecals << "\n";
+                ss << "  Lifetime: " << d.defaultLifetime << " s\n";
+                return ss.str();
+            },
+            "Show particle and decal settings", "Particles");
+    }
+
+    // ========================================================================
+    // Save system commands
+    // ========================================================================
+
+    static void RegisterSaveSystemCommands(SimpleConsole& console)
+    {
+        console.RegisterCommand(
+            "autosave_interval",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                auto& sv = EngineSettings::GetInstance().SaveSystem();
+                if (args.empty())
+                    return "Auto-save interval: " + std::to_string(static_cast<int>(sv.autoSaveInterval)) + " s";
+                sv.autoSaveInterval = std::clamp(std::stof(args[0]), 0.0f, 3600.0f);
+                return "Auto-save interval set to " + std::to_string(static_cast<int>(sv.autoSaveInterval)) + " s";
+            },
+            "Get/set auto-save interval (seconds, 0=disabled)", "SaveSystem");
     }
 
     // ========================================================================
@@ -535,6 +717,11 @@ namespace Spark
         RegisterDestructionCommands(console);
         RegisterDialogueCommands(console);
         RegisterSettingsShortcutCommands(console);
+        RegisterAccessibilityCommands(console);
+        RegisterVRCommands(console);
+        RegisterMemoryCommands(console);
+        RegisterParticleCommands(console);
+        RegisterSaveSystemCommands(console);
     }
 
 } // namespace Spark

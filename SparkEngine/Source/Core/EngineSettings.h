@@ -19,52 +19,100 @@
 #include <vector>
 #include <functional>
 
+/// Flags indicating how a setting behaves at runtime.
+/// Used by the console, editor UI, and settings_list to annotate each value.
+enum class SettingsFlags : uint8_t
+{
+    Runtime = 0,         ///< Safe to change on the fly — takes effect immediately
+    RequiresRestart = 1, ///< Stored but only applied on next engine/subsystem restart
+    ReadOnly = 2,        ///< Informational — cannot be changed via console or editor
+    DevOnly = 3          ///< Only modifiable in development builds or with cheats enabled
+};
+
 class EngineSettings
 {
   public:
     // =========================================================================
-    // Settings structures
+    // Settings structures — organised by domain
+    //
+    // Legend (in comments after each field):
+    //   [R]  = Runtime — takes effect immediately
+    //   [RS] = Requires Restart — stored, applied on next launch
+    //   [RO] = Read-Only — informational, not modifiable
+    //   [D]  = Dev-Only — development/cheat builds only
     // =========================================================================
+
+    // =====================================================================
+    // 1. DISPLAY & WINDOW
+    // =====================================================================
 
     struct GraphicsSettings
     {
-        int windowWidth = 1280;
-        int windowHeight = 720;
-        bool fullscreen = false;
-        bool vsync = true;
-        int antiAliasing = 4;     // MSAA sample count (1, 2, 4, 8)
-        int shadowQuality = 2;    // 0=Off, 1=Low, 2=Medium, 3=High
-        float renderScale = 1.0f; // Internal resolution scale
-        bool hdr = false;
+        int windowWidth = 1280;          ///< [RS] Window width in pixels
+        int windowHeight = 720;          ///< [RS] Window height in pixels
+        bool fullscreen = false;         ///< [RS] Fullscreen mode (requires mode switch)
+        bool vsync = true;               ///< [R]  Vertical sync toggle
+        int antiAliasing = 4;            ///< [R]  MSAA sample count (1, 2, 4, 8)
+        int shadowQuality = 2;           ///< [R]  0=Off, 1=Low, 2=Medium, 3=High
+        float renderScale = 1.0f;        ///< [R]  Internal resolution scale
+        bool hdr = false;                ///< [RS] HDR output mode
+        int refreshRate = 0;             ///< [RS] Monitor refresh rate Hz (0=native)
+        bool borderlessWindowed = false; ///< [RS] Borderless windowed mode
+        int monitor = 0;                 ///< [RS] Monitor index for multi-monitor setups
+        bool tripleBuffering = false;    ///< [RS] Triple buffering (reduces input lag with vsync)
+        int maxFrameLatency = 2;         ///< [R]  Max pre-rendered frames (1-4)
     };
+
+    // =====================================================================
+    // 4. AUDIO
+    // =====================================================================
 
     struct AudioSettings
     {
-        float masterVolume = 1.0f;
-        float sfxVolume = 0.8f;
-        float musicVolume = 0.6f;
-        float voiceVolume = 1.0f;
-        bool muteOnFocusLoss = true;
+        float masterVolume = 1.0f;   ///< [R] Master volume (0-1)
+        float sfxVolume = 0.8f;      ///< [R] Sound effects volume (0-1)
+        float musicVolume = 0.6f;    ///< [R] Music volume (0-1)
+        float voiceVolume = 1.0f;    ///< [R] Voice/dialogue volume (0-1)
+        float ambienceVolume = 0.7f; ///< [R] Ambient sound volume (0-1)
+        bool muteOnFocusLoss = true; ///< [R] Mute when window loses focus
+        bool muteAll = false;        ///< [R] Master mute toggle
     };
+
+    // =====================================================================
+    // 5. INPUT & CONTROLS
+    // =====================================================================
 
     struct ControlsSettings
     {
-        float mouseSensitivity = 1.0f;
-        bool invertMouseY = false;
-        float mouseDeadZone = 0.0f;
-        bool rawMouseInput = false;
-        bool mouseAcceleration = false;
+        float mouseSensitivity = 1.0f;        ///< [R] Mouse sensitivity multiplier
+        bool invertMouseY = false;            ///< [R] Invert vertical mouse axis
+        float mouseDeadZone = 0.0f;           ///< [R] Mouse dead zone threshold
+        bool rawMouseInput = false;           ///< [R] Bypass OS mouse acceleration
+        bool mouseAcceleration = false;       ///< [R] Enable mouse acceleration curve
+        float controllerDeadZoneLeft = 0.15f; ///< [R] Left stick dead zone (0-1)
+        float controllerDeadZoneRight = 0.1f; ///< [R] Right stick dead zone (0-1)
+        float controllerSensitivity = 1.0f;   ///< [R] Controller aim sensitivity
+        bool controllerVibration = true;      ///< [R] Controller haptic feedback
+        bool invertControllerY = false;       ///< [R] Invert vertical controller axis
     };
+
+    // =====================================================================
+    // 6. GAME
+    // =====================================================================
 
     struct GameSettings
     {
-        std::string difficulty = "Normal";
-        bool showFPS = true;
-        bool showDebugInfo = false;
-        float fieldOfView = 90.0f;
+        std::string difficulty = "Normal"; ///< [R] Difficulty preset (Easy/Normal/Hard/Nightmare)
+        bool showFPS = true;               ///< [R] Show FPS counter overlay
+        bool showDebugInfo = false;        ///< [R] Show debug info overlay
+        float fieldOfView = 90.0f;         ///< [R] Horizontal field of view (degrees)
+        std::string language = "en";       ///< [RS] Game language code (en/de/fr/es/ja/zh/ko/pt/ru/it)
+        bool pauseOnFocusLoss = true;      ///< [R] Pause single-player when window loses focus
     };
 
-    // ---- New: Rendering Advanced ----
+    // =====================================================================
+    // 2. RENDERING PIPELINE
+    // =====================================================================
 
     struct RenderingSettings
     {
@@ -92,7 +140,9 @@ class EngineSettings
         bool enableGPUTiming = false;
     };
 
-    // ---- New: Post-Processing ----
+    // =====================================================================
+    // 3. POST-PROCESSING
+    // =====================================================================
 
     struct PostProcessSettings
     {
@@ -119,8 +169,6 @@ class EngineSettings
         float saturation = 1.0f;
     };
 
-    // ---- New: SSAO ----
-
     struct SSAOSettings
     {
         bool enabled = false;
@@ -130,8 +178,6 @@ class EngineSettings
         float bias = 0.025f;
         bool blur = true;
     };
-
-    // ---- New: SSR ----
 
     struct SSRSettings
     {
@@ -143,8 +189,6 @@ class EngineSettings
         float fadeEnd = 100.0f;
     };
 
-    // ---- New: Volumetric Lighting ----
-
     struct VolumetricSettings
     {
         bool enabled = false;
@@ -153,8 +197,6 @@ class EngineSettings
         float extinction = 0.01f;
         float anisotropy = 0.3f;
     };
-
-    // ---- New: TAA ----
 
     struct TAASettings
     {
@@ -173,8 +215,6 @@ class EngineSettings
         float flickerReduction = 0.5f;
     };
 
-    // ---- New: Motion Blur ----
-
     struct MotionBlurSettings
     {
         bool enabled = false;
@@ -189,8 +229,6 @@ class EngineSettings
         float cameraTranslationScale = 1.0f;
         int tileSize = 20;
     };
-
-    // ---- New: Dynamic Quality Scaler ----
 
     struct DynamicQualitySettings
     {
@@ -216,8 +254,6 @@ class EngineSettings
         float pidKD = 0.1f;
     };
 
-    // ---- New: Audio Extended ----
-
     struct AudioExtendedSettings
     {
         float dopplerScale = 1.0f;
@@ -228,7 +264,9 @@ class EngineSettings
         int maxSources = 32;
     };
 
-    // ---- New: Physics ----
+    // =====================================================================
+    // 7. PHYSICS
+    // =====================================================================
 
     struct PhysicsSettings
     {
@@ -244,7 +282,9 @@ class EngineSettings
         bool debugDraw = false;
     };
 
-    // ---- New: AI ----
+    // =====================================================================
+    // 8. AI
+    // =====================================================================
 
     struct AISettings
     {
@@ -261,7 +301,9 @@ class EngineSettings
         bool canUseCover = true;
     };
 
-    // ---- New: Player Defaults ----
+    // =====================================================================
+    // 9. PLAYER
+    // =====================================================================
 
     struct PlayerSettings
     {
@@ -281,7 +323,9 @@ class EngineSettings
         float energyRegenRate = 10.0f;
     };
 
-    // ---- New: Game Mode Rules ----
+    // =====================================================================
+    // 10. GAME MODE
+    // =====================================================================
 
     struct GameModeSettings
     {
@@ -308,7 +352,9 @@ class EngineSettings
         int headshotBonus = 50;
     };
 
-    // ---- New: Camera ----
+    // =====================================================================
+    // 11. CAMERA
+    // =====================================================================
 
     struct CameraSettings
     {
@@ -321,20 +367,35 @@ class EngineSettings
         float farPlane = 1000.0f;
     };
 
-    // ---- New: Editor ----
+    // =====================================================================
+    // 12. EDITOR
+    // =====================================================================
 
     struct EditorSettings
     {
-        float gridSize = 1.0f;
-        bool snapToGrid = true;
-        bool showGrid = true;
-        float gizmoScale = 1.0f;
-        bool autosaveEnabled = true;
-        float autosaveIntervalSeconds = 300.0f;
-        int undoHistorySize = 100;
+        float gridSize = 1.0f;                  ///< [R] Grid cell size (world units)
+        bool snapToGrid = true;                 ///< [R] Snap objects to grid
+        bool showGrid = true;                   ///< [R] Display grid overlay
+        float gizmoScale = 1.0f;                ///< [R] Transform gizmo size multiplier
+        bool autosaveEnabled = true;            ///< [R] Periodic autosave
+        float autosaveIntervalSeconds = 300.0f; ///< [R] Autosave interval (seconds)
+        int undoHistorySize = 100;              ///< [R] Undo stack depth
+        float rotationSnap = 15.0f;             ///< [R] Rotation snap increment (degrees)
+        float scaleSnap = 0.25f;                ///< [R] Scale snap increment
+        bool showGizmoLabels = true;            ///< [R] Show position/rotation labels on gizmo
+        bool showWireframeOverlay = false;      ///< [R] Wireframe overlay on selected objects
+        bool showBounds = false;                ///< [R] Show bounding boxes
+        bool showColliders = false;             ///< [R] Show physics colliders
+        bool showNavMesh = false;               ///< [R] Show navigation mesh
+        bool showLightRadius = true;            ///< [R] Show light influence radius
+        float cameraSpeedMultiplier = 1.0f;     ///< [R] Editor camera fly speed multiplier
+        int recentFilesMax = 10;                ///< [R] Max recent files in menu
+        bool enableCollaboration = false;       ///< [RS] Multi-user collaborative editing
     };
 
-    // ---- Network ----
+    // =====================================================================
+    // 13. NETWORK
+    // =====================================================================
 
     struct NetworkSettings
     {
@@ -355,7 +416,9 @@ class EngineSettings
         float simulatedJitterMs = 0.0f;
     };
 
-    // ---- Scripting ----
+    // =====================================================================
+    // 14. SCRIPTING
+    // =====================================================================
 
     struct ScriptingSettings
     {
@@ -369,7 +432,9 @@ class EngineSettings
         bool enableProfiler = false;
     };
 
-    // ---- Animation ----
+    // =====================================================================
+    // 15. ANIMATION
+    // =====================================================================
 
     struct AnimationSettings
     {
@@ -383,9 +448,9 @@ class EngineSettings
         bool enableAnimationEvents = true;
     };
 
-    // ---- Debug ----
-
-    // ---- Crash Reporting ----
+    // =====================================================================
+    // 16. CRASH REPORTING & DEBUG
+    // =====================================================================
 
     struct CrashReportingSettings
     {
@@ -416,7 +481,9 @@ class EngineSettings
         bool breakOnSuppressedAsserts = true; ///< Break into debugger on suppressed assertions
     };
 
-    // ---- Weather ----
+    // =====================================================================
+    // 17. ENVIRONMENT (Weather, Time of Day, World)
+    // =====================================================================
 
     struct WeatherSettings
     {
@@ -439,8 +506,6 @@ class EngineSettings
         float directionalMultiplier = 1.0f;
     };
 
-    // ---- Time of Day ----
-
     struct TimeOfDaySettings
     {
         float startHour = 12.0f;
@@ -452,7 +517,9 @@ class EngineSettings
         float ambientNightMultiplier = 0.2f;
     };
 
-    // ---- Streaming / LOD ----
+    // =====================================================================
+    // 18. STREAMING & LOD
+    // =====================================================================
 
     struct StreamingSettings
     {
@@ -466,7 +533,9 @@ class EngineSettings
         float shadowDrawDistance = 200.0f;
     };
 
-    // ---- Performance ----
+    // =====================================================================
+    // 19. PERFORMANCE & MEMORY
+    // =====================================================================
 
     struct PerformanceSettings
     {
@@ -480,8 +549,6 @@ class EngineSettings
         float objectPoolGrowthFactor = 1.5f;
     };
 
-    // ---- World ----
-
     struct WorldSettings
     {
         float originRebaseThreshold = 5000.0f;
@@ -491,7 +558,9 @@ class EngineSettings
         float worldBoundsMax = 100000.0f;
     };
 
-    // ---- UI ----
+    // =====================================================================
+    // 20. UI & ACCESSIBILITY
+    // =====================================================================
 
     struct UISettings
     {
@@ -507,7 +576,9 @@ class EngineSettings
         bool showInteractionPrompts = true;
     };
 
-    // ---- Logging ----
+    // =====================================================================
+    // 21. LOGGING
+    // =====================================================================
 
     struct LoggingSettings
     {
@@ -541,6 +612,204 @@ class EngineSettings
         std::string proceduralLevel;
         std::string editorLevel;
         std::string gameLevel;
+    };
+
+    // =====================================================================
+    // 22. ACCESSIBILITY
+    // =====================================================================
+
+    struct AccessibilitySettings
+    {
+        int colorblindMode = 0;          ///< [R] 0=Off, 1=Protanopia, 2=Deuteranopia, 3=Tritanopia
+        float colorblindStrength = 1.0f; ///< [R] Colorblind filter intensity (0-1)
+        bool screenReader = false;       ///< [R] Enable screen reader support
+        bool reduceMotion = false;       ///< [R] Reduce screen shake, camera bob, particle effects
+        bool highContrast = false;       ///< [R] High-contrast UI and outlines
+        float textToSpeechRate = 1.0f;   ///< [R] Text-to-speech speed multiplier
+        bool largeText = false;          ///< [R] Force larger minimum text sizes
+        bool closedCaptions = false;     ///< [R] Closed captions for non-dialogue sounds
+        float holdTimeMultiplier = 1.0f; ///< [R] Multiplier for hold-to-interact durations
+        bool toggleAim = false;          ///< [R] Toggle aim instead of hold
+        bool toggleSprint = false;       ///< [R] Toggle sprint instead of hold
+        bool toggleCrouch = false;       ///< [R] Toggle crouch instead of hold
+        bool autoAim = false;            ///< [R] Aim assist for accessibility
+        float autoAimStrength = 0.5f;    ///< [R] Aim assist strength (0-1)
+    };
+
+    // =====================================================================
+    // 23. VR
+    // =====================================================================
+
+    struct VRSettings
+    {
+        bool enabled = false;                  ///< [RS] Enable VR mode (requires restart)
+        int renderTargetWidth = 1440;          ///< [RS] Per-eye render target width
+        int renderTargetHeight = 1600;         ///< [RS] Per-eye render target height
+        float renderScale = 1.0f;              ///< [R]  VR supersampling scale
+        int trackingSpace = 1;                 ///< [RS] 0=Seated, 1=RoomScale
+        bool headTrackingEnabled = true;       ///< [R]  Head tracking
+        bool controllerTrackingEnabled = true; ///< [R]  Controller tracking
+        float hapticAmplitude = 1.0f;          ///< [R]  Default haptic feedback amplitude (0-1)
+        float hapticDuration = 0.1f;           ///< [R]  Default haptic pulse duration (seconds)
+        float ipd = 0.064f;                    ///< [R]  Inter-pupillary distance (meters)
+        int comfortMode = 0;                   ///< [R]  0=Off, 1=Vignette, 2=SnapTurn
+        float snapTurnAngle = 45.0f;           ///< [R]  Snap turn degrees
+        bool reprojection = true;              ///< [R]  Motion reprojection
+    };
+
+    // =====================================================================
+    // 24. DESTRUCTION
+    // =====================================================================
+
+    struct DestructionSettings
+    {
+        float debrisLifetime = 10.0f;    ///< [R] Default debris lifetime (seconds)
+        float damageThreshold = 50.0f;   ///< [R] Min damage to trigger destruction
+        float damageMultiplier = 1.0f;   ///< [R] Global destruction damage multiplier
+        int maxDamageStages = 3;         ///< [R] Max progressive destruction stages
+        float scatterForce = 5.0f;       ///< [R] Force applied to debris chunks
+        int maxDebrisPieces = 100;       ///< [R] Max debris pieces per object
+        bool enablePhysicsDebris = true; ///< [R] Physics-simulated debris
+    };
+
+    // =====================================================================
+    // 25. DIALOGUE
+    // =====================================================================
+
+    struct DialogueSettings
+    {
+        float defaultCooldown = 5.0f; ///< [R] DRS rule cooldown (seconds)
+        int defaultPriority = 50;     ///< [R] Default response rule priority (0-100)
+        int maxRulesPerSignal = 16;   ///< [R] Max rules evaluated per signal
+        float typingSpeed = 40.0f;    ///< [R] Characters per second for typewriter effect
+        bool enableBarks = true;      ///< [R] NPC bark system enabled
+        float barkRange = 15.0f;      ///< [R] Max distance to hear NPC barks
+        float barkCooldown = 10.0f;   ///< [R] Min time between barks from same NPC
+    };
+
+    // =====================================================================
+    // 26. MODDING
+    // =====================================================================
+
+    struct ModdingSettings
+    {
+        bool enableModding = false;         ///< [RS] Master mod loading toggle
+        std::string modsDirectory = "Mods"; ///< [RS] Relative path to mods folder
+        bool allowScriptMods = false;       ///< [RS] Allow mods to load scripts (security)
+        bool allowAssetOverrides = true;    ///< [RS] Allow mods to override base assets
+        int maxLoadedMods = 32;             ///< [RS] Maximum simultaneously loaded mods
+        bool sandboxMods = true;            ///< [RS] Run mod scripts in sandbox
+    };
+
+    // =====================================================================
+    // 27. LOCALIZATION
+    // =====================================================================
+
+    struct LocalizationSettings
+    {
+        std::string defaultLanguage = "en";           ///< [RS] Default language code
+        std::string fallbackLanguage = "en";          ///< [R]  Fallback when key missing
+        bool autoDetectLanguage = true;               ///< [RS] Auto-detect from OS locale
+        bool loadAllLanguages = false;                ///< [RS] Preload all language files
+        std::string localizationDir = "Localization"; ///< [RS] Localization files directory
+    };
+
+    // =====================================================================
+    // 28. SAVE SYSTEM
+    // =====================================================================
+
+    struct SaveSystemSettings
+    {
+        std::string savesDirectory = "Saves"; ///< [RS] Save files directory
+        int maxAutoSaveSlots = 3;             ///< [R]  Auto-save slot rotation count
+        float autoSaveInterval = 300.0f;      ///< [R]  Game auto-save interval (seconds, 0=disabled)
+        bool enableCloudSaves = false;        ///< [RS] Sync saves to cloud
+        bool compressSaves = true;            ///< [R]  Compress save files
+        bool backupOnSave = true;             ///< [R]  Keep backup of previous save
+        int maxManualSaves = 100;             ///< [R]  Max manual save slots
+    };
+
+    // =====================================================================
+    // 29. REPLAY
+    // =====================================================================
+
+    struct ReplaySettings
+    {
+        float recordInterval = 0.05f;            ///< [R]  Seconds between replay snapshots
+        int maxFrameCount = 1000000;             ///< [R]  Max recorded frames (safety limit)
+        int maxEntityCount = 100000;             ///< [R]  Max tracked entities
+        int maxEventCount = 500000;              ///< [R]  Max recorded events
+        int maxStringLength = 256;               ///< [R]  Max string length in replay data
+        std::string replayDirectory = "Replays"; ///< [R] Replay storage directory
+        bool autoRecord = false;                 ///< [R]  Auto-start recording on gameplay
+    };
+
+    // =====================================================================
+    // 30. PERSISTENCE (Async Database)
+    // =====================================================================
+
+    struct PersistenceSettings
+    {
+        std::string databasePath = "Data/persistence.db"; ///< [RS] SQLite database path
+        int connectionPoolSize = 4;                       ///< [RS] Database connection pool size
+        int workerThreadCount = 2;                        ///< [RS] Async query worker threads
+        float queryTimeoutMs = 5000.0f;                   ///< [R]  Query timeout (milliseconds)
+        bool enableWAL = true;                            ///< [RS] SQLite WAL mode
+        int maxRetries = 3;                               ///< [R]  Retry count on transient failures
+    };
+
+    // =====================================================================
+    // 31. PARTICLES & DECALS
+    // =====================================================================
+
+    struct ParticleSettings
+    {
+        int maxParticles = 10000;           ///< [R]  Global particle count limit
+        int maxEmitters = 256;              ///< [R]  Max active emitters
+        float simulationRate = 60.0f;       ///< [R]  Particle simulation tick rate (Hz)
+        float lodDistanceMultiplier = 1.0f; ///< [R]  Particle LOD distance scale
+        bool gpuParticles = false;          ///< [RS] GPU-accelerated particles
+        float globalScale = 1.0f;           ///< [R]  Global particle size multiplier
+        bool softParticles = true;          ///< [R]  Depth-tested soft particles
+    };
+
+    struct DecalSettings
+    {
+        int maxDecals = 256;           ///< [R]  Max simultaneous decals
+        float defaultLifetime = 30.0f; ///< [R]  Decal lifetime (seconds, 0=permanent)
+        float fadeTime = 2.0f;         ///< [R]  Fade-out duration (seconds)
+        int atlasSize = 2048;          ///< [RS] Decal atlas texture size
+        bool enableDecals = true;      ///< [R]  Master decal toggle
+    };
+
+    // =====================================================================
+    // 32. MEMORY MANAGEMENT
+    // =====================================================================
+
+    struct MemorySettings
+    {
+        int textureStreamingBudgetMB = 512; ///< [R]  Texture streaming memory budget
+        int meshStreamingBudgetMB = 256;    ///< [R]  Mesh streaming memory budget
+        int audioStreamingBudgetMB = 128;   ///< [R]  Audio streaming memory budget
+        int shaderCacheSizeMB = 64;         ///< [RS] Shader cache size limit
+        bool enableMemoryTracking = false;  ///< [RS] Detailed memory allocation tracking
+        float gcInterval = 60.0f;           ///< [R]  Garbage collection interval (seconds)
+        float gcAggressiveness = 0.5f;      ///< [R]  GC aggressiveness (0=lazy, 1=aggressive)
+    };
+
+    // =====================================================================
+    // 33. ONLINE SERVICES
+    // =====================================================================
+
+    struct OnlineServicesSettings
+    {
+        int platformBackend = 0;           ///< [RS] 0=Null, 1=Steam, 2=Epic, 3=Custom
+        bool enableOnlineServices = false; ///< [RS] Master online toggle
+        float sessionTimeout = 300.0f;     ///< [R]  Session inactivity timeout (seconds)
+        int maxSessionSearchResults = 50;  ///< [R]  Matchmaking search result limit
+        bool enableVoiceChat = false;      ///< [R]  In-game voice chat
+        float voiceChatVolume = 0.8f;      ///< [R]  Voice chat volume (0-1)
+        bool pushToTalk = true;            ///< [R]  Push-to-talk vs open mic
     };
 
     // =========================================================================
@@ -665,6 +934,45 @@ class EngineSettings
     LoggingSettings& Logging() { return m_logging; }
     const LoggingSettings& Logging() const { return m_logging; }
 
+    AccessibilitySettings& Accessibility() { return m_accessibility; }
+    const AccessibilitySettings& Accessibility() const { return m_accessibility; }
+
+    VRSettings& VR() { return m_vr; }
+    const VRSettings& VR() const { return m_vr; }
+
+    DestructionSettings& Destruction() { return m_destruction; }
+    const DestructionSettings& Destruction() const { return m_destruction; }
+
+    DialogueSettings& Dialogue() { return m_dialogue; }
+    const DialogueSettings& Dialogue() const { return m_dialogue; }
+
+    ModdingSettings& Modding() { return m_modding; }
+    const ModdingSettings& Modding() const { return m_modding; }
+
+    LocalizationSettings& Localization() { return m_localization; }
+    const LocalizationSettings& Localization() const { return m_localization; }
+
+    SaveSystemSettings& SaveSystem() { return m_saveSystem; }
+    const SaveSystemSettings& SaveSystem() const { return m_saveSystem; }
+
+    ReplaySettings& Replay() { return m_replay; }
+    const ReplaySettings& Replay() const { return m_replay; }
+
+    PersistenceSettings& Persistence() { return m_persistence; }
+    const PersistenceSettings& Persistence() const { return m_persistence; }
+
+    ParticleSettings& Particles() { return m_particles; }
+    const ParticleSettings& Particles() const { return m_particles; }
+
+    DecalSettings& Decals() { return m_decals; }
+    const DecalSettings& Decals() const { return m_decals; }
+
+    MemorySettings& Memory() { return m_memory; }
+    const MemorySettings& Memory() const { return m_memory; }
+
+    OnlineServicesSettings& OnlineServices() { return m_onlineServices; }
+    const OnlineServicesSettings& OnlineServices() const { return m_onlineServices; }
+
     // =========================================================================
     // Generic key access (for console commands)
     // =========================================================================
@@ -752,6 +1060,19 @@ class EngineSettings
     WorldSettings m_world;
     UISettings m_ui;
     LoggingSettings m_logging;
+    AccessibilitySettings m_accessibility;
+    VRSettings m_vr;
+    DestructionSettings m_destruction;
+    DialogueSettings m_dialogue;
+    ModdingSettings m_modding;
+    LocalizationSettings m_localization;
+    SaveSystemSettings m_saveSystem;
+    ReplaySettings m_replay;
+    PersistenceSettings m_persistence;
+    ParticleSettings m_particles;
+    DecalSettings m_decals;
+    MemorySettings m_memory;
+    OnlineServicesSettings m_onlineServices;
 
     // Change listeners
     std::vector<SettingsChangedCallback> m_changeCallbacks;

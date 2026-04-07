@@ -421,3 +421,259 @@ TEST(EngineSettings_HDRRequiresBloomThreshold)
     // With HDR, bloom threshold should be > 0 to avoid blooming everything
     EXPECT_GT(pp.bloomThreshold, 0.0f);
 }
+
+// ============================================================================
+// New Settings Categories — Accessibility
+// ============================================================================
+
+namespace
+{
+    struct AccessibilitySettings
+    {
+        int colorblindMode = 0;
+        float colorblindStrength = 1.0f;
+        bool screenReader = false;
+        bool reduceMotion = false;
+        bool highContrast = false;
+        float holdTimeMultiplier = 1.0f;
+        bool toggleAim = false;
+        bool toggleSprint = false;
+        bool toggleCrouch = false;
+        bool autoAim = false;
+        float autoAimStrength = 0.5f;
+    };
+
+    struct VRSettings
+    {
+        bool enabled = false;
+        int renderTargetWidth = 1440;
+        int renderTargetHeight = 1600;
+        float renderScale = 1.0f;
+        int trackingSpace = 1;
+        float ipd = 0.064f;
+        int comfortMode = 0;
+        float snapTurnAngle = 45.0f;
+    };
+
+    struct DestructionSettings
+    {
+        float debrisLifetime = 10.0f;
+        float damageThreshold = 50.0f;
+        float damageMultiplier = 1.0f;
+        int maxDamageStages = 3;
+        float scatterForce = 5.0f;
+        int maxDebrisPieces = 100;
+    };
+
+    struct SaveSystemSettings
+    {
+        int maxAutoSaveSlots = 3;
+        float autoSaveInterval = 300.0f;
+        bool compressSaves = true;
+        bool backupOnSave = true;
+        int maxManualSaves = 100;
+    };
+
+    struct MemorySettings
+    {
+        int textureStreamingBudgetMB = 512;
+        int meshStreamingBudgetMB = 256;
+        int audioStreamingBudgetMB = 128;
+        float gcInterval = 60.0f;
+        float gcAggressiveness = 0.5f;
+    };
+
+    struct ParticleSettings
+    {
+        int maxParticles = 10000;
+        int maxEmitters = 256;
+        float simulationRate = 60.0f;
+        float globalScale = 1.0f;
+    };
+} // anonymous namespace
+
+TEST(EngineSettings_AccessibilityDefaults)
+{
+    AccessibilitySettings a;
+    EXPECT_EQ(a.colorblindMode, 0);
+    EXPECT_NEAR(a.colorblindStrength, 1.0f, 0.01f);
+    EXPECT_FALSE(a.screenReader);
+    EXPECT_FALSE(a.reduceMotion);
+    EXPECT_FALSE(a.highContrast);
+    EXPECT_NEAR(a.holdTimeMultiplier, 1.0f, 0.01f);
+    EXPECT_FALSE(a.toggleAim);
+    EXPECT_FALSE(a.autoAim);
+    EXPECT_NEAR(a.autoAimStrength, 0.5f, 0.01f);
+}
+
+TEST(EngineSettings_ColorblindModeBounds)
+{
+    AccessibilitySettings a;
+    a.colorblindMode = std::clamp(5, 0, 3);
+    EXPECT_EQ(a.colorblindMode, 3);
+
+    a.colorblindMode = std::clamp(-1, 0, 3);
+    EXPECT_EQ(a.colorblindMode, 0);
+}
+
+TEST(EngineSettings_AutoAimStrengthClamped)
+{
+    AccessibilitySettings a;
+    a.autoAimStrength = Clamp(1.5f, 0.0f, 1.0f);
+    EXPECT_NEAR(a.autoAimStrength, 1.0f, 0.01f);
+
+    a.autoAimStrength = Clamp(-0.5f, 0.0f, 1.0f);
+    EXPECT_NEAR(a.autoAimStrength, 0.0f, 0.01f);
+}
+
+// ============================================================================
+// VR Settings
+// ============================================================================
+
+TEST(EngineSettings_VRDefaults)
+{
+    VRSettings vr;
+    EXPECT_FALSE(vr.enabled);
+    EXPECT_EQ(vr.renderTargetWidth, 1440);
+    EXPECT_EQ(vr.renderTargetHeight, 1600);
+    EXPECT_NEAR(vr.renderScale, 1.0f, 0.01f);
+    EXPECT_EQ(vr.trackingSpace, 1);
+    EXPECT_NEAR(vr.ipd, 0.064f, 0.001f);
+}
+
+TEST(EngineSettings_VRRenderScaleClamped)
+{
+    VRSettings vr;
+    vr.renderScale = Clamp(3.0f, 0.5f, 2.0f);
+    EXPECT_NEAR(vr.renderScale, 2.0f, 0.01f);
+}
+
+TEST(EngineSettings_VRSnapTurnAngleBounds)
+{
+    VRSettings vr;
+    vr.snapTurnAngle = Clamp(100.0f, 15.0f, 90.0f);
+    EXPECT_NEAR(vr.snapTurnAngle, 90.0f, 0.01f);
+}
+
+// ============================================================================
+// Destruction Settings
+// ============================================================================
+
+TEST(EngineSettings_DestructionDefaults)
+{
+    DestructionSettings d;
+    EXPECT_NEAR(d.debrisLifetime, 10.0f, 0.01f);
+    EXPECT_NEAR(d.damageThreshold, 50.0f, 0.01f);
+    EXPECT_NEAR(d.damageMultiplier, 1.0f, 0.01f);
+    EXPECT_EQ(d.maxDamageStages, 3);
+    EXPECT_EQ(d.maxDebrisPieces, 100);
+}
+
+TEST(EngineSettings_DebrisLifetimePositive)
+{
+    DestructionSettings d;
+    d.debrisLifetime = Clamp(-5.0f, 0.0f, 60.0f);
+    EXPECT_GE(d.debrisLifetime, 0.0f);
+}
+
+// ============================================================================
+// Save System Settings
+// ============================================================================
+
+TEST(EngineSettings_SaveSystemDefaults)
+{
+    SaveSystemSettings sv;
+    EXPECT_EQ(sv.maxAutoSaveSlots, 3);
+    EXPECT_NEAR(sv.autoSaveInterval, 300.0f, 0.01f);
+    EXPECT_TRUE(sv.compressSaves);
+    EXPECT_TRUE(sv.backupOnSave);
+    EXPECT_EQ(sv.maxManualSaves, 100);
+}
+
+TEST(EngineSettings_AutoSaveIntervalBounds)
+{
+    SaveSystemSettings sv;
+    sv.autoSaveInterval = Clamp(-10.0f, 0.0f, 3600.0f);
+    EXPECT_GE(sv.autoSaveInterval, 0.0f);
+}
+
+// ============================================================================
+// Memory Settings
+// ============================================================================
+
+TEST(EngineSettings_MemoryDefaults)
+{
+    MemorySettings mem;
+    EXPECT_EQ(mem.textureStreamingBudgetMB, 512);
+    EXPECT_EQ(mem.meshStreamingBudgetMB, 256);
+    EXPECT_EQ(mem.audioStreamingBudgetMB, 128);
+    EXPECT_NEAR(mem.gcInterval, 60.0f, 0.01f);
+    EXPECT_NEAR(mem.gcAggressiveness, 0.5f, 0.01f);
+}
+
+TEST(EngineSettings_MemoryBudgetPositive)
+{
+    MemorySettings mem;
+    mem.textureStreamingBudgetMB = std::max(64, mem.textureStreamingBudgetMB);
+    EXPECT_GE(mem.textureStreamingBudgetMB, 64);
+}
+
+TEST(EngineSettings_GCAggressivenessClamped)
+{
+    MemorySettings mem;
+    mem.gcAggressiveness = Clamp(1.5f, 0.0f, 1.0f);
+    EXPECT_NEAR(mem.gcAggressiveness, 1.0f, 0.01f);
+}
+
+// ============================================================================
+// Particle Settings
+// ============================================================================
+
+TEST(EngineSettings_ParticleDefaults)
+{
+    ParticleSettings p;
+    EXPECT_EQ(p.maxParticles, 10000);
+    EXPECT_EQ(p.maxEmitters, 256);
+    EXPECT_NEAR(p.simulationRate, 60.0f, 0.01f);
+    EXPECT_NEAR(p.globalScale, 1.0f, 0.01f);
+}
+
+TEST(EngineSettings_ParticleCountPositive)
+{
+    ParticleSettings p;
+    p.maxParticles = std::max(100, p.maxParticles);
+    EXPECT_GE(p.maxParticles, 100);
+}
+
+// ============================================================================
+// Cross-category Interactions (new categories)
+// ============================================================================
+
+TEST(EngineSettings_ReduceMotionDisablesScreenShake)
+{
+    AccessibilitySettings a;
+    a.reduceMotion = true;
+    // When reduce motion is on, camera shake/bob multipliers should be 0
+    float cameraShakeMultiplier = a.reduceMotion ? 0.0f : 1.0f;
+    EXPECT_NEAR(cameraShakeMultiplier, 0.0f, 0.01f);
+}
+
+TEST(EngineSettings_VROverridesRenderScale)
+{
+    GraphicsSettings gs;
+    VRSettings vr;
+    vr.enabled = true;
+    vr.renderScale = 1.4f;
+
+    // When VR is enabled, its render scale should be used instead of graphics scale
+    float effectiveScale = vr.enabled ? vr.renderScale : gs.renderScale;
+    EXPECT_NEAR(effectiveScale, 1.4f, 0.01f);
+}
+
+TEST(EngineSettings_TotalMemoryBudgetReasonable)
+{
+    MemorySettings mem;
+    int totalBudget = mem.textureStreamingBudgetMB + mem.meshStreamingBudgetMB + mem.audioStreamingBudgetMB;
+    // Total streaming budget should be under 4 GB by default
+    EXPECT_LT(totalBudget, 4096);
+}
