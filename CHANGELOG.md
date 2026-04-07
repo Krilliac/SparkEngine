@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Animation system (skeletal, blend spaces, IK, retargeting)
 - UDP networking with entity replication, prediction, lag compensation
 - EnTT-based ECS with 75 component types and 25 systems
-- Dear ImGui editor with 57 panels and collaborative editing
+- Dear ImGui editor with 59 panels and collaborative editing
 - Audio system (XAudio2, OpenAL, null backend)
 - AngelScript + Lua scripting with hot-reload
 - 10 game modules (FPS, RPG, MMO, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)

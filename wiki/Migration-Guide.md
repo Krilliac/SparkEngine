@@ -72,7 +72,7 @@ Asset files contain a version header. When the engine loads an asset:
 2. If the version is older than current, `AssetMigration` runs automatic upgrade
 3. Upgraded assets are written back to disk (or cached in memory)
 
-See `SparkEngine/Source/Graphics/AssetMigration.h` for the migration registry and `docs/specs/asset-format.md` for format details.
+See `SparkEngine/Source/Core/AssetMigration.h` for the migration registry and `docs/specs/asset-format.md` for format details.
 
 ### Forcing re-migration
 

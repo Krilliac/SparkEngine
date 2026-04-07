@@ -1,6 +1,6 @@
 # SparkEditor
 
-The SparkEditor is an ImGui-based visual editor with 57 specialized dockable panels for creating and editing game content. It provides a full-featured workspace for [scene editing](Scene-Management), material authoring with [Shader Graph](Shader-Graph), [visual scripting](Visual-Scripting) (60 node types), [animation](Animation) timelines, [cinematic sequencing](Cinematic-Sequencer), AI/dialogue/ability/destruction editors, debugging, profiling, and [collaborative multi-user editing](Collaborative-Editing) (HeroEngine-inspired node locking and presence awareness). Features include a command palette (Ctrl+P), full undo/redo, play-mode editing, layout save/load, theming, and a plugin system (built-in + DLL).
+The SparkEditor is an ImGui-based visual editor with 59 specialized dockable panels for creating and editing game content. It provides a full-featured workspace for [scene editing](Scene-Management), material authoring with [Shader Graph](Shader-Graph), [visual scripting](Visual-Scripting) (60 node types), [animation](Animation) timelines, [cinematic sequencing](Cinematic-Sequencer), AI/dialogue/ability/destruction editors, debugging, profiling, and [collaborative multi-user editing](Collaborative-Editing) (HeroEngine-inspired node locking and presence awareness). Features include a command palette (Ctrl+P), full undo/redo, play-mode editing, layout save/load, theming, and a plugin system (built-in + DLL).
 
 ![SparkEditor default layout](../docs/screenshots/editor-overview.png)
 

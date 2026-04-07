@@ -103,7 +103,7 @@ wWinMain() / main()
 Save system, UI, dialogue, ability system (WoW-style), scripting (conditional on SDK),
 weather, destruction, modding (VFS + SparkPak), coroutines, events
 
-### 11. Editor -- EXTENSIVE (57 panels, collaborative editing)
+### 11. Editor -- EXTENSIVE (59 panels, collaborative editing)
 
 ### 12. Tests -- 211 files, 2,577 tests (all pass on Linux)
 

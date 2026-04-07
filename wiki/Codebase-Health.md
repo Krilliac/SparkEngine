@@ -118,7 +118,7 @@ Status legend: **DONE** = fully implemented and wired in | **PARTIAL** = core wo
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| ImGui editor core | **DONE** | 57 panel classes, docking, theming |
+| ImGui editor core | **DONE** | 59 panel classes, docking, theming |
 | Scene hierarchy | **DONE** | Tree view with drag-drop |
 | Inspector | **DONE** | Component renderers |
 | Material editor | **DONE** | PBR material editing |
