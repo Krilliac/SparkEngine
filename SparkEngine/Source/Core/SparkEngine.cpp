@@ -216,8 +216,25 @@ static void ShutdownEngine()
         if (g_eventBus)
             g_eventBus->ClearAll();
 
-        g_moduleManager->UnloadAll();
-        g_moduleManager.reset();
+        const bool shouldSkipModuleUnload =
+#ifndef _WIN32
+            (EngineContext::Get() != nullptr && EngineContext::Get()->IsHeadless());
+#else
+            false;
+#endif
+
+        if (shouldSkipModuleUnload)
+        {
+            // Linux/headless teardown currently hits a late-shutdown crash path
+            // when module-owned callbacks/channels are destroyed after dlclose().
+            // Keep modules mapped until process exit in this mode.
+            g_moduleManager.release();
+        }
+        else
+        {
+            g_moduleManager->UnloadAll();
+            g_moduleManager.reset();
+        }
     }
     else
     {
@@ -1852,6 +1869,31 @@ int main(int argc, char* argv[])
 #endif
 
         Spark::SimpleConsole::GetInstance().LogInfo("Spark Engine shut down cleanly.");
+
+#ifndef _WIN32
+        // Defensive finalization for Linux:
+        // Dynamic module code can still be referenced by late static destructors
+        // (e.g., event channels/handlers captured in global singletons), which can
+        // trigger a use-after-dlclose segfault during process teardown.
+        // We intentionally clear/release these pointers and terminate without
+        // running additional static destruction code.
+        if (g_eventBus)
+        {
+            try
+            {
+                g_eventBus->ClearAll();
+            }
+            catch (...)
+            {
+                // Best-effort only during final process teardown.
+            }
+        }
+        g_moduleHotReload.release();
+        g_moduleManager.release();
+        g_eventBus.release();
+        std::_Exit(result);
+#endif
+
         return result;
     }
     catch (const std::system_error& e)
