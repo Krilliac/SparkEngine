@@ -365,6 +365,7 @@ namespace Spark::Net
         /// Register message handler
         using MessageHandler = std::function<void(const NetworkMessage&)>;
         void RegisterHandler(MessageType type, MessageHandler handler);
+        void ClearHandlers();
 
         // Entity replication
         uint32_t RegisterReplicatedEntity(const ReplicatedEntity& entity);

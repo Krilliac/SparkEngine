@@ -520,6 +520,12 @@ namespace Spark::Net
         m_handlers[static_cast<uint16_t>(type)] = std::move(handler);
     }
 
+    void NetworkManager::ClearHandlers()
+    {
+        std::lock_guard<std::mutex> lock(m_handlerMutex);
+        m_handlers.clear();
+    }
+
     // --------------------------------------------------------------------------
     // KickClient
     // --------------------------------------------------------------------------

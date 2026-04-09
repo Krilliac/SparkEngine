@@ -20,7 +20,8 @@
 #pragma once
 
 #include "../../Core/Platform.h"
-#include "NetworkManager.h"
+#include "INetworkRuntime.h"
+#include "NetworkManagerRuntimeAdapter.h"
 
 #include <atomic>
 #include <chrono>
@@ -194,6 +195,7 @@ namespace Spark::Net
     {
       public:
         DedicatedServer();
+        explicit DedicatedServer(INetworkRuntime& networkRuntime);
         ~DedicatedServer();
 
         // Non-copyable
@@ -316,6 +318,8 @@ namespace Spark::Net
 
         /// @brief Register built-in RCON commands (help, status, kick, ban, map, say).
         void RegisterBuiltInRconCommands();
+        void RegisterNetworkHandlers();
+        void ClearNetworkHandlers();
 
         /// @brief Log a message to file and callback.
         void Log(const std::string& message);
@@ -354,6 +358,7 @@ namespace Spark::Net
 
         // Logging
         mutable std::mutex m_logMutex;
+        INetworkRuntime* m_networkRuntime = nullptr;
     };
 
 } // namespace Spark::Net
