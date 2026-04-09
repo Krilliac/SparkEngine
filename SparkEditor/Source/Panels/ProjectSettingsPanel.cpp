@@ -106,12 +106,12 @@ namespace SparkEditor
                     RenderEditorTab();
                     ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem(ICON_FA_UNIVERSAL_ACCESS " Accessibility"))
+                if (ImGui::BeginTabItem(ICON_FA_USER " Accessibility"))
                 {
                     RenderAccessibilityTab();
                     ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem(ICON_FA_VR_CARDBOARD " VR"))
+                if (ImGui::BeginTabItem(ICON_FA_GLOBE " VR"))
                 {
                     RenderVRTab();
                     ImGui::EndTabItem();
