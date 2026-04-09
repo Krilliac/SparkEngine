@@ -90,6 +90,7 @@
 #include "Graphics/LightmapBaker.h"
 #include "Engine/Procedural/ProceduralGenerator.h"
 #include "Engine/Networking/DeltaSnapshotManager.h"
+#include "Engine/Networking/NetworkManager.h"
 #include "Engine/Networking/InstabilitySimulator.h"
 #include "Engine/Security/MemoryIntegrity.h"
 #include "Utils/InvalidStateDetector.h"
@@ -328,6 +329,29 @@ void InitDebugSystems()
 // Gameplay system lifecycle
 // ============================================================================
 
+static void InitNetworkingLifecycle(EngineContext* ctx)
+{
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "NetworkingLifecycle", 0.0);
+
+    if (!ctx->GetNetworkService())
+    {
+        auto& networkSingleton = Spark::NetworkManager::GetInstance(); // DI_SHIM_OK: one-time compatibility bridge
+        ctx->SetNetwork(&networkSingleton);
+        ctx->SetNetworkService(&networkSingleton);
+    }
+
+    auto* network = ctx->GetNetworkService();
+    if (network)
+    {
+        if (!network->IsInitialized() && !network->Initialize())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Network service failed to initialize");
+        }
+    }
+
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "NetworkingLifecycle", 0.0);
+}
+
 static void InitCoreGameplaySystems(EngineContext* ctx)
 {
     SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "CoreGameplaySystems", 0.0);
@@ -376,7 +400,7 @@ static void InitAIAndWorldSystems(Spark::EventBus* eventBus)
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "AIAndWorldSystems", 0.0);
 }
 
-static void InitRenderingAndUtilitySystems()
+static void InitRenderingAndUtilitySystems(EngineContext* ctx)
 {
     SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "RenderingAndUtility", 0.0);
     Spark::FreezeSystem::GetInstance().Initialize();
@@ -400,7 +424,16 @@ static void InitRenderingAndUtilitySystems()
     Spark::PluginRegistry::InitializeAll();
 
     Spark::Animation::AnimNotifyManager::GetInstance().Initialize();
-    Spark::Gameplay::GameplayTagRegistry::GetInstance().Initialize();
+    if (ctx->GetGameplayTagService())
+    {
+        ctx->GetGameplayTagService()->Initialize();
+    }
+    else
+    {
+        auto& gameplayTagRegistry = Spark::Gameplay::GameplayTagRegistry::GetInstance();
+        ctx->SetGameplayTagService(&gameplayTagRegistry);
+        gameplayTagRegistry.Initialize();
+    }
     Spark::Utils::GameplayDebugger::GetInstance().Initialize();
     Spark::Graphics::ScreenCapture::GetInstance().Initialize();
     Spark::Cinematic::VideoPlayer::GetInstance().Initialize();
@@ -510,6 +543,7 @@ void InitGameplaySystems()
         return;
     }
 
+    InitNetworkingLifecycle(ctx);
     InitCoreGameplaySystems(ctx);
 
     // Register snapshot serializers for play-in-editor mode
@@ -523,7 +557,7 @@ void InitGameplaySystems()
     {
         SPARK_LOG_WARN(Spark::LogCategory::Core, "EventBus is null — AI/World systems skipped");
     }
-    InitRenderingAndUtilitySystems();
+    InitRenderingAndUtilitySystems(ctx);
     InitScriptingAndPlatformSystems(ctx);
 }
 
@@ -903,7 +937,8 @@ static void ShutdownRenderingAndUtilitySystems()
 
 void ShutdownGameplaySystems()
 {
-    if (auto* ctx = EngineContext::Get())
+    auto* ctx = EngineContext::Get();
+    if (ctx)
     {
         if (auto* vr = ctx->GetVR())
             vr->Shutdown();
@@ -927,7 +962,14 @@ void ShutdownGameplaySystems()
     Spark::Accessibility::AccessibilitySystem::GetInstance().Shutdown();
 
     Spark::Animation::AnimNotifyManager::GetInstance().Shutdown();
-    Spark::Gameplay::GameplayTagRegistry::GetInstance().Shutdown();
+    if (ctx && ctx->GetGameplayTagService())
+    {
+        ctx->GetGameplayTagService()->Shutdown();
+    }
+    else
+    {
+        Spark::Gameplay::GameplayTagRegistry::GetInstance().Shutdown();
+    }
     Spark::Utils::GameplayDebugger::GetInstance().Shutdown();
     Spark::Graphics::ScreenCapture::GetInstance().Shutdown();
     Spark::Cinematic::VideoPlayer::GetInstance().Shutdown();
@@ -949,6 +991,14 @@ void ShutdownGameplaySystems()
     Spark::Rendering::MovieRenderPipeline::GetInstance().Shutdown();
     Spark::Data::DataTableRegistry::GetInstance().Shutdown();
     Spark::OnlineServices::OnlineServiceManager::GetInstance().Shutdown();
+
+    if (ctx)
+    {
+        if (auto* network = ctx->GetNetworkService())
+        {
+            network->Shutdown();
+        }
+    }
 
     if (auto* as = AngelScriptEngine::GetInstance())
     {

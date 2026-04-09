@@ -128,7 +128,11 @@ namespace Spark::EngineSetup
             ctx.RegisterSubsystem<AngelScriptEngine>(script, DependsOn<Timer, Spark::EventBus>{});
         }
 
-        // Networking depends on Timer (only registered when ENABLE_NETWORKING=ON)
+        // Networking depends on Timer (DI service + concrete compatibility path)
+        if (auto* networkService = ctx.GetNetworkService())
+        {
+            ctx.RegisterSubsystem<Spark::INetworkService>(networkService, DependsOn<Timer>{});
+        }
         if (auto* network = ctx.GetNetwork())
         {
             ctx.RegisterSubsystem<Spark::NetworkManager>(network, DependsOn<Timer>{});

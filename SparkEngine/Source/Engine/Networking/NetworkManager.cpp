@@ -9,6 +9,7 @@
  */
 
 #include "NetworkManager.h"
+#include "../../Core/EngineContext.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/DebugHookManager.h"
 #include "../../Utils/Validate.h"
@@ -128,6 +129,17 @@ namespace Spark::Net
 
     NetworkManager& NetworkManager::GetInstance()
     {
+        if (auto* ctx = EngineContext::Get())
+        {
+            if (auto* service = ctx->GetNetworkService())
+            {
+                if (auto* network = dynamic_cast<NetworkManager*>(service))
+                {
+                    return *network;
+                }
+            }
+        }
+
         static NetworkManager instance;
         return instance;
     }

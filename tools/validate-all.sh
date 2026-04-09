@@ -48,6 +48,7 @@ case "${1:-check}" in
         echo "  tools/check-bloat.sh             File size threshold checker (baseline-aware)"
         echo "  tools/check-doxygen-coverage.sh  Doxygen comment coverage"
         echo "  tools/check-cross-utilization.sh Architectural dependency boundaries"
+        echo "  tools/check-di-singletons.sh      DI singleton guardrails"
         exit 0
         ;;
 esac
@@ -91,6 +92,7 @@ run_check "System Wiring"                "check-wiring.sh"
 run_check "Bloat Thresholds (New Only)"  "check-bloat.sh" "new-only"
 run_check "Doxygen Coverage"             "check-doxygen-coverage.sh" "check"
 run_check "Cross-Utilization Boundaries" "check-cross-utilization.sh"
+run_check "DI Singleton Guardrails"     "check-di-singletons.sh"
 
 # Summary
 echo ""

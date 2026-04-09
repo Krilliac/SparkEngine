@@ -30,6 +30,8 @@
 
 #pragma once
 
+#include "Spark/ServiceInterfaces.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <sstream>
@@ -142,7 +144,7 @@ namespace Spark::Gameplay
      * Singleton that manages tag registration, hierarchy resolution, and ID lookup.
      * Tags are registered once at startup and referenced by ID at runtime for O(1) lookups.
      */
-    class GameplayTagRegistry
+    class GameplayTagRegistry : public Spark::IGameplayTagService
     {
       public:
         /**
@@ -158,7 +160,7 @@ namespace Spark::Gameplay
         /**
          * @brief Initialize the registry
          */
-        void Initialize()
+        void Initialize() override
         {
             m_nextId = 1;
             m_tags.clear();
@@ -169,12 +171,14 @@ namespace Spark::Gameplay
         /**
          * @brief Shut down and clear all registered tags
          */
-        void Shutdown()
+        void Shutdown() override
         {
             m_tags.clear();
             m_nameToId.clear();
             m_initialized = false;
         }
+
+        uint32_t RegisterTag(std::string_view fullName) override { return RegisterTag(std::string(fullName)); }
 
         /**
          * @brief Register a tag (and all parent tags implicitly)
@@ -222,6 +226,8 @@ namespace Spark::Gameplay
          * @param fullName Dot-separated tag name
          * @return Tag ID, or INVALID_TAG_ID if not registered
          */
+        uint32_t GetTagId(std::string_view fullName) const override { return GetTagId(std::string(fullName)); }
+
         GameplayTagId GetTagId(const std::string& fullName) const
         {
             auto it = m_nameToId.find(fullName);
