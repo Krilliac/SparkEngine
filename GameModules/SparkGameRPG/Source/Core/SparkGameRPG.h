@@ -24,8 +24,7 @@ namespace RPG
     class RPGWorldSetup;
     class RPGCharacterSystem;
     class RPGCombatSystem;
-    class RPGDialogueSystem;
-    class RPGQuestSystem;
+    class RPGGameplayBridge;
     class RPGInventorySystem;
     class RPGNPCSystem;
     class RPGEngineSystems;
@@ -72,8 +71,7 @@ class SparkGameRPGModule : public Spark::IModule
     std::unique_ptr<RPG::RPGWorldSetup> m_worldSetup;
     std::unique_ptr<RPG::RPGCharacterSystem> m_characterSystem;
     std::unique_ptr<RPG::RPGCombatSystem> m_combatSystem;
-    std::unique_ptr<RPG::RPGDialogueSystem> m_dialogueSystem;
-    std::unique_ptr<RPG::RPGQuestSystem> m_questSystem;
+    std::unique_ptr<RPG::RPGGameplayBridge> m_gameplayBridge;
     std::unique_ptr<RPG::RPGInventorySystem> m_inventorySystem;
     std::unique_ptr<RPG::RPGNPCSystem> m_npcSystem;
     std::unique_ptr<RPG::RPGEngineSystems> m_engineSystems;

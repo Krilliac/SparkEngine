@@ -78,6 +78,7 @@ namespace Spark::Gameplay
         std::string description;
         std::vector<QuestObjective> objectives;
 
+        uint32_t requiredLevel = 1;
         uint32_t xpReward = 0;
         std::vector<std::pair<uint32_t, uint32_t>> itemRewards; ///< (itemId, count) pairs
 
@@ -109,6 +110,31 @@ namespace Spark::Gameplay
     class QuestSystem
     {
       public:
+        /**
+         * @brief Strategy interface for module-specific quest policy decisions.
+         *
+         * Game modules can install a policy object to enforce custom rules
+         * (minimum level, faction gating, reputation checks, side effects) while
+         * still using the engine's shared quest tracking implementation.
+         */
+        class IQuestPolicy
+        {
+          public:
+            virtual ~IQuestPolicy() = default;
+
+            /// @brief Whether this entity is allowed to start this quest.
+            [[nodiscard]] virtual bool CanStartQuest(uint32_t entityId, const QuestDefinition& questDef) const = 0;
+
+            /// @brief Invoked after quest start has been accepted and persisted.
+            virtual void OnQuestStarted(uint32_t entityId, const QuestDefinition& questDef) = 0;
+
+            /// @brief Invoked when objective progress is applied.
+            virtual void OnObjectiveProgress(uint32_t entityId, uint32_t questId, const QuestObjective& objective) = 0;
+
+            /// @brief Invoked after quest completion is committed.
+            virtual void OnQuestCompleted(uint32_t entityId, const QuestDefinition& questDef) = 0;
+        };
+
         static QuestSystem& GetInstance();
 
         /// @brief Initialize the quest system, clearing all state
@@ -167,6 +193,13 @@ namespace Spark::Gameplay
         /// @brief Get a human-readable status string for debugging
         [[nodiscard]] std::string Console_GetStatus() const;
 
+        /// @brief Install (or clear) a module-provided quest policy strategy.
+        /// @param policy Non-owning pointer. Caller must keep object alive while installed.
+        void SetPolicy(IQuestPolicy* policy);
+
+        /// @brief Current installed policy, if any.
+        [[nodiscard]] IQuestPolicy* GetPolicy() const { return m_policy; }
+
       private:
         QuestSystem() = default;
 
@@ -183,6 +216,9 @@ namespace Spark::Gameplay
 
         // Per-entity quest state: entityId -> (questId -> ActiveQuestData)
         std::unordered_map<uint32_t, std::unordered_map<uint32_t, ActiveQuestData>> m_entityQuests;
+
+        // Optional non-owning policy strategy for module specialization.
+        IQuestPolicy* m_policy = nullptr;
     };
 
 } // namespace Spark::Gameplay

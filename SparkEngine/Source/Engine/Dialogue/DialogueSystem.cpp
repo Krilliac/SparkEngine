@@ -428,6 +428,16 @@ namespace Spark
         m_endCallbacks.push_back(std::move(callback));
     }
 
+    void DialogueSystem::RegisterEventAction(const std::string& actionName,
+                                             std::function<void(const std::string& payload)> handler)
+    {
+        if (actionName.empty())
+        {
+            return;
+        }
+        m_eventActionHandlers[actionName] = std::move(handler);
+    }
+
     void DialogueSystem::ProcessNode(const DialogueNode& node)
     {
         ++m_processDepth;
@@ -465,6 +475,10 @@ namespace Spark
         }
 
         case DialogueNodeType::Event:
+            if (auto actionIt = m_eventActionHandlers.find(node.eventName); actionIt != m_eventActionHandlers.end())
+            {
+                SPARK_GUARDED_UPDATE("Dialogue:EventAction", "Dialogue", { actionIt->second(node.eventData); });
+            }
             for (const auto& callback : m_eventCallbacks)
             {
                 SPARK_GUARDED_UPDATE("Dialogue:EventCallback", "Dialogue",

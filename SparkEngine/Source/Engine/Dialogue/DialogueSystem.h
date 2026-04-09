@@ -295,6 +295,16 @@ namespace Spark
      */
         void OnConversationEnded(std::function<void(const std::string&)> callback);
 
+        /**
+     * @brief Register a data-driven event action handler.
+     *
+     * Event nodes can now route eventName values through named action handlers.
+     * This lets modules extend dialogue behavior without forking DialogueSystem.
+     * Example eventName format: "rpg.startQuest".
+     */
+        void RegisterEventAction(const std::string& actionName,
+                                 std::function<void(const std::string& payload)> handler);
+
         // --- Console integration ---
 
         /** @brief Get dialogue system status (console integration). */
@@ -310,6 +320,7 @@ namespace Spark
         std::unordered_map<std::string, std::unique_ptr<DialogueTree>> m_trees;
         ConversationState m_state;
         std::unordered_map<std::string, std::function<bool(const std::string&)>> m_conditionEvaluators;
+        std::unordered_map<std::string, std::function<void(const std::string&)>> m_eventActionHandlers;
         std::vector<std::function<void(const std::string&, const std::string&)>> m_eventCallbacks;
         std::vector<std::function<void(const std::string&)>> m_endCallbacks;
 

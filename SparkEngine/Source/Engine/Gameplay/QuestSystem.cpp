@@ -93,6 +93,13 @@ namespace Spark::Gameplay
             }
         }
 
+        if (m_policy && !m_policy->CanStartQuest(entityId, *def))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "QuestSystem: Entity %u blocked by quest policy when starting quest %u", entityId, questId);
+            return false;
+        }
+
         auto& entityQuests = m_entityQuests[entityId];
 
         // Check if already started or completed
@@ -124,6 +131,10 @@ namespace Spark::Gameplay
         }
 
         entityQuests[questId] = std::move(questData);
+        if (m_policy)
+        {
+            m_policy->OnQuestStarted(entityId, *def);
+        }
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "QuestSystem: Entity %u started quest '%s' (id=%u)", entityId,
                        def->name.c_str(), questId);
@@ -196,6 +207,10 @@ namespace Spark::Gameplay
                     if (obj.currentCount != oldCount)
                     {
                         anyUpdated = true;
+                        if (m_policy)
+                        {
+                            m_policy->OnObjectiveProgress(entityId, questId, obj);
+                        }
                         SPARK_LOG_INFO(Spark::LogCategory::Game,
                                        "QuestSystem: Entity %u quest %u objective progress: %u/%u", entityId, questId,
                                        obj.currentCount, obj.requiredCount);
@@ -272,6 +287,10 @@ namespace Spark::Gameplay
         const QuestDefinition* def = GetQuestDef(questId);
         if (def)
         {
+            if (m_policy)
+            {
+                m_policy->OnQuestCompleted(entityId, *def);
+            }
             SPARK_LOG_INFO(Spark::LogCategory::Game,
                            "QuestSystem: Entity %u completed quest '%s' (id=%u, xp=%u, %zu item rewards)", entityId,
                            def->name.c_str(), questId, def->xpReward, def->itemRewards.size());
@@ -352,6 +371,11 @@ namespace Spark::Gameplay
         }
 
         return s;
+    }
+
+    void QuestSystem::SetPolicy(IQuestPolicy* policy)
+    {
+        m_policy = policy;
     }
 
 } // namespace Spark::Gameplay

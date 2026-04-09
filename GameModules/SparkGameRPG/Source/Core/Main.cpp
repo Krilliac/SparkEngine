@@ -8,11 +8,10 @@
 
 #include "SparkGameRPG.h"
 #include "RPGEngineSystems.h"
+#include "Gameplay/RPGGameplayBridge.h"
 #include "World/RPGWorldSetup.h"
 #include "Character/RPGCharacterSystem.h"
 #include "Combat/RPGCombatSystem.h"
-#include "Dialogue/RPGDialogueSystem.h"
-#include "Quest/RPGQuestSystem.h"
 #include "Inventory/RPGInventorySystem.h"
 #include "NPC/RPGNPCSystem.h"
 #include "Utils/SparkConsole.h"
@@ -102,19 +101,11 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
         return false;
     }
 
-    // Initialize dialogue system (branching trees, skill checks)
-    m_dialogueSystem = std::make_unique<RPG::RPGDialogueSystem>();
-    if (!m_dialogueSystem->Initialize(context))
+    // Initialize bridge to engine quest/dialogue systems with RPG policies/data
+    m_gameplayBridge = std::make_unique<RPG::RPGGameplayBridge>();
+    if (!m_gameplayBridge->Initialize(context, m_characterSystem.get()))
     {
-        console.LogError("[RPG] Failed to initialize dialogue system");
-        return false;
-    }
-
-    // Initialize quest system (objectives, chains, rewards)
-    m_questSystem = std::make_unique<RPG::RPGQuestSystem>();
-    if (!m_questSystem->Initialize(context))
-    {
-        console.LogError("[RPG] Failed to initialize quest system");
+        console.LogError("[RPG] Failed to initialize gameplay bridge");
         return false;
     }
 
@@ -178,12 +169,12 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
                            }});
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module loaded successfully — 8 subsystems active");
-    console.LogInfo("[RPG] Spark RPG module loaded successfully (8 subsystems)");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG module loaded successfully — 7 subsystems active");
+    console.LogInfo("[RPG] Spark RPG module loaded successfully (7 subsystems)");
     console.LogInfo("[RPG] Areas: " + std::to_string(m_worldSetup->GetAreaCount()) +
                     " | Classes: " + std::to_string(m_characterSystem->GetClassCount()) +
                     " | Items: " + std::to_string(m_inventorySystem->GetItemCount()) +
-                    " | Quests: " + std::to_string(m_questSystem->GetQuestCount()) +
+                    " | Quests: " + std::to_string(m_gameplayBridge->GetRegisteredQuestCount()) +
                     " | NPCs: " + std::to_string(m_npcSystem->GetNPCCount()));
     return true;
 }
@@ -213,15 +204,10 @@ void SparkGameRPGModule::OnUnload()
         m_inventorySystem->Shutdown();
         m_inventorySystem.reset();
     }
-    if (m_questSystem)
+    if (m_gameplayBridge)
     {
-        m_questSystem->Shutdown();
-        m_questSystem.reset();
-    }
-    if (m_dialogueSystem)
-    {
-        m_dialogueSystem->Shutdown();
-        m_dialogueSystem.reset();
+        m_gameplayBridge->Shutdown();
+        m_gameplayBridge.reset();
     }
     if (m_combatSystem)
     {
@@ -253,8 +239,7 @@ void SparkGameRPGModule::OnUpdate(float deltaTime)
     m_worldSetup->Update(deltaTime);
     m_combatSystem->Update(deltaTime);
     m_npcSystem->Update(deltaTime);
-    m_questSystem->Update(deltaTime);
-    m_dialogueSystem->Update(deltaTime);
+    m_gameplayBridge->Update(deltaTime);
     m_engineSystems->Update(deltaTime);
 }
 
@@ -296,8 +281,7 @@ void SparkGameRPGModule::OnImGui()
     m_worldSetup->RenderDebugUI();
     m_characterSystem->RenderDebugUI();
     m_combatSystem->RenderDebugUI();
-    m_dialogueSystem->RenderDebugUI();
-    m_questSystem->RenderDebugUI();
+    m_gameplayBridge->RenderDebugUI();
     m_inventorySystem->RenderDebugUI();
     m_npcSystem->RenderDebugUI();
     m_engineSystems->RenderDebugUI();
@@ -317,7 +301,8 @@ void SparkGameRPGModule::RegisterConsoleCommands()
                                 status += "Areas: " + std::to_string(m_worldSetup->GetAreaCount()) + "\n";
                                 status += "Classes: " + std::to_string(m_characterSystem->GetClassCount()) + "\n";
                                 status += "Items: " + std::to_string(m_inventorySystem->GetItemCount()) + "\n";
-                                status += "Quests: " + std::to_string(m_questSystem->GetQuestCount()) + "\n";
+                                status +=
+                                    "Quests: " + std::to_string(m_gameplayBridge->GetRegisteredQuestCount()) + "\n";
                                 status += "NPCs: " + std::to_string(m_npcSystem->GetNPCCount()) + "\n";
                                 status +=
                                     "Active combats: " + std::to_string(m_combatSystem->GetActiveCombatCount()) + "\n";
@@ -331,7 +316,7 @@ void SparkGameRPGModule::RegisterConsoleCommands()
                             { return m_characterSystem->GetClassListString(); });
 
     console.RegisterCommand("rpg_quests", [this](const std::vector<std::string>&) -> std::string
-                            { return m_questSystem->GetQuestListString(); });
+                            { return Spark::Gameplay::QuestSystem::GetInstance().Console_GetStatus(); });
 
     console.RegisterCommand("rpg_npcs", [this](const std::vector<std::string>&) -> std::string
                             { return m_npcSystem->GetNPCListString(); });
