@@ -35,7 +35,6 @@ echo "=== Checking git submodules ==="
 
 SUBMODULES=(
   "ThirdParty/Utils/miniz|miniz|Compression (crash dumps, save files)"
-  "ThirdParty/Physics/bullet3|Bullet Physics|Rigid body physics, collision, raycasting"
   "ThirdParty/UI/imgui|Dear ImGui|Editor UI, debug overlays"
   "ThirdParty/ECS/entt|EnTT|Entity component system"
   "ThirdParty/Scripting/angelscript-mirror|AngelScript|Hot-reload scripting"

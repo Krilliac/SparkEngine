@@ -1,9 +1,6 @@
 [submodule "ThirdParty/Utils/miniz"]
 	path = ThirdParty/Utils/miniz
 	url = https://github.com/richgel999/miniz.git
-[submodule "ThirdParty/Physics/bullet3"]
-	path = ThirdParty/Physics/bullet3
-	url = https://github.com/bulletphysics/bullet3.git
 [submodule "ThirdParty/UI/imgui"]
 	path = ThirdParty/UI/imgui
 	url = https://github.com/ocornut/imgui.git
