@@ -435,4 +435,85 @@ namespace Spark::Graphics
         return ImportFromMemory(data.data(), data.size(), options);
     }
 
+    bool FBXImporter::ValidateForPipeline(const FBXImportResult& result, bool requireSkeleton, bool requireAnimation,
+                                          std::string* outError) const
+    {
+        auto fail = [&outError](const std::string& message)
+        {
+            if (outError)
+            {
+                *outError = message;
+            }
+            return false;
+        };
+
+        if (!result.success)
+        {
+            return fail("FBX import did not succeed");
+        }
+
+        if (result.meshes.empty())
+        {
+            return fail("No meshes were imported");
+        }
+
+        bool hasRenderableMesh = false;
+        for (const auto& mesh : result.meshes)
+        {
+            if (!mesh.vertices.empty() && !mesh.indices.empty())
+            {
+                hasRenderableMesh = true;
+                break;
+            }
+        }
+        if (!hasRenderableMesh)
+        {
+            return fail("Imported meshes are missing vertex/index data");
+        }
+
+        if (requireSkeleton && result.bones.empty())
+        {
+            return fail("Skeletal import requested but no bones were imported");
+        }
+
+        if (requireAnimation)
+        {
+            if (result.animations.empty())
+            {
+                return fail("Animation import requested but no animation clips were imported");
+            }
+
+            bool hasValidClip = false;
+            for (const auto& clip : result.animations)
+            {
+                if (!clip.boneTracks.empty())
+                {
+                    for (const auto& track : clip.boneTracks)
+                    {
+                        if (!track.keyframes.empty())
+                        {
+                            hasValidClip = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasValidClip)
+                {
+                    break;
+                }
+            }
+
+            if (!hasValidClip)
+            {
+                return fail("Animation clips are present but contain no keyframes");
+            }
+        }
+
+        if (outError)
+        {
+            outError->clear();
+        }
+        return true;
+    }
+
 } // namespace Spark::Graphics

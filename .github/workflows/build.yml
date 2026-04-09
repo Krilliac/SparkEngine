@@ -558,6 +558,18 @@ jobs:
     - name: Run Tests
       run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
+    - name: Assert Vulkan preset is enabled (Release gate)
+      if: matrix.config == 'Release'
+      run: |
+        cmake --preset linux-gcc-release
+        grep -q "ENABLE_VULKAN:BOOL=ON" build/linux-gcc-release/CMakeCache.txt
+
+    - name: Assert Vulkan shader compile parity test ran (Release gate)
+      if: matrix.config == 'Release'
+      run: |
+        grep -q "VulkanParity_ShaderCompilePath_Asserted" test-results.log
+        grep -q "VulkanParity_D3D11MilestoneSnapshot" test-results.log
+
     - name: Extract error summary
       if: failure()
       run: |

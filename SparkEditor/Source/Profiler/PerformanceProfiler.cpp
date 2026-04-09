@@ -15,6 +15,15 @@
 #include <sstream>
 #include <fstream>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+#if __has_include(<DXProgrammableCapture.h>)
+#include <DXProgrammableCapture.h>
+#define SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE 1
+#else
+#define SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE 0
+#endif
+#endif
+
 using namespace DirectX;
 namespace SparkEditor
 {
@@ -122,6 +131,14 @@ namespace SparkEditor
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Performance Profiler panel");
         m_isProfiling = true;
+        m_pendingGPUQueries.clear();
+        m_gpuScopeStack.clear();
+        m_currentGPUScopeDepth = 0;
+        m_timestampSupported = false;
+        m_pipelineStatsSupported = false;
+        m_gpuBackendName = "Unsupported";
+        m_gpuSupportStatus = "GPU backend not configured.";
+        RefreshCaptureAvailability();
         return true;
     }
 
@@ -274,6 +291,46 @@ namespace SparkEditor
     {
         m_device = device;
         m_context = context;
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        m_timestampSupported = false;
+        m_pipelineStatsSupported = false;
+        m_gpuBackendName = "Unsupported";
+        m_gpuSupportStatus = "GPU profiling unavailable (D3D11 device/context missing).";
+
+        if (!m_device || !m_context)
+        {
+            return;
+        }
+
+        m_gpuBackendName = "D3D11";
+        m_gpuSupportStatus = "D3D11 GPU profiling ready.";
+
+        D3D11_QUERY_DESC timestampDesc = {};
+        timestampDesc.Query = D3D11_QUERY_TIMESTAMP;
+        Microsoft::WRL::ComPtr<ID3D11Query> testTimestampQuery;
+        if (SUCCEEDED(m_device->CreateQuery(&timestampDesc, testTimestampQuery.ReleaseAndGetAddressOf())))
+        {
+            m_timestampSupported = true;
+        }
+        else
+        {
+            m_gpuSupportStatus = "D3D11 backend active, but timestamp queries are unsupported.";
+        }
+
+        D3D11_QUERY_DESC pipelineDesc = {};
+        pipelineDesc.Query = D3D11_QUERY_PIPELINE_STATISTICS;
+        Microsoft::WRL::ComPtr<ID3D11Query> testPipelineQuery;
+        if (SUCCEEDED(m_device->CreateQuery(&pipelineDesc, testPipelineQuery.ReleaseAndGetAddressOf())))
+        {
+            m_pipelineStatsSupported = true;
+        }
+
+        if (m_timestampSupported && !m_pipelineStatsSupported)
+        {
+            m_gpuSupportStatus = "D3D11 timestamps enabled; pipeline statistics unavailable.";
+        }
+#endif // SPARK_PLATFORM_WINDOWS
     }
 
     void PerformanceProfiler::BeginGPUSample(const std::string& name, const std::string& shaderName)
@@ -284,11 +341,14 @@ namespace SparkEditor
         GPUProfileSample sample;
         sample.name = name;
         sample.shaderName = shaderName;
+        sample.depth = m_currentGPUScopeDepth;
         m_activeGPUSamples[name] = sample;
+        m_gpuScopeStack.push_back(name);
+        m_currentGPUScopeDepth++;
 
 #ifdef SPARK_PLATFORM_WINDOWS
         // Issue a D3D11 timestamp query if device is available
-        if (m_device && m_context)
+        if (m_device && m_context && m_timestampSupported)
         {
             // Start the per-frame disjoint query if not already active
             if (!m_disjointActive)
@@ -303,9 +363,23 @@ namespace SparkEditor
                 }
             }
 
+            if (m_pipelineStatsSupported && !m_pipelineStatsActive)
+            {
+                D3D11_QUERY_DESC pipelineDesc = {};
+                pipelineDesc.Query = D3D11_QUERY_PIPELINE_STATISTICS;
+                HRESULT pipelineHr =
+                    m_device->CreateQuery(&pipelineDesc, m_pipelineStatsQuery.ReleaseAndGetAddressOf());
+                if (SUCCEEDED(pipelineHr))
+                {
+                    m_context->Begin(m_pipelineStatsQuery.Get());
+                    m_pipelineStatsActive = true;
+                }
+            }
+
             GPUQueryPair queryPair;
             queryPair.name = name;
             queryPair.shaderName = shaderName;
+            queryPair.depth = sample.depth;
 
             D3D11_QUERY_DESC tsDesc = {};
             tsDesc.Query = D3D11_QUERY_TIMESTAMP;
@@ -320,7 +394,7 @@ namespace SparkEditor
             {
                 m_context->End(queryPair.beginQuery.Get()); // Timestamp queries use End(), not Begin()
                 queryPair.begun = true;
-                m_pendingGPUQueries[name] = std::move(queryPair);
+                m_pendingGPUQueries.push_back(std::move(queryPair));
             }
         }
 #endif // SPARK_PLATFORM_WINDOWS
@@ -335,16 +409,28 @@ namespace SparkEditor
         // Issue the end timestamp query
         if (m_context)
         {
-            auto it = m_pendingGPUQueries.find(name);
-            if (it != m_pendingGPUQueries.end() && it->second.begun)
+            for (auto it = m_pendingGPUQueries.rbegin(); it != m_pendingGPUQueries.rend(); ++it)
             {
-                m_context->End(it->second.endQuery.Get());
-                it->second.ended = true;
+                if (it->name == name && it->begun && !it->ended)
+                {
+                    m_context->End(it->endQuery.Get());
+                    it->ended = true;
+                    break;
+                }
             }
         }
 #endif // SPARK_PLATFORM_WINDOWS
 
         m_activeGPUSamples.erase(name);
+
+        if (!m_gpuScopeStack.empty())
+        {
+            m_gpuScopeStack.pop_back();
+        }
+        if (m_currentGPUScopeDepth > 0)
+        {
+            m_currentGPUScopeDepth--;
+        }
     }
 
     void PerformanceProfiler::RecordMemoryAllocation(const std::string& category, size_t bytes, void* pointer)
@@ -734,8 +820,11 @@ namespace SparkEditor
         {
             ImGui::Text("Frame: %d", m_currentFrame->frameNumber);
             ImGui::Text("Frame Time: %.2f ms", m_currentFrame->frameTime);
+            ImGui::Text("CPU/GPU: %.2f ms / %.2f ms", m_currentFrame->cpuTime, m_currentFrame->gpuTime);
             ImGui::Text("FPS: %.1f", m_currentFrame->fps);
             ImGui::Text("Draw Calls: %d", m_currentFrame->drawCalls);
+            ImGui::Text("GPU Backend: %s", m_currentFrame->gpuProfilerBackend.c_str());
+            ImGui::TextWrapped("%s", m_currentFrame->gpuProfilerStatus.c_str());
         }
         else
         {
@@ -765,18 +854,161 @@ namespace SparkEditor
     {
         ImGui::Text("GPU Profiler");
         ImGui::Separator();
+        ImGui::Text("Backend: %s", m_gpuBackendName.c_str());
+        ImGui::TextWrapped("%s", m_gpuSupportStatus.c_str());
+        if (ImGui::Button("Trigger GPU Capture"))
+        {
+            TriggerExternalGPUCapture();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Refresh Capture Support"))
+        {
+            RefreshCaptureAvailability();
+        }
+        ImGui::TextWrapped("%s", m_captureStatus.c_str());
+        ImGui::Separator();
 
         if (m_currentFrame && !m_currentFrame->gpuSamples.empty())
         {
+            ImGui::Text("GPU Time: %.2f ms", m_currentFrame->gpuTime);
+            ImGui::Text("CPU Time: %.2f ms", m_currentFrame->cpuTime);
+            ImGui::Text("Frame Time: %.2f ms", m_currentFrame->frameTime);
+            ImGui::Separator();
+
+            if (m_currentFrame->gpuPipelineStatsSupported)
+            {
+                ImGui::Text("Pipeline Statistics");
+                ImGui::BulletText("IA Vertices: %llu",
+                                  static_cast<unsigned long long>(m_currentFrame->pipelineIAVertices));
+                ImGui::BulletText("IA Primitives: %llu",
+                                  static_cast<unsigned long long>(m_currentFrame->pipelineIAPrimitives));
+                ImGui::BulletText("VS Invocations: %llu",
+                                  static_cast<unsigned long long>(m_currentFrame->pipelineVSInvocations));
+                ImGui::BulletText("PS Invocations: %llu",
+                                  static_cast<unsigned long long>(m_currentFrame->pipelinePSInvocations));
+                ImGui::BulletText("CS Invocations: %llu",
+                                  static_cast<unsigned long long>(m_currentFrame->pipelineCSInvocations));
+                ImGui::Separator();
+            }
+
+            ImGui::Text("GPU Timeline (per pass)");
             for (const auto& sample : m_currentFrame->gpuSamples)
             {
-                ImGui::Text("%s: %.2f ms (%d draw calls)", sample.name.c_str(), sample.duration, sample.drawCalls);
+                std::string indent(sample.depth * 2, ' ');
+                ImGui::Text("%s%s: %.2f ms (%d draw calls)", indent.c_str(), sample.name.c_str(), sample.duration,
+                            sample.drawCalls);
             }
         }
         else
         {
-            ImGui::Text("No GPU samples available");
+            if (m_timestampSupported)
+            {
+                ImGui::Text("No GPU samples available");
+            }
+            else
+            {
+                ImGui::TextWrapped("GPU timestamp timeline is unavailable on this backend/build.");
+            }
         }
+    }
+
+    bool PerformanceProfiler::TriggerExternalGPUCapture()
+    {
+#ifndef NDEBUG
+#ifdef SPARK_PLATFORM_WINDOWS
+        if (m_renderDocCaptureAvailable)
+        {
+            HMODULE renderDocModule = GetModuleHandleA("renderdoc.dll");
+            using TriggerCaptureFn = void (*)();
+            auto triggerCapture =
+                reinterpret_cast<TriggerCaptureFn>(GetProcAddress(renderDocModule, "RENDERDOC_TriggerCapture"));
+            if (triggerCapture)
+            {
+                triggerCapture();
+                m_captureStatus = "Triggered RenderDoc capture.";
+                return true;
+            }
+        }
+
+        if (m_pixCaptureAvailable)
+        {
+#if SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE
+            HMODULE dxgiDebug = LoadLibraryA("dxgidebug.dll");
+            if (dxgiDebug)
+            {
+                auto getDebugInterface = reinterpret_cast<HRESULT(WINAPI*)(UINT, REFIID, void**)>(
+                    GetProcAddress(dxgiDebug, "DXGIGetDebugInterface1"));
+                if (getDebugInterface)
+                {
+                    ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;
+                    HRESULT hr = getDebugInterface(0, __uuidof(IDXGraphicsAnalysis),
+                                                   reinterpret_cast<void**>(graphicsAnalysis.GetAddressOf()));
+                    if (SUCCEEDED(hr) && graphicsAnalysis)
+                    {
+                        graphicsAnalysis->BeginCapture();
+                        graphicsAnalysis->EndCapture();
+                        FreeLibrary(dxgiDebug);
+                        m_captureStatus = "Triggered PIX capture.";
+                        return true;
+                    }
+                }
+                FreeLibrary(dxgiDebug);
+            }
+#endif
+        }
+
+        m_captureStatus = "No capture API available (RenderDoc/PIX not attached).";
+        return false;
+#else
+        m_captureStatus = "Capture trigger currently implemented for Windows D3D11 only.";
+        return false;
+#endif
+#else
+        m_captureStatus = "Capture trigger disabled in non-dev builds.";
+        return false;
+#endif
+    }
+
+    void PerformanceProfiler::RefreshCaptureAvailability()
+    {
+#ifndef NDEBUG
+#ifdef SPARK_PLATFORM_WINDOWS
+        m_renderDocCaptureAvailable = GetModuleHandleA("renderdoc.dll") &&
+                                      GetProcAddress(GetModuleHandleA("renderdoc.dll"), "RENDERDOC_TriggerCapture");
+
+        m_pixCaptureAvailable = false;
+#if SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE
+        HMODULE dxgiDebug = LoadLibraryA("dxgidebug.dll");
+        if (dxgiDebug)
+        {
+            auto getDebugInterface = reinterpret_cast<HRESULT(WINAPI*)(UINT, REFIID, void**)>(
+                GetProcAddress(dxgiDebug, "DXGIGetDebugInterface1"));
+            if (getDebugInterface)
+            {
+                ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;
+                HRESULT hr = getDebugInterface(0, __uuidof(IDXGraphicsAnalysis),
+                                               reinterpret_cast<void**>(graphicsAnalysis.GetAddressOf()));
+                m_pixCaptureAvailable = SUCCEEDED(hr) && graphicsAnalysis;
+            }
+            FreeLibrary(dxgiDebug);
+        }
+#endif
+
+        if (m_renderDocCaptureAvailable || m_pixCaptureAvailable)
+        {
+            m_captureStatus = "Capture tools: " + std::string(m_renderDocCaptureAvailable ? "RenderDoc " : "") +
+                              std::string(m_pixCaptureAvailable ? "PIX" : "");
+        }
+        else
+        {
+            m_captureStatus = "No GPU capture tool API found in this process.";
+        }
+#else
+        m_captureStatus = "Capture availability check is Windows-only.";
+#endif
+#else
+        m_captureStatus = "Capture support hidden in non-dev builds.";
+#endif
     }
 
     void PerformanceProfiler::RenderMemoryProfilerPanel()
@@ -875,11 +1107,18 @@ namespace SparkEditor
 
     void PerformanceProfiler::UpdateFrameData()
     {
-        auto frame = std::make_unique<FrameProfileData>();
-        frame->frameNumber = m_currentFrameNumber;
-        frame->timestamp = std::chrono::steady_clock::now();
+        m_currentFrame = std::make_unique<FrameProfileData>();
+        m_currentFrame->frameNumber = m_currentFrameNumber;
+        m_currentFrame->timestamp = std::chrono::steady_clock::now();
+        m_currentFrame->gpuTimestampQueriesSupported = m_timestampSupported;
+        m_currentFrame->gpuPipelineStatsSupported = m_pipelineStatsSupported;
+        m_currentFrame->gpuProfilerBackend = m_gpuBackendName;
+        m_currentFrame->gpuProfilerStatus = m_gpuSupportStatus;
 
-        m_currentFrame = std::move(frame);
+        ProcessGPUQueries();
+        UpdateMemoryTracking();
+        CalculateStatistics();
+        AnalyzePerformance();
 
         // Keep history within limits
         if (static_cast<int>(m_frameHistory.size()) >= m_config.maxFrameHistory)
@@ -1126,7 +1365,14 @@ namespace SparkEditor
     void PerformanceProfiler::ProcessGPUQueries()
     {
         if (!m_currentFrame)
-            return;
+        {
+            m_currentFrame = std::make_unique<FrameProfileData>();
+            m_currentFrame->gpuTimestampQueriesSupported = m_timestampSupported;
+            m_currentFrame->gpuPipelineStatsSupported = m_pipelineStatsSupported;
+            m_currentFrame->gpuProfilerBackend = m_gpuBackendName;
+            m_currentFrame->gpuProfilerStatus = m_gpuSupportStatus;
+        }
+        m_currentFrame->gpuSamples.clear();
 
 #ifdef SPARK_PLATFORM_WINDOWS
         // Collect results from D3D11 timestamp queries
@@ -1138,14 +1384,15 @@ namespace SparkEditor
 
             // Retrieve the disjoint query data (contains GPU frequency)
             D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjointData = {};
-            HRESULT hr = m_context->GetData(m_disjointQuery.Get(), &disjointData, sizeof(disjointData), 0);
+            HRESULT hr = m_context->GetData(m_disjointQuery.Get(), &disjointData, sizeof(disjointData),
+                                            D3D11_ASYNC_GETDATA_DONOTFLUSH);
 
             if (SUCCEEDED(hr) && !disjointData.Disjoint && disjointData.Frequency > 0)
             {
                 // Collect timestamp results for all completed query pairs
                 for (auto it = m_pendingGPUQueries.begin(); it != m_pendingGPUQueries.end();)
                 {
-                    auto& [name, queryPair] = *it;
+                    auto& queryPair = *it;
                     if (!queryPair.begun || !queryPair.ended)
                     {
                         ++it;
@@ -1155,9 +1402,10 @@ namespace SparkEditor
                     UINT64 beginTimestamp = 0;
                     UINT64 endTimestamp = 0;
 
-                    HRESULT hrBegin =
-                        m_context->GetData(queryPair.beginQuery.Get(), &beginTimestamp, sizeof(UINT64), 0);
-                    HRESULT hrEnd = m_context->GetData(queryPair.endQuery.Get(), &endTimestamp, sizeof(UINT64), 0);
+                    HRESULT hrBegin = m_context->GetData(queryPair.beginQuery.Get(), &beginTimestamp, sizeof(UINT64),
+                                                         D3D11_ASYNC_GETDATA_DONOTFLUSH);
+                    HRESULT hrEnd = m_context->GetData(queryPair.endQuery.Get(), &endTimestamp, sizeof(UINT64),
+                                                       D3D11_ASYNC_GETDATA_DONOTFLUSH);
 
                     if (SUCCEEDED(hrBegin) && SUCCEEDED(hrEnd) && endTimestamp > beginTimestamp)
                     {
@@ -1170,17 +1418,46 @@ namespace SparkEditor
                         sample.startTimestamp = beginTimestamp;
                         sample.endTimestamp = endTimestamp;
                         sample.duration = durationMs;
+                        sample.depth = queryPair.depth;
+
+                        auto sampleIt = m_activeGPUSamples.find(queryPair.name);
+                        if (sampleIt != m_activeGPUSamples.end())
+                        {
+                            sample.drawCalls = sampleIt->second.drawCalls;
+                        }
 
                         m_currentFrame->gpuSamples.push_back(sample);
+                        it = m_pendingGPUQueries.erase(it);
+                        continue;
                     }
 
-                    it = m_pendingGPUQueries.erase(it);
+                    ++it;
                 }
             }
             else
             {
                 // Disjoint or failed — discard all pending queries
                 m_pendingGPUQueries.clear();
+            }
+        }
+
+        if (m_context && m_pipelineStatsActive && m_pipelineStatsQuery)
+        {
+            m_context->End(m_pipelineStatsQuery.Get());
+            m_pipelineStatsActive = false;
+
+            D3D11_QUERY_DATA_PIPELINE_STATISTICS stats = {};
+            HRESULT statsHr =
+                m_context->GetData(m_pipelineStatsQuery.Get(), &stats, sizeof(stats), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+            if (SUCCEEDED(statsHr))
+            {
+                m_currentFrame->pipelineIAVertices = stats.IAVertices;
+                m_currentFrame->pipelineIAPrimitives = stats.IAPrimitives;
+                m_currentFrame->pipelineVSInvocations = stats.VSInvocations;
+                m_currentFrame->pipelinePSInvocations = stats.PSInvocations;
+                m_currentFrame->pipelineCSInvocations = stats.CSInvocations;
+                m_currentFrame->pipelineCInvocations = stats.CInvocations;
+                m_currentFrame->pipelineCPrimitives = stats.CPrimitives;
             }
         }
 #endif // SPARK_PLATFORM_WINDOWS
