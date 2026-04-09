@@ -69,6 +69,7 @@ std::shared_ptr<AudioAsset> AssetPipeline::LoadAudioFromFile(const std::string& 
 #else  // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "FBXImporter.h"
 #include "../Utils/LogMacros.h"
 #include <cfloat>
 #include <cmath>
@@ -78,6 +79,113 @@ std::shared_ptr<AudioAsset> AssetPipeline::LoadAudioFromFile(const std::string& 
 #if SPARK_HAS_CGLTF
 #include <cgltf.h>
 #endif
+
+namespace
+{
+    void ComputeBounds(MeshAssetData& meshData)
+    {
+        if (meshData.vertices.empty())
+        {
+            meshData.boundingBoxMin = {0.0f, 0.0f, 0.0f};
+            meshData.boundingBoxMax = {0.0f, 0.0f, 0.0f};
+            meshData.boundingSphereCenter = {0.0f, 0.0f, 0.0f};
+            meshData.boundingSphereRadius = 0.0f;
+            return;
+        }
+
+        XMFLOAT3 minV = {FLT_MAX, FLT_MAX, FLT_MAX};
+        XMFLOAT3 maxV = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        for (const auto& v : meshData.vertices)
+        {
+            minV.x = std::min(minV.x, v.position.x);
+            minV.y = std::min(minV.y, v.position.y);
+            minV.z = std::min(minV.z, v.position.z);
+            maxV.x = std::max(maxV.x, v.position.x);
+            maxV.y = std::max(maxV.y, v.position.y);
+            maxV.z = std::max(maxV.z, v.position.z);
+        }
+
+        meshData.boundingBoxMin = minV;
+        meshData.boundingBoxMax = maxV;
+        meshData.boundingSphereCenter = {(minV.x + maxV.x) * 0.5f, (minV.y + maxV.y) * 0.5f, (minV.z + maxV.z) * 0.5f};
+        float dx = maxV.x - minV.x;
+        float dy = maxV.y - minV.y;
+        float dz = maxV.z - minV.z;
+        meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+    }
+
+    void GenerateTangents(MeshAssetData& meshData)
+    {
+        if (meshData.vertices.empty() || meshData.indices.size() < 3)
+        {
+            return;
+        }
+
+        std::vector<XMFLOAT3> accum(meshData.vertices.size(), XMFLOAT3{0.0f, 0.0f, 0.0f});
+        for (size_t i = 0; i + 2 < meshData.indices.size(); i += 3)
+        {
+            uint32_t i0 = meshData.indices[i + 0];
+            uint32_t i1 = meshData.indices[i + 1];
+            uint32_t i2 = meshData.indices[i + 2];
+            if (i0 >= meshData.vertices.size() || i1 >= meshData.vertices.size() || i2 >= meshData.vertices.size())
+            {
+                continue;
+            }
+
+            const auto& v0 = meshData.vertices[i0];
+            const auto& v1 = meshData.vertices[i1];
+            const auto& v2 = meshData.vertices[i2];
+
+            float e1x = v1.position.x - v0.position.x;
+            float e1y = v1.position.y - v0.position.y;
+            float e1z = v1.position.z - v0.position.z;
+            float e2x = v2.position.x - v0.position.x;
+            float e2y = v2.position.y - v0.position.y;
+            float e2z = v2.position.z - v0.position.z;
+            float du1 = v1.texCoord0.x - v0.texCoord0.x;
+            float dv1 = v1.texCoord0.y - v0.texCoord0.y;
+            float du2 = v2.texCoord0.x - v0.texCoord0.x;
+            float dv2 = v2.texCoord0.y - v0.texCoord0.y;
+
+            float det = du1 * dv2 - du2 * dv1;
+            if (std::abs(det) < 1e-8f)
+            {
+                continue;
+            }
+            float invDet = 1.0f / det;
+            XMFLOAT3 tangent{(dv2 * e1x - dv1 * e2x) * invDet, (dv2 * e1y - dv1 * e2y) * invDet,
+                             (dv2 * e1z - dv1 * e2z) * invDet};
+
+            accum[i0].x += tangent.x;
+            accum[i0].y += tangent.y;
+            accum[i0].z += tangent.z;
+            accum[i1].x += tangent.x;
+            accum[i1].y += tangent.y;
+            accum[i1].z += tangent.z;
+            accum[i2].x += tangent.x;
+            accum[i2].y += tangent.y;
+            accum[i2].z += tangent.z;
+        }
+
+        for (size_t i = 0; i < meshData.vertices.size(); ++i)
+        {
+            const auto& t = accum[i];
+            float len = std::sqrt(t.x * t.x + t.y * t.y + t.z * t.z);
+            if (len > 1e-6f)
+            {
+                meshData.vertices[i].tangent.x = t.x / len;
+                meshData.vertices[i].tangent.y = t.y / len;
+                meshData.vertices[i].tangent.z = t.z / len;
+            }
+            else
+            {
+                meshData.vertices[i].tangent.x = 1.0f;
+                meshData.vertices[i].tangent.y = 0.0f;
+                meshData.vertices[i].tangent.z = 0.0f;
+            }
+        }
+    }
+} // namespace
 
 // ============================================================================
 // FILE-TO-ASSET CREATION HELPERS (Linux)
@@ -216,11 +324,82 @@ HRESULT AssetPipeline::LoadOBJ(const std::string& path, MeshAssetData& meshData)
     return S_OK;
 }
 
-HRESULT AssetPipeline::LoadFBX(const std::string& path, MeshAssetData& /*meshData*/)
+HRESULT AssetPipeline::LoadFBX(const std::string& path, MeshAssetData& meshData)
 {
-    // FBX loading not implemented on Linux - requires proprietary SDK
-    (void)path;
-    return E_NOTIMPL;
+    Spark::Graphics::FBXImportOptions options{};
+    options.targetCoordSystem = Spark::Graphics::CoordinateSystem::LeftHanded;
+    options.scaleFactor = 1.0f;
+    options.importAnimations = true;
+    options.triangulate = true;
+
+    Spark::Graphics::FBXImportResult result = Spark::Graphics::FBXImporter::GetInstance().Import(path, options);
+    std::string validationError;
+    if (!Spark::Graphics::FBXImporter::GetInstance().ValidateForPipeline(result, false, false, &validationError))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBX import failed: %s (%s)", path.c_str(),
+                        validationError.c_str());
+        return E_FAIL;
+    }
+
+    meshData.vertices.clear();
+    meshData.indices.clear();
+    meshData.submeshes.clear();
+
+    uint32_t vertexBase = 0;
+    for (const auto& src : result.meshes)
+    {
+        if (src.vertices.empty() || src.indices.empty())
+        {
+            continue;
+        }
+
+        meshData.submeshes.push_back(static_cast<uint32_t>(meshData.indices.size()));
+        const size_t vertexCount = src.vertices.size() / 3;
+        const size_t normalCount = src.normals.size() / 3;
+        const size_t uvCount = src.uvs.size() / 2;
+
+        for (size_t i = 0; i < vertexCount; ++i)
+        {
+            MeshAssetData::Vertex vertex{};
+            vertex.position.x = src.vertices[i * 3 + 0];
+            vertex.position.y = src.vertices[i * 3 + 1];
+            vertex.position.z = src.vertices[i * 3 + 2];
+            if (i < normalCount)
+            {
+                vertex.normal.x = src.normals[i * 3 + 0];
+                vertex.normal.y = src.normals[i * 3 + 1];
+                vertex.normal.z = src.normals[i * 3 + 2];
+            }
+            if (i < uvCount)
+            {
+                vertex.texCoord0.x = src.uvs[i * 2 + 0];
+                vertex.texCoord0.y = src.uvs[i * 2 + 1];
+            }
+            vertex.tangent.x = 1.0f;
+            vertex.tangent.y = 0.0f;
+            vertex.tangent.z = 0.0f;
+            vertex.color.x = 1.0f;
+            vertex.color.y = 1.0f;
+            vertex.color.z = 1.0f;
+            vertex.color.w = 1.0f;
+            meshData.vertices.push_back(vertex);
+        }
+
+        for (uint32_t index : src.indices)
+        {
+            meshData.indices.push_back(vertexBase + index);
+        }
+        vertexBase += static_cast<uint32_t>(vertexCount);
+    }
+
+    if (meshData.vertices.empty() || meshData.indices.empty())
+    {
+        return E_FAIL;
+    }
+
+    GenerateTangents(meshData);
+    ComputeBounds(meshData);
+    return S_OK;
 }
 
 HRESULT AssetPipeline::LoadGLTF(const std::string& path, MeshAssetData& meshData)
@@ -352,6 +531,7 @@ HRESULT AssetPipeline::LoadGLTF(const std::string& path, MeshAssetData& meshData
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded glTF: %s (%zu verts, %zu tris, %zu submeshes)", path.c_str(),
                    meshData.vertices.size(), meshData.indices.size() / 3, meshData.submeshes.size());
+    GenerateTangents(meshData);
 
     cgltf_free(data);
     return S_OK;
