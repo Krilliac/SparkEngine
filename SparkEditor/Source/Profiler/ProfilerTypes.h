@@ -125,6 +125,7 @@ namespace SparkEditor
         uint64_t startTimestamp = 0; ///< GPU start timestamp
         uint64_t endTimestamp = 0;   ///< GPU end timestamp
         float duration = 0.0f;       ///< Duration in milliseconds
+        uint32_t depth = 0;          ///< Scope nesting depth (render pass hierarchy)
         int drawCalls = 0;           ///< Number of draw calls
         int vertices = 0;            ///< Number of vertices processed
         int pixels = 0;              ///< Number of pixels processed
@@ -178,6 +179,19 @@ namespace SparkEditor
         float fps = 0.0f;                ///< Frames per second
         float targetFrameTime = 16.67f;  ///< Target frame time (60 FPS)
         bool isPerformanceTarget = true; ///< Whether frame met performance target
+
+        // GPU profiling capability/telemetry
+        bool gpuTimestampQueriesSupported = false;  ///< Whether GPU timestamps are supported on this backend
+        bool gpuPipelineStatsSupported = false;     ///< Whether pipeline stats are supported on this backend
+        std::string gpuProfilerBackend = "Unknown"; ///< Backend label (e.g. D3D11)
+        std::string gpuProfilerStatus;              ///< Human-readable status for UI fallback messaging
+        uint64_t pipelineIAVertices = 0;            ///< IA vertex count (pipeline statistics)
+        uint64_t pipelineIAPrimitives = 0;          ///< IA primitive count
+        uint64_t pipelineVSInvocations = 0;         ///< VS invocation count
+        uint64_t pipelinePSInvocations = 0;         ///< PS invocation count
+        uint64_t pipelineCSInvocations = 0;         ///< CS invocation count
+        uint64_t pipelineCInvocations = 0;          ///< Clipper invocation count
+        uint64_t pipelineCPrimitives = 0;           ///< Clipper output primitive count
 
         std::vector<std::unique_ptr<CPUProfileSample>> cpuSamples; ///< CPU profiling samples
         std::vector<GPUProfileSample> gpuSamples;                  ///< GPU profiling samples

@@ -12,6 +12,8 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace Spark
 {
@@ -58,6 +60,33 @@ namespace Spark
         };
 
         /**
+         * @brief Timestamped GPU render pass sample for the current frame.
+         */
+        struct GPUPassTimestamp
+        {
+            std::string passName;
+            uint64_t beginTicks = 0;
+            uint64_t endTicks = 0;
+            uint64_t frequencyHz = 0;
+            float durationMs = 0.0f;
+            uint32_t depth = 0;
+        };
+
+        /**
+         * @brief Snapshot of hardware pipeline statistics for a frame.
+         */
+        struct GPUPipelineStatsCounters
+        {
+            uint64_t iaVertices = 0;
+            uint64_t iaPrimitives = 0;
+            uint64_t vsInvocations = 0;
+            uint64_t psInvocations = 0;
+            uint64_t csInvocations = 0;
+            uint64_t clipInvocations = 0;
+            uint64_t clipPrimitives = 0;
+        };
+
+        /**
          * @brief Tracks and aggregates GPU performance counters per frame.
          */
         class GPUPerfCounters
@@ -77,12 +106,33 @@ namespace Spark
              */
             void Increment(GPUCounterCategory category, uint64_t amount = 1) { m_current[category] += amount; }
 
+            void RecordPassTimestamp(const std::string& passName, uint64_t beginTicks, uint64_t endTicks,
+                                     uint64_t frequencyHz, uint32_t depth = 0)
+            {
+                GPUPassTimestamp ts;
+                ts.passName = passName;
+                ts.beginTicks = beginTicks;
+                ts.endTicks = endTicks;
+                ts.frequencyHz = frequencyHz;
+                ts.depth = depth;
+                if (endTicks > beginTicks && frequencyHz > 0)
+                {
+                    ts.durationMs =
+                        static_cast<float>(endTicks - beginTicks) / static_cast<float>(frequencyHz) * 1000.0f;
+                }
+                m_currentPassTimestamps.push_back(std::move(ts));
+            }
+
+            void SetPipelineStats(const GPUPipelineStatsCounters& stats) { m_currentPipelineStats = stats; }
+
             /**
              * @brief Call at the end of each frame to snapshot counters.
              */
             void EndFrame()
             {
                 m_lastFrame = m_current;
+                m_lastPassTimestamps = m_currentPassTimestamps;
+                m_lastPipelineStats = m_currentPipelineStats;
 
                 // Update rolling averages
                 for (size_t i = 0; i < m_rollingSum.size(); ++i)
@@ -94,6 +144,8 @@ namespace Spark
                 m_historyIndex = (m_historyIndex + 1) % HISTORY_SIZE;
 
                 m_current.Reset();
+                m_currentPassTimestamps.clear();
+                m_currentPipelineStats = {};
                 m_frameCount++;
             }
 
@@ -101,6 +153,10 @@ namespace Spark
             {
                 m_current.Reset();
                 m_lastFrame.Reset();
+                m_currentPassTimestamps.clear();
+                m_lastPassTimestamps.clear();
+                m_currentPipelineStats = {};
+                m_lastPipelineStats = {};
                 for (auto& h : m_history)
                     h.Reset();
                 m_rollingSum.fill(0);
@@ -110,6 +166,8 @@ namespace Spark
 
             const GPUFrameCounters& GetLastFrame() const { return m_lastFrame; }
             const GPUFrameCounters& GetCurrentFrame() const { return m_current; }
+            const std::vector<GPUPassTimestamp>& GetLastPassTimestamps() const { return m_lastPassTimestamps; }
+            const GPUPipelineStatsCounters& GetLastPipelineStats() const { return m_lastPipelineStats; }
 
             uint64_t GetAverage(GPUCounterCategory category) const
             {
@@ -155,6 +213,19 @@ namespace Spark
                     report += "  " + std::string(GetCategoryName(cat)) + ": " + std::to_string(m_lastFrame[cat]) +
                               " (avg: " + std::to_string(GetAverage(cat)) + ")\n";
                 }
+                report += "Pipeline Stats: IA Vtx=" + std::to_string(m_lastPipelineStats.iaVertices) +
+                          ", IA Prim=" + std::to_string(m_lastPipelineStats.iaPrimitives) +
+                          ", VS=" + std::to_string(m_lastPipelineStats.vsInvocations) +
+                          ", PS=" + std::to_string(m_lastPipelineStats.psInvocations) + "\n";
+                if (!m_lastPassTimestamps.empty())
+                {
+                    report += "Pass Timeline:\n";
+                    for (const auto& pass : m_lastPassTimestamps)
+                    {
+                        report += "  [" + std::to_string(pass.depth) + "] " + pass.passName + ": " +
+                                  std::to_string(pass.durationMs) + " ms\n";
+                    }
+                }
                 return report;
             }
 
@@ -165,6 +236,10 @@ namespace Spark
 
             GPUFrameCounters m_current;
             GPUFrameCounters m_lastFrame;
+            std::vector<GPUPassTimestamp> m_currentPassTimestamps;
+            std::vector<GPUPassTimestamp> m_lastPassTimestamps;
+            GPUPipelineStatsCounters m_currentPipelineStats;
+            GPUPipelineStatsCounters m_lastPipelineStats;
             std::array<GPUFrameCounters, HISTORY_SIZE> m_history;
             std::array<uint64_t, static_cast<size_t>(GPUCounterCategory::Count)> m_rollingSum = {};
             uint32_t m_historyIndex = 0;
