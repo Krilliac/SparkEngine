@@ -69,6 +69,7 @@ std::shared_ptr<AudioAsset> AssetPipeline::LoadAudioFromFile(const std::string& 
 #else  // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "FBXImporter.h"
 #include "../Utils/LogMacros.h"
 #include <cfloat>
 #include <cmath>
@@ -216,11 +217,79 @@ HRESULT AssetPipeline::LoadOBJ(const std::string& path, MeshAssetData& meshData)
     return S_OK;
 }
 
-HRESULT AssetPipeline::LoadFBX(const std::string& path, MeshAssetData& /*meshData*/)
+HRESULT AssetPipeline::LoadFBX(const std::string& path, MeshAssetData& meshData)
 {
-    // FBX loading not implemented on Linux - requires proprietary SDK
-    (void)path;
-    return E_NOTIMPL;
+    Spark::Graphics::FBXImportOptions options{};
+    options.targetCoordSystem = Spark::Graphics::CoordinateSystem::LeftHanded;
+    options.scaleFactor = 1.0f;
+    options.importAnimations = true;
+    options.triangulate = true;
+
+    Spark::Graphics::FBXImportResult result = Spark::Graphics::FBXImporter::GetInstance().Import(path, options);
+    std::string validationError;
+    if (!Spark::Graphics::FBXImporter::GetInstance().ValidateForPipeline(result, false, false, &validationError))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBX import failed: %s (%s)", path.c_str(),
+                        validationError.c_str());
+        return E_FAIL;
+    }
+
+    meshData.vertices.clear();
+    meshData.indices.clear();
+    meshData.submeshes.clear();
+
+    uint32_t vertexBase = 0;
+    for (const auto& src : result.meshes)
+    {
+        if (src.vertices.empty() || src.indices.empty())
+        {
+            continue;
+        }
+
+        meshData.submeshes.push_back(static_cast<uint32_t>(meshData.indices.size()));
+        const size_t vertexCount = src.vertices.size() / 3;
+        const size_t normalCount = src.normals.size() / 3;
+        const size_t uvCount = src.uvs.size() / 2;
+
+        for (size_t i = 0; i < vertexCount; ++i)
+        {
+            MeshAssetData::Vertex vertex{};
+            vertex.position.x = src.vertices[i * 3 + 0];
+            vertex.position.y = src.vertices[i * 3 + 1];
+            vertex.position.z = src.vertices[i * 3 + 2];
+            if (i < normalCount)
+            {
+                vertex.normal.x = src.normals[i * 3 + 0];
+                vertex.normal.y = src.normals[i * 3 + 1];
+                vertex.normal.z = src.normals[i * 3 + 2];
+            }
+            if (i < uvCount)
+            {
+                vertex.texCoord0.x = src.uvs[i * 2 + 0];
+                vertex.texCoord0.y = src.uvs[i * 2 + 1];
+            }
+            vertex.tangent.x = 1.0f;
+            vertex.tangent.y = 0.0f;
+            vertex.tangent.z = 0.0f;
+            vertex.color.x = 1.0f;
+            vertex.color.y = 1.0f;
+            vertex.color.z = 1.0f;
+            vertex.color.w = 1.0f;
+            meshData.vertices.push_back(vertex);
+        }
+
+        for (uint32_t index : src.indices)
+        {
+            meshData.indices.push_back(vertexBase + index);
+        }
+        vertexBase += static_cast<uint32_t>(vertexCount);
+    }
+
+    if (meshData.vertices.empty() || meshData.indices.empty())
+    {
+        return E_FAIL;
+    }
+    return S_OK;
 }
 
 HRESULT AssetPipeline::LoadGLTF(const std::string& path, MeshAssetData& meshData)
