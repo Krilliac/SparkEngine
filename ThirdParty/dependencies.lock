@@ -1,0 +1,23 @@
+# SparkEngine third-party dependency manifest.
+# Format:
+#   "name|source|version_or_commit|license|local_path|required_files_csv|feature_macro|fallback_or_stub_path|severity"
+# severity: ERROR (configure-time fatal), WARN (configure-time warning)
+
+set(SPARK_THIRDPARTY_AUDIT_ENTRIES
+    "Jolt Physics|https://github.com/jrouwe/JoltPhysics|v5.5.1 (vendored snapshot)|MIT|ThirdParty/Physics/JoltPhysics|Jolt/Jolt.h,Build/CMakeLists.txt|SPARK_JOLT_PHYSICS_AVAILABLE|SparkEngine/Source/Physics/PhysicsSystemStub.cpp|ERROR"
+    "miniz|https://github.com/richgel999/miniz.git|4b9fcf1df525114484be49f3216169b061c07ac6|MIT|ThirdParty/Utils/miniz|miniz.c,miniz.h|SPARK_HAS_MINIZ (path-gated in CMake)|SparkEngine/Source/Utils/CrashHandlerStub.cpp|ERROR"
+    "EnTT|https://github.com/skypjack/entt.git|9c5281c79a241ec810f999ad9675fa32f51f934f|MIT|ThirdParty/ECS/entt|single_include/entt/entt.hpp|SPARK_HAS_ENTT (path-gated in CMake)|ThirdParty/ECS/entt_stub|WARN"
+    "Dear ImGui|https://github.com/ocornut/imgui.git (docking branch)|148bd34a7e8106cd6e8dae8411a506a8e3e84f40|MIT|ThirdParty/UI/imgui|imgui.h,imgui.cpp|SPARK_HAS_IMGUI (path-gated in CMake)|SparkEditor disabled when missing|WARN"
+    "AngelScript|https://github.com/codecat/angelscript-mirror.git|c81df254037524b18cd41a57805cfec76acd05bf|zlib|ThirdParty/Scripting/angelscript-mirror|sdk/angelscript/include|SPARK_HAS_ANGELSCRIPT (path-gated in CMake)|SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp (stub path)|WARN"
+    "RecastNavigation|https://github.com/recastnavigation/recastnavigation.git|9f4ce64458dfae86e1239c525ddc219c4e9e06f1|zlib|ThirdParty/AI/recastnavigation|Recast/Source/Recast.cpp,Detour/Source/DetourNavMesh.cpp|SPARK_RECAST_AVAILABLE|SparkEngine/Source/Engine/AI/RecastDetourBackend.cpp (internal fallback backend)|WARN"
+    "SDL2|https://github.com/libsdl-org/SDL.git|859844eae358447be8d66e6da59b6fb3df0ed778|zlib|ThirdParty/SDL2|CMakeLists.txt,include/SDL.h|SPARK_HAS_SDL2 (path/system-package-gated in CMake)|Headless mode (no window/input backend)|WARN"
+    "tinyobjloader|https://github.com/tinyobjloader/tinyobjloader|v2.0.0 (vendored header snapshot)|MIT|ThirdParty/Utils/tinyobjloader|include/tiny_obj_loader.h|SPARK_HAS_TINYOBJLOADER (target-gated in CMake)|OBJ import disabled when missing|WARN"
+    "stb_image|https://github.com/nothings/stb|snapshot (stb_image.h blob edff2054dfc231fe42c34bf620c913a90842c5c8)|Public Domain / MIT|ThirdParty/Utils/stb|stb_image.h,stb_image_write.h,stb_impl.cpp|SPARK_HAS_STB_IMAGE|SparkEngine/Source/Graphics/TextureSystem.cpp (DDS-only fallback)|WARN"
+    "cgltf|https://github.com/jkuhlmann/cgltf|snapshot (cgltf.h blob 90a171684c9f7570e6b796bf6b5477d4b5508f92)|MIT|ThirdParty/Utils/cgltf|cgltf.h,cgltf_impl.cpp|SPARK_HAS_CGLTF|SparkEngine/Source/Graphics/ModelLoading.cpp (glTF disabled fallback)|WARN"
+    "miniaudio|https://github.com/mackron/miniaudio|snapshot (miniaudio.h blob 2ad4c8eaa80a16a4fc9de1387707cf8d3266f040)|Public Domain / MIT-0|ThirdParty/Audio/miniaudio|miniaudio.h,miniaudio_impl.cpp|SPARK_HAS_MINIAUDIO|SparkEngine/Source/Core/PlatformAudioStubs.h (no-op audio fallback)|WARN"
+    "nlohmann/json|https://github.com/nlohmann/json|v3.11.3 (single-header snapshot)|MIT|ThirdParty/Utils/json|nlohmann_json.h|SPARK_HAS_NLOHMANN_JSON|SparkEngine/Source/Utils/JsonUtils.h (minimal parser fallback)|WARN"
+    "tinyexr|https://github.com/syoyo/tinyexr|v1.0.9 (single-header snapshot)|BSD-3-Clause|ThirdParty/Utils/tinyexr|tinyexr.h,tinyexr_impl.cpp|SPARK_HAS_TINYEXR|SparkEngine/Source/Graphics/TextureSystem.cpp (EXR disabled fallback)|WARN"
+    "zstd|https://github.com/facebook/zstd|v1.5.6 (vendored minimal wrapper)|BSD-3-Clause (library; upstream tools are dual-licensed)|ThirdParty/Utils/zstd|zstd.h,zstd_impl.cpp|SPARK_HAS_ZSTD (target-gated in CMake)|miniz-only compression path|WARN"
+    "VulkanMemoryAllocator|https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator|snapshot (vk_mem_alloc.h blob c7d3de9b0c4c1d4db35e24ddb6429bac70141559)|MIT|ThirdParty/VulkanMemoryAllocator|vk_mem_alloc.h|SPARK_HAS_VMA (target-gated in CMake)|SparkEngine/Source/Graphics/RHI/Vulkan/VulkanMemoryManager.cpp (internal allocator fallback)|WARN"
+    "glad|https://github.com/Dav1dde/glad|0.1.36 (generated loader snapshot)|MIT|ThirdParty/glad|include/glad/glad.h,src/glad.c|SPARK_OPENGL_SUPPORT (backend-gated)|NullRHI/headless fallback when OpenGL loader missing|WARN"
+)
