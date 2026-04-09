@@ -2,6 +2,7 @@ name: Publish Builds
 
 on:
   push:
+    branches: [ 'release/**' ]
     tags: [ 'v*' ]
   schedule:
     # Nightly at 04:00 UTC — after the day's merges settle
@@ -92,7 +93,7 @@ jobs:
       uses: microsoft/setup-msbuild@v3
 
     - name: Configure CMake
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
 
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel
@@ -100,23 +101,17 @@ jobs:
     - name: Run Tests
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
 
-    - name: Package artifacts
+    - name: Generate CPack packages
       shell: pwsh
       run: |
-        $outDir = "dist/SparkEngine-Windows-${{ matrix.config }}"
-        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-        if (Test-Path "build/bin/${{ matrix.config }}") {
-          Copy-Item "build/bin/${{ matrix.config }}/*" $outDir -Recurse -Force
-        } elseif (Test-Path "build/bin") {
-          Copy-Item "build/bin/*" $outDir -Recurse -Force
-        }
-        Compress-Archive -Path $outDir -DestinationPath "SparkEngine-Windows-${{ matrix.config }}.zip"
+        cmake --install build --config ${{ matrix.config }}
+        cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
     - name: Upload packaged artifact
       uses: actions/upload-artifact@v7
       with:
-        name: SparkEngine-Windows-${{ matrix.config }}
-        path: SparkEngine-Windows-${{ matrix.config }}.zip
+        name: SparkEngine-Windows-${{ matrix.config }}-packages
+        path: build/packages/*
         retention-days: 7
 
   # ===========================================================================
@@ -145,6 +140,7 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
+          -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage" \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14
 
@@ -157,18 +153,23 @@ jobs:
         ctest --output-on-failure
         if [ -f bin/SparkTests ]; then ./bin/SparkTests; fi
 
-    - name: Package artifacts
+    - name: Validate external package consumption
       run: |
-        mkdir -p dist/SparkEngine-Linux-${{ matrix.config }}
-        cp -r build/bin/* dist/SparkEngine-Linux-${{ matrix.config }}/
-        tar -czf SparkEngine-Linux-${{ matrix.config }}.tar.gz \
-          -C dist SparkEngine-Linux-${{ matrix.config }}
+        cmake --install build
+        cmake -S Tests/PackageSmoke -B smoke-build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine"
+        cmake --build smoke-build --parallel $(nproc)
+
+    - name: Generate CPack packages
+      run: |
+        cpack --config build/CPackConfig.cmake -B build/packages
 
     - name: Upload packaged artifact
       uses: actions/upload-artifact@v7
       with:
-        name: SparkEngine-Linux-${{ matrix.config }}
-        path: SparkEngine-Linux-${{ matrix.config }}.tar.gz
+        name: SparkEngine-Linux-${{ matrix.config }}-packages
+        path: build/packages/*
         retention-days: 7
 
   # ===========================================================================
@@ -272,26 +273,27 @@ jobs:
     - name: Collect release assets
       id: assets
       run: |
-        # Flatten all artifacts to current directory
-        find release-assets -type f \( -name "*.zip" -o -name "*.tar.gz" \) \
+        # Flatten all package artifacts to current directory
+        find release-assets -type f \
+          \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \) \
           -exec cp {} . \;
 
-        # Build the file list and downloads table dynamically
         FILES=""
-        TABLE="| Asset | Platform | Config |"$'\n'"|---|---|---|"
-
-        for config in Debug Release; do
-          WIN="SparkEngine-Windows-${config}.zip"
-          LIN="SparkEngine-Linux-${config}.tar.gz"
-
-          if [ -f "$WIN" ]; then
-            FILES="${FILES}${WIN}"$'\n'
-            TABLE="${TABLE}"$'\n'"| \`${WIN}\` | Windows (VS 2022 x64) | ${config} |"
+        TABLE="| Asset | Notes |"$'\n'"|---|---|"
+        for artifact in *.zip *.tar.gz *.exe *.msi; do
+          if [ ! -f "$artifact" ]; then
+            continue
           fi
-          if [ -f "$LIN" ]; then
-            FILES="${FILES}${LIN}"$'\n'
-            TABLE="${TABLE}"$'\n'"| \`${LIN}\` | Linux (GCC, ubuntu-24.04) | ${config} |"
+
+          note="CPack package"
+          if [[ "$artifact" == *"-Windows-"* ]]; then
+            note="Windows package"
+          elif [[ "$artifact" == *"-Linux-"* ]]; then
+            note="Linux package"
           fi
+
+          FILES="${FILES}${artifact}"$'\n'
+          TABLE="${TABLE}"$'\n'"| \`${artifact}\` | ${note} |"
         done
 
         # Write multiline outputs

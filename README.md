@@ -120,6 +120,21 @@ Stable releases are published manually and thoroughly tested. Recommended for mo
 
 > Download the latest stable release (v1.0.0). For bleeding-edge features, use the nightly build above.
 
+### Release Package Types (CPack)
+
+- **Linux/macOS:** ZIP and TGZ archives
+- **Windows:** ZIP archive plus NSIS and WiX installers
+
+Package components:
+
+- `runtime` (engine runtime binaries/content)
+- `sdk` (headers, libraries, CMake config)
+- `tools` (spark-cli and build tools)
+- `templates` (starter project templates)
+- `samples` (sample content)
+
+Install layout and versioning policy are documented in [`docs/packaging.md`](docs/packaging.md).
+
 ### CI Artifacts
 
 Per-commit build artifacts from CI on the `Working` branch via [nightly.link](https://nightly.link) (no GitHub login required).
@@ -561,10 +576,11 @@ Two GitHub Actions workflows run automatically:
 
 > ^1 **VS 2026 (v144 toolset):** The VS 2026 CI job is included for forward compatibility but will be skipped until GitHub Actions runners ship with the v144 platform toolset. It is marked `continue-on-error` and does not gate merges.
 
-**`release.yml`** — runs on every push to `master` / `main`:
+**`release.yml`** — runs on release branches (`release/**`) and tags (`v*`):
 - Builds Windows (VS 2022) and Linux (GCC) in Debug + Release
-- Packages each configuration into a zip / tar.gz archive
-- Creates or updates the rolling [`latest` GitHub Release](https://github.com/Krilliac/SparkEngine/releases/tag/latest) with all four binaries and the exact commit hash
+- Runs install + CPack package generation and uploads package artifacts (ZIP/TGZ on Linux, ZIP/NSIS/WiX on Windows)
+- Validates package consumption from a clean external sample using `SparkEngineConfig.cmake`
+- Creates or updates GitHub Release assets with generated package files
 
 **`update-sparkbuild.yml`** — runs weekly (Monday 06:00 UTC) or on manual dispatch:
 - Downloads the latest [SparkBuild](https://github.com/Krilliac/SparkBuild) release binary
@@ -576,6 +592,7 @@ Two GitHub Actions workflows run automatically:
 - **[Feature Roadmap](docs/FEATURE_ROADMAP.md)** — Planned features across 3 priority tiers
 - **[Project Status](docs/PROJECT_STATUS.md)** — Current system status and recent changes
 - **[API Documentation](docs/README.md)** — Doxygen-based auto-generated API docs
+- **[Packaging Guide](docs/packaging.md)** — Package formats, install layout, components, and versioning policy
 - **[AI Prompt Library](.github/AI_README.md)** — Prompts for Copilot, GPT, Claude, and others
 
 ### Generating API Docs
