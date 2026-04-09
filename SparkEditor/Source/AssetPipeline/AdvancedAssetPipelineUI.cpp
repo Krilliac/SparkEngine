@@ -277,6 +277,53 @@ namespace SparkEditor
             }
         }
 
+        if (metadata.type == AssetType::MESH && metadata.importSettings.meshSettings.previewGeneratedLODs)
+        {
+            auto lodCountIt = metadata.customData.find("lod.level_count");
+            if (lodCountIt != metadata.customData.end())
+            {
+                ImGui::Separator();
+                ImGui::Text("Auto-LOD Preview");
+                ImGui::Text("Profile: %s/%s",
+                            metadata.customData.contains("lod.profile_platform")
+                                ? metadata.customData.at("lod.profile_platform").c_str()
+                                : "Unknown",
+                            metadata.customData.contains("lod.profile_quality")
+                                ? metadata.customData.at("lod.profile_quality").c_str()
+                                : "Unknown");
+
+                std::istringstream triStream(metadata.customData.contains("lod.triangle_counts")
+                                                 ? metadata.customData.at("lod.triangle_counts")
+                                                 : std::string{});
+                std::string triToken;
+                int lodIndex = 0;
+                while (std::getline(triStream, triToken, ','))
+                {
+                    if (triToken.empty())
+                    {
+                        ++lodIndex;
+                        continue;
+                    }
+
+                    uint32_t tris = static_cast<uint32_t>(std::stoul(triToken));
+                    float normalized = 1.0f;
+                    if (lodIndex > 0 && metadata.customData.contains("lod.level0_triangles"))
+                    {
+                        uint32_t lod0 =
+                            static_cast<uint32_t>(std::stoul(metadata.customData.at("lod.level0_triangles")));
+                        if (lod0 > 0)
+                        {
+                            normalized = std::clamp(static_cast<float>(tris) / static_cast<float>(lod0), 0.0f, 1.0f);
+                        }
+                    }
+
+                    const std::string label = "LOD" + std::to_string(lodIndex) + " (" + std::to_string(tris) + " tris)";
+                    ImGui::ProgressBar(normalized, ImVec2(-1.0f, 0.0f), label.c_str());
+                    ++lodIndex;
+                }
+            }
+        }
+
         ImGui::Separator();
 
         if (ImGui::Button("Reprocess"))
@@ -473,6 +520,23 @@ namespace SparkEditor
             ImGui::Checkbox("Optimize Mesh", &meshSettings.optimizeMesh);
             ImGui::Checkbox("Weld Vertices", &meshSettings.weldVertices);
             ImGui::SliderFloat("Weld Threshold", &meshSettings.weldThreshold, 0.00001f, 0.01f, "%.5f");
+            ImGui::SeparatorText("Auto LOD");
+            ImGui::Checkbox("Auto Generate LODs", &meshSettings.autoGenerateLODs);
+            ImGui::Checkbox("Preview Generated LODs", &meshSettings.previewGeneratedLODs);
+
+            const char* platformNames[] = {"Desktop", "Mobile", "Console"};
+            int platformIndex = static_cast<int>(meshSettings.lodPlatform);
+            if (ImGui::Combo("LOD Platform", &platformIndex, platformNames, IM_ARRAYSIZE(platformNames)))
+            {
+                meshSettings.lodPlatform = static_cast<LODTargetPlatform>(platformIndex);
+            }
+
+            const char* qualityNames[] = {"Low", "Medium", "High", "Ultra"};
+            int qualityIndex = static_cast<int>(meshSettings.lodQuality);
+            if (ImGui::Combo("LOD Quality", &qualityIndex, qualityNames, IM_ARRAYSIZE(qualityNames)))
+            {
+                meshSettings.lodQuality = static_cast<LODQualityTier>(qualityIndex);
+            }
         }
 
         // Audio settings
@@ -736,6 +800,7 @@ namespace SparkEditor
         }
 
         file << "GUID=" << metadata.guid << "\n";
+        file << "METADATA_VERSION=2\n";
         file << "SOURCE=" << metadata.sourceFilePath << "\n";
         file << "PROCESSED=" << metadata.processedFilePath << "\n";
         file << "TYPE=" << static_cast<int>(metadata.type) << "\n";
@@ -796,6 +861,10 @@ namespace SparkEditor
             if (key == "GUID")
             {
                 metadata->guid = value;
+            }
+            else if (key == "METADATA_VERSION")
+            {
+                metadata->customData["metadata.version"] = value;
             }
             else if (key == "SOURCE")
             {

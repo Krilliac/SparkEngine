@@ -43,6 +43,21 @@ namespace SparkEditor
         CUSTOM = 1000
     };
 
+    enum class LODTargetPlatform
+    {
+        Desktop = 0,
+        Mobile = 1,
+        Console = 2
+    };
+
+    enum class LODQualityTier
+    {
+        Low = 0,
+        Medium = 1,
+        High = 2,
+        Ultra = 3
+    };
+
     /**
  * @brief Asset processing status
  */
@@ -96,6 +111,10 @@ namespace SparkEditor
             bool optimizeMesh = true;           ///< Optimize mesh for rendering
             bool weldVertices = true;           ///< Weld duplicate vertices
             float weldThreshold = 0.0001f;      ///< Vertex welding threshold
+            bool autoGenerateLODs = false;      ///< Generate LOD chain during import
+            bool previewGeneratedLODs = true;   ///< Show LOD chain preview in inspector
+            LODTargetPlatform lodPlatform = LODTargetPlatform::Desktop;
+            LODQualityTier lodQuality = LODQualityTier::High;
 
         } meshSettings;
 
