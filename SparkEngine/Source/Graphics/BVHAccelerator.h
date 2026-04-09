@@ -348,10 +348,10 @@ namespace Spark::Graphics
                 float dz = totalBounds.max.z - totalBounds.min.z;
                 bestAxis = (dx >= dy && dx >= dz) ? 0 : (dy >= dz ? 1 : 2);
                 bestSplit = (start + end) / 2;
-                std::nth_element(prims.begin() + start, prims.begin() + bestSplit, prims.begin() + end,
-                                 [bestAxis](const BVHPrimitive& a, const BVHPrimitive& b) {
-                                     return GetAxis(a.bounds.Center(), bestAxis) < GetAxis(b.bounds.Center(), bestAxis);
-                                 });
+                std::nth_element(
+                    prims.begin() + start, prims.begin() + bestSplit, prims.begin() + end,
+                    [bestAxis](const BVHPrimitive& a, const BVHPrimitive& b)
+                    { return GetAxis(a.bounds.Center(), bestAxis) < GetAxis(b.bounds.Center(), bestAxis); });
             }
 
             m_nodes[nodeIndex].splitAxis = static_cast<uint8_t>(bestAxis);

@@ -315,7 +315,8 @@ namespace Spark::RemoteDebug
             };
             m_handlers["property_set"] = [](const RemoteCommand& c)
             { return RemoteCommand{"property_set_result", R"({"status":"ok"})", c.requestId, 0.0f}; };
-            m_handlers["profile_data"] = [](const RemoteCommand& c) {
+            m_handlers["profile_data"] = [](const RemoteCommand& c)
+            {
                 return RemoteCommand{"profile_data", R"({"fps":0,"cpuMs":0,"gpuMs":0,"memoryMB":0})", c.requestId,
                                      0.0f};
             };
