@@ -115,9 +115,9 @@ namespace SparkEditor
                 }
             }
 
-            // Apply the Spark Professional theme
-            console.LogInfo("Applying Spark Professional theme...");
-            ApplyTheme("Spark Professional");
+            // Apply the Spark Fusion theme (default sleek professional look)
+            console.LogInfo("Applying Spark Fusion theme...");
+            ApplyTheme("Spark Fusion");
             console.LogSuccess("Theme applied");
 
             m_isInitialized = true;
@@ -1654,6 +1654,7 @@ namespace SparkEditor
     void EditorUI::RegisterToolCommands()
     {
         // Theme commands
+        m_commandPalette->RegisterAction("Theme: Spark Fusion", "Command", [this]() { ApplyTheme("Spark Fusion"); });
         m_commandPalette->RegisterAction("Theme: Spark Professional", "Command",
                                          [this]() { ApplyTheme("Spark Professional"); });
         m_commandPalette->RegisterAction("Theme: Dark", "Command", [this]() { ApplyTheme("Dark"); });
