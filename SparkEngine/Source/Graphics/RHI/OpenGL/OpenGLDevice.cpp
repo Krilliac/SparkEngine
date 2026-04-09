@@ -1217,11 +1217,25 @@ namespace Spark
                 m_capabilities.computeShaderSupport = true;
                 m_capabilities.geometryShaderSupport = true;
                 m_capabilities.multiDrawIndirectSupport = true; // GL 4.3+ core (GL_ARB_multi_draw_indirect)
+                m_capabilities.maxConstantBuffers = 14;
+
+                // llvmpipe/softpipe renderer strings identify software rasterizers.
+                const std::string rendererLower = m_capabilities.deviceName;
+                const bool isLlvmPipe = rendererLower.find("llvmpipe") != std::string::npos;
+                const bool isSoftPipe = rendererLower.find("softpipe") != std::string::npos;
+                m_capabilities.isSoftwareDevice = isLlvmPipe || isSoftPipe;
+
+                // OpenGL has no hardware RT pipeline; compute path can still drive SDFGI.
+                m_capabilities.rayTracing.bestBackend = m_capabilities.computeShaderSupport
+                                                            ? RayTracingBackend::Software_SDFGI
+                                                            : RayTracingBackend::Disabled;
 
                 // Query actual max MSAA sample count
                 GLint maxSamples = 8;
                 glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
                 m_capabilities.maxMSAASamples = static_cast<uint32_t>(maxSamples);
+
+                FinalizeDeviceCapabilities(m_capabilities);
             }
 
             std::unique_ptr<IRHISwapChain> GLDevice::CreateSwapChain(const RHISwapChainDesc& desc)

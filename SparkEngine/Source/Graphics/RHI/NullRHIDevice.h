@@ -94,6 +94,9 @@ namespace Spark
                 m_caps.tessellationSupport = false;
                 m_caps.computeShaderSupport = true;
                 m_caps.geometryShaderSupport = false;
+                m_caps.backend = GraphicsBackend::None;
+                m_caps.maxMSAASamples = 1;
+                FinalizeDeviceCapabilities(m_caps);
                 m_initialized = true;
                 return true;
             }

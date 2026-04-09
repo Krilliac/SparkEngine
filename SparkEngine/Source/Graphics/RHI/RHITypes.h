@@ -18,6 +18,7 @@
 #include <memory>
 #include <functional>
 #include <utility>
+#include <algorithm>
 
 namespace Spark
 {
@@ -382,6 +383,46 @@ namespace Spark
             uint32_t maxMSAASamples = 8;
             float maxAnisotropy = 16.0f;
         };
+
+        /**
+         * @brief Normalizes capability state across backends.
+         *
+         * Backends populate capabilities in different orders and with different
+         * levels of detail. This post-pass keeps high-level flags in sync with
+         * detailed fields and clamps impossible values to safe minima.
+         */
+        inline void FinalizeDeviceCapabilities(RHIDeviceCapabilities& caps)
+        {
+            // If a backend reports a software or hardware RT path, expose it through
+            // the legacy top-level boolean as well.
+            caps.rayTracingSupport = (caps.rayTracing.bestBackend != RayTracingBackend::Disabled);
+
+            // Ensure RT detail fields stay coherent when RT is unavailable.
+            if (!caps.rayTracingSupport)
+            {
+                caps.rayTracing.bestBackend = RayTracingBackend::Disabled;
+                caps.rayTracing.supportsHardwareRT = false;
+                caps.rayTracing.supportsInlineRT = false;
+                caps.rayTracing.maxRecursionDepth = 0;
+                caps.rayTracing.supportsVRS = false;
+                caps.rayTracing.raytracingTier = 0;
+            }
+
+            // VRS-dependent RT flag must not be true when VRS itself is unavailable.
+            if (!caps.variableRateShadingSupport)
+            {
+                caps.rayTracing.supportsVRS = false;
+            }
+
+            // Clamp capability counts to sane minimums for generic rendering code.
+            caps.maxTextureSize = std::max(1u, caps.maxTextureSize);
+            caps.maxRenderTargets = std::max(1u, caps.maxRenderTargets);
+            caps.maxSamplers = std::max(1u, caps.maxSamplers);
+            caps.maxConstantBuffers = std::max(1u, caps.maxConstantBuffers);
+            caps.maxVertexAttributes = std::max(1u, caps.maxVertexAttributes);
+            caps.maxMSAASamples = std::max(1u, caps.maxMSAASamples);
+            caps.maxAnisotropy = std::max(1.0f, caps.maxAnisotropy);
+        }
 
         // ============================================================================
         // STATISTICS

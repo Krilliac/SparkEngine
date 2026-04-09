@@ -243,6 +243,7 @@ namespace Spark
 
                 DetectCapabilities();
                 DetectDXRSupport();
+                FinalizeDeviceCapabilities(m_capabilities);
 
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12: Device initialized: %s",
                                m_capabilities.deviceName.c_str());
