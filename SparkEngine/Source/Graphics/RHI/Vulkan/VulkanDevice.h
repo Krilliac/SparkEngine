@@ -345,6 +345,18 @@ namespace Spark
             class VulkanDevice : public IRHIDevice
             {
               public:
+                struct D3D11ParityMilestones
+                {
+                    bool frameLifecycle = false;
+                    bool resourceBarriersAndSynchronization = false;
+                    bool descriptorBindingModel = false;
+                    bool shadowAndDeferredPassRoute = false;
+                    bool postProcessRoute = false;
+                    bool goldenSceneRenderRoute = false;
+                    bool ciVulkanPresetAssertion = false;
+                    bool ciShaderCompilePathAssertion = false;
+                };
+
                 VulkanDevice();
                 ~VulkanDevice() override;
 
@@ -390,6 +402,8 @@ namespace Spark
                 bool IsVulkan14() const { return m_vulkan14Available; }
                 bool SupportsPushDescriptors() const { return m_pushDescriptorSupported; }
                 bool SupportsHostImageCopy() const { return m_hostImageCopySupported; }
+                D3D11ParityMilestones GetD3D11ParityMilestones() const;
+                std::vector<uint8_t> RenderCanonicalGoldenScene(uint32_t width, uint32_t height) const;
                 VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
                 VkQueue GetPresentQueue() const { return m_presentQueue; }
                 VkCommandPool GetCommandPool() const { return m_commandPool; }
