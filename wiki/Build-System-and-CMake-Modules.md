@@ -152,6 +152,24 @@ DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 ./build/bin/SparkEngine
 
 The GLAD OpenGL loader is bundled in `ThirdParty/glad/` and detected automatically. When no GPU backend is available at runtime, the engine automatically falls back to `NullRHIDevice` (headless no-op mode).
 
+### Third-Party Manifest + Configure-Time Audit
+
+SparkEngine now tracks third-party dependency metadata in `ThirdParty/dependencies.lock` (single source of truth).
+
+Each manifest row declares:
+- dependency name + upstream source URL/repo,
+- exact pinned version/tag/commit,
+- license,
+- local path,
+- fallback/shim behavior (`SPARK_HAS_*` macro + stub/fallback path).
+
+`cmake/SparkThirdPartyAudit.cmake` is invoked from root `CMakeLists.txt` early in configure and:
+- validates required files exist for each declared dependency,
+- prints source/version/license summary during configure,
+- warns on manifest mismatches (and can be made fatal with `-DSPARK_STRICT_DEPS=ON`).
+
+CI enforces manifest hygiene via `tools/check-thirdparty-manifest-sync.sh`: dependency path/URL/version wiring changes must include a matching `ThirdParty/dependencies.lock` update.
+
 ### MSVC Toolset Selection
 
 ```bash

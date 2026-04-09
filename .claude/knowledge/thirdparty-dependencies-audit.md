@@ -3,119 +3,61 @@
 **Last updated:** 2026-04-09
 **Type:** Observation
 **Status:** Active
-**Severity:** High
+**Severity:** Medium
 
 ## Description
 
-7 dependencies total: 6 git submodules (ALL uninitialized) + 1 vendored library. All licenses permissive (MIT/ZLib). curl is dead code (declared but never built/linked). Build silently disables features when submodules are missing. No version tracking file exists.
+SparkEngine now has a single source of truth for external libraries at `ThirdParty/dependencies.lock` plus a configure-time audit helper (`cmake/SparkThirdPartyAudit.cmake`).
+
+The audit runs during CMake configure and validates:
+- dependency manifest format,
+- required files for each dependency,
+- `.gitmodules` URL alignment for submodules,
+- pinned submodule commit alignment (`git rev-parse HEAD:<path>`),
+- fallback/shim metadata (`SPARK_HAS_*` style macro + stub/fallback path).
+
+A CI guard (`tools/check-thirdparty-manifest-sync.sh`) now fails if dependency paths/URLs/version wiring changes without an accompanying `ThirdParty/dependencies.lock` update.
 
 ---
 
-## Dependency Inventory
+## Manifest Format (authoritative)
 
-| Library | Purpose | License | Type | In Repo? | Built? | Linked? |
-|---------|---------|---------|------|----------|--------|---------|
-| EnTT | ECS | MIT | Header-only (submodule) | NO (uninitialized) | Stub fallback | YES (include) |
-| Bullet3 | Physics | ZLib | Compiled (submodule) | NO (uninitialized) | If exists | YES (conditional) |
-| Dear ImGui | Editor UI | MIT | Compiled (submodule) | NO (uninitialized) | If exists + ENABLE_EDITOR | YES (editor only) |
-| AngelScript | Scripting | ZLib | Compiled (submodule) | NO (uninitialized) | If exists | YES (conditional) |
-| curl | HTTP (crash reports) | MIT | Compiled (submodule) | NO (uninitialized) | **NEVER** | **NEVER** |
-| miniz | Compression | MIT | Compiled (submodule) | NO (uninitialized) | If exists | YES |
-| tinyobjloader | OBJ mesh loading | MIT | Header-only (vendored) | **YES** (3,517 lines) | YES | YES |
+`ThirdParty/dependencies.lock` is a CMake-readable lock manifest:
 
----
+- Defines `SPARK_THIRDPARTY_AUDIT_ENTRIES`
+- One string entry per dependency
+- Pipe-delimited fields:
 
-## Critical Issues
+`name|source|version_or_commit|license|local_path|required_files_csv|feature_macro|fallback_or_stub_path|severity`
 
-### 1. All 6 Submodules Uninitialized
-
-Every git submodule directory is empty. Build system uses `if(EXISTS ...)` to detect and silently disable features:
-```
-[MISSING] EnTT → uses 332-line custom stub
-[MISSING] Bullet3 → PhysicsSystem disabled
-[MISSING] ImGui → Editor disabled
-[MISSING] AngelScript → Scripting disabled
-[MISSING] miniz → Compression disabled
-```
-
-**Impact**: Builds succeed but most engine features don't work. Creates false confidence.
-
-**Fix**: `git submodule update --init --recursive` or fail with `message(FATAL_ERROR ...)` for critical deps.
-
-### 2. curl is Dead Code
-
-- Declared in `.gitmodules`
-- Checked in CMakeLists.txt:1187
-- **Never added to any build target** via add_subdirectory() or target_link_libraries()
-- Referenced in CrashHandler.cpp (`#include <curl/curl.h>`) but link will fail
-- Has extensive CVE history — shouldn't be in repo if unused
-
-**Fix**: Remove from `.gitmodules` and ThirdParty/, or fully integrate.
-
-### 3. No Version Tracking
-
-No `VERSIONS.txt`, `DEPENDENCIES.md`, or CMake version specifications. Versions only identifiable by inspecting git commit hashes in `.gitmodules`.
-
-| Library | Commit Hash | Version (if known) |
-|---------|-------------|-------------------|
-| EnTT | 9fdc43f... | Unknown (commit hash only) |
-| Bullet3 | 63c4d67... | Unknown |
-| Dear ImGui | 934c6a5... | docking branch |
-| AngelScript | c81df25... | Unknown (mirror repo) |
-| curl | 4a15bc1... | Unknown |
-| miniz | 4b9fcf1... | Unknown |
-| tinyobjloader | N/A | v2.0.0 (in header) |
-
-### 4. EnTT Stub Fallback
-
-When the EnTT submodule is missing (always, since uninitialized), a 332-line custom `entt_stub/` provides a minimal ECS interface. This is fragile — API drift between stub and real EnTT will cause compile failures when submodule is eventually initialized.
+Severity:
+- `ERROR` → warning by default, fatal when `-DSPARK_STRICT_DEPS=ON`
+- `WARN` → warning-only
 
 ---
 
-## License Compliance
+## Current Dependency Coverage
 
-**GPL Contamination Risk: NONE**
+The lock manifest currently tracks:
+- submodule dependencies: miniz, EnTT, ImGui, AngelScript, RecastNavigation, SDL2,
+- vendored dependencies: Jolt Physics, tinyobjloader, stb, cgltf, miniaudio, nlohmann/json, tinyexr, zstd, VulkanMemoryAllocator, glad.
 
-All dependencies use permissive licenses (MIT, ZLib). Safe for commercial/proprietary use. No license conflicts detected.
-
----
-
-## Security Assessment
-
-| Library | Risk | Notes |
-|---------|------|-------|
-| curl | MODERATE | Extensive CVE history. Dead code but if ever linked, needs periodic updates |
-| Bullet3 | LOW | Stable since ~2020, few CVEs |
-| miniz | LOW | Minimal attack surface |
-| tinyobjloader | LOW | Basic parser, no network I/O |
-| Dear ImGui | LOW | Editor-only, not shipped in release |
-| EnTT | LOW | Pure C++ ECS, no I/O |
-| AngelScript | LOW | Sandboxed scripting |
+Each entry includes pinned source/version metadata, SPDX-compatible license text, local path, required files, and fallback behavior.
 
 ---
 
-## CMake Integration
+## CI / Workflow Integration
 
-**ThirdParty/CMakeLists.txt**: Removed (dependency targets are now created only in root `CMakeLists.txt`).
-
-**Main CMakeLists.txt**:
-- miniz: GLOB sources, build as STATIC
-- tinyobjloader: find_path() + STATIC lib from wrapper
-- bullet3: add_subdirectory() if exists
-- curl: Checked but never built (orphaned)
-
-**ImGui target ownership**: Root does not create `imgui`; SparkEditor keeps `if(NOT TARGET imgui)` fallback ownership.
+- `CMakeLists.txt` invokes the audit early in configure.
+- `.github/workflows/build.yml` adds `check-thirdparty-manifest` job.
+- `tools/validate-all.sh` includes the manifest-sync check for local validation runs.
 
 ---
 
-## Recommendations
+## Practical Rules
 
-| Issue | Priority | Action |
-|-------|----------|--------|
-| Initialize submodules | CRITICAL | `git submodule update --init --recursive` |
-| Remove curl | HIGH | Delete from .gitmodules + ThirdParty/ |
-| Add VERSIONS.txt | HIGH | Document all pinned commits and dates |
-| Fail on missing critical deps | HIGH | Use FATAL_ERROR for Bullet3, miniz |
-| Replace entt_stub | MEDIUM | Initialize real EnTT submodule |
-| Keep dependency authority centralized | MEDIUM | Create third-party targets in root only; editor consumes `imgui` via `if(NOT TARGET imgui)` fallback |
-| Add CVE audit script | LOW | Periodic check for vendored library CVEs |
+1. If you change a dependency URL, path, pinned version/commit, or required files, update `ThirdParty/dependencies.lock` in the same commit.
+2. If you add/remove a dependency target in CMake, update both:
+   - `ThirdParty/dependencies.lock`
+   - `cmake/SparkThirdPartyAudit.cmake` expectations (if needed)
+3. Keep fallback metadata accurate (`SPARK_HAS_*` behavior and stub path) so configure output matches runtime behavior.

@@ -71,6 +71,17 @@ jobs:
     - name: Validate prompt system
       run: ./tools/validate-prompts.sh --ci
 
+  check-thirdparty-manifest:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Check ThirdParty manifest sync
+      run: ./tools/check-thirdparty-manifest-sync.sh
+
   # ===========================================================================
   # Linux Build — GCC with AddressSanitizer + UBSan + LSan
   # ===========================================================================

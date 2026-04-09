@@ -129,6 +129,10 @@ option(ENABLE_CONSOLE_IN_SHIPPING "Include SparkConsole in Shipping builds" OFF)
 option(ENABLE_DEVCOMMANDS_IN_SHIPPING "Include developer commands (god, noclip, etc.) in Shipping builds" OFF)
 option(STRIP_DEBUG_SYMBOLS "Strip debug symbols from the final binary" OFF)
 
+# Third-party manifest audit (single source of truth lives in ThirdParty/dependencies.lock)
+include("${CMAKE_SOURCE_DIR}/cmake/SparkThirdPartyAudit.cmake")
+spark_thirdparty_audit("${CMAKE_SOURCE_DIR}/ThirdParty/dependencies.lock")
+
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
 # ---------------------------------------------------------------------
