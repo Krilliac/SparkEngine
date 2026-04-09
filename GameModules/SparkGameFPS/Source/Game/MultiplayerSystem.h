@@ -17,10 +17,12 @@
 #pragma once
 
 #include "Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/ClientPrediction.h"
 #include "Core/Platform.h"
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -54,12 +56,25 @@ namespace SparkFPS
     // ============================================================================
 
     /** @brief Replicated player state sent in each snapshot. */
+    enum PlayerActionFlags : uint32_t
+    {
+        ActionNone = 0,
+        ActionJump = 1u << 0,
+        ActionFire = 1u << 1,
+        ActionReload = 1u << 2,
+        ActionCrouch = 1u << 3,
+        ActionSprint = 1u << 4
+    };
+
     struct NetworkPlayerState
     {
         uint32_t clientId = 0;
         float posX = 0.0f, posY = 0.0f, posZ = 0.0f;
+        float velX = 0.0f, velY = 0.0f, velZ = 0.0f;
         float yaw = 0.0f, pitch = 0.0f;
         float health = 100.0f;
+        uint32_t actionFlags = ActionNone;
+        uint32_t acknowledgedInputSequence = 0;
         uint8_t currentWeapon = 0;
         bool isAlive = true;
         bool isCrouching = false;
@@ -104,12 +119,17 @@ namespace SparkFPS
     /** @brief Projectile replication data. */
     struct ProjectileData
     {
+        uint32_t projectileId = 0;
         uint32_t ownerId = 0;
         uint8_t weaponType = 0;
         float originX = 0.0f, originY = 0.0f, originZ = 0.0f;
         float dirX = 0.0f, dirY = 0.0f, dirZ = 0.0f;
+        float positionX = 0.0f, positionY = 0.0f, positionZ = 0.0f;
+        float velocityX = 0.0f, velocityY = 0.0f, velocityZ = 0.0f;
+        float lifetime = 3.0f;
         float speed = 500.0f;
         float damage = 25.0f;
+        bool active = false;
     };
 
     // ============================================================================
@@ -195,6 +215,14 @@ namespace SparkFPS
         /** @brief Console status string. */
         std::string Console_GetStatus() const;
 
+        struct MultiplayerDebugMetrics
+        {
+            float packetLossPercent = 0.0f;
+            float rttMs = 0.0f;
+            uint32_t correctionCount = 0;
+        };
+        MultiplayerDebugMetrics GetDebugMetrics() const;
+
       private:
         FPSMultiplayerSystem() = default;
 
@@ -210,12 +238,14 @@ namespace SparkFPS
         void SendStateSnapshot();
         void ApplyClientInput(uint32_t clientId, const PlayerInput& input, float dt);
         void ValidateHit(uint32_t attackerId, uint32_t victimId, float damage);
+        void UpdateProjectiles(float dt);
         SpawnPoint GetRandomSpawnPoint() const;
         void RespawnPlayer(uint32_t clientId);
 
         // -- Client logic --
         void ClientUpdate(float dt);
         void InterpolateRemotePlayers(float dt);
+        void ReconcileToAuthoritativeState(const NetworkPlayerState& authoritativeState);
 
         bool m_isServer = false;
         bool m_isActive = false;
@@ -226,10 +256,17 @@ namespace SparkFPS
         float m_respawnTime = 5.0f;
 
         std::unordered_map<uint32_t, NetworkPlayerState> m_playerStates;
+        std::unordered_map<uint32_t, ProjectileData> m_projectiles;
         std::unordered_map<uint32_t, PlayerScore> m_scores;
         std::unordered_map<uint32_t, float> m_respawnTimers;
+        std::unordered_map<uint32_t, std::deque<NetworkPlayerState>> m_remoteSnapshots;
+        std::unordered_map<uint32_t, PlayerInput> m_lastInputByPlayer;
         std::vector<SpawnPoint> m_spawnPoints;
         uint32_t m_stateSequence = 0;
+        uint32_t m_nextProjectileId = 1;
+        Spark::ClientPrediction m_clientPrediction;
+        Spark::PredictedState m_localPredictedState{};
+        uint32_t m_correctionCount = 0;
     };
 
 } // namespace SparkFPS
