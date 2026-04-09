@@ -18,6 +18,7 @@
 
 #pragma once
 #include "../../Core/Platform.h"
+#include "Spark/ServiceInterfaces.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -324,17 +325,17 @@ namespace Spark::Net
 
     // Thread safety: Queue mutex protects message I/O and handler registration.
     // Socket operations run on a dedicated network thread when connected.
-    class NetworkManager
+    class NetworkManager : public Spark::INetworkService
     {
       public:
         static NetworkManager& GetInstance();
 
         /// Initialize the networking subsystem (platform sockets).
         /// Must be called before StartServer() or Connect().
-        bool Initialize();
+        bool Initialize() override;
 
         /// Shut down the networking subsystem and release all resources.
-        void Shutdown();
+        void Shutdown() override;
 
         /// Initialize as server
         bool StartServer(uint16_t port = DEFAULT_PORT, int maxClients = 32);
@@ -350,7 +351,7 @@ namespace Spark::Net
         void Disconnect();
 
         /// Process incoming messages and send outgoing
-        void Update(float deltaTime);
+        void Update(float deltaTime) override;
 
         /// Send a message to the connected server (client) or broadcast (server)
         void SendMessage(const NetworkMessage& msg);
@@ -402,7 +403,7 @@ namespace Spark::Net
         float GetServerTime() const { return m_serverTime; }
         const NetworkStats& GetStats() const { return m_stats; }
         void SetPredictionCorrectionCount(uint32_t correctionCount) { m_stats.correctionCount = correctionCount; }
-        bool IsInitialized() const { return m_initialized; }
+        bool IsInitialized() const override { return m_initialized; }
 
         // Client management (server only)
         const std::unordered_map<ClientID, ClientInfo>& GetClients() const { return m_clients; }

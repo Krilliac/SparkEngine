@@ -28,6 +28,8 @@
 
 #pragma once
 
+#include "Spark/ServiceInterfaces.h"
+
 #include <chrono>
 #include <cstdint>
 #include <fstream>
@@ -211,7 +213,7 @@ namespace Spark
      * @class TelemetrySystem
      * @brief Singleton managing event recording, batching, and backend dispatch.
      */
-    class TelemetrySystem
+    class TelemetrySystem : public ITelemetryService
     {
       public:
         /** @brief Get the singleton instance. */
@@ -252,7 +254,7 @@ namespace Spark
         }
 
         /** @brief Flush remaining events and shut down. */
-        void Shutdown()
+        void Shutdown() override
         {
             if (m_initialized)
             {
@@ -346,7 +348,7 @@ namespace Spark
          * @brief Per-frame update. Auto-flushes when the interval elapses.
          * @param dt Delta time in seconds.
          */
-        void Update(float dt)
+        void Update(float dt) override
         {
             if (!m_initialized || !m_config.enabled)
                 return;
@@ -377,6 +379,9 @@ namespace Spark
 
         /** @brief Check if the user has given consent. */
         bool HasConsent() const { return m_config.consentGiven; }
+
+        /** @brief Check if telemetry service has been initialized. */
+        bool IsInitialized() const override { return m_initialized; }
 
         // --- Queries ---
 

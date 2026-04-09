@@ -166,6 +166,18 @@ class EngineContext : public Spark::IEngineContext
     const Spark::AI::AISystem* GetAI() const override { return GetSystem<Spark::AI::AISystem>(); }
     Spark::NetworkManager* GetNetwork() override { return GetSystem<Spark::NetworkManager>(); }
     const Spark::NetworkManager* GetNetwork() const override { return GetSystem<Spark::NetworkManager>(); }
+    Spark::INetworkService* GetNetworkService() override { return GetSystem<Spark::INetworkService>(); }
+    const Spark::INetworkService* GetNetworkService() const override { return GetSystem<Spark::INetworkService>(); }
+    Spark::ITelemetryService* GetTelemetryService() override { return GetSystem<Spark::ITelemetryService>(); }
+    const Spark::ITelemetryService* GetTelemetryService() const override
+    {
+        return GetSystem<Spark::ITelemetryService>();
+    }
+    Spark::IGameplayTagService* GetGameplayTagService() override { return GetSystem<Spark::IGameplayTagService>(); }
+    const Spark::IGameplayTagService* GetGameplayTagService() const override
+    {
+        return GetSystem<Spark::IGameplayTagService>();
+    }
     World* GetWorld() override { return GetSystem<World>(); }
     const World* GetWorld() const override { return GetSystem<World>(); }
     SceneManager* GetSceneManager() override { return GetSystem<SceneManager>(); }
@@ -266,6 +278,9 @@ class EngineContext : public Spark::IEngineContext
     void SetAnimation(Spark::Animation::AnimationSystem* a) { RegisterSystem<Spark::Animation::AnimationSystem>(a); }
     void SetAI(Spark::AI::AISystem* a) { RegisterSystem<Spark::AI::AISystem>(a); }
     void SetNetwork(Spark::NetworkManager* n) { RegisterSystem<Spark::NetworkManager>(n); }
+    void SetNetworkService(Spark::INetworkService* s) { RegisterSystem<Spark::INetworkService>(s); }
+    void SetTelemetryService(Spark::ITelemetryService* s) { RegisterSystem<Spark::ITelemetryService>(s); }
+    void SetGameplayTagService(Spark::IGameplayTagService* s) { RegisterSystem<Spark::IGameplayTagService>(s); }
     void SetWorld(World* w) { RegisterSystem<World>(w); }
     void SetSceneManager(SceneManager* s) { RegisterSystem<SceneManager>(s); }
     void SetScriptEngine(AngelScriptEngine* s) { RegisterSystem<AngelScriptEngine>(s); }

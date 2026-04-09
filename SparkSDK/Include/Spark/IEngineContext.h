@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstdint>
+#include "Spark/ServiceInterfaces.h"
 
 // Forward declarations — engine types accessible through the context.
 // Modules include the specific engine headers they need for full definitions.
@@ -159,6 +160,18 @@ namespace Spark
         /** @brief Get the network manager (requires ENABLE_NETWORKING) */
         virtual NetworkManager* GetNetwork() { return nullptr; }
         virtual const NetworkManager* GetNetwork() const { return nullptr; }
+
+        /** @brief Get the network lifecycle interface (DI-friendly). */
+        virtual INetworkService* GetNetworkService() { return nullptr; }
+        virtual const INetworkService* GetNetworkService() const { return nullptr; }
+
+        /** @brief Get the telemetry lifecycle interface (DI-friendly). */
+        virtual ITelemetryService* GetTelemetryService() { return nullptr; }
+        virtual const ITelemetryService* GetTelemetryService() const { return nullptr; }
+
+        /** @brief Get the gameplay tag lifecycle interface (DI-friendly). */
+        virtual IGameplayTagService* GetGameplayTagService() { return nullptr; }
+        virtual const IGameplayTagService* GetGameplayTagService() const { return nullptr; }
 
         /** @brief Get the ECS world for entity/component access */
         virtual World* GetWorld() { return nullptr; }
