@@ -70,6 +70,7 @@ add_executable(SparkTests
     TestEnvironmentQuery.cpp
     TestAnimationRetargeting.cpp
     TestDedicatedServer.cpp
+    TestDedicatedServerRuntime.cpp
     TestServerMockClient.cpp
     TestServerLiveMockClient.cpp
     TestSplineMath.cpp

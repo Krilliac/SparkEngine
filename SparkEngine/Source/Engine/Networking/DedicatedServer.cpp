@@ -32,12 +32,22 @@
 
 namespace Spark::Net
 {
+    namespace
+    {
+        INetworkRuntime& GetDefaultNetworkRuntime()
+        {
+            static NetworkManagerRuntimeAdapter runtimeAdapter(NetworkManager::GetInstance());
+            return runtimeAdapter;
+        }
+    } // namespace
 
     // ============================================================================
     // Constructor / Destructor
     // ============================================================================
 
-    DedicatedServer::DedicatedServer() = default;
+    DedicatedServer::DedicatedServer() : DedicatedServer(GetDefaultNetworkRuntime()) {}
+
+    DedicatedServer::DedicatedServer(INetworkRuntime& networkRuntime) : m_networkRuntime(&networkRuntime) {}
 
     DedicatedServer::~DedicatedServer()
     {
@@ -62,108 +72,23 @@ namespace Spark::Net
         m_currentRound = 1;
         m_matchInProgress = false;
 
-        auto& netMgr = NetworkManager::GetInstance();
-        if (!netMgr.Initialize())
+        if (!m_networkRuntime->Initialize())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to initialize NetworkManager");
             Log("ERROR: Failed to initialize NetworkManager");
             return false;
         }
 
-        if (!netMgr.StartServer(m_config.port, m_config.maxClients))
+        if (!m_networkRuntime->StartServer(m_config.port, m_config.maxClients))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Failed to start server on port %d", m_config.port);
             Log("ERROR: Failed to start server on port " + std::to_string(m_config.port));
-            netMgr.Shutdown();
+            m_networkRuntime->Shutdown();
             return false;
         }
 
         RegisterBuiltInRconCommands();
-
-        // Register handlers for dedicated-server-specific messages
-        netMgr.RegisterHandler(
-            MessageType::Connect,
-            [this](const NetworkMessage& msg)
-            {
-                // Check bans
-                {
-                    std::lock_guard<std::mutex> lock(m_banMutex);
-                    if (Spark::ContainerUtils::Contains(m_bannedClients, msg.senderID))
-                    {
-                        SPARK_LOG_WARN(Spark::LogCategory::Network, "Rejected banned client %u", msg.senderID);
-                        NetworkManager::GetInstance().KickClient(msg.senderID, "You are banned from this server");
-                        return;
-                    }
-                }
-                m_stats.totalConnectionsServed++;
-                SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u connected", msg.senderID);
-                uint32_t playerCount = GetPlayerCount();
-                if (playerCount > m_stats.peakPlayers)
-                    m_stats.peakPlayers = playerCount;
-                m_stats.currentPlayers = playerCount;
-
-                if (m_callbacks.onClientConnected)
-                {
-                    auto clients = NetworkManager::GetInstance().GetClients();
-                    auto it = clients.find(msg.senderID);
-                    std::string name = (it != clients.end()) ? it->second.name : "Unknown";
-                    m_callbacks.onClientConnected(msg.senderID, name);
-                }
-                Log("Client " + std::to_string(msg.senderID) + " connected");
-            });
-
-        netMgr.RegisterHandler(MessageType::Disconnect,
-                               [this](const NetworkMessage& msg)
-                               {
-                                   m_stats.currentPlayers = GetPlayerCount();
-                                   SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnected", msg.senderID);
-                                   if (m_callbacks.onClientDisconnected)
-                                   {
-                                       m_callbacks.onClientDisconnected(msg.senderID, "Disconnected");
-                                   }
-                                   Log("Client " + std::to_string(msg.senderID) + " disconnected");
-                               });
-
-        netMgr.RegisterHandler(MessageType::ChatMessage,
-                               [this](const NetworkMessage& msg)
-                               {
-                                   if (msg.payload.empty())
-                                       return;
-                                   NetBuffer buf;
-                                   buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                   std::string chatText = buf.ReadString();
-
-                                   // Check for RCON prefix — bypassing this gate allows
-                                   // any client to execute server admin commands (kick, ban,
-                                   // map change, shutdown). Critical security boundary.
-                                   SPARK_BRANCH_GUARD_BEGIN("rcon_command_gate")
-                                   if (chatText.size() > 1 && chatText[0] == '/')
-                                   {
-                                       std::string rconCmd = chatText.substr(1);
-                                       std::string response = ExecuteRcon(rconCmd);
-                                       // Send response back to the issuing client
-                                       NetworkMessage reply;
-                                       reply.type = MessageType::ChatMessage;
-                                       reply.channel = ChannelType::Reliable;
-                                       NetBuffer replyBuf;
-                                       replyBuf.WriteString("[RCON] " + response);
-                                       reply.payload = replyBuf.GetData();
-                                       NetworkManager::GetInstance().SendToClient(msg.senderID, reply);
-                                       return;
-                                   }
-                                   SPARK_BRANCH_GUARD_END("rcon_command_gate")
-
-                                   // Broadcast chat to all clients
-                                   NetworkMessage broadcast;
-                                   broadcast.type = MessageType::ChatMessage;
-                                   broadcast.channel = ChannelType::Reliable;
-                                   broadcast.payload = msg.payload;
-                                   NetworkManager::GetInstance().SendToAllExcept(msg.senderID, broadcast);
-
-                                   if (m_callbacks.onChatMessage)
-                                       m_callbacks.onChatMessage(chatText);
-                                   Log("Chat: " + chatText);
-                               });
+        RegisterNetworkHandlers();
 
         // Set initial map
         if (!m_config.mapRotation.empty())
@@ -224,17 +149,16 @@ namespace Spark::Net
         Log("Server shutting down...");
 
         // Signal all clients
-        auto& netMgr = NetworkManager::GetInstance();
         NetworkMessage shutdownMsg;
         shutdownMsg.type = MessageType::Disconnect;
         shutdownMsg.channel = ChannelType::Reliable;
         NetBuffer buf;
         buf.WriteString("Server shutting down");
         shutdownMsg.payload = buf.GetData();
-        netMgr.SendToAll(shutdownMsg);
+        m_networkRuntime->SendToAll(shutdownMsg);
 
         // Give the message a chance to be flushed
-        netMgr.Update(0.0f);
+        m_networkRuntime->Update(0.0f);
 
         m_running.store(false, std::memory_order_release);
 
@@ -249,8 +173,9 @@ namespace Spark::Net
         if (m_lanBroadcastThread.joinable())
             m_lanBroadcastThread.join();
 
-        netMgr.StopServer();
-        netMgr.Shutdown();
+        ClearNetworkHandlers();
+        m_networkRuntime->StopServer();
+        m_networkRuntime->Shutdown();
 
         if (m_callbacks.onServerStopped)
             m_callbacks.onServerStopped();
@@ -265,8 +190,7 @@ namespace Spark::Net
 
         auto tickStart = std::chrono::steady_clock::now();
 
-        auto& netMgr = NetworkManager::GetInstance();
-        SPARK_GUARDED_UPDATE("Server:Network", "Network", { netMgr.Update(deltaTime); });
+        SPARK_GUARDED_UPDATE("Server:Network", "Network", { m_networkRuntime->Update(deltaTime); });
 
         SPARK_GUARDED_UPDATE("Server:Messages", "Network", { ProcessServerMessages(deltaTime); });
         SPARK_GUARDED_UPDATE("Server:MatchState", "Network", { UpdateMatchState(deltaTime); });
@@ -286,7 +210,7 @@ namespace Spark::Net
         m_stats.currentTickRate = (tickMs > 0.0f) ? (1000.0f / tickMs) : m_config.tickRate;
 
         // Update network byte counters
-        const auto& netStats = netMgr.GetStats();
+        const auto& netStats = m_networkRuntime->GetStats();
         m_stats.totalBytesIn = netStats.bytesReceived;
         m_stats.totalBytesOut = netStats.bytesSent;
         m_stats.currentPlayers = GetPlayerCount();
@@ -330,6 +254,98 @@ namespace Spark::Net
         // such as anti-cheat validation or rate-limit enforcement.
     }
 
+    void DedicatedServer::RegisterNetworkHandlers()
+    {
+        m_networkRuntime->RegisterHandler(
+            MessageType::Connect,
+            [this](const NetworkMessage& msg)
+            {
+                {
+                    std::lock_guard<std::mutex> lock(m_banMutex);
+                    if (Spark::ContainerUtils::Contains(m_bannedClients, msg.senderID))
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Network, "Rejected banned client %u", msg.senderID);
+                        m_networkRuntime->KickClient(msg.senderID, "You are banned from this server");
+                        return;
+                    }
+                }
+
+                m_stats.totalConnectionsServed++;
+                SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u connected", msg.senderID);
+
+                uint32_t playerCount = GetPlayerCount();
+                if (playerCount > m_stats.peakPlayers)
+                    m_stats.peakPlayers = playerCount;
+                m_stats.currentPlayers = playerCount;
+
+                if (m_callbacks.onClientConnected)
+                {
+                    const auto& clients = m_networkRuntime->GetClients();
+                    auto it = clients.find(msg.senderID);
+                    std::string name = (it != clients.end()) ? it->second.name : "Unknown";
+                    m_callbacks.onClientConnected(msg.senderID, name);
+                }
+
+                Log("Client " + std::to_string(msg.senderID) + " connected");
+            });
+
+        m_networkRuntime->RegisterHandler(MessageType::Disconnect,
+                                          [this](const NetworkMessage& msg)
+                                          {
+                                              m_stats.currentPlayers = GetPlayerCount();
+                                              SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnected",
+                                                             msg.senderID);
+                                              if (m_callbacks.onClientDisconnected)
+                                              {
+                                                  m_callbacks.onClientDisconnected(msg.senderID, "Disconnected");
+                                              }
+                                              Log("Client " + std::to_string(msg.senderID) + " disconnected");
+                                          });
+
+        m_networkRuntime->RegisterHandler(MessageType::ChatMessage,
+                                          [this](const NetworkMessage& msg)
+                                          {
+                                              if (msg.payload.empty())
+                                                  return;
+
+                                              NetBuffer buf;
+                                              buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                                              std::string chatText = buf.ReadString();
+
+                                              SPARK_BRANCH_GUARD_BEGIN("rcon_command_gate")
+                                              if (chatText.size() > 1 && chatText[0] == '/')
+                                              {
+                                                  std::string rconCmd = chatText.substr(1);
+                                                  std::string response = ExecuteRcon(rconCmd);
+
+                                                  NetworkMessage reply;
+                                                  reply.type = MessageType::ChatMessage;
+                                                  reply.channel = ChannelType::Reliable;
+                                                  NetBuffer replyBuf;
+                                                  replyBuf.WriteString("[RCON] " + response);
+                                                  reply.payload = replyBuf.GetData();
+                                                  m_networkRuntime->SendToClient(msg.senderID, reply);
+                                                  return;
+                                              }
+                                              SPARK_BRANCH_GUARD_END("rcon_command_gate")
+
+                                              NetworkMessage broadcast;
+                                              broadcast.type = MessageType::ChatMessage;
+                                              broadcast.channel = ChannelType::Reliable;
+                                              broadcast.payload = msg.payload;
+                                              m_networkRuntime->SendToAllExcept(msg.senderID, broadcast);
+
+                                              if (m_callbacks.onChatMessage)
+                                                  m_callbacks.onChatMessage(chatText);
+                                              Log("Chat: " + chatText);
+                                          });
+    }
+
+    void DedicatedServer::ClearNetworkHandlers()
+    {
+        m_networkRuntime->ClearHandlers();
+    }
+
     // ============================================================================
     // Match State
     // ============================================================================
@@ -352,7 +368,7 @@ namespace Spark::Net
         buf.WriteFloat(m_matchTimeRemaining);
         buf.WriteUint32(static_cast<uint32_t>(m_config.scoreLimit));
         msg.payload = buf.GetData();
-        NetworkManager::GetInstance().SendToAll(msg);
+        m_networkRuntime->SendToAll(msg);
 
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Match started on map '%s' (mode: %d, time limit: %.0fs)",
                        m_currentMap.c_str(), static_cast<int>(m_config.gameMode), m_matchTimeRemaining);
@@ -374,7 +390,7 @@ namespace Spark::Net
         buf.WriteString(m_currentMap);
         buf.WriteUint32(static_cast<uint32_t>(m_currentRound));
         msg.payload = buf.GetData();
-        NetworkManager::GetInstance().SendToAll(msg);
+        m_networkRuntime->SendToAll(msg);
 
         Log("Match ended on map '" + m_currentMap + "'");
 
@@ -423,7 +439,7 @@ namespace Spark::Net
             buf.WriteUint32(static_cast<uint32_t>(m_currentRound));
             buf.WriteUint32(m_stats.currentPlayers);
             msg.payload = buf.GetData();
-            NetworkManager::GetInstance().SendToAll(msg);
+            m_networkRuntime->SendToAll(msg);
         }
     }
 
@@ -491,7 +507,7 @@ namespace Spark::Net
     void DedicatedServer::KickPlayer(ClientID id, const std::string& reason)
     {
         SPARK_WARN_IF(Spark::LogCategory::Network, reason.empty(), "KickPlayer called with empty reason");
-        NetworkManager::GetInstance().KickClient(id, reason);
+        m_networkRuntime->KickClient(id, reason);
         m_stats.currentPlayers = GetPlayerCount();
         Log("Kicked client " + std::to_string(id) + ": " + reason);
     }
@@ -509,7 +525,7 @@ namespace Spark::Net
     std::vector<ClientInfo> DedicatedServer::GetConnectedClients() const
     {
         std::vector<ClientInfo> result;
-        const auto& clients = NetworkManager::GetInstance().GetClients();
+        const auto& clients = m_networkRuntime->GetClients();
         result.reserve(clients.size());
         for (const auto& [id, info] : clients)
         {
@@ -520,7 +536,7 @@ namespace Spark::Net
 
     uint32_t DedicatedServer::GetPlayerCount() const
     {
-        return static_cast<uint32_t>(NetworkManager::GetInstance().GetClients().size());
+        return static_cast<uint32_t>(m_networkRuntime->GetClients().size());
     }
 
     // ============================================================================
@@ -623,7 +639,7 @@ namespace Spark::Net
                             });
 
         RegisterRconCommand("say", "Broadcast server message: say <text>",
-                            [](const std::vector<std::string>& args)
+                            [this](const std::vector<std::string>& args)
                             {
                                 if (args.empty())
                                     return std::string("Usage: say <message>");
@@ -640,7 +656,7 @@ namespace Spark::Net
                                 NetBuffer buf;
                                 buf.WriteString("[SERVER] " + text);
                                 msg.payload = buf.GetData();
-                                NetworkManager::GetInstance().SendToAll(msg);
+                                m_networkRuntime->SendToAll(msg);
                                 return std::format("Broadcast: {}", text);
                             });
 
