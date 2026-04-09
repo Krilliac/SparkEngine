@@ -1,6 +1,6 @@
 # Third-Party Dependencies Audit
 
-**Last updated:** 2026-03-16
+**Last updated:** 2026-04-09
 **Type:** Observation
 **Status:** Active
 **Severity:** High
@@ -96,9 +96,7 @@ All dependencies use permissive licenses (MIT, ZLib). Safe for commercial/propri
 
 ## CMake Integration
 
-**ThirdParty/CMakeLists.txt** (80 lines):
-- Defines `entt` (INTERFACE), `imgui` (STATIC), `angelscript` (subdirectory)
-- Platform-specific ImGui backends (Win32+DX11 or SDL2+OpenGL3)
+**ThirdParty/CMakeLists.txt**: Removed (dependency targets are now created only in root `CMakeLists.txt`).
 
 **Main CMakeLists.txt**:
 - miniz: GLOB sources, build as STATIC
@@ -106,7 +104,7 @@ All dependencies use permissive licenses (MIT, ZLib). Safe for commercial/propri
 - bullet3: add_subdirectory() if exists
 - curl: Checked but never built (orphaned)
 
-**Duplicate imgui target**: Both ThirdParty/CMakeLists.txt and SparkEditor/CMakeLists.txt define imgui build targets (previously identified in cmake-build-audit.md).
+**ImGui target ownership**: Root does not create `imgui`; SparkEditor keeps `if(NOT TARGET imgui)` fallback ownership.
 
 ---
 
@@ -119,5 +117,5 @@ All dependencies use permissive licenses (MIT, ZLib). Safe for commercial/propri
 | Add VERSIONS.txt | HIGH | Document all pinned commits and dates |
 | Fail on missing critical deps | HIGH | Use FATAL_ERROR for Bullet3, miniz |
 | Replace entt_stub | MEDIUM | Initialize real EnTT submodule |
-| Fix duplicate imgui target | MEDIUM | Single definition in ThirdParty/ |
+| Keep dependency authority centralized | MEDIUM | Create third-party targets in root only; editor consumes `imgui` via `if(NOT TARGET imgui)` fallback |
 | Add CVE audit script | LOW | Periodic check for vendored library CVEs |
