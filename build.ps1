@@ -31,7 +31,6 @@ Write-Host "=== Checking git submodules ===" -ForegroundColor Cyan
 
 $submodules = @(
     @{ Path = "ThirdParty\Utils\miniz";                        Name = "miniz";          Desc = "Compression (crash dumps, save files)" },
-    @{ Path = "ThirdParty\Physics\bullet3";                    Name = "Bullet Physics"; Desc = "Rigid body physics, collision, raycasting" },
     @{ Path = "ThirdParty\UI\imgui";                           Name = "Dear ImGui";     Desc = "Editor UI, debug overlays" },
     @{ Path = "ThirdParty\ECS\entt";                           Name = "EnTT";           Desc = "Entity component system" },
     @{ Path = "ThirdParty\Scripting\angelscript-mirror";       Name = "AngelScript";    Desc = "Hot-reload scripting" },
