@@ -4,6 +4,13 @@ SparkEngine includes a comprehensive set of gameplay systems built on top of the
 
 **Source:** `SparkEngine/Source/Game/`, `SparkEngine/Source/Engine/Gameplay/`, `SparkEngine/Source/Engine/ECS/Components/`
 
+## Module Extension vs Fork Policy
+
+For governance on when gameplay behavior must extend engine systems (Quest/Dialogue) versus when module forks are
+acceptable (specialized Loot/Skill/Inventory domains), see:
+
+- `docs/architecture/gameplay-extension-policy.md`
+
 ## Player Controller
 
 The FPS player controller provides standard first-person movement and interaction:
