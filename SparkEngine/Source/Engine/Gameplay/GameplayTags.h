@@ -192,6 +192,12 @@ namespace Spark::Gameplay
          * @note Threading: game-thread-only.
          */
         uint32_t RegisterTag(std::string_view fullName) override { return RegisterTag(std::string(fullName)); }
+        uint32_t RegisterTag(const char* fullName)
+        {
+            if (fullName == nullptr)
+                return INVALID_TAG_ID;
+            return RegisterTag(std::string_view(fullName));
+        }
 
         /**
          * @brief Register a tag (and all parent tags implicitly).
@@ -212,6 +218,12 @@ namespace Spark::Gameplay
          * @return Tag ID, or INVALID_TAG_ID if not registered
          */
         uint32_t GetTagId(std::string_view fullName) const override { return GetTagId(std::string(fullName)); }
+        uint32_t GetTagId(const char* fullName) const
+        {
+            if (fullName == nullptr)
+                return INVALID_TAG_ID;
+            return GetTagId(std::string_view(fullName));
+        }
 
         /**
          * @brief Get the ID for a tag name.

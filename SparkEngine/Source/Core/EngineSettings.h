@@ -454,24 +454,24 @@ class EngineSettings
 
     struct CrashReportingSettings
     {
-        bool enabled = true;                       ///< Master switch for crash report uploading
-        bool requireConsent = true;                ///< Show consent dialog before uploading
-        bool headlessMode = false;                 ///< Skip dialogs (CI/testing/headless — auto-consent)
-        bool promptUserDescription = true;         ///< Show "what were you doing" text input
-        bool allowScreenshotRefusal = true;        ///< Let users refuse screenshot in consent dialog
-        std::string uploadURL = "";                ///< Upload URL (auto-detects backend from prefix)
-        std::string proxyURL = "";                 ///< Proxy relay endpoint (release builds)
-        std::string githubRepo = "";               ///< GitHub "owner/repo" for direct Issue creation
-        std::string githubToken = "";              ///< GitHub PAT (dev builds only, not shipped)
-        std::string githubLabels = "crash-report"; ///< Comma-separated Issue labels
-        bool attachDump = true;                    ///< Attach zip dump to crash reports
-        bool captureScreenshot = true;             ///< Capture screenshot at crash time
-        bool captureSystemInfo = true;             ///< Collect OS/GPU/memory info
-        bool captureAllThreads = true;             ///< Dump all thread stacks
-        int timeoutSeconds = 5;                    ///< HTTP connection timeout
-        std::string smtpUser = "";                 ///< SMTP username (email backend)
-        std::string smtpPass = "";                 ///< SMTP password (email backend)
-        std::string emailTo = "";                  ///< Recipient email address
+        bool enabled = true;                                     ///< Master switch for crash report uploading
+        bool requireConsent = true;                              ///< Show consent dialog before uploading
+        bool headlessMode = false;                               ///< Skip dialogs (CI/testing/headless — auto-consent)
+        bool promptUserDescription = true;                       ///< Show "what were you doing" text input
+        bool allowScreenshotRefusal = true;                      ///< Let users refuse screenshot in consent dialog
+        std::string uploadURL = "";                              ///< Upload URL (auto-detects backend from prefix)
+        std::string proxyURL = "";                               ///< Proxy relay endpoint (release builds)
+        std::string githubRepo = "";                             ///< GitHub "owner/repo" for direct Issue creation
+        std::string githubToken = "";                            ///< GitHub PAT (dev builds only, not shipped)
+        std::string githubLabels = "crash-report";               ///< Comma-separated Issue labels
+        bool attachDump = true;                                  ///< Attach zip dump to crash reports
+        bool captureScreenshot = true;                           ///< Capture screenshot at crash time
+        bool captureSystemInfo = true;                           ///< Collect OS/GPU/memory info
+        bool captureAllThreads = true;                           ///< Dump all thread stacks
+        int timeoutSeconds = 5;                                  ///< HTTP connection timeout
+        std::string smtpUser = "";                               ///< SMTP username (email backend)
+        std::string smtpPass = "";                               ///< SMTP password (email backend)
+        std::string emailTo = "";                                ///< Recipient email address
         std::string emailFrom = "crashreporter@sparkengine.dev"; ///< Sender address
     };
 

@@ -755,6 +755,7 @@ namespace Spark
                 m_capabilities.rayTracing.supportsInlineRT = false;
                 m_capabilities.rayTracing.maxRecursionDepth = 0;
                 m_capabilities.rayTracing.supportsVRS = false;
+                FinalizeDeviceCapabilities(m_capabilities);
 
                 // Create immediate command list wrapper
                 m_immediateCommandList = std::make_unique<D3D11CommandList>(m_immediateContext.Get(), true);

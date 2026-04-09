@@ -180,6 +180,7 @@ namespace Spark
                     return false;
 
                 QueryCapabilities();
+                FinalizeDeviceCapabilities(m_capabilities);
 
                 // Create immediate command list with statistics tracking
                 m_immediateCommandList = std::make_unique<VulkanCommandList>(m_device, m_commandPool, true,

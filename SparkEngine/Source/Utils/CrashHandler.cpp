@@ -1107,7 +1107,7 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         int fd = open(logFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd >= 0)
         {
-            (void)write(fd, logStr.c_str(), logStr.size());
+            [[maybe_unused]] const ssize_t writtenLog = write(fd, logStr.c_str(), logStr.size());
             close(fd);
         }
 
@@ -1119,7 +1119,7 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         fd = open(coreFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd >= 0)
         {
-            (void)write(fd, coreHint, sizeof(coreHint) - 1);
+            [[maybe_unused]] const ssize_t writtenHint = write(fd, coreHint, sizeof(coreHint) - 1);
             close(fd);
         }
 

@@ -940,7 +940,7 @@ namespace SparkEditor
                     GetProcAddress(dxgiDebug, "DXGIGetDebugInterface1"));
                 if (getDebugInterface)
                 {
-                    ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;
+                    Microsoft::WRL::ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;
                     HRESULT hr = getDebugInterface(0, __uuidof(IDXGraphicsAnalysis),
                                                    reinterpret_cast<void**>(graphicsAnalysis.GetAddressOf()));
                     if (SUCCEEDED(hr) && graphicsAnalysis)
@@ -985,7 +985,7 @@ namespace SparkEditor
                 GetProcAddress(dxgiDebug, "DXGIGetDebugInterface1"));
             if (getDebugInterface)
             {
-                ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;
+                Microsoft::WRL::ComPtr<IDXGraphicsAnalysis> graphicsAnalysis;
                 HRESULT hr = getDebugInterface(0, __uuidof(IDXGraphicsAnalysis),
                                                reinterpret_cast<void**>(graphicsAnalysis.GetAddressOf()));
                 m_pixCaptureAvailable = SUCCEEDED(hr) && graphicsAnalysis;

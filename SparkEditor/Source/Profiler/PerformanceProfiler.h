@@ -19,6 +19,7 @@
 #include <wrl/client.h>
 #include <DirectXMath.h>
 using namespace DirectX;
+using Microsoft::WRL::ComPtr;
 #else
 #include "Core/Platform.h"
 using namespace DirectX;

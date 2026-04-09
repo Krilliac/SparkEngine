@@ -719,9 +719,11 @@ namespace SparkEditor
                 listenFd = m_listenSocket;
             }
             if (listenFd < 0)
+            {
                 break;
+            }
 
-                // Use poll/select with timeout to allow shutdown checks
+            // Use poll/select with timeout to allow shutdown checks
 #ifdef _WIN32
             fd_set readSet;
             FD_ZERO(&readSet);
