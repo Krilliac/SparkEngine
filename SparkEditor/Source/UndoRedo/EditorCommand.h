@@ -17,6 +17,7 @@
 #include <functional>
 #include <variant>
 #include <unordered_map>
+#include <utility>
 
 #ifdef _WIN32
 #include <DirectXMath.h>
@@ -469,6 +470,44 @@ namespace SparkEditor
       private:
         std::string m_description;
         std::vector<std::unique_ptr<EditorCommand>> m_commands;
+    };
+
+    /**
+     * @brief Generic command backed by execute/undo lambdas.
+     *
+     * Used to bridge legacy command callsites onto UndoRedoManager while
+     * preserving undo/redo behavior.
+     */
+    class LambdaEditorCommand : public EditorCommand
+    {
+      public:
+        LambdaEditorCommand(std::function<void()> execute, std::function<void()> undo, std::string description)
+            : m_execute(std::move(execute)), m_undo(std::move(undo)), m_description(std::move(description))
+        {
+        }
+
+        void Execute() override
+        {
+            if (m_execute)
+            {
+                m_execute();
+            }
+        }
+
+        void Undo() override
+        {
+            if (m_undo)
+            {
+                m_undo();
+            }
+        }
+
+        std::string GetDescription() const override { return m_description; }
+
+      private:
+        std::function<void()> m_execute;
+        std::function<void()> m_undo;
+        std::string m_description;
     };
 
 } // namespace SparkEditor

@@ -6,6 +6,13 @@
  *
  * The UndoRedoManager maintains two stacks (undo and redo) of EditorCommand
  * objects, allowing the user to undo and redo operations in the editor.
+ *
+ * Required undoable action categories (central checklist):
+ * 1) Transform gizmo apply (translate/rotate/scale commits)
+ * 2) Component add/remove/edit (including property and asset reference edits)
+ * 3) Hierarchy mutations (create/delete/reparent/duplicate/rename)
+ * 4) Asset assignment and reassignment (mesh/material/texture/script references)
+ * 5) Multi-object/batch edits that mutate scene/editor state
  */
 
 #pragma once
@@ -29,6 +36,11 @@ namespace SparkEditor
     class UndoRedoManager
     {
       public:
+        /**
+         * @brief Global undo/redo manager instance for editor command dispatch.
+         */
+        static UndoRedoManager& GetInstance();
+
         UndoRedoManager();
         ~UndoRedoManager() = default;
 
@@ -137,6 +149,17 @@ namespace SparkEditor
          * @param depth Max stack depth
          */
         void SetMaxStackDepth(size_t depth) { m_maxStackDepth = depth; }
+
+        /**
+         * @brief Returns true while a command is being executed via UndoRedoManager.
+         */
+        static bool IsDispatchingCommand();
+
+        /**
+         * @brief Logs a warning when editor state mutation bypasses command dispatch.
+         * @param operation Context string for the mutation path.
+         */
+        static void WarnIfMutationBypassesDispatch(const char* operation);
 
       private:
         std::vector<std::unique_ptr<EditorCommand>> m_undoStack;

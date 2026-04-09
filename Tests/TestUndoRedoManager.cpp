@@ -148,6 +148,60 @@ namespace UndoRedoTest
         std::string m_oldValue;
     };
 
+    struct EditorState
+    {
+        int transformX = 0;
+        bool hasLightComponent = false;
+        int parentId = 0;
+        bool entityDeleted = false;
+        std::string materialAssetPath;
+    };
+
+    class IntFieldCommand : public IUndoCommand
+    {
+      public:
+        IntFieldCommand(int& target, int value) : m_target(target), m_oldValue(target), m_newValue(value) {}
+        void Execute() override { m_target = m_newValue; }
+        void Undo() override { m_target = m_oldValue; }
+        std::string GetName() const override { return "IntField"; }
+
+      private:
+        int& m_target;
+        int m_oldValue;
+        int m_newValue;
+    };
+
+    class BoolFieldCommand : public IUndoCommand
+    {
+      public:
+        BoolFieldCommand(bool& target, bool value) : m_target(target), m_oldValue(target), m_newValue(value) {}
+        void Execute() override { m_target = m_newValue; }
+        void Undo() override { m_target = m_oldValue; }
+        std::string GetName() const override { return "BoolField"; }
+
+      private:
+        bool& m_target;
+        bool m_oldValue;
+        bool m_newValue;
+    };
+
+    class StringFieldCommand : public IUndoCommand
+    {
+      public:
+        StringFieldCommand(std::string& target, std::string value)
+            : m_target(target), m_oldValue(target), m_newValue(std::move(value))
+        {
+        }
+        void Execute() override { m_target = m_newValue; }
+        void Undo() override { m_target = m_oldValue; }
+        std::string GetName() const override { return "StringField"; }
+
+      private:
+        std::string& m_target;
+        std::string m_oldValue;
+        std::string m_newValue;
+    };
+
 } // namespace UndoRedoTest
 
 // ============================================================================
@@ -276,4 +330,53 @@ TEST(UndoRedo_ClearHistory)
 
     EXPECT_FALSE(mgr.CanUndo());
     EXPECT_FALSE(mgr.CanRedo());
+}
+
+TEST(UndoRedo_EditorMutationCategoriesRoundtrip)
+{
+    using namespace UndoRedoTest;
+
+    UndoRedoManager mgr;
+    EditorState s{};
+
+    // 1) Transform gizmo apply
+    mgr.Push(std::make_unique<IntFieldCommand>(s.transformX, 42));
+    // 2) Component add/remove/edit
+    mgr.Push(std::make_unique<BoolFieldCommand>(s.hasLightComponent, true));
+    // 3) Hierarchy reparent
+    mgr.Push(std::make_unique<IntFieldCommand>(s.parentId, 17));
+    // 4) Hierarchy delete
+    mgr.Push(std::make_unique<BoolFieldCommand>(s.entityDeleted, true));
+    // 5) Asset assignment
+    mgr.Push(std::make_unique<StringFieldCommand>(s.materialAssetPath, "Materials/Metal.mat"));
+
+    EXPECT_EQ(s.transformX, 42);
+    EXPECT_TRUE(s.hasLightComponent);
+    EXPECT_EQ(s.parentId, 17);
+    EXPECT_TRUE(s.entityDeleted);
+    EXPECT_EQ(s.materialAssetPath, std::string("Materials/Metal.mat"));
+
+    // Undo full stack
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_TRUE(mgr.Undo());
+    }
+
+    EXPECT_EQ(s.transformX, 0);
+    EXPECT_FALSE(s.hasLightComponent);
+    EXPECT_EQ(s.parentId, 0);
+    EXPECT_FALSE(s.entityDeleted);
+    EXPECT_TRUE(s.materialAssetPath.empty());
+
+    // Redo full stack
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_TRUE(mgr.Redo());
+    }
+
+    EXPECT_EQ(s.transformX, 42);
+    EXPECT_TRUE(s.hasLightComponent);
+    EXPECT_EQ(s.parentId, 17);
+    EXPECT_TRUE(s.entityDeleted);
+    EXPECT_EQ(s.materialAssetPath, std::string("Materials/Metal.mat"));
 }

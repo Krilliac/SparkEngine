@@ -151,7 +151,33 @@ namespace SparkEditor
                 if (ImGui::InputText("Mesh", meshBuf, sizeof(meshBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: mesh asset changed to '%s'", meshBuf);
-                    mr->meshAssetPath = meshBuf;
+                    const std::string oldPath = mr->meshAssetPath;
+                    const std::string newPath = meshBuf;
+                    SceneFile* capturedScene = m_scene;
+                    ObjectID capturedID = m_inspectedObjectID;
+                    auto& history = Spark::Editor::CommandHistory::GetInstance();
+                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                        [capturedScene, capturedID, newPath]()
+                        {
+                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                            {
+                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                {
+                                    data->meshAssetPath = newPath;
+                                }
+                            }
+                        },
+                        [capturedScene, capturedID, oldPath]()
+                        {
+                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                            {
+                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                {
+                                    data->meshAssetPath = oldPath;
+                                }
+                            }
+                        },
+                        "Assign Mesh Asset"));
                 }
 
                 // Material path
@@ -162,7 +188,33 @@ namespace SparkEditor
                 if (ImGui::InputText("Material", matBuf, sizeof(matBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: material asset changed to '%s'", matBuf);
-                    mr->materialAssetPath = matBuf;
+                    const std::string oldPath = mr->materialAssetPath;
+                    const std::string newPath = matBuf;
+                    SceneFile* capturedScene = m_scene;
+                    ObjectID capturedID = m_inspectedObjectID;
+                    auto& history = Spark::Editor::CommandHistory::GetInstance();
+                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                        [capturedScene, capturedID, newPath]()
+                        {
+                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                            {
+                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                {
+                                    data->materialAssetPath = newPath;
+                                }
+                            }
+                        },
+                        [capturedScene, capturedID, oldPath]()
+                        {
+                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                            {
+                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                {
+                                    data->materialAssetPath = oldPath;
+                                }
+                            }
+                        },
+                        "Assign Material Asset"));
                 }
 
                 ImGui::Checkbox("Cast Shadows", &mr->castShadows);
