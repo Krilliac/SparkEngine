@@ -32,17 +32,17 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine viability evaluation (can you make a game?) | [knowledge/engine-viability-evaluation.md](knowledge/engine-viability-evaluation.md) | Observation | Active | 2026-04-01 |
 | Project recommendations (13+3 production systems) | [knowledge/project-recommendations-2026-04-04.md](knowledge/project-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 | Engine feature recommendations (7 new game-making systems) | [knowledge/engine-feature-recommendations-2026-04-04.md](knowledge/engine-feature-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
-| Engine next steps (15 recommendations, 4 tiers) | [knowledge/engine-recommendations-2026-04-04.md](knowledge/engine-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
+| Engine next steps (15 recommendations, 4 tiers) | [knowledge/engine-recommendations-2026-04-04.md](knowledge/engine-recommendations-2026-04-04.md) | Decision | **Resolved** | 2026-04-09 |
 | Memory integrity system (branch guards, code scanning) | [knowledge/memory-integrity-system.md](knowledge/memory-integrity-system.md) | Observation | Active | 2026-04-05 |
 | Header namespace issues (Animation, Network, PostProcess) | [knowledge/header-namespace-issues.md](knowledge/header-namespace-issues.md) | Observation | **Resolved** | 2026-04-05 |
 | Memory safety evaluation & C++26 bridge (Contracts, NonNull, SafeCast) | [knowledge/memory-safety-evaluation.md](knowledge/memory-safety-evaluation.md) | Decision | Active | 2026-04-06 |
 ## Quick Reference
 
-### Current Engine State (2026-04-07)
+### Current Engine State (2026-04-09)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 340 test files, 4413 tests (all pass on native Linux except 1 pre-existing MMO test)
+- **Tests**: 341 test files, 4416 tests (all pass on native Linux except 1 pre-existing MMO test)
 - **Editor**: 59 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations. 6 RHI backends (D3D11, D3D12, Vulkan, OpenGL, Metal, NullRHI)
 - **Post-processing**: 14 passes (Bloom, AutoExposure, Tonemapping, ColorGrading, FXAA, DOF, MotionBlur, Vignette, ChromaticAberration, FilmGrain, LensDistortion, LightShafts, LensFlare, Sharpen)
@@ -50,7 +50,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides
 - **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame, WeatherSystem integration
-- **Codebase**: ~514K lines of C++ across 1580 source files, 125 wiki pages
+- **Codebase**: ~515K lines of C++ across 1581 source files, 125 wiki pages
 
 ### Before Writing Code
 
