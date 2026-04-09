@@ -321,12 +321,14 @@ namespace SparkEditor
 
     // Forward declaration
     static EditorThemeData CreateSparkThemeImpl();
+    static EditorThemeData CreateSparkFusionThemeImpl();
 
     void EditorTheme::InitializeDefaultThemes()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing default editor themes");
         RegisterTheme(CreateSparkThemeImpl());
+        RegisterTheme(CreateSparkFusionThemeImpl());
         RegisterTheme(CreateUnityProTheme());
         RegisterTheme(CreateUnrealProTheme());
         RegisterTheme(CreateVSProTheme());
@@ -451,6 +453,119 @@ namespace SparkEditor
         t.fontSize = 15.0f;
         t.fontScale = 1.0f;
         t.fontFamily = "Roboto";
+
+        return t;
+    }
+
+    // -------------------------------------------------------------------
+    // SPARK FUSION — Unreal + Unity + Godot inspired with Spark's own signature
+    // High readability, sculpted contrast, cyan/amber visual language
+    // -------------------------------------------------------------------
+    static EditorThemeData CreateSparkFusionThemeImpl()
+    {
+        EditorThemeData t;
+        t.name = "Spark Fusion";
+        t.description = "Sleek pro dark blend of Unreal/Unity/Godot with Spark signature cyan + ember accents";
+        t.author = "Spark Engine Team";
+
+        // Background stack: deep neutral slate base with layered panel contrast.
+        t.background = ThemeColor::FromHex("#171A20");
+        t.backgroundDark = ThemeColor::FromHex("#101318");
+        t.backgroundLight = ThemeColor::FromHex("#222734");
+        t.backgroundAccent = ThemeColor::FromHex("#113A4A");
+        t.backgroundHeader = ThemeColor::FromHex("#1C212C");
+        t.backgroundActive = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.24f);
+        t.backgroundHover = ThemeColor::FromHex("#2A3140");
+        t.backgroundSelected = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.18f);
+
+        // Text hierarchy tuned for long editor sessions.
+        t.text = ThemeColor::FromHex("#E5EAF3");
+        t.textDisabled = ThemeColor::FromHex("#596477");
+        t.textSecondary = ThemeColor::FromHex("#97A4B8");
+        t.textAccent = ThemeColor::FromHex("#5CD8EA");
+        t.textWarning = ThemeColor::FromHex("#F5B45A");
+        t.textError = ThemeColor::FromHex("#F06363");
+        t.textSuccess = ThemeColor::FromHex("#54D79A");
+
+        // Buttons: Unity-like clarity with Unreal-like depth.
+        t.button = ThemeColor::FromHex("#2A3040");
+        t.buttonHovered = ThemeColor::FromHex("#343C4F");
+        t.buttonActive = ThemeColor::FromHex("#2FB8CC");
+        t.buttonDisabled = ThemeColor::FromHex("#1E2430");
+
+        // Frames: Godot-style recessed fields for dense data entry workflows.
+        t.frame = ThemeColor::FromHex("#141923");
+        t.frameHovered = ThemeColor::FromHex("#1C2431");
+        t.frameActive = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.37f);
+
+        t.border = ThemeColor::FromHex("#2A3343");
+        t.borderLight = ThemeColor::FromHex("#3A4558");
+        t.borderAccent = ThemeColor::FromHex("#2FB8CC");
+        t.borderSeparator = ThemeColor::FromHex("#242C39");
+
+        t.titleBar = ThemeColor::FromHex("#0F131A");
+        t.titleBarActive = ThemeColor::FromHex("#1D4D61");
+        t.titleBarText = ThemeColor::FromHex("#E5EAF3");
+
+        t.menuBar = ThemeColor::FromHex("#171A20");
+        t.menuItem = ThemeColor(0, 0, 0, 0);
+        t.menuItemHovered = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.32f);
+
+        t.scrollbar = ThemeColor::FromHex("#11161E");
+        t.scrollbarGrab = ThemeColor::FromHex("#3B465A");
+        t.scrollbarGrabHovered = ThemeColor::FromHex("#4D5B74");
+        t.scrollbarGrabActive = ThemeColor::FromHex("#2FB8CC");
+
+        t.tab = ThemeColor::FromHex("#1A1F29");
+        t.tabHovered = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.30f);
+        t.tabActive = ThemeColor::FromHex("#232A37");
+        t.tabUnfocused = ThemeColor::FromHex("#131720");
+
+        // Spark twist: cool cyan primary, warm ember secondary for key states.
+        t.accent = ThemeColor::FromHex("#2FB8CC");
+        t.accentSecondary = ThemeColor::FromHex("#EE9C44");
+        t.focus = ThemeColor::FromHex("#47CEE0");
+        t.selection = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.28f);
+        t.drop = ThemeColor::FromHex("#EE9C44").WithAlpha(0.80f);
+
+        t.graph1 = ThemeColor::FromHex("#2FB8CC");
+        t.graph2 = ThemeColor::FromHex("#EE9C44");
+        t.graph3 = ThemeColor::FromHex("#54D79A");
+        t.graph4 = ThemeColor::FromHex("#F06363");
+        t.graph5 = ThemeColor::FromHex("#A98AF9");
+
+        // Style tuning: slightly crisper than Spark Professional, still modern.
+        t.windowRounding = 5.0f;
+        t.childRounding = 4.0f;
+        t.frameRounding = 5.0f;
+        t.popupRounding = 7.0f;
+        t.scrollbarRounding = 11.0f;
+        t.grabRounding = 4.0f;
+        t.tabRounding = 5.0f;
+
+        t.windowBorderSize = 1.0f;
+        t.childBorderSize = 1.0f;
+        t.popupBorderSize = 1.0f;
+        t.frameBorderSize = 0.0f;
+
+        t.windowPaddingX = 11.0f;
+        t.windowPaddingY = 10.0f;
+        t.framePaddingX = 9.0f;
+        t.framePaddingY = 6.0f;
+        t.itemSpacingX = 9.0f;
+        t.itemSpacingY = 6.0f;
+        t.itemInnerSpacingX = 6.0f;
+        t.itemInnerSpacingY = 5.0f;
+
+        t.indentSpacing = 20.0f;
+        t.scrollbarSize = 12.0f;
+        t.grabMinSize = 10.0f;
+
+        t.shadowOpacity = 0.42f;
+        t.shadowSize = 10.0f;
+        t.fontSize = 15.0f;
+        t.fontScale = 1.0f;
+        t.fontFamily = "Inter";
 
         return t;
     }
