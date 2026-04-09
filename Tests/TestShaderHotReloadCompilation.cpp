@@ -128,3 +128,70 @@ TEST(ShaderReloadComp_ReloadCountIncrements)
     hr.Shutdown();
     std::filesystem::remove_all(tempDir);
 }
+
+TEST(ShaderReloadComp_SuccessfulCompileSwapsAtomically)
+{
+    auto& hr = ShaderHotReload::GetInstance();
+    auto tempDir = std::filesystem::temp_directory_path() / "spark_shr_test6";
+    std::filesystem::create_directories(tempDir);
+
+    const auto shaderPath = tempDir / "AtomicSwapVS.hlsl";
+    {
+        std::ofstream(shaderPath) << "float4 main():SV_Target{return float4(1,0,0,1);}";
+    }
+
+    hr.Initialize(tempDir.string());
+
+    ShaderReloadEvent lastEvent{};
+    hr.OnShaderReloaded([&](const ShaderReloadEvent& ev) { lastEvent = ev; });
+    hr.ForceReload("AtomicSwapVS");
+
+    EXPECT_TRUE(lastEvent.success);
+    EXPECT_FALSE(lastEvent.reusedPreviousBinary);
+    EXPECT_TRUE(lastEvent.errorMessage.empty());
+    EXPECT_TRUE(hr.HasCompiledShader("AtomicSwapVS"));
+    EXPECT_EQ(hr.GetShaderSwapGeneration("AtomicSwapVS"), 1u);
+
+    hr.Shutdown();
+    std::filesystem::remove_all(tempDir);
+}
+
+TEST(ShaderReloadComp_FailedCompileKeepsPreviousShader)
+{
+    auto& hr = ShaderHotReload::GetInstance();
+    auto tempDir = std::filesystem::temp_directory_path() / "spark_shr_test7";
+    std::filesystem::create_directories(tempDir);
+
+    const auto shaderPath = tempDir / "RevertVS.hlsl";
+    {
+        std::ofstream(shaderPath) << "float4 main():SV_Target{return float4(0,1,0,1);}";
+    }
+
+    hr.Initialize(tempDir.string());
+    hr.ForceReload("RevertVS");
+    EXPECT_TRUE(hr.HasCompiledShader("RevertVS"));
+    EXPECT_EQ(hr.GetShaderSwapGeneration("RevertVS"), 1u);
+
+    ShaderReloadEvent failureEvent{};
+    hr.OnShaderReloaded(
+        [&](const ShaderReloadEvent& ev)
+        {
+            if (ev.shaderName == "RevertVS" && !ev.success)
+                failureEvent = ev;
+        });
+
+    // Empty file is a deterministic compile failure for this pipeline.
+    {
+        std::ofstream(shaderPath, std::ios::trunc) << "";
+    }
+    hr.ForceReload("RevertVS");
+
+    EXPECT_FALSE(failureEvent.success);
+    EXPECT_TRUE(failureEvent.reusedPreviousBinary);
+    EXPECT_FALSE(failureEvent.compileLog.empty());
+    EXPECT_TRUE(hr.HasCompiledShader("RevertVS"));
+    EXPECT_EQ(hr.GetShaderSwapGeneration("RevertVS"), 1u);
+
+    hr.Shutdown();
+    std::filesystem::remove_all(tempDir);
+}
