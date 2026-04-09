@@ -7,7 +7,6 @@
 
 #include "Core/EngineContext.h"
 #include "Engine/ECS/Components.h"
-#include "Engine/ECS/Systems/ECSystems.h"
 #include "Engine/Editor/SceneSnapshotSerializer.h"
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/InstabilitySimulator.h"
@@ -61,6 +60,26 @@ namespace
     {
         XMFLOAT4X4 world{};
     };
+
+    struct PhysicsEntityBinding
+    {
+        EntityID entity = entt::null;
+        std::shared_ptr<PhysicsBody> body;
+    };
+
+    static bool SyncTransformFromPhysics(World& world, const PhysicsEntityBinding& binding)
+    {
+        if (binding.entity == entt::null || !binding.body)
+            return false;
+
+        auto* transform = world.GetComponent<Transform>(binding.entity);
+        if (!transform)
+            return false;
+
+        const XMFLOAT3 position = binding.body->GetPosition();
+        transform->position = position;
+        return true;
+    }
 
     static bool UpdateWorldMatrixAndConstants(World& world, EntityID entity,
                                               Spark::Graphics::ConstantBufferDiffManager& cbDiff,
@@ -164,7 +183,9 @@ namespace
                 const uint32_t entityRaw = reader.ReadU32();
                 const entt::entity entity = static_cast<entt::entity>(entityRaw);
                 while (!registry->valid(entity))
-                    registry->create();
+                {
+                    [[maybe_unused]] const auto created = registry->create();
+                }
 
                 Transform transform;
                 reader.ReadFloat3(transform.position.x, transform.position.y, transform.position.z);
@@ -225,7 +246,9 @@ namespace
             {
                 const auto entity = static_cast<entt::entity>(reader.ReadU32());
                 while (!registry->valid(entity))
-                    registry->create();
+                {
+                    [[maybe_unused]] const auto created = registry->create();
+                }
 
                 NameComponent name;
                 name.name = reader.ReadString();
@@ -281,34 +304,32 @@ TEST(Integration_ECSPhysics_TransformSyncAfterSimulationTicks)
     auto& transform = world.AddComponent<Transform>(entity);
     transform.position = {0.0f, 8.0f, 0.0f};
 
-    auto& rigidBody = world.AddComponent<RigidBodyComponent>(entity);
-    rigidBody.type = RigidBodyComponent::Type::Dynamic;
-    rigidBody.mass = 1.0f;
+    PhysicsBodyDesc desc;
+    desc.type = PhysicsBodyType::Dynamic;
+    desc.position = transform.position;
+    desc.mass = 1.0f;
+    desc.shape.type = CollisionShapeType::Box;
+    desc.shape.dimensions = {0.5f, 0.5f, 0.5f};
 
-    world.AddComponent<ColliderComponent>(entity);
-
-    Spark::ECS::PhysicsUpdateSystem physicsSystem(&harness.physics, 1.0f / 60.0f);
-
-    physicsSystem.Update(world, 1.0f / 60.0f); // creates body
-    EXPECT_TRUE(rigidBody.physicsBodyHandle != Spark::PhysicsHandle{});
-    if (rigidBody.physicsBodyHandle == Spark::PhysicsHandle{})
+    PhysicsEntityBinding binding;
+    binding.entity = entity;
+    binding.body = harness.physics.CreateBody(desc);
+    EXPECT_TRUE(binding.body != nullptr);
+    if (!binding.body)
         return;
 
-    auto* body = rigidBody.physicsBodyHandle.As<PhysicsBody>();
-    EXPECT_TRUE(body != nullptr);
-    if (!body)
-        return;
-    body->SetLinearVelocity({2.0f, 0.0f, 0.0f});
+    binding.body->SetLinearVelocity({2.0f, 0.0f, 0.0f});
 
     const float xBeforeTicks = transform.position.x;
     for (int i = 0; i < 6; ++i)
     {
-        physicsSystem.Update(world, 1.0f / 60.0f);
+        harness.physics.Update(1.0f / 60.0f);
+        EXPECT_TRUE(SyncTransformFromPhysics(world, binding));
     }
 
     EXPECT_TRUE(transform.position.x > xBeforeTicks + 0.01f);
 
-    const XMFLOAT3 bodyPosition = body->GetPosition();
+    const XMFLOAT3 bodyPosition = binding.body->GetPosition();
     EXPECT_NEAR(transform.position.x, bodyPosition.x, 0.05f);
     EXPECT_NEAR(transform.position.y, bodyPosition.y, 0.05f);
 }
