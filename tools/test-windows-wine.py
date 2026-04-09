@@ -18,6 +18,8 @@ import sys
 import os
 import signal
 import json
+import argparse
+import shutil
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
@@ -36,11 +38,17 @@ class TestResult:
     phase: str = ""
 
 results: list[TestResult] = []
+HAS_WINE64 = False
 
 def test(name: str, condition: bool, detail: str = "", phase: str = ""):
     status = "PASS" if condition else "FAIL"
     print(f"  [{status}] {name}" + (f" — {detail}" if detail else ""))
     results.append(TestResult(name, condition, detail, phase))
+
+
+def mark_skipped(name: str, detail: str, phase: str):
+    """Record a skipped test as a structured non-crashing failure."""
+    test(name, False, f"Skipped: {detail}", phase)
 
 
 # ── Wine helpers ─────────────────────────────────────────────────────
@@ -137,6 +145,9 @@ def run_wine(exe_path: str, args: list[str] = None, timeout: int = 60,
     if env is None:
         env = get_wine_env()
 
+    if not HAS_WINE64:
+        return -1, "", "wine64 not found in PATH"
+
     cmd = ["wine64", exe_path] + args
     try:
         result = subprocess.run(
@@ -151,18 +162,24 @@ def run_wine(exe_path: str, args: list[str] = None, timeout: int = 60,
 
 
 def run_wine_process(exe_path: str, args: list[str] = None,
-                     env: dict = None) -> subprocess.Popen:
+                     env: dict = None) -> Optional[subprocess.Popen]:
     """Start a .exe under Wine as a background process."""
     if args is None:
         args = []
     if env is None:
         env = get_wine_env()
 
+    if not HAS_WINE64:
+        return None
+
     cmd = ["wine64", exe_path] + args
-    return subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, env=env, cwd=str(PROJECT_ROOT)
-    )
+    try:
+        return subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, env=env, cwd=str(PROJECT_ROOT)
+        )
+    except FileNotFoundError:
+        return None
 
 
 def read_output_nonblocking(proc: subprocess.Popen, timeout: float = 0.5) -> str:
@@ -196,11 +213,13 @@ def phase_prerequisites(build_dir: Path):
     print("=" * 60)
 
     # Wine available?
-    try:
+    global HAS_WINE64
+    HAS_WINE64 = shutil.which("wine64") is not None
+    if HAS_WINE64:
         result = subprocess.run(["wine64", "--version"], capture_output=True, text=True, timeout=10)
         test("Wine64 installed", result.returncode == 0,
              result.stdout.strip(), "prerequisites")
-    except FileNotFoundError:
+    else:
         test("Wine64 installed", False, "wine64 not found in PATH", "prerequisites")
 
     # MinGW compiler?
@@ -248,6 +267,11 @@ def phase_wine_setup():
 
     wine_run = str(PROJECT_ROOT / "tools" / "wine-run.sh")
     env = get_wine_env()
+    if not HAS_WINE64:
+        test("Wine prefix initialized", False, "Skipped: wine64 unavailable", "wine-setup")
+        test("DXVK installed in Wine prefix", False, "Skipped: wine64 unavailable", "wine-setup")
+        test("Wine environment info", False, "Skipped: wine64 unavailable", "wine-setup")
+        return
 
     # Setup Wine prefix
     try:
@@ -286,6 +310,10 @@ def phase_unit_tests(build_dir: Path):
     print("\n" + "=" * 60)
     print("[PHASE 2] Unit Tests Under Wine")
     print("=" * 60)
+
+    if not HAS_WINE64:
+        mark_skipped("Unit tests executable", "wine64 unavailable", "unit-tests")
+        return
 
     tests_exe = str(build_dir / "bin" / "SparkTests.exe")
     if not os.path.isfile(tests_exe):
@@ -341,6 +369,9 @@ def phase_engine_live(build_dir: Path):
     print("=" * 60)
 
     engine_exe = str(build_dir / "bin" / "SparkEngine.exe")
+    if not HAS_WINE64:
+        test("Engine executable", False, "Skipped: wine64 unavailable", "engine-live")
+        return
     if not os.path.isfile(engine_exe):
         test("Engine executable", False, "SparkEngine.exe not found", "engine-live")
         return
@@ -355,6 +386,11 @@ def phase_engine_live(build_dir: Path):
     print("  Launching SparkEngine.exe -test-frames 60 -window-size 320x240...")
     start = time.time()
     proc = run_wine_process(engine_exe, engine_args, env=env)
+    if proc is None:
+        test("Engine launches under Wine", False, "wine64 unavailable", "engine-live")
+        test("Engine initializes graphics subsystem", False, "wine64 unavailable", "engine-live")
+        test("Engine completes 60 frames and exits", False, "wine64 unavailable", "engine-live")
+        return
 
     max_wait = 180  # seconds (DXVK+Lavapipe ~3-30s, WineD3D ~120s+)
 
@@ -417,6 +453,9 @@ def phase_editor_live(build_dir: Path):
     print("=" * 60)
 
     editor_exe = str(build_dir / "bin" / "SparkEditor.exe")
+    if not HAS_WINE64:
+        test("Editor executable", False, "Skipped: wine64 unavailable", "editor-live")
+        return
     if not os.path.isfile(editor_exe):
         test("Editor executable", False, "SparkEditor.exe not found", "editor-live")
         return
@@ -430,6 +469,11 @@ def phase_editor_live(build_dir: Path):
     proc = run_wine_process(editor_exe,
                             ["--test-mode", "--test-frames", str(frames)],
                             env=env)
+    if proc is None:
+        test("Editor launches under Wine", False, "wine64 unavailable", "editor-live")
+        test("Editor initializes D3D11 + ImGui", False, "wine64 unavailable", "editor-live")
+        test("Editor completes {0} frames".format(frames), False, "wine64 unavailable", "editor-live")
+        return
 
     max_wait = 120
 
@@ -476,6 +520,26 @@ def phase_stress_tests(build_dir: Path):
     engine_exe = str(build_dir / "bin" / "SparkEngine.exe")
     tests_exe = str(build_dir / "bin" / "SparkTests.exe")
     env = get_wine_env()
+    if not HAS_WINE64:
+        mark_skipped("Rapid start/stop (5 cycles)", "wine64 unavailable", "stress")
+        mark_skipped("Single-frame exit", "wine64 unavailable", "stress")
+        mark_skipped("Negative frame count handled", "wine64 unavailable", "stress")
+        mark_skipped("Non-numeric frame count handled", "wine64 unavailable", "stress")
+        mark_skipped("Multiple concurrent instances launch", "wine64 unavailable", "stress")
+        mark_skipped("Concurrent instances exit cleanly", "wine64 unavailable", "stress")
+        mark_skipped("Extended 60-frame run", "wine64 unavailable", "stress")
+        mark_skipped("Headless mode completes", "wine64 unavailable", "stress")
+        return
+    if not os.path.isfile(engine_exe):
+        mark_skipped("Rapid start/stop (5 cycles)", "SparkEngine.exe not found", "stress")
+        mark_skipped("Single-frame exit", "SparkEngine.exe not found", "stress")
+        mark_skipped("Negative frame count handled", "SparkEngine.exe not found", "stress")
+        mark_skipped("Non-numeric frame count handled", "SparkEngine.exe not found", "stress")
+        mark_skipped("Multiple concurrent instances launch", "SparkEngine.exe not found", "stress")
+        mark_skipped("Concurrent instances exit cleanly", "SparkEngine.exe not found", "stress")
+        mark_skipped("Extended 60-frame run", "SparkEngine.exe not found", "stress")
+        mark_skipped("Headless mode completes", "SparkEngine.exe not found", "stress")
+        return
 
     # Low-res args for faster software rendering
     lo = ["-window-size", "320x240"]
@@ -512,7 +576,8 @@ def phase_stress_tests(build_dir: Path):
     procs = []
     for i in range(3):
         p = run_wine_process(engine_exe, ["-test-frames", "30"] + lo, env=env)
-        procs.append(p)
+        if p is not None:
+            procs.append(p)
     time.sleep(5)
 
     alive_count = sum(1 for p in procs if p.poll() is None)
@@ -564,12 +629,33 @@ def phase_break_it(build_dir: Path):
     engine_exe = str(build_dir / "bin" / "SparkEngine.exe")
     editor_exe = str(build_dir / "bin" / "SparkEditor.exe")
     env = get_wine_env()
+    if not HAS_WINE64:
+        mark_skipped("Engine handles SIGKILL during init", "wine64 unavailable", "break")
+        mark_skipped("Engine handles SIGTERM gracefully", "wine64 unavailable", "break")
+        mark_skipped("Engine with fresh Wine prefix", "wine64 unavailable", "break")
+        mark_skipped("Engine handles missing Vulkan gracefully", "wine64 unavailable", "break")
+        mark_skipped("Simultaneous engine+editor", "wine64 unavailable", "break")
+        return
+    if not os.path.isfile(engine_exe):
+        mark_skipped("Engine handles SIGKILL during init", "SparkEngine.exe not found", "break")
+        mark_skipped("Engine handles SIGTERM gracefully", "SparkEngine.exe not found", "break")
+        mark_skipped("Engine with fresh Wine prefix", "SparkEngine.exe not found", "break")
+        mark_skipped("Engine handles missing Vulkan gracefully", "SparkEngine.exe not found", "break")
+        mark_skipped("Simultaneous engine+editor", "SparkEngine.exe not found", "break")
+        return
 
     lo = ["-window-size", "640x480"]
 
     # Break test 1: Kill during initialization
     print("\n  [6a] Kill during initialization...")
     proc = run_wine_process(engine_exe, ["-test-frames", "1000"] + lo, env=env)
+    if proc is None:
+        mark_skipped("Engine handles SIGKILL during init", "wine process failed to launch", "break")
+        mark_skipped("Engine handles SIGTERM gracefully", "wine process failed to launch", "break")
+        mark_skipped("Engine with fresh Wine prefix", "wine process failed to launch", "break")
+        mark_skipped("Engine handles missing Vulkan gracefully", "wine process failed to launch", "break")
+        mark_skipped("Simultaneous engine+editor", "wine process failed to launch", "break")
+        return
     time.sleep(0.5)  # Kill mid-init
     proc.kill()
     rc = proc.wait()
@@ -579,6 +665,9 @@ def phase_break_it(build_dir: Path):
     # Break test 2: SIGTERM during rendering
     print("  [6b] SIGTERM during rendering...")
     proc = run_wine_process(engine_exe, ["-test-frames", "1000"], env=env)
+    if proc is None:
+        mark_skipped("Engine handles SIGTERM gracefully", "wine process failed to launch", "break")
+        return
     time.sleep(3)  # Let it start rendering
     proc.send_signal(signal.SIGTERM)
     try:
@@ -629,6 +718,10 @@ def phase_break_it(build_dir: Path):
                           ["--test-mode", "--test-frames", "30"],
                           env=env) if os.path.isfile(editor_exe) else None
     time.sleep(5)
+
+    if p1 is None:
+        mark_skipped("Simultaneous engine+editor", "engine launch failed", "break")
+        return
 
     p1_alive = p1.poll() is None
     p2_alive = p2.poll() is None if p2 else False
@@ -697,11 +790,16 @@ def print_summary():
 # ── Main ─────────────────────────────────────────────────────────────
 
 def main():
-    build_dir = Path("build/linux-mingw-release")
-
-    for i, arg in enumerate(sys.argv[1:], 1):
-        if arg == "--build-dir" and i < len(sys.argv) - 1:
-            build_dir = Path(sys.argv[i + 1])
+    parser = argparse.ArgumentParser(
+        description="Run SparkEngine Windows (MinGW) live tests under Wine."
+    )
+    parser.add_argument(
+        "--build-dir",
+        default="build/linux-mingw-release",
+        help="Build directory containing bin/*.exe outputs.",
+    )
+    args = parser.parse_args()
+    build_dir = Path(args.build_dir)
 
     build_dir = build_dir.resolve() if not build_dir.is_absolute() else build_dir
 

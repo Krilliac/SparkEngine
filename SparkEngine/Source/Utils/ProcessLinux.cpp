@@ -369,7 +369,25 @@ namespace Spark
     {
         if (!m_impl || m_impl->stdinWriteFd < 0)
             return;
-        write(m_impl->stdinWriteFd, data.data(), data.size());
+
+        const char* cursor = data.data();
+        size_t remaining = data.size();
+        while (remaining > 0)
+        {
+            const ssize_t written = write(m_impl->stdinWriteFd, cursor, remaining);
+            if (written > 0)
+            {
+                cursor += written;
+                remaining -= static_cast<size_t>(written);
+                continue;
+            }
+
+            if (written < 0 && errno == EINTR)
+                continue;
+
+            // EPIPE (child closed stdin) and any other write failure: stop writing.
+            break;
+        }
     }
 
     void Process::CloseStdin()

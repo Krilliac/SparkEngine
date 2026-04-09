@@ -21,9 +21,11 @@ import time
 import sys
 import os
 import signal
+import argparse
 import ctypes
 import ctypes.util
 import json
+import shutil
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -169,13 +171,30 @@ def test(name: str, condition: bool, detail: str = "", screenshot: str = ""):
 # ── Main test runner ──────────────────────────────────────────────────
 
 def main():
-    editor_path = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.abspath("build/bin/SparkEditor")
+    parser = argparse.ArgumentParser(
+        description="Run SparkEditor live GUI tests under X11/llvmpipe."
+    )
+    parser.add_argument(
+        "editor_path",
+        nargs="?",
+        default="build/bin/SparkEditor",
+        help="Path to SparkEditor binary (default: build/bin/SparkEditor)",
+    )
+    args = parser.parse_args()
+
+    editor_path = os.path.abspath(args.editor_path)
     output_dir = Path("/tmp/spark-editor-test")
     output_dir.mkdir(exist_ok=True)
 
     # Ensure DISPLAY is set
     if "DISPLAY" not in os.environ:
         print("ERROR: DISPLAY not set. Run with: export DISPLAY=:99")
+        sys.exit(1)
+    if not os.path.isfile(editor_path):
+        print(f"ERROR: Editor binary not found: {editor_path}")
+        sys.exit(1)
+    if shutil.which("xdotool") is None:
+        print("ERROR: xdotool not found in PATH")
         sys.exit(1)
 
     print("=" * 60)
@@ -190,12 +209,17 @@ def main():
     env["GALLIUM_DRIVER"] = "llvmpipe"
 
     editor_dir = os.path.dirname(editor_path)
-    proc = subprocess.Popen(
-        [editor_path, "--test-mode", "--debug-console"],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        cwd=editor_dir,
-        env=env
-    )
+    try:
+        proc = subprocess.Popen(
+            [editor_path, "--test-mode", "--debug-console"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            cwd=editor_dir,
+            env=env
+        )
+    except OSError as e:
+        test("Editor launches without crash", False, f"Launch error: {e}")
+        print_summary()
+        sys.exit(1)
     time.sleep(4)  # Wait for init
 
     alive = proc.poll() is None
@@ -248,7 +272,11 @@ def main():
     if "Position:" in geo:
         pos_part = geo.split("Position:")[1].split("(")[0].strip()
         parts = pos_part.split(",")
-        win_x, win_y = int(parts[0]), int(parts[1])
+        if len(parts) >= 2:
+            try:
+                win_x, win_y = int(parts[0]), int(parts[1])
+            except ValueError:
+                pass
 
     menu_y = win_y + 8  # Menu bar is ~8px from window top
 
@@ -378,8 +406,8 @@ def main():
          f"Exit code={proc.returncode}" if crash else "Still running")
 
     ss = str(output_dir / "09_final_state.png")
-    capture_screenshot(ss)
-    test("Final state screenshot captured", captured, screenshot=ss)
+    final_captured = capture_screenshot(ss)
+    test("Final state screenshot captured", final_captured, screenshot=ss)
 
     # ── Shutdown ──
     print("\n[CLEANUP] Shutting down editor...")
