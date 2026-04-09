@@ -11,6 +11,7 @@
  */
 
 #include "GizmoSystem.h"
+#include "../CommandHistory.h"
 #include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
@@ -241,7 +242,44 @@ namespace SparkEditor
             if (m_isDragging)
             {
                 // Mouse released -- end drag
+                if (!m_dragStartSnapshots.empty())
+                {
+                    std::vector<TransformSnapshot> startSnapshots = m_dragStartSnapshots;
+                    std::vector<TransformSnapshot> endSnapshots;
+                    endSnapshots.reserve(m_dragStartSnapshots.size());
+                    for (const auto& snap : m_dragStartSnapshots)
+                    {
+                        if (snap.target)
+                        {
+                            endSnapshots.push_back({snap.target, *snap.target});
+                        }
+                    }
+
+                    Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                        [endSnapshots]()
+                        {
+                            for (const auto& snap : endSnapshots)
+                            {
+                                if (snap.target)
+                                {
+                                    *snap.target = snap.value;
+                                }
+                            }
+                        },
+                        [startSnapshots]()
+                        {
+                            for (const auto& snap : startSnapshots)
+                            {
+                                if (snap.target)
+                                {
+                                    *snap.target = snap.value;
+                                }
+                            }
+                        },
+                        "Gizmo Transform Apply"));
+                }
                 m_isDragging = false;
+                m_dragStartSnapshots.clear();
                 m_interaction.isActive = false;
                 m_interaction.isDragging = false;
             }
@@ -265,6 +303,15 @@ namespace SparkEditor
                 m_interaction.totalDelta = 0.0f;
                 m_lastMouseWorldPos = ray.origin;
                 m_interactionStartPos = center;
+                m_dragStartSnapshots.clear();
+                m_dragStartSnapshots.reserve(selectedObjects.size());
+                for (Transform* transform : selectedObjects)
+                {
+                    if (transform)
+                    {
+                        m_dragStartSnapshots.push_back({transform, *transform});
+                    }
+                }
             }
         }
 
@@ -685,6 +732,7 @@ namespace SparkEditor
 
     void GizmoSystem::ApplyTranslation(const XMFLOAT3& delta, std::vector<Transform*>& transforms)
     {
+        Spark::Editor::CommandHistory::WarnIfBypassingDispatch("GizmoSystem::ApplyTranslation");
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Applying translation delta (%.3f, %.3f, %.3f) to %zu objects",
                         delta.x, delta.y, delta.z, transforms.size());
         for (auto* t : transforms)
@@ -700,6 +748,7 @@ namespace SparkEditor
 
     void GizmoSystem::ApplyRotation(GizmoAxis axis, float angleDelta, std::vector<Transform*>& transforms)
     {
+        Spark::Editor::CommandHistory::WarnIfBypassingDispatch("GizmoSystem::ApplyRotation");
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Applying rotation delta %.3f rad on axis %d to %zu objects",
                         angleDelta, static_cast<int>(axis), transforms.size());
         XMVECTOR rotAxis = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
@@ -734,6 +783,7 @@ namespace SparkEditor
 
     void GizmoSystem::ApplyScale(const XMFLOAT3& scale, GizmoAxis axis, std::vector<Transform*>& transforms)
     {
+        Spark::Editor::CommandHistory::WarnIfBypassingDispatch("GizmoSystem::ApplyScale");
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Applying scale (%.3f, %.3f, %.3f) on axis %d to %zu objects",
                         scale.x, scale.y, scale.z, static_cast<int>(axis), transforms.size());
         for (auto* t : transforms)

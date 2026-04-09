@@ -411,6 +411,12 @@ namespace SparkEditor
         XMFLOAT3 m_interactionStartPos = {0, 0, 0}; ///< Interaction start position
         bool m_isDragging = false;                  ///< Currently dragging
         GizmoAxis m_hoveredAxis = GizmoAxis::NONE;  ///< Currently hovered axis
+        struct TransformSnapshot
+        {
+            Transform* target = nullptr;
+            Transform value = {};
+        };
+        std::vector<TransformSnapshot> m_dragStartSnapshots; ///< Snapshot at gizmo drag begin for undo command
 
         // Rendering resources
         struct GizmoGeometry

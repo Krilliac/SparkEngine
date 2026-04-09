@@ -12,6 +12,16 @@
 
 namespace SparkEditor
 {
+    namespace
+    {
+        thread_local int g_dispatchDepth = 0;
+    }
+
+    UndoRedoManager& UndoRedoManager::GetInstance()
+    {
+        static UndoRedoManager instance;
+        return instance;
+    }
 
     UndoRedoManager::UndoRedoManager() = default;
 
@@ -32,7 +42,9 @@ namespace SparkEditor
 
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Executing command: '%s'", command->GetDescription().c_str());
         // Execute the command
+        ++g_dispatchDepth;
         command->Execute();
+        --g_dispatchDepth;
 
         // Push onto undo stack
         m_undoStack.push_back(std::move(command));
@@ -59,7 +71,9 @@ namespace SparkEditor
         m_undoStack.pop_back();
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Undoing command: '%s' (stack depth: %zu)",
                         command->GetDescription().c_str(), m_undoStack.size());
+        ++g_dispatchDepth;
         command->Undo();
+        --g_dispatchDepth;
 
         m_redoStack.push_back(std::move(command));
 
@@ -79,7 +93,9 @@ namespace SparkEditor
         auto command = std::move(m_redoStack.back());
         m_redoStack.pop_back();
 
+        ++g_dispatchDepth;
         command->Execute();
+        --g_dispatchDepth;
 
         m_undoStack.push_back(std::move(command));
 
@@ -188,6 +204,21 @@ namespace SparkEditor
             {
                 --m_savedIndex;
             }
+        }
+    }
+
+    bool UndoRedoManager::IsDispatchingCommand()
+    {
+        return g_dispatchDepth > 0;
+    }
+
+    void UndoRedoManager::WarnIfMutationBypassesDispatch(const char* operation)
+    {
+        if (!IsDispatchingCommand())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "Editor mutation bypassed UndoRedoManager dispatch at '%s'. Wrap this in an EditorCommand.",
+                           operation ? operation : "unknown");
         }
     }
 

@@ -41,6 +41,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include "UndoRedo/UndoRedoManager.h"
 
 namespace Spark::Editor
 {
@@ -115,30 +116,8 @@ namespace Spark::Editor
      */
         void Execute(std::unique_ptr<ICommand> command)
         {
-            command->Execute();
-
-            // Try to merge with the last command
-            if (!m_undoStack.empty() && command->GetTypeId() != 0 &&
-                m_undoStack.back()->GetTypeId() == command->GetTypeId())
-            {
-                if (m_undoStack.back()->MergeWith(*command))
-                {
-                    // Merged — discard the new command
-                    m_redoStack.clear();
-                    NotifyChange();
-                    return;
-                }
-            }
-
-            m_undoStack.push_back(std::move(command));
-            m_redoStack.clear();
-
-            // Enforce max history size
-            while (m_undoStack.size() > m_maxHistory)
-            {
-                m_undoStack.erase(m_undoStack.begin());
-            }
-
+            auto wrapped = std::make_unique<CommandHistoryAdapterCommand>(std::move(command));
+            m_manager.ExecuteCommand(std::move(wrapped));
             NotifyChange();
         }
 
@@ -148,15 +127,12 @@ namespace Spark::Editor
      */
         bool Undo()
         {
-            if (m_undoStack.empty())
-                return false;
-
-            auto cmd = std::move(m_undoStack.back());
-            m_undoStack.pop_back();
-            cmd->Undo();
-            m_redoStack.push_back(std::move(cmd));
-            NotifyChange();
-            return true;
+            const bool changed = m_manager.Undo();
+            if (changed)
+            {
+                NotifyChange();
+            }
+            return changed;
         }
 
         /**
@@ -165,48 +141,38 @@ namespace Spark::Editor
      */
         bool Redo()
         {
-            if (m_redoStack.empty())
-                return false;
-
-            auto cmd = std::move(m_redoStack.back());
-            m_redoStack.pop_back();
-            cmd->Execute();
-            m_undoStack.push_back(std::move(cmd));
-            NotifyChange();
-            return true;
+            const bool changed = m_manager.Redo();
+            if (changed)
+            {
+                NotifyChange();
+            }
+            return changed;
         }
 
-        bool CanUndo() const { return !m_undoStack.empty(); }
-        bool CanRedo() const { return !m_redoStack.empty(); }
+        bool CanUndo() const { return m_manager.CanUndo(); }
+        bool CanRedo() const { return m_manager.CanRedo(); }
 
         /** @brief Get the description of the command that would be undone. */
-        std::string GetUndoDescription() const
-        {
-            return m_undoStack.empty() ? "" : m_undoStack.back()->GetDescription();
-        }
+        std::string GetUndoDescription() const { return m_manager.GetUndoDescription(); }
 
         /** @brief Get the description of the command that would be redone. */
-        std::string GetRedoDescription() const
-        {
-            return m_redoStack.empty() ? "" : m_redoStack.back()->GetDescription();
-        }
+        std::string GetRedoDescription() const { return m_manager.GetRedoDescription(); }
 
         /** @brief Clear all history (e.g., when opening a new scene). */
         void Clear()
         {
-            m_undoStack.clear();
-            m_redoStack.clear();
+            m_manager.Clear();
             NotifyChange();
         }
 
         /** @brief Set the maximum number of undo steps to retain. */
-        void SetMaxHistory(size_t max) { m_maxHistory = max; }
+        void SetMaxHistory(size_t max) { m_manager.SetMaxStackDepth(max); }
 
         /** @brief Number of undo steps available. */
-        size_t UndoCount() const { return m_undoStack.size(); }
+        size_t UndoCount() const { return m_manager.GetUndoStack().size(); }
 
         /** @brief Number of redo steps available. */
-        size_t RedoCount() const { return m_redoStack.size(); }
+        size_t RedoCount() const { return m_manager.GetRedoStack().size(); }
 
         /** @brief Register a callback invoked whenever the history changes. */
         void OnChange(std::function<void()> callback) { m_changeCallbacks.push_back(std::move(callback)); }
@@ -216,13 +182,65 @@ namespace Spark::Editor
      *
      * `IsModified()` returns false until further commands are executed.
      */
-        void MarkSaved() { m_savedIndex = m_undoStack.size(); }
+        void MarkSaved() { m_manager.MarkSaved(); }
 
         /** @brief True if the scene has been modified since the last save. */
-        bool IsModified() const { return m_undoStack.size() != m_savedIndex; }
+        bool IsModified() const { return m_manager.HasUnsavedChanges(); }
+
+        /**
+         * @brief Runtime guard for mutation paths that bypass command dispatch.
+         */
+        static void WarnIfBypassingDispatch(const char* operation)
+        {
+            SparkEditor::UndoRedoManager::WarnIfMutationBypassesDispatch(operation);
+        }
 
       private:
-        CommandHistory() = default;
+        class CommandHistoryAdapterCommand final : public SparkEditor::EditorCommand
+        {
+          public:
+            explicit CommandHistoryAdapterCommand(std::unique_ptr<ICommand> command) : m_command(std::move(command)) {}
+
+            void Execute() override
+            {
+                if (m_command)
+                {
+                    m_command->Execute();
+                }
+            }
+
+            void Undo() override
+            {
+                if (m_command)
+                {
+                    m_command->Undo();
+                }
+            }
+
+            std::string GetDescription() const override
+            {
+                return m_command ? m_command->GetDescription() : "CommandHistoryAdapter";
+            }
+
+            bool MergeWith(const SparkEditor::EditorCommand* other) override
+            {
+                const auto* rhs = dynamic_cast<const CommandHistoryAdapterCommand*>(other);
+                if (!rhs || !m_command || !rhs->m_command)
+                {
+                    return false;
+                }
+                if (m_command->GetTypeId() == 0 || m_command->GetTypeId() != rhs->m_command->GetTypeId())
+                {
+                    return false;
+                }
+                return m_command->MergeWith(*rhs->m_command);
+            }
+
+          private:
+            std::unique_ptr<ICommand> m_command;
+        };
+
+        CommandHistory() : m_manager(SparkEditor::UndoRedoManager::GetInstance()) {}
 
         void NotifyChange()
         {
@@ -233,11 +251,8 @@ namespace Spark::Editor
             }
         }
 
-        std::vector<std::unique_ptr<ICommand>> m_undoStack;
-        std::vector<std::unique_ptr<ICommand>> m_redoStack;
+        SparkEditor::UndoRedoManager& m_manager;
         std::vector<std::function<void()>> m_changeCallbacks;
-        size_t m_maxHistory = 100;
-        size_t m_savedIndex = 0;
     };
 
     // ============================================================================
