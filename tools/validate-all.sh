@@ -45,8 +45,9 @@ case "${1:-check}" in
         echo "  tools/check-editor-panels.sh     Editor panel registration"
         echo "  tools/check-wiki-nav.sh          Wiki sidebar consistency"
         echo "  tools/check-wiring.sh            System wiring validation"
-        echo "  tools/check-bloat.sh             File size threshold checker"
+        echo "  tools/check-bloat.sh             File size threshold checker (baseline-aware)"
         echo "  tools/check-doxygen-coverage.sh  Doxygen comment coverage"
+        echo "  tools/check-cross-utilization.sh Architectural dependency boundaries"
         exit 0
         ;;
 esac
@@ -87,8 +88,9 @@ run_check "Header Guards (#pragma once)" "check-pragma-once.sh"
 run_check "Editor Panel Registration"    "check-editor-panels.sh"
 run_check "Wiki Navigation"              "check-wiki-nav.sh"
 run_check "System Wiring"                "check-wiring.sh"
-run_check "Bloat Thresholds"             "check-bloat.sh" "check"
+run_check "Bloat Thresholds (New Only)"  "check-bloat.sh" "new-only"
 run_check "Doxygen Coverage"             "check-doxygen-coverage.sh" "check"
+run_check "Cross-Utilization Boundaries" "check-cross-utilization.sh"
 
 # Summary
 echo ""

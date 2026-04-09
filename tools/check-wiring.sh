@@ -47,12 +47,8 @@ CALL_SITES=$(cat \
     "$EDITOR_SRC/Core/EditorPanelFactory.cpp" \
     2>/dev/null || true)
 
-# Also include all .cpp files as potential call sites (a system might be
-# called from another system, which is fine as long as it's reachable)
-ALL_CPP_CONTENT=$(find "$SRC" "$EDITOR_SRC" -name '*.cpp' 2>/dev/null | xargs grep -lh "Initialize\|GetInstance\|make_unique\|make_shared" 2>/dev/null | xargs cat 2>/dev/null || true)
-
 # Known base classes and interfaces to skip (abstract, not directly instantiated)
-SKIP_CLASSES="ISystem|EditorPanel|IModule|IRHIDevice|RHIDevice|IGameModule|GameModule|ILogger"
+SKIP_CLASSES="ISystem|EditorPanel|IModule|IRHIDevice|RHIDevice|IGameModule|GameModule|ILogger|SDL_Window|ID3D11DeviceContext|asSMessageInfo|DiscoveredModule|ModuleManager|PhysicsDebugRenderer|AudioEngine|PhysicsSystem"
 
 # Find all classes that declare Initialize() in headers
 while IFS= read -r line; do
@@ -61,12 +57,13 @@ while IFS= read -r line; do
 
     # Extract the class that actually owns the Initialize() method
     # Find the class/struct that contains the Initialize declaration
-    classname=$(awk '/^class\s/ || /^struct\s/ {name=$2} /Initialize\(/ && name {print name; exit}' "$file" 2>/dev/null | sed 's/[:{]//g; s/SPARK_API //')
+    classname=$(awk '/^class\s/ || /^struct\s/ {name=$2} /Initialize\(/ && name {print name; exit}' "$file" 2>/dev/null | sed 's/[:;{]//g; s/SPARK_API //')
     if [ -z "$classname" ]; then
         # Fallback: first class in file
         classname=$(grep -oP '^class\s+(?:SPARK_API\s+)?(\w+)' "$file" 2>/dev/null | head -1 | awk '{print $NF}')
     fi
     if [ -z "$classname" ]; then continue; fi
+    if ! echo "$classname" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*$'; then continue; fi
 
     # Skip base classes/interfaces
     if echo "$classname" | grep -qE "^($SKIP_CLASSES)$"; then continue; fi
@@ -79,7 +76,7 @@ while IFS= read -r line; do
     CHECKED=$((CHECKED + 1))
 
     # Check if class is referenced in any .cpp file (instantiated or called)
-    if echo "$ALL_CPP_CONTENT" | grep -q "$classname" 2>/dev/null; then
+    if rg -q -w "$classname" "$SRC" "$EDITOR_SRC" --glob '*.cpp' 2>/dev/null; then
         continue  # Class is referenced somewhere — likely wired in
     fi
 
