@@ -31,11 +31,14 @@
 #pragma once
 
 #include "Spark/ServiceInterfaces.h"
+#include "Utils/Assert.h"
 
 #include <algorithm>
 #include <cstdint>
+#include <shared_mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -158,10 +161,13 @@ namespace Spark::Gameplay
         }
 
         /**
-         * @brief Initialize the registry
+         * @brief Reset and initialize the registry state.
+         * @note Threading: game-thread-only.
          */
         void Initialize() override
         {
+            m_gameThreadId = std::this_thread::get_id();
+            std::unique_lock lock(m_registryMutex);
             m_nextId = 1;
             m_tags.clear();
             m_nameToId.clear();
@@ -169,26 +175,143 @@ namespace Spark::Gameplay
         }
 
         /**
-         * @brief Shut down and clear all registered tags
+         * @brief Clear all registered tags and mark the service uninitialized.
+         * @note Threading: game-thread-only.
          */
         void Shutdown() override
         {
+            AssertGameThread("Shutdown");
+            std::unique_lock lock(m_registryMutex);
             m_tags.clear();
             m_nameToId.clear();
             m_initialized = false;
         }
 
+        /**
+         * @brief Register a tag by string view.
+         * @note Threading: game-thread-only.
+         */
         uint32_t RegisterTag(std::string_view fullName) override { return RegisterTag(std::string(fullName)); }
 
         /**
-         * @brief Register a tag (and all parent tags implicitly)
-         * @param fullName Dot-separated tag name (e.g. "Damage.Fire.DoT")
-         * @return The tag ID for the registered tag
-         *
-         * If the tag already exists, returns its existing ID.
-         * Parent tags (e.g. "Damage", "Damage.Fire") are created automatically.
+         * @brief Register a tag (and all parent tags implicitly).
+         * @param fullName Dot-separated tag name (e.g. "Damage.Fire.DoT").
+         * @return The tag ID for the registered tag.
+         * @note Threading: game-thread-only.
          */
         GameplayTagId RegisterTag(const std::string& fullName)
+        {
+            AssertGameThread("RegisterTag");
+            std::unique_lock lock(m_registryMutex);
+            return RegisterTagUnlocked(fullName);
+        }
+
+        /**
+         * @brief Get the ID for a tag name
+         * @param fullName Dot-separated tag name
+         * @return Tag ID, or INVALID_TAG_ID if not registered
+         */
+        uint32_t GetTagId(std::string_view fullName) const override { return GetTagId(std::string(fullName)); }
+
+        /**
+         * @brief Get the ID for a tag name.
+         * @param fullName Dot-separated tag name.
+         * @return Tag ID, or INVALID_TAG_ID if not registered.
+         * @note Threading: thread-safe.
+         */
+        GameplayTagId GetTagId(const std::string& fullName) const
+        {
+            std::shared_lock lock(m_registryMutex);
+            return GetTagIdUnlocked(fullName);
+        }
+
+        /**
+         * @brief Get tag info by ID.
+         * @param id Tag ID.
+         * @return Pointer to immutable tag info, or nullptr if not found.
+         * @note Threading: thread-safe.
+         */
+        const GameplayTagInfo* GetTagInfo(GameplayTagId id) const
+        {
+            std::shared_lock lock(m_registryMutex);
+            auto it = m_tags.find(id);
+            return it != m_tags.end() ? &it->second : nullptr;
+        }
+
+        /**
+         * @brief Check if @p tagId equals @p parentTagId or is its descendant.
+         * @note Threading: thread-safe.
+         */
+        bool IsTagChildOf(GameplayTagId tagId, GameplayTagId parentTagId) const
+        {
+            std::shared_lock lock(m_registryMutex);
+            return IsTagChildOfUnlocked(tagId, parentTagId);
+        }
+
+        /**
+         * @brief Check if any tag in @p container matches @p parentTagName or its descendants.
+         * @note Threading: thread-safe.
+         */
+        bool ContainerMatchesTag(const GameplayTagContainer& container, const std::string& parentTagName) const
+        {
+            std::shared_lock lock(m_registryMutex);
+            GameplayTagId parentId = GetTagIdUnlocked(parentTagName);
+            if (parentId == INVALID_TAG_ID)
+                return false;
+
+            for (auto tagId : container.GetTags())
+            {
+                if (IsTagChildOfUnlocked(tagId, parentId))
+                    return true;
+            }
+            return false;
+        }
+
+        /**
+         * @brief Get the total number of registered tags.
+         * @note Threading: thread-safe.
+         */
+        size_t GetTagCount() const
+        {
+            std::shared_lock lock(m_registryMutex);
+            return m_tags.size();
+        }
+
+        /**
+         * @brief Get all registered tag names, sorted alphabetically.
+         * @note Threading: thread-safe.
+         */
+        std::vector<std::string> GetAllTagNames() const
+        {
+            std::shared_lock lock(m_registryMutex);
+            std::vector<std::string> names;
+            names.reserve(m_nameToId.size());
+            for (const auto& [name, id] : m_nameToId)
+                names.push_back(name);
+            std::sort(names.begin(), names.end());
+            return names;
+        }
+
+        /**
+         * @brief Get debug/console status text.
+         * @note Threading: thread-safe.
+         */
+        std::string Console_GetStatus() const
+        {
+            std::shared_lock lock(m_registryMutex);
+            return "GameplayTagRegistry: " + std::to_string(m_tags.size()) + " tags registered";
+        }
+
+      private:
+        GameplayTagRegistry() = default;
+
+        void AssertGameThread(const char* methodName) const
+        {
+            ASSERT_MSG(std::this_thread::get_id() == m_gameThreadId, "GameplayTagRegistry::%s must run on game thread",
+                       methodName);
+        }
+
+        GameplayTagId RegisterTagUnlocked(const std::string& fullName)
         {
             if (fullName.empty())
                 return INVALID_TAG_ID;
@@ -197,13 +320,12 @@ namespace Spark::Gameplay
             if (existing != m_nameToId.end())
                 return existing->second;
 
-            // Register parent tags first
             GameplayTagId parentId = INVALID_TAG_ID;
             auto lastDot = fullName.rfind('.');
             if (lastDot != std::string::npos)
             {
                 std::string parentName = fullName.substr(0, lastDot);
-                parentId = RegisterTag(parentName);
+                parentId = RegisterTagUnlocked(parentName);
             }
 
             GameplayTagId id = m_nextId++;
@@ -214,44 +336,19 @@ namespace Spark::Gameplay
             m_tags[id] = info;
             m_nameToId[fullName] = id;
 
-            // Add as child of parent
             if (parentId != INVALID_TAG_ID)
                 m_tags[parentId].children.push_back(id);
 
             return id;
         }
 
-        /**
-         * @brief Get the ID for a tag name
-         * @param fullName Dot-separated tag name
-         * @return Tag ID, or INVALID_TAG_ID if not registered
-         */
-        uint32_t GetTagId(std::string_view fullName) const override { return GetTagId(std::string(fullName)); }
-
-        GameplayTagId GetTagId(const std::string& fullName) const
+        GameplayTagId GetTagIdUnlocked(const std::string& fullName) const
         {
             auto it = m_nameToId.find(fullName);
             return it != m_nameToId.end() ? it->second : INVALID_TAG_ID;
         }
 
-        /**
-         * @brief Get tag info by ID
-         * @param id Tag ID
-         * @return Pointer to tag info, or nullptr if not found
-         */
-        const GameplayTagInfo* GetTagInfo(GameplayTagId id) const
-        {
-            auto it = m_tags.find(id);
-            return it != m_tags.end() ? &it->second : nullptr;
-        }
-
-        /**
-         * @brief Check if a tag matches another tag or is a child of it
-         * @param tagId The tag to check
-         * @param parentTagId The potential parent tag
-         * @return true if tagId equals parentTagId or is a descendant
-         */
-        bool IsTagChildOf(GameplayTagId tagId, GameplayTagId parentTagId) const
+        bool IsTagChildOfUnlocked(GameplayTagId tagId, GameplayTagId parentTagId) const
         {
             GameplayTagId current = tagId;
             while (current != INVALID_TAG_ID)
@@ -266,59 +363,9 @@ namespace Spark::Gameplay
             return false;
         }
 
-        /**
-         * @brief Check if a container has a tag matching the given tag or any child of it
-         * @param container The tag container to search
-         * @param parentTagName Tag name to match (also matches children)
-         * @return true if any tag in the container matches
-         */
-        bool ContainerMatchesTag(const GameplayTagContainer& container, const std::string& parentTagName) const
-        {
-            GameplayTagId parentId = GetTagId(parentTagName);
-            if (parentId == INVALID_TAG_ID)
-                return false;
-
-            for (auto tagId : container.GetTags())
-            {
-                if (IsTagChildOf(tagId, parentId))
-                    return true;
-            }
-            return false;
-        }
-
-        /**
-         * @brief Get the total number of registered tags
-         * @return Number of tags
-         */
-        size_t GetTagCount() const { return m_tags.size(); }
-
-        /**
-         * @brief Get all registered tag names
-         * @return Vector of tag names sorted alphabetically
-         */
-        std::vector<std::string> GetAllTagNames() const
-        {
-            std::vector<std::string> names;
-            names.reserve(m_nameToId.size());
-            for (const auto& [name, id] : m_nameToId)
-                names.push_back(name);
-            std::sort(names.begin(), names.end());
-            return names;
-        }
-
-        /**
-         * @brief Get status string for console/debug display
-         * @return Formatted status string
-         */
-        std::string Console_GetStatus() const
-        {
-            return "GameplayTagRegistry: " + std::to_string(m_tags.size()) + " tags registered";
-        }
-
-      private:
-        GameplayTagRegistry() = default;
-
         bool m_initialized = false;
+        std::thread::id m_gameThreadId = std::this_thread::get_id();
+        mutable std::shared_mutex m_registryMutex;
         GameplayTagId m_nextId = 1;
         std::unordered_map<GameplayTagId, GameplayTagInfo> m_tags;
         std::unordered_map<std::string, GameplayTagId> m_nameToId;

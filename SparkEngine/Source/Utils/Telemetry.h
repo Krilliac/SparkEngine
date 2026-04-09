@@ -29,12 +29,17 @@
 #pragma once
 
 #include "Spark/ServiceInterfaces.h"
+#include "Utils/Assert.h"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <fstream>
+#include <mutex>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -56,6 +61,7 @@ namespace Spark
         uint64_t timestamp = 0;                                  ///< Epoch milliseconds
         std::unordered_map<std::string, std::string> properties; ///< Key-value metadata
         std::string sessionId;                                   ///< Session identifier
+        uint64_t sequence = 0;                                   ///< Monotonic enqueue order for deterministic flush
     };
 
     // ============================================================================
@@ -231,13 +237,23 @@ namespace Spark
         /**
          * @brief Initialize the telemetry system.
          * @param config Configuration (enable, consent, paths, batching).
+         * @note Threading: game-thread-only.
          */
         void Initialize(const TelemetryConfig& config)
         {
+            m_gameThreadId = std::this_thread::get_id();
             m_config = config;
-            m_eventQueue.clear();
+            {
+                std::lock_guard<std::mutex> queueLock(m_eventQueueMutex);
+                m_eventQueue.clear();
+            }
             m_timeSinceFlush = 0.0f;
-            m_totalEventsRecorded = 0;
+            m_queuedEventCount.store(0, std::memory_order_relaxed);
+            m_totalEventsRecorded.store(0, std::memory_order_relaxed);
+            m_nextEventSequence.store(1, std::memory_order_relaxed);
+            m_enabled.store(m_config.enabled, std::memory_order_relaxed);
+            m_consentGiven.store(m_config.consentGiven, std::memory_order_relaxed);
+            m_maxQueueSize.store(m_config.maxQueueSize, std::memory_order_relaxed);
 
             // Generate a simple session ID from the current time
             auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -250,19 +266,27 @@ namespace Spark
                 m_backend = std::make_unique<LocalFileTelemetryBackend>(m_config.localExportPath);
             }
 
-            m_initialized = true;
+            m_initialized.store(true, std::memory_order_release);
         }
 
-        /** @brief Flush remaining events and shut down. */
+        /**
+         * @brief Flush remaining events and shut down.
+         * @note Threading: game-thread-only.
+         */
         void Shutdown() override
         {
-            if (m_initialized)
+            AssertGameThread("Shutdown");
+            if (m_initialized.load(std::memory_order_acquire))
             {
                 FlushEvents();
             }
-            m_eventQueue.clear();
+            {
+                std::lock_guard<std::mutex> queueLock(m_eventQueueMutex);
+                m_eventQueue.clear();
+            }
+            m_queuedEventCount.store(0, std::memory_order_relaxed);
             m_backend.reset();
-            m_initialized = false;
+            m_initialized.store(false, std::memory_order_release);
         }
 
         // --- Recording ---
@@ -273,6 +297,7 @@ namespace Spark
          * @param properties Optional key-value metadata.
          *
          * Silently drops the event if consent is not given or the queue is full.
+         * @note Threading: thread-safe (multi-producer).
          */
         void RecordEvent(std::string_view name,
                          const std::optional<std::unordered_map<std::string, std::string>>& properties = std::nullopt)
@@ -280,18 +305,15 @@ namespace Spark
             if (!CanRecord())
                 return;
 
-            if (m_eventQueue.size() >= m_config.maxQueueSize)
-                return;
-
             TelemetryEvent evt;
             evt.name = std::string(name);
             evt.timestamp = GetCurrentTimestampMs();
             evt.sessionId = m_sessionId;
+            evt.sequence = m_nextEventSequence.fetch_add(1, std::memory_order_relaxed);
             if (properties.has_value())
                 evt.properties = properties.value();
 
-            m_eventQueue.push_back(std::move(evt));
-            m_totalEventsRecorded++;
+            EnqueueEventThreadSafe(std::move(evt));
         }
 
         /**
@@ -299,6 +321,7 @@ namespace Spark
          * @param name       Event name.
          * @param durationMs Duration of the measured operation in milliseconds.
          * @param properties Optional additional metadata.
+         * @note Threading: thread-safe (multi-producer).
          */
         void RecordTimedEvent(
             std::string_view name, float durationMs,
@@ -319,42 +342,54 @@ namespace Spark
          * @brief Flush all queued events to the registered backend.
          *
          * Sends events in batches of config.batchSize.
+         * @note Threading: game-thread-only.
          */
         void FlushEvents()
         {
-            if (!m_backend || m_eventQueue.empty())
+            AssertGameThread("FlushEvents");
+            if (!m_backend)
                 return;
+
+            std::vector<TelemetryEvent> pendingEvents;
+            ExtractQueuedEventsForFlush_GameThread(pendingEvents);
+            if (pendingEvents.empty())
+                return;
+
+            std::sort(pendingEvents.begin(), pendingEvents.end(),
+                      [](const TelemetryEvent& lhs, const TelemetryEvent& rhs) { return lhs.sequence < rhs.sequence; });
 
             // Send in batches
             size_t offset = 0;
-            while (offset < m_eventQueue.size())
+            while (offset < pendingEvents.size())
             {
                 size_t batchEnd = offset + m_config.batchSize;
-                if (batchEnd > m_eventQueue.size())
-                    batchEnd = m_eventQueue.size();
+                if (batchEnd > pendingEvents.size())
+                    batchEnd = pendingEvents.size();
 
-                std::vector<TelemetryEvent> batch(m_eventQueue.begin() + static_cast<ptrdiff_t>(offset),
-                                                  m_eventQueue.begin() + static_cast<ptrdiff_t>(batchEnd));
+                std::vector<TelemetryEvent> batch(pendingEvents.begin() + static_cast<ptrdiff_t>(offset),
+                                                  pendingEvents.begin() + static_cast<ptrdiff_t>(batchEnd));
 
                 m_backend->Send(batch);
                 offset = batchEnd;
             }
 
-            m_eventQueue.clear();
             m_timeSinceFlush = 0.0f;
         }
 
         /**
          * @brief Per-frame update. Auto-flushes when the interval elapses.
          * @param dt Delta time in seconds.
+         * @note Threading: game-thread-only.
          */
         void Update(float dt) override
         {
-            if (!m_initialized || !m_config.enabled)
+            AssertGameThread("Update");
+            if (!m_initialized.load(std::memory_order_acquire) || !m_enabled.load(std::memory_order_relaxed))
                 return;
 
             m_timeSinceFlush += dt;
-            if (m_timeSinceFlush >= m_config.flushIntervalSeconds && !m_eventQueue.empty())
+            if (m_timeSinceFlush >= m_config.flushIntervalSeconds &&
+                m_queuedEventCount.load(std::memory_order_relaxed) > 0)
             {
                 FlushEvents();
             }
@@ -367,52 +402,81 @@ namespace Spark
          * @param consent true to allow recording, false to revoke.
          *
          * Revoking consent immediately clears all queued events.
+         * @note Threading: game-thread-only.
          */
         void SetConsent(bool consent)
         {
+            AssertGameThread("SetConsent");
             m_config.consentGiven = consent;
+            m_consentGiven.store(consent, std::memory_order_relaxed);
             if (!consent)
             {
+                std::lock_guard<std::mutex> queueLock(m_eventQueueMutex);
                 m_eventQueue.clear();
+                m_queuedEventCount.store(0, std::memory_order_relaxed);
             }
         }
 
-        /** @brief Check if the user has given consent. */
-        bool HasConsent() const { return m_config.consentGiven; }
+        /**
+         * @brief Check if the user has given consent.
+         * @note Threading: thread-safe.
+         */
+        bool HasConsent() const { return m_consentGiven.load(std::memory_order_relaxed); }
 
-        /** @brief Check if telemetry service has been initialized. */
-        bool IsInitialized() const override { return m_initialized; }
+        /**
+         * @brief Check if telemetry service has been initialized.
+         * @note Threading: thread-safe.
+         */
+        bool IsInitialized() const override { return m_initialized.load(std::memory_order_acquire); }
 
         // --- Queries ---
 
-        /** @brief Get the current configuration (read-only). */
-        const TelemetryConfig& GetConfig() const { return m_config; }
+        /**
+         * @brief Get the current configuration (read-only snapshot).
+         * @note Threading: game-thread-only.
+         */
+        const TelemetryConfig& GetConfig() const
+        {
+            AssertGameThread("GetConfig");
+            return m_config;
+        }
 
-        /** @brief Number of events currently queued. */
-        uint32_t GetQueueSize() const { return static_cast<uint32_t>(m_eventQueue.size()); }
+        /**
+         * @brief Number of events currently queued.
+         * @note Threading: thread-safe.
+         */
+        uint32_t GetQueueSize() const { return m_queuedEventCount.load(std::memory_order_relaxed); }
 
         // --- Backend ---
 
         /**
          * @brief Register a custom telemetry backend.
          * @param backend The backend to use (replaces any existing backend).
+         * @note Threading: game-thread-only.
          */
-        void RegisterBackend(std::unique_ptr<ITelemetryBackend> backend) { m_backend = std::move(backend); }
+        void RegisterBackend(std::unique_ptr<ITelemetryBackend> backend)
+        {
+            AssertGameThread("RegisterBackend");
+            m_backend = std::move(backend);
+        }
 
         // --- Console ---
 
-        /** @brief Get telemetry system status (console integration). */
+        /**
+         * @brief Get telemetry system status (console integration).
+         * @note Threading: thread-safe.
+         */
         std::string Console_GetStatus() const
         {
             std::string status = "TelemetrySystem: ";
-            status += m_initialized ? "initialized" : "not initialized";
+            status += m_initialized.load(std::memory_order_acquire) ? "initialized" : "not initialized";
             status += " | Enabled: ";
-            status += m_config.enabled ? "yes" : "no";
+            status += m_enabled.load(std::memory_order_relaxed) ? "yes" : "no";
             status += " | Consent: ";
-            status += m_config.consentGiven ? "yes" : "no";
-            status += " | Queued: " + std::to_string(m_eventQueue.size());
+            status += m_consentGiven.load(std::memory_order_relaxed) ? "yes" : "no";
+            status += " | Queued: " + std::to_string(m_queuedEventCount.load(std::memory_order_relaxed));
             status += "/" + std::to_string(m_config.maxQueueSize);
-            status += " | Total recorded: " + std::to_string(m_totalEventsRecorded);
+            status += " | Total recorded: " + std::to_string(m_totalEventsRecorded.load(std::memory_order_relaxed));
             status += " | Backend: ";
             status += m_backend ? std::string(m_backend->GetBackendName()) : "none";
             status += " | Session: " + m_sessionId;
@@ -423,8 +487,40 @@ namespace Spark
         TelemetrySystem() = default;
         ~TelemetrySystem() = default;
 
+        void AssertGameThread(const char* methodName) const
+        {
+            ASSERT_MSG(std::this_thread::get_id() == m_gameThreadId, "TelemetrySystem::%s must run on game thread",
+                       methodName);
+        }
+
         /** @brief Check if recording is permitted. */
-        bool CanRecord() const { return m_initialized && m_config.enabled && m_config.consentGiven; }
+        bool CanRecord() const
+        {
+            return m_initialized.load(std::memory_order_acquire) && m_enabled.load(std::memory_order_relaxed) &&
+                   m_consentGiven.load(std::memory_order_relaxed);
+        }
+
+        /** @brief Thread-safe writer path for producers calling RecordEvent. */
+        void EnqueueEventThreadSafe(TelemetryEvent&& evt)
+        {
+            std::lock_guard<std::mutex> queueLock(m_eventQueueMutex);
+            if (m_eventQueue.size() >= static_cast<size_t>(m_maxQueueSize.load(std::memory_order_relaxed)))
+                return;
+
+            m_eventQueue.push_back(std::move(evt));
+            m_queuedEventCount.store(static_cast<uint32_t>(m_eventQueue.size()), std::memory_order_relaxed);
+            m_totalEventsRecorded.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        /** @brief Game-thread read/flush path; swaps queued events into @p outEvents. */
+        void ExtractQueuedEventsForFlush_GameThread(std::vector<TelemetryEvent>& outEvents)
+        {
+            AssertGameThread("ExtractQueuedEventsForFlush_GameThread");
+            std::lock_guard<std::mutex> queueLock(m_eventQueueMutex);
+            outEvents.clear();
+            outEvents.swap(m_eventQueue);
+            m_queuedEventCount.store(0, std::memory_order_relaxed);
+        }
 
         /** @brief Get current time in epoch milliseconds. */
         static uint64_t GetCurrentTimestampMs()
@@ -433,13 +529,20 @@ namespace Spark
             return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
         }
 
-        bool m_initialized = false;
+        std::thread::id m_gameThreadId = std::this_thread::get_id();
+        std::atomic<bool> m_initialized{false};
+        std::atomic<bool> m_enabled{false};
+        std::atomic<bool> m_consentGiven{false};
+        std::atomic<uint32_t> m_maxQueueSize{0};
         TelemetryConfig m_config;
+        mutable std::mutex m_eventQueueMutex;
         std::vector<TelemetryEvent> m_eventQueue;
         std::unique_ptr<ITelemetryBackend> m_backend;
         std::string m_sessionId;
+        std::atomic<uint32_t> m_queuedEventCount{0};
+        std::atomic<uint64_t> m_nextEventSequence{1};
         float m_timeSinceFlush = 0.0f;
-        uint64_t m_totalEventsRecorded = 0;
+        std::atomic<uint64_t> m_totalEventsRecorded{0};
     };
 
 } // namespace Spark
