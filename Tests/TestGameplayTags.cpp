@@ -2,6 +2,10 @@
 #include "TestFramework.h"
 #include "Engine/Gameplay/GameplayTags.h"
 
+#include <atomic>
+#include <thread>
+#include <vector>
+
 // ============================================================================
 // Registration
 // ============================================================================
@@ -206,5 +210,47 @@ TEST(GameplayTags_GetAllTagNames)
     EXPECT_EQ(names.size(), static_cast<size_t>(4)); // A, A.Child, B, B.Child
     // Should be sorted alphabetically
     EXPECT_TRUE(names[0] <= names[1]);
+    reg.Shutdown();
+}
+
+TEST(GameplayTags_ConcurrentReadPath_IsThreadSafe)
+{
+    auto& reg = Spark::Gameplay::GameplayTagRegistry::GetInstance();
+    reg.Initialize();
+    reg.RegisterTag("Damage.Fire.DoT");
+    reg.RegisterTag("Damage.Ice");
+    reg.RegisterTag("Status.Immune.Fire");
+
+    const auto dotId = reg.GetTagId("Damage.Fire.DoT");
+    const auto damageId = reg.GetTagId("Damage");
+    const auto immuneFireId = reg.GetTagId("Status.Immune.Fire");
+
+    constexpr int kThreadCount = 8;
+    constexpr int kIterationsPerThread = 2000;
+    std::atomic<int> successfulChecks = 0;
+    std::vector<std::thread> workers;
+    workers.reserve(kThreadCount);
+
+    for (int i = 0; i < kThreadCount; ++i)
+    {
+        workers.emplace_back(
+            [&]()
+            {
+                for (int j = 0; j < kIterationsPerThread; ++j)
+                {
+                    if (reg.IsTagChildOf(dotId, damageId))
+                        successfulChecks.fetch_add(1, std::memory_order_relaxed);
+
+                    const auto resolved = reg.GetTagId("Status.Immune.Fire");
+                    if (resolved == immuneFireId)
+                        successfulChecks.fetch_add(1, std::memory_order_relaxed);
+                }
+            });
+    }
+
+    for (auto& worker : workers)
+        worker.join();
+
+    EXPECT_EQ(successfulChecks.load(std::memory_order_relaxed), kThreadCount * kIterationsPerThread * 2);
     reg.Shutdown();
 }
