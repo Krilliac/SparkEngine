@@ -356,6 +356,9 @@ namespace SparkEditor
         // Tick notification lifetimes and remove expired ones
         UpdateNotifications(deltaTime);
 
+        // Tick play/simulate state machine (PIE and in-editor simulation stepping/stats)
+        m_playModeManager.Update(deltaTime);
+
         // Update stats
         UpdateStats(deltaTime);
 
@@ -450,8 +453,37 @@ namespace SparkEditor
             else
             {
                 m_playModeManager.TogglePlayMode();
-                m_playMode = m_playModeManager.IsInPlayMode() ? PlayMode::Playing : PlayMode::Stopped;
-                ShowNotification(m_playMode == PlayMode::Playing ? "Playing..." : "Stopped", "info", 2.0f);
+                m_playMode = m_playModeManager.IsPlaying()
+                                 ? PlayMode::Playing
+                                 : (m_playModeManager.IsSimulating()
+                                        ? PlayMode::Simulating
+                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
+                ShowNotification(m_playMode == PlayMode::Playing
+                                     ? "Playing..."
+                                     : (m_playMode == PlayMode::Simulating ? "Simulating..." : "Stopped"),
+                                 "info", 2.0f);
+            }
+        }
+
+        // F6: Toggle simulation mode (physics/AI/etc. while retaining editor camera workflow)
+        if (ImGui::IsKeyPressed(ImGuiKey_F6) && !io.WantTextInput)
+        {
+            if (io.KeyShift)
+            {
+                m_playModeManager.ExitPlayMode();
+                m_playMode = PlayMode::Stopped;
+                ShowNotification("Stopped simulation", "info", 2.0f);
+            }
+            else
+            {
+                m_playModeManager.ToggleSimulationMode();
+                m_playMode = m_playModeManager.IsPlaying()
+                                 ? PlayMode::Playing
+                                 : (m_playModeManager.IsSimulating()
+                                        ? PlayMode::Simulating
+                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
+                ShowNotification(m_playMode == PlayMode::Simulating ? "Simulation running..." : "Simulation stopped",
+                                 "info", 2.0f);
             }
         }
 

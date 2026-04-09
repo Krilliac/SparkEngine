@@ -230,6 +230,7 @@ namespace SparkEditor
         {
             Stopped,
             Playing,
+            Simulating,
             Paused
         };
         PlayMode m_playMode = PlayMode::Stopped;

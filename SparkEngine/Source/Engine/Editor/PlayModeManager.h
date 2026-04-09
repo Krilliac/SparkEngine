@@ -60,6 +60,7 @@ namespace Spark::Editor
             m_playStartTime = Clock::now();
             m_stepRequested = false;
             m_multiStepRemaining = 0;
+            m_wasSimulatingBeforePause = false;
             m_stats.Reset();
             m_liveEdits.clear();
             m_cameraMode = m_config.cameraMode;
@@ -72,11 +73,47 @@ namespace Spark::Editor
             return true;
         }
 
+        /// @brief Enter simulation mode without switching to game camera behavior.
+        bool EnterSimulationMode()
+        {
+            if (m_state != PlayModeState::Stopped)
+                return false;
+
+            m_state = PlayModeState::Starting;
+
+            if (!SaveSnapshot())
+            {
+                m_state = PlayModeState::Stopped;
+                if (m_callbacks.onError)
+                    m_callbacks.onError("Failed to save scene snapshot before entering simulation mode");
+                return false;
+            }
+
+            m_playTimeSeconds = 0.0f;
+            m_frameCount = 0;
+            m_playStartTime = Clock::now();
+            m_stepRequested = false;
+            m_multiStepRemaining = 0;
+            m_wasSimulatingBeforePause = true;
+            m_stats.Reset();
+            m_liveEdits.clear();
+            m_cameraMode = EditorCameraMode::EditorFree;
+
+            m_state = m_config.startPaused ? PlayModeState::Paused : PlayModeState::Simulating;
+
+            if (m_callbacks.onEnterSimulate)
+                m_callbacks.onEnterSimulate();
+
+            return true;
+        }
+
         bool ExitPlayMode()
         {
             if (m_state == PlayModeState::Stopped)
                 return false;
 
+            const bool wasSimulating = (m_state == PlayModeState::Simulating) ||
+                                       (m_state == PlayModeState::Paused && m_wasSimulatingBeforePause);
             m_state = PlayModeState::Stopping;
 
             if (!m_config.keepChangesOnStop)
@@ -96,9 +133,12 @@ namespace Spark::Editor
 
             m_cameraMode = EditorCameraMode::EditorFree;
             m_state = PlayModeState::Stopped;
+            m_wasSimulatingBeforePause = false;
 
             if (m_callbacks.onExitPlay)
                 m_callbacks.onExitPlay();
+            if (wasSimulating && m_callbacks.onExitSimulate)
+                m_callbacks.onExitSimulate();
 
             return true;
         }
@@ -111,12 +151,21 @@ namespace Spark::Editor
                 EnterPlayMode();
         }
 
+        void ToggleSimulationMode()
+        {
+            if (IsInPlayMode())
+                ExitPlayMode();
+            else
+                EnterSimulationMode();
+        }
+
         // -- Pause / Step --
 
         void PausePlayMode()
         {
-            if (m_state == PlayModeState::Playing)
+            if (m_state == PlayModeState::Playing || m_state == PlayModeState::Simulating)
             {
+                m_wasSimulatingBeforePause = (m_state == PlayModeState::Simulating);
                 m_state = PlayModeState::Paused;
                 if (m_callbacks.onPause)
                     m_callbacks.onPause();
@@ -127,7 +176,7 @@ namespace Spark::Editor
         {
             if (m_state == PlayModeState::Paused)
             {
-                m_state = PlayModeState::Playing;
+                m_state = m_wasSimulatingBeforePause ? PlayModeState::Simulating : PlayModeState::Playing;
                 if (m_callbacks.onResume)
                     m_callbacks.onResume();
             }
@@ -237,9 +286,14 @@ namespace Spark::Editor
 
         PlayModeState GetState() const { return m_state; }
         bool IsPlaying() const { return m_state == PlayModeState::Playing; }
+        bool IsSimulating() const { return m_state == PlayModeState::Simulating; }
         bool IsPaused() const { return m_state == PlayModeState::Paused; }
         bool IsStopped() const { return m_state == PlayModeState::Stopped; }
-        bool IsInPlayMode() const { return m_state == PlayModeState::Playing || m_state == PlayModeState::Paused; }
+        bool IsInPlayMode() const
+        {
+            return m_state == PlayModeState::Playing || m_state == PlayModeState::Simulating ||
+                   m_state == PlayModeState::Paused;
+        }
 
         // -- Config --
 
@@ -379,6 +433,9 @@ namespace Spark::Editor
             case PlayModeState::Playing:
                 oss << "Playing";
                 break;
+            case PlayModeState::Simulating:
+                oss << "Simulating";
+                break;
             case PlayModeState::Paused:
                 oss << "Paused";
                 break;
@@ -483,6 +540,7 @@ namespace Spark::Editor
         uint64_t m_frameCount = 0;
         bool m_stepRequested = false;
         uint32_t m_multiStepRemaining = 0;
+        bool m_wasSimulatingBeforePause = false;
 
         EditorCameraMode m_cameraMode = EditorCameraMode::EditorFree;
         std::vector<LiveEditRecord> m_liveEdits;
