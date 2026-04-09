@@ -55,6 +55,8 @@
 #include "Engine/AI/GroupAI.h"
 #include "Engine/AI/CollisionAvoidance.h"
 #include "Engine/Gameplay/MaterialEffects.h"
+#include "Engine/Gameplay/AchievementSystem.h"
+#include "Engine/Accessibility/AccessibilitySystem.h"
 #include "Engine/Dialogue/DynamicResponseSystem.h"
 #include "Engine/ECS/EntityArchetype.h"
 #include "Engine/Gameplay/WeatherGameplayIntegration.h"
@@ -136,9 +138,6 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-
-// Access the graphics engine global (owned by SparkEngine.cpp)
-extern std::unique_ptr<GraphicsEngine> g_graphics;
 
 // ============================================================================
 // SparkPak auto-mount — scan for .spk files beside the executable
@@ -339,6 +338,8 @@ static void InitCoreGameplaySystems(EngineContext* ctx)
     Spark::Gameplay::InstanceManager::GetInstance().Initialize();
     Spark::Gameplay::InventorySystem::GetInstance().Initialize();
     Spark::Gameplay::QuestSystem::GetInstance().Initialize();
+    Spark::Gameplay::AchievementSystem::GetInstance().Initialize();
+    Spark::Accessibility::AccessibilitySystem::GetInstance().Initialize();
     Spark::AI::MovementSystem::GetInstance().Initialize();
     Spark::Audio::MusicManager::GetInstance().Initialize();
     Spark::Audio::AudioMixer::GetInstance().Initialize();
@@ -636,6 +637,8 @@ static void UpdateECSDependentSystems(World* world, float dt)
     SPARK_GUARDED_UPDATE("MusicManager", "Core", { Spark::Audio::MusicManager::GetInstance().Update(dt); });
 
     SPARK_GUARDED_UPDATE("AudioMixer", "Core", { Spark::Audio::AudioMixer::GetInstance().Update({0, 0, 0}, dt); });
+    SPARK_GUARDED_UPDATE("Accessibility", "Core",
+                         { Spark::Accessibility::AccessibilitySystem::GetInstance().Update(dt); });
 
     SPARK_GUARDED_UPDATE("WeaponSystem", "Core", {
         static Spark::Gameplay::WeaponSystem s_weaponSystem;
@@ -692,12 +695,15 @@ static void UpdateClusteredLighting(World* world)
             clustering.AddLight(ld);
         }
 
-        if (g_graphics)
+        if (const auto* ctx = EngineContext::Get())
         {
-            XMFLOAT4X4 viewMat, projMat;
-            XMStoreFloat4x4(&viewMat, g_graphics->GetFrameViewMatrix());
-            XMStoreFloat4x4(&projMat, g_graphics->GetFrameProjectionMatrix());
-            clustering.Update(viewMat, projMat, g_graphics->GetNearPlane(), g_graphics->GetFarPlane());
+            if (const auto* graphics = ctx->GetGraphics())
+            {
+                XMFLOAT4X4 viewMat, projMat;
+                XMStoreFloat4x4(&viewMat, graphics->GetFrameViewMatrix());
+                XMStoreFloat4x4(&projMat, graphics->GetFrameProjectionMatrix());
+                clustering.Update(viewMat, projMat, graphics->GetNearPlane(), graphics->GetFarPlane());
+            }
         }
     });
 }
@@ -721,7 +727,8 @@ static void UpdateExtendedSystems(EngineContext* ctx, float dt)
             [dt]() { SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); }); });
 
         auto futCinematic = jobs.Submit(
-            [dt]() {
+            [dt]()
+            {
                 SPARK_GUARDED_UPDATE("Cinematic", "Core",
                                      { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
             });
@@ -916,6 +923,8 @@ void ShutdownGameplaySystems()
     Spark::Gameplay::InstanceManager::GetInstance().Shutdown();
     Spark::Gameplay::AbilitySystem::GetInstance().Shutdown();
     Spark::Gameplay::ConditionSystem::GetInstance().Shutdown();
+    Spark::Gameplay::AchievementSystem::GetInstance().Shutdown();
+    Spark::Accessibility::AccessibilitySystem::GetInstance().Shutdown();
 
     Spark::Animation::AnimNotifyManager::GetInstance().Shutdown();
     Spark::Gameplay::GameplayTagRegistry::GetInstance().Shutdown();

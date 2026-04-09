@@ -66,7 +66,7 @@ generate_violation_list() {
             awk -v t=$CPP_THRESHOLD '{if ($1 > t) print $2}' | sed "s|$PROJECT_ROOT/||" | sort
         find "${SOURCE_DIRS[@]}" -name "*.h" 2>/dev/null | xargs wc -l 2>/dev/null | grep -v " total$" | \
             awk -v t=$H_THRESHOLD '{if ($1 > t) print $2}' | sed "s|$PROJECT_ROOT/||" | sort
-    }
+    } | sort
 }
 
 # ============================================================================
