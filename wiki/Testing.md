@@ -517,10 +517,11 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*340 test files, 4416+ test cases*
+*344 test files, 4438+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
+| `TestSubsystemIntegrationScenarios` | 4 |
 | `TestAIBehaviorTree` | 16 |
 | `TestAIBudgetLimiter` | 6 |
 | `TestAIDebugRenderer` | 7 |
@@ -552,6 +553,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAtomicSharedPtr` | 3 |
 | `TestAudioEngine` | 18 |
 | `TestAudioMixerBus` | 17 |
+| `TestAutoLODPerformance` | 2 |
 | `TestBehaviorTreeNodes` | 22 |
 | `TestBenchmarkFramework` | 15 |
 | `TestBitFlags` | 14 |
@@ -597,6 +599,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDebugUtilities` | 28 |
 | `TestDecalSystem` | 7 |
 | `TestDedicatedServer` | 27 |
+| `TestDedicatedServerRuntime` | 3 |
 | `TestDeferredDeletion` | 6 |
 | `TestDeferredQueue` | 6 |
 | `TestDelegate` | 9 |
@@ -669,7 +672,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplayDebugger` | 11 |
 | `TestGameplayExtensionRegistry` | 7 |
 | `TestGameplayStress` | 15 |
-| `TestGameplayTags` | 13 |
+| `TestGameplayTags` | 14 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
 | `TestGraphicsEngine` | 14 |
@@ -730,7 +733,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkMMOIntegration` | 11 |
 | `TestNetworkManagerEdgeCases` | 23 |
 | `TestNetworkManagerOrchestration` | 27 |
-| `TestNetworkReplicationIntegration` | 10 |
+| `TestNetworkReplicationIntegration` | 11 |
 | `TestNetworkSecurity` | 12 |
 | `TestNetworkStress` | 21 |
 | `TestNeuralInference` | 17 |
@@ -765,6 +768,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
+| `TestRHICapabilityParity` | 4 |
 | `TestRHIHandlePool` | 10 |
 | `TestRandomEngine` | 11 |
 | `TestRecastIntegration` | 6 |
@@ -806,7 +810,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestShaderDiskCache` | 6 |
 | `TestShaderGraphCompiler` | 8 |
 | `TestShaderHotReload` | 8 |
-| `TestShaderHotReloadCompilation` | 7 |
+| `TestShaderHotReloadCompilation` | 9 |
 | `TestShadowAtlas` | 7 |
 | `TestSkyAtmosphere` | 5 |
 | `TestSoftwareRendering` | 5 |
@@ -828,7 +832,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSubTickInput` | 5 |
 | `TestSubsystemConsoleCommands` | 14 |
 | `TestTacticalPointSystem` | 4 |
-| `TestTelemetry` | 14 |
+| `TestTelemetry` | 15 |
 | `TestTemporalEffects` | 11 |
 | `TestTerrainRenderer` | 5 |
 | `TestTextureCompressor` | 9 |
@@ -845,14 +849,14 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestUILayoutExtensions` | 29 |
 | `TestUISystem` | 6 |
 | `TestUUID` | 12 |
-| `TestUndoRedoManager` | 6 |
+| `TestUndoRedoManager` | 7 |
 | `TestUpscalingSystem` | 10 |
 | `TestUtilsStress` | 13 |
 | `TestVRSystem` | 12 |
 | `TestVersionedHandle` | 9 |
 | `TestVideoPlayer` | 12 |
 | `TestVisualScriptCompiler` | 12 |
-| `TestVulkanLavapipe` | 5 |
+| `TestVulkanLavapipe` | 8 |
 | `TestWARPRendering` | 4 |
 | `TestWaterRenderer` | 6 |
 | `TestWeaponMechanics` | 29 |

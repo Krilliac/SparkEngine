@@ -37,6 +37,9 @@ Features being evaluated but not yet committed to.
 | **Machine Learning Integration** | **Shipped** (v1.0.0) — Neural texture compression, radiance cache, denoiser, super-resolution. See `ENABLE_NEURAL_RENDERING`. |
 | **Deterministic Lockstep Networking** | Alternative to current snapshot-based replication. |
 
+
+Tier 3 execution is tracked in detail by **Milestone M1**: `docs/plans/tier3-polish-maturity-milestone.md` (7 scoped epics, acceptance tests, perf budgets, owner/estimate, docs gates).
+
 ## Completed (v1.0.0)
 
 Major features shipped in the initial release:
