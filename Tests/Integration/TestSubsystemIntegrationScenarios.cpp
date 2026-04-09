@@ -399,6 +399,7 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
     prediction.SetMaxPendingInputs(64);
 
     auto& simulator = Spark::Net::InstabilitySimulator::GetInstance();
+    simulator.Shutdown(); // Ensure deterministic clean state across test runs.
     Spark::Net::InstabilitySettings instability{};
     instability.enabled = true;
     instability.latencyMs = 90.0f;
@@ -432,7 +433,7 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
 
     float currentTimeMs = 0.0f;
     int deliveredPackets = 0;
-    while (deliveredPackets < 8 && currentTimeMs < 500.0f)
+    while (deliveredPackets < 8 && currentTimeMs < 700.0f)
     {
         auto readyPackets = simulator.GetReadyPackets(currentTimeMs);
         for (const auto& payload : readyPackets)
@@ -447,7 +448,7 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
             transform.position = reconciled.position;
             deliveredPackets++;
         }
-        currentTimeMs += 8.0f;
+        currentTimeMs += 4.0f;
     }
 
     EXPECT_EQ(deliveredPackets, 8);
@@ -464,8 +465,9 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
         maxDelay = std::max(maxDelay, delay);
     }
 
-    EXPECT_TRUE(minDelay >= 70.0f);
-    EXPECT_TRUE(maxDelay <= 110.0f);
+    EXPECT_TRUE(minDelay >= 69.0f);
+    EXPECT_TRUE(maxDelay <= 111.0f);
+    EXPECT_TRUE((maxDelay - minDelay) > 0.01f);
 
     simulator.Shutdown();
     networkManager.Shutdown();

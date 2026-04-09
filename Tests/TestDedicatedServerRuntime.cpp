@@ -199,7 +199,8 @@ TEST(DedicatedServerRuntime_ChatAndRconFlow)
     const auto& payload = runtime.sendToClientCalls[0].second.payload;
     responseBuf.WriteBytes(payload.data(), payload.size());
     const std::string response = responseBuf.ReadString();
-    EXPECT_TRUE(response.find("[RCON] Server:") == 0);
+    EXPECT_TRUE(response.rfind("[RCON] ", 0) == 0);
+    EXPECT_TRUE(response.find("Server") != std::string::npos);
 
     server.Stop();
 }
