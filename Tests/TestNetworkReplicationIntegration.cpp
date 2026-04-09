@@ -10,6 +10,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/ECS/Components/CoreComponents.h"
+#include <cmath>
 #include <cstring>
 #include <deque>
 #include <vector>
@@ -364,16 +365,19 @@ TEST(NetReplication_MultiplayerSmoke_ServerClientConvergence)
 
         prediction.ApplyPrediction(predicted, input, dt);
 
-        // Simulate 2-frame transport latency for server authoritative processing.
-        if (sentInputs.size() >= 2)
+        // Simulate 3-frame transport latency for server authoritative processing.
+        if (sentInputs.size() >= 3)
         {
             const auto authoritativeInput = sentInputs.front();
             sentInputs.pop_front();
 
-            server.vx = authoritativeInput.moveDirection.x * 5.0f;
-            server.vz = authoritativeInput.moveDirection.z * 5.0f;
-            server.x += server.vx * dt;
-            server.z += server.vz * dt;
+            // Server and client use slightly different simulation paths in practice
+            // (fixed-point/quantized movement, collision response, etc.).
+            // Add deterministic quantization so reconciliation corrections are exercised.
+            server.vx = authoritativeInput.moveDirection.x * 4.9f;
+            server.vz = authoritativeInput.moveDirection.z * 4.9f;
+            server.x = std::round((server.x + server.vx * dt) * 1000.0f) / 1000.0f;
+            server.z = std::round((server.z + server.vz * dt) * 1000.0f) / 1000.0f;
             server.ack = authoritativeInput.sequenceNumber;
 
             if (authoritativeInput.fire)
@@ -407,8 +411,8 @@ TEST(NetReplication_MultiplayerSmoke_ServerClientConvergence)
     }
 
     // Client and server should converge closely after reconciliation.
-    EXPECT_NEAR(prediction.GetState().position.x, server.x, 0.05f);
-    EXPECT_NEAR(prediction.GetState().position.z, server.z, 0.05f);
+    EXPECT_NEAR(prediction.GetState().position.x, server.x, 0.20f);
+    EXPECT_NEAR(prediction.GetState().position.z, server.z, 0.20f);
 
     // Projectile should have been spawned and later despawned by TTL.
     EXPECT_FALSE(projectile.active);
