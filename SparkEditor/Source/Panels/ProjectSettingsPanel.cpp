@@ -253,7 +253,7 @@ namespace SparkEditor
     // Rendering Tab (Advanced)
     // =========================================================================
 
-    void ProjectSettingsPanel::RenderRenderingTab()
+    void SparkEditor::ProjectSettingsPanel::RenderRenderingTab()
     {
         auto& r = EngineSettings::GetInstance().Rendering();
         auto& game = EngineSettings::GetInstance().Game();
@@ -397,7 +397,7 @@ namespace SparkEditor
     // Post-Processing Tab
     // =========================================================================
 
-    void ProjectSettingsPanel::RenderPostProcessingTab()
+    void SparkEditor::ProjectSettingsPanel::RenderPostProcessingTab()
     {
         auto& pp = EngineSettings::GetInstance().PostProcess();
         auto& ssao = EngineSettings::GetInstance().SSAO();
