@@ -396,6 +396,34 @@ The `RenderGraphBuilder` integrates with the RHI through `RHIAdapter`, so all GP
 
 ---
 
+## Vulkan ↔ D3D11 Parity Milestones (as of April 9, 2026)
+
+The Vulkan backend now exposes an explicit parity milestone snapshot in `VulkanDevice::GetD3D11ParityMilestones()` and a deterministic canonical golden-scene route through `VulkanDevice::RenderCanonicalGoldenScene()`. These are validated in CI-oriented tests (`VulkanParity_*` in `Tests/TestVulkanLavapipe.cpp`).
+
+### Milestone checklist
+
+- ✅ Frame lifecycle (`BeginFrame`/`EndFrame` fencing + submission path)
+- ✅ Resource barriers / synchronization baseline (image transitions + upload fence path)
+- ✅ Descriptor binding model parity baseline (D3D11-style fixed slots mapped to Vulkan descriptor set layout; push-descriptor fast path when available)
+- ✅ Shadow/deferred pass route declared through `StandardPipelineBuilder`
+- ✅ Post-process route declared through `StandardPipelineBuilder`
+- ✅ Canonical golden-scene render route (deterministic RGBA output for regression comparison)
+- ✅ CI assertion hooks:
+  - Vulkan preset assertion (`linux-gcc-release` configure cache must enable Vulkan)
+  - Shader compile path assertion (`VulkanParity_ShaderCompilePath_Asserted`)
+
+### Explicitly unsupported / not-yet-parity-complete features
+
+Until full Vulkan parity is completed, the following remain explicitly unsupported or incomplete versus the mature D3D11 path:
+
+1. Full GPU-backed golden-scene readback parity (current canonical route is deterministic and backend-owned, but not yet a full swapchain readback of the production renderer in CI).
+2. End-to-end Vulkan pass execution validation for every production shadow/deferred/post variant (current milestone verifies route wiring and deterministic reference output, not full feature-by-feature visual equivalence).
+3. Vulkan shader toolchain hard dependency in CI (DXC/glslang integration may still be optional; current gate asserts the path executes and reports deterministic outcome).
+
+These items remain documented here by design and should be removed only when the Vulkan path is verified feature-complete against D3D11.
+
+---
+
 ## Thread Safety
 
 - **IRHIDevice** -- main thread only for resource creation and destruction. `std::atomic` frame state for cross-thread queries.

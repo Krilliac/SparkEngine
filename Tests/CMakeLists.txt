@@ -283,9 +283,11 @@ add_executable(SparkTests
     TestAnimationPhysicsIntegration.cpp
     TestNetworkReplicationIntegration.cpp
     TestRenderECSIntegration.cpp
+    Integration/TestSubsystemIntegrationScenarios.cpp
     TestFPSMultiplayer.cpp
     # Asset pipeline and GPU profiling
     TestFBXImporter.cpp
+    TestFBXImportValidation.cpp
     TestTextureCompressor.cpp
     TestNeuralInference.cpp
     TestCpuNeuralInference.cpp

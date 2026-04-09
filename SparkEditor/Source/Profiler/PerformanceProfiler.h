@@ -362,6 +362,9 @@ namespace SparkEditor
      */
         void RenderPerformanceGraph(const PerformanceCounter& counter, const XMFLOAT2& size);
 
+        bool TriggerExternalGPUCapture();
+        void RefreshCaptureAvailability();
+
       private:
         // Profiling state
         bool m_isProfiling = false; ///< Whether profiling is active
@@ -391,13 +394,25 @@ namespace SparkEditor
             Microsoft::WRL::ComPtr<ID3D11Query> endQuery;   ///< Timestamp at sample end
             std::string name;                               ///< Sample name
             std::string shaderName;                         ///< Associated shader
+            uint32_t depth = 0;                             ///< Scope depth at BeginGPUSample()
             bool begun = false;                             ///< Whether begin was issued
             bool ended = false;                             ///< Whether end was issued
         };
 
-        std::unordered_map<std::string, GPUQueryPair> m_pendingGPUQueries; ///< In-flight GPU queries
-        Microsoft::WRL::ComPtr<ID3D11Query> m_disjointQuery;               ///< Per-frame disjoint query
-        bool m_disjointActive = false;                                     ///< Whether disjoint query is active
+        std::vector<GPUQueryPair> m_pendingGPUQueries;                      ///< In-flight GPU queries (ordered)
+        std::vector<std::string> m_gpuScopeStack;                           ///< Active GPU sample scope stack
+        uint32_t m_currentGPUScopeDepth = 0;                                ///< Current GPU scope depth
+        Microsoft::WRL::ComPtr<ID3D11Query> m_disjointQuery;                ///< Per-frame disjoint query
+        bool m_disjointActive = false;                                      ///< Whether disjoint query is active
+        Microsoft::WRL::ComPtr<ID3D11Query> m_pipelineStatsQuery;           ///< Per-frame pipeline statistics
+        bool m_pipelineStatsActive = false;                                 ///< Whether pipeline stats query is active
+        bool m_timestampSupported = false;                                  ///< Whether timestamp queries are supported
+        bool m_pipelineStatsSupported = false;                              ///< Whether pipeline stats are supported
+        std::string m_gpuBackendName = "Unsupported";                       ///< Current GPU profiler backend label
+        std::string m_gpuSupportStatus = "No GPU backend configured.";      ///< User-facing status message
+        bool m_renderDocCaptureAvailable = false;                           ///< RenderDoc capture API availability
+        bool m_pixCaptureAvailable = false;                                 ///< PIX capture API availability
+        std::string m_captureStatus = "Capture unavailable in this build."; ///< Last capture action/status text
 
         // Memory profiling
         std::unordered_map<void*, std::pair<std::string, size_t>> m_memoryAllocations; ///< Active allocations

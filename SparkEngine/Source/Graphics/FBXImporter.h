@@ -282,6 +282,17 @@ namespace Spark::Graphics
         FBXImportResult ImportFromMemory(const uint8_t* data, size_t size, const FBXImportOptions& options = {});
 
         /**
+         * @brief Validate that imported FBX data satisfies pipeline expectations.
+         * @param result Import result to validate.
+         * @param requireSkeleton True to require at least one bone.
+         * @param requireAnimation True to require at least one valid animation clip.
+         * @param outError Optional output error text on validation failure.
+         * @return True when validation passes.
+         */
+        bool ValidateForPipeline(const FBXImportResult& result, bool requireSkeleton = false,
+                                 bool requireAnimation = false, std::string* outError = nullptr) const;
+
+        /**
          * @brief Check if a file can be imported by inspecting magic bytes.
          * @param filePath Path to the file.
          * @return True if the file begins with the FBX binary magic string.
