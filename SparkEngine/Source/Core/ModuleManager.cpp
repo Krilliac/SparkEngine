@@ -553,6 +553,9 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 void ModuleManager::UnloadAll()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    if (m_modules.empty())
+        return;
+
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Unloading all modules (%zu loaded)", m_modules.size());
 
     for (auto& entry : m_modules)
