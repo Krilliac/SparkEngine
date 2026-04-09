@@ -15,6 +15,15 @@
 #include <sstream>
 #include <fstream>
 
+#ifdef SPARK_PLATFORM_WINDOWS
+#if __has_include(<DXProgrammableCapture.h>)
+#include <DXProgrammableCapture.h>
+#define SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE 1
+#else
+#define SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE 0
+#endif
+#endif
+
 using namespace DirectX;
 namespace SparkEditor
 {
@@ -923,6 +932,7 @@ namespace SparkEditor
 
         if (m_pixCaptureAvailable)
         {
+#if SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE
             HMODULE dxgiDebug = LoadLibraryA("dxgidebug.dll");
             if (dxgiDebug)
             {
@@ -944,6 +954,7 @@ namespace SparkEditor
                 }
                 FreeLibrary(dxgiDebug);
             }
+#endif
         }
 
         m_captureStatus = "No capture API available (RenderDoc/PIX not attached).";
@@ -966,6 +977,7 @@ namespace SparkEditor
                                       GetProcAddress(GetModuleHandleA("renderdoc.dll"), "RENDERDOC_TriggerCapture");
 
         m_pixCaptureAvailable = false;
+#if SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE
         HMODULE dxgiDebug = LoadLibraryA("dxgidebug.dll");
         if (dxgiDebug)
         {
@@ -980,6 +992,7 @@ namespace SparkEditor
             }
             FreeLibrary(dxgiDebug);
         }
+#endif
 
         if (m_renderDocCaptureAvailable || m_pixCaptureAvailable)
         {

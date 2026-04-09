@@ -30,12 +30,17 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>
 #include <d3d11.h>
-#include <dxgi1_3.h>
 #include <dxgidebug.h>
 #include <windows.h>
 #include <wrl/client.h>
 #include <cstdint>
 #include <string>
+#if __has_include(<DXProgrammableCapture.h>)
+#include <DXProgrammableCapture.h>
+#define SPARK_HAS_DX_PROGRAMMABLE_CAPTURE 1
+#else
+#define SPARK_HAS_DX_PROGRAMMABLE_CAPTURE 0
+#endif
 
 using Microsoft::WRL::ComPtr;
 
@@ -273,6 +278,7 @@ namespace Spark::Graphics
 
         bool IsPIXAvailable() const
         {
+#if SPARK_HAS_DX_PROGRAMMABLE_CAPTURE
             HMODULE dxgiDebug = LoadLibraryA("dxgidebug.dll");
             if (!dxgiDebug)
             {
@@ -292,10 +298,14 @@ namespace Spark::Graphics
                                            reinterpret_cast<void**>(graphicsAnalysis.GetAddressOf()));
             FreeLibrary(dxgiDebug);
             return SUCCEEDED(hr) && graphicsAnalysis;
+#else
+            return false;
+#endif
         }
 
         bool TriggerPIXCapture()
         {
+#if SPARK_HAS_DX_PROGRAMMABLE_CAPTURE
             HMODULE dxgiDebug = LoadLibraryA("dxgidebug.dll");
             if (!dxgiDebug)
             {
@@ -323,6 +333,9 @@ namespace Spark::Graphics
             graphicsAnalysis->EndCapture();
             FreeLibrary(dxgiDebug);
             return true;
+#else
+            return false;
+#endif
         }
     };
 
