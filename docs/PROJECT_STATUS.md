@@ -18,7 +18,7 @@ Current status of all major subsystems as of v1.0.0 (April 2026).
 | Engine Framework | **Stable** | `EngineContext` service locator, phase-based execution |
 | ECS (EnTT) | **Stable** | 75 component types, 25 systems, 17 component headers |
 | Scene Management | **Stable** | Serialization, snapshots, streaming |
-| Asset Pipeline | **Stable** | Assimp (FBX/glTF/OBJ), async LRU caching, VRAM budget |
+| Asset Pipeline | **Stable** | Native FBX importer + glTF/OBJ loaders, async LRU caching, VRAM budget |
 | Job System | **Stable** | Multi-threaded task dispatch |
 | Event Bus | **Stable** | Typed publish/subscribe with event response system |
 

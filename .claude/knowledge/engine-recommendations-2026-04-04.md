@@ -1,8 +1,8 @@
 # Engine Recommendations — Next Steps (April 2026)
 
-**Last updated:** 2026-04-04
+**Last updated:** 2026-04-09
 **Type:** Decision
-**Status:** Active
+**Status:** Resolved
 
 ## Description
 
@@ -189,6 +189,25 @@ engine networking, physics integration is sparse, and audio is minimally integra
 | Systems without tests | ~10 | Gaps |
 
 ---
+
+## Completion Update (2026-04-09)
+
+All Tier 1 and Tier 2 recommendations listed in this document are now completed in the codebase:
+
+1. **Cross-system integration tests** — covered by dedicated integration suites:
+   - `TestCrossSystemIntegration.cpp`
+   - `TestPhysicsECSIntegration.cpp`
+   - `TestRenderECSIntegration.cpp`
+   - `TestAnimationPhysicsIntegration.cpp`
+   - `TestNetworkReplicationIntegration.cpp`
+2. **Vulkan backend parity baseline** — Vulkan backend implementation and RHI shader compilation path are in place and CI-covered as experimental.
+3. **Game module networking wiring** — FPS module contains real multiplayer integration with engine `NetworkManager`, including replication/prediction scaffolding and runtime commands.
+4. **Real shader inventory for advanced rendering systems** — production HLSL/GLSL shader trees exist for raster, compute, mesh shader, and DXR pipelines.
+5. **FBX import pipeline** — FBX importer is implemented and wired into `AssetPipeline::LoadFBX`.
+6. **GPU profiling/frame analysis** — GPU profiling + timestamp systems are integrated and editor-visible.
+7. **Shader hot-reload compilation** — hot reload compile path is wired to RHI shader compilation with diagnostics.
+
+Tier 3 items are tracked as polish/maturity work and no longer block core production-readiness goals.
 
 ## Recommended Execution Order
 

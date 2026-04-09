@@ -69,6 +69,7 @@ std::shared_ptr<AudioAsset> AssetPipeline::LoadAudioFromFile(const std::string& 
 #else  // !SPARK_PLATFORM_WINDOWS
 
 #include "AssetPipeline.h"
+#include "FBXImporter.h"
 #include "../Utils/LogMacros.h"
 #include <cfloat>
 #include <cmath>
@@ -216,11 +217,74 @@ HRESULT AssetPipeline::LoadOBJ(const std::string& path, MeshAssetData& meshData)
     return S_OK;
 }
 
-HRESULT AssetPipeline::LoadFBX(const std::string& path, MeshAssetData& /*meshData*/)
+HRESULT AssetPipeline::LoadFBX(const std::string& path, MeshAssetData& meshData)
 {
-    // FBX loading not implemented on Linux - requires proprietary SDK
-    (void)path;
-    return E_NOTIMPL;
+    auto& importer = FBXImporter::GetInstance();
+    FBXImportResult importResult = importer.Import(path);
+
+    if (!importResult.success || importResult.meshes.empty())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBX import failed: %s", path.c_str());
+        return E_FAIL;
+    }
+
+    meshData.vertices.clear();
+    meshData.indices.clear();
+    meshData.submeshes.clear();
+
+    XMFLOAT3 bboxMin = {FLT_MAX, FLT_MAX, FLT_MAX};
+    XMFLOAT3 bboxMax = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+    for (const FBXMeshData& importedMesh : importResult.meshes)
+    {
+        const uint32_t vertexOffset = static_cast<uint32_t>(meshData.vertices.size());
+        meshData.submeshes.push_back(static_cast<uint32_t>(meshData.indices.size()));
+
+        for (size_t i = 0; i < importedMesh.positions.size(); ++i)
+        {
+            MeshAssetData::Vertex v{};
+            v.position = importedMesh.positions[i];
+            v.normal = (i < importedMesh.normals.size()) ? importedMesh.normals[i] : XMFLOAT3{0.0f, 1.0f, 0.0f};
+            v.texCoord0 = (i < importedMesh.uvs.size()) ? importedMesh.uvs[i] : XMFLOAT2{0.0f, 0.0f};
+            v.texCoord1 = XMFLOAT2{0.0f, 0.0f};
+            v.color = XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f};
+            v.tangent = XMFLOAT3{1.0f, 0.0f, 0.0f};
+            v.boneIndices = XMUINT4{0, 0, 0, 0};
+            v.boneWeights = XMFLOAT4{1.0f, 0.0f, 0.0f, 0.0f};
+            meshData.vertices.push_back(v);
+
+            bboxMin.x = std::min(bboxMin.x, v.position.x);
+            bboxMin.y = std::min(bboxMin.y, v.position.y);
+            bboxMin.z = std::min(bboxMin.z, v.position.z);
+            bboxMax.x = std::max(bboxMax.x, v.position.x);
+            bboxMax.y = std::max(bboxMax.y, v.position.y);
+            bboxMax.z = std::max(bboxMax.z, v.position.z);
+        }
+
+        for (uint32_t idx : importedMesh.indices)
+        {
+            meshData.indices.push_back(vertexOffset + idx);
+        }
+    }
+
+    if (meshData.vertices.empty())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBX import produced zero vertices: %s", path.c_str());
+        return E_FAIL;
+    }
+
+    meshData.boundingBoxMin = bboxMin;
+    meshData.boundingBoxMax = bboxMax;
+    meshData.boundingSphereCenter = {(bboxMin.x + bboxMax.x) * 0.5f, (bboxMin.y + bboxMax.y) * 0.5f,
+                                     (bboxMin.z + bboxMax.z) * 0.5f};
+    const float dx = bboxMax.x - bboxMin.x;
+    const float dy = bboxMax.y - bboxMin.y;
+    const float dz = bboxMax.z - bboxMin.z;
+    meshData.boundingSphereRadius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded FBX: %s (%zu verts, %zu tris, %zu submeshes)", path.c_str(),
+                   meshData.vertices.size(), meshData.indices.size() / 3, meshData.submeshes.size());
+    return S_OK;
 }
 
 HRESULT AssetPipeline::LoadGLTF(const std::string& path, MeshAssetData& meshData)
