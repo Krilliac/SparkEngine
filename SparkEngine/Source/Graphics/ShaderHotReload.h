@@ -27,13 +27,19 @@
 #pragma once
 
 #include <cstdint>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
+
+#include "RHI/RHIFactory.h"
+#include "Utils/SparkConsole.h"
 
 namespace Spark::Graphics
 {
@@ -73,11 +79,13 @@ namespace Spark::Graphics
     /** @brief Describes the result of a shader reload attempt. */
     struct ShaderReloadEvent
     {
-        std::string shaderName;    ///< Name of the reloaded shader.
-        std::string shaderPath;    ///< File path of the shader source.
-        bool success = false;      ///< True if compilation succeeded.
-        std::string errorMessage;  ///< Compiler error text (empty on success).
-        float compilationTimeMs{}; ///< Time spent compiling in milliseconds.
+        std::string shaderName;            ///< Name of the reloaded shader.
+        std::string shaderPath;            ///< File path of the shader source.
+        bool success = false;              ///< True if compilation succeeded.
+        std::string errorMessage;          ///< Compiler error text (empty on success).
+        std::string compileLog;            ///< Compiler log text (warnings/errors).
+        float compilationTimeMs{};         ///< Time spent compiling in milliseconds.
+        bool reusedPreviousBinary = false; ///< True when compile failed and previous shader stays active.
     };
 
     // ============================================================================
@@ -112,6 +120,11 @@ namespace Spark::Graphics
         {
             m_watchDirectories.clear();
             m_watchedFiles.clear();
+            {
+                std::scoped_lock lock(m_compiledShaderMutex);
+                m_compiledShaders.clear();
+                m_shaderSwapGenerations.clear();
+            }
             m_reloadCount = 0;
             m_timeSinceLastPoll = 0.0f;
             m_enabled = true;
@@ -124,6 +137,11 @@ namespace Spark::Graphics
             m_watchedFiles.clear();
             m_watchDirectories.clear();
             m_reloadCallbacks.clear();
+            {
+                std::scoped_lock lock(m_compiledShaderMutex);
+                m_compiledShaders.clear();
+                m_shaderSwapGenerations.clear();
+            }
             m_enabled = false;
             m_reloadCount = 0;
         }
@@ -207,6 +225,22 @@ namespace Spark::Graphics
 
         /** @brief Total number of successful reloads since initialization. */
         [[nodiscard]] uint32_t GetReloadCount() const { return m_reloadCount; }
+
+        /** @brief Returns true if a compiled binary is currently available for shaderName. */
+        [[nodiscard]] bool HasCompiledShader(std::string_view shaderName) const
+        {
+            std::scoped_lock lock(m_compiledShaderMutex);
+            return m_compiledShaders.contains(std::string(shaderName));
+        }
+
+        /** @brief Returns monotonically increasing successful swap count for shaderName. */
+        [[nodiscard]] uint64_t GetShaderSwapGeneration(std::string_view shaderName) const
+        {
+            std::scoped_lock lock(m_compiledShaderMutex);
+            if (auto it = m_shaderSwapGenerations.find(std::string(shaderName)); it != m_shaderSwapGenerations.end())
+                return it->second;
+            return 0;
+        }
 
         /** @brief True if currently watching (initialized and enabled). */
         [[nodiscard]] bool IsWatching() const { return m_enabled && !m_watchDirectories.empty(); }
@@ -296,6 +330,42 @@ namespace Spark::Graphics
             return false;
         }
 
+        static Spark::RHI::RHIShaderStage ToRHIStage(ShaderStageType stage)
+        {
+            switch (stage)
+            {
+            case ShaderStageType::Vertex:
+                return Spark::RHI::RHIShaderStage::Vertex;
+            case ShaderStageType::Pixel:
+                return Spark::RHI::RHIShaderStage::Pixel;
+            case ShaderStageType::Geometry:
+                return Spark::RHI::RHIShaderStage::Geometry;
+            case ShaderStageType::Compute:
+                return Spark::RHI::RHIShaderStage::Compute;
+            case ShaderStageType::Hull:
+                return Spark::RHI::RHIShaderStage::Hull;
+            case ShaderStageType::Domain:
+                return Spark::RHI::RHIShaderStage::Domain;
+            }
+
+            return Spark::RHI::RHIShaderStage::Vertex;
+        }
+
+        static Spark::RHI::ShaderLanguage DetermineSourceLanguage(const std::filesystem::path& filePath)
+        {
+            const std::string ext = filePath.extension().string();
+            if (ext == ".hlsl" || ext == ".vs" || ext == ".ps" || ext == ".gs" || ext == ".cs" || ext == ".hs" ||
+                ext == ".ds")
+            {
+                return Spark::RHI::ShaderLanguage::HLSL;
+            }
+
+            if (ext == ".glsl" || ext == ".vert" || ext == ".frag" || ext == ".geom" || ext == ".comp")
+                return Spark::RHI::ShaderLanguage::GLSL;
+
+            return Spark::RHI::ShaderLanguage::Auto;
+        }
+
         /** @brief Scan a directory for shader files and populate m_watchedFiles. */
         void ScanDirectory(const std::string& directory)
         {
@@ -359,8 +429,14 @@ namespace Spark::Graphics
             if (!std::filesystem::exists(info.path, ec))
             {
                 event.errorMessage = "Shader file not found: " + info.path;
+                event.compileLog = event.errorMessage;
+                {
+                    std::scoped_lock lock(m_compiledShaderMutex);
+                    event.reusedPreviousBinary = m_compiledShaders.contains(info.shaderName);
+                }
                 auto endTime = std::chrono::high_resolution_clock::now();
                 event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+                Spark::SimpleConsole::GetInstance().LogError("Shader hot-reload failed: " + event.errorMessage);
                 NotifyReload(event);
                 return false;
             }
@@ -372,8 +448,14 @@ namespace Spark::Graphics
                 if (!file.is_open())
                 {
                     event.errorMessage = "Failed to open shader file: " + info.path;
+                    event.compileLog = event.errorMessage;
+                    {
+                        std::scoped_lock lock(m_compiledShaderMutex);
+                        event.reusedPreviousBinary = m_compiledShaders.contains(info.shaderName);
+                    }
                     auto endTime = std::chrono::high_resolution_clock::now();
                     event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+                    Spark::SimpleConsole::GetInstance().LogError("Shader hot-reload failed: " + event.errorMessage);
                     NotifyReload(event);
                     return false;
                 }
@@ -384,20 +466,59 @@ namespace Spark::Graphics
             if (sourceCode.empty())
             {
                 event.errorMessage = "Shader file is empty: " + info.path;
+                event.compileLog = event.errorMessage;
+                {
+                    std::scoped_lock lock(m_compiledShaderMutex);
+                    event.reusedPreviousBinary = m_compiledShaders.contains(info.shaderName);
+                }
                 auto endTime = std::chrono::high_resolution_clock::now();
                 event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+                Spark::SimpleConsole::GetInstance().LogError("Shader hot-reload failed: " + event.errorMessage);
                 NotifyReload(event);
                 return false;
             }
 
-            // Source validated — mark success (full GPU compilation requires RHI context)
-            event.success = true;
+            Spark::RHI::ShaderCompileOptions options;
+            options.stage = ToRHIStage(info.shaderType);
+            options.sourceFile = info.path;
+            options.sourceCode = sourceCode;
+            options.entryPoint = "main";
+            options.sourceLanguage = DetermineSourceLanguage(std::filesystem::path(info.path));
+            options.targetLanguage = options.sourceLanguage;
+            options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+            const Spark::RHI::ShaderCompileResult compileResult = Spark::RHI::CompileShader(options);
+            event.success = compileResult.success;
+            event.errorMessage = compileResult.errorMessage;
+            event.compileLog = compileResult.errorMessage;
+
+            if (event.success)
+            {
+                std::scoped_lock lock(m_compiledShaderMutex);
+                m_compiledShaders[info.shaderName] = compileResult.bytecode;
+                ++m_shaderSwapGenerations[info.shaderName];
+            }
+            else
+            {
+                std::scoped_lock lock(m_compiledShaderMutex);
+                event.reusedPreviousBinary = m_compiledShaders.contains(info.shaderName);
+            }
 
             auto endTime = std::chrono::high_resolution_clock::now();
             event.compilationTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
 
             if (event.success)
+            {
                 ++m_reloadCount;
+                Spark::SimpleConsole::GetInstance().LogSuccess("Shader hot-reloaded: " + info.shaderName + " (" +
+                                                               info.path + ")");
+            }
+            else
+            {
+                const std::string suffix = event.reusedPreviousBinary ? " (previous shader kept active)" : "";
+                Spark::SimpleConsole::GetInstance().LogError("Shader hot-reload failed: " + info.shaderName + " — " +
+                                                             event.errorMessage + suffix);
+            }
 
             NotifyReload(event);
             return event.success;
@@ -420,6 +541,9 @@ namespace Spark::Graphics
         std::vector<std::function<void(const ShaderReloadEvent&)>> m_reloadCallbacks; ///< Reload event subscribers.
         bool m_enabled = false;                                                       ///< Whether polling is active.
         uint32_t m_reloadCount = 0;                                                   ///< Total successful reloads.
+        mutable std::mutex m_compiledShaderMutex;                      ///< Protects compiled shader maps.
+        std::map<std::string, std::vector<uint8_t>> m_compiledShaders; ///< Active compiled binaries.
+        std::map<std::string, uint64_t> m_shaderSwapGenerations;       ///< Atomic swap generation counter.
     };
 
 } // namespace Spark::Graphics
