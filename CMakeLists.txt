@@ -45,7 +45,8 @@ if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
     set(CMAKE_GENERATOR_PLATFORM "x64")
 endif()
 
-project(SparkEngine LANGUAGES CXX C)
+set(SPARK_ENGINE_VERSION "1.0.0" CACHE STRING "SparkEngine semantic version used for package metadata")
+project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C)
 
 # Set consistent runtime library for all targets using modern CMake (CMP0091)
 # Must be after project() so that the MSVC variable is defined.
@@ -974,7 +975,7 @@ endif()
 
 # zstd — Zstandard compression (faster than miniz, used alongside it)
 if(TARGET zstd)
-    target_link_libraries(SparkEngineLib PRIVATE zstd)
+    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:zstd>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_ZSTD_AVAILABLE=1)
     target_compile_definitions(SparkEngine PRIVATE SPARK_ZSTD_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with zstd")
@@ -992,14 +993,14 @@ if(CURL_FOUND)
 endif()
 
 if(TINYOBJ_FOUND)
-    target_link_libraries(SparkEngineLib PRIVATE tinyobjloader)
+    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:tinyobjloader>)
     message(STATUS "Linking SparkEngineLib with TinyObjLoader")
 endif()
 
 # Link stb_image (cross-platform texture loading)
 # PUBLIC because TextureSystem.h consumers may transitively need it
 if(TARGET stb_image)
-    target_link_libraries(SparkEngineLib PUBLIC stb_image)
+    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:stb_image>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_STB_IMAGE=1)
     message(STATUS "Linking SparkEngineLib with stb_image")
 endif()
@@ -1007,7 +1008,7 @@ endif()
 # Link cgltf (glTF 2.0 model loading)
 # PUBLIC because AssetPipeline.h consumers may transitively need it
 if(TARGET cgltf)
-    target_link_libraries(SparkEngineLib PUBLIC cgltf)
+    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:cgltf>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_CGLTF=1)
     message(STATUS "Linking SparkEngineLib with cgltf")
 endif()
@@ -1015,7 +1016,7 @@ endif()
 # Link miniaudio (cross-platform audio backend)
 # PUBLIC because PlatformAudioStubs.h includes miniaudio.h transitively
 if(TARGET miniaudio)
-    target_link_libraries(SparkEngineLib PUBLIC miniaudio)
+    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:miniaudio>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_MINIAUDIO=1)
     message(STATUS "Linking SparkEngineLib with miniaudio")
 endif()
@@ -1023,7 +1024,7 @@ endif()
 # Link nlohmann/json (JSON parsing library)
 # PUBLIC because JsonUtils.h includes nlohmann_json.h when available
 if(TARGET nlohmann_json)
-    target_link_libraries(SparkEngineLib PUBLIC nlohmann_json)
+    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:nlohmann_json>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_NLOHMANN_JSON=1)
     message(STATUS "Linking SparkEngineLib with nlohmann/json")
 endif()
@@ -1031,7 +1032,7 @@ endif()
 # Link tinyexr (OpenEXR image loading)
 # PUBLIC because TextureSystem consumers may transitively need it
 if(TARGET tinyexr)
-    target_link_libraries(SparkEngineLib PUBLIC tinyexr)
+    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:tinyexr>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_TINYEXR=1)
     message(STATUS "Linking SparkEngineLib with tinyexr")
 endif()
@@ -1132,7 +1133,7 @@ if(JOLT_FOUND)
         endif()
     endif()
 
-    target_link_libraries(SparkEngineLib PRIVATE Jolt)
+    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:Jolt>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_JOLT_PHYSICS_AVAILABLE=1)
     target_compile_definitions(SparkEngine PRIVATE SPARK_JOLT_PHYSICS_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with Jolt Physics")
@@ -1170,7 +1171,7 @@ else()
 endif()
 
 if(RECAST_FOUND)
-    target_link_libraries(SparkEngineLib PRIVATE Recast Detour)
+    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:Recast> $<BUILD_INTERFACE:Detour>)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_RECAST_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with Recast/Detour")
 endif()
@@ -1438,7 +1439,7 @@ if(SPARK_OPENGL_AVAILABLE)
         if(MSVC)
             set_property(TARGET glad PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
         endif()
-        target_link_libraries(SparkEngineLib PUBLIC glad)
+        target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:glad>)
     endif()
 
     # EGL for headless software rendering on Linux
@@ -1690,24 +1691,29 @@ endif()
 # Install with: cmake --install build --prefix /path/to/install
 # ---------------------------------------------------------------------
 
+set(SPARK_INSTALL_COMPONENT_RUNTIME "runtime")
+set(SPARK_INSTALL_COMPONENT_SDK "sdk")
+set(SPARK_INSTALL_COMPONENT_TOOLS "tools")
+set(SPARK_INSTALL_COMPONENT_TEMPLATES "templates")
+set(SPARK_INSTALL_COMPONENT_SAMPLES "samples")
+
 set(_SPARK_INSTALL_TARGETS SparkEngineLib)
-if(TARGET tinyobjloader)
-    list(APPEND _SPARK_INSTALL_TARGETS tinyobjloader)
-endif()
 install(TARGETS ${_SPARK_INSTALL_TARGETS}
     EXPORT SparkEngineTargets
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    LIBRARY DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
 
 # Install SparkSDK public headers
 install(DIRECTORY SparkSDK/Include/Spark
     DESTINATION include
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
 
 # Install the engine's public headers (needed by modules that use engine types directly)
 install(DIRECTORY "SparkEngine/Source/"
     DESTINATION include/SparkEngine
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
     FILES_MATCHING
         PATTERN "*.h"
         PATTERN "*.hpp"
@@ -1718,6 +1724,7 @@ foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
     if(EXISTS "${dir}")
         install(DIRECTORY "${dir}/"
             DESTINATION include/SparkEngine/ThirdParty
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
             FILES_MATCHING
                 PATTERN "*.h"
                 PATTERN "*.hpp"
@@ -1725,14 +1732,12 @@ foreach(dir ${THIRDPARTY_INCLUDE_DIRS})
     endif()
 endforeach()
 
-# Export targets (only when all dependencies are in export sets)
-if(FALSE) # Disabled: third-party targets (Jolt, miniz) lack EXPORT sets
 install(EXPORT SparkEngineTargets
     FILE SparkEngineTargets.cmake
     NAMESPACE Spark::
     DESTINATION lib/cmake/SparkEngine
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
-endif()
 
 # Package config
 include(CMakePackageConfigHelpers)
@@ -1741,21 +1746,28 @@ configure_package_config_file(
     "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
     INSTALL_DESTINATION lib/cmake/SparkEngine
 )
+write_basic_package_version_file(
+    "${CMAKE_BINARY_DIR}/SparkEngineConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
 
 install(FILES
     "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
+    "${CMAKE_BINARY_DIR}/SparkEngineConfigVersion.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
     DESTINATION lib/cmake/SparkEngine
+    COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
 
 # Install engine executable and game DLL
 install(TARGETS SparkEngine
-    RUNTIME DESTINATION bin
+    RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
 )
 if(TARGET SparkGameFPS)
     install(TARGETS SparkGameFPS
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION bin
+        RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
+        LIBRARY DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
     )
 endif()
 
@@ -1763,6 +1775,46 @@ endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders")
     install(DIRECTORY "SparkEngine/Shaders/"
         DESTINATION bin/Shaders
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    )
+endif()
+
+# Install tools
+if(TARGET SparkShaderCompiler)
+    install(TARGETS SparkShaderCompiler
+        RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_TOOLS}
+    )
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/Tools")
+    install(DIRECTORY "Tools/"
+        DESTINATION tools
+        COMPONENT ${SPARK_INSTALL_COMPONENT_TOOLS}
+    )
+endif()
+
+# Install project templates and samples
+if(EXISTS "${CMAKE_SOURCE_DIR}/Templates")
+    install(DIRECTORY "Templates/"
+        DESTINATION share/SparkEngine/templates
+        COMPONENT ${SPARK_INSTALL_COMPONENT_TEMPLATES}
+    )
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/Samples")
+    install(DIRECTORY "Samples/"
+        DESTINATION share/SparkEngine/samples
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
+    )
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/GameModules/SparkGame")
+    install(DIRECTORY "GameModules/SparkGame/"
+        DESTINATION share/SparkEngine/samples/SparkGame
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
+        FILES_MATCHING
+            PATTERN "*.h"
+            PATTERN "*.hpp"
+            PATTERN "*.cpp"
+            PATTERN "*.json"
+            PATTERN "CMakeLists.txt"
     )
 endif()
 
@@ -2126,6 +2178,72 @@ message(STATUS "")
 # ---------------------------------------------------------------------
 # CPack packaging configuration
 # ---------------------------------------------------------------------
-if(EXISTS "${CMAKE_SOURCE_DIR}/cmake/SparkCPack.cmake")
-    include("${CMAKE_SOURCE_DIR}/cmake/SparkCPack.cmake")
+set(CPACK_PACKAGE_NAME "SparkEngine")
+set(CPACK_PACKAGE_VENDOR "Spark Engine Team")
+set(CPACK_PACKAGE_CONTACT "https://github.com/Krilliac/SparkEngine")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Krilliac/SparkEngine")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "SparkEngine C++23 game engine SDK/runtime distribution")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}")
+set(CPACK_PACKAGE_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
+set(CPACK_PACKAGE_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "SparkEngine")
+
+set(CPACK_GENERATOR "ZIP")
+if(WIN32)
+    list(APPEND CPACK_GENERATOR "NSIS" "WIX")
+else()
+    list(APPEND CPACK_GENERATOR "TGZ")
 endif()
+
+set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
+set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
+set(CPACK_COMPONENTS_ALL
+    ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    ${SPARK_INSTALL_COMPONENT_SDK}
+    ${SPARK_INSTALL_COMPONENT_TOOLS}
+    ${SPARK_INSTALL_COMPONENT_TEMPLATES}
+    ${SPARK_INSTALL_COMPONENT_SAMPLES}
+)
+
+set(CPACK_COMPONENT_RUNTIME_DISPLAY_NAME "Runtime Binaries")
+set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "SparkEngine runtime executable, runtime shaders, and required binaries")
+set(CPACK_COMPONENT_RUNTIME_REQUIRED ON)
+
+set(CPACK_COMPONENT_SDK_DISPLAY_NAME "Headers and SDK")
+set(CPACK_COMPONENT_SDK_DESCRIPTION "SparkEngine static library, CMake package files, and public headers")
+set(CPACK_COMPONENT_SDK_DEPENDS runtime)
+
+set(CPACK_COMPONENT_TOOLS_DISPLAY_NAME "Developer Tools")
+set(CPACK_COMPONENT_TOOLS_DESCRIPTION "Command-line tools such as spark-cli and SparkShaderCompiler")
+set(CPACK_COMPONENT_TOOLS_DEPENDS runtime)
+
+set(CPACK_COMPONENT_TEMPLATES_DISPLAY_NAME "Project Templates")
+set(CPACK_COMPONENT_TEMPLATES_DESCRIPTION "Starter templates for new SparkEngine projects")
+set(CPACK_COMPONENT_TEMPLATES_DEPENDS sdk)
+
+set(CPACK_COMPONENT_SAMPLES_DISPLAY_NAME "Sample Content")
+set(CPACK_COMPONENT_SAMPLES_DESCRIPTION "Reference sample modules and sample project content")
+set(CPACK_COMPONENT_SAMPLES_DEPENDS runtime)
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/README.md")
+    set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+endif()
+
+set(CPACK_SOURCE_GENERATOR "ZIP;TGZ")
+set(CPACK_SOURCE_IGNORE_FILES
+    "/build/"
+    "/[.]git/"
+    "/[.]claude/"
+    "/[.]vs/"
+    "/[.]vscode/"
+    "/out/"
+)
+set(CPACK_PACKAGE_FILE_NAME
+    "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
+)
+
+include(CPack)
