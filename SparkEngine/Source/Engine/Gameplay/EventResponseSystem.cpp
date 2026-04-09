@@ -5,6 +5,7 @@
 
 #include "EventResponseSystem.h"
 #include "Core/EngineContext.h"
+#include "Utils/JsonUtils.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
@@ -755,9 +756,113 @@ namespace Spark::Gameplay
 
     bool EventResponseSystem::LoadFromJson(const std::string& path)
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game,
-                       "EventResponseSystem::LoadFromJson('%s') — not yet implemented (no JSON library)", path.c_str());
-        return false;
+        std::ifstream file(path);
+        if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadFromJson: failed to open file '%s'", path.c_str());
+            return false;
+        }
+
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+
+        const auto root = Spark::Json::Parse(buffer.str());
+        if (!root.IsObject() || !root.HasKey("rules"))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadFromJson: invalid root object in '%s'", path.c_str());
+            return false;
+        }
+
+        const auto& rules = root["rules"];
+        if (!rules.IsArray())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadFromJson: 'rules' is not an array in '%s'", path.c_str());
+            return false;
+        }
+
+        m_rules.clear();
+        m_timers.clear();
+        m_delayedActions.clear();
+
+        for (size_t r = 0; r < rules.Size(); ++r)
+        {
+            const auto& ruleNode = rules[r];
+            if (!ruleNode.IsObject())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "LoadFromJson: skipping non-object rule at index %zu", r);
+                continue;
+            }
+
+            EventResponseRule rule;
+            rule.name = ruleNode.HasKey("name") ? ruleNode["name"].AsString() : "";
+            rule.sourceEntityId = ruleNode.HasKey("sourceEntityId") ? ruleNode["sourceEntityId"].AsInt() : 0;
+            rule.trigger = ruleNode.HasKey("trigger") ? StringToTriggerType(ruleNode["trigger"].AsString())
+                                                      : EventTriggerType::OnStart;
+            rule.triggerParam = ruleNode.HasKey("triggerParam") ? ruleNode["triggerParam"].AsString() : "";
+            rule.enabled = !ruleNode.HasKey("enabled") || ruleNode["enabled"].AsBool();
+            rule.oneShot = ruleNode.HasKey("oneShot") && ruleNode["oneShot"].AsBool();
+
+            if (ruleNode.HasKey("actions") && ruleNode["actions"].IsArray())
+            {
+                const auto& actions = ruleNode["actions"];
+                for (size_t a = 0; a < actions.Size(); ++a)
+                {
+                    const auto& actionNode = actions[a];
+                    if (!actionNode.IsObject())
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                       "LoadFromJson: skipping non-object action at rule %zu action %zu", r, a);
+                        continue;
+                    }
+
+                    GameplayAction action;
+                    action.type = actionNode.HasKey("type") ? StringToActionType(actionNode["type"].AsString())
+                                                            : ActionType::ShowMessage;
+
+                    if (actionNode.HasKey("params") && actionNode["params"].IsArray())
+                    {
+                        const auto& params = actionNode["params"];
+                        action.params.reserve(params.Size());
+                        for (size_t p = 0; p < params.Size(); ++p)
+                        {
+                            const auto& paramNode = params[p];
+                            if (paramNode.IsNull())
+                            {
+                                action.params.emplace_back(std::monostate{});
+                            }
+                            else if (paramNode.IsString())
+                            {
+                                action.params.emplace_back(paramNode.AsString());
+                            }
+                            else if (paramNode.IsBool())
+                            {
+                                action.params.emplace_back(static_cast<int64_t>(paramNode.AsBool() ? 1 : 0));
+                            }
+                            else if (paramNode.IsNumber())
+                            {
+                                action.params.emplace_back(paramNode.AsNumber());
+                            }
+                            else
+                            {
+                                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                               "LoadFromJson: unsupported param type at rule %zu action %zu param %zu; "
+                                               "storing null",
+                                               r, a, p);
+                                action.params.emplace_back(std::monostate{});
+                            }
+                        }
+                    }
+
+                    rule.actions.push_back(std::move(action));
+                }
+            }
+
+            AddRule(std::move(rule));
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "EventResponseSystem::LoadFromJson — loaded %zu rules from '%s'",
+                       m_rules.size(), path.c_str());
+        return true;
     }
 
 } // namespace Spark::Gameplay
