@@ -129,6 +129,7 @@ namespace SparkEditor
         bool GenerateNormals(const std::string& meshPath, float smoothingAngle);
         bool GenerateTangents(const std::string& meshPath);
         bool GenerateLightmapUVs(const std::string& meshPath);
+        bool GenerateAutoLODs(AssetMetadata& metadata, const AssetImportSettings::MeshSettings& settings);
     };
 
     /**

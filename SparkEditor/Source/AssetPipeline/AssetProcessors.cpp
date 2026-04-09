@@ -6,9 +6,11 @@
  */
 
 #include "AdvancedAssetPipeline.h"
+#include "Graphics/LODGenerator.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/LogMacros.h"
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -18,6 +20,187 @@ namespace fs = std::filesystem;
 
 namespace SparkEditor
 {
+    namespace
+    {
+        struct LODProfileDefinition
+        {
+            std::vector<float> triangleTargets;
+            std::vector<float> errorThresholds;
+            std::vector<float> screenThresholds;
+        };
+
+        const char* ToString(LODTargetPlatform platform)
+        {
+            switch (platform)
+            {
+            case LODTargetPlatform::Desktop:
+                return "Desktop";
+            case LODTargetPlatform::Mobile:
+                return "Mobile";
+            case LODTargetPlatform::Console:
+                return "Console";
+            }
+            return "Desktop";
+        }
+
+        const char* ToString(LODQualityTier quality)
+        {
+            switch (quality)
+            {
+            case LODQualityTier::Low:
+                return "Low";
+            case LODQualityTier::Medium:
+                return "Medium";
+            case LODQualityTier::High:
+                return "High";
+            case LODQualityTier::Ultra:
+                return "Ultra";
+            }
+            return "High";
+        }
+
+        LODProfileDefinition GetLODProfile(LODTargetPlatform platform, LODQualityTier quality)
+        {
+            // Triangle targets are ratios versus LOD0.
+            if (platform == LODTargetPlatform::Mobile)
+            {
+                switch (quality)
+                {
+                case LODQualityTier::Low:
+                    return {{1.0f, 0.45f, 0.22f, 0.10f}, {0.0f, 0.015f, 0.03f, 0.06f}, {1.0f, 0.7f, 0.4f, 0.2f}};
+                case LODQualityTier::Medium:
+                    return {{1.0f, 0.55f, 0.30f, 0.15f}, {0.0f, 0.012f, 0.025f, 0.05f}, {1.0f, 0.75f, 0.5f, 0.25f}};
+                case LODQualityTier::High:
+                case LODQualityTier::Ultra:
+                    return {{1.0f, 0.65f, 0.38f, 0.20f}, {0.0f, 0.010f, 0.020f, 0.04f}, {1.0f, 0.8f, 0.55f, 0.3f}};
+                }
+            }
+            else if (platform == LODTargetPlatform::Console)
+            {
+                switch (quality)
+                {
+                case LODQualityTier::Low:
+                    return {{1.0f, 0.55f, 0.30f, 0.16f}, {0.0f, 0.012f, 0.024f, 0.048f}, {1.0f, 0.75f, 0.48f, 0.24f}};
+                case LODQualityTier::Medium:
+                    return {{1.0f, 0.62f, 0.36f, 0.20f}, {0.0f, 0.010f, 0.020f, 0.040f}, {1.0f, 0.8f, 0.55f, 0.3f}};
+                case LODQualityTier::High:
+                    return {{1.0f, 0.70f, 0.45f, 0.25f}, {0.0f, 0.009f, 0.018f, 0.035f}, {1.0f, 0.82f, 0.6f, 0.35f}};
+                case LODQualityTier::Ultra:
+                    return {{1.0f, 0.78f, 0.52f, 0.30f}, {0.0f, 0.007f, 0.015f, 0.03f}, {1.0f, 0.86f, 0.65f, 0.4f}};
+                }
+            }
+
+            // Desktop defaults
+            switch (quality)
+            {
+            case LODQualityTier::Low:
+                return {{1.0f, 0.60f, 0.35f, 0.20f}, {0.0f, 0.012f, 0.024f, 0.05f}, {1.0f, 0.78f, 0.52f, 0.28f}};
+            case LODQualityTier::Medium:
+                return {{1.0f, 0.68f, 0.42f, 0.25f}, {0.0f, 0.010f, 0.020f, 0.04f}, {1.0f, 0.82f, 0.58f, 0.34f}};
+            case LODQualityTier::High:
+                return {{1.0f, 0.75f, 0.50f, 0.30f}, {0.0f, 0.008f, 0.016f, 0.032f}, {1.0f, 0.85f, 0.62f, 0.38f}};
+            case LODQualityTier::Ultra:
+                return {{1.0f, 0.82f, 0.58f, 0.36f}, {0.0f, 0.006f, 0.013f, 0.026f}, {1.0f, 0.88f, 0.68f, 0.42f}};
+            }
+
+            return {{1.0f, 0.75f, 0.50f, 0.30f}, {0.0f, 0.008f, 0.016f, 0.032f}, {1.0f, 0.85f, 0.62f, 0.38f}};
+        }
+
+        bool LoadOBJMeshForLOD(const std::string& filePath, std::vector<float>& positions,
+                               std::vector<uint32_t>& indices)
+        {
+            std::ifstream file(filePath);
+            if (!file.is_open())
+            {
+                return false;
+            }
+
+            positions.clear();
+            indices.clear();
+
+            std::vector<std::array<float, 3>> rawPositions;
+            std::string line;
+            while (std::getline(file, line))
+            {
+                std::istringstream iss(line);
+                std::string prefix;
+                iss >> prefix;
+
+                if (prefix == "v")
+                {
+                    std::array<float, 3> p{};
+                    iss >> p[0] >> p[1] >> p[2];
+                    rawPositions.push_back(p);
+                }
+                else if (prefix == "f")
+                {
+                    std::vector<uint32_t> face;
+                    std::string token;
+                    while (iss >> token)
+                    {
+                        std::istringstream tokenStream(token);
+                        std::string indexToken;
+                        std::getline(tokenStream, indexToken, '/');
+                        if (indexToken.empty())
+                        {
+                            continue;
+                        }
+
+                        int idx = std::stoi(indexToken);
+                        if (idx > 0)
+                        {
+                            face.push_back(static_cast<uint32_t>(idx - 1));
+                        }
+                    }
+
+                    for (size_t i = 2; i < face.size(); ++i)
+                    {
+                        indices.push_back(face[0]);
+                        indices.push_back(face[i - 1]);
+                        indices.push_back(face[i]);
+                    }
+                }
+            }
+
+            positions.reserve(rawPositions.size() * 3);
+            for (const auto& p : rawPositions)
+            {
+                positions.push_back(p[0]);
+                positions.push_back(p[1]);
+                positions.push_back(p[2]);
+            }
+
+            return !positions.empty() && indices.size() >= 3;
+        }
+
+        std::string ComputeFileChecksum(const std::string& filePath)
+        {
+            std::ifstream file(filePath, std::ios::binary);
+            if (!file.is_open())
+            {
+                return {};
+            }
+
+            constexpr std::size_t prime = 0x100000001B3ULL;
+            constexpr std::size_t offset = 0xCBF29CE484222325ULL;
+            std::size_t hash = offset;
+
+            char buffer[4096];
+            while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
+            {
+                const std::streamsize bytesRead = file.gcount();
+                for (std::streamsize i = 0; i < bytesRead; ++i)
+                {
+                    hash ^= static_cast<std::size_t>(static_cast<unsigned char>(buffer[i]));
+                    hash *= prime;
+                }
+            }
+
+            std::ostringstream oss;
+            oss << std::hex << hash;
+            return oss.str();
+        }
+    } // namespace
 
     // =========================================================================
     // AssetProcessor
@@ -133,6 +316,7 @@ namespace SparkEditor
         metadata.processedFilePath = outputPath.string();
         metadata.sourceFileSize = fs::file_size(sourcePath);
         metadata.processedFileSize = fs::file_size(outputPath);
+        metadata.checksum = ComputeFileChecksum(outputPath.string());
         metadata.processedTime = std::chrono::system_clock::now();
         metadata.sourceModifiedTime =
             std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(sourcePath));
@@ -291,6 +475,11 @@ namespace SparkEditor
             GenerateLightmapUVs(outputPath.string());
         }
 
+        if (settings.meshSettings.autoGenerateLODs)
+        {
+            GenerateAutoLODs(metadata, settings.meshSettings);
+        }
+
         if (progressCallback)
         {
             progressCallback(0.9f);
@@ -345,6 +534,66 @@ namespace SparkEditor
 
     bool MeshProcessor::GenerateLightmapUVs(const std::string& /*meshPath*/)
     {
+        return true;
+    }
+
+    bool MeshProcessor::GenerateAutoLODs(AssetMetadata& metadata, const AssetImportSettings::MeshSettings& settings)
+    {
+        std::vector<float> positions;
+        std::vector<uint32_t> indices;
+        if (!LoadOBJMeshForLOD(metadata.processedFilePath.empty() ? metadata.sourceFilePath
+                                                                  : metadata.processedFilePath,
+                               positions, indices))
+        {
+            metadata.customData["lod.status"] = "skipped";
+            metadata.customData["lod.reason"] = "format_not_supported_for_offline_lod";
+            return false;
+        }
+
+        const LODProfileDefinition profile = GetLODProfile(settings.lodPlatform, settings.lodQuality);
+        Spark::Graphics::LODGenerationOptions options{};
+        options.lodCount = static_cast<uint32_t>(profile.triangleTargets.size());
+        options.maxError = profile.errorThresholds.size() > 1 ? profile.errorThresholds[1] : 0.01f;
+        options.screenSizeThresholds = profile.screenThresholds;
+        options.reductionPerLevel = profile.triangleTargets.size() > 1 ? profile.triangleTargets[1] : 0.75f;
+
+        auto result = Spark::Graphics::LODGenerator::GetInstance().Generate(
+            positions.data(), static_cast<uint32_t>(positions.size() / 3), indices.data(),
+            static_cast<uint32_t>(indices.size()), options);
+        if (result.levels.empty())
+        {
+            metadata.customData["lod.status"] = "failed";
+            metadata.customData["lod.reason"] = "generation_failed";
+            return false;
+        }
+
+        std::ostringstream triCounts;
+        std::ostringstream errors;
+        for (size_t i = 0; i < result.levels.size(); ++i)
+        {
+            if (i > 0)
+            {
+                triCounts << ",";
+                errors << ",";
+            }
+            triCounts << result.levels[i].triangleCount;
+            errors << result.levels[i].geometricError;
+        }
+
+        std::ostringstream profileSeed;
+        profileSeed << ToString(settings.lodPlatform) << "|" << ToString(settings.lodQuality) << "|"
+                    << metadata.checksum << "|lod_meta_v2";
+
+        metadata.customData["lod.status"] = "generated";
+        metadata.customData["lod.meta_version"] = "2";
+        metadata.customData["lod.profile_platform"] = ToString(settings.lodPlatform);
+        metadata.customData["lod.profile_quality"] = ToString(settings.lodQuality);
+        metadata.customData["lod.level_count"] = std::to_string(result.levels.size());
+        metadata.customData["lod.level0_triangles"] = std::to_string(result.levels.front().triangleCount);
+        metadata.customData["lod.triangle_counts"] = triCounts.str();
+        metadata.customData["lod.geometric_errors"] = errors.str();
+        metadata.customData["lod.total_reduction"] = std::to_string(result.totalReduction);
+        metadata.customData["lod.rebuild_fingerprint"] = std::to_string(std::hash<std::string>{}(profileSeed.str()));
         return true;
     }
 
