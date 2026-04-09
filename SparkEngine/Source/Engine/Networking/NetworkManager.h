@@ -299,6 +299,7 @@ namespace Spark::Net
         uint32_t packetsSent = 0;     ///< Total UDP packets sent.
         uint32_t packetsReceived = 0; ///< Total UDP packets received.
         uint32_t packetsDropped = 0;  ///< Packets detected as lost (sequence gaps).
+        uint32_t correctionCount = 0; ///< Number of client prediction corrections observed.
         float bandwidthUp = 0.0f;     ///< KB/s
         float bandwidthDown = 0.0f;   ///< KB/s
     };
@@ -400,6 +401,7 @@ namespace Spark::Net
         }
         float GetServerTime() const { return m_serverTime; }
         const NetworkStats& GetStats() const { return m_stats; }
+        void SetPredictionCorrectionCount(uint32_t correctionCount) { m_stats.correctionCount = correctionCount; }
         bool IsInitialized() const { return m_initialized; }
 
         // Client management (server only)

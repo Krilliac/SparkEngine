@@ -1091,6 +1091,7 @@ namespace Spark::Net
         ss << "Bandwidth: Up " << m_stats.bandwidthUp << " KB/s, Down " << m_stats.bandwidthDown << " KB/s\n";
         ss << "Packets: Sent " << m_stats.packetsSent << ", Received " << m_stats.packetsReceived << ", Dropped "
            << m_stats.packetsDropped << "\n";
+        ss << "Prediction Corrections: " << m_stats.correctionCount << "\n";
         ss << "Bytes: Sent " << m_stats.bytesSent << ", Received " << m_stats.bytesReceived << "\n";
         ss << "Unacked reliable messages: " << m_unacknowledgedMessages.size() << "\n";
         return ss.str();

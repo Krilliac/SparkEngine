@@ -8,6 +8,7 @@
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <random>
 
@@ -71,8 +72,15 @@ namespace SparkFPS
         m_playerStates.clear();
         m_scores.clear();
         m_respawnTimers.clear();
+        m_projectiles.clear();
+        m_remoteSnapshots.clear();
+        m_lastInputByPlayer.clear();
         m_stateSequence = 0;
+        m_nextProjectileId = 1;
+        m_correctionCount = 0;
         m_tickAccumulator = 0.0f;
+        m_clientPrediction.SetMaxPendingInputs(256);
+        m_clientPrediction.SetSmoothCorrection(true, 10.0f);
 
         // Default spawn points if none configured
         if (m_spawnPoints.empty())
@@ -108,6 +116,8 @@ namespace SparkFPS
             Disconnect();
 
         m_playerStates.clear();
+        m_projectiles.clear();
+        m_remoteSnapshots.clear();
         m_scores.clear();
         m_isActive = false;
     }
@@ -122,6 +132,8 @@ namespace SparkFPS
         (void)maxPlayers;
         m_isActive = true;
         m_isServer = true;
+        m_localClientId = 1;
+        OnPlayerJoined(m_localClientId);
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.Log("[FPSMultiplayer] Server started on port " + std::to_string(port) + " (max " +
@@ -146,6 +158,7 @@ namespace SparkFPS
         (void)port;
         m_isActive = true;
         m_isServer = false;
+        m_localClientId = 2;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.Log("[FPSMultiplayer] Connecting to " + address + ":" + std::to_string(port));
@@ -163,8 +176,41 @@ namespace SparkFPS
         if (!m_isActive || m_isServer)
             return;
 
-        // In a real implementation, this would serialize and send via NetworkManager
-        (void)input;
+        m_lastInputByPlayer[m_localClientId] = input;
+
+        Spark::PredictedInput predicted{};
+        predicted.timestamp = static_cast<float>(input.sequenceNumber) * (1.0f / 60.0f);
+        predicted.moveDirection = {input.strafe, 0.0f, input.forward};
+        predicted.lookYaw = input.yaw;
+        predicted.lookPitch = input.pitch;
+        predicted.jump = input.jump;
+        predicted.crouch = input.crouch;
+        predicted.fire = input.fire;
+        predicted.reload = input.reload;
+        const uint32_t assignedSequence = m_clientPrediction.RecordInput(predicted);
+        predicted.sequenceNumber = assignedSequence;
+
+        m_clientPrediction.ApplyPrediction(m_localPredictedState, predicted, 1.0f / 60.0f);
+        if (input.fire)
+        {
+            ProjectileData projectile;
+            projectile.projectileId = m_nextProjectileId++;
+            projectile.ownerId = m_localClientId;
+            projectile.originX = m_localPredictedState.position.x;
+            projectile.originY = m_localPredictedState.position.y + 1.0f;
+            projectile.originZ = m_localPredictedState.position.z;
+            projectile.positionX = projectile.originX;
+            projectile.positionY = projectile.originY;
+            projectile.positionZ = projectile.originZ;
+            projectile.dirX = std::cos(input.yaw);
+            projectile.dirY = 0.0f;
+            projectile.dirZ = std::sin(input.yaw);
+            projectile.velocityX = projectile.dirX * projectile.speed;
+            projectile.velocityY = projectile.dirY * projectile.speed;
+            projectile.velocityZ = projectile.dirZ * projectile.speed;
+            projectile.active = true;
+            m_projectiles[projectile.projectileId] = projectile; // local fire prediction hook
+        }
     }
 
     // ============================================================================
@@ -222,6 +268,7 @@ namespace SparkFPS
 
         // Send state snapshots at tick rate
         m_tickAccumulator += dt;
+        UpdateProjectiles(dt);
         float tickInterval = 1.0f / static_cast<float>(m_tickRate);
         if (m_tickAccumulator >= tickInterval)
         {
@@ -236,8 +283,19 @@ namespace SparkFPS
         for (auto& [id, state] : m_playerStates)
         {
             state.sequenceNumber = m_stateSequence;
+            auto inputIt = m_lastInputByPlayer.find(id);
+            if (inputIt != m_lastInputByPlayer.end())
+            {
+                state.acknowledgedInputSequence = inputIt->second.sequenceNumber;
+            }
+            auto& history = m_remoteSnapshots[id];
+            history.push_back(state);
+            constexpr size_t kMaxSnapshots = 4;
+            while (history.size() > kMaxSnapshots)
+            {
+                history.pop_front();
+            }
         }
-        // In real impl: serialize all player states, send unreliable to all clients
     }
 
     void FPSMultiplayerSystem::ApplyClientInput(uint32_t clientId, const PlayerInput& input, float dt)
@@ -254,16 +312,66 @@ namespace SparkFPS
 
         state.posX += (input.forward * cosYaw + input.strafe * sinYaw) * m_moveSpeed * dt;
         state.posZ += (input.forward * sinYaw - input.strafe * cosYaw) * m_moveSpeed * dt;
+        state.velX = (input.forward * cosYaw + input.strafe * sinYaw) * m_moveSpeed;
+        state.velY = 0.0f;
+        state.velZ = (input.forward * sinYaw - input.strafe * cosYaw) * m_moveSpeed;
 
         state.yaw = input.yaw;
         state.pitch = input.pitch;
         state.isCrouching = input.crouch;
+        state.actionFlags = ActionNone;
+        state.actionFlags |= input.jump ? ActionJump : ActionNone;
+        state.actionFlags |= input.fire ? ActionFire : ActionNone;
+        state.actionFlags |= input.reload ? ActionReload : ActionNone;
+        state.actionFlags |= input.crouch ? ActionCrouch : ActionNone;
+        m_lastInputByPlayer[clientId] = input;
+
+        if (input.fire)
+        {
+            ProjectileData projectile;
+            projectile.projectileId = m_nextProjectileId++;
+            projectile.ownerId = clientId;
+            projectile.originX = state.posX;
+            projectile.originY = state.posY + 1.0f;
+            projectile.originZ = state.posZ;
+            projectile.positionX = projectile.originX;
+            projectile.positionY = projectile.originY;
+            projectile.positionZ = projectile.originZ;
+            projectile.dirX = std::cos(state.yaw);
+            projectile.dirY = 0.0f;
+            projectile.dirZ = std::sin(state.yaw);
+            projectile.velocityX = projectile.dirX * projectile.speed;
+            projectile.velocityY = 0.0f;
+            projectile.velocityZ = projectile.dirZ * projectile.speed;
+            projectile.active = true;
+            m_projectiles[projectile.projectileId] = projectile;
+        }
     }
 
     void FPSMultiplayerSystem::ValidateHit(uint32_t attackerId, uint32_t victimId, float damage)
     {
         auto victimIt = m_playerStates.find(victimId);
         if (victimIt == m_playerStates.end() || !victimIt->second.isAlive)
+            return;
+
+        bool validated = true;
+        if (m_isServer)
+        {
+            auto attackerIt = m_playerStates.find(attackerId);
+            if (attackerIt != m_playerStates.end())
+            {
+                const auto rayOrigin =
+                    DirectX::XMFLOAT3(attackerIt->second.posX, attackerIt->second.posY + 1.0f, attackerIt->second.posZ);
+                const auto rayDir = DirectX::XMFLOAT3(victimIt->second.posX - attackerIt->second.posX,
+                                                      victimIt->second.posY - attackerIt->second.posY,
+                                                      victimIt->second.posZ - attackerIt->second.posZ);
+                const float halfRTT = Spark::Net::NetworkManager::GetInstance().GetEstimatedRTT() * 0.0005f;
+                const float now = Spark::Net::NetworkManager::GetInstance().GetServerTime();
+                auto result = Spark::Net::NetworkManager::GetInstance().ValidateHit(now, halfRTT, rayOrigin, rayDir);
+                validated = result.hit;
+            }
+        }
+        if (!validated)
             return;
 
         victimIt->second.health -= damage;
@@ -314,14 +422,42 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::ClientUpdate(float dt)
     {
+        auto localIt = m_playerStates.find(m_localClientId);
+        if (localIt != m_playerStates.end())
+        {
+            ReconcileToAuthoritativeState(localIt->second);
+        }
         InterpolateRemotePlayers(dt);
+        UpdateProjectiles(dt);
     }
 
     void FPSMultiplayerSystem::InterpolateRemotePlayers(float dt)
     {
-        // In real impl: interpolate between last two server snapshots
-        // using a 100ms interpolation buffer for smooth movement
-        (void)dt;
+        const float blend = (std::min)(1.0f, dt * 10.0f);
+        for (auto& [playerId, snapshots] : m_remoteSnapshots)
+        {
+            if (playerId == m_localClientId || snapshots.empty())
+                continue;
+
+            auto target = snapshots.back();
+            auto currentIt = m_playerStates.find(playerId);
+            if (currentIt == m_playerStates.end())
+            {
+                m_playerStates[playerId] = target;
+                continue;
+            }
+
+            auto& current = currentIt->second;
+            current.posX += (target.posX - current.posX) * blend;
+            current.posY += (target.posY - current.posY) * blend;
+            current.posZ += (target.posZ - current.posZ) * blend;
+            current.velX = target.velX;
+            current.velY = target.velY;
+            current.velZ = target.velZ;
+            current.yaw = target.yaw;
+            current.pitch = target.pitch;
+            current.actionFlags = target.actionFlags;
+        }
     }
 
     // ============================================================================
@@ -341,6 +477,7 @@ namespace SparkFPS
         state.isAlive = true;
 
         m_playerStates[clientId] = state;
+        m_remoteSnapshots[clientId].push_back(state);
 
         PlayerScore score;
         score.clientId = clientId;
@@ -370,9 +507,24 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::OnProjectileFired(uint32_t clientId, const ProjectileData& proj)
     {
-        (void)clientId;
-        (void)proj;
-        // In real impl: validate, create server-side projectile, broadcast to all clients
+        if (!m_isServer)
+            return;
+
+        auto ownerIt = m_playerStates.find(clientId);
+        if (ownerIt == m_playerStates.end() || !ownerIt->second.isAlive)
+            return;
+
+        ProjectileData serverProj = proj;
+        serverProj.projectileId = (serverProj.projectileId == 0) ? m_nextProjectileId++ : serverProj.projectileId;
+        serverProj.ownerId = clientId;
+        serverProj.active = true;
+        serverProj.positionX = serverProj.originX;
+        serverProj.positionY = serverProj.originY;
+        serverProj.positionZ = serverProj.originZ;
+        serverProj.velocityX = serverProj.dirX * serverProj.speed;
+        serverProj.velocityY = serverProj.dirY * serverProj.speed;
+        serverProj.velocityZ = serverProj.dirZ * serverProj.speed;
+        m_projectiles[serverProj.projectileId] = serverProj;
     }
 
     void FPSMultiplayerSystem::OnPlayerDamaged(uint32_t attackerId, uint32_t victimId, float damage)
@@ -397,9 +549,94 @@ namespace SparkFPS
 
         status += m_isServer ? "Server" : "Client";
         status += " | Players: " + std::to_string(m_playerStates.size());
+        status += " | Projectiles: " + std::to_string(m_projectiles.size());
         status += " | Tick: " + std::to_string(m_tickRate) + "Hz";
         status += " | Seq: " + std::to_string(m_stateSequence);
+        auto metrics = GetDebugMetrics();
+        status += " | RTT: " + std::to_string(static_cast<int>(metrics.rttMs)) + "ms";
+        status += " | Loss: " + std::to_string(static_cast<int>(metrics.packetLossPercent)) + "%";
+        status += " | Corrections: " + std::to_string(metrics.correctionCount);
         return status;
+    }
+
+    FPSMultiplayerSystem::MultiplayerDebugMetrics FPSMultiplayerSystem::GetDebugMetrics() const
+    {
+        MultiplayerDebugMetrics out;
+        const auto& stats = Spark::Net::NetworkManager::GetInstance().GetStats();
+        out.packetLossPercent = stats.packetLoss * 100.0f;
+        out.rttMs = stats.ping;
+        out.correctionCount = m_correctionCount;
+        return out;
+    }
+
+    void FPSMultiplayerSystem::UpdateProjectiles(float dt)
+    {
+        for (auto it = m_projectiles.begin(); it != m_projectiles.end();)
+        {
+            auto& projectile = it->second;
+            projectile.positionX += projectile.velocityX * dt;
+            projectile.positionY += projectile.velocityY * dt;
+            projectile.positionZ += projectile.velocityZ * dt;
+            projectile.lifetime -= dt;
+
+            bool despawned = (projectile.lifetime <= 0.0f);
+            if (!despawned && m_isServer)
+            {
+                for (const auto& [playerId, state] : m_playerStates)
+                {
+                    if (playerId == projectile.ownerId || !state.isAlive)
+                        continue;
+
+                    const float dx = projectile.positionX - state.posX;
+                    const float dy = projectile.positionY - state.posY;
+                    const float dz = projectile.positionZ - state.posZ;
+                    const float distSq = dx * dx + dy * dy + dz * dz;
+                    if (distSq <= 1.0f)
+                    {
+                        ValidateHit(projectile.ownerId, playerId, projectile.damage);
+                        despawned = true;
+                        break;
+                    }
+                }
+            }
+
+            if (despawned)
+                it = m_projectiles.erase(it);
+            else
+                ++it;
+        }
+    }
+
+    void FPSMultiplayerSystem::ReconcileToAuthoritativeState(const NetworkPlayerState& authoritativeState)
+    {
+        Spark::PredictedState serverState;
+        serverState.position = {authoritativeState.posX, authoritativeState.posY, authoritativeState.posZ};
+        serverState.velocity = {authoritativeState.velX, authoritativeState.velY, authoritativeState.velZ};
+        serverState.yaw = authoritativeState.yaw;
+        serverState.pitch = authoritativeState.pitch;
+        serverState.isCrouching = authoritativeState.isCrouching;
+        serverState.lastProcessedInput = authoritativeState.acknowledgedInputSequence;
+
+        const float before = m_clientPrediction.GetLastCorrectionMagnitude();
+        m_clientPrediction.Reconcile(serverState, 1.0f / 60.0f);
+        const float after = m_clientPrediction.GetLastCorrectionMagnitude();
+        if (after > 0.01f && after != before)
+        {
+            ++m_correctionCount;
+            Spark::Net::NetworkManager::GetInstance().SetPredictionCorrectionCount(m_correctionCount);
+        }
+
+        const auto& predicted = m_clientPrediction.GetState();
+        auto& local = m_playerStates[m_localClientId];
+        local.posX = predicted.position.x;
+        local.posY = predicted.position.y;
+        local.posZ = predicted.position.z;
+        local.velX = predicted.velocity.x;
+        local.velY = predicted.velocity.y;
+        local.velZ = predicted.velocity.z;
+        local.yaw = predicted.yaw;
+        local.pitch = predicted.pitch;
+        local.isCrouching = predicted.isCrouching;
     }
 
 } // namespace SparkFPS

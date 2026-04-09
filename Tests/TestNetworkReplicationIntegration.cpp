@@ -8,8 +8,10 @@
 
 #include "TestFramework.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/ClientPrediction.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include <cstring>
+#include <deque>
 #include <vector>
 
 using namespace Spark;
@@ -317,4 +319,100 @@ TEST(NetReplication_LagCompensationRewind)
 
     EXPECT_EQ(closestIdx, static_cast<size_t>(6));
     EXPECT_NEAR(history[closestIdx].posX, 3.0f, 0.001f);
+}
+
+TEST(NetReplication_MultiplayerSmoke_ServerClientConvergence)
+{
+    struct PlayerState
+    {
+        float x = 0.0f;
+        float z = 0.0f;
+        float vx = 0.0f;
+        float vz = 0.0f;
+        uint32_t ack = 0;
+    };
+    struct ProjectileState
+    {
+        bool active = false;
+        float x = 0.0f;
+        float z = 0.0f;
+        float vx = 0.0f;
+        float vz = 0.0f;
+        float ttl = 0.0f;
+    };
+
+    constexpr float dt = 1.0f / 60.0f;
+    Spark::ClientPrediction prediction;
+    Spark::PredictedState predicted;
+    PlayerState server{};
+    ProjectileState projectile{};
+    std::deque<Spark::PredictedInput> sentInputs;
+    uint32_t correctionCount = 0;
+
+    for (int frame = 0; frame < 180; ++frame)
+    {
+        Spark::PredictedInput input{};
+        input.timestamp = static_cast<float>(frame) * dt;
+        input.moveDirection = {0.0f, 0.0f, 1.0f};
+        input.lookYaw = 0.0f;
+        input.lookPitch = 0.0f;
+        input.fire = (frame == 30);
+
+        const uint32_t sequence = prediction.RecordInput(input);
+        input.sequenceNumber = sequence;
+        sentInputs.push_back(input);
+
+        prediction.ApplyPrediction(predicted, input, dt);
+
+        // Simulate 2-frame transport latency for server authoritative processing.
+        if (sentInputs.size() >= 2)
+        {
+            const auto authoritativeInput = sentInputs.front();
+            sentInputs.pop_front();
+
+            server.vx = authoritativeInput.moveDirection.x * 5.0f;
+            server.vz = authoritativeInput.moveDirection.z * 5.0f;
+            server.x += server.vx * dt;
+            server.z += server.vz * dt;
+            server.ack = authoritativeInput.sequenceNumber;
+
+            if (authoritativeInput.fire)
+            {
+                projectile.active = true;
+                projectile.x = server.x;
+                projectile.z = server.z;
+                projectile.vx = 0.0f;
+                projectile.vz = 30.0f;
+                projectile.ttl = 0.5f;
+            }
+        }
+
+        if (projectile.active)
+        {
+            projectile.x += projectile.vx * dt;
+            projectile.z += projectile.vz * dt;
+            projectile.ttl -= dt;
+            if (projectile.ttl <= 0.0f)
+                projectile.active = false;
+        }
+
+        Spark::PredictedState authoritative{};
+        authoritative.position = {server.x, 0.0f, server.z};
+        authoritative.velocity = {server.vx, 0.0f, server.vz};
+        authoritative.lastProcessedInput = server.ack;
+
+        prediction.Reconcile(authoritative, dt);
+        if (prediction.GetLastCorrectionMagnitude() > 0.001f)
+            ++correctionCount;
+    }
+
+    // Client and server should converge closely after reconciliation.
+    EXPECT_NEAR(prediction.GetState().position.x, server.x, 0.05f);
+    EXPECT_NEAR(prediction.GetState().position.z, server.z, 0.05f);
+
+    // Projectile should have been spawned and later despawned by TTL.
+    EXPECT_FALSE(projectile.active);
+
+    // Prediction corrections should have occurred due to latency and reconciliation.
+    EXPECT_TRUE(correctionCount > 0);
 }
