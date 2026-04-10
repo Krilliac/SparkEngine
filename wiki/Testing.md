@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*344 test files, 4438+ test cases*
+*353 test files, 4570+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -543,7 +543,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAreaAssetLoader` | 12 |
 | `TestAssertSuppression` | 9 |
 | `TestAssetDatabase` | 4 |
-| `TestAssetDependencyGraph` | 8 |
+| `TestAssetDependencyGraph` | 19 |
 | `TestAssetMigration` | 21 |
 | `TestAssetPipelineCache` | 22 |
 | `TestAssetStallDetector` | 0 |
@@ -551,6 +551,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAsyncComputeScheduler` | 9 |
 | `TestAsyncDatabase` | 23 |
 | `TestAtomicSharedPtr` | 3 |
+| `TestAudioBackendFactory` | 5 |
 | `TestAudioEngine` | 18 |
 | `TestAudioMixerBus` | 17 |
 | `TestAutoLODPerformance` | 2 |
@@ -559,6 +560,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestBitFlags` | 14 |
 | `TestBitUtils` | 10 |
 | `TestBlendSpace` | 6 |
+| `TestCSGEditorPanel` | 10 |
 | `TestCSGSystem` | 12 |
 | `TestCameraInterpolation` | 9 |
 | `TestCameraTransforms` | 26 |
@@ -577,6 +579,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestConfigParser` | 16 |
 | `TestConnectionScope` | 8 |
 | `TestConnectionScopeFilter` | 5 |
+| `TestConnectionScopeWiring` | 6 |
 | `TestConnectionTimeout` | 9 |
 | `TestConsoleRBAC` | 21 |
 | `TestConsoleVariables` | 31 |
@@ -619,9 +622,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestECSystemSpecialized` | 27 |
 | `TestEditorAutomation` | 9 |
 | `TestEditorCommands` | 8 |
-| `TestEditorLayoutManager` | 3 |
+| `TestEditorLayoutManager` | 13 |
 | `TestEditorSubsystems` | 83 |
-| `TestEditorWindowManager` | 7 |
+| `TestEditorWindowManager` | 14 |
 | `TestEngineContext` | 18 |
 | `TestEngineDiagnostics` | 4 |
 | `TestEngineLoadTest` | 21 |
@@ -645,6 +648,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFileWatcher` | 10 |
 | `TestFixtures` | 0 |
 | `TestFogSystem` | 17 |
+| `TestFoliageImpostorBaker` | 14 |
+| `TestFoliageRenderer` | 20 |
+| `TestFoliageSystem` | 10 |
 | `TestFontSystem` | 13 |
 | `TestFormationSystem` | 9 |
 | `TestFrameAllocator` | 8 |
@@ -672,6 +678,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplayDebugger` | 11 |
 | `TestGameplayExtensionRegistry` | 7 |
 | `TestGameplayStress` | 15 |
+| `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 14 |
@@ -723,9 +730,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMultiISADispatch` | 7 |
 | `TestMusicManager` | 24 |
 | `TestNavMesh` | 11 |
+| `TestNavMeshLink` | 5 |
 | `TestNavMeshObstacles` | 7 |
 | `TestNetBuffer` | 29 |
-| `TestNetworkDebugPanel` | 9 |
+| `TestNetworkDebugPanel` | 11 |
 | `TestNetworkEncryption` | 17 |
 | `TestNetworkHealthMonitor` | 0 |
 | `TestNetworkIntegration` | 31 |
@@ -801,7 +809,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestScriptHotReload` | 16 |
 | `TestScriptSandbox` | 11 |
 | `TestSeamlessAreaManager` | 14 |
-| `TestSelectionManager` | 10 |
+| `TestSelectionManager` | 23 |
 | `TestSelfRecovery` | 16 |
 | `TestSequencer` | 10 |
 | `TestSerializer` | 17 |
@@ -823,6 +831,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSparkPak` | 12 |
 | `TestSpatialGrid` | 16 |
 | `TestSplineMath` | 24 |
+| `TestSpringArm` | 6 |
 | `TestSprite2DComponents` | 35 |
 | `TestStackTrace` | 16 |
 | `TestStateMachine` | 16 |
@@ -843,7 +852,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTimeOfDaySystem` | 18 |
 | `TestTimerManager` | 11 |
 | `TestTransientBufferAllocator` | 10 |
-| `TestTutorialSystem` | 15 |
+| `TestTutorialSystem` | 22 |
 | `TestTween` | 14 |
 | `TestTypeTraits` | 11 |
 | `TestUILayoutExtensions` | 29 |

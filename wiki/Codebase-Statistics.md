@@ -8,33 +8,33 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 264476 |
-| **SparkEditor/Source** | 86764 |
+| **SparkEngine/Source** | 266535 |
+| **SparkEditor/Source** | 88282 |
 | **GameModules** | 58460 |
-| **Tests** | 107933 |
-| **SparkConsole/src** | 1858 |
+| **Tests** | 111117 |
+| **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~520024** |
+| **Total C++ (excl. ThirdParty)** | **~526795** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 748 |
-| Implementation files (.cpp) | 866 |
-| HLSL shader files | 38 |
+| Header files (.h/.hpp) | 750 |
+| Implementation files (.cpp) | 879 |
+| HLSL shader files | 40 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 345 |
+| Test files (.cpp) | 354 |
 | Wiki pages (.md) | 125 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~862 |
-| Average lines per .h file | ~570 |
-| Largest codebase section | Graphics (101654 lines — 38% of SparkEngine/Source) |
+| Average lines per .cpp file | ~863 |
+| Average lines per .h file | ~574 |
+| Largest codebase section | Graphics (103413 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,11 +42,11 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 101654 | 38.4% |
-| Engine (all subsystems) | 80184 | 30.3% |
-| Utils | 36974 | 13.9% |
-| Core | 20603 | 7.7% |
-| Physics | 10101 | 3.8% |
+| Graphics | 103413 | 38.7% |
+| Engine (all subsystems) | 80376 | 30.1% |
+| Utils | 36987 | 13.8% |
+| Core | 20698 | 7.7% |
+| Physics | 10101 | 3.7% |
 | Audio | 5548 | 2.0% |
 | Input | 3895 | 1.4% |
 | SceneManager | 1886 | 0.7% |
@@ -58,15 +58,15 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines |
 |-----------|------:|
-| AI | 13133 |
-| Networking | 11896 |
-| ECS | 8545 |
+| AI | 13151 |
+| Networking | 12047 |
+| ECS | 8544 |
 | Gameplay | 7511 |
 | Animation | 6534 |
 | Scripting | 4445 |
 | UI | 2521 |
 | SaveSystem | 2491 |
-| Streaming | 1763 |
+| Streaming | 1767 |
 | World | 1588 |
 | Editor | 1556 |
 | Cinematic | 1526 |
@@ -99,14 +99,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 86764 |
+| Total editor lines | 88282 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 345 |
-| TEST() definitions | 4434 |
+| Test files | 354 |
+| TEST() definitions | 4566 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -154,8 +154,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | File | Lines |
 |------|------:|
-| `OpenGLDevice.cpp` | 1959 |
-| `SparkEngine.cpp` | 1936 |
+| `OpenGLDevice.cpp` | 1965 |
+| `SparkEngine.cpp` | 1957 |
 | `VulkanDevice.cpp` | 1835 |
 | `GraphicsEngine.cpp` | 1693 |
 | `D3D12Device.cpp` | 1565 |
@@ -178,14 +178,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `SVGRenderer.h` | 803 |
 | `DataTableSystem.h` | 800 |
 | `PhysicsTypes.h` | 779 |
-| `FastNoise2SIMD.h` | 749 |
+| `FastNoise2SIMD.h` | 752 |
 
 ### SparkEditor .cpp Files (by line count)
 
 | File | Lines |
 |------|------:|
+| `EditorUI.cpp` | 1776 |
 | `VisualScriptPanel.cpp` | 1773 |
-| `EditorUI.cpp` | 1706 |
 | `PerformanceProfiler.cpp` | 1609 |
 | `ProjectSettingsPanel.cpp` | 1501 |
 | `EditorTheme.cpp` | 1456 |
@@ -199,7 +199,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Type | Count | Location |
 |------|------:|----------|
-| HLSL shaders | 38 | `Shaders/HLSL/` (includes Compute, MeshShaders, RayTracing) |
+| HLSL shaders | 40 | `Shaders/HLSL/` (includes Compute, MeshShaders, RayTracing) |
 | GLSL shaders | 14 | `Shaders/GLSL/` |
 | Compiled bytecode (.cso) | varies | `Shaders/Compiled/` |
 
