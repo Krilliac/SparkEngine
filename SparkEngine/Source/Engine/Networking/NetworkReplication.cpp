@@ -7,6 +7,7 @@
  */
 
 #include "NetworkManager.h"
+#include "ConnectionScopeFilter.h"
 #include "DeltaSnapshotManager.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
@@ -118,11 +119,21 @@ namespace Spark::Net
         if (GetRole() != NetworkRole::Server)
             return;
 
+        auto& scopeFilter = ConnectionScopeFilter::GetInstance();
+
         std::lock_guard<std::mutex> lock(m_replicationMutex);
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Sending full entity sync to client %u (%zu entities)",
                         targetClient, m_replicatedEntities.size());
         for (const auto& [netID, entity] : m_replicatedEntities)
         {
+            // Per-connection interest filter: skip entities outside the client's scope.
+            // If no scope is set for this client, IsEntityInScope returns true (see-all default).
+            if (!scopeFilter.IsEntityInScope(targetClient, entity.position, entity.areaId, entity.teamMask,
+                                             entity.visibilityMask))
+            {
+                continue;
+            }
+
             // Send spawn message
             NetworkMessage spawnMsg;
             spawnMsg.type = MessageType::EntitySpawn;
@@ -279,6 +290,7 @@ namespace Spark::Net
         m_replicationTimer = 0.0f;
 
         auto& deltaManager = DeltaSnapshotManager::GetInstance();
+        auto& scopeFilter = ConnectionScopeFilter::GetInstance();
 
         for (auto& [netID, entity] : m_replicatedEntities)
         {
@@ -321,30 +333,49 @@ namespace Spark::Net
 
                 deltaManager.RecordEntityState(netID, fieldSnapshots);
 
+                // Snapshot client IDs once — both code paths need them so we can
+                // apply the per-connection interest filter instead of broadcasting.
+                std::vector<ClientID> connectedClients;
+                {
+                    std::lock_guard<std::mutex> clientLock(m_clientsMutex);
+                    connectedClients.reserve(m_clients.size());
+                    for (const auto& [cid, cinfo] : m_clients)
+                        connectedClients.push_back(cid);
+                }
+
                 if (entity.needsFullSync)
                 {
-                    // Full sync: send all properties via the standard path
-                    NetworkMessage msg;
-                    msg.type = MessageType::EntityStateUpdate;
-                    msg.channel = ChannelType::Reliable;
-
+                    // Full sync: previously broadcast to all clients. Now filter
+                    // by ConnectionScopeFilter so out-of-scope clients don't see
+                    // entities they can't observe.
                     NetBuffer buf;
                     SerializeEntityState(netID, buf);
-                    msg.payload = buf.GetData();
-                    SendToAll(msg);
+                    std::vector<uint8_t> payload = buf.GetData();
+
+                    for (ClientID clientId : connectedClients)
+                    {
+                        if (!scopeFilter.IsEntityInScope(clientId, entity.position, entity.areaId, entity.teamMask,
+                                                         entity.visibilityMask))
+                        {
+                            continue;
+                        }
+                        NetworkMessage msg;
+                        msg.type = MessageType::EntityStateUpdate;
+                        msg.channel = ChannelType::Reliable;
+                        msg.payload = payload;
+                        SendToClient(clientId, msg);
+                    }
                 }
                 else
                 {
-                    // Delta sync: snapshot client IDs under lock, then build per-connection delta packets
-                    std::vector<ClientID> connectedClients;
-                    {
-                        std::lock_guard<std::mutex> clientLock(m_clientsMutex);
-                        connectedClients.reserve(m_clients.size());
-                        for (const auto& [cid, cinfo] : m_clients)
-                            connectedClients.push_back(cid);
-                    }
+                    // Delta sync: build per-connection delta packets, filtered by scope.
                     for (ClientID clientId : connectedClients)
                     {
+                        if (!scopeFilter.IsEntityInScope(clientId, entity.position, entity.areaId, entity.teamMask,
+                                                         entity.visibilityMask))
+                        {
+                            continue;
+                        }
                         auto deltaPacket = deltaManager.BuildDeltaPacket(clientId, netID);
                         if (!deltaPacket.empty())
                         {
@@ -362,6 +393,27 @@ namespace Spark::Net
                     prop.dirty = false;
             }
         }
+    }
+
+    // --------------------------------------------------------------------------
+    // Per-connection interest management
+    // --------------------------------------------------------------------------
+
+    void NetworkManager::SetClientScope(ClientID client, const XMFLOAT3& position, float radius, uint32_t areaId,
+                                        uint32_t teamMask, uint32_t visibilityMask)
+    {
+        ConnectionScope scope;
+        scope.areaId = areaId;
+        scope.position = position;
+        scope.radius = radius;
+        scope.teamMask = teamMask;
+        scope.visibilityMask = visibilityMask;
+        ConnectionScopeFilter::GetInstance().SetScope(static_cast<uint32_t>(client), scope);
+    }
+
+    void NetworkManager::ClearClientScope(ClientID client)
+    {
+        ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(client));
     }
 
 } // namespace Spark::Net

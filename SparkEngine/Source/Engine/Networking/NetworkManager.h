@@ -228,6 +228,13 @@ namespace Spark::Net
         float lastUpdateTime = 0.0f;                ///< Server time of the most recent state update.
         bool needsFullSync = true;                  ///< True = send all properties, not just dirty ones.
 
+        /// Scope metadata — consumed by ConnectionScopeFilter during replication.
+        /// Defaults match-all (areaId=0 means global, masks all bits set) so
+        /// entities remain fully replicated until a connection scope is set.
+        uint32_t areaId = 0;                   ///< Area bucket for area-based scope filtering (0 = global).
+        uint32_t teamMask = 0xFFFFFFFFu;       ///< Team bitmask; must share a bit with the connection scope.
+        uint32_t visibilityMask = 0xFFFFFFFFu; ///< Visibility flag bitmask; must share a bit with the scope.
+
         /// @brief Client-side interpolation buffer for smooth remote entity rendering.
         NetworkInterpolationBuffer interpolationBuffer;
     };
@@ -409,6 +416,31 @@ namespace Spark::Net
         // Client management (server only)
         const std::unordered_map<ClientID, ClientInfo>& GetClients() const { return m_clients; }
         void KickClient(ClientID client, const std::string& reason = "");
+
+        // ====================================================================
+        // Per-connection interest management (server-side bandwidth filter)
+        // ====================================================================
+
+        /**
+         * @brief Set the visibility scope for a connected client (server only).
+         *
+         * Registers the client with ConnectionScopeFilter so that entity
+         * replication (SendFullEntitySync and the delta-update loop) filters
+         * entities outside the sphere centered at @p position with @p radius.
+         * Subsequent calls replace any existing scope for this client.
+         *
+         * @param client   Target connection ID.
+         * @param position World-space center of the visibility sphere (usually the player entity position).
+         * @param radius   Visibility radius in world units.
+         * @param areaId   Area bucket filter (0 = global; entities with matching areaId will pass).
+         * @param teamMask Team bitmask filter (must share a bit with the entity's team mask).
+         * @param visibilityMask Custom visibility bitmask (must share a bit with the entity's mask).
+         */
+        void SetClientScope(ClientID client, const XMFLOAT3& position, float radius, uint32_t areaId = 0,
+                            uint32_t teamMask = 0xFFFFFFFFu, uint32_t visibilityMask = 0xFFFFFFFFu);
+
+        /// @brief Remove a client's visibility scope, reverting to "see everything".
+        void ClearClientScope(ClientID client);
 
         /// Register a callback for client timeout events (server-side).
         void SetTimeoutHandler(std::function<void(ClientID)> handler) { m_timeoutHandler = std::move(handler); }

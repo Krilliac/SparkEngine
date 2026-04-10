@@ -10,6 +10,7 @@
  */
 
 #include "NetworkManager.h"
+#include "ConnectionScopeFilter.h"
 #include "DeltaSnapshotManager.h"
 #include "InstabilitySimulator.h"
 #include "../Security/MemoryIntegrity.h"
@@ -552,6 +553,9 @@ namespace Spark::Net
 #ifdef ENABLE_NETWORKING
         m_clientAddresses.erase(client);
 #endif
+        // Drop any interest-management scope tied to this connection so
+        // a future client reusing the ID starts with "see everything".
+        ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(client));
     }
 
     // --------------------------------------------------------------------------
@@ -637,6 +641,10 @@ namespace Spark::Net
         // Unregister from delta snapshot tracking before removing the client
         DeltaSnapshotManager::GetInstance().UnregisterConnection(clientID);
 
+        // Drop interest-management scope so a future connection reusing this
+        // ID starts fresh instead of inheriting the prior player's visibility.
+        ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(clientID));
+
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients.erase(clientID);
@@ -717,6 +725,9 @@ namespace Spark::Net
                     m_clientAddresses.erase(id);
 #endif
                 }
+
+                // Drop interest-management scope for timed-out clients.
+                ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(id));
             }
         }
         else if (m_role == NetworkRole::Client)
