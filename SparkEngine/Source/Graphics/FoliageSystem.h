@@ -168,6 +168,16 @@ namespace Spark::Graphics
         /// @brief True if the volume ID is currently registered.
         bool HasVolume(uint32_t volumeId) const;
 
+        /// @brief List the IDs of all currently-registered volumes, in
+        /// creation order. Empty if none. Used by the render consumer to
+        /// iterate volumes without knowing the internal ID range.
+        std::vector<uint32_t> GetVolumeIds() const;
+
+        /// @brief Lookup a volume's descriptor by ID. Returns nullptr if
+        /// the volume does not exist. The returned pointer is invalidated
+        /// by any subsequent Add/Remove call.
+        const FoliageVolumeDesc* GetVolumeDesc(uint32_t volumeId) const;
+
         // ----- Instance queries -----
 
         /// @brief Immutable view of the instances for a specific volume.

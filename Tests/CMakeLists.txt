@@ -218,6 +218,8 @@ add_executable(SparkTests
     TestSceneGraph2D.cpp
     TestDecalSystem.cpp
     TestFoliageSystem.cpp
+    TestFoliageRenderer.cpp
+    TestFoliageImpostorBaker.cpp
     TestConnectionScopeFilter.cpp
     TestNavMeshObstacles.cpp
     TestFaultIsolation.cpp

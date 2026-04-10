@@ -255,6 +255,25 @@ namespace Spark::Graphics
                            [volumeId](const Volume& v) { return v.id == volumeId; });
     }
 
+    std::vector<uint32_t> FoliageManager::GetVolumeIds() const
+    {
+        std::vector<uint32_t> ids;
+        ids.reserve(m_volumes.size());
+        for (const auto& v : m_volumes)
+            ids.push_back(v.id);
+        return ids;
+    }
+
+    const FoliageVolumeDesc* FoliageManager::GetVolumeDesc(uint32_t volumeId) const
+    {
+        for (const auto& v : m_volumes)
+        {
+            if (v.id == volumeId)
+                return &v.desc;
+        }
+        return nullptr;
+    }
+
     const std::vector<FoliageInstance>& FoliageManager::GetInstances(uint32_t volumeId) const
     {
         for (const auto& v : m_volumes)

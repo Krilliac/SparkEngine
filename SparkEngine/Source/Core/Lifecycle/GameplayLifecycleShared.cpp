@@ -121,6 +121,7 @@
 #include "Graphics/ClusteredLightCulling.h"
 #include "Graphics/LightProbeSystem.h"
 #include "Graphics/ClipmapTerrain.h"
+#include "Graphics/FoliageRenderer.h"
 #include "Graphics/FoliageSystem.h"
 #include "Graphics/VirtualTexture.h"
 #include "Graphics/MaterialPropertyHandle.h"
@@ -424,6 +425,13 @@ namespace Spark::Core::Lifecycle
         Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
         Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
         Spark::Graphics::FoliageManager::GetInstance().Initialize();
+        // FoliageRenderer uses a nullptr loader here; the real
+        // AssetPipeline::LoadMesh integration is installed later in
+        // render-side initialization once the graphics device is ready.
+        // Until then the renderer still builds its CPU-side batch from
+        // FoliageManager so the wind phase, world matrices and LOD state
+        // are available to any consumer that queries GetRenderInstances().
+        Spark::Graphics::FoliageRenderer::GetInstance().Initialize(nullptr, 50.0f);
         Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
         Spark::PluginRegistry::InitializeAll();
 
@@ -711,6 +719,11 @@ namespace Spark::Core::Lifecycle
                 }
             }
             foliage.Update(dt, camPos);
+
+            // Rebuild the render-side batch after the manager's visibility
+            // has been refreshed so the next frame can push instances into
+            // the GPU scene buffer on Windows builds.
+            Spark::Graphics::FoliageRenderer::GetInstance().CollectFromFoliageManager(dt);
         });
 
         SPARK_GUARDED_UPDATE("AI_Tactical", "Core", {
@@ -946,6 +959,7 @@ namespace Spark::Core::Lifecycle
         Spark::ProfileProperties::GetInstance().Shutdown();
 #endif
         Spark::Graphics::VirtualTextureManager::GetInstance().Shutdown();
+        Spark::Graphics::FoliageRenderer::GetInstance().Shutdown();
         Spark::Graphics::FoliageManager::GetInstance().Shutdown();
         Spark::Graphics::ClipmapTerrain::GetInstance().Shutdown();
         Spark::Graphics::TransientResourcePool::GetInstance().Shutdown();
