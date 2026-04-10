@@ -74,6 +74,7 @@ struct TestRegistrar
 
 extern int g_assertionsPassed;
 extern int g_assertionsFailed;
+extern int g_testsWarned;
 extern std::string g_currentTest;
 
 #define TEST(name)                                                                                                     \

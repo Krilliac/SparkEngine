@@ -11,6 +11,8 @@
  *   --junit-xml <path>     Write JUnit XML report (for CI integration)
  *   --shuffle [seed]       Randomize test execution order (seed for reproducibility)
  *   --retries N            Retry failed tests up to N times (for flaky test mitigation)
+ *   --warn-is-error        Treat known-flaky test warnings as hard failures
+ *   --list-warnings        List all registered flaky test patterns and exit
  *   --help                 Show usage information
  *
  * Environment variables (still supported):
@@ -21,6 +23,7 @@
  */
 
 #include "TestFramework.h"
+#include "TestWarnings.h"
 #include "../SparkEngine/Source/Utils/Logger.h"
 
 #include <algorithm>
@@ -42,6 +45,7 @@
 // Global test state (defined here, declared extern in TestFramework.h)
 int g_assertionsPassed = 0;
 int g_assertionsFailed = 0;
+int g_testsWarned = 0;
 std::string g_currentTest;
 
 // ============================================================================
@@ -54,6 +58,8 @@ struct TestResult
     double durationMs = 0.0;
     int assertions = 0;
     bool passed = true;
+    bool warned = false;
+    std::string warningReason;
     std::string failureOutput;
 };
 
@@ -225,24 +231,34 @@ static void WriteJUnitXml(const std::string& path, const std::vector<TestResult>
 
     int totalTests = static_cast<int>(results.size());
     int failures = 0;
+    int warnings = 0;
     for (const auto& r : results)
     {
-        if (!r.passed)
+        if (r.warned)
+            ++warnings;
+        else if (!r.passed)
             ++failures;
     }
 
     xml << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-    xml << "<testsuites tests=\"" << totalTests << "\" failures=\"" << failures << "\" time=\""
-        << (totalTimeMs / 1000.0) << "\">\n";
-    xml << "  <testsuite name=\"SparkEngine\" tests=\"" << totalTests << "\" failures=\"" << failures << "\" time=\""
-        << (totalTimeMs / 1000.0) << "\">\n";
+    xml << "<testsuites tests=\"" << totalTests << "\" failures=\"" << failures << "\" skipped=\"" << warnings
+        << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
+    xml << "  <testsuite name=\"SparkEngine\" tests=\"" << totalTests << "\" failures=\"" << failures << "\" skipped=\""
+        << warnings << "\" time=\"" << (totalTimeMs / 1000.0) << "\">\n";
 
     for (const auto& r : results)
     {
         xml << "    <testcase name=\"" << XmlEscape(r.name) << "\" time=\"" << (r.durationMs / 1000.0) << "\"";
-        if (r.passed)
+        if (r.passed && !r.warned)
         {
             xml << "/>\n";
+        }
+        else if (r.warned)
+        {
+            xml << ">\n";
+            xml << "      <skipped message=\"Known flaky: " << XmlEscape(r.warningReason) << "\">"
+                << XmlEscape(r.failureOutput) << "</skipped>\n";
+            xml << "    </testcase>\n";
         }
         else
         {
@@ -289,6 +305,8 @@ static void PrintUsage(const char* argv0)
               << "  --junit-xml <path>     Write JUnit XML report for CI integration\n"
               << "  --shuffle [seed]       Randomize test order (optional integer seed)\n"
               << "  --retries <N>          Retry failed tests up to N times (default: 0)\n"
+              << "  --warn-is-error        Treat known-flaky test warnings as hard failures\n"
+              << "  --list-warnings        List all registered flaky test patterns and exit\n"
               << "  --help                 Show this help message\n"
               << "\n"
               << "Environment variables:\n"
@@ -313,6 +331,7 @@ int main(int argc, char** argv)
     bool shuffle = false;
     unsigned int shuffleSeed = 0;
     int maxRetries = 0;
+    bool warnIsError = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -340,6 +359,20 @@ int main(int argc, char** argv)
         else if (arg == "--retries" && i + 1 < argc)
         {
             maxRetries = std::max(0, std::atoi(argv[++i]));
+        }
+        else if (arg == "--warn-is-error")
+        {
+            warnIsError = true;
+        }
+        else if (arg == "--list-warnings")
+        {
+            std::cout << "Registered flaky test warning patterns (" << g_testWarningPatternCount << "):\n\n";
+            for (size_t j = 0; j < g_testWarningPatternCount; ++j)
+            {
+                std::cout << "  " << g_testWarningPatterns[j].pattern << "\n"
+                          << "    Reason: " << g_testWarningPatterns[j].reason << "\n\n";
+            }
+            return EXIT_SUCCESS;
         }
         else if (arg == "--help")
         {
@@ -375,6 +408,7 @@ int main(int argc, char** argv)
     auto& tests = GetTestRegistry();
     int passed = 0;
     int failed = 0;
+    int warned = 0;
 
     // Shuffle test order if requested
     if (shuffle)
@@ -389,6 +423,9 @@ int main(int argc, char** argv)
         out.PrintSummary("Shuffle seed: " + std::to_string(shuffleSeed) + "\n");
     if (maxRetries > 0)
         out.PrintSummary("Retry policy: up to " + std::to_string(maxRetries) + " retries for failed tests\n");
+    if (g_testWarningPatternCount > 0 && !warnIsError)
+        out.PrintSummary("Warning patterns: " + std::to_string(g_testWarningPatternCount) +
+                         " known flaky test(s) will warn instead of fail\n");
     out.PrintSummary("\n");
 
     // Allow limiting test count for bisection debugging (SPARK_TEST_LIMIT=N)
@@ -511,10 +548,26 @@ int main(int argc, char** argv)
         std::string duration = FormatDuration(durationMs);
         std::string suffix = " (" + duration + ", " + std::to_string(testAssertions) + " assertions)";
 
+        // Check if a failing test matches a known-flaky warning pattern
+        const char* warnReason = testFailed ? GetTestWarningReason(test->name) : nullptr;
+        bool isWarning = warnReason != nullptr && !warnIsError;
+
         if (!testFailed)
         {
             out.Print("[   OK   ] " + g_currentTest + suffix + "\n");
             passed++;
+        }
+        else if (isWarning)
+        {
+            out.Print("[ WARN   ] " + g_currentTest + suffix + "\n");
+            out.Print("           Known flaky: " + std::string(warnReason) + "\n");
+            // Emit GitHub Actions warning annotation (visible in CI summary)
+            std::cout << "::warning title=Flaky test: " << g_currentTest << "::" << g_currentTest
+                      << " failed but is a known flaky test (" << warnReason << ")\n";
+            warned++;
+            g_testsWarned++;
+            // Roll back the assertion failure count — warning tests don't count as failures
+            g_assertionsFailed = prevFailed;
         }
         else
         {
@@ -522,7 +575,15 @@ int main(int argc, char** argv)
             failed++;
         }
 
-        results.push_back({test->name, durationMs, testAssertions, !testFailed, capturedErrors});
+        TestResult result;
+        result.name = test->name;
+        result.durationMs = durationMs;
+        result.assertions = testAssertions;
+        result.passed = !testFailed || isWarning;
+        result.warned = isWarning;
+        result.warningReason = warnReason ? warnReason : "";
+        result.failureOutput = capturedErrors;
+        results.push_back(std::move(result));
     }
 
     // Retry failed tests if --retries was specified
@@ -612,11 +673,18 @@ int main(int argc, char** argv)
         std::cerr.rdbuf(origCerrBuf);
 
     out.PrintSummary("\n=== Results ===\n");
-    out.PrintSummary("Tests:      " + std::to_string(passed) + " passed, " + std::to_string(failed) + " failed, " +
-                     std::to_string(tests.size()) + " total\n");
+    out.PrintSummary("Tests:      " + std::to_string(passed) + " passed, " + std::to_string(failed) + " failed");
+    if (warned > 0)
+        out.PrintSummary(", " + std::to_string(warned) + " warned");
+    out.PrintSummary(", " + std::to_string(passed + failed + warned) + " total\n");
     out.PrintSummary("Assertions: " + std::to_string(g_assertionsPassed) + " passed, " +
                      std::to_string(g_assertionsFailed) + " failed\n");
     out.PrintSummary("Duration:   " + FormatDuration(totalMs) + "\n");
+    if (warned > 0)
+    {
+        out.PrintSummary("Warnings:   " + std::to_string(warned) +
+                         " known flaky test(s) failed (not counted as errors)\n");
+    }
     if (retriedPassed > 0)
     {
         out.PrintSummary("Retries:    " + std::to_string(retriedPassed) + " flaky test(s) passed on retry (" +
