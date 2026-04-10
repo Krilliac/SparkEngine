@@ -9,6 +9,9 @@
  * churn. Inspired by ThorVG's compositor stack with needComposition() skip.
  *
  * @see UISystem.h, UIDirtyTracking.h, RenderTargetPool.h
+ *
+ * @note **Intentional reusable graphics utility** — UI compositor (may be superseded by `Engine/UI`). Kept for reference until the Engine/UI path is verified to cover the same functionality; a follow-up will either migrate and delete, or wire this in for standalone use.
+ *
  */
 
 #pragma once

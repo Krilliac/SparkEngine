@@ -26,6 +26,9 @@
  * @endcode
  *
  * @see GraphicsEngine, PipelineStateCache
+ *
+ * @note **Intentional reusable graphics utility** — Ring buffer allocator for per-frame constant buffer updates. A future render graph will instantiate one per device.
+ *
  */
 
 #pragma once

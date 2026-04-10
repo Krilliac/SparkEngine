@@ -17,6 +17,9 @@
  * - Domain warping with configurable amplitude
  *
  * @see ProceduralGeneration.h, TerrainGenerator.h, NoiseSystem.h
+ *
+ * @note **Intentional reusable graphics utility** — SIMD-accelerated procedural noise (ported from the third-party FastNoise2 library). A future terrain / procedural-generation feature will call these directly. Kept self-contained so neighbouring code can use it without a compiled dependency.
+ *
  */
 
 #pragma once

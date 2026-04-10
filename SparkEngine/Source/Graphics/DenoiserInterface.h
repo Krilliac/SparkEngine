@@ -12,6 +12,9 @@
  * to produce a clean, denoised image from 1-4 samples per pixel.
  *
  * @see HybridRT/HybridRTManager.h, DXRSupport.h
+ *
+ * @note **Intentional reusable graphics utility** — Abstract denoiser plugin interface (for raytraced AO / GI / reflections). A future ray tracing pipeline will load concrete denoiser implementations against this interface.
+ *
  */
 
 #pragma once

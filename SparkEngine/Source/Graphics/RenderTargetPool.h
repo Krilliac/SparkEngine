@@ -38,6 +38,9 @@
  * @endcode
  *
  * @see RenderGraph, GraphicsEngine
+ *
+ * @note **Intentional reusable graphics utility** — Pooled render target allocator with acquire/release semantics. A render graph will instantiate one of these per device and reclaim RTs between passes. No singleton — the pool is per-device.
+ *
  */
 
 #pragma once

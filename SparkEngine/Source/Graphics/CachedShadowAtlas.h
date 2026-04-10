@@ -13,6 +13,9 @@
  * - Cached atlas: rendered once, invalidated on change
  *
  * @see ShadowAtlas.h, LightingSystem.h
+ *
+ * @note **Intentional reusable graphics utility** — Shadow atlas with per-light caching — lights that have not moved reuse their cached shadow page. A future shadow map system will instantiate one per atlas. Covered by `Tests/TestGraphicsIntegration.cpp`.
+ *
  */
 
 #pragma once

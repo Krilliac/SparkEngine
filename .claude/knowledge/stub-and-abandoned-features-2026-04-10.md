@@ -77,30 +77,32 @@ engine-side integration. **Before deleting, re-verify each file individually
 with grep across all `.cpp` directories including `Tests/`, `SparkEditor/`, and
 `GameModules/`.**
 
-High-value orphans (substantial implementations, would be useful if wired):
+High-value orphans — **resolved 2026-04-10 (later session):**
 
-| File | Lines | What it would provide |
+Per-file verification found **1 false positive** (a filename collision — the actual class in the orphan file is different from the real one). The other **19 are legitimate reusable graphics utilities**. All 19 received a header `@note` documenting intentional-utility status per the audit's "(c) document as intentional utility" resolution path; 4 of them already had test coverage via `Tests/TestGraphicsIntegration.cpp` and those notes point to the existing tests. None were deleted — every file represents substantial working code (200–750 lines) that will be useful when the corresponding render features are built.
+
+| File | Lines | Status |
 |---|---|---|
-| `SparkEngine/Source/Graphics/BVHAccelerator.h` | 441 | SAH-based hierarchical frustum culling |
-| `SparkEngine/Source/Graphics/VolumeSystem.h` | 461 | Unity-style post-process volume blending |
-| `SparkEngine/Source/Graphics/VoxelConeTracing.h` | 463 | Voxel cone traced global illumination |
-| `SparkEngine/Source/Graphics/GTAOEffect.h` | 444 | Ground-truth AO implementation |
-| `SparkEngine/Source/Graphics/SSAOTemporal.h` | 231 | Temporal SSAO variant |
-| `SparkEngine/Source/Graphics/MeshOptimizer.h` | 471 | Mesh/index buffer optimization |
-| `SparkEngine/Source/Graphics/RenderTargetPool.h` | 398 | RT pooling with acquire/release |
-| `SparkEngine/Source/Graphics/PipelineStateCache.h` | 398 | PSO caching. **Note:** a file at `Graphics/RHI/PipelineStateCache.cpp` exists — verify whether it implements this header or a different class before action. |
-| `SparkEngine/Source/Graphics/ReflectionProbeCache.h` | 317 | Reflection probe cache |
-| `SparkEngine/Source/Graphics/CachedShadowAtlas.h` | 328 | Shadow atlas with caching |
-| `SparkEngine/Source/Graphics/RTHandleSystem.h` | 265 | Render target handle abstraction |
-| `SparkEngine/Source/Graphics/ShaderVariantSystem.h` | 391 | Shader variant permutation management |
-| `SparkEngine/Source/Graphics/ShaderCrossCompiler.h` | 376 | HLSL↔GLSL translation (duplicates SlangShaderInterface?) |
-| `SparkEngine/Source/Graphics/ConstantBufferRing.h` | 362 | Ring buffer allocator |
-| `SparkEngine/Source/Graphics/GPUDebugMarkers.h` | 377 | GPU timing/debug markers |
-| `SparkEngine/Source/Graphics/GPUTimestampQuery.h` | 490 | GPU timestamp queries |
-| `SparkEngine/Source/Graphics/PersistentMaterialCB.h` | 220 | Persistent material constant buffer |
-| `SparkEngine/Source/Graphics/UICompositor.h` | 231 | UI compositor (possibly superseded by Engine/UI) |
-| `SparkEngine/Source/Graphics/DenoiserInterface.h` | 251 | Abstract denoiser plugin interface |
-| `SparkEngine/Source/Graphics/FastNoise2SIMD.h` | 749 | SIMD procedural noise (appears to be a ported third-party header) |
+| `Graphics/BVHAccelerator.h` | 441 | **DOCUMENTED.** SAH-based hierarchical frustum / ray culling. One per scene renderer that wants hierarchical culling. |
+| `Graphics/VolumeSystem.h` | 461 | **DOCUMENTED + tested.** Unity-style post-process volume blending. Covered by `Tests/TestGraphicsIntegration.cpp`. |
+| `Graphics/VoxelConeTracing.h` | 463 | **DOCUMENTED.** Voxel-cone-traced GI. Future render pipeline feature. |
+| `Graphics/GTAOEffect.h` | 444 | **DOCUMENTED.** Ground-truth AO post-process effect. One per view. |
+| `Graphics/SSAOTemporal.h` | 231 | **DOCUMENTED.** Temporal SSAO with frame-to-frame history. One per view. |
+| `Graphics/MeshOptimizer.h` | 471 | **DOCUMENTED + tested.** Mesh / index buffer optimizer (vertex cache, overdraw). Covered by `Tests/TestGraphicsIntegration.cpp`. |
+| `Graphics/RenderTargetPool.h` | 398 | **DOCUMENTED.** Pooled render target allocator with acquire/release. One per device. |
+| `Graphics/PipelineStateCache.h` | 398 | **FALSE POSITIVE (filename collision).** The orphan file defines class `D3D11PipelineStateCache`; the file at `Graphics/RHI/PipelineStateCache.h` defines a different class named `PipelineStateCache` that IS wired in `GameplayLifecycleShared.cpp:427` / `:993`. Header `@note` added to the orphan to disambiguate and mark it as a future D3D11 helper. |
+| `Graphics/ReflectionProbeCache.h` | 317 | **DOCUMENTED.** Prefiltered environment map cache for reflection probes. |
+| `Graphics/CachedShadowAtlas.h` | 328 | **DOCUMENTED + tested.** Shadow atlas with per-light caching. Covered by `Tests/TestGraphicsIntegration.cpp`. |
+| `Graphics/RTHandleSystem.h` | 265 | **DOCUMENTED.** Render target handle abstraction (Unity-HDRP-inspired). |
+| `Graphics/ShaderVariantSystem.h` | 391 | **DOCUMENTED + tested.** Keyword-based shader permutation management. Covered by `Tests/TestGraphicsIntegration.cpp`. |
+| `Graphics/ShaderCrossCompiler.h` | 376 | **DOCUMENTED.** HLSL↔GLSL translation. May be superseded by `SlangShaderInterface.h` — follow-up will decide. |
+| `Graphics/ConstantBufferRing.h` | 362 | **DOCUMENTED.** Ring buffer allocator for per-frame constant buffer updates. |
+| `Graphics/GPUDebugMarkers.h` | 377 | **DOCUMENTED.** Scoped GPU debug markers for PIX / RenderDoc / NSight. |
+| `Graphics/GPUTimestampQuery.h` | 490 | **DOCUMENTED.** GPU timestamp query pool for per-pass timing. |
+| `Graphics/PersistentMaterialCB.h` | 220 | **DOCUMENTED.** Persistent constant buffer with dirty tracking. One per material family. |
+| `Graphics/UICompositor.h` | 231 | **DOCUMENTED.** May be superseded by `Engine/UI` — a follow-up will migrate-and-delete or wire. |
+| `Graphics/DenoiserInterface.h` | 251 | **DOCUMENTED.** Abstract denoiser plugin interface for RT AO / GI / reflections. |
+| `Graphics/FastNoise2SIMD.h` | 749 | **DOCUMENTED.** SIMD procedural noise ported from FastNoise2. Kept self-contained. |
 
 Smaller orphans — **resolved 2026-04-10 (later session):**
 

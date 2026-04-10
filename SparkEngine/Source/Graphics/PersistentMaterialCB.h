@@ -10,6 +10,9 @@
  * changes by sorting objects by shader variant and keeping CBs persistent.
  *
  * @see MaterialSystem.h, DrawSortKey.h
+ *
+ * @note **Intentional reusable graphics utility** — Persistent constant buffer for frequently-updated material data with dirty tracking. A future material system will instantiate one per material family.
+ *
  */
 
 #pragma once

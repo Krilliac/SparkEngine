@@ -17,6 +17,9 @@
  * - CPU reference path for validation
  *
  * @see SSAOEffect.h, PostProcessing.h, RenderGraph.h
+ *
+ * @note **Intentional reusable graphics utility** — Ground-truth ambient occlusion post-process. A future post-process stack will instantiate one of these per view. No singleton.
+ *
  */
 
 #pragma once

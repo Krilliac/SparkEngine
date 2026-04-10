@@ -33,6 +33,9 @@
  * @endcode
  *
  * @see FrustumCulling.h, Octree.h, RenderSystem
+ *
+ * @note **Intentional reusable graphics utility** — An SAH-based bounding volume hierarchy for hierarchical frustum / ray culling. No singleton — a scene renderer that wants hierarchical culling instantiates one of these and feeds it the scene's renderable AABBs each frame. Kept header-only so future render passes can adopt it without a compiled dependency.
+ *
  */
 
 #pragma once
