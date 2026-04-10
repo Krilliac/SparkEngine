@@ -1301,6 +1301,80 @@ foreach(SHADER_FILE ${ENGINE_SHADER_FILES})
     )
 endforeach()
 
+# Also copy the top-level Shaders/HLSL/ tree (DXR ray-tracing shaders,
+# foliage impostor bake shader, compute shaders, mesh shaders). These
+# live under the repo root rather than SparkEngine/Shaders/HLSL/ for
+# historical reasons; the runtime paths in DXRSupport.cpp and
+# FoliageImpostorBaker.cpp expect them at "Shaders/HLSL/...".
+if(EXISTS "${CMAKE_SOURCE_DIR}/Shaders/HLSL")
+    add_custom_command(TARGET SparkEngine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/Shaders/HLSL"
+            "$<TARGET_FILE_DIR:SparkEngine>/Shaders/HLSL"
+        COMMENT "Copying top-level Shaders/HLSL/ tree (DXR, compute, mesh, impostor bake)"
+    )
+endif()
+
+# DXR ray-tracing shaders need DXC (lib_6_3 profile) to compile to DXIL
+# blobs. d3dcompiler.dll caps out at SM 5.1 and cannot produce ray
+# tracing libraries. We invoke dxc.exe at build time when:
+#   - Building on Windows MSVC (NOT MinGW — MinGW's d3d12.h is too old
+#     to host DXR anyway)
+#   - ENABLE_DXR is on (which gates the C++ side too)
+#   - find_program located dxc on the host
+#
+# When dxc is missing the build still succeeds — the runtime
+# DXRManager::BuildRTPSOs() handles missing .cso files by logging a
+# warning and skipping that PSO, so trace methods become no-ops.
+if(ENABLE_DXR AND WIN32 AND NOT MINGW)
+    find_program(DXC_EXECUTABLE
+        NAMES dxc dxc.exe
+        HINTS
+            "$ENV{WindowsSdkVerBinPath}x64"
+            "$ENV{WindowsSdkDir}bin/x64"
+            "$ENV{VULKAN_SDK}/Bin"
+        DOC "DirectX Shader Compiler (dxc.exe) — required for DXR HLSL → DXIL"
+    )
+
+    if(DXC_EXECUTABLE)
+        message(STATUS "SparkEngine: Found dxc at ${DXC_EXECUTABLE} — will compile DXR shaders to DXIL")
+        set(DXR_SHADER_DIR "${CMAKE_SOURCE_DIR}/Shaders/HLSL/RayTracing")
+        set(DXR_OUTPUT_DIR "$<TARGET_FILE_DIR:SparkEngine>/Shaders/HLSL/RayTracing")
+
+        # Each DXR HLSL file is compiled as a `lib_6_3` DXIL library.
+        # Library compilation discovers all functions tagged with
+        # [shader("...")] attributes, so no -E entry flag is needed.
+        # The output .cso is written next to the runtime .hlsl file.
+        set(DXR_HLSL_FILES
+            DXRReflections.hlsl
+            DXRShadows.hlsl
+            DXRAO.hlsl
+            DXRGI.hlsl
+        )
+
+        set(DXR_CSO_OUTPUTS "")
+        foreach(SHADER ${DXR_HLSL_FILES})
+            get_filename_component(SHADER_BASE ${SHADER} NAME_WE)
+            set(SHADER_INPUT "${DXR_SHADER_DIR}/${SHADER}")
+            set(SHADER_OUTPUT "${DXR_OUTPUT_DIR}/${SHADER_BASE}.cso")
+            add_custom_command(TARGET SparkEngine POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${DXR_OUTPUT_DIR}"
+                COMMAND ${DXC_EXECUTABLE}
+                    -T lib_6_3
+                    -Fo "${SHADER_OUTPUT}"
+                    "${SHADER_INPUT}"
+                COMMENT "DXC: ${SHADER} -> ${SHADER_BASE}.cso (lib_6_3)"
+                VERBATIM
+            )
+            list(APPEND DXR_CSO_OUTPUTS "${SHADER_OUTPUT}")
+        endforeach()
+    else()
+        message(STATUS "SparkEngine: dxc not found — DXR HLSL files will not be compiled to DXIL")
+        message(STATUS "  Install the latest Windows 10/11 SDK or set WindowsSdkVerBinPath in your environment.")
+        message(STATUS "  Trace methods will become no-ops at runtime (logged as warnings, no crashes).")
+    endif()
+endif()
+
 # Copy all asset subdirectories (Models, Textures, Audio, Materials, Scenes, Scripts, MMO)
 foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}")

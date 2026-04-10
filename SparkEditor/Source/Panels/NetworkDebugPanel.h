@@ -12,6 +12,7 @@
 
 #include "../Core/EditorPanel.h"
 
+#include "Engine/Networking/NetworkManager.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
@@ -111,6 +112,15 @@ namespace SparkEditor
             m_accumulatedPacketsSent = 0;
             m_accumulatedPacketsRecv = 0;
             m_accumulatedPacketsDropped = 0;
+
+            // Seed the poll baseline from whatever totals the engine has
+            // already accumulated so the first PollEngineNetwork() call
+            // reports a zero delta instead of the full history.
+            const auto& seed = Spark::Net::NetworkManager::GetInstance().GetStats();
+            m_lastPolledBytesSent = seed.bytesSent;
+            m_lastPolledBytesRecv = seed.bytesReceived;
+            m_lastPolledPacketsDropped = seed.packetsDropped;
+
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "NetworkDebugPanel initialized");
             return true;
         }
@@ -119,6 +129,12 @@ namespace SparkEditor
         {
             m_timeSinceLastSample += deltaTime;
             m_totalTime += deltaTime;
+
+            // Pull live stats from the engine NetworkManager each frame.
+            // Explicit producer calls (RecordBytesSent, LogPacket, ...)
+            // still work and are additive, so tests can push synthetic data
+            // without a live network socket.
+            PollEngineNetwork();
 
             if (m_timeSinceLastSample >= m_sampleInterval)
             {
@@ -246,6 +262,49 @@ namespace SparkEditor
         size_t GetReplicatedEntityCount() const { return m_replicationInfo.size(); }
 
       private:
+        /**
+         * @brief Pull the latest cumulative stats from the engine NetworkManager.
+         *
+         * Computes per-frame deltas for bytes sent / received / packets
+         * dropped and pushes them through the same Record* / SetCurrentLatency
+         * API that external producers use, so the accumulator reset logic in
+         * `TakeSnapshot()` stays the single source of truth. Safe to call
+         * even when the network subsystem is uninitialized — `GetStats()`
+         * returns a zero-initialized struct in that case and the deltas
+         * collapse to zero.
+         */
+        void PollEngineNetwork()
+        {
+            const auto& stats = Spark::Net::NetworkManager::GetInstance().GetStats();
+
+            auto deltaU64 = [](uint64_t curr, uint64_t prev) -> uint32_t
+            {
+                if (curr < prev)
+                    return 0; // stats reset (reconnect) — treat as no delta this frame
+                const uint64_t diff = curr - prev;
+                return static_cast<uint32_t>(std::min<uint64_t>(diff, UINT32_MAX));
+            };
+            auto deltaU32 = [](uint32_t curr, uint32_t prev) -> uint32_t
+            { return (curr >= prev) ? (curr - prev) : 0u; };
+
+            const uint32_t dSent = deltaU64(stats.bytesSent, m_lastPolledBytesSent);
+            const uint32_t dRecv = deltaU64(stats.bytesReceived, m_lastPolledBytesRecv);
+            const uint32_t dDropped = deltaU32(stats.packetsDropped, m_lastPolledPacketsDropped);
+
+            if (dSent > 0)
+                RecordBytesSent(dSent);
+            if (dRecv > 0)
+                RecordBytesRecv(dRecv);
+            for (uint32_t i = 0; i < dDropped; ++i)
+                RecordPacketDrop();
+
+            SetCurrentLatency(stats.ping);
+
+            m_lastPolledBytesSent = stats.bytesSent;
+            m_lastPolledBytesRecv = stats.bytesReceived;
+            m_lastPolledPacketsDropped = stats.packetsDropped;
+        }
+
         void TakeSnapshot()
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "NetworkDebugPanel: TakeSnapshot at t=%.2f", m_totalTime);
@@ -445,6 +504,13 @@ namespace SparkEditor
         uint32_t m_accumulatedPacketsSent = 0;
         uint32_t m_accumulatedPacketsRecv = 0;
         uint32_t m_accumulatedPacketsDropped = 0;
+
+        // Last values polled from NetworkManager::GetStats() — used to compute
+        // per-frame deltas in PollEngineNetwork() without double-counting the
+        // cumulative totals that the engine itself tracks.
+        uint64_t m_lastPolledBytesSent = 0;
+        uint64_t m_lastPolledBytesRecv = 0;
+        uint32_t m_lastPolledPacketsDropped = 0;
 
         // Filters
         std::string m_filterPacketType;

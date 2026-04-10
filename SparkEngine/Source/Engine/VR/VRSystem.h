@@ -16,6 +16,28 @@
  * - Room-scale tracking space configuration
  *
  * Enabled via CMake toggle: `ENABLE_VR=ON`
+ *
+ * @warning **Framework stub — no OpenXR SDK linked.**
+ *          `Initialize()` currently logs a warning and returns `false`
+ *          unconditionally; `UpdateTracking()` is a no-op;
+ *          `IsAvailable()` will always report `false` until an OpenXR
+ *          runtime is linked and the implementation stubs in
+ *          `VRSystem.cpp` are filled in. The class is still wired into
+ *          `EngineContext` (`GetVR()`) and instantiated in
+ *          `GameplayLifecycleShared.cpp:546` so that public SDK users can
+ *          program against the interface today — the wiring comes alive
+ *          automatically once OpenXR is integrated. Until then, every
+ *          getter returns the default-initialized member state.
+ *
+ * @note To actually ship VR, a follow-up session must: (a) add the
+ *       `openxr_loader` dependency to `ThirdParty/` and gate it behind
+ *       `ENABLE_VR`, (b) implement `Initialize()` / `Shutdown()` /
+ *       `UpdateTracking()` using the standard `xrCreateInstance` /
+ *       `xrCreateSession` / `xrLocateViews` flow, and (c) wire the per-eye
+ *       render path into `GraphicsEngine` (left/right eye projection
+ *       matrices and swapchain acquisition). `VRConfigPanel` already has
+ *       placeholder UI hooks for `RecenterTracking()` and
+ *       `TriggerHaptic()` that will light up once the runtime is linked.
  */
 
 #pragma once

@@ -143,6 +143,7 @@ namespace SparkEditor
         ObjectID m_inspectedObjectID = INVALID_OBJECT_ID; ///< Currently inspected object (by ID).
         std::string m_inspectedObject;                    ///< Legacy string-based object identifier.
         bool m_showAddComponentMenu = false;              ///< Whether the "Add Component" popup is open.
+        uint32_t m_selectionMgrCallbackId = 0;            ///< SelectionManager subscription handle.
     };
 
 } // namespace SparkEditor

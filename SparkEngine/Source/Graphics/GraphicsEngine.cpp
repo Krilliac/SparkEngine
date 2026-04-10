@@ -31,6 +31,7 @@
 #include "AssetPipeline.h"
 #include "UpscalingSystem.h"
 #include "VRAMBudgetMonitor.h"
+#include "FoliageRenderer.h"
 
 #include "TemporalEffects.h"
 #include "LightManager.h"
@@ -841,6 +842,24 @@ void GraphicsEngine::EndFrame()
     SPARK_GUARDED_UPDATE("Graphics:GPUFlush", "Graphics", {
         if (m_gpuSceneBuffer.IsInitialized())
         {
+            // Push the latest foliage batch into the GPU scene buffer
+            // before the flush. The renderer's CollectFromFoliageManager
+            // step is wired into the per-frame lifecycle update; this
+            // handoff is the last hop that gets foliage instances to
+            // the GPU. We append after the existing static-mesh slots
+            // by starting at the buffer's current write head.
+            auto& foliage = Spark::Graphics::FoliageRenderer::GetInstance();
+            if (foliage.IsInitialized())
+            {
+                const uint32_t startSlot = m_gpuSceneBuffer.GetActiveCount();
+                const uint32_t written = foliage.UploadToSceneBuffer(m_gpuSceneBuffer, startSlot);
+                if (written != UINT32_MAX && written > 0)
+                {
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Foliage: uploaded %u instances to GPU scene buffer",
+                                    written);
+                }
+            }
+
             m_gpuSceneBuffer.FlushToGPU(m_context.Get());
         }
         m_constantBufferRing.EndFrame();

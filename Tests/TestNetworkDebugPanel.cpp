@@ -272,3 +272,88 @@ TEST(NetworkDebug_MultipleSnapshots)
     float avgLatency = collector.GetAverageLatency();
     EXPECT_TRUE(std::abs(avgLatency - 30.0f) < 0.01f);
 }
+
+// ============================================================================
+// Real-class PollEngineNetwork tests
+// Gated by SPARK_TEST_HAS_IMGUI, which is defined by Tests/CMakeLists.txt
+// exactly when the `imgui` target exists — the same condition under which
+// SparkEditor/Source/Core/EditorPanel.cpp is added to SparkTests. Using
+// __has_include(<imgui.h>) here would compile the test in configurations
+// where imgui.h is on the include path (exported transitively by the
+// engine target) but EditorPanel.cpp is not linked, producing undefined
+// symbols for the NetworkDebugPanel base class constructor at link time.
+// ============================================================================
+#ifdef SPARK_TEST_HAS_IMGUI
+#include "Panels/NetworkDebugPanel.h"
+#include "Engine/Networking/NetworkManager.h"
+
+TEST(NetworkDebugPanelReal_PollEngineNetworkDelta)
+{
+    // Seed the NetworkManager's stats counters with known values BEFORE
+    // initializing the panel so the baseline is captured.
+    auto& nm = Spark::Net::NetworkManager::GetInstance();
+    auto& stats = const_cast<Spark::Net::NetworkStats&>(nm.GetStats());
+    const uint64_t seedSent = stats.bytesSent;
+    const uint64_t seedRecv = stats.bytesReceived;
+    const uint32_t seedDropped = stats.packetsDropped;
+
+    SparkEditor::NetworkDebugPanel panel;
+    EXPECT_TRUE(panel.Initialize());
+
+    // First Update() with no new bytes — delta is zero, no snapshot yet.
+    panel.Update(0.1f);
+    EXPECT_EQ(panel.GetSnapshotCount(), static_cast<size_t>(0));
+
+    // Push 2048 bytes into the engine stats and tick the panel by a full
+    // sample interval (0.5s) — PollEngineNetwork should observe the delta,
+    // RecordBytesSent should accumulate it, and TakeSnapshot should emit.
+    stats.bytesSent = seedSent + 2048;
+    stats.bytesReceived = seedRecv + 1024;
+    stats.ping = 42.0f;
+    panel.Update(0.5f);
+
+    EXPECT_EQ(panel.GetSnapshotCount(), static_cast<size_t>(1));
+    EXPECT_TRUE(std::abs(panel.GetAverageLatency() - 42.0f) < 0.01f);
+    // Bandwidth = 2048 bytes over 0.5s interval = 4096 B/s
+    EXPECT_TRUE(panel.GetAverageBandwidthOut() > 4000.0f);
+    EXPECT_TRUE(panel.GetAverageBandwidthOut() < 4200.0f);
+
+    // Restore stats so subsequent tests see a clean slate.
+    stats.bytesSent = seedSent;
+    stats.bytesReceived = seedRecv;
+    stats.packetsDropped = seedDropped;
+    stats.ping = 0.0f;
+}
+
+TEST(NetworkDebugPanelReal_PollEngineNetworkHandlesReset)
+{
+    // If NetworkManager's cumulative counters go BACKWARDS (e.g. after a
+    // reconnect resets the stats), PollEngineNetwork must clamp the delta
+    // to zero rather than wrapping a uint64 subtraction.
+    auto& nm = Spark::Net::NetworkManager::GetInstance();
+    auto& stats = const_cast<Spark::Net::NetworkStats&>(nm.GetStats());
+    const uint64_t seedSent = stats.bytesSent;
+    const uint64_t seedRecv = stats.bytesReceived;
+
+    // Seed baseline at something high.
+    stats.bytesSent = 1'000'000;
+    stats.bytesReceived = 500'000;
+
+    SparkEditor::NetworkDebugPanel panel;
+    EXPECT_TRUE(panel.Initialize());
+
+    // Simulate a reset: counters go to zero.
+    stats.bytesSent = 0;
+    stats.bytesReceived = 0;
+
+    // First poll after reset should clamp the delta and not crash /
+    // emit a huge bogus snapshot value.
+    panel.Update(0.5f);
+    EXPECT_EQ(panel.GetSnapshotCount(), static_cast<size_t>(1));
+    EXPECT_TRUE(panel.GetAverageBandwidthOut() < 1.0f);
+
+    // Restore.
+    stats.bytesSent = seedSent;
+    stats.bytesReceived = seedRecv;
+}
+#endif // SPARK_TEST_HAS_IMGUI

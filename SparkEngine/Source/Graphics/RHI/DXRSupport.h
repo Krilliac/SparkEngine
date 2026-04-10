@@ -13,6 +13,46 @@
  * - Ray-traced global illumination (diffuse GI)
  *
  * Requires D3D12 and DXR-capable GPU. Falls back gracefully when unavailable.
+ *
+ * @note **Implementation status — Phase C update (2026-04-10).**
+ *       The full DXR pipeline is now wired end-to-end:
+ *          - Device capability check, root signature, command queue, descriptor
+ *            heap, timestamp query heap (`Initialize()`).
+ *          - `CreateBLAS` / `UpdateBLAS` / `DestroyBLAS` with acceleration
+ *            structure resource management.
+ *          - `BuildTLAS` with full GPU-side TLAS build and barriers.
+ *          - HLSL ray shaders under `Shaders/HLSL/RayTracing/DXR{...}.hlsl`.
+ *          - `BuildRTPSOs()` now loads pre-compiled DXIL blobs from
+ *            `Shaders/HLSL/RayTracing/DXR*.cso` and creates one
+ *            `ID3D12StateObject` per effect with the real `RayGen`,
+ *            `Miss`, and `ClosestHit` exports from each library.
+ *          - `BuildShaderTables()` builds **per-PSO** rayGen / miss /
+ *            hitGroup tables (sharing tables across PSOs binds the
+ *            wrong identifiers and was a latent bug).
+ *          - `DispatchRT()` lazily creates the per-effect output
+ *            UAV texture, binds the per-frame constant buffer at
+ *            root parameter slot 2, and calls `DispatchRays()` against
+ *            the correct per-PSO tables.
+ *          - `TraceReflections / TraceShadows / TraceAmbientOcclusion /
+ *            TraceGlobalIllumination` populate the constant buffer with
+ *            their per-effect settings before dispatching.
+ *          - All four trace entry points are already called from
+ *            `GraphicsEngine.cpp:1161-1176`, so the render pipeline
+ *            picks up the new behaviour automatically when DXR is
+ *            available and `SPARK_HARDWARE_RT` is defined.
+ *
+ *       **Build dependency:** the runtime expects pre-compiled DXIL
+ *       blobs (`DXR*.cso`) next to the `.hlsl` source files. The shader
+ *       compile step that produces them is owned by the build system —
+ *       a missing `.cso` is logged as a warning and the matching trace
+ *       method becomes a no-op (no crash). On a developer machine the
+ *       blobs are produced by re-running the existing shader compile
+ *       pass over `Shaders/HLSL/RayTracing/`.
+ *
+ *       **Test status:** there are still no `Tests/` files for DXR
+ *       specifically — the D3D12 device stack is not reachable from the
+ *       native Linux test runner. Any future coverage needs a MinGW +
+ *       Wine + Lavapipe path or a D3D12 mock.
  */
 
 #pragma once

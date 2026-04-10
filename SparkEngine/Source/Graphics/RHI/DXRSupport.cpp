@@ -34,6 +34,26 @@ namespace Spark::Graphics
         "Shaders/HLSL/RayTracing/DXRGI.hlsl",
     };
 
+    // Pre-compiled DXIL blobs that the build system writes alongside the
+    // HLSL files. We never call DXC at runtime — production builds have a
+    // shader-compile step that produces these .cso files, and developer
+    // workflows simply re-run that step. If the file is missing, the
+    // matching PSO build fails and the trace dispatch becomes a no-op.
+    static const wchar_t* k_dxilPaths[] = {
+        L"Shaders/HLSL/RayTracing/DXRReflections.cso",
+        L"Shaders/HLSL/RayTracing/DXRShadows.cso",
+        L"Shaders/HLSL/RayTracing/DXRAO.cso",
+        L"Shaders/HLSL/RayTracing/DXRGI.cso",
+    };
+
+    // Shader entry-point names exactly as they appear in the .hlsl files.
+    // Each PSO has its own DXIL library subobject, so reusing the same
+    // export names across PSOs does not collide.
+    static const wchar_t* k_rayGenName = L"RayGen";
+    static const wchar_t* k_missName = L"Miss";
+    static const wchar_t* k_closestHitName = L"ClosestHit";
+    static const wchar_t* k_hitGroupNames[] = {L"ReflectionHitGroup", L"ShadowHitGroup", L"AOHitGroup", L"GIHitGroup"};
+
     // Shader table record alignment required by DXR spec
     static constexpr UINT k_shaderRecordAlignment = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
 
@@ -52,13 +72,29 @@ namespace Spark::Graphics
         ComPtr<ID3D12CommandQueue> commandQueue;
         ComPtr<ID3D12DescriptorHeap> cbvSrvUavHeap;
 
-        // Shader tables (per-PSO: rayGen, miss, hitGroup records)
-        UINT shaderRecordSize = 0;
-        ComPtr<ID3D12Resource> rayGenTable;
-        ComPtr<ID3D12Resource> missTable;
-        ComPtr<ID3D12Resource> hitGroupTable;
+        // DXIL library blobs — one per PSO. Held alive for the lifetime
+        // of the manager because D3D12_DXIL_LIBRARY_DESC retains a raw
+        // pointer into them.
+        std::vector<uint8_t> dxilBlobs[4];
 
-        // Output textures
+        // Per-PSO shader binding tables. Each PSO needs its own rayGen,
+        // miss, and hitGroup records — sharing tables across PSOs binds
+        // the wrong shader identifiers and causes the dispatch to fault.
+        UINT shaderRecordSize = 0;
+        ComPtr<ID3D12Resource> rayGenTables[4];
+        ComPtr<ID3D12Resource> missTables[4];
+        ComPtr<ID3D12Resource> hitGroupTables[4];
+
+        // Per-frame constant buffer (camera + light data) shared by all
+        // four trace dispatches in a frame. Mapped persistently for
+        // simple update — DXR is dispatched once per effect per frame so
+        // a single CB is enough; we recreate when the upload size grows.
+        ComPtr<ID3D12Resource> frameConstantBuffer;
+        UINT frameConstantBufferSize = 0;
+
+        // Output textures (one UAV per RT effect: reflections, shadows,
+        // AO, GI). Created lazily inside DispatchRT once the output
+        // dimensions are known so renderer-side resize is automatic.
         ComPtr<ID3D12Resource> outputTextures[4];
         uint32_t outputWidth = 0;
         uint32_t outputHeight = 0;
@@ -78,6 +114,97 @@ namespace Spark::Graphics
     };
 
     static std::unique_ptr<DXRInternalState> s_dxrState;
+
+    // Read a pre-compiled .cso DXIL blob from disk into a vector. Returns
+    // empty vector on failure (logged once at error level — caller treats
+    // as "PSO unavailable" rather than "fatal").
+    static std::vector<uint8_t> LoadDXILBlob(const wchar_t* path)
+    {
+        std::vector<uint8_t> blob;
+        FILE* f = nullptr;
+        if (_wfopen_s(&f, path, L"rb") != 0 || !f)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "DXR: DXIL blob not found: %ls", path);
+            return blob;
+        }
+        fseek(f, 0, SEEK_END);
+        long size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (size > 0)
+        {
+            blob.resize(static_cast<size_t>(size));
+            fread(blob.data(), 1, blob.size(), f);
+        }
+        fclose(f);
+        return blob;
+    }
+
+    // Create an UPLOAD-heap buffer pre-filled with `bytes` bytes from `src`.
+    // Used by per-PSO shader-table construction.
+    static ComPtr<ID3D12Resource> CreateUploadBufferWithData(ID3D12Device5* device, const void* src, UINT bytes)
+    {
+        D3D12_HEAP_PROPERTIES heapProps{};
+        heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = bytes;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+        ComPtr<ID3D12Resource> buf;
+        if (FAILED(device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+                                                   D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&buf))))
+            return nullptr;
+
+        void* mapped = nullptr;
+        if (SUCCEEDED(buf->Map(0, nullptr, &mapped)) && mapped)
+        {
+            memcpy(mapped, src, bytes);
+            buf->Unmap(0, nullptr);
+        }
+        return buf;
+    }
+
+    // Lazily allocate the per-effect output texture as a UAV at the
+    // current output dimensions. Recreates the texture if the dimensions
+    // changed since the last call. The caller (DispatchRT) is responsible
+    // for binding the descriptor — this just owns the resource.
+    static void EnsureOutputTexture(DXRInternalState& state, uint32_t effectIndex)
+    {
+        if (effectIndex >= 4)
+            return;
+
+        if (state.outputTextures[effectIndex])
+        {
+            const auto desc = state.outputTextures[effectIndex]->GetDesc();
+            if (desc.Width == state.outputWidth && desc.Height == state.outputHeight)
+                return; // up to date
+            state.outputTextures[effectIndex].Reset();
+        }
+
+        if (state.outputWidth == 0 || state.outputHeight == 0)
+            return;
+
+        D3D12_HEAP_PROPERTIES heapProps{};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = state.outputWidth;
+        desc.Height = state.outputHeight;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        state.dxrDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+                                                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
+                                                 IID_PPV_ARGS(&state.outputTextures[effectIndex]));
+    }
 
     // Ensure scratch buffer is at least `requiredSize` bytes
     static void EnsureScratchBuffer(DXRInternalState& state, uint64_t requiredSize)
@@ -211,9 +338,23 @@ namespace Spark::Graphics
         return blasBuffer;
     }
 
-    // Common dispatch helper shared by all 4 trace methods
+    // Common dispatch helper shared by all 4 trace methods. Uses the
+    // per-PSO shader tables built in BuildShaderTables and lazily creates
+    // the matching output UAV texture for the requested effect.
     static void DispatchRT(DXRInternalState& state, uint32_t psoIndex, uint32_t tsBegin)
     {
+        if (psoIndex >= 4)
+            return;
+        if (!state.psos[psoIndex] || !state.rayGenTables[psoIndex] || !state.missTables[psoIndex] ||
+            !state.hitGroupTables[psoIndex])
+            return;
+        if (state.outputWidth == 0 || state.outputHeight == 0)
+            return;
+
+        EnsureOutputTexture(state, psoIndex);
+        if (!state.outputTextures[psoIndex])
+            return;
+
         auto* cmdList = state.commandList.Get();
 
         if (state.timestampQueryHeap)
@@ -227,35 +368,92 @@ namespace Spark::Graphics
         cmdList->SetComputeRootSignature(state.globalRootSignature.Get());
         cmdList->SetPipelineState1(state.psos[psoIndex].Get());
 
-        UINT recordSize = AlignTo(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, k_shaderRecordAlignment);
+        // Bind the per-frame constant buffer at root parameter slot 2 if
+        // available. The frame CB is updated by Trace*() methods just
+        // before invoking DispatchRT.
+        if (state.frameConstantBuffer)
+            cmdList->SetComputeRootConstantBufferView(2, state.frameConstantBuffer->GetGPUVirtualAddress());
+
+        const UINT recordSize = AlignTo(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, k_shaderRecordAlignment);
 
         D3D12_DISPATCH_RAYS_DESC dispatch = {};
         dispatch.Width = state.outputWidth;
         dispatch.Height = state.outputHeight;
         dispatch.Depth = 1;
 
-        if (state.rayGenTable)
-        {
-            dispatch.RayGenerationShaderRecord.StartAddress = state.rayGenTable->GetGPUVirtualAddress();
-            dispatch.RayGenerationShaderRecord.SizeInBytes = recordSize;
-        }
-        if (state.missTable)
-        {
-            dispatch.MissShaderTable.StartAddress = state.missTable->GetGPUVirtualAddress();
-            dispatch.MissShaderTable.SizeInBytes = recordSize;
-            dispatch.MissShaderTable.StrideInBytes = recordSize;
-        }
-        if (state.hitGroupTable)
-        {
-            dispatch.HitGroupTable.StartAddress = state.hitGroupTable->GetGPUVirtualAddress();
-            dispatch.HitGroupTable.SizeInBytes = recordSize;
-            dispatch.HitGroupTable.StrideInBytes = recordSize;
-        }
+        dispatch.RayGenerationShaderRecord.StartAddress = state.rayGenTables[psoIndex]->GetGPUVirtualAddress();
+        dispatch.RayGenerationShaderRecord.SizeInBytes = recordSize;
+
+        dispatch.MissShaderTable.StartAddress = state.missTables[psoIndex]->GetGPUVirtualAddress();
+        dispatch.MissShaderTable.SizeInBytes = recordSize;
+        dispatch.MissShaderTable.StrideInBytes = recordSize;
+
+        dispatch.HitGroupTable.StartAddress = state.hitGroupTables[psoIndex]->GetGPUVirtualAddress();
+        dispatch.HitGroupTable.SizeInBytes = recordSize;
+        dispatch.HitGroupTable.StrideInBytes = recordSize;
 
         cmdList->DispatchRays(&dispatch);
 
         if (state.timestampQueryHeap)
             cmdList->EndQuery(state.timestampQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, tsBegin + 1);
+    }
+
+    // Update the per-frame constant buffer with view data for an effect.
+    // Layout matches the `RTConstants` cbuffer in the four DXR HLSL files.
+    static void UpdateFrameConstants(DXRInternalState& state, const XMMATRIX& viewProj, const XMFLOAT3& cameraPos,
+                                     const XMFLOAT3& lightDir, float maxDistance, int maxBounces, int samplesPerPixel,
+                                     float roughnessThreshold)
+    {
+        struct RTConstants
+        {
+            XMFLOAT4X4 invViewProj;
+            XMFLOAT3 cameraPosition;
+            float maxDistance;
+            int maxBounces;
+            int samplesPerPixel;
+            float roughnessThreshold;
+            float padding;
+            XMFLOAT3 lightDirection;
+            float padding2;
+        } cb{};
+
+        XMMATRIX inv = XMMatrixInverse(nullptr, viewProj);
+        XMStoreFloat4x4(&cb.invViewProj, XMMatrixTranspose(inv));
+        cb.cameraPosition = cameraPos;
+        cb.maxDistance = maxDistance;
+        cb.maxBounces = maxBounces;
+        cb.samplesPerPixel = samplesPerPixel;
+        cb.roughnessThreshold = roughnessThreshold;
+        cb.lightDirection = lightDir;
+
+        // Allocate / grow the per-frame constant buffer if needed.
+        const UINT requiredSize = AlignTo(static_cast<UINT>(sizeof(RTConstants)), 256);
+        if (state.frameConstantBufferSize < requiredSize)
+        {
+            state.frameConstantBuffer.Reset();
+            D3D12_HEAP_PROPERTIES heap{};
+            heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+            D3D12_RESOURCE_DESC desc{};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Width = requiredSize;
+            desc.Height = 1;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = 1;
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if (FAILED(state.dxrDevice->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                                IID_PPV_ARGS(&state.frameConstantBuffer))))
+                return;
+            state.frameConstantBufferSize = requiredSize;
+        }
+
+        void* mapped = nullptr;
+        if (SUCCEEDED(state.frameConstantBuffer->Map(0, nullptr, &mapped)) && mapped)
+        {
+            memcpy(mapped, &cb, sizeof(cb));
+            state.frameConstantBuffer->Unmap(0, nullptr);
+        }
     }
 
 #endif // SPARK_PLATFORM_WINDOWS
@@ -364,28 +562,54 @@ namespace Spark::Graphics
         if (!s_dxrState || !s_dxrState->dxrDevice || !s_dxrState->globalRootSignature)
             return false;
 
-        // Build one RTPSO per effect: each has RayGen + Miss + ClosestHit in a HitGroup
-        const wchar_t* rayGenExports[] = {L"ReflectionRayGen", L"ShadowRayGen", L"AORayGen", L"GIRayGen"};
-        const wchar_t* missExports[] = {L"ReflectionMiss", L"ShadowMiss", L"AOMiss", L"GIMiss"};
-        const wchar_t* hitExports[] = {L"ReflectionClosestHit", L"ShadowClosestHit", L"AOClosestHit", L"GIClosestHit"};
-        const wchar_t* hitGroupNames[] = {L"ReflectionHitGroup", L"ShadowHitGroup", L"AOHitGroup", L"GIHitGroup"};
+        // Per-PSO max recursion depths. Reflections need 2 (primary +
+        // bounce), shadows/AO need 1 (single visibility ray), GI needs 3
+        // (primary + 2 indirect bounces).
         const UINT maxRecursion[] = {2, 1, 1, 3};
 
         for (int i = 0; i < 4; i++)
         {
-            // 5 subobjects: DXIL library, hit group, root sig association, shader config, pipeline config
+            // Load the pre-compiled DXIL blob for this effect. Stored in
+            // the persistent dxilBlobs slot so the raw pointer in the
+            // library descriptor stays valid until the PSO finishes
+            // compilation.
+            s_dxrState->dxilBlobs[i] = LoadDXILBlob(k_dxilPaths[i]);
+            if (s_dxrState->dxilBlobs[i].empty())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "DXR: Skipping PSO %d — DXIL blob unavailable. Trace will be a no-op.", i);
+                continue;
+            }
+
+            // 5 subobjects: DXIL library, hit group, shader config,
+            // global root signature, pipeline config.
             D3D12_STATE_SUBOBJECT subobjects[5] = {};
 
+            // Export the three entry points by name. Each .hlsl file uses
+            // the same names (`RayGen`, `ClosestHit`, `Miss`); each PSO
+            // has its own DXIL library so collisions are not possible.
+            // Shadow library has no closest-hit shader, so we only
+            // export raygen+miss for it.
+            D3D12_EXPORT_DESC exportDescs[3] = {};
+            UINT exportCount = 0;
+            exportDescs[exportCount++] = {k_rayGenName, nullptr, D3D12_EXPORT_FLAG_NONE};
+            exportDescs[exportCount++] = {k_missName, nullptr, D3D12_EXPORT_FLAG_NONE};
+            const bool hasClosestHit = (i != 1); // Shadows are visibility-only
+            if (hasClosestHit)
+                exportDescs[exportCount++] = {k_closestHitName, nullptr, D3D12_EXPORT_FLAG_NONE};
+
             D3D12_DXIL_LIBRARY_DESC libDesc = {};
-            // Shader bytecode would be loaded from k_shaderPaths[i] via DXC at runtime
-            // For now, set up the PSO structure; actual bytecode binding happens in shader loading
+            libDesc.DXILLibrary.pShaderBytecode = s_dxrState->dxilBlobs[i].data();
+            libDesc.DXILLibrary.BytecodeLength = s_dxrState->dxilBlobs[i].size();
+            libDesc.NumExports = exportCount;
+            libDesc.pExports = exportDescs;
             subobjects[0].Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
             subobjects[0].pDesc = &libDesc;
 
             D3D12_HIT_GROUP_DESC hitGroupDesc = {};
-            hitGroupDesc.HitGroupExport = hitGroupNames[i];
+            hitGroupDesc.HitGroupExport = k_hitGroupNames[i];
             hitGroupDesc.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-            hitGroupDesc.ClosestHitShaderImport = hitExports[i];
+            hitGroupDesc.ClosestHitShaderImport = hasClosestHit ? k_closestHitName : nullptr;
             subobjects[1].Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
             subobjects[1].pDesc = &hitGroupDesc;
 
@@ -424,58 +648,46 @@ namespace Spark::Graphics
     bool DXRManager::BuildShaderTables()
     {
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (!s_dxrState || !s_dxrState->psos[0])
+        if (!s_dxrState || !s_dxrState->dxrDevice)
             return false;
 
-        UINT recordSize = AlignTo(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, k_shaderRecordAlignment);
+        const UINT recordSize = AlignTo(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, k_shaderRecordAlignment);
         s_dxrState->shaderRecordSize = recordSize;
 
-        auto createTable = [&](ComPtr<ID3D12Resource>& table) -> bool
+        bool anyOk = false;
+        for (int i = 0; i < 4; ++i)
         {
-            D3D12_HEAP_PROPERTIES heapProps = {};
-            heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-            D3D12_RESOURCE_DESC desc = {};
-            desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-            desc.Width = recordSize;
-            desc.Height = 1;
-            desc.DepthOrArraySize = 1;
-            desc.MipLevels = 1;
-            desc.SampleDesc.Count = 1;
-            desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if (!s_dxrState->psos[i])
+                continue;
 
-            return SUCCEEDED(s_dxrState->dxrDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-                                                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                                                            IID_PPV_ARGS(&table)));
-        };
-
-        bool ok = createTable(s_dxrState->rayGenTable) && createTable(s_dxrState->missTable) &&
-                  createTable(s_dxrState->hitGroupTable);
-
-        // Populate tables with shader identifiers from PSO 0 (reflections as default)
-        if (ok && s_dxrState->psos[0])
-        {
             ComPtr<ID3D12StateObjectProperties> props;
-            if (SUCCEEDED(s_dxrState->psos[0].As(&props)))
-            {
-                auto writeRecord = [&](ComPtr<ID3D12Resource>& table, const wchar_t* exportName)
-                {
-                    void* id = props->GetShaderIdentifier(exportName);
-                    if (!id)
-                        return;
-                    void* mapped = nullptr;
-                    if (SUCCEEDED(table->Map(0, nullptr, &mapped)))
-                    {
-                        memcpy(mapped, id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-                        table->Unmap(0, nullptr);
-                    }
-                };
-                writeRecord(s_dxrState->rayGenTable, L"ReflectionRayGen");
-                writeRecord(s_dxrState->missTable, L"ReflectionMiss");
-                writeRecord(s_dxrState->hitGroupTable, L"ReflectionHitGroup");
-            }
-        }
+            if (FAILED(s_dxrState->psos[i].As(&props)))
+                continue;
 
-        return ok;
+            auto buildRecord = [&](const wchar_t* name) -> std::vector<uint8_t>
+            {
+                std::vector<uint8_t> rec(recordSize, 0);
+                void* id = props->GetShaderIdentifier(name);
+                if (id)
+                    memcpy(rec.data(), id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+                return rec;
+            };
+
+            auto rayGenRec = buildRecord(k_rayGenName);
+            auto missRec = buildRecord(k_missName);
+            auto hitGroupRec = buildRecord(k_hitGroupNames[i]);
+
+            s_dxrState->rayGenTables[i] =
+                CreateUploadBufferWithData(s_dxrState->dxrDevice.Get(), rayGenRec.data(), recordSize);
+            s_dxrState->missTables[i] =
+                CreateUploadBufferWithData(s_dxrState->dxrDevice.Get(), missRec.data(), recordSize);
+            s_dxrState->hitGroupTables[i] =
+                CreateUploadBufferWithData(s_dxrState->dxrDevice.Get(), hitGroupRec.data(), recordSize);
+
+            if (s_dxrState->rayGenTables[i] && s_dxrState->missTables[i] && s_dxrState->hitGroupTables[i])
+                anyOk = true;
+        }
+        return anyOk;
 #else
         return false;
 #endif
@@ -729,46 +941,62 @@ namespace Spark::Graphics
 #endif
     }
 
-    void DXRManager::TraceReflections(const XMMATRIX& /*viewProj*/, const XMFLOAT3& /*cameraPos*/)
+    void DXRManager::TraceReflections(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::Reflections))
             return;
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!s_dxrState || !s_dxrState->psos[0] || !s_dxrState->tlasResource)
             return;
+        const XMFLOAT3 dummyLight{0.0f, -1.0f, 0.0f};
+        UpdateFrameConstants(*s_dxrState, viewProj, cameraPos, dummyLight, m_settings.reflections.maxDistance,
+                             m_settings.reflections.maxBounces, m_settings.reflections.samplesPerPixel,
+                             m_settings.reflections.roughnessThreshold);
         DispatchRT(*s_dxrState, 0, 0);
 #endif
     }
 
-    void DXRManager::TraceShadows(const XMFLOAT3& /*lightDirection*/)
+    void DXRManager::TraceShadows(const XMFLOAT3& lightDirection)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::Shadows))
             return;
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!s_dxrState || !s_dxrState->psos[1] || !s_dxrState->tlasResource)
             return;
+        // Shadow shader doesn't read InvViewProj — feed an identity-ish CB.
+        XMMATRIX identity = XMMatrixIdentity();
+        XMFLOAT3 origin{0.0f, 0.0f, 0.0f};
+        UpdateFrameConstants(*s_dxrState, identity, origin, lightDirection, 1000.0f, 1,
+                             m_settings.shadows.samplesPerPixel, 0.0f);
         DispatchRT(*s_dxrState, 1, 2);
 #endif
     }
 
-    void DXRManager::TraceAmbientOcclusion(const XMMATRIX& /*viewProj*/, const XMFLOAT3& /*cameraPos*/)
+    void DXRManager::TraceAmbientOcclusion(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::AmbientOcclusion))
             return;
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!s_dxrState || !s_dxrState->psos[2] || !s_dxrState->tlasResource)
             return;
+        const XMFLOAT3 dummyLight{0.0f, -1.0f, 0.0f};
+        UpdateFrameConstants(*s_dxrState, viewProj, cameraPos, dummyLight, m_settings.ambientOcclusion.radius, 1,
+                             m_settings.ambientOcclusion.samplesPerPixel, 0.0f);
         DispatchRT(*s_dxrState, 2, 4);
 #endif
     }
 
-    void DXRManager::TraceGlobalIllumination(const XMMATRIX& /*viewProj*/, const XMFLOAT3& /*cameraPos*/)
+    void DXRManager::TraceGlobalIllumination(const XMMATRIX& viewProj, const XMFLOAT3& cameraPos)
     {
         if (!m_isInitialized || !HasFeature(m_settings.enabledFeatures, RTFeature::GlobalIllumination))
             return;
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!s_dxrState || !s_dxrState->psos[3] || !s_dxrState->tlasResource)
             return;
+        const XMFLOAT3 dummyLight{0.0f, -1.0f, 0.0f};
+        UpdateFrameConstants(*s_dxrState, viewProj, cameraPos, dummyLight, m_settings.globalIllumination.maxDistance,
+                             m_settings.globalIllumination.maxBounces, m_settings.globalIllumination.samplesPerPixel,
+                             0.0f);
         DispatchRT(*s_dxrState, 3, 6);
 #endif
     }
