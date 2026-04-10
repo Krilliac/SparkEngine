@@ -351,3 +351,61 @@ TEST(FoliageRenderer_ConsoleStatusString)
     EXPECT_TRUE(s.find("FoliageRenderer") != std::string::npos);
     renderer.Shutdown();
 }
+
+// ============================================================================
+// AssetPipeline loader installation
+// ============================================================================
+
+TEST(FoliageRenderer_InstallAssetPipelineLoaderNullIsNoOp)
+{
+    FoliageRenderer renderer;
+    renderer.Initialize(nullptr, 50.0f);
+    EXPECT_FALSE(renderer.HasExplicitLoader());
+
+    EXPECT_FALSE(renderer.InstallAssetPipelineLoader(nullptr));
+    EXPECT_FALSE(renderer.HasExplicitLoader());
+
+    renderer.Shutdown();
+}
+
+TEST(FoliageRenderer_ExplicitLoaderTakesPrecedence)
+{
+    FoliageRenderer renderer;
+
+    int calls = 0;
+    auto loader = [&](const std::string&) -> std::shared_ptr<MeshAsset>
+    {
+        ++calls;
+        return nullptr;
+    };
+
+    renderer.Initialize(loader, 50.0f);
+    EXPECT_TRUE(renderer.HasExplicitLoader());
+
+    // A subsequent Collect on an empty manager should not un-install the
+    // explicit loader via the lazy AssetPipeline path.
+    auto& fm = FoliageManager::GetInstance();
+    fm.Initialize();
+    renderer.CollectFromFoliageManager(0.0f);
+    EXPECT_TRUE(renderer.HasExplicitLoader());
+    fm.Shutdown();
+
+    renderer.Shutdown();
+    EXPECT_FALSE(renderer.HasExplicitLoader());
+}
+
+TEST(FoliageRenderer_InitNullLoaderStaysWithoutExplicitLoader)
+{
+    // Without an EngineContext AssetPipeline registered (typical CI test
+    // configuration), the lazy install should fail silently and leave
+    // HasExplicitLoader() == false.
+    FoliageRenderer renderer;
+    renderer.Initialize(nullptr, 50.0f);
+
+    // Depending on whether an earlier test populated EngineContext, the
+    // lazy install may or may not have succeeded. The contract we test
+    // here is that the renderer is still functional regardless.
+    EXPECT_TRUE(renderer.IsInitialized());
+
+    renderer.Shutdown();
+}

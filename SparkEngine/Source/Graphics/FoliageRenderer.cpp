@@ -18,7 +18,9 @@
 
 #include "FoliageRenderer.h"
 
+#include "../Core/EngineContext.h"
 #include "../Utils/Validate.h"
+#include "AssetPipeline.h"
 
 #include <algorithm>
 #include <cmath>
@@ -56,26 +58,71 @@ namespace Spark::Graphics
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
 
-        if (!loader)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                           "FoliageRenderer::Initialize — null loader; using a passthrough that returns nullptr");
-            m_loader = [](const std::string&) -> std::shared_ptr<MeshAsset> { return nullptr; };
-        }
-        else
-        {
-            m_loader = std::move(loader);
-        }
-
         m_impostorDistance = std::max(0.0f, impostorDistance);
         m_meshCache.clear();
         m_renderInstances.clear();
         m_stats = {};
+        m_hasExplicitLoader = false;
+
+        if (loader)
+        {
+            m_loader = std::move(loader);
+            m_hasExplicitLoader = true;
+        }
+        else
+        {
+            // Placeholder that returns nullptr until a real loader is
+            // installed (either explicitly via InstallAssetPipelineLoader
+            // or lazily via TryInstallEngineContextLoader on first Collect).
+            m_loader = [](const std::string&) -> std::shared_ptr<MeshAsset> { return nullptr; };
+        }
+
         m_initialized = true;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FoliageRenderer initialized (impostorDistance=%.1f)",
-                       m_impostorDistance);
+        // Attempt the lazy path immediately so typical lifecycle flows
+        // finish Initialize with a fully wired loader.
+        if (!m_hasExplicitLoader)
+        {
+            TryInstallEngineContextLoader();
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "FoliageRenderer initialized (impostorDistance=%.1f, explicitLoader=%s)", m_impostorDistance,
+                       m_hasExplicitLoader ? "yes" : "no");
         return true;
+    }
+
+    bool FoliageRenderer::InstallAssetPipelineLoader(::AssetPipeline* pipeline)
+    {
+        if (!pipeline)
+            return false;
+
+        m_loader = [pipeline](const std::string& path) -> std::shared_ptr<MeshAsset>
+        {
+            if (path.empty())
+                return nullptr;
+            return pipeline->LoadMesh(path);
+        };
+        m_hasExplicitLoader = true;
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FoliageRenderer: AssetPipeline-backed mesh loader installed");
+        return true;
+    }
+
+    void FoliageRenderer::TryInstallEngineContextLoader()
+    {
+        if (m_hasExplicitLoader)
+            return;
+
+        auto* ctx = EngineContext::Get();
+        if (!ctx)
+            return;
+
+        ::AssetPipeline* pipeline = ctx->GetAssetPipeline();
+        if (!pipeline)
+            return;
+
+        InstallAssetPipelineLoader(pipeline);
     }
 
     void FoliageRenderer::Shutdown()
@@ -86,6 +133,7 @@ namespace Spark::Graphics
         m_renderInstances.clear();
         m_stats = {};
         m_loader = nullptr;
+        m_hasExplicitLoader = false;
         m_initialized = false;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FoliageRenderer shutting down (%zu meshes cached)", cached);
     }
@@ -193,6 +241,15 @@ namespace Spark::Graphics
 
         if (!m_initialized)
             return;
+
+        // Lazy loader install: the engine lifecycle calls Initialize()
+        // before AssetPipeline is guaranteed to be registered with
+        // EngineContext. Retry the lookup each frame until a real loader
+        // is in place; after that it is a single bool check.
+        if (!m_hasExplicitLoader)
+        {
+            TryInstallEngineContextLoader();
+        }
 
         auto& manager = FoliageManager::GetInstance();
         if (!manager.IsInitialized())

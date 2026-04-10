@@ -425,13 +425,17 @@ namespace Spark::Core::Lifecycle
         Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
         Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
         Spark::Graphics::FoliageManager::GetInstance().Initialize();
-        // FoliageRenderer uses a nullptr loader here; the real
-        // AssetPipeline::LoadMesh integration is installed later in
-        // render-side initialization once the graphics device is ready.
-        // Until then the renderer still builds its CPU-side batch from
-        // FoliageManager so the wind phase, world matrices and LOD state
-        // are available to any consumer that queries GetRenderInstances().
+        // FoliageRenderer::Initialize with a nullptr loader. The renderer
+        // will attempt to self-install an AssetPipeline-backed loader via
+        // EngineContext immediately, and again on the first Collect call
+        // if AssetPipeline was not yet registered at init time. We also
+        // explicitly attempt to install it here with whatever AssetPipeline
+        // the context has *right now* — whichever path resolves first wins.
         Spark::Graphics::FoliageRenderer::GetInstance().Initialize(nullptr, 50.0f);
+        if (auto* pipeline = ctx->GetAssetPipeline())
+        {
+            Spark::Graphics::FoliageRenderer::GetInstance().InstallAssetPipelineLoader(pipeline);
+        }
         Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
         Spark::PluginRegistry::InitializeAll();
 

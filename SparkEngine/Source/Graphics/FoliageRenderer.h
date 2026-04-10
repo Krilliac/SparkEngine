@@ -148,11 +148,33 @@ namespace Spark::Graphics
 
         /**
          * @brief Initialize the renderer.
-         * @param loader  Callback invoked on mesh cache misses. Must be non-null.
+         * @param loader  Callback invoked on mesh cache misses. May be null,
+         *                in which case the renderer will attempt to resolve
+         *                a default loader from `EngineContext::GetAssetPipeline()`
+         *                on the first CollectFromFoliageManager call.
          * @param impostorDistance  Distance beyond which instances render as impostors.
          * @return true on success.
          */
         bool Initialize(FoliageMeshLoader loader, float impostorDistance = 50.0f);
+
+        /**
+         * @brief Install an AssetPipeline-backed mesh loader explicitly.
+         *
+         * Invoked by the engine lifecycle once AssetPipeline is known to be
+         * reachable via EngineContext. Can also be called by tests that want
+         * to exercise the real AssetPipeline code path with a custom instance.
+         * Passing `nullptr` is a no-op.
+         *
+         * @return true if the loader was installed (pipeline was non-null).
+         */
+        bool InstallAssetPipelineLoader(::AssetPipeline* pipeline);
+
+        /**
+         * @brief True if an explicit (user- or engine-supplied) loader has
+         *        been installed. The passthrough loader used when
+         *        Initialize() is called with a null loader does NOT count.
+         */
+        bool HasExplicitLoader() const { return m_hasExplicitLoader; }
 
         /**
          * @brief Release all cached meshes and statistics.
@@ -283,12 +305,20 @@ namespace Spark::Graphics
       private:
         std::shared_ptr<MeshAsset> GetOrLoadMesh(const std::string& path);
 
+        /// Try to resolve AssetPipeline via EngineContext and install a
+        /// default loader if one has not yet been provided. Called
+        /// implicitly on the first CollectFromFoliageManager call so
+        /// render-side init does not need to know whether AssetPipeline
+        /// was registered before or after FoliageRenderer::Initialize.
+        void TryInstallEngineContextLoader();
+
         FoliageMeshLoader m_loader;
         std::unordered_map<std::string, std::shared_ptr<MeshAsset>> m_meshCache;
         std::vector<FoliageRenderInstance> m_renderInstances;
         FoliageRenderStats m_stats;
         float m_impostorDistance = 50.0f;
         bool m_initialized = false;
+        bool m_hasExplicitLoader = false; ///< True if Initialize/Install supplied a real loader
     };
 
 } // namespace Spark::Graphics
