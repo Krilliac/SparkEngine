@@ -18,6 +18,14 @@
  * @endcode
  *
  * @see IRHIDevice, IRHIBuffer
+ *
+ * @note **Intentional per-frame allocator utility** — one instance is
+ *       expected to be owned by each render system that needs cheap
+ *       transient vertex/index memory (particles, debug draw, UI,
+ *       decals). No singleton, no engine lifecycle wiring. Exercised
+ *       by `Tests/TestTransientBufferAllocator.cpp` against a fake
+ *       RHI device so the allocation math is covered without a real
+ *       GPU.
  */
 
 #pragma once

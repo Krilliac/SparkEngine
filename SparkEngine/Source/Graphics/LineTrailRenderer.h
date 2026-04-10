@@ -9,6 +9,17 @@
  * - TrailRenderer: renders a fading trail behind a moving entity
  *
  * Both generate camera-facing triangle strips for efficient GPU rendering.
+ *
+ * @note This header defines **intentional data-carrier structs**
+ *       (`LineRendererData`, `TrailRendererData`, ...) used by
+ *       `LineRendererComponent` / `TrailRendererComponent` in the ECS (see
+ *       `AdvancedPlacementComponents.h`). There is no singleton to
+ *       initialize; the actual GPU strip generation is a render-side
+ *       consumer that doesn't exist yet. When that consumer is written it
+ *       will iterate the ECS components, copy their state into these
+ *       structs, and submit them to the render graph. Intentionally kept
+ *       header-only so game modules can construct the structs without
+ *       pulling in a compiled dependency.
  */
 
 #pragma once

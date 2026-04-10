@@ -22,6 +22,12 @@
  * @endcode
  *
  * @see RHITypes.h for handle type aliases
+ *
+ * @note **Intentional generic utility template** — pure C++ with no GPU
+ *       dependency. There is no singleton to wire into a lifecycle; RHI
+ *       device implementations (D3D11, Vulkan, ...) instantiate one per
+ *       resource type as they are added. Exercised by
+ *       `Tests/TestRHIHandlePool.cpp`.
  */
 
 #pragma once

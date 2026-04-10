@@ -223,6 +223,7 @@ add_executable(SparkTests
     TestCSGEditorPanel.cpp
     TestNavMeshLink.cpp
     TestGameplaySystemExtension.cpp
+    TestSpringArm.cpp
     TestConnectionScopeFilter.cpp
     TestNavMeshObstacles.cpp
     TestFaultIsolation.cpp

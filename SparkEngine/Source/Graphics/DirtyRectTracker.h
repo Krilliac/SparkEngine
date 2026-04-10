@@ -2,9 +2,15 @@
  * @file DirtyRectTracker.h
  * @brief Dirty rectangle tracking for partial texture updates
  *
- * Tracks modified
- * sub-regions of textures so only dirty rectangles are re-uploaded,
- * avoiding full texture updates for localized changes.
+ * Tracks modified sub-regions of textures so only dirty rectangles are
+ * re-uploaded, avoiding full texture updates for localized changes.
+ *
+ * @note **Intentional reusable utility** — pure CPU rectangle-merge
+ *       logic with no GPU dependency. There is no singleton to wire
+ *       into the engine lifecycle; any future texture-streaming or
+ *       UI-atlas system that wants partial-update semantics will
+ *       instantiate one of these per tracked texture. Exercised by
+ *       `Tests/TestDirtyRectTracker.cpp`.
  */
 
 #pragma once

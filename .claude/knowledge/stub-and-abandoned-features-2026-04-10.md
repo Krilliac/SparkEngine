@@ -102,18 +102,20 @@ High-value orphans (substantial implementations, would be useful if wired):
 | `SparkEngine/Source/Graphics/DenoiserInterface.h` | 251 | Abstract denoiser plugin interface |
 | `SparkEngine/Source/Graphics/FastNoise2SIMD.h` | 749 | SIMD procedural noise (appears to be a ported third-party header) |
 
-Smaller orphans (consider deletion if no owner):
+Smaller orphans — **resolved 2026-04-10 (later session):**
 
-| File | Lines |
-|---|---|
-| `SparkEngine/Source/Graphics/LineTrailRenderer.h` | 127 |
-| `SparkEngine/Source/Graphics/SpringArm.h` | 69 |
-| `SparkEngine/Source/Graphics/DirtyRectTracker.h` | 167 |
-| `SparkEngine/Source/Graphics/ClusteredLightGPU.h` | 163 |
-| `SparkEngine/Source/Graphics/ConstantBufferDiff.h` | 138 |
-| `SparkEngine/Source/Graphics/RHI/DeferredDeletionQueue.h` | 121 |
-| `SparkEngine/Source/Graphics/RHI/RHIHandlePool.h` | 233 |
-| `SparkEngine/Source/Graphics/RHI/TransientBufferAllocator.h` | 232 |
+Per-file verification found **2 of 8 were false positives** (already wired) and the other 6 are legitimate reusable utilities that were already covered by tests. All 6 received a header `@note` documenting intentional-utility status per the audit's "(c) document as intentional utility" resolution path.
+
+| File | Lines | Status |
+|---|---|---|
+| `Graphics/LineTrailRenderer.h` | 127 | **DOCUMENTED.** Pure data-carrier structs (`LineRendererData`, `TrailRendererData`) consumed by `LineRendererComponent` / `TrailRendererComponent`. Header `@note` explains the render-side consumer is a follow-up; the structs are intentionally header-only so game modules can construct them without a compiled dependency. |
+| `Graphics/SpringArm.h` | 69 | **DOCUMENTED + tested.** `SpringArmState` is a pure-CPU value type with a deterministic `Update()` method. `SpringArmComponent` currently duplicates the state fields but a follow-up will unify them. New `Tests/TestSpringArm.cpp` covers defaults, no-collision, collision shortening, min-length clamp, collision-disable, and recovery (6 tests). |
+| `Graphics/DirtyRectTracker.h` | 167 | **DOCUMENTED.** Pure CPU rectangle-merge logic for partial texture updates. No GPU dependency, no singleton — any future texture-streaming or UI-atlas system instantiates one per tracked texture. Existing `Tests/TestDirtyRectTracker.cpp` covers it. |
+| `Graphics/ClusteredLightGPU.h` | 163 | **DOCUMENTED.** GPU bridge utility that converts `ClusteredLightCulling` results to structured-buffer-ready arrays. One instance per frame in a future forward+ render pass. Existing `Tests/TestClusteredLightGPU.cpp` covers the layout. |
+| `Graphics/ConstantBufferDiff.h` | 138 | **FALSE POSITIVE.** `ConstantBufferDiffManager` is wired at `GameplayLifecycleShared.cpp:415` (Initialize), `:937` (BeginFrame), `:980` (Shutdown). Already integrated into the per-frame loop. No action needed. |
+| `Graphics/RHI/DeferredDeletionQueue.h` | 121 | **FALSE POSITIVE.** Held as a member of `D3D11Device` (`D3D11Device.h:342`) and used by the D3D11 RHI backend. Not orphaned. |
+| `Graphics/RHI/RHIHandlePool.h` | 233 | **DOCUMENTED.** Generic `HandlePool<T, N>` template with generation counters. Pure C++ / no GPU dependency; RHI backends instantiate one per resource type as those are added. Existing `Tests/TestRHIHandlePool.cpp` covers it. |
+| `Graphics/RHI/TransientBufferAllocator.h` | 232 | **DOCUMENTED.** Per-frame bump allocator for dynamic geometry. Owned per render system (particles, debug draw, UI, decals). Existing `Tests/TestTransientBufferAllocator.cpp` exercises the allocation math against a fake RHI device. |
 
 **Approximate total:** ~10,000 lines of header-only code in Graphics alone
 that has no engine-side call sites.
