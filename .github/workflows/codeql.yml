@@ -40,7 +40,11 @@ jobs:
       contents: read
 
       # required for Copilot Autofix to propose pull request suggestions
+      # and for the "Post CodeQL findings" step to create/update a
+      # consolidated report comment on the PR (matches the CI Error
+      # Report pattern in build.yml).
       pull-requests: write
+      issues: write
 
     strategy:
       fail-fast: false
@@ -107,6 +111,40 @@ jobs:
         cmake --build build --parallel $(nproc) --target SparkEngineLib
 
     - name: Perform CodeQL Analysis
+      id: codeql-analyze
       uses: github/codeql-action/analyze@v4
       with:
         category: "/language:${{matrix.language}}"
+        # Write SARIF files to a known path so the follow-up reporter
+        # step can parse and post findings as a PR comment (matching the
+        # CI Error Report pattern in build.yml).
+        output: sarif-results
+        upload: always
+
+    # ------------------------------------------------------------------
+    # Consolidated PR comment — mirrors the "CI Error Report" pattern
+    # in build.yml. Uses .github/scripts/report-codeql-findings.js to
+    # parse the SARIF files emitted by the analyze step and post a
+    # single in-place-updated comment summarizing errors / warnings /
+    # notes per language. On push (non-PR) runs this writes a job
+    # summary visible in the Actions UI instead of a comment.
+    # ------------------------------------------------------------------
+    - name: Post CodeQL findings
+      if: always()
+      uses: actions/github-script@v8
+      env:
+        SARIF_DIR: sarif-results
+        CODEQL_LANGUAGE: ${{ matrix.language }}
+      with:
+        script: |
+          const report = require('./.github/scripts/report-codeql-findings.js');
+          await report({ github, context, core });
+
+    - name: Upload CodeQL summary artifact
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ci-errors-codeql-${{ matrix.language }}
+        path: codeql-summary.json
+        retention-days: 7
+        if-no-files-found: ignore

@@ -116,6 +116,8 @@ namespace SparkEditor
          */
         void SaveLayout(const std::string& name)
         {
+            SyncRuntimeStateIntoCurrentLayout();
+
             WindowLayout layout = m_currentLayout;
             layout.name = name;
 
@@ -163,6 +165,14 @@ namespace SparkEditor
             m_lastSavedPath = path;
             if (path.empty())
                 return false;
+
+            // Fold the runtime floating / monitor-placement maps into
+            // m_currentLayout.panels before serializing. FloatPanel /
+            // DockPanel / MoveToMonitor mutate the side maps but never
+            // touch m_currentLayout.panels directly, so without this sync
+            // the serialized file would omit whatever the user just
+            // reconfigured and a subsequent Load would silently lose it.
+            SyncRuntimeStateIntoCurrentLayout();
 
             std::error_code ec;
             auto parent = std::filesystem::path(path).parent_path();
@@ -400,6 +410,48 @@ namespace SparkEditor
 
       private:
         EditorWindowManager() = default;
+
+        // =====================================================================
+        // Runtime state synchronization
+        // =====================================================================
+
+        /**
+         * @brief Fold m_floatingPanels + m_panelMonitors into m_currentLayout.panels
+         *
+         * FloatPanel / DockPanel / MoveToMonitor mutate the side maps to
+         * avoid O(N) searches in m_currentLayout.panels on every runtime
+         * toggle. That leaves the two sources of truth temporarily out of
+         * sync until the user saves. This helper merges them back so any
+         * Save path sees the latest floating / monitor placement for every
+         * panel the runtime has touched, including panels that were never
+         * explicitly added to m_currentLayout.panels.
+         */
+        void SyncRuntimeStateIntoCurrentLayout()
+        {
+            auto findOrCreate = [this](const std::string& name) -> PanelWindowState*
+            {
+                for (auto& p : m_currentLayout.panels)
+                {
+                    if (p.panelName == name)
+                        return &p;
+                }
+                PanelWindowState entry;
+                entry.panelName = name;
+                m_currentLayout.panels.push_back(entry);
+                return &m_currentLayout.panels.back();
+            };
+
+            for (const auto& [name, floating] : m_floatingPanels)
+            {
+                PanelWindowState* p = findOrCreate(name);
+                p->isFloating = floating;
+            }
+            for (const auto& [name, monitor] : m_panelMonitors)
+            {
+                PanelWindowState* p = findOrCreate(name);
+                p->monitorIndex = monitor;
+            }
+        }
 
         // =====================================================================
         // Minimal JSON helpers (avoid pulling a library into a header-only class)

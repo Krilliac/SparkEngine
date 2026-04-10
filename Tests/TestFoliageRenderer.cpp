@@ -343,6 +343,90 @@ TEST(FoliageRenderer_EmptyManagerProducesEmptyBatch)
     fm.Shutdown();
 }
 
+TEST(FoliageRenderer_GlobalMaterialIdMatchesRegistryIndex)
+{
+    // Register three species in a known order, then build a volume that
+    // lists them in a DIFFERENT order. Verify that each render record
+    // carries the REGISTRY-wide index (not the volume-local speciesIndex)
+    // in globalMaterialId, which is the value uploaded as GPUInstanceData
+    // materialId.
+    auto& fm = FoliageManager::GetInstance();
+    fm.Initialize();
+    fm.RegisterSpecies(MakeRendererSpecies("grass", 1.0f, 1.0f, "meshes/grass.mesh"));
+    fm.RegisterSpecies(MakeRendererSpecies("flower", 1.0f, 1.0f, "meshes/flower.mesh"));
+    fm.RegisterSpecies(MakeRendererSpecies("fern", 1.0f, 1.0f, "meshes/fern.mesh"));
+
+    const uint32_t grassIdx = fm.GetSpeciesGlobalIndex("grass");
+    const uint32_t flowerIdx = fm.GetSpeciesGlobalIndex("flower");
+    const uint32_t fernIdx = fm.GetSpeciesGlobalIndex("fern");
+    EXPECT_NE(grassIdx, UINT32_MAX);
+    EXPECT_NE(flowerIdx, UINT32_MAX);
+    EXPECT_NE(fernIdx, UINT32_MAX);
+    EXPECT_NE(grassIdx, flowerIdx);
+    EXPECT_NE(flowerIdx, fernIdx);
+
+    // Volume references them in reversed order: local index 0 = fern,
+    // 1 = flower, 2 = grass.
+    fm.AddVolume(MakeRendererVolume(7, {"fern", "flower", "grass"}));
+    fm.Update(0.016f, {0.0f, 0.0f, 0.0f});
+
+    FoliageRenderer renderer;
+    renderer.Initialize([](const std::string&) { return nullptr; }, 500.0f);
+    renderer.CollectFromFoliageManager(0.0f);
+
+    bool sawFern = false, sawFlower = false, sawGrass = false;
+    for (const auto& inst : renderer.GetRenderInstances())
+    {
+        if (inst.speciesIndex == 0)
+        {
+            EXPECT_EQ(inst.globalMaterialId, fernIdx);
+            sawFern = true;
+        }
+        else if (inst.speciesIndex == 1)
+        {
+            EXPECT_EQ(inst.globalMaterialId, flowerIdx);
+            sawFlower = true;
+        }
+        else if (inst.speciesIndex == 2)
+        {
+            EXPECT_EQ(inst.globalMaterialId, grassIdx);
+            sawGrass = true;
+        }
+    }
+    EXPECT_TRUE(sawFern);
+    EXPECT_TRUE(sawFlower);
+    EXPECT_TRUE(sawGrass);
+
+    renderer.Shutdown();
+    fm.Shutdown();
+}
+
+TEST(FoliageRenderer_UnregisteredSpeciesSkippedNotEmitted)
+{
+    // Register a species, add a volume that uses it, then unregister the
+    // species BEFORE collecting. Every instance should be skipped via
+    // stats.unresolvedSpecies and the batch should be empty — not filled
+    // with defaulted material ids.
+    auto& fm = FoliageManager::GetInstance();
+    fm.Initialize();
+    fm.RegisterSpecies(MakeRendererSpecies("ephemeral", 0.1f, 1.0f, "meshes/ephemeral.mesh"));
+    fm.AddVolume(MakeRendererVolume(11, {"ephemeral"}));
+    fm.Update(0.016f, {0.0f, 0.0f, 0.0f});
+    fm.UnregisterSpecies("ephemeral");
+
+    FoliageRenderer renderer;
+    renderer.Initialize([](const std::string&) { return nullptr; }, 500.0f);
+    renderer.CollectFromFoliageManager(0.0f);
+
+    EXPECT_EQ(renderer.GetRenderInstances().size(), static_cast<size_t>(0));
+    EXPECT_GT(renderer.GetStats().unresolvedSpecies, static_cast<uint32_t>(0));
+    EXPECT_EQ(renderer.GetStats().meshDraws, static_cast<uint32_t>(0));
+    EXPECT_EQ(renderer.GetStats().impostorDraws, static_cast<uint32_t>(0));
+
+    renderer.Shutdown();
+    fm.Shutdown();
+}
+
 TEST(FoliageRenderer_ConsoleStatusString)
 {
     FoliageRenderer renderer;

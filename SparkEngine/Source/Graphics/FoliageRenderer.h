@@ -74,8 +74,12 @@ namespace Spark::Graphics
      */
     struct FoliageRenderInstance
     {
-        uint32_t volumeId = 0;     ///< Source volume.
-        uint32_t speciesIndex = 0; ///< Volume-local species index.
+        uint32_t volumeId = 0;         ///< Source volume.
+        uint32_t speciesIndex = 0;     ///< Volume-local species index (0..N in the volume's speciesNames).
+        uint32_t globalMaterialId = 0; ///< Global (registry-wide) species index. This is the value
+                                       ///< uploaded to `GPUInstanceData::materialId` — using the
+                                       ///< volume-local `speciesIndex` there would break material
+                                       ///< lookup when two volumes use different species orderings.
         FoliageRenderLOD lod = FoliageRenderLOD::Mesh;
         float distanceToCamera = 0.0f; ///< Last known distance (metres).
         float windPhase = 0.0f;        ///< Per-instance sway phase in radians.
@@ -92,12 +96,15 @@ namespace Spark::Graphics
      */
     struct FoliageRenderStats
     {
-        uint32_t meshDraws = 0;       ///< Mesh-LOD instances in the latest batch.
-        uint32_t impostorDraws = 0;   ///< Impostor-LOD instances in the latest batch.
-        uint32_t culledInstances = 0; ///< Instances skipped because they were not visible.
-        uint32_t meshCacheHits = 0;   ///< Mesh lookups served from the cache.
-        uint32_t meshCacheMisses = 0; ///< Mesh lookups that triggered a loader callback.
-        uint32_t uniqueSpecies = 0;   ///< Number of distinct species in the batch.
+        uint32_t meshDraws = 0;         ///< Mesh-LOD instances in the latest batch.
+        uint32_t impostorDraws = 0;     ///< Impostor-LOD instances in the latest batch.
+        uint32_t culledInstances = 0;   ///< Instances skipped because they were not visible.
+        uint32_t unresolvedSpecies = 0; ///< Instances skipped because their species could not be
+                                        ///< resolved (out-of-range local index or species name that
+                                        ///< is no longer in the registry after a registry change).
+        uint32_t meshCacheHits = 0;     ///< Mesh lookups served from the cache.
+        uint32_t meshCacheMisses = 0;   ///< Mesh lookups that triggered a loader callback.
+        uint32_t uniqueSpecies = 0;     ///< Number of distinct species in the batch.
     };
 
     /**

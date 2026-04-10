@@ -197,6 +197,14 @@ namespace Spark::Graphics
         return &m_species[it->second];
     }
 
+    uint32_t FoliageManager::GetSpeciesGlobalIndex(const std::string& name) const
+    {
+        auto it = m_speciesByName.find(name);
+        if (it == m_speciesByName.end())
+            return UINT32_MAX;
+        return it->second;
+    }
+
     void FoliageManager::UnregisterSpecies(const std::string& name)
     {
         auto it = m_speciesByName.find(name);

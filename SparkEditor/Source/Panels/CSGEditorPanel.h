@@ -113,7 +113,7 @@ namespace SparkEditor
          * auto-rebuild if enabled. Clears the selection cursor if the
          * removed brush was selected.
          */
-        bool DeleteBrush(uint32_t brushId)
+        bool RemoveBrushById(uint32_t brushId)
         {
             auto it = std::find(m_brushIds.begin(), m_brushIds.end(), brushId);
             if (it == m_brushIds.end())
@@ -145,7 +145,7 @@ namespace SparkEditor
          * @brief Set the "selected" brush by ID. A value of 0 clears the
          *        selection cursor. Unknown IDs are ignored.
          */
-        void SelectBrush(uint32_t brushId)
+        void SetSelectedBrushId(uint32_t brushId)
         {
             if (brushId == 0)
             {
@@ -248,7 +248,7 @@ namespace SparkEditor
             }
             if (toDelete != 0)
             {
-                DeleteBrush(toDelete);
+                RemoveBrushById(toDelete);
             }
             ImGui::Spacing();
         }

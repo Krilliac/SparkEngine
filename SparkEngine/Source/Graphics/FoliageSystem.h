@@ -149,6 +149,12 @@ namespace Spark::Graphics
         /// but their species index becomes stale; call RemoveVolume if needed.
         void UnregisterSpecies(const std::string& name);
 
+        /// @brief Return the global (registry-wide) index of a species by
+        /// name, or UINT32_MAX if the species is not registered. Used by
+        /// the render consumer to derive a stable per-species material ID
+        /// that does not depend on any volume's local species ordering.
+        uint32_t GetSpeciesGlobalIndex(const std::string& name) const;
+
         // ----- Volume management -----
 
         /**

@@ -275,29 +275,51 @@ namespace Spark::Graphics
                     continue;
                 }
 
+                // Resolve the species BEFORE emitting the record so that
+                // unresolved species (out-of-range volume-local index, or a
+                // species name that disappeared from the registry after a
+                // registry change) are cleanly skipped instead of entering
+                // the batch with a defaulted material id and zero wind
+                // strength. Tracked via `stats.unresolvedSpecies` so the
+                // renderer's diagnostics still surface the drop.
+                if (inst.speciesIndex >= desc->speciesNames.size())
+                {
+                    ++m_stats.unresolvedSpecies;
+                    continue;
+                }
+                const std::string& speciesName = desc->speciesNames[inst.speciesIndex];
+                const FoliageSpecies* species = manager.FindSpecies(speciesName);
+                if (!species)
+                {
+                    ++m_stats.unresolvedSpecies;
+                    continue;
+                }
+
+                // The material id uploaded to GPUInstanceData must be a
+                // registry-wide index, not the volume-local `speciesIndex`.
+                // Two volumes that order their `speciesNames` differently
+                // would otherwise collide on the same local index and bind
+                // the wrong material.
+                const uint32_t globalMaterialId = manager.GetSpeciesGlobalIndex(speciesName);
+                if (globalMaterialId == UINT32_MAX)
+                {
+                    ++m_stats.unresolvedSpecies;
+                    continue;
+                }
+
                 FoliageRenderInstance rec;
                 rec.volumeId = volId;
                 rec.speciesIndex = inst.speciesIndex;
+                rec.globalMaterialId = globalMaterialId;
                 rec.distanceToCamera = inst.distanceToCamera;
                 rec.windPhase = ComputeWindPhase(inst);
+                rec.windStrength = std::clamp(species->windInfluence, 0.0f, 2.0f);
                 rec.lod = SelectLOD(inst.distanceToCamera, m_impostorDistance);
                 BuildWorldMatrix(inst, rec.worldMatrix);
 
-                // Resolve species name via the volume descriptor; use the
-                // name to load the mesh and copy the species' windInfluence
-                // onto the render record so the vertex shader knows how
-                // hard to sway the instance.
-                if (inst.speciesIndex < desc->speciesNames.size())
+                if (!species->meshPath.empty())
                 {
-                    const std::string& speciesName = desc->speciesNames[inst.speciesIndex];
-                    if (const FoliageSpecies* species = manager.FindSpecies(speciesName))
-                    {
-                        rec.windStrength = std::clamp(species->windInfluence, 0.0f, 2.0f);
-                        if (!species->meshPath.empty())
-                        {
-                            GetOrLoadMesh(species->meshPath);
-                        }
-                    }
+                    GetOrLoadMesh(species->meshPath);
                 }
 
                 if (rec.lod == FoliageRenderLOD::Mesh)
@@ -305,7 +327,9 @@ namespace Spark::Graphics
                 else
                     ++m_stats.impostorDraws;
 
-                uniqueKeys.insert((static_cast<uint64_t>(rec.volumeId) << 32) | rec.speciesIndex);
+                // Uniqueness key uses the global material id so cross-volume
+                // duplicates collapse into a single `uniqueSpecies` count.
+                uniqueKeys.insert(static_cast<uint64_t>(globalMaterialId));
                 m_renderInstances.push_back(rec);
             }
         }
@@ -345,7 +369,9 @@ namespace Spark::Graphics
             DirectX::XMMATRIX normal = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(nullptr, world));
             DirectX::XMStoreFloat4x4(&data.normalMatrix, normal);
 
-            data.materialId = inst.speciesIndex;
+            // Use the registry-wide global index; `speciesIndex` alone is
+            // volume-local and would alias different species across volumes.
+            data.materialId = inst.globalMaterialId;
             data.flags = static_cast<uint32_t>(InstanceFlags::Visible) |
                          static_cast<uint32_t>(InstanceFlags::CastShadow) |
                          static_cast<uint32_t>(InstanceFlags::ReceiveShadow);

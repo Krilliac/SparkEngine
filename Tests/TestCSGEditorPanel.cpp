@@ -1,7 +1,7 @@
 // TestCSGEditorPanel.cpp - Tests for the CSGEditorPanel public API
 //
 // These exercise the non-ImGui bookkeeping layer that CSGEditorPanel
-// exposes (CreateBrush, DeleteBrush, RebuildMesh, auto-rebuild toggle,
+// exposes (CreateBrush, RemoveBrushById, RebuildMesh, auto-rebuild toggle,
 // selection cursor, brush tracking). ImGui rendering is covered by
 // live editor testing and is compiled out of the test binary via the
 // SPARK_CSG_PANEL_HAS_IMGUI guard in the header.
@@ -46,7 +46,7 @@ namespace
             return id;
         }
 
-        bool DeleteBrush(uint32_t brushId)
+        bool RemoveBrushById(uint32_t brushId)
         {
             auto it = std::find(m_brushIds.begin(), m_brushIds.end(), brushId);
             if (it == m_brushIds.end())
@@ -62,7 +62,7 @@ namespace
 
         void RebuildMesh() { m_lastMesh = CSGSystem::GetInstance().BuildAll(); }
 
-        void SelectBrush(uint32_t brushId)
+        void SetSelectedBrushId(uint32_t brushId)
         {
             if (brushId == 0)
             {
@@ -141,7 +141,7 @@ TEST(CSGEditorPanel_DeleteBrushRemovesFromList)
     const uint32_t c = panel.CreateBrush(BrushShape::Cylinder, {1, 1, 1});
     EXPECT_EQ(panel.GetBrushCount(), static_cast<uint32_t>(3));
 
-    EXPECT_TRUE(panel.DeleteBrush(b));
+    EXPECT_TRUE(panel.RemoveBrushById(b));
     EXPECT_EQ(panel.GetBrushCount(), static_cast<uint32_t>(2));
 
     const auto& ids = panel.GetBrushes();
@@ -154,8 +154,8 @@ TEST(CSGEditorPanel_DeleteBrushRemovesFromList)
 TEST(CSGEditorPanel_DeleteUnknownBrushReturnsFalse)
 {
     CSGPanelHelper panel;
-    EXPECT_FALSE(panel.DeleteBrush(99999));
-    EXPECT_FALSE(panel.DeleteBrush(0));
+    EXPECT_FALSE(panel.RemoveBrushById(99999));
+    EXPECT_FALSE(panel.RemoveBrushById(0));
     panel.Reset();
 }
 
@@ -168,10 +168,10 @@ TEST(CSGEditorPanel_DeleteSelectedClearsOrReassignsCursor)
     const uint32_t b = panel.CreateBrush(BrushShape::Sphere, {1, 1, 1});
     EXPECT_EQ(panel.GetSelectedBrush(), b); // last-created is selected
 
-    EXPECT_TRUE(panel.DeleteBrush(b));
+    EXPECT_TRUE(panel.RemoveBrushById(b));
     EXPECT_EQ(panel.GetSelectedBrush(), a); // cursor reassigned
 
-    EXPECT_TRUE(panel.DeleteBrush(a));
+    EXPECT_TRUE(panel.RemoveBrushById(a));
     EXPECT_EQ(panel.GetSelectedBrush(), static_cast<uint32_t>(0)); // cleared
     panel.Reset();
 }
@@ -188,16 +188,16 @@ TEST(CSGEditorPanel_SelectBrushAcceptsKnownIdsOnly)
     const uint32_t a = panel.CreateBrush(BrushShape::Box, {1, 1, 1});
     const uint32_t b = panel.CreateBrush(BrushShape::Sphere, {1, 1, 1});
 
-    panel.SelectBrush(a);
+    panel.SetSelectedBrushId(a);
     EXPECT_EQ(panel.GetSelectedBrush(), a);
 
-    panel.SelectBrush(b);
+    panel.SetSelectedBrushId(b);
     EXPECT_EQ(panel.GetSelectedBrush(), b);
 
-    panel.SelectBrush(999); // unknown — ignored
+    panel.SetSelectedBrushId(999); // unknown — ignored
     EXPECT_EQ(panel.GetSelectedBrush(), b);
 
-    panel.SelectBrush(0); // 0 clears the cursor
+    panel.SetSelectedBrushId(0); // 0 clears the cursor
     EXPECT_EQ(panel.GetSelectedBrush(), static_cast<uint32_t>(0));
 
     panel.Reset();
@@ -243,7 +243,7 @@ TEST(CSGEditorPanel_AutoRebuildTriggersOnCreateAndDelete)
     const uint32_t triAfterCreate = panel.GetLastMesh().triangleCount;
     EXPECT_GT(triAfterCreate, static_cast<uint32_t>(0));
 
-    panel.DeleteBrush(panel.GetSelectedBrush());
+    panel.RemoveBrushById(panel.GetSelectedBrush());
     const uint32_t triAfterDelete = panel.GetLastMesh().triangleCount;
     EXPECT_EQ(triAfterDelete, static_cast<uint32_t>(0));
 
