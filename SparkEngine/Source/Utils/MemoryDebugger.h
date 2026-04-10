@@ -109,6 +109,16 @@ namespace Spark
         bool IsEnabled() const { return m_enabled; }
 
         /**
+     * @brief Silence the stderr double-free warnings emitted by RecordFree.
+     *
+     * Unit tests that intentionally trigger double-frees (to cover the
+     * detection path) should call this with false to avoid spamming test
+     * output. The internal counter is still incremented.
+     */
+        void SetLogDoubleFreeWarnings(bool log) { m_logDoubleFreeWarnings = log; }
+        bool IsLoggingDoubleFreeWarnings() const { return m_logDoubleFreeWarnings; }
+
+        /**
      * @brief Record a memory allocation
      * @param ptr       Allocated pointer
      * @param size      Allocation size in bytes
@@ -180,8 +190,10 @@ namespace Spark
             {
                 // Potential double-free or freeing untracked memory
                 m_doubleFreeCount++;
-                // Rate-limit stderr output to avoid log spam from repeated double-frees
-                if (m_doubleFreeCount <= MAX_DOUBLE_FREE_WARNINGS)
+                // Rate-limit stderr output to avoid log spam from repeated double-frees.
+                // Tests that intentionally exercise this path can suppress it entirely
+                // via SetLogDoubleFreeWarnings(false).
+                if (m_logDoubleFreeWarnings && m_doubleFreeCount <= MAX_DOUBLE_FREE_WARNINGS)
                 {
                     fprintf(stderr,
                             "[MemoryDebugger] WARNING: Freeing untracked pointer %p (possible double-free #%llu)\n",
@@ -404,6 +416,7 @@ namespace Spark
         uint64_t m_totalDeallocationCount = 0;
         uint64_t m_doubleFreeCount = 0;
         static constexpr uint64_t MAX_DOUBLE_FREE_WARNINGS = 3; ///< Suppress stderr after this many warnings
+        bool m_logDoubleFreeWarnings = true;                    ///< Tests may disable stderr noise
         uint64_t m_nextAllocIndex = 1;
 
         bool m_enabled =

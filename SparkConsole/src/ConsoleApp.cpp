@@ -90,14 +90,23 @@ void ConsoleApp::PrintBanner()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     [[maybe_unused]] int rc_ = system("cls"); // Intentional: side-effect only
-#else
-    [[maybe_unused]] int rc_ = system("clear"); // Intentional: side-effect only
-#endif
     std::wcout << L"========================================" << std::endl;
     std::wcout << L"   Spark Engine Console v2.0.0" << std::endl;
     std::wcout << L"   Tab: Autocomplete | Up/Down: History" << std::endl;
     std::wcout << L"========================================" << std::endl;
     std::wcout << std::endl;
+#else
+    // On Linux the subprocess's stdout is wired straight into the engine's
+    // ConsoleProcessManager command queue. Writing the banner to stdout would
+    // make the engine interpret each banner line as a console command and
+    // emit "Unknown command: ..." back to the user. Route human-facing text
+    // through stderr so stdout is reserved for commands only.
+    std::cerr << "========================================" << std::endl;
+    std::cerr << "   Spark Engine Console v2.0.0" << std::endl;
+    std::cerr << "   Tab: Autocomplete | Up/Down: History" << std::endl;
+    std::cerr << "========================================" << std::endl;
+    std::cerr << std::endl;
+#endif
     PrintLog(L"Console application started. Type 'help' for commands or 'exit' to quit.");
 }
 
@@ -808,7 +817,8 @@ void ConsoleApp::PrintLog(const std::wstring& msg)
     timeStr << std::put_time(std::localtime(&time_t), "[%H:%M:%S] ");
 
     std::string narrowMsg(msg.begin(), msg.end());
-    std::cout << ANSI_CYAN << timeStr.str() << ANSI_RESET << narrowMsg << std::endl;
+    // stderr, not stdout — stdout is the command channel to the engine.
+    std::cerr << ANSI_CYAN << timeStr.str() << ANSI_RESET << narrowMsg << std::endl;
 #endif
 
     // Manage buffer size

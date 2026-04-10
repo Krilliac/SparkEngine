@@ -1154,6 +1154,12 @@ namespace Spark
             void GLDevice::Shutdown()
             {
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+                // Idempotent: GraphicsEngine calls Shutdown explicitly, and the destructor
+                // calls it again. Without this guard we log "GLDevice::Shutdown" twice and
+                // risk re-closing the GLX display on ownership paths.
+                if (m_shutdownCalled)
+                    return;
+                m_shutdownCalled = true;
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice::Shutdown");
                 m_immediateCommandList.reset();
 

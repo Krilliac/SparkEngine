@@ -403,6 +403,7 @@ namespace Spark
                 RHIDeviceCapabilities m_capabilities;
                 RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
+                bool m_shutdownCalled = false; ///< Guards against double Shutdown() calls
 
 #if defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
                 Display* m_glxDisplay = nullptr;

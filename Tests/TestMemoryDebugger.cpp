@@ -58,6 +58,7 @@ TEST(MemDbg_DoubleFreeDetection)
     auto& md = Spark::MemoryDebugger::GetInstance();
     md.Reset();
     md.SetEnabled(true);
+    md.SetLogDoubleFreeWarnings(false); // test intentionally exercises this path
 
     int dummy = 0;
     md.RecordAlloc(&dummy, 512, "General");
@@ -70,6 +71,8 @@ TEST(MemDbg_DoubleFreeDetection)
     bool second = md.RecordFree(&dummy);
     EXPECT_FALSE(second);
     EXPECT_EQ(md.GetDoubleFreeCount(), static_cast<uint64_t>(1));
+
+    md.SetLogDoubleFreeWarnings(true);
 }
 
 TEST(MemDbg_FreeUntrackedPointer)
@@ -77,11 +80,14 @@ TEST(MemDbg_FreeUntrackedPointer)
     auto& md = Spark::MemoryDebugger::GetInstance();
     md.Reset();
     md.SetEnabled(true);
+    md.SetLogDoubleFreeWarnings(false); // test intentionally exercises this path
 
     int dummy = 0;
     bool result = md.RecordFree(&dummy);
     EXPECT_FALSE(result);
     EXPECT_EQ(md.GetDoubleFreeCount(), static_cast<uint64_t>(1));
+
+    md.SetLogDoubleFreeWarnings(true);
 }
 
 // =============================================================================
