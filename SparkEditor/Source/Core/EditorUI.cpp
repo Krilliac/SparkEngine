@@ -16,6 +16,7 @@
 #include "Utils/LogMacros.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
+#include "../Panels/AssetAuditGraph.h"
 #include "../Panels/HierarchyPanel.h"
 #include "../Panels/SelectionManager.h"
 #include "TutorialSystem.h"
@@ -213,6 +214,14 @@ namespace SparkEditor
         console.LogSuccess("Tutorial system initialized (" +
                            std::to_string(TutorialSystem::GetInstance().GetAvailableTutorials().size()) +
                            " tutorials registered)");
+
+        // Asset audit graph — editor-facing dependency / unused / size
+        // budgeting graph. Not to be confused with
+        // AssetPipeline::AssetDependencyGraph (build-system topological
+        // graph); both classes coexist and serve different purposes.
+        console.LogInfo("Initializing asset audit graph...");
+        AssetAuditGraph::GetInstance().Initialize();
+        console.LogSuccess("Asset audit graph initialized");
 
         // Command palette
         console.LogInfo("Initializing command palette...");
@@ -752,6 +761,11 @@ namespace SparkEditor
             m_collabSession.reset();
             console.LogSuccess("Collaborative edit session shutdown complete");
         }
+
+        // Shutdown asset audit graph singleton
+        console.LogInfo("Shutting down asset audit graph...");
+        AssetAuditGraph::GetInstance().Shutdown();
+        console.LogSuccess("Asset audit graph shutdown complete");
 
         // Shutdown tutorial system singleton
         console.LogInfo("Shutting down tutorial system...");

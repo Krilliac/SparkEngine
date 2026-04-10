@@ -2,7 +2,9 @@
 
 Asset reference tracking, dependency analysis, unused asset detection, circular dependency detection, and size budgeting for editor workflows.
 
-**Source:** `SparkEditor/Source/Panels/AssetDependencyGraph.h`
+**Source:** `SparkEditor/Source/Panels/AssetAuditGraph.h` (class `SparkEditor::AssetAuditGraph`)
+
+> **Note:** Prior to 2026-04-10 this class was named `AssetDependencyGraph`, which collided with the unrelated build-system graph of the same name in `AssetPipeline/AdvancedAssetPipeline.h`. The class was renamed to `AssetAuditGraph` and its `AssetType` enum to `AuditAssetType` to eliminate the ODR hazard. The two classes now coexist cleanly: `AssetAuditGraph` is the editor-facing audit/budget tool documented here, while `AssetPipeline::AssetDependencyGraph` is the build-system topological graph used by the asset processor pipeline.
 
 ## Overview
 
