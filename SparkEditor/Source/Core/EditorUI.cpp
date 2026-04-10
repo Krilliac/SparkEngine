@@ -18,6 +18,7 @@
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/HierarchyPanel.h"
 #include "../Panels/SelectionManager.h"
+#include "TutorialSystem.h"
 #include "../Panels/InspectorPanel.h"
 #include "../Panels/AssetBrowserPanel.h"
 #include "../Panels/GameViewPanel.h"
@@ -204,6 +205,15 @@ namespace SparkEditor
         SelectionManager::GetInstance().Initialize();
         console.LogSuccess("Selection manager initialized");
 
+        // Tutorial system — registers built-in tutorial sequences on
+        // Initialize(). Update() is ticked from EditorUI::Update to drive
+        // the auto-advance timers.
+        console.LogInfo("Initializing tutorial system...");
+        TutorialSystem::GetInstance().Initialize();
+        console.LogSuccess("Tutorial system initialized (" +
+                           std::to_string(TutorialSystem::GetInstance().GetAvailableTutorials().size()) +
+                           " tutorials registered)");
+
         // Command palette
         console.LogInfo("Initializing command palette...");
         m_commandPalette = std::make_unique<CommandPalette>();
@@ -379,6 +389,9 @@ namespace SparkEditor
 
         // Tick notification lifetimes and remove expired ones
         UpdateNotifications(deltaTime);
+
+        // Tick tutorial auto-advance timers so active tutorials progress.
+        SPARK_GUARDED_UPDATE("TutorialSystem", "Editor", { TutorialSystem::GetInstance().Update(deltaTime); });
 
         // Tick play/simulate state machine (PIE and in-editor simulation stepping/stats)
         m_playModeManager.Update(deltaTime);
@@ -739,6 +752,11 @@ namespace SparkEditor
             m_collabSession.reset();
             console.LogSuccess("Collaborative edit session shutdown complete");
         }
+
+        // Shutdown tutorial system singleton
+        console.LogInfo("Shutting down tutorial system...");
+        TutorialSystem::GetInstance().Shutdown();
+        console.LogSuccess("Tutorial system shutdown complete");
 
         // Shutdown selection manager singleton
         console.LogInfo("Shutting down selection manager...");
