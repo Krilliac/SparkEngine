@@ -23,23 +23,32 @@
  * the render consumer on Windows builds; it is intentionally kept out of
  * this header so the logic here is testable in CI without a GPU.
  *
- * @warning **GPU bake pipeline not yet implemented.** As of 2026-04-10 this
- *          file contains only CPU-side atlas layout (`ComputeAtlasLayout`),
- *          angle slot selection (`SelectAngleSlot`), and UV math
- *          (`GetAngleSlotUV`). There is no compute shader, no render-target
- *          allocation, and no HLSL under `Shaders/HLSL/FoliageImpostor*`
- *          today. Until the GPU bake is written, impostor atlases must be
- *          pre-baked offline (e.g. by a tool pass) and loaded as regular
- *          textures. The CPU layout logic here stays valid either way — a
- *          future `FoliageImpostorGPUBaker` will consume the same
- *          `AtlasLayout` struct and just write pixels into the rectangles
- *          this file allocates.
+ * @note **GPU bake — partial.** The CPU layout helpers above are joined by
+ *       `FoliageImpostorAtlas` (Windows-only) which:
  *
- *          Exercised by `Tests/TestFoliageImpostorBaker.cpp` (CPU-side
- *          layout math). See `FoliageRenderer::UploadToSceneBuffer()` for
- *          the matching runtime instance-upload path, which is also only
- *          active on Windows builds and currently unused from the main
- *          render loop.
+ *         - Allocates the atlas `ID3D11Texture2D` plus matching depth
+ *           buffer, RTV, SRV.
+ *         - Compiles the bake VS/PS pair from
+ *           `Shaders/HLSL/FoliageImpostorBake.hlsl`.
+ *         - Renders one mesh into one atlas slot via `BakeSlot()`,
+ *           iterating over `slot.angleSteps` yaw angles and using a
+ *           viewport the size of a single cell so each angle lands in
+ *           the correct sub-rectangle.
+ *
+ *       What is **not** wired in yet:
+ *         - The lifecycle does not call `BakeSlot()` for any species.
+ *           Production code must walk `FoliageManager`'s species
+ *           registry, fetch each `MeshAsset`, and bake on demand. The
+ *           render side already accepts `FoliageRenderLOD::Impostor`
+ *           records (see `FoliageRenderer::UploadToSceneBuffer`) but
+ *           the SRV is currently never bound for sampling because no
+ *           atlas has been built.
+ *
+ *       Tests: `Tests/TestFoliageImpostorBaker.cpp` covers the CPU-side
+ *       layout math. The Windows-only GPU paths in
+ *       `FoliageImpostorAtlas` are exercised by
+ *       `Tests/TestFoliageImpostorAtlas.cpp` once a real D3D11 device is
+ *       reachable; on Linux CI they compile out of the build.
  *
  * @threadsafety All static methods are pure functions — safe to call from
  *               any thread.
@@ -47,8 +56,18 @@
 
 #pragma once
 
+#include "../Core/Platform.h"
+
 #include <cstdint>
 #include <vector>
+
+#ifdef SPARK_PLATFORM_WINDOWS
+#include <DirectXMath.h>
+#include <d3d11.h>
+#include <wrl/client.h>
+#endif
+
+class MeshAsset;
 
 namespace Spark::Graphics
 {
@@ -139,5 +158,103 @@ namespace Spark::Graphics
          */
         static uint32_t NextPowerOfTwo(uint32_t v);
     };
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    /**
+     * @brief D3D11-backed runtime impostor atlas.
+     *
+     * Owns the GPU texture, depth buffer, and bake shader pair used to
+     * render foliage species into per-species slots. Lives next to
+     * `FoliageImpostorBaker` because it consumes the same
+     * `ImpostorAtlasSlot` layout produced by `ComputeAtlasLayout()`.
+     *
+     * Lifecycle:
+     *   - `Initialize(device, width, height)` allocates the atlas and
+     *     compiles the bake shaders. Idempotent — re-initialising
+     *     releases the previous atlas first.
+     *   - `BakeSlot(context, slot, mesh, bbox, tint)` rasterises the
+     *     mesh into the slot's cells; one orthographic view per yaw step.
+     *   - `Shutdown()` releases all GPU resources.
+     *
+     * @threadsafety Not thread-safe. Call only from the render thread
+     *               while no other system is mutating the immediate
+     *               D3D11 device context.
+     */
+    class FoliageImpostorAtlas
+    {
+      public:
+        FoliageImpostorAtlas() = default;
+        ~FoliageImpostorAtlas();
+
+        FoliageImpostorAtlas(const FoliageImpostorAtlas&) = delete;
+        FoliageImpostorAtlas& operator=(const FoliageImpostorAtlas&) = delete;
+
+        /**
+         * @brief Allocate the atlas texture and compile bake shaders.
+         *
+         * @param device     D3D11 device used to create resources.
+         * @param width      Atlas width in pixels (must match
+         *                   `ComputeAtlasLayout` output to avoid clipping).
+         * @param height     Atlas height in pixels.
+         * @return true on success, false on shader compile or resource
+         *         creation failure.
+         */
+        bool Initialize(ID3D11Device* device, uint32_t width, uint32_t height);
+
+        /**
+         * @brief Release every GPU resource owned by the atlas.
+         */
+        void Shutdown();
+
+        /**
+         * @brief Render `mesh` into one atlas slot from `slot.angleSteps`
+         *        yaw angles.
+         *
+         * The mesh is fitted with an orthographic projection sized to
+         * `bboxMax - bboxMin`. Cells are written one at a time using a
+         * cell-sized viewport, so the result is identical to the layout
+         * `ComputeAtlasLayout` reported.
+         *
+         * @param context        D3D11 immediate context.
+         * @param slot           Slot rectangle from `ComputeAtlasLayout`.
+         * @param mesh           Source mesh — must already be uploaded
+         *                       (vertex+index buffers non-null).
+         * @param bboxMin        World-space mesh bounding box minimum.
+         * @param bboxMax        World-space mesh bounding box maximum.
+         * @param tint           Per-species RGBA tint passed to the PS.
+         * @return true if every angle was rendered without error.
+         */
+        bool BakeSlot(ID3D11DeviceContext* context, const ImpostorAtlasSlot& slot, const MeshAsset& mesh,
+                      const DirectX::XMFLOAT3& bboxMin, const DirectX::XMFLOAT3& bboxMax,
+                      const DirectX::XMFLOAT4& tint);
+
+        bool IsInitialized() const { return m_initialized; }
+        uint32_t GetWidth() const { return m_width; }
+        uint32_t GetHeight() const { return m_height; }
+        ID3D11ShaderResourceView* GetSRV() const { return m_srv.Get(); }
+        ID3D11Texture2D* GetTexture() const { return m_atlas.Get(); }
+
+      private:
+        bool CompileBakeShaders(ID3D11Device* device);
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_atlas;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_srv;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_depthBuffer;
+        Microsoft::WRL::ComPtr<ID3D11DepthStencilView> m_dsv;
+
+        Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vs;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> m_ps;
+        Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_constantBuffer;
+        Microsoft::WRL::ComPtr<ID3D11RasterizerState> m_rasterState;
+        Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_depthState;
+        Microsoft::WRL::ComPtr<ID3D11BlendState> m_blendState;
+
+        bool m_initialized = false;
+        uint32_t m_width = 0;
+        uint32_t m_height = 0;
+    };
+#endif // SPARK_PLATFORM_WINDOWS
 
 } // namespace Spark::Graphics
