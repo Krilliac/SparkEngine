@@ -1,7 +1,7 @@
 {
     "schemaVersion": 1,
     "label": "release downloads",
-    "message": "0",
+    "message": "0{"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}0",
     "color": "blue",
     "namedLogo": "github",
     "logoColor": "white"
