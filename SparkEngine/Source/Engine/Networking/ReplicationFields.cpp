@@ -24,8 +24,16 @@ namespace Spark::Net
             return;
         }
 
+        const auto visibilityIndex = static_cast<size_t>(visibility);
+        if (visibilityIndex >= static_cast<size_t>(FieldVisibility::Count))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "RegisterField: visibility value %zu is out of range [0, %zu)",
+                           visibilityIndex, static_cast<size_t>(FieldVisibility::Count));
+            return;
+        }
+
         const uint64_t bit = 1ULL << index;
-        m_visibilityMasks[static_cast<size_t>(visibility)] |= bit;
+        m_visibilityMasks[visibilityIndex] |= bit;
 
         if (index >= m_fieldCount)
         {

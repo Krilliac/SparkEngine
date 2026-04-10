@@ -7,6 +7,7 @@
 #include "../../Utils/Validate.h"
 
 #include <cstring>
+#include <limits>
 
 namespace Spark::Net
 {
@@ -66,10 +67,25 @@ namespace Spark::Net
 
         const auto& entry = it->second;
         const uint8_t fieldCount = entry.fieldSet.GetFieldCount();
+        if (fieldCount > MAX_REPLICATED_FIELDS)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "WriteCreatePacket: entity %u has invalid field count %u (max %u)", entityID, fieldCount,
+                           MAX_REPLICATED_FIELDS);
+            return false;
+        }
+
+        constexpr size_t kHeaderSize = sizeof(uint32_t) + sizeof(uint8_t);
+        if (buffer.size() > (std::numeric_limits<size_t>::max() - kHeaderSize))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "WriteCreatePacket: buffer size overflow while writing header for entity %u", entityID);
+            return false;
+        }
 
         // Header: entityID + fieldCount
         const auto headerOffset = buffer.size();
-        buffer.resize(headerOffset + sizeof(uint32_t) + sizeof(uint8_t));
+        buffer.resize(headerOffset + kHeaderSize);
         std::memcpy(buffer.data() + headerOffset, &entityID, sizeof(uint32_t));
         buffer[headerOffset + sizeof(uint32_t)] = fieldCount;
 
@@ -94,6 +110,14 @@ namespace Spark::Net
         }
 
         const auto& entry = it->second;
+        const uint8_t fieldCount = entry.fieldSet.GetFieldCount();
+        if (fieldCount > MAX_REPLICATED_FIELDS)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "WriteUpdatePacket: entity %u has invalid field count %u (max %u)", entityID, fieldCount,
+                           MAX_REPLICATED_FIELDS);
+            return false;
+        }
 
         // Build a combined visibility mask
         uint64_t visibleMask = entry.fieldSet.GetVisibilityMask(FieldVisibility::Public);
@@ -102,20 +126,31 @@ namespace Spark::Net
             visibleMask |= entry.fieldSet.GetVisibilityMask(observerVisibility);
         }
 
-        const uint64_t dirtyMask = entry.fieldSet.GetDirtyMask() & visibleMask;
+        uint64_t dirtyMask = entry.fieldSet.GetDirtyMask() & visibleMask;
+        if (fieldCount < MAX_REPLICATED_FIELDS)
+        {
+            dirtyMask &= ((1ULL << fieldCount) - 1ULL);
+        }
         if (dirtyMask == 0)
         {
             return false; // Nothing to send for this observer
         }
 
+        constexpr size_t kHeaderSize = sizeof(uint32_t) + sizeof(uint64_t);
+        if (buffer.size() > (std::numeric_limits<size_t>::max() - kHeaderSize))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "WriteUpdatePacket: buffer size overflow while writing header for entity %u", entityID);
+            return false;
+        }
+
         // Header: entityID + filtered dirty mask
         const auto headerOffset = buffer.size();
-        buffer.resize(headerOffset + sizeof(uint32_t) + sizeof(uint64_t));
+        buffer.resize(headerOffset + kHeaderSize);
         std::memcpy(buffer.data() + headerOffset, &entityID, sizeof(uint32_t));
         std::memcpy(buffer.data() + headerOffset + sizeof(uint32_t), &dirtyMask, sizeof(uint64_t));
 
         // Serialize only dirty+visible fields
-        const uint8_t fieldCount = entry.fieldSet.GetFieldCount();
         for (uint8_t i = 0; i < fieldCount; ++i)
         {
             if ((dirtyMask >> i) & 1ULL)
