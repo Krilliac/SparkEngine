@@ -455,4 +455,5 @@ struct FoliageVolumeComponent
     float cullDistance = 100.0f;                        ///< Distance to cull instances.
     bool enabled = true;                                ///< Active state.
     uint32_t runtimeVolumeId = 0;                       ///< Runtime handle from FoliageManager.
+    std::vector<std::string> speciesNames; ///< Species the volume scatters (lookup by name in FoliageManager).
 };

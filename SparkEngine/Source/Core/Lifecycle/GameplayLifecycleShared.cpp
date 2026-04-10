@@ -121,6 +121,7 @@
 #include "Graphics/ClusteredLightCulling.h"
 #include "Graphics/LightProbeSystem.h"
 #include "Graphics/ClipmapTerrain.h"
+#include "Graphics/FoliageSystem.h"
 #include "Graphics/VirtualTexture.h"
 #include "Graphics/MaterialPropertyHandle.h"
 #include "Graphics/RHI/PipelineStateCache.h"
@@ -422,6 +423,7 @@ namespace Spark::Core::Lifecycle
         Spark::Graphics::PipelineStateCache::GetInstance().Initialize();
         Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
         Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
+        Spark::Graphics::FoliageManager::GetInstance().Initialize();
         Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
         Spark::PluginRegistry::InitializeAll();
 
@@ -697,6 +699,20 @@ namespace Spark::Core::Lifecycle
             s_terrainSystem.Update(*world, dt);
         });
 
+        SPARK_GUARDED_UPDATE("Foliage", "Core", {
+            auto& foliage = Spark::Graphics::FoliageManager::GetInstance();
+            foliage.UpdateFromECS(*world, dt);
+            XMFLOAT3 camPos{0.0f, 0.0f, 0.0f};
+            if (const auto* ctx = EngineContext::Get())
+            {
+                if (const auto* graphics = ctx->GetGraphics())
+                {
+                    camPos = graphics->GetFrameCameraPosition();
+                }
+            }
+            foliage.Update(dt, camPos);
+        });
+
         SPARK_GUARDED_UPDATE("AI_Tactical", "Core", {
             SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AI_Tactical", 0.0);
             Spark::AI::FormationSystem::GetInstance().Update(dt);
@@ -930,6 +946,7 @@ namespace Spark::Core::Lifecycle
         Spark::ProfileProperties::GetInstance().Shutdown();
 #endif
         Spark::Graphics::VirtualTextureManager::GetInstance().Shutdown();
+        Spark::Graphics::FoliageManager::GetInstance().Shutdown();
         Spark::Graphics::ClipmapTerrain::GetInstance().Shutdown();
         Spark::Graphics::TransientResourcePool::GetInstance().Shutdown();
         Spark::Graphics::PipelineStateCache::GetInstance().Shutdown();

@@ -217,6 +217,7 @@ add_executable(SparkTests
     TestReplaySystem.cpp
     TestSceneGraph2D.cpp
     TestDecalSystem.cpp
+    TestFoliageSystem.cpp
     TestConnectionScopeFilter.cpp
     TestNavMeshObstacles.cpp
     TestFaultIsolation.cpp
