@@ -15,6 +15,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "AssetPipeline.h"
 #include "FoliageSystem.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
 #include <d3dcompiler.h>
 #endif

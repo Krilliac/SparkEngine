@@ -275,12 +275,15 @@ TEST(NetworkDebug_MultipleSnapshots)
 
 // ============================================================================
 // Real-class PollEngineNetwork tests
-// Only compiled when ImGui is available, which is the same condition that
-// brings SparkEditor/Source/Core/EditorPanel.cpp into the SparkTests target
-// (see Tests/CMakeLists.txt). Without EditorPanel.cpp the base-class ctor
-// would be unresolved at link time.
+// Gated by SPARK_TEST_HAS_IMGUI, which is defined by Tests/CMakeLists.txt
+// exactly when the `imgui` target exists — the same condition under which
+// SparkEditor/Source/Core/EditorPanel.cpp is added to SparkTests. Using
+// __has_include(<imgui.h>) here would compile the test in configurations
+// where imgui.h is on the include path (exported transitively by the
+// engine target) but EditorPanel.cpp is not linked, producing undefined
+// symbols for the NetworkDebugPanel base class constructor at link time.
 // ============================================================================
-#if __has_include(<imgui.h>)
+#ifdef SPARK_TEST_HAS_IMGUI
 #include "Panels/NetworkDebugPanel.h"
 #include "Engine/Networking/NetworkManager.h"
 
@@ -353,4 +356,4 @@ TEST(NetworkDebugPanelReal_PollEngineNetworkHandlesReset)
     stats.bytesSent = seedSent;
     stats.bytesReceived = seedRecv;
 }
-#endif // __has_include(<imgui.h>)
+#endif // SPARK_TEST_HAS_IMGUI
