@@ -16,7 +16,10 @@
 #include "Utils/LogMacros.h"
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
+#include "../Panels/AssetAuditGraph.h"
 #include "../Panels/HierarchyPanel.h"
+#include "../Panels/SelectionManager.h"
+#include "TutorialSystem.h"
 #include "../Panels/InspectorPanel.h"
 #include "../Panels/AssetBrowserPanel.h"
 #include "../Panels/GameViewPanel.h"
@@ -179,6 +182,46 @@ namespace SparkEditor
         m_prefabManager = std::make_unique<PrefabManager>();
         m_prefabManager->Initialize();
         console.LogSuccess("Prefab manager initialized");
+
+        // Layout manager — disk-backed panel state persistence
+        console.LogInfo("Initializing layout manager...");
+        m_layoutManager = std::make_unique<EditorLayoutManager>();
+        if (m_layoutManager->Initialize("Layouts"))
+        {
+            console.LogSuccess("Layout manager initialized (dir=Layouts)");
+        }
+        else
+        {
+            console.LogWarning("Layout manager initialization failed — layouts will not persist");
+        }
+
+        // Selection manager — centralized editor selection singleton.
+        // Panels (Hierarchy, Inspector, SceneView) currently maintain
+        // their own selection state keyed by uint64_t ObjectID while the
+        // SelectionManager API is keyed by uint32_t EntityId; the two
+        // will be unified in a follow-up, but the singleton still needs
+        // to be alive so new panel code and any tests that rely on
+        // SelectionManager::GetInstance() find it in a usable state.
+        console.LogInfo("Initializing selection manager...");
+        SelectionManager::GetInstance().Initialize();
+        console.LogSuccess("Selection manager initialized");
+
+        // Tutorial system — registers built-in tutorial sequences on
+        // Initialize(). Update() is ticked from EditorUI::Update to drive
+        // the auto-advance timers.
+        console.LogInfo("Initializing tutorial system...");
+        TutorialSystem::GetInstance().Initialize();
+        console.LogSuccess("Tutorial system initialized (" +
+                           std::to_string(TutorialSystem::GetInstance().GetAvailableTutorials().size()) +
+                           " tutorials registered)");
+
+        // Asset audit graph — editor-facing dependency / unused / size
+        // budgeting graph. Not to be confused with
+        // AssetPipeline::AssetDependencyGraph (build-system topological
+        // graph); both classes coexist and serve different purposes.
+        console.LogInfo("Initializing asset audit graph...");
+        AssetAuditGraph::GetInstance().Initialize();
+        console.LogSuccess("Asset audit graph initialized");
 
         // Command palette
         console.LogInfo("Initializing command palette...");
@@ -355,6 +398,9 @@ namespace SparkEditor
 
         // Tick notification lifetimes and remove expired ones
         UpdateNotifications(deltaTime);
+
+        // Tick tutorial auto-advance timers so active tutorials progress.
+        SPARK_GUARDED_UPDATE("TutorialSystem", "Editor", { TutorialSystem::GetInstance().Update(deltaTime); });
 
         // Tick play/simulate state machine (PIE and in-editor simulation stepping/stats)
         m_playModeManager.Update(deltaTime);
@@ -714,6 +760,30 @@ namespace SparkEditor
             m_collabSession->Disconnect();
             m_collabSession.reset();
             console.LogSuccess("Collaborative edit session shutdown complete");
+        }
+
+        // Shutdown asset audit graph singleton
+        console.LogInfo("Shutting down asset audit graph...");
+        AssetAuditGraph::GetInstance().Shutdown();
+        console.LogSuccess("Asset audit graph shutdown complete");
+
+        // Shutdown tutorial system singleton
+        console.LogInfo("Shutting down tutorial system...");
+        TutorialSystem::GetInstance().Shutdown();
+        console.LogSuccess("Tutorial system shutdown complete");
+
+        // Shutdown selection manager singleton
+        console.LogInfo("Shutting down selection manager...");
+        SelectionManager::GetInstance().Shutdown();
+        console.LogSuccess("Selection manager shutdown complete");
+
+        // Shutdown layout manager
+        if (m_layoutManager)
+        {
+            console.LogInfo("Shutting down layout manager...");
+            m_layoutManager->Shutdown();
+            m_layoutManager.reset();
+            console.LogSuccess("Layout manager shutdown complete");
         }
 
         // Reset other systems

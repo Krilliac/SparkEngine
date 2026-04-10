@@ -32,7 +32,7 @@ namespace Spark::Gameplay
     /**
      * @brief Minimal quest definition passed to extensions
      */
-    struct QuestDefinition
+    struct QuestExtensionInput
     {
         uint32_t questId = 0;
         std::string name;
@@ -43,7 +43,7 @@ namespace Spark::Gameplay
     /**
      * @brief Mutable per-entity quest state passed to extensions
      */
-    struct QuestContext
+    struct QuestExtensionState
     {
         uint32_t entityId = 0;
         uint32_t questId = 0;
@@ -72,10 +72,10 @@ namespace Spark::Gameplay
         virtual std::string GetTypeName() const = 0;
 
         /** @brief Check whether the quest can be started in the given context */
-        virtual bool CanStart(const QuestDefinition& quest, const QuestContext& ctx) const = 0;
+        virtual bool CanStart(const QuestExtensionInput& quest, const QuestExtensionState& ctx) const = 0;
 
         /** @brief Called when the quest is started */
-        virtual void OnStarted(const QuestDefinition& quest, QuestContext& ctx) = 0;
+        virtual void OnStarted(const QuestExtensionInput& quest, QuestExtensionState& ctx) = 0;
 
         /**
          * @brief Called when objective progress is reported
@@ -84,14 +84,14 @@ namespace Spark::Gameplay
          * @param objectiveId  Which objective progressed
          * @param progress     Amount of progress to add
          */
-        virtual void OnObjectiveProgress(const QuestDefinition& quest, QuestContext& ctx,
+        virtual void OnObjectiveProgress(const QuestExtensionInput& quest, QuestExtensionState& ctx,
                                          const std::string& objectiveId, int32_t progress) = 0;
 
         /** @brief Check whether all objectives are satisfied */
-        virtual bool IsComplete(const QuestDefinition& quest, const QuestContext& ctx) const = 0;
+        virtual bool IsComplete(const QuestExtensionInput& quest, const QuestExtensionState& ctx) const = 0;
 
         /** @brief Called when the quest is completed (award rewards, etc.) */
-        virtual void OnCompleted(const QuestDefinition& quest, QuestContext& ctx) = 0;
+        virtual void OnCompleted(const QuestExtensionInput& quest, QuestExtensionState& ctx) = 0;
     };
 
     // ============================================================================

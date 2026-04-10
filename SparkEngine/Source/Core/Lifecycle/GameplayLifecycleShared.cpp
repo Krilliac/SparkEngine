@@ -82,7 +82,10 @@
 #include "Core/FixedTimestepAccumulator.h"
 #include "Core/PluginRegistry.h"
 #include "Core/ResourceVersionTracker.h"
+#include "Engine/AI/NavMeshLink.h"
 #include "Engine/Animation/AnimNotify.h"
+#include "Engine/ECS/RuntimePrefab.h"
+#include "Engine/Gameplay/GameplaySystemExtension.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -121,6 +124,7 @@
 #include "Graphics/ClusteredLightCulling.h"
 #include "Graphics/LightProbeSystem.h"
 #include "Graphics/ClipmapTerrain.h"
+#include "Graphics/FoliageRenderer.h"
 #include "Graphics/FoliageSystem.h"
 #include "Graphics/VirtualTexture.h"
 #include "Graphics/MaterialPropertyHandle.h"
@@ -424,6 +428,17 @@ namespace Spark::Core::Lifecycle
         Spark::Graphics::TransientResourcePool::GetInstance().Initialize();
         Spark::Graphics::ClipmapTerrain::GetInstance().Initialize();
         Spark::Graphics::FoliageManager::GetInstance().Initialize();
+        // FoliageRenderer::Initialize with a nullptr loader. The renderer
+        // will attempt to self-install an AssetPipeline-backed loader via
+        // EngineContext immediately, and again on the first Collect call
+        // if AssetPipeline was not yet registered at init time. We also
+        // explicitly attempt to install it here with whatever AssetPipeline
+        // the context has *right now* — whichever path resolves first wins.
+        Spark::Graphics::FoliageRenderer::GetInstance().Initialize(nullptr, 50.0f);
+        if (auto* pipeline = ctx->GetAssetPipeline())
+        {
+            Spark::Graphics::FoliageRenderer::GetInstance().InstallAssetPipelineLoader(pipeline);
+        }
         Spark::Graphics::VirtualTextureManager::GetInstance().Initialize();
         Spark::PluginRegistry::InitializeAll();
 
@@ -452,6 +467,26 @@ namespace Spark::Core::Lifecycle
         Spark::Build::GamePackager::GetInstance().Initialize();
         Spark::OnlineServices::OnlineServiceManager::GetInstance().Initialize();
         Spark::Data::DataTableRegistry::GetInstance().Initialize();
+
+        // Off-mesh navigation links (jump, climb, teleport) — pathfinding
+        // consults this registry for traversal between disconnected nav
+        // regions. `FoliageVolumeComponent`-style runtime bookkeeping is
+        // already wired in `AdvancedPlacementComponents.h`; the singleton
+        // just needs to be alive so links can be registered.
+        Spark::AI::NavMeshLinkSystem::GetInstance().Initialize();
+
+        // Runtime prefab registry — data-driven entity templates with
+        // component descriptors, spawning, and binary (de)serialization.
+        // Touch the singleton so later RegisterPrefab calls find it in a
+        // constructed state.
+        (void)Spark::ECS::PrefabRegistry::GetInstance();
+
+        // Extension point registry for genre-specific quest / dialogue
+        // behavior. Game modules (RPG, MMO, etc.) register concrete
+        // implementations here; the engine QuestSystem / DialogueSystem
+        // delegates to matching extensions at runtime.
+        (void)Spark::Gameplay::GameplayExtensionRegistry::GetInstance();
+
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
         Spark::HLOD::HLODSystem::GetInstance().Initialize();
@@ -711,6 +746,11 @@ namespace Spark::Core::Lifecycle
                 }
             }
             foliage.Update(dt, camPos);
+
+            // Rebuild the render-side batch after the manager's visibility
+            // has been refreshed so the next frame can push instances into
+            // the GPU scene buffer on Windows builds.
+            Spark::Graphics::FoliageRenderer::GetInstance().CollectFromFoliageManager(dt);
         });
 
         SPARK_GUARDED_UPDATE("AI_Tactical", "Core", {
@@ -946,6 +986,7 @@ namespace Spark::Core::Lifecycle
         Spark::ProfileProperties::GetInstance().Shutdown();
 #endif
         Spark::Graphics::VirtualTextureManager::GetInstance().Shutdown();
+        Spark::Graphics::FoliageRenderer::GetInstance().Shutdown();
         Spark::Graphics::FoliageManager::GetInstance().Shutdown();
         Spark::Graphics::ClipmapTerrain::GetInstance().Shutdown();
         Spark::Graphics::TransientResourcePool::GetInstance().Shutdown();
@@ -1017,6 +1058,12 @@ namespace Spark::Core::Lifecycle
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Shutdown();
         Spark::Rendering::MovieRenderPipeline::GetInstance().Shutdown();
         Spark::Data::DataTableRegistry::GetInstance().Shutdown();
+
+        // Engine-orphan singletons wired in this branch — teardown
+        // mirrors the startup order so dependents are released first.
+        Spark::Gameplay::GameplayExtensionRegistry::GetInstance().Clear();
+        Spark::AI::NavMeshLinkSystem::GetInstance().Shutdown();
+
         Spark::OnlineServices::OnlineServiceManager::GetInstance().Shutdown();
 
         if (ctx)

@@ -20,10 +20,20 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <deque>
 #include <numeric>
 #include <string>
 #include <vector>
+
+// The panel renders with Dear ImGui when available, and compiles as a
+// no-op in headless / test builds where ImGui is not linked.
+#if __has_include(<imgui.h>)
+#include <imgui.h>
+#define SPARK_NETDEBUG_PANEL_HAS_IMGUI 1
+#else
+#define SPARK_NETDEBUG_PANEL_HAS_IMGUI 0
+#endif
 
 namespace SparkEditor
 {
@@ -259,51 +269,161 @@ namespace SparkEditor
             m_accumulatedPacketsDropped = 0;
         }
 
+#if SPARK_NETDEBUG_PANEL_HAS_IMGUI
         void RenderBandwidthGraph()
         {
-            // ImGui plot: bytesSentPerSec and bytesRecvPerSec over time
-            // Would use ImGui::PlotLines in real implementation
-            (void)m_graphWindowSeconds;
+            ImGui::TextUnformatted("Bandwidth (bytes/sec)");
+            ImGui::Separator();
+
+            std::vector<float> sent;
+            std::vector<float> recv;
+            sent.reserve(m_snapshots.size());
+            recv.reserve(m_snapshots.size());
+            for (const auto& s : m_snapshots)
+            {
+                sent.push_back(s.bytesSentPerSec);
+                recv.push_back(s.bytesRecvPerSec);
+            }
+            if (!sent.empty())
+            {
+                ImGui::PlotLines("Sent", sent.data(), static_cast<int>(sent.size()), 0, nullptr, 0.0f, FLT_MAX,
+                                 ImVec2(0, 60));
+                ImGui::PlotLines("Recv", recv.data(), static_cast<int>(recv.size()), 0, nullptr, 0.0f, FLT_MAX,
+                                 ImVec2(0, 60));
+            }
+            ImGui::Text("Avg out: %.1f B/s", GetAverageBandwidthOut());
+            ImGui::Spacing();
         }
 
         void RenderLatencyGraph()
         {
-            // ImGui plot: latencyMs over time with min/avg/max/p99 labels
+            ImGui::TextUnformatted("Latency (ms)");
+            ImGui::Separator();
+
+            std::vector<float> lat;
+            lat.reserve(m_snapshots.size());
+            for (const auto& s : m_snapshots)
+                lat.push_back(s.latencyMs);
+            if (!lat.empty())
+            {
+                ImGui::PlotLines("Ping", lat.data(), static_cast<int>(lat.size()), 0, nullptr, 0.0f, FLT_MAX,
+                                 ImVec2(0, 60));
+            }
+            ImGui::Text("Avg:  %.1f ms", GetAverageLatency());
+            ImGui::Text("Peak: %.1f ms", GetPeakLatency());
+            ImGui::Spacing();
         }
 
         void RenderSimulationControls()
         {
-            // ImGui sliders for:
-            // - Artificial latency (0-500ms)
-            // - Packet loss (0-100%)
-            // - Jitter (0-100ms)
-            // - Bandwidth limit (0-unlimited KB/s)
-            // - Enable/disable toggle
-            (void)m_simulationSettings;
+            ImGui::TextUnformatted("Network Simulation");
+            ImGui::Separator();
+            ImGui::Checkbox("Enabled", &m_simulationSettings.enabled);
+            ImGui::SliderFloat("Latency (ms)", &m_simulationSettings.artificialLatencyMs, 0.0f, 500.0f);
+            ImGui::SliderFloat("Packet Loss %", &m_simulationSettings.packetLossPercent, 0.0f, 100.0f);
+            ImGui::SliderFloat("Jitter (ms)", &m_simulationSettings.jitterMs, 0.0f, 100.0f);
+            ImGui::SliderFloat("Bandwidth cap (KB/s)", &m_simulationSettings.bandwidthLimitKBps, 0.0f, 10000.0f);
+            ImGui::Spacing();
         }
 
         void RenderPacketLog()
         {
-            // Scrollable table with columns: Time, Direction, Type, Size, Summary
-            // Filter by packet type, direction
-            (void)m_filterPacketType;
-            (void)m_showSendPackets;
-            (void)m_showRecvPackets;
+            ImGui::TextUnformatted("Packet Log");
+            ImGui::Separator();
+            ImGui::Checkbox("Show SEND", &m_showSendPackets);
+            ImGui::SameLine();
+            ImGui::Checkbox("Show RECV", &m_showRecvPackets);
+
+            if (ImGui::BeginTable("PacketLog", 5,
+                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
+                                  ImVec2(0, 150)))
+            {
+                ImGui::TableSetupColumn("Time");
+                ImGui::TableSetupColumn("Dir");
+                ImGui::TableSetupColumn("Type");
+                ImGui::TableSetupColumn("Size");
+                ImGui::TableSetupColumn("Summary");
+                ImGui::TableHeadersRow();
+                for (const auto& entry : m_packetLog)
+                {
+                    if (entry.direction == "SEND" && !m_showSendPackets)
+                        continue;
+                    if (entry.direction == "RECV" && !m_showRecvPackets)
+                        continue;
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%.2f", entry.timestamp);
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted(entry.direction.c_str());
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextUnformatted(entry.packetType.c_str());
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%u", entry.sizeBytes);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::TextUnformatted(entry.summary.c_str());
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Spacing();
         }
 
         void RenderReplicationViewer()
         {
-            // Table: EntityID, Name, DirtyProps, SnapshotSize, UpdateHz, Priority
-            // Sorted by snapshot size (biggest bandwidth consumers first)
+            ImGui::TextUnformatted("Replication");
+            ImGui::Separator();
             auto sorted = m_replicationInfo;
             std::sort(sorted.begin(), sorted.end(), [](const ReplicationInfo& a, const ReplicationInfo& b)
                       { return a.snapshotSizeBytes > b.snapshotSizeBytes; });
+
+            if (ImGui::BeginTable("Replication", 6,
+                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
+                                  ImVec2(0, 150)))
+            {
+                ImGui::TableSetupColumn("Entity");
+                ImGui::TableSetupColumn("Name");
+                ImGui::TableSetupColumn("Dirty");
+                ImGui::TableSetupColumn("Bytes");
+                ImGui::TableSetupColumn("Hz");
+                ImGui::TableSetupColumn("Prio");
+                ImGui::TableHeadersRow();
+                for (const auto& rep : sorted)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%u", rep.entityId);
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted(rep.entityName.c_str());
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%u", rep.dirtyProperties);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%u", rep.snapshotSizeBytes);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%.1f", rep.updateFrequency);
+                    ImGui::TableSetColumnIndex(5);
+                    ImGui::Text("%.2f", rep.priority);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::Spacing();
         }
 
         void RenderConnectionSummary()
         {
-            // Overall stats: total bytes sent/recv, uptime, packet loss rate
+            ImGui::TextUnformatted("Connection");
+            ImGui::Separator();
+            ImGui::Text("Uptime:      %.1f s", m_totalTime);
+            ImGui::Text("Snapshots:   %u", static_cast<unsigned>(m_snapshots.size()));
+            ImGui::Text("Packet log:  %u", static_cast<unsigned>(m_packetLog.size()));
+            ImGui::Text("Entities:    %u", static_cast<unsigned>(m_replicationInfo.size()));
         }
+#else
+        void RenderBandwidthGraph() {}
+        void RenderLatencyGraph() {}
+        void RenderSimulationControls() {}
+        void RenderPacketLog() {}
+        void RenderReplicationViewer() {}
+        void RenderConnectionSummary() {}
+#endif
 
         // State
         std::deque<NetworkSnapshot> m_snapshots;

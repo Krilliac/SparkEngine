@@ -13,6 +13,14 @@
  * - `g_LightIndexList` (Buffer<uint>) — flat light index list
  *
  * @see ClusteredLightCulling for CPU-side cluster computation
+ *
+ * @note **Intentional GPU bridge utility** — converts
+ *       `ClusteredLightCulling` results into structured-buffer-ready
+ *       arrays (`GPULightData`, `ClusterLightGrid`, light-index list).
+ *       There is no singleton; a future forward+ render pass will
+ *       instantiate one of these per frame and call its buffer-build
+ *       helpers. Exercised by `Tests/TestClusteredLightGPU.cpp` so the
+ *       layout stays valid even without a live render pass.
  */
 
 #pragma once

@@ -197,6 +197,14 @@ namespace Spark::Graphics
         return &m_species[it->second];
     }
 
+    uint32_t FoliageManager::GetSpeciesGlobalIndex(const std::string& name) const
+    {
+        auto it = m_speciesByName.find(name);
+        if (it == m_speciesByName.end())
+            return UINT32_MAX;
+        return it->second;
+    }
+
     void FoliageManager::UnregisterSpecies(const std::string& name)
     {
         auto it = m_speciesByName.find(name);
@@ -253,6 +261,25 @@ namespace Spark::Graphics
     {
         return std::any_of(m_volumes.begin(), m_volumes.end(),
                            [volumeId](const Volume& v) { return v.id == volumeId; });
+    }
+
+    std::vector<uint32_t> FoliageManager::GetVolumeIds() const
+    {
+        std::vector<uint32_t> ids;
+        ids.reserve(m_volumes.size());
+        for (const auto& v : m_volumes)
+            ids.push_back(v.id);
+        return ids;
+    }
+
+    const FoliageVolumeDesc* FoliageManager::GetVolumeDesc(uint32_t volumeId) const
+    {
+        for (const auto& v : m_volumes)
+        {
+            if (v.id == volumeId)
+                return &v.desc;
+        }
+        return nullptr;
     }
 
     const std::vector<FoliageInstance>& FoliageManager::GetInstances(uint32_t volumeId) const

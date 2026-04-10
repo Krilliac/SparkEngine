@@ -21,6 +21,9 @@
  * @endcode
  *
  * @see GraphicsEngine, GPUTimestampQuery
+ *
+ * @note **Intentional reusable graphics utility** — Scoped GPU debug markers for PIX / RenderDoc / NSight. Render passes will wrap their work in one of these scopes. No singleton; construction emits BeginEvent / EndEvent in the destructor.
+ *
  */
 
 #pragma once

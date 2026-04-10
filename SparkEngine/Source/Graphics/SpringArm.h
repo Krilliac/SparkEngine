@@ -7,6 +7,16 @@
  * A spring arm extends from a target position and performs a sphere cast
  * to detect collisions. If an obstacle is hit, the arm shortens to prevent
  * the camera from clipping through geometry. Common in third-person games.
+ *
+ * @note This is an **intentional stateless utility**. `SpringArmState` is
+ *       a value type with a pure-CPU `Update()` method; there is no
+ *       singleton to initialize. It is referenced in `SpringArmComponent`
+ *       (see `AdvancedPlacementComponents.h`), which currently duplicates
+ *       the state fields — a follow-up will unify them by having the
+ *       component hold a `SpringArmState` directly and having a new
+ *       camera-update system call `Update()` each frame with the collision
+ *       result from the physics world. Until then the helper is exercised
+ *       via `Tests/TestSpringArm.cpp`.
  */
 
 #pragma once

@@ -15,6 +15,9 @@
  * on raw vertex/index data and produces optimized buffers suitable for rendering.
  *
  * @see MeshLOD.h, Mesh.h
+ *
+ * @note **Intentional reusable graphics utility** — Mesh and index buffer optimizer (vertex cache, overdraw, vertex fetch). An offline tool or an asset cooker will instantiate this per mesh during bake. Covered by `Tests/TestGraphicsIntegration.cpp`.
+ *
  */
 
 #pragma once

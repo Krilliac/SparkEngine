@@ -15,6 +15,9 @@
  * 4. Composite: blend indirect lighting with direct lighting
  *
  * @see LightingSystem.h, ClusteredLightCulling.h, HybridRT/
+ *
+ * @note **Intentional reusable graphics utility** — Voxel-cone-traced global illumination — voxelizes the scene into a 3D texture and cone-traces against it for approximate GI. A future render pipeline feature; a render-side consumer will drive the voxelization + trace passes. Kept header-only so the CPU-side data layout can be adopted piece-wise.
+ *
  */
 
 #pragma once

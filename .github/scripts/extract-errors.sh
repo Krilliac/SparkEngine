@@ -43,6 +43,23 @@ for logfile in "$@"; do
         | grep -viE 'Performing Test|Check.*- Failed|Looking for|0 tests? failed' \
         >> "$tmp_tests" 2>/dev/null || true
 
+    # ── Test crashes (from TestMain.cpp crash handler) ───────────
+    # Captures `[ CRASH  ] TestName (EXCEPTION / signal: SIG...)` plus
+    # the stack trace lines the crash handler emits below it. These are
+    # the lines the CI Error Report groups under "Test Failures" so a
+    # segfault stops looking like a silent test timeout.
+    grep -E '^\[ *CRASH *\]' "$clean_file" 2>/dev/null \
+        >> "$tmp_tests" 2>/dev/null || true
+    # Also capture the top few frames of the stack trace so the PR
+    # comment reader can see where the crash happened without having to
+    # download the full log artifact.
+    awk '
+        /^\[ *CRASH *\] Stack trace:/ { inTrace = 1; next }
+        inTrace && /^  #[0-9]+/ { print; count++; if (count >= 10) { inTrace = 0; count = 0 } next }
+        inTrace && /^\[/ { inTrace = 0; count = 0 }
+    ' "$clean_file" 2>/dev/null \
+        >> "$tmp_tests" 2>/dev/null || true
+
     # ── Test warnings (known flaky tests) ────────────────────────
     grep -E '\[ *WARN *\]' "$clean_file" 2>/dev/null \
         >> "$tmp_warnings" 2>/dev/null || true

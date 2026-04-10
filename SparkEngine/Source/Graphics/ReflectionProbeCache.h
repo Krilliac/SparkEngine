@@ -11,6 +11,9 @@
  * Features: parallax correction, priority-based rendering budget, LRU eviction.
  *
  * @see LightProbeSystem.h, HybridRT/ProbeSystem.h
+ *
+ * @note **Intentional reusable graphics utility** — Caches prefiltered environment maps for reflection probes so probes do not re-render every frame. A future GI / reflection system will instantiate one per scene.
+ *
  */
 
 #pragma once

@@ -10,6 +10,9 @@
  * and local (bounded region with blend distance) volumes.
  *
  * @see PostProcessingPipeline.h, FogSystem.h
+ *
+ * @note **Intentional reusable graphics utility** — Unity-style post-process volume blending (weighted profile blending by camera position). A future post-process stack will instantiate this per scene and query `GetBlendedProfile()` each frame. Covered by `Tests/TestGraphicsIntegration.cpp` against its public API so the blend math stays valid even without a live PP stack.
+ *
  */
 
 #pragma once

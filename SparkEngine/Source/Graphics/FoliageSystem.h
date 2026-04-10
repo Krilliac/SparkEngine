@@ -149,6 +149,12 @@ namespace Spark::Graphics
         /// but their species index becomes stale; call RemoveVolume if needed.
         void UnregisterSpecies(const std::string& name);
 
+        /// @brief Return the global (registry-wide) index of a species by
+        /// name, or UINT32_MAX if the species is not registered. Used by
+        /// the render consumer to derive a stable per-species material ID
+        /// that does not depend on any volume's local species ordering.
+        uint32_t GetSpeciesGlobalIndex(const std::string& name) const;
+
         // ----- Volume management -----
 
         /**
@@ -167,6 +173,16 @@ namespace Spark::Graphics
 
         /// @brief True if the volume ID is currently registered.
         bool HasVolume(uint32_t volumeId) const;
+
+        /// @brief List the IDs of all currently-registered volumes, in
+        /// creation order. Empty if none. Used by the render consumer to
+        /// iterate volumes without knowing the internal ID range.
+        std::vector<uint32_t> GetVolumeIds() const;
+
+        /// @brief Lookup a volume's descriptor by ID. Returns nullptr if
+        /// the volume does not exist. The returned pointer is invalidated
+        /// by any subsequent Add/Remove call.
+        const FoliageVolumeDesc* GetVolumeDesc(uint32_t volumeId) const;
 
         // ----- Instance queries -----
 

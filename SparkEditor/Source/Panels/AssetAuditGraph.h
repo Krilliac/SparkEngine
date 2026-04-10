@@ -1,6 +1,6 @@
 /**
- * @file AssetDependencyGraph.h
- * @brief Asset dependency tracking, reference graph, and audit tools
+ * @file AssetAuditGraph.h
+ * @brief Editor-facing asset audit graph (unused / circular / size budgeting)
  * @author Spark Engine Team
  * @date 2026
  *
@@ -8,18 +8,23 @@
  * Provides tools for finding unused assets, circular dependencies,
  * size budgeting, and visualizing the dependency tree.
  *
+ * @note This class was previously named `AssetDependencyGraph`, which
+ *       collided with an unrelated (and actively used)
+ *       `SparkEditor::AssetDependencyGraph` declared in
+ *       `AssetPipeline/AdvancedAssetPipeline.h`. Renamed on 2026-04-10
+ *       to eliminate the ODR hazard and to better reflect its role —
+ *       this class is the editor-facing **audit / budget** graph, not
+ *       the build-system topological graph.
+ *
  * ## Usage
  * @code
- *   auto& graph = SparkEditor::AssetDependencyGraph::GetInstance();
+ *   auto& graph = SparkEditor::AssetAuditGraph::GetInstance();
  *   graph.Initialize();
  *
  *   // Register asset and its dependencies
- *   graph.RegisterAsset("Materials/Metal.mat", AssetType::Material, 2048);
+ *   graph.RegisterAsset("Materials/Metal.mat", AuditAssetType::Material, 2048);
  *   graph.AddDependency("Materials/Metal.mat", "Textures/Metal_Albedo.png");
  *   graph.AddDependency("Materials/Metal.mat", "Textures/Metal_Normal.png");
- *
- *   // Build from scene
- *   graph.ScanDirectory("Assets/");
  *
  *   // Query
  *   auto refs = graph.GetReferencedBy("Textures/Metal_Albedo.png");
@@ -47,7 +52,7 @@ namespace SparkEditor
 {
 
     /** @brief Asset type classification */
-    enum class AssetType
+    enum class AuditAssetType
     {
         Unknown,
         Texture,
@@ -67,12 +72,12 @@ namespace SparkEditor
     /** @brief Information about a single asset in the graph */
     struct AssetNode
     {
-        std::string path;                             ///< Relative asset path
-        AssetType type = AssetType::Unknown;          ///< Asset type
-        uint64_t sizeBytes = 0;                       ///< File size on disk
-        std::unordered_set<std::string> dependencies; ///< Assets this asset depends on
-        std::unordered_set<std::string> referencedBy; ///< Assets that depend on this asset
-        bool isRootAsset = false;                     ///< Whether this is a scene/level root
+        std::string path;                              ///< Relative asset path
+        AuditAssetType type = AuditAssetType::Unknown; ///< Asset type
+        uint64_t sizeBytes = 0;                        ///< File size on disk
+        std::unordered_set<std::string> dependencies;  ///< Assets this asset depends on
+        std::unordered_set<std::string> referencedBy;  ///< Assets that depend on this asset
+        bool isRootAsset = false;                      ///< Whether this is a scene/level root
     };
 
     /** @brief A circular dependency chain */
@@ -99,8 +104,8 @@ namespace SparkEditor
         uint32_t unusedAssets = 0;
         uint64_t unusedSizeBytes = 0;
         uint32_t circularDependencyCount = 0;
-        std::vector<std::pair<AssetType, uint64_t>> sizeByType;
-        std::vector<std::pair<AssetType, uint32_t>> countByType;
+        std::vector<std::pair<AuditAssetType, uint64_t>> sizeByType;
+        std::vector<std::pair<AuditAssetType, uint32_t>> countByType;
     };
 
     /**
@@ -113,12 +118,12 @@ namespace SparkEditor
      *
      * Thread safety: Not thread-safe. Call from main thread only.
      */
-    class AssetDependencyGraph
+    class AssetAuditGraph
     {
       public:
-        static AssetDependencyGraph& GetInstance()
+        static AssetAuditGraph& GetInstance()
         {
-            static AssetDependencyGraph instance;
+            static AssetAuditGraph instance;
             return instance;
         }
 
@@ -127,7 +132,7 @@ namespace SparkEditor
         {
             m_nodes.clear();
             m_initialized = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "AssetDependencyGraph initialized");
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "AssetAuditGraph initialized");
         }
 
         /** @brief Shut down and clear all data */
@@ -143,11 +148,11 @@ namespace SparkEditor
          * @param type Asset type
          * @param sizeBytes File size
          */
-        void RegisterAsset(const std::string& path, AssetType type, uint64_t sizeBytes = 0)
+        void RegisterAsset(const std::string& path, AuditAssetType type, uint64_t sizeBytes = 0)
         {
             if (!m_initialized || path.empty())
                 return;
-            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AssetDependencyGraph: RegisterAsset '%s'", path.c_str());
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AssetAuditGraph: RegisterAsset '%s'", path.c_str());
             auto& node = m_nodes[path];
             node.path = path;
             node.type = type;
@@ -286,7 +291,7 @@ namespace SparkEditor
             }
             if (!cycles.empty())
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Editor, "AssetDependencyGraph: Found %zu circular dependencies",
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "AssetAuditGraph: Found %zu circular dependencies",
                                cycles.size());
             }
             return cycles;
@@ -301,7 +306,7 @@ namespace SparkEditor
             auto deps = GetTransitiveDependencies(rootPath);
             deps.push_back(rootPath); // Include the root itself
 
-            std::unordered_map<AssetType, uint64_t> typeSize;
+            std::unordered_map<AuditAssetType, uint64_t> typeSize;
 
             for (const auto& dep : deps)
             {
@@ -321,7 +326,7 @@ namespace SparkEditor
                 report.largest.resize(20);
 
             for (const auto& [type, size] : typeSize)
-                report.byType.push_back({AssetTypeName(type), size});
+                report.byType.push_back({AuditAssetTypeName(type), size});
 
             return report;
         }
@@ -330,8 +335,8 @@ namespace SparkEditor
         AuditReport GenerateAudit() const
         {
             AuditReport report;
-            std::unordered_map<AssetType, uint64_t> sizeByType;
-            std::unordered_map<AssetType, uint32_t> countByType;
+            std::unordered_map<AuditAssetType, uint64_t> sizeByType;
+            std::unordered_map<AuditAssetType, uint32_t> countByType;
 
             for (const auto& [path, node] : m_nodes)
             {
@@ -355,7 +360,7 @@ namespace SparkEditor
                 report.countByType.push_back({type, count});
 
             SPARK_LOG_INFO(Spark::LogCategory::Editor,
-                           "AssetDependencyGraph: GenerateAudit — %u assets, %u unused, %u circular deps",
+                           "AssetAuditGraph: GenerateAudit — %u assets, %u unused, %u circular deps",
                            report.totalAssets, report.unusedAssets, report.circularDependencyCount);
             return report;
         }
@@ -395,7 +400,7 @@ namespace SparkEditor
         }
 
       private:
-        AssetDependencyGraph() = default;
+        AssetAuditGraph() = default;
 
         void DetectCycles(const std::string& node, std::unordered_set<std::string>& pathSet,
                           std::vector<std::string>& pathStack, std::unordered_set<std::string>& globalVisited,
@@ -434,33 +439,33 @@ namespace SparkEditor
             globalVisited.insert(node);
         }
 
-        static std::string AssetTypeName(AssetType type)
+        static std::string AuditAssetTypeName(AuditAssetType type)
         {
             switch (type)
             {
-            case AssetType::Texture:
+            case AuditAssetType::Texture:
                 return "Texture";
-            case AssetType::Material:
+            case AuditAssetType::Material:
                 return "Material";
-            case AssetType::Mesh:
+            case AuditAssetType::Mesh:
                 return "Mesh";
-            case AssetType::Animation:
+            case AuditAssetType::Animation:
                 return "Animation";
-            case AssetType::Audio:
+            case AuditAssetType::Audio:
                 return "Audio";
-            case AssetType::Scene:
+            case AuditAssetType::Scene:
                 return "Scene";
-            case AssetType::Prefab:
+            case AuditAssetType::Prefab:
                 return "Prefab";
-            case AssetType::Script:
+            case AuditAssetType::Script:
                 return "Script";
-            case AssetType::Shader:
+            case AuditAssetType::Shader:
                 return "Shader";
-            case AssetType::Font:
+            case AuditAssetType::Font:
                 return "Font";
-            case AssetType::Data:
+            case AuditAssetType::Data:
                 return "Data";
-            case AssetType::Video:
+            case AuditAssetType::Video:
                 return "Video";
             default:
                 return "Unknown";

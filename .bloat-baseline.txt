@@ -63,7 +63,7 @@ SparkEditor/Source/Lighting/LightingTools.h
 SparkEditor/Source/Lighting/LightingToolsUI.cpp
 SparkEditor/Source/MaterialEditor/MaterialEditor.cpp
 SparkEditor/Source/MaterialEditor/MaterialEditor.h
-SparkEditor/Source/Panels/AssetDependencyGraph.h
+SparkEditor/Source/Panels/AssetAuditGraph.h
 SparkEditor/Source/Panels/BuildCookPanel.cpp
 SparkEditor/Source/Panels/ConsolePanel.cpp
 SparkEditor/Source/Panels/ConsolePanel.h

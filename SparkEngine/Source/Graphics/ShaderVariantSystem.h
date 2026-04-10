@@ -13,6 +13,9 @@
  * - DynamicBranch: No variants generated; runtime GPU branching instead
  *
  * @see Shader.h, SparkShaderCompiler
+ *
+ * @note **Intentional reusable graphics utility** — Shader variant permutation management (keyword-based compile-time variant selection). A future material system will instantiate one per shader family. Covered by `Tests/TestGraphicsIntegration.cpp`.
+ *
  */
 
 #pragma once

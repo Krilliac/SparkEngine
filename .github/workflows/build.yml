@@ -42,22 +42,47 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Install clang-format
-      run: sudo apt-get update && sudo apt-get install -y clang-format
+      run: |
+        set -e
+        for attempt in 1 2 3 4; do
+          if sudo apt-get update; then break; fi
+          echo "apt-get update failed (attempt $attempt); retrying in $((attempt * 5))s..."
+          sleep $((attempt * 5))
+        done
+        sudo apt-get install -y clang-format
 
     - name: Check formatting
       run: |
         # clang-format 18+ warns about missing Objective-C config and returns
         # exit code 1 even with zero violations.  Capture output and check for
         # actual violation markers instead of relying on the exit code.
-        OUTPUT=$(find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
-          xargs clang-format --dry-run --Werror 2>&1 || true)
+          xargs clang-format --dry-run --Werror > check-format-output.log 2>&1 || true
+        OUTPUT=$(cat check-format-output.log)
         if echo "$OUTPUT" | grep -q "\-Wclang-format-violations"; then
           echo "$OUTPUT"
           echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
           exit 1
         fi
+
+    - name: Extract check-format error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "check-format" \
+          error-summary.json \
+          check-format-output.log || true
+
+    - name: Upload check-format error summary
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ci-errors-check-format
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
 
   # ===========================================================================
   # Prompt System Validation — anti-drift, overload prevention, stale detection
@@ -938,19 +963,54 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
       - name: Build
-        run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+        run: |
+          # pipefail so a cmake --build failure is not masked by tee
+          set -o pipefail
+          cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
       - name: Print ccache stats
         if: always()
         run: ccache --show-stats
       - name: Test
         env:
           SPARK_TEST_EXCLUDE: "LoadTest_"
-        run: cd build && ./bin/SparkTests --verbose 2>&1 | tee ../test-output.log; tail -5 ../test-output.log
-      - name: Generate coverage
+        # Deliberately tolerant: test failures should not abort the
+        # coverage report generation. The CI Error Report still picks
+        # them up via the extract-errors step below.
         run: |
-          lcov --capture --directory build --output-file coverage.info --gcov-tool gcov-14 --ignore-errors mismatch,mismatch,gcov,negative --rc geninfo_unexecuted_blocks=1
-          lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' --output-file coverage.info --ignore-errors unused,negative
-          lcov --list coverage.info --ignore-errors unused,negative 2>&1 | tee coverage-summary.txt
+          cd build && ./bin/SparkTests --verbose 2>&1 | tee ../test-output.log || true
+          tail -5 ../test-output.log
+      - name: Generate coverage
+        # lcov is noisy on warnings and sometimes emits non-zero exit
+        # codes even with --ignore-errors. Capture each command's exit
+        # status explicitly so we can continue into the per-subsystem
+        # analysis even if a single file fails to process, while still
+        # recording the failure in the logs for the PR error report.
+        run: |
+          set +e
+          lcov --capture --directory build --output-file coverage.info \
+            --gcov-tool gcov-14 \
+            --ignore-errors mismatch,mismatch,gcov,negative,unused,source,inconsistent \
+            --rc geninfo_unexecuted_blocks=1 2>&1 | tee lcov-capture.log
+          cap_exit=${PIPESTATUS[0]}
+          echo "lcov --capture exit: $cap_exit"
+
+          lcov --remove coverage.info '/usr/*' '*/ThirdParty/*' '*/Tests/*' \
+            --output-file coverage.info \
+            --ignore-errors unused,negative,inconsistent 2>&1 | tee lcov-remove.log
+          rm_exit=${PIPESTATUS[0]}
+          echo "lcov --remove exit: $rm_exit"
+
+          lcov --list coverage.info --ignore-errors unused,negative,inconsistent 2>&1 \
+            | tee coverage-summary.txt
+          list_exit=${PIPESTATUS[0]}
+          echo "lcov --list exit: $list_exit"
+
+          # Fail the step only if NO coverage file was produced at all —
+          # individual file warnings should not block the report.
+          if [ ! -s coverage.info ]; then
+            echo "::error::coverage.info is empty or missing — lcov produced no usable data"
+            exit 1
+          fi
       - name: Per-subsystem coverage analysis
         run: |
           chmod +x scripts/coverage-report.sh
@@ -1031,7 +1091,20 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev
+        # Azure's apt mirrors occasionally return 403 on
+        # packages.microsoft.com. Retry with exponential backoff and
+        # ignore the third-party repo failures that don't block the
+        # packages we actually need.
+        run: |
+          set -e
+          for attempt in 1 2 3 4; do
+            if sudo apt-get update; then
+              break
+            fi
+            echo "apt-get update failed on attempt $attempt; retrying in $((attempt * 5))s..."
+            sleep $((attempt * 5))
+          done
+          sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev
       - name: Setup ccache
         uses: actions/cache@v5
         with:
@@ -1055,10 +1128,50 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
       - name: Run clang-tidy
+        id: clang-tidy-run
         run: |
+          # Route full output to a log file so the follow-up extract
+          # step can parse warnings/errors for the CI Error Report PR
+          # comment, while also printing a tail to the job log for
+          # live-viewing in the Actions UI.
+          set +e
           find SparkEngine/Source -name '*.cpp' | head -30 | \
-            xargs clang-tidy -p build --warnings-as-errors="" 2>&1 | tail -100
+            xargs clang-tidy -p build --warnings-as-errors="" 2>&1 | tee clang-tidy-output.log
+          ct_exit=${PIPESTATUS[1]}
+          echo ""
+          echo "=== Last 50 lines of clang-tidy output ==="
+          tail -50 clang-tidy-output.log
+          echo ""
+          # Count warning / error lines for the summary.
+          warn_count=$(grep -cE ':\s*(warning|error):' clang-tidy-output.log || true)
+          echo "clang-tidy issues detected: $warn_count"
+          echo "warn_count=$warn_count" >> "$GITHUB_OUTPUT"
+          # Never fail the step — clang-tidy runs as advisory only.
+          exit 0
         continue-on-error: true
+      - name: Extract clang-tidy error summary
+        if: always()
+        run: |
+          .github/scripts/extract-errors.sh \
+            "clang-tidy" \
+            error-summary.json \
+            clang-tidy-output.log || true
+      - name: Upload clang-tidy error summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-errors-clang-tidy
+          path: error-summary.json
+          retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+          if-no-files-found: ignore
+      - name: Upload clang-tidy full log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: clang-tidy-output
+          path: clang-tidy-output.log
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: ignore
 
   # ===========================================================================
   # Consolidated CI Error Report — PR comment or job summary
@@ -1071,16 +1184,19 @@ jobs:
     needs:
       - check-format
       - validate-prompts
+      - check-thirdparty-manifest
       - build-linux-asan
       - build-linux-tsan
       - build-linux-msan
       - build-windows-vs2022
+      - build-windows-vs2026
       - build-linux-gcc
       - build-linux-clang
       - build-linux-mingw-wine
       - build-macos
       - coverage
       - clang-tidy
+      - todo-count
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -1116,9 +1232,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Count TODO/FIXME/HACK comments
+        id: todo-count-run
         run: |
-          count=$(grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source GameModules --include='*.h' --include='*.cpp' | wc -l)
+          grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source GameModules \
+            --include='*.h' --include='*.cpp' > todo-list.log || true
+          count=$(wc -l < todo-list.log)
           echo "Found $count TODO/FIXME/HACK/XXX comments"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -gt 20 ]; then
             echo "::warning::TODO/FIXME count ($count) exceeds threshold of 20"
           fi
+      - name: Upload todo-count summary artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: todo-count-report
+          path: todo-list.log
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: ignore

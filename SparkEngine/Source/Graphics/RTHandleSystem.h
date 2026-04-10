@@ -11,6 +11,9 @@
  * Inspired by Unity's RTHandleSystem.
  *
  * @see RenderTargetPool.h, RenderGraph.h
+ *
+ * @note **Intentional reusable graphics utility** — Render target handle abstraction (Unity-HDRP-inspired). Future render graph feature will instantiate one per frame to manage transient RT lifetimes.
+ *
  */
 
 #pragma once

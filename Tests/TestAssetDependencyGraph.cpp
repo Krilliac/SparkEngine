@@ -213,3 +213,199 @@ TEST(AssetDependencyGraph_SizeBudget)
     EXPECT_EQ(static_cast<size_t>(1), over.size());
     EXPECT_EQ(static_cast<uint64_t>(6100), g.GetTotalSize());
 }
+
+// ============================================================================
+// Real SparkEditor::AssetAuditGraph tests
+// ----------------------------------------------------------------------------
+// These exercise the actual editor-side singleton from
+// SparkEditor/Source/Panels/AssetAuditGraph.h (formerly
+// AssetDependencyGraph.h, renamed to resolve a latent name collision
+// with AssetPipeline::AssetDependencyGraph). The class is header-only
+// and has no ImGui dependency so the real implementation is directly
+// includable into the test binary.
+// ============================================================================
+
+#include "Panels/AssetAuditGraph.h"
+
+TEST(AssetAuditGraph_InitializeAndShutdown)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    EXPECT_EQ(g.GetAssetCount(), static_cast<size_t>(0));
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_RegisterAssetAndGet)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("a.png", SparkEditor::AuditAssetType::Texture, 1024);
+
+    const auto* node = g.GetAsset("a.png");
+    EXPECT_NE(node, nullptr);
+    if (node)
+    {
+        EXPECT_EQ(node->path, std::string("a.png"));
+        EXPECT_EQ(static_cast<int>(node->type), static_cast<int>(SparkEditor::AuditAssetType::Texture));
+        EXPECT_EQ(node->sizeBytes, static_cast<uint64_t>(1024));
+    }
+    EXPECT_EQ(g.GetAsset("missing.png"), nullptr);
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_AddDependencyBidirectional)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("mat.mat", SparkEditor::AuditAssetType::Material, 500);
+    g.RegisterAsset("tex.png", SparkEditor::AuditAssetType::Texture, 2048);
+
+    g.AddDependency("mat.mat", "tex.png");
+
+    auto deps = g.GetDependencies("mat.mat");
+    EXPECT_EQ(deps.size(), static_cast<size_t>(1));
+    EXPECT_EQ(deps[0], std::string("tex.png"));
+
+    auto refs = g.GetReferencedBy("tex.png");
+    EXPECT_EQ(refs.size(), static_cast<size_t>(1));
+    EXPECT_EQ(refs[0], std::string("mat.mat"));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_RemoveDependency)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("a", SparkEditor::AuditAssetType::Texture, 100);
+    g.RegisterAsset("b", SparkEditor::AuditAssetType::Texture, 100);
+    g.AddDependency("a", "b");
+    EXPECT_EQ(g.GetDependencies("a").size(), static_cast<size_t>(1));
+
+    g.RemoveDependency("a", "b");
+    EXPECT_EQ(g.GetDependencies("a").size(), static_cast<size_t>(0));
+    EXPECT_EQ(g.GetReferencedBy("b").size(), static_cast<size_t>(0));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_TransitiveDependencies)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("scene", SparkEditor::AuditAssetType::Scene, 1000);
+    g.RegisterAsset("mesh", SparkEditor::AuditAssetType::Mesh, 5000);
+    g.RegisterAsset("mat", SparkEditor::AuditAssetType::Material, 500);
+    g.RegisterAsset("tex", SparkEditor::AuditAssetType::Texture, 2048);
+
+    g.AddDependency("scene", "mesh");
+    g.AddDependency("mesh", "mat");
+    g.AddDependency("mat", "tex");
+
+    auto deps = g.GetTransitiveDependencies("scene");
+    EXPECT_EQ(deps.size(), static_cast<size_t>(3));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_FindUnusedAssets)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+
+    g.RegisterAsset("used-by-mat", SparkEditor::AuditAssetType::Texture, 100);
+    g.RegisterAsset("used-mat", SparkEditor::AuditAssetType::Material, 200);
+    g.RegisterAsset("unused-tex", SparkEditor::AuditAssetType::Texture, 300);
+    g.RegisterAsset("root-scene", SparkEditor::AuditAssetType::Scene, 1000);
+
+    g.AddDependency("used-mat", "used-by-mat");
+    g.AddDependency("root-scene", "used-mat");
+    g.SetRootAsset("root-scene", true);
+
+    auto unused = g.FindUnusedAssets();
+    EXPECT_EQ(unused.size(), static_cast<size_t>(1));
+    EXPECT_EQ(unused[0], std::string("unused-tex"));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_FindCircularDependencies)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("a", SparkEditor::AuditAssetType::Mesh, 100);
+    g.RegisterAsset("b", SparkEditor::AuditAssetType::Mesh, 100);
+    g.RegisterAsset("c", SparkEditor::AuditAssetType::Mesh, 100);
+
+    g.AddDependency("a", "b");
+    g.AddDependency("b", "c");
+    g.AddDependency("c", "a"); // cycle
+
+    auto cycles = g.FindCircularDependencies();
+    EXPECT_GT(cycles.size(), static_cast<size_t>(0));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_RemoveAssetClearsEdges)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("parent", SparkEditor::AuditAssetType::Material, 100);
+    g.RegisterAsset("child", SparkEditor::AuditAssetType::Texture, 200);
+    g.AddDependency("parent", "child");
+
+    g.RemoveAsset("child");
+    EXPECT_EQ(g.GetAsset("child"), nullptr);
+    // The 'parent' should no longer list 'child' in its dependencies.
+    EXPECT_EQ(g.GetDependencies("parent").size(), static_cast<size_t>(0));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_SizeBudgetReport)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("level.scene", SparkEditor::AuditAssetType::Scene, 500);
+    g.RegisterAsset("mesh.fbx", SparkEditor::AuditAssetType::Mesh, 5000);
+    g.RegisterAsset("tex.png", SparkEditor::AuditAssetType::Texture, 10000);
+    g.AddDependency("level.scene", "mesh.fbx");
+    g.AddDependency("mesh.fbx", "tex.png");
+
+    auto report = g.GetSizeBudget("level.scene");
+    EXPECT_EQ(report.rootAsset, std::string("level.scene"));
+    EXPECT_EQ(report.totalSizeBytes, static_cast<uint64_t>(500 + 5000 + 10000));
+    EXPECT_EQ(report.assetCount, static_cast<uint32_t>(3));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_GenerateAuditAggregatesStats)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("a.png", SparkEditor::AuditAssetType::Texture, 1000);
+    g.RegisterAsset("b.png", SparkEditor::AuditAssetType::Texture, 2000);
+    g.RegisterAsset("m.mat", SparkEditor::AuditAssetType::Material, 500);
+    g.AddDependency("m.mat", "a.png");
+    // 'b.png' has no references and is not a root → unused.
+
+    auto report = g.GenerateAudit();
+    EXPECT_EQ(report.totalAssets, static_cast<uint32_t>(3));
+    EXPECT_EQ(report.totalSizeBytes, static_cast<uint64_t>(3500));
+    EXPECT_GE(report.unusedAssets, static_cast<uint32_t>(1));
+
+    g.Shutdown();
+}
+
+TEST(AssetAuditGraph_ConsoleStatus)
+{
+    auto& g = SparkEditor::AssetAuditGraph::GetInstance();
+    g.Initialize();
+    g.RegisterAsset("x", SparkEditor::AuditAssetType::Texture, 42);
+    const std::string s = g.Console_GetStatus();
+    EXPECT_TRUE(s.find("[AssetGraph]") != std::string::npos);
+    EXPECT_TRUE(s.find("Assets: 1") != std::string::npos);
+    g.Shutdown();
+}

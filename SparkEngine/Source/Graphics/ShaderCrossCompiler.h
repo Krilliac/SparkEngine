@@ -11,6 +11,9 @@
  * Caches compiled artifacts per target to avoid recompilation.
  *
  * @see Shader.h, ShaderVariantSystem.h, SparkShaderCompiler/
+ *
+ * @note **Intentional reusable graphics utility** — HLSL↔GLSL translation shim. A future asset cooker or runtime shader loader will call this when a backend needs a language the source is not authored in. May be superseded by `SlangShaderInterface.h` — a follow-up will decide.
+ *
  */
 
 #pragma once

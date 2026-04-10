@@ -28,6 +28,9 @@
  * @endcode
  *
  * @see GraphicsEngine, MaterialSystem, DrawSortKey
+ *
+ * @note **Intentional reusable graphics utility** — Hash-based cache for D3D11 rasterizer/blend/depth-stencil/sampler state objects (`D3D11PipelineStateCache`). **Do not confuse with `Graphics/RHI/PipelineStateCache.h`** — that one defines a different class (`PipelineStateCache`) used by the RHI lifecycle. A future D3D11 backend helper will own an instance of this cache.
+ *
  */
 
 #pragma once

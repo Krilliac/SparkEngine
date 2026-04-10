@@ -36,10 +36,18 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
 #else
 #include <csignal>
 #include <cstdio>
 #include <unistd.h>
+#if __has_include(<execinfo.h>)
+#include <execinfo.h>
+#define SPARK_TEST_HAS_BACKTRACE 1
+#else
+#define SPARK_TEST_HAS_BACKTRACE 0
+#endif
 #endif
 
 // Global test state (defined here, declared extern in TestFramework.h)
@@ -68,6 +76,88 @@ struct TestResult
 // ============================================================================
 
 #ifdef _WIN32
+// Walk the faulting thread's stack via DbgHelp and print a symbolicated
+// backtrace to stdout + stderr. Resolves up to 64 frames. Called from
+// the top-level exception filter so test crashes leave a real trail
+// instead of just a bare exception name.
+static void PrintWindowsStackTrace(CONTEXT* ctx)
+{
+    HANDLE process = GetCurrentProcess();
+    HANDLE thread = GetCurrentThread();
+
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
+    SymInitialize(process, nullptr, TRUE);
+
+    STACKFRAME64 frame = {};
+    DWORD machine = 0;
+#if defined(_M_X64) || defined(__x86_64__)
+    machine = IMAGE_FILE_MACHINE_AMD64;
+    frame.AddrPC.Offset = ctx->Rip;
+    frame.AddrFrame.Offset = ctx->Rbp;
+    frame.AddrStack.Offset = ctx->Rsp;
+#elif defined(_M_IX86) || defined(__i386__)
+    machine = IMAGE_FILE_MACHINE_I386;
+    frame.AddrPC.Offset = ctx->Eip;
+    frame.AddrFrame.Offset = ctx->Ebp;
+    frame.AddrStack.Offset = ctx->Esp;
+#elif defined(_M_ARM64) || defined(__aarch64__)
+    machine = IMAGE_FILE_MACHINE_ARM64;
+    frame.AddrPC.Offset = ctx->Pc;
+    frame.AddrFrame.Offset = ctx->Fp;
+    frame.AddrStack.Offset = ctx->Sp;
+#else
+    machine = IMAGE_FILE_MACHINE_UNKNOWN;
+#endif
+    frame.AddrPC.Mode = AddrModeFlat;
+    frame.AddrFrame.Mode = AddrModeFlat;
+    frame.AddrStack.Mode = AddrModeFlat;
+
+    std::cout << "[ CRASH  ] Stack trace:\n";
+
+    constexpr int MAX_FRAMES = 64;
+    for (int i = 0; i < MAX_FRAMES; ++i)
+    {
+        if (!StackWalk64(machine, process, thread, &frame, ctx, nullptr, SymFunctionTableAccess64, SymGetModuleBase64,
+                         nullptr))
+            break;
+        if (frame.AddrPC.Offset == 0)
+            break;
+
+        char symBuf[sizeof(SYMBOL_INFO) + 256];
+        SYMBOL_INFO* sym = reinterpret_cast<SYMBOL_INFO*>(symBuf);
+        sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+        sym->MaxNameLen = 255;
+        DWORD64 displacement = 0;
+        const char* name = "?";
+        if (SymFromAddr(process, frame.AddrPC.Offset, &displacement, sym))
+            name = sym->Name;
+
+        IMAGEHLP_LINE64 line = {};
+        line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+        DWORD lineDisp = 0;
+        bool haveLine = SymGetLineFromAddr64(process, frame.AddrPC.Offset, &lineDisp, &line) != 0;
+
+        char out[512];
+        if (haveLine)
+        {
+            std::snprintf(out, sizeof(out), "  #%-2d 0x%016llx  %s  (%s:%lu)\n", i,
+                          static_cast<unsigned long long>(frame.AddrPC.Offset), name, line.FileName,
+                          static_cast<unsigned long>(line.LineNumber));
+        }
+        else
+        {
+            std::snprintf(out, sizeof(out), "  #%-2d 0x%016llx  %s\n", i,
+                          static_cast<unsigned long long>(frame.AddrPC.Offset), name);
+        }
+        std::cout << out;
+        std::cerr << out;
+    }
+    std::cout.flush();
+    std::cerr.flush();
+
+    SymCleanup(process);
+}
+
 static LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exInfo)
 {
     const char* excName = "UNKNOWN";
@@ -109,6 +199,20 @@ static LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exInfo)
     std::cout << "\n[ CRASH  ] " << g_currentTest << " (" << excName << ")\n";
     std::cout.flush();
 
+    // Walk the faulting thread's stack and print a symbolicated trace.
+    // This runs in the exception filter, so DbgHelp calls are allowed
+    // (they are not async-signal-safe, but Windows SEH is not signal-
+    // based). On stack overflow DbgHelp may itself recurse; we guard
+    // by skipping the walk on STACK_OVERFLOW.
+    if (exInfo && exInfo->ContextRecord && exInfo->ExceptionRecord->ExceptionCode != EXCEPTION_STACK_OVERFLOW)
+    {
+        PrintWindowsStackTrace(exInfo->ContextRecord);
+    }
+    else
+    {
+        std::cout << "[ CRASH  ] (stack trace skipped — unavailable or stack overflow)\n";
+    }
+
     ExitProcess(1);
 }
 
@@ -131,9 +235,15 @@ static void CrashSignalHandler(int sig)
     case SIGFPE:
         sigName = "SIGFPE";
         break;
+    case SIGBUS:
+        sigName = "SIGBUS";
+        break;
+    case SIGILL:
+        sigName = "SIGILL";
+        break;
     }
 
-    // Use write() — async-signal-safe, unlike std::cerr
+    // Use write() — async-signal-safe, unlike std::cerr.
     const char* prefix = "\n[ CRASH  ] ";
     [[maybe_unused]] auto r1 = write(STDERR_FILENO, prefix, 12);
     [[maybe_unused]] auto r2 = write(STDERR_FILENO, g_currentTest.c_str(), g_currentTest.size());
@@ -142,6 +252,29 @@ static void CrashSignalHandler(int sig)
     [[maybe_unused]] auto r4 = write(STDERR_FILENO, sigName, strlen(sigName));
     const char* suffix = ")\n";
     [[maybe_unused]] auto r5 = write(STDERR_FILENO, suffix, 2);
+
+#if SPARK_TEST_HAS_BACKTRACE
+    // backtrace() + backtrace_symbols_fd() are async-signal-safe on glibc
+    // (backtrace_symbols() is NOT — that one calls malloc). We use the
+    // _fd variant that writes directly to a file descriptor.
+    const char* btHeader = "[ CRASH  ] Stack trace:\n";
+    [[maybe_unused]] auto r6 = write(STDERR_FILENO, btHeader, strlen(btHeader));
+    void* frames[64];
+    int n = backtrace(frames, 64);
+    backtrace_symbols_fd(frames, n, STDERR_FILENO);
+    // Mirror to stdout so the test output capture also includes it.
+    [[maybe_unused]] auto r7 = write(STDOUT_FILENO, prefix, 12);
+    [[maybe_unused]] auto r8 = write(STDOUT_FILENO, g_currentTest.c_str(), g_currentTest.size());
+    [[maybe_unused]] auto r9 = write(STDOUT_FILENO, mid, 10);
+    [[maybe_unused]] auto rA = write(STDOUT_FILENO, sigName, strlen(sigName));
+    [[maybe_unused]] auto rB = write(STDOUT_FILENO, suffix, 2);
+    [[maybe_unused]] auto rC = write(STDOUT_FILENO, btHeader, strlen(btHeader));
+    backtrace_symbols_fd(frames, n, STDOUT_FILENO);
+#else
+    const char* unavail = "[ CRASH  ] (stack trace unavailable — backtrace() not present)\n";
+    [[maybe_unused]] auto r6 = write(STDERR_FILENO, unavail, strlen(unavail));
+#endif
+
     _exit(128 + sig);
 }
 
@@ -150,6 +283,8 @@ static void InstallCrashHandlers()
     signal(SIGSEGV, CrashSignalHandler);
     signal(SIGABRT, CrashSignalHandler);
     signal(SIGFPE, CrashSignalHandler);
+    signal(SIGBUS, CrashSignalHandler);
+    signal(SIGILL, CrashSignalHandler);
 }
 #endif
 

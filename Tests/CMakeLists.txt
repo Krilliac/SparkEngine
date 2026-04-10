@@ -218,6 +218,12 @@ add_executable(SparkTests
     TestSceneGraph2D.cpp
     TestDecalSystem.cpp
     TestFoliageSystem.cpp
+    TestFoliageRenderer.cpp
+    TestFoliageImpostorBaker.cpp
+    TestCSGEditorPanel.cpp
+    TestNavMeshLink.cpp
+    TestGameplaySystemExtension.cpp
+    TestSpringArm.cpp
     TestConnectionScopeFilter.cpp
     TestNavMeshObstacles.cpp
     TestFaultIsolation.cpp
@@ -354,6 +360,7 @@ add_executable(SparkTests
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
     # Editor sources needed by tests

@@ -10,6 +10,9 @@
  * increasing per-frame sample count.
  *
  * @see ScreenSpaceEffects.h, TemporalEffects.h
+ *
+ * @note **Intentional reusable graphics utility** — Temporal variant of SSAO with frame-to-frame history reprojection. Same pattern as `GTAOEffect` — one per view, owned by a future post-process stack.
+ *
  */
 
 #pragma once

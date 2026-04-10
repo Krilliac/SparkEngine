@@ -28,6 +28,9 @@
  * @endcode
  *
  * @see GraphicsEngine, GPUDebugMarkers, Profiler
+ *
+ * @note **Intentional reusable graphics utility** — GPU timestamp query pool for per-pass timing. A profiler will instantiate one per frame in flight.
+ *
  */
 
 #pragma once
