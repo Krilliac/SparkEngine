@@ -2,7 +2,7 @@
 # Format:
 #   "name|source|version_or_commit|license|local_path|required_files_csv|feature_macro|fallback_or_stub_path|severity"
 # severity: ERROR (configure-time fatal), WARN (configure-time warning)
-# Last sync: 2026-04-09 (dependency wiring updates in CMakeLists.txt)
+# Last sync: 2026-04-10 (SDL2 include-dir propagation bump PRIVATE -> PUBLIC; no version/URL changes)
 
 set(SPARK_THIRDPARTY_AUDIT_ENTRIES
     "Jolt Physics|https://github.com/jrouwe/JoltPhysics|v5.5.1 (vendored snapshot)|MIT|ThirdParty/Physics/JoltPhysics|Jolt/Jolt.h,Build/CMakeLists.txt|SPARK_JOLT_PHYSICS_AVAILABLE|SparkEngine/Source/Physics/PhysicsSystemStub.cpp|ERROR"
