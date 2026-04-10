@@ -302,6 +302,9 @@ namespace SparkEditor
         std::vector<ObjectID> m_selectedObjects;          ///< Currently selected objects
         std::unordered_set<ObjectID> m_selectedSet;       ///< For fast lookup
         ObjectID m_lastClickedObject = INVALID_OBJECT_ID; ///< Last clicked object for range selection
+        bool m_syncingFromSelectionManager = false;       ///< Re-entry guard while applying an
+                                                          ///< incoming SelectionManager update.
+        uint32_t m_selectionMgrCallbackId = 0;            ///< SelectionManager callback handle.
 
         // Expansion state
         std::unordered_set<ObjectID> m_expandedObjects; ///< Expanded objects

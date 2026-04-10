@@ -9,6 +9,7 @@
  */
 
 #include "HierarchyPanel.h"
+#include "SelectionManager.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -37,6 +38,28 @@ namespace SparkEditor
 
         // Create a default scene so the panel works immediately
         ResetToDefault();
+
+        // Subscribe to SelectionManager so external selection changes
+        // (e.g. picking from the SceneView, AbilityEditor focus, scripted
+        // tools) are reflected in the hierarchy view. Updates we apply
+        // here are guarded by m_syncingFromSelectionManager so the
+        // mirror-back inside NotifySelectionChanged does not loop.
+        m_selectionMgrCallbackId = SelectionManager::GetInstance().OnSelectionChanged(
+            [this](const SelectionChangedEvent& event)
+            {
+                if (m_syncingFromSelectionManager)
+                    return;
+                std::vector<ObjectID> incoming;
+                incoming.reserve(event.current.size());
+                for (auto entityId : event.current)
+                {
+                    incoming.push_back(static_cast<ObjectID>(entityId));
+                }
+                m_syncingFromSelectionManager = true;
+                SetSelectedObjects(incoming);
+                m_syncingFromSelectionManager = false;
+            });
+
         return true;
     }
 
@@ -68,6 +91,11 @@ namespace SparkEditor
 
     void HierarchyPanel::Shutdown()
     {
+        if (m_selectionMgrCallbackId != 0)
+        {
+            SelectionManager::GetInstance().RemoveCallback(m_selectionMgrCallbackId);
+            m_selectionMgrCallbackId = 0;
+        }
         std::cout << "Shutting down Hierarchy panel\n";
     }
 
@@ -1081,6 +1109,23 @@ namespace SparkEditor
 
     void HierarchyPanel::NotifySelectionChanged()
     {
+        // Mirror our selection state into the editor-wide SelectionManager
+        // singleton so that observers (InspectorPanel, gizmo system,
+        // collaborative session, etc.) all see a single source of truth
+        // instead of subscribing to each panel's private callback. The
+        // m_syncingFromSelectionManager guard breaks the loop when the
+        // mirror update is itself triggered by an external Select call.
+        if (!m_syncingFromSelectionManager)
+        {
+            std::vector<EntityId> ids;
+            ids.reserve(m_selectedObjects.size());
+            for (auto id : m_selectedObjects)
+            {
+                ids.push_back(static_cast<EntityId>(id));
+            }
+            SelectionManager::GetInstance().SelectMultiple(ids);
+        }
+
         if (m_selectionCallback)
         {
             m_selectionCallback(m_selectedObjects);

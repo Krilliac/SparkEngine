@@ -9,6 +9,7 @@
  */
 
 #include "InspectorPanel.h"
+#include "SelectionManager.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../CommandHistory.h"
@@ -29,6 +30,26 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing Inspector panel");
+
+        // Drive the inspected object from the editor-wide SelectionManager
+        // singleton. The Inspector follows the *primary* selection (the
+        // last-clicked entity). When the selection clears, the inspector
+        // shows its idle hint instead of stale component data.
+        m_selectionMgrCallbackId = SelectionManager::GetInstance().OnSelectionChanged(
+            [this](const SelectionChangedEvent& event)
+            {
+                if (event.current.empty())
+                {
+                    m_inspectedObjectID = INVALID_OBJECT_ID;
+                    m_inspectedObject.clear();
+                    return;
+                }
+                // Use the *back* of the order vector to match
+                // SelectionManager::GetPrimarySelection() — the most
+                // recently added entity is what should be inspected.
+                SetInspectedObjectByID(static_cast<ObjectID>(event.current.back()));
+            });
+
         return true;
     }
 
@@ -81,6 +102,11 @@ namespace SparkEditor
 
     void InspectorPanel::Shutdown()
     {
+        if (m_selectionMgrCallbackId != 0)
+        {
+            SelectionManager::GetInstance().RemoveCallback(m_selectionMgrCallbackId);
+            m_selectionMgrCallbackId = 0;
+        }
         std::cout << "Shutting down Inspector panel\n";
     }
 

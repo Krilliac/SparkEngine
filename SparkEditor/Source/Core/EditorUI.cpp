@@ -196,12 +196,13 @@ namespace SparkEditor
         }
 
         // Selection manager — centralized editor selection singleton.
-        // Panels (Hierarchy, Inspector, SceneView) currently maintain
-        // their own selection state keyed by uint64_t ObjectID while the
-        // SelectionManager API is keyed by uint32_t EntityId; the two
-        // will be unified in a follow-up, but the singleton still needs
-        // to be alive so new panel code and any tests that rely on
-        // SelectionManager::GetInstance() find it in a usable state.
+        // HierarchyPanel mirrors its selection state into this singleton
+        // (NotifySelectionChanged → SelectionManager::SelectMultiple) and
+        // InspectorPanel observes it (OnSelectionChanged → SetInspected
+        // ObjectByID). Both keys are now uint64_t after the EntityId
+        // widening, so no narrowing conversion is required. Initialize
+        // the manager BEFORE any panel's Initialize() call so that the
+        // panels can register their callbacks against a live singleton.
         console.LogInfo("Initializing selection manager...");
         SelectionManager::GetInstance().Initialize();
         console.LogSuccess("Selection manager initialized");
