@@ -31,16 +31,14 @@ jobs:
         NIGHTLY_FMT=$(printf "%'d" "$NIGHTLY_DL" 2>/dev/null || echo "$NIGHTLY_DL")
         echo "Nightly downloads: $NIGHTLY_DL"
 
-        cat > "$NIGHTLY_BADGE" << EOF
-{
-    "schemaVersion": 1,
-    "label": "nightly downloads",
-    "message": "$NIGHTLY_FMT",
-    "color": "brightgreen",
-    "namedLogo": "github",
-    "logoColor": "white"
-}
-EOF
+        echo "{
+            \"schemaVersion\": 1,
+            \"label\": \"nightly downloads\",
+            \"message\": \"$NIGHTLY_FMT\",
+            \"color\": \"brightgreen\",
+            \"namedLogo\": \"github\",
+            \"logoColor\": \"white\"
+        }" > "$NIGHTLY_BADGE"
 
         # Fetch current stable (latest) downloads
         STABLE_DL=$(gh api repos/${{ github.repository }}/releases/latest \
@@ -48,16 +46,14 @@ EOF
         STABLE_FMT=$(printf "%'d" "$STABLE_DL" 2>/dev/null || echo "$STABLE_DL")
         echo "Stable downloads: $STABLE_DL"
 
-        cat > "$STABLE_BADGE" << EOF
-{
-    "schemaVersion": 1,
-    "label": "release downloads",
-    "message": "$STABLE_FMT",
-    "color": "blue",
-    "namedLogo": "github",
-    "logoColor": "white"
-}
-EOF
+        echo "{
+            \"schemaVersion\": 1,
+            \"label\": \"release downloads\",
+            \"message\": \"$STABLE_FMT\",
+            \"color\": \"blue\",
+            \"namedLogo\": \"github\",
+            \"logoColor\": \"white\"
+        }" > "$STABLE_BADGE"
 
         # Commit if changed
         git config user.name "github-actions[bot]"
