@@ -14,6 +14,7 @@
 #include "EditorApplication.h"
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "EditorWindowManager.h"
 #include "Core/FaultIsolation.h"
 #include "EditorCrashHandler.h"
 #include "EditorPluginManager.h"
@@ -107,6 +108,14 @@ namespace SparkEditor
             return false;
         }
         console.LogSuccess("Dear ImGui initialized successfully");
+
+        // Initialize window manager singleton — owns multi-monitor placement,
+        // floating-window state, and on-disk layout persistence. Ordered
+        // before EditorUI so panels can query / restore their window state
+        // while they are being created.
+        console.LogInfo("Initializing window manager...");
+        EditorWindowManager::GetInstance().Initialize();
+        console.LogSuccess("Window manager initialized");
 
         // Initialize EditorUI (this creates all panels including console)
         console.LogInfo("Initializing EditorUI...");
@@ -457,6 +466,12 @@ namespace SparkEditor
             console.LogSuccess("EditorUI shutdown complete");
         }
 
+        // Window manager shutdown after EditorUI so any auto-save picks
+        // up the final panel state.
+        console.LogInfo("Shutting down window manager...");
+        EditorWindowManager::GetInstance().Shutdown();
+        console.LogSuccess("Window manager shutdown complete");
+
         // Cleanup ImGui
         console.LogInfo("Cleaning up Dear ImGui...");
         ImGui_ImplDX11_Shutdown();
@@ -784,6 +799,12 @@ namespace SparkEditor
             m_ui.reset();
             console.LogSuccess("EditorUI shutdown complete");
         }
+
+        // Window manager shutdown after EditorUI so any auto-save picks
+        // up the final panel state.
+        console.LogInfo("Shutting down window manager...");
+        EditorWindowManager::GetInstance().Shutdown();
+        console.LogSuccess("Window manager shutdown complete");
 
         // Cleanup ImGui
         console.LogInfo("Cleaning up Dear ImGui...");

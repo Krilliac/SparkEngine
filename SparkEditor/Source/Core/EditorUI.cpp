@@ -180,6 +180,18 @@ namespace SparkEditor
         m_prefabManager->Initialize();
         console.LogSuccess("Prefab manager initialized");
 
+        // Layout manager — disk-backed panel state persistence
+        console.LogInfo("Initializing layout manager...");
+        m_layoutManager = std::make_unique<EditorLayoutManager>();
+        if (m_layoutManager->Initialize("Layouts"))
+        {
+            console.LogSuccess("Layout manager initialized (dir=Layouts)");
+        }
+        else
+        {
+            console.LogWarning("Layout manager initialization failed — layouts will not persist");
+        }
+
         // Command palette
         console.LogInfo("Initializing command palette...");
         m_commandPalette = std::make_unique<CommandPalette>();
@@ -714,6 +726,15 @@ namespace SparkEditor
             m_collabSession->Disconnect();
             m_collabSession.reset();
             console.LogSuccess("Collaborative edit session shutdown complete");
+        }
+
+        // Shutdown layout manager
+        if (m_layoutManager)
+        {
+            console.LogInfo("Shutting down layout manager...");
+            m_layoutManager->Shutdown();
+            m_layoutManager.reset();
+            console.LogSuccess("Layout manager shutdown complete");
         }
 
         // Reset other systems
