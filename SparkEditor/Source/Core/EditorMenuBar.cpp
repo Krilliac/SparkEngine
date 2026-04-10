@@ -770,7 +770,7 @@ namespace SparkEditor
         if (cursorX > ImGui::GetCursorPosX())
             ImGui::SetCursorPosX(cursorX);
 
-        bool isPlaying = (m_playMode == PlayMode::Playing);
+        bool isPlaying = (m_playMode == PlayMode::Playing || m_playMode == PlayMode::Simulating);
         if (isPlaying)
         {
             ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
@@ -785,11 +785,19 @@ namespace SparkEditor
         if (ImGui::Button(ICON_FA_PLAY, btnDim))
         {
             m_playModeManager.TogglePlayMode();
-            m_playMode = m_playModeManager.IsInPlayMode() ? PlayMode::Playing : PlayMode::Stopped;
+            m_playMode = m_playModeManager.IsPlaying()
+                             ? PlayMode::Playing
+                             : (m_playModeManager.IsSimulating()
+                                    ? PlayMode::Simulating
+                                    : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Play mode toggled: %s",
-                           m_playModeManager.IsInPlayMode() ? "Playing" : "Stopped");
-            ShowNotification(m_playModeManager.IsInPlayMode() ? "Playing..." : "Stopped",
-                             m_playModeManager.IsInPlayMode() ? "success" : "info", 2.0f);
+                           m_playMode == PlayMode::Playing
+                               ? "Playing"
+                               : (m_playMode == PlayMode::Simulating
+                                      ? "Simulating"
+                                      : (m_playMode == PlayMode::Paused ? "Paused" : "Stopped")));
+            ShowNotification(m_playMode == PlayMode::Stopped ? "Stopped" : "Running...",
+                             m_playMode == PlayMode::Stopped ? "info" : "success", 2.0f);
         }
         ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered())
@@ -813,6 +821,8 @@ namespace SparkEditor
             m_playModeManager.TogglePause();
             if (m_playModeManager.IsPaused())
                 m_playMode = PlayMode::Paused;
+            else if (m_playModeManager.IsSimulating())
+                m_playMode = PlayMode::Simulating;
             else if (m_playModeManager.IsInPlayMode())
                 m_playMode = PlayMode::Playing;
         }

@@ -306,6 +306,22 @@ namespace SparkEditor
             }
         }
 
+        // Wire play/sim manager into dependent panels after initialization.
+        if (auto it = m_panels.find("PlayModeToolbar"); it != m_panels.end())
+        {
+            if (auto* toolbar = dynamic_cast<PlayModeToolbarPanel*>(it->second.get()))
+            {
+                toolbar->SetPlayModeManager(&m_playModeManager);
+            }
+        }
+        if (auto it = m_panels.find("DedicatedServer"); it != m_panels.end())
+        {
+            if (auto* dedicatedServer = dynamic_cast<DedicatedServerPanel*>(it->second.get()))
+            {
+                dedicatedServer->SetPlayModeManager(&m_playModeManager);
+            }
+        }
+
         InitializePanelIcons();
         SetDefaultPanelVisibility();
 

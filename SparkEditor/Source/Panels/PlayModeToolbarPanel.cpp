@@ -43,8 +43,8 @@ namespace SparkEditor
 
     void PlayModeToolbarPanel::Update(float deltaTime)
     {
-        // Animate the play-button pulse when playing
-        if (m_playModeManager && m_playModeManager->IsPlaying())
+        // Animate the play-button pulse when playing or simulating
+        if (m_playModeManager && (m_playModeManager->IsPlaying() || m_playModeManager->IsSimulating()))
         {
             m_playButtonPulse += deltaTime * 3.0f;
             if (m_playButtonPulse > 6.2831853f) // 2 * PI
@@ -167,12 +167,13 @@ namespace SparkEditor
         using namespace Spark::Editor;
 
         bool isPlaying = m_playModeManager->IsPlaying();
+        bool isSimulating = m_playModeManager->IsSimulating();
         bool isPaused = m_playModeManager->IsPaused();
         bool isStopped = m_playModeManager->IsStopped();
         bool isInPlayMode = m_playModeManager->IsInPlayMode();
 
         // --- Play Button ---
-        if (isPlaying)
+        if (isPlaying || isSimulating)
         {
             // Pulsing green when playing
             float pulse = 0.5f + 0.5f * std::sin(m_playButtonPulse);
@@ -224,7 +225,7 @@ namespace SparkEditor
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
         }
 
-        bool pauseDisabled = !isPlaying && !isPaused;
+        bool pauseDisabled = (!isPlaying && !isSimulating) && !isPaused;
         if (pauseDisabled)
         {
             ImGui::BeginDisabled();
@@ -588,6 +589,10 @@ namespace SparkEditor
 
         case PlayModeState::Playing:
             ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), ICON_FA_PLAY " Playing");
+            break;
+
+        case PlayModeState::Simulating:
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), ICON_FA_CUBE " Simulating");
             break;
 
         case PlayModeState::Paused:

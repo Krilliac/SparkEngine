@@ -24,11 +24,12 @@ namespace Spark::Editor
 
     enum class PlayModeState
     {
-        Stopped,  ///< Editor mode — scene is editable
-        Starting, ///< Transitioning to play: saving snapshot
-        Playing,  ///< Game loop running in viewport
-        Paused,   ///< Game loop paused — can inspect/step
-        Stopping  ///< Transitioning back: restoring snapshot
+        Stopped,    ///< Editor mode — scene is editable
+        Starting,   ///< Transitioning to play: saving snapshot
+        Playing,    ///< Game loop running in viewport
+        Simulating, ///< Simulation running while retaining editor camera/workflow
+        Paused,     ///< Game loop paused — can inspect/step
+        Stopping    ///< Transitioning back: restoring snapshot
     };
 
     // ============================================================================
@@ -184,6 +185,8 @@ namespace Spark::Editor
     {
         PlayModeCallback onEnterPlay;
         PlayModeCallback onExitPlay;
+        PlayModeCallback onEnterSimulate;
+        PlayModeCallback onExitSimulate;
         PlayModeCallback onPause;
         PlayModeCallback onResume;
         PlayModeCallback onFrameStep;
