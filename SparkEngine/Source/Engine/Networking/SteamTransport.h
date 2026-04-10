@@ -10,6 +10,24 @@
  * compiles and can be tested without the Steam SDK.
  *
  * All networking code is guarded by ENABLE_NETWORKING.
+ *
+ * @warning **Framework stub — no Steamworks SDK linked.**
+ *          `Initialize()` always returns `false`, `Send()` always returns
+ *          `false`, `Receive()` always returns `-1`, and `IsReady()`
+ *          always returns `false`. Selecting `TransportType::Steam` in
+ *          `NetworkStackConfig` therefore produces a non-functional
+ *          `NetworkStack` — `NetworkStack::Initialize()` will still
+ *          succeed but the transport cannot open or process sockets.
+ *          Prefer `TransportType::UDP` until the Steamworks SDK is
+ *          integrated. The class is kept compilable so that
+ *          `NetworkStackConfig::TransportType::Steam` and the
+ *          corresponding `case` in `NetworkIntegration.h:104-106` can
+ *          remain part of the public API — when a future session adds
+ *          `steamworks_sdk` to `ThirdParty/` and gates it behind a new
+ *          `ENABLE_STEAMWORKS` CMake flag, the inline bodies below will
+ *          be replaced with real `SteamNetworkingSockets()` calls and
+ *          every existing consumer becomes a live Steam client without
+ *          any API surface changes.
  */
 
 #pragma once

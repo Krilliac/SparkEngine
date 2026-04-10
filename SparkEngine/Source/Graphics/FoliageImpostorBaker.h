@@ -23,6 +23,24 @@
  * the render consumer on Windows builds; it is intentionally kept out of
  * this header so the logic here is testable in CI without a GPU.
  *
+ * @warning **GPU bake pipeline not yet implemented.** As of 2026-04-10 this
+ *          file contains only CPU-side atlas layout (`ComputeAtlasLayout`),
+ *          angle slot selection (`SelectAngleSlot`), and UV math
+ *          (`GetAngleSlotUV`). There is no compute shader, no render-target
+ *          allocation, and no HLSL under `Shaders/HLSL/FoliageImpostor*`
+ *          today. Until the GPU bake is written, impostor atlases must be
+ *          pre-baked offline (e.g. by a tool pass) and loaded as regular
+ *          textures. The CPU layout logic here stays valid either way — a
+ *          future `FoliageImpostorGPUBaker` will consume the same
+ *          `AtlasLayout` struct and just write pixels into the rectangles
+ *          this file allocates.
+ *
+ *          Exercised by `Tests/TestFoliageImpostorBaker.cpp` (CPU-side
+ *          layout math). See `FoliageRenderer::UploadToSceneBuffer()` for
+ *          the matching runtime instance-upload path, which is also only
+ *          active on Windows builds and currently unused from the main
+ *          render loop.
+ *
  * @threadsafety All static methods are pure functions — safe to call from
  *               any thread.
  */

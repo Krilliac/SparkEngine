@@ -13,6 +13,35 @@
  * - Ray-traced global illumination (diffuse GI)
  *
  * Requires D3D12 and DXR-capable GPU. Falls back gracefully when unavailable.
+ *
+ * @warning **Partial implementation — ~80% done.** As of 2026-04-10:
+ *          - Device capability check, root signature, command queue
+ *            (`Initialize()`, ~lines 269–360 of `DXRSupport.cpp`) — DONE.
+ *          - `CreateBLAS` / `UpdateBLAS` / `DestroyBLAS` with acceleration
+ *            structure resource management — DONE (~lines 525–630).
+ *          - `BuildTLAS` with full GPU-side TLAS build and barriers — DONE
+ *            (~lines 643–729).
+ *          - HLSL ray shaders — present under
+ *            `Shaders/HLSL/RayTracing/DXR{Reflections,Shadows,AO,GI}.hlsl`.
+ *          - `TraceReflections()` / `TraceShadows()` / `TraceAO()` /
+ *            `TraceGI()` declared but **stubbed** — they need shader
+ *            binding table (SBT) construction, state-object creation via
+ *            `ID3D12StateObject`, and `DispatchRays()` calls before they
+ *            produce usable output.
+ *          - `DXRManager::GetInstance().IsAvailable()` is checked in
+ *            `GraphicsEngine.cpp:409` and the trace entry points are
+ *            already called at `GraphicsEngine.cpp:1161-1176`, so as soon
+ *            as the trace methods are filled in the rest of the render
+ *            pipeline picks them up automatically.
+ *
+ *          No tests exist under `Tests/` for DXR specifically — because
+ *          the D3D12 device stack is not reachable from the native Linux
+ *          test runner, any future coverage needs a MinGW + Wine +
+ *          Lavapipe path or a D3D12 mock.
+ *
+ *          Finishing this file is a larger scoped session than simple
+ *          wiring — see `.claude/knowledge/engine-next-steps-2026-04-10.md`
+ *          Phase B item 4.
  */
 
 #pragma once

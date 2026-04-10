@@ -335,6 +335,26 @@ namespace Spark::Animation
  *   auto runClip = mgr.GetClip("Run");
  * @endcode
  */
+    /**
+     * @class AnimationManager
+     * @brief Registry singleton for loaded skeletons and animation clips.
+     *
+     * @note **Intentional demand-driven registry** — `AnimationManager` has
+     *       no `Initialize()` / `Update()` / `Shutdown()` lifecycle and is
+     *       intentionally not wired into `GameplayLifecycleShared.cpp`.
+     *       The ECS `AnimationUpdateSystem` (registered at
+     *       `EngineSetup.h:187`, `Phase::Animation`) calls into
+     *       `GetClip()` / `GetSkeleton()` on demand each frame to drive
+     *       per-entity playback, and asset importers call `RegisterClip()`
+     *       / `LoadSkeleton()` / `LoadAnimations()` at load time. The
+     *       complementary `AnimNotifyManager` (wired at
+     *       `GameplayLifecycleShared.cpp:445,1032`) handles event
+     *       delivery — it is orthogonal to this registry, not a
+     *       duplicate. `Clear()` is safe to call at level unload but is
+     *       not a lifecycle requirement because cached entries use
+     *       `shared_ptr` and outlive this map while anyone holds a ref.
+     *       Exercised by `Tests/TestAnimationSystem.cpp` (895 lines).
+     */
     class AnimationManager
     {
       public:

@@ -296,6 +296,15 @@ namespace Spark::Graphics
          *                      of a buffer already populated by static
          *                      meshes).
          * @return Number of instances written, or UINT32_MAX on error.
+         *
+         * @warning **Not currently called from the render pipeline.** The
+         *          CPU batch build (`CollectFromFoliageManager`) is wired
+         *          into `GameplayLifecycleShared.cpp` but this GPU upload
+         *          step is not — a render-graph pass that calls it needs
+         *          to be added before foliage actually reaches the GPU.
+         *          The method itself is correct and testable against the
+         *          `GPUSceneBuffer` API; it is just unused. See
+         *          `FoliageImpostorBaker.h` for the matching GPU-bake gap.
          */
         uint32_t UploadToSceneBuffer(GPUSceneBuffer& sceneBuffer, uint32_t startSlot) const;
 #endif
