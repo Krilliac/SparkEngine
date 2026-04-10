@@ -75,9 +75,15 @@ namespace Spark::Net
     {
         if (m_error || m_readPos >= m_data.size())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "NetBuffer::ReadUint8 — buffer overrun at pos %zu (size=%zu)",
-                           m_readPos, m_data.size());
-            m_error = true;
+            // Log only on the first overrun per buffer. Subsequent reads after
+            // m_error is sticky would otherwise spam the log during fuzz / stress tests
+            // that intentionally feed truncated packets.
+            if (!m_error)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "NetBuffer::ReadUint8 — buffer overrun at pos %zu (size=%zu)", m_readPos, m_data.size());
+                m_error = true;
+            }
             return 0;
         }
         return m_data[m_readPos++];
@@ -87,10 +93,13 @@ namespace Spark::Net
     {
         if (m_error || m_readPos + 2 > m_data.size())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network,
-                           "NetBuffer::ReadUint16 — buffer overrun at pos %zu (need 2, size=%zu)", m_readPos,
-                           m_data.size());
-            m_error = true;
+            if (!m_error)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "NetBuffer::ReadUint16 — buffer overrun at pos %zu (need 2, size=%zu)", m_readPos,
+                               m_data.size());
+                m_error = true;
+            }
             return 0;
         }
         uint16_t val = 0;
@@ -103,10 +112,13 @@ namespace Spark::Net
     {
         if (m_error || m_readPos + 4 > m_data.size())
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network,
-                           "NetBuffer::ReadUint32 — buffer overrun at pos %zu (need 4, size=%zu)", m_readPos,
-                           m_data.size());
-            m_error = true;
+            if (!m_error)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "NetBuffer::ReadUint32 — buffer overrun at pos %zu (need 4, size=%zu)", m_readPos,
+                               m_data.size());
+                m_error = true;
+            }
             return 0;
         }
         uint32_t val = 0;

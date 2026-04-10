@@ -176,6 +176,7 @@ TEST(MemoryMonitor_DoubleFreeAnomalyDetection)
     auto& md = Spark::MemoryDebugger::GetInstance();
     md.Reset();
     md.SetEnabled(true);
+    md.SetLogDoubleFreeWarnings(false); // test intentionally exercises this path
     mm.Initialize();
     mm.SetEnabled(true);
 
@@ -197,6 +198,7 @@ TEST(MemoryMonitor_DoubleFreeAnomalyDetection)
     EXPECT_TRUE(foundDoubleFree);
 
     mm.Shutdown();
+    md.SetLogDoubleFreeWarnings(true);
 }
 
 // =============================================================================
@@ -249,6 +251,7 @@ TEST(MemoryMonitor_AnomalyRingBufferWraps)
     auto& md = Spark::MemoryDebugger::GetInstance();
     md.Reset();
     md.SetEnabled(true);
+    md.SetLogDoubleFreeWarnings(false); // test intentionally exercises this path
     mm.Initialize();
 
     // Force many double-free anomalies to fill the ring buffer
@@ -268,4 +271,5 @@ TEST(MemoryMonitor_AnomalyRingBufferWraps)
     EXPECT_LE(static_cast<int>(anomalies.size()), Spark::MemoryMonitor::ANOMALY_RING_SIZE);
 
     mm.Shutdown();
+    md.SetLogDoubleFreeWarnings(true);
 }

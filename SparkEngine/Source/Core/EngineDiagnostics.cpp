@@ -33,6 +33,7 @@
 #include "Utils/LogMacros.h"
 
 #include <cmath>
+#include <filesystem>
 #include <sstream>
 
 namespace Spark
@@ -767,27 +768,36 @@ namespace Spark
         report.Add(sub, "Metrics query", true,
                    "entries=" + std::to_string(cache->GetEntryCount()) + " hits=" + std::to_string(cacheMetrics.hits));
 
-        // Write, read, verify, delete
-        auto writeResult = cache->WriteText("/tmp/__diag_cache_test.txt", "SparkEngine diagnostics OK");
+        // Write, read, verify, delete. Use a portable temp path — /tmp only exists on
+        // POSIX platforms, and the Windows bots reported the diag failing because the
+        // literal "/tmp/..." write had nowhere to go.
+        std::error_code tmpEc;
+        auto tempDir = std::filesystem::temp_directory_path(tmpEc);
+        if (tmpEc || tempDir.empty())
+            tempDir = std::filesystem::current_path();
+        const auto testPath = (tempDir / "__diag_cache_test.txt").string();
+        const auto missingPath = (tempDir / "__diag_nonexistent_12345.txt").string();
+
+        auto writeResult = cache->WriteText(testPath, "SparkEngine diagnostics OK");
         bool wrote = writeResult.IsOk();
         report.Add(sub, "Write text", wrote);
 
         if (wrote)
         {
-            auto readResult = cache->ReadText("/tmp/__diag_cache_test.txt");
+            auto readResult = cache->ReadText(testPath);
             bool readOk = readResult.IsOk() && readResult.Value() == "SparkEngine diagnostics OK";
             report.Add(sub, "Read text roundtrip", readOk);
 
-            bool contains = cache->Contains("/tmp/__diag_cache_test.txt");
+            bool contains = cache->Contains(testPath);
             report.Add(sub, "Contains check", contains);
 
-            cache->Invalidate("/tmp/__diag_cache_test.txt");
-            auto deleteResult = cache->Delete("/tmp/__diag_cache_test.txt");
+            cache->Invalidate(testPath);
+            auto deleteResult = cache->Delete(testPath);
             report.Add(sub, "Delete file", deleteResult.IsOk());
         }
 
         // Reading non-existent should return error
-        auto badRead = cache->ReadText("/tmp/__diag_nonexistent_12345.txt");
+        auto badRead = cache->ReadText(missingPath);
         report.Add(sub, "Read non-existent returns error", !badRead.IsOk());
     }
 

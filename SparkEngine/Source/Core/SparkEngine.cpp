@@ -83,13 +83,16 @@
 #include <filesystem>
 #include <thread>
 
+// CrashHandler is cross-platform — needed by SetupCrashHandler() which is called
+// from both Windows and Linux main() paths.
+#include "Utils/CrashHandler.h"
+
 // Platform-specific includes
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Utils/Assert.h"
 #include "Utils/SparkError.h"
 #include "Utils/Validate.h"
 #include "Utils/DeltaSmoother.h"
-#include "Utils/CrashHandler.h"
 #include "Utils/D3DUtils.h"
 #include "Utils/LocalFileCache.h"
 #else
@@ -401,7 +404,9 @@ static std::string FindGameModuleFromCmdLine(LPWSTR cmdLine)
         size_t end = cmd.find(L' ', start);
         std::wstring wpath = cmd.substr(start, end - start);
         std::string path(wpath.begin(), wpath.end());
-        if (std::filesystem::exists(path))
+        // error_code overload: don't let a malformed -game value throw from main.
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec) && !ec)
             return path;
     }
     return "";
@@ -433,8 +438,11 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
     return manager.LoadModulesFromDirectory(exeDir.string());
 }
 
+#endif // SPARK_PLATFORM_WINDOWS — end of the block that started above; SetupCrashHandler                            \
+       //  is shared by Windows and Linux main() and must be visible to both.
+
 // ===================================================================================
-//                       Windows extracted helpers
+//                       Cross-platform helpers
 // ===================================================================================
 
 /**
@@ -506,6 +514,10 @@ static void SetupCrashHandler()
 
     InstallCrashHandler(crashCfg);
 }
+
+// Re-enter the Windows-only block (which opened above and was closed around
+// SetupCrashHandler so it's visible to both Windows and Linux main()s).
+#ifdef SPARK_PLATFORM_WINDOWS
 
 #ifdef SPARK_HEADLESS_SUPPORT
 
@@ -1163,7 +1175,11 @@ static std::string FindGameModuleFromArgs(int argc, char* argv[])
         if (strcmp(argv[i], "-game") == 0)
         {
             std::string path = argv[i + 1];
-            if (std::filesystem::exists(path))
+            // Use the error_code overload so hostile -game values (e.g. paths longer
+            // than NAME_MAX, null bytes, unreadable parents) don't throw and escape
+            // to main() as a FATAL.
+            std::error_code ec;
+            if (std::filesystem::exists(path, ec) && !ec)
                 return path;
         }
     }
@@ -1849,6 +1865,11 @@ int main(int argc, char* argv[])
 #ifndef _WIN32
     std::signal(SIGPIPE, SIG_IGN);
 #endif
+
+    // Install SIGSEGV/SIGABRT/SIGBUS/SIGILL/SIGFPE/SIGTRAP handlers so hard crashes
+    // on Linux go through the same crash-report pipeline that wWinMain uses on
+    // Windows. Without this, fatal signals on Linux bypass the reporter entirely.
+    SetupCrashHandler();
 
     try
     {

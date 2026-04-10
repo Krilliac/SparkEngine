@@ -526,6 +526,21 @@ namespace Spark::Security
             if (perms[0] != 'r' || perms[2] != 'x')
                 continue; // Not readable + executable
 
+            // Skip pseudo-regions like [vsyscall], [vdso], [vvar], [stack], [heap].
+            // [vsyscall] in particular is mapped r-xp but dereferencing it from user
+            // space triggers SIGSEGV on modern kernels (vsyscall=xonly/none). Also skip
+            // anonymous mappings (no pathname) since those are typically JIT pages or
+            // thread trampolines, not engine code we want to tamper-check.
+            std::string_view rest(line.data() + spacePos + 1);
+            auto pathPos = rest.find('/');
+            if (pathPos == std::string_view::npos)
+                continue; // no file-backed path → skip
+            std::string_view pathname = rest.substr(pathPos);
+            while (!pathname.empty() && (pathname.back() == '\n' || pathname.back() == '\r'))
+                pathname.remove_suffix(1);
+            if (pathname.empty() || pathname.front() == '[')
+                continue;
+
             // Parse address range
             auto dashPos = line.find('-');
             if (dashPos == std::string::npos || dashPos >= spacePos)
@@ -544,6 +559,11 @@ namespace Spark::Security
             }
 
             if (endAddr <= startAddr)
+                continue;
+
+            // Belt-and-braces: explicitly skip the vsyscall page by address
+            // (0xffffffffff600000) in case /proc/self/maps formatting ever hides the tag.
+            if (startAddr >= 0xffffffffff600000ULL)
                 continue;
 
             size_t regionSize = static_cast<size_t>(endAddr - startAddr);

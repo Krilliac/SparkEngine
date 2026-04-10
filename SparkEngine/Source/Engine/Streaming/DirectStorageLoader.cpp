@@ -65,6 +65,10 @@ namespace Spark::Streaming
     void DirectStorageLoader::Shutdown()
     {
         std::lock_guard lock(m_mutex);
+        // Idempotent: Shutdown is called from both the engine teardown path and
+        // static-destructor cleanup, producing duplicate log lines otherwise.
+        if (!m_initialized)
+            return;
         SPARK_LOG_INFO(Spark::LogCategory::Scene, "DirectStorageLoader shutting down (%zu active, %llu total bytes)",
                        m_activeRequests.size(), static_cast<unsigned long long>(m_stats.totalBytesLoaded));
         m_activeRequests.clear();
