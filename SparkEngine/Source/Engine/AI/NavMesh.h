@@ -355,6 +355,14 @@ namespace Spark::AI
  *   // Per agent at spawn
  *   auto query = mgr.CreateQuery("Level_01");
  * @endcode
+ *
+ * @note **Intentional demand-driven registry** — `NavMeshManager` has no
+ *       `Initialize()` / `Update()` / `Shutdown()` lifecycle and is
+ *       intentionally not wired into `GameplayLifecycleShared.cpp` beyond
+ *       the existing "passive registry" comment. It is consumed on demand
+ *       by `AISystem` (`AISystem.cpp:139`), `NavMeshLinkSystem`, and game
+ *       modules such as `GameModules/SparkGameRTS`. Exercised by
+ *       `Tests/TestNavMesh.cpp`.
  */
     class NavMeshManager
     {

@@ -39,6 +39,16 @@
  *   // Remove it
  *   obsMgr.RemoveObstacle(handle);
  * @endcode
+ *
+ * @note **Intentional demand-driven registry** — `NavMeshObstacleManager`
+ *       is a passive singleton with no `Initialize()` / `Update()` /
+ *       `Shutdown()` lifecycle. Gameplay code calls `SetNavMesh()` at level
+ *       load, `AddObstacle()` / `UpdateObstacle()` / `RemoveObstacle()` as
+ *       obstacles spawn and move, and `ApplyDirtyObstacles()` once per frame
+ *       if it batches updates via `MarkObstacleDirty()`. It intentionally
+ *       has no wiring in `GameplayLifecycleShared.cpp` for the same reason
+ *       `NavMeshManager` does not — both are consumed on demand by AI and
+ *       level-streaming code. Exercised by `Tests/TestNavMeshObstacles.cpp`.
  */
 
 #pragma once

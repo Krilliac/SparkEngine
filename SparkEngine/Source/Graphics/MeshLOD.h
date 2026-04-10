@@ -104,6 +104,21 @@ namespace Spark::Graphics
     // LOD Manager
     // ============================================================================
 
+    /**
+     * @class LODManager
+     * @brief Registry singleton for generated / pre-built mesh LOD chains.
+     *
+     * @note **Intentional passive cache** — `LODManager` has no
+     *       `Initialize()` / `Update()` / `Shutdown()` lifecycle. The
+     *       matching comment in `GameplayLifecycleShared.cpp` reads
+     *       "LODManager is a passive cache (no init/update needed; queries
+     *       only)". Render code calls `SelectLOD()` on demand, and mesh
+     *       importers call `RegisterLODChain()` at asset-load time. The
+     *       header lives alongside `MeshSimplifier` (edge-collapse
+     *       simplification) and `LODChain` (per-mesh level data), which
+     *       are both pure CPU utilities. Exercised by
+     *       `Tests/TestMeshLOD.cpp`.
+     */
     class LODManager
     {
       public:
