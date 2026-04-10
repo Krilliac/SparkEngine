@@ -238,7 +238,7 @@ namespace SparkEditor
     {
         uint32_t id = CreateScreen("UI_HUD", "HUD");
         auto* screen = GetScreen(id);
-        if (!screen)
+        if (!screen || screen->widgets.empty())
             return id;
 
         uint32_t rootId = screen->widgets.front().widgetId;
@@ -283,7 +283,7 @@ namespace SparkEditor
     {
         uint32_t id = CreateScreen("UI_MainMenu", "Menu");
         auto* screen = GetScreen(id);
-        if (!screen)
+        if (!screen || screen->widgets.empty())
             return id;
 
         uint32_t rootId = screen->widgets.front().widgetId;
@@ -319,7 +319,7 @@ namespace SparkEditor
     {
         uint32_t id = CreateScreen("UI_Inventory", "Popup");
         auto* screen = GetScreen(id);
-        if (!screen)
+        if (!screen || screen->widgets.empty())
             return id;
 
         uint32_t rootId = screen->widgets.front().widgetId;

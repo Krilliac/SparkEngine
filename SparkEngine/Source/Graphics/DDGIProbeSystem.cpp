@@ -306,6 +306,13 @@ namespace Spark::Graphics
 
     void DDGIProbeSystem::SphericalFibonacci(int index, int count, float& outX, float& outY, float& outZ)
     {
+        if (count <= 0)
+        {
+            outX = 0.0f;
+            outY = 1.0f;
+            outZ = 0.0f;
+            return;
+        }
         static constexpr float GOLDEN_RATIO = 1.6180339887498948f;
         float theta = 2.0f * 3.14159265f * index / GOLDEN_RATIO;
         float phi = std::acos(1.0f - 2.0f * (index + 0.5f) / count);

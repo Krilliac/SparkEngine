@@ -47,8 +47,15 @@ static bool IsDebuggerAttached()
         {
             if (line.find("TracerPid:") == 0)
             {
-                int pid = std::stoi(line.substr(10));
-                return pid != 0;
+                try
+                {
+                    int pid = std::stoi(line.substr(10));
+                    return pid != 0;
+                }
+                catch (const std::exception&)
+                {
+                    return false;
+                }
             }
         }
     }

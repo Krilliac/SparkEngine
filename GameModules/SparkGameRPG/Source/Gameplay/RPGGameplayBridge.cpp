@@ -274,7 +274,15 @@ namespace RPG
                                         }
 
                                         const std::string statName = param.substr(0, sep);
-                                        const float requiredValue = std::stof(param.substr(sep + 1));
+                                        float requiredValue = 0.0f;
+                                        try
+                                        {
+                                            requiredValue = std::stof(param.substr(sep + 1));
+                                        }
+                                        catch (const std::exception&)
+                                        {
+                                            return false;
+                                        }
                                         const uint32_t characterId = GetActiveDialogueCharacter();
                                         if (characterId == 0)
                                         {

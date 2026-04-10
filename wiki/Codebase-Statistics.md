@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-09.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-10.
 
 ## Code Volume
 
@@ -8,20 +8,20 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 264419 |
-| **SparkEditor/Source** | 86744 |
-| **GameModules** | 58451 |
+| **SparkEngine/Source** | 264458 |
+| **SparkEditor/Source** | 86733 |
+| **GameModules** | 58460 |
 | **Tests** | 107806 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~519811** |
+| **Total C++ (excl. ThirdParty)** | **~519848** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 748 |
-| Implementation files (.cpp) | 867 |
+| Header files (.h/.hpp) | 747 |
+| Implementation files (.cpp) | 866 |
 | HLSL shader files | 38 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -32,9 +32,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~860 |
-| Average lines per .h file | ~569 |
-| Largest codebase section | Graphics (101631 lines — 38% of SparkEngine/Source) |
+| Average lines per .cpp file | ~862 |
+| Average lines per .h file | ~570 |
+| Largest codebase section | Graphics (101653 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 101631 | 38.4% |
-| Engine (all subsystems) | 80172 | 30.3% |
-| Utils | 36969 | 13.9% |
-| Core | 20593 | 7.7% |
+| Graphics | 101653 | 38.4% |
+| Engine (all subsystems) | 80181 | 30.3% |
+| Utils | 36974 | 13.9% |
+| Core | 20596 | 7.7% |
 | Physics | 10101 | 3.8% |
 | Audio | 5548 | 2.0% |
 | Input | 3888 | 1.4% |
@@ -59,17 +59,17 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Subsystem | Lines |
 |-----------|------:|
 | AI | 13133 |
-| Networking | 11853 |
-| ECS | 8546 |
+| Networking | 11896 |
+| ECS | 8545 |
 | Gameplay | 7511 |
 | Animation | 6534 |
-| Scripting | 4539 |
+| Scripting | 4445 |
 | UI | 2521 |
 | SaveSystem | 2491 |
 | Streaming | 1763 |
 | World | 1588 |
+| Editor | 1556 |
 | Cinematic | 1526 |
-| Editor | 1495 |
 | Dialogue | 1384 |
 | Modding | 1263 |
 | 2D | 979 |
@@ -82,7 +82,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Mobile | 421 |
 | Physics | 381 |
 | Events | 362 |
-| Loading | 354 |
+| Loading | 355 |
 | VR | 296 |
 
 ## ECS Architecture Metrics
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 86744 |
+| Total editor lines | 86733 |
 
 ## Testing Metrics
 
@@ -157,7 +157,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `OpenGLDevice.cpp` | 1959 |
 | `SparkEngine.cpp` | 1936 |
 | `VulkanDevice.cpp` | 1835 |
-| `GraphicsEngine.cpp` | 1695 |
+| `GraphicsEngine.cpp` | 1693 |
 | `D3D12Device.cpp` | 1565 |
 | `EngineSettings.cpp` | 1554 |
 | `D3D11Device.cpp` | 1471 |
@@ -174,7 +174,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `JsonUtils.h` | 963 |
 | `BasisTranscoder.h` | 912 |
 | `ECSystems.h` | 849 |
-| `MeshClusterSystem.h` | 819 |
+| `MeshClusterSystem.h` | 824 |
 | `SVGRenderer.h` | 803 |
 | `DataTableSystem.h` | 800 |
 | `PhysicsTypes.h` | 779 |
@@ -184,8 +184,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | File | Lines |
 |------|------:|
-| `VisualScriptPanel.cpp` | 1851 |
-| `EditorUI.cpp` | 1674 |
+| `VisualScriptPanel.cpp` | 1773 |
+| `EditorUI.cpp` | 1706 |
 | `PerformanceProfiler.cpp` | 1609 |
 | `ProjectSettingsPanel.cpp` | 1501 |
 | `EditorTheme.cpp` | 1456 |

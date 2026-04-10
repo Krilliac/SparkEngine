@@ -1,3 +1,8 @@
+/**
+ * @file LifecycleStages.h
+ * @brief Factory functions for concrete lifecycle stage instances
+ */
+
 #pragma once
 
 #include "Core/Lifecycle/LifecycleStage.h"

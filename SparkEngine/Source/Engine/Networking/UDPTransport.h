@@ -62,7 +62,7 @@ namespace Spark::Net
             if (m_socket == INVALID_SOCKET)
                 return false;
 
-            // Set non-blocking mode
+                // Set non-blocking mode
 #ifdef SPARK_PLATFORM_WINDOWS
             u_long nonBlocking = 1;
             if (ioctlsocket(m_socket, FIONBIO, &nonBlocking) == SOCKET_ERROR)

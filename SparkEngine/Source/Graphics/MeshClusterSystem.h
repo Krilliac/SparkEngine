@@ -313,6 +313,9 @@ namespace Spark::Graphics
                                                       uint32_t indexCount, uint32_t vertexCount)
         {
             std::vector<MeshCluster> clusters;
+            if (!indices || !positions || indexCount == 0 || vertexCount == 0)
+                return clusters;
+
             uint32_t triangleCount = indexCount / 3;
             uint32_t clusterTriCount = CLUSTER_MAX_TRIANGLES;
 
@@ -335,6 +338,8 @@ namespace Spark::Graphics
                     for (int k = 0; k < 3; ++k)
                     {
                         uint32_t globalIdx = indices[t * 3 + k];
+                        if (globalIdx >= vertexCount)
+                            continue;
                         if (vertexMap[globalIdx] == UINT32_MAX)
                         {
                             vertexMap[globalIdx] = localVertCount;

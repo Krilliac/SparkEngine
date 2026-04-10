@@ -38,7 +38,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Memory safety evaluation & C++26 bridge (Contracts, NonNull, SafeCast) | [knowledge/memory-safety-evaluation.md](knowledge/memory-safety-evaluation.md) | Decision | Active | 2026-04-06 |
 ## Quick Reference
 
-### Current Engine State (2026-04-09)
+### Current Engine State (2026-04-10)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
@@ -50,7 +50,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides
 - **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame, WeatherSystem integration
-- **Codebase**: ~519K lines of C++ across 1604 source files, 125 wiki pages
+- **Codebase**: ~519K lines of C++ across 1602 source files, 125 wiki pages
 
 ### Before Writing Code
 
