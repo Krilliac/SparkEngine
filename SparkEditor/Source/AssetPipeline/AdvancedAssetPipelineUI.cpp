@@ -876,19 +876,43 @@ namespace SparkEditor
             }
             else if (key == "TYPE")
             {
-                metadata->type = static_cast<AssetType>(std::stoi(value));
+                try
+                {
+                    metadata->type = static_cast<AssetType>(std::stoi(value));
+                }
+                catch (const std::exception&)
+                {
+                }
             }
             else if (key == "SOURCE_SIZE")
             {
-                metadata->sourceFileSize = std::stoull(value);
+                try
+                {
+                    metadata->sourceFileSize = std::stoull(value);
+                }
+                catch (const std::exception&)
+                {
+                }
             }
             else if (key == "PROCESSED_SIZE")
             {
-                metadata->processedFileSize = std::stoull(value);
+                try
+                {
+                    metadata->processedFileSize = std::stoull(value);
+                }
+                catch (const std::exception&)
+                {
+                }
             }
             else if (key == "STATUS")
             {
-                metadata->status = static_cast<ProcessingStatus>(std::stoi(value));
+                try
+                {
+                    metadata->status = static_cast<ProcessingStatus>(std::stoi(value));
+                }
+                catch (const std::exception&)
+                {
+                }
             }
             else if (key == "CHECKSUM")
             {
