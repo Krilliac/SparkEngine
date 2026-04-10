@@ -284,6 +284,35 @@ namespace Spark::Net
             m_playerSessions.erase(it);
         }
         m_stats.totalPlayers = static_cast<uint32_t>(m_playerSessions.size());
+
+        // Scope cleanup runs inside NetworkManager::HandleDisconnect as well,
+        // but we call it here defensively for callers that bypass the network
+        // layer (tests, direct WorldServer drive-by disconnects).
+        NetworkManager::GetInstance().ClearClientScope(clientId);
+    }
+
+    bool WorldServer::UpdatePlayerPosition(ClientID clientId, const XMFLOAT3& position, float interestRadius)
+    {
+        AreaID areaForScope = INVALID_AREA;
+        {
+            std::lock_guard<std::mutex> lock(m_playerMutex);
+            auto it = m_playerSessions.find(clientId);
+            if (it == m_playerSessions.end())
+            {
+                return false;
+            }
+            it->second.lastKnownPosition = position;
+            areaForScope = it->second.currentArea;
+        }
+
+        // Forward to NetworkManager so replication filters out-of-interest entities
+        // for this connection on subsequent ticks. Defaulted masks accept all teams
+        // and visibility flags; game code can use NetworkManager::SetClientScope
+        // directly for finer-grained filtering.
+        NetworkManager::GetInstance().SetClientScope(
+            clientId, position, interestRadius,
+            areaForScope == INVALID_AREA ? 0u : static_cast<uint32_t>(areaForScope));
+        return true;
     }
 
     bool WorldServer::TransferPlayer(ClientID clientId, AreaID targetArea)

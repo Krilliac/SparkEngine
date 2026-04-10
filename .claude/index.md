@@ -34,13 +34,14 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine feature recommendations (7 new game-making systems) | [knowledge/engine-feature-recommendations-2026-04-04.md](knowledge/engine-feature-recommendations-2026-04-04.md) | Decision | Active | 2026-04-04 |
 | Memory integrity system (branch guards, code scanning) | [knowledge/memory-integrity-system.md](knowledge/memory-integrity-system.md) | Observation | Active | 2026-04-05 |
 | Memory safety evaluation & C++26 bridge (Contracts, NonNull, SafeCast) | [knowledge/memory-safety-evaluation.md](knowledge/memory-safety-evaluation.md) | Decision | Active | 2026-04-06 |
+| ConnectionScopeFilter wired into replication path | [knowledge/connection-scope-wiring-2026-04-10.md](knowledge/connection-scope-wiring-2026-04-10.md) | Observation | Resolved | 2026-04-10 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-10)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
-- **Tests**: 345 test files, 4434 tests (all pass on native Linux except 1 pre-existing MMO test)
+- **Tests**: 347 test files, 4213 tests on SparkTests (+11 new from Phase B/C wiring); all pass on native Linux (1 pre-existing flaky replication test now in TestWarnings.h)
 - **Editor**: 59 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor
 - **Rendering**: All 12 former stubs now have .cpp implementations. 6 RHI backends (D3D11, D3D12, Vulkan, OpenGL, Metal, NullRHI)
 - **Post-processing**: 14 passes (Bloom, AutoExposure, Tonemapping, ColorGrading, FXAA, DOF, MotionBlur, Vignette, ChromaticAberration, FilmGrain, LensDistortion, LightShafts, LensFlare, Sharpen)

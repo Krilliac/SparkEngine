@@ -226,6 +226,21 @@ namespace Spark::Net
         void HandlePlayerDisconnect(ClientID clientId);
 
         /**
+         * @brief Update a player's last-known world position.
+         *
+         * Also refreshes the ConnectionScopeFilter visibility sphere (via
+         * NetworkManager::SetClientScope) so entity replication filters the
+         * connection's interest set by this position. Call each time the
+         * area server reports new player coordinates.
+         *
+         * @param clientId        Client ID.
+         * @param position        New world-space position.
+         * @param interestRadius  Visibility radius for replication scoping (world units).
+         * @return true if the player session exists and was updated.
+         */
+        bool UpdatePlayerPosition(ClientID clientId, const XMFLOAT3& position, float interestRadius = 500.0f);
+
+        /**
          * @brief Transfer a player from one area to another
          * @param clientId Client ID
          * @param targetArea Target area ID

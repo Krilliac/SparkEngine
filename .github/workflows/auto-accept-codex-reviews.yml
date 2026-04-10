@@ -1,11 +1,20 @@
 name: Auto-accept Codex reviews
 
-# Automatically dismisses "changes requested" reviews from OpenAI Codex bots
-# and resolves any review threads they create, so Codex comments are visible
-# but do not block PRs from merging.
+# Applies Codex review suggestions to the PR branch, then dismisses the
+# "changes requested" review and resolves the review threads.
 #
-# Codex reviews are always treated as advisory — a human reviewer must still
-# approve the PR via branch protection rules if required.
+# Scope:
+#   1. Parse ```suggestion blocks out of every review comment authored by a
+#      known Codex bot and commit the replacements to the PR head branch.
+#   2. Dismiss the Codex review so it does not block merging.
+#   3. Resolve Codex-authored review threads so the conversation tab is clean.
+#
+# Cross-fork PRs are skipped for the apply step because GITHUB_TOKEN cannot
+# push to a fork's branch. Codex reviews on fork PRs still get dismissed and
+# their threads resolved — a maintainer can apply the suggestions manually.
+#
+# A human reviewer must still approve the PR via branch protection rules if
+# required. These changes are advisory integration, not a trust boundary.
 
 on:
   pull_request_review:
@@ -14,8 +23,14 @@ on:
     types: [created]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
+
+# Serialize runs on the same PR so two concurrent Codex events never push
+# conflicting commits to the head branch.
+concurrency:
+  group: auto-accept-codex-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
   auto-accept:
@@ -28,6 +43,191 @@ jobs:
       github.event.sender.login == 'openai-codex[bot]' ||
       github.event.sender.login == 'chatgpt-codex[bot]'
     steps:
+      - name: Apply Codex suggestion blocks to PR branch
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+
+            const pr = await github.rest.pulls.get({ owner, repo, pull_number });
+            const headRepo = pr.data.head.repo ? pr.data.head.repo.full_name : null;
+            const baseRepo = `${owner}/${repo}`;
+            const headRef = pr.data.head.ref;
+
+            // Cross-fork PRs: GITHUB_TOKEN cannot push to a fork's branch.
+            if (headRepo !== baseRepo) {
+              core.info(`PR head is on ${headRepo || 'an unknown fork'}; skipping suggestion apply (cannot push to forks).`);
+              return;
+            }
+
+            const codexLogins = new Set([
+              'chatgpt-codex-connector[bot]',
+              'codex[bot]',
+              'openai-codex[bot]',
+              'chatgpt-codex[bot]',
+            ]);
+
+            // Fetch every review comment on the PR so we can find suggestion
+            // blocks. Each comment carries its file path and line range.
+            const allComments = await github.paginate(
+              github.rest.pulls.listReviewComments,
+              { owner, repo, pull_number, per_page: 100 }
+            );
+
+            const suggestionRegex = /```suggestion\n([\s\S]*?)```/g;
+            const suggestionsByFile = new Map();
+
+            for (const comment of allComments) {
+              if (!codexLogins.has(comment.user.login)) continue;
+              if (!comment.path) continue;
+              // `line` is null for comments that have become outdated since
+              // the PR moved on. We can't apply those reliably.
+              if (comment.line == null) continue;
+
+              suggestionRegex.lastIndex = 0;
+              let match;
+              while ((match = suggestionRegex.exec(comment.body || '')) !== null) {
+                const replacement = match[1];
+                const startLine = comment.start_line ?? comment.line;
+                const endLine = comment.line;
+                if (!suggestionsByFile.has(comment.path)) {
+                  suggestionsByFile.set(comment.path, []);
+                }
+                suggestionsByFile.get(comment.path).push({
+                  startLine,
+                  endLine,
+                  replacement,
+                  commentId: comment.id,
+                });
+              }
+            }
+
+            if (suggestionsByFile.size === 0) {
+              core.info('No Codex suggestion blocks found to apply.');
+              return;
+            }
+
+            let totalApplied = 0;
+            let totalSkipped = 0;
+
+            for (const [filePath, suggestions] of suggestionsByFile) {
+              // Process highest line numbers first so earlier edits don't
+              // shift later line numbers in the same file.
+              suggestions.sort((a, b) => b.startLine - a.startLine);
+
+              let file;
+              try {
+                file = await github.rest.repos.getContent({
+                  owner, repo, path: filePath, ref: headRef,
+                });
+              } catch (e) {
+                core.warning(`Could not fetch ${filePath} from ${headRef}: ${e.message}`);
+                totalSkipped += suggestions.length;
+                continue;
+              }
+
+              if (Array.isArray(file.data) || file.data.type !== 'file') {
+                core.warning(`${filePath} is not a regular file; skipping.`);
+                totalSkipped += suggestions.length;
+                continue;
+              }
+
+              const originalContent = Buffer.from(file.data.content, 'base64').toString('utf8');
+              const hadTrailingNewline = originalContent.endsWith('\n');
+              let lines = originalContent.split('\n');
+              if (hadTrailingNewline) lines = lines.slice(0, -1);
+
+              // Track which line indices have already been rewritten in this
+              // pass so overlapping suggestions don't corrupt each other.
+              const touched = new Set();
+              let appliedInFile = 0;
+
+              for (const s of suggestions) {
+                const startIdx = s.startLine - 1;
+                const endIdx = s.endLine - 1;
+
+                if (startIdx < 0 || endIdx >= lines.length || startIdx > endIdx) {
+                  core.warning(
+                    `${filePath}: suggestion at lines ${s.startLine}-${s.endLine} out of range ` +
+                    `(file has ${lines.length} lines); skipping comment ${s.commentId}.`
+                  );
+                  totalSkipped++;
+                  continue;
+                }
+
+                let overlaps = false;
+                for (let i = startIdx; i <= endIdx; i++) {
+                  if (touched.has(i)) { overlaps = true; break; }
+                }
+                if (overlaps) {
+                  core.warning(
+                    `${filePath}: suggestion at lines ${s.startLine}-${s.endLine} overlaps a ` +
+                    `previously applied one; skipping comment ${s.commentId}.`
+                  );
+                  totalSkipped++;
+                  continue;
+                }
+
+                // Idempotency: if the target lines already match the
+                // replacement exactly, treat the suggestion as already
+                // applied and move on.
+                const existingSlice = lines.slice(startIdx, endIdx + 1).join('\n');
+                const normalizedReplacement = s.replacement.endsWith('\n')
+                  ? s.replacement.slice(0, -1)
+                  : s.replacement;
+                if (existingSlice === normalizedReplacement) {
+                  for (let i = startIdx; i <= endIdx; i++) touched.add(i);
+                  continue;
+                }
+
+                const replacementLines = normalizedReplacement.split('\n');
+                lines.splice(startIdx, endIdx - startIdx + 1, ...replacementLines);
+                for (let i = startIdx; i < startIdx + replacementLines.length; i++) {
+                  touched.add(i);
+                }
+                appliedInFile++;
+              }
+
+              if (appliedInFile === 0) continue;
+
+              let newContent = lines.join('\n');
+              if (hadTrailingNewline) newContent += '\n';
+              if (newContent === originalContent) continue;
+
+              try {
+                await github.rest.repos.createOrUpdateFileContents({
+                  owner,
+                  repo,
+                  path: filePath,
+                  message:
+                    `chore: apply ${appliedInFile} Codex review suggestion(s) to ${filePath}\n\n` +
+                    `Applied automatically by .github/workflows/auto-accept-codex-reviews.yml`,
+                  content: Buffer.from(newContent, 'utf8').toString('base64'),
+                  sha: file.data.sha,
+                  branch: headRef,
+                  committer: {
+                    name: 'github-actions[bot]',
+                    email: '41898282+github-actions[bot]@users.noreply.github.com',
+                  },
+                  author: {
+                    name: 'github-actions[bot]',
+                    email: '41898282+github-actions[bot]@users.noreply.github.com',
+                  },
+                });
+                totalApplied += appliedInFile;
+                core.info(`Committed ${appliedInFile} suggestion(s) to ${filePath}`);
+              } catch (e) {
+                core.warning(`Failed to commit ${filePath}: ${e.message}`);
+                totalSkipped += appliedInFile;
+              }
+            }
+
+            core.info(
+              `Codex suggestion apply summary: ${totalApplied} applied, ${totalSkipped} skipped ` +
+              `across ${suggestionsByFile.size} file(s).`
+            );
+
       - name: Dismiss changes-requested review from Codex
         if: >-
           github.event_name == 'pull_request_review' &&
@@ -45,7 +245,7 @@ jobs:
               repo,
               pull_number,
               review_id,
-              message: 'Codex review auto-accepted — treated as advisory, not blocking.',
+              message: 'Codex review auto-accepted — suggestions applied (same-repo PRs) and review dismissed.',
               event: 'DISMISS',
             });
 

@@ -113,6 +113,7 @@ add_executable(SparkTests
     TestNetworkIntegration.cpp
     TestConnectionTimeout.cpp
     TestRecastIntegration.cpp
+    TestAudioBackendFactory.cpp
     TestAudioEngine.cpp
     TestSceneManager.cpp
     TestPhysicsSystem.cpp
@@ -155,6 +156,7 @@ add_executable(SparkTests
     TestDrawIndirect.cpp
     TestParallelCulling.cpp
     TestConnectionScope.cpp
+    TestConnectionScopeWiring.cpp
     TestDatablockRegistry.cpp
     TestEntityEventBus.cpp
     TestSHLighting.cpp
