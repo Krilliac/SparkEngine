@@ -155,6 +155,14 @@ namespace Spark::Graphics
         /// that does not depend on any volume's local species ordering.
         uint32_t GetSpeciesGlobalIndex(const std::string& name) const;
 
+        /// @brief Look up a species by its global index. Returns nullptr if
+        /// the index is out of range. The pointer is invalidated by any
+        /// subsequent RegisterSpecies/UnregisterSpecies call.
+        ///
+        /// Used by the foliage impostor baker to walk the registry without
+        /// going through the by-name lookup for every entry.
+        const FoliageSpecies* GetSpeciesByGlobalIndex(uint32_t index) const;
+
         // ----- Volume management -----
 
         /**

@@ -14,6 +14,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "AssetPipeline.h"
+#include "FoliageSystem.h"
 #include "../Utils/SparkConsole.h"
 #include <d3dcompiler.h>
 #endif
@@ -439,6 +440,71 @@ namespace Spark::Graphics
         context->OMSetRenderTargets(1, nullRtvs, nullptr);
 
         return true;
+    }
+
+    uint32_t FoliageImpostorAtlas::BakeAllRegisteredSpecies(
+        ID3D11Device* device, ID3D11DeviceContext* context, const FoliageManager& manager,
+        const std::function<std::shared_ptr<MeshAsset>(const std::string&)>& meshLoader, uint32_t cellSize,
+        uint32_t angleSteps, uint32_t maxAtlasSize)
+    {
+        if (!device || !context || cellSize == 0 || angleSteps == 0)
+            return 0;
+
+        const uint32_t speciesCount = manager.GetSpeciesCount();
+        if (speciesCount == 0)
+            return 0;
+
+        // Build the atlas layout for all currently-registered species.
+        std::vector<uint32_t> indices;
+        indices.reserve(speciesCount);
+        for (uint32_t i = 0; i < speciesCount; ++i)
+            indices.push_back(i);
+
+        uint32_t atlasW = 0;
+        uint32_t atlasH = 0;
+        auto slots =
+            FoliageImpostorBaker::ComputeAtlasLayout(indices, cellSize, angleSteps, maxAtlasSize, atlasW, atlasH);
+        if (slots.empty() || atlasW == 0 || atlasH == 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "FoliageImpostorAtlas: layout failed for %u species (cell=%u steps=%u max=%u)", speciesCount,
+                           cellSize, angleSteps, maxAtlasSize);
+            return 0;
+        }
+
+        // (Re)allocate the atlas at the resulting size. Initialize() is
+        // idempotent — it releases existing resources first.
+        if (!Initialize(device, atlasW, atlasH))
+            return 0;
+
+        const DirectX::XMFLOAT4 defaultTint{0.30f, 0.55f, 0.20f, 1.0f}; // foliage green
+
+        uint32_t baked = 0;
+        for (size_t i = 0; i < slots.size(); ++i)
+        {
+            const FoliageSpecies* species = manager.GetSpeciesByGlobalIndex(static_cast<uint32_t>(i));
+            if (!species)
+                continue;
+            if (species->meshPath.empty())
+                continue;
+
+            std::shared_ptr<MeshAsset> mesh = meshLoader ? meshLoader(species->meshPath) : nullptr;
+            if (!mesh)
+            {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Graphics,
+                                "FoliageImpostorAtlas: skipping species '%s' — mesh '%s' not loaded",
+                                species->name.c_str(), species->meshPath.c_str());
+                continue;
+            }
+
+            const auto& meshData = mesh->GetMeshData();
+            if (BakeSlot(context, slots[i], *mesh, meshData.boundingBoxMin, meshData.boundingBoxMax, defaultTint))
+                ++baked;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FoliageImpostorAtlas: baked %u / %u species (atlas %ux%u)", baked,
+                       speciesCount, atlasW, atlasH);
+        return baked;
     }
 
 #endif // SPARK_PLATFORM_WINDOWS

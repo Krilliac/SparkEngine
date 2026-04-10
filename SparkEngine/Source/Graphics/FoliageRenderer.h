@@ -297,16 +297,32 @@ namespace Spark::Graphics
          *                      meshes).
          * @return Number of instances written, or UINT32_MAX on error.
          *
-         * @warning **Not currently called from the render pipeline.** The
-         *          CPU batch build (`CollectFromFoliageManager`) is wired
-         *          into `GameplayLifecycleShared.cpp` but this GPU upload
-         *          step is not — a render-graph pass that calls it needs
-         *          to be added before foliage actually reaches the GPU.
-         *          The method itself is correct and testable against the
-         *          `GPUSceneBuffer` API; it is just unused. See
-         *          `FoliageImpostorBaker.h` for the matching GPU-bake gap.
+         * @note Wired into `GraphicsEngine::EndFrame()` just before
+         *       `GPUSceneBuffer::FlushToGPU()` so the latest CPU batch
+         *       reaches the GPU each frame. Phase B note about this
+         *       method being unused is no longer accurate.
          */
         uint32_t UploadToSceneBuffer(GPUSceneBuffer& sceneBuffer, uint32_t startSlot) const;
+
+        /**
+         * @brief Lazily (re)build the impostor atlas to cover every species
+         *        currently registered in `FoliageManager`.
+         *
+         * Called once per frame from `CollectFromFoliageManager`. The first
+         * call after Initialize() always rebuilds; subsequent calls only
+         * rebuild if the species count has grown since the previous bake
+         * (a game module registered new species after engine startup).
+         * Idempotent and cheap when nothing has changed.
+         *
+         * @param device   D3D11 device used to allocate the atlas.
+         * @param context  Immediate context for the bake draw calls.
+         * @return Number of species successfully baked on this call (0 if
+         *         no rebake was needed or no mesh loader is installed).
+         */
+        uint32_t BakeImpostorAtlasIfNeeded(ID3D11Device* device, ID3D11DeviceContext* context);
+
+        /// @brief Read-only access to the singleton impostor atlas.
+        const FoliageImpostorAtlas& GetImpostorAtlas() const { return m_impostorAtlas; }
 #endif
 
         // --------------------------------------------------------------------
@@ -335,6 +351,11 @@ namespace Spark::Graphics
         float m_impostorDistance = 50.0f;
         bool m_initialized = false;
         bool m_hasExplicitLoader = false; ///< True if Initialize/Install supplied a real loader
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        FoliageImpostorAtlas m_impostorAtlas; ///< Singleton runtime atlas (Windows-only).
+        uint32_t m_lastBakedSpeciesCount = 0; ///< Watermark for lazy rebake.
+#endif
     };
 
 } // namespace Spark::Graphics

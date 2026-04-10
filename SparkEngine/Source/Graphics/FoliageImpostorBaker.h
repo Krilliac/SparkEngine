@@ -59,6 +59,9 @@
 #include "../Core/Platform.h"
 
 #include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -71,6 +74,7 @@ class MeshAsset;
 
 namespace Spark::Graphics
 {
+    class FoliageManager;
 
     /**
      * @brief A packed slot in a foliage impostor atlas.
@@ -227,6 +231,34 @@ namespace Spark::Graphics
         bool BakeSlot(ID3D11DeviceContext* context, const ImpostorAtlasSlot& slot, const MeshAsset& mesh,
                       const DirectX::XMFLOAT3& bboxMin, const DirectX::XMFLOAT3& bboxMax,
                       const DirectX::XMFLOAT4& tint);
+
+        /**
+         * @brief Walk a `FoliageManager` registry and bake every species
+         *        whose mesh is currently resolvable into the atlas.
+         *
+         * Allocates a fresh layout sized for `manager.GetSpeciesCount()`
+         * via `FoliageImpostorBaker::ComputeAtlasLayout`, re-creates the
+         * atlas texture/depth/SRV at the resulting size, then iterates the
+         * species, fetches each mesh through the supplied loader, computes
+         * the bounding box from `MeshAssetData`, and calls `BakeSlot`.
+         *
+         * @param device         D3D11 device used to (re)allocate the atlas.
+         * @param context        D3D11 immediate context for draw commands.
+         * @param manager        Foliage species registry.
+         * @param meshLoader     Callback that resolves a species `meshPath`
+         *                       to a `std::shared_ptr<MeshAsset>`. Returning
+         *                       null marks the species as unbaked (it will
+         *                       be re-attempted on the next call).
+         * @param cellSize       Pixel side length of one angle cell.
+         * @param angleSteps     Number of yaw cells per species.
+         * @param maxAtlasSize   Upper bound on atlas dimensions.
+         * @return Number of species successfully baked. Zero is a valid
+         *         outcome (empty registry, or every mesh load returned null).
+         */
+        uint32_t BakeAllRegisteredSpecies(
+            ID3D11Device* device, ID3D11DeviceContext* context, const class FoliageManager& manager,
+            const std::function<std::shared_ptr<MeshAsset>(const std::string&)>& meshLoader, uint32_t cellSize = 256,
+            uint32_t angleSteps = 8, uint32_t maxAtlasSize = 4096);
 
         bool IsInitialized() const { return m_initialized; }
         uint32_t GetWidth() const { return m_width; }

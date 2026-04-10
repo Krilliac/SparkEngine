@@ -31,6 +31,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "GPUSceneBuffer.h"
+#include "GraphicsEngine.h"
 #endif
 
 namespace Spark::Graphics
@@ -335,6 +336,19 @@ namespace Spark::Graphics
         }
 
         m_stats.uniqueSpecies = static_cast<uint32_t>(uniqueKeys.size());
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        // Lazy impostor atlas bake — runs at most once per "species count
+        // grew" event. Pulls device + context from the live GraphicsEngine
+        // via EngineContext so the test path (no graphics) is unaffected.
+        if (auto* ctx = EngineContext::Get())
+        {
+            if (auto* graphics = ctx->GetGraphics())
+            {
+                BakeImpostorAtlasIfNeeded(graphics->GetDevice(), graphics->GetContext());
+            }
+        }
+#endif
     }
 
     // ========================================================================
@@ -342,6 +356,32 @@ namespace Spark::Graphics
     // ========================================================================
 
 #ifdef SPARK_PLATFORM_WINDOWS
+    uint32_t FoliageRenderer::BakeImpostorAtlasIfNeeded(ID3D11Device* device, ID3D11DeviceContext* context)
+    {
+        if (!m_initialized || !device || !context || !m_loader)
+            return 0;
+
+        auto& mgr = FoliageManager::GetInstance();
+        if (!mgr.IsInitialized())
+            return 0;
+
+        const uint32_t currentCount = mgr.GetSpeciesCount();
+        if (currentCount == 0)
+            return 0;
+        if (currentCount == m_lastBakedSpeciesCount && m_impostorAtlas.IsInitialized())
+            return 0; // up to date
+
+        const uint32_t baked =
+            m_impostorAtlas.BakeAllRegisteredSpecies(device, context, mgr, m_loader, /*cellSize=*/256,
+                                                     /*angleSteps=*/8, /*maxAtlasSize=*/4096);
+
+        // Watermark on the OBSERVED species count even if some species
+        // failed to bake (their meshes weren't loaded yet) — the renderer
+        // will retry on the next frame when the count next changes.
+        m_lastBakedSpeciesCount = currentCount;
+        return baked;
+    }
+
     uint32_t FoliageRenderer::UploadToSceneBuffer(GPUSceneBuffer& sceneBuffer, uint32_t startSlot) const
     {
         if (!m_initialized)

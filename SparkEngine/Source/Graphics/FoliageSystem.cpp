@@ -205,6 +205,13 @@ namespace Spark::Graphics
         return it->second;
     }
 
+    const FoliageSpecies* FoliageManager::GetSpeciesByGlobalIndex(uint32_t index) const
+    {
+        if (index >= m_species.size())
+            return nullptr;
+        return &m_species[index];
+    }
+
     void FoliageManager::UnregisterSpecies(const std::string& name)
     {
         auto it = m_speciesByName.find(name);
