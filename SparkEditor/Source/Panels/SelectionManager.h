@@ -61,8 +61,19 @@
 namespace SparkEditor
 {
 
-    /** @brief Entity identifier for selection purposes */
-    using EntityId = uint32_t;
+    /**
+     * @brief Entity identifier for selection purposes.
+     *
+     * Matches `ObjectID` from `SparkEditor/Source/SceneSystem/SceneFileTypes.h`
+     * (`using ObjectID = uint64_t`) so that editor panels like
+     * `HierarchyPanel` and `InspectorPanel`, which store `ObjectID`
+     * selection state, can migrate to this singleton without a narrowing
+     * conversion. The full panel-level migration (replacing per-panel
+     * `m_selectedObjects` etc. with `SelectionManager::GetInstance()`) is
+     * a separate follow-up — see
+     * `.claude/knowledge/engine-next-steps-2026-04-10.md` Phase B item 2.
+     */
+    using EntityId = uint64_t;
 
     /** @brief Invalid entity sentinel */
     constexpr EntityId INVALID_ENTITY = 0;
