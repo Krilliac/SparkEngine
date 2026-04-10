@@ -301,9 +301,9 @@ namespace Spark
     {
         const std::string sub = "Scripting";
 
-        // AngelScript and Lua engines are complex to initialize in test context.
-        // Verify they at least exist as concepts in the engine.
-        report.Add(sub, "Scripting subsystem present", true, "AngelScript + Lua engines available");
+        // AngelScript runtime is complex to initialize in test context.
+        // Verify it exists as a concept in the engine.
+        report.Add(sub, "Scripting subsystem present", true, "AngelScript engine available");
     }
 
     // ========================================================================

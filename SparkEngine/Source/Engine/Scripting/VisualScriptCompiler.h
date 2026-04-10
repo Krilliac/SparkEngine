@@ -221,6 +221,17 @@ namespace Spark::Scripting
         bool success = false;
     };
 
+    /**
+     * @brief Node palette metadata for visual scripting authoring UI.
+     */
+    struct ScriptNodePaletteEntry
+    {
+        ScriptNodeType type{};
+        const char* displayName = "";
+        const char* category = "";
+        const char* tooltip = "";
+    };
+
     // ========================================================================
     // Compiler
     // ========================================================================
@@ -243,6 +254,15 @@ namespace Spark::Scripting
          * @return Compilation result with generated source or errors
          */
         static ScriptCompileResult Compile(const VisualScriptGraph& graph, bool debugMode = false);
+
+        /// Blueprint-style authoring metadata used by editor palettes and search.
+        static const std::vector<ScriptNodePaletteEntry>& GetNodePalette();
+
+        /// Display name for a node type (fallback: "Unknown").
+        static const char* GetNodeDisplayName(ScriptNodeType type);
+
+        /// Category name for a node type (fallback: "Misc").
+        static const char* GetNodeCategory(ScriptNodeType type);
 
       private:
         /// Generate a unique variable name for a node's output

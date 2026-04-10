@@ -43,7 +43,7 @@
  *
  * ## Scripting Language Integration
  *
- * To expose editor automation to AngelScript or Lua:
+ * To expose editor automation to script runtimes:
  *
  * ### AngelScript Integration
  * ```cpp
@@ -54,14 +54,6 @@
  *         auto result = EditorAutomation::GetInstance().ExecuteCommand(cmd, {});
  *         return result.success;
  *     }), asCALL_CDECL);
- * ```
- *
- * ### Lua Integration
- * ```cpp
- * // In LuaScriptEngine::BindEditorAPI():
- * lua["editor_exec"] = [](const std::string& cmd) -> bool {
- *     return EditorAutomation::GetInstance().ExecuteCommand(cmd, {}).success;
- * };
  * ```
  *
  * ### Python Integration (via pybind11)

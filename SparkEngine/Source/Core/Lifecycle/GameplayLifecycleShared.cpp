@@ -114,7 +114,6 @@
 #include "Engine/Modding/ArchiveResourceProvider.h"
 #include "Engine/UI/UIFactory.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
-#include "Engine/Scripting/LuaScriptEngine.h"
 #include "Engine/Animation/BlendSpace.h"
 #include "Graphics/RHI/DXRSupport.h"
 #include "Graphics/RHI/NullRHIDevice.h"
@@ -478,14 +477,6 @@ namespace Spark::Core::Lifecycle
             }
         }
 
-        if (Spark::Scripting::LuaScriptEngine::GetInstance().Initialize())
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Core, "LuaScriptEngine initialized");
-        }
-        else
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "LuaScriptEngine init failed — Lua scripts disabled");
-        }
 
         (void)Spark::Animation::BlendSpaceManager::GetInstance();
         Profiler::GetInstance().SetEnabled(true);
@@ -1025,7 +1016,6 @@ namespace Spark::Core::Lifecycle
         {
             as->Shutdown();
         }
-        Spark::Scripting::LuaScriptEngine::GetInstance().Shutdown();
 
         Profiler::GetInstance().Shutdown();
 

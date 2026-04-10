@@ -972,7 +972,7 @@ namespace Spark
 
         console.RegisterCommand(
             "diag_scripting", [](const std::vector<std::string>&) -> std::string
-            { return RunSingleDiag(DiagScripting); }, "Diagnose scripting engines (AngelScript, Lua)", "Diagnostics");
+            { return RunSingleDiag(DiagScripting); }, "Diagnose scripting engine (AngelScript)", "Diagnostics");
 
         // Debug utility commands
         console.RegisterCommand(

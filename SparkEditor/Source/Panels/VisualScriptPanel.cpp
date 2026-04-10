@@ -12,105 +12,37 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <string>
+#include <unordered_map>
 
 namespace SparkEditor
 {
 
     using namespace Spark::Scripting;
 
-    // Node category definitions for the palette
-    struct NodePaletteEntry
+    struct PaletteCategory
     {
-        const char* name;
-        ScriptNodeType type;
+        std::string name;
+        std::vector<const ScriptNodePaletteEntry*> entries;
     };
 
-    struct NodeCategory
+    static std::vector<PaletteCategory> BuildPaletteCategories()
     {
-        const char* name;
-        const NodePaletteEntry* entries;
-        int count;
-    };
-
-    static constexpr NodePaletteEntry kEventNodes[] = {
-        {"On Start", ScriptNodeType::OnStart},
-        {"On Update", ScriptNodeType::OnUpdate},
-        {"On Trigger Enter", ScriptNodeType::OnTriggerEnter},
-        {"On Trigger Exit", ScriptNodeType::OnTriggerExit},
-        {"On Damaged", ScriptNodeType::OnDamaged},
-        {"On Key Press", ScriptNodeType::OnKeyPress},
-        {"On Collision", ScriptNodeType::OnCollision},
-        {"On Custom Event", ScriptNodeType::OnCustomEvent},
-    };
-
-    static constexpr NodePaletteEntry kFlowNodes[] = {
-        {"Branch (If)", ScriptNodeType::Branch},
-        {"For Loop", ScriptNodeType::ForLoop},
-        {"Sequence", ScriptNodeType::Sequence},
-    };
-
-    static constexpr NodePaletteEntry kActionNodes[] = {
-        {"Set Position", ScriptNodeType::SetPosition},     {"Set Health", ScriptNodeType::SetHealth},
-        {"Apply Force", ScriptNodeType::ApplyForce},       {"Play Sound", ScriptNodeType::PlaySound},
-        {"Play Animation", ScriptNodeType::PlayAnimation}, {"Spawn Entity", ScriptNodeType::SpawnEntity},
-        {"Destroy Entity", ScriptNodeType::DestroyEntity}, {"Print Message", ScriptNodeType::PrintMessage},
-        {"Fire Event", ScriptNodeType::FireEvent},
-    };
-
-    static constexpr NodePaletteEntry kMathNodes[] = {
-        {"Add", ScriptNodeType::Add},           {"Subtract", ScriptNodeType::Subtract},
-        {"Multiply", ScriptNodeType::Multiply}, {"Divide", ScriptNodeType::Divide},
-        {"Negate", ScriptNodeType::Negate},     {"Abs", ScriptNodeType::Abs},
-        {"Lerp", ScriptNodeType::Lerp},         {"Clamp", ScriptNodeType::Clamp},
-        {"Random", ScriptNodeType::Random},     {"Random Range", ScriptNodeType::RandomRange},
-    };
-
-    static constexpr NodePaletteEntry kLogicNodes[] = {
-        {"AND", ScriptNodeType::And},
-        {"OR", ScriptNodeType::Or},
-        {"NOT", ScriptNodeType::Not},
-        {"Equal", ScriptNodeType::Equal},
-        {"Not Equal", ScriptNodeType::NotEqual},
-        {"Greater", ScriptNodeType::Greater},
-        {"Less", ScriptNodeType::Less},
-    };
-
-    static constexpr NodePaletteEntry kGetterNodes[] = {
-        {"Get Key Down", ScriptNodeType::GetKeyDown},
-        {"Get Key Held", ScriptNodeType::GetKey},
-        {"Get Delta Time", ScriptNodeType::GetDeltaTime},
-        {"Get Self", ScriptNodeType::GetSelf},
-    };
-
-    static constexpr NodePaletteEntry kConstantNodes[] = {
-        {"Float", ScriptNodeType::ConstFloat},     {"Int", ScriptNodeType::ConstInt},
-        {"Bool", ScriptNodeType::ConstBool},       {"String", ScriptNodeType::ConstString},
-        {"Vector3", ScriptNodeType::ConstVector3},
-    };
-
-    static constexpr NodePaletteEntry kVariableNodes[] = {
-        {"Get Variable", ScriptNodeType::GetVariable},
-        {"Set Variable", ScriptNodeType::SetVariable},
-    };
-
-    static constexpr NodePaletteEntry kFunctionNodes[] = {
-        {"Custom Event", ScriptNodeType::DefineCustomEvent},
-        {"Call Function", ScriptNodeType::CallFunction},
-        {"Return Value", ScriptNodeType::ReturnValue},
-        {"Comment", ScriptNodeType::Comment},
-    };
-
-    static constexpr NodeCategory kCategories[] = {
-        {"Events", kEventNodes, static_cast<int>(std::size(kEventNodes))},
-        {"Flow Control", kFlowNodes, static_cast<int>(std::size(kFlowNodes))},
-        {"Actions", kActionNodes, static_cast<int>(std::size(kActionNodes))},
-        {"Math", kMathNodes, static_cast<int>(std::size(kMathNodes))},
-        {"Logic", kLogicNodes, static_cast<int>(std::size(kLogicNodes))},
-        {"Getters", kGetterNodes, static_cast<int>(std::size(kGetterNodes))},
-        {"Constants", kConstantNodes, static_cast<int>(std::size(kConstantNodes))},
-        {"Variables", kVariableNodes, static_cast<int>(std::size(kVariableNodes))},
-        {"Functions", kFunctionNodes, static_cast<int>(std::size(kFunctionNodes))},
-    };
+        std::vector<PaletteCategory> categories;
+        std::unordered_map<std::string, size_t> categoryToIndex;
+        for (const auto& entry : VisualScriptCompiler::GetNodePalette())
+        {
+            const std::string key = entry.category ? entry.category : "Misc";
+            const auto it = categoryToIndex.find(key);
+            if (it == categoryToIndex.end())
+            {
+                categoryToIndex[key] = categories.size();
+                categories.push_back(PaletteCategory{key, {}});
+            }
+            categories[categoryToIndex[key]].entries.push_back(&entry);
+        }
+        return categories;
+    }
 
     // Node colors by category
     static ImU32 GetNodeColor(ScriptNodeType type)
@@ -139,18 +71,7 @@ namespace SparkEditor
 
     static const char* GetNodeTitle(ScriptNodeType type)
     {
-        // Search categories for display name
-        for (const auto& cat : kCategories)
-        {
-            for (int i = 0; i < cat.count; ++i)
-            {
-                if (cat.entries[i].type == type)
-                {
-                    return cat.entries[i].name;
-                }
-            }
-        }
-        return "Unknown";
+        return VisualScriptCompiler::GetNodeDisplayName(type);
     }
 
     // Pin color by kind
@@ -282,15 +203,16 @@ namespace SparkEditor
             std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(), ::tolower);
         }
 
-        for (const auto& category : kCategories)
+        const auto categories = BuildPaletteCategories();
+        for (const auto& category : categories)
         {
             // If searching, skip empty categories
             bool hasMatch = false;
             if (hasSearch)
             {
-                for (int i = 0; i < category.count; ++i)
+                for (const auto* entry : category.entries)
                 {
-                    std::string name = category.entries[i].name;
+                    std::string name = entry->displayName;
                     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
                     if (name.find(searchLower) != std::string::npos)
                     {
@@ -303,25 +225,25 @@ namespace SparkEditor
             }
 
             // Auto-open categories when searching
-            bool open = hasSearch ? ImGui::TreeNodeEx(category.name, ImGuiTreeNodeFlags_DefaultOpen)
-                                  : ImGui::TreeNode(category.name);
+            bool open = hasSearch ? ImGui::TreeNodeEx(category.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)
+                                  : ImGui::TreeNode(category.name.c_str());
             if (open)
             {
-                for (int i = 0; i < category.count; ++i)
+                for (const auto* entry : category.entries)
                 {
                     if (hasSearch)
                     {
-                        std::string name = category.entries[i].name;
+                        std::string name = entry->displayName;
                         std::transform(name.begin(), name.end(), name.begin(), ::tolower);
                         if (name.find(searchLower) == std::string::npos)
                             continue;
                     }
-                    if (ImGui::Selectable(category.entries[i].name))
+                    if (ImGui::Selectable(entry->displayName))
                     {
                         // Add node at center of canvas view
                         float cx = -m_canvasOffsetX + 300.0f;
                         float cy = -m_canvasOffsetY + 200.0f;
-                        AddNodeAtPosition(category.entries[i].type, cx, cy);
+                        AddNodeAtPosition(entry->type, cx, cy);
                     }
                 }
                 ImGui::TreePop();
@@ -646,15 +568,16 @@ namespace SparkEditor
 
     void VisualScriptPanel::AddContextMenuNode()
     {
-        for (const auto& category : kCategories)
+        const auto categories = BuildPaletteCategories();
+        for (const auto& category : categories)
         {
-            if (ImGui::BeginMenu(category.name))
+            if (ImGui::BeginMenu(category.name.c_str()))
             {
-                for (int i = 0; i < category.count; ++i)
+                for (const auto* entry : category.entries)
                 {
-                    if (ImGui::MenuItem(category.entries[i].name))
+                    if (ImGui::MenuItem(entry->displayName))
                     {
-                        AddNodeAtPosition(category.entries[i].type, m_contextMenuX, m_contextMenuY);
+                        AddNodeAtPosition(entry->type, m_contextMenuX, m_contextMenuY);
                     }
                 }
                 ImGui::EndMenu();
