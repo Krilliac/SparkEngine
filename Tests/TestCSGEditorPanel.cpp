@@ -29,9 +29,20 @@ namespace
     // EditorPanel base class dependency. Every method here delegates to
     // the same CSGSystem singleton the real panel uses, so a bug in the
     // underlying system will surface here.
+    //
+    // The helper's constructor calls `CSGSystem::GetInstance().Initialize()`
+    // so each test starts with a clean singleton regardless of shuffle
+    // order. Without this, the test framework's `--shuffle` mode on
+    // Windows Release races with other tests that leave CSG state behind
+    // — a subsequent RebuildMesh() call would walk stale brushes and
+    // crash with ACCESS_VIOLATION. On Linux GCC Release the happy-path
+    // test order did not expose the race, but the fix is the same
+    // regardless of host.
     class CSGPanelHelper
     {
       public:
+        CSGPanelHelper() { CSGSystem::GetInstance().Initialize(); }
+        ~CSGPanelHelper() { CSGSystem::GetInstance().Shutdown(); }
         uint32_t CreateBrush(BrushShape shape, const CSGVec3& size, CSGOperation op = CSGOperation::Additive)
         {
             auto& csg = CSGSystem::GetInstance();
