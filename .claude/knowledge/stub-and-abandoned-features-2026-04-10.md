@@ -55,16 +55,18 @@ These are fully designed-and-implemented-in-header classes that no `.cpp`
 anywhere in the engine calls. Most have no tests either. They are candidates
 for deletion if no follow-up owner claims them.
 
-### Engine subsystems (verified orphaned — no refs outside their own headers)
+### Engine subsystems — resolved 2026-04-10 (later session)
 
-| File | Lines | Purpose |
-|---|---|---|
-| `SparkEngine/Source/Engine/DataTable/DataTableSystem.h` | ~? | `DataTableManager` singleton, CSV/JSON row tables. Never instantiated. |
-| `SparkEngine/Source/Engine/AI/NavMeshLink.h` | ~100+ | `NavMeshLinkSystem` singleton for off-mesh connections. Never called. |
-| `SparkEngine/Source/Engine/Gameplay/GameplayTags.h` | ~? | `GameplayTagManager` singleton (Unreal-style tag system). Never referenced. |
-| `SparkEngine/Source/Engine/Gameplay/GameplaySystemExtension.h` | ~? | Extension framework with `GetInstance()`. Never referenced. |
-| `SparkEngine/Source/Engine/ECS/RuntimePrefab.h` | ~? | Runtime prefab instantiation with serialization. Only referenced in its own test file `Tests/TestRuntimePrefab.cpp`. |
-| `SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h` | ~? | Type file containing a `GetInstance()` declaration. Never used. |
+Verification on each entry found that **3 of the 6 were false positives** — the audit had listed incorrect class names. The remaining 3 real orphans have been wired in.
+
+| File | Lines | Original audit claim | Actual status |
+|---|---|---|---|
+| `SparkEngine/Source/Engine/DataTable/DataTableSystem.h` | 800 | "`DataTableManager` singleton, never instantiated" | **FALSE POSITIVE.** The class is named `DataTableRegistry`, not `DataTableManager`, and it **was already wired** in `GameplayLifecycleShared.cpp:469` (Initialize) and `:1060` (Shutdown). No action needed. |
+| `SparkEngine/Source/Engine/AI/NavMeshLink.h` | 134 | "`NavMeshLinkSystem` singleton for off-mesh connections. Never called." | **RESOLVED.** `NavMeshLinkSystem::GetInstance().Initialize()` / `Shutdown()` now called from `GameplayLifecycleShared.cpp`. Added `Tests/TestNavMeshLink.cpp` with 5 real-class tests covering init/clear, add-link ID assignment, remove-link (including unknown-ID safety), enable/disable, and `FindLinksNear` with bidirectional vs one-way semantics. |
+| `SparkEngine/Source/Engine/Gameplay/GameplayTags.h` | 386 | "`GameplayTagManager` singleton, never referenced" | **FALSE POSITIVE.** The class is named `GameplayTagRegistry`, not `GameplayTagManager`, and it **was already wired** in `GameplayLifecycleShared.cpp:443-450` (Initialize + EngineContext registration) and `:1010-1016` (Shutdown). Covered by `Tests/TestGameplayTags.cpp`. No action needed. |
+| `SparkEngine/Source/Engine/Gameplay/GameplaySystemExtension.h` | 260 | "Extension framework with `GetInstance()`. Never referenced." | **RESOLVED.** `(void)GameplayExtensionRegistry::GetInstance()` touch added at startup, `GetInstance().Clear()` called at shutdown. Also fixed a latent ODR hazard: this header declared `Spark::Gameplay::QuestDefinition` and `QuestContext`, which collided with completely different definitions in `QuestSystem.h`. Renamed the extension-local types to `QuestExtensionInput` / `QuestExtensionState` so both headers can coexist. Added `Tests/TestGameplaySystemExtension.cpp` with 6 real-class tests covering singleton liveness, quest + dialogue registration/lookup, null rejection, `Clear()`, and full quest extension lifecycle (CanStart / OnStarted / OnObjectiveProgress / IsComplete / OnCompleted). |
+| `SparkEngine/Source/Engine/ECS/RuntimePrefab.h` | 478 | "Runtime prefab instantiation with serialization. Only referenced in its own test file" | **RESOLVED.** `(void)PrefabRegistry::GetInstance()` touch added at startup in `GameplayLifecycleShared.cpp` so new `RegisterPrefab` calls find the singleton in a constructed state. Also fixed a build-time hazard: the header used forward declarations of `Spark::BinaryWriter` / `BinaryReader` but its inline `Serialize` / `Deserialize` method bodies called methods on them, so any TU including `RuntimePrefab.h` without also including `Utils/Serializer.h` failed to compile. Switched to a proper `#include "Utils/Serializer.h"`. Existing `Tests/TestRuntimePrefab.cpp` already exercises the real class. |
+| `SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h` | 288 | "Type file containing a `GetInstance()` declaration. Never used." | **FALSE POSITIVE.** Already `#include`d from `SaveSystem.h:74`. No action needed. |
 
 ### Graphics subsystems (reported by audit, require re-verification before action)
 

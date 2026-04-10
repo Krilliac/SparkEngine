@@ -47,12 +47,10 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations — full headers not needed in this header.
-namespace Spark
-{
-    class BinaryWriter;
-    class BinaryReader;
-} // namespace Spark
+// Full include required: the inline Serialize / Deserialize method
+// bodies below call BinaryWriter / BinaryReader methods directly, so
+// forward declarations are not sufficient.
+#include "Utils/Serializer.h"
 
 namespace Spark::ECS
 {

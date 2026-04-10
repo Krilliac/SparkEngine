@@ -82,7 +82,10 @@
 #include "Core/FixedTimestepAccumulator.h"
 #include "Core/PluginRegistry.h"
 #include "Core/ResourceVersionTracker.h"
+#include "Engine/AI/NavMeshLink.h"
 #include "Engine/Animation/AnimNotify.h"
+#include "Engine/ECS/RuntimePrefab.h"
+#include "Engine/Gameplay/GameplaySystemExtension.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -464,6 +467,26 @@ namespace Spark::Core::Lifecycle
         Spark::Build::GamePackager::GetInstance().Initialize();
         Spark::OnlineServices::OnlineServiceManager::GetInstance().Initialize();
         Spark::Data::DataTableRegistry::GetInstance().Initialize();
+
+        // Off-mesh navigation links (jump, climb, teleport) — pathfinding
+        // consults this registry for traversal between disconnected nav
+        // regions. `FoliageVolumeComponent`-style runtime bookkeeping is
+        // already wired in `AdvancedPlacementComponents.h`; the singleton
+        // just needs to be alive so links can be registered.
+        Spark::AI::NavMeshLinkSystem::GetInstance().Initialize();
+
+        // Runtime prefab registry — data-driven entity templates with
+        // component descriptors, spawning, and binary (de)serialization.
+        // Touch the singleton so later RegisterPrefab calls find it in a
+        // constructed state.
+        (void)Spark::ECS::PrefabRegistry::GetInstance();
+
+        // Extension point registry for genre-specific quest / dialogue
+        // behavior. Game modules (RPG, MMO, etc.) register concrete
+        // implementations here; the engine QuestSystem / DialogueSystem
+        // delegates to matching extensions at runtime.
+        (void)Spark::Gameplay::GameplayExtensionRegistry::GetInstance();
+
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
         Spark::HLOD::HLODSystem::GetInstance().Initialize();
@@ -1035,6 +1058,12 @@ namespace Spark::Core::Lifecycle
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Shutdown();
         Spark::Rendering::MovieRenderPipeline::GetInstance().Shutdown();
         Spark::Data::DataTableRegistry::GetInstance().Shutdown();
+
+        // Engine-orphan singletons wired in this branch — teardown
+        // mirrors the startup order so dependents are released first.
+        Spark::Gameplay::GameplayExtensionRegistry::GetInstance().Clear();
+        Spark::AI::NavMeshLinkSystem::GetInstance().Shutdown();
+
         Spark::OnlineServices::OnlineServiceManager::GetInstance().Shutdown();
 
         if (ctx)
