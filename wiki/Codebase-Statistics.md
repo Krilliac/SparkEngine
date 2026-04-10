@@ -8,19 +8,19 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 264458 |
-| **SparkEditor/Source** | 86733 |
+| **SparkEngine/Source** | 264476 |
+| **SparkEditor/Source** | 86764 |
 | **GameModules** | 58460 |
-| **Tests** | 107806 |
+| **Tests** | 107933 |
 | **SparkConsole/src** | 1858 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~519848** |
+| **Total C++ (excl. ThirdParty)** | **~520024** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 747 |
+| Header files (.h/.hpp) | 748 |
 | Implementation files (.cpp) | 866 |
 | HLSL shader files | 38 |
 | GLSL shader files | 14 |
@@ -34,7 +34,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |--------|-------|
 | Average lines per .cpp file | ~862 |
 | Average lines per .h file | ~570 |
-| Largest codebase section | Graphics (101653 lines — 38% of SparkEngine/Source) |
+| Largest codebase section | Graphics (101654 lines — 38% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,13 +42,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 101653 | 38.4% |
-| Engine (all subsystems) | 80181 | 30.3% |
+| Graphics | 101654 | 38.4% |
+| Engine (all subsystems) | 80184 | 30.3% |
 | Utils | 36974 | 13.9% |
-| Core | 20596 | 7.7% |
+| Core | 20603 | 7.7% |
 | Physics | 10101 | 3.8% |
 | Audio | 5548 | 2.0% |
-| Input | 3888 | 1.4% |
+| Input | 3895 | 1.4% |
 | SceneManager | 1886 | 0.7% |
 | Enums | 1423 | 0.5% |
 | Game | 1272 | 0.4% |
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 86733 |
+| Total editor lines | 86764 |
 
 ## Testing Metrics
 
@@ -169,7 +169,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | File | Lines |
 |------|------:|
-| `RenderGraph.h` | 1124 |
+| `RenderGraph.h` | 1125 |
 | `EngineSettings.h` | 1079 |
 | `JsonUtils.h` | 963 |
 | `BasisTranscoder.h` | 912 |

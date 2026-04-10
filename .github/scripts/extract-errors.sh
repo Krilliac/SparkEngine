@@ -38,10 +38,14 @@ for logfile in "$@"; do
     [[ "$logfile" == *configure* ]] && is_configure=true
 
     # ── Test failures ────────────────────────────────────────────
-    # Match test failures but exclude cmake feature checks and "0 tests failed"
+    # Match test failures but exclude cmake feature checks, "0 tests failed", and warned (flaky) tests
     grep -iE '\[ *FAIL|\bFAILED\b.*test|tests? failed[^:]|\bTest #[0-9]+.*Failed' "$clean_file" 2>/dev/null \
         | grep -viE 'Performing Test|Check.*- Failed|Looking for|0 tests? failed' \
         >> "$tmp_tests" 2>/dev/null || true
+
+    # ── Test warnings (known flaky tests) ────────────────────────
+    grep -E '\[ *WARN *\]' "$clean_file" 2>/dev/null \
+        >> "$tmp_warnings" 2>/dev/null || true
 
     # ── Compile/link errors ──────────────────────────────────────
     {

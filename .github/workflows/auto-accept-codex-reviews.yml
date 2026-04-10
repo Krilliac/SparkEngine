@@ -1,0 +1,109 @@
+name: Auto-accept Codex reviews
+
+# Automatically dismisses "changes requested" reviews from OpenAI Codex bots
+# and resolves any review threads they create, so Codex comments are visible
+# but do not block PRs from merging.
+#
+# Codex reviews are always treated as advisory — a human reviewer must still
+# approve the PR via branch protection rules if required.
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  auto-accept:
+    runs-on: ubuntu-latest
+    # Only run on reviews/comments from known Codex bot accounts.
+    # Extend this list if OpenAI adds new bot identities.
+    if: >-
+      github.event.sender.login == 'chatgpt-codex-connector[bot]' ||
+      github.event.sender.login == 'codex[bot]' ||
+      github.event.sender.login == 'openai-codex[bot]' ||
+      github.event.sender.login == 'chatgpt-codex[bot]'
+    steps:
+      - name: Dismiss changes-requested review from Codex
+        if: >-
+          github.event_name == 'pull_request_review' &&
+          github.event.review.state == 'changes_requested'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            const review_id = context.payload.review.id;
+
+            core.info(`Dismissing Codex review #${review_id} on PR #${pull_number}`);
+            await github.rest.pulls.dismissReview({
+              owner,
+              repo,
+              pull_number,
+              review_id,
+              message: 'Codex review auto-accepted — treated as advisory, not blocking.',
+              event: 'DISMISS',
+            });
+
+      - name: Resolve Codex review threads
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            const sender = context.payload.sender.login;
+
+            // Fetch all review threads on this PR via GraphQL
+            const query = `
+              query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    reviewThreads(first: 50, after: $cursor) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        id
+                        isResolved
+                        comments(first: 1) {
+                          nodes { author { login } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            const resolveMutation = `
+              mutation($threadId: ID!) {
+                resolveReviewThread(input: { threadId: $threadId }) {
+                  thread { id isResolved }
+                }
+              }
+            `;
+
+            let cursor = null;
+            let resolved = 0;
+            do {
+              const result = await github.graphql(query, {
+                owner, repo, number: pull_number, cursor,
+              });
+              const threadsPage = result.repository.pullRequest.reviewThreads;
+              for (const thread of threadsPage.nodes) {
+                if (thread.isResolved) continue;
+                const firstAuthor = thread.comments.nodes[0]?.author?.login;
+                if (firstAuthor !== sender) continue;
+                try {
+                  await github.graphql(resolveMutation, { threadId: thread.id });
+                  resolved++;
+                } catch (e) {
+                  core.warning(`Failed to resolve thread ${thread.id}: ${e.message}`);
+                }
+              }
+              cursor = threadsPage.pageInfo.hasNextPage ? threadsPage.pageInfo.endCursor : null;
+            } while (cursor);
+
+            core.info(`Resolved ${resolved} Codex review thread(s) on PR #${pull_number}`);

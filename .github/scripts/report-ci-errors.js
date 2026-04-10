@@ -301,22 +301,46 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
 
     if (globalWarnings.size > 0) {
         const allJobs = [...new Set(jobResults.map(r => r.job))];
-        const specificWarnings = [...globalWarnings.values()]
-            .filter(w => w.jobs.length < allJobs.length || allJobs.length === 1);
 
-        if (specificWarnings.length > 0) {
+        // Separate test warnings (flaky tests) from compiler warnings
+        const testWarnings = [...globalWarnings.values()]
+            .filter(w => w.message.match(/\[ *WARN *\]/));
+        const compilerWarnings = [...globalWarnings.values()]
+            .filter(w => !w.message.match(/\[ *WARN *\]/) &&
+                (w.jobs.length < allJobs.length || allJobs.length === 1));
+
+        if (testWarnings.length > 0) {
+            const lines = ['### :warning: Test Warnings (Known Flaky)', ''];
+            lines.push('These tests are registered as known flaky and do not block the build:');
+            lines.push('');
+            lines.push('| Test | Jobs |');
+            lines.push('|------|------|');
+            for (const entry of testWarnings.slice(0, 20)) {
+                const jobList = entry.jobs.map(j => j.replace('build-', '')).join(', ');
+                const msg = entry.message.length > 120
+                    ? entry.message.slice(0, 117) + '...'
+                    : entry.message;
+                lines.push(`| ${msg} | ${jobList} |`);
+            }
+            if (testWarnings.length > 20) {
+                lines.push(`| ... and ${testWarnings.length - 20} more | |`);
+            }
+            sections.push(lines.join('\n'));
+        }
+
+        if (compilerWarnings.length > 0) {
             const lines = [];
-            lines.push(`<details><summary>Compiler Warnings (${specificWarnings.length})</summary>`);
+            lines.push(`<details><summary>Compiler Warnings (${compilerWarnings.length})</summary>`);
             lines.push('');
             lines.push('```');
-            for (const entry of specificWarnings.slice(0, 20)) {
+            for (const entry of compilerWarnings.slice(0, 20)) {
                 const jobTag = entry.jobs.length < allJobs.length
                     ? ` [${entry.jobs.map(j => j.replace('build-', '')).join(', ')}]`
                     : '';
                 lines.push(entry.message + jobTag);
             }
-            if (specificWarnings.length > 20) {
-                lines.push(`... and ${specificWarnings.length - 20} more`);
+            if (compilerWarnings.length > 20) {
+                lines.push(`... and ${compilerWarnings.length - 20} more`);
             }
             lines.push('```');
             lines.push('</details>');
@@ -324,13 +348,19 @@ module.exports = async ({ github, context, core, glob, io, artifact }) => {
         }
     }
 
+    const testWarningCount = [...globalWarnings.values()]
+        .filter(w => w.message.match(/\[ *WARN *\]/)).length;
+    const compilerWarningCount = globalWarnings.size - testWarningCount;
+
     const failedJobs = jobResults.map(r => r.job.replace('build-', '')).join(', ');
     const body = [
         COMMENT_MARKER,
         `## :x: CI Error Report`,
         '',
         `**Failed jobs:** ${failedJobs}`,
-        `**Errors:** ${globalErrors.size} | **Test failures:** ${globalTests.size} | **Warnings:** ${globalWarnings.size}`,
+        `**Errors:** ${globalErrors.size} | **Test failures:** ${globalTests.size}` +
+            (testWarningCount > 0 ? ` | **Test warnings:** ${testWarningCount}` : '') +
+            ` | **Compiler warnings:** ${compilerWarningCount}`,
         '',
         ...sections,
         '',
