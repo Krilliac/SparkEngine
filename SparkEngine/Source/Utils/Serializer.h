@@ -280,6 +280,11 @@ namespace Spark
         {
             if (size == 0)
                 return true;
+            if (dest == nullptr)
+            {
+                m_error = true;
+                return false;
+            }
             if (!Consume(size))
                 return false;
             std::memcpy(dest, m_data + m_cursor - size, size);
@@ -326,7 +331,7 @@ namespace Spark
       private:
         bool Consume(size_t count) noexcept
         {
-            if (m_error || m_cursor + count > m_size)
+            if (m_error || m_cursor > m_size || count > (m_size - m_cursor))
             {
                 m_error = true;
                 return false;
