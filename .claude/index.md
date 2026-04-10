@@ -37,6 +37,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | ConnectionScopeFilter wired into replication path | [knowledge/connection-scope-wiring-2026-04-10.md](knowledge/connection-scope-wiring-2026-04-10.md) | Observation | Resolved | 2026-04-10 |
 | Stub & abandoned features catalog (Tier 1–4, ~30 Graphics orphans, VR/Steam stubs) | [knowledge/stub-and-abandoned-features-2026-04-10.md](knowledge/stub-and-abandoned-features-2026-04-10.md) | Observation | Active | 2026-04-10 |
 | Engine next-steps Phase A (NavMesh/LOD notes, NetworkDebugPanel poll) | [knowledge/engine-next-steps-2026-04-10.md](knowledge/engine-next-steps-2026-04-10.md) | Observation | Active | 2026-04-10 |
+| Engine next-steps Phase B (stub @warnings, AnimMgr, SelectionMgr id widen) | [knowledge/engine-next-steps-phase-b-2026-04-10.md](knowledge/engine-next-steps-phase-b-2026-04-10.md) | Observation | Active | 2026-04-10 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-10)
@@ -44,9 +45,9 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps
 - **Tests**: 354 test files, 4566 tests on SparkTests (+11 new from Phase B/C wiring); all pass on native Linux (1 pre-existing flaky replication test now in TestWarnings.h)
-- **Editor**: 59 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor. `NetworkDebugPanel` now auto-polls `NetworkManager::GetStats()` each frame.
-- **Rendering**: 6 RHI backends (D3D11, D3D12, Vulkan, OpenGL, Metal, NullRHI). Remaining Tier 1 stubs: `VRSystem` (awaiting OpenXR SDK), `SteamTransport` (awaiting Steamworks SDK), `SteamPlatform`/`EpicPlatform`/`ConsolePlatform` in `OnlineServices` (awaiting SDKs). ~25 Graphics utility headers intentionally demand-driven (see `stub-and-abandoned-features-2026-04-10.md`).
-- **Passive registries (demand-driven, not in lifecycle)**: `NavMeshManager`, `NavMeshObstacleManager`, `LODManager` — each has a header `@note` explaining the pattern. Consumed on demand by AI / render / level-streaming code, exercised by dedicated tests.
+- **Editor**: 59 panels, all wired including GizmoSystem, CollaborativeEditSession, CinematicSequencer, TimeOfDay, AbilityEditor, TriggerEditor, ConditionEditor, DecalEditor. `NetworkDebugPanel` now auto-polls `NetworkManager::GetStats()` each frame. `SelectionManager::EntityId` widened from `uint32_t` to `uint64_t` to match `ObjectID` so panels can migrate to it without narrowing.
+- **Rendering**: 6 RHI backends (D3D11, D3D12, Vulkan, OpenGL, Metal, NullRHI). Remaining Tier 1 stubs (now with explicit `@warning` headers): `VRSystem` (awaiting OpenXR SDK), `SteamTransport` (awaiting Steamworks SDK), `SteamPlatform`/`EpicPlatform`/`ConsolePlatform` in `OnlineServices`, `FoliageImpostorBaker` + `FoliageRenderer::UploadToSceneBuffer` (GPU bake/upload not wired), `DXRSupport` (~80% — needs shader binding tables + DispatchRays). ~25 Graphics utility headers intentionally demand-driven (see `stub-and-abandoned-features-2026-04-10.md`).
+- **Passive registries (demand-driven, not in lifecycle)**: `NavMeshManager`, `NavMeshObstacleManager`, `LODManager`, `AnimationManager` — each has a header `@note` explaining the pattern. Consumed on demand by AI / render / animation / level-streaming code, exercised by dedicated tests.
 - **Post-processing**: 14 passes (Bloom, AutoExposure, Tonemapping, ColorGrading, FXAA, DOF, MotionBlur, Vignette, ChromaticAberration, FilmGrain, LensDistortion, LightShafts, LensFlare, Sharpen)
 - **ECS**: 75 component types across 17 headers, 25 systems
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript)
