@@ -1,3 +1,8 @@
+/**
+ * @file LifecycleStage.h
+ * @brief Abstract base class for engine lifecycle stages (init, update, shutdown)
+ */
+
 #pragma once
 
 #include <cstdint>

@@ -649,7 +649,14 @@ namespace Spark
                 auto& mem = EngineSettings::GetInstance().Memory();
                 if (args.empty())
                     return "Texture budget: " + std::to_string(mem.textureStreamingBudgetMB) + " MB";
-                mem.textureStreamingBudgetMB = std::clamp(std::stoi(args[0]), 64, 4096);
+                try
+                {
+                    mem.textureStreamingBudgetMB = std::clamp(std::stoi(args[0]), 64, 4096);
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid number: " + args[0];
+                }
                 return "Texture budget set to " + std::to_string(mem.textureStreamingBudgetMB) + " MB";
             },
             "Get/set texture streaming budget (MB)", "Memory");

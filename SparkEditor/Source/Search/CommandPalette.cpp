@@ -300,7 +300,10 @@ namespace SparkEditor
     {
         if (m_selectedIndex >= 0 && m_selectedIndex < static_cast<int>(m_filteredIndices.size()))
         {
-            const auto& action = m_allActions[m_filteredIndices[static_cast<size_t>(m_selectedIndex)]];
+            size_t actionIdx = m_filteredIndices[static_cast<size_t>(m_selectedIndex)];
+            if (actionIdx >= m_allActions.size())
+                return;
+            const auto& action = m_allActions[actionIdx];
             if (action.callback)
             {
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "Executing command: '%s'", action.name.c_str());

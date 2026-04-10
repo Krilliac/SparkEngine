@@ -767,15 +767,13 @@ namespace Spark::Core::Lifecycle
                 [dt]() { SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); }); });
 
             auto futCinematic = jobs.Submit(
-                [dt]()
-                {
+                [dt]() {
                     SPARK_GUARDED_UPDATE("Cinematic", "Core",
                                          { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
                 });
 
             auto futReplay = jobs.Submit(
-                [dt]()
-                {
+                [dt]() {
                     SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
                 });
 

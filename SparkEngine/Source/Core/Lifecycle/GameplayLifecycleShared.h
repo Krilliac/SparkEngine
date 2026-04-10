@@ -1,3 +1,8 @@
+/**
+ * @file GameplayLifecycleShared.h
+ * @brief Shared lifecycle functions for gameplay and debug subsystem management
+ */
+
 #pragma once
 #include <cstdint>
 

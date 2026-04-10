@@ -401,62 +401,69 @@ namespace Spark::Input
             size_t pos = 0;
             while (pos < json.size())
             {
-                // Find next action name
-                auto nameStart = json.find('"', pos);
-                if (nameStart == std::string_view::npos)
-                    break;
-                nameStart++;
-                auto nameEnd = json.find('"', nameStart);
-                if (nameEnd == std::string_view::npos)
-                    break;
-                std::string name(json.substr(nameStart, nameEnd - nameStart));
-
-                // Find "primary":
-                auto primaryPos = json.find("\"primary\":", nameEnd);
-                if (primaryPos == std::string_view::npos)
-                    break;
-                primaryPos += 10; // skip past "primary":
-                while (primaryPos < json.size() && json[primaryPos] == ' ')
-                    primaryPos++;
-                auto primaryEnd = json.find_first_of(",}", primaryPos);
-                uint16_t primaryVal =
-                    static_cast<uint16_t>(std::stoi(std::string(json.substr(primaryPos, primaryEnd - primaryPos))));
-
-                // Find "secondary":
-                auto secondaryPos = json.find("\"secondary\":", primaryEnd);
-                if (secondaryPos == std::string_view::npos)
-                    break;
-                secondaryPos += 12;
-                while (secondaryPos < json.size() && json[secondaryPos] == ' ')
-                    secondaryPos++;
-                auto secondaryEnd = json.find_first_of(",}", secondaryPos);
-                uint16_t secondaryVal = static_cast<uint16_t>(
-                    std::stoi(std::string(json.substr(secondaryPos, secondaryEnd - secondaryPos))));
-
-                // Find "deadzone":
-                auto dzPos = json.find("\"deadzone\":", secondaryEnd);
-                float dzVal = 0.15f;
-                if (dzPos != std::string_view::npos && dzPos < json.find('}', secondaryEnd) + 1)
+                try
                 {
-                    dzPos += 11;
-                    while (dzPos < json.size() && json[dzPos] == ' ')
-                        dzPos++;
-                    auto dzEnd = json.find_first_of(",} ", dzPos);
-                    dzVal = std::stof(std::string(json.substr(dzPos, dzEnd - dzPos)));
+                    // Find next action name
+                    auto nameStart = json.find('"', pos);
+                    if (nameStart == std::string_view::npos)
+                        break;
+                    nameStart++;
+                    auto nameEnd = json.find('"', nameStart);
+                    if (nameEnd == std::string_view::npos)
+                        break;
+                    std::string name(json.substr(nameStart, nameEnd - nameStart));
+
+                    // Find "primary":
+                    auto primaryPos = json.find("\"primary\":", nameEnd);
+                    if (primaryPos == std::string_view::npos)
+                        break;
+                    primaryPos += 10; // skip past "primary":
+                    while (primaryPos < json.size() && json[primaryPos] == ' ')
+                        primaryPos++;
+                    auto primaryEnd = json.find_first_of(",}", primaryPos);
+                    uint16_t primaryVal =
+                        static_cast<uint16_t>(std::stoi(std::string(json.substr(primaryPos, primaryEnd - primaryPos))));
+
+                    // Find "secondary":
+                    auto secondaryPos = json.find("\"secondary\":", primaryEnd);
+                    if (secondaryPos == std::string_view::npos)
+                        break;
+                    secondaryPos += 12;
+                    while (secondaryPos < json.size() && json[secondaryPos] == ' ')
+                        secondaryPos++;
+                    auto secondaryEnd = json.find_first_of(",}", secondaryPos);
+                    uint16_t secondaryVal = static_cast<uint16_t>(
+                        std::stoi(std::string(json.substr(secondaryPos, secondaryEnd - secondaryPos))));
+
+                    // Find "deadzone":
+                    auto dzPos = json.find("\"deadzone\":", secondaryEnd);
+                    float dzVal = 0.15f;
+                    if (dzPos != std::string_view::npos && dzPos < json.find('}', secondaryEnd) + 1)
+                    {
+                        dzPos += 11;
+                        while (dzPos < json.size() && json[dzPos] == ' ')
+                            dzPos++;
+                        auto dzEnd = json.find_first_of(",} ", dzPos);
+                        dzVal = std::stof(std::string(json.substr(dzPos, dzEnd - dzPos)));
+                    }
+
+                    InputAction action;
+                    action.name = name;
+                    action.primaryKey = static_cast<PlatformKeyCode>(primaryVal);
+                    action.secondaryKey = static_cast<PlatformKeyCode>(secondaryVal);
+                    action.deadzone = dzVal;
+                    m_actions[name] = std::move(action);
+
+                    // Advance past this action's closing brace
+                    pos = json.find('}', secondaryEnd);
+                    if (pos == std::string_view::npos)
+                        break;
+                    pos++;
                 }
-
-                InputAction action;
-                action.name = name;
-                action.primaryKey = static_cast<PlatformKeyCode>(primaryVal);
-                action.secondaryKey = static_cast<PlatformKeyCode>(secondaryVal);
-                action.deadzone = dzVal;
-                m_actions[name] = std::move(action);
-
-                // Advance past this action's closing brace
-                pos = json.find('}', secondaryEnd);
-                if (pos == std::string_view::npos)
-                    break;
-                pos++;
+                catch (const std::exception&)
+                {
+                    break; // Malformed entry — stop parsing
+                }
             }
         }
 

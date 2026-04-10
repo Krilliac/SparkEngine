@@ -814,11 +814,12 @@ namespace Spark
         }
 
         // Clean up destroyed objects
-        m_objects.erase(
-            std::remove_if(
-                m_objects.begin(), m_objects.end(), [](const std::unique_ptr<InteractiveObject>& obj)
-                { return !obj || (!obj->IsActive() && obj->GetObjectType() == InteractiveObjectType::DESTRUCTIBLE); }),
-            m_objects.end());
+        m_objects.erase(std::remove_if(m_objects.begin(), m_objects.end(),
+                                       [](const std::unique_ptr<InteractiveObject>& obj) {
+                                           return !obj || (!obj->IsActive() &&
+                                                           obj->GetObjectType() == InteractiveObjectType::DESTRUCTIBLE);
+                                       }),
+                        m_objects.end());
     }
 
     bool InteractionSystem::TryInteract(Player* player)

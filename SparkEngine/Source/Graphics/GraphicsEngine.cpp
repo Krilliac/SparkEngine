@@ -938,28 +938,26 @@ void GraphicsEngine::SubmitMeshForRendering(std::string_view meshPath, std::stri
 
     // Spinlock: lower overhead than std::mutex for short critical sections.
     // Draw submission is called per-entity but holds the lock only for a push_back.
-    while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
     {
+        SpinlockGuard guard(m_drawListSpinlock);
+        m_drawList.push_back(cmd);
     }
-    m_drawList.push_back(cmd);
-    m_drawListSpinlock.clear(std::memory_order_release);
 }
 
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {
     // Swap the draw list out under the spinlock — minimal hold time.
     std::vector<MeshDrawCommand> localDrawList;
-    while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
     {
+        SpinlockGuard guard(m_drawListSpinlock);
+        localDrawList = std::move(m_drawList);
+        m_drawList.clear();
+        // Pre-reserve capacity for next frame based on this frame's count
+        if (m_drawList.capacity() == 0 && !localDrawList.empty())
+        {
+            m_drawList.reserve(localDrawList.size());
+        }
     }
-    localDrawList = std::move(m_drawList);
-    m_drawList.clear();
-    // Pre-reserve capacity for next frame based on this frame's count
-    if (m_drawList.capacity() == 0 && !localDrawList.empty())
-    {
-        m_drawList.reserve(localDrawList.size());
-    }
-    m_drawListSpinlock.clear(std::memory_order_release);
 
     if (localDrawList.empty())
         return;

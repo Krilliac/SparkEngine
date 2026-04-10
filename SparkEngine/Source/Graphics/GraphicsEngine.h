@@ -86,6 +86,25 @@ class Shader;
  * - AssetPipeline for model loading and asset streaming
  * - PhysicsSystem for physics simulation integration
  */
+/// @brief RAII guard for std::atomic_flag spinlocks — ensures release even on exception.
+class SpinlockGuard
+{
+  public:
+    explicit SpinlockGuard(std::atomic_flag& flag) noexcept : m_flag(flag)
+    {
+        while (m_flag.test_and_set(std::memory_order_acquire))
+        {
+        }
+    }
+    ~SpinlockGuard() noexcept { m_flag.clear(std::memory_order_release); }
+
+    SpinlockGuard(const SpinlockGuard&) = delete;
+    SpinlockGuard& operator=(const SpinlockGuard&) = delete;
+
+  private:
+    std::atomic_flag& m_flag;
+};
+
 class GraphicsEngine
 {
     // RenderPipeline delegates to private render sub-passes (FillGBuffer,
@@ -204,12 +223,8 @@ class GraphicsEngine
      */
     std::vector<MeshDrawCommand> GetDrawList() const
     {
-        while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
-        {
-        }
-        auto copy = m_drawList;
-        m_drawListSpinlock.clear(std::memory_order_release);
-        return copy;
+        SpinlockGuard guard(m_drawListSpinlock);
+        return m_drawList;
     }
 
     /**
@@ -217,11 +232,8 @@ class GraphicsEngine
      */
     void ClearDrawList()
     {
-        while (m_drawListSpinlock.test_and_set(std::memory_order_acquire))
-        {
-        }
+        SpinlockGuard guard(m_drawListSpinlock);
         m_drawList.clear();
-        m_drawListSpinlock.clear(std::memory_order_release);
     }
 
     // ========================================================================

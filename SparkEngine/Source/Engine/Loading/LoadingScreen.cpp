@@ -148,7 +148,8 @@ namespace Spark
         oss << "=== Loading Screen ===\n";
         oss << "Session: " << m_sessionName << "\n";
         const char* stateNames[] = {"Idle", "Loading", "Completed", "Failed", "Cancelled"};
-        oss << "State: " << stateNames[static_cast<int>(m_state)] << "\n";
+        auto stateIdx = static_cast<size_t>(m_state);
+        oss << "State: " << (stateIdx < std::size(stateNames) ? stateNames[stateIdx] : "Unknown") << "\n";
         oss << "Progress: " << static_cast<int>(m_progress.load() * 100) << "%\n";
         oss << "Tasks: " << m_tasks.size() << "\n";
         for (size_t i = 0; i < m_tasks.size(); ++i)

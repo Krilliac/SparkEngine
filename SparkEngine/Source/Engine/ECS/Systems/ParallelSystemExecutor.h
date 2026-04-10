@@ -194,8 +194,7 @@ namespace Spark::ECS
                         if (system->IsEnabled())
                         {
                             futures.push_back(jobs.Submit(
-                                [system, &world, deltaTime]()
-                                {
+                                [system, &world, deltaTime]() {
                                     SPARK_GUARDED_UPDATE("ECS:BatchSystem", "ECS",
                                                          { system->Update(world, deltaTime); });
                                 }));

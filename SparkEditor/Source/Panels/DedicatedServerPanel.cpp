@@ -652,7 +652,14 @@ namespace SparkEditor
             if (colonPos != std::string::npos)
             {
                 direct.address = addrStr.substr(0, colonPos);
-                direct.port = static_cast<uint16_t>(std::stoi(addrStr.substr(colonPos + 1)));
+                try
+                {
+                    direct.port = static_cast<uint16_t>(std::stoi(addrStr.substr(colonPos + 1)));
+                }
+                catch (const std::exception&)
+                {
+                    direct.port = 27015;
+                }
             }
             ConnectToServer(direct);
         }

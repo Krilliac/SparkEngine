@@ -1533,8 +1533,7 @@ namespace SparkEditor
                     {
                         // Remove existing connection to same input (only one wire per input)
                         std::erase_if(m_connections,
-                                      [toId, inPin](const ConnectionUI& c)
-                                      {
+                                      [toId, inPin](const ConnectionUI& c) {
                                           return c.connection.toNode == toId &&
                                                  c.connection.toPin == static_cast<uint32_t>(inPin);
                                       });
