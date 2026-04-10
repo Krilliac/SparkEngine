@@ -379,7 +379,8 @@ namespace Spark::Graphics
                     {
                         ss << " -> ";
                     }
-                    ss << m_passes[m_executionOrder[i]]->GetName();
+                    auto passIdx = m_executionOrder[i];
+                    ss << (passIdx < m_passes.size() ? m_passes[passIdx]->GetName() : "?");
                 }
                 ss << "\n";
             }

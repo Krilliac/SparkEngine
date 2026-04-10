@@ -118,6 +118,9 @@ namespace Spark::HLOD
             uint32_t nextClusterId = 1;
             for (const auto& [key, cellEntities] : grid)
             {
+                if (cellEntities.empty())
+                    continue;
+
                 HLODCluster cluster;
                 cluster.clusterId = nextClusterId++;
 
