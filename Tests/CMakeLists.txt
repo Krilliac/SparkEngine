@@ -220,6 +220,7 @@ add_executable(SparkTests
     TestFoliageSystem.cpp
     TestFoliageRenderer.cpp
     TestFoliageImpostorBaker.cpp
+    TestCSGEditorPanel.cpp
     TestConnectionScopeFilter.cpp
     TestNavMeshObstacles.cpp
     TestFaultIsolation.cpp
