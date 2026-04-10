@@ -282,3 +282,213 @@ TEST(SelectionManager_InvalidEntity)
     EXPECT_EQ(static_cast<size_t>(0), mgr.GetSelectionCount());
     mgr.Shutdown();
 }
+
+// ============================================================================
+// Real SparkEditor::SelectionManager tests
+// ----------------------------------------------------------------------------
+// These run against the actual class from
+// SparkEditor/Source/Panels/SelectionManager.h, which is now initialized in
+// EditorUI::InitializeManagers. Because the real class is a singleton, the
+// tests defensively reset state at the top of each case via Initialize().
+// ============================================================================
+
+#include "Panels/SelectionManager.h"
+
+TEST(SelectionMgrReal_InitializeAndClear)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    EXPECT_FALSE(mgr.HasSelection());
+    EXPECT_EQ(mgr.GetSelectionCount(), static_cast<size_t>(0));
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_SelectSingleEntity)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.Select(42);
+    EXPECT_TRUE(mgr.IsSelected(42));
+    EXPECT_EQ(mgr.GetSelectionCount(), static_cast<size_t>(1));
+    EXPECT_EQ(mgr.GetPrimarySelection(), static_cast<SparkEditor::EntityId>(42));
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_AddAndRemoveFromSelection)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.Select(1);
+    mgr.AddToSelection(2);
+    mgr.AddToSelection(3);
+    EXPECT_EQ(mgr.GetSelectionCount(), static_cast<size_t>(3));
+    EXPECT_EQ(mgr.GetPrimarySelection(), static_cast<SparkEditor::EntityId>(3));
+
+    mgr.RemoveFromSelection(2);
+    EXPECT_EQ(mgr.GetSelectionCount(), static_cast<size_t>(2));
+    EXPECT_FALSE(mgr.IsSelected(2));
+    EXPECT_TRUE(mgr.IsSelected(1));
+    EXPECT_TRUE(mgr.IsSelected(3));
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_ToggleSelection)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.ToggleSelection(5);
+    EXPECT_TRUE(mgr.IsSelected(5));
+    mgr.ToggleSelection(5);
+    EXPECT_FALSE(mgr.IsSelected(5));
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_SelectMultiple)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.SelectMultiple({10, 11, 12, 13});
+    EXPECT_EQ(mgr.GetSelectionCount(), static_cast<size_t>(4));
+    EXPECT_TRUE(mgr.IsSelected(10));
+    EXPECT_TRUE(mgr.IsSelected(13));
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_ClearSelection)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.SelectMultiple({1, 2, 3});
+    EXPECT_EQ(mgr.GetSelectionCount(), static_cast<size_t>(3));
+    mgr.ClearSelection();
+    EXPECT_FALSE(mgr.HasSelection());
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_CallbackFiresOnSelect)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+
+    int fireCount = 0;
+    SparkEditor::EntityId lastAdded = 0;
+    const uint32_t cbId = mgr.OnSelectionChanged(
+        [&](const SparkEditor::SelectionChangedEvent& e)
+        {
+            ++fireCount;
+            if (!e.added.empty())
+                lastAdded = e.added.front();
+        });
+
+    mgr.Select(99);
+    EXPECT_EQ(fireCount, 1);
+    EXPECT_EQ(lastAdded, static_cast<SparkEditor::EntityId>(99));
+
+    mgr.RemoveCallback(cbId);
+    mgr.Select(100);
+    EXPECT_EQ(fireCount, 1); // Unregistered — no further fires.
+
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_LockedEntityCannotBeSelected)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.LockEntity(7);
+    mgr.Select(7);
+    EXPECT_FALSE(mgr.IsSelected(7));
+    EXPECT_TRUE(mgr.IsLocked(7));
+
+    mgr.UnlockEntity(7);
+    mgr.Select(7);
+    EXPECT_TRUE(mgr.IsSelected(7));
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_MarqueeSelection)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+
+    mgr.BeginMarquee(0.0f, 0.0f);
+    EXPECT_TRUE(mgr.IsMarqueeActive());
+
+    mgr.UpdateMarquee(100.0f, 100.0f);
+
+    std::vector<std::pair<SparkEditor::EntityId, SparkEditor::ScreenPosition>> positions = {
+        {1, {10.0f, 10.0f}},   // inside
+        {2, {50.0f, 50.0f}},   // inside
+        {3, {200.0f, 200.0f}}, // outside
+    };
+    mgr.EndMarquee(positions, /*additive=*/false);
+
+    EXPECT_FALSE(mgr.IsMarqueeActive());
+    EXPECT_TRUE(mgr.IsSelected(1));
+    EXPECT_TRUE(mgr.IsSelected(2));
+    EXPECT_FALSE(mgr.IsSelected(3));
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_SelectionGroupsSaveAndRestore)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+
+    mgr.SelectMultiple({10, 20, 30});
+    mgr.SaveSelectionGroup("Trio");
+
+    mgr.ClearSelection();
+    EXPECT_FALSE(mgr.HasSelection());
+
+    mgr.RestoreSelectionGroup("Trio");
+    EXPECT_EQ(mgr.GetSelectionCount(), static_cast<size_t>(3));
+    EXPECT_TRUE(mgr.IsSelected(10));
+    EXPECT_TRUE(mgr.IsSelected(20));
+    EXPECT_TRUE(mgr.IsSelected(30));
+
+    auto names = mgr.GetGroupNames();
+    EXPECT_EQ(names.size(), static_cast<size_t>(1));
+    EXPECT_EQ(names[0], std::string("Trio"));
+
+    mgr.DeleteSelectionGroup("Trio");
+    EXPECT_EQ(mgr.GetGroupNames().size(), static_cast<size_t>(0));
+
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_FilterClearAndSet)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+
+    EXPECT_EQ(static_cast<int>(mgr.GetFilter()), static_cast<int>(SparkEditor::SelectionFilter::All));
+
+    mgr.SetFilter(SparkEditor::SelectionFilter::LightsOnly);
+    EXPECT_EQ(static_cast<int>(mgr.GetFilter()), static_cast<int>(SparkEditor::SelectionFilter::LightsOnly));
+
+    mgr.ClearFilter();
+    EXPECT_EQ(static_cast<int>(mgr.GetFilter()), static_cast<int>(SparkEditor::SelectionFilter::All));
+
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_ConsoleStatus)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.Select(42);
+    const std::string status = mgr.Console_GetStatus();
+    EXPECT_TRUE(status.find("[Selection]") != std::string::npos);
+    EXPECT_TRUE(status.find("Selected: 1") != std::string::npos);
+    mgr.Shutdown();
+}
+
+TEST(SelectionMgrReal_NotInitializedStatus)
+{
+    auto& mgr = SparkEditor::SelectionManager::GetInstance();
+    mgr.Initialize();
+    mgr.Shutdown();
+    const std::string status = mgr.Console_GetStatus();
+    EXPECT_TRUE(status.find("Not initialized") != std::string::npos);
+}

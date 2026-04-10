@@ -17,6 +17,7 @@
 #include "../Panels/SceneViewPanel.h"
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/HierarchyPanel.h"
+#include "../Panels/SelectionManager.h"
 #include "../Panels/InspectorPanel.h"
 #include "../Panels/AssetBrowserPanel.h"
 #include "../Panels/GameViewPanel.h"
@@ -191,6 +192,17 @@ namespace SparkEditor
         {
             console.LogWarning("Layout manager initialization failed — layouts will not persist");
         }
+
+        // Selection manager — centralized editor selection singleton.
+        // Panels (Hierarchy, Inspector, SceneView) currently maintain
+        // their own selection state keyed by uint64_t ObjectID while the
+        // SelectionManager API is keyed by uint32_t EntityId; the two
+        // will be unified in a follow-up, but the singleton still needs
+        // to be alive so new panel code and any tests that rely on
+        // SelectionManager::GetInstance() find it in a usable state.
+        console.LogInfo("Initializing selection manager...");
+        SelectionManager::GetInstance().Initialize();
+        console.LogSuccess("Selection manager initialized");
 
         // Command palette
         console.LogInfo("Initializing command palette...");
@@ -727,6 +739,11 @@ namespace SparkEditor
             m_collabSession.reset();
             console.LogSuccess("Collaborative edit session shutdown complete");
         }
+
+        // Shutdown selection manager singleton
+        console.LogInfo("Shutting down selection manager...");
+        SelectionManager::GetInstance().Shutdown();
+        console.LogSuccess("Selection manager shutdown complete");
 
         // Shutdown layout manager
         if (m_layoutManager)
