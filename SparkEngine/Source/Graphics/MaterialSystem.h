@@ -13,6 +13,9 @@
 #include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
+// Phase P: activated Tier 2 graphics orphan — pure CPU persistent
+// material constant buffer manager, runs on every platform.
+#include "PersistentMaterialCB.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -370,6 +373,31 @@ class MaterialSystem
     std::shared_ptr<Material> GetDefaultMaterial() const { return m_defaultMaterial; }
     std::shared_ptr<Material> GetErrorMaterial() const { return m_errorMaterial; }
 
+    // ------------------------------------------------------------------
+    // Phase P: PersistentMaterialCB accessor
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Get the persistent material CB manager (Phase P activation).
+     *
+     * The `PersistentMaterialCBManager` is lifecycle-owned by the
+     * material system. It manages a 4096-material × 256-byte mega
+     * buffer with per-material dirty tracking. Callers register a
+     * material via `RegisterMaterial(id)`, upload data with
+     * `UpdateMaterial(id, data, size)` (which hashes the data and
+     * only marks a GPU upload when the hash changes), and drain
+     * dirty slots via `GetDirtySlots()` / `ClearDirtyFlags()` after
+     * the GPU-side upload completes.
+     *
+     * The manager is pure CPU — it tracks a shadow buffer + dirty
+     * bookkeeping, no D3D11 resources. A future GPU-side companion
+     * that actually creates the mega `ID3D11Buffer` can read the
+     * shadow via `GetMaterialData()` and upload only the dirty
+     * sub-ranges.
+     */
+    Spark::Graphics::PersistentMaterialCBManager& GetPersistentMaterialCB() { return m_persistentCB; }
+    const Spark::Graphics::PersistentMaterialCBManager& GetPersistentMaterialCB() const { return m_persistentCB; }
+
     // Texture management
     ComPtr<ID3D11ShaderResourceView> LoadTexture(const std::string& filePath);
     void UnloadTexture(const std::string& filePath);
@@ -518,6 +546,13 @@ class MaterialSystem
     mutable std::mutex m_metricsMutex;
     MaterialMetrics m_metrics;
     std::chrono::high_resolution_clock::time_point m_frameStartTime;
+
+    // Phase P: persistent material constant buffer manager. Pure CPU —
+    // tracks a shadow buffer + per-material dirty bookkeeping so
+    // materials only upload to the GPU when their data actually
+    // changes. Lives outside the Windows guard; runs on every
+    // platform's build of MaterialSystem.
+    Spark::Graphics::PersistentMaterialCBManager m_persistentCB;
 
     // Helper methods
     HRESULT CreateDefaultMaterials();

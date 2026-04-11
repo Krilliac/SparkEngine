@@ -233,6 +233,7 @@ add_executable(SparkTests
     TestConstantBufferRing.cpp
     TestPostProcessingPipelinePhaseN.cpp
     TestShaderVariantSystem.cpp
+    TestPersistentMaterialCB.cpp
     TestDXRSupport.cpp
     TestCSGEditorPanel.cpp
     TestNavMeshLink.cpp

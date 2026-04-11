@@ -48,6 +48,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine next-steps Phase M (ReflectionProbeCache + CachedShadowAtlas wired into LightingSystem lifecycle) | [knowledge/engine-next-steps-phase-m-2026-04-11.md](knowledge/engine-next-steps-phase-m-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase N (RTHandleSystem + ConstantBufferRing wired into PostProcessingPipeline) | [knowledge/engine-next-steps-phase-n-2026-04-11.md](knowledge/engine-next-steps-phase-n-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase O (ShaderVariantSystem wired into Shader class lifecycle) | [knowledge/engine-next-steps-phase-o-2026-04-11.md](knowledge/engine-next-steps-phase-o-2026-04-11.md) | Observation | Active | 2026-04-11 |
+| Engine next-steps Phase P (PersistentMaterialCBManager wired into MaterialSystem lifecycle) | [knowledge/engine-next-steps-phase-p-2026-04-11.md](knowledge/engine-next-steps-phase-p-2026-04-11.md) | Observation | Active | 2026-04-11 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-11)
