@@ -505,6 +505,18 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
     m_denoiser->Initialize(denoiserSettings);
 
+    // Phase S: activate the procedural noise graph. Default output
+    // is a SimplexNode so the accessor is useful immediately; terrain
+    // / foliage / decoration systems can add more nodes via
+    // `GetProceduralNoise()->AddNode(...)` without rebuilding the
+    // engine.
+    m_proceduralNoise = std::make_unique<Spark::Graphics::NoiseGraph>();
+    {
+        auto defaultNode = std::make_unique<Spark::Graphics::SimplexNode>();
+        auto* nodePtr = m_proceduralNoise->AddNode(std::move(defaultNode));
+        m_proceduralNoise->SetOutputNode(nodePtr);
+    }
+
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Graphics", 0.0);
     return S_OK;
 }
@@ -516,6 +528,15 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 Spark::Graphics::DenoiserBackend GraphicsEngine::GetDenoiserBackend() const
 {
     return m_denoiser ? m_denoiser->GetBackend() : Spark::Graphics::DenoiserBackend::None;
+}
+
+// ============================================================================
+// Phase S: Procedural noise accessor
+// ============================================================================
+
+Spark::Graphics::SIMDLevel GraphicsEngine::GetProceduralNoiseSIMDLevel() const
+{
+    return Spark::Graphics::DetectBestSIMD();
 }
 
 // ============================================================================
@@ -600,6 +621,10 @@ void GraphicsEngine::Shutdown()
         m_denoiser->Shutdown();
         m_denoiser.reset();
     }
+
+    // Phase S: tear down the procedural noise graph. The unique_ptr
+    // releases all owned nodes via the graph's vector destructor.
+    m_proceduralNoise.reset();
 
     // Shutdown legacy systems
     if (m_renderPipeline)
@@ -1494,6 +1519,16 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
     m_denoiser->Initialize(denoiserSettings);
 
+    // Phase S: mirror the procedural noise graph activation on
+    // Linux / headless so tests exercising GraphicsEngine see the
+    // same default output node.
+    m_proceduralNoise = std::make_unique<Spark::Graphics::NoiseGraph>();
+    {
+        auto defaultNode = std::make_unique<Spark::Graphics::SimplexNode>();
+        auto* nodePtr = m_proceduralNoise->AddNode(std::move(defaultNode));
+        m_proceduralNoise->SetOutputNode(nodePtr);
+    }
+
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",
                    rhi.bridge.GetBackendName().c_str());
 
@@ -1531,6 +1566,9 @@ void GraphicsEngine::Shutdown()
         m_denoiser.reset();
     }
 
+    // Phase S: drop the procedural noise graph (Linux stub path).
+    m_proceduralNoise.reset();
+
     rhi.bridge.Shutdown();
     rhi.initialized = false;
 
@@ -1545,6 +1583,15 @@ void GraphicsEngine::Shutdown()
 Spark::Graphics::DenoiserBackend GraphicsEngine::GetDenoiserBackend() const
 {
     return m_denoiser ? m_denoiser->GetBackend() : Spark::Graphics::DenoiserBackend::None;
+}
+
+// ============================================================================
+// Phase S: Procedural noise accessor (Linux stub path)
+// ============================================================================
+
+Spark::Graphics::SIMDLevel GraphicsEngine::GetProceduralNoiseSIMDLevel() const
+{
+    return Spark::Graphics::DetectBestSIMD();
 }
 
 // ============================================================================

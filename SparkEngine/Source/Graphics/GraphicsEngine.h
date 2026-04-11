@@ -38,6 +38,11 @@
 // interface plus SoftwareDenoiser fallback. Pure CPU (joint bilateral
 // filter), no external SDK dependency, runs on every platform.
 #include "DenoiserInterface.h"
+// Phase S: activated Tier 2 graphics orphan — SIMD-accelerated
+// procedural noise graph (Simplex/Perlin/Cellular/FBM/DomainWarp/
+// Combiner nodes with batch evaluation). Pure CPU, runtime SIMD
+// detection, runs on every platform.
+#include "FastNoise2SIMD.h"
 #include "RHI/RHIBridge.h"
 #ifdef SPARK_HARDWARE_RT
 #include "RHI/DXRSupport.h"
@@ -350,6 +355,39 @@ class GraphicsEngine
      * current denoiser reports.
      */
     Spark::Graphics::DenoiserBackend GetDenoiserBackend() const;
+
+    // ========================================================================
+    // Phase S: Procedural noise accessor
+    // ========================================================================
+
+    /**
+     * @brief Get the engine's procedural noise graph (Phase S activation).
+     *
+     * The `GraphicsEngine` owns one `NoiseGraph` instance, default-
+     * initialised with a single `SimplexNode` as the output. Terrain,
+     * foliage scatter, and any other procedural system can call
+     * `Evaluate(x, y)` / `BatchEvaluate(...)` through this accessor
+     * without creating a standalone graph or touching a singleton.
+     *
+     * The graph exposes the full node catalog (Perlin, Cellular, FBM,
+     * DomainWarp, Combiner) via `AddNode(std::make_unique<...>)` for
+     * callers that want to compose their own graphs; the default
+     * output is a Simplex node so the accessor is useful out of the
+     * box. Runtime SIMD detection is available via
+     * `GetProceduralNoiseSIMDLevel()`.
+     */
+    Spark::Graphics::NoiseGraph* GetProceduralNoise() { return m_proceduralNoise.get(); }
+    const Spark::Graphics::NoiseGraph* GetProceduralNoise() const { return m_proceduralNoise.get(); }
+
+    /**
+     * @brief Get the runtime-detected SIMD level used by the noise graph.
+     *
+     * Returns `Scalar` on non-x86 platforms or when neither SSE2 nor
+     * AVX2 is available. The level is detected at compile time from
+     * the preprocessor feature macros, not at runtime — swap the
+     * compiler flags to change it.
+     */
+    Spark::Graphics::SIMDLevel GetProceduralNoiseSIMDLevel() const;
 
     /** @brief Set non-owning physics pointer (called by engine during init) */
     void SetPhysicsSystem(PhysicsSystem* physics) { m_physicsSystem = physics; }
@@ -703,6 +741,16 @@ class GraphicsEngine
     // platform with no external SDK). Owned by unique_ptr so a future
     // swap to OIDN / OptiX is a one-line replacement inside Initialize.
     std::unique_ptr<Spark::Graphics::IDenoiser> m_denoiser;
+
+    // Phase S: procedural noise graph (portable — runtime SIMD
+    // detection, default output is a SimplexNode). unique_ptr so a
+    // future terrain / foliage scatter system can replace the graph
+    // with a domain-specific composition without rebuilding the
+    // engine. Owned by unique_ptr because `NoiseGraph` holds a
+    // `std::vector<std::unique_ptr<NoiseNode>>` and the raw output
+    // pointer points into that vector; moving / copying the graph
+    // would invalidate the pointer.
+    std::unique_ptr<Spark::Graphics::NoiseGraph> m_proceduralNoise;
     std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
     std::vector<GameObject*> m_culledObjectsBuffer;               ///< Reusable culling output (avoids per-frame alloc)
 
