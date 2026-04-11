@@ -48,6 +48,7 @@ namespace Spark::Graphics
         }
         m_fullscreenVS.Reset();
         m_bloomPS.Reset();
+        m_gtaoPS.Reset();
         m_autoExposurePS.Reset();
         m_tonemapPS.Reset();
         m_colorGradingPS.Reset();
@@ -131,9 +132,9 @@ namespace Spark::Graphics
     {
         std::vector<PassMetrics> metrics;
         static const char* passNames[] = {
-            "Bloom",      "AutoExposure", "Tonemapping",         "ColorGrading", "FXAA",           "DepthOfField",
-            "MotionBlur", "Vignette",     "ChromaticAberration", "FilmGrain",    "LensDistortion", "LightShafts",
-            "LensFlare",  "Sharpen"};
+            "GTAO",      "Bloom",          "AutoExposure", "Tonemapping", "ColorGrading",
+            "FXAA",      "DepthOfField",   "MotionBlur",   "Vignette",    "ChromaticAberration",
+            "FilmGrain", "LensDistortion", "LightShafts",  "LensFlare",   "Sharpen"};
         for (int i = 0; i < static_cast<int>(PostProcessPass::Count); ++i)
         {
             PassMetrics pm;
@@ -698,6 +699,95 @@ namespace Spark::Graphics
         }
     )";
 
+        // Ground Truth Ambient Occlusion pixel shader
+        // Horizon-based screen-space AO with per-pixel depth-derivative normal reconstruction.
+        // Output multiplies the scene color by the computed AO so the pass is self-contained
+        // and can be slotted anywhere in the pipeline without a separate composite stage.
+        const char* gtaoPS = R"(
+        Texture2D sceneTexture : register(t0);
+        Texture2D depthTexture : register(t1);
+        SamplerState linearSampler : register(s0);
+        SamplerState pointSampler : register(s1);
+        cbuffer PostProcessParams : register(b0) {
+            float4 params0; // x=radius, y=power, z=projScale, w=directions
+            float4 params1; // x=width, y=height, z=stepsPerDir, w=totalTime (unused)
+            float4 params2; // x=falloffStart, y=falloffEnd, z=depthThreshold, w=normalBias
+            float4 params3;
+        };
+        static const float GTAO_PI = 3.14159265;
+        float3 ReconstructNormalFromDepth(float2 uv, float2 texelSize, float centerDepth) {
+            float rd = depthTexture.Sample(pointSampler, uv + float2(texelSize.x, 0)).r;
+            float dd = depthTexture.Sample(pointSampler, uv + float2(0, texelSize.y)).r;
+            float3 dx = float3(texelSize.x, 0.0, rd - centerDepth);
+            float3 dy = float3(0.0, texelSize.y, dd - centerDepth);
+            return normalize(cross(dy, dx));
+        }
+        float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
+            float3 scene = sceneTexture.Sample(linearSampler, uv).rgb;
+            float depth = depthTexture.Sample(linearSampler, uv).r;
+            if (depth <= 0.0001)
+                return float4(scene, 1);
+            float2 texelSize = 1.0 / float2(params1.x, params1.y);
+            int directions = (int)params0.w;
+            int steps = (int)params1.z;
+            float radius = params0.x;
+            float power = params0.y;
+            float projScale = max(params0.z, 0.001);
+            float falloffStart = params2.x * radius;
+            float falloffEnd = params2.y * radius;
+            float3 normal = ReconstructNormalFromDepth(uv, texelSize, depth);
+            float screenRadius = clamp(radius * projScale / max(depth, 0.001), 1.0, 256.0);
+            float totalAO = 0.0;
+            [loop]
+            for (int d = 0; d < directions; d++) {
+                float angle = GTAO_PI * (float)d / max((float)directions, 1.0);
+                float2 dir = float2(cos(angle), sin(angle));
+                float maxH = -1.0;
+                float maxHNeg = -1.0;
+                [loop]
+                for (int s = 1; s <= steps; s++) {
+                    float stepFrac = (float)s / max((float)steps, 1.0);
+                    float2 pixOffset = dir * stepFrac * screenRadius;
+                    float2 uvStep = pixOffset * texelSize;
+                    float2 spUV = uv + uvStep;
+                    if (all(spUV >= 0.0) && all(spUV <= 1.0)) {
+                        float sd = depthTexture.Sample(linearSampler, spUV).r;
+                        if (sd > 0.0001) {
+                            float3 delta = float3(pixOffset / projScale * depth, sd - depth);
+                            float len = length(delta);
+                            if (len > 0.0001) {
+                                float hc = dot(delta, normal) / len;
+                                float falloff = 1.0 - saturate((len - falloffStart) /
+                                                               max(falloffEnd - falloffStart, 0.001));
+                                maxH = max(maxH, hc * falloff);
+                            }
+                        }
+                    }
+                    float2 spUVneg = uv - uvStep;
+                    if (all(spUVneg >= 0.0) && all(spUVneg <= 1.0)) {
+                        float sdn = depthTexture.Sample(linearSampler, spUVneg).r;
+                        if (sdn > 0.0001) {
+                            float3 deltaN = float3(-pixOffset / projScale * depth, sdn - depth);
+                            float lenN = length(deltaN);
+                            if (lenN > 0.0001) {
+                                float hcN = dot(deltaN, normal) / lenN;
+                                float falloffN = 1.0 - saturate((lenN - falloffStart) /
+                                                                max(falloffEnd - falloffStart, 0.001));
+                                maxHNeg = max(maxHNeg, hcN * falloffN);
+                            }
+                        }
+                    }
+                }
+                float h1 = acos(clamp(maxH, -1.0, 1.0));
+                float h2 = acos(clamp(maxHNeg, -1.0, 1.0));
+                float vis = 0.25 * (-cos(2.0 * h1) + 2.0 * h1 + -cos(2.0 * h2) + 2.0 * h2) / GTAO_PI;
+                totalAO += saturate(vis);
+            }
+            float ao = pow(saturate(totalAO / max((float)directions, 1.0)), max(power, 0.01));
+            return float4(scene * ao, 1);
+        }
+    )";
+
         // Motion Blur pixel shader
         const char* motionBlurPS = R"(
         Texture2D sceneTexture : register(t0);
@@ -740,6 +830,7 @@ namespace Spark::Graphics
             const char* name;
         };
         ShaderDef shaders[] = {
+            {gtaoPS, &m_gtaoPS, "GTAO"},
             {bloomPS, &m_bloomPS, "Bloom"},
             {autoExposurePS, &m_autoExposurePS, "AutoExposure"},
             {tonemapPS, &m_tonemapPS, "Tonemap"},
@@ -872,6 +963,21 @@ namespace Spark::Graphics
 
         switch (pass)
         {
+        case PostProcessPass::GTAO:
+            // params0: x=radius, y=power, z=projScale, w=directions
+            // params1: x=width, y=height (set above), z=stepsPerDir, w=totalTime (unused by GTAO)
+            // params2: x=falloffStart, y=falloffEnd, z=depthThreshold, w=normalBias
+            // projScale is focal_length / viewport_height. With a default 60° vertical FOV,
+            // projScale = 1 / tan(30°) ≈ 1.732. Use that as a conservative default until a
+            // camera feed is wired; the existing DOF/MotionBlur passes use the same pattern.
+            cb.params0 = {m_gtaoSettings.radius, m_gtaoSettings.power, 1.732f,
+                          static_cast<float>(std::clamp(m_gtaoSettings.directions, 1, 16))};
+            cb.params1.z = static_cast<float>(std::clamp(m_gtaoSettings.stepsPerDirection, 1, 16));
+            cb.params2 = {m_gtaoSettings.falloffStart, m_gtaoSettings.falloffEnd, m_gtaoSettings.depthThreshold,
+                          m_gtaoSettings.normalBias};
+            ps = m_gtaoPS.Get();
+            break;
+
         case PostProcessPass::Bloom:
             cb.params0 = {m_bloomSettings.threshold, m_bloomSettings.softThreshold, m_bloomSettings.intensity,
                           m_bloomSettings.scatter};

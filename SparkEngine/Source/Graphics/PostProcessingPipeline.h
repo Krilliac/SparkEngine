@@ -145,6 +145,9 @@ namespace Spark::Graphics
         BloomSettings& GetBloomSettings() { return m_bloomSettings; }
         const BloomSettings& GetBloomSettings() const { return m_bloomSettings; }
 
+        GTAOSettings& GetGTAOSettings() { return m_gtaoSettings; }
+        const GTAOSettings& GetGTAOSettings() const { return m_gtaoSettings; }
+
         AutoExposureSettings& GetAutoExposureSettings() { return m_autoExposureSettings; }
         const AutoExposureSettings& GetAutoExposureSettings() const { return m_autoExposureSettings; }
 
@@ -216,6 +219,7 @@ namespace Spark::Graphics
 
         // Per-effect settings
         BloomSettings m_bloomSettings;
+        GTAOSettings m_gtaoSettings;
         AutoExposureSettings m_autoExposureSettings;
         TonemappingSettings m_tonemappingSettings;
         ColorGradingSettings m_colorGradingSettings;
@@ -246,6 +250,7 @@ namespace Spark::Graphics
         // Per-pass pixel shaders
         ComPtr<ID3D11VertexShader> m_fullscreenVS;
         ComPtr<ID3D11PixelShader> m_bloomPS;
+        ComPtr<ID3D11PixelShader> m_gtaoPS;
         ComPtr<ID3D11PixelShader> m_autoExposurePS;
         ComPtr<ID3D11PixelShader> m_tonemapPS;
         ComPtr<ID3D11PixelShader> m_colorGradingPS;
