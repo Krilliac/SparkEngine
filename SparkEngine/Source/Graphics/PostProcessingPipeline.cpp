@@ -32,6 +32,28 @@ namespace Spark::Graphics
             }
         }
 
+        // Phase J: activate the CPU-side temporal filter unconditionally —
+        // it runs even when there is no D3D11 device (headless / NullRHI).
+        // The history buffer grows with viewport size and is reset to match
+        // the pipeline resolution.
+        m_ssaoTemporalFilter.Initialize(width, height);
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        // Phase J: activate the D3D11-backed orphans when a device is available.
+        // All three have no-op Initialize methods when the pipeline is
+        // running headless (no m_device), so the non-device path is already
+        // correct for tests and the NullRHI backend.
+        if (m_device)
+        {
+            m_rtPool.Initialize(m_device, /*reclaimAfterFrames*/ 60);
+            m_gpuTimer.Initialize(m_device, /*maxTimers*/ static_cast<uint32_t>(PostProcessPass::Count));
+        }
+        if (m_context)
+        {
+            m_gpuMarkers.Initialize(m_context);
+        }
+#endif
+
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "PostProcessingPipeline initialized (%ux%u)", width, height);
         return true;
@@ -49,6 +71,7 @@ namespace Spark::Graphics
         m_fullscreenVS.Reset();
         m_bloomPS.Reset();
         m_gtaoPS.Reset();
+        m_ssaoTemporalPS.Reset();
         m_autoExposurePS.Reset();
         m_tonemapPS.Reset();
         m_colorGradingPS.Reset();
@@ -66,6 +89,17 @@ namespace Spark::Graphics
         m_linearSampler.Reset();
         m_pointSampler.Reset();
         m_currentExposure = 1.0f;
+
+        // Phase J: release orphan-owned resources alongside the rest of the
+        // D3D11 state. Calling Shutdown on an uninitialised instance is safe —
+        // each orphan guards its teardown on its own `m_initialized` flag.
+        m_ssaoTemporalFilter.Shutdown();
+#ifdef SPARK_PLATFORM_WINDOWS
+        m_rtPool.Shutdown();
+        m_gpuTimer.Shutdown();
+        m_gpuMarkers.Shutdown();
+#endif
+
         m_initialized = false;
     }
 
@@ -77,6 +111,25 @@ namespace Spark::Graphics
         m_activePassCount = 0;
         m_vsAlreadyBound = false; // Reset per-frame — VS/sampler/CB binding will be set on first pass
 
+#ifdef SPARK_PLATFORM_WINDOWS
+        // Phase J: age pooled transient RTs and begin a new timestamp frame
+        // before the first pass runs. The RT pool's Tick() is cheap (one
+        // pass over its entry vector) and the timestamp BeginFrame is a
+        // no-op if Initialize() was never called.
+        if (m_context)
+        {
+            m_gpuTimer.BeginFrame(m_context);
+        }
+        m_rtPool.Tick();
+
+        // Bracket the entire post-process chain in a single named event so
+        // PIX / RenderDoc captures group the per-pass inner events.
+        if (m_gpuMarkers.IsInitialized())
+        {
+            m_gpuMarkers.BeginEvent(L"PostProcessingPipeline");
+        }
+#endif
+
         for (int i = 0; i < static_cast<int>(PostProcessPass::Count); ++i)
         {
             auto pass = static_cast<PostProcessPass>(i);
@@ -86,6 +139,17 @@ namespace Spark::Graphics
                 m_activePassCount++;
             }
         }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        if (m_gpuMarkers.IsInitialized())
+        {
+            m_gpuMarkers.EndEvent();
+        }
+        if (m_context)
+        {
+            m_gpuTimer.EndFrame(m_context);
+        }
+#endif
     }
 
     void PostProcessingPipeline::Render()
@@ -132,15 +196,28 @@ namespace Spark::Graphics
     {
         std::vector<PassMetrics> metrics;
         static const char* passNames[] = {
-            "GTAO",      "Bloom",          "AutoExposure", "Tonemapping", "ColorGrading",
-            "FXAA",      "DepthOfField",   "MotionBlur",   "Vignette",    "ChromaticAberration",
-            "FilmGrain", "LensDistortion", "LightShafts",  "LensFlare",   "Sharpen"};
+            "GTAO",           "SSAOTemporal", "Bloom",      "AutoExposure", "Tonemapping",         "ColorGrading",
+            "FXAA",           "DepthOfField", "MotionBlur", "Vignette",     "ChromaticAberration", "FilmGrain",
+            "LensDistortion", "LightShafts",  "LensFlare",  "Sharpen"};
+        static_assert(sizeof(passNames) / sizeof(passNames[0]) == static_cast<size_t>(PostProcessPass::Count),
+                      "passNames must stay aligned with PostProcessPass enum");
         for (int i = 0; i < static_cast<int>(PostProcessPass::Count); ++i)
         {
             PassMetrics pm;
             pm.name = passNames[i];
             pm.isEnabled = m_passEnabled[i];
             pm.timeMs = m_passTimings[i];
+#ifdef SPARK_PLATFORM_WINDOWS
+            // Phase J: prefer the GPU-side reading when one has been
+            // collected this frame. GPU timestamps are at least two frames
+            // behind (kFrameLatency = 2) so during warm-up the CPU value
+            // remains authoritative.
+            float gpuMs = m_gpuTimer.GetPassTimeMs(passNames[i]);
+            if (gpuMs > 0.0f)
+            {
+                pm.timeMs = gpuMs;
+            }
+#endif
             metrics.push_back(pm);
         }
         return metrics;
@@ -156,6 +233,54 @@ namespace Spark::Graphics
         }
         result += "Active: " + std::to_string(m_activePassCount) + "\n";
         return result;
+    }
+
+    // -----------------------------------------------------------------------------
+    // Phase J: Tier 2 orphan accessors
+    // -----------------------------------------------------------------------------
+
+    uint32_t PostProcessingPipeline::GetRenderTargetPoolSize() const
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return m_rtPool.GetMetrics().totalTargets;
+#else
+        return 0;
+#endif
+    }
+
+    std::string PostProcessingPipeline::Console_RenderTargetPoolStatus() const
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return m_rtPool.Console_GetStatus();
+#else
+        return "Render Target Pool:\n  (not compiled on this platform)\n";
+#endif
+    }
+
+    uint32_t PostProcessingPipeline::GetGPUMarkerDepth() const
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return m_gpuMarkers.GetEventDepth();
+#else
+        return 0;
+#endif
+    }
+
+    float PostProcessingPipeline::GetPassTimeMs(PostProcessPass pass) const
+    {
+        const int idx = static_cast<int>(pass);
+        if (idx < 0 || idx >= static_cast<int>(PostProcessPass::Count))
+        {
+            return 0.0f;
+        }
+#ifdef SPARK_PLATFORM_WINDOWS
+        // Pull the live reading from GetPassMetrics so we share the same
+        // GPU-vs-CPU precedence rule with every other caller.
+        auto metrics = GetPassMetrics();
+        return metrics[idx].timeMs;
+#else
+        return m_passTimings[idx];
+#endif
     }
 
     // =============================================================================
@@ -788,6 +913,71 @@ namespace Spark::Graphics
         }
     )";
 
+        // SSAO Temporal pixel shader
+        // Variance-clipped spatial denoiser that reads the AO-modulated scene
+        // from the previous pass and runs a bilateral 3x3 blur whose clamp
+        // window is derived from the neighborhood's per-pixel luminance
+        // statistics. Until a double-buffered AO history target lands, this
+        // first cut serves as the "spatial fallback" that the temporal
+        // filter degrades to on first frames anyway, so it matches the
+        // `SSAOTemporalFilter::Apply` behaviour on history-miss pixels.
+        const char* ssaoTemporalPS = R"(
+        Texture2D sceneTexture : register(t0);
+        Texture2D depthTexture : register(t1);
+        SamplerState linearSampler : register(s0);
+        SamplerState pointSampler : register(s1);
+        cbuffer PostProcessParams : register(b0) {
+            float4 params0; // x=blendFactor, y=motionRejectionScale, z=depthRejectionScale, w=varianceGamma
+            float4 params1; // x=width, y=height, z=useVarianceClipping (0/1), w=totalTime
+            float4 params2;
+            float4 params3;
+        };
+        float Luma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
+        float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
+            float3 center = sceneTexture.Sample(linearSampler, uv).rgb;
+            float2 texelSize = 1.0 / float2(max(params1.x, 1.0), max(params1.y, 1.0));
+            float centerDepth = depthTexture.Sample(pointSampler, uv).r;
+            float gamma = max(params0.w, 0.001);
+            // Gather a 3x3 neighborhood for luminance statistics and a
+            // depth-weighted bilateral blend.
+            float3 mean = 0;
+            float3 m2 = 0;
+            float3 sum = 0;
+            float weightSum = 0;
+            float depthSigma = 0.02;
+            [unroll]
+            for (int dy = -1; dy <= 1; ++dy) {
+                [unroll]
+                for (int dx = -1; dx <= 1; ++dx) {
+                    float2 off = float2(dx, dy) * texelSize;
+                    float3 s = sceneTexture.Sample(linearSampler, uv + off).rgb;
+                    mean += s;
+                    m2 += s * s;
+                    float sd = depthTexture.Sample(pointSampler, uv + off).r;
+                    float dDiff = abs(sd - centerDepth);
+                    float w = exp(-dDiff * params0.z) * exp(-(float)(dx*dx + dy*dy) * 0.25);
+                    sum += s * w;
+                    weightSum += w;
+                }
+            }
+            mean /= 9.0;
+            float3 variance = max(m2 / 9.0 - mean * mean, 0);
+            float3 stddev = sqrt(variance);
+            float3 blurred = (weightSum > 0.0001) ? (sum / weightSum) : center;
+            // Variance-clip the blurred result to the neighborhood band so
+            // edges stay crisp even through the denoise.
+            if (params1.z > 0.5) {
+                float3 clampMin = mean - stddev * gamma;
+                float3 clampMax = mean + stddev * gamma;
+                blurred = clamp(blurred, clampMin, clampMax);
+            }
+            // Blend toward the blurred AO proxy using the SSAOTemporal
+            // "blendFactor" — matches the CPU reference's history weight.
+            float w = saturate(params0.x);
+            return float4(lerp(center, blurred, w), 1);
+        }
+    )";
+
         // Motion Blur pixel shader
         const char* motionBlurPS = R"(
         Texture2D sceneTexture : register(t0);
@@ -831,6 +1021,7 @@ namespace Spark::Graphics
         };
         ShaderDef shaders[] = {
             {gtaoPS, &m_gtaoPS, "GTAO"},
+            {ssaoTemporalPS, &m_ssaoTemporalPS, "SSAOTemporal"},
             {bloomPS, &m_bloomPS, "Bloom"},
             {autoExposurePS, &m_autoExposurePS, "AutoExposure"},
             {tonemapPS, &m_tonemapPS, "Tonemap"},
@@ -978,6 +1169,16 @@ namespace Spark::Graphics
             ps = m_gtaoPS.Get();
             break;
 
+        case PostProcessPass::SSAOTemporal:
+        {
+            const auto& s = m_ssaoTemporalFilter.GetSettings();
+            cb.params0 = {std::clamp(s.blendFactor, 0.0f, 1.0f), s.motionRejectionScale, s.depthRejectionScale,
+                          std::max(s.varianceGamma, 0.001f)};
+            cb.params1.z = s.useVarianceClipping ? 1.0f : 0.0f;
+            ps = m_ssaoTemporalPS.Get();
+            break;
+        }
+
         case PostProcessPass::Bloom:
             cb.params0 = {m_bloomSettings.threshold, m_bloomSettings.softThreshold, m_bloomSettings.intensity,
                           m_bloomSettings.scatter};
@@ -1110,8 +1311,35 @@ namespace Spark::Graphics
 
         if (ps)
         {
+#ifdef SPARK_PLATFORM_WINDOWS
+            // Phase J: bracket each pass with a PIX/RenderDoc event region
+            // and a GPU timestamp scope so captures and profilers group
+            // work by pass name. The convenience wrappers are safe to call
+            // when either subsystem was initialised without a device —
+            // they degrade to no-ops.
+            static const char* kPassNames[] = {
+                "GTAO",           "SSAOTemporal", "Bloom",      "AutoExposure", "Tonemapping",         "ColorGrading",
+                "FXAA",           "DepthOfField", "MotionBlur", "Vignette",     "ChromaticAberration", "FilmGrain",
+                "LensDistortion", "LightShafts",  "LensFlare",  "Sharpen"};
+            static const wchar_t* kPassNamesW[] = {L"GTAO",           L"SSAOTemporal",        L"Bloom",
+                                                   L"AutoExposure",   L"Tonemapping",         L"ColorGrading",
+                                                   L"FXAA",           L"DepthOfField",        L"MotionBlur",
+                                                   L"Vignette",       L"ChromaticAberration", L"FilmGrain",
+                                                   L"LensDistortion", L"LightShafts",         L"LensFlare",
+                                                   L"Sharpen"};
+            static_assert(sizeof(kPassNames) / sizeof(kPassNames[0]) == static_cast<size_t>(PostProcessPass::Count),
+                          "Phase J: kPassNames must stay aligned with PostProcessPass");
+            static_assert(sizeof(kPassNamesW) / sizeof(kPassNamesW[0]) == static_cast<size_t>(PostProcessPass::Count),
+                          "Phase J: kPassNamesW must stay aligned with PostProcessPass");
+
+            ScopedGPUEvent gpuEvent(m_gpuMarkers, kPassNamesW[static_cast<int>(pass)]);
+            ScopedTimestamp gpuTs(m_gpuTimer, m_context, kPassNames[static_cast<int>(pass)]);
             BeginPass(ps, cb);
             DrawFullscreen();
+#else
+            BeginPass(ps, cb);
+            DrawFullscreen();
+#endif
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();

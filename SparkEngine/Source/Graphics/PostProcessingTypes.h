@@ -13,7 +13,8 @@
 #pragma once
 
 #include "../Core/Platform.h"
-#include "GTAOEffect.h" // Provides GTAOSettings for the GTAO post-process pass
+#include "GTAOEffect.h"   // Provides GTAOSettings for the GTAO post-process pass
+#include "SSAOTemporal.h" // Provides SSAOTemporalSettings for the SSAOTemporal post-process pass
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
@@ -33,12 +34,15 @@ namespace Spark::Graphics
  * @brief Individual post-processing passes in render order
  *
  * GTAO is slotted first so ambient occlusion modulates scene lighting at
- * HDR resolution, before Bloom extracts highlights. Subsequent passes see
+ * HDR resolution, before Bloom extracts highlights. SSAOTemporal immediately
+ * follows GTAO and applies a variance-clipped spatial/temporal denoise to
+ * the AO output before downstream passes (Bloom, exposure, tonemap...) see
  * the AO-darkened scene.
  */
     enum class PostProcessPass
     {
         GTAO,                ///< Ground Truth Ambient Occlusion (horizon-based screen-space AO)
+        SSAOTemporal,        ///< Variance-clipped denoiser for the AO term (runs immediately after GTAO)
         Bloom,               ///< HDR bloom (threshold extract + blur + composite)
         AutoExposure,        ///< Luminance-based automatic exposure adaptation
         Tonemapping,         ///< HDR-to-LDR tonemapping (ACES, Filmic, Neutral)

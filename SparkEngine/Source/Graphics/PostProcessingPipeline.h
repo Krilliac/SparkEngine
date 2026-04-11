@@ -29,6 +29,10 @@
 
 // Subsystem headers
 #include "PostProcessingEffects.h"
+// SSAOTemporalFilter is a CPU-side reference implementation and is
+// unconditionally available (no D3D11 dependency) — the pipeline owns one
+// instance for per-frame history state even on Linux / headless builds.
+#include "SSAOTemporal.h"
 
 #include "../Core/Platform.h"
 
@@ -37,6 +41,12 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
+
+// Phase J: Tier 2 graphics orphan activation — these utilities are all
+// Windows-only (they wrap D3D11 interfaces) and gated on the same guard.
+#include "GPUDebugMarkers.h"
+#include "GPUTimestampQuery.h"
+#include "RenderTargetPool.h"
 #endif
 
 #include <string>
@@ -103,6 +113,14 @@ namespace Spark::Graphics
             {
                 CreatePingPongTargets();
             }
+
+            // Phase J: the CPU temporal-AO history is tied to viewport size.
+            // Resize it unconditionally so a headless pipeline still keeps a
+            // coherent history buffer if it draws at the new resolution.
+            if (m_ssaoTemporalFilter.IsInitialized())
+            {
+                m_ssaoTemporalFilter.Resize(width, height);
+            }
         }
 
         // ---- Effect Enable/Disable ----
@@ -148,6 +166,12 @@ namespace Spark::Graphics
         GTAOSettings& GetGTAOSettings() { return m_gtaoSettings; }
         const GTAOSettings& GetGTAOSettings() const { return m_gtaoSettings; }
 
+        SSAOTemporalSettings& GetSSAOTemporalSettings() { return m_ssaoTemporalFilter.GetSettings(); }
+        const SSAOTemporalSettings& GetSSAOTemporalSettings() const { return m_ssaoTemporalFilter.GetSettings(); }
+
+        SSAOTemporalFilter& GetSSAOTemporalFilter() { return m_ssaoTemporalFilter; }
+        const SSAOTemporalFilter& GetSSAOTemporalFilter() const { return m_ssaoTemporalFilter; }
+
         AutoExposureSettings& GetAutoExposureSettings() { return m_autoExposureSettings; }
         const AutoExposureSettings& GetAutoExposureSettings() const { return m_autoExposureSettings; }
 
@@ -161,6 +185,42 @@ namespace Spark::Graphics
 
         std::vector<PassMetrics> GetPassMetrics() const;
         std::string Console_ListEffects() const;
+
+        // ---- Phase J: Tier 2 orphan activation surface ----
+
+        /**
+         * @brief Number of render targets owned by the per-frame RT pool.
+         *
+         * Windows builds return the live count from `RenderTargetPool::GetMetrics`;
+         * non-Windows builds always return 0 (the pool is Windows-only).
+         */
+        uint32_t GetRenderTargetPoolSize() const;
+
+        /**
+         * @brief Console-friendly render-target pool status.
+         *
+         * On Windows returns the pool's own status line; on other platforms
+         * returns a short "(not compiled on this platform)" marker so UI
+         * panels that display this never get an empty string.
+         */
+        std::string Console_RenderTargetPoolStatus() const;
+
+        /**
+         * @brief Current GPU debug marker nesting depth (for PIX/RenderDoc).
+         *
+         * Returns 0 on non-Windows builds. Used by tests to assert that
+         * BeginPass/Render never leak an unbalanced event region.
+         */
+        uint32_t GetGPUMarkerDepth() const;
+
+        /**
+         * @brief Most recent GPU-side time in milliseconds for a pass.
+         *
+         * Returns the `GPUTimestampQuery` reading for the pass name when a
+         * D3D11 device is attached; otherwise returns the CPU-side
+         * `m_passTimings` value so callers always get a non-negative number.
+         */
+        float GetPassTimeMs(PostProcessPass pass) const;
 
         void Console_SetExposure(float value) { m_lightShaftSettings.exposure = value; }
 
@@ -220,6 +280,10 @@ namespace Spark::Graphics
         // Per-effect settings
         BloomSettings m_bloomSettings;
         GTAOSettings m_gtaoSettings;
+        // SSAOTemporalFilter is an all-CPU orphan, so it is owned unconditionally.
+        // Its `Initialize(width, height)` gets called from the pipeline's own
+        // Initialize and Resize paths so the history buffer follows viewport size.
+        SSAOTemporalFilter m_ssaoTemporalFilter;
         AutoExposureSettings m_autoExposureSettings;
         TonemappingSettings m_tonemappingSettings;
         ColorGradingSettings m_colorGradingSettings;
@@ -248,9 +312,18 @@ namespace Spark::Graphics
         ID3D11ShaderResourceView* m_pingPongSRVs[2] = {};
 
         // Per-pass pixel shaders
+#ifdef SPARK_PLATFORM_WINDOWS
+        // Phase J orphan activations. All three wrap D3D11 interfaces and
+        // are therefore guarded on the same platform toggle as the rest of
+        // the render state above.
+        RenderTargetPool m_rtPool;    ///< Per-device transient RT allocator (Phase J)
+        GPUDebugMarkers m_gpuMarkers; ///< PIX / RenderDoc scoped event regions (Phase J)
+        GPUTimestampQuery m_gpuTimer; ///< Per-pass GPU timestamp queries (Phase J)
+#endif
         ComPtr<ID3D11VertexShader> m_fullscreenVS;
         ComPtr<ID3D11PixelShader> m_bloomPS;
         ComPtr<ID3D11PixelShader> m_gtaoPS;
+        ComPtr<ID3D11PixelShader> m_ssaoTemporalPS;
         ComPtr<ID3D11PixelShader> m_autoExposurePS;
         ComPtr<ID3D11PixelShader> m_tonemapPS;
         ComPtr<ID3D11PixelShader> m_colorGradingPS;

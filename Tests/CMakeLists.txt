@@ -221,6 +221,8 @@ add_executable(SparkTests
     TestFoliageRenderer.cpp
     TestFoliageImpostorBaker.cpp
     TestGTAOEffect.cpp
+    TestSSAOTemporalFilter.cpp
+    TestPostProcessingPipelinePhaseJ.cpp
     TestDXRSupport.cpp
     TestCSGEditorPanel.cpp
     TestNavMeshLink.cpp
