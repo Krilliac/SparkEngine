@@ -129,6 +129,11 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     m_vertexShader = std::make_unique<VertexShaderResource>();
     m_pixelShader = std::make_unique<PixelShaderResource>();
 
+    // Phase O: activate the shader variant system alongside the existing
+    // shader resources. Zero dependencies on the D3D11 device — pure
+    // CPU keyword / variant bookkeeping.
+    m_variantSystem.Initialize();
+
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader system initialized");
     return S_OK;
 }
@@ -152,6 +157,10 @@ void Shader::Shutdown()
 
     m_pixelShader.reset();
     m_vertexShader.reset();
+
+    // Phase O: tear down the variant system — clears all keyword
+    // registrations and groups so a subsequent Initialize starts clean.
+    m_variantSystem.Shutdown();
 
     m_device = nullptr;
     m_context = nullptr;
@@ -505,6 +514,10 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
         return hr;
     }
 
+    // Phase O: activate the shader variant system on Linux too so
+    // headless builds can still register keywords and query variants.
+    m_variantSystem.Initialize();
+
     return S_OK;
 }
 
@@ -517,6 +530,8 @@ void Shader::Shutdown()
     m_variants.clear();
     m_watchedFiles.clear();
     m_isCompiled = false;
+    // Phase O: mirror the Windows teardown — clear keyword bookkeeping.
+    m_variantSystem.Shutdown();
     m_device = nullptr;
     m_context = nullptr;
     m_shader = nullptr;

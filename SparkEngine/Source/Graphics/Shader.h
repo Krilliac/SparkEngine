@@ -13,6 +13,9 @@
 
 #include "Utils/Assert.h"
 #include "../Core/framework.h"
+// Phase O: activated Tier 2 graphics orphan — pure CPU keyword / variant
+// bookkeeping, lives outside the Windows guard.
+#include "ShaderVariantSystem.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -520,6 +523,28 @@ class Shader
     static HRESULT CompileShaderFromFile(const std::wstring& filename, const std::string& entryPoint,
                                          const std::string& shaderModel, ID3DBlob** blobOut);
 
+    // ========================================================================
+    // Phase O: ShaderVariantSystem accessor
+    // ========================================================================
+
+    /**
+     * @brief Get the shader variant system (Phase O activation).
+     *
+     * The `ShaderVariantSystem` is lifecycle-owned by each `Shader`
+     * instance and initialised from `Shader::Initialize`. It tracks
+     * keyword declarations, keyword groups, per-variant preprocessor
+     * define lists, and variant-stripping bookkeeping.
+     *
+     * Usage:
+     *   auto& vs = shader.GetVariantSystem();
+     *   vs.RegisterKeyword({"_NORMALMAP", "ENABLE_NORMALMAP",
+     *                       Spark::Graphics::KeywordType::MultiCompile, false});
+     *   vs.SetGlobalKeyword("_NORMALMAP", true);
+     *   auto defines = vs.GetDefinesForVariant(vs.GetGlobalVariantKey());
+     */
+    Spark::Graphics::ShaderVariantSystem& GetVariantSystem() { return m_variantSystem; }
+    const Spark::Graphics::ShaderVariantSystem& GetVariantSystem() const { return m_variantSystem; }
+
   private:
     /**
      * @brief Create constant buffers for the shader system
@@ -585,6 +610,11 @@ class Shader
     ShaderCompilationFlags m_defaultFlags;
     bool m_hotReloadEnabled = false;
     bool m_validationEnabled = false;
+
+    // Phase O: keyword / variant bookkeeping. Pure CPU — lives on every
+    // platform's build and is initialised from both the Windows and
+    // Linux paths of Shader::Initialize().
+    Spark::Graphics::ShaderVariantSystem m_variantSystem;
 
     // Additional members for implementation
     std::vector<ShaderVariant> m_variants;         ///< Shader variants
