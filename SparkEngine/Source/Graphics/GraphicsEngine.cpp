@@ -517,6 +517,21 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         m_proceduralNoise->SetOutputNode(nodePtr);
     }
 
+    // Phase T: activate the voxel cone traced GI system with a
+    // small 32³ default grid (~130 KB) and `enabled = false`. A
+    // future GI render pass that wants full resolution can
+    // re-initialise via `GetVCTSystem()->Initialize({...})` with a
+    // 128³ grid. Keeping the default small avoids wasting ~9 MB
+    // per GraphicsEngine instance for a feature that is opt-in.
+    m_vctSystem = std::make_unique<Spark::Graphics::VCTSystem>();
+    {
+        Spark::Graphics::VCTSettings vctSettings;
+        vctSettings.enabled = false;
+        vctSettings.voxelResolution = 32;
+        vctSettings.worldExtent = 50.0f;
+        m_vctSystem->Initialize(vctSettings);
+    }
+
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Graphics", 0.0);
     return S_OK;
 }
@@ -625,6 +640,16 @@ void GraphicsEngine::Shutdown()
     // Phase S: tear down the procedural noise graph. The unique_ptr
     // releases all owned nodes via the graph's vector destructor.
     m_proceduralNoise.reset();
+
+    // Phase T: tear down the VCT system. Shutdown() clears the
+    // voxel grid (destroys the mip chain + base data); resetting
+    // the unique_ptr releases the wrapper itself. Calling Shutdown
+    // on an uninitialised system is safe.
+    if (m_vctSystem)
+    {
+        m_vctSystem->Shutdown();
+        m_vctSystem.reset();
+    }
 
     // Shutdown legacy systems
     if (m_renderPipeline)
@@ -1529,6 +1554,18 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         m_proceduralNoise->SetOutputNode(nodePtr);
     }
 
+    // Phase T: mirror the VCT system activation on the Linux
+    // path. Same small default grid so headless builds keep a
+    // trivial memory footprint.
+    m_vctSystem = std::make_unique<Spark::Graphics::VCTSystem>();
+    {
+        Spark::Graphics::VCTSettings vctSettings;
+        vctSettings.enabled = false;
+        vctSettings.voxelResolution = 32;
+        vctSettings.worldExtent = 50.0f;
+        m_vctSystem->Initialize(vctSettings);
+    }
+
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",
                    rhi.bridge.GetBackendName().c_str());
 
@@ -1568,6 +1605,13 @@ void GraphicsEngine::Shutdown()
 
     // Phase S: drop the procedural noise graph (Linux stub path).
     m_proceduralNoise.reset();
+
+    // Phase T: tear down the VCT system (Linux stub path).
+    if (m_vctSystem)
+    {
+        m_vctSystem->Shutdown();
+        m_vctSystem.reset();
+    }
 
     rhi.bridge.Shutdown();
     rhi.initialized = false;

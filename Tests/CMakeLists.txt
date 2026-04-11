@@ -238,6 +238,7 @@ add_executable(SparkTests
     TestUICompositor.cpp
     TestUISystemPhaseR.cpp
     TestFastNoise2SIMD.cpp
+    TestVoxelConeTracing.cpp
     TestDXRSupport.cpp
     TestCSGEditorPanel.cpp
     TestNavMeshLink.cpp

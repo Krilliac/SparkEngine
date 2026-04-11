@@ -52,6 +52,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine next-steps Phase Q (DenoiserInterface + SoftwareDenoiser wired into GraphicsEngine) | [knowledge/engine-next-steps-phase-q-2026-04-11.md](knowledge/engine-next-steps-phase-q-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase R (UICompositor wired into UISystem after wire-or-delete audit) | [knowledge/engine-next-steps-phase-r-2026-04-11.md](knowledge/engine-next-steps-phase-r-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase S (FastNoise2SIMD NoiseGraph wired into GraphicsEngine) | [knowledge/engine-next-steps-phase-s-2026-04-11.md](knowledge/engine-next-steps-phase-s-2026-04-11.md) | Observation | Active | 2026-04-11 |
+| Engine next-steps Phase T (VoxelConeTracing VCTSystem wired into GraphicsEngine — final Tier 2 orphan) | [knowledge/engine-next-steps-phase-t-2026-04-11.md](knowledge/engine-next-steps-phase-t-2026-04-11.md) | Observation | Active | 2026-04-11 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-11)

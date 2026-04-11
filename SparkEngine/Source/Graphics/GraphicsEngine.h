@@ -43,6 +43,13 @@
 // Combiner nodes with batch evaluation). Pure CPU, runtime SIMD
 // detection, runs on every platform.
 #include "FastNoise2SIMD.h"
+// Phase T: activated Tier 2 graphics orphan — voxel-cone-traced
+// global illumination. Pure CPU VoxelGrid + VCTSystem (no D3D11
+// dependency); the mip chain, cone trace, and tangent-frame math
+// all run on every platform. Default settings disable the pipeline
+// so the grid allocation is tiny (~130 KB at 32³) until a future
+// render pass opts in.
+#include "VoxelConeTracing.h"
 #include "RHI/RHIBridge.h"
 #ifdef SPARK_HARDWARE_RT
 #include "RHI/DXRSupport.h"
@@ -388,6 +395,34 @@ class GraphicsEngine
      * compiler flags to change it.
      */
     Spark::Graphics::SIMDLevel GetProceduralNoiseSIMDLevel() const;
+
+    // ========================================================================
+    // Phase T: Voxel cone traced GI accessor
+    // ========================================================================
+
+    /**
+     * @brief Get the voxel cone traced GI system (Phase T activation).
+     *
+     * The `GraphicsEngine` owns one `VCTSystem` instance, default-
+     * initialised with a small 32³ voxel grid (~130 KB) and
+     * `enabled = false` so no per-frame voxelization or cone-trace
+     * work runs until a future GI render pass opts in. Callers
+     * that want full-resolution GI can re-initialise the system
+     * with `VCTSettings{.voxelResolution = 128, .worldExtent = 100.0f}`
+     * which reallocates the grid at ~9 MB.
+     *
+     * The VCT pipeline is four stages:
+     * 1. `BeginVoxelization()` — clear the grid.
+     * 2. `InjectLight(...)` / `InjectGeometry(...)` — rasterise the
+     *    scene into the voxel grid.
+     * 3. `EndVoxelization()` — build the mip chain for cone filtering.
+     * 4. `TraceDiffuse(...)` / `TraceSpecular(...)` — gather indirect
+     *    lighting per surface point.
+     *
+     * All four stages run on pure CPU and work on every platform.
+     */
+    Spark::Graphics::VCTSystem* GetVCTSystem() { return m_vctSystem.get(); }
+    const Spark::Graphics::VCTSystem* GetVCTSystem() const { return m_vctSystem.get(); }
 
     /** @brief Set non-owning physics pointer (called by engine during init) */
     void SetPhysicsSystem(PhysicsSystem* physics) { m_physicsSystem = physics; }
@@ -751,6 +786,17 @@ class GraphicsEngine
     // pointer points into that vector; moving / copying the graph
     // would invalidate the pointer.
     std::unique_ptr<Spark::Graphics::NoiseGraph> m_proceduralNoise;
+
+    // Phase T: voxel cone traced GI system (portable — CPU voxel
+    // grid + mip chain + cone-trace math, no D3D11). unique_ptr
+    // so the grid's internal `std::vector<uint8_t>` storage has a
+    // stable heap address across any future GraphicsEngine copy,
+    // and so a full-resolution GI re-initialisation (32³ → 128³)
+    // can be an in-place replace without touching the accessor.
+    // Default settings set `enabled = false` + 32³ resolution so
+    // the memory footprint stays ~130 KB until a real GI pass
+    // opts in.
+    std::unique_ptr<Spark::Graphics::VCTSystem> m_vctSystem;
     std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
     std::vector<GameObject*> m_culledObjectsBuffer;               ///< Reusable culling output (avoids per-frame alloc)
 
