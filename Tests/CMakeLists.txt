@@ -332,6 +332,8 @@ add_executable(SparkTests
     TestRHIHandlePoolPhaseX.cpp
     TestTransientBufferAllocatorPhaseX.cpp
     TestNullRHIDevicePhaseY.cpp
+    TestScriptHookManagerPhaseBB.cpp
+    TestDynamicQualityScalerPhaseBB.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp

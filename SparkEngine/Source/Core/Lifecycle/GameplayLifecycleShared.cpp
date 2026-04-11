@@ -86,6 +86,12 @@
 #include "Engine/Animation/AnimNotify.h"
 #include "Engine/ECS/RuntimePrefab.h"
 #include "Engine/Gameplay/GameplaySystemExtension.h"
+// Phase BB Theme 3D: activated two SparkEngine singleton orphans that
+// had existing implementations but zero external call sites. See the
+// lifecycle Initialize / Shutdown blocks below for the touch-based
+// wire-up that keeps them reachable from any code path.
+#include "Engine/Scripting/ScriptHookManager.h"
+#include "Graphics/DynamicQualityScaler.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -486,6 +492,29 @@ namespace Spark::Core::Lifecycle
         // implementations here; the engine QuestSystem / DialogueSystem
         // delegates to matching extensions at runtime.
         (void)Spark::Gameplay::GameplayExtensionRegistry::GetInstance();
+
+        // Phase BB Theme 3D: Script hook dispatcher for gameplay events.
+        // Touch the singleton so scripts that call RegisterHook during
+        // module load find it in a constructed state. Hot-reloading a
+        // script calls UnregisterAllForScript on the same singleton, so
+        // having it alive from engine startup is the correct lifetime.
+        (void)Spark::Scripting::ScriptHookManager::GetInstance();
+
+        // Phase BB Theme 3D: Dynamic resolution scaler — tracks FPS over
+        // a sliding window and adjusts render scale toward a target
+        // frame rate. Initialised here with sensible defaults; the
+        // upscaling pipeline can re-initialise with game-specific
+        // thresholds later. RecordFrameTime is pumped from the main
+        // render loop wherever the caller has access to delta-time.
+        {
+            Spark::Graphics::DynamicQualityThresholds dqsDefaults;
+            dqsDefaults.targetFPS = 60.0f;
+            dqsDefaults.headroomPercent = 10.0f;
+            dqsDefaults.dropThresholdPercent = 5.0f;
+            dqsDefaults.minScale = 0.5f;
+            dqsDefaults.maxScale = 1.0f;
+            Spark::Graphics::DynamicQualityScaler::GetInstance().Initialize(dqsDefaults);
+        }
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
@@ -1061,6 +1090,9 @@ namespace Spark::Core::Lifecycle
 
         // Engine-orphan singletons wired in this branch — teardown
         // mirrors the startup order so dependents are released first.
+        // Phase BB Theme 3D additions:
+        Spark::Graphics::DynamicQualityScaler::GetInstance().Reset();
+        Spark::Scripting::ScriptHookManager::GetInstance().Clear();
         Spark::Gameplay::GameplayExtensionRegistry::GetInstance().Clear();
         Spark::AI::NavMeshLinkSystem::GetInstance().Shutdown();
 
