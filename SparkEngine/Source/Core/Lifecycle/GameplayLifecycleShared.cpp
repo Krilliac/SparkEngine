@@ -113,6 +113,13 @@
 // Utils-folder pure-CPU classes with zero external wire-up.
 #include "Utils/Telemetry.h"
 #include "Utils/CacheDebugger.h"
+// Phase GG Theme 3D: four more orphans — static random-number init,
+// CPU section profiler, mesh LOD generator, and GPU texture
+// compressor. All pure-CPU utilities with clean public APIs.
+#include "Utils/MathUtilsExtended.h"
+#include "Utils/CpuDebugger.h"
+#include "Graphics/LODGenerator.h"
+#include "Graphics/TextureCompressor.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -600,6 +607,30 @@ namespace Spark::Core::Lifecycle
         // here guarantees it exists for any cache that registers
         // during engine startup.
         (void)Spark::CacheDebugger::GetInstance();
+
+        // Phase GG Theme 3D: Seed the random number generator for
+        // all MathUtilsExtended::Random* functions. This is the
+        // once-per-process initialization the class docs recommend.
+        MathUtilsExtended::InitializeRandom();
+
+        // Phase GG Theme 3D: CPU section profiler (begin/end
+        // timed sections, aggregates statistics). Lazy singleton
+        // enabled by default — the touch makes it reachable from
+        // any profiling code before the first section timer fires.
+        (void)Spark::CpuDebugger::GetInstance();
+
+        // Phase GG Theme 3D: Mesh LOD generator (Quadric Error
+        // Metric simplification). Lazy utility singleton — asset
+        // cookers and runtime mesh optimizers call Generate() /
+        // Simplify() on demand. Touch so it's reachable from any
+        // mesh-loading code path.
+        (void)Spark::Graphics::LODGenerator::GetInstance();
+
+        // Phase GG Theme 3D: GPU texture compressor (BC1/BC7/ASTC).
+        // Lazy utility singleton — texture loaders call
+        // Compress() / SaveCompressed() on demand. Touch so the
+        // instance is constructed before any asset cooker needs it.
+        (void)Spark::Graphics::TextureCompressor::GetInstance();
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
