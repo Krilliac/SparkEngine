@@ -98,6 +98,11 @@
 // D3D11 synchronous fallback.
 #include "Utils/GPUStallProfiler.h"
 #include "Graphics/AsyncComputeScheduler.h"
+// Phase DD Theme 3D: AIDebugRenderer singleton — renders NavMesh,
+// paths, perception cones, behavior-tree state, and cover points via
+// the engine DebugDraw system. Was previously unreferenced by any
+// production code; Phase DD lands the lifecycle seam.
+#include "Engine/AI/AIDebugRenderer.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -537,6 +542,13 @@ namespace Spark::Core::Lifecycle
         // is ready, and Flush/BeginFrame are pumped from the render
         // loop once a consumer exists.
         Spark::Graphics::AsyncComputeScheduler::GetInstance().Initialize();
+
+        // Phase DD Theme 3D: AI debug renderer — initializes as
+        // disabled (IsEnabled() returns false until SetEnabled(true)).
+        // Update(dt) is pumped by the AI system when debug mode is
+        // toggled on; the singleton just needs to be alive so
+        // ImGui menu toggles can reach it.
+        Spark::AI::AIDebugRenderer::GetInstance().Initialize();
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
@@ -1112,6 +1124,8 @@ namespace Spark::Core::Lifecycle
 
         // Engine-orphan singletons wired in this branch — teardown
         // mirrors the startup order so dependents are released first.
+        // Phase DD Theme 3D addition:
+        Spark::AI::AIDebugRenderer::GetInstance().Shutdown();
         // Phase CC Theme 3D additions (released first — they depend on
         // the render loop being alive, so tear them down before the
         // rest of the engine winds down):
