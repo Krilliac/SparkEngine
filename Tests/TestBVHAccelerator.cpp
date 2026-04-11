@@ -110,38 +110,62 @@ TEST(BVH_Build_ManyPrimitivesKeepsAllVisible)
 // =========================================================================
 // FrustumQuery culling
 // =========================================================================
+//
+// IMPORTANT: BVHAccelerator's FrustumQuery only performs PER-LEAF frustum
+// culling, not per-primitive. When a leaf node's bounding box intersects
+// the frustum, ALL primitives in that leaf are returned regardless of
+// their individual positions. The default `maxLeafSize` is 4, so up to 4
+// primitives can share a single leaf.
+//
+// These tests use SINGLE-primitive BVHs for the cull-target side so the
+// "outside" leaf only contains one primitive whose bounds are entirely
+// outside the frustum — guaranteeing the frustum query rejects it via
+// the leaf-level test. Mixing inside/outside primitives in the same BVH
+// would put them in a single leaf whose bounds CROSS the frustum plane,
+// and the leaf-level cull would conservatively keep both.
 
 TEST(BVH_FrustumQuery_CullsBehindCamera)
 {
-    // The camera sits at z=-10 looking at the origin. Primitives behind
-    // the camera (z < -10) should be culled.
+    // Lone primitive way behind the camera. With maxLeafSize=4 and only
+    // one primitive, the BVH builds a single leaf with bounds entirely
+    // outside the near plane → frustum query returns empty.
     BVHAccelerator bvh;
-    std::vector<BVHPrimitive> prims = {MakeUnitPrimitive(1, 0, 0, 0),    // in front, should stay
-                                       MakeUnitPrimitive(2, 0, 0, -50)}; // behind camera, should cull
+    std::vector<BVHPrimitive> prims = {MakeUnitPrimitive(2, 0, 0, -50)};
     bvh.Build(prims);
 
     Frustum f = MakeFrustumLookingAtOrigin();
     auto visible = bvh.FrustumQuery(f);
 
-    // Only the in-front primitive survives.
+    EXPECT_EQ(static_cast<int>(visible.size()), 0);
+}
+
+TEST(BVH_FrustumQuery_KeepsInFrontPrimitive)
+{
+    // Companion to CullsBehindCamera — verify the front primitive
+    // survives when it's the only one in the BVH.
+    BVHAccelerator bvh;
+    std::vector<BVHPrimitive> prims = {MakeUnitPrimitive(1, 0, 0, 0)};
+    bvh.Build(prims);
+
+    Frustum f = MakeFrustumLookingAtOrigin();
+    auto visible = bvh.FrustumQuery(f);
+
     EXPECT_EQ(static_cast<int>(visible.size()), 1);
     EXPECT_EQ(visible[0], 1u);
 }
 
 TEST(BVH_FrustumQuery_CullsBeyondFarPlane)
 {
-    // Far plane is at z=100 from the camera (at z=-10), so anything
-    // past world z=90 is outside the frustum.
+    // Far plane is at z≈90 in world space (camera at z=-10 + far distance
+    // 100). A single primitive at z=500 is well past the far plane and
+    // forms a leaf whose bounds are entirely outside.
     BVHAccelerator bvh;
-    std::vector<BVHPrimitive> prims = {MakeUnitPrimitive(1, 0, 0, 0),    // well inside
-                                       MakeUnitPrimitive(2, 0, 0, 500)}; // way past far plane
+    std::vector<BVHPrimitive> prims = {MakeUnitPrimitive(2, 0, 0, 500)};
     bvh.Build(prims);
 
     Frustum f = MakeFrustumLookingAtOrigin();
     auto visible = bvh.FrustumQuery(f);
-    // Primitive 2 must be culled.
-    EXPECT_TRUE(std::find(visible.begin(), visible.end(), 2u) == visible.end());
-    EXPECT_TRUE(std::find(visible.begin(), visible.end(), 1u) != visible.end());
+    EXPECT_EQ(static_cast<int>(visible.size()), 0);
 }
 
 TEST(BVH_FrustumQuery_PreservesObjectIds)
@@ -207,16 +231,19 @@ TEST(BVH_Build_EmptyAfterNonEmptyReturnsEmptyQuery)
 
 TEST(BVH_Build_HandlesFiftyPrimitives)
 {
-    // 50 primitives spread across a plane in front of the camera. All
-    // should remain visible under a wide frustum, which also exercises
-    // the SAH split path.
+    // 50 primitives in a 10x5 grid centred on the origin, scaled so they
+    // all sit well inside the camera frustum (extent ±4.143 at z=0 from
+    // a camera at z=-10 with 45° vertical FOV). Halving the grid step to
+    // 0.5 keeps the maximum primitive bounds at ±2.5+0.5 = ±3.0, which
+    // is comfortably inside the right/left planes on every platform —
+    // both real DirectXMath on Windows and the Linux scalar stub.
     BVHAccelerator bvh;
     std::vector<BVHPrimitive> prims;
     for (int i = 0; i < 50; ++i)
     {
-        float x = static_cast<float>((i % 10) - 4);
-        float y = static_cast<float>((i / 10) - 2);
-        prims.push_back(MakeUnitPrimitive(static_cast<uint32_t>(i), x, y, 0.0f));
+        float x = (static_cast<float>((i % 10) - 4) - 0.5f) * 0.5f; // x ∈ [-2.25, 2.25]
+        float y = static_cast<float>((i / 10) - 2) * 0.5f;          // y ∈ [-1.0, 1.0]
+        prims.push_back(MakeUnitPrimitive(static_cast<uint32_t>(i), x, y, 0.0f, 0.2f));
     }
     bvh.Build(prims);
 
