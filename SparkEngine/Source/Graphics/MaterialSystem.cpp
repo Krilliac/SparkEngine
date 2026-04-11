@@ -63,6 +63,12 @@ HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     HRESULT hr = CreateDefaultMaterials();
     UpdateMetrics();
 
+    // Phase P: activate the persistent material constant buffer manager.
+    // Pure CPU — no device dependency, runs on every platform. Sized for
+    // 4096 materials × 256 bytes each = 1 MB shadow buffer, matching the
+    // defaults the audit described as the reference working set.
+    m_persistentCB.Initialize(/*maxMaterials*/ 4096, /*cbSizePerMat*/ 256);
+
 #ifdef SPARK_PLATFORM_WINDOWS
     if (SUCCEEDED(hr))
     {
@@ -89,6 +95,10 @@ void MaterialSystem::Shutdown()
     m_fileTimestamps.clear();
     m_defaultMaterial.reset();
     m_errorMaterial.reset();
+    // Phase P: drop the material CB manager alongside the other
+    // material storage. The Shutdown is safe on an uninitialised
+    // manager (guarded by its own m_initialized flag).
+    m_persistentCB.Shutdown();
     m_device = nullptr;
     m_context = nullptr;
     memset(&m_metrics, 0, sizeof(m_metrics));
@@ -247,6 +257,12 @@ void MaterialSystem::BeginFrame()
         m_metrics.materialSwitches = 0;
         m_metrics.textureBinds = 0;
     }
+
+    // Phase P: advance the persistent material CB manager's frame
+    // counter so `UpdateMaterial` stamps `lastUpdatedFrame` correctly.
+    // This is a single increment — zero cost even on scenes with no
+    // material activity.
+    m_persistentCB.BeginFrame();
 
     UpdateMetrics();
     UpdateHotReload();

@@ -101,12 +101,63 @@ namespace Spark::Graphics
             m_portalCulling.DetermineVisibility(cameraPos, vpStored);
         }
 
+        // Phase L: activate the BVHAccelerator orphan as a first-level
+        // frustum pre-cull. Build a per-frame BVH from the current draw
+        // commands using a unit AABB around each object position, then
+        // query the camera frustum to get a conservative visible set.
+        // The existing per-command point-in-clip test below still runs
+        // as the precise second-level cull. The BVH gets built every
+        // frame because draw-command positions change — rebuilding is
+        // linear in command count and dominated by SAH sort, which is
+        // still cheaper than a naive per-command frustum test for
+        // larger scenes.
+        constexpr float kBVHPrimitiveHalfSize = 0.5f;
+        std::vector<BVHPrimitive> bvhPrimitives;
+        bvhPrimitives.reserve(m_drawCommands.size());
+        for (uint32_t i = 0; i < static_cast<uint32_t>(m_drawCommands.size()); ++i)
+        {
+            const auto& cmd = m_drawCommands[i];
+            BVHPrimitive p;
+            p.objectId = i;
+            p.bounds.min = {cmd.worldMatrix._41 - kBVHPrimitiveHalfSize, cmd.worldMatrix._42 - kBVHPrimitiveHalfSize,
+                            cmd.worldMatrix._43 - kBVHPrimitiveHalfSize};
+            p.bounds.max = {cmd.worldMatrix._41 + kBVHPrimitiveHalfSize, cmd.worldMatrix._42 + kBVHPrimitiveHalfSize,
+                            cmd.worldMatrix._43 + kBVHPrimitiveHalfSize};
+            bvhPrimitives.push_back(p);
+        }
+        m_bvh.Build(bvhPrimitives);
+
+        Frustum cameraFrustum;
+        cameraFrustum.ExtractPlanes(viewProj);
+        const auto bvhVisibleIds = m_bvh.FrustumQuery(cameraFrustum);
+
+        // Build an inclusion mask from the BVH query so the per-command
+        // loop below can skip objects the BVH already culled. An empty
+        // mask (bvhVisibleIds empty) also means nothing is visible — the
+        // loop then emits zero draw commands.
+        std::vector<uint8_t> bvhVisible(m_drawCommands.size(), 0);
+        for (uint32_t id : bvhVisibleIds)
+        {
+            if (id < bvhVisible.size())
+            {
+                bvhVisible[id] = 1;
+            }
+        }
+
         // Build sorted draw list using DrawSortKey for optimal state batching
         std::vector<DrawSortEntry> sortEntries;
         sortEntries.reserve(m_drawCommands.size());
 
         for (uint32_t i = 0; i < static_cast<uint32_t>(m_drawCommands.size()); ++i)
         {
+            // Phase L: BVH first-level cull — skip commands the BVH
+            // already rejected. The BVH uses a conservative unit AABB
+            // around each object position, so survivors still need the
+            // per-command point-in-clip test below for precise culling.
+            if (!bvhVisible[i])
+            {
+                continue;
+            }
             auto& cmd = m_drawCommands[i];
 
             // Extract position from world matrix

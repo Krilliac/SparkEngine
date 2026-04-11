@@ -29,6 +29,20 @@
 
 // Subsystem headers
 #include "PostProcessingEffects.h"
+// SSAOTemporalFilter is a CPU-side reference implementation and is
+// unconditionally available (no D3D11 dependency) — the pipeline owns one
+// instance for per-frame history state even on Linux / headless builds.
+#include "SSAOTemporal.h"
+// VolumeManager is Phase K's activation — portable CPU code that spatially
+// blends post-process settings based on camera position. Owned by the
+// pipeline so every call to Process() can apply the live volume stack
+// into the pass settings structs.
+#include "VolumeSystem.h"
+// RTHandleSystem is Phase N's portable activation — Unity-HDRP-style
+// scale-based render texture handles whose allocation tracks the
+// reference viewport without reallocating on shrink. Ticked from the
+// pipeline's own Initialize / Resize paths.
+#include "RTHandleSystem.h"
 
 #include "../Core/Platform.h"
 
@@ -37,6 +51,15 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
+
+// Phase J: Tier 2 graphics orphan activation — these utilities are all
+// Windows-only (they wrap D3D11 interfaces) and gated on the same guard.
+#include "GPUDebugMarkers.h"
+#include "GPUTimestampQuery.h"
+#include "RenderTargetPool.h"
+// Phase N: ConstantBufferRing is another Windows-only D3D11 wrapper —
+// Dynamic sub-allocation for per-frame constant buffer updates.
+#include "ConstantBufferRing.h"
 #endif
 
 #include <string>
@@ -103,6 +126,24 @@ namespace Spark::Graphics
             {
                 CreatePingPongTargets();
             }
+
+            // Phase J: the CPU temporal-AO history is tied to viewport size.
+            // Resize it unconditionally so a headless pipeline still keeps a
+            // coherent history buffer if it draws at the new resolution.
+            if (m_ssaoTemporalFilter.IsInitialized())
+            {
+                m_ssaoTemporalFilter.Resize(width, height);
+            }
+
+            // Phase N: propagate the new reference size to the RTHandle
+            // system. Allocated handles are grow-only, so shrinking the
+            // pipeline does not reallocate — only the reported current
+            // sizes update. Growing past the max-history size triggers
+            // a per-handle allocated-size bump on the next frame.
+            if (m_rtHandleSystem.IsInitialized())
+            {
+                m_rtHandleSystem.SetReferenceSize(width, height);
+            }
         }
 
         // ---- Effect Enable/Disable ----
@@ -145,6 +186,64 @@ namespace Spark::Graphics
         BloomSettings& GetBloomSettings() { return m_bloomSettings; }
         const BloomSettings& GetBloomSettings() const { return m_bloomSettings; }
 
+        GTAOSettings& GetGTAOSettings() { return m_gtaoSettings; }
+        const GTAOSettings& GetGTAOSettings() const { return m_gtaoSettings; }
+
+        SSAOTemporalSettings& GetSSAOTemporalSettings() { return m_ssaoTemporalFilter.GetSettings(); }
+        const SSAOTemporalSettings& GetSSAOTemporalSettings() const { return m_ssaoTemporalFilter.GetSettings(); }
+
+        SSAOTemporalFilter& GetSSAOTemporalFilter() { return m_ssaoTemporalFilter; }
+        const SSAOTemporalFilter& GetSSAOTemporalFilter() const { return m_ssaoTemporalFilter; }
+
+        // ---- Phase K: Volume manager accessors ----
+
+        /**
+         * @brief Get the spatial post-process volume manager.
+         *
+         * The manager is lifecycle-owned by the pipeline and updated once
+         * per call to `Process()`. Callers can add global or local volumes
+         * with `CreateVolume()`, attach parameter components to them, and
+         * set the camera position via `SetCameraPosition()` — on the next
+         * frame the blended `VolumeStack` is applied to the pipeline's
+         * effect settings.
+         */
+        VolumeManager& GetVolumeManager() { return m_volumeManager; }
+        const VolumeManager& GetVolumeManager() const { return m_volumeManager; }
+
+        /**
+         * @brief Set the camera world position used by the volume manager.
+         *
+         * This is the only signal the volume blend needs — on the next
+         * `Process()` call, all local volumes compute their AABB-distance
+         * blend factor against this position. Global volumes ignore it.
+         * Default position is the origin.
+         */
+        void SetCameraPosition(const XMFLOAT3& position) { m_cameraPosition = position; }
+        const XMFLOAT3& GetCameraPosition() const { return m_cameraPosition; }
+
+        /**
+         * @brief Whether `Process()` should push the blended volume stack
+         *        into the effect settings structs each frame.
+         *
+         * Defaults to `true`. Disable it if you want `VolumeManager` to
+         * collect a stack for queries without mutating the live pipeline
+         * settings — useful for preview/debug panels.
+         */
+        void SetVolumeBlendEnabled(bool enabled) { m_volumeBlendEnabled = enabled; }
+        bool IsVolumeBlendEnabled() const { return m_volumeBlendEnabled; }
+
+        /**
+         * @brief Apply the current `VolumeStack` to the effect settings.
+         *
+         * Public so tests can exercise the blend without calling `Process()`.
+         * The stack's four component types map onto the pipeline settings as:
+         *   - Exposure      → `m_autoExposureSettings` (compensationEV)
+         *   - Bloom         → `m_bloomSettings`        (intensity, threshold, softThreshold, scatter)
+         *   - ColorGrading  → `m_colorGradingSettings` (lift, gain, saturation, contrast, temperature, tint)
+         *   - Fog           → unused (no fog in the pipeline — left for a future fog pass)
+         */
+        void ApplyVolumeStack();
+
         AutoExposureSettings& GetAutoExposureSettings() { return m_autoExposureSettings; }
         const AutoExposureSettings& GetAutoExposureSettings() const { return m_autoExposureSettings; }
 
@@ -158,6 +257,79 @@ namespace Spark::Graphics
 
         std::vector<PassMetrics> GetPassMetrics() const;
         std::string Console_ListEffects() const;
+
+        // ---- Phase J: Tier 2 orphan activation surface ----
+
+        /**
+         * @brief Number of render targets owned by the per-frame RT pool.
+         *
+         * Windows builds return the live count from `RenderTargetPool::GetMetrics`;
+         * non-Windows builds always return 0 (the pool is Windows-only).
+         */
+        uint32_t GetRenderTargetPoolSize() const;
+
+        /**
+         * @brief Console-friendly render-target pool status.
+         *
+         * On Windows returns the pool's own status line; on other platforms
+         * returns a short "(not compiled on this platform)" marker so UI
+         * panels that display this never get an empty string.
+         */
+        std::string Console_RenderTargetPoolStatus() const;
+
+        /**
+         * @brief Current GPU debug marker nesting depth (for PIX/RenderDoc).
+         *
+         * Returns 0 on non-Windows builds. Used by tests to assert that
+         * BeginPass/Render never leak an unbalanced event region.
+         */
+        uint32_t GetGPUMarkerDepth() const;
+
+        /**
+         * @brief Most recent GPU-side time in milliseconds for a pass.
+         *
+         * Returns the `GPUTimestampQuery` reading for the pass name when a
+         * D3D11 device is attached; otherwise returns the CPU-side
+         * `m_passTimings` value so callers always get a non-negative number.
+         */
+        float GetPassTimeMs(PostProcessPass pass) const;
+
+        // ---- Phase N: RTHandleSystem (portable) ----
+
+        /**
+         * @brief Get the render-target handle system.
+         *
+         * The pipeline owns one `RTHandleSystem` instance sized to the
+         * pipeline's reference viewport. Callers allocate scale-based
+         * handles (e.g. a half-resolution bloom target at
+         * `scaleX = scaleY = 0.5f`), and the system tracks per-handle
+         * allocation bookkeeping without reallocating on shrink.
+         *
+         * `Resize()` forwards the new reference size via
+         * `RTHandleSystem::SetReferenceSize` so every allocated handle
+         * grows / updates its current dimensions automatically.
+         */
+        RTHandleSystem& GetRTHandleSystem() { return m_rtHandleSystem; }
+        const RTHandleSystem& GetRTHandleSystem() const { return m_rtHandleSystem; }
+
+        // ---- Phase N: ConstantBufferRing (Windows-only) ----
+
+        /**
+         * @brief Current ring-buffer capacity in bytes (0 on non-Windows).
+         *
+         * The `ConstantBufferRing` is only allocated on Windows when a
+         * D3D11 device is attached. Callers can use this to decide
+         * whether to sub-allocate from the ring or fall back to the
+         * per-draw `Map` / `Unmap` path.
+         */
+        uint32_t GetConstantBufferRingCapacity() const;
+
+        /**
+         * @brief Peak constant-buffer-ring usage in bytes across all frames.
+         *
+         * Zero on non-Windows. Reset by `Shutdown()`.
+         */
+        uint32_t GetConstantBufferRingPeakUsage() const;
 
         void Console_SetExposure(float value) { m_lightShaftSettings.exposure = value; }
 
@@ -216,6 +388,25 @@ namespace Spark::Graphics
 
         // Per-effect settings
         BloomSettings m_bloomSettings;
+        GTAOSettings m_gtaoSettings;
+        // SSAOTemporalFilter is an all-CPU orphan, so it is owned unconditionally.
+        // Its `Initialize(width, height)` gets called from the pipeline's own
+        // Initialize and Resize paths so the history buffer follows viewport size.
+        SSAOTemporalFilter m_ssaoTemporalFilter;
+
+        // Phase K: VolumeManager is pure CPU code and runs on every platform.
+        // Initialised alongside the pipeline; Update() runs once per Process()
+        // call and ApplyVolumeStack() pushes the blended stack into the
+        // existing effect settings structs.
+        VolumeManager m_volumeManager;
+        XMFLOAT3 m_cameraPosition = {0.0f, 0.0f, 0.0f};
+        bool m_volumeBlendEnabled = true;
+
+        // Phase N: RTHandleSystem is pure CPU code (the allocation metadata
+        // layer, not the GPU texture layer), so it lives outside the
+        // Windows guard. Initialized from Initialize(width, height) and
+        // SetReferenceSize()-ed from Resize().
+        RTHandleSystem m_rtHandleSystem;
         AutoExposureSettings m_autoExposureSettings;
         TonemappingSettings m_tonemappingSettings;
         ColorGradingSettings m_colorGradingSettings;
@@ -244,8 +435,21 @@ namespace Spark::Graphics
         ID3D11ShaderResourceView* m_pingPongSRVs[2] = {};
 
         // Per-pass pixel shaders
+#ifdef SPARK_PLATFORM_WINDOWS
+        // Phase J orphan activations. All three wrap D3D11 interfaces and
+        // are therefore guarded on the same platform toggle as the rest of
+        // the render state above.
+        RenderTargetPool m_rtPool;    ///< Per-device transient RT allocator (Phase J)
+        GPUDebugMarkers m_gpuMarkers; ///< PIX / RenderDoc scoped event regions (Phase J)
+        GPUTimestampQuery m_gpuTimer; ///< Per-pass GPU timestamp queries (Phase J)
+        // Phase N: ring-buffer CB allocator (Windows-only — wraps
+        // ID3D11Buffer directly). Lifecycle follows the D3D11 device.
+        ConstantBufferRing m_cbRing;
+#endif
         ComPtr<ID3D11VertexShader> m_fullscreenVS;
         ComPtr<ID3D11PixelShader> m_bloomPS;
+        ComPtr<ID3D11PixelShader> m_gtaoPS;
+        ComPtr<ID3D11PixelShader> m_ssaoTemporalPS;
         ComPtr<ID3D11PixelShader> m_autoExposurePS;
         ComPtr<ID3D11PixelShader> m_tonemapPS;
         ComPtr<ID3D11PixelShader> m_colorGradingPS;

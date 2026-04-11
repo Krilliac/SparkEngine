@@ -13,6 +13,10 @@
 #include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
+// Phase M: activated Tier 2 graphics orphans — both are pure CPU and
+// compile on every platform, so they live outside the Windows guard.
+#include "CachedShadowAtlas.h"
+#include "ReflectionProbeCache.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -289,6 +293,36 @@ class LightingSystem
      */
     void BindLightingData(ID3D11DeviceContext* context);
 
+    // ------------------------------------------------------------------
+    // Phase M: Tier 2 orphan activation — cached shadow atlas + probe cache
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Get the cached shadow atlas (Phase M activation).
+     *
+     * The `CachedShadowAtlas` is lifecycle-owned by the lighting system.
+     * It is initialised in `Initialize()`, ticked (`BeginFrame`/`EndFrame`)
+     * by `Update()`, and torn down in `Shutdown()`. Callers can request
+     * shadow tiles via `GetCachedShadowAtlas().RequestShadow(...)`; cached
+     * static lights reuse their tile, dynamic or invalidated lights land
+     * in `GetShadowsToRender()`.
+     */
+    Spark::Graphics::CachedShadowAtlas& GetCachedShadowAtlas() { return m_shadowCache; }
+    const Spark::Graphics::CachedShadowAtlas& GetCachedShadowAtlas() const { return m_shadowCache; }
+
+    /**
+     * @brief Get the reflection probe cache (Phase M activation).
+     *
+     * The `ReflectionProbeCache` is lifecycle-owned by the lighting
+     * system. Tests and downstream code can register probes, call
+     * `Update(cameraX, cameraY, cameraZ)` to get the list of probes to
+     * render this frame, and query cache slots via `GetCacheSlot()`.
+     * The cache is ticked automatically from `LightingSystem::Update`
+     * using the camera position extracted from the inverse view matrix.
+     */
+    Spark::Graphics::ReflectionProbeCache& GetReflectionProbeCache() { return m_probeCache; }
+    const Spark::Graphics::ReflectionProbeCache& GetReflectionProbeCache() const { return m_probeCache; }
+
     // Light management
     std::shared_ptr<Light> CreateLight(LightType type = LightType::Directional);
     void AddLight(std::shared_ptr<Light> light);
@@ -410,6 +444,12 @@ class LightingSystem
 
     // Metrics
     LightingMetrics m_metrics;
+
+    // Phase M: Tier 2 orphan activations — pure CPU members that live
+    // outside the Windows guard so they are consistently available on
+    // every platform's build of LightingSystem.
+    Spark::Graphics::CachedShadowAtlas m_shadowCache;
+    Spark::Graphics::ReflectionProbeCache m_probeCache;
 
     // Helper methods
     HRESULT CreateConstantBuffers();

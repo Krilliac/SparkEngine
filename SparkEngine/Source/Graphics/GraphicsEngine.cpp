@@ -493,8 +493,65 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         LOG_TO_CONSOLE_IMMEDIATE(L"Basic shaders initialized successfully", L"SUCCESS");
     }
 
+    // Phase Q: activate the image denoiser. The default backend is
+    // SoftwareDenoiser (joint-bilateral filter), which works on every
+    // platform with no external SDK. A future pipeline can replace
+    // m_denoiser with an OIDN / OptiX instance before the first
+    // Execute() call. The initial settings have `enabled = false` so
+    // no CPU work happens until a real RT pass toggles it on.
+    m_denoiser = std::make_unique<Spark::Graphics::SoftwareDenoiser>();
+    Spark::Graphics::DenoiserSettings denoiserSettings;
+    denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
+    denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
+    m_denoiser->Initialize(denoiserSettings);
+
+    // Phase S: activate the procedural noise graph. Default output
+    // is a SimplexNode so the accessor is useful immediately; terrain
+    // / foliage / decoration systems can add more nodes via
+    // `GetProceduralNoise()->AddNode(...)` without rebuilding the
+    // engine.
+    m_proceduralNoise = std::make_unique<Spark::Graphics::NoiseGraph>();
+    {
+        auto defaultNode = std::make_unique<Spark::Graphics::SimplexNode>();
+        auto* nodePtr = m_proceduralNoise->AddNode(std::move(defaultNode));
+        m_proceduralNoise->SetOutputNode(nodePtr);
+    }
+
+    // Phase T: activate the voxel cone traced GI system with a
+    // small 32³ default grid (~130 KB) and `enabled = false`. A
+    // future GI render pass that wants full resolution can
+    // re-initialise via `GetVCTSystem()->Initialize({...})` with a
+    // 128³ grid. Keeping the default small avoids wasting ~9 MB
+    // per GraphicsEngine instance for a feature that is opt-in.
+    m_vctSystem = std::make_unique<Spark::Graphics::VCTSystem>();
+    {
+        Spark::Graphics::VCTSettings vctSettings;
+        vctSettings.enabled = false;
+        vctSettings.voxelResolution = 32;
+        vctSettings.worldExtent = 50.0f;
+        m_vctSystem->Initialize(vctSettings);
+    }
+
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Graphics", 0.0);
     return S_OK;
+}
+
+// ============================================================================
+// Phase Q: Denoiser accessor
+// ============================================================================
+
+Spark::Graphics::DenoiserBackend GraphicsEngine::GetDenoiserBackend() const
+{
+    return m_denoiser ? m_denoiser->GetBackend() : Spark::Graphics::DenoiserBackend::None;
+}
+
+// ============================================================================
+// Phase S: Procedural noise accessor
+// ============================================================================
+
+Spark::Graphics::SIMDLevel GraphicsEngine::GetProceduralNoiseSIMDLevel() const
+{
+    return Spark::Graphics::DetectBestSIMD();
 }
 
 // ============================================================================
@@ -569,6 +626,30 @@ void GraphicsEngine::Shutdown()
     m_constantBufferRing.Shutdown();
     m_gpuDebugMarkers.Shutdown();
     m_gpuTimestampQuery.Shutdown();
+
+    // Phase Q: tear down the image denoiser. Shutdown() drops the
+    // internal output buffer; resetting the unique_ptr releases the
+    // polymorphic backend so a future swap to OIDN / OptiX can
+    // construct a fresh instance on the next Initialize.
+    if (m_denoiser)
+    {
+        m_denoiser->Shutdown();
+        m_denoiser.reset();
+    }
+
+    // Phase S: tear down the procedural noise graph. The unique_ptr
+    // releases all owned nodes via the graph's vector destructor.
+    m_proceduralNoise.reset();
+
+    // Phase T: tear down the VCT system. Shutdown() clears the
+    // voxel grid (destroys the mip chain + base data); resetting
+    // the unique_ptr releases the wrapper itself. Calling Shutdown
+    // on an uninitialised system is safe.
+    if (m_vctSystem)
+    {
+        m_vctSystem->Shutdown();
+        m_vctSystem.reset();
+    }
 
     // Shutdown legacy systems
     if (m_renderPipeline)
@@ -1454,6 +1535,37 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_renderPipeline->SetGraphicsEngine(this);
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
+    // Phase Q: mirror the Windows denoiser activation so Linux /
+    // headless builds have the same live IDenoiser instance and
+    // tests exercising GraphicsEngine directly see consistent state.
+    m_denoiser = std::make_unique<Spark::Graphics::SoftwareDenoiser>();
+    Spark::Graphics::DenoiserSettings denoiserSettings;
+    denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
+    denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
+    m_denoiser->Initialize(denoiserSettings);
+
+    // Phase S: mirror the procedural noise graph activation on
+    // Linux / headless so tests exercising GraphicsEngine see the
+    // same default output node.
+    m_proceduralNoise = std::make_unique<Spark::Graphics::NoiseGraph>();
+    {
+        auto defaultNode = std::make_unique<Spark::Graphics::SimplexNode>();
+        auto* nodePtr = m_proceduralNoise->AddNode(std::move(defaultNode));
+        m_proceduralNoise->SetOutputNode(nodePtr);
+    }
+
+    // Phase T: mirror the VCT system activation on the Linux
+    // path. Same small default grid so headless builds keep a
+    // trivial memory footprint.
+    m_vctSystem = std::make_unique<Spark::Graphics::VCTSystem>();
+    {
+        Spark::Graphics::VCTSettings vctSettings;
+        vctSettings.enabled = false;
+        vctSettings.voxelResolution = 32;
+        vctSettings.worldExtent = 50.0f;
+        m_vctSystem->Initialize(vctSettings);
+    }
+
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",
                    rhi.bridge.GetBackendName().c_str());
 
@@ -1484,11 +1596,46 @@ void GraphicsEngine::Shutdown()
     m_temporalEffects.reset();
     m_shader.reset();
 
+    // Phase Q: tear down the denoiser on the Linux path too.
+    if (m_denoiser)
+    {
+        m_denoiser->Shutdown();
+        m_denoiser.reset();
+    }
+
+    // Phase S: drop the procedural noise graph (Linux stub path).
+    m_proceduralNoise.reset();
+
+    // Phase T: tear down the VCT system (Linux stub path).
+    if (m_vctSystem)
+    {
+        m_vctSystem->Shutdown();
+        m_vctSystem.reset();
+    }
+
     rhi.bridge.Shutdown();
     rhi.initialized = false;
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shutdown complete");
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Graphics.RHI", 0.0);
+}
+
+// ============================================================================
+// Phase Q: Denoiser accessor (Linux stub path)
+// ============================================================================
+
+Spark::Graphics::DenoiserBackend GraphicsEngine::GetDenoiserBackend() const
+{
+    return m_denoiser ? m_denoiser->GetBackend() : Spark::Graphics::DenoiserBackend::None;
+}
+
+// ============================================================================
+// Phase S: Procedural noise accessor (Linux stub path)
+// ============================================================================
+
+Spark::Graphics::SIMDLevel GraphicsEngine::GetProceduralNoiseSIMDLevel() const
+{
+    return Spark::Graphics::DetectBestSIMD();
 }
 
 // ============================================================================

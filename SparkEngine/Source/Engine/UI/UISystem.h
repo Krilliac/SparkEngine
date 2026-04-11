@@ -50,6 +50,12 @@
 
 #pragma once
 
+// Phase R: activated Tier 2 graphics orphan — per-widget compositor
+// stack with pooled render-target metadata. Pure CPU, runs on every
+// platform. Owned by UISystem so the widget layer can push / pop
+// composition levels for nested effects (blur, mask, opacity).
+#include "../../Graphics/UICompositor.h"
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -440,6 +446,29 @@ namespace Spark::UI
         void SetVisible(bool visible) { m_visible = visible; }
         bool IsVisible() const { return m_visible; }
 
+        // --- Phase R: UICompositor accessor ---
+
+        /**
+         * @brief Get the per-widget composition stack (Phase R activation).
+         *
+         * The `UICompositor` is lifecycle-owned by the UI system. It
+         * manages a pool of intermediate render-target metadata slots
+         * and a `kMaxStackDepth = 8` composition stack so widgets can
+         * push a `CompositeRequest` (opacity, blur, mask, etc.),
+         * render to an intermediate target, and pop back to the parent.
+         * Simple widgets (full opacity, no effects) skip the push /
+         * pop via `NeedsComposition()` and render straight to the
+         * parent RT.
+         *
+         * The compositor is initialised from `UISystem::Initialize`
+         * with the viewport size, ticked via `BeginFrame()` from
+         * `UISystem::Render()` (which reclaims pool entries unused
+         * for 10+ frames), and re-initialised on `OnResize` so the
+         * pool resets at the new screen size.
+         */
+        Spark::Graphics::UICompositor& GetCompositor() { return m_compositor; }
+        const Spark::Graphics::UICompositor& GetCompositor() const { return m_compositor; }
+
         // --- Console integration ---
 
         /** @brief Get UI system status (console integration). */
@@ -447,6 +476,12 @@ namespace Spark::UI
 
       private:
         UICanvas m_canvas;
+        // Phase R: per-widget compositor stack. Pure CPU bookkeeping
+        // — the header documents that "GPU resources would be
+        // ComPtr<ID3D11Texture2D>, etc. Kept abstract for cross-
+        // platform compatibility", so the member lives outside any
+        // Windows guard and runs on every platform.
+        Spark::Graphics::UICompositor m_compositor;
         bool m_visible = true;
     };
 

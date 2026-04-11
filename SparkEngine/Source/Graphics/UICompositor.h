@@ -10,7 +10,16 @@
  *
  * @see UISystem.h, UIDirtyTracking.h, RenderTargetPool.h
  *
- * @note **Intentional reusable graphics utility** — UI compositor (may be superseded by `Engine/UI`). Kept for reference until the Engine/UI path is verified to cover the same functionality; a follow-up will either migrate and delete, or wire this in for standalone use.
+ * @note **Activated in Phase R (2026-04-11).** `Spark::UI::UISystem`
+ *       owns a `Spark::Graphics::UICompositor` member — lifecycle-
+ *       initialised from `UISystem::Initialize`, reset on
+ *       `OnResize`, and ticked (`BeginFrame`) from `Render()`. The
+ *       audit previously marked this as "may be superseded by
+ *       Engine/UI" but verification showed the existing UISystem
+ *       has no compositor or per-widget compositing surface —
+ *       the two systems are complementary (UISystem manages the
+ *       widget hierarchy + layout + input; UICompositor manages
+ *       the composition stack for nested widget effects).
  *
  */
 
@@ -18,6 +27,7 @@
 
 #include "../Core/Platform.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>

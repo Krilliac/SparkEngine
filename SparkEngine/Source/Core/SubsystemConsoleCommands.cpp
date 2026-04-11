@@ -499,6 +499,8 @@ namespace Spark
                     return "Post-processing pipeline not available";
 
                 static const std::unordered_map<std::string, Graphics::PostProcessPass> passes = {
+                    {"gtao", Graphics::PostProcessPass::GTAO},
+                    {"ssaotemporal", Graphics::PostProcessPass::SSAOTemporal},
                     {"bloom", Graphics::PostProcessPass::Bloom},
                     {"autoexposure", Graphics::PostProcessPass::AutoExposure},
                     {"tonemapping", Graphics::PostProcessPass::Tonemapping},
@@ -535,6 +537,8 @@ namespace Spark
                     return "Post-processing pipeline not available";
 
                 static const std::unordered_map<std::string, Graphics::PostProcessPass> passes = {
+                    {"gtao", Graphics::PostProcessPass::GTAO},
+                    {"ssaotemporal", Graphics::PostProcessPass::SSAOTemporal},
                     {"bloom", Graphics::PostProcessPass::Bloom},
                     {"autoexposure", Graphics::PostProcessPass::AutoExposure},
                     {"tonemapping", Graphics::PostProcessPass::Tonemapping},

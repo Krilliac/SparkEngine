@@ -220,6 +220,25 @@ add_executable(SparkTests
     TestFoliageSystem.cpp
     TestFoliageRenderer.cpp
     TestFoliageImpostorBaker.cpp
+    TestGTAOEffect.cpp
+    TestSSAOTemporalFilter.cpp
+    TestPostProcessingPipelinePhaseJ.cpp
+    TestVolumeManager.cpp
+    TestPostProcessingPipelinePhaseK.cpp
+    TestMeshOptimizer.cpp
+    TestBVHAccelerator.cpp
+    TestReflectionProbeCache.cpp
+    TestCachedShadowAtlas.cpp
+    TestRTHandleSystem.cpp
+    TestConstantBufferRing.cpp
+    TestPostProcessingPipelinePhaseN.cpp
+    TestShaderVariantSystem.cpp
+    TestPersistentMaterialCB.cpp
+    TestDenoiserInterface.cpp
+    TestUICompositor.cpp
+    TestUISystemPhaseR.cpp
+    TestFastNoise2SIMD.cpp
+    TestVoxelConeTracing.cpp
     TestDXRSupport.cpp
     TestCSGEditorPanel.cpp
     TestNavMeshLink.cpp

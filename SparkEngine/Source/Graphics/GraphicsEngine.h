@@ -34,6 +34,22 @@
 #include "MakeDesc.h"
 #include "TerrainRenderer.h"
 #include "GPUTimestampQuery.h"
+// Phase Q: activated Tier 2 graphics orphan — abstract denoiser
+// interface plus SoftwareDenoiser fallback. Pure CPU (joint bilateral
+// filter), no external SDK dependency, runs on every platform.
+#include "DenoiserInterface.h"
+// Phase S: activated Tier 2 graphics orphan — SIMD-accelerated
+// procedural noise graph (Simplex/Perlin/Cellular/FBM/DomainWarp/
+// Combiner nodes with batch evaluation). Pure CPU, runtime SIMD
+// detection, runs on every platform.
+#include "FastNoise2SIMD.h"
+// Phase T: activated Tier 2 graphics orphan — voxel-cone-traced
+// global illumination. Pure CPU VoxelGrid + VCTSystem (no D3D11
+// dependency); the mip chain, cone trace, and tangent-frame math
+// all run on every platform. Default settings disable the pipeline
+// so the grid allocation is tiny (~130 KB at 32³) until a future
+// render pass opts in.
+#include "VoxelConeTracing.h"
 #include "RHI/RHIBridge.h"
 #ifdef SPARK_HARDWARE_RT
 #include "RHI/DXRSupport.h"
@@ -316,6 +332,97 @@ class GraphicsEngine
     /** @brief Get the depth buffer SRV for HiZ construction and post-process reads. */
     ID3D11ShaderResourceView* GetDepthSRV() const { return m_depthStencilSRV.Get(); }
 #endif // SPARK_PLATFORM_WINDOWS
+
+    // ========================================================================
+    // Phase Q: DenoiserInterface accessor
+    // ========================================================================
+
+    /**
+     * @brief Get the engine's image denoiser (Phase Q activation).
+     *
+     * The `GraphicsEngine` owns one `IDenoiser` instance, default-
+     * constructed as a `SoftwareDenoiser` (joint-bilateral fallback
+     * that works on every platform with no external SDK). A future
+     * ray-traced AO / GI / reflections pass can register its noisy
+     * color buffer + optional albedo / normal guides through this
+     * accessor, call `Execute()`, and read back the denoised output.
+     *
+     * The accessor returns a raw pointer (not null after Initialize)
+     * so a future swap to OIDN / OptiX is a one-line replacement
+     * inside `GraphicsEngine::Initialize`.
+     */
+    Spark::Graphics::IDenoiser* GetDenoiser() { return m_denoiser.get(); }
+    const Spark::Graphics::IDenoiser* GetDenoiser() const { return m_denoiser.get(); }
+
+    /**
+     * @brief Get the current denoiser backend (Software / OIDN / OptiX / etc).
+     *
+     * Returns `DenoiserBackend::None` on a headless build where the
+     * denoiser was never constructed, or the concrete backend the
+     * current denoiser reports.
+     */
+    Spark::Graphics::DenoiserBackend GetDenoiserBackend() const;
+
+    // ========================================================================
+    // Phase S: Procedural noise accessor
+    // ========================================================================
+
+    /**
+     * @brief Get the engine's procedural noise graph (Phase S activation).
+     *
+     * The `GraphicsEngine` owns one `NoiseGraph` instance, default-
+     * initialised with a single `SimplexNode` as the output. Terrain,
+     * foliage scatter, and any other procedural system can call
+     * `Evaluate(x, y)` / `BatchEvaluate(...)` through this accessor
+     * without creating a standalone graph or touching a singleton.
+     *
+     * The graph exposes the full node catalog (Perlin, Cellular, FBM,
+     * DomainWarp, Combiner) via `AddNode(std::make_unique<...>)` for
+     * callers that want to compose their own graphs; the default
+     * output is a Simplex node so the accessor is useful out of the
+     * box. Runtime SIMD detection is available via
+     * `GetProceduralNoiseSIMDLevel()`.
+     */
+    Spark::Graphics::NoiseGraph* GetProceduralNoise() { return m_proceduralNoise.get(); }
+    const Spark::Graphics::NoiseGraph* GetProceduralNoise() const { return m_proceduralNoise.get(); }
+
+    /**
+     * @brief Get the runtime-detected SIMD level used by the noise graph.
+     *
+     * Returns `Scalar` on non-x86 platforms or when neither SSE2 nor
+     * AVX2 is available. The level is detected at compile time from
+     * the preprocessor feature macros, not at runtime — swap the
+     * compiler flags to change it.
+     */
+    Spark::Graphics::SIMDLevel GetProceduralNoiseSIMDLevel() const;
+
+    // ========================================================================
+    // Phase T: Voxel cone traced GI accessor
+    // ========================================================================
+
+    /**
+     * @brief Get the voxel cone traced GI system (Phase T activation).
+     *
+     * The `GraphicsEngine` owns one `VCTSystem` instance, default-
+     * initialised with a small 32³ voxel grid (~130 KB) and
+     * `enabled = false` so no per-frame voxelization or cone-trace
+     * work runs until a future GI render pass opts in. Callers
+     * that want full-resolution GI can re-initialise the system
+     * with `VCTSettings{.voxelResolution = 128, .worldExtent = 100.0f}`
+     * which reallocates the grid at ~9 MB.
+     *
+     * The VCT pipeline is four stages:
+     * 1. `BeginVoxelization()` — clear the grid.
+     * 2. `InjectLight(...)` / `InjectGeometry(...)` — rasterise the
+     *    scene into the voxel grid.
+     * 3. `EndVoxelization()` — build the mip chain for cone filtering.
+     * 4. `TraceDiffuse(...)` / `TraceSpecular(...)` — gather indirect
+     *    lighting per surface point.
+     *
+     * All four stages run on pure CPU and work on every platform.
+     */
+    Spark::Graphics::VCTSystem* GetVCTSystem() { return m_vctSystem.get(); }
+    const Spark::Graphics::VCTSystem* GetVCTSystem() const { return m_vctSystem.get(); }
 
     /** @brief Set non-owning physics pointer (called by engine during init) */
     void SetPhysicsSystem(PhysicsSystem* physics) { m_physicsSystem = physics; }
@@ -663,8 +770,35 @@ class GraphicsEngine
     Spark::Graphics::GPUDebugMarkers m_gpuDebugMarkers;            ///< PIX/RenderDoc GPU annotations
     Spark::Graphics::GPUTimestampQuery m_gpuTimestampQuery;        ///< Per-pass GPU timing queries
 #endif                                                             // SPARK_PLATFORM_WINDOWS
-    std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList;  ///< Sorted draw list per frame
-    std::vector<GameObject*> m_culledObjectsBuffer;                ///< Reusable culling output (avoids per-frame alloc)
+
+    // Phase Q: image denoiser (portable — default-constructed as a
+    // SoftwareDenoiser joint-bilateral fallback that works on every
+    // platform with no external SDK). Owned by unique_ptr so a future
+    // swap to OIDN / OptiX is a one-line replacement inside Initialize.
+    std::unique_ptr<Spark::Graphics::IDenoiser> m_denoiser;
+
+    // Phase S: procedural noise graph (portable — runtime SIMD
+    // detection, default output is a SimplexNode). unique_ptr so a
+    // future terrain / foliage scatter system can replace the graph
+    // with a domain-specific composition without rebuilding the
+    // engine. Owned by unique_ptr because `NoiseGraph` holds a
+    // `std::vector<std::unique_ptr<NoiseNode>>` and the raw output
+    // pointer points into that vector; moving / copying the graph
+    // would invalidate the pointer.
+    std::unique_ptr<Spark::Graphics::NoiseGraph> m_proceduralNoise;
+
+    // Phase T: voxel cone traced GI system (portable — CPU voxel
+    // grid + mip chain + cone-trace math, no D3D11). unique_ptr
+    // so the grid's internal `std::vector<uint8_t>` storage has a
+    // stable heap address across any future GraphicsEngine copy,
+    // and so a full-resolution GI re-initialisation (32³ → 128³)
+    // can be an in-place replace without touching the accessor.
+    // Default settings set `enabled = false` + 32³ resolution so
+    // the memory footprint stays ~130 KB until a real GI pass
+    // opts in.
+    std::unique_ptr<Spark::Graphics::VCTSystem> m_vctSystem;
+    std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
+    std::vector<GameObject*> m_culledObjectsBuffer;               ///< Reusable culling output (avoids per-frame alloc)
 
     // Basic shader system resources (fallback rendering pipeline)
     ComPtr<ID3D11VertexShader> m_basicVertexShader;

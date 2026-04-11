@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*353 test files, 4570+ test cases*
+*355 test files, 4609+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -593,6 +593,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCpuNeuralInference` | 14 |
 | `TestCrashReportUploader` | 8 |
 | `TestCrossSystemIntegration` | 4 |
+| `TestDXRSupport` | 13 |
 | `TestDataTableSystem` | 11 |
 | `TestDatablockRegistry` | 10 |
 | `TestDayNightCycle` | 10 |
@@ -648,8 +649,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFileWatcher` | 10 |
 | `TestFixtures` | 0 |
 | `TestFogSystem` | 17 |
-| `TestFoliageImpostorBaker` | 14 |
-| `TestFoliageRenderer` | 20 |
+| `TestFoliageImpostorBaker` | 21 |
+| `TestFoliageRenderer` | 31 |
 | `TestFoliageSystem` | 10 |
 | `TestFontSystem` | 13 |
 | `TestFormationSystem` | 9 |
@@ -666,6 +667,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGPUResourceLeakDetector` | 0 |
 | `TestGPUSkinning` | 9 |
 | `TestGPUStallProfiler` | 6 |
+| `TestGTAOEffect` | 8 |
 | `TestGameMode` | 5 |
 | `TestGameModuleMMO` | 23 |
 | `TestGameModulePlatformerARPG` | 0 |

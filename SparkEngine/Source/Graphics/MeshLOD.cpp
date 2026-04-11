@@ -6,6 +6,7 @@
  */
 
 #include "MeshLOD.h"
+#include "MeshOptimizer.h" // Phase L: ACMR reporting at LOD-chain build time
 #include "../Utils/Validate.h"
 #include <sstream>
 #include <algorithm>
@@ -210,6 +211,23 @@ namespace Spark::Graphics
         SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, indices);
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Generating LOD chain for '%s' (%u verts, %u indices)",
                        meshName.c_str(), vertexCount, indexCount);
+
+        // Phase L: activate the MeshOptimizer orphan by reporting the source
+        // mesh's Average Cache Miss Ratio (ACMR) at LOD-chain build time.
+        // ACMR measures how cache-friendly the index order is: lower is
+        // better, with 0.5 as the theoretical optimum for a 32-entry FIFO
+        // post-transform cache. Values above 1.0 indicate the mesh would
+        // benefit from a `MeshOptimizer::OptimizeVertexCache` pass before
+        // upload. The result is logged only — we do not rewrite the caller's
+        // index buffer.
+        if (indexCount >= 3)
+        {
+            const float acmr = MeshOptimizer::ComputeACMR(indices, indexCount);
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                           "  MeshOptimizer ACMR for '%s': %.3f (lower is better, 0.5 optimal)", meshName.c_str(),
+                           static_cast<double>(acmr));
+        }
+
         LODChain chain;
         chain.meshName = meshName;
         chain.totalVertices = 0;
