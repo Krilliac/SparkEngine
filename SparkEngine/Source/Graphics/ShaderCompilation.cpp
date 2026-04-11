@@ -14,6 +14,11 @@
 #include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Each successful LoadFromFile / LoadVertexShader /
+// LoadPixelShader call registers the parent directory with the singleton
+// so runtime file-watching covers every shader that is actually loaded.
+#include "ShaderHotReload.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -21,6 +26,7 @@
 #include "RHI/RHIFactory.h"
 #include "RHI/RHITypes.h"
 #include "Utils/LocalFileCache.h"
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -130,6 +136,18 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
     }
 
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::string narrowFile(filename.begin(), filename.end());
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowFile).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
+
     return hr;
 }
 
@@ -182,6 +200,18 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
     {
         std::wstring errorMsg = L"CreatePixelShader failed with HR=0x" + std::to_wstring(hr);
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+    }
+
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::string narrowFile(filename.begin(), filename.end());
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowFile).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
     }
 
     return hr;
@@ -536,6 +566,18 @@ HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const
     // Add to watched files for hot reload
     m_watchedFiles.push_back(wFilePath);
 
+    // Phase U: register the parent directory with the
+    // Spark::Graphics::ShaderHotReload singleton so runtime file-watching
+    // picks up this file and its siblings.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(m_filePath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
+
     return LoadShaderFromSource(source, type, flags);
 }
 
@@ -647,10 +689,15 @@ bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int 
 // ============================================================================
 
 #include "Shader.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Linux branch needs the same include so the singleton is
+// reachable from LoadVertexShader/LoadPixelShader/LoadFromFile.
+#include "ShaderHotReload.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -805,6 +852,17 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
     m_type = ShaderType::VERTEX_SHADER;
     m_filePath = narrowPath;
 
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowPath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Vertex shader compiled (RHI): " + filename, L"SUCCESS");
     NotifyStateChange();
     return S_OK;
@@ -882,6 +940,17 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
 
     m_isCompiled = true;
     m_filePath = narrowPath;
+
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowPath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Pixel shader compiled (RHI): " + filename, L"SUCCESS");
     NotifyStateChange();
@@ -995,6 +1064,17 @@ HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const
     uint64_t modTime = GetFileModTime(filePath);
     m_lastModified.dwLowDateTime = static_cast<uint32_t>(modTime & 0xFFFFFFFF);
     m_lastModified.dwHighDateTime = static_cast<uint32_t>((modTime >> 32) & 0xFFFFFFFF);
+
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(filePath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
 
     return LoadShaderFromSource(sourceCode, type, flags);
 }
