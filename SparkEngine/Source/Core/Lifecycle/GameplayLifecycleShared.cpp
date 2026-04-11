@@ -92,6 +92,12 @@
 // wire-up that keeps them reachable from any code path.
 #include "Engine/Scripting/ScriptHookManager.h"
 #include "Graphics/DynamicQualityScaler.h"
+// Phase CC Theme 3D: two more singleton orphans surfaced by a broader
+// sweep. `GPUStallProfiler` lives in Utils and tracks CPU-GPU frame
+// overlap; `AsyncComputeScheduler` manages compute workloads with a
+// D3D11 synchronous fallback.
+#include "Utils/GPUStallProfiler.h"
+#include "Graphics/AsyncComputeScheduler.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -515,6 +521,22 @@ namespace Spark::Core::Lifecycle
             dqsDefaults.maxScale = 1.0f;
             Spark::Graphics::DynamicQualityScaler::GetInstance().Initialize(dqsDefaults);
         }
+
+        // Phase CC Theme 3D: GPU stall profiler — tracks CPU/GPU frame
+        // overlap and classifies each frame as CPU-bound, GPU-bound,
+        // balanced, or a pipeline bubble. Initialize clears the
+        // history ring; actual BeginCPUWork / EndCPUWork / EndFrame
+        // calls are made from the render loop when a real profiler
+        // feed is wired (Phase CC only lands the lifecycle seam).
+        Spark::GPUStallProfiler::GetInstance().Initialize();
+
+        // Phase CC Theme 3D: Async compute scheduler — submits compute
+        // workloads with a D3D11 synchronous-immediate fallback.
+        // Initialize sets up the pending queue; SetDeviceContext is
+        // called from the D3D11 render path on Windows when the device
+        // is ready, and Flush/BeginFrame are pumped from the render
+        // loop once a consumer exists.
+        Spark::Graphics::AsyncComputeScheduler::GetInstance().Initialize();
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
@@ -1090,6 +1112,11 @@ namespace Spark::Core::Lifecycle
 
         // Engine-orphan singletons wired in this branch — teardown
         // mirrors the startup order so dependents are released first.
+        // Phase CC Theme 3D additions (released first — they depend on
+        // the render loop being alive, so tear them down before the
+        // rest of the engine winds down):
+        Spark::Graphics::AsyncComputeScheduler::GetInstance().Shutdown();
+        Spark::GPUStallProfiler::GetInstance().Shutdown();
         // Phase BB Theme 3D additions:
         Spark::Graphics::DynamicQualityScaler::GetInstance().Reset();
         Spark::Scripting::ScriptHookManager::GetInstance().Clear();
