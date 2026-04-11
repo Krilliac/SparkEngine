@@ -24,6 +24,11 @@
 // cache. Wired into Shader::Initialize so every Shader instance queries
 // the same process-wide cache before calling the backend compiler.
 #include "ShaderDiskCache.h"
+// Phase W: activated Tier 2 graphics orphan — in-memory shader cross-
+// compilation cache. Shared singleton reachable from any Shader call
+// path so asset cookers and tests have a stable handle to the cross-
+// compile surface.
+#include "ShaderCrossCompiler.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -191,6 +196,20 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     if (!diskCache.IsInitialized())
     {
         diskCache.Initialize(std::filesystem::path("ShaderCache"));
+    }
+
+    // Phase W: activate Spark::Graphics::ShaderCrossCompiler singleton.
+    // In-memory compile cache used by CompileAll / CompileAsync. The
+    // internal per-target Compile* functions are currently stubs that
+    // report success without producing bytecode — Phase W wires the
+    // lifecycle so tests and future asset cookers that need a
+    // cross-target compile surface have a shared instance to talk to,
+    // and so any real DXC / SPIRV-Cross integration slots into this
+    // existing activation.
+    auto& crossCompiler = Spark::Graphics::GetShaderCrossCompiler();
+    if (!crossCompiler.IsInitialized())
+    {
+        crossCompiler.Initialize();
     }
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader system initialized");
@@ -489,6 +508,10 @@ Shader::ShaderMetrics Shader::GetMetricsThreadSafe() const
 // cache. Mirrors the Windows include block so the Linux branch shares
 // the same cache singleton on headless / RHI builds.
 #include "ShaderDiskCache.h"
+// Phase W: activated Tier 2 graphics orphan — in-memory cross-compile
+// cache. Mirrors the Windows include so Linux Shader::Initialize
+// also primes the shared singleton.
+#include "ShaderCrossCompiler.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -629,6 +652,15 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     if (!diskCache.IsInitialized())
     {
         diskCache.Initialize(std::filesystem::path("ShaderCache"));
+    }
+
+    // Phase W: activate Spark::Graphics::ShaderCrossCompiler singleton
+    // on the Linux branch. Matches the Windows path — the first
+    // Shader::Initialize primes the in-memory compile cache.
+    auto& crossCompiler = Spark::Graphics::GetShaderCrossCompiler();
+    if (!crossCompiler.IsInitialized())
+    {
+        crossCompiler.Initialize();
     }
 
     return S_OK;
