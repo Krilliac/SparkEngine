@@ -978,7 +978,15 @@ jobs:
         # them up via the extract-errors step below.
         run: |
           cd build && ./bin/SparkTests --verbose 2>&1 | tee ../test-output.log || true
-          tail -5 ../test-output.log
+          echo "==== SparkTests exit status: ${PIPESTATUS[0]} ===="
+          echo "==== test-output.log tail (last 80 lines) ===="
+          tail -80 ../test-output.log || true
+          echo "==== .gcno file count ===="
+          find . -name '*.gcno' 2>/dev/null | wc -l
+          echo "==== .gcda file count ===="
+          find . -name '*.gcda' 2>/dev/null | wc -l
+          echo "==== first 5 .gcda paths ===="
+          find . -name '*.gcda' 2>/dev/null | head -5
       - name: Generate coverage
         # lcov is noisy on warnings and sometimes emits non-zero exit
         # codes even with --ignore-errors. Capture each command's exit
