@@ -28,6 +28,7 @@
 #include "../Core/Platform.h"
 #include "FoliageImpostorBaker.h"
 #include "FoliageSystem.h"
+#include "GPUSceneBuffer.h"
 
 #include <cstdint>
 #include <functional>
@@ -36,10 +37,14 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations to avoid pulling AssetPipeline.h here (it is
-// Windows-heavy). The renderer stores assets as opaque shared handles.
+// Forward declarations to avoid pulling AssetPipeline.h / TextureSystem.h
+// here (both are Windows-heavy). The renderer stores assets as opaque
+// shared handles and fishes the SRV out inside the Windows-only draw
+// path where the full headers are already visible.
 class MeshAsset;
 class AssetPipeline;
+class Texture;
+class TextureSystem;
 
 #ifdef SPARK_PLATFORM_WINDOWS
 namespace Spark::Graphics
@@ -89,6 +94,21 @@ namespace Spark::Graphics
         float worldMatrix[16] = {
             1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
         };
+    };
+
+    /**
+     * @brief A contiguous run of instances sharing `(lod, globalMaterialId)`.
+     *
+     * Populated by `CollectFromFoliageManager` after sorting the batch so
+     * the GPU render pass can issue one `DrawIndexedInstanced` per run
+     * without scanning for group boundaries per frame.
+     */
+    struct FoliageDrawRun
+    {
+        uint32_t startInstance = 0;    ///< Index into the sorted batch.
+        uint32_t instanceCount = 0;    ///< Number of consecutive instances in the run.
+        uint32_t globalMaterialId = 0; ///< Species index (for mesh lookup / cell buffer).
+        FoliageRenderLOD lod = FoliageRenderLOD::Mesh;
     };
 
     /**
@@ -212,8 +232,19 @@ namespace Spark::Graphics
 
         /**
          * @brief Read-only access to the latest batch.
+         *
+         * After `CollectFromFoliageManager` the batch is sorted by
+         * `(lod, globalMaterialId)` so runs of identical species are
+         * contiguous and mesh LODs precede impostors — matching
+         * `m_drawOrder`.
          */
         const std::vector<FoliageRenderInstance>& GetRenderInstances() const { return m_renderInstances; }
+
+        /**
+         * @brief Read-only access to the contiguous draw runs of the
+         *        current sorted batch.
+         */
+        const std::vector<FoliageDrawRun>& GetDrawOrder() const { return m_drawOrder; }
 
         /**
          * @brief Statistics captured during the last CollectFromFoliageManager call.
@@ -283,6 +314,49 @@ namespace Spark::Graphics
          */
         static FoliageRenderLOD SelectLOD(float distanceToCamera, float impostorDistance);
 
+        /**
+         * @brief Translate a CPU `FoliageRenderInstance` into the GPU POD.
+         *
+         * Extracted from `UploadToSceneBuffer` so unit tests can hit the
+         * encoding path without a D3D11 device. Writes:
+         *   - `worldMatrix` and `prevWorldMatrix` from the CPU record
+         *   - `normalMatrix` = inverse-transpose(world)
+         *   - `materialId`    = registry-wide global species index
+         *   - `flags`         = Visible | CastShadow | ReceiveShadow,
+         *                       plus `FoliageImpostor` if the CPU record's
+         *                       `lod == FoliageRenderLOD::Impostor`
+         *   - `lodDistance`   = instance distance to camera
+         *   - `padding`       = per-instance wind phase (read by the VS)
+         */
+        static void BuildGPUInstance(const FoliageRenderInstance& src, GPUInstanceData& out);
+
+        /**
+         * @brief Clamp a draw run against the number of instances that were
+         *        actually uploaded to the scene buffer this frame.
+         *
+         * `UploadToSceneBuffer` can stop early when it hits `GPUSceneBuffer`
+         * capacity (large static scene + large foliage batch). When that
+         * happens the tail of `m_drawOrder` still references instance slots
+         * past `uploadedCount` — the VS would sample stale or uninitialized
+         * `GPUInstanceData`. This helper returns the clamped
+         * `(startInstance, instanceCount)` pair; when the entire run is
+         * past the uploaded tail `outInstanceCount` is set to 0 and the
+         * caller should skip the draw.
+         *
+         * Pure function so unit tests can pin the overflow behaviour
+         * without a D3D11 device.
+         *
+         * @param run            Draw run produced by `CollectFromFoliageManager`.
+         * @param uploadedCount  Number of instances actually written to
+         *                       the scene buffer this frame (return value
+         *                       of `UploadToSceneBuffer`).
+         * @param outStartInstance  Unchanged — always equals `run.startInstance`.
+         * @param outInstanceCount  Clamped instance count (0 when the run
+         *                          is entirely past `uploadedCount`).
+         */
+        static void ClampDrawRunToUploaded(const FoliageDrawRun& run, uint32_t uploadedCount,
+                                           uint32_t& outStartInstance, uint32_t& outInstanceCount);
+
 #ifdef SPARK_PLATFORM_WINDOWS
         // --------------------------------------------------------------------
         // Windows-only GPU integration
@@ -323,6 +397,48 @@ namespace Spark::Graphics
 
         /// @brief Read-only access to the singleton impostor atlas.
         const FoliageImpostorAtlas& GetImpostorAtlas() const { return m_impostorAtlas; }
+
+        /**
+         * @brief Issue the foliage render pass for the current batch.
+         *
+         * Runs two sub-passes that share a single VS/PS pair:
+         *   1. **Mesh sub-pass** — one `DrawIndexedInstanced` per contiguous
+         *      `(lod=Mesh, globalMaterialId)` run, binding the species' VB/IB
+         *      via the renderer's mesh cache.
+         *   2. **Impostor sub-pass** — one `DrawIndexedInstanced` per
+         *      `(lod=Impostor, globalMaterialId)` run using a persistent unit
+         *      quad; the VS rebuilds the quad as a camera-aligned billboard
+         *      and the PS samples `FoliageImpostorAtlas` via the cell SRV.
+         *
+         * All GPU resources (shaders, input layout, CBs, sampler, quad VB/IB,
+         * 1×1 white albedo fallback) are created on the first call via
+         * `CreatePassResources`.
+         *
+         * Skips the impostor sub-pass entirely if no impostor runs exist or
+         * the atlas cell SRV is null.
+         *
+         * @param device       D3D11 device (for lazy resource creation).
+         * @param context      Immediate context for draw calls.
+         * @param view         Camera view matrix (row-major CPU convention).
+         * @param proj         Camera projection matrix.
+         * @param cameraPos    Camera world position.
+         * @param time         Wall-clock seconds for wind animation.
+         * @param sceneBuffer  Scene buffer whose SRV is bound at t0 (produced
+         *                     by `UploadToSceneBuffer` the same frame).
+         * @param startSlot    Index of the first foliage instance inside the
+         *                     scene buffer — used as `StartInstanceLocation`
+         *                     so the VS's `SV_InstanceID` reads the correct
+         *                     `GPUInstanceData` record.
+         * @param uploadedCount  Number of instances actually uploaded to
+         *                       the scene buffer this frame (the return
+         *                       value of `UploadToSceneBuffer`). Runs that
+         *                       reference indices past this value are
+         *                       clamped so the VS never samples stale or
+         *                       out-of-range `GPUInstanceData`.
+         */
+        void RenderFoliagePass(ID3D11Device* device, ID3D11DeviceContext* context, const DirectX::XMMATRIX& view,
+                               const DirectX::XMMATRIX& proj, const DirectX::XMFLOAT3& cameraPos, float time,
+                               GPUSceneBuffer& sceneBuffer, uint32_t startSlot, uint32_t uploadedCount);
 #endif
 
         // --------------------------------------------------------------------
@@ -347,6 +463,7 @@ namespace Spark::Graphics
         FoliageMeshLoader m_loader;
         std::unordered_map<std::string, std::shared_ptr<MeshAsset>> m_meshCache;
         std::vector<FoliageRenderInstance> m_renderInstances;
+        std::vector<FoliageDrawRun> m_drawOrder;
         FoliageRenderStats m_stats;
         float m_impostorDistance = 50.0f;
         bool m_initialized = false;
@@ -355,6 +472,38 @@ namespace Spark::Graphics
 #ifdef SPARK_PLATFORM_WINDOWS
         FoliageImpostorAtlas m_impostorAtlas; ///< Singleton runtime atlas (Windows-only).
         uint32_t m_lastBakedSpeciesCount = 0; ///< Watermark for lazy rebake.
+
+        // Render pass resources (created lazily by CreatePassResources).
+        bool CreatePassResources(ID3D11Device* device);
+
+        /**
+         * @brief Resolve a species' albedo texture to an SRV, loading and
+         *        caching on the first request.
+         *
+         * Phase F: replaces the 1x1 white fallback per mesh run. Uses
+         * `GraphicsEngine::GetTextureSystem()->LoadTexture` on the first
+         * call for a given path, then reuses the cached SRV. An empty
+         * path or a failed load returns the 1x1 white SRV so the draw
+         * stays safe on missing assets.
+         */
+        ID3D11ShaderResourceView* GetOrLoadAlbedoSRV(const std::string& path);
+
+        Microsoft::WRL::ComPtr<ID3D11VertexShader> m_passVS;
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> m_passPS;
+        Microsoft::WRL::ComPtr<ID3D11InputLayout> m_passInputLayout;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbPerFrame;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbWind;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbLighting;
+        Microsoft::WRL::ComPtr<ID3D11SamplerState> m_sampler;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_impostorQuadVB;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_impostorQuadIB;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> m_whiteTexture;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_whiteSRV;
+        bool m_passResourcesReady = false;
+
+        // Per-species albedo cache. Holds the owning shared_ptr alive so
+        // the SRV stays valid for as long as the species is referenced.
+        std::unordered_map<std::string, std::shared_ptr<::Texture>> m_albedoCache;
 #endif
     };
 

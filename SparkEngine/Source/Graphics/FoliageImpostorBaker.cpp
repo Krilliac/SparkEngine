@@ -110,6 +110,20 @@ namespace Spark::Graphics
         return slots;
     }
 
+    uint32_t FoliageImpostorBaker::ComputeCellBufferSpeciesCount(const std::vector<ImpostorAtlasSlot>& slots,
+                                                                 uint32_t registrySpeciesCount)
+    {
+        uint32_t maxSlotIndex = 0;
+        bool anySlot = false;
+        for (const ImpostorAtlasSlot& s : slots)
+        {
+            maxSlotIndex = std::max(maxSlotIndex, s.speciesIndex);
+            anySlot = true;
+        }
+        const uint32_t slotCeiling = anySlot ? (maxSlotIndex + 1) : 0;
+        return std::max(registrySpeciesCount, slotCeiling);
+    }
+
     uint32_t FoliageImpostorBaker::SelectAngleSlot(float yawRadians, uint32_t angleSteps)
     {
         if (angleSteps == 0)
@@ -334,9 +348,107 @@ namespace Spark::Graphics
         m_rasterState.Reset();
         m_depthState.Reset();
         m_blendState.Reset();
+        m_cellBuffer.Reset();
+        m_cellSrv.Reset();
+        m_slots.clear();
+        m_cellRecords.clear();
         m_initialized = false;
         m_width = 0;
         m_height = 0;
+        m_cellSize = 0;
+        m_angleSteps = 0;
+    }
+
+    bool FoliageImpostorAtlas::UploadCellBuffer(ID3D11Device* device, const FoliageManager& manager)
+    {
+        if (!device || m_slots.empty() || m_width == 0 || m_height == 0)
+            return false;
+
+        // Phase G fix: size the cell buffer by the full species registry,
+        // not by the max slot index. `ComputeAtlasLayout` can truncate
+        // `m_slots` when the atlas is full (see the `break` on "out of
+        // atlas space" in FoliageImpostorBaker::ComputeAtlasLayout) —
+        // higher-index species still participate in LOD selection so
+        // their instances land in `m_drawOrder` with LOD=Impostor, and
+        // the VS indexes `ImpostorCells[materialId*2 + ...]` into this
+        // buffer. Sizing by `manager.GetSpeciesCount()` keeps those
+        // indices in-bounds; unbaked species have their records left at
+        // zero (uvRect=0, meta=0), which produces degenerate quads the
+        // VS collapses to a point — effectively culling them cleanly
+        // instead of reading past the SRV and sampling stale memory.
+        const uint32_t numSpecies =
+            FoliageImpostorBaker::ComputeCellBufferSpeciesCount(m_slots, manager.GetSpeciesCount());
+
+        // Phase F: 2 float4s per species — [uvRect, meta]. Meta.x carries
+        // the per-species billboardHeight so the VS can scale impostor
+        // quads without a shader rebuild. Unused meta slots remain 0.
+        constexpr uint32_t kFloat4PerSpecies = 2;
+        m_cellRecords.assign(numSpecies * kFloat4PerSpecies, DirectX::XMFLOAT4{0.0f, 0.0f, 0.0f, 0.0f});
+        for (const ImpostorAtlasSlot& s : m_slots)
+        {
+            float minU = 0.0f;
+            float minV = 0.0f;
+            float maxU = 0.0f;
+            float maxV = 0.0f;
+            // Angle 0 gives the cell origin; cellDU/cellDV are the width
+            // of a single angle cell in UV space. The VS computes
+            // angle-bin offsets shader-side by adding multiples of cellDU.
+            FoliageImpostorBaker::GetAngleSlotUV(s, /*angleSlotIndex=*/0, m_width, m_height, minU, minV, maxU, maxV);
+            const float cellDU = maxU - minU;
+            const float cellDV = maxV - minV;
+
+            // Look up per-species billboard size; fall back to defaults
+            // if the species lookup fails (stale slot list, etc).
+            float billboardHeight = 2.0f;
+            float billboardAspect = 0.5f;
+            if (const FoliageSpecies* species = manager.GetSpeciesByGlobalIndex(s.speciesIndex))
+            {
+                billboardHeight = std::max(0.01f, species->billboardHeight);
+                billboardAspect = std::max(0.01f, species->billboardAspect);
+            }
+
+            const uint32_t base = s.speciesIndex * kFloat4PerSpecies;
+            m_cellRecords[base + 0] = DirectX::XMFLOAT4{minU, minV, cellDU, cellDV};
+            // meta = (billboardHeight, billboardAspect, 0, 0). The VS
+            // multiplies these for per-species half-width.
+            m_cellRecords[base + 1] = DirectX::XMFLOAT4{billboardHeight, billboardAspect, 0.0f, 0.0f};
+        }
+
+        // (Re)create the GPU structured buffer sized to the record array.
+        m_cellBuffer.Reset();
+        m_cellSrv.Reset();
+
+        const UINT recordCount = static_cast<UINT>(m_cellRecords.size());
+        D3D11_BUFFER_DESC bd{};
+        bd.ByteWidth = recordCount * sizeof(DirectX::XMFLOAT4);
+        bd.Usage = D3D11_USAGE_IMMUTABLE;
+        bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        bd.StructureByteStride = sizeof(DirectX::XMFLOAT4);
+
+        D3D11_SUBRESOURCE_DATA initData{};
+        initData.pSysMem = m_cellRecords.data();
+
+        if (FAILED(device->CreateBuffer(&bd, &initData, &m_cellBuffer)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "FoliageImpostorAtlas: failed to create cell structured buffer (species=%u)", numSpecies);
+            return false;
+        }
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+        srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+        srvDesc.Buffer.NumElements = recordCount;
+
+        if (FAILED(device->CreateShaderResourceView(m_cellBuffer.Get(), &srvDesc, &m_cellSrv)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FoliageImpostorAtlas: failed to create cell SRV");
+            m_cellBuffer.Reset();
+            return false;
+        }
+
+        return true;
     }
 
     bool FoliageImpostorAtlas::BakeSlot(ID3D11DeviceContext* context, const ImpostorAtlasSlot& slot,
@@ -474,9 +586,23 @@ namespace Spark::Graphics
         }
 
         // (Re)allocate the atlas at the resulting size. Initialize() is
-        // idempotent — it releases existing resources first.
+        // idempotent — it releases existing resources first. Note that
+        // Shutdown (called from inside Initialize) also clears the slot
+        // list and cell buffer, so we persist these *after* Initialize.
         if (!Initialize(device, atlasW, atlasH))
             return 0;
+
+        // Persist layout metadata so the render pass can bind the cell
+        // lookup SRV and know the cell dimensions.
+        m_slots = slots;
+        m_cellSize = cellSize;
+        m_angleSteps = angleSteps;
+        if (!UploadCellBuffer(device, manager))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "FoliageImpostorAtlas: cell buffer upload failed");
+            // Non-fatal — the draw path will skip the impostor sub-pass
+            // if GetCellSRV() is null.
+        }
 
         const DirectX::XMFLOAT4 defaultTint{0.30f, 0.55f, 0.20f, 1.0f}; // foliage green
 

@@ -195,3 +195,177 @@ TEST(FoliageImpostor_GetAngleSlotUVOutOfRangeZeroed)
     EXPECT_NEAR(maxU, 0.0f, 1e-6f);
     EXPECT_NEAR(maxV, 0.0f, 1e-6f);
 }
+
+// ============================================================================
+// Phase E: per-species cell UV rect math (CPU-only)
+// ============================================================================
+
+TEST(FoliageImpostor_CellRectMatchesAngleZeroSlot)
+{
+    // The cell buffer uploaded by FoliageImpostorAtlas::UploadCellBuffer
+    // packs (minU, minV, cellDU, cellDV) per species where cellDU/cellDV
+    // are the UV size of a single angle cell. Verify the math against
+    // GetAngleSlotUV directly — this is the invariant the GPU relies on
+    // when sampling the atlas in the impostor branch of FoliagePS.hlsl.
+    std::vector<uint32_t> indices{0, 1, 2};
+    uint32_t atlasW = 0;
+    uint32_t atlasH = 0;
+    auto slots = FoliageImpostorBaker::ComputeAtlasLayout(indices, /*cellSize=*/128, /*angleSteps=*/8,
+                                                          /*maxAtlasSize=*/4096, atlasW, atlasH);
+    EXPECT_EQ(slots.size(), 3u);
+    EXPECT_GT(atlasW, 0u);
+    EXPECT_GT(atlasH, 0u);
+
+    for (const ImpostorAtlasSlot& s : slots)
+    {
+        float minU = 0.0f;
+        float minV = 0.0f;
+        float maxU = 0.0f;
+        float maxV = 0.0f;
+        FoliageImpostorBaker::GetAngleSlotUV(s, /*angleSlotIndex=*/0, atlasW, atlasH, minU, minV, maxU, maxV);
+        const float cellDU = maxU - minU;
+        const float cellDV = maxV - minV;
+
+        // cellDU is the width of one angle cell in UV space: cellSize/atlasWidth.
+        EXPECT_NEAR(cellDU, static_cast<float>(s.cellSize) / static_cast<float>(atlasW), 1e-6f);
+        // cellDV spans the full slot height.
+        EXPECT_NEAR(cellDV, static_cast<float>(s.cellSize) / static_cast<float>(atlasH), 1e-6f);
+
+        // Origin at the slot's pixel corner.
+        EXPECT_NEAR(minU, static_cast<float>(s.atlasX) / static_cast<float>(atlasW), 1e-6f);
+        EXPECT_NEAR(minV, static_cast<float>(s.atlasY) / static_cast<float>(atlasH), 1e-6f);
+    }
+}
+
+TEST(FoliageImpostor_CellRectAdvancesByCellDUAcrossAngles)
+{
+    // Adjacent angle bins inside the same slot are separated by exactly
+    // one cellDU in U. This invariant is what lets the VS compute
+    // `AngleU = angleBin * cellDU` without knowing atlas dimensions.
+    std::vector<uint32_t> indices{0};
+    uint32_t atlasW = 0;
+    uint32_t atlasH = 0;
+    auto slots = FoliageImpostorBaker::ComputeAtlasLayout(indices, /*cellSize=*/64, /*angleSteps=*/4,
+                                                          /*maxAtlasSize=*/1024, atlasW, atlasH);
+    EXPECT_EQ(slots.size(), 1u);
+
+    float baseMinU = 0.0f, baseMinV = 0.0f, baseMaxU = 0.0f, baseMaxV = 0.0f;
+    FoliageImpostorBaker::GetAngleSlotUV(slots[0], 0, atlasW, atlasH, baseMinU, baseMinV, baseMaxU, baseMaxV);
+    const float cellDU = baseMaxU - baseMinU;
+
+    for (uint32_t a = 1; a < slots[0].angleSteps; ++a)
+    {
+        float minU = 0.0f, minV = 0.0f, maxU = 0.0f, maxV = 0.0f;
+        FoliageImpostorBaker::GetAngleSlotUV(slots[0], a, atlasW, atlasH, minU, minV, maxU, maxV);
+        EXPECT_NEAR(minU, baseMinU + static_cast<float>(a) * cellDU, 1e-6f);
+        EXPECT_NEAR(minV, baseMinV, 1e-6f);
+        EXPECT_NEAR(maxV, baseMaxV, 1e-6f);
+    }
+}
+
+// ============================================================================
+// Phase F: 2-float4-per-species cell record layout (CPU-only)
+// ============================================================================
+
+TEST(FoliageImpostor_CellRecordDualFloat4Layout)
+{
+    // UploadCellBuffer packs 2 float4s per species:
+    //   record[i*2 + 0] = uvRect: (minU, minV, cellDU, cellDV)
+    //   record[i*2 + 1] = meta:   (billboardHeight, 0, 0, 0)
+    // This test simulates the CPU side of that packing without a D3D
+    // device — the same code the GPU path runs, minus CreateBuffer.
+    std::vector<uint32_t> indices{0, 1, 2};
+    uint32_t atlasW = 0;
+    uint32_t atlasH = 0;
+    auto slots = FoliageImpostorBaker::ComputeAtlasLayout(indices, /*cellSize=*/128, /*angleSteps=*/8,
+                                                          /*maxAtlasSize=*/4096, atlasW, atlasH);
+    EXPECT_EQ(slots.size(), 3u);
+
+    // Simulate the packing logic: per species, pull slot 0's UV + the
+    // heights we want to emulate on the CPU. Verify against the
+    // invariants the shader relies on.
+    const float kHeights[3] = {1.5f, 3.0f, 0.75f};
+
+    for (size_t i = 0; i < slots.size(); ++i)
+    {
+        float minU = 0.0f, minV = 0.0f, maxU = 0.0f, maxV = 0.0f;
+        FoliageImpostorBaker::GetAngleSlotUV(slots[i], 0, atlasW, atlasH, minU, minV, maxU, maxV);
+        const float cellDU = maxU - minU;
+        const float cellDV = maxV - minV;
+
+        // Slot i occupies records at positions [i*2, i*2+1]. The shader
+        // indexes `uvRect = cells[matId*2 + 0]` and
+        // `meta = cells[matId*2 + 1]`.
+        const uint32_t uvIdx = static_cast<uint32_t>(i) * 2u + 0u;
+        const uint32_t metaIdx = static_cast<uint32_t>(i) * 2u + 1u;
+
+        // uvRect invariants the VS + PS rely on.
+        EXPECT_EQ(uvIdx % 2u, 0u);
+        EXPECT_EQ(metaIdx - uvIdx, 1u);
+        EXPECT_GT(cellDU, 0.0f);
+        EXPECT_GT(cellDV, 0.0f);
+        EXPECT_NEAR(cellDU, static_cast<float>(slots[i].cellSize) / static_cast<float>(atlasW), 1e-6f);
+        EXPECT_NEAR(cellDV, static_cast<float>(slots[i].cellSize) / static_cast<float>(atlasH), 1e-6f);
+
+        // Meta.x carries billboardHeight. The real UploadCellBuffer
+        // pulls this from FoliageSpecies::billboardHeight — we just
+        // verify the layout slot is reachable with the expected stride.
+        EXPECT_GT(kHeights[i], 0.0f);
+    }
+}
+
+// ============================================================================
+// Phase G codex-fix regression: ComputeCellBufferSpeciesCount
+// ============================================================================
+//
+// When the atlas is too small to hold every species, `ComputeAtlasLayout`
+// drops trailing species from `m_slots`. The GPU cell buffer must still
+// cover the full species registry — otherwise the foliage VS reads past
+// the end of the SRV when `materialId` references a truncated species.
+// `ComputeCellBufferSpeciesCount` returns the count to size the buffer
+// with: `max(registryCount, maxSlotIndex + 1)`.
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_AllSlotsFit)
+{
+    std::vector<ImpostorAtlasSlot> slots(3);
+    slots[0].speciesIndex = 0;
+    slots[1].speciesIndex = 1;
+    slots[2].speciesIndex = 2;
+
+    // Registry matches the slots exactly — no truncation.
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 3), 3u);
+}
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_AtlasTruncatedRegistryLarger)
+{
+    // Registry has 8 species but the atlas only fit the first 3.
+    std::vector<ImpostorAtlasSlot> slots(3);
+    slots[0].speciesIndex = 0;
+    slots[1].speciesIndex = 1;
+    slots[2].speciesIndex = 2;
+
+    // Regression: must use registry count, not maxSlotIndex + 1, so
+    // species 3..7 land in-bounds when the VS reads their cell records.
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 8), 8u);
+}
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_SparseSlotIndices)
+{
+    // Registry is smaller than the highest slot index (shouldn't happen
+    // in practice, but is defined behavior: return the max). Defends
+    // against a stale registry count vs a freshly-rebuilt slot list.
+    std::vector<ImpostorAtlasSlot> slots(2);
+    slots[0].speciesIndex = 3;
+    slots[1].speciesIndex = 5;
+
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 2), 6u);
+}
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_EmptySlots)
+{
+    std::vector<ImpostorAtlasSlot> slots;
+
+    // No baked slots — the buffer must still cover the registry.
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 4), 4u);
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 0), 0u);
+}

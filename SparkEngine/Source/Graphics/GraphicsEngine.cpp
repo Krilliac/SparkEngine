@@ -849,18 +849,43 @@ void GraphicsEngine::EndFrame()
             // the GPU. We append after the existing static-mesh slots
             // by starting at the buffer's current write head.
             auto& foliage = Spark::Graphics::FoliageRenderer::GetInstance();
+            uint32_t foliageStartSlot = 0;
+            uint32_t foliageUploadedCount = 0;
             if (foliage.IsInitialized())
             {
-                const uint32_t startSlot = m_gpuSceneBuffer.GetActiveCount();
-                const uint32_t written = foliage.UploadToSceneBuffer(m_gpuSceneBuffer, startSlot);
+                foliageStartSlot = m_gpuSceneBuffer.GetActiveCount();
+                const uint32_t written = foliage.UploadToSceneBuffer(m_gpuSceneBuffer, foliageStartSlot);
                 if (written != UINT32_MAX && written > 0)
                 {
+                    foliageUploadedCount = written;
                     SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Foliage: uploaded %u instances to GPU scene buffer",
                                     written);
                 }
             }
 
             m_gpuSceneBuffer.FlushToGPU(m_context.Get());
+
+            // Phase E: after the flush, issue the foliage draw pass.
+            // Mesh instances draw the cached species meshes; impostor
+            // instances draw camera-aligned billboards sampling the
+            // impostor atlas SRV. Skips cleanly when there is no batch.
+            //
+            // Phase G fix: pass `foliageUploadedCount` so RenderFoliagePass
+            // clamps draw runs to the slots actually written this frame
+            // (UploadToSceneBuffer can stop early on GPUSceneBuffer
+            // overflow), and pass an accumulated wall-clock time so
+            // ComputeWindSway in FoliageVS.hlsl animates frame-to-frame
+            // instead of being frozen at time=0.
+            if (foliageUploadedCount > 0 && m_device && m_context)
+            {
+                static const auto s_foliageTimeOrigin = std::chrono::high_resolution_clock::now();
+                const float foliageWindTime =
+                    std::chrono::duration<float>(m_frameStartTime - s_foliageTimeOrigin).count();
+
+                foliage.RenderFoliagePass(m_device.Get(), m_context.Get(), m_frameViewMatrix, m_frameProjMatrix,
+                                          m_frameCameraPos, foliageWindTime, m_gpuSceneBuffer, foliageStartSlot,
+                                          foliageUploadedCount);
+            }
         }
         m_constantBufferRing.EndFrame();
         m_gpuTimestampQuery.EndFrame(m_context.Get());

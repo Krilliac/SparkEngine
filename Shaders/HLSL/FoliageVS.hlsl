@@ -57,6 +57,23 @@ struct InstanceData
 
 StructuredBuffer<InstanceData> InstanceBuffer : register(t0);
 
+// Per-species impostor atlas records, packed as 2 float4s per species:
+//   record[speciesIndex*2 + 0] = uvRect: (minU, minV, cellDU, cellDV)
+//   record[speciesIndex*2 + 1] = meta:   (billboardHeight, 0, 0, 0)
+// Indexed by InstanceData.materialId. Built by FoliageImpostorAtlas::
+// UploadCellBuffer. Bound by FoliageRenderer::RenderFoliagePass; null-
+// bound (skip) when no impostors are in the batch.
+StructuredBuffer<float4> ImpostorCells : register(t3);
+
+// Phase E: fixed angle-cell count. Matches the default in
+// FoliageImpostorAtlas::BakeAllRegisteredSpecies(angleSteps=8). Move to a
+// cbuffer once per-species overrides are needed.
+#define FOLIAGE_IMPOSTOR_ANGLE_STEPS 8u
+
+// Flag bit for InstanceData.flags — must match
+// Spark::Graphics::InstanceFlags::FoliageImpostor (GPUSceneBuffer.h).
+#define FOLIAGE_IMPOSTOR_FLAG 0x40u
+
 struct VS_INPUT
 {
     float4 Pos      : POSITION;
@@ -73,6 +90,8 @@ struct PS_INPUT
     float2 UV       : TEXCOORD0;
     float  WindSway : TEXCOORD1; // exposed for the pixel shader (debug / AO)
     nointerpolation uint MaterialId : TEXCOORD2;
+    nointerpolation float AngleU    : TEXCOORD3; // per-instance impostor U offset
+    nointerpolation uint  Flags     : TEXCOORD4; // InstanceData.flags copy
 };
 
 // ----------------------------------------------------------------------------
@@ -116,24 +135,78 @@ PS_INPUT main(VS_INPUT input)
 
     InstanceData inst = InstanceBuffer[input.InstanceId];
 
-    // Transform the vertex into world space using the instance's matrix.
-    float4 worldPos = mul(input.Pos, inst.worldMatrix);
+    bool isImpostor = (inst.flags & FOLIAGE_IMPOSTOR_FLAG) != 0u;
 
-    // Apply wind deformation in world space; the local Y is read from the
-    // untransformed vertex so trunk position is independent of instance
-    // rotation/scale.
-    float3 sway = ComputeWindSway(worldPos.xyz, input.Pos.y, inst.windPhase);
-    worldPos.xyz += sway;
+    float4 worldPos;
+    float3 worldNormal;
+    float  swayLen = 0.0;
+    float  angleU  = 0.0;
+
+    if (isImpostor)
+    {
+        // ----- Impostor billboard path -----
+        // The impostor sub-pass binds a unit-quad VB with positions in
+        // y=[0,1], xz=[-0.5,0.5]. We rebuild the quad as a camera-aligned
+        // billboard anchored at the instance's world translation.
+        float3 worldTranslation = mul(float4(0.0, 0.0, 0.0, 1.0), inst.worldMatrix).xyz;
+
+        // Y-axis-aligned billboard: trees / tall foliage look best pinned
+        // to world-up while facing the camera around the horizontal axis.
+        float3 toCam = CameraPos - worldTranslation;
+        float3 worldUp = float3(0.0, 1.0, 0.0);
+        float3 right = normalize(cross(worldUp, float3(toCam.x, 0.0, toCam.z) + float3(1e-6, 0.0, 0.0)));
+
+        // Phase F/G: per-species billboard size comes from the cell meta
+        // float4 (element [materialId*2 + 1] = (height, aspect, 0, 0)).
+        // Horizontal half-width = height * aspect — lets bush / grass /
+        // tree species each pick their own silhouette proportions.
+        float4 meta = ImpostorCells[inst.materialId * 2u + 1u];
+        float billboardHeight = max(meta.x, 0.01);
+        float billboardAspect = max(meta.y, 0.01);
+        float billboardHalfWidth = billboardHeight * billboardAspect;
+
+        float3 offset = right * (input.Pos.x * billboardHalfWidth * 2.0)
+                      + worldUp * (input.Pos.y * billboardHeight);
+        worldPos = float4(worldTranslation + offset, 1.0);
+
+        // Normal faces back at the camera — keeps wrapped-diffuse lighting
+        // consistent across yaws without making the impostor go dark.
+        worldNormal = normalize(toCam - worldUp * toCam.y);
+
+        // Angle bin: map view-relative yaw to one of ANGLE_STEPS cells and
+        // convert to a U offset into the atlas row for this species.
+        float yaw = atan2(toCam.x, toCam.z); // [-pi, pi]
+        float normalised = (yaw + 3.14159265) * (0.5 / 3.14159265); // [0, 1]
+        uint angleBin = (uint)floor(normalised * (float)FOLIAGE_IMPOSTOR_ANGLE_STEPS);
+        if (angleBin >= FOLIAGE_IMPOSTOR_ANGLE_STEPS)
+            angleBin = FOLIAGE_IMPOSTOR_ANGLE_STEPS - 1u;
+
+        // uvRect: (minU, minV, cellDU, cellDV). Impostor atlas stores
+        // angles horizontally so the U offset is the only per-angle
+        // adjustment. The PS reads uvRect separately.
+        float4 uvRect = ImpostorCells[inst.materialId * 2u + 0u];
+        angleU = (float)angleBin * uvRect.z;
+    }
+    else
+    {
+        // ----- Mesh path (existing) -----
+        worldPos = mul(input.Pos, inst.worldMatrix);
+
+        float3 sway = ComputeWindSway(worldPos.xyz, input.Pos.y, inst.windPhase);
+        worldPos.xyz += sway;
+        swayLen = length(sway);
+
+        worldNormal = normalize(mul(input.Normal, (float3x3)inst.normalMatrix));
+    }
 
     output.WorldPos = worldPos.xyz;
     output.Pos = mul(mul(worldPos, View), Projection);
-
-    // Transform the normal by the instance's normal matrix.
-    output.Normal = normalize(mul(input.Normal, (float3x3)inst.normalMatrix));
-
+    output.Normal = worldNormal;
     output.UV = input.UV;
-    output.WindSway = length(sway);
+    output.WindSway = swayLen;
     output.MaterialId = inst.materialId;
+    output.AngleU = angleU;
+    output.Flags = inst.flags;
 
     return output;
 }

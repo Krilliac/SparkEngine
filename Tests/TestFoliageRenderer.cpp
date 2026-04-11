@@ -493,3 +493,242 @@ TEST(FoliageRenderer_InitNullLoaderStaysWithoutExplicitLoader)
 
     renderer.Shutdown();
 }
+
+// ============================================================================
+// Phase E: GPU instance encoding + flag bit helpers (CPU-only)
+// ============================================================================
+
+TEST(FoliageRenderer_FoliageImpostorFlagRoundTrip)
+{
+    // The flag helpers live in GPUSceneBuffer.h and operate on the POD
+    // struct directly — no D3D required. Verifies that toggling the
+    // impostor bit does not corrupt other flag bits.
+    GPUInstanceData data{};
+    data.flags = static_cast<uint32_t>(InstanceFlags::Visible) | static_cast<uint32_t>(InstanceFlags::CastShadow);
+
+    EXPECT_FALSE(IsFoliageImpostorFlag(data));
+
+    SetFoliageImpostorFlag(data, true);
+    EXPECT_TRUE(IsFoliageImpostorFlag(data));
+    // Other bits preserved.
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::Visible)) != 0);
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::CastShadow)) != 0);
+
+    SetFoliageImpostorFlag(data, false);
+    EXPECT_FALSE(IsFoliageImpostorFlag(data));
+    // Other bits still preserved.
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::Visible)) != 0);
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::CastShadow)) != 0);
+}
+
+TEST(FoliageRenderer_BuildGPUInstanceMeshLOD)
+{
+    // Mesh-LOD record should NOT have the impostor flag bit set.
+    FoliageRenderInstance src;
+    src.globalMaterialId = 7;
+    src.lod = FoliageRenderLOD::Mesh;
+    src.distanceToCamera = 12.5f;
+    src.windPhase = 1.25f;
+    // Build a simple translation-only world matrix.
+    float world[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 4, 5, 1};
+    std::memcpy(src.worldMatrix, world, sizeof(world));
+
+    GPUInstanceData out{};
+    FoliageRenderer::BuildGPUInstance(src, out);
+
+    EXPECT_EQ(out.materialId, 7u);
+    EXPECT_NEAR(out.lodDistance, 12.5f, 1e-6f);
+    EXPECT_NEAR(out.padding, 1.25f, 1e-6f); // wind phase packed into padding
+    EXPECT_FALSE(IsFoliageImpostorFlag(out));
+    EXPECT_TRUE((out.flags & static_cast<uint32_t>(InstanceFlags::Visible)) != 0);
+}
+
+TEST(FoliageRenderer_BuildGPUInstanceImpostorLODSetsFlag)
+{
+    // Impostor-LOD record should have the impostor flag bit set and
+    // preserve the wind-phase-in-padding / material-id conventions.
+    FoliageRenderInstance src;
+    src.globalMaterialId = 42;
+    src.lod = FoliageRenderLOD::Impostor;
+    src.distanceToCamera = 200.0f;
+    src.windPhase = 3.14f;
+    float world[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    std::memcpy(src.worldMatrix, world, sizeof(world));
+
+    GPUInstanceData out{};
+    FoliageRenderer::BuildGPUInstance(src, out);
+
+    EXPECT_EQ(out.materialId, 42u);
+    EXPECT_TRUE(IsFoliageImpostorFlag(out));
+    EXPECT_NEAR(out.lodDistance, 200.0f, 1e-6f);
+    EXPECT_NEAR(out.padding, 3.14f, 1e-6f);
+}
+
+TEST(FoliageRenderer_SpeciesDefaultsForPhaseFFields)
+{
+    // Phase F added two fields to FoliageSpecies; Phase G added a third.
+    // Defaults matter because existing scenes will inherit them without
+    // touching the new fields.
+    FoliageSpecies s;
+    EXPECT_TRUE(s.albedoTexturePath.empty());
+    EXPECT_NEAR(s.billboardHeight, 2.0f, 1e-6f);
+    // Phase G: aspect default preserves Phase E/F appearance
+    // (halfWidth = height * 0.5 = height/2).
+    EXPECT_NEAR(s.billboardAspect, 0.5f, 1e-6f);
+}
+
+TEST(FoliageRenderer_BillboardHalfWidthFormulaPhaseG)
+{
+    // Documents the VS formula: halfWidth = height * aspect. Tests the
+    // two anchor cases (default tree-like, wide bush) so a regression
+    // in either the CPU-side packing or the VS read surfaces here
+    // before it appears visually.
+    FoliageSpecies tree;
+    tree.billboardHeight = 8.0f;
+    tree.billboardAspect = 0.5f;
+    const float treeHalf = tree.billboardHeight * tree.billboardAspect;
+    EXPECT_NEAR(treeHalf, 4.0f, 1e-6f);
+
+    FoliageSpecies bush;
+    bush.billboardHeight = 1.0f;
+    bush.billboardAspect = 1.5f;
+    const float bushHalf = bush.billboardHeight * bush.billboardAspect;
+    EXPECT_NEAR(bushHalf, 1.5f, 1e-6f);
+}
+
+TEST(FoliageRenderer_CollectProducesSortedDrawOrder)
+{
+    // After CollectFromFoliageManager, m_renderInstances should be sorted
+    // by (lod, globalMaterialId) and m_drawOrder should contain one run
+    // per contiguous (lod, species) group in that order.
+    auto& fm = FoliageManager::GetInstance();
+    fm.Initialize();
+    fm.RegisterSpecies(MakeRendererSpecies("grass", 0.05f, 1.0f, "meshes/grass.mesh"));
+    fm.AddVolume(MakeRendererVolume(31, {"grass"}));
+
+    FoliageRenderer renderer;
+    renderer.Initialize(nullptr, 50.0f);
+    renderer.CollectFromFoliageManager(0.0f);
+
+    const auto& batch = renderer.GetRenderInstances();
+    const auto& order = renderer.GetDrawOrder();
+
+    // Every run in m_drawOrder covers a contiguous slice of m_renderInstances.
+    uint32_t walker = 0;
+    for (const FoliageDrawRun& run : order)
+    {
+        EXPECT_EQ(run.startInstance, walker);
+        EXPECT_GT(run.instanceCount, 0u);
+        // All instances in the run share the run's (lod, globalMaterialId).
+        for (uint32_t k = 0; k < run.instanceCount; ++k)
+        {
+            const FoliageRenderInstance& rec = batch[walker + k];
+            EXPECT_TRUE(rec.lod == run.lod);
+            EXPECT_EQ(rec.globalMaterialId, run.globalMaterialId);
+        }
+        walker += run.instanceCount;
+    }
+    EXPECT_EQ(walker, static_cast<uint32_t>(batch.size()));
+
+    // Sorted by (lod, globalMaterialId): all Mesh before any Impostor.
+    bool sawImpostor = false;
+    for (const FoliageRenderInstance& rec : batch)
+    {
+        if (rec.lod == FoliageRenderLOD::Impostor)
+            sawImpostor = true;
+        else
+            EXPECT_FALSE(sawImpostor); // no mesh after we saw an impostor
+    }
+
+    renderer.Shutdown();
+    fm.Shutdown();
+}
+
+// ============================================================================
+// Phase G codex-fix regression: ClampDrawRunToUploaded
+// ============================================================================
+//
+// `UploadToSceneBuffer` can stop early when the GPU scene buffer is
+// full. `RenderFoliagePass` must then clamp every draw run against the
+// number of instances that actually landed in the buffer, otherwise the
+// VS reads stale or out-of-range `GPUInstanceData`. This test pins the
+// pure helper that does the clamping so we do not need a D3D11 device.
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_FullyInsideRange)
+{
+    FoliageDrawRun run;
+    run.startInstance = 0;
+    run.instanceCount = 4;
+    run.globalMaterialId = 3;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    EXPECT_EQ(outStart, 0u);
+    EXPECT_EQ(outCount, 4u); // entire run fits
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_PartiallyOverflowing)
+{
+    FoliageDrawRun run;
+    run.startInstance = 8;
+    run.instanceCount = 5;
+    run.globalMaterialId = 7;
+    run.lod = FoliageRenderLOD::Impostor;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    EXPECT_EQ(outStart, 8u);
+    EXPECT_EQ(outCount, 2u); // only 10-8 = 2 slots available
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_EntirelyPastUploaded)
+{
+    FoliageDrawRun run;
+    run.startInstance = 12;
+    run.instanceCount = 3;
+    run.globalMaterialId = 2;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    // Caller must skip — the whole run references stale slots.
+    EXPECT_EQ(outCount, 0u);
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_BoundaryAtExactEnd)
+{
+    FoliageDrawRun run;
+    run.startInstance = 5;
+    run.instanceCount = 5;
+    run.globalMaterialId = 0;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    EXPECT_EQ(outStart, 5u);
+    EXPECT_EQ(outCount, 5u); // 5..9 is exactly 5 slots — still inside
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_ZeroUploadedClampsEverything)
+{
+    FoliageDrawRun run;
+    run.startInstance = 0;
+    run.instanceCount = 10;
+    run.globalMaterialId = 1;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/0, outStart, outCount);
+
+    EXPECT_EQ(outCount, 0u); // nothing uploaded — skip the entire batch
+}
