@@ -385,6 +385,8 @@ add_executable(SparkTests
     TestHashReal.cpp
     TestCooldownReal.cpp
     TestDeltaSmootherReal.cpp
+    TestTimerReal.cpp
+    TestFileUtilsReal.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
