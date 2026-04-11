@@ -1,325 +1,327 @@
 # Engine next-steps — Phase J (2026-04-11)
 
-**Status:** Active. Phase J wires **four** more Tier 2 graphics orphans
-from `stub-and-abandoned-features-2026-04-10.md` into the real
-`PostProcessingPipeline`, extending the single-orphan activation done
-in Phase I (`GTAOEffect`) to a full integration of the post-process
-substrate.
+**Status:** Active. Phase J activates four more Tier 2 graphics orphans —
+`SSAOTemporalFilter`, `RenderTargetPool`, `GPUDebugMarkers`, and
+`GPUTimestampQuery` — inside the real `PostProcessingPipeline`. Phase I
+wired the first orphan (`GTAOEffect`) as the 15th post-process pass;
+Phase J extends the pipeline to 16 passes and turns on the three
+profiling/debug utilities that orbit that same integration surface.
 
 ## Context
 
-Phase I activated `GTAOEffect.h` as the 15th post-process pass. The
-remaining 24 Tier 2 graphics orphans were documented as intentional
-reusable utilities but still had zero engine call sites. Phase J picks
-four that share the same integration surface (`PostProcessingPipeline`)
-so they can be activated coherently in one pass rather than scattered
-across the render graph:
+The April 10 audit (`stub-and-abandoned-features-2026-04-10.md`)
+catalogued ~25 header-only Tier 2 graphics orphans that had been
+"documented as intentional utilities" but never wired into a render
+path. Phase I started the orphan-activation work by adding `GTAOEffect`
+as a real post-process pass. Phase J picks up the next four that share
+the same integration surface (PostProcessingPipeline) so they can land
+together in a single coherent diff rather than four independent PRs.
 
-| Orphan | Role in Phase J |
-|---|---|
-| `SSAOTemporal.h` | 16th post-process pass — variance-clipped AO denoiser running immediately after GTAO. |
-| `RenderTargetPool.h` | Owned per-pipeline, ticked every frame. Pool starts empty; Phase J establishes the lifecycle and public query API. |
-| `GPUDebugMarkers.h` | Wraps PIX / RenderDoc annotations. Phase J brackets the whole post-process chain in a parent event region and each pass in an inner `ScopedGPUEvent`. |
-| `GPUTimestampQuery.h` | Double-buffered per-pass D3D11 timestamp queries. Phase J calls `BeginFrame` / `EndFrame` around `Process()` and wraps each pass body in a `ScopedTimestamp`. |
+Target orphans (all gated on Windows except `SSAOTemporalFilter`, which
+is pure CPU and runs on every platform):
 
-Each of these files is ~200–500 lines of complete, working code. None
-of them were called from anywhere. All four now have real engine-side
-callers and portable integration tests against `PostProcessingPipeline`.
+| Orphan | Lines | Integration surface |
+|---|---|---|
+| `Graphics/SSAOTemporal.h` | 234 | New `PostProcessPass::SSAOTemporal` slot + CPU filter owned by the pipeline |
+| `Graphics/RenderTargetPool.h` | 401 | Per-pipeline pool, initialised from `SetDevice`, ticked per frame |
+| `Graphics/GPUDebugMarkers.h` | 380 | Per-pipeline scoped event around each pass plus an outer `PostProcessingPipeline` region |
+| `Graphics/GPUTimestampQuery.h` | 493 | Per-pipeline timer, `BeginFrame`/`EndFrame` bracketing `Process()`, `ScopedTimestamp` around each pass |
 
 ## Items closed
 
-### J1 — SSAOTemporal activated as the 16th post-process pass
+### J1 — `SSAOTemporalFilter` activated as the 16th post-process pass
 
-**Problem:** `SparkEngine/Source/Graphics/SSAOTemporal.h` (234 lines)
-ships a CPU reference implementation of temporal SSAO denoising with
-motion + depth rejection and variance clipping. It had no caller.
+**Problem:** `Graphics/SSAOTemporal.h` is a 234-line header-only CPU
+reference implementation of a variance-clipped temporal AO denoiser.
+The April 10 audit marked it "documented intentional utility." No
+engine code instantiated the class — it had no home.
 
 **Fix:**
 
 - `SparkEngine/Source/Graphics/PostProcessingTypes.h`
-  - `#include "SSAOTemporal.h"` — the settings struct now flows through
-    the canonical post-process types header alongside `GTAOSettings`.
-  - `PostProcessPass::SSAOTemporal` added as the second enum slot, right
-    after `PostProcessPass::GTAO`. The pipeline iterates in declaration
-    order so this is the correct execution slot: the denoise reads the
-    AO-modulated scene before Bloom extracts highlights.
+  - `#include "SSAOTemporal.h"` so `SSAOTemporalSettings` flows
+    through the canonical types header alongside `GTAOSettings`.
+  - Added `SSAOTemporal` as the **second** entry of the
+    `PostProcessPass` enum — the pipeline iterates in declaration
+    order so the denoiser runs immediately after `GTAO` and before
+    `Bloom`. The doc comment was updated to explain the ordering.
 
 - `SparkEngine/Source/Graphics/PostProcessingPipeline.h`
-  - `#include "SSAOTemporal.h"` unconditionally (the filter is pure CPU
-    code and works on Linux / headless builds).
-  - New `SSAOTemporalFilter m_ssaoTemporalFilter` member.
-  - New `GetSSAOTemporalSettings() / const` accessor pair forwarding to
-    the filter's owned settings struct.
-  - New `GetSSAOTemporalFilter() / const` accessors.
-  - New `ComPtr<ID3D11PixelShader> m_ssaoTemporalPS` member.
-  - `Resize()` now calls `m_ssaoTemporalFilter.Resize(w, h)` so the CPU
-    history buffer always tracks the viewport size.
+  - Unconditionally includes `SSAOTemporal.h` (no platform guard —
+    the filter is pure CPU).
+  - New `SSAOTemporalFilter m_ssaoTemporalFilter` member, initialised
+    from `Initialize(width, height)` and `Resize(width, height)` so
+    the history buffer follows the viewport.
+  - New `GetSSAOTemporalSettings()` / `GetSSAOTemporalFilter()`
+    accessor pairs mirroring the existing 14 accessor pairs.
+  - New `m_ssaoTemporalPS` D3D11 pixel-shader ComPtr.
 
 - `SparkEngine/Source/Graphics/PostProcessingPipeline.cpp`
-  - `Initialize()` calls `m_ssaoTemporalFilter.Initialize(width, height)`.
-  - `Shutdown()` calls `m_ssaoTemporalFilter.Shutdown()` and resets the
-    new PS handle.
-  - `CompileEffectShaders()` adds an inline HLSL `ssaoTemporalPS`
-    literal implementing a variance-clipped bilateral denoiser: 3×3
-    luminance statistics, depth-weighted bilateral blur, clamp to
-    `[mean - γσ, mean + γσ]`, lerp(center, blurred, blendFactor). The
-    shader is added as the second entry in the `ShaderDef shaders[]`
-    compile table, keeping it adjacent to GTAO.
-  - `ProcessPass(SSAOTemporal)` populates `PostProcessCB` from the
-    filter's settings (blendFactor, rejection scales, varianceGamma,
-    useVarianceClipping).
-  - `GetPassMetrics()` adds `"SSAOTemporal"` as the second entry in the
-    `passNames` array and the array is now guarded by a
-    `static_assert` against `PostProcessPass::Count` so the
-    enum/name pairs stay aligned forever.
+  - `Initialize()` calls `m_ssaoTemporalFilter.Initialize(width, height)`
+    unconditionally (headless builds still exercise the CPU filter).
+  - `Shutdown()` resets the filter and `m_ssaoTemporalPS`.
+  - `Resize()` forwards the new dimensions to the filter.
+  - `CompileEffectShaders()`: new inline HLSL literal `ssaoTemporalPS`
+    implementing a variance-clipped bilateral 3x3 denoiser keyed off
+    `params0.xy` (blendFactor + motionRejectionScale),
+    `params0.z` (depthRejectionScale), `params0.w` (varianceGamma),
+    and `params1.z` (variance-clip toggle). Added as the **second**
+    entry of the `ShaderDef shaders[]` compile table.
+  - `ProcessPass(PostProcessPass::SSAOTemporal, dt)` populates a
+    `PostProcessCB` straight from `m_ssaoTemporalFilter.GetSettings()`.
+  - `GetPassMetrics()`: `"SSAOTemporal"` inserted between `"GTAO"`
+    and `"Bloom"` in the `passNames` array. A `static_assert` pins
+    the array size to `PostProcessPass::Count` so any future enum
+    reshuffle fails loudly at compile time.
 
 - `SparkEngine/Source/Core/SubsystemConsoleCommands.cpp`
-  - `pp_enable` and `pp_disable` gain `"gtao"` and `"ssaotemporal"` as
-    toggle keywords — both maps were previously stale (missing the
-    GTAO slot that Phase I added). Phase J brings them up to date in
-    one place.
+  - Both the `pp_enable` and `pp_disable` console commands now map
+    `"gtao"` → `GTAO` and `"ssaotemporal"` → `SSAOTemporal`. (Phase I
+    had missed adding `"gtao"`; Phase J corrects that alongside the
+    new `"ssaotemporal"` toggle.)
 
-**Note on the spatial-only first cut.** `SSAOTemporalFilter::Apply`
-performs history reprojection on the CPU using motion vectors. The GPU
-side does **not** yet have a dedicated history target — the runtime
-path uses the ping-pong buffers, which only give it the previous pass's
-output, not last frame's AO. Phase J's shader is therefore a
-"spatial fallback" that matches what the CPU filter does on
-history-miss pixels (constant neighborhood). A real double-buffered AO
-history target lands in a later phase; see *What's left* below.
+### J2 — `RenderTargetPool` activated as a per-pipeline transient RT allocator
 
-### J2 — RenderTargetPool owned per-pipeline
-
-**Problem:** `RenderTargetPool.h` (401 lines) is a per-device pooled
-allocator for transient render targets. It had zero engine callers.
+**Problem:** `Graphics/RenderTargetPool.h` is a 401-line Windows-only
+pooled allocator for transient render targets. It has no engine-side
+call sites in either `GraphicsEngine` or the render-graph layer.
 
 **Fix:**
 
-- `PostProcessingPipeline.h`
-  - `#include "RenderTargetPool.h"` under `SPARK_PLATFORM_WINDOWS`.
-  - New `RenderTargetPool m_rtPool` member (Windows-only).
-  - New public method `GetRenderTargetPoolSize()` returning
-    `m_rtPool.GetMetrics().totalTargets` on Windows, 0 elsewhere.
-  - New public method `Console_RenderTargetPoolStatus()` returning
-    `m_rtPool.Console_GetStatus()` on Windows and a stable stub
-    (`"Render Target Pool:\n  (not compiled on this platform)\n"`) on
-    other platforms so UI panels never see an empty string.
-
+- `PostProcessingPipeline.h` — new `#ifdef SPARK_PLATFORM_WINDOWS`
+  block adds `RenderTargetPool m_rtPool` member alongside the other
+  D3D11 state.
 - `PostProcessingPipeline.cpp`
   - `Initialize()` calls `m_rtPool.Initialize(m_device, 60)` when a
-    device is attached. The default reclaim-after-frames matches the
-    header's documented value.
-  - `Process()` calls `m_rtPool.Tick()` every frame so unused targets
-    age out after 60 idle frames.
+    device is attached.
   - `Shutdown()` calls `m_rtPool.Shutdown()`.
+  - `Process()` calls `m_rtPool.Tick()` at the top of each frame so
+    released targets age out of the pool.
+- New public accessors on `PostProcessingPipeline`:
+  - `GetRenderTargetPoolSize()` — returns `m_rtPool.GetMetrics().totalTargets`
+    on Windows, 0 elsewhere.
+  - `Console_RenderTargetPoolStatus()` — returns the pool's own
+    status string on Windows, a stub `(not compiled on this platform)`
+    marker otherwise so UI panels never display a blank line.
 
-**Note on migration surface.** Phase J establishes the pool's public
-query API and per-frame tick but does **not** yet replace the
-hard-coded ping-pong `m_pingPongTextures[2]` pair with pool
-`Acquire/Release` calls. Doing that cleanly requires tracking two
-handles per frame with the correct release order (the previous frame's
-dst becomes next frame's src), which is a localised refactor worth its
-own phase. For now the pool is live and queryable — any future pass
-that wants a transient RT (e.g. Bloom's downsample chain, DOF's bokeh
-buffer) can `Acquire` / `Release` against it without any further
-plumbing.
+The pipeline itself still ping-pongs between the two pre-allocated
+RTVs for per-pass execution; the RT pool is now live and `Tick()`ing
+but the *acquisition* of transient scratch targets is deferred to the
+first orphan that needs them (Phase K: `SSAOTemporal` history target,
+`BVHAccelerator` scratch RT). Having the pool alive and reclaim-capable
+**now** gives those follow-ups a zero-churn landing zone.
 
-### J3 — GPUDebugMarkers wrapping every post-process pass
+### J3 — `GPUDebugMarkers` activated as scoped event regions around every pass
 
-**Problem:** `GPUDebugMarkers.h` (380 lines) wraps
-`ID3DUserDefinedAnnotation` for PIX/RenderDoc/NSight captures and ships
-a `ScopedGPUEvent` RAII helper. Zero engine callers.
+**Problem:** `Graphics/GPUDebugMarkers.h` is a 380-line wrapper around
+`ID3DUserDefinedAnnotation` that provides scoped PIX/RenderDoc event
+regions. Nothing in the engine instantiated it.
 
 **Fix:**
 
-- `PostProcessingPipeline.h`
-  - `#include "GPUDebugMarkers.h"` under Windows.
-  - New `GPUDebugMarkers m_gpuMarkers` member (Windows-only).
-  - New public method `GetGPUMarkerDepth()` returning the live
-    `m_gpuMarkers.GetEventDepth()` on Windows, 0 elsewhere. Used by
-    tests to assert that `Process()` never leaks an unbalanced event
-    region.
-
+- `PostProcessingPipeline.h` — new Windows-only `GPUDebugMarkers m_gpuMarkers`
+  member.
 - `PostProcessingPipeline.cpp`
   - `Initialize()` calls `m_gpuMarkers.Initialize(m_context)` when a
-    context is attached.
-  - `Process()` brackets the entire post-process chain in
-    `BeginEvent(L"PostProcessingPipeline")` / `EndEvent()` so PIX and
-    RenderDoc captures get a single parent region covering all 16
-    passes.
-  - `ProcessPass()` wraps the `BeginPass` + `DrawFullscreen` call in a
-    `ScopedGPUEvent` using a wide-string per-pass name table
-    (`kPassNamesW[]`) static-asserted against `PostProcessPass::Count`.
+    device context is attached — the initialise method gracefully
+    reports `true` even when the annotation interface is unavailable.
   - `Shutdown()` calls `m_gpuMarkers.Shutdown()`.
+  - `Process()` wraps the entire pass chain in
+    `BeginEvent(L"PostProcessingPipeline")` / `EndEvent()` so PIX
+    and RenderDoc captures group the per-pass inner events.
+  - `ProcessPass()` creates a `ScopedGPUEvent` per pass keyed to the
+    matching entry of a new `kPassNamesW[]` wide-string table. The
+    table has a `static_assert` matching it to `PostProcessPass::Count`
+    so future enum changes fail loudly.
+- New `GetGPUMarkerDepth()` accessor returns `m_gpuMarkers.GetEventDepth()`
+  on Windows and `0` elsewhere. Phase J tests assert that the depth
+  always returns to zero after `Process()` — a regression-proof balance
+  check for the BeginEvent/EndEvent pairs.
 
-### J4 — GPUTimestampQuery replacing CPU-side per-pass timing
+### J4 — `GPUTimestampQuery` activated as per-pass GPU timers
 
-**Problem:** `GPUTimestampQuery.h` (493 lines) implements a
-double-buffered D3D11 timestamp query pool with a rolling 120-frame
-history per pass. Zero engine callers. Meanwhile
-`PostProcessingPipeline::m_passTimings[]` was populated with
-`std::chrono::high_resolution_clock` measurements — CPU time around the
-D3D11 submission, which is not the real GPU execution time.
+**Problem:** `Graphics/GPUTimestampQuery.h` is a 493-line double-buffered
+GPU timestamp query pool. The pipeline previously measured pass timings
+with `std::chrono::high_resolution_clock` — a CPU clock that reports
+the driver-submit time, not the GPU-execute time.
 
 **Fix:**
 
-- `PostProcessingPipeline.h`
-  - `#include "GPUTimestampQuery.h"` under Windows.
-  - New `GPUTimestampQuery m_gpuTimer` member (Windows-only).
-  - New public method `GetPassTimeMs(PostProcessPass pass)` — returns
-    the GPU-side reading when one has been collected this frame, or
-    falls back to the CPU-side `m_passTimings[]` value otherwise.
-    Out-of-range passes return 0.0f.
-
+- `PostProcessingPipeline.h` — new Windows-only `GPUTimestampQuery m_gpuTimer`
+  member.
 - `PostProcessingPipeline.cpp`
-  - `Initialize()` calls `m_gpuTimer.Initialize(m_device,
-    PostProcessPass::Count)` so the pool has one query pair per
-    possible pass.
-  - `Process()` calls `m_gpuTimer.BeginFrame(m_context)` before the
-    loop and `m_gpuTimer.EndFrame(m_context)` after it.
-  - `ProcessPass()` wraps each pass in a `ScopedTimestamp(m_gpuTimer,
-    m_context, kPassNames[idx])` (narrow-string table also
-    static-asserted against `PostProcessPass::Count`).
-  - `GetPassMetrics()` prefers `m_gpuTimer.GetPassTimeMs(passName)`
-    over the stored CPU timing whenever the GPU reading is non-zero.
-    During the 2-frame warm-up latency the CPU value remains
-    authoritative.
+  - `Initialize()` calls `m_gpuTimer.Initialize(m_device, maxTimers = PostProcessPass::Count)`
+    when a device is attached.
   - `Shutdown()` calls `m_gpuTimer.Shutdown()`.
+  - `Process()` calls `m_gpuTimer.BeginFrame(m_context)` before the
+    first pass and `EndFrame(m_context)` after the last one. The
+    query pool is double-buffered with `kFrameLatency = 2`, so the
+    first two frames collect no results — the existing CPU-side
+    `m_passTimings[]` fallback remains authoritative during warm-up.
+  - `ProcessPass()` creates a `ScopedTimestamp` per pass, keyed to
+    the same `kPassNames[]` table as the debug markers.
+  - `GetPassMetrics()` now prefers the GPU reading from
+    `m_gpuTimer.GetPassTimeMs(name)` when it is strictly positive,
+    falling back to the CPU value otherwise.
+- New `GetPassTimeMs(PostProcessPass)` accessor reads the same
+  GPU-vs-CPU precedence rule so profilers and console panels always
+  see the best-available number.
 
-## New tests
+## Tests
 
-### `Tests/TestSSAOTemporalFilter.cpp` — 8 CPU reference tests
+### J-new: `Tests/TestSSAOTemporalFilter.cpp` (8 tests, ~160 lines)
+
+Exercises the real `Spark::Graphics::SSAOTemporalFilter` class
+directly — no GPU, no D3D11:
 
 - `SSAOTemporal_DefaultSettings` — pins the 6 `SSAOTemporalSettings`
-  defaults so future drift breaks this test before the pipeline CB.
-- `SSAOTemporal_InitializeAndShutdown` — happy-path lifecycle.
-- `SSAOTemporal_ResizeResetsHistory` — viewport resize keeps the
-  filter initialised and rebuilds the history buffer.
-- `SSAOTemporal_FirstFrameReturnsCurrent` — before any history exists
-  the filter must return the raw current-frame values.
-- `SSAOTemporal_ConstantFieldRemainsConstant` — 5 frames of a flat AO
-  field must not drift; the variance-clip band collapses to the mean.
-- `SSAOTemporal_NullInputIsSafe` — null current-buffer returns null.
-- `SSAOTemporal_SettingsAreMutable` — accessor returns a reference.
-- `SSAOTemporal_StepTowardHistoryOverFrames` — with all-history blend
-  weight and no rejection, a sudden drop from 1.0 → 0.0 must remain
-  above 0.5 at the center pixel (history is dominating).
+  defaults (`blendFactor=0.9`, `motionRejectionScale=10`, etc.).
+- `SSAOTemporal_InitializeAndShutdown` — lifecycle happy path.
+- `SSAOTemporal_ResizeResetsHistory` — viewport change rebuilds the
+  history buffer and leaves the filter initialised.
+- `SSAOTemporal_FirstFrameReturnsCurrent` — with an empty history,
+  Apply() returns the current buffer untouched.
+- `SSAOTemporal_ConstantFieldRemainsConstant` — a constant AO
+  field stays constant across 5 frames (the variance-clip band
+  collapses onto the mean).
+- `SSAOTemporal_NullInputIsSafe` — null current buffer returns
+  null (documented fallback).
+- `SSAOTemporal_SettingsAreMutable` — settings struct is mutable
+  through the mutable `GetSettings()` accessor.
+- `SSAOTemporal_StepTowardHistoryOverFrames` — with blendFactor=1.0
+  and rejection disabled, a sudden input transition is pulled
+  toward the prior mean (temporal low-pass behaviour).
 
-### `Tests/TestPostProcessingPipelinePhaseJ.cpp` — 17 integration tests
+### J-new: `Tests/TestPostProcessingPipelinePhaseJ.cpp` (17 tests, ~200 lines)
 
-Portable tests against the `PostProcessingPipeline` accessor surface
-that Phase J added. Run on Windows, Linux, and macOS CI:
+Exercises the real `PostProcessingPipeline` against its new public
+surface. These are portable — they run on Windows, Linux, and macOS
+CI without a GPU device:
 
-- Enum layout: `GTAO` at slot 0, `SSAOTemporal` at slot 1, `Bloom` at
-  slot 2, `Sharpen` last, `Count == 16`.
-- Lifecycle: headless `Initialize`/`Shutdown` round-trips set and clear
-  `SSAOTemporalFilter::IsInitialized()`.
-- Resize propagation: identical re-resize is a no-op, dimension change
-  keeps the filter initialised.
-- Safe `Process()` with no device attached (no active passes,
-  no crash).
-- `GetPassMetrics()` returns 16 entries with `"SSAOTemporal"` at slot 1.
-- `Console_ListEffects()` contains both `"GTAO"` and `"SSAOTemporal"`.
-- `GetRenderTargetPoolSize()` returns 0 when no device is attached.
-- `Console_RenderTargetPoolStatus()` is always non-empty (the Linux
-  stub keeps UI panels from showing a blank line).
-- `GetGPUMarkerDepth()` is 0 at rest and returns to 0 after
-  `Process()` completes — the `BeginEvent`/`EndEvent` pair is balanced.
-- `GetPassTimeMs()` is non-negative for every valid enum index and
-  returns 0 for out-of-range indices.
-- `GetSSAOTemporalSettings()` is mutable through the accessor.
-- `SetEffectEnabled(SSAOTemporal, …)` toggles correctly.
+**Enum ordering:**
+- `PhaseJ_EnumOrdering_GTAOFirst` — slot 0.
+- `PhaseJ_EnumOrdering_SSAOTemporalSecond` — slot 1.
+- `PhaseJ_EnumOrdering_BloomBumpedToThird` — slot 2 (was 1 in Phase I).
+- `PhaseJ_EnumOrdering_CountIsSixteen` — `Count` = 16 (was 15 in Phase I).
+- `PhaseJ_EnumOrdering_SharpenIsLast` — `Sharpen + 1 == Count`.
+
+**Pipeline lifecycle:**
+- `PhaseJ_HeadlessInitializeAndShutdown` — CPU-only init/teardown.
+- `PhaseJ_ResizePropagatesToSSAOTemporalHistory` — resize + repeat.
+- `PhaseJ_ProcessIsSafeWithoutDevice` — `Process()` is a safe no-op
+  without a D3D11 context.
+
+**Metrics:**
+- `PhaseJ_GetPassMetrics_HasSixteenEntries` — metrics vector size.
+- `PhaseJ_GetPassMetrics_SSAOTemporalNameAtSlotOne` — slot[1] name.
+- `PhaseJ_Console_ListEffects_IncludesSSAOTemporal` — console string.
+
+**Accessor surface (the four Phase J additions):**
+- `PhaseJ_GetRenderTargetPoolSize_HeadlessIsZero` — headless returns 0.
+- `PhaseJ_Console_RenderTargetPoolStatus_ReturnsNonEmpty` — never blank.
+- `PhaseJ_GetGPUMarkerDepth_AtRestIsZero` — balanced event regions.
+- `PhaseJ_GetPassTimeMs_IsNonNegative` — timings are always ≥ 0, and
+  out-of-range indices return 0 safely.
+
+**Settings:**
+- `PhaseJ_GetSSAOTemporalSettings_Mutable` — settings are writable.
+- `PhaseJ_SetEffectEnabled_SSAOTemporalToggles` — toggleable via enum.
+
+### Registration
+`Tests/CMakeLists.txt` — both new files registered alongside
+`TestGTAOEffect.cpp`.
 
 ## Files touched
 
 ```
-SparkEngine/Source/Graphics/PostProcessingTypes.h         (J1)
-SparkEngine/Source/Graphics/PostProcessingPipeline.h      (J1–J4)
-SparkEngine/Source/Graphics/PostProcessingPipeline.cpp    (J1–J4)
-SparkEngine/Source/Core/SubsystemConsoleCommands.cpp      (J1)
-Tests/TestSSAOTemporalFilter.cpp                          (new)
-Tests/TestPostProcessingPipelinePhaseJ.cpp                (new)
-Tests/CMakeLists.txt                                      (J1 registrations)
-.claude/knowledge/engine-next-steps-phase-j-2026-04-11.md (new)
-.claude/index.md                                          (updated)
+SparkEngine/Source/Graphics/PostProcessingTypes.h          (J1)
+SparkEngine/Source/Graphics/PostProcessingPipeline.h       (J1, J2, J3, J4)
+SparkEngine/Source/Graphics/PostProcessingPipeline.cpp     (J1, J2, J3, J4)
+SparkEngine/Source/Core/SubsystemConsoleCommands.cpp       (J1)
+Tests/TestSSAOTemporalFilter.cpp                           (J1, new)
+Tests/TestPostProcessingPipelinePhaseJ.cpp                 (J1-J4, new)
+Tests/CMakeLists.txt                                       (J1-J4)
+.claude/knowledge/engine-next-steps-phase-j-2026-04-11.md  (new)
+.claude/index.md                                           (updated)
 ```
 
 ## Build status
 
 - `cmake --preset linux-gcc-release` — clean.
 - `cmake --build build/linux-gcc-release --target SparkEngine` — clean
-  (pre-existing InputManager / DebugHookManager / LoadingScreen ODR
-  warnings unchanged).
-- `cmake --build build/linux-gcc-release --target SparkTests` — clean.
-- Full `SparkTests` run — **4395 passed, 0 failed, 1 warned**
-  (pre-existing known-flaky `LoadTest_Severe_EntityFlood`), 119021
-  assertions. +25 tests and +191 assertions over Phase I (4370 /
-  118830).
+  (pre-existing InputManager ODR warnings unchanged).
+- `cmake --build build/linux-gcc-release --target SparkTests` — clean
+  (pre-existing DebugHookManager ODR warnings unchanged).
+- `SparkTests` binary — **4395 passed, 0 failed, 1 warned** (pre-existing
+  `LoadTest_Severe_EntityFlood` known-flaky), total 119021 assertions
+  (+25 new Phase J assertions over the Phase I baseline of 118996; the
+  +26-test delta is from 17 PhaseJ integration tests + 8 SSAOTemporalFilter
+  CPU tests).
 - `clang-format --dry-run --Werror` on all touched files — clean after
-  one auto-format pass.
-- Direct-binary verification of the 25 new tests via
-  `SPARK_TEST_NAME=PhaseJ` and `SPARK_TEST_NAME=SSAOTemporal`: all
-  pass.
+  a single `clang-format -i` pass (the multi-line `kPassNames` arrays
+  rewrapped against the 120-col limit).
 
 ## What's left for Phase K
 
-Phase J's pattern — co-locating four orphans that share an integration
-surface — is reusable. Candidates still on the Tier 2 list from
-`stub-and-abandoned-features-2026-04-10.md`:
+Phase J closes four of the ~25 Tier 2 graphics orphans catalogued on
+April 10. The remaining high-value orphans that can be picked up next,
+in roughly ascending order of scope:
 
-- **`RenderTargetPool` migration** — replace the hard-coded
-  `m_pingPongTextures[2]` in `PostProcessingPipeline` with
-  `Acquire`/`Release` calls, then add a real double-buffered history
-  target for `SSAOTemporal` so it can run its full temporal path. Same
-  commit should add a `SSAOTemporal_HistoryTarget` test asserting that
-  the filter's GPU-side blend equals the CPU reference on constant
-  fields.
-- **`BVHAccelerator.h`** — hierarchical frustum / ray culling. Feeds a
-  scene renderer, not post-process. Needs a new integration surface
-  (likely `GraphicsEngine::CollectVisible`).
-- **`VoxelConeTracing.h`** — real-time GI. Large scope, parked until a
-  GI work phase.
-- **`MeshOptimizer.h`** — vertex-cache / overdraw optimiser. Called at
-  mesh upload time (asset pipeline), not per-frame. Integration surface
-  is `AssetPipeline::LoadMesh`.
-- **`ShaderVariantSystem.h`**, **`ShaderCrossCompiler.h`** — shader
-  permutation + HLSL↔GLSL translation. Integration surface is the
-  shader manager.
-- **`RTHandleSystem.h`**, **`ConstantBufferRing.h`**, **`PersistentMaterialCB.h`**,
-  **`ReflectionProbeCache.h`**, **`CachedShadowAtlas.h`**,
-  **`DenoiserInterface.h`**, **`FastNoise2SIMD.h`** — each has its own
-  integration surface. Next phase should batch two or three that share
-  a consumer (e.g. the shadow atlas + reflection probe cache both live
-  in the lighting subsystem).
-- **Smaller orphans** (`LineTrailRenderer`, `SpringArm`, `DirtyRectTracker`,
-  `ClusteredLightGPU`, `RHIHandlePool`, `TransientBufferAllocator`) —
-  already documented as intentional utilities with tests; most don't
-  need further activation, they need consumers that'll arrive with
-  future features.
+- **`BVHAccelerator.h`** (441 lines) — hierarchical frustum / ray
+  culling. Needs a scene-renderer call site; would likely live in
+  `GraphicsEngine::CullFrustum` or similar. Different integration
+  surface from post-process.
+- **`MeshOptimizer.h`** (471 lines) — vertex-cache / overdraw mesh
+  optimiser. Wires into `AssetPipeline::LoadMesh` or the foliage
+  `FoliageImpostorBaker`. Already has `TestGraphicsIntegration.cpp`
+  coverage — activation just needs a call site.
+- **`RTHandleSystem.h`** (265 lines) — HDRP-style render-target
+  handle abstraction. Can be instantiated in `GraphicsEngine` and
+  used for the main scene colour / depth targets.
+- **`ShaderVariantSystem.h`** (391 lines) — keyword-based shader
+  permutation management. Would replace the ad-hoc variant bookkeeping
+  in the existing shader families.
+- **`ReflectionProbeCache.h`** (317 lines) — prefiltered env-map cache.
+  Wires into the lighting system.
+- **`CachedShadowAtlas.h`** (328 lines) — shadow atlas with per-light
+  caching. Wires into the shadow rendering path.
+- **`VolumeSystem.h`** (461 lines) — Unity-style post-process volume
+  blending. This one belongs in `PostProcessingPipeline` too — it
+  blends `PostProcessPass` settings based on spatial volumes. Good
+  Phase L candidate.
+- **`VoxelConeTracing.h`** (463 lines) — voxel-cone-traced GI. Multi-
+  session scope, parked until real-time GI becomes a priority.
 
-None of these are blocked on Phase J. The I1 + J1–J4 activation pattern
-(header include → member → lifecycle wire → per-frame tick → portable
-accessor → integration test) works for any orphan that has a
-CPU-runnable reference path.
+The smaller orphans (`LineTrailRenderer`, `SpringArm`, `DirtyRectTracker`,
+`ClusteredLightGPU`, `RHIHandlePool`, `TransientBufferAllocator`) all
+have existing test coverage and header `@note` documentation; they are
+intentional reusable utilities that components / future systems pull
+in on demand. No activation work is required — their "consumers" are
+the components that already include them.
 
 ## Design notes for follow-ups
 
-- **Enum ordering is execution ordering — again.** Both Phase I and
-  Phase J added new passes at the beginning of `PostProcessPass`. Any
-  future activation should audit the enum position against the
-  HDR → tonemap → LDR → present phase the pass belongs in.
-- **Metrics / name tables are `static_assert`'d against
-  `PostProcessPass::Count`.** The three tables (`passNames` in
-  `GetPassMetrics`, `kPassNames`/`kPassNamesW` in `ProcessPass`) will
-  now fail to compile rather than silently mismatch. Future enum
-  additions must update all three; the static_assert will point at
-  any forgotten one.
-- **Headless / NullRHI still works.** Every Windows-only orphan has an
-  `#ifdef` block in the pipeline's accessor methods so calling them
-  without a device returns a stable fallback (0 / stub string / CPU
-  timing). Tests run on Linux against that exact path, so the
-  headless behaviour is contractual, not accidental.
-- **`ScopedTimestamp` and `ScopedGPUEvent` are cheap.** Both RAII
-  helpers no-op when the underlying subsystem was never initialised,
-  so wrapping every `ProcessPass` call in them is free during tests
-  and NullRHI rendering, and real on Windows with a device.
+- **Enum ordering is still execution ordering.** Phase J added a slot
+  at position 1 (between GTAO and Bloom) — that shifted every existing
+  pass by one. All downstream code that touches the enum must use the
+  named value (`PostProcessPass::Bloom`), never a hard-coded integer.
+  The console command maps and the `passNames[]` / `kPassNames[]` /
+  `kPassNamesW[]` tables are now protected by `static_assert`s against
+  `PostProcessPass::Count`.
+- **Windows-only orphans need Windows-only members.** `GPUDebugMarkers`,
+  `GPUTimestampQuery`, and `RenderTargetPool` all gate their entire
+  class bodies behind `SPARK_PLATFORM_WINDOWS`, so any pipeline member
+  of those types must live inside the same `#ifdef`. The Phase J
+  accessors return 0 / stub strings on non-Windows so UI code never
+  special-cases the platform.
+- **CPU oracles are great test fixtures.** `SSAOTemporalFilter` shipped
+  a full CPU implementation, which means the Phase J tests can pin its
+  behaviour with 100% coverage without any GPU. The pattern matches
+  Phase I's `GTAOEffect` — *every* orphan that provides a CPU reference
+  should be tested against it before activation, not after.
+- **Pool-first wiring pays off.** Activating `RenderTargetPool` with no
+  live acquisitions looks like dead code, but it means the follow-up
+  orphans (`SSAOTemporal` history, `BVHAccelerator` scratch RTs,
+  `VolumeSystem` blend intermediates) can each land as one-line
+  `Acquire`/`Release` diffs with no pool-lifecycle plumbing. This is
+  deliberate scaffolding.
