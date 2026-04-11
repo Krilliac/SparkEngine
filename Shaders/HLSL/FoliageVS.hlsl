@@ -156,12 +156,14 @@ PS_INPUT main(VS_INPUT input)
         float3 worldUp = float3(0.0, 1.0, 0.0);
         float3 right = normalize(cross(worldUp, float3(toCam.x, 0.0, toCam.z) + float3(1e-6, 0.0, 0.0)));
 
-        // Phase F: per-species billboard height comes from the cell meta
-        // float4 (element [materialId*2 + 1].x). Horizontal half-width
-        // is half the height — good default for tree-like foliage.
+        // Phase F/G: per-species billboard size comes from the cell meta
+        // float4 (element [materialId*2 + 1] = (height, aspect, 0, 0)).
+        // Horizontal half-width = height * aspect — lets bush / grass /
+        // tree species each pick their own silhouette proportions.
         float4 meta = ImpostorCells[inst.materialId * 2u + 1u];
         float billboardHeight = max(meta.x, 0.01);
-        float billboardHalfWidth = billboardHeight * 0.5;
+        float billboardAspect = max(meta.y, 0.01);
+        float billboardHalfWidth = billboardHeight * billboardAspect;
 
         float3 offset = right * (input.Pos.x * billboardHalfWidth * 2.0)
                       + worldUp * (input.Pos.y * billboardHeight);

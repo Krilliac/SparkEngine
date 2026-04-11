@@ -40,6 +40,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine next-steps Phase B (stub @warnings, AnimMgr, SelectionMgr id widen) | [knowledge/engine-next-steps-phase-b-2026-04-10.md](knowledge/engine-next-steps-phase-b-2026-04-10.md) | Observation | Active | 2026-04-10 |
 | Engine next-steps Phase C (DXR finish, foliage GPU bake, SelectionMgr panel migration) | [knowledge/engine-next-steps-phase-c-2026-04-10.md](knowledge/engine-next-steps-phase-c-2026-04-10.md) | Observation | Active | 2026-04-10 |
 | Engine next-steps Phase D (DXR .cso build step, foliage lifecycle bake, DXR tests) | [knowledge/engine-next-steps-phase-d-2026-04-10.md](knowledge/engine-next-steps-phase-d-2026-04-10.md) | Observation | Active | 2026-04-10 |
+| Engine next-steps Phase G (billboard aspect, FXC validation, Windows smoke procedure) | [knowledge/engine-next-steps-phase-g-2026-04-11.md](knowledge/engine-next-steps-phase-g-2026-04-11.md) | Observation | Active | 2026-04-11 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-10)

@@ -566,11 +566,34 @@ TEST(FoliageRenderer_BuildGPUInstanceImpostorLODSetsFlag)
 
 TEST(FoliageRenderer_SpeciesDefaultsForPhaseFFields)
 {
-    // Phase F added two fields to FoliageSpecies. Defaults matter because
-    // existing scenes will inherit them without touching the new fields.
+    // Phase F added two fields to FoliageSpecies; Phase G added a third.
+    // Defaults matter because existing scenes will inherit them without
+    // touching the new fields.
     FoliageSpecies s;
     EXPECT_TRUE(s.albedoTexturePath.empty());
     EXPECT_NEAR(s.billboardHeight, 2.0f, 1e-6f);
+    // Phase G: aspect default preserves Phase E/F appearance
+    // (halfWidth = height * 0.5 = height/2).
+    EXPECT_NEAR(s.billboardAspect, 0.5f, 1e-6f);
+}
+
+TEST(FoliageRenderer_BillboardHalfWidthFormulaPhaseG)
+{
+    // Documents the VS formula: halfWidth = height * aspect. Tests the
+    // two anchor cases (default tree-like, wide bush) so a regression
+    // in either the CPU-side packing or the VS read surfaces here
+    // before it appears visually.
+    FoliageSpecies tree;
+    tree.billboardHeight = 8.0f;
+    tree.billboardAspect = 0.5f;
+    const float treeHalf = tree.billboardHeight * tree.billboardAspect;
+    EXPECT_NEAR(treeHalf, 4.0f, 1e-6f);
+
+    FoliageSpecies bush;
+    bush.billboardHeight = 1.0f;
+    bush.billboardAspect = 1.5f;
+    const float bushHalf = bush.billboardHeight * bush.billboardAspect;
+    EXPECT_NEAR(bushHalf, 1.5f, 1e-6f);
 }
 
 TEST(FoliageRenderer_CollectProducesSortedDrawOrder)

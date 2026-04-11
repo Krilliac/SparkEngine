@@ -65,6 +65,10 @@ namespace Spark::Graphics
         float billboardHeight = 2.0f;   ///< Impostor billboard vertical size in metres. Phase F:
                                         ///< packed into the atlas cell meta buffer so the VS can
                                         ///< scale per-species billboards without a shader rebuild.
+        float billboardAspect = 0.5f;   ///< Impostor billboard width/height ratio. Phase G:
+                                        ///< `halfWidth = height * aspect`. Default 0.5 keeps the
+                                        ///< Phase E/F appearance (tree-like, taller than wide).
+                                        ///< Increase for bushes / grass clumps.
     };
 
     // ========================================================================

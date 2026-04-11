@@ -376,17 +376,21 @@ namespace Spark::Graphics
             const float cellDU = maxU - minU;
             const float cellDV = maxV - minV;
 
-            // Look up per-species billboard height; fall back to 2.0 if
-            // the species lookup fails (stale slot list, etc).
+            // Look up per-species billboard size; fall back to defaults
+            // if the species lookup fails (stale slot list, etc).
             float billboardHeight = 2.0f;
+            float billboardAspect = 0.5f;
             if (const FoliageSpecies* species = manager.GetSpeciesByGlobalIndex(s.speciesIndex))
             {
                 billboardHeight = std::max(0.01f, species->billboardHeight);
+                billboardAspect = std::max(0.01f, species->billboardAspect);
             }
 
             const uint32_t base = s.speciesIndex * kFloat4PerSpecies;
             m_cellRecords[base + 0] = DirectX::XMFLOAT4{minU, minV, cellDU, cellDV};
-            m_cellRecords[base + 1] = DirectX::XMFLOAT4{billboardHeight, 0.0f, 0.0f, 0.0f};
+            // meta = (billboardHeight, billboardAspect, 0, 0). The VS
+            // multiplies these for per-species half-width.
+            m_cellRecords[base + 1] = DirectX::XMFLOAT4{billboardHeight, billboardAspect, 0.0f, 0.0f};
         }
 
         // (Re)create the GPU structured buffer sized to the record array.

@@ -1375,6 +1375,76 @@ if(ENABLE_DXR AND WIN32 AND NOT MINGW)
     endif()
 endif()
 
+# Phase G: Offline FXC validation for the foliage shader family.
+#
+# The foliage VS/PS pair (Phase E) and the impostor bake VS/PS pair
+# (Phase C) are still compiled at runtime via D3DCompileFromFile. That
+# path is correct and shipped, but it defers shader errors to the first
+# time a foliage scene is loaded — which in CI never happens.
+#
+# This step runs fxc.exe at build time as a belt-and-braces validation:
+# the runtime code is unchanged, but if any of the four shaders fail to
+# compile the build fails with the exact error from the real Windows
+# shader compiler. The generated .cso files are dropped next to the
+# .hlsl copies under $<TARGET_FILE_DIR:SparkEngine>/Shaders/HLSL/ so a
+# future session can switch the runtime to offline-load with a one-line
+# change to CompileFoliageShader.
+#
+# Gated the same way as the DXC step (Windows MSVC only, non-fatal when
+# fxc is missing) so Linux and MinGW builds are unaffected.
+if(WIN32 AND NOT MINGW)
+    find_program(FXC_EXECUTABLE
+        NAMES fxc fxc.exe
+        HINTS
+            "$ENV{WindowsSdkVerBinPath}x64"
+            "$ENV{WindowsSdkDir}bin/x64"
+        DOC "Legacy HLSL compiler (fxc.exe) — validates SM 5.0 shaders at build time"
+    )
+
+    if(FXC_EXECUTABLE)
+        message(STATUS "SparkEngine: Found fxc at ${FXC_EXECUTABLE} — will validate foliage shaders offline")
+        set(FOLIAGE_SHADER_DIR "${CMAKE_SOURCE_DIR}/Shaders/HLSL")
+        set(FOLIAGE_OUTPUT_DIR "$<TARGET_FILE_DIR:SparkEngine>/Shaders/HLSL")
+
+        # Pairs of (file, entry, profile). FoliageVS/PS use `main`; the
+        # impostor bake pair uses VSMain/PSMain per FoliageImpostorBaker
+        # CompileBakeShaders.
+        set(FOLIAGE_FXC_TARGETS
+            "FoliageVS.hlsl|main|vs_5_0"
+            "FoliagePS.hlsl|main|ps_5_0"
+            "FoliageImpostorBake.hlsl|VSMain|vs_5_0"
+            "FoliageImpostorBake.hlsl|PSMain|ps_5_0"
+        )
+
+        foreach(TARGET_SPEC ${FOLIAGE_FXC_TARGETS})
+            string(REPLACE "|" ";" TARGET_PARTS ${TARGET_SPEC})
+            list(GET TARGET_PARTS 0 SHADER_FILE)
+            list(GET TARGET_PARTS 1 ENTRY_POINT)
+            list(GET TARGET_PARTS 2 PROFILE)
+
+            get_filename_component(SHADER_BASE ${SHADER_FILE} NAME_WE)
+            set(SHADER_INPUT "${FOLIAGE_SHADER_DIR}/${SHADER_FILE}")
+            set(SHADER_OUTPUT "${FOLIAGE_OUTPUT_DIR}/${SHADER_BASE}_${ENTRY_POINT}.cso")
+
+            add_custom_command(TARGET SparkEngine POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${FOLIAGE_OUTPUT_DIR}"
+                COMMAND ${FXC_EXECUTABLE}
+                    /nologo
+                    /T ${PROFILE}
+                    /E ${ENTRY_POINT}
+                    /Fo "${SHADER_OUTPUT}"
+                    "${SHADER_INPUT}"
+                COMMENT "FXC: ${SHADER_FILE} [${ENTRY_POINT}/${PROFILE}] -> ${SHADER_BASE}_${ENTRY_POINT}.cso"
+                VERBATIM
+            )
+        endforeach()
+    else()
+        message(STATUS "SparkEngine: fxc not found — foliage shaders will only be validated at runtime")
+        message(STATUS "  Install the Windows 10/11 SDK or set WindowsSdkVerBinPath in your environment")
+        message(STATUS "  if you want build-time validation of FoliageVS/PS + FoliageImpostorBake.")
+    endif()
+endif()
+
 # Copy all asset subdirectories (Models, Textures, Audio, Materials, Scenes, Scripts, MMO)
 foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}")
