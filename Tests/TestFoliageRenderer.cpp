@@ -493,3 +493,121 @@ TEST(FoliageRenderer_InitNullLoaderStaysWithoutExplicitLoader)
 
     renderer.Shutdown();
 }
+
+// ============================================================================
+// Phase E: GPU instance encoding + flag bit helpers (CPU-only)
+// ============================================================================
+
+TEST(FoliageRenderer_FoliageImpostorFlagRoundTrip)
+{
+    // The flag helpers live in GPUSceneBuffer.h and operate on the POD
+    // struct directly — no D3D required. Verifies that toggling the
+    // impostor bit does not corrupt other flag bits.
+    GPUInstanceData data{};
+    data.flags = static_cast<uint32_t>(InstanceFlags::Visible) | static_cast<uint32_t>(InstanceFlags::CastShadow);
+
+    EXPECT_FALSE(IsFoliageImpostorFlag(data));
+
+    SetFoliageImpostorFlag(data, true);
+    EXPECT_TRUE(IsFoliageImpostorFlag(data));
+    // Other bits preserved.
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::Visible)) != 0);
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::CastShadow)) != 0);
+
+    SetFoliageImpostorFlag(data, false);
+    EXPECT_FALSE(IsFoliageImpostorFlag(data));
+    // Other bits still preserved.
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::Visible)) != 0);
+    EXPECT_TRUE((data.flags & static_cast<uint32_t>(InstanceFlags::CastShadow)) != 0);
+}
+
+TEST(FoliageRenderer_BuildGPUInstanceMeshLOD)
+{
+    // Mesh-LOD record should NOT have the impostor flag bit set.
+    FoliageRenderInstance src;
+    src.globalMaterialId = 7;
+    src.lod = FoliageRenderLOD::Mesh;
+    src.distanceToCamera = 12.5f;
+    src.windPhase = 1.25f;
+    // Build a simple translation-only world matrix.
+    float world[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 3, 4, 5, 1};
+    std::memcpy(src.worldMatrix, world, sizeof(world));
+
+    GPUInstanceData out{};
+    FoliageRenderer::BuildGPUInstance(src, out);
+
+    EXPECT_EQ(out.materialId, 7u);
+    EXPECT_NEAR(out.lodDistance, 12.5f, 1e-6f);
+    EXPECT_NEAR(out.padding, 1.25f, 1e-6f); // wind phase packed into padding
+    EXPECT_FALSE(IsFoliageImpostorFlag(out));
+    EXPECT_TRUE((out.flags & static_cast<uint32_t>(InstanceFlags::Visible)) != 0);
+}
+
+TEST(FoliageRenderer_BuildGPUInstanceImpostorLODSetsFlag)
+{
+    // Impostor-LOD record should have the impostor flag bit set and
+    // preserve the wind-phase-in-padding / material-id conventions.
+    FoliageRenderInstance src;
+    src.globalMaterialId = 42;
+    src.lod = FoliageRenderLOD::Impostor;
+    src.distanceToCamera = 200.0f;
+    src.windPhase = 3.14f;
+    float world[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    std::memcpy(src.worldMatrix, world, sizeof(world));
+
+    GPUInstanceData out{};
+    FoliageRenderer::BuildGPUInstance(src, out);
+
+    EXPECT_EQ(out.materialId, 42u);
+    EXPECT_TRUE(IsFoliageImpostorFlag(out));
+    EXPECT_NEAR(out.lodDistance, 200.0f, 1e-6f);
+    EXPECT_NEAR(out.padding, 3.14f, 1e-6f);
+}
+
+TEST(FoliageRenderer_CollectProducesSortedDrawOrder)
+{
+    // After CollectFromFoliageManager, m_renderInstances should be sorted
+    // by (lod, globalMaterialId) and m_drawOrder should contain one run
+    // per contiguous (lod, species) group in that order.
+    auto& fm = FoliageManager::GetInstance();
+    fm.Initialize();
+    fm.RegisterSpecies(MakeRendererSpecies("grass", 0.05f, 1.0f, "meshes/grass.mesh"));
+    fm.AddVolume(MakeRendererVolume(31, {"grass"}));
+
+    FoliageRenderer renderer;
+    renderer.Initialize(nullptr, 50.0f);
+    renderer.CollectFromFoliageManager(0.0f);
+
+    const auto& batch = renderer.GetRenderInstances();
+    const auto& order = renderer.GetDrawOrder();
+
+    // Every run in m_drawOrder covers a contiguous slice of m_renderInstances.
+    uint32_t walker = 0;
+    for (const FoliageDrawRun& run : order)
+    {
+        EXPECT_EQ(run.startInstance, walker);
+        EXPECT_GT(run.instanceCount, 0u);
+        // All instances in the run share the run's (lod, globalMaterialId).
+        for (uint32_t k = 0; k < run.instanceCount; ++k)
+        {
+            const FoliageRenderInstance& rec = batch[walker + k];
+            EXPECT_TRUE(rec.lod == run.lod);
+            EXPECT_EQ(rec.globalMaterialId, run.globalMaterialId);
+        }
+        walker += run.instanceCount;
+    }
+    EXPECT_EQ(walker, static_cast<uint32_t>(batch.size()));
+
+    // Sorted by (lod, globalMaterialId): all Mesh before any Impostor.
+    bool sawImpostor = false;
+    for (const FoliageRenderInstance& rec : batch)
+    {
+        if (rec.lod == FoliageRenderLOD::Impostor)
+            sawImpostor = true;
+        else
+            EXPECT_FALSE(sawImpostor); // no mesh after we saw an impostor
+    }
+
+    renderer.Shutdown();
+    fm.Shutdown();
+}

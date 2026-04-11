@@ -195,3 +195,70 @@ TEST(FoliageImpostor_GetAngleSlotUVOutOfRangeZeroed)
     EXPECT_NEAR(maxU, 0.0f, 1e-6f);
     EXPECT_NEAR(maxV, 0.0f, 1e-6f);
 }
+
+// ============================================================================
+// Phase E: per-species cell UV rect math (CPU-only)
+// ============================================================================
+
+TEST(FoliageImpostor_CellRectMatchesAngleZeroSlot)
+{
+    // The cell buffer uploaded by FoliageImpostorAtlas::UploadCellBuffer
+    // packs (minU, minV, cellDU, cellDV) per species where cellDU/cellDV
+    // are the UV size of a single angle cell. Verify the math against
+    // GetAngleSlotUV directly — this is the invariant the GPU relies on
+    // when sampling the atlas in the impostor branch of FoliagePS.hlsl.
+    std::vector<uint32_t> indices{0, 1, 2};
+    uint32_t atlasW = 0;
+    uint32_t atlasH = 0;
+    auto slots = FoliageImpostorBaker::ComputeAtlasLayout(indices, /*cellSize=*/128, /*angleSteps=*/8,
+                                                          /*maxAtlasSize=*/4096, atlasW, atlasH);
+    EXPECT_EQ(slots.size(), 3u);
+    EXPECT_GT(atlasW, 0u);
+    EXPECT_GT(atlasH, 0u);
+
+    for (const ImpostorAtlasSlot& s : slots)
+    {
+        float minU = 0.0f;
+        float minV = 0.0f;
+        float maxU = 0.0f;
+        float maxV = 0.0f;
+        FoliageImpostorBaker::GetAngleSlotUV(s, /*angleSlotIndex=*/0, atlasW, atlasH, minU, minV, maxU, maxV);
+        const float cellDU = maxU - minU;
+        const float cellDV = maxV - minV;
+
+        // cellDU is the width of one angle cell in UV space: cellSize/atlasWidth.
+        EXPECT_NEAR(cellDU, static_cast<float>(s.cellSize) / static_cast<float>(atlasW), 1e-6f);
+        // cellDV spans the full slot height.
+        EXPECT_NEAR(cellDV, static_cast<float>(s.cellSize) / static_cast<float>(atlasH), 1e-6f);
+
+        // Origin at the slot's pixel corner.
+        EXPECT_NEAR(minU, static_cast<float>(s.atlasX) / static_cast<float>(atlasW), 1e-6f);
+        EXPECT_NEAR(minV, static_cast<float>(s.atlasY) / static_cast<float>(atlasH), 1e-6f);
+    }
+}
+
+TEST(FoliageImpostor_CellRectAdvancesByCellDUAcrossAngles)
+{
+    // Adjacent angle bins inside the same slot are separated by exactly
+    // one cellDU in U. This invariant is what lets the VS compute
+    // `AngleU = angleBin * cellDU` without knowing atlas dimensions.
+    std::vector<uint32_t> indices{0};
+    uint32_t atlasW = 0;
+    uint32_t atlasH = 0;
+    auto slots = FoliageImpostorBaker::ComputeAtlasLayout(indices, /*cellSize=*/64, /*angleSteps=*/4,
+                                                          /*maxAtlasSize=*/1024, atlasW, atlasH);
+    EXPECT_EQ(slots.size(), 1u);
+
+    float baseMinU = 0.0f, baseMinV = 0.0f, baseMaxU = 0.0f, baseMaxV = 0.0f;
+    FoliageImpostorBaker::GetAngleSlotUV(slots[0], 0, atlasW, atlasH, baseMinU, baseMinV, baseMaxU, baseMaxV);
+    const float cellDU = baseMaxU - baseMinU;
+
+    for (uint32_t a = 1; a < slots[0].angleSteps; ++a)
+    {
+        float minU = 0.0f, minV = 0.0f, maxU = 0.0f, maxV = 0.0f;
+        FoliageImpostorBaker::GetAngleSlotUV(slots[0], a, atlasW, atlasH, minU, minV, maxU, maxV);
+        EXPECT_NEAR(minU, baseMinU + static_cast<float>(a) * cellDU, 1e-6f);
+        EXPECT_NEAR(minV, baseMinV, 1e-6f);
+        EXPECT_NEAR(maxV, baseMaxV, 1e-6f);
+    }
+}

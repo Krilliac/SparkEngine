@@ -849,18 +849,31 @@ void GraphicsEngine::EndFrame()
             // the GPU. We append after the existing static-mesh slots
             // by starting at the buffer's current write head.
             auto& foliage = Spark::Graphics::FoliageRenderer::GetInstance();
+            uint32_t foliageStartSlot = 0;
+            bool foliageUploaded = false;
             if (foliage.IsInitialized())
             {
-                const uint32_t startSlot = m_gpuSceneBuffer.GetActiveCount();
-                const uint32_t written = foliage.UploadToSceneBuffer(m_gpuSceneBuffer, startSlot);
+                foliageStartSlot = m_gpuSceneBuffer.GetActiveCount();
+                const uint32_t written = foliage.UploadToSceneBuffer(m_gpuSceneBuffer, foliageStartSlot);
                 if (written != UINT32_MAX && written > 0)
                 {
+                    foliageUploaded = true;
                     SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Foliage: uploaded %u instances to GPU scene buffer",
                                     written);
                 }
             }
 
             m_gpuSceneBuffer.FlushToGPU(m_context.Get());
+
+            // Phase E: after the flush, issue the foliage draw pass.
+            // Mesh instances draw the cached species meshes; impostor
+            // instances draw camera-aligned billboards sampling the
+            // impostor atlas SRV. Skips cleanly when there is no batch.
+            if (foliageUploaded && m_device && m_context)
+            {
+                foliage.RenderFoliagePass(m_device.Get(), m_context.Get(), m_frameViewMatrix, m_frameProjMatrix,
+                                          m_frameCameraPos, /*time=*/0.0f, m_gpuSceneBuffer, foliageStartSlot);
+            }
         }
         m_constantBufferRing.EndFrame();
         m_gpuTimestampQuery.EndFrame(m_context.Get());

@@ -53,10 +53,6 @@
 #include <vector>
 #include <utility>
 
-#ifdef SPARK_PLATFORM_WINDOWS
-
-using Microsoft::WRL::ComPtr;
-
 namespace Spark::Graphics
 {
 
@@ -65,6 +61,11 @@ namespace Spark::Graphics
      *
      * Matches the HLSL StructuredBuffer<InstanceData> layout.
      * 16-byte aligned for GPU compatibility.
+     *
+     * This POD is platform-agnostic: the struct itself has no D3D
+     * dependencies so Linux/macOS builds can exercise the flag helpers
+     * and upload-encoding logic in unit tests. Only the GPU-side
+     * `class GPUSceneBuffer` below is Windows-gated.
      */
     struct alignas(16) GPUInstanceData
     {
@@ -74,7 +75,7 @@ namespace Spark::Graphics
         uint32_t materialId = 0;             ///< Index into material table
         uint32_t flags = 0;                  ///< Bit flags (visible, castShadow, etc.)
         float lodDistance = 0.0f;            ///< Distance to camera for LOD selection
-        float padding = 0.0f;
+        float padding = 0.0f;                ///< Reused by foliage to pack wind phase
     };
 
     /**
@@ -88,13 +89,47 @@ namespace Spark::Graphics
         ReceiveShadow = 1 << 2,
         Static = 1 << 3,
         Skinned = 1 << 4,
-        Selected = 1 << 5 // Editor selection highlight
+        Selected = 1 << 5,       // Editor selection highlight
+        FoliageImpostor = 1 << 6 // Foliage LOD: sample impostor atlas instead of mesh
     };
 
     inline InstanceFlags operator|(InstanceFlags a, InstanceFlags b)
     {
         return static_cast<InstanceFlags>(std::to_underlying(a) | std::to_underlying(b));
     }
+
+    /**
+     * @brief Set or clear the FoliageImpostor flag bit on an instance.
+     *
+     * Platform-agnostic helper — touches only the POD `flags` field so
+     * it is testable on Linux without a D3D device.
+     */
+    inline void SetFoliageImpostorFlag(GPUInstanceData& data, bool on)
+    {
+        constexpr uint32_t bit = std::to_underlying(InstanceFlags::FoliageImpostor);
+        if (on)
+            data.flags |= bit;
+        else
+            data.flags &= ~bit;
+    }
+
+    /**
+     * @brief Read the FoliageImpostor flag bit from an instance.
+     */
+    inline bool IsFoliageImpostorFlag(const GPUInstanceData& data)
+    {
+        constexpr uint32_t bit = std::to_underlying(InstanceFlags::FoliageImpostor);
+        return (data.flags & bit) != 0;
+    }
+
+} // namespace Spark::Graphics
+
+#ifdef SPARK_PLATFORM_WINDOWS
+
+using Microsoft::WRL::ComPtr;
+
+namespace Spark::Graphics
+{
 
     /**
      * @brief GPU scene buffer metrics.

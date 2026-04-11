@@ -32,6 +32,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "GPUSceneBuffer.h"
 #include "GraphicsEngine.h"
+#include <d3dcompiler.h>
 #endif
 
 namespace Spark::Graphics
@@ -132,6 +133,7 @@ namespace Spark::Graphics
         const size_t cached = m_meshCache.size();
         m_meshCache.clear();
         m_renderInstances.clear();
+        m_drawOrder.clear();
         m_stats = {};
         m_loader = nullptr;
         m_hasExplicitLoader = false;
@@ -231,6 +233,36 @@ namespace Spark::Graphics
         return (distanceToCamera <= impostorDistance) ? FoliageRenderLOD::Mesh : FoliageRenderLOD::Impostor;
     }
 
+    void FoliageRenderer::BuildGPUInstance(const FoliageRenderInstance& src, GPUInstanceData& out)
+    {
+        std::memcpy(&out.worldMatrix, src.worldMatrix, sizeof(float) * 16);
+        // Default prev matrix to current — first-frame motion vectors will
+        // be zero until GPUSceneBuffer::UpdateTransform is used to roll the
+        // previous frame forward.
+        std::memcpy(&out.prevWorldMatrix, src.worldMatrix, sizeof(float) * 16);
+
+        // normalMatrix = inverse-transpose(world) for correct foliage
+        // normals under non-uniform wind-driven scale.
+        DirectX::XMMATRIX world = DirectX::XMLoadFloat4x4(&out.worldMatrix);
+        DirectX::XMMATRIX normal = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(nullptr, world));
+        DirectX::XMStoreFloat4x4(&out.normalMatrix, normal);
+
+        // Use the registry-wide global index; `speciesIndex` alone is
+        // volume-local and would alias different species across volumes.
+        out.materialId = src.globalMaterialId;
+        out.flags = static_cast<uint32_t>(InstanceFlags::Visible) | static_cast<uint32_t>(InstanceFlags::CastShadow) |
+                    static_cast<uint32_t>(InstanceFlags::ReceiveShadow);
+        if (src.lod == FoliageRenderLOD::Impostor)
+        {
+            SetFoliageImpostorFlag(out, true);
+        }
+        out.lodDistance = src.distanceToCamera;
+        // Pack the wind phase into the padding slot so the foliage vertex
+        // shader can read it alongside the world matrix without growing
+        // GPUInstanceData.
+        out.padding = src.windPhase;
+    }
+
     // ========================================================================
     // Per-frame collection
     // ========================================================================
@@ -238,6 +270,7 @@ namespace Spark::Graphics
     void FoliageRenderer::CollectFromFoliageManager(float /*windTime*/)
     {
         m_renderInstances.clear();
+        m_drawOrder.clear();
         m_stats = {};
 
         if (!m_initialized)
@@ -337,6 +370,47 @@ namespace Spark::Graphics
 
         m_stats.uniqueSpecies = static_cast<uint32_t>(uniqueKeys.size());
 
+        // Sort the batch by (lod, globalMaterialId) so the GPU render pass
+        // can issue one DrawIndexedInstanced per contiguous run. Mesh LOD
+        // instances precede impostors — matches the two-sub-pass render
+        // flow in RenderFoliagePass (mesh sub-pass then impostor sub-pass).
+        std::sort(m_renderInstances.begin(), m_renderInstances.end(),
+                  [](const FoliageRenderInstance& a, const FoliageRenderInstance& b)
+                  {
+                      if (a.lod != b.lod)
+                          return static_cast<uint8_t>(a.lod) < static_cast<uint8_t>(b.lod);
+                      return a.globalMaterialId < b.globalMaterialId;
+                  });
+
+        // Build the draw-run index over the now-sorted batch.
+        m_drawOrder.clear();
+        if (!m_renderInstances.empty())
+        {
+            FoliageDrawRun run;
+            run.startInstance = 0;
+            run.instanceCount = 1;
+            run.globalMaterialId = m_renderInstances[0].globalMaterialId;
+            run.lod = m_renderInstances[0].lod;
+
+            for (size_t i = 1; i < m_renderInstances.size(); ++i)
+            {
+                const FoliageRenderInstance& rec = m_renderInstances[i];
+                if (rec.lod == run.lod && rec.globalMaterialId == run.globalMaterialId)
+                {
+                    ++run.instanceCount;
+                }
+                else
+                {
+                    m_drawOrder.push_back(run);
+                    run.startInstance = static_cast<uint32_t>(i);
+                    run.instanceCount = 1;
+                    run.globalMaterialId = rec.globalMaterialId;
+                    run.lod = rec.lod;
+                }
+            }
+            m_drawOrder.push_back(run);
+        }
+
 #ifdef SPARK_PLATFORM_WINDOWS
         // Lazy impostor atlas bake — runs at most once per "species count
         // grew" event. Pulls device + context from the live GraphicsEngine
@@ -397,35 +471,341 @@ namespace Spark::Graphics
                 break;
 
             GPUInstanceData data{};
-            std::memcpy(&data.worldMatrix, inst.worldMatrix, sizeof(float) * 16);
-            // Default prev matrix to current — first-frame motion vectors
-            // will be zero until GPUSceneBuffer::UpdateTransform is used to
-            // roll the previous frame forward.
-            std::memcpy(&data.prevWorldMatrix, inst.worldMatrix, sizeof(float) * 16);
-
-            // normalMatrix = inverse-transpose(world) for correct
-            // foliage normals under non-uniform wind-driven scale.
-            DirectX::XMMATRIX world = DirectX::XMLoadFloat4x4(&data.worldMatrix);
-            DirectX::XMMATRIX normal = DirectX::XMMatrixTranspose(DirectX::XMMatrixInverse(nullptr, world));
-            DirectX::XMStoreFloat4x4(&data.normalMatrix, normal);
-
-            // Use the registry-wide global index; `speciesIndex` alone is
-            // volume-local and would alias different species across volumes.
-            data.materialId = inst.globalMaterialId;
-            data.flags = static_cast<uint32_t>(InstanceFlags::Visible) |
-                         static_cast<uint32_t>(InstanceFlags::CastShadow) |
-                         static_cast<uint32_t>(InstanceFlags::ReceiveShadow);
-            data.lodDistance = inst.distanceToCamera;
-            // Pack the wind phase into the padding slot so the foliage
-            // vertex shader can read it alongside the world matrix without
-            // growing GPUInstanceData.
-            data.padding = inst.windPhase;
-
+            BuildGPUInstance(inst, data);
             sceneBuffer.UpdateInstance(slot, data);
             ++written;
         }
 
         return written;
+    }
+
+    // ========================================================================
+    // Render pass (Phase E)
+    // ========================================================================
+
+    namespace
+    {
+        struct FoliagePerFrameCB
+        {
+            DirectX::XMFLOAT4X4 view;
+            DirectX::XMFLOAT4X4 projection;
+            DirectX::XMFLOAT3 cameraPos;
+            float time;
+        };
+
+        struct FoliageWindCB
+        {
+            DirectX::XMFLOAT4 windParams;    // x=strength, y=hFreq, z=vFreq, w=refHeight
+            DirectX::XMFLOAT4 windDirection; // xyz=direction, w=gustMul
+        };
+
+        struct FoliageLightingCB
+        {
+            DirectX::XMFLOAT4 sunDirection;  // xyz=dir, w=unused
+            DirectX::XMFLOAT4 sunColor;      // rgb=color, a=intensity
+            DirectX::XMFLOAT4 ambientColor;  // rgb=fill, a=unused
+            DirectX::XMFLOAT4 foliageParams; // x=alphaRef, y=wrap, z=backlit, w=aoStrength
+        };
+
+        bool CompileFoliageShader(const wchar_t* path, const char* entryPoint, const char* profile,
+                                  Microsoft::WRL::ComPtr<ID3DBlob>& outBlob)
+        {
+            Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+            UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+#ifdef _DEBUG
+            flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+            HRESULT hr = D3DCompileFromFile(path, nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, entryPoint, profile,
+                                            flags, 0, &outBlob, &errorBlob);
+            if (FAILED(hr))
+            {
+                if (errorBlob)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FoliageRenderer shader compile error (%s): %s",
+                                    entryPoint, static_cast<const char*>(errorBlob->GetBufferPointer()));
+                }
+                else
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "FoliageRenderer shader compile failed (%s) hr=0x%08X", entryPoint,
+                                    static_cast<unsigned int>(hr));
+                }
+                return false;
+            }
+            return true;
+        }
+    } // namespace
+
+    bool FoliageRenderer::CreatePassResources(ID3D11Device* device)
+    {
+        if (m_passResourcesReady)
+            return true;
+        if (!device)
+            return false;
+
+        // ---- Compile VS + PS ---------------------------------------------
+        Microsoft::WRL::ComPtr<ID3DBlob> vsBlob;
+        Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
+        if (!CompileFoliageShader(L"Shaders/HLSL/FoliageVS.hlsl", "main", "vs_5_0", vsBlob))
+            return false;
+        if (!CompileFoliageShader(L"Shaders/HLSL/FoliagePS.hlsl", "main", "ps_5_0", psBlob))
+            return false;
+
+        if (FAILED(device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &m_passVS)))
+            return false;
+        if (FAILED(device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_passPS)))
+            return false;
+
+        // ---- Input layout: POSITION/NORMAL/TEXCOORD0 ---------------------
+        // Matches the byte offsets of the equivalent fields inside
+        // MeshAssetData::Vertex (POSITION at 0, NORMAL at 12, TEXCOORD0 at
+        // 36 — bytes 24..35 are TANGENT and intentionally skipped). The
+        // impostor unit quad vertex is padded to match the same offsets so
+        // a single input layout serves both sub-passes.
+        D3D11_INPUT_ELEMENT_DESC layout[] = {
+            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+        if (FAILED(device->CreateInputLayout(layout, ARRAYSIZE(layout), vsBlob->GetBufferPointer(),
+                                             vsBlob->GetBufferSize(), &m_passInputLayout)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FoliageRenderer: CreateInputLayout failed");
+            return false;
+        }
+
+        // ---- Constant buffers --------------------------------------------
+        auto createCB = [device](UINT byteWidth, Microsoft::WRL::ComPtr<ID3D11Buffer>& out)
+        {
+            D3D11_BUFFER_DESC bd{};
+            bd.ByteWidth = (byteWidth + 15u) & ~15u; // round up to 16
+            bd.Usage = D3D11_USAGE_DYNAMIC;
+            bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            return SUCCEEDED(device->CreateBuffer(&bd, nullptr, &out));
+        };
+        if (!createCB(sizeof(FoliagePerFrameCB), m_cbPerFrame))
+            return false;
+        if (!createCB(sizeof(FoliageWindCB), m_cbWind))
+            return false;
+        if (!createCB(sizeof(FoliageLightingCB), m_cbLighting))
+            return false;
+
+        // ---- Linear-wrap sampler -----------------------------------------
+        D3D11_SAMPLER_DESC sd{};
+        sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sd.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+        sd.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+        sd.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+        sd.MaxLOD = D3D11_FLOAT32_MAX;
+        if (FAILED(device->CreateSamplerState(&sd, &m_sampler)))
+            return false;
+
+        // ---- 1x1 white albedo fallback -----------------------------------
+        // Mesh instances sample this until a per-species albedo loader
+        // lands in a follow-up phase. Impostor instances never touch t1 —
+        // they sample the atlas at t2 instead.
+        const uint32_t whitePixel = 0xFFFFFFFFu;
+        D3D11_TEXTURE2D_DESC td{};
+        td.Width = 1;
+        td.Height = 1;
+        td.MipLevels = 1;
+        td.ArraySize = 1;
+        td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        td.SampleDesc.Count = 1;
+        td.Usage = D3D11_USAGE_IMMUTABLE;
+        td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA texInit{};
+        texInit.pSysMem = &whitePixel;
+        texInit.SysMemPitch = sizeof(whitePixel);
+        if (FAILED(device->CreateTexture2D(&td, &texInit, &m_whiteTexture)))
+            return false;
+        if (FAILED(device->CreateShaderResourceView(m_whiteTexture.Get(), nullptr, &m_whiteSRV)))
+            return false;
+
+        // ---- Unit quad for impostor billboards ---------------------------
+        // VS treats pos.xy as horizontal offsets and pos.y as vertical
+        // height for the y-aligned billboard. Layout mirrors the mesh
+        // vertex prefix: POSITION@0, NORMAL@12, TANGENT-padding@24 (unused
+        // but consumed by stride), TEXCOORD0@36 → 44 bytes per vertex.
+        struct QuadVertex
+        {
+            float px, py, pz;    // 0..11   POSITION
+            float nx, ny, nz;    // 12..23  NORMAL
+            float tangentPad[3]; // 24..35  unused (matches mesh TANGENT)
+            float u, v;          // 36..43  TEXCOORD0
+        };
+        static_assert(sizeof(QuadVertex) == 44, "QuadVertex must match mesh layout prefix");
+        const QuadVertex quadVerts[4] = {
+            {-0.5f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, {0, 0, 0}, 0.0f, 1.0f}, // bottom-left
+            {0.5f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, {0, 0, 0}, 1.0f, 1.0f},  // bottom-right
+            {-0.5f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f, {0, 0, 0}, 0.0f, 0.0f}, // top-left
+            {0.5f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f, {0, 0, 0}, 1.0f, 0.0f},  // top-right
+        };
+        const uint32_t quadIndices[6] = {0, 1, 2, 2, 1, 3};
+
+        D3D11_BUFFER_DESC vbd{};
+        vbd.ByteWidth = sizeof(quadVerts);
+        vbd.Usage = D3D11_USAGE_IMMUTABLE;
+        vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA vbInit{};
+        vbInit.pSysMem = quadVerts;
+        if (FAILED(device->CreateBuffer(&vbd, &vbInit, &m_impostorQuadVB)))
+            return false;
+
+        D3D11_BUFFER_DESC ibd{};
+        ibd.ByteWidth = sizeof(quadIndices);
+        ibd.Usage = D3D11_USAGE_IMMUTABLE;
+        ibd.BindFlags = D3D11_BIND_INDEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA ibInit{};
+        ibInit.pSysMem = quadIndices;
+        if (FAILED(device->CreateBuffer(&ibd, &ibInit, &m_impostorQuadIB)))
+            return false;
+
+        m_passResourcesReady = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FoliageRenderer: pass resources created");
+        return true;
+    }
+
+    void FoliageRenderer::RenderFoliagePass(ID3D11Device* device, ID3D11DeviceContext* context,
+                                            const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj,
+                                            const DirectX::XMFLOAT3& cameraPos, float time, GPUSceneBuffer& sceneBuffer,
+                                            uint32_t startSlot)
+    {
+        if (!m_initialized || !device || !context)
+            return;
+        if (m_drawOrder.empty() || !sceneBuffer.IsInitialized())
+            return;
+        if (!CreatePassResources(device))
+            return;
+
+        // ---- Update constant buffers -------------------------------------
+        {
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(context->Map(m_cbPerFrame.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            {
+                FoliagePerFrameCB cb{};
+                // Transpose to match HLSL default column-major packing; the
+                // VS uses `mul(v, View)` which expects transposed input.
+                DirectX::XMStoreFloat4x4(&cb.view, DirectX::XMMatrixTranspose(view));
+                DirectX::XMStoreFloat4x4(&cb.projection, DirectX::XMMatrixTranspose(proj));
+                cb.cameraPos = cameraPos;
+                cb.time = time;
+                std::memcpy(mapped.pData, &cb, sizeof(cb));
+                context->Unmap(m_cbPerFrame.Get(), 0);
+            }
+        }
+        {
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(context->Map(m_cbWind.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            {
+                FoliageWindCB cb{};
+                cb.windParams = DirectX::XMFLOAT4(0.5f, 0.25f, 0.1f, 2.0f);
+                cb.windDirection = DirectX::XMFLOAT4(0.7071f, 0.0f, 0.7071f, 1.0f);
+                std::memcpy(mapped.pData, &cb, sizeof(cb));
+                context->Unmap(m_cbWind.Get(), 0);
+            }
+        }
+        {
+            D3D11_MAPPED_SUBRESOURCE mapped{};
+            if (SUCCEEDED(context->Map(m_cbLighting.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+            {
+                FoliageLightingCB cb{};
+                cb.sunDirection = DirectX::XMFLOAT4(0.0f, -0.7071f, 0.7071f, 0.0f);
+                cb.sunColor = DirectX::XMFLOAT4(1.0f, 0.95f, 0.8f, 1.2f);
+                cb.ambientColor = DirectX::XMFLOAT4(0.25f, 0.3f, 0.35f, 0.0f);
+                cb.foliageParams = DirectX::XMFLOAT4(0.3f, 0.4f, 0.3f, 0.5f);
+                std::memcpy(mapped.pData, &cb, sizeof(cb));
+                context->Unmap(m_cbLighting.Get(), 0);
+            }
+        }
+
+        // ---- Bind pipeline state -----------------------------------------
+        context->VSSetShader(m_passVS.Get(), nullptr, 0);
+        context->PSSetShader(m_passPS.Get(), nullptr, 0);
+        context->IASetInputLayout(m_passInputLayout.Get());
+        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        ID3D11Buffer* vsCBs[] = {m_cbPerFrame.Get(), nullptr, m_cbWind.Get()};
+        context->VSSetConstantBuffers(0, 3, vsCBs);
+        ID3D11Buffer* psCBs[] = {m_cbPerFrame.Get(), nullptr, nullptr, m_cbLighting.Get()};
+        context->PSSetConstantBuffers(0, 4, psCBs);
+
+        ID3D11SamplerState* samplers[] = {m_sampler.Get()};
+        context->PSSetSamplers(0, 1, samplers);
+
+        // Bind GPU scene buffer SRV at t0 for VS.
+        sceneBuffer.BindVS(context, 0);
+
+        // Bind albedo fallback at t1 (mesh path) and impostor atlas SRVs at
+        // t2/t3 (impostor path). Both sub-passes share the bind state.
+        ID3D11ShaderResourceView* atlasSRV = m_impostorAtlas.GetSRV();
+        ID3D11ShaderResourceView* cellSRV = m_impostorAtlas.GetCellSRV();
+        ID3D11ShaderResourceView* psSRVs[] = {m_whiteSRV.Get(), atlasSRV, cellSRV};
+        context->PSSetShaderResources(1, 3, psSRVs);
+        // The VS also needs the cell SRV at t3 for the angle-bin lookup.
+        ID3D11ShaderResourceView* vsCellSRVs[] = {cellSRV};
+        context->VSSetShaderResources(3, 1, vsCellSRVs);
+
+        auto& manager = FoliageManager::GetInstance();
+
+        // ---- Mesh sub-pass: one DrawIndexedInstanced per species run -----
+        for (const FoliageDrawRun& run : m_drawOrder)
+        {
+            if (run.lod != FoliageRenderLOD::Mesh)
+                continue;
+
+            const FoliageSpecies* species = manager.GetSpeciesByGlobalIndex(run.globalMaterialId);
+            if (!species || species->meshPath.empty())
+                continue;
+
+            auto it = m_meshCache.find(species->meshPath);
+            if (it == m_meshCache.end() || !it->second)
+                continue;
+
+            MeshAsset* mesh = it->second.get();
+            ID3D11Buffer* vb = mesh->GetVertexBuffer();
+            ID3D11Buffer* ib = mesh->GetIndexBuffer();
+            const uint32_t indexCount = mesh->GetIndexCount();
+            if (!vb || !ib || indexCount == 0)
+                continue;
+
+            // MeshAssetData::Vertex stride — first three input-layout
+            // elements span 32 bytes, but the full vertex is larger
+            // (POSITION+NORMAL+TANGENT+TEXCOORD0+TEXCOORD1+COLOR+indices+
+            // weights). The engine's mesh stride is 100 bytes; we step by
+            // that so SV_VertexID advances correctly through the VB.
+            const UINT stride = 100u;
+            const UINT offset = 0u;
+            context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+            context->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
+
+            context->DrawIndexedInstanced(indexCount, run.instanceCount, 0, 0, startSlot + run.startInstance);
+        }
+
+        // ---- Impostor sub-pass: one DrawIndexedInstanced per species run
+        // Skip entirely if the atlas cell SRV never got built.
+        if (cellSRV != nullptr && atlasSRV != nullptr)
+        {
+            const UINT quadStride = 44u;
+            const UINT quadOffset = 0u;
+            ID3D11Buffer* quadVB = m_impostorQuadVB.Get();
+            context->IASetVertexBuffers(0, 1, &quadVB, &quadStride, &quadOffset);
+            context->IASetIndexBuffer(m_impostorQuadIB.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+            for (const FoliageDrawRun& run : m_drawOrder)
+            {
+                if (run.lod != FoliageRenderLOD::Impostor)
+                    continue;
+                context->DrawIndexedInstanced(6u, run.instanceCount, 0, 0, startSlot + run.startInstance);
+            }
+        }
+
+        // ---- Unbind SRVs so the scene buffer / atlas can be written next
+        // frame without a debug-layer "resource bound as SRV and RTV" error
+        ID3D11ShaderResourceView* nullSRVs[4] = {};
+        context->VSSetShaderResources(0, 4, nullSRVs);
+        context->PSSetShaderResources(1, 3, nullSRVs);
     }
 #endif // SPARK_PLATFORM_WINDOWS
 

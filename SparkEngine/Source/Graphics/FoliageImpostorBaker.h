@@ -266,8 +266,43 @@ namespace Spark::Graphics
         ID3D11ShaderResourceView* GetSRV() const { return m_srv.Get(); }
         ID3D11Texture2D* GetTexture() const { return m_atlas.Get(); }
 
+        /**
+         * @brief Read-only access to the per-species layout slots from the
+         *        most recent `BakeAllRegisteredSpecies` call.
+         *
+         * Indexed by the *position* in the layout request — which is also
+         * the global species index since the helper passes indices 0..N-1.
+         */
+        const std::vector<ImpostorAtlasSlot>& GetSlots() const { return m_slots; }
+
+        /** @brief Cell size (pixels) used for the most recent bake. */
+        uint32_t GetCellSize() const { return m_cellSize; }
+
+        /** @brief Angle steps per species used for the most recent bake. */
+        uint32_t GetAngleSteps() const { return m_angleSteps; }
+
+        /**
+         * @brief GPU structured buffer view containing per-species atlas
+         *        cell records, indexed by global species index.
+         *
+         * Each record is a `float4 uvRect` = (minU, minV, cellDU, cellDV)
+         * where cellDU/cellDV are the size of a single angle cell in
+         * normalised UV space. Built once per bake by `UploadCellBuffer`.
+         * Returns nullptr if no bake has happened yet.
+         */
+        ID3D11ShaderResourceView* GetCellSRV() const { return m_cellSrv.Get(); }
+
+        /**
+         * @brief CPU-visible copy of the per-species cell UV rectangles.
+         *
+         * Same layout as the GPU structured buffer. Used by unit tests to
+         * verify the layout math without touching D3D.
+         */
+        const std::vector<DirectX::XMFLOAT4>& GetCellRects() const { return m_cellRects; }
+
       private:
         bool CompileBakeShaders(ID3D11Device* device);
+        bool UploadCellBuffer(ID3D11Device* device);
 
         Microsoft::WRL::ComPtr<ID3D11Texture2D> m_atlas;
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_rtv;
@@ -283,9 +318,17 @@ namespace Spark::Graphics
         Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_depthState;
         Microsoft::WRL::ComPtr<ID3D11BlendState> m_blendState;
 
+        // Per-species cell buffer (rebuilt by BakeAllRegisteredSpecies).
+        Microsoft::WRL::ComPtr<ID3D11Buffer> m_cellBuffer;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_cellSrv;
+        std::vector<ImpostorAtlasSlot> m_slots;
+        std::vector<DirectX::XMFLOAT4> m_cellRects;
+
         bool m_initialized = false;
         uint32_t m_width = 0;
         uint32_t m_height = 0;
+        uint32_t m_cellSize = 0;
+        uint32_t m_angleSteps = 0;
     };
 #endif // SPARK_PLATFORM_WINDOWS
 

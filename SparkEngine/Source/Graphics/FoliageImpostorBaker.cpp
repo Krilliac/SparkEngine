@@ -334,9 +334,80 @@ namespace Spark::Graphics
         m_rasterState.Reset();
         m_depthState.Reset();
         m_blendState.Reset();
+        m_cellBuffer.Reset();
+        m_cellSrv.Reset();
+        m_slots.clear();
+        m_cellRects.clear();
         m_initialized = false;
         m_width = 0;
         m_height = 0;
+        m_cellSize = 0;
+        m_angleSteps = 0;
+    }
+
+    bool FoliageImpostorAtlas::UploadCellBuffer(ID3D11Device* device)
+    {
+        if (!device || m_slots.empty() || m_width == 0 || m_height == 0)
+            return false;
+
+        // Determine the highest global species index so the GPU buffer can
+        // be indexed directly by `GPUInstanceData::materialId` without an
+        // intermediate lookup.
+        uint32_t maxIndex = 0;
+        for (const ImpostorAtlasSlot& s : m_slots)
+            maxIndex = std::max(maxIndex, s.speciesIndex);
+        const uint32_t numSpecies = maxIndex + 1;
+
+        m_cellRects.assign(numSpecies, DirectX::XMFLOAT4{0.0f, 0.0f, 0.0f, 0.0f});
+        for (const ImpostorAtlasSlot& s : m_slots)
+        {
+            float minU = 0.0f;
+            float minV = 0.0f;
+            float maxU = 0.0f;
+            float maxV = 0.0f;
+            // Angle 0 gives the cell origin; cellDU/cellDV are the width
+            // of a single angle cell in UV space. The VS computes
+            // angle-bin offsets shader-side by adding multiples of cellDU.
+            FoliageImpostorBaker::GetAngleSlotUV(s, /*angleSlotIndex=*/0, m_width, m_height, minU, minV, maxU, maxV);
+            const float cellDU = maxU - minU;
+            const float cellDV = maxV - minV;
+            m_cellRects[s.speciesIndex] = DirectX::XMFLOAT4{minU, minV, cellDU, cellDV};
+        }
+
+        // (Re)create the GPU structured buffer sized exactly to numSpecies.
+        m_cellBuffer.Reset();
+        m_cellSrv.Reset();
+
+        D3D11_BUFFER_DESC bd{};
+        bd.ByteWidth = static_cast<UINT>(numSpecies * sizeof(DirectX::XMFLOAT4));
+        bd.Usage = D3D11_USAGE_IMMUTABLE;
+        bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        bd.StructureByteStride = sizeof(DirectX::XMFLOAT4);
+
+        D3D11_SUBRESOURCE_DATA initData{};
+        initData.pSysMem = m_cellRects.data();
+
+        if (FAILED(device->CreateBuffer(&bd, &initData, &m_cellBuffer)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "FoliageImpostorAtlas: failed to create cell structured buffer (species=%u)", numSpecies);
+            return false;
+        }
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+        srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+        srvDesc.Buffer.NumElements = numSpecies;
+
+        if (FAILED(device->CreateShaderResourceView(m_cellBuffer.Get(), &srvDesc, &m_cellSrv)))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FoliageImpostorAtlas: failed to create cell SRV");
+            m_cellBuffer.Reset();
+            return false;
+        }
+
+        return true;
     }
 
     bool FoliageImpostorAtlas::BakeSlot(ID3D11DeviceContext* context, const ImpostorAtlasSlot& slot,
@@ -474,9 +545,23 @@ namespace Spark::Graphics
         }
 
         // (Re)allocate the atlas at the resulting size. Initialize() is
-        // idempotent — it releases existing resources first.
+        // idempotent — it releases existing resources first. Note that
+        // Shutdown (called from inside Initialize) also clears the slot
+        // list and cell buffer, so we persist these *after* Initialize.
         if (!Initialize(device, atlasW, atlasH))
             return 0;
+
+        // Persist layout metadata so the render pass can bind the cell
+        // lookup SRV and know the cell dimensions.
+        m_slots = slots;
+        m_cellSize = cellSize;
+        m_angleSteps = angleSteps;
+        if (!UploadCellBuffer(device))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "FoliageImpostorAtlas: cell buffer upload failed");
+            // Non-fatal — the draw path will skip the impostor sub-pass
+            // if GetCellSRV() is null.
+        }
 
         const DirectX::XMFLOAT4 defaultTint{0.30f, 0.55f, 0.20f, 1.0f}; // foliage green
 
