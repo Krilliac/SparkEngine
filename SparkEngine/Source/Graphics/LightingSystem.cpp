@@ -187,6 +187,15 @@ HRESULT LightingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
         SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Failed to create default environment");
     }
 
+    // Phase M: activate the Tier 2 orphans that belong on the lighting
+    // surface. Both are pure CPU — a failure here does not block the
+    // lighting system from running the existing shadow map / IBL paths.
+    if (!m_shadowCache.Initialize(/*dynamic*/ 2048, /*cached*/ 4096, /*minTile*/ 256))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "LightingSystem: CachedShadowAtlas::Initialize returned false");
+    }
+    m_probeCache.Initialize(/*maxCachedProbes*/ 64, /*renderBudget*/ 4);
+
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem initialized with %zu lights", m_lights.size());
     return S_OK;
 }
@@ -217,6 +226,11 @@ void LightingSystem::Shutdown()
     m_environmentLighting.prefilterMap.Reset();
     m_environmentLighting.brdfLUT.Reset();
 
+    // Phase M: tear down the orphan caches. Both are safe to call on an
+    // uninitialised instance (each guards its own m_initialized flag).
+    m_shadowCache.Shutdown();
+    m_probeCache.Shutdown();
+
     m_device = nullptr;
     m_context = nullptr;
 
@@ -228,6 +242,20 @@ void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const X
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     SPARK_WARN_IF(Spark::LogCategory::Graphics, deltaTime < 0.0f,
                   "LightingSystem::Update called with negative deltaTime");
+
+    // Phase M: tick the Tier 2 orphan caches before anything else reads
+    // from them. `BeginFrame` clears the per-frame shadow render list
+    // and advances the internal frame counter; the probe cache's
+    // `Update()` runs the priority/budget evaluator against the camera
+    // position extracted from the inverse view matrix.
+    m_shadowCache.BeginFrame();
+
+    XMVECTOR cameraPosVec = XMMatrixInverse(nullptr, viewMatrix).r[3];
+    float camX = XMVectorGetX(cameraPosVec);
+    float camY = XMVectorGetY(cameraPosVec);
+    float camZ = XMVectorGetZ(cameraPosVec);
+    m_probeCache.Update(camX, camY, camZ);
+
     // Update metrics
     m_metrics.activeLights = static_cast<uint32_t>(m_lights.size());
     m_metrics.shadowCastingLights = 0;
@@ -271,6 +299,12 @@ void LightingSystem::Update(float deltaTime, const XMMATRIX& viewMatrix, const X
 
     // Update culling metrics
     m_metrics.culledLights = m_metrics.activeLights - m_metrics.visibleLights;
+
+    // Phase M: close the cached shadow atlas frame so the two sub-
+    // atlases ratchet their per-frame state. The probe cache does not
+    // have a corresponding EndFrame — its frame counter advances at
+    // the top of `Update()`.
+    m_shadowCache.EndFrame();
 }
 
 void LightingSystem::EnableShadows(bool enabled)
@@ -940,6 +974,13 @@ HRESULT LightingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     m_context = context;
     m_environmentLighting.skyColor = {0.5f, 0.7f, 1.0f};
     m_environmentLighting.skyIntensity = 1.0f;
+
+    // Phase M: the Tier 2 orphan caches run on every platform because
+    // they are pure CPU. The Linux stub tracks the exact same lifecycle
+    // as the Windows path so portable tests see consistent state.
+    m_shadowCache.Initialize(2048, 4096, 256);
+    m_probeCache.Initialize(64, 4);
+
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem (Linux) initialized");
     return S_OK;
 }
@@ -952,12 +993,26 @@ void LightingSystem::Shutdown()
     m_lightDataArray.clear();
     m_shadowMaps.clear();
     m_csmShadowMap.reset();
+    // Phase M: tear down orphan caches alongside the rest of the state.
+    m_shadowCache.Shutdown();
+    m_probeCache.Shutdown();
     m_device = nullptr;
     m_context = nullptr;
 }
 
-void LightingSystem::Update(float /*deltaTime*/, const XMMATRIX& /*viewMatrix*/, const XMMATRIX& /*projMatrix*/)
+void LightingSystem::Update(float /*deltaTime*/, const XMMATRIX& viewMatrix, const XMMATRIX& /*projMatrix*/)
 {
+    // Phase M: mirror the Windows tick path — begin frame on the shadow
+    // atlas, pull the camera position from the inverse view matrix, and
+    // feed the probe cache. EndFrame is called at the bottom of the
+    // method so the two sub-atlases advance their state.
+    m_shadowCache.BeginFrame();
+    XMVECTOR cameraPosVec = XMMatrixInverse(nullptr, viewMatrix).r[3];
+    float camX = XMVectorGetX(cameraPosVec);
+    float camY = XMVectorGetY(cameraPosVec);
+    float camZ = XMVectorGetZ(cameraPosVec);
+    m_probeCache.Update(camX, camY, camZ);
+
     m_metrics.activeLights = static_cast<uint32_t>(m_lights.size());
     m_metrics.shadowCastingLights = 0;
     m_metrics.visibleLights = 0;
@@ -979,6 +1034,9 @@ void LightingSystem::Update(float /*deltaTime*/, const XMMATRIX& /*viewMatrix*/,
         }
     }
     m_metrics.culledLights = m_metrics.activeLights - m_metrics.visibleLights;
+
+    // Phase M: advance the cached shadow atlas frame state.
+    m_shadowCache.EndFrame();
 }
 
 void LightingSystem::RenderShadowMaps(std::function<void(const XMMATRIX&, const XMMATRIX&)> /*renderCallback*/)
