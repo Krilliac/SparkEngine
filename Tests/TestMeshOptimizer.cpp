@@ -188,7 +188,9 @@ TEST(MeshOptimizer_OptimizeVertexFetch_PreservesTriangleMeaning)
 {
     // A triangle should shade identically after optimise — the per-vertex
     // data that each triangle references is unchanged, only the vertex
-    // buffer layout moves.
+    // buffer layout moves. This test just confirms the optimized buffer
+    // is readable after the remapping; the Vertex data is still live at
+    // the new indices[i] positions.
     struct Vertex
     {
         float x, y, z;
@@ -200,13 +202,14 @@ TEST(MeshOptimizer_OptimizeVertexFetch_PreservesTriangleMeaning)
     MeshOptimizer::OptimizeVertexFetch(optimised.data(), indices.data(), optimised.size(), indices.size(),
                                        sizeof(Vertex));
 
-    // Rebuild the triangle from the optimised buffer + remapped indices.
+    // Read each triangle vertex through the remapped index and confirm
+    // it is reachable without a crash. Earlier this test also computed
+    // an out-of-bounds `original[1 + ((i + 2) % 3) - ...]` lookup for a
+    // comparison that was never actually used; removing it because it
+    // aborts under _GLIBCXX_ASSERTIONS (Ubuntu-runner coverage build).
     for (int i = 0; i < 3; ++i)
     {
         const Vertex& optV = optimised[indices[i]];
-        const Vertex& origV = original[1 + ((i + 2) % 3) - (i == 0 ? 0 : 0)]; // original order was 1, 2, 0
-        (void)origV;
-        // Only check that we can read each vertex back without a crash.
         EXPECT_TRUE(optV.x >= 0.0f || optV.y >= 0.0f || optV.z >= 0.0f);
     }
 }
