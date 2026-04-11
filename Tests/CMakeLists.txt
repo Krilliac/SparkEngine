@@ -517,6 +517,12 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlGitOps.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlHelpers.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlRender.cpp"
+        # Phase AA Theme 3C: tests for LevelStreamingSystem and
+        # VersionControlSystem. Gated behind the ImGui-available block
+        # because both classes are EditorPanel subclasses whose .cpp
+        # files require ImGui to link.
+        "${CMAKE_SOURCE_DIR}/Tests/TestLevelStreamingSystemPhaseAA.cpp"
+        "${CMAKE_SOURCE_DIR}/Tests/TestVersionControlSystemPhaseAA.cpp"
     )
 
     message(STATUS "[Tests] ImGui available — gated editor + 6 game module tests enabled")
