@@ -44,6 +44,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine next-steps Phase I (GTAO wired as 15th post-process pass — first Tier 2 orphan activation) | [knowledge/engine-next-steps-phase-i-2026-04-11.md](knowledge/engine-next-steps-phase-i-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase J (SSAOTemporal + RenderTargetPool + GPUDebugMarkers + GPUTimestampQuery — 4 more Tier 2 orphans) | [knowledge/engine-next-steps-phase-j-2026-04-11.md](knowledge/engine-next-steps-phase-j-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase K (VolumeManager activated with spatial post-process volumes + ApplyVolumeStack binding) | [knowledge/engine-next-steps-phase-k-2026-04-11.md](knowledge/engine-next-steps-phase-k-2026-04-11.md) | Observation | Active | 2026-04-11 |
+| Engine next-steps Phase L (MeshOptimizer ACMR reporting in LODManager + BVHAccelerator first-level cull in SceneRenderer) | [knowledge/engine-next-steps-phase-l-2026-04-11.md](knowledge/engine-next-steps-phase-l-2026-04-11.md) | Observation | Active | 2026-04-11 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-11)
