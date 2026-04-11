@@ -37,10 +37,14 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations to avoid pulling AssetPipeline.h here (it is
-// Windows-heavy). The renderer stores assets as opaque shared handles.
+// Forward declarations to avoid pulling AssetPipeline.h / TextureSystem.h
+// here (both are Windows-heavy). The renderer stores assets as opaque
+// shared handles and fishes the SRV out inside the Windows-only draw
+// path where the full headers are already visible.
 class MeshAsset;
 class AssetPipeline;
+class Texture;
+class TextureSystem;
 
 #ifdef SPARK_PLATFORM_WINDOWS
 namespace Spark::Graphics
@@ -439,6 +443,18 @@ namespace Spark::Graphics
         // Render pass resources (created lazily by CreatePassResources).
         bool CreatePassResources(ID3D11Device* device);
 
+        /**
+         * @brief Resolve a species' albedo texture to an SRV, loading and
+         *        caching on the first request.
+         *
+         * Phase F: replaces the 1x1 white fallback per mesh run. Uses
+         * `GraphicsEngine::GetTextureSystem()->LoadTexture` on the first
+         * call for a given path, then reuses the cached SRV. An empty
+         * path or a failed load returns the 1x1 white SRV so the draw
+         * stays safe on missing assets.
+         */
+        ID3D11ShaderResourceView* GetOrLoadAlbedoSRV(const std::string& path);
+
         Microsoft::WRL::ComPtr<ID3D11VertexShader> m_passVS;
         Microsoft::WRL::ComPtr<ID3D11PixelShader> m_passPS;
         Microsoft::WRL::ComPtr<ID3D11InputLayout> m_passInputLayout;
@@ -451,6 +467,10 @@ namespace Spark::Graphics
         Microsoft::WRL::ComPtr<ID3D11Texture2D> m_whiteTexture;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_whiteSRV;
         bool m_passResourcesReady = false;
+
+        // Per-species albedo cache. Holds the owning shared_ptr alive so
+        // the SRV stays valid for as long as the species is referenced.
+        std::unordered_map<std::string, std::shared_ptr<::Texture>> m_albedoCache;
 #endif
     };
 

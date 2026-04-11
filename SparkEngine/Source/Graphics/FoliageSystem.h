@@ -46,7 +46,10 @@ namespace Spark::Graphics
     {
         std::string name;               ///< Unique species name (lookup key).
         std::string meshPath;           ///< Mesh asset path (for the renderer).
-        std::string materialPath;       ///< Material asset path.
+        std::string materialPath;       ///< Material asset path (descriptive; not currently resolved).
+        std::string albedoTexturePath;  ///< Albedo texture for the mesh sub-pass. Phase F: loaded
+                                        ///< lazily via TextureSystem and cached on the renderer.
+                                        ///< Empty string falls back to the engine's 1x1 white SRV.
         float density = 1.0f;           ///< Instances per square meter of volume XZ area.
         float minScale = 0.8f;          ///< Minimum uniform scale.
         float maxScale = 1.2f;          ///< Maximum uniform scale.
@@ -59,6 +62,9 @@ namespace Spark::Graphics
         bool castShadows = true;        ///< Instances cast shadows.
         float windInfluence = 1.0f;     ///< Wind sway multiplier [0,2].
         float cullDistance = 100.0f;    ///< Distance (meters) beyond which instances are culled.
+        float billboardHeight = 2.0f;   ///< Impostor billboard vertical size in metres. Phase F:
+                                        ///< packed into the atlas cell meta buffer so the VS can
+                                        ///< scale per-species billboards without a shader rebuild.
     };
 
     // ========================================================================

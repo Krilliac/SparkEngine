@@ -337,7 +337,7 @@ namespace Spark::Graphics
         m_cellBuffer.Reset();
         m_cellSrv.Reset();
         m_slots.clear();
-        m_cellRects.clear();
+        m_cellRecords.clear();
         m_initialized = false;
         m_width = 0;
         m_height = 0;
@@ -345,7 +345,7 @@ namespace Spark::Graphics
         m_angleSteps = 0;
     }
 
-    bool FoliageImpostorAtlas::UploadCellBuffer(ID3D11Device* device)
+    bool FoliageImpostorAtlas::UploadCellBuffer(ID3D11Device* device, const FoliageManager& manager)
     {
         if (!device || m_slots.empty() || m_width == 0 || m_height == 0)
             return false;
@@ -358,7 +358,11 @@ namespace Spark::Graphics
             maxIndex = std::max(maxIndex, s.speciesIndex);
         const uint32_t numSpecies = maxIndex + 1;
 
-        m_cellRects.assign(numSpecies, DirectX::XMFLOAT4{0.0f, 0.0f, 0.0f, 0.0f});
+        // Phase F: 2 float4s per species — [uvRect, meta]. Meta.x carries
+        // the per-species billboardHeight so the VS can scale impostor
+        // quads without a shader rebuild. Unused meta slots remain 0.
+        constexpr uint32_t kFloat4PerSpecies = 2;
+        m_cellRecords.assign(numSpecies * kFloat4PerSpecies, DirectX::XMFLOAT4{0.0f, 0.0f, 0.0f, 0.0f});
         for (const ImpostorAtlasSlot& s : m_slots)
         {
             float minU = 0.0f;
@@ -371,22 +375,34 @@ namespace Spark::Graphics
             FoliageImpostorBaker::GetAngleSlotUV(s, /*angleSlotIndex=*/0, m_width, m_height, minU, minV, maxU, maxV);
             const float cellDU = maxU - minU;
             const float cellDV = maxV - minV;
-            m_cellRects[s.speciesIndex] = DirectX::XMFLOAT4{minU, minV, cellDU, cellDV};
+
+            // Look up per-species billboard height; fall back to 2.0 if
+            // the species lookup fails (stale slot list, etc).
+            float billboardHeight = 2.0f;
+            if (const FoliageSpecies* species = manager.GetSpeciesByGlobalIndex(s.speciesIndex))
+            {
+                billboardHeight = std::max(0.01f, species->billboardHeight);
+            }
+
+            const uint32_t base = s.speciesIndex * kFloat4PerSpecies;
+            m_cellRecords[base + 0] = DirectX::XMFLOAT4{minU, minV, cellDU, cellDV};
+            m_cellRecords[base + 1] = DirectX::XMFLOAT4{billboardHeight, 0.0f, 0.0f, 0.0f};
         }
 
-        // (Re)create the GPU structured buffer sized exactly to numSpecies.
+        // (Re)create the GPU structured buffer sized to the record array.
         m_cellBuffer.Reset();
         m_cellSrv.Reset();
 
+        const UINT recordCount = static_cast<UINT>(m_cellRecords.size());
         D3D11_BUFFER_DESC bd{};
-        bd.ByteWidth = static_cast<UINT>(numSpecies * sizeof(DirectX::XMFLOAT4));
+        bd.ByteWidth = recordCount * sizeof(DirectX::XMFLOAT4);
         bd.Usage = D3D11_USAGE_IMMUTABLE;
         bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
         bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
         bd.StructureByteStride = sizeof(DirectX::XMFLOAT4);
 
         D3D11_SUBRESOURCE_DATA initData{};
-        initData.pSysMem = m_cellRects.data();
+        initData.pSysMem = m_cellRecords.data();
 
         if (FAILED(device->CreateBuffer(&bd, &initData, &m_cellBuffer)))
         {
@@ -398,7 +414,7 @@ namespace Spark::Graphics
         D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
         srvDesc.Format = DXGI_FORMAT_UNKNOWN;
         srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-        srvDesc.Buffer.NumElements = numSpecies;
+        srvDesc.Buffer.NumElements = recordCount;
 
         if (FAILED(device->CreateShaderResourceView(m_cellBuffer.Get(), &srvDesc, &m_cellSrv)))
         {
@@ -556,7 +572,7 @@ namespace Spark::Graphics
         m_slots = slots;
         m_cellSize = cellSize;
         m_angleSteps = angleSteps;
-        if (!UploadCellBuffer(device))
+        if (!UploadCellBuffer(device, manager))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Graphics, "FoliageImpostorAtlas: cell buffer upload failed");
             // Non-fatal — the draw path will skip the impostor sub-pass

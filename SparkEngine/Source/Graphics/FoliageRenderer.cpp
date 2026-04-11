@@ -32,6 +32,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "GPUSceneBuffer.h"
 #include "GraphicsEngine.h"
+#include "TextureSystem.h"
 #include <d3dcompiler.h>
 #endif
 
@@ -138,6 +139,9 @@ namespace Spark::Graphics
         m_loader = nullptr;
         m_hasExplicitLoader = false;
         m_initialized = false;
+#ifdef SPARK_PLATFORM_WINDOWS
+        m_albedoCache.clear();
+#endif
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "FoliageRenderer shutting down (%zu meshes cached)", cached);
     }
 
@@ -536,6 +540,50 @@ namespace Spark::Graphics
         }
     } // namespace
 
+    ID3D11ShaderResourceView* FoliageRenderer::GetOrLoadAlbedoSRV(const std::string& path)
+    {
+        // Empty path → always the 1x1 white fallback. Callers reach here
+        // when a species has no explicit albedoTexturePath set.
+        if (path.empty())
+            return m_whiteSRV.Get();
+
+        auto it = m_albedoCache.find(path);
+        if (it != m_albedoCache.end())
+        {
+            if (it->second)
+                return it->second->GetSRV();
+            return m_whiteSRV.Get();
+        }
+
+        // Miss — resolve TextureSystem via GraphicsEngine. When the
+        // engine is not up (unit tests, early init), keep the fall-back
+        // so the draw path stays crash-safe.
+        TextureSystem* texSys = nullptr;
+        if (auto* ctx = EngineContext::Get())
+        {
+            if (auto* graphics = ctx->GetGraphics())
+                texSys = graphics->GetTextureSystem();
+        }
+        if (!texSys)
+        {
+            m_albedoCache.emplace(path, nullptr);
+            return m_whiteSRV.Get();
+        }
+
+        std::shared_ptr<::Texture> tex = texSys->LoadTexture(path);
+        if (!tex || !tex->GetSRV())
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Graphics,
+                            "FoliageRenderer: albedo load failed for '%s' — using white fallback", path.c_str());
+            m_albedoCache.emplace(path, nullptr);
+            return m_whiteSRV.Get();
+        }
+
+        ID3D11ShaderResourceView* srv = tex->GetSRV();
+        m_albedoCache.emplace(path, std::move(tex));
+        return srv;
+    }
+
     bool FoliageRenderer::CreatePassResources(ID3D11Device* device)
     {
         if (m_passResourcesReady)
@@ -737,13 +785,15 @@ namespace Spark::Graphics
         // Bind GPU scene buffer SRV at t0 for VS.
         sceneBuffer.BindVS(context, 0);
 
-        // Bind albedo fallback at t1 (mesh path) and impostor atlas SRVs at
-        // t2/t3 (impostor path). Both sub-passes share the bind state.
+        // Bind impostor atlas SRVs at t2/t3 once — they do not change
+        // per run. The albedo at t1 is rebound per-species in the mesh
+        // sub-pass loop so each species picks up its own texture.
         ID3D11ShaderResourceView* atlasSRV = m_impostorAtlas.GetSRV();
         ID3D11ShaderResourceView* cellSRV = m_impostorAtlas.GetCellSRV();
-        ID3D11ShaderResourceView* psSRVs[] = {m_whiteSRV.Get(), atlasSRV, cellSRV};
-        context->PSSetShaderResources(1, 3, psSRVs);
-        // The VS also needs the cell SRV at t3 for the angle-bin lookup.
+        ID3D11ShaderResourceView* atlasAndCell[] = {atlasSRV, cellSRV};
+        context->PSSetShaderResources(2, 2, atlasAndCell);
+        // The VS also needs the cell SRV at t3 for the angle-bin lookup
+        // and per-species billboard height.
         ID3D11ShaderResourceView* vsCellSRVs[] = {cellSRV};
         context->VSSetShaderResources(3, 1, vsCellSRVs);
 
@@ -770,6 +820,12 @@ namespace Spark::Graphics
             if (!vb || !ib || indexCount == 0)
                 continue;
 
+            // Phase F: bind per-species albedo at t1 (cached via
+            // GetOrLoadAlbedoSRV). Empty path / missing asset falls back
+            // to the 1x1 white texture so the draw never unbinds t1.
+            ID3D11ShaderResourceView* albedoSRV = GetOrLoadAlbedoSRV(species->albedoTexturePath);
+            context->PSSetShaderResources(1, 1, &albedoSRV);
+
             // MeshAssetData::Vertex stride — first three input-layout
             // elements span 32 bytes, but the full vertex is larger
             // (POSITION+NORMAL+TANGENT+TEXCOORD0+TEXCOORD1+COLOR+indices+
@@ -782,6 +838,12 @@ namespace Spark::Graphics
 
             context->DrawIndexedInstanced(indexCount, run.instanceCount, 0, 0, startSlot + run.startInstance);
         }
+
+        // Impostor sub-pass uses the white fallback for t1 (the PS
+        // bypasses the mesh albedo path anyway). Rebind once here to
+        // guarantee a defined SRV is held for the whole sub-pass.
+        ID3D11ShaderResourceView* whiteAlbedo = m_whiteSRV.Get();
+        context->PSSetShaderResources(1, 1, &whiteAlbedo);
 
         // ---- Impostor sub-pass: one DrawIndexedInstanced per species run
         // Skip entirely if the atlas cell SRV never got built.

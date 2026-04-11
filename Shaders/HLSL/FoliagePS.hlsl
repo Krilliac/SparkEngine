@@ -28,7 +28,10 @@ cbuffer FoliageLighting : register(b3)
 
 Texture2D AlbedoMap       : register(t1); // leaf/bark albedo with alpha
 Texture2D ImpostorAtlas   : register(t2); // foliage impostor atlas (Phase E)
-StructuredBuffer<float4> ImpostorCells : register(t3); // per-species cell rects
+// Phase F: 2 float4s per species — [uvRect, meta]. PS only reads uvRect
+// (slot 0 within the per-species pair); the VS reads the meta slot for
+// billboard height.
+StructuredBuffer<float4> ImpostorCells : register(t3);
 SamplerState SamplerLinear : register(s0);
 
 // Flag bit for PS_INPUT.Flags — must match
@@ -55,12 +58,13 @@ float4 main(PS_INPUT i) : SV_TARGET
     if (isImpostor)
     {
         // Sample the pre-baked impostor atlas. The VS packed the angle-bin
-        // U offset into AngleU; `cell` gives the atlas cell origin and
+        // U offset into AngleU; `uvRect` gives the atlas cell origin and
         // per-angle cell size in UV space. The vertex UVs are in [0,1]
-        // canonical unit-quad space (TEXCOORD0).
-        float4 cell = ImpostorCells[i.MaterialId];
-        float2 uv = float2(cell.x + i.AngleU + i.UV.x * cell.z,
-                            cell.y +            i.UV.y * cell.w);
+        // canonical unit-quad space (TEXCOORD0). Phase F: two float4s
+        // per species — index with `MaterialId * 2 + 0` for the uvRect.
+        float4 uvRect = ImpostorCells[i.MaterialId * 2u + 0u];
+        float2 uv = float2(uvRect.x + i.AngleU + i.UV.x * uvRect.z,
+                            uvRect.y +            i.UV.y * uvRect.w);
         albedo = ImpostorAtlas.Sample(SamplerLinear, uv);
     }
     else

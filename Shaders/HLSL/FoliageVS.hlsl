@@ -57,20 +57,18 @@ struct InstanceData
 
 StructuredBuffer<InstanceData> InstanceBuffer : register(t0);
 
-// Per-species impostor atlas cell rectangles: float4(minU, minV, cellDU, cellDV)
-// indexed by InstanceData.materialId. Built by FoliageImpostorAtlas::UploadCellBuffer.
-// Bound by FoliageRenderer::RenderFoliagePass; null-bound (skip) when no impostors
-// are in the batch.
+// Per-species impostor atlas records, packed as 2 float4s per species:
+//   record[speciesIndex*2 + 0] = uvRect: (minU, minV, cellDU, cellDV)
+//   record[speciesIndex*2 + 1] = meta:   (billboardHeight, 0, 0, 0)
+// Indexed by InstanceData.materialId. Built by FoliageImpostorAtlas::
+// UploadCellBuffer. Bound by FoliageRenderer::RenderFoliagePass; null-
+// bound (skip) when no impostors are in the batch.
 StructuredBuffer<float4> ImpostorCells : register(t3);
 
 // Phase E: fixed angle-cell count. Matches the default in
 // FoliageImpostorAtlas::BakeAllRegisteredSpecies(angleSteps=8). Move to a
 // cbuffer once per-species overrides are needed.
 #define FOLIAGE_IMPOSTOR_ANGLE_STEPS 8u
-
-// Phase E: fixed impostor billboard half-height in metres. A future pass
-// will pack per-species height into the cell buffer.
-#define FOLIAGE_IMPOSTOR_SCALE 2.0
 
 // Flag bit for InstanceData.flags — must match
 // Spark::Graphics::InstanceFlags::FoliageImpostor (GPUSceneBuffer.h).
@@ -158,8 +156,15 @@ PS_INPUT main(VS_INPUT input)
         float3 worldUp = float3(0.0, 1.0, 0.0);
         float3 right = normalize(cross(worldUp, float3(toCam.x, 0.0, toCam.z) + float3(1e-6, 0.0, 0.0)));
 
-        float3 offset = right * (input.Pos.x * FOLIAGE_IMPOSTOR_SCALE)
-                      + worldUp * (input.Pos.y * FOLIAGE_IMPOSTOR_SCALE * 2.0);
+        // Phase F: per-species billboard height comes from the cell meta
+        // float4 (element [materialId*2 + 1].x). Horizontal half-width
+        // is half the height — good default for tree-like foliage.
+        float4 meta = ImpostorCells[inst.materialId * 2u + 1u];
+        float billboardHeight = max(meta.x, 0.01);
+        float billboardHalfWidth = billboardHeight * 0.5;
+
+        float3 offset = right * (input.Pos.x * billboardHalfWidth * 2.0)
+                      + worldUp * (input.Pos.y * billboardHeight);
         worldPos = float4(worldTranslation + offset, 1.0);
 
         // Normal faces back at the camera — keeps wrapped-diffuse lighting
@@ -174,10 +179,11 @@ PS_INPUT main(VS_INPUT input)
         if (angleBin >= FOLIAGE_IMPOSTOR_ANGLE_STEPS)
             angleBin = FOLIAGE_IMPOSTOR_ANGLE_STEPS - 1u;
 
-        float4 cell = ImpostorCells[inst.materialId];
-        // cell: (minU, minV, cellDU, cellDV). Impostor atlas stores angles
-        // horizontally so the U offset is the only per-angle adjustment.
-        angleU = (float)angleBin * cell.z;
+        // uvRect: (minU, minV, cellDU, cellDV). Impostor atlas stores
+        // angles horizontally so the U offset is the only per-angle
+        // adjustment. The PS reads uvRect separately.
+        float4 uvRect = ImpostorCells[inst.materialId * 2u + 0u];
+        angleU = (float)angleBin * uvRect.z;
     }
     else
     {

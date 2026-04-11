@@ -564,6 +564,15 @@ TEST(FoliageRenderer_BuildGPUInstanceImpostorLODSetsFlag)
     EXPECT_NEAR(out.padding, 3.14f, 1e-6f);
 }
 
+TEST(FoliageRenderer_SpeciesDefaultsForPhaseFFields)
+{
+    // Phase F added two fields to FoliageSpecies. Defaults matter because
+    // existing scenes will inherit them without touching the new fields.
+    FoliageSpecies s;
+    EXPECT_TRUE(s.albedoTexturePath.empty());
+    EXPECT_NEAR(s.billboardHeight, 2.0f, 1e-6f);
+}
+
 TEST(FoliageRenderer_CollectProducesSortedDrawOrder)
 {
     // After CollectFromFoliageManager, m_renderInstances should be sorted
