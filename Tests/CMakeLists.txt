@@ -366,6 +366,9 @@ add_executable(SparkTests
     TestBlendSpaceReal.cpp
     TestSequencerReal.cpp
     TestFaultIsolationReal.cpp
+    TestColorUtilsReal.cpp
+    TestStateMachineReal.cpp
+    TestEventBusReal.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
