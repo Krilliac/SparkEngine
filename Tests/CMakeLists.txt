@@ -327,6 +327,7 @@ add_executable(SparkTests
     TestGPUProfiler.cpp
     TestShaderHotReloadCompilation.cpp
     TestShaderHotReloadPhaseU.cpp
+    TestShaderDiskCachePhaseV.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp

@@ -20,6 +20,10 @@
 // Shader::HotReloadShaders so every Shader instance shares the same
 // registry of watched directories.
 #include "ShaderHotReload.h"
+// Phase V: activated Tier 2 graphics orphan — persistent on-disk shader
+// cache. Wired into Shader::Initialize so every Shader instance queries
+// the same process-wide cache before calling the backend compiler.
+#include "ShaderDiskCache.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -175,6 +179,18 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
                 hotReload.AddWatchDirectory(path);
             }
         }
+    }
+
+    // Phase V: activate Spark::Graphics::ShaderDiskCache singleton. The
+    // first Shader::Initialize call creates the cache directory under
+    // the working directory ("ShaderCache/"); subsequent Shader
+    // instances reuse the same cache. Tests may override the directory
+    // via GetShaderDiskCache().Initialize(path) before the first
+    // Shader::Initialize runs.
+    auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+    if (!diskCache.IsInitialized())
+    {
+        diskCache.Initialize(std::filesystem::path("ShaderCache"));
     }
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader system initialized");
@@ -469,6 +485,10 @@ Shader::ShaderMetrics Shader::GetMetricsThreadSafe() const
 // watcher. Mirrors the Windows include block so the Linux branch can
 // reach the Spark::Graphics::ShaderHotReload singleton from Initialize.
 #include "ShaderHotReload.h"
+// Phase V: activated Tier 2 graphics orphan — persistent on-disk shader
+// cache. Mirrors the Windows include block so the Linux branch shares
+// the same cache singleton on headless / RHI builds.
+#include "ShaderDiskCache.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -598,6 +618,17 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
                 hotReload.AddWatchDirectory(path);
             }
         }
+    }
+
+    // Phase V: activate Spark::Graphics::ShaderDiskCache singleton on
+    // the Linux branch. Matches the Windows path: first Initialize call
+    // creates "ShaderCache/" under the working directory; subsequent
+    // Shader instances reuse the same cache. Tests may pre-initialise
+    // the singleton with a different path via GetShaderDiskCache().
+    auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+    if (!diskCache.IsInitialized())
+    {
+        diskCache.Initialize(std::filesystem::path("ShaderCache"));
     }
 
     return S_OK;

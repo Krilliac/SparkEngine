@@ -108,4 +108,19 @@ namespace Spark::Graphics
         std::atomic<bool> m_ready{false};
     };
 
+    /**
+     * @brief Process-wide singleton accessor for the shader disk cache.
+     *
+     * Phase V activation helper. Returns a Meyers singleton so every
+     * translation unit that includes this header talks to the same
+     * `ShaderDiskCache` instance. `Shader::Initialize` calls
+     * `GetShaderDiskCache().Initialize(path)` once per process; subsequent
+     * shader compiles consult the same cache for lookups and stores.
+     */
+    inline ShaderDiskCache& GetShaderDiskCache()
+    {
+        static ShaderDiskCache s_cache;
+        return s_cache;
+    }
+
 } // namespace Spark::Graphics
