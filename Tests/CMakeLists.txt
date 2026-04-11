@@ -351,6 +351,16 @@ add_executable(SparkTests
     TestNetworkSecurityPhaseHH.cpp
     TestAIDirectorPhaseII.cpp
     TestHLODBuilderPhaseII.cpp
+    TestAngleUtilsReal.cpp
+    TestBitUtilsReal.cpp
+    TestBitFlagsReal.cpp
+    TestTweenReal.cpp
+    TestSplineMathReal.cpp
+    TestSpatialGridReal.cpp
+    TestSteeringBehaviorsReal.cpp
+    TestCoverSystemReal.cpp
+    TestAlignedHeapArrayReal.cpp
+    TestAtomicSharedPtrReal.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
