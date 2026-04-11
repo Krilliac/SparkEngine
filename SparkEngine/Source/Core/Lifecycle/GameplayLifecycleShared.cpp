@@ -103,6 +103,12 @@
 // the engine DebugDraw system. Was previously unreferenced by any
 // production code; Phase DD lands the lifecycle seam.
 #include "Engine/AI/AIDebugRenderer.h"
+// Phase EE Theme 3D: three more SparkEngine singleton orphans
+// surfaced by a deep parallel sweep. All three are low-risk pure-CPU
+// utilities with default constructors and no platform guards.
+#include "Engine/Gameplay/EventResponseSystem.h"
+#include "Engine/ECS/EntityPresetManager.h"
+#include "Core/AssetMigration.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -549,6 +555,27 @@ namespace Spark::Core::Lifecycle
         // toggled on; the singleton just needs to be alive so
         // ImGui menu toggles can reach it.
         Spark::AI::AIDebugRenderer::GetInstance().Initialize();
+
+        // Phase EE Theme 3D: Event response rule engine — data-driven
+        // "When/If/Then" gameplay logic for no-code designers. Rules
+        // are attached via AddRule / LoadFromJson; Initialize
+        // subscribes to the event bus. Update(dt) is pumped from the
+        // gameplay update phase when rules need per-frame timing
+        // (OnTimer triggers).
+        Spark::Gameplay::EventResponseSystem::GetInstance().Initialize();
+
+        // Phase EE Theme 3D: Entity preset registry — pre-configured
+        // entity templates for no-code entity spawning. Initialize
+        // registers built-in presets; editor panels query it for the
+        // spawn menu.
+        Spark::ECS::EntityPresetManager::GetInstance().Initialize();
+
+        // Phase EE Theme 3D: Asset migration registry — manages
+        // versioned migration steps for asset schema upgrades. Real
+        // migration steps are registered by asset loaders before
+        // Execute(asset, version) is called. Initialize clears the
+        // previous state so the registry can be re-populated.
+        Spark::AssetMigrationRegistry::GetInstance().Initialize();
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
@@ -1124,6 +1151,13 @@ namespace Spark::Core::Lifecycle
 
         // Engine-orphan singletons wired in this branch — teardown
         // mirrors the startup order so dependents are released first.
+        // Phase EE Theme 3D additions (released first — they hold no
+        // GPU handles so the order relative to render-loop teardown
+        // does not matter). EntityPresetManager has no explicit
+        // Shutdown API because it owns only pure in-memory data;
+        // the process-exit destructor handles cleanup.
+        Spark::AssetMigrationRegistry::GetInstance().Shutdown();
+        Spark::Gameplay::EventResponseSystem::GetInstance().Shutdown();
         // Phase DD Theme 3D addition:
         Spark::AI::AIDebugRenderer::GetInstance().Shutdown();
         // Phase CC Theme 3D additions (released first — they depend on

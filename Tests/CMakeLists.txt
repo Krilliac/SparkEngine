@@ -338,6 +338,9 @@ add_executable(SparkTests
     TestAsyncComputeSchedulerPhaseCC.cpp
     TestAIDebugRendererPhaseDD.cpp
     TestDirtyRegionGridPhaseDD.cpp
+    TestEventResponseSystemPhaseEE.cpp
+    TestEntityPresetManagerPhaseEE.cpp
+    TestAssetMigrationPhaseEE.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
