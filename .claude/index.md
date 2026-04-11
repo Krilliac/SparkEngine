@@ -46,6 +46,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine next-steps Phase K (VolumeManager activated with spatial post-process volumes + ApplyVolumeStack binding) | [knowledge/engine-next-steps-phase-k-2026-04-11.md](knowledge/engine-next-steps-phase-k-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase L (MeshOptimizer ACMR reporting in LODManager + BVHAccelerator first-level cull in SceneRenderer) | [knowledge/engine-next-steps-phase-l-2026-04-11.md](knowledge/engine-next-steps-phase-l-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase M (ReflectionProbeCache + CachedShadowAtlas wired into LightingSystem lifecycle) | [knowledge/engine-next-steps-phase-m-2026-04-11.md](knowledge/engine-next-steps-phase-m-2026-04-11.md) | Observation | Active | 2026-04-11 |
+| Engine next-steps Phase N (RTHandleSystem + ConstantBufferRing wired into PostProcessingPipeline) | [knowledge/engine-next-steps-phase-n-2026-04-11.md](knowledge/engine-next-steps-phase-n-2026-04-11.md) | Observation | Active | 2026-04-11 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-11)

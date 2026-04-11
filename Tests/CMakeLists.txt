@@ -229,6 +229,9 @@ add_executable(SparkTests
     TestBVHAccelerator.cpp
     TestReflectionProbeCache.cpp
     TestCachedShadowAtlas.cpp
+    TestRTHandleSystem.cpp
+    TestConstantBufferRing.cpp
+    TestPostProcessingPipelinePhaseN.cpp
     TestDXRSupport.cpp
     TestCSGEditorPanel.cpp
     TestNavMeshLink.cpp

@@ -38,6 +38,11 @@
 // pipeline so every call to Process() can apply the live volume stack
 // into the pass settings structs.
 #include "VolumeSystem.h"
+// RTHandleSystem is Phase N's portable activation — Unity-HDRP-style
+// scale-based render texture handles whose allocation tracks the
+// reference viewport without reallocating on shrink. Ticked from the
+// pipeline's own Initialize / Resize paths.
+#include "RTHandleSystem.h"
 
 #include "../Core/Platform.h"
 
@@ -52,6 +57,9 @@
 #include "GPUDebugMarkers.h"
 #include "GPUTimestampQuery.h"
 #include "RenderTargetPool.h"
+// Phase N: ConstantBufferRing is another Windows-only D3D11 wrapper —
+// Dynamic sub-allocation for per-frame constant buffer updates.
+#include "ConstantBufferRing.h"
 #endif
 
 #include <string>
@@ -125,6 +133,16 @@ namespace Spark::Graphics
             if (m_ssaoTemporalFilter.IsInitialized())
             {
                 m_ssaoTemporalFilter.Resize(width, height);
+            }
+
+            // Phase N: propagate the new reference size to the RTHandle
+            // system. Allocated handles are grow-only, so shrinking the
+            // pipeline does not reallocate — only the reported current
+            // sizes update. Growing past the max-history size triggers
+            // a per-handle allocated-size bump on the next frame.
+            if (m_rtHandleSystem.IsInitialized())
+            {
+                m_rtHandleSystem.SetReferenceSize(width, height);
             }
         }
 
@@ -276,6 +294,43 @@ namespace Spark::Graphics
          */
         float GetPassTimeMs(PostProcessPass pass) const;
 
+        // ---- Phase N: RTHandleSystem (portable) ----
+
+        /**
+         * @brief Get the render-target handle system.
+         *
+         * The pipeline owns one `RTHandleSystem` instance sized to the
+         * pipeline's reference viewport. Callers allocate scale-based
+         * handles (e.g. a half-resolution bloom target at
+         * `scaleX = scaleY = 0.5f`), and the system tracks per-handle
+         * allocation bookkeeping without reallocating on shrink.
+         *
+         * `Resize()` forwards the new reference size via
+         * `RTHandleSystem::SetReferenceSize` so every allocated handle
+         * grows / updates its current dimensions automatically.
+         */
+        RTHandleSystem& GetRTHandleSystem() { return m_rtHandleSystem; }
+        const RTHandleSystem& GetRTHandleSystem() const { return m_rtHandleSystem; }
+
+        // ---- Phase N: ConstantBufferRing (Windows-only) ----
+
+        /**
+         * @brief Current ring-buffer capacity in bytes (0 on non-Windows).
+         *
+         * The `ConstantBufferRing` is only allocated on Windows when a
+         * D3D11 device is attached. Callers can use this to decide
+         * whether to sub-allocate from the ring or fall back to the
+         * per-draw `Map` / `Unmap` path.
+         */
+        uint32_t GetConstantBufferRingCapacity() const;
+
+        /**
+         * @brief Peak constant-buffer-ring usage in bytes across all frames.
+         *
+         * Zero on non-Windows. Reset by `Shutdown()`.
+         */
+        uint32_t GetConstantBufferRingPeakUsage() const;
+
         void Console_SetExposure(float value) { m_lightShaftSettings.exposure = value; }
 
         /** @brief Set the D3D11 device and context for GPU execution */
@@ -346,6 +401,12 @@ namespace Spark::Graphics
         VolumeManager m_volumeManager;
         XMFLOAT3 m_cameraPosition = {0.0f, 0.0f, 0.0f};
         bool m_volumeBlendEnabled = true;
+
+        // Phase N: RTHandleSystem is pure CPU code (the allocation metadata
+        // layer, not the GPU texture layer), so it lives outside the
+        // Windows guard. Initialized from Initialize(width, height) and
+        // SetReferenceSize()-ed from Resize().
+        RTHandleSystem m_rtHandleSystem;
         AutoExposureSettings m_autoExposureSettings;
         TonemappingSettings m_tonemappingSettings;
         ColorGradingSettings m_colorGradingSettings;
@@ -381,6 +442,9 @@ namespace Spark::Graphics
         RenderTargetPool m_rtPool;    ///< Per-device transient RT allocator (Phase J)
         GPUDebugMarkers m_gpuMarkers; ///< PIX / RenderDoc scoped event regions (Phase J)
         GPUTimestampQuery m_gpuTimer; ///< Per-pass GPU timestamp queries (Phase J)
+        // Phase N: ring-buffer CB allocator (Windows-only — wraps
+        // ID3D11Buffer directly). Lifecycle follows the D3D11 device.
+        ConstantBufferRing m_cbRing;
 #endif
         ComPtr<ID3D11VertexShader> m_fullscreenVS;
         ComPtr<ID3D11PixelShader> m_bloomPS;

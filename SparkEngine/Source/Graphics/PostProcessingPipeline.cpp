@@ -44,6 +44,10 @@ namespace Spark::Graphics
         // push the blended stack into the effect settings.
         m_volumeManager.Initialize();
 
+        // Phase N: activate RTHandleSystem with the pipeline's reference
+        // viewport. Pure CPU — runs on every platform.
+        m_rtHandleSystem.Initialize(width, height);
+
 #ifdef SPARK_PLATFORM_WINDOWS
         // Phase J: activate the D3D11-backed orphans when a device is available.
         // All three have no-op Initialize methods when the pipeline is
@@ -53,6 +57,12 @@ namespace Spark::Graphics
         {
             m_rtPool.Initialize(m_device, /*reclaimAfterFrames*/ 60);
             m_gpuTimer.Initialize(m_device, /*maxTimers*/ static_cast<uint32_t>(PostProcessPass::Count));
+            // Phase N: a 2 MB ring is plenty for the PostProcessCB traffic
+            // the pipeline generates today. Allocations above the capacity
+            // fail gracefully (Allocate returns an invalid allocation) and
+            // the existing Map/Unmap path continues to work for oversize
+            // updates.
+            m_cbRing.Initialize(m_device, /*capacityBytes*/ 2 * 1024 * 1024);
         }
         if (m_context)
         {
@@ -103,10 +113,16 @@ namespace Spark::Graphics
         // Phase K: drop any volumes the caller registered; they will not
         // survive a pipeline restart.
         m_volumeManager.Shutdown();
+        // Phase N: tear down the portable RTHandleSystem alongside the
+        // other CPU-side orphans.
+        m_rtHandleSystem.Shutdown();
 #ifdef SPARK_PLATFORM_WINDOWS
         m_rtPool.Shutdown();
         m_gpuTimer.Shutdown();
         m_gpuMarkers.Shutdown();
+        // Phase N: ConstantBufferRing follows the same teardown contract —
+        // safe to call on an uninitialised ring.
+        m_cbRing.Shutdown();
 #endif
 
         m_initialized = false;
@@ -137,6 +153,13 @@ namespace Spark::Graphics
         if (m_context)
         {
             m_gpuTimer.BeginFrame(m_context);
+            // Phase N: open the constant-buffer ring for this frame. The
+            // map is a WRITE_DISCARD so the driver renames the buffer
+            // under the hood — no GPU stall. If the ring was never
+            // initialised (headless pipeline) BeginFrame returns false
+            // and the pipeline continues to use the per-pass Map/Unmap
+            // path on m_constantBuffer.
+            m_cbRing.BeginFrame(m_context);
         }
         m_rtPool.Tick();
 
@@ -166,6 +189,10 @@ namespace Spark::Graphics
         if (m_context)
         {
             m_gpuTimer.EndFrame(m_context);
+            // Phase N: unmap the ring so the driver can rename on the
+            // next BeginFrame. Safe to call when BeginFrame was never
+            // issued — the ring guards on m_frameMapped internally.
+            m_cbRing.EndFrame();
         }
 #endif
     }
@@ -373,6 +400,24 @@ namespace Spark::Graphics
         // fog component is still evaluated so GetVolumeManager().GetStack()
         // returns a meaningful value — a future fog pass can read it
         // without changing the binding here.
+    }
+
+    uint32_t PostProcessingPipeline::GetConstantBufferRingCapacity() const
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return m_cbRing.GetMetrics().capacityBytes;
+#else
+        return 0;
+#endif
+    }
+
+    uint32_t PostProcessingPipeline::GetConstantBufferRingPeakUsage() const
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return m_cbRing.GetMetrics().peakUsageBytes;
+#else
+        return 0;
+#endif
     }
 
     float PostProcessingPipeline::GetPassTimeMs(PostProcessPass pass) const
