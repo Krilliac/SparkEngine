@@ -329,6 +329,8 @@ add_executable(SparkTests
     TestShaderHotReloadPhaseU.cpp
     TestShaderDiskCachePhaseV.cpp
     TestShaderCrossCompilerPhaseW.cpp
+    TestRHIHandlePoolPhaseX.cpp
+    TestTransientBufferAllocatorPhaseX.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
