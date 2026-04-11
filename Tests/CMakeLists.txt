@@ -349,6 +349,8 @@ add_executable(SparkTests
     TestTextureCompressorPhaseGG.cpp
     TestDatablockRegistryPhaseHH.cpp
     TestNetworkSecurityPhaseHH.cpp
+    TestAIDirectorPhaseII.cpp
+    TestHLODBuilderPhaseII.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
