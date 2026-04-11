@@ -267,6 +267,20 @@ namespace Spark::Graphics
         out.padding = src.windPhase;
     }
 
+    void FoliageRenderer::ClampDrawRunToUploaded(const FoliageDrawRun& run, uint32_t uploadedCount,
+                                                 uint32_t& outStartInstance, uint32_t& outInstanceCount)
+    {
+        outStartInstance = run.startInstance;
+        if (run.startInstance >= uploadedCount)
+        {
+            // Entire run is past the uploaded tail — caller must skip.
+            outInstanceCount = 0;
+            return;
+        }
+        const uint32_t available = uploadedCount - run.startInstance;
+        outInstanceCount = std::min(run.instanceCount, available);
+    }
+
     // ========================================================================
     // Per-frame collection
     // ========================================================================
@@ -718,11 +732,13 @@ namespace Spark::Graphics
     void FoliageRenderer::RenderFoliagePass(ID3D11Device* device, ID3D11DeviceContext* context,
                                             const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj,
                                             const DirectX::XMFLOAT3& cameraPos, float time, GPUSceneBuffer& sceneBuffer,
-                                            uint32_t startSlot)
+                                            uint32_t startSlot, uint32_t uploadedCount)
     {
         if (!m_initialized || !device || !context)
             return;
         if (m_drawOrder.empty() || !sceneBuffer.IsInitialized())
+            return;
+        if (uploadedCount == 0)
             return;
         if (!CreatePassResources(device))
             return;
@@ -805,6 +821,17 @@ namespace Spark::Graphics
             if (run.lod != FoliageRenderLOD::Mesh)
                 continue;
 
+            // Phase G fix: clamp the run to the number of instances that
+            // actually landed in the scene buffer this frame. Without
+            // this, an overflow in UploadToSceneBuffer (scene buffer full)
+            // leaves the tail of m_drawOrder pointing at stale or
+            // uninitialised GPUInstanceData records.
+            uint32_t clampedStart = 0;
+            uint32_t clampedCount = 0;
+            ClampDrawRunToUploaded(run, uploadedCount, clampedStart, clampedCount);
+            if (clampedCount == 0)
+                continue;
+
             const FoliageSpecies* species = manager.GetSpeciesByGlobalIndex(run.globalMaterialId);
             if (!species || species->meshPath.empty())
                 continue;
@@ -836,7 +863,7 @@ namespace Spark::Graphics
             context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
             context->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
 
-            context->DrawIndexedInstanced(indexCount, run.instanceCount, 0, 0, startSlot + run.startInstance);
+            context->DrawIndexedInstanced(indexCount, clampedCount, 0, 0, startSlot + clampedStart);
         }
 
         // Impostor sub-pass uses the white fallback for t1 (the PS
@@ -859,7 +886,15 @@ namespace Spark::Graphics
             {
                 if (run.lod != FoliageRenderLOD::Impostor)
                     continue;
-                context->DrawIndexedInstanced(6u, run.instanceCount, 0, 0, startSlot + run.startInstance);
+
+                // Phase G fix: same overflow guard as the mesh sub-pass.
+                uint32_t clampedStart = 0;
+                uint32_t clampedCount = 0;
+                ClampDrawRunToUploaded(run, uploadedCount, clampedStart, clampedCount);
+                if (clampedCount == 0)
+                    continue;
+
+                context->DrawIndexedInstanced(6u, clampedCount, 0, 0, startSlot + clampedStart);
             }
         }
 

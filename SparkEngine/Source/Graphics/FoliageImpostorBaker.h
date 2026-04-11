@@ -161,6 +161,29 @@ namespace Spark::Graphics
          * returned unchanged. Zero maps to one.
          */
         static uint32_t NextPowerOfTwo(uint32_t v);
+
+        /**
+         * @brief Compute the species count used to size the per-species
+         *        cell structured buffer.
+         *
+         * `ComputeAtlasLayout` can truncate the slot list when the atlas
+         * is full, so the max slot index is an underestimate of the real
+         * high-water mark. The foliage VS/PS index
+         * `ImpostorCells[materialId * 2 + ...]` using the full
+         * registry-wide species id, so the buffer must cover every
+         * species — even unbaked ones (which are left zero-filled).
+         *
+         * Pure function so unit tests can pin the formula without a
+         * D3D11 device.
+         *
+         * @param slots                 Atlas slots actually allocated.
+         * @param registrySpeciesCount  Number of species in the live
+         *                              `FoliageManager` registry.
+         * @return `max(registrySpeciesCount, maxSlotIndex + 1)`. Returns
+         *         `registrySpeciesCount` when `slots` is empty.
+         */
+        static uint32_t ComputeCellBufferSpeciesCount(const std::vector<ImpostorAtlasSlot>& slots,
+                                                      uint32_t registrySpeciesCount);
     };
 
 #ifdef SPARK_PLATFORM_WINDOWS

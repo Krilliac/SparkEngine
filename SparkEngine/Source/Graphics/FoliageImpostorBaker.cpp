@@ -110,6 +110,20 @@ namespace Spark::Graphics
         return slots;
     }
 
+    uint32_t FoliageImpostorBaker::ComputeCellBufferSpeciesCount(const std::vector<ImpostorAtlasSlot>& slots,
+                                                                 uint32_t registrySpeciesCount)
+    {
+        uint32_t maxSlotIndex = 0;
+        bool anySlot = false;
+        for (const ImpostorAtlasSlot& s : slots)
+        {
+            maxSlotIndex = std::max(maxSlotIndex, s.speciesIndex);
+            anySlot = true;
+        }
+        const uint32_t slotCeiling = anySlot ? (maxSlotIndex + 1) : 0;
+        return std::max(registrySpeciesCount, slotCeiling);
+    }
+
     uint32_t FoliageImpostorBaker::SelectAngleSlot(float yawRadians, uint32_t angleSteps)
     {
         if (angleSteps == 0)
@@ -350,13 +364,20 @@ namespace Spark::Graphics
         if (!device || m_slots.empty() || m_width == 0 || m_height == 0)
             return false;
 
-        // Determine the highest global species index so the GPU buffer can
-        // be indexed directly by `GPUInstanceData::materialId` without an
-        // intermediate lookup.
-        uint32_t maxIndex = 0;
-        for (const ImpostorAtlasSlot& s : m_slots)
-            maxIndex = std::max(maxIndex, s.speciesIndex);
-        const uint32_t numSpecies = maxIndex + 1;
+        // Phase G fix: size the cell buffer by the full species registry,
+        // not by the max slot index. `ComputeAtlasLayout` can truncate
+        // `m_slots` when the atlas is full (see the `break` on "out of
+        // atlas space" in FoliageImpostorBaker::ComputeAtlasLayout) —
+        // higher-index species still participate in LOD selection so
+        // their instances land in `m_drawOrder` with LOD=Impostor, and
+        // the VS indexes `ImpostorCells[materialId*2 + ...]` into this
+        // buffer. Sizing by `manager.GetSpeciesCount()` keeps those
+        // indices in-bounds; unbaked species have their records left at
+        // zero (uvRect=0, meta=0), which produces degenerate quads the
+        // VS collapses to a point — effectively culling them cleanly
+        // instead of reading past the SRV and sampling stale memory.
+        const uint32_t numSpecies =
+            FoliageImpostorBaker::ComputeCellBufferSpeciesCount(m_slots, manager.GetSpeciesCount());
 
         // Phase F: 2 float4s per species — [uvRect, meta]. Meta.x carries
         // the per-species billboardHeight so the VS can scale impostor

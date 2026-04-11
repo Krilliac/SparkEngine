@@ -313,3 +313,59 @@ TEST(FoliageImpostor_CellRecordDualFloat4Layout)
         EXPECT_GT(kHeights[i], 0.0f);
     }
 }
+
+// ============================================================================
+// Phase G codex-fix regression: ComputeCellBufferSpeciesCount
+// ============================================================================
+//
+// When the atlas is too small to hold every species, `ComputeAtlasLayout`
+// drops trailing species from `m_slots`. The GPU cell buffer must still
+// cover the full species registry — otherwise the foliage VS reads past
+// the end of the SRV when `materialId` references a truncated species.
+// `ComputeCellBufferSpeciesCount` returns the count to size the buffer
+// with: `max(registryCount, maxSlotIndex + 1)`.
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_AllSlotsFit)
+{
+    std::vector<ImpostorAtlasSlot> slots(3);
+    slots[0].speciesIndex = 0;
+    slots[1].speciesIndex = 1;
+    slots[2].speciesIndex = 2;
+
+    // Registry matches the slots exactly — no truncation.
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 3), 3u);
+}
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_AtlasTruncatedRegistryLarger)
+{
+    // Registry has 8 species but the atlas only fit the first 3.
+    std::vector<ImpostorAtlasSlot> slots(3);
+    slots[0].speciesIndex = 0;
+    slots[1].speciesIndex = 1;
+    slots[2].speciesIndex = 2;
+
+    // Regression: must use registry count, not maxSlotIndex + 1, so
+    // species 3..7 land in-bounds when the VS reads their cell records.
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 8), 8u);
+}
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_SparseSlotIndices)
+{
+    // Registry is smaller than the highest slot index (shouldn't happen
+    // in practice, but is defined behavior: return the max). Defends
+    // against a stale registry count vs a freshly-rebuilt slot list.
+    std::vector<ImpostorAtlasSlot> slots(2);
+    slots[0].speciesIndex = 3;
+    slots[1].speciesIndex = 5;
+
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 2), 6u);
+}
+
+TEST(FoliageImpostorBaker_CellBufferSpeciesCount_EmptySlots)
+{
+    std::vector<ImpostorAtlasSlot> slots;
+
+    // No baked slots — the buffer must still cover the registry.
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 4), 4u);
+    EXPECT_EQ(FoliageImpostorBaker::ComputeCellBufferSpeciesCount(slots, 0), 0u);
+}

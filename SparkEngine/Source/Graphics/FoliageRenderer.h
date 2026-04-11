@@ -330,6 +330,33 @@ namespace Spark::Graphics
          */
         static void BuildGPUInstance(const FoliageRenderInstance& src, GPUInstanceData& out);
 
+        /**
+         * @brief Clamp a draw run against the number of instances that were
+         *        actually uploaded to the scene buffer this frame.
+         *
+         * `UploadToSceneBuffer` can stop early when it hits `GPUSceneBuffer`
+         * capacity (large static scene + large foliage batch). When that
+         * happens the tail of `m_drawOrder` still references instance slots
+         * past `uploadedCount` — the VS would sample stale or uninitialized
+         * `GPUInstanceData`. This helper returns the clamped
+         * `(startInstance, instanceCount)` pair; when the entire run is
+         * past the uploaded tail `outInstanceCount` is set to 0 and the
+         * caller should skip the draw.
+         *
+         * Pure function so unit tests can pin the overflow behaviour
+         * without a D3D11 device.
+         *
+         * @param run            Draw run produced by `CollectFromFoliageManager`.
+         * @param uploadedCount  Number of instances actually written to
+         *                       the scene buffer this frame (return value
+         *                       of `UploadToSceneBuffer`).
+         * @param outStartInstance  Unchanged — always equals `run.startInstance`.
+         * @param outInstanceCount  Clamped instance count (0 when the run
+         *                          is entirely past `uploadedCount`).
+         */
+        static void ClampDrawRunToUploaded(const FoliageDrawRun& run, uint32_t uploadedCount,
+                                           uint32_t& outStartInstance, uint32_t& outInstanceCount);
+
 #ifdef SPARK_PLATFORM_WINDOWS
         // --------------------------------------------------------------------
         // Windows-only GPU integration
@@ -402,10 +429,16 @@ namespace Spark::Graphics
          *                     scene buffer — used as `StartInstanceLocation`
          *                     so the VS's `SV_InstanceID` reads the correct
          *                     `GPUInstanceData` record.
+         * @param uploadedCount  Number of instances actually uploaded to
+         *                       the scene buffer this frame (the return
+         *                       value of `UploadToSceneBuffer`). Runs that
+         *                       reference indices past this value are
+         *                       clamped so the VS never samples stale or
+         *                       out-of-range `GPUInstanceData`.
          */
         void RenderFoliagePass(ID3D11Device* device, ID3D11DeviceContext* context, const DirectX::XMMATRIX& view,
                                const DirectX::XMMATRIX& proj, const DirectX::XMFLOAT3& cameraPos, float time,
-                               GPUSceneBuffer& sceneBuffer, uint32_t startSlot);
+                               GPUSceneBuffer& sceneBuffer, uint32_t startSlot, uint32_t uploadedCount);
 #endif
 
         // --------------------------------------------------------------------

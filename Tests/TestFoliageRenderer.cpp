@@ -643,3 +643,92 @@ TEST(FoliageRenderer_CollectProducesSortedDrawOrder)
     renderer.Shutdown();
     fm.Shutdown();
 }
+
+// ============================================================================
+// Phase G codex-fix regression: ClampDrawRunToUploaded
+// ============================================================================
+//
+// `UploadToSceneBuffer` can stop early when the GPU scene buffer is
+// full. `RenderFoliagePass` must then clamp every draw run against the
+// number of instances that actually landed in the buffer, otherwise the
+// VS reads stale or out-of-range `GPUInstanceData`. This test pins the
+// pure helper that does the clamping so we do not need a D3D11 device.
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_FullyInsideRange)
+{
+    FoliageDrawRun run;
+    run.startInstance = 0;
+    run.instanceCount = 4;
+    run.globalMaterialId = 3;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    EXPECT_EQ(outStart, 0u);
+    EXPECT_EQ(outCount, 4u); // entire run fits
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_PartiallyOverflowing)
+{
+    FoliageDrawRun run;
+    run.startInstance = 8;
+    run.instanceCount = 5;
+    run.globalMaterialId = 7;
+    run.lod = FoliageRenderLOD::Impostor;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    EXPECT_EQ(outStart, 8u);
+    EXPECT_EQ(outCount, 2u); // only 10-8 = 2 slots available
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_EntirelyPastUploaded)
+{
+    FoliageDrawRun run;
+    run.startInstance = 12;
+    run.instanceCount = 3;
+    run.globalMaterialId = 2;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    // Caller must skip — the whole run references stale slots.
+    EXPECT_EQ(outCount, 0u);
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_BoundaryAtExactEnd)
+{
+    FoliageDrawRun run;
+    run.startInstance = 5;
+    run.instanceCount = 5;
+    run.globalMaterialId = 0;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/10, outStart, outCount);
+
+    EXPECT_EQ(outStart, 5u);
+    EXPECT_EQ(outCount, 5u); // 5..9 is exactly 5 slots — still inside
+}
+
+TEST(FoliageRenderer_ClampDrawRunToUploaded_ZeroUploadedClampsEverything)
+{
+    FoliageDrawRun run;
+    run.startInstance = 0;
+    run.instanceCount = 10;
+    run.globalMaterialId = 1;
+    run.lod = FoliageRenderLOD::Mesh;
+
+    uint32_t outStart = 0;
+    uint32_t outCount = 0;
+    FoliageRenderer::ClampDrawRunToUploaded(run, /*uploadedCount=*/0, outStart, outCount);
+
+    EXPECT_EQ(outCount, 0u); // nothing uploaded — skip the entire batch
+}
