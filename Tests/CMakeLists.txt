@@ -223,6 +223,8 @@ add_executable(SparkTests
     TestGTAOEffect.cpp
     TestSSAOTemporalFilter.cpp
     TestPostProcessingPipelinePhaseJ.cpp
+    TestVolumeManager.cpp
+    TestPostProcessingPipelinePhaseK.cpp
     TestDXRSupport.cpp
     TestCSGEditorPanel.cpp
     TestNavMeshLink.cpp

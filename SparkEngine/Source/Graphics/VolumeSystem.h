@@ -24,8 +24,10 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -102,17 +104,35 @@ namespace Spark::Graphics
         {
             const auto& other = static_cast<const ExposureVolumeComponent&>(target);
             if (other.fixedExposure.overrideState)
+            {
                 fixedExposure.value = std::lerp(fixedExposure.value, other.fixedExposure.value, t);
+                fixedExposure.overrideState = true;
+            }
             if (other.compensationEV.overrideState)
+            {
                 compensationEV.value = std::lerp(compensationEV.value, other.compensationEV.value, t);
+                compensationEV.overrideState = true;
+            }
             if (other.minEV.overrideState)
+            {
                 minEV.value = std::lerp(minEV.value, other.minEV.value, t);
+                minEV.overrideState = true;
+            }
             if (other.maxEV.overrideState)
+            {
                 maxEV.value = std::lerp(maxEV.value, other.maxEV.value, t);
+                maxEV.overrideState = true;
+            }
             if (other.adaptationSpeedUp.overrideState)
+            {
                 adaptationSpeedUp.value = std::lerp(adaptationSpeedUp.value, other.adaptationSpeedUp.value, t);
+                adaptationSpeedUp.overrideState = true;
+            }
             if (other.adaptationSpeedDown.overrideState)
+            {
                 adaptationSpeedDown.value = std::lerp(adaptationSpeedDown.value, other.adaptationSpeedDown.value, t);
+                adaptationSpeedDown.overrideState = true;
+            }
         }
     };
 
@@ -133,15 +153,30 @@ namespace Spark::Graphics
         {
             const auto& other = static_cast<const BloomVolumeComponent&>(target);
             if (other.intensity.overrideState)
+            {
                 intensity.value = std::lerp(intensity.value, other.intensity.value, t);
+                intensity.overrideState = true;
+            }
             if (other.threshold.overrideState)
+            {
                 threshold.value = std::lerp(threshold.value, other.threshold.value, t);
+                threshold.overrideState = true;
+            }
             if (other.softKnee.overrideState)
+            {
                 softKnee.value = std::lerp(softKnee.value, other.softKnee.value, t);
+                softKnee.overrideState = true;
+            }
             if (other.scatter.overrideState)
+            {
                 scatter.value = std::lerp(scatter.value, other.scatter.value, t);
+                scatter.overrideState = true;
+            }
             if (other.anamorphicRatio.overrideState)
+            {
                 anamorphicRatio.value = std::lerp(anamorphicRatio.value, other.anamorphicRatio.value, t);
+                anamorphicRatio.overrideState = true;
+            }
         }
     };
 
@@ -171,32 +206,30 @@ namespace Spark::Graphics
         void Interpolate(const VolumeComponent& target, float t) override
         {
             const auto& other = static_cast<const ColorGradingVolumeComponent&>(target);
-            if (other.liftR.overrideState)
-                liftR.value = std::lerp(liftR.value, other.liftR.value, t);
-            if (other.liftG.overrideState)
-                liftG.value = std::lerp(liftG.value, other.liftG.value, t);
-            if (other.liftB.overrideState)
-                liftB.value = std::lerp(liftB.value, other.liftB.value, t);
-            if (other.gammaR.overrideState)
-                gammaR.value = std::lerp(gammaR.value, other.gammaR.value, t);
-            if (other.gammaG.overrideState)
-                gammaG.value = std::lerp(gammaG.value, other.gammaG.value, t);
-            if (other.gammaB.overrideState)
-                gammaB.value = std::lerp(gammaB.value, other.gammaB.value, t);
-            if (other.gainR.overrideState)
-                gainR.value = std::lerp(gainR.value, other.gainR.value, t);
-            if (other.gainG.overrideState)
-                gainG.value = std::lerp(gainG.value, other.gainG.value, t);
-            if (other.gainB.overrideState)
-                gainB.value = std::lerp(gainB.value, other.gainB.value, t);
-            if (other.saturation.overrideState)
-                saturation.value = std::lerp(saturation.value, other.saturation.value, t);
-            if (other.contrast.overrideState)
-                contrast.value = std::lerp(contrast.value, other.contrast.value, t);
-            if (other.temperature.overrideState)
-                temperature.value = std::lerp(temperature.value, other.temperature.value, t);
-            if (other.tint.overrideState)
-                tint.value = std::lerp(tint.value, other.tint.value, t);
+            // Helper to keep the per-field branches readable. Interpolate each
+            // parameter and mark the target as overridden so downstream
+            // consumers (e.g. `PostProcessingPipeline::ApplyVolumeStack`)
+            // know this field was actually touched by a volume this frame.
+#define SPARK_VOLUME_BLEND(field)                                                                                      \
+    if (other.field.overrideState)                                                                                     \
+    {                                                                                                                  \
+        field.value = std::lerp(field.value, other.field.value, t);                                                    \
+        field.overrideState = true;                                                                                    \
+    }
+            SPARK_VOLUME_BLEND(liftR)
+            SPARK_VOLUME_BLEND(liftG)
+            SPARK_VOLUME_BLEND(liftB)
+            SPARK_VOLUME_BLEND(gammaR)
+            SPARK_VOLUME_BLEND(gammaG)
+            SPARK_VOLUME_BLEND(gammaB)
+            SPARK_VOLUME_BLEND(gainR)
+            SPARK_VOLUME_BLEND(gainG)
+            SPARK_VOLUME_BLEND(gainB)
+            SPARK_VOLUME_BLEND(saturation)
+            SPARK_VOLUME_BLEND(contrast)
+            SPARK_VOLUME_BLEND(temperature)
+            SPARK_VOLUME_BLEND(tint)
+#undef SPARK_VOLUME_BLEND
         }
     };
 
@@ -216,13 +249,25 @@ namespace Spark::Graphics
         {
             const auto& other = static_cast<const FogVolumeComponent&>(target);
             if (other.density.overrideState)
+            {
                 density.value = std::lerp(density.value, other.density.value, t);
+                density.overrideState = true;
+            }
             if (other.heightFalloff.overrideState)
+            {
                 heightFalloff.value = std::lerp(heightFalloff.value, other.heightFalloff.value, t);
+                heightFalloff.overrideState = true;
+            }
             if (other.maxOpacity.overrideState)
+            {
                 maxOpacity.value = std::lerp(maxOpacity.value, other.maxOpacity.value, t);
+                maxOpacity.overrideState = true;
+            }
             if (other.startDistance.overrideState)
+            {
                 startDistance.value = std::lerp(startDistance.value, other.startDistance.value, t);
+                startDistance.overrideState = true;
+            }
         }
     };
 

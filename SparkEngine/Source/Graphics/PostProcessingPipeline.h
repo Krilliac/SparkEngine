@@ -33,6 +33,11 @@
 // unconditionally available (no D3D11 dependency) — the pipeline owns one
 // instance for per-frame history state even on Linux / headless builds.
 #include "SSAOTemporal.h"
+// VolumeManager is Phase K's activation — portable CPU code that spatially
+// blends post-process settings based on camera position. Owned by the
+// pipeline so every call to Process() can apply the live volume stack
+// into the pass settings structs.
+#include "VolumeSystem.h"
 
 #include "../Core/Platform.h"
 
@@ -172,6 +177,55 @@ namespace Spark::Graphics
         SSAOTemporalFilter& GetSSAOTemporalFilter() { return m_ssaoTemporalFilter; }
         const SSAOTemporalFilter& GetSSAOTemporalFilter() const { return m_ssaoTemporalFilter; }
 
+        // ---- Phase K: Volume manager accessors ----
+
+        /**
+         * @brief Get the spatial post-process volume manager.
+         *
+         * The manager is lifecycle-owned by the pipeline and updated once
+         * per call to `Process()`. Callers can add global or local volumes
+         * with `CreateVolume()`, attach parameter components to them, and
+         * set the camera position via `SetCameraPosition()` — on the next
+         * frame the blended `VolumeStack` is applied to the pipeline's
+         * effect settings.
+         */
+        VolumeManager& GetVolumeManager() { return m_volumeManager; }
+        const VolumeManager& GetVolumeManager() const { return m_volumeManager; }
+
+        /**
+         * @brief Set the camera world position used by the volume manager.
+         *
+         * This is the only signal the volume blend needs — on the next
+         * `Process()` call, all local volumes compute their AABB-distance
+         * blend factor against this position. Global volumes ignore it.
+         * Default position is the origin.
+         */
+        void SetCameraPosition(const XMFLOAT3& position) { m_cameraPosition = position; }
+        const XMFLOAT3& GetCameraPosition() const { return m_cameraPosition; }
+
+        /**
+         * @brief Whether `Process()` should push the blended volume stack
+         *        into the effect settings structs each frame.
+         *
+         * Defaults to `true`. Disable it if you want `VolumeManager` to
+         * collect a stack for queries without mutating the live pipeline
+         * settings — useful for preview/debug panels.
+         */
+        void SetVolumeBlendEnabled(bool enabled) { m_volumeBlendEnabled = enabled; }
+        bool IsVolumeBlendEnabled() const { return m_volumeBlendEnabled; }
+
+        /**
+         * @brief Apply the current `VolumeStack` to the effect settings.
+         *
+         * Public so tests can exercise the blend without calling `Process()`.
+         * The stack's four component types map onto the pipeline settings as:
+         *   - Exposure      → `m_autoExposureSettings` (compensationEV)
+         *   - Bloom         → `m_bloomSettings`        (intensity, threshold, softThreshold, scatter)
+         *   - ColorGrading  → `m_colorGradingSettings` (lift, gain, saturation, contrast, temperature, tint)
+         *   - Fog           → unused (no fog in the pipeline — left for a future fog pass)
+         */
+        void ApplyVolumeStack();
+
         AutoExposureSettings& GetAutoExposureSettings() { return m_autoExposureSettings; }
         const AutoExposureSettings& GetAutoExposureSettings() const { return m_autoExposureSettings; }
 
@@ -284,6 +338,14 @@ namespace Spark::Graphics
         // Its `Initialize(width, height)` gets called from the pipeline's own
         // Initialize and Resize paths so the history buffer follows viewport size.
         SSAOTemporalFilter m_ssaoTemporalFilter;
+
+        // Phase K: VolumeManager is pure CPU code and runs on every platform.
+        // Initialised alongside the pipeline; Update() runs once per Process()
+        // call and ApplyVolumeStack() pushes the blended stack into the
+        // existing effect settings structs.
+        VolumeManager m_volumeManager;
+        XMFLOAT3 m_cameraPosition = {0.0f, 0.0f, 0.0f};
+        bool m_volumeBlendEnabled = true;
         AutoExposureSettings m_autoExposureSettings;
         TonemappingSettings m_tonemappingSettings;
         ColorGradingSettings m_colorGradingSettings;

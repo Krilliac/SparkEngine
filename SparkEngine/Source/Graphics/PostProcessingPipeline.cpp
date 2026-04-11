@@ -38,6 +38,12 @@ namespace Spark::Graphics
         // the pipeline resolution.
         m_ssaoTemporalFilter.Initialize(width, height);
 
+        // Phase K: activate the volume manager. It has no viewport dependency
+        // so the call is a fixed clear + mark-initialised; from this point
+        // forward Process() will call Update() and (if m_volumeBlendEnabled)
+        // push the blended stack into the effect settings.
+        m_volumeManager.Initialize();
+
 #ifdef SPARK_PLATFORM_WINDOWS
         // Phase J: activate the D3D11-backed orphans when a device is available.
         // All three have no-op Initialize methods when the pipeline is
@@ -94,6 +100,9 @@ namespace Spark::Graphics
         // D3D11 state. Calling Shutdown on an uninitialised instance is safe —
         // each orphan guards its teardown on its own `m_initialized` flag.
         m_ssaoTemporalFilter.Shutdown();
+        // Phase K: drop any volumes the caller registered; they will not
+        // survive a pipeline restart.
+        m_volumeManager.Shutdown();
 #ifdef SPARK_PLATFORM_WINDOWS
         m_rtPool.Shutdown();
         m_gpuTimer.Shutdown();
@@ -110,6 +119,15 @@ namespace Spark::Graphics
         m_totalTime += deltaTime;
         m_activePassCount = 0;
         m_vsAlreadyBound = false; // Reset per-frame — VS/sampler/CB binding will be set on first pass
+
+        // Phase K: evaluate all registered volumes against the live camera
+        // position and push the blended stack into the pipeline settings
+        // before any pass reads from them.
+        m_volumeManager.Update(m_cameraPosition);
+        if (m_volumeBlendEnabled)
+        {
+            ApplyVolumeStack();
+        }
 
 #ifdef SPARK_PLATFORM_WINDOWS
         // Phase J: age pooled transient RTs and begin a new timestamp frame
@@ -264,6 +282,97 @@ namespace Spark::Graphics
 #else
         return 0;
 #endif
+    }
+
+    // -----------------------------------------------------------------------------
+    // Phase K: Volume manager → effect settings binding
+    // -----------------------------------------------------------------------------
+
+    void PostProcessingPipeline::ApplyVolumeStack()
+    {
+        // Pull the most recently evaluated blended stack and map each
+        // component onto the pipeline's existing effect settings. Only
+        // fields whose `overrideState` flag was set by a real volume
+        // land on the pipeline settings — every other field keeps its
+        // prior value so the caller can still tweak settings by hand
+        // without a volume-less frame clobbering them back to defaults.
+        const auto& stack = m_volumeManager.GetStack();
+
+        // Exposure → auto-exposure compensation EV. The volume system
+        // models exposure as a fractional EV shift on top of the
+        // pipeline's own auto-exposure math, not as a replacement for it.
+        if (stack.exposure.compensationEV.overrideState)
+        {
+            m_autoExposureSettings.compensationEV = stack.exposure.compensationEV.value;
+        }
+
+        // Bloom: intensity, threshold, soft-knee, scatter.
+        if (stack.bloom.intensity.overrideState)
+        {
+            m_bloomSettings.intensity = stack.bloom.intensity.value;
+        }
+        if (stack.bloom.threshold.overrideState)
+        {
+            m_bloomSettings.threshold = stack.bloom.threshold.value;
+        }
+        if (stack.bloom.softKnee.overrideState)
+        {
+            m_bloomSettings.softThreshold = stack.bloom.softKnee.value;
+        }
+        if (stack.bloom.scatter.overrideState)
+        {
+            m_bloomSettings.scatter = stack.bloom.scatter.value;
+        }
+
+        // Color grading: lift / gain triplets + saturation / contrast /
+        // temperature / tint. The volume system tracks gamma but the
+        // pipeline does not expose a gamma curve control — those values
+        // are intentionally dropped.
+        if (stack.colorGrading.liftR.overrideState)
+        {
+            m_colorGradingSettings.lift.x = stack.colorGrading.liftR.value;
+        }
+        if (stack.colorGrading.liftG.overrideState)
+        {
+            m_colorGradingSettings.lift.y = stack.colorGrading.liftG.value;
+        }
+        if (stack.colorGrading.liftB.overrideState)
+        {
+            m_colorGradingSettings.lift.z = stack.colorGrading.liftB.value;
+        }
+        if (stack.colorGrading.gainR.overrideState)
+        {
+            m_colorGradingSettings.gain.x = stack.colorGrading.gainR.value;
+        }
+        if (stack.colorGrading.gainG.overrideState)
+        {
+            m_colorGradingSettings.gain.y = stack.colorGrading.gainG.value;
+        }
+        if (stack.colorGrading.gainB.overrideState)
+        {
+            m_colorGradingSettings.gain.z = stack.colorGrading.gainB.value;
+        }
+        if (stack.colorGrading.saturation.overrideState)
+        {
+            m_colorGradingSettings.saturation = stack.colorGrading.saturation.value;
+        }
+        if (stack.colorGrading.contrast.overrideState)
+        {
+            m_colorGradingSettings.contrast = stack.colorGrading.contrast.value;
+        }
+        if (stack.colorGrading.temperature.overrideState)
+        {
+            m_colorGradingSettings.temperature = stack.colorGrading.temperature.value;
+        }
+        if (stack.colorGrading.tint.overrideState)
+        {
+            m_colorGradingSettings.tint = stack.colorGrading.tint.value;
+        }
+
+        // Fog: no fog pass lives in PostProcessingPipeline yet. The stack's
+        // fog component is still evaluated so GetVolumeManager().GetStack()
+        // returns a meaningful value — a future fog pass can read it
+        // without changing the binding here.
     }
 
     float PostProcessingPipeline::GetPassTimeMs(PostProcessPass pass) const
