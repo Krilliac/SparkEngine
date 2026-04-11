@@ -120,6 +120,11 @@
 #include "Utils/CpuDebugger.h"
 #include "Graphics/LODGenerator.h"
 #include "Graphics/TextureCompressor.h"
+// Phase HH Theme 3D: Networking data registry singleton. Servers
+// register immutable datablocks at startup (weapon stats, vehicle
+// configs, item templates) which clients then reference by ID,
+// eliminating per-tick replication for shared configuration data.
+#include "Engine/Networking/DatablockRegistry.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -631,6 +636,13 @@ namespace Spark::Core::Lifecycle
         // Compress() / SaveCompressed() on demand. Touch so the
         // instance is constructed before any asset cooker needs it.
         (void)Spark::Graphics::TextureCompressor::GetInstance();
+
+        // Phase HH Theme 3D: Datablock registry — Torque3D-inspired
+        // immutable shared-data table (sent once at connect time).
+        // Servers register datablocks during startup; clients
+        // deserialize on connect. Touch so the singleton exists
+        // before any network handshake fires.
+        (void)Spark::Net::DatablockRegistry::Get();
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
@@ -1206,6 +1218,8 @@ namespace Spark::Core::Lifecycle
 
         // Engine-orphan singletons wired in this branch — teardown
         // mirrors the startup order so dependents are released first.
+        // Phase HH Theme 3D additions:
+        Spark::Net::DatablockRegistry::Get().Clear();
         // Phase FF Theme 3D additions:
         Spark::CacheDebugger::GetInstance().Reset();
         Spark::TelemetrySystem::GetInstance().Shutdown();
