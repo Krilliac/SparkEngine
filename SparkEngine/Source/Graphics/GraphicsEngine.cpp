@@ -493,8 +493,29 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         LOG_TO_CONSOLE_IMMEDIATE(L"Basic shaders initialized successfully", L"SUCCESS");
     }
 
+    // Phase Q: activate the image denoiser. The default backend is
+    // SoftwareDenoiser (joint-bilateral filter), which works on every
+    // platform with no external SDK. A future pipeline can replace
+    // m_denoiser with an OIDN / OptiX instance before the first
+    // Execute() call. The initial settings have `enabled = false` so
+    // no CPU work happens until a real RT pass toggles it on.
+    m_denoiser = std::make_unique<Spark::Graphics::SoftwareDenoiser>();
+    Spark::Graphics::DenoiserSettings denoiserSettings;
+    denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
+    denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
+    m_denoiser->Initialize(denoiserSettings);
+
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Graphics", 0.0);
     return S_OK;
+}
+
+// ============================================================================
+// Phase Q: Denoiser accessor
+// ============================================================================
+
+Spark::Graphics::DenoiserBackend GraphicsEngine::GetDenoiserBackend() const
+{
+    return m_denoiser ? m_denoiser->GetBackend() : Spark::Graphics::DenoiserBackend::None;
 }
 
 // ============================================================================
@@ -569,6 +590,16 @@ void GraphicsEngine::Shutdown()
     m_constantBufferRing.Shutdown();
     m_gpuDebugMarkers.Shutdown();
     m_gpuTimestampQuery.Shutdown();
+
+    // Phase Q: tear down the image denoiser. Shutdown() drops the
+    // internal output buffer; resetting the unique_ptr releases the
+    // polymorphic backend so a future swap to OIDN / OptiX can
+    // construct a fresh instance on the next Initialize.
+    if (m_denoiser)
+    {
+        m_denoiser->Shutdown();
+        m_denoiser.reset();
+    }
 
     // Shutdown legacy systems
     if (m_renderPipeline)
@@ -1454,6 +1485,15 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_renderPipeline->SetGraphicsEngine(this);
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
+    // Phase Q: mirror the Windows denoiser activation so Linux /
+    // headless builds have the same live IDenoiser instance and
+    // tests exercising GraphicsEngine directly see consistent state.
+    m_denoiser = std::make_unique<Spark::Graphics::SoftwareDenoiser>();
+    Spark::Graphics::DenoiserSettings denoiserSettings;
+    denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
+    denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
+    m_denoiser->Initialize(denoiserSettings);
+
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",
                    rhi.bridge.GetBackendName().c_str());
 
@@ -1484,11 +1524,27 @@ void GraphicsEngine::Shutdown()
     m_temporalEffects.reset();
     m_shader.reset();
 
+    // Phase Q: tear down the denoiser on the Linux path too.
+    if (m_denoiser)
+    {
+        m_denoiser->Shutdown();
+        m_denoiser.reset();
+    }
+
     rhi.bridge.Shutdown();
     rhi.initialized = false;
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shutdown complete");
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Graphics.RHI", 0.0);
+}
+
+// ============================================================================
+// Phase Q: Denoiser accessor (Linux stub path)
+// ============================================================================
+
+Spark::Graphics::DenoiserBackend GraphicsEngine::GetDenoiserBackend() const
+{
+    return m_denoiser ? m_denoiser->GetBackend() : Spark::Graphics::DenoiserBackend::None;
 }
 
 // ============================================================================

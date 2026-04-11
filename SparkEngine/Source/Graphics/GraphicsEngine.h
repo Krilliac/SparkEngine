@@ -34,6 +34,10 @@
 #include "MakeDesc.h"
 #include "TerrainRenderer.h"
 #include "GPUTimestampQuery.h"
+// Phase Q: activated Tier 2 graphics orphan — abstract denoiser
+// interface plus SoftwareDenoiser fallback. Pure CPU (joint bilateral
+// filter), no external SDK dependency, runs on every platform.
+#include "DenoiserInterface.h"
 #include "RHI/RHIBridge.h"
 #ifdef SPARK_HARDWARE_RT
 #include "RHI/DXRSupport.h"
@@ -316,6 +320,36 @@ class GraphicsEngine
     /** @brief Get the depth buffer SRV for HiZ construction and post-process reads. */
     ID3D11ShaderResourceView* GetDepthSRV() const { return m_depthStencilSRV.Get(); }
 #endif // SPARK_PLATFORM_WINDOWS
+
+    // ========================================================================
+    // Phase Q: DenoiserInterface accessor
+    // ========================================================================
+
+    /**
+     * @brief Get the engine's image denoiser (Phase Q activation).
+     *
+     * The `GraphicsEngine` owns one `IDenoiser` instance, default-
+     * constructed as a `SoftwareDenoiser` (joint-bilateral fallback
+     * that works on every platform with no external SDK). A future
+     * ray-traced AO / GI / reflections pass can register its noisy
+     * color buffer + optional albedo / normal guides through this
+     * accessor, call `Execute()`, and read back the denoised output.
+     *
+     * The accessor returns a raw pointer (not null after Initialize)
+     * so a future swap to OIDN / OptiX is a one-line replacement
+     * inside `GraphicsEngine::Initialize`.
+     */
+    Spark::Graphics::IDenoiser* GetDenoiser() { return m_denoiser.get(); }
+    const Spark::Graphics::IDenoiser* GetDenoiser() const { return m_denoiser.get(); }
+
+    /**
+     * @brief Get the current denoiser backend (Software / OIDN / OptiX / etc).
+     *
+     * Returns `DenoiserBackend::None` on a headless build where the
+     * denoiser was never constructed, or the concrete backend the
+     * current denoiser reports.
+     */
+    Spark::Graphics::DenoiserBackend GetDenoiserBackend() const;
 
     /** @brief Set non-owning physics pointer (called by engine during init) */
     void SetPhysicsSystem(PhysicsSystem* physics) { m_physicsSystem = physics; }
@@ -663,8 +697,14 @@ class GraphicsEngine
     Spark::Graphics::GPUDebugMarkers m_gpuDebugMarkers;            ///< PIX/RenderDoc GPU annotations
     Spark::Graphics::GPUTimestampQuery m_gpuTimestampQuery;        ///< Per-pass GPU timing queries
 #endif                                                             // SPARK_PLATFORM_WINDOWS
-    std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList;  ///< Sorted draw list per frame
-    std::vector<GameObject*> m_culledObjectsBuffer;                ///< Reusable culling output (avoids per-frame alloc)
+
+    // Phase Q: image denoiser (portable — default-constructed as a
+    // SoftwareDenoiser joint-bilateral fallback that works on every
+    // platform with no external SDK). Owned by unique_ptr so a future
+    // swap to OIDN / OptiX is a one-line replacement inside Initialize.
+    std::unique_ptr<Spark::Graphics::IDenoiser> m_denoiser;
+    std::vector<Spark::Graphics::DrawSortEntry> m_sortedDrawList; ///< Sorted draw list per frame
+    std::vector<GameObject*> m_culledObjectsBuffer;               ///< Reusable culling output (avoids per-frame alloc)
 
     // Basic shader system resources (fallback rendering pipeline)
     ComPtr<ID3D11VertexShader> m_basicVertexShader;
