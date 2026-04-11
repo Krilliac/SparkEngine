@@ -95,30 +95,51 @@ TEST(GraphicsFallback_HeadlessResourceTracking)
     Spark::RHI::RHIDeviceDesc desc;
     device.Initialize(desc);
 
-    // Create resources — all return nullptr but stats are tracked
+    // Phase Y Theme 3B: NullRHIDevice now returns real stub resources
+    // (NullBuffer, NullTexture, NullShader) instead of nullptr, so
+    // downstream code can consume them without crashing. The backing
+    // memory is CPU-only. Initialize also creates two buffers
+    // internally for the transient allocator, so the test baselines
+    // its "user-created" count off the post-init stats.
+    const auto baseline = device.GetNullStats();
+
     Spark::RHI::RHIBufferDesc bufDesc;
     bufDesc.size = 1024;
     auto buf = device.CreateBuffer(bufDesc);
-    EXPECT_TRUE(buf == nullptr); // Null device doesn't allocate real resources
+    EXPECT_TRUE(buf != nullptr);
+    EXPECT_TRUE(buf->IsValid());
+    EXPECT_EQ(buf->GetSize(), static_cast<uint64_t>(1024));
 
     Spark::RHI::RHITextureDesc texDesc;
     texDesc.width = 256;
     texDesc.height = 256;
     auto tex = device.CreateTexture(texDesc);
-    EXPECT_TRUE(tex == nullptr);
+    EXPECT_TRUE(tex != nullptr);
+    EXPECT_TRUE(tex->IsValid());
+    EXPECT_EQ(tex->GetWidth(), static_cast<uint32_t>(256));
 
     Spark::RHI::RHIShaderDesc shaderDesc;
     shaderDesc.stage = Spark::RHI::RHIShaderStage::Vertex;
     auto shader = device.CreateShader(shaderDesc);
-    EXPECT_TRUE(shader == nullptr);
+    EXPECT_TRUE(shader != nullptr);
+    EXPECT_TRUE(shader->IsValid());
 
-    // Verify tracking
+    // Verify stats tracking — one of each beyond the post-init baseline.
     const auto& stats = device.GetNullStats();
-    EXPECT_EQ(stats.buffersCreated, 1u);
-    EXPECT_EQ(stats.texturesCreated, 1u);
-    EXPECT_EQ(stats.shadersCreated, 1u);
+    EXPECT_EQ(stats.buffersCreated - baseline.buffersCreated, 1u);
+    EXPECT_EQ(stats.texturesCreated - baseline.texturesCreated, 1u);
+    EXPECT_EQ(stats.shadersCreated - baseline.shadersCreated, 1u);
 
-    // Run a few frames
+    // Phase Y: the HandlePools now track every Create* call. The
+    // buffer pool also contains the two transient-allocator buffers
+    // created during Initialize, so we expect 3 total.
+    EXPECT_TRUE(device.GetBufferPool().Count() >= 1);
+    EXPECT_EQ(device.GetTexturePool().Count(), static_cast<uint32_t>(1));
+    EXPECT_EQ(device.GetShaderPool().Count(), static_cast<uint32_t>(1));
+
+    // Run a few frames — Phase Y also wires the transient allocator
+    // into BeginFrame / EndFrame, so these calls exercise the full
+    // wire-up path.
     device.BeginFrame();
     device.EndFrame();
     device.BeginFrame();

@@ -1148,6 +1148,10 @@ namespace Spark
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice initialized: %s (%s)",
                                m_capabilities.deviceName.c_str(), m_capabilities.apiVersion.c_str());
 
+                // Phase Z Theme 3B: wire the transient vertex/index allocator
+                // into the lifecycle after the GL context is ready.
+                m_transientBuffers.Initialize(this);
+
                 return true;
             }
 
@@ -1161,6 +1165,9 @@ namespace Spark
                     return;
                 m_shutdownCalled = true;
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GLDevice::Shutdown");
+                // Phase Z Theme 3B: release transient allocator buffers before
+                // the GL context becomes invalid.
+                m_transientBuffers.Shutdown(this);
                 m_immediateCommandList.reset();
 
 #if defined(__linux__) && !defined(SPARK_EGL_SUPPORT)
@@ -1693,8 +1700,14 @@ namespace Spark
             void GLDevice::BeginFrame()
             {
                 ResetStatistics();
+                // Phase Z Theme 3B: pump the transient allocator each frame.
+                m_transientBuffers.BeginFrame(this);
             }
-            void GLDevice::EndFrame() {}
+            void GLDevice::EndFrame()
+            {
+                // Phase Z Theme 3B: release the frame's transient mapping.
+                m_transientBuffers.EndFrame(this);
+            }
             void GLDevice::WaitForIdle()
             {
                 glFinish();

@@ -247,6 +247,11 @@ namespace Spark
 
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12: Device initialized: %s",
                                m_capabilities.deviceName.c_str());
+
+                // Phase Z Theme 3B: wire the transient vertex/index allocator
+                // into the lifecycle after the D3D12 device is ready.
+                m_transientBuffers.Initialize(this);
+
                 return true;
             }
 
@@ -254,6 +259,9 @@ namespace Spark
             {
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12Device::Shutdown");
+                // Phase Z Theme 3B: release transient allocator before WaitForIdle
+                // so its buffers enter the deferred-release queue cleanly.
+                m_transientBuffers.Shutdown(this);
                 WaitForIdle();
                 ProcessDeferredReleases();
                 m_immediateCommandList.reset();
@@ -1153,10 +1161,14 @@ namespace Spark
                 frame.commandAllocator->Reset();
                 ProcessDeferredReleases();
                 m_statistics = {};
+                // Phase Z Theme 3B: pump the transient allocator each frame.
+                m_transientBuffers.BeginFrame(this);
             }
 
             void D3D12Device::EndFrame()
             {
+                // Phase Z Theme 3B: release the frame's transient mapping.
+                m_transientBuffers.EndFrame(this);
                 MoveToNextFrame();
             }
 

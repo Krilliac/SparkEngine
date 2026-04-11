@@ -760,6 +760,12 @@ namespace Spark
                 // Create immediate command list wrapper
                 m_immediateCommandList = std::make_unique<D3D11CommandList>(m_immediateContext.Get(), true);
 
+                // Phase Z Theme 3B: wire the transient vertex/index allocator
+                // into the lifecycle once the D3D device is ready. CreateBuffer
+                // is valid from this point so TransientBufferAllocator::Initialize
+                // can materialise its two persistent Dynamic buffers.
+                m_transientBuffers.Initialize(this);
+
                 return true;
             }
 
@@ -767,6 +773,9 @@ namespace Spark
             {
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D11Device::Shutdown");
+                // Phase Z Theme 3B: release the transient allocator's GPU
+                // buffers before the device itself goes away.
+                m_transientBuffers.Shutdown(this);
                 m_deletionQueue.FlushAll();
                 m_immediateCommandList.reset();
                 m_immediateContext.Reset();
@@ -1226,8 +1235,14 @@ namespace Spark
             {
                 ResetStatistics();
                 m_deletionQueue.ProcessQueue();
+                // Phase Z Theme 3B: pump the transient allocator each frame.
+                m_transientBuffers.BeginFrame(this);
             }
-            void D3D11Device::EndFrame() {}
+            void D3D11Device::EndFrame()
+            {
+                // Phase Z Theme 3B: release the frame's transient mapping.
+                m_transientBuffers.EndFrame(this);
+            }
             void D3D11Device::WaitForIdle()
             {
                 m_immediateContext->Flush();

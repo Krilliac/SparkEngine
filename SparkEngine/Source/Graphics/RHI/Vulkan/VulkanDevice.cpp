@@ -264,6 +264,10 @@ namespace Spark
                                    m_pushDescriptorSupported ? "yes" : "no", m_hostImageCopySupported ? "yes" : "no");
                 }
 
+                // Phase Z Theme 3B: wire the transient vertex/index allocator
+                // into the lifecycle after the vk device is ready.
+                m_transientBuffers.Initialize(this);
+
                 return true;
             }
 
@@ -889,6 +893,10 @@ namespace Spark
             {
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VulkanDevice::Shutdown");
+                // Phase Z Theme 3B: release transient allocator buffers before
+                // wait-idle so the buffers are freed on the device's queue.
+                m_transientBuffers.Shutdown(this);
+
                 if (m_device != VK_NULL_HANDLE)
                     vkDeviceWaitIdle(m_device);
 
@@ -1649,10 +1657,17 @@ namespace Spark
                     vkWaitForFences(m_device, 1, &m_frameFences[m_currentFrame], VK_TRUE, UINT64_MAX);
                     vkResetFences(m_device, 1, &m_frameFences[m_currentFrame]);
                 }
+
+                // Phase Z Theme 3B: pump the transient allocator each frame.
+                m_transientBuffers.BeginFrame(this);
             }
 
             void VulkanDevice::EndFrame()
             {
+                // Phase Z Theme 3B: release the frame's transient mapping
+                // before submitting the frame's command list.
+                m_transientBuffers.EndFrame(this);
+
                 // Submit the immediate command list if recording
                 auto* cmdList = static_cast<VulkanCommandList*>(GetImmediateCommandList());
                 VkCommandBuffer cmd = cmdList->GetVkCommandBuffer();

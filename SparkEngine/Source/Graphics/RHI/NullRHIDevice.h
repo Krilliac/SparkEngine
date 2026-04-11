@@ -2,14 +2,34 @@
  * @file NullRHIDevice.h
  * @brief Headless no-op RHI backend for testing and CI
  *
- * Implements the full IRHIDevice interface with no-op methods.
+ * Implements the full IRHIDevice interface with no-op methods, except
+ * that resource-creation methods now return real stub objects from
+ * `NullRHIResources.h` instead of `nullptr`. Phase Y Theme 3B wires
+ * two previously-orphaned RHI utilities into this backend:
+ *
+ *   - `Spark::RHI::HandlePool<T, Tag, 256>` for each resource type —
+ *     CreateBuffer / CreateTexture / CreateShader / CreateSampler /
+ *     CreatePipelineState register the returned pointer in the
+ *     matching pool so tests can introspect live resource counts.
+ *     The pool is cleared on Shutdown.
+ *
+ *   - `Spark::RHI::TransientBufferAllocator` — initialized from
+ *     NullRHIDevice::Initialize (now that CreateBuffer returns real
+ *     NullBuffer instances with CPU-backed storage) and pumped from
+ *     BeginFrame / EndFrame so headless tests exercise the full
+ *     per-frame transient-memory lifecycle.
+ *
  * Enables render graph construction, draw call submission, and
  * shader parameter binding tests without requiring a GPU.
  */
 
 #pragma once
 
+#include "NullRHIResources.h"
 #include "RHIDevice.h"
+#include "RHIHandlePool.h"
+#include "TransientBufferAllocator.h"
+
 #include <vector>
 
 namespace Spark
@@ -72,11 +92,21 @@ namespace Spark
          * @brief Headless RHI device that implements all operations as no-ops.
          *
          * Tracks resource creation/destruction counts and call statistics
-         * for validation in tests. No GPU interaction occurs.
+         * for validation in tests. Returns real NullBuffer/NullTexture/etc.
+         * stubs from Create* so downstream code never sees nullptr. Phase Y
+         * Theme 3B also wires HandlePool + TransientBufferAllocator into the
+         * lifecycle.
          */
         class NullRHIDevice : public IRHIDevice
         {
           public:
+            static constexpr uint32_t kPoolCapacity = 256;
+            using BufferPool = HandlePool<IRHIBuffer, BufferTag, kPoolCapacity>;
+            using TexturePool = HandlePool<IRHITexture, TextureTag, kPoolCapacity>;
+            using ShaderPool = HandlePool<IRHIShader, ShaderTag, kPoolCapacity>;
+            using SamplerPool = HandlePool<IRHISampler, SamplerTag, kPoolCapacity>;
+            using PipelinePool = HandlePool<IRHIPipelineState, PipelineTag, kPoolCapacity>;
+
             static NullRHIDevice& GetInstance()
             {
                 static NullRHIDevice instance;
@@ -98,47 +128,103 @@ namespace Spark
                 m_caps.maxMSAASamples = 1;
                 FinalizeDeviceCapabilities(m_caps);
                 m_initialized = true;
+
+                // Phase Y: wire the Spark::RHI::TransientBufferAllocator into
+                // the headless lifecycle. Initialize creates one NullBuffer
+                // for vertices and one for indices via `this->CreateBuffer`,
+                // so the pools below track them as real resources.
+                m_transientBuffers.Initialize(this);
+
                 return true;
             }
 
             void Shutdown() override
             {
+                // Phase Y: tear the transient allocator down first — it holds
+                // unique_ptrs to NullBuffer objects that were registered in
+                // m_bufferPool. Clearing the pools before the allocator
+                // destructs would leave the pool with dangling raw pointers,
+                // which is fine in practice (Clear doesn't dereference), but
+                // teardown ordering is easier to reason about this way.
+                m_transientBuffers.Shutdown(this);
+
+                m_bufferPool.Clear();
+                m_texturePool.Clear();
+                m_shaderPool.Clear();
+                m_samplerPool.Clear();
+                m_pipelinePool.Clear();
+
                 m_initialized = false;
                 m_stats = {};
             }
 
             std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc&) override { return nullptr; }
 
-            std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc&) override
+            std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) override
             {
                 m_stats.buffersCreated++;
-                return nullptr;
+                auto buffer = std::make_unique<NullBuffer>(desc);
+                // Phase Y: register the raw pointer with the HandlePool. The
+                // handle is stored locally on the stack — the pool is used
+                // here as a debug/validation counter rather than as the
+                // primary lifetime owner (the caller still owns the
+                // unique_ptr).
+                [[maybe_unused]] auto handle = m_bufferPool.Allocate(buffer.get());
+                return buffer;
             }
 
-            std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc&) override
+            std::unique_ptr<IRHITexture> CreateTexture(const RHITextureDesc& desc) override
             {
                 m_stats.texturesCreated++;
-                return nullptr;
+                auto texture = std::make_unique<NullTexture>(desc);
+                [[maybe_unused]] auto handle = m_texturePool.Allocate(texture.get());
+                return texture;
             }
 
-            std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc&) override
+            std::unique_ptr<IRHIShader> CreateShader(const RHIShaderDesc& desc) override
             {
                 m_stats.shadersCreated++;
-                return nullptr;
+                auto shader = std::make_unique<NullShader>(desc);
+                [[maybe_unused]] auto handle = m_shaderPool.Allocate(shader.get());
+                return shader;
             }
 
-            std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc&) override { return nullptr; }
+            std::unique_ptr<IRHISampler> CreateSampler(const RHISamplerDesc& desc) override
+            {
+                auto sampler = std::make_unique<NullSampler>(desc);
+                [[maybe_unused]] auto handle = m_samplerPool.Allocate(sampler.get());
+                return sampler;
+            }
 
-            std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc&, IRHIShader*,
+            std::unique_ptr<IRHIPipelineState> CreatePipelineState(const RHIPipelineStateDesc& desc, IRHIShader*,
                                                                    IRHIShader*) override
             {
                 m_stats.pipelinesCreated++;
+                auto pipeline = std::make_unique<NullPipelineState>(desc);
+                [[maybe_unused]] auto handle = m_pipelinePool.Allocate(pipeline.get());
+                return pipeline;
+            }
+
+            std::unique_ptr<IRHITexture> WrapNativeTexture(void*, const RHITextureDesc& desc) override
+            {
+                // Wrappers also emit real NullTexture objects so callers
+                // never see nullptr.
+                auto texture = std::make_unique<NullTexture>(desc);
+                [[maybe_unused]] auto handle = m_texturePool.Allocate(texture.get());
+                return texture;
+            }
+
+            void* MapBuffer(IRHIBuffer* buffer) override
+            {
+                // Phase Y: return the CPU-backed storage from NullBuffer so
+                // the TransientBufferAllocator receives a writable pointer.
+                // A safe static_cast is fine here because every buffer
+                // reaching this path was produced by NullRHIDevice::CreateBuffer.
+                if (auto* nb = static_cast<NullBuffer*>(buffer))
+                    return nb->GetCpuPointer();
                 return nullptr;
             }
 
-            std::unique_ptr<IRHITexture> WrapNativeTexture(void*, const RHITextureDesc&) override { return nullptr; }
-
-            void* MapBuffer(IRHIBuffer*) override { return nullptr; }
             void UnmapBuffer(IRHIBuffer*) override {}
             void UpdateBuffer(IRHIBuffer*, const void*, size_t, size_t) override {}
             void UpdateTexture(IRHITexture*, const void*, uint32_t, uint32_t) override {}
@@ -147,8 +233,19 @@ namespace Spark
             std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override { return nullptr; }
             void ExecuteCommandList(IRHICommandList*) override { m_stats.commandListsExecuted++; }
 
-            void BeginFrame() override { m_stats.framesRendered++; }
-            void EndFrame() override {}
+            void BeginFrame() override
+            {
+                m_stats.framesRendered++;
+                // Phase Y: pump the transient allocator per frame.
+                m_transientBuffers.BeginFrame(this);
+            }
+
+            void EndFrame() override
+            {
+                // Phase Y: release the transient allocator's frame mapping.
+                m_transientBuffers.EndFrame(this);
+            }
+
             void WaitForIdle() override {}
 
             GraphicsBackend GetBackendType() const override { return GraphicsBackend::None; }
@@ -173,6 +270,16 @@ namespace Spark
             const NullStats& GetNullStats() const { return m_stats; }
             void ResetNullStats() { m_stats = {}; }
 
+            // Phase Y accessors — test hooks for validating the wired
+            // HandlePool and TransientBufferAllocator instances.
+            const BufferPool& GetBufferPool() const { return m_bufferPool; }
+            const TexturePool& GetTexturePool() const { return m_texturePool; }
+            const ShaderPool& GetShaderPool() const { return m_shaderPool; }
+            const SamplerPool& GetSamplerPool() const { return m_samplerPool; }
+            const PipelinePool& GetPipelinePool() const { return m_pipelinePool; }
+            TransientBufferAllocator& GetTransientBuffers() { return m_transientBuffers; }
+            const TransientBufferAllocator& GetTransientBuffers() const { return m_transientBuffers; }
+
             /** @brief Public constructor for factory-created instances (unique_ptr ownership). */
             NullRHIDevice() = default;
 
@@ -182,6 +289,19 @@ namespace Spark
             NullStats m_stats;
             NullCommandList m_commandList;
             bool m_initialized = false;
+
+            // Phase Y: resource tracking pools. Populated on Create*; cleared
+            // on Shutdown.
+            BufferPool m_bufferPool;
+            TexturePool m_texturePool;
+            ShaderPool m_shaderPool;
+            SamplerPool m_samplerPool;
+            PipelinePool m_pipelinePool;
+
+            // Phase Y: per-frame transient vertex/index memory. 64 KB vertex
+            // + 32 KB index is generous for headless tests and cheap at
+            // process startup.
+            TransientBufferAllocator m_transientBuffers{64 * 1024, 32 * 1024};
         };
 
     } // namespace RHI
