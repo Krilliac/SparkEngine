@@ -109,6 +109,10 @@
 #include "Engine/Gameplay/EventResponseSystem.h"
 #include "Engine/ECS/EntityPresetManager.h"
 #include "Core/AssetMigration.h"
+// Phase FF Theme 3D: two diagnostics/analytics singletons. Both are
+// Utils-folder pure-CPU classes with zero external wire-up.
+#include "Utils/Telemetry.h"
+#include "Utils/CacheDebugger.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -576,6 +580,26 @@ namespace Spark::Core::Lifecycle
         // Execute(asset, version) is called. Initialize clears the
         // previous state so the registry can be re-populated.
         Spark::AssetMigrationRegistry::GetInstance().Initialize();
+
+        // Phase FF Theme 3D: Telemetry system — event recording,
+        // batching, and backend dispatch. Initialized with
+        // consent=false + enabled=false by default so nothing is
+        // sent unless a game opts in (privacy-first). Games can
+        // re-initialize with a concrete TelemetryConfig when the
+        // user accepts data collection.
+        {
+            Spark::TelemetryConfig telemetryCfg;
+            telemetryCfg.enabled = false;
+            telemetryCfg.consentGiven = false;
+            Spark::TelemetrySystem::GetInstance().Initialize(telemetryCfg);
+        }
+
+        // Phase FF Theme 3D: Cache performance debugger — tracks
+        // hit/miss rates for engine caches. Lazy-initialised on
+        // first GetInstance() access; enabled by default. The touch
+        // here guarantees it exists for any cache that registers
+        // during engine startup.
+        (void)Spark::CacheDebugger::GetInstance();
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
@@ -1151,6 +1175,9 @@ namespace Spark::Core::Lifecycle
 
         // Engine-orphan singletons wired in this branch — teardown
         // mirrors the startup order so dependents are released first.
+        // Phase FF Theme 3D additions:
+        Spark::CacheDebugger::GetInstance().Reset();
+        Spark::TelemetrySystem::GetInstance().Shutdown();
         // Phase EE Theme 3D additions (released first — they hold no
         // GPU handles so the order relative to render-loop teardown
         // does not matter). EntityPresetManager has no explicit
