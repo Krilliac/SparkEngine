@@ -350,6 +350,13 @@ namespace Spark::UI
         SPARK_WARN_IF(Spark::LogCategory::Core, screenWidth <= 0 || screenHeight <= 0,
                       "UISystem initialized with non-positive screen dimensions");
         m_canvas.Initialize(screenWidth, screenHeight);
+
+        // Phase R: activate the per-widget composition stack. Clamp
+        // non-positive dimensions to 1 so the compositor has a valid
+        // reference size even when the caller passed garbage.
+        const uint32_t compW = screenWidth > 0 ? static_cast<uint32_t>(screenWidth) : 1u;
+        const uint32_t compH = screenHeight > 0 ? static_cast<uint32_t>(screenHeight) : 1u;
+        m_compositor.Initialize(compW, compH);
     }
 
     void UISystem::Update(float deltaTime)
@@ -365,6 +372,12 @@ namespace Spark::UI
 
     void UISystem::Render()
     {
+        // Phase R: advance the compositor frame counter so pool
+        // entries not used for 10+ frames are reclaimed. Runs every
+        // frame regardless of visibility — the reclaim path should
+        // drain the pool even when the UI is hidden.
+        m_compositor.BeginFrame();
+
         SPARK_GUARDED_UPDATE("UI:CanvasRender", "UI", {
             if (m_visible)
             {
@@ -377,6 +390,16 @@ namespace Spark::UI
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "UISystem resizing to %dx%d", width, height);
         m_canvas.Resize(width, height);
+
+        // Phase R: re-initialise the compositor with the new
+        // dimensions. Initialize() clears the pool so the metadata
+        // slots re-align with the new screen size. Any in-flight
+        // composition stack entries are also dropped — callers that
+        // push composite levels across a resize are responsible for
+        // recreating them.
+        const uint32_t compW = width > 0 ? static_cast<uint32_t>(width) : 1u;
+        const uint32_t compH = height > 0 ? static_cast<uint32_t>(height) : 1u;
+        m_compositor.Initialize(compW, compH);
     }
 
     bool UISystem::HandleClick(float x, float y)

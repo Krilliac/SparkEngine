@@ -50,6 +50,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine next-steps Phase O (ShaderVariantSystem wired into Shader class lifecycle) | [knowledge/engine-next-steps-phase-o-2026-04-11.md](knowledge/engine-next-steps-phase-o-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase P (PersistentMaterialCBManager wired into MaterialSystem lifecycle) | [knowledge/engine-next-steps-phase-p-2026-04-11.md](knowledge/engine-next-steps-phase-p-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Phase Q (DenoiserInterface + SoftwareDenoiser wired into GraphicsEngine) | [knowledge/engine-next-steps-phase-q-2026-04-11.md](knowledge/engine-next-steps-phase-q-2026-04-11.md) | Observation | Active | 2026-04-11 |
+| Engine next-steps Phase R (UICompositor wired into UISystem after wire-or-delete audit) | [knowledge/engine-next-steps-phase-r-2026-04-11.md](knowledge/engine-next-steps-phase-r-2026-04-11.md) | Observation | Active | 2026-04-11 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-11)
