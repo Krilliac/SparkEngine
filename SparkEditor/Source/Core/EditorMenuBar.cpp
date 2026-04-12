@@ -6,6 +6,7 @@
  * Split from EditorUI.cpp for maintainability.
  */
 #include "EditorUI.h"
+#include "EditorPanel.h"
 #include "EditorPluginManager.h"
 #include "EditorIcons.h"
 #include "EditorTheme.h"
@@ -463,91 +464,56 @@ namespace SparkEditor
         ImGui::EndMenu();
     }
 
-    void EditorUI::RenderWindowCorePanels()
-    {
-        if (ImGui::MenuItem("Hierarchy", nullptr, IsPanelVisible("Hierarchy")))
-            SetPanelVisible("Hierarchy", !IsPanelVisible("Hierarchy"));
-        if (ImGui::MenuItem("Inspector", nullptr, IsPanelVisible("Inspector")))
-            SetPanelVisible("Inspector", !IsPanelVisible("Inspector"));
-        if (ImGui::MenuItem("Scene View", nullptr, IsPanelVisible("SceneView")))
-            SetPanelVisible("SceneView", !IsPanelVisible("SceneView"));
-        if (ImGui::MenuItem("Asset Browser", nullptr, IsPanelVisible("AssetBrowser")))
-            SetPanelVisible("AssetBrowser", !IsPanelVisible("AssetBrowser"));
-        if (ImGui::MenuItem("Console", nullptr, IsPanelVisible("Console")))
-            SetPanelVisible("Console", !IsPanelVisible("Console"));
-        if (ImGui::MenuItem("Game View", nullptr, IsPanelVisible("GameView")))
-            SetPanelVisible("GameView", !IsPanelVisible("GameView"));
-        if (ImGui::MenuItem(ICON_FA_PALETTE " Material Editor", nullptr, IsPanelVisible("MaterialEditor")))
-            SetPanelVisible("MaterialEditor", !IsPanelVisible("MaterialEditor"));
-        if (ImGui::MenuItem(ICON_FA_PLAY " Play Mode Toolbar", nullptr, IsPanelVisible("PlayModeToolbar")))
-            SetPanelVisible("PlayModeToolbar", !IsPanelVisible("PlayModeToolbar"));
-        if (ImGui::MenuItem("Profiler", nullptr, IsPanelVisible("Profiler")))
-            SetPanelVisible("Profiler", !IsPanelVisible("Profiler"));
-    }
-
-    void EditorUI::RenderWindowToolPanels()
-    {
-        ImGui::TextDisabled("Tools & Debug");
-        if (ImGui::MenuItem(ICON_FA_BUG " Debug Visualizer", nullptr, IsPanelVisible("DebugVisualizer")))
-            SetPanelVisible("DebugVisualizer", !IsPanelVisible("DebugVisualizer"));
-        if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Stats", nullptr, IsPanelVisible("SceneStats")))
-            SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
-        if (ImGui::MenuItem(ICON_FA_CUBE " Object Placement", nullptr, IsPanelVisible("ObjectPlacement")))
-            SetPanelVisible("ObjectPlacement", !IsPanelVisible("ObjectPlacement"));
-        if (ImGui::MenuItem(ICON_FA_HAMMER " Build & Cook", nullptr, IsPanelVisible("BuildCook")))
-            SetPanelVisible("BuildCook", !IsPanelVisible("BuildCook"));
-        if (ImGui::MenuItem(ICON_FA_MOUNTAIN " Terrain Editor", nullptr, IsPanelVisible("TerrainEditor")))
-            SetPanelVisible("TerrainEditor", !IsPanelVisible("TerrainEditor"));
-
-        ImGui::TextDisabled("Tools & Analysis");
-        if (ImGui::MenuItem(ICON_FA_UNDO " Undo History", nullptr, IsPanelVisible("UndoHistory")))
-            SetPanelVisible("UndoHistory", !IsPanelVisible("UndoHistory"));
-        if (ImGui::MenuItem(ICON_FA_CHART_BAR " Scene Statistics", nullptr, IsPanelVisible("SceneStats")))
-            SetPanelVisible("SceneStats", !IsPanelVisible("SceneStats"));
-        if (ImGui::MenuItem(ICON_FA_CUBE " Prefab Editor", nullptr, IsPanelVisible("PrefabEditor")))
-            SetPanelVisible("PrefabEditor", !IsPanelVisible("PrefabEditor"));
-        if (ImGui::MenuItem(ICON_FA_SEARCH " Search", nullptr, IsPanelVisible("Search")))
-            SetPanelVisible("Search", !IsPanelVisible("Search"));
-    }
-
-    void EditorUI::RenderWindow2DAndGamePanels()
-    {
-        ImGui::TextDisabled("2D / 2.5D Panels");
-        if (ImGui::MenuItem("Sprite Editor", nullptr, IsPanelVisible("SpriteEditor")))
-            SetPanelVisible("SpriteEditor", !IsPanelVisible("SpriteEditor"));
-        if (ImGui::MenuItem("Tilemap Editor", nullptr, IsPanelVisible("TilemapEditor")))
-            SetPanelVisible("TilemapEditor", !IsPanelVisible("TilemapEditor"));
-        if (ImGui::MenuItem("Sprite Animation", nullptr, IsPanelVisible("SpriteAnimEditor")))
-            SetPanelVisible("SpriteAnimEditor", !IsPanelVisible("SpriteAnimEditor"));
-        if (ImGui::MenuItem("Physics 2D", nullptr, IsPanelVisible("Physics2D")))
-            SetPanelVisible("Physics2D", !IsPanelVisible("Physics2D"));
-        if (ImGui::MenuItem("Physics 3D", nullptr, IsPanelVisible("Physics3D")))
-            SetPanelVisible("Physics3D", !IsPanelVisible("Physics3D"));
-
-        ImGui::Separator();
-        ImGui::TextDisabled("Game Modules");
-        if (ImGui::MenuItem(ICON_FA_PUZZLE_PIECE " Game Module Selector", nullptr,
-                            IsPanelVisible("GameModuleSelector")))
-            SetPanelVisible("GameModuleSelector", !IsPanelVisible("GameModuleSelector"));
-
-        ImGui::Separator();
-        ImGui::TextDisabled("FPS Panels");
-        if (ImGui::MenuItem("Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
-            SetPanelVisible("WeaponEditor", !IsPanelVisible("WeaponEditor"));
-        if (ImGui::MenuItem("FPS Tools", nullptr, IsPanelVisible("FPSTools")))
-            SetPanelVisible("FPSTools", !IsPanelVisible("FPSTools"));
-    }
-
+    // Category-driven Window menu: groups all panels by their PanelCategory
+    // instead of hardcoded submenu functions. Adding a new panel only requires
+    // registering it in the factory and assigning a category — no menu changes.
     void EditorUI::RenderWindowMenu()
     {
         if (!ImGui::BeginMenu("Window"))
             return;
 
-        RenderWindowCorePanels();
-        ImGui::Separator();
-        RenderWindowToolPanels();
-        ImGui::Separator();
-        RenderWindow2DAndGamePanels();
+        struct CategoryInfo
+        {
+            PanelCategory cat;
+            const char* label;
+        };
+        constexpr CategoryInfo categories[] = {
+            {PanelCategory::Viewport, "Viewports"},
+            {PanelCategory::Inspector, "Inspectors"},
+            {PanelCategory::Tool, "Tools"},
+            {PanelCategory::Config, "Configuration"},
+            {PanelCategory::Debug, "Debug & Profiling"},
+            {PanelCategory::Other, "Other"},
+        };
+
+        for (const auto& [cat, label] : categories)
+        {
+            // Collect panels in this category
+            std::vector<std::pair<std::string, EditorPanel*>> catPanels;
+            for (auto& [name, panel] : m_panels)
+            {
+                if (panel->GetCategory() == cat && panel->IsVisibleInMenu())
+                    catPanels.emplace_back(name, panel.get());
+            }
+            if (catPanels.empty())
+                continue;
+
+            // Sort alphabetically for consistent ordering
+            std::sort(catPanels.begin(), catPanels.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+
+            if (ImGui::BeginMenu(label))
+            {
+                for (auto& [name, panel] : catPanels)
+                {
+                    std::string menuLabel =
+                        panel->GetIcon().empty() ? panel->GetName() : panel->GetIcon() + " " + panel->GetName();
+                    if (ImGui::MenuItem(menuLabel.c_str(), nullptr, panel->IsVisible()))
+                        panel->SetVisible(!panel->IsVisible());
+                }
+                ImGui::EndMenu();
+            }
+        }
 
         ImGui::Separator();
         if (ImGui::MenuItem("Reset Layout"))

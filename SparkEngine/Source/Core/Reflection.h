@@ -95,6 +95,10 @@ namespace Spark
         bool replicated = false;            ///< Included in network replication
         bool serialized = true;             ///< Included in save/load (default true)
         std::vector<std::string> enumNames; ///< Enum value names for dropdown display
+
+        // Conditional visibility for inspector rendering
+        std::string visibleWhenField; ///< If set, this field is only shown when the named field equals visibleWhenValue
+        int visibleWhenValue = 0;     ///< Value the controlling field must equal for this field to display
     };
 
     // ========================================================================
@@ -543,6 +547,26 @@ namespace Spark
  * Place inside a SPARK_REFLECT_TYPE block before SPARK_REFLECT_END.
  */
 #define SPARK_REFLECT_VERSION(ver) info.version = (ver);
+
+/**
+ * @brief Register a field that is only visible in the inspector when another field equals a value.
+ *
+ * Usage: SPARK_REFLECT_FIELD_VISIBLE_WHEN(Collider, radius, "Radius", shape, 1)
+ * shows the Radius field only when shape == 1 (Sphere).
+ */
+#define SPARK_REFLECT_FIELD_VISIBLE_WHEN(Type, member, displayName, controlMember, controlVal)                         \
+    {                                                                                                                  \
+        Spark::FieldInfo field;                                                                                        \
+        field.name = displayName;                                                                                      \
+        field.fieldName = #member;                                                                                     \
+        field.type = Spark::DeduceFieldType<decltype(Type::member)>();                                                 \
+        field.offset = offsetof(Type, member);                                                                         \
+        field.size = sizeof(Type::member);                                                                             \
+        field.ownerType = GetTypeId<Type>();                                                                           \
+        field.visibleWhenField = #controlMember;                                                                       \
+        field.visibleWhenValue = controlVal;                                                                           \
+        info.fields.push_back(field);                                                                                  \
+    }
 
 /**
  * @brief End type reflection registration.

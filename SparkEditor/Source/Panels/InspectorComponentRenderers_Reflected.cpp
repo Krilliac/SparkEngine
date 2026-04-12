@@ -144,6 +144,36 @@ namespace SparkEditor
         }
     }
 
+    // Check if a field should be visible based on its visibleWhenField condition.
+    static bool IsFieldVisible(const Spark::FieldInfo& field, const void* data,
+                               const std::vector<Spark::FieldInfo>& allFields)
+    {
+        if (field.visibleWhenField.empty())
+            return true; // No condition — always visible
+
+        // Find the controlling field and read its int value
+        for (const auto& ctrl : allFields)
+        {
+            if (ctrl.fieldName == field.visibleWhenField)
+            {
+                const auto* src = static_cast<const char*>(data) + ctrl.offset;
+                int val = 0;
+                if (ctrl.type == Spark::FieldType::Bool)
+                {
+                    bool b = false;
+                    std::memcpy(&b, src, sizeof(bool));
+                    val = b ? 1 : 0;
+                }
+                else
+                {
+                    std::memcpy(&val, src, sizeof(int));
+                }
+                return val == field.visibleWhenValue;
+            }
+        }
+        return true; // Controlling field not found — show by default
+    }
+
     void InspectorPanel::RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields)
     {
         if (!data)
@@ -197,6 +227,8 @@ namespace SparkEditor
                 {
                     if (field.category != cat)
                         continue;
+                    if (!IsFieldVisible(field, data, fields))
+                        continue;
 
                     auto* dst = static_cast<char*>(data) + field.offset;
                     RenderSingleField(field, dst);
@@ -217,6 +249,8 @@ namespace SparkEditor
             // Flat rendering (no categories)
             for (const auto& field : fields)
             {
+                if (!IsFieldVisible(field, data, fields))
+                    continue;
                 auto* dst = static_cast<char*>(data) + field.offset;
                 RenderSingleField(field, dst);
 
