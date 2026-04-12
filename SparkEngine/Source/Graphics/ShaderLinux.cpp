@@ -11,6 +11,7 @@
 // ============================================================================
 
 #include "Shader.h"
+#include "GraphicsEngineRHI.h"
 // Phase U: activated Tier 2 graphics orphan — process-wide shader file
 // watcher. Mirrors the Windows include block so the Linux branch can
 // reach the Spark::Graphics::ShaderHotReload singleton from Initialize.
@@ -97,6 +98,10 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     m_device = device;
     m_context = context;
 
+    // Acquire the RHI device for shader/pipeline creation on the OpenGL path.
+    auto& rhiState = Spark::Graphics::Detail::GetRHI();
+    m_rhiDevice = rhiState.initialized ? rhiState.bridge.GetDevice() : nullptr;
+
     m_vertexShader.reset(new VertexShaderResource());
     m_pixelShader.reset(new PixelShaderResource());
 
@@ -179,6 +184,16 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 
 void Shader::Shutdown()
 {
+    // Release RHI resources before the device goes away
+    m_rhiPipeline.reset();
+    m_rhiVertexShader.reset();
+    m_rhiPixelShader.reset();
+    m_rhiPerFrameCB.reset();
+    m_rhiPerObjectCB.reset();
+    m_rhiDevice = nullptr;
+    m_compiledVertexSource.clear();
+    m_compiledPixelSource.clear();
+
     m_vertexShader.reset();
     m_pixelShader.reset();
     m_shaderCache.clear();
@@ -199,10 +214,70 @@ void Shader::Shutdown()
 
 HRESULT Shader::CreateConstantBuffers()
 {
-    // On Linux, D3D11 buffers are not created. Constant buffer data is stored
-    // in-memory and forwarded to the RHI backend when available.
-    // The ComPtr<ID3D11Buffer> members remain null (stubs).
+    // Create RHI constant buffers for the OpenGL path. These are bound to
+    // UBO binding points 0 (per-frame) and 1 (per-object) matching the
+    // GLSL layout(std140, binding=N) declarations.
+    if (m_rhiDevice)
+    {
+        Spark::RHI::RHIBufferDesc cbDesc;
+        cbDesc.usage = Spark::RHI::RHIBufferUsage::Constant;
+        cbDesc.access = Spark::RHI::RHIBufferAccess::Dynamic;
+
+        cbDesc.size = sizeof(PerFrameConstants);
+        cbDesc.debugName = "PerFrameCB";
+        m_rhiPerFrameCB = m_rhiDevice->CreateBuffer(cbDesc);
+
+        cbDesc.size = sizeof(PerObjectConstants);
+        cbDesc.debugName = "PerObjectCB";
+        m_rhiPerObjectCB = m_rhiDevice->CreateBuffer(cbDesc);
+    }
+
     return S_OK;
+}
+
+void Shader::CreateRHIPipelineIfReady()
+{
+    // Already built
+    if (m_rhiPipeline)
+        return;
+
+    // Need both shaders and a device
+    if (!m_rhiDevice || m_compiledVertexSource.empty() || m_compiledPixelSource.empty())
+        return;
+
+    // Create vertex shader
+    Spark::RHI::RHIShaderDesc vsDesc;
+    vsDesc.stage = Spark::RHI::RHIShaderStage::Vertex;
+    vsDesc.sourceCode = m_compiledVertexSource;
+    vsDesc.entryPoint = "main";
+    vsDesc.language = Spark::RHI::ShaderLanguage::GLSL;
+    vsDesc.debugName = m_filePath + "_VS";
+    m_rhiVertexShader = m_rhiDevice->CreateShader(vsDesc);
+
+    // Create pixel shader
+    Spark::RHI::RHIShaderDesc psDesc;
+    psDesc.stage = Spark::RHI::RHIShaderStage::Pixel;
+    psDesc.sourceCode = m_compiledPixelSource;
+    psDesc.entryPoint = "main";
+    psDesc.language = Spark::RHI::ShaderLanguage::GLSL;
+    psDesc.debugName = m_filePath + "_PS";
+    m_rhiPixelShader = m_rhiDevice->CreateShader(psDesc);
+
+    if (!m_rhiVertexShader || !m_rhiPixelShader)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Failed to create RHI shaders from compiled GLSL source");
+        return;
+    }
+
+    // Create pipeline state
+    Spark::RHI::RHIPipelineStateDesc psoDesc;
+    psoDesc.debugName = m_filePath + "_PSO";
+    m_rhiPipeline = m_rhiDevice->CreatePipelineState(psoDesc, m_rhiVertexShader.get(), m_rhiPixelShader.get());
+
+    if (m_rhiPipeline)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RHI pipeline state created for shader '%s'", m_filePath.c_str());
+    }
 }
 
 // ============================================================================
@@ -211,14 +286,32 @@ HRESULT Shader::CreateConstantBuffers()
 
 void Shader::SetShaders()
 {
-    // On Linux, shader binding is handled through the RHI pipeline.
-    // The D3D11 context is null, so there is nothing to bind here.
-    // The compiled RHI bytecode will be used by the active RHI device.
+    // Bind the RHI pipeline state on the OpenGL path. The pipeline is
+    // created lazily the first time both VS and PS are compiled.
+    CreateRHIPipelineIfReady();
+
+    auto& rhiState = Spark::Graphics::Detail::GetRHI();
+    if (!rhiState.initialized)
+        return;
+
+    auto* cmd = rhiState.bridge.GetCommandList();
+    if (!cmd)
+        return;
+
+    if (m_rhiPipeline)
+        cmd->SetPipelineState(m_rhiPipeline.get());
+
+    // Bind constant buffers to the expected UBO slots
+    if (m_rhiPerFrameCB)
+        cmd->SetConstantBuffer(Spark::RHI::RHIShaderStage::Vertex, 0, m_rhiPerFrameCB.get());
+    if (m_rhiPerObjectCB)
+        cmd->SetConstantBuffer(Spark::RHI::RHIShaderStage::Vertex, 1, m_rhiPerObjectCB.get());
 }
 
 void Shader::UnbindShaders()
 {
-    // No-op on Linux; RHI handles unbinding
+    // On OpenGL the pipeline state persists until the next SetPipelineState call.
+    // No explicit unbind needed.
 }
 
 // ============================================================================
@@ -236,14 +329,14 @@ bool Shader::IsValid() const
 
 void Shader::UpdatePerFrameConstants(const PerFrameConstants& constants)
 {
-    // On Linux, store the data internally. The RHI backend will
-    // consume it when rendering. No D3D11 buffer update occurs.
-    (void)constants;
+    if (m_rhiDevice && m_rhiPerFrameCB)
+        m_rhiDevice->UpdateBuffer(m_rhiPerFrameCB.get(), &constants, sizeof(constants), 0);
 }
 
 void Shader::UpdatePerObjectConstants(const PerObjectConstants& constants)
 {
-    (void)constants;
+    if (m_rhiDevice && m_rhiPerObjectCB)
+        m_rhiDevice->UpdateBuffer(m_rhiPerObjectCB.get(), &constants, sizeof(constants), 0);
 }
 
 void Shader::UpdatePerMaterialConstants(const PerMaterialConstants& constants)
