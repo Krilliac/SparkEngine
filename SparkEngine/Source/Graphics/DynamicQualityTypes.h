@@ -13,8 +13,9 @@
 
 #include "../Core/Platform.h"
 
+// DirectXMath types provided by Platform.h (stubs on Linux).
+// D3D11 types: real <d3d11.h> on Windows, PlatformD3DStubs.h on Linux.
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
 #include <d3d11.h>
 #endif
 

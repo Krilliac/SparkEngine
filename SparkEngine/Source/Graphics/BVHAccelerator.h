@@ -34,7 +34,10 @@
  *
  * @see FrustumCulling.h, Octree.h, RenderSystem
  *
- * @note **Intentional reusable graphics utility** — An SAH-based bounding volume hierarchy for hierarchical frustum / ray culling. No singleton — a scene renderer that wants hierarchical culling instantiates one of these and feeds it the scene's renderable AABBs each frame. Kept header-only so future render passes can adopt it without a compiled dependency.
+ * @note **Lifecycle-only activation (Phase L)** — BVHAccelerator is referenced in
+ * SceneRenderer comments but FrustumQuery/Cull are not called from any active render path.
+ * The BVH is not populated with scene primitives. Full activation requires the scene renderer
+ * to build the BVH from renderable AABBs each frame and use FrustumQuery for hierarchical culling.
  *
  */
 

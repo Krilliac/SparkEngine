@@ -43,6 +43,7 @@ SparkEditor/Source/Communication/EngineInterface.cpp
 SparkEditor/Source/Communication/EngineInterface.h
 SparkEditor/Source/Core/EditorApplication.cpp
 SparkEditor/Source/Core/EditorCrashHandler.cpp
+SparkEditor/Source/Core/EditorLayoutManager.cpp
 SparkEditor/Source/Core/EditorLogger.h
 SparkEditor/Source/Core/EditorMenuBar.cpp
 SparkEditor/Source/Core/EditorTheme.cpp
@@ -84,6 +85,7 @@ SparkEditor/Source/Panels/NetworkDebugPanel.h
 SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp
 SparkEditor/Source/Panels/ProjectBrowserPanel.cpp
 SparkEditor/Source/Panels/ProjectSettingsPanel.cpp
+SparkEditor/Source/Panels/SceneViewPanel.cpp
 SparkEditor/Source/Panels/SelectionManager.h
 SparkEditor/Source/Panels/SpriteAnimationEditorPanel.cpp
 SparkEditor/Source/Panels/TilemapEditorPanel.cpp
@@ -224,6 +226,8 @@ SparkEngine/Source/Graphics/FBXImporter.cpp
 SparkEngine/Source/Graphics/FBXImporter.h
 SparkEngine/Source/Graphics/FastNoise2SIMD.h
 SparkEngine/Source/Graphics/FastNoiseLite.h
+SparkEngine/Source/Graphics/FoliageImpostorBaker.h
+SparkEngine/Source/Graphics/FoliageRenderer.h
 SparkEngine/Source/Graphics/FrustumCulling.h
 SparkEngine/Source/Graphics/GPUDebugMarkers.h
 SparkEngine/Source/Graphics/GPUParticleSystem.cpp
@@ -257,12 +261,15 @@ SparkEngine/Source/Graphics/PBRMaterialLighting.cpp
 SparkEngine/Source/Graphics/ParticleSystem.cpp
 SparkEngine/Source/Graphics/PipelineStateCache.h
 SparkEngine/Source/Graphics/PostProcessingPipeline.cpp
+SparkEngine/Source/Graphics/PostProcessingPipeline.h
+SparkEngine/Source/Graphics/PostProcessingPipelineGPU.cpp
 SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp
 SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h
 SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp
 SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h
 SparkEngine/Source/Graphics/RHI/DXRSupport.cpp
 SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h
+SparkEngine/Source/Graphics/RHI/NullRHIDevice.h
 SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp
 SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h
 SparkEngine/Source/Graphics/RHI/RHIAdapter.cpp
@@ -297,10 +304,12 @@ SparkEngine/Source/Graphics/TemporalEffectsTypes.h
 SparkEngine/Source/Graphics/TemporalTypes.h
 SparkEngine/Source/Graphics/TextureSystem.cpp
 SparkEngine/Source/Graphics/TextureSystem.h
+SparkEngine/Source/Graphics/TextureSystemGPU.cpp
 SparkEngine/Source/Graphics/TonemapColorGrading.cpp
 SparkEngine/Source/Graphics/UpscalingShaders.h
 SparkEngine/Source/Graphics/UpscalingSystem.cpp
 SparkEngine/Source/Graphics/UpscalingSystem.h
+SparkEngine/Source/Graphics/UpscalingSystemGPU.cpp
 SparkEngine/Source/Graphics/UpscalingTypes.h
 SparkEngine/Source/Graphics/VolumeSystem.h
 SparkEngine/Source/Graphics/VoxelConeTracing.h

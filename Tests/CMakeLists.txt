@@ -268,6 +268,18 @@ add_executable(SparkTests
     TestAssetPipelineCache.cpp
     TestEngineSettingsParser.cpp
     TestEngineSettingsEdgeCases.cpp
+    TestEngineSettingsReal.cpp
+    TestECSystemsReal.cpp
+    TestNetworkManagerReal.cpp
+    TestMaterialSystemReal.cpp
+    TestAssetPipelineReal.cpp
+    TestAbilitySystemReal.cpp
+    TestAchievementSystemReal.cpp
+    TestConstantBufferDiffReal.cpp
+    TestContainerUtilsReal.cpp
+    TestDirtyRectTrackerReal.cpp
+    TestSceneConfigDatabaseReal.cpp
+    TestSpringArmReal.cpp
     TestPerceptionSystemMath.cpp
     TestInputManagerState.cpp
     TestGamepadInputProcessing.cpp
@@ -387,6 +399,10 @@ add_executable(SparkTests
     TestDeltaSmootherReal.cpp
     TestTimerReal.cpp
     TestFileUtilsReal.cpp
+    TestAIDebugRendererReal.cpp
+    TestAssertSuppressionReal.cpp
+    TestLockFreeRingAllocatorReal.cpp
+    TestGameModeReal.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
@@ -438,10 +454,13 @@ add_executable(SparkTests
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
     TestGameModulePlatformerARPG.cpp
+    # FPS game module source needed by TestGameModeReal
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/GameMode.cpp"
     # Editor core sources (no ImGui dependency)
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLogger.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorCrashHandler.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorWindowManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
     # Editor sources needed by tests

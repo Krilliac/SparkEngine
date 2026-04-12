@@ -14,9 +14,7 @@
 
 #include "../Core/Platform.h"
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
-#endif
+// DirectXMath types provided by Platform.h (stubs on Linux).
 
 #include <algorithm>
 #include <array>

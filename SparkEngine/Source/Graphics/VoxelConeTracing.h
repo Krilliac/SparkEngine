@@ -16,7 +16,11 @@
  *
  * @see LightingSystem.h, ClusteredLightCulling.h, HybridRT/
  *
- * @note **Intentional reusable graphics utility** — Voxel-cone-traced global illumination — voxelizes the scene into a 3D texture and cone-traces against it for approximate GI. A future render pipeline feature; a render-side consumer will drive the voxelization + trace passes. Kept header-only so the CPU-side data layout can be adopted piece-wise.
+ * @note **Lifecycle-only activation (Phase T)** — VCTSystem is initialized/shutdown by
+ * GraphicsEngine but TraceDiffuse/TraceSpecular/InjectGeometry are never called from any
+ * render pass. The voxel grid (default 32^3) is allocated but never populated. Full activation
+ * requires wiring BeginVoxelization/EndVoxelization into a deferred render pass and dispatching
+ * cone trace compute shaders.
  *
  */
 

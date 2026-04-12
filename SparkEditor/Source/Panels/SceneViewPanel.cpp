@@ -6,6 +6,7 @@
  */
 
 #include "SceneViewPanel.h"
+#include "SelectionManager.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
@@ -21,6 +22,18 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         std::cout << "Initializing Scene View panel\n";
+
+        // Subscribe to the editor-wide SelectionManager so the scene view
+        // tracks which entity has the selection highlight / gizmo.
+        m_selectionMgrCallbackId = SelectionManager::GetInstance().OnSelectionChanged(
+            [this](const SelectionChangedEvent& event)
+            {
+                if (event.current.empty())
+                    m_selectedEntityId = 0;
+                else
+                    m_selectedEntityId = event.current.back();
+            });
+
         return true;
     }
 

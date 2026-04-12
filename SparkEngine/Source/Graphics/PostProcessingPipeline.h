@@ -106,45 +106,7 @@ namespace Spark::Graphics
         void Render();
 
         /** @brief Handle viewport resize, recreating GPU targets if needed */
-        void Resize(uint32_t width, uint32_t height)
-        {
-            if (width == 0 || height == 0)
-            {
-                return;
-            }
-
-            if (m_width == width && m_height == height)
-            {
-                return;
-            }
-
-            m_width = width;
-            m_height = height;
-
-            // Recreate ping-pong targets at new resolution
-            if (m_initialized && m_device)
-            {
-                CreatePingPongTargets();
-            }
-
-            // Phase J: the CPU temporal-AO history is tied to viewport size.
-            // Resize it unconditionally so a headless pipeline still keeps a
-            // coherent history buffer if it draws at the new resolution.
-            if (m_ssaoTemporalFilter.IsInitialized())
-            {
-                m_ssaoTemporalFilter.Resize(width, height);
-            }
-
-            // Phase N: propagate the new reference size to the RTHandle
-            // system. Allocated handles are grow-only, so shrinking the
-            // pipeline does not reallocate — only the reported current
-            // sizes update. Growing past the max-history size triggers
-            // a per-handle allocated-size bump on the next frame.
-            if (m_rtHandleSystem.IsInitialized())
-            {
-                m_rtHandleSystem.SetReferenceSize(width, height);
-            }
-        }
+        void Resize(uint32_t width, uint32_t height);
 
         // ---- Effect Enable/Disable ----
 
@@ -334,11 +296,7 @@ namespace Spark::Graphics
         void Console_SetExposure(float value) { m_lightShaftSettings.exposure = value; }
 
         /** @brief Set the D3D11 device and context for GPU execution */
-        void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context)
-        {
-            m_device = device;
-            m_context = context;
-        }
+        void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context);
 
         /** @brief Set the scene depth SRV for depth-aware effects */
         void SetDepthSRV(ID3D11ShaderResourceView* depthSRV) { m_depthSRV = depthSRV; }

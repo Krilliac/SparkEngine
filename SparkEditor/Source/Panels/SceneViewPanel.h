@@ -130,6 +130,11 @@ namespace SparkEditor
 
         // Collaborative peer visualization
         CollaborativeEditSession* m_collabSession = nullptr;
+
+        // SelectionManager integration — tracks the primary selected entity
+        // so the scene view can render gizmo highlights on it.
+        uint64_t m_selectedEntityId = 0;       ///< Primary selected entity (0 = none).
+        uint32_t m_selectionMgrCallbackId = 0; ///< SelectionManager subscription handle.
     };
 
 } // namespace SparkEditor
