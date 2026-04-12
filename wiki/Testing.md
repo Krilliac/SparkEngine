@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*460 test files, 5696+ test cases*
+*461 test files, 5720+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -744,6 +744,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGroupAI` | 5 |
 | `TestHLODBuilderPhaseII` | 8 |
 | `TestHLODSystem` | 9 |
+| `TestHResultPlatform` | 24 |
 | `TestHash` | 18 |
 | `TestHashReal` | 9 |
 | `TestHitchDetector` | 0 |

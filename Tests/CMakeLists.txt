@@ -451,6 +451,7 @@ add_executable(SparkTests
     TestEngineLifecycle.cpp
     TestFPSGameplayIntegration.cpp
     TestGLSLPipelineIntegration.cpp
+    TestHResultPlatform.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
     # Comprehensive subsystem coverage

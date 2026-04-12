@@ -8,6 +8,7 @@
 
 #include "TextureSystem.h"
 #include "../Utils/Validate.h"
+#include "../Utils/LogMacros.h"
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
@@ -198,7 +199,13 @@ HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* con
         desc.height = 1;
         desc.format = TextureFormat::R8G8B8A8_UNORM;
         m_whiteTexture = std::make_shared<Texture>("__white", desc);
-        m_whiteTexture->CreateFromData(nullptr, 4, nullptr);
+        HRESULT hr = m_whiteTexture->CreateFromData(nullptr, 4, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "TextureSystem: default white texture CreateFromData failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
     }
     {
         TextureDesc desc;
@@ -206,7 +213,13 @@ HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* con
         desc.height = 1;
         desc.format = TextureFormat::R8G8B8A8_UNORM;
         m_blackTexture = std::make_shared<Texture>("__black", desc);
-        m_blackTexture->CreateFromData(nullptr, 4, nullptr);
+        HRESULT hr = m_blackTexture->CreateFromData(nullptr, 4, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "TextureSystem: default black texture CreateFromData failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
     }
     {
         TextureDesc desc;
@@ -214,7 +227,13 @@ HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* con
         desc.height = 1;
         desc.format = TextureFormat::R8G8B8A8_UNORM;
         m_normalTexture = std::make_shared<Texture>("__normal", desc);
-        m_normalTexture->CreateFromData(nullptr, 4, nullptr);
+        HRESULT hr = m_normalTexture->CreateFromData(nullptr, 4, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "TextureSystem: default normal texture CreateFromData failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
     }
     {
         TextureDesc desc;
@@ -222,7 +241,13 @@ HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* con
         desc.height = 64;
         desc.format = TextureFormat::R8G8B8A8_UNORM;
         m_noiseTexture = std::make_shared<Texture>("__noise", desc);
-        m_noiseTexture->CreateFromData(nullptr, 64 * 64 * 4, nullptr);
+        HRESULT hr = m_noiseTexture->CreateFromData(nullptr, 64 * 64 * 4, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "TextureSystem: default noise texture CreateFromData failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
     }
 
     return S_OK;

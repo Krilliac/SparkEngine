@@ -309,7 +309,10 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
 
     // Initialize neural inference engine (GPU compute-based, no external ML deps)
     auto& neuralInference = Spark::Graphics::Neural::NeuralInferenceEngine::GetInstance();
-    neuralInference.Initialize();
+    if (!neuralInference.Initialize())
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "NeuralInferenceEngine::Initialize failed — continuing without ML");
+    }
     ctx->RegisterSystem<Spark::Graphics::Neural::NeuralInferenceEngine>(&neuralInference);
 
     if (registerGameplay)
