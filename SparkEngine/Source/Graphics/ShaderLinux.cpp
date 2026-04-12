@@ -118,6 +118,8 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     HRESULT hr = CreateConstantBuffers();
     if (FAILED(hr))
     {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader::CreateConstantBuffers failed (hr=0x%08X)",
+                        static_cast<unsigned>(hr));
         return hr;
     }
 

@@ -116,7 +116,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     Spark::Graphics::DenoiserSettings denoiserSettings;
     denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
     denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
-    m_denoiser->Initialize(denoiserSettings);
+    if (!m_denoiser->Initialize(denoiserSettings))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Denoiser::Initialize failed — continuing with stub");
+    }
 
     // Phase S: mirror the procedural noise graph activation on
     // Linux / headless so tests exercising GraphicsEngine see the
@@ -137,7 +140,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         vctSettings.enabled = false;
         vctSettings.voxelResolution = 32;
         vctSettings.worldExtent = 50.0f;
-        m_vctSystem->Initialize(vctSettings);
+        if (!m_vctSystem->Initialize(vctSettings))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "VCTSystem::Initialize failed — continuing without VCT");
+        }
     }
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",
