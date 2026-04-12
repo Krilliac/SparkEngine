@@ -253,7 +253,30 @@ namespace SparkEditor
             if (d)                                                                                                     \
             {                                                                                                          \
                 static const std::vector<Spark::FieldInfo> fields = {__VA_ARGS__};                                     \
+                dataType oldSnapshot = *d;                                                                             \
                 RenderReflectedFields(d, fields);                                                                      \
+                if (std::memcmp(&oldSnapshot, d, sizeof(dataType)) != 0)                                               \
+                {                                                                                                      \
+                    dataType newSnapshot = *d;                                                                         \
+                    SceneFile* cs = m_scene;                                                                           \
+                    ObjectID ci = m_inspectedObjectID;                                                                 \
+                    ComponentType ct = compType;                                                                       \
+                    auto& history = Spark::Editor::CommandHistory::GetInstance();                                      \
+                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(                                    \
+                        [cs, ci, ct, newSnapshot]()                                                                    \
+                        {                                                                                              \
+                            Component* c = FindComponent(cs, ci, ct);                                                  \
+                            if (auto* p = c ? c->GetData<dataType>() : nullptr)                                        \
+                                *p = newSnapshot;                                                                      \
+                        },                                                                                             \
+                        [cs, ci, ct, oldSnapshot]()                                                                    \
+                        {                                                                                              \
+                            Component* c = FindComponent(cs, ci, ct);                                                  \
+                            if (auto* p = c ? c->GetData<dataType>() : nullptr)                                        \
+                                *p = oldSnapshot;                                                                      \
+                        },                                                                                             \
+                        displayName " Change"));                                                                       \
+                }                                                                                                      \
             }                                                                                                          \
             else                                                                                                       \
             {                                                                                                          \

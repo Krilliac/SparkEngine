@@ -309,6 +309,7 @@ namespace SparkEditor
         void CreateToolAndContentPanels(
             const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel);
         void InitializePanelIcons();
+        void InitializePanelCategories();
         void SetDefaultPanelVisibility();
         void InitializeCommandPalette();
         void HandleKeyboardShortcuts();

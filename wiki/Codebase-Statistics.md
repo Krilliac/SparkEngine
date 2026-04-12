@@ -9,12 +9,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Section | Lines |
 |---------|------:|
 | **SparkEngine/Source** | 272699 |
-| **SparkEditor/Source** | 88402 |
+| **SparkEditor/Source** | 88618 |
 | **GameModules** | 58460 |
 | **Tests** | 127940 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~549902** |
+| **Total C++ (excl. ThirdParty)** | **~550118** |
 
 ### File Counts
 
@@ -32,7 +32,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~776 |
+| Average lines per .cpp file | ~777 |
 | Average lines per .h file | ~582 |
 | Largest codebase section | Graphics (108948 lines — 39% of SparkEngine/Source) |
 
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 88402 |
+| Total editor lines | 88618 |
 
 ## Testing Metrics
 

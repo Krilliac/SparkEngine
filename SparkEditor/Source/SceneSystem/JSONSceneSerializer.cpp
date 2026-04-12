@@ -9,6 +9,7 @@
  */
 
 #include "SceneSerializer.h"
+#include "Core/Reflection.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <filesystem>
@@ -1045,6 +1046,29 @@ namespace SparkEditor
         if (!component.data.empty())
         {
             ss << ",\"data\":\"" << BytesToHex(component.data) << "\"";
+
+            // Reflection-driven readable properties: if the component type name
+            // is registered in TypeRegistry, output named fields alongside the
+            // binary blob for human readability and debugging.
+            std::string typeName = ComponentTypeToString(component.type);
+            const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(typeName);
+            if (typeInfo && !typeInfo->fields.empty() && component.data.size() >= typeInfo->size)
+            {
+                ss << ",\"_properties\":{";
+                bool first = true;
+                for (const auto& field : typeInfo->fields)
+                {
+                    if (!field.serialized)
+                        continue;
+                    std::string val = Spark::GetFieldAsString(component.data.data(), field);
+                    if (!first)
+                        ss << ",";
+                    // Escape quotes in string values
+                    ss << "\"" << field.fieldName << "\":\"" << val << "\"";
+                    first = false;
+                }
+                ss << "}";
+            }
         }
         ss << "}";
         *json = ss.str();
@@ -1087,7 +1111,7 @@ namespace SparkEditor
             component.enabled = (str->find("true", enPos + 10) == enPos + 10);
         }
 
-        // Extract data hex string
+        // Extract data hex string (primary path)
         auto dataPos = str->find("\"data\":\"");
         if (dataPos != std::string::npos)
         {
@@ -1099,6 +1123,57 @@ namespace SparkEditor
                 component.data = HexToBytes(hexStr);
             }
         }
+
+        // Reflection fallback: if no hex data but _properties exist, reconstruct
+        // component data from named fields via TypeRegistry. This allows hand-edited
+        // scene files with readable property values.
+        if (component.data.empty())
+        {
+            auto propsPos = str->find("\"_properties\":");
+            if (propsPos != std::string::npos)
+            {
+                std::string typeName = ComponentTypeToString(component.type);
+                const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(typeName);
+                if (typeInfo && typeInfo->size > 0)
+                {
+                    component.data.resize(typeInfo->size, 0);
+                    // Parse simple "key":"value" pairs from the _properties block
+                    auto braceStart = str->find('{', propsPos);
+                    auto braceEnd = str->find('}', braceStart);
+                    if (braceStart != std::string::npos && braceEnd != std::string::npos)
+                    {
+                        std::string propsBlock = str->substr(braceStart + 1, braceEnd - braceStart - 1);
+                        size_t pos = 0;
+                        while (pos < propsBlock.size())
+                        {
+                            auto keyStart = propsBlock.find('"', pos);
+                            if (keyStart == std::string::npos)
+                                break;
+                            auto keyEnd = propsBlock.find('"', keyStart + 1);
+                            if (keyEnd == std::string::npos)
+                                break;
+                            auto valStart = propsBlock.find('"', keyEnd + 2);
+                            if (valStart == std::string::npos)
+                                break;
+                            auto valEnd = propsBlock.find('"', valStart + 1);
+                            if (valEnd == std::string::npos)
+                                break;
+
+                            std::string key = propsBlock.substr(keyStart + 1, keyEnd - keyStart - 1);
+                            std::string val = propsBlock.substr(valStart + 1, valEnd - valStart - 1);
+
+                            const auto* field = typeInfo->FindField(key);
+                            if (field)
+                            {
+                                Spark::SetFieldFromString(component.data.data(), *field, val);
+                            }
+                            pos = valEnd + 1;
+                        }
+                    }
+                }
+            }
+        }
+
         return true;
     }
 

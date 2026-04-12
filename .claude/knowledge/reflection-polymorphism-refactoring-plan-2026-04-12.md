@@ -13,7 +13,9 @@
 | 7 (Settings) | **Done** | 43 of 44 groups migrated (all except Logging with hex categoryMask). 441 manual Read + 442 manual Write lines → 88 one-liners + registrations |
 | 8B (UI Bindings) | **Done** | UITypedBinding\<T\> replaces 4 concrete classes, backward-compatible aliases |
 | 8C (Physics) | **Deferred** | IPhysicsBackend API (raw uint32_t IDs) mismatches PhysicsSystem's higher-level API (named bodies, PhysicsBody*). Would require adapter layer — not a simple inheritance |
-| 8D (Editor Panels) | **Deferred** | Optional categorization; adds code without removing any |
+| 8D (Editor Panels) | **Done** | PanelCategory enum (Viewport/Inspector/Tool/Config/Debug/Other), GetCategory() virtual, InitializePanelCategories() assigns all 59 panels |
+| Live Editing | **Done** | RENDER_REFLECTED_COMPONENT macro now captures old/new component snapshots and pushes LambdaCommand through CommandHistory for automatic undo/redo |
+| Scene Properties | **Done** | ComponentToJSON outputs `_properties` JSON block with named field values for reflection-registered types. JSONToComponent supports loading from `_properties` fallback when hex data is absent |
 
 ## Context
 
