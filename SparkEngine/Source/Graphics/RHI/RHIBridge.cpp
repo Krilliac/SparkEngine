@@ -7,6 +7,7 @@
 
 #include "RHIBridge.h"
 #include "RHIFactory.h"
+#include "NullRHIDevice.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 #include <cassert>
@@ -152,22 +153,57 @@ namespace Spark
             if (backend == GraphicsBackend::Auto)
                 backend = SelectBestBackend();
 
-            // Create the device via factory (may return NullRHIDevice for None)
-            m_device = CreateDevice(backend);
-            if (!m_device)
-                return false;
+            // Try the preferred backend first, then fall back to alternatives.
+            // This handles the common case where Vulkan is preferred on Linux but
+            // no Vulkan driver is present — the engine falls back to OpenGL.
+            auto backendsToTry = GetAvailableBackends();
 
-            // Initialize device
-            RHIDeviceDesc deviceDesc;
-            deviceDesc.preferredBackend = backend;
-            deviceDesc.enableDebugLayer = enableDebug;
-            deviceDesc.enableGPUValidation = enableDebug;
-            deviceDesc.applicationName = "SparkEngine";
+            // Move the preferred backend to the front of the list
+            auto it = std::find(backendsToTry.begin(), backendsToTry.end(), backend);
+            if (it != backendsToTry.end() && it != backendsToTry.begin())
+                std::rotate(backendsToTry.begin(), it, it + 1);
+            else if (it == backendsToTry.end())
+                backendsToTry.insert(backendsToTry.begin(), backend);
 
-            if (!m_device->Initialize(deviceDesc))
+            bool deviceReady = false;
+            for (auto candidate : backendsToTry)
             {
+                m_device = CreateDevice(candidate);
+                if (!m_device)
+                    continue;
+
+                RHIDeviceDesc deviceDesc;
+                deviceDesc.preferredBackend = candidate;
+                deviceDesc.enableDebugLayer = enableDebug;
+                deviceDesc.enableGPUValidation = enableDebug;
+                deviceDesc.applicationName = "SparkEngine";
+
+                if (m_device->Initialize(deviceDesc))
+                {
+                    if (candidate != backend)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "Preferred backend '%s' unavailable — fell back to '%s'",
+                                       Spark::RHI::GetBackendName(backend), Spark::RHI::GetBackendName(candidate));
+                    }
+                    deviceReady = true;
+                    break;
+                }
+
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Backend '%s' failed to initialize — trying next",
+                               Spark::RHI::GetBackendName(candidate));
                 m_device.reset();
-                return false;
+            }
+
+            if (!deviceReady)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "All GPU backends failed — falling back to NullRHIDevice (headless)");
+                m_device = std::make_unique<NullRHIDevice>();
+                RHIDeviceDesc nullDesc;
+                nullDesc.preferredBackend = GraphicsBackend::None;
+                nullDesc.applicationName = "SparkEngine";
+                m_device->Initialize(nullDesc);
             }
 
             // Headless path: NullRHIDevice can't create a swap chain or depth buffer,

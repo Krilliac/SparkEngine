@@ -19,6 +19,9 @@
 #include "OpenGLDevice.h"
 #include "../RHIFormatUtils.h"
 #include "../../../Utils/Validate.h"
+#ifdef SPARK_SDL2_AVAILABLE
+#include <SDL2/SDL.h>
+#endif
 #include <cassert>
 #include <cstring>
 
@@ -308,32 +311,61 @@ namespace Spark
             GLSwapChain::GLSwapChain(const RHISwapChainDesc& desc) : m_desc(desc)
             {
 #if defined(__linux__)
-                // Linux headless (EGL or GLX): create an FBO as the "swap chain" back buffer.
-                // The GL context is already current from GLDevice::Initialize().
-                GLuint colorTex = 0;
-                glCreateTextures(GL_TEXTURE_2D, 1, &colorTex);
-                glTextureStorage2D(colorTex, 1, GL_RGBA8, desc.width, desc.height);
-
-                GLuint fbo = 0;
-                glCreateFramebuffers(1, &fbo);
-                glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, colorTex, 0);
-
-                GLenum status = glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER);
-                if (status != GL_FRAMEBUFFER_COMPLETE)
+                if (desc.windowHandle != nullptr)
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Headless swap chain FBO incomplete: 0x%x", status);
+                    // Windowed mode: SDL2 created the GL context and owns the window.
+                    // Render to the default framebuffer (FBO 0) and use SDL_GL_SwapWindow.
+                    m_windowed = true;
+                    m_sdlWindow = desc.windowHandle;
+
+                    RHITextureDesc texDesc;
+                    texDesc.width = desc.width;
+                    texDesc.height = desc.height;
+                    texDesc.format = desc.format;
+                    texDesc.usage = RHITextureUsage::RenderTarget;
+                    texDesc.debugName = "DefaultFramebuffer";
+
+                    m_backBuffer = std::make_unique<GLTexture>(texDesc, 0, 0); // FBO 0 = default
+
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: windowed mode (%ux%u)", desc.width,
+                                   desc.height);
                 }
+                else
+                {
+                    // Headless mode (EGL or GLX): create an FBO as the "swap chain" back buffer.
+                    m_windowed = false;
 
-                RHITextureDesc texDesc;
-                texDesc.width = desc.width;
-                texDesc.height = desc.height;
-                texDesc.format = desc.format;
-                texDesc.usage = RHITextureUsage::RenderTarget;
-                texDesc.debugName = "HeadlessBackBuffer";
+                    GLuint colorTex = 0;
+                    glCreateTextures(GL_TEXTURE_2D, 1, &colorTex);
+                    glTextureStorage2D(colorTex, 1, GL_RGBA8, desc.width, desc.height);
 
-                m_backBuffer = std::make_unique<GLTexture>(texDesc, colorTex, fbo);
+                    GLuint fbo = 0;
+                    glCreateFramebuffers(1, &fbo);
+                    glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, colorTex, 0);
+
+                    GLenum status = glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER);
+                    if (status != GL_FRAMEBUFFER_COMPLETE)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Headless swap chain FBO incomplete: 0x%x",
+                                        status);
+                    }
+
+                    RHITextureDesc texDesc;
+                    texDesc.width = desc.width;
+                    texDesc.height = desc.height;
+                    texDesc.format = desc.format;
+                    texDesc.usage = RHITextureUsage::RenderTarget;
+                    texDesc.debugName = "HeadlessBackBuffer";
+
+                    m_backBuffer = std::make_unique<GLTexture>(texDesc, colorTex, fbo);
+
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL swap chain: headless FBO mode (%ux%u)",
+                                   desc.width, desc.height);
+                }
 #else
-                // Create a texture wrapper for the default framebuffer
+                // Windows: render to the default framebuffer
+                m_windowed = true;
+
                 RHITextureDesc texDesc;
                 texDesc.width = desc.width;
                 texDesc.height = desc.height;
@@ -362,7 +394,7 @@ namespace Spark
                 m_hglrc = wglCreateContext(m_hdc);
                 wglMakeCurrent(m_hdc, m_hglrc);
 #endif
-#endif // SPARK_EGL_SUPPORT
+#endif
             }
 
             GLSwapChain::~GLSwapChain()
@@ -378,9 +410,19 @@ namespace Spark
 #endif
             }
 
-            bool GLSwapChain::Present(bool)
+            bool GLSwapChain::Present(bool vsync)
             {
 #if defined(__linux__)
+                if (m_windowed && m_sdlWindow)
+                {
+#ifdef SPARK_SDL2_AVAILABLE
+                    SDL_GL_SetSwapInterval(vsync ? 1 : 0);
+                    SDL_GL_SwapWindow(static_cast<SDL_Window*>(m_sdlWindow));
+#else
+                    glFlush();
+#endif
+                    return true;
+                }
                 // Headless: flush all pending GL commands (no window to swap to)
                 glFlush();
                 return true;
@@ -398,6 +440,44 @@ namespace Spark
             {
                 m_desc.width = width;
                 m_desc.height = height;
+
+                if (m_windowed)
+                {
+                    // Windowed: default framebuffer resizes automatically with the window.
+                    // Just update the stored dimensions in the back buffer wrapper.
+                    if (m_backBuffer)
+                    {
+                        RHITextureDesc texDesc;
+                        texDesc.width = width;
+                        texDesc.height = height;
+                        texDesc.format = m_desc.format;
+                        texDesc.usage = RHITextureUsage::RenderTarget;
+                        texDesc.debugName = "DefaultFramebuffer";
+                        m_backBuffer = std::make_unique<GLTexture>(texDesc, 0, 0);
+                    }
+                }
+                else
+                {
+                    // Headless: recreate the FBO at the new size
+                    GLuint colorTex = 0;
+                    glCreateTextures(GL_TEXTURE_2D, 1, &colorTex);
+                    glTextureStorage2D(colorTex, 1, GL_RGBA8, width, height);
+
+                    GLuint fbo = 0;
+                    glCreateFramebuffers(1, &fbo);
+                    glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, colorTex, 0);
+
+                    RHITextureDesc texDesc;
+                    texDesc.width = width;
+                    texDesc.height = height;
+                    texDesc.format = m_desc.format;
+                    texDesc.usage = RHITextureUsage::RenderTarget;
+                    texDesc.debugName = "HeadlessBackBuffer";
+
+                    // Old FBO/texture cleaned up by GLTexture destructor
+                    m_backBuffer = std::make_unique<GLTexture>(texDesc, colorTex, fbo);
+                }
+
                 glViewport(0, 0, width, height);
                 return true;
             }
@@ -438,11 +518,20 @@ namespace Spark
                 GLuint fbo = glTex->GetGLFramebuffer();
                 glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-                // Set draw buffers
-                std::vector<GLenum> drawBuffers(count);
-                for (uint32_t i = 0; i < count; ++i)
-                    drawBuffers[i] = GL_COLOR_ATTACHMENT0 + i;
-                glDrawBuffers(count, drawBuffers.data());
+                if (fbo == 0)
+                {
+                    // Default framebuffer: valid draw buffers are GL_BACK (not GL_COLOR_ATTACHMENT0)
+                    GLenum backBuf = GL_BACK;
+                    glDrawBuffers(1, &backBuf);
+                }
+                else
+                {
+                    // FBO: use color attachment points
+                    std::vector<GLenum> drawBuffers(count);
+                    for (uint32_t i = 0; i < count; ++i)
+                        drawBuffers[i] = GL_COLOR_ATTACHMENT0 + i;
+                    glDrawBuffers(count, drawBuffers.data());
+                }
 
                 if (m_statistics)
                 {

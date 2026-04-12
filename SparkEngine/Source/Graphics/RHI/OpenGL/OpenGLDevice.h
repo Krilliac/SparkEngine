@@ -275,14 +275,18 @@ namespace Spark
               private:
                 RHISwapChainDesc m_desc;
                 std::unique_ptr<GLTexture> m_backBuffer;
+                bool m_windowed = false; ///< True when rendering to an on-screen window
 
 #ifdef _WIN32
                 HDC m_hdc = nullptr;
                 HGLRC m_hglrc = nullptr;
-#elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+#elif defined(__linux__)
+                void* m_sdlWindow = nullptr; ///< SDL_Window* for windowed Present
+#ifdef SPARK_EGL_SUPPORT
                 EGLDisplay m_eglDisplay = EGL_NO_DISPLAY;
                 EGLSurface m_eglSurface = EGL_NO_SURFACE;
                 EGLContext m_eglContext = EGL_NO_CONTEXT;
+#endif
 #endif
             };
 
