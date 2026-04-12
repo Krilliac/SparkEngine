@@ -9,12 +9,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Section | Lines |
 |---------|------:|
 | **SparkEngine/Source** | 273153 |
-| **SparkEditor/Source** | 88617 |
+| **SparkEditor/Source** | 88721 |
 | **GameModules** | 58460 |
 | **Tests** | 127940 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~550571** |
+| **Total C++ (excl. ThirdParty)** | **~550675** |
 
 ### File Counts
 
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 88617 |
+| Total editor lines | 88721 |
 
 ## Testing Metrics
 
@@ -190,10 +190,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `ProjectSettingsPanel.cpp` | 1501 |
 | `EditorTheme.cpp` | 1456 |
 | `CollaborativeEditSession.cpp` | 1384 |
+| `InspectorComponentRenderers_Reflected.cpp` | 1362 |
 | `InspectorPanel.cpp` | 1288 |
 | `LevelStreamingSystem.cpp` | 1272 |
 | `MaterialEditor.cpp` | 1269 |
-| `HierarchyPanel.cpp` | 1182 |
 
 ## Shader Inventory
 
