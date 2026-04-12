@@ -268,6 +268,11 @@ add_executable(SparkTests
     TestAssetPipelineCache.cpp
     TestEngineSettingsParser.cpp
     TestEngineSettingsEdgeCases.cpp
+    TestEngineSettingsReal.cpp
+    TestECSystemsReal.cpp
+    TestNetworkManagerReal.cpp
+    TestMaterialSystemReal.cpp
+    TestAssetPipelineReal.cpp
     TestPerceptionSystemMath.cpp
     TestInputManagerState.cpp
     TestGamepadInputProcessing.cpp
