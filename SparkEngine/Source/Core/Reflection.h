@@ -61,6 +61,7 @@ namespace Spark
         Float,
         Double,
         String,
+        Vector2, ///< XMFLOAT2 or equivalent 2-float struct
         Vector3, ///< XMFLOAT3 or equivalent 3-float struct
         Vector4, ///< XMFLOAT4 or equivalent 4-float struct
         Enum,

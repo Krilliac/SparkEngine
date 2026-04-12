@@ -177,53 +177,8 @@ namespace Spark
                 t.scale = {SafeGetFloat(p, "sx", 1), SafeGetFloat(p, "sy", 1), SafeGetFloat(p, "sz", 1)};
             });
 
-        reg.Register(
-            "MeshRenderer",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* m = static_cast<const MeshRenderer*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "MeshRenderer";
-                sc.properties["meshPath"] = m->meshPath;
-                sc.properties["materialPath"] = m->materialPath;
-                sc.properties["castShadows"] = m->castShadows ? "1" : "0";
-                sc.properties["receiveShadows"] = m->receiveShadows ? "1" : "0";
-                sc.properties["visible"] = m->visible ? "1" : "0";
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& m = world.AddComponent<MeshRenderer>(entity);
-                auto& p = data.properties;
-                m.meshPath = SafeGetString(p, "meshPath");
-                m.materialPath = SafeGetString(p, "materialPath");
-                m.castShadows = SafeGetString(p, "castShadows") != "0";
-                m.receiveShadows = SafeGetString(p, "receiveShadows") != "0";
-                m.visible = SafeGetString(p, "visible") != "0";
-            });
-
-        reg.Register(
-            "Camera",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* c = static_cast<const Camera*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "Camera";
-                sc.properties["fov"] = std::to_string(c->fov);
-                sc.properties["nearPlane"] = std::to_string(c->nearPlane);
-                sc.properties["farPlane"] = std::to_string(c->farPlane);
-                sc.properties["isMainCamera"] = c->isMainCamera ? "1" : "0";
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& c = world.AddComponent<Camera>(entity);
-                auto& p = data.properties;
-                c.fov = SafeGetFloat(p, "fov", 60.0f);
-                c.nearPlane = SafeGetFloat(p, "nearPlane", 0.1f);
-                c.farPlane = SafeGetFloat(p, "farPlane", 1000.0f);
-                c.isMainCamera = SafeGetString(p, "isMainCamera") == "1";
-            });
+        // MeshRenderer — handled by RegisterReflectedSerializers() (field names match)
+        // Camera — handled by RegisterReflectedSerializers() (field names match)
 
         reg.Register(
             "Script",
@@ -285,22 +240,7 @@ namespace Spark
                 }
             });
 
-        reg.Register(
-            "ActiveComponent",
-            [](const void* comp) -> SerializedComponent
-            {
-                const auto* ac = static_cast<const ActiveComponent*>(comp);
-                SerializedComponent sc;
-                sc.typeName = "ActiveComponent";
-                sc.properties["active"] = ac->active ? "1" : "0";
-                return sc;
-            },
-            [](World& world, EntityID entity, const SerializedComponent& data)
-            {
-                auto& ac = world.AddComponent<ActiveComponent>(entity);
-                auto it = data.properties.find("active");
-                ac.active = (it == data.properties.end()) || (it->second != "0");
-            });
+        // ActiveComponent — handled by RegisterReflectedSerializers() (field names match)
     }
 
     static void RegisterPhysicsSerializers(ComponentSerializerRegistry& reg)

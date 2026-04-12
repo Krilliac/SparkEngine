@@ -92,6 +92,20 @@ namespace Spark
             *str = value;
             return true;
         }
+        case FieldType::Vector2:
+        {
+            // Parse "x,y" format
+            float x = 0, y = 0;
+            std::istringstream ss(value);
+            char delim;
+            if (ss >> x >> delim >> y)
+            {
+                std::memcpy(dst, &x, sizeof(float));
+                std::memcpy(dst + sizeof(float), &y, sizeof(float));
+                return true;
+            }
+            return false;
+        }
         case FieldType::Vector3:
         {
             // Parse "x,y,z" format
@@ -164,6 +178,13 @@ namespace Spark
         {
             const auto* str = reinterpret_cast<const std::string*>(src);
             return *str;
+        }
+        case FieldType::Vector2:
+        {
+            float x, y;
+            std::memcpy(&x, src, sizeof(float));
+            std::memcpy(&y, src + sizeof(float), sizeof(float));
+            return std::to_string(x) + "," + std::to_string(y);
         }
         case FieldType::Vector3:
         {
@@ -239,9 +260,9 @@ SPARK_REFLECT_FIELD(NameComponent, name, "Name")
 SPARK_REFLECT_END(NameComponent)
 
 SPARK_REFLECT_TYPE(Transform)
-SPARK_REFLECT_FIELD_AS(Transform, position, "Position", Spark::FieldType::Vector3)
-SPARK_REFLECT_FIELD_AS(Transform, rotation, "Rotation", Spark::FieldType::Vector3)
-SPARK_REFLECT_FIELD_AS(Transform, scale, "Scale", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD_ATTR_AS(Transform, position, "Position", Spark::FieldType::Vector3, field.replicated = true;)
+SPARK_REFLECT_FIELD_ATTR_AS(Transform, rotation, "Rotation", Spark::FieldType::Vector3, field.replicated = true;)
+SPARK_REFLECT_FIELD_ATTR_AS(Transform, scale, "Scale", Spark::FieldType::Vector3, field.replicated = true;)
 SPARK_REFLECT_END(Transform)
 
 SPARK_REFLECT_TYPE(MeshRenderer)
@@ -339,8 +360,8 @@ SPARK_REFLECT_END(AIComponent)
 // --- Networking ---
 
 SPARK_REFLECT_TYPE(NetworkIdentity)
-SPARK_REFLECT_FIELD(NetworkIdentity, replicateTransform, "Replicate Transform")
-SPARK_REFLECT_FIELD(NetworkIdentity, replicateHealth, "Replicate Health")
+SPARK_REFLECT_FIELD_ATTR(NetworkIdentity, replicateTransform, "Replicate Transform", field.replicated = true;)
+SPARK_REFLECT_FIELD_ATTR(NetworkIdentity, replicateHealth, "Replicate Health", field.replicated = true;)
 SPARK_REFLECT_END(NetworkIdentity)
 
 // --- Gameplay ---
@@ -350,7 +371,7 @@ SPARK_REFLECT_FIELD(ActiveComponent, active, "Active")
 SPARK_REFLECT_END(ActiveComponent)
 
 SPARK_REFLECT_TYPE(HealthComponent)
-SPARK_REFLECT_FIELD(HealthComponent, health, "Health")
+SPARK_REFLECT_FIELD_ATTR(HealthComponent, health, "Health", field.replicated = true;)
 SPARK_REFLECT_FIELD_RANGE(HealthComponent, maxHealth, "Max Health", 1.0f, 100000.0f)
 SPARK_REFLECT_END(HealthComponent)
 

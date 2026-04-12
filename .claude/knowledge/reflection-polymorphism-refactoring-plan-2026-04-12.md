@@ -4,10 +4,10 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1 (Inspector) | **Done** | FieldInfo extended (tooltip/category/isAssetPath/replicated/serialized/enumNames), SPARK_REFLECT_FIELD_ATTR macros, RenderReflectedFields with category/tooltip/enum support, 10 renderers migrated |
+| 1 (Inspector) | **Done** | FieldInfo extended (tooltip/category/isAssetPath/replicated/serialized/enumNames/Vector2), SPARK_REFLECT_FIELD_ATTR macros, RenderReflectedFields with category/tooltip/enum/vec2, 17 of 35 renderers migrated |
 | 2 (Serialization) | **Foundation done** | ReflectionSerializer.h created (SerializeToProperties/DeserializeFromProperties/binary), not yet wired into JSONSceneSerializer |
-| 3 (Save/Load) | Planned | RegisterReflectedSerializers already works, hand-written serializers still exist |
-| 4 (Network) | Planned | |
+| 3 (Save/Load) | **Partial** | 3 hand-written serializers removed (MeshRenderer, Camera, ActiveComponent) — reflection fallback handles them. 10 remain (custom format) |
+| 4 (Network) | **Prep done** | Transform/Health/NetworkIdentity fields marked `replicated=true`. EntityReplicator not yet modified |
 | 5 (Materials) | Planned | |
 | 6 (AngelScript) | Planned | |
 | 7 (Settings) | Planned | |

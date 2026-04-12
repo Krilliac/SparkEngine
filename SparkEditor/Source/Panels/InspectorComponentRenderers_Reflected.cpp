@@ -117,6 +117,13 @@ namespace SparkEditor
             }
             break;
 
+        case Spark::FieldType::Vector2:
+        {
+            float* v = reinterpret_cast<float*>(dst);
+            ImGui::DragFloat2(field.name.c_str(), v, 0.1f);
+            break;
+        }
+
         case Spark::FieldType::Vector3:
         {
             float* v = reinterpret_cast<float*>(dst);
@@ -295,6 +302,8 @@ namespace SparkEditor
     MakeField(displayName, #member, Spark::FieldType::Int, offsetof(DataType, member), sizeof(int))
 #define FIELD_BOOL(DataType, member, displayName)                                                                      \
     MakeField(displayName, #member, Spark::FieldType::Bool, offsetof(DataType, member), sizeof(bool))
+#define FIELD_VEC2(DataType, member, displayName)                                                                      \
+    MakeField(displayName, #member, Spark::FieldType::Vector2, offsetof(DataType, member), sizeof(XMFLOAT2))
 #define FIELD_VEC3(DataType, member, displayName)                                                                      \
     MakeField(displayName, #member, Spark::FieldType::Vector3, offsetof(DataType, member), sizeof(XMFLOAT3))
 #define FIELD_VEC4(DataType, member, displayName)                                                                      \
@@ -800,6 +809,210 @@ namespace SparkEditor
             }
             ImGui::Unindent(4);
         }
+    }
+
+    // ============================================================================
+    // Batch 2 — Migrated from InspectorComponentRenderers_Gameplay.cpp
+    // ============================================================================
+
+    // ============================================================================
+    // Decal (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderDecalComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(
+            ComponentType::DECAL, ICON_FA_STAMP, "Decal", DecalData, FIELD_STRING(DecalData, texturePath, "Texture"),
+            FIELD_STRING(DecalData, category, "Category"), FIELD_VEC3(DecalData, size, "Size"),
+            FIELD_VEC4(DecalData, color, "Color"), FIELD_FLOAT(DecalData, lifetime, "Lifetime"),
+            FIELD_FLOAT(DecalData, fadeOutDuration, "Fade Duration"),
+            FIELD_BOOL(DecalData, receiveLighting, "Receive Lighting"), FIELD_INT(DecalData, sortOrder, "Sort Order"));
+    }
+
+    // ============================================================================
+    // Particle Emitter (migrated to reflection with categories)
+    // ============================================================================
+
+    void InspectorPanel::RenderParticleEmitterComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_FIRE " Particle Emitter");
+        if (ImGui::BeginPopupContextItem("##ParticleEmitterCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::PARTICLE_SYSTEM);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PARTICLE_SYSTEM);
+            auto* d = comp ? comp->GetData<ParticleEmitterData>() : nullptr;
+            if (d)
+            {
+                Spark::FieldInfo nameField = FIELD_STRING(ParticleEmitterData, effectName, "Effect Name");
+                Spark::FieldInfo autoField = FIELD_BOOL(ParticleEmitterData, autoPlay, "Auto Play");
+                Spark::FieldInfo loopField = FIELD_BOOL(ParticleEmitterData, loop, "Loop");
+                Spark::FieldInfo rateField = FIELD_FLOAT(ParticleEmitterData, emissionRate, "Rate");
+                rateField.category = "Emission";
+                Spark::FieldInfo maxField = FIELD_INT(ParticleEmitterData, maxParticles, "Max Particles");
+                maxField.category = "Emission";
+                Spark::FieldInfo lifeField = FIELD_FLOAT(ParticleEmitterData, lifetime, "Lifetime");
+                lifeField.category = "Emission";
+                Spark::FieldInfo colField = FIELD_VEC4(ParticleEmitterData, startColor, "Start Color");
+                colField.category = "Initial Values";
+                Spark::FieldInfo sizeField = FIELD_FLOAT(ParticleEmitterData, startSize, "Start Size");
+                sizeField.category = "Initial Values";
+                Spark::FieldInfo speedField = FIELD_FLOAT(ParticleEmitterData, startSpeed, "Start Speed");
+                speedField.category = "Initial Values";
+                Spark::FieldInfo gravField = FIELD_FLOAT(ParticleEmitterData, gravityMultiplier, "Gravity");
+                gravField.category = "Initial Values";
+
+                const std::vector<Spark::FieldInfo> fields = {nameField, autoField, loopField, rateField,  maxField,
+                                                              lifeField, colField,  sizeField, speedField, gravField};
+                RenderReflectedFields(d, fields);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Batch 2 — Migrated from InspectorComponentRenderers_2D.cpp
+    // ============================================================================
+
+    // ============================================================================
+    // Sprite Renderer (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderSpriteRendererComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(
+            ComponentType::SPRITE_RENDERER, ICON_FA_IMAGE, "Sprite Renderer", SpriteRendererData,
+            FIELD_STRING(SpriteRendererData, texturePath, "Texture"), FIELD_VEC4(SpriteRendererData, color, "Color"),
+            FIELD_VEC2(SpriteRendererData, pivot, "Pivot"),
+            FIELD_FLOAT(SpriteRendererData, pixelsPerUnit, "Pixels/Unit"),
+            FIELD_INT(SpriteRendererData, sortingLayer, "Sorting Layer"),
+            FIELD_INT(SpriteRendererData, orderInLayer, "Order in Layer"),
+            FIELD_BOOL(SpriteRendererData, flipX, "Flip X"), FIELD_BOOL(SpriteRendererData, flipY, "Flip Y"));
+    }
+
+    // ============================================================================
+    // Camera 2D (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderCamera2DComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(
+            ComponentType::CAMERA_2D, ICON_FA_CAMERA, "Camera 2D", Camera2DData,
+            FIELD_FLOAT(Camera2DData, orthoSize, "Ortho Size"), FIELD_FLOAT(Camera2DData, zoom, "Zoom"),
+            FIELD_FLOAT(Camera2DData, nearPlane, "Near Plane"), FIELD_FLOAT(Camera2DData, farPlane, "Far Plane"),
+            FIELD_FLOAT(Camera2DData, followSmoothing, "Follow Smoothing"),
+            FIELD_VEC2(Camera2DData, deadZone, "Dead Zone"), FIELD_VEC4(Camera2DData, clearColor, "Clear Color"),
+            FIELD_BOOL(Camera2DData, isMain2DCamera, "Main 2D Camera"));
+    }
+
+    // ============================================================================
+    // Tilemap (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderTilemapComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_TH " Tilemap");
+        if (ImGui::BeginPopupContextItem("##TilemapCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::TILEMAP);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::TILEMAP);
+            auto* d = comp ? comp->GetData<TilemapData>() : nullptr;
+            if (d)
+            {
+                static const std::vector<Spark::FieldInfo> fields = {
+                    FIELD_STRING(TilemapData, tilesetTexturePath, "Tileset"),
+                    FIELD_INT(TilemapData, tileWidth, "Tile Width"),
+                    FIELD_INT(TilemapData, tileHeight, "Tile Height"),
+                    FIELD_INT(TilemapData, mapWidth, "Map Width"),
+                    FIELD_INT(TilemapData, mapHeight, "Map Height"),
+                    FIELD_FLOAT(TilemapData, pixelsPerUnit, "Pixels/Unit"),
+                    FIELD_INT(TilemapData, sortingLayer, "Sorting Layer"),
+                    FIELD_BOOL(TilemapData, generateCollision, "Generate Collision"),
+                };
+                RenderReflectedFields(d, fields);
+                ImGui::TextDisabled("Paint tiles in the Tilemap Editor panel");
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Nine-Slice (migrated to reflection with categories)
+    // ============================================================================
+
+    void InspectorPanel::RenderNineSliceComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BORDER_ALL " Nine-Slice");
+        if (ImGui::BeginPopupContextItem("##NineSliceCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::NINE_SLICE);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::NINE_SLICE);
+            auto* d = comp ? comp->GetData<NineSliceData>() : nullptr;
+            if (d)
+            {
+                Spark::FieldInfo texField = FIELD_STRING(NineSliceData, texturePath, "Texture");
+                Spark::FieldInfo leftField = FIELD_FLOAT(NineSliceData, borderLeft, "Left");
+                leftField.category = "Borders (pixels)";
+                Spark::FieldInfo topField = FIELD_FLOAT(NineSliceData, borderTop, "Top");
+                topField.category = "Borders (pixels)";
+                Spark::FieldInfo rightField = FIELD_FLOAT(NineSliceData, borderRight, "Right");
+                rightField.category = "Borders (pixels)";
+                Spark::FieldInfo bottomField = FIELD_FLOAT(NineSliceData, borderBottom, "Bottom");
+                bottomField.category = "Borders (pixels)";
+                Spark::FieldInfo sizeField = FIELD_VEC2(NineSliceData, size, "Size");
+                Spark::FieldInfo colorField = FIELD_VEC4(NineSliceData, color, "Color");
+                Spark::FieldInfo fillField = FIELD_BOOL(NineSliceData, fillCenter, "Fill Center");
+                Spark::FieldInfo sortField = FIELD_INT(NineSliceData, sortingLayer, "Sorting Layer");
+
+                const std::vector<Spark::FieldInfo> fields = {texField,  leftField,  topField,  rightField, bottomField,
+                                                              sizeField, colorField, fillField, sortField};
+                RenderReflectedFields(d, fields);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Parallax Background (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderParallaxBGComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(
+            ComponentType::PARALLAX_BG, ICON_FA_LAYER_GROUP, "Parallax Background", ParallaxLayerData,
+            FIELD_STRING(ParallaxLayerData, texturePath, "Texture"),
+            FIELD_VEC2(ParallaxLayerData, scrollSpeed, "Scroll Speed"), FIELD_BOOL(ParallaxLayerData, tileX, "Tile X"),
+            FIELD_BOOL(ParallaxLayerData, tileY, "Tile Y"), FIELD_VEC4(ParallaxLayerData, tint, "Tint"),
+            FIELD_INT(ParallaxLayerData, sortOrder, "Sort Order"));
     }
 
 } // namespace SparkEditor
