@@ -47,7 +47,9 @@ TEST(LevelStreamingPhaseAA_AddRemoveTile)
     SparkEditor::WorldTile tile;
     tile.name = "TileA";
     tile.filePath = "world/TileA.scene";
-    EXPECT_TRUE(ls.AddTile(tile));
+    // WorldTile contains std::future<bool> loadingTask which deletes the
+    // copy constructor; the test must move the tile into AddTile.
+    EXPECT_TRUE(ls.AddTile(std::move(tile)));
     EXPECT_EQ(ls.GetAllTiles().size(), static_cast<size_t>(1));
 
     EXPECT_TRUE(ls.RemoveTile("TileA"));
@@ -119,7 +121,7 @@ TEST(LevelStreamingPhaseAA_MultipleTilesAndRemoveSpecific)
         SparkEditor::WorldTile tile;
         tile.name = "Tile_" + std::to_string(i);
         tile.filePath = "world/" + tile.name + ".scene";
-        ls.AddTile(tile);
+        ls.AddTile(std::move(tile)); // WorldTile is move-only (std::future).
     }
     EXPECT_EQ(ls.GetAllTiles().size(), static_cast<size_t>(5));
 
@@ -157,7 +159,10 @@ TEST(LevelStreamingPhaseAA_ValidateWorldOnEmptyReturnsClean)
     // world, validation may report success or a warning; just verify
     // the call is safe and doesn't throw.
     (void)result;
-    EXPECT_TRUE(errors.size() >= 0);
+    // `errors` is always a valid vector after the call (size is unsigned
+    // so a `>= 0` check is tautological); we simply assert that
+    // ValidateWorld did not crash or corrupt the vector.
+    EXPECT_TRUE(true);
 
     ls.Shutdown();
 }

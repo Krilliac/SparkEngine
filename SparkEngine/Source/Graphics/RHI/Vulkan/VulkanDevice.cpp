@@ -893,12 +893,20 @@ namespace Spark
             {
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VulkanDevice::Shutdown");
-                // Phase Z Theme 3B: release transient allocator buffers before
-                // wait-idle so the buffers are freed on the device's queue.
-                m_transientBuffers.Shutdown(this);
 
+                // Phase Z Theme 3B (fix for Codex P1 review comment on PR #459):
+                // Drain the device BEFORE destroying transient allocator buffers.
+                // TransientBufferAllocator::Shutdown immediately destroys its
+                // VulkanBuffer objects, whose destructors call vkDestroyBuffer /
+                // vkFreeMemory. If the previous frame is still executing those
+                // buffers may be in flight, so we must first wait for the device
+                // to go idle — otherwise Vulkan validation layers report
+                // destroy-on-in-flight-resource errors and some drivers may
+                // fault during shutdown.
                 if (m_device != VK_NULL_HANDLE)
                     vkDeviceWaitIdle(m_device);
+
+                m_transientBuffers.Shutdown(this);
 
                 m_immediateCommandList.reset();
 

@@ -10,6 +10,29 @@
 
 #pragma once
 
+// The Windows SDK (winnt.h) defines `DELETE` as `(0x00010000L)` and a few
+// other all-caps tokens as macros. If any translation unit includes a
+// Windows header before this file, the bare `DELETE` / `IN` / `OUT` /
+// `OPTIONAL` tokens inside enum class bodies below would be
+// preprocessor-expanded and produce confusing syntax errors. Undefine
+// the troublesome macros defensively so the enums below are always
+// parsed as written.
+#ifdef DELETE
+#undef DELETE
+#endif
+#ifdef IN
+#undef IN
+#endif
+#ifdef OUT
+#undef OUT
+#endif
+#ifdef OPTIONAL
+#undef OPTIONAL
+#endif
+#ifdef ERROR
+#undef ERROR
+#endif
+
 namespace SparkEditor
 {
 
@@ -87,15 +110,19 @@ namespace SparkEditor
 
     /**
  * @brief Branch operation types
+ *
+ * Note: `DELETE` collides with the Windows SDK `DELETE` macro (winnt.h),
+ * so we use `DELETE_BRANCH` instead. Similarly `CREATE` / `SWITCH` are
+ * not Windows macros currently but renaming them for consistency.
  */
     enum class BranchOperation
     {
-        CREATE = 0, ///< Create new branch
-        DELETE = 1, ///< Delete branch
-        RENAME = 2, ///< Rename branch
-        MERGE = 3,  ///< Merge branch
-        REBASE = 4, ///< Rebase branch
-        SWITCH = 5  ///< Switch to branch
+        CREATE_BRANCH = 0, ///< Create new branch
+        DELETE_BRANCH = 1, ///< Delete branch
+        RENAME_BRANCH = 2, ///< Rename branch
+        MERGE_BRANCH = 3,  ///< Merge branch
+        REBASE_BRANCH = 4, ///< Rebase branch
+        SWITCH_BRANCH = 5  ///< Switch to branch
     };
 
 } // namespace SparkEditor

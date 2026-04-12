@@ -143,7 +143,14 @@ namespace Spark::Graphics
 
     uint64_t ShaderDiskCache::HashSourceForDisk(const ShaderSource& source, ShaderTarget target)
     {
-        // FNV-1a hash of source + defines + target + stage
+        // FNV-1a hash of source + defines + target + stage + entry point.
+        //
+        // Fix for Codex P2 review comment on PR #459: the previous hash
+        // omitted `entryPoint`, so two shaders compiled from the same HLSL
+        // source / target / stage / defines but with different entry-point
+        // functions (common when one .hlsl file exposes VSMain, VSShadowMain,
+        // etc.) would collide and reuse each other's cached bytecode. Mixing
+        // `entryPoint` into the FNV chain keeps the key-space separated.
         uint64_t hash = 14695981039346656037ULL;
         constexpr uint64_t prime = 1099511628211ULL;
 
@@ -164,6 +171,11 @@ namespace Spark::Graphics
         hash *= prime;
         hash ^= static_cast<uint8_t>(source.stage);
         hash *= prime;
+        for (char c : source.entryPoint)
+        {
+            hash ^= static_cast<uint8_t>(c);
+            hash *= prime;
+        }
 
         return hash;
     }

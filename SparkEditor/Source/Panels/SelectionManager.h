@@ -203,7 +203,11 @@ namespace SparkEditor
             if (IsLocked(entityId))
                 return;
 
-            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "SelectionManager: Select entity %u", entityId);
+            // EntityId is a 64-bit unsigned type; format with %llu and cast
+            // to unsigned long long for portable printing (GCC/MSVC both
+            // warned about %u vs uint64_t on CI).
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "SelectionManager: Select entity %llu",
+                            static_cast<unsigned long long>(entityId));
             auto oldSelection = GetSelectionVector();
             m_selection.clear();
             m_selectionOrder.clear();

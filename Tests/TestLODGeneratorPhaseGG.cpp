@@ -86,8 +86,10 @@ TEST(LODGeneratorPhaseGG_EmptyInputIsSafe)
     Spark::Graphics::LODGenerationOptions opts;
     opts.lodCount = 2;
     auto result = gen.Generate(nullptr, 0, nullptr, 0, opts);
-    // Should handle empty input without crashing.
-    EXPECT_TRUE(result.levels.size() >= static_cast<size_t>(0));
+    // Should handle empty input without crashing. `levels.size()` is
+    // unsigned, so `>= 0` is tautological; assert the call returned.
+    (void)result.levels.size();
+    EXPECT_TRUE(true);
 }
 
 TEST(LODGeneratorPhaseGG_DefaultOptionsProduceFourLevels)
