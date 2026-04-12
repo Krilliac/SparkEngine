@@ -17,6 +17,7 @@
 
 #include "../Core/EngineContext.h"
 #include "../Utils/Validate.h"
+#include "AssetPipeline.h"
 #include "GPUSceneBuffer.h"
 #include "GraphicsEngine.h"
 #include "TextureSystem.h"

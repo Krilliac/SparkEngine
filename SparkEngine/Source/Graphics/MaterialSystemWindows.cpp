@@ -13,6 +13,7 @@
 
 #include "MaterialSystem.h"
 #include "../Utils/SparkConsole.h"
+#include "../Utils/LogMacros.h"
 #include "Utils/LocalFileCache.h"
 #include <cstring>
 #include <filesystem>
