@@ -18,7 +18,10 @@
  *
  * @see SSAOEffect.h, PostProcessing.h, RenderGraph.h
  *
- * @note **Intentional reusable graphics utility** — Ground-truth ambient occlusion post-process. A future post-process stack will instantiate one of these per view. No singleton.
+ * @note **Lifecycle-only activation (Phase I)** — Settings are wired into PostProcessingPipeline
+ * but the GPU compute path (ComputeGTAO) is not called from any render pass. The CPU reference
+ * path is exercised by tests. Full GPU activation requires a compute-shader dispatch step in the
+ * post-process pipeline, which depends on the HLSL compute shader being compiled and bound.
  *
  */
 

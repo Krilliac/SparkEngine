@@ -13,7 +13,10 @@
  *
  * @see HybridRT/HybridRTManager.h, DXRSupport.h
  *
- * @note **Intentional reusable graphics utility** — Abstract denoiser plugin interface (for raytraced AO / GI / reflections). A future ray tracing pipeline will load concrete denoiser implementations against this interface.
+ * @note **Lifecycle-only activation (Phase Q)** — SoftwareDenoiser is instantiated by
+ * GraphicsEngine (m_denoiser) but Denoise() is never called from any render pass.
+ * Full activation requires a ray-tracing pipeline consumer to feed noisy color/albedo/normal
+ * buffers and invoke Denoise() after RT accumulation.
  *
  */
 

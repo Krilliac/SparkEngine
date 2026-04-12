@@ -14,7 +14,9 @@
  *
  * @see Shader.h, SparkShaderCompiler
  *
- * @note **Intentional reusable graphics utility** — Shader variant permutation management (keyword-based compile-time variant selection). A future material system will instantiate one per shader family. Covered by `Tests/TestGraphicsIntegration.cpp`.
+ * @note **Lifecycle-only activation (Phase O)** — ShaderVariantSystem singleton is wired into
+ * Shader class lifecycle but RequestVariant() is not called from any material or render path.
+ * Full activation requires materials to register keyword sets and request variants at bind time.
  *
  */
 
