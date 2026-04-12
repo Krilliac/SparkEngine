@@ -262,6 +262,7 @@ SparkEngine/Source/Graphics/ParticleSystem.cpp
 SparkEngine/Source/Graphics/PipelineStateCache.h
 SparkEngine/Source/Graphics/PostProcessingPipeline.cpp
 SparkEngine/Source/Graphics/PostProcessingPipeline.h
+SparkEngine/Source/Graphics/PostProcessingPipelineGPU.cpp
 SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp
 SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h
 SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp
@@ -303,10 +304,12 @@ SparkEngine/Source/Graphics/TemporalEffectsTypes.h
 SparkEngine/Source/Graphics/TemporalTypes.h
 SparkEngine/Source/Graphics/TextureSystem.cpp
 SparkEngine/Source/Graphics/TextureSystem.h
+SparkEngine/Source/Graphics/TextureSystemGPU.cpp
 SparkEngine/Source/Graphics/TonemapColorGrading.cpp
 SparkEngine/Source/Graphics/UpscalingShaders.h
 SparkEngine/Source/Graphics/UpscalingSystem.cpp
 SparkEngine/Source/Graphics/UpscalingSystem.h
+SparkEngine/Source/Graphics/UpscalingSystemGPU.cpp
 SparkEngine/Source/Graphics/UpscalingTypes.h
 SparkEngine/Source/Graphics/VolumeSystem.h
 SparkEngine/Source/Graphics/VoxelConeTracing.h
