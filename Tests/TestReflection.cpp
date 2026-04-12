@@ -35,6 +35,9 @@ namespace TestReflect
         Float,
         Double,
         String,
+        Vector2,
+        Vector3,
+        Vector4,
         Enum,
         Custom
     };

@@ -9,6 +9,7 @@
  */
 
 #include "SceneSerializer.h"
+#include "Core/Reflection.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <filesystem>
@@ -56,61 +57,39 @@ namespace SparkEditor
         return out;
     }
 
+    // Data-driven component type ↔ string mapping.
+    // Adding a new component type requires only adding one entry here.
+    static const std::pair<ComponentType, const char*> s_componentTypeMap[] = {
+        {ComponentType::TRANSFORM, "Transform"},
+        {ComponentType::MESH_RENDERER, "MeshRenderer"},
+        {ComponentType::LIGHT, "Light"},
+        {ComponentType::CAMERA, "Camera"},
+        {ComponentType::RIGID_BODY, "RigidBody"},
+        {ComponentType::COLLIDER, "Collider"},
+        {ComponentType::AUDIO_SOURCE, "AudioSource"},
+        {ComponentType::SCRIPT, "Script"},
+        {ComponentType::PARTICLE_SYSTEM, "ParticleSystem"},
+        {ComponentType::ANIMATION, "Animation"},
+        {ComponentType::TERRAIN, "Terrain"},
+    };
+
     static std::string ComponentTypeToString(ComponentType type)
     {
-        switch (type)
+        for (const auto& [ct, name] : s_componentTypeMap)
         {
-        case ComponentType::TRANSFORM:
-            return "Transform";
-        case ComponentType::MESH_RENDERER:
-            return "MeshRenderer";
-        case ComponentType::LIGHT:
-            return "Light";
-        case ComponentType::CAMERA:
-            return "Camera";
-        case ComponentType::RIGID_BODY:
-            return "RigidBody";
-        case ComponentType::COLLIDER:
-            return "Collider";
-        case ComponentType::AUDIO_SOURCE:
-            return "AudioSource";
-        case ComponentType::SCRIPT:
-            return "Script";
-        case ComponentType::PARTICLE_SYSTEM:
-            return "ParticleSystem";
-        case ComponentType::ANIMATION:
-            return "Animation";
-        case ComponentType::TERRAIN:
-            return "Terrain";
-        default:
-            return "Custom_" + std::to_string(static_cast<uint32_t>(type));
+            if (ct == type)
+                return name;
         }
+        return "Custom_" + std::to_string(static_cast<uint32_t>(type));
     }
 
     static ComponentType StringToComponentType(const std::string& s)
     {
-        if (s == "Transform")
-            return ComponentType::TRANSFORM;
-        if (s == "MeshRenderer")
-            return ComponentType::MESH_RENDERER;
-        if (s == "Light")
-            return ComponentType::LIGHT;
-        if (s == "Camera")
-            return ComponentType::CAMERA;
-        if (s == "RigidBody")
-            return ComponentType::RIGID_BODY;
-        if (s == "Collider")
-            return ComponentType::COLLIDER;
-        if (s == "AudioSource")
-            return ComponentType::AUDIO_SOURCE;
-        if (s == "Script")
-            return ComponentType::SCRIPT;
-        if (s == "ParticleSystem")
-            return ComponentType::PARTICLE_SYSTEM;
-        if (s == "Animation")
-            return ComponentType::ANIMATION;
-        if (s == "Terrain")
-            return ComponentType::TERRAIN;
+        for (const auto& [ct, name] : s_componentTypeMap)
+        {
+            if (s == name)
+                return ct;
+        }
         return ComponentType::CUSTOM;
     }
 
@@ -1067,6 +1046,29 @@ namespace SparkEditor
         if (!component.data.empty())
         {
             ss << ",\"data\":\"" << BytesToHex(component.data) << "\"";
+
+            // Reflection-driven readable properties: if the component type name
+            // is registered in TypeRegistry, output named fields alongside the
+            // binary blob for human readability and debugging.
+            std::string typeName = ComponentTypeToString(component.type);
+            const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(typeName);
+            if (typeInfo && !typeInfo->fields.empty() && component.data.size() >= typeInfo->size)
+            {
+                ss << ",\"_properties\":{";
+                bool first = true;
+                for (const auto& field : typeInfo->fields)
+                {
+                    if (!field.serialized)
+                        continue;
+                    std::string val = Spark::GetFieldAsString(component.data.data(), field);
+                    if (!first)
+                        ss << ",";
+                    // Escape quotes in string values
+                    ss << "\"" << field.fieldName << "\":\"" << val << "\"";
+                    first = false;
+                }
+                ss << "}";
+            }
         }
         ss << "}";
         *json = ss.str();
@@ -1109,7 +1111,7 @@ namespace SparkEditor
             component.enabled = (str->find("true", enPos + 10) == enPos + 10);
         }
 
-        // Extract data hex string
+        // Extract data hex string (primary path)
         auto dataPos = str->find("\"data\":\"");
         if (dataPos != std::string::npos)
         {
@@ -1121,6 +1123,57 @@ namespace SparkEditor
                 component.data = HexToBytes(hexStr);
             }
         }
+
+        // Reflection fallback: if no hex data but _properties exist, reconstruct
+        // component data from named fields via TypeRegistry. This allows hand-edited
+        // scene files with readable property values.
+        if (component.data.empty())
+        {
+            auto propsPos = str->find("\"_properties\":");
+            if (propsPos != std::string::npos)
+            {
+                std::string typeName = ComponentTypeToString(component.type);
+                const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(typeName);
+                if (typeInfo && typeInfo->size > 0)
+                {
+                    component.data.resize(typeInfo->size, 0);
+                    // Parse simple "key":"value" pairs from the _properties block
+                    auto braceStart = str->find('{', propsPos);
+                    auto braceEnd = str->find('}', braceStart);
+                    if (braceStart != std::string::npos && braceEnd != std::string::npos)
+                    {
+                        std::string propsBlock = str->substr(braceStart + 1, braceEnd - braceStart - 1);
+                        size_t pos = 0;
+                        while (pos < propsBlock.size())
+                        {
+                            auto keyStart = propsBlock.find('"', pos);
+                            if (keyStart == std::string::npos)
+                                break;
+                            auto keyEnd = propsBlock.find('"', keyStart + 1);
+                            if (keyEnd == std::string::npos)
+                                break;
+                            auto valStart = propsBlock.find('"', keyEnd + 2);
+                            if (valStart == std::string::npos)
+                                break;
+                            auto valEnd = propsBlock.find('"', valStart + 1);
+                            if (valEnd == std::string::npos)
+                                break;
+
+                            std::string key = propsBlock.substr(keyStart + 1, keyEnd - keyStart - 1);
+                            std::string val = propsBlock.substr(valStart + 1, valEnd - valStart - 1);
+
+                            const auto* field = typeInfo->FindField(key);
+                            if (field)
+                            {
+                                Spark::SetFieldFromString(component.data.data(), *field, val);
+                            }
+                            pos = valEnd + 1;
+                        }
+                    }
+                }
+            }
+        }
+
         return true;
     }
 

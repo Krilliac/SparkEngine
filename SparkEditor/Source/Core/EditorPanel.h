@@ -10,11 +10,27 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <functional>
 
 namespace SparkEditor
 {
+
+    /**
+     * @brief Category classification for editor panels.
+     *
+     * Used for View menu grouping, layout presets, and panel discovery.
+     */
+    enum class PanelCategory : uint8_t
+    {
+        Viewport,  ///< Renders 3D/2D scene (SceneView, GameView, TilemapEditor, CSG)
+        Inspector, ///< Displays/edits properties of selected objects
+        Tool,      ///< Specialized editing tools (material, particle, AI, etc.)
+        Config,    ///< Project/system-wide settings panels
+        Debug,     ///< Profiling, debugging, and diagnostic panels
+        Other      ///< Uncategorized (default)
+    };
 
     /**
  * @brief Base class for all editor panels
@@ -132,6 +148,14 @@ namespace SparkEditor
      * @brief Get panel type name
      */
         virtual std::string GetTypeName() const { return "EditorPanel"; }
+
+        /**
+     * @brief Get the category this panel belongs to.
+     *
+     * Override in derived panels to classify them for View menu grouping
+     * and layout presets. Default is PanelCategory::Other.
+     */
+        virtual PanelCategory GetCategory() const { return m_category; }
 
         /**
      * @brief Check if panel can be reset
@@ -255,8 +279,9 @@ namespace SparkEditor
         float m_posX = 0.0f;     ///< Panel X position
         float m_posY = 0.0f;     ///< Panel Y position
 
-        bool m_isModified = false;   ///< Panel modification state
-        bool m_visibleInMenu = true; ///< Visibility in view menu
+        bool m_isModified = false;                       ///< Panel modification state
+        bool m_visibleInMenu = true;                     ///< Visibility in view menu
+        PanelCategory m_category = PanelCategory::Other; ///< Panel category for grouping
 
         std::string m_icon; ///< FontAwesome icon for panel header
 
@@ -268,6 +293,9 @@ namespace SparkEditor
 
         /** @brief Get icon string */
         const std::string& GetIcon() const { return m_icon; }
+
+        /** @brief Set panel category (called by EditorPanelFactory at creation) */
+        void SetPanelCategory(PanelCategory cat) { m_category = cat; }
     };
 
 } // namespace SparkEditor

@@ -245,6 +245,94 @@ namespace SparkEditor
         }
     }
 
+    void EditorUI::InitializePanelCategories()
+    {
+        struct PanelCat
+        {
+            const char* name;
+            PanelCategory category;
+        };
+        constexpr PanelCat panelCategories[] = {
+            // Viewports
+            {"SceneView", PanelCategory::Viewport},
+            {"GameView", PanelCategory::Viewport},
+            {"TilemapEditor", PanelCategory::Viewport},
+            {"CSGEditor", PanelCategory::Viewport},
+
+            // Inspectors
+            {"Inspector", PanelCategory::Inspector},
+            {"Hierarchy", PanelCategory::Inspector},
+            {"ProjectSettings", PanelCategory::Inspector},
+            {"UndoHistory", PanelCategory::Inspector},
+            {"ObjectPlacement", PanelCategory::Inspector},
+            {"UIDesigner", PanelCategory::Inspector},
+            {"Search", PanelCategory::Inspector},
+
+            // Tools
+            {"AssetBrowser", PanelCategory::Tool},
+            {"MaterialEditor", PanelCategory::Tool},
+            {"SpriteEditor", PanelCategory::Tool},
+            {"SpriteAnimEditor", PanelCategory::Tool},
+            {"ParticleEditor", PanelCategory::Tool},
+            {"DialogueEditor", PanelCategory::Tool},
+            {"AIEditor", PanelCategory::Tool},
+            {"SplineEditor", PanelCategory::Tool},
+            {"WeaponEditor", PanelCategory::Tool},
+            {"AbilityEditor", PanelCategory::Tool},
+            {"TriggerEditor", PanelCategory::Tool},
+            {"ConditionEditor", PanelCategory::Tool},
+            {"DecalEditor", PanelCategory::Tool},
+            {"DestructionEditor", PanelCategory::Tool},
+            {"CinematicSequencer", PanelCategory::Tool},
+            {"AudioMixer", PanelCategory::Tool},
+            {"ScriptEditor", PanelCategory::Tool},
+            {"PostProcessing", PanelCategory::Tool},
+            {"TerrainEditor", PanelCategory::Tool},
+            {"PrefabEditor", PanelCategory::Tool},
+            {"VisualScript", PanelCategory::Tool},
+            {"FPSTools", PanelCategory::Tool},
+            {"PlayModeToolbar", PanelCategory::Tool},
+            {"BuildCook", PanelCategory::Tool},
+            {"Prototyping", PanelCategory::Tool},
+            {"Workflows", PanelCategory::Tool},
+            {"EventResponses", PanelCategory::Tool},
+
+            // Config
+            {"SaveSystem", PanelCategory::Config},
+            {"Localization", PanelCategory::Config},
+            {"WeatherFog", PanelCategory::Config},
+            {"VRConfig", PanelCategory::Config},
+            {"Streaming", PanelCategory::Config},
+            {"Modding", PanelCategory::Config},
+            {"Collaboration", PanelCategory::Config},
+            {"TimeOfDay", PanelCategory::Config},
+            {"DedicatedServer", PanelCategory::Config},
+            {"GameModuleSelector", PanelCategory::Config},
+            {"LevelStreaming", PanelCategory::Config},
+            {"VersionControl", PanelCategory::Config},
+
+            // Debug
+            {"Console", PanelCategory::Debug},
+            {"Profiler", PanelCategory::Debug},
+            {"AIDebug", PanelCategory::Debug},
+            {"ScriptDebugger", PanelCategory::Debug},
+            {"DebugVisualizer", PanelCategory::Debug},
+            {"EventMonitor", PanelCategory::Debug},
+            {"SceneStats", PanelCategory::Debug},
+            {"Physics2D", PanelCategory::Debug},
+            {"Physics3D", PanelCategory::Debug},
+            {"NetworkDebug", PanelCategory::Debug},
+            {"CoroutineDebug", PanelCategory::Debug},
+            {"Replay", PanelCategory::Debug},
+        };
+
+        for (const auto& [name, cat] : panelCategories)
+        {
+            if (m_panels.count(name))
+                m_panels[name]->SetPanelCategory(cat);
+        }
+    }
+
     void EditorUI::SetDefaultPanelVisibility()
     {
         // On first launch, only show the essential panels that form a clean,
@@ -342,6 +430,7 @@ namespace SparkEditor
         }
 
         InitializePanelIcons();
+        InitializePanelCategories();
         SetDefaultPanelVisibility();
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Panel creation complete: %zu panels registered", m_panels.size());

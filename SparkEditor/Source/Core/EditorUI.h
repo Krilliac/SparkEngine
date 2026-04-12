@@ -284,9 +284,8 @@ namespace SparkEditor
         void RenderGameObject2DSubMenu();
         void RenderGameObjectVolumeSubMenu(const std::function<void(const std::string&)>& createObject);
         void RenderGameObjectSpecializedSubMenus(const std::function<void(const std::string&)>& createObject);
-        void RenderWindowCorePanels();
-        void RenderWindowToolPanels();
-        void RenderWindow2DAndGamePanels();
+        // Window menu panels are now rendered dynamically by PanelCategory
+        // in RenderWindowMenu() — no per-category submenu functions needed.
         void RenderWindowMenu();
         void RenderFPSToolsMenu();
         void RenderBuildMenu();
@@ -309,6 +308,7 @@ namespace SparkEditor
         void CreateToolAndContentPanels(
             const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel);
         void InitializePanelIcons();
+        void InitializePanelCategories();
         void SetDefaultPanelVisibility();
         void InitializeCommandPalette();
         void HandleKeyboardShortcuts();

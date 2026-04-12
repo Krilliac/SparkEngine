@@ -16,12 +16,72 @@
 
 #include "MaterialSystem.h"
 #include "Utils/LocalFileCache.h"
+#include "../Core/Reflection.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/LogMacros.h"
 #include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+
+// ============================================================================
+// Reflection registrations for PBR material structs.
+// field.name is the INI key (PascalCase) used in .material files.
+// ============================================================================
+
+SPARK_REFLECT_TYPE(PBRProperties)
+SPARK_REFLECT_FIELD_ATTR_AS(PBRProperties, albedoColor, "AlbedoColor", Spark::FieldType::Vector4, )
+SPARK_REFLECT_FIELD(PBRProperties, metallicFactor, "MetallicFactor")
+SPARK_REFLECT_FIELD(PBRProperties, roughnessFactor, "RoughnessFactor")
+SPARK_REFLECT_FIELD(PBRProperties, normalScale, "NormalScale")
+SPARK_REFLECT_FIELD(PBRProperties, occlusionStrength, "OcclusionStrength")
+SPARK_REFLECT_FIELD_ATTR_AS(PBRProperties, emissiveColor, "EmissiveColor", Spark::FieldType::Vector3, )
+SPARK_REFLECT_FIELD(PBRProperties, emissiveFactor, "EmissiveFactor")
+SPARK_REFLECT_FIELD(PBRProperties, alphaCutoff, "AlphaCutoff")
+SPARK_REFLECT_FIELD(PBRProperties, indexOfRefraction, "IndexOfRefraction")
+SPARK_REFLECT_END(PBRProperties)
+
+SPARK_REFLECT_TYPE(MaterialRenderState)
+SPARK_REFLECT_FIELD(MaterialRenderState, blendMode, "BlendMode")
+SPARK_REFLECT_FIELD(MaterialRenderState, cullMode, "CullMode")
+SPARK_REFLECT_FIELD(MaterialRenderState, depthTest, "DepthTest")
+SPARK_REFLECT_FIELD(MaterialRenderState, depthWrite, "DepthWrite")
+SPARK_REFLECT_FIELD(MaterialRenderState, castShadows, "CastShadows")
+SPARK_REFLECT_FIELD(MaterialRenderState, receiveShadows, "ReceiveShadows")
+SPARK_REFLECT_FIELD(MaterialRenderState, renderQueue, "RenderQueue")
+SPARK_REFLECT_FIELD(MaterialRenderState, doubleSided, "DoubleSided")
+SPARK_REFLECT_END(MaterialRenderState)
+
+// ============================================================================
+// Generic INI section write from reflected fields.
+// ============================================================================
+
+namespace
+{
+
+    void WriteReflectedINISection(std::ofstream& file, const void* data, const Spark::TypeInfo& typeInfo)
+    {
+        for (const auto& field : typeInfo.fields)
+        {
+            file << field.name << "=" << Spark::GetFieldAsString(data, field) << "\n";
+        }
+    }
+
+    bool LoadReflectedINIField(void* data, const Spark::TypeInfo& typeInfo, const std::string& key,
+                               const std::string& value)
+    {
+        for (const auto& field : typeInfo.fields)
+        {
+            if (field.name == key)
+            {
+                Spark::SetFieldFromString(data, field, value);
+                return true;
+            }
+        }
+        return false;
+    }
+
+} // anonymous namespace
 
 // ============================================================================
 // PLATFORM-INDEPENDENT IMPLEMENTATIONS
@@ -59,17 +119,8 @@ bool Material::SaveToFile(const std::string& filePath) const
         file << "\n";
 
         file << "[PBR]\n";
-        file << "AlbedoColor=" << m_pbrProperties.albedoColor.x << "," << m_pbrProperties.albedoColor.y << ","
-             << m_pbrProperties.albedoColor.z << "," << m_pbrProperties.albedoColor.w << "\n";
-        file << "MetallicFactor=" << std::fixed << std::setprecision(6) << m_pbrProperties.metallicFactor << "\n";
-        file << "RoughnessFactor=" << std::fixed << std::setprecision(6) << m_pbrProperties.roughnessFactor << "\n";
-        file << "NormalScale=" << std::fixed << std::setprecision(6) << m_pbrProperties.normalScale << "\n";
-        file << "OcclusionStrength=" << std::fixed << std::setprecision(6) << m_pbrProperties.occlusionStrength << "\n";
-        file << "EmissiveColor=" << m_pbrProperties.emissiveColor.x << "," << m_pbrProperties.emissiveColor.y << ","
-             << m_pbrProperties.emissiveColor.z << "\n";
-        file << "EmissiveFactor=" << std::fixed << std::setprecision(6) << m_pbrProperties.emissiveFactor << "\n";
-        file << "AlphaCutoff=" << std::fixed << std::setprecision(6) << m_pbrProperties.alphaCutoff << "\n";
-        file << "IndexOfRefraction=" << std::fixed << std::setprecision(6) << m_pbrProperties.indexOfRefraction << "\n";
+        WriteReflectedINISection(file, &m_pbrProperties,
+                                 *Spark::TypeRegistry::Get().FindType(GetTypeId<PBRProperties>()));
         file << "\n";
 
         file << "[Advanced]\n";
@@ -122,14 +173,8 @@ bool Material::SaveToFile(const std::string& filePath) const
         file << "\n";
 
         file << "[RenderState]\n";
-        file << "BlendMode=" << static_cast<int>(m_renderState.blendMode) << "\n";
-        file << "CullMode=" << static_cast<int>(m_renderState.cullMode) << "\n";
-        file << "DepthTest=" << (m_renderState.depthTest ? "true" : "false") << "\n";
-        file << "DepthWrite=" << (m_renderState.depthWrite ? "true" : "false") << "\n";
-        file << "CastShadows=" << (m_renderState.castShadows ? "true" : "false") << "\n";
-        file << "ReceiveShadows=" << (m_renderState.receiveShadows ? "true" : "false") << "\n";
-        file << "RenderQueue=" << m_renderState.renderQueue << "\n";
-        file << "DoubleSided=" << (m_renderState.doubleSided ? "true" : "false") << "\n";
+        WriteReflectedINISection(file, &m_renderState,
+                                 *Spark::TypeRegistry::Get().FindType(GetTypeId<MaterialRenderState>()));
         file << "\n";
 
         file << "[Textures]\n";

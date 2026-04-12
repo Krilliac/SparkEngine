@@ -12,6 +12,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "MaterialSystem.h"
+#include "../Core/Reflection.h"
 #include "../Utils/Assert.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/LogMacros.h"
@@ -157,54 +158,18 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                 }
                 else if (currentSection == "PBR")
                 {
-                    if (key == "AlbedoColor")
+                    // Reflection-driven: look up field by INI key, set via SetFieldFromString
+                    const auto* pbrType = Spark::TypeRegistry::Get().FindType(GetTypeId<PBRProperties>());
+                    if (pbrType)
                     {
-                        std::vector<float> components;
-                        if (parseFloatArray(value, components) && components.size() >= 3)
+                        for (const auto& field : pbrType->fields)
                         {
-                            m_pbrProperties.albedoColor.x = components[0];
-                            m_pbrProperties.albedoColor.y = components[1];
-                            m_pbrProperties.albedoColor.z = components[2];
-                            m_pbrProperties.albedoColor.w = components.size() > 3 ? components[3] : 1.0f;
+                            if (field.name == key)
+                            {
+                                Spark::SetFieldFromString(&m_pbrProperties, field, value);
+                                break;
+                            }
                         }
-                    }
-                    else if (key == "MetallicFactor")
-                    {
-                        m_pbrProperties.metallicFactor = safeStof(value);
-                    }
-                    else if (key == "RoughnessFactor")
-                    {
-                        m_pbrProperties.roughnessFactor = safeStof(value);
-                    }
-                    else if (key == "NormalScale")
-                    {
-                        m_pbrProperties.normalScale = safeStof(value);
-                    }
-                    else if (key == "OcclusionStrength")
-                    {
-                        m_pbrProperties.occlusionStrength = safeStof(value);
-                    }
-                    else if (key == "EmissiveColor")
-                    {
-                        std::vector<float> components;
-                        if (parseFloatArray(value, components) && components.size() >= 3)
-                        {
-                            m_pbrProperties.emissiveColor.x = components[0];
-                            m_pbrProperties.emissiveColor.y = components[1];
-                            m_pbrProperties.emissiveColor.z = components[2];
-                        }
-                    }
-                    else if (key == "EmissiveFactor")
-                    {
-                        m_pbrProperties.emissiveFactor = safeStof(value);
-                    }
-                    else if (key == "AlphaCutoff")
-                    {
-                        m_pbrProperties.alphaCutoff = safeStof(value);
-                    }
-                    else if (key == "IndexOfRefraction")
-                    {
-                        m_pbrProperties.indexOfRefraction = safeStof(value);
                     }
                 }
                 else if (currentSection == "Advanced")
@@ -311,37 +276,18 @@ bool Material::LoadFromFile(const std::string& filePath, ID3D11Device* device)
                 }
                 else if (currentSection == "RenderState")
                 {
-                    if (key == "BlendMode")
+                    // Reflection-driven: look up field by INI key, set via SetFieldFromString
+                    const auto* rsType = Spark::TypeRegistry::Get().FindType(GetTypeId<MaterialRenderState>());
+                    if (rsType)
                     {
-                        m_renderState.blendMode = static_cast<BlendMode>(safeStoi(value));
-                    }
-                    else if (key == "CullMode")
-                    {
-                        m_renderState.cullMode = static_cast<CullMode>(safeStoi(value));
-                    }
-                    else if (key == "DepthTest")
-                    {
-                        m_renderState.depthTest = parseBool(value);
-                    }
-                    else if (key == "DepthWrite")
-                    {
-                        m_renderState.depthWrite = parseBool(value);
-                    }
-                    else if (key == "CastShadows")
-                    {
-                        m_renderState.castShadows = parseBool(value);
-                    }
-                    else if (key == "ReceiveShadows")
-                    {
-                        m_renderState.receiveShadows = parseBool(value);
-                    }
-                    else if (key == "RenderQueue")
-                    {
-                        m_renderState.renderQueue = safeStoi(value);
-                    }
-                    else if (key == "DoubleSided")
-                    {
-                        m_renderState.doubleSided = parseBool(value);
+                        for (const auto& field : rsType->fields)
+                        {
+                            if (field.name == key)
+                            {
+                                Spark::SetFieldFromString(&m_renderState, field, value);
+                                break;
+                            }
+                        }
                     }
                 }
                 else if (currentSection == "Textures")

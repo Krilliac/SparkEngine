@@ -36,72 +36,62 @@ namespace Spark::UI
         virtual std::string GetDisplayValue() const = 0;
     };
 
-    /// @brief Float data binding
-    class UIFloatBinding : public UIDataBinding
+    /// @brief Templated bidirectional data binding — replaces per-type classes
+    template <typename T> class UITypedBinding : public UIDataBinding
     {
       public:
-        explicit UIFloatBinding(float* target, std::function<void(float)> onChange = nullptr);
+        explicit UITypedBinding(T* target, std::function<void(const T&)> onChange = nullptr)
+            : m_target(target), m_onChange(std::move(onChange))
+        {
+            if (m_target)
+                m_widgetValue = *m_target;
+        }
 
-        void PushToWidget() override;
-        void PullFromWidget() override;
-        std::string GetDisplayValue() const override;
+        void PushToWidget() override
+        {
+            if (m_target)
+                m_widgetValue = *m_target;
+        }
 
-        float GetValue() const { return *m_target; }
-        void SetValue(float value);
+        void PullFromWidget() override
+        {
+            if (m_target && *m_target != m_widgetValue)
+            {
+                *m_target = m_widgetValue;
+                if (m_onChange)
+                    m_onChange(m_widgetValue);
+            }
+        }
 
-      private:
-        float* m_target;
-        float m_widgetValue = 0.0f;
-        std::function<void(float)> m_onChange;
-    };
+        std::string GetDisplayValue() const override
+        {
+            if constexpr (std::is_same_v<T, bool>)
+                return m_widgetValue ? "true" : "false";
+            else if constexpr (std::is_same_v<T, std::string>)
+                return m_widgetValue;
+            else
+                return std::to_string(m_widgetValue);
+        }
 
-    /// @brief String data binding
-    class UIStringBinding : public UIDataBinding
-    {
-      public:
-        explicit UIStringBinding(std::string* target, std::function<void(const std::string&)> onChange = nullptr);
+        const T& GetValue() const { return m_widgetValue; }
 
-        void PushToWidget() override;
-        void PullFromWidget() override;
-        std::string GetDisplayValue() const override;
-
-      private:
-        std::string* m_target;
-        std::string m_widgetValue;
-        std::function<void(const std::string&)> m_onChange;
-    };
-
-    /// @brief Bool data binding
-    class UIBoolBinding : public UIDataBinding
-    {
-      public:
-        explicit UIBoolBinding(bool* target, std::function<void(bool)> onChange = nullptr);
-
-        void PushToWidget() override;
-        void PullFromWidget() override;
-        std::string GetDisplayValue() const override;
-
-      private:
-        bool* m_target;
-        bool m_widgetValue = false;
-        std::function<void(bool)> m_onChange;
-    };
-
-    /// @brief Int data binding
-    class UIIntBinding : public UIDataBinding
-    {
-      public:
-        explicit UIIntBinding(int32_t* target, std::function<void(int32_t)> onChange = nullptr);
-
-        void PushToWidget() override;
-        void PullFromWidget() override;
-        std::string GetDisplayValue() const override;
+        void SetValue(const T& value)
+        {
+            m_widgetValue = value;
+            PullFromWidget();
+        }
 
       private:
-        int32_t* m_target;
-        int32_t m_widgetValue = 0;
-        std::function<void(int32_t)> m_onChange;
+        T* m_target;
+        T m_widgetValue{};
+        std::function<void(const T&)> m_onChange;
     };
+
+    // Type aliases for backward compatibility
+    using UIFloatBinding = UITypedBinding<float>;
+    using UIStringBinding = UITypedBinding<std::string>;
+    using UIBoolBinding = UITypedBinding<bool>;
+    using UIIntBinding = UITypedBinding<int32_t>;
 
     /// @brief Simple config node for UI widget definition
     struct UIWidgetConfig

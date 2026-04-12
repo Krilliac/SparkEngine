@@ -20,6 +20,12 @@
 
 #include "Utils/LogMacros.h"
 
+// Bring Spark-namespaced component types into the global namespace so
+// the SPARK_REFLECT_TYPE token-pasting macros work.
+using Spark::CameraDrawMaskComponent;
+using Spark::CollisionMaskComponent;
+using Spark::VisibilityMaskComponent;
+
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -91,6 +97,20 @@ namespace Spark
             auto* str = reinterpret_cast<std::string*>(dst);
             *str = value;
             return true;
+        }
+        case FieldType::Vector2:
+        {
+            // Parse "x,y" format
+            float x = 0, y = 0;
+            std::istringstream ss(value);
+            char delim;
+            if (ss >> x >> delim >> y)
+            {
+                std::memcpy(dst, &x, sizeof(float));
+                std::memcpy(dst + sizeof(float), &y, sizeof(float));
+                return true;
+            }
+            return false;
         }
         case FieldType::Vector3:
         {
@@ -164,6 +184,13 @@ namespace Spark
         {
             const auto* str = reinterpret_cast<const std::string*>(src);
             return *str;
+        }
+        case FieldType::Vector2:
+        {
+            float x, y;
+            std::memcpy(&x, src, sizeof(float));
+            std::memcpy(&y, src + sizeof(float), sizeof(float));
+            return std::to_string(x) + "," + std::to_string(y);
         }
         case FieldType::Vector3:
         {
@@ -239,9 +266,9 @@ SPARK_REFLECT_FIELD(NameComponent, name, "Name")
 SPARK_REFLECT_END(NameComponent)
 
 SPARK_REFLECT_TYPE(Transform)
-SPARK_REFLECT_FIELD_AS(Transform, position, "Position", Spark::FieldType::Vector3)
-SPARK_REFLECT_FIELD_AS(Transform, rotation, "Rotation", Spark::FieldType::Vector3)
-SPARK_REFLECT_FIELD_AS(Transform, scale, "Scale", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD_ATTR_AS(Transform, position, "Position", Spark::FieldType::Vector3, field.replicated = true;)
+SPARK_REFLECT_FIELD_ATTR_AS(Transform, rotation, "Rotation", Spark::FieldType::Vector3, field.replicated = true;)
+SPARK_REFLECT_FIELD_ATTR_AS(Transform, scale, "Scale", Spark::FieldType::Vector3, field.replicated = true;)
 SPARK_REFLECT_END(Transform)
 
 SPARK_REFLECT_TYPE(MeshRenderer)
@@ -339,8 +366,8 @@ SPARK_REFLECT_END(AIComponent)
 // --- Networking ---
 
 SPARK_REFLECT_TYPE(NetworkIdentity)
-SPARK_REFLECT_FIELD(NetworkIdentity, replicateTransform, "Replicate Transform")
-SPARK_REFLECT_FIELD(NetworkIdentity, replicateHealth, "Replicate Health")
+SPARK_REFLECT_FIELD_ATTR(NetworkIdentity, replicateTransform, "Replicate Transform", field.replicated = true;)
+SPARK_REFLECT_FIELD_ATTR(NetworkIdentity, replicateHealth, "Replicate Health", field.replicated = true;)
 SPARK_REFLECT_END(NetworkIdentity)
 
 // --- Gameplay ---
@@ -350,7 +377,7 @@ SPARK_REFLECT_FIELD(ActiveComponent, active, "Active")
 SPARK_REFLECT_END(ActiveComponent)
 
 SPARK_REFLECT_TYPE(HealthComponent)
-SPARK_REFLECT_FIELD(HealthComponent, health, "Health")
+SPARK_REFLECT_FIELD_ATTR(HealthComponent, health, "Health", field.replicated = true;)
 SPARK_REFLECT_FIELD_RANGE(HealthComponent, maxHealth, "Max Health", 1.0f, 100000.0f)
 SPARK_REFLECT_END(HealthComponent)
 
@@ -520,6 +547,385 @@ SPARK_REFLECT_FIELD(TerrainComponent, receiveShadows, "Receive Shadows")
 SPARK_REFLECT_FIELD(TerrainComponent, visible, "Visible")
 SPARK_REFLECT_END(TerrainComponent)
 
+// --- Spline (missing reflection) ---
+
+SPARK_REFLECT_TYPE(SplineComponent)
+SPARK_REFLECT_FIELD(SplineComponent, debugVisible, "Debug Visible")
+SPARK_REFLECT_END(SplineComponent)
+
+// --- Volumes (missing reflection) ---
+
+SPARK_REFLECT_TYPE(LODGroupComponent)
+SPARK_REFLECT_FIELD(LODGroupComponent, lodCount, "LOD Count")
+SPARK_REFLECT_FIELD(LODGroupComponent, crossFadeDuration, "Cross Fade Duration")
+SPARK_REFLECT_FIELD(LODGroupComponent, autoGenerate, "Auto Generate")
+SPARK_REFLECT_FIELD(LODGroupComponent, currentLOD, "Current LOD")
+SPARK_REFLECT_END(LODGroupComponent)
+
+// --- 2D / Sprite ---
+
+SPARK_REFLECT_TYPE(SpriteRenderer)
+SPARK_REFLECT_FIELD(SpriteRenderer, texturePath, "Texture Path")
+SPARK_REFLECT_FIELD_AS(SpriteRenderer, color, "Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD_AS(SpriteRenderer, sourceRect, "Source Rect", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD_AS(SpriteRenderer, pivot, "Pivot", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD(SpriteRenderer, pixelsPerUnit, "Pixels Per Unit")
+SPARK_REFLECT_FIELD(SpriteRenderer, sortingLayer, "Sorting Layer")
+SPARK_REFLECT_FIELD(SpriteRenderer, orderInLayer, "Order In Layer")
+SPARK_REFLECT_FIELD(SpriteRenderer, flipX, "Flip X")
+SPARK_REFLECT_FIELD(SpriteRenderer, flipY, "Flip Y")
+SPARK_REFLECT_FIELD(SpriteRenderer, visible, "Visible")
+SPARK_REFLECT_FIELD(SpriteRenderer, textureWidth, "Texture Width")
+SPARK_REFLECT_FIELD(SpriteRenderer, textureHeight, "Texture Height")
+SPARK_REFLECT_END(SpriteRenderer)
+
+SPARK_REFLECT_TYPE(SpriteAnimator)
+SPARK_REFLECT_FIELD(SpriteAnimator, currentClipIndex, "Current Clip Index")
+SPARK_REFLECT_FIELD(SpriteAnimator, currentFrameIndex, "Current Frame Index")
+SPARK_REFLECT_FIELD(SpriteAnimator, frameTimer, "Frame Timer")
+SPARK_REFLECT_FIELD(SpriteAnimator, speed, "Speed")
+SPARK_REFLECT_FIELD(SpriteAnimator, playing, "Playing")
+SPARK_REFLECT_FIELD(SpriteAnimator, defaultClip, "Default Clip")
+SPARK_REFLECT_END(SpriteAnimator)
+
+SPARK_REFLECT_TYPE(Camera2D)
+SPARK_REFLECT_FIELD(Camera2D, orthoSize, "Ortho Size")
+SPARK_REFLECT_FIELD(Camera2D, nearPlane, "Near Plane")
+SPARK_REFLECT_FIELD(Camera2D, farPlane, "Far Plane")
+SPARK_REFLECT_FIELD(Camera2D, zoom, "Zoom")
+SPARK_REFLECT_FIELD_AS(Camera2D, shakeOffset, "Shake Offset", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD_AS(Camera2D, deadZone, "Dead Zone", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD(Camera2D, followSmoothing, "Follow Smoothing")
+SPARK_REFLECT_FIELD(Camera2D, isMain2DCamera, "Is Main 2D Camera")
+SPARK_REFLECT_FIELD_AS(Camera2D, clearColor, "Clear Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD(Camera2D, viewportX, "Viewport X")
+SPARK_REFLECT_FIELD(Camera2D, viewportY, "Viewport Y")
+SPARK_REFLECT_FIELD(Camera2D, viewportWidth, "Viewport Width")
+SPARK_REFLECT_FIELD(Camera2D, viewportHeight, "Viewport Height")
+SPARK_REFLECT_END(Camera2D)
+
+SPARK_REFLECT_TYPE(ParallaxBackground)
+SPARK_REFLECT_FIELD(ParallaxBackground, autoScroll, "Auto Scroll")
+SPARK_REFLECT_FIELD_AS(ParallaxBackground, autoScrollSpeed, "Auto Scroll Speed", Spark::FieldType::Vector2)
+SPARK_REFLECT_END(ParallaxBackground)
+
+SPARK_REFLECT_TYPE(TilemapComponent)
+SPARK_REFLECT_FIELD(TilemapComponent, width, "Width")
+SPARK_REFLECT_FIELD(TilemapComponent, height, "Height")
+SPARK_REFLECT_FIELD(TilemapComponent, sortingLayer, "Sorting Layer")
+SPARK_REFLECT_FIELD(TilemapComponent, pixelsPerUnit, "Pixels Per Unit")
+SPARK_REFLECT_FIELD(TilemapComponent, generateCollision, "Generate Collision")
+SPARK_REFLECT_FIELD_AS(TilemapComponent, gridColor, "Grid Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_END(TilemapComponent)
+
+SPARK_REFLECT_TYPE(RigidBody2D)
+SPARK_REFLECT_FIELD(RigidBody2D, mass, "Mass")
+SPARK_REFLECT_FIELD(RigidBody2D, gravityScale, "Gravity Scale")
+SPARK_REFLECT_FIELD(RigidBody2D, linearDamping, "Linear Damping")
+SPARK_REFLECT_FIELD(RigidBody2D, angularDamping, "Angular Damping")
+SPARK_REFLECT_FIELD(RigidBody2D, fixedRotation, "Fixed Rotation")
+SPARK_REFLECT_FIELD(RigidBody2D, isBullet, "Is Bullet")
+SPARK_REFLECT_FIELD_AS(RigidBody2D, linearVelocity, "Linear Velocity", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD(RigidBody2D, angularVelocity, "Angular Velocity")
+SPARK_REFLECT_FIELD(RigidBody2D, friction, "Friction")
+SPARK_REFLECT_FIELD(RigidBody2D, restitution, "Restitution")
+SPARK_REFLECT_END(RigidBody2D)
+
+SPARK_REFLECT_TYPE(Collider2D)
+SPARK_REFLECT_FIELD_AS(Collider2D, halfExtents, "Half Extents", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD(Collider2D, radius, "Radius")
+SPARK_REFLECT_FIELD(Collider2D, height, "Height")
+SPARK_REFLECT_FIELD_AS(Collider2D, offset, "Offset", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD(Collider2D, isTrigger, "Is Trigger")
+SPARK_REFLECT_FIELD_AS(Collider2D, edgeStart, "Edge Start", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD_AS(Collider2D, edgeEnd, "Edge End", Spark::FieldType::Vector2)
+SPARK_REFLECT_END(Collider2D)
+
+SPARK_REFLECT_TYPE(NineSliceSprite)
+SPARK_REFLECT_FIELD(NineSliceSprite, texturePath, "Texture Path")
+SPARK_REFLECT_FIELD(NineSliceSprite, borderLeft, "Border Left")
+SPARK_REFLECT_FIELD(NineSliceSprite, borderTop, "Border Top")
+SPARK_REFLECT_FIELD(NineSliceSprite, borderRight, "Border Right")
+SPARK_REFLECT_FIELD(NineSliceSprite, borderBottom, "Border Bottom")
+SPARK_REFLECT_FIELD_AS(NineSliceSprite, size, "Size", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD_AS(NineSliceSprite, color, "Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD(NineSliceSprite, fillCenter, "Fill Center")
+SPARK_REFLECT_FIELD(NineSliceSprite, sortingLayer, "Sorting Layer")
+SPARK_REFLECT_FIELD(NineSliceSprite, orderInLayer, "Order In Layer")
+SPARK_REFLECT_END(NineSliceSprite)
+
+SPARK_REFLECT_TYPE(PixelPerfectComponent)
+SPARK_REFLECT_FIELD(PixelPerfectComponent, referenceWidth, "Reference Width")
+SPARK_REFLECT_FIELD(PixelPerfectComponent, referenceHeight, "Reference Height")
+SPARK_REFLECT_FIELD(PixelPerfectComponent, upscaleToFill, "Upscale To Fill")
+SPARK_REFLECT_FIELD(PixelPerfectComponent, cropToFit, "Crop To Fit")
+SPARK_REFLECT_FIELD(PixelPerfectComponent, currentScaleFactor, "Current Scale Factor")
+SPARK_REFLECT_END(PixelPerfectComponent)
+
+// --- Placement ---
+
+SPARK_REFLECT_TYPE(WindZoneComponent)
+SPARK_REFLECT_FIELD_AS(WindZoneComponent, direction, "Direction", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(WindZoneComponent, mainStrength, "Main Strength")
+SPARK_REFLECT_FIELD(WindZoneComponent, turbulenceStrength, "Turbulence Strength")
+SPARK_REFLECT_FIELD(WindZoneComponent, pulseFrequency, "Pulse Frequency")
+SPARK_REFLECT_FIELD(WindZoneComponent, radius, "Radius")
+SPARK_REFLECT_FIELD(WindZoneComponent, affectsParticles, "Affects Particles")
+SPARK_REFLECT_FIELD(WindZoneComponent, affectsVegetation, "Affects Vegetation")
+SPARK_REFLECT_FIELD(WindZoneComponent, affectsCloth, "Affects Cloth")
+SPARK_REFLECT_END(WindZoneComponent)
+
+SPARK_REFLECT_TYPE(PhysicsJointComponent)
+SPARK_REFLECT_FIELD_AS(PhysicsJointComponent, anchor, "Anchor", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD_AS(PhysicsJointComponent, axis, "Axis", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(PhysicsJointComponent, lowerLimit, "Lower Limit")
+SPARK_REFLECT_FIELD(PhysicsJointComponent, upperLimit, "Upper Limit")
+SPARK_REFLECT_FIELD(PhysicsJointComponent, enableLimits, "Enable Limits")
+SPARK_REFLECT_FIELD(PhysicsJointComponent, enableMotor, "Enable Motor")
+SPARK_REFLECT_FIELD(PhysicsJointComponent, motorSpeed, "Motor Speed")
+SPARK_REFLECT_FIELD(PhysicsJointComponent, motorMaxForce, "Motor Max Force")
+SPARK_REFLECT_FIELD(PhysicsJointComponent, breakForce, "Break Force")
+SPARK_REFLECT_FIELD(PhysicsJointComponent, breakTorque, "Break Torque")
+SPARK_REFLECT_END(PhysicsJointComponent)
+
+SPARK_REFLECT_TYPE(OccluderComponent)
+SPARK_REFLECT_FIELD_AS(OccluderComponent, halfExtents, "Half Extents", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(OccluderComponent, doubleSided, "Double Sided")
+SPARK_REFLECT_END(OccluderComponent)
+
+SPARK_REFLECT_TYPE(CoverPointComponent)
+SPARK_REFLECT_FIELD(CoverPointComponent, width, "Width")
+SPARK_REFLECT_FIELD_AS(CoverPointComponent, coverNormal, "Cover Normal", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(CoverPointComponent, canLeanLeft, "Can Lean Left")
+SPARK_REFLECT_FIELD(CoverPointComponent, canLeanRight, "Can Lean Right")
+SPARK_REFLECT_FIELD(CoverPointComponent, canFireOver, "Can Fire Over")
+SPARK_REFLECT_FIELD(CoverPointComponent, maxOccupants, "Max Occupants")
+SPARK_REFLECT_FIELD(CoverPointComponent, currentOccupants, "Current Occupants")
+SPARK_REFLECT_END(CoverPointComponent)
+
+SPARK_REFLECT_TYPE(TacticalPointComponent)
+SPARK_REFLECT_FIELD(TacticalPointComponent, qualityScore, "Quality Score")
+SPARK_REFLECT_FIELD(TacticalPointComponent, radius, "Radius")
+SPARK_REFLECT_FIELD(TacticalPointComponent, enabled, "Enabled")
+SPARK_REFLECT_END(TacticalPointComponent)
+
+SPARK_REFLECT_TYPE(DestructibleComponent)
+SPARK_REFLECT_FIELD(DestructibleComponent, health, "Health")
+SPARK_REFLECT_FIELD(DestructibleComponent, maxHealth, "Max Health")
+SPARK_REFLECT_FIELD(DestructibleComponent, damageStages, "Damage Stages")
+SPARK_REFLECT_FIELD(DestructibleComponent, fracturePattern, "Fracture Pattern")
+SPARK_REFLECT_FIELD(DestructibleComponent, debrisLifetime, "Debris Lifetime")
+SPARK_REFLECT_FIELD(DestructibleComponent, explosionForce, "Explosion Force")
+SPARK_REFLECT_FIELD(DestructibleComponent, minDamageThreshold, "Min Damage Threshold")
+SPARK_REFLECT_FIELD(DestructibleComponent, generateColliders, "Generate Colliders")
+SPARK_REFLECT_FIELD(DestructibleComponent, chainReaction, "Chain Reaction")
+SPARK_REFLECT_FIELD(DestructibleComponent, currentStage, "Current Stage")
+SPARK_REFLECT_END(DestructibleComponent)
+
+SPARK_REFLECT_TYPE(CinematicTriggerComponent)
+SPARK_REFLECT_FIELD(CinematicTriggerComponent, sequenceName, "Sequence Name")
+SPARK_REFLECT_FIELD(CinematicTriggerComponent, radius, "Radius")
+SPARK_REFLECT_FIELD(CinematicTriggerComponent, playOnce, "Play Once")
+SPARK_REFLECT_FIELD(CinematicTriggerComponent, skipable, "Skipable")
+SPARK_REFLECT_FIELD(CinematicTriggerComponent, pauseGameplay, "Pause Gameplay")
+SPARK_REFLECT_FIELD(CinematicTriggerComponent, hasTriggered, "Has Triggered")
+SPARK_REFLECT_END(CinematicTriggerComponent)
+
+SPARK_REFLECT_TYPE(DialogueTriggerComponent)
+SPARK_REFLECT_FIELD(DialogueTriggerComponent, dialogueTreeName, "Dialogue Tree Name")
+SPARK_REFLECT_FIELD(DialogueTriggerComponent, speakerName, "Speaker Name")
+SPARK_REFLECT_FIELD(DialogueTriggerComponent, interactionRadius, "Interaction Radius")
+SPARK_REFLECT_FIELD(DialogueTriggerComponent, requiresInteract, "Requires Interact")
+SPARK_REFLECT_FIELD(DialogueTriggerComponent, oneShot, "One Shot")
+SPARK_REFLECT_FIELD(DialogueTriggerComponent, facePlayer, "Face Player")
+SPARK_REFLECT_END(DialogueTriggerComponent)
+
+SPARK_REFLECT_TYPE(AreaBoundaryComponent)
+SPARK_REFLECT_FIELD(AreaBoundaryComponent, areaName, "Area Name")
+SPARK_REFLECT_FIELD(AreaBoundaryComponent, scenePath, "Scene Path")
+SPARK_REFLECT_FIELD_AS(AreaBoundaryComponent, boundsMin, "Bounds Min", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD_AS(AreaBoundaryComponent, boundsMax, "Bounds Max", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(AreaBoundaryComponent, priority, "Priority")
+SPARK_REFLECT_FIELD(AreaBoundaryComponent, loadRadius, "Load Radius")
+SPARK_REFLECT_FIELD(AreaBoundaryComponent, unloadRadius, "Unload Radius")
+SPARK_REFLECT_FIELD(AreaBoundaryComponent, alwaysLoaded, "Always Loaded")
+SPARK_REFLECT_END(AreaBoundaryComponent)
+
+SPARK_REFLECT_TYPE(BillboardComponent)
+SPARK_REFLECT_FIELD(BillboardComponent, texturePath, "Texture Path")
+SPARK_REFLECT_FIELD_AS(BillboardComponent, color, "Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD_AS(BillboardComponent, size, "Size", Spark::FieldType::Vector2)
+SPARK_REFLECT_FIELD(BillboardComponent, fadeStartDistance, "Fade Start Distance")
+SPARK_REFLECT_FIELD(BillboardComponent, fadeEndDistance, "Fade End Distance")
+SPARK_REFLECT_FIELD(BillboardComponent, sortingLayer, "Sorting Layer")
+SPARK_REFLECT_END(BillboardComponent)
+
+// --- Advanced Placement ---
+
+SPARK_REFLECT_TYPE(AudioListenerComponent)
+SPARK_REFLECT_FIELD(AudioListenerComponent, isActive, "Is Active")
+SPARK_REFLECT_FIELD(AudioListenerComponent, volumeScale, "Volume Scale")
+SPARK_REFLECT_END(AudioListenerComponent)
+
+SPARK_REFLECT_TYPE(CharacterControllerComponent)
+SPARK_REFLECT_FIELD(CharacterControllerComponent, height, "Height")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, radius, "Radius")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, stepHeight, "Step Height")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, slopeLimit, "Slope Limit")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, skinWidth, "Skin Width")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, gravity, "Gravity")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, moveSpeed, "Move Speed")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, jumpForce, "Jump Force")
+SPARK_REFLECT_FIELD(CharacterControllerComponent, groundState, "Ground State")
+SPARK_REFLECT_END(CharacterControllerComponent)
+
+SPARK_REFLECT_TYPE(NavRegionComponent)
+SPARK_REFLECT_FIELD_AS(NavRegionComponent, halfExtents, "Half Extents", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(NavRegionComponent, agentRadius, "Agent Radius")
+SPARK_REFLECT_FIELD(NavRegionComponent, agentHeight, "Agent Height")
+SPARK_REFLECT_FIELD(NavRegionComponent, maxSlope, "Max Slope")
+SPARK_REFLECT_FIELD(NavRegionComponent, cellSize, "Cell Size")
+SPARK_REFLECT_FIELD(NavRegionComponent, autoRebuild, "Auto Rebuild")
+SPARK_REFLECT_END(NavRegionComponent)
+
+SPARK_REFLECT_TYPE(NavLinkComponent)
+SPARK_REFLECT_FIELD_AS(NavLinkComponent, endOffset, "End Offset", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(NavLinkComponent, radius, "Radius")
+SPARK_REFLECT_FIELD(NavLinkComponent, traversalCost, "Traversal Cost")
+SPARK_REFLECT_FIELD(NavLinkComponent, bidirectional, "Bidirectional")
+SPARK_REFLECT_FIELD(NavLinkComponent, enabled, "Enabled")
+SPARK_REFLECT_FIELD(NavLinkComponent, animationName, "Animation Name")
+SPARK_REFLECT_END(NavLinkComponent)
+
+SPARK_REFLECT_TYPE(SkyboxComponent)
+SPARK_REFLECT_FIELD(SkyboxComponent, cubemapPath, "Cubemap Path")
+SPARK_REFLECT_FIELD_AS(SkyboxComponent, topColor, "Top Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD_AS(SkyboxComponent, bottomColor, "Bottom Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD(SkyboxComponent, turbidity, "Turbidity")
+SPARK_REFLECT_FIELD(SkyboxComponent, sunSize, "Sun Size")
+SPARK_REFLECT_FIELD(SkyboxComponent, exposure, "Exposure")
+SPARK_REFLECT_FIELD(SkyboxComponent, rotation, "Rotation")
+SPARK_REFLECT_END(SkyboxComponent)
+
+SPARK_REFLECT_TYPE(ConstantForceComponent)
+SPARK_REFLECT_FIELD_AS(ConstantForceComponent, force, "Force", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD_AS(ConstantForceComponent, torque, "Torque", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(ConstantForceComponent, relativeForce, "Relative Force")
+SPARK_REFLECT_FIELD(ConstantForceComponent, relativeTorque, "Relative Torque")
+SPARK_REFLECT_FIELD(ConstantForceComponent, enabled, "Enabled")
+SPARK_REFLECT_END(ConstantForceComponent)
+
+SPARK_REFLECT_TYPE(ForceRegionComponent)
+SPARK_REFLECT_FIELD_AS(ForceRegionComponent, halfExtents, "Half Extents", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD_AS(ForceRegionComponent, forceDirection, "Force Direction", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(ForceRegionComponent, forceMagnitude, "Force Magnitude")
+SPARK_REFLECT_FIELD(ForceRegionComponent, damping, "Damping")
+SPARK_REFLECT_FIELD(ForceRegionComponent, enabled, "Enabled")
+SPARK_REFLECT_END(ForceRegionComponent)
+
+SPARK_REFLECT_TYPE(RagdollComponent)
+SPARK_REFLECT_FIELD(RagdollComponent, definitionName, "Definition Name")
+SPARK_REFLECT_FIELD(RagdollComponent, blendWeight, "Blend Weight")
+SPARK_REFLECT_FIELD(RagdollComponent, jointStiffness, "Joint Stiffness")
+SPARK_REFLECT_FIELD(RagdollComponent, linearDamping, "Linear Damping")
+SPARK_REFLECT_FIELD(RagdollComponent, angularDamping, "Angular Damping")
+SPARK_REFLECT_FIELD(RagdollComponent, selfCollision, "Self Collision")
+SPARK_REFLECT_END(RagdollComponent)
+
+SPARK_REFLECT_TYPE(SoftBodyComponent)
+SPARK_REFLECT_FIELD(SoftBodyComponent, mass, "Mass")
+SPARK_REFLECT_FIELD(SoftBodyComponent, stiffness, "Stiffness")
+SPARK_REFLECT_FIELD(SoftBodyComponent, damping, "Damping")
+SPARK_REFLECT_FIELD(SoftBodyComponent, windInfluence, "Wind Influence")
+SPARK_REFLECT_FIELD(SoftBodyComponent, gravityScale, "Gravity Scale")
+SPARK_REFLECT_FIELD(SoftBodyComponent, solverIterations, "Solver Iterations")
+SPARK_REFLECT_FIELD(SoftBodyComponent, selfCollision, "Self Collision")
+SPARK_REFLECT_FIELD(SoftBodyComponent, twoSided, "Two Sided")
+SPARK_REFLECT_END(SoftBodyComponent)
+
+SPARK_REFLECT_TYPE(VehicleComponent)
+SPARK_REFLECT_FIELD(VehicleComponent, wheelCount, "Wheel Count")
+SPARK_REFLECT_FIELD(VehicleComponent, mass, "Mass")
+SPARK_REFLECT_FIELD(VehicleComponent, maxEngineTorque, "Max Engine Torque")
+SPARK_REFLECT_FIELD(VehicleComponent, maxSteerAngle, "Max Steer Angle")
+SPARK_REFLECT_FIELD(VehicleComponent, maxBrakeForce, "Max Brake Force")
+SPARK_REFLECT_FIELD(VehicleComponent, suspensionLength, "Suspension Length")
+SPARK_REFLECT_FIELD(VehicleComponent, suspensionStiffness, "Suspension Stiffness")
+SPARK_REFLECT_FIELD(VehicleComponent, suspensionDamping, "Suspension Damping")
+SPARK_REFLECT_FIELD(VehicleComponent, gearCount, "Gear Count")
+SPARK_REFLECT_FIELD(VehicleComponent, antiRollBar, "Anti Roll Bar")
+SPARK_REFLECT_END(VehicleComponent)
+
+SPARK_REFLECT_TYPE(BuoyancyVolumeComponent)
+SPARK_REFLECT_FIELD_AS(BuoyancyVolumeComponent, halfExtents, "Half Extents", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(BuoyancyVolumeComponent, waterDensity, "Water Density")
+SPARK_REFLECT_FIELD(BuoyancyVolumeComponent, linearDrag, "Linear Drag")
+SPARK_REFLECT_FIELD(BuoyancyVolumeComponent, angularDrag, "Angular Drag")
+SPARK_REFLECT_FIELD(BuoyancyVolumeComponent, flowSpeed, "Flow Speed")
+SPARK_REFLECT_FIELD_AS(BuoyancyVolumeComponent, flowDirection, "Flow Direction", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(BuoyancyVolumeComponent, enabled, "Enabled")
+SPARK_REFLECT_END(BuoyancyVolumeComponent)
+
+SPARK_REFLECT_TYPE(SpringArmComponent)
+SPARK_REFLECT_FIELD(SpringArmComponent, targetLength, "Target Length")
+SPARK_REFLECT_FIELD(SpringArmComponent, probeRadius, "Probe Radius")
+SPARK_REFLECT_FIELD(SpringArmComponent, smoothSpeed, "Smooth Speed")
+SPARK_REFLECT_FIELD(SpringArmComponent, minLength, "Min Length")
+SPARK_REFLECT_FIELD(SpringArmComponent, doCollisionTest, "Do Collision Test")
+SPARK_REFLECT_FIELD(SpringArmComponent, currentLength, "Current Length")
+SPARK_REFLECT_FIELD(SpringArmComponent, isColliding, "Is Colliding")
+SPARK_REFLECT_END(SpringArmComponent)
+
+SPARK_REFLECT_TYPE(TrailRendererComponent)
+SPARK_REFLECT_FIELD(TrailRendererComponent, lifetime, "Lifetime")
+SPARK_REFLECT_FIELD(TrailRendererComponent, minVertexDistance, "Min Vertex Distance")
+SPARK_REFLECT_FIELD(TrailRendererComponent, startWidth, "Start Width")
+SPARK_REFLECT_FIELD(TrailRendererComponent, endWidth, "End Width")
+SPARK_REFLECT_FIELD_AS(TrailRendererComponent, startColor, "Start Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD_AS(TrailRendererComponent, endColor, "End Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD(TrailRendererComponent, materialPath, "Material Path")
+SPARK_REFLECT_FIELD(TrailRendererComponent, emitting, "Emitting")
+SPARK_REFLECT_FIELD(TrailRendererComponent, sortingLayer, "Sorting Layer")
+SPARK_REFLECT_END(TrailRendererComponent)
+
+SPARK_REFLECT_TYPE(Text3DComponent)
+SPARK_REFLECT_FIELD(Text3DComponent, text, "Text")
+SPARK_REFLECT_FIELD(Text3DComponent, fontPath, "Font Path")
+SPARK_REFLECT_FIELD(Text3DComponent, fontSize, "Font Size")
+SPARK_REFLECT_FIELD_AS(Text3DComponent, color, "Color", Spark::FieldType::Vector4)
+SPARK_REFLECT_FIELD(Text3DComponent, faceCamera, "Face Camera")
+SPARK_REFLECT_FIELD(Text3DComponent, castShadows, "Cast Shadows")
+SPARK_REFLECT_FIELD(Text3DComponent, maxWidth, "Max Width")
+SPARK_REFLECT_FIELD(Text3DComponent, sortingLayer, "Sorting Layer")
+SPARK_REFLECT_END(Text3DComponent)
+
+SPARK_REFLECT_TYPE(FoliageVolumeComponent)
+SPARK_REFLECT_FIELD_AS(FoliageVolumeComponent, halfExtents, "Half Extents", Spark::FieldType::Vector3)
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, seed, "Seed")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, densityScale, "Density Scale")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, minSlopeAngle, "Min Slope Angle")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, maxSlopeAngle, "Max Slope Angle")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, minAltitude, "Min Altitude")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, maxAltitude, "Max Altitude")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, alignToSurface, "Align To Surface")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, castShadows, "Cast Shadows")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, cullDistance, "Cull Distance")
+SPARK_REFLECT_FIELD(FoliageVolumeComponent, enabled, "Enabled")
+SPARK_REFLECT_END(FoliageVolumeComponent)
+
+// --- Collision Mask ---
+
+SPARK_REFLECT_TYPE(CollisionMaskComponent)
+SPARK_REFLECT_END(CollisionMaskComponent)
+
+// --- Visibility ---
+
+SPARK_REFLECT_TYPE(VisibilityMaskComponent)
+SPARK_REFLECT_END(VisibilityMaskComponent)
+
+SPARK_REFLECT_TYPE(CameraDrawMaskComponent)
+SPARK_REFLECT_END(CameraDrawMaskComponent)
+
 // ============================================================================
 // ComponentFactory registrations — static initializer
 // ============================================================================
@@ -589,6 +995,51 @@ namespace
 
             // Terrain
             SPARK_REGISTER_COMPONENT(TerrainComponent)
+
+            // 2D / Sprite
+            SPARK_REGISTER_COMPONENT(SpriteRenderer)
+            SPARK_REGISTER_COMPONENT(SpriteAnimator)
+            SPARK_REGISTER_COMPONENT(Camera2D)
+            SPARK_REGISTER_COMPONENT(ParallaxBackground)
+            SPARK_REGISTER_COMPONENT(TilemapComponent)
+            SPARK_REGISTER_COMPONENT(RigidBody2D)
+            SPARK_REGISTER_COMPONENT(Collider2D)
+            SPARK_REGISTER_COMPONENT(NineSliceSprite)
+            SPARK_REGISTER_COMPONENT(PixelPerfectComponent)
+
+            // Placement
+            SPARK_REGISTER_COMPONENT(WindZoneComponent)
+            SPARK_REGISTER_COMPONENT(PhysicsJointComponent)
+            SPARK_REGISTER_COMPONENT(OccluderComponent)
+            SPARK_REGISTER_COMPONENT(CoverPointComponent)
+            SPARK_REGISTER_COMPONENT(TacticalPointComponent)
+            SPARK_REGISTER_COMPONENT(DestructibleComponent)
+            SPARK_REGISTER_COMPONENT(CinematicTriggerComponent)
+            SPARK_REGISTER_COMPONENT(DialogueTriggerComponent)
+            SPARK_REGISTER_COMPONENT(AreaBoundaryComponent)
+            SPARK_REGISTER_COMPONENT(BillboardComponent)
+
+            // Advanced Placement
+            SPARK_REGISTER_COMPONENT(AudioListenerComponent)
+            SPARK_REGISTER_COMPONENT(CharacterControllerComponent)
+            SPARK_REGISTER_COMPONENT(NavRegionComponent)
+            SPARK_REGISTER_COMPONENT(NavLinkComponent)
+            SPARK_REGISTER_COMPONENT(SkyboxComponent)
+            SPARK_REGISTER_COMPONENT(ConstantForceComponent)
+            SPARK_REGISTER_COMPONENT(ForceRegionComponent)
+            SPARK_REGISTER_COMPONENT(RagdollComponent)
+            SPARK_REGISTER_COMPONENT(SoftBodyComponent)
+            SPARK_REGISTER_COMPONENT(VehicleComponent)
+            SPARK_REGISTER_COMPONENT(BuoyancyVolumeComponent)
+            SPARK_REGISTER_COMPONENT(SpringArmComponent)
+            SPARK_REGISTER_COMPONENT(TrailRendererComponent)
+            SPARK_REGISTER_COMPONENT(Text3DComponent)
+            SPARK_REGISTER_COMPONENT(FoliageVolumeComponent)
+
+            // Collision / Visibility
+            SPARK_REGISTER_COMPONENT(CollisionMaskComponent)
+            SPARK_REGISTER_COMPONENT(VisibilityMaskComponent)
+            SPARK_REGISTER_COMPONENT(CameraDrawMaskComponent)
 
             SPARK_LOG_INFO(Spark::LogCategory::Core, "ComponentFactory registration complete");
         }
