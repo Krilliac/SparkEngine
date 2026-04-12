@@ -67,6 +67,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Fake-coverage conversion — Phases JJ/KK/LL (18 real-class test files replacing fake anon-namespace reimpls, 111 tests) | [knowledge/fake-coverage-conversion-2026-04-11.md](knowledge/fake-coverage-conversion-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine next-steps Themes 1-6 (16 real-class test files, bloat baseline, SelectionManager wiring, shallow-wire audit) | [knowledge/engine-next-steps-themes-1-6-2026-04-12.md](knowledge/engine-next-steps-themes-1-6-2026-04-12.md) | Observation | Active | 2026-04-12 |
 | GPU/CPU separation plan (7 splits done, 4 deferred, portability + wiring + RHI parity roadmap) | [knowledge/gpu-cpu-separation-plan-2026-04-12.md](knowledge/gpu-cpu-separation-plan-2026-04-12.md) | Plan | Active | 2026-04-12 |
+| Reflection & polymorphism refactoring plan (8 phases, ~3100 line net reduction, extends Reflection.h) | [knowledge/reflection-polymorphism-refactoring-plan-2026-04-12.md](knowledge/reflection-polymorphism-refactoring-plan-2026-04-12.md) | Plan | Deferred | 2026-04-12 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-12)
