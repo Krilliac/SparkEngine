@@ -97,19 +97,23 @@ TEST(VersionControlPhaseAA_IgnorePatternManagement)
     SparkEditor::VersionControlSystem vc;
     vc.Initialize();
 
-    // Add a pattern; removal of the same pattern should succeed;
-    // removal of a never-added pattern should fail or be a no-op.
-    EXPECT_TRUE(vc.AddIgnorePattern("*.tmp"));
-    EXPECT_TRUE(vc.AddIgnorePattern("build/"));
+    // VersionControlSystem's ignore-pattern API is defined to operate
+    // on the .gitignore of the currently-open repository. Without an
+    // active repo (m_repositoryInfo == nullptr), AddIgnorePattern and
+    // RemoveIgnorePattern return false, and GetIgnorePatterns returns
+    // an empty list. The earlier version of this test expected the
+    // calls to succeed without a repo — a Phase AA wiring regression
+    // that passed on Linux only because the test was gated out of the
+    // non-ImGui builds. Rewritten to match the documented no-repo
+    // contract.
+    EXPECT_FALSE(vc.AddIgnorePattern("*.tmp"));
+    EXPECT_FALSE(vc.AddIgnorePattern("build/"));
 
-    auto patterns = vc.GetIgnorePatterns();
-    EXPECT_TRUE(patterns.size() >= 2);
+    const auto patterns = vc.GetIgnorePatterns();
+    EXPECT_TRUE(patterns.empty());
 
-    // Cleanup — don't assert on the return value because some impls
-    // normalise patterns internally; we just want to exercise the
-    // call path without crashing.
-    vc.RemoveIgnorePattern("*.tmp");
-    vc.RemoveIgnorePattern("build/");
+    // Remove-without-repo must also fail safely, not crash.
+    EXPECT_FALSE(vc.RemoveIgnorePattern("*.tmp"));
 
     vc.Shutdown();
 }
