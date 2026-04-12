@@ -86,6 +86,7 @@ SparkEditor/Source/Panels/NetworkDebugPanel.h
 SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp
 SparkEditor/Source/Panels/ProjectBrowserPanel.cpp
 SparkEditor/Source/Panels/ProjectSettingsPanel.cpp
+SparkEditor/Source/Panels/SceneViewPanel.cpp
 SparkEditor/Source/Panels/SelectionManager.h
 SparkEditor/Source/Panels/SpriteAnimationEditorPanel.cpp
 SparkEditor/Source/Panels/TilemapEditorPanel.cpp
