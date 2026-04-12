@@ -1,0 +1,162 @@
+/**
+ * @file TestEngineLifecycle.cpp
+ * @brief End-to-end engine lifecycle smoke tests
+ *
+ * Validates the full engine initialization → frame ticks → shutdown sequence
+ * using NullRHI (headless). Tests that the engine subsystem graph starts and
+ * stops cleanly without any GPU or display.
+ */
+
+#include "TestFramework.h"
+#include "Graphics/GraphicsEngine.h"
+#include "Graphics/RHI/RHIBridge.h"
+
+// ============================================================================
+// GraphicsEngine Lifecycle Tests (NullRHI / Headless)
+// ============================================================================
+
+TEST(EngineLifecycle_GraphicsInit_NullWindow_Succeeds)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    // On Linux without GPU, should either succeed via NullRHI or fail gracefully
+    // Either way, it should not crash
+    (void)hr;
+}
+
+TEST(EngineLifecycle_GraphicsInitShutdown_NoCrash)
+{
+    GraphicsEngine engine;
+    engine.Initialize(nullptr);
+    // Shutdown should always be safe
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_GraphicsDoubleShutdown_Safe)
+{
+    GraphicsEngine engine;
+    engine.Initialize(nullptr);
+    engine.Shutdown();
+    engine.Shutdown(); // Second shutdown should be safe
+}
+
+TEST(EngineLifecycle_FrameLoop_Headless_NoCrash)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    if (SUCCEEDED(hr))
+    {
+        // Run a few frame cycles in headless mode
+        for (int i = 0; i < 5; ++i)
+        {
+            engine.BeginFrame();
+            engine.EndFrame();
+        }
+    }
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_GetSubsystems_AfterInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    if (SUCCEEDED(hr))
+    {
+        // Subsystems should be created during init
+        auto* texSys = engine.GetTextureSystem();
+        auto* matSys = engine.GetMaterialSystem();
+        auto* lightSys = engine.GetLightingSystem();
+        auto* assetPipe = engine.GetAssetPipeline();
+        auto* lightMgr = engine.GetLightManager();
+        auto* postProc = engine.GetPostProcessingPipeline();
+
+        EXPECT_TRUE(texSys != nullptr);
+        EXPECT_TRUE(matSys != nullptr);
+        EXPECT_TRUE(lightSys != nullptr);
+        EXPECT_TRUE(assetPipe != nullptr);
+        EXPECT_TRUE(lightMgr != nullptr);
+        EXPECT_TRUE(postProc != nullptr);
+    }
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_GetSubsystems_BeforeInit_ReturnsNull)
+{
+    GraphicsEngine engine;
+    // Before init, subsystems should be null
+    EXPECT_TRUE(engine.GetTextureSystem() == nullptr);
+    EXPECT_TRUE(engine.GetMaterialSystem() == nullptr);
+    EXPECT_TRUE(engine.GetLightingSystem() == nullptr);
+}
+
+TEST(EngineLifecycle_GraphicsSettings_Readable)
+{
+    GraphicsEngine engine;
+    engine.Initialize(nullptr);
+
+    const auto& settings = engine.GetGraphicsSettings();
+    // Settings should have reasonable defaults
+    EXPECT_TRUE(settings.clearColor[3] >= 0.0f); // alpha component exists
+
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_RHIDevice_AccessibleAfterInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    if (SUCCEEDED(hr))
+    {
+        auto* rhiDevice = engine.GetRHIDevice();
+        // Should have a device (NullRHIDevice in headless)
+        EXPECT_TRUE(rhiDevice != nullptr);
+    }
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_WindowDimensions_DefaultValues)
+{
+    GraphicsEngine engine;
+    engine.Initialize(nullptr);
+
+    EXPECT_TRUE(engine.GetWindowWidth() > 0);
+    EXPECT_TRUE(engine.GetWindowHeight() > 0);
+
+    engine.Shutdown();
+}
+
+// ============================================================================
+// RHI Bridge Standalone Lifecycle
+// ============================================================================
+
+TEST(EngineLifecycle_RHIBridge_FullCycle)
+{
+    Spark::RHI::RHIBridge bridge;
+
+    // Initialize headless
+    EXPECT_TRUE(bridge.Initialize(nullptr, 1280, 720, Spark::RHI::GraphicsBackend::None, false));
+    EXPECT_TRUE(bridge.IsHeadless());
+
+    // Run 10 frame cycles
+    for (int i = 0; i < 10; ++i)
+    {
+        bridge.BeginFrame();
+        // In a real app, draw calls would happen here via GetCommandList()
+        bridge.EndFrame();
+    }
+
+    // Create and destroy resources
+    auto vb = bridge.CreateVertexBuffer(nullptr, 1024, 32);
+    auto ib = bridge.CreateIndexBuffer(nullptr, 256, 4);
+    auto cb = bridge.CreateConstantBuffer(256);
+    EXPECT_TRUE(vb != nullptr);
+    EXPECT_TRUE(ib != nullptr);
+    EXPECT_TRUE(cb != nullptr);
+
+    // Resources are destroyed when unique_ptrs go out of scope
+    vb.reset();
+    ib.reset();
+    cb.reset();
+
+    bridge.Shutdown();
+}

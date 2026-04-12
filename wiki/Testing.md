@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*455 test files, 5628+ test cases*
+*458 test files, 5668+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -556,6 +556,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAssetMigration` | 21 |
 | `TestAssetMigrationPhaseEE` | 10 |
 | `TestAssetPipelineCache` | 22 |
+| `TestAssetPipelineIntegration` | 16 |
 | `TestAssetPipelineReal` | 17 |
 | `TestAssetStallDetector` | 0 |
 | `TestAssetValidator` | 7 |
@@ -665,6 +666,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorWindowManager` | 14 |
 | `TestEngineContext` | 18 |
 | `TestEngineDiagnostics` | 4 |
+| `TestEngineLifecycle` | 10 |
 | `TestEngineLoadTest` | 21 |
 | `TestEngineMonitor` | 10 |
 | `TestEngineSettingsEdgeCases` | 45 |
@@ -771,6 +773,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
 | `TestMaterialSystemEdgeCases` | 10 |
+| `TestMaterialSystemIntegration` | 14 |
 | `TestMaterialSystemReal` | 13 |
 | `TestMaterialSystemValidation` | 31 |
 | `TestMathUtils` | 11 |

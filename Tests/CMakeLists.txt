@@ -446,6 +446,9 @@ add_executable(SparkTests
     TestRHIBridgeIntegration.cpp
     TestNetworkManagerIntegration.cpp
     TestSystemManagerIntegration.cpp
+    TestAssetPipelineIntegration.cpp
+    TestMaterialSystemIntegration.cpp
+    TestEngineLifecycle.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
     # Comprehensive subsystem coverage
