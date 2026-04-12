@@ -86,6 +86,14 @@ namespace Spark
         float rangeMax = 0.0f; ///< Optional: maximum value hint for editor
         bool hasRange = false; ///< Whether range constraints are set
         bool readOnly = false; ///< Whether the field is read-only in editor
+
+        // Extended attributes for reflection-driven subsystems
+        std::string tooltip;                ///< Editor hover text
+        std::string category;               ///< Group in Inspector (e.g., "Rendering", "Physics")
+        bool isAssetPath = false;           ///< Shows asset picker in Inspector
+        bool replicated = false;            ///< Included in network replication
+        bool serialized = true;             ///< Included in save/load (default true)
+        std::vector<std::string> enumNames; ///< Enum value names for dropdown display
     };
 
     // ========================================================================
@@ -102,6 +110,7 @@ namespace Spark
         size_t size = 0;           ///< sizeof(T)
         size_t alignment = 0;      ///< alignof(T)
         TypeId baseType = nullptr; ///< Base class TypeId (nullptr if none)
+        uint32_t version = 0;      ///< Schema version for save migration
         std::vector<FieldInfo> fields;
 
         /** @brief Find a field by C++ member name. Returns nullptr if not found. */
@@ -113,6 +122,51 @@ namespace Spark
                     return &f;
             }
             return nullptr;
+        }
+
+        /** @brief Get all unique category names used by fields. Empty string = uncategorized. */
+        std::vector<std::string> GetCategories() const
+        {
+            std::vector<std::string> cats;
+            for (const auto& f : fields)
+            {
+                bool found = false;
+                for (const auto& c : cats)
+                {
+                    if (c == f.category)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    cats.push_back(f.category);
+            }
+            return cats;
+        }
+
+        /** @brief Get the count of fields that are marked for serialization. */
+        size_t GetSerializedFieldCount() const
+        {
+            size_t count = 0;
+            for (const auto& f : fields)
+            {
+                if (f.serialized)
+                    ++count;
+            }
+            return count;
+        }
+
+        /** @brief Get the count of fields that are marked for replication. */
+        size_t GetReplicatedFieldCount() const
+        {
+            size_t count = 0;
+            for (const auto& f : fields)
+            {
+                if (f.replicated)
+                    ++count;
+            }
+            return count;
         }
     };
 
@@ -438,6 +492,56 @@ namespace Spark
         field.hasRange = true;                                                                                         \
         info.fields.push_back(field);                                                                                  \
     }
+
+/**
+ * @brief Register a field with extended attributes via inline statements.
+ *
+ * Usage:
+ * ```
+ * SPARK_REFLECT_FIELD_ATTR(MyType, myField, "My Field",
+ *     field.tooltip = "Description";
+ *     field.category = "Physics";
+ *     field.replicated = true;
+ * )
+ * ```
+ */
+#define SPARK_REFLECT_FIELD_ATTR(Type, member, displayName, ...)                                                       \
+    {                                                                                                                  \
+        Spark::FieldInfo field;                                                                                        \
+        field.name = displayName;                                                                                      \
+        field.fieldName = #member;                                                                                     \
+        field.type = Spark::DeduceFieldType<decltype(Type::member)>();                                                 \
+        field.offset = offsetof(Type, member);                                                                         \
+        field.size = sizeof(Type::member);                                                                             \
+        field.ownerType = GetTypeId<Type>();                                                                           \
+        __VA_ARGS__                                                                                                    \
+        info.fields.push_back(field);                                                                                  \
+    }
+
+/**
+ * @brief Register a field with explicit FieldType and extended attributes.
+ *
+ * Use for types like XMFLOAT3/XMFLOAT4 where DeduceFieldType returns Custom.
+ */
+#define SPARK_REFLECT_FIELD_ATTR_AS(Type, member, displayName, fieldType, ...)                                         \
+    {                                                                                                                  \
+        Spark::FieldInfo field;                                                                                        \
+        field.name = displayName;                                                                                      \
+        field.fieldName = #member;                                                                                     \
+        field.type = fieldType;                                                                                        \
+        field.offset = offsetof(Type, member);                                                                         \
+        field.size = sizeof(Type::member);                                                                             \
+        field.ownerType = GetTypeId<Type>();                                                                           \
+        __VA_ARGS__                                                                                                    \
+        info.fields.push_back(field);                                                                                  \
+    }
+
+/**
+ * @brief Set the schema version for the current type registration.
+ *
+ * Place inside a SPARK_REFLECT_TYPE block before SPARK_REFLECT_END.
+ */
+#define SPARK_REFLECT_VERSION(ver) info.version = (ver);
 
 /**
  * @brief End type reflection registration.

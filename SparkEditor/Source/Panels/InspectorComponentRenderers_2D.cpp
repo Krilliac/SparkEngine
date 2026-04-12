@@ -1,10 +1,10 @@
 /**
  * @file InspectorComponentRenderers_2D.cpp
- * @brief Inspector renderers for 2D, audio, and terrain components
+ * @brief Inspector renderers for 2D and audio components with complex conditional UI
  *
- * Contains: AudioSource, Terrain, SpriteRenderer, SpriteAnimator, Camera2D,
- * Tilemap, NineSlice, ParallaxBG, PixelPerfect, RigidBody2D, Collider2D.
- * Split from InspectorComponentRenderers.cpp for maintainability.
+ * Contains: AudioSource, SpriteRenderer, Camera2D, Tilemap, NineSlice, ParallaxBG,
+ * RigidBody2D, Collider2D. Simpler components (Terrain, SpriteAnimator, PixelPerfect)
+ * migrated to InspectorComponentRenderers_Reflected.cpp.
  */
 
 #include "InspectorPanel.h"
@@ -81,57 +81,7 @@ namespace SparkEditor
         }
     }
 
-    // ============================================================================
-    // Terrain Component
-    // ============================================================================
-
-    void InspectorPanel::RenderTerrainComponent()
-    {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_MOUNTAIN " Terrain");
-
-        if (ImGui::BeginPopupContextItem("##TerrainCtx"))
-        {
-            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
-            {
-                RemoveComponent(ComponentType::TERRAIN);
-            }
-            ImGui::EndPopup();
-        }
-
-        if (headerOpen)
-        {
-            ImGui::Indent(4);
-
-            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::TERRAIN);
-            TerrainSceneData* terrain = comp ? comp->GetData<TerrainSceneData>() : nullptr;
-
-            if (terrain)
-            {
-                ImGui::DragInt("Resolution", &terrain->heightmapResolution, 1.0f, 33, 4097);
-                ImGui::DragFloat("Size", &terrain->terrainSize, 10.0f, 100.0f, 10000.0f, "%.0f m");
-                ImGui::DragFloat("Height Scale", &terrain->heightScale, 0.1f, 0.1f, 100.0f);
-                ImGui::DragFloat("Min Height", &terrain->minHeight, 0.5f, -1000.0f, terrain->maxHeight);
-                ImGui::DragFloat("Max Height", &terrain->maxHeight, 0.5f, terrain->minHeight, 1000.0f);
-
-                ImGui::Separator();
-                ImGui::TextDisabled("LOD");
-                ImGui::DragInt("LOD Levels", &terrain->lodLevels, 0.1f, 1, 8);
-                ImGui::DragFloat("LOD Bias", &terrain->lodBias, 0.1f, 0.1f, 4.0f, "%.1f");
-
-                ImGui::Separator();
-                ImGui::TextDisabled("Physics");
-                ImGui::Checkbox("Generate Collider", &terrain->generateCollider);
-                ImGui::Checkbox("Cast Shadows", &terrain->castShadows);
-                ImGui::Checkbox("Receive Shadows", &terrain->receiveShadows);
-            }
-            else
-            {
-                ImGui::TextDisabled("(Component data unavailable)");
-            }
-
-            ImGui::Unindent(4);
-        }
-    }
+    // Terrain — migrated to InspectorComponentRenderers_Reflected.cpp (reflection with categories)
 
     // ============================================================================
     // Sprite Renderer Component
@@ -183,26 +133,7 @@ namespace SparkEditor
         }
     }
 
-    // ============================================================================
-    // Sprite Animator Component
-    // ============================================================================
-
-    void InspectorPanel::RenderSpriteAnimatorComponent()
-    {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_FILM " Sprite Animator");
-        if (ImGui::BeginPopupContextItem("##SpriteAnimatorCtx"))
-        {
-            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
-                RemoveComponent(ComponentType::SPRITE_ANIMATOR);
-            ImGui::EndPopup();
-        }
-        if (headerOpen)
-        {
-            ImGui::Indent(4);
-            ImGui::TextDisabled("Edit clips in the Sprite Animation Editor panel");
-            ImGui::Unindent(4);
-        }
-    }
+    // Sprite Animator — migrated to InspectorComponentRenderers_Reflected.cpp
 
     // ============================================================================
     // Camera 2D Component
@@ -389,38 +320,7 @@ namespace SparkEditor
         }
     }
 
-    // ============================================================================
-    // Pixel Perfect Component
-    // ============================================================================
-
-    void InspectorPanel::RenderPixelPerfectComponent()
-    {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_TH_LARGE " Pixel Perfect");
-        if (ImGui::BeginPopupContextItem("##PixelPerfectCtx"))
-        {
-            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
-                RemoveComponent(ComponentType::PIXEL_PERFECT);
-            ImGui::EndPopup();
-        }
-        if (headerOpen)
-        {
-            ImGui::Indent(4);
-            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PIXEL_PERFECT);
-            PixelPerfectData* pp = comp ? comp->GetData<PixelPerfectData>() : nullptr;
-            if (pp)
-            {
-                ImGui::DragInt("Reference Width", &pp->referenceWidth, 1.0f, 64, 3840);
-                ImGui::DragInt("Reference Height", &pp->referenceHeight, 1.0f, 64, 2160);
-                ImGui::Checkbox("Upscale to Fill", &pp->upscaleToFill);
-                ImGui::Checkbox("Crop to Fit", &pp->cropToFit);
-            }
-            else
-            {
-                ImGui::TextDisabled("(Component data unavailable)");
-            }
-            ImGui::Unindent(4);
-        }
-    }
+    // Pixel Perfect — migrated to InspectorComponentRenderers_Reflected.cpp
 
     // ============================================================================
     // Rigid Body 2D Component

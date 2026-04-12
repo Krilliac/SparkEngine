@@ -1,10 +1,23 @@
 # Reflection & Polymorphism Refactoring — Full Project Plan
 
+## Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 1 (Inspector) | **Done** | FieldInfo extended (tooltip/category/isAssetPath/replicated/serialized/enumNames), SPARK_REFLECT_FIELD_ATTR macros, RenderReflectedFields with category/tooltip/enum support, 10 renderers migrated |
+| 2 (Serialization) | **Foundation done** | ReflectionSerializer.h created (SerializeToProperties/DeserializeFromProperties/binary), not yet wired into JSONSceneSerializer |
+| 3 (Save/Load) | Planned | RegisterReflectedSerializers already works, hand-written serializers still exist |
+| 4 (Network) | Planned | |
+| 5 (Materials) | Planned | |
+| 6 (AngelScript) | Planned | |
+| 7 (Settings) | Planned | |
+| 8B (UI Bindings) | **Done** | UITypedBinding\<T\> replaces 4 concrete classes, backward-compatible aliases |
+
 ## Context
 
-SparkEngine already has a **solid reflection foundation** in `Core/Reflection.h` (452 lines) with `TypeRegistry`, `TypeInfo`, `FieldInfo`, `ComponentFactory`, and `SPARK_REFLECT_*` macros. 40+ components are registered. However, only ~30% of the engine uses it — the rest still has manual boilerplate for serialization, inspector rendering, network replication, and script binding. This plan unifies everything under the existing reflection system and cleans up polymorphism patterns.
+SparkEngine already has a **solid reflection foundation** in `Core/Reflection.h` (~530 lines) with `TypeRegistry`, `TypeInfo`, `FieldInfo`, `ComponentFactory`, and `SPARK_REFLECT_*` macros. 40+ components are registered. The reflection system now covers ~50% of inspector rendering (up from ~30%). The new `ReflectionSerializer.h` provides generic serialize/deserialize utilities. The remaining phases extend coverage further.
 
-**Goal**: Eliminate manual per-type boilerplate across 8 subsystems by expanding the existing reflection system from ~30% coverage to ~95%. No external library — extend `Reflection.h` and `ComponentReflection.cpp`.
+**Goal**: Eliminate manual per-type boilerplate across 8 subsystems by expanding the existing reflection system to ~95%. No external library — extend `Reflection.h` and `ComponentReflection.cpp`.
 
 ---
 

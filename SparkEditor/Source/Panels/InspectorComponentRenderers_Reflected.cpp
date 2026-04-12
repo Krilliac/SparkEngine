@@ -2,12 +2,17 @@
  * @file InspectorComponentRenderers_Reflected.cpp
  * @brief Inspector renderers using reflection-driven field rendering
  *
- * Contains: RenderReflectedFields helper, RENDER_REFLECTED_COMPONENT macro,
- * and all components using reflection: TriggerVolume, PostProcessVolume,
- * ReflectionProbe, LightProbe, NavObstacle, WaterPlane, FogVolume, LODGroup,
- * SpawnPoint, AudioReverbZone, WindZone, Billboard, AudioListener,
- * CharacterController, Skybox.
- * Split from InspectorComponentRenderers.cpp for maintainability.
+ * Contains: RenderReflectedFields helper (with category, tooltip, and enum
+ * dropdown support), RENDER_REFLECTED_COMPONENT macro, and all components
+ * using reflection-driven rendering:
+ *   Volumes: TriggerVolume, PostProcessVolume, FogVolume
+ *   Probes:  ReflectionProbe, LightProbe
+ *   Placement: NavObstacle, WaterPlane, LODGroup, SpawnPoint, WindZone, Billboard
+ *   Audio:   AudioReverbZone, AudioListener
+ *   Gameplay: Health, AIAgent, Script, AnimationController, SplineFollower,
+ *             Weather, NetworkIdentity
+ *   2D:      PixelPerfect, SpriteAnimator, Terrain
+ *   Misc:    CharacterController, Skybox
  */
 
 #include "InspectorPanel.h"
@@ -27,6 +32,111 @@ namespace SparkEditor
     // Reflection-driven field rendering
     // ============================================================================
 
+    // Render a single field widget based on its FieldInfo metadata.
+    static void RenderSingleField(const Spark::FieldInfo& field, char* dst)
+    {
+        // Enum fields with names → combo dropdown
+        if (field.type == Spark::FieldType::Enum || (field.type == Spark::FieldType::Int && !field.enumNames.empty()))
+        {
+            int* val = reinterpret_cast<int*>(dst);
+            if (!field.enumNames.empty())
+            {
+                // Build items string for ImGui::Combo (null-separated, double-null terminated)
+                std::string items;
+                for (const auto& name : field.enumNames)
+                {
+                    items += name;
+                    items += '\0';
+                }
+                items += '\0';
+                ImGui::Combo(field.name.c_str(), val, items.c_str());
+            }
+            else
+            {
+                ImGui::DragInt(field.name.c_str(), val);
+            }
+            return;
+        }
+
+        switch (field.type)
+        {
+        case Spark::FieldType::Bool:
+            ImGui::Checkbox(field.name.c_str(), reinterpret_cast<bool*>(dst));
+            break;
+
+        case Spark::FieldType::Int:
+            if (field.hasRange)
+            {
+                ImGui::SliderInt(field.name.c_str(), reinterpret_cast<int*>(dst), static_cast<int>(field.rangeMin),
+                                 static_cast<int>(field.rangeMax));
+            }
+            else
+            {
+                ImGui::DragInt(field.name.c_str(), reinterpret_cast<int*>(dst));
+            }
+            break;
+
+        case Spark::FieldType::Float:
+            if (field.hasRange)
+            {
+                ImGui::SliderFloat(field.name.c_str(), reinterpret_cast<float*>(dst), field.rangeMin, field.rangeMax,
+                                   "%.3f");
+            }
+            else
+            {
+                ImGui::DragFloat(field.name.c_str(), reinterpret_cast<float*>(dst), 0.1f);
+            }
+            break;
+
+        case Spark::FieldType::Double:
+        {
+            auto val = static_cast<float>(*reinterpret_cast<double*>(dst));
+            if (ImGui::DragFloat(field.name.c_str(), &val, 0.1f))
+            {
+                *reinterpret_cast<double*>(dst) = static_cast<double>(val);
+            }
+            break;
+        }
+
+        case Spark::FieldType::String:
+            // Editor data types use char[N] arrays; handle as fixed buffer
+            if (field.size > sizeof(std::string))
+            {
+                ImGui::InputText(field.name.c_str(), reinterpret_cast<char*>(dst), field.size);
+            }
+            else
+            {
+                auto* str = reinterpret_cast<std::string*>(dst);
+                char buf[256];
+                strncpy(buf, str->c_str(), sizeof(buf) - 1);
+                buf[sizeof(buf) - 1] = '\0';
+                if (ImGui::InputText(field.name.c_str(), buf, sizeof(buf)))
+                {
+                    *str = buf;
+                }
+            }
+            break;
+
+        case Spark::FieldType::Vector3:
+        {
+            float* v = reinterpret_cast<float*>(dst);
+            InspectorPanel::DrawVec3Control(field.name.c_str(), v, 0.0f, 0.1f);
+            break;
+        }
+
+        case Spark::FieldType::Vector4:
+        {
+            float* v = reinterpret_cast<float*>(dst);
+            ImGui::ColorEdit4(field.name.c_str(), v);
+            break;
+        }
+
+        default:
+            ImGui::TextDisabled("%s (unsupported type)", field.name.c_str());
+            break;
+        }
+    }
+
     void InspectorPanel::RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields)
     {
         if (!data)
@@ -36,95 +146,81 @@ namespace SparkEditor
             return;
         }
 
+        // Check if any field has a category assigned
+        bool hasCategories = false;
         for (const auto& field : fields)
         {
-            auto* dst = static_cast<char*>(data) + field.offset;
-
-            switch (field.type)
+            if (!field.category.empty())
             {
-            case Spark::FieldType::Bool:
-                ImGui::Checkbox(field.name.c_str(), reinterpret_cast<bool*>(dst));
-                break;
-
-            case Spark::FieldType::Int:
-                if (field.hasRange)
-                {
-                    ImGui::SliderInt(field.name.c_str(), reinterpret_cast<int*>(dst), static_cast<int>(field.rangeMin),
-                                     static_cast<int>(field.rangeMax));
-                }
-                else
-                {
-                    ImGui::DragInt(field.name.c_str(), reinterpret_cast<int*>(dst));
-                }
-                break;
-
-            case Spark::FieldType::Float:
-                if (field.hasRange)
-                {
-                    ImGui::SliderFloat(field.name.c_str(), reinterpret_cast<float*>(dst), field.rangeMin,
-                                       field.rangeMax, "%.3f");
-                }
-                else
-                {
-                    ImGui::DragFloat(field.name.c_str(), reinterpret_cast<float*>(dst), 0.1f);
-                }
-                break;
-
-            case Spark::FieldType::Double:
-            {
-                auto val = static_cast<float>(*reinterpret_cast<double*>(dst));
-                if (ImGui::DragFloat(field.name.c_str(), &val, 0.1f))
-                {
-                    *reinterpret_cast<double*>(dst) = static_cast<double>(val);
-                }
+                hasCategories = true;
                 break;
             }
+        }
 
-            case Spark::FieldType::String:
-                // Editor data types use char[N] arrays; handle as fixed buffer
-                if (field.size > sizeof(std::string))
+        if (hasCategories)
+        {
+            // Collect unique categories in order of first appearance
+            std::vector<std::string> categories;
+            for (const auto& field : fields)
+            {
+                const auto& cat = field.category;
+                bool found = false;
+                for (const auto& c : categories)
                 {
-                    // Likely a char[N] array
-                    ImGui::InputText(field.name.c_str(), reinterpret_cast<char*>(dst), field.size);
-                }
-                else
-                {
-                    // std::string — read into temp buffer
-                    auto* str = reinterpret_cast<std::string*>(dst);
-                    char buf[256];
-                    strncpy(buf, str->c_str(), sizeof(buf) - 1);
-                    buf[sizeof(buf) - 1] = '\0';
-                    if (ImGui::InputText(field.name.c_str(), buf, sizeof(buf)))
+                    if (c == cat)
                     {
-                        *str = buf;
+                        found = true;
+                        break;
                     }
                 }
-                break;
-
-            case Spark::FieldType::Vector3:
-            {
-                float* v = reinterpret_cast<float*>(dst);
-                DrawVec3Control(field.name.c_str(), v, 0.0f, 0.1f);
-                break;
+                if (!found)
+                    categories.push_back(cat);
             }
 
-            case Spark::FieldType::Vector4:
+            for (const auto& cat : categories)
             {
-                float* v = reinterpret_cast<float*>(dst);
-                ImGui::ColorEdit4(field.name.c_str(), v);
-                break;
-            }
+                bool inSection = !cat.empty();
+                if (inSection)
+                {
+                    ImGui::Separator();
+                    ImGui::TextDisabled("%s", cat.c_str());
+                }
 
-            default:
-                ImGui::TextDisabled("%s (unsupported type)", field.name.c_str());
-                break;
-            }
+                for (const auto& field : fields)
+                {
+                    if (field.category != cat)
+                        continue;
 
-            if (field.readOnly)
+                    auto* dst = static_cast<char*>(data) + field.offset;
+                    RenderSingleField(field, dst);
+
+                    if (!field.tooltip.empty() && ImGui::IsItemHovered())
+                        ImGui::SetTooltip("%s", field.tooltip.c_str());
+
+                    if (field.readOnly)
+                    {
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("(read-only)");
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Flat rendering (no categories)
+            for (const auto& field : fields)
             {
-                // Draw a "read-only" overlay hint if applicable
-                ImGui::SameLine();
-                ImGui::TextDisabled("(read-only)");
+                auto* dst = static_cast<char*>(data) + field.offset;
+                RenderSingleField(field, dst);
+
+                if (!field.tooltip.empty() && ImGui::IsItemHovered())
+                    ImGui::SetTooltip("%s", field.tooltip.c_str());
+
+                if (field.readOnly)
+                {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("(read-only)");
+                }
             }
         }
     }
@@ -176,6 +272,20 @@ namespace SparkEditor
         return f;
     }
 
+    // Helper to build an enum FieldInfo with named values for combo dropdown
+    static Spark::FieldInfo MakeEnumField(const char* name, const char* fieldName, size_t offset, size_t size,
+                                          std::vector<std::string> names)
+    {
+        Spark::FieldInfo f;
+        f.name = name;
+        f.fieldName = fieldName;
+        f.type = Spark::FieldType::Int;
+        f.offset = offset;
+        f.size = size;
+        f.enumNames = std::move(names);
+        return f;
+    }
+
     // Shorthand macros for concise field descriptors
 #define FIELD_FLOAT(DataType, member, displayName)                                                                     \
     MakeField(displayName, #member, Spark::FieldType::Float, offsetof(DataType, member), sizeof(float))
@@ -191,6 +301,9 @@ namespace SparkEditor
     MakeField(displayName, #member, Spark::FieldType::Vector4, offsetof(DataType, member), sizeof(XMFLOAT4))
 #define FIELD_STRING(DataType, member, displayName)                                                                    \
     MakeField(displayName, #member, Spark::FieldType::String, offsetof(DataType, member), sizeof(DataType::member))
+#define FIELD_ENUM(DataType, member, displayName, ...)                                                                 \
+    MakeEnumField(displayName, #member, offsetof(DataType, member), sizeof(DataType::member),                          \
+                  std::vector<std::string>{__VA_ARGS__})
 
     // ============================================================================
     // Trigger Volume
@@ -420,10 +533,273 @@ namespace SparkEditor
     {
         RENDER_REFLECTED_COMPONENT(
             ComponentType::SKYBOX, ICON_FA_CLOUD_SUN, "Skybox", SkyboxData,
-            FIELD_INT(SkyboxData, mode, "Mode (0=Proc,1=Cube,2=Grad,3=Solid)"),
+            FIELD_ENUM(SkyboxData, mode, "Mode", "Procedural", "Cubemap", "Gradient", "Solid Color"),
             FIELD_STRING(SkyboxData, cubemapPath, "Cubemap Path"), FIELD_VEC4(SkyboxData, topColor, "Top Color"),
             FIELD_VEC4(SkyboxData, bottomColor, "Bottom Color"), FIELD_FLOAT(SkyboxData, exposure, "Exposure"),
             FIELD_FLOAT(SkyboxData, rotation, "Rotation"));
+    }
+
+    // ============================================================================
+    // Migrated from InspectorComponentRenderers_Gameplay.cpp
+    // ============================================================================
+
+    // ============================================================================
+    // Animation Controller (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderAnimationControllerComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(ComponentType::ANIMATION, ICON_FA_RUNNING, "Animation", AnimationControllerData,
+                                   FIELD_STRING(AnimationControllerData, defaultAnimation, "Default Clip"),
+                                   FIELD_FLOAT(AnimationControllerData, playbackSpeed, "Speed"),
+                                   FIELD_BOOL(AnimationControllerData, playing, "Playing"),
+                                   FIELD_BOOL(AnimationControllerData, loop, "Loop"));
+    }
+
+    // ============================================================================
+    // Script (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderScriptComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(ComponentType::SCRIPT, ICON_FA_CODE, "Script", ScriptData,
+                                   FIELD_STRING(ScriptData, scriptPath, "Script Path"),
+                                   FIELD_STRING(ScriptData, className, "Class Name"),
+                                   FIELD_BOOL(ScriptData, autoStart, "Auto Start"));
+    }
+
+    // ============================================================================
+    // Health (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderHealthComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_HEART " Health");
+        if (ImGui::BeginPopupContextItem("##HealthCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::HEALTH);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::HEALTH);
+            auto* d = comp ? comp->GetData<HealthData>() : nullptr;
+            if (d)
+            {
+                static const std::vector<Spark::FieldInfo> fields = {
+                    FIELD_FLOAT(HealthData, health, "Health"),
+                    FIELD_FLOAT(HealthData, maxHealth, "Max Health"),
+                };
+                RenderReflectedFields(d, fields);
+
+                // Health bar preview (custom visual not expressible via reflection)
+                float fraction = d->maxHealth > 0.0f ? d->health / d->maxHealth : 0.0f;
+                ImGui::ProgressBar(fraction, ImVec2(-1, 0), "");
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Spline Follower (migrated to reflection with enum)
+    // ============================================================================
+
+    void InspectorPanel::RenderSplineFollowerComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(ComponentType::SPLINE_FOLLOWER, ICON_FA_ROUTE, "Spline Follower", SplineFollowerData,
+                                   FIELD_FLOAT(SplineFollowerData, speed, "Speed"),
+                                   FIELD_ENUM(SplineFollowerData, loopMode, "Loop Mode", "Once", "Loop", "Ping-Pong"),
+                                   FIELD_BOOL(SplineFollowerData, playing, "Playing"),
+                                   FIELD_BOOL(SplineFollowerData, orientToPath, "Orient to Path"));
+    }
+
+    // ============================================================================
+    // Network Identity (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderNetworkIdentityComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(ComponentType::NETWORK_IDENTITY, ICON_FA_NETWORK_WIRED, "Network Identity",
+                                   NetworkIdentityData,
+                                   FIELD_BOOL(NetworkIdentityData, replicateTransform, "Replicate Transform"),
+                                   FIELD_BOOL(NetworkIdentityData, replicateHealth, "Replicate Health"),
+                                   FIELD_BOOL(NetworkIdentityData, isLocalAuthority, "Local Authority"));
+    }
+
+    // ============================================================================
+    // Weather (migrated to reflection with enum)
+    // ============================================================================
+
+    void InspectorPanel::RenderWeatherComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CLOUD_SUN " Weather Zone");
+        if (ImGui::BeginPopupContextItem("##WeatherCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::WEATHER);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::WEATHER);
+            auto* d = comp ? comp->GetData<WeatherData>() : nullptr;
+            if (d)
+            {
+                static const std::vector<Spark::FieldInfo> fields = {
+                    FIELD_ENUM(WeatherData, weatherType, "Type", "Clear", "Cloudy", "Rain", "Snow", "Fog", "Storm"),
+                    FIELD_FLOAT_RANGE(WeatherData, intensity, "Intensity", 0.0f, 1.0f),
+                    FIELD_FLOAT(WeatherData, windSpeed, "Wind Speed"),
+                    FIELD_VEC3(WeatherData, windDirection, "Wind Direction"),
+                    FIELD_FLOAT(WeatherData, transitionTime, "Transition Time"),
+                    FIELD_BOOL(WeatherData, enabled, "Enabled"),
+                };
+                RenderReflectedFields(d, fields);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // AI Agent (migrated to reflection with enum)
+    // ============================================================================
+
+    void InspectorPanel::RenderAIAgentComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BRAIN " AI Agent");
+        if (ImGui::BeginPopupContextItem("##AIAgentCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::AI_AGENT);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::AI_AGENT);
+            auto* d = comp ? comp->GetData<AIAgentData>() : nullptr;
+            if (d)
+            {
+                Spark::FieldInfo stateField = FIELD_ENUM(AIAgentData, aiState, "Initial State", "Idle", "Patrolling",
+                                                         "Alert", "Combat", "Fleeing", "Dead");
+                Spark::FieldInfo btField = FIELD_STRING(AIAgentData, behaviorTreeName, "Behavior Tree");
+                Spark::FieldInfo detField = FIELD_FLOAT(AIAgentData, detectionRange, "Detection Range");
+                detField.category = "Perception";
+                Spark::FieldInfo atkField = FIELD_FLOAT(AIAgentData, attackRange, "Attack Range");
+                atkField.category = "Perception";
+                Spark::FieldInfo rxnField = FIELD_FLOAT(AIAgentData, reactionTime, "Reaction Time");
+                rxnField.category = "Perception";
+                Spark::FieldInfo spdField = FIELD_FLOAT(AIAgentData, moveSpeed, "Move Speed");
+                spdField.category = "Movement";
+                Spark::FieldInfo accField = FIELD_FLOAT_RANGE(AIAgentData, accuracy, "Accuracy", 0.0f, 1.0f);
+                accField.category = "Movement";
+
+                const std::vector<Spark::FieldInfo> fields = {stateField, btField,  detField, atkField,
+                                                              rxnField,   spdField, accField};
+                RenderReflectedFields(d, fields);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Migrated from InspectorComponentRenderers_2D.cpp
+    // ============================================================================
+
+    // ============================================================================
+    // Pixel Perfect (migrated to reflection)
+    // ============================================================================
+
+    void InspectorPanel::RenderPixelPerfectComponent()
+    {
+        RENDER_REFLECTED_COMPONENT(ComponentType::PIXEL_PERFECT, ICON_FA_TH_LARGE, "Pixel Perfect", PixelPerfectData,
+                                   FIELD_INT(PixelPerfectData, referenceWidth, "Reference Width"),
+                                   FIELD_INT(PixelPerfectData, referenceHeight, "Reference Height"),
+                                   FIELD_BOOL(PixelPerfectData, upscaleToFill, "Upscale to Fill"),
+                                   FIELD_BOOL(PixelPerfectData, cropToFit, "Crop to Fit"));
+    }
+
+    // ============================================================================
+    // Sprite Animator (migrated to reflection — minimal)
+    // ============================================================================
+
+    void InspectorPanel::RenderSpriteAnimatorComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_FILM " Sprite Animator");
+        if (ImGui::BeginPopupContextItem("##SpriteAnimatorCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::SPRITE_ANIMATOR);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            ImGui::TextDisabled("Edit clips in the Sprite Animation Editor panel");
+            ImGui::Unindent(4);
+        }
+    }
+
+    // ============================================================================
+    // Terrain (migrated to reflection with categories)
+    // ============================================================================
+
+    void InspectorPanel::RenderTerrainComponent()
+    {
+        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_MOUNTAIN " Terrain");
+        if (ImGui::BeginPopupContextItem("##TerrainCtx"))
+        {
+            if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
+                RemoveComponent(ComponentType::TERRAIN);
+            ImGui::EndPopup();
+        }
+        if (headerOpen)
+        {
+            ImGui::Indent(4);
+            Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::TERRAIN);
+            auto* d = comp ? comp->GetData<TerrainSceneData>() : nullptr;
+            if (d)
+            {
+                Spark::FieldInfo resField = FIELD_INT(TerrainSceneData, heightmapResolution, "Resolution");
+                Spark::FieldInfo sizeField = FIELD_FLOAT(TerrainSceneData, terrainSize, "Size");
+                Spark::FieldInfo hsField = FIELD_FLOAT(TerrainSceneData, heightScale, "Height Scale");
+                Spark::FieldInfo minHField = FIELD_FLOAT(TerrainSceneData, minHeight, "Min Height");
+                Spark::FieldInfo maxHField = FIELD_FLOAT(TerrainSceneData, maxHeight, "Max Height");
+                Spark::FieldInfo lodField = FIELD_INT(TerrainSceneData, lodLevels, "LOD Levels");
+                lodField.category = "LOD";
+                Spark::FieldInfo biasField = FIELD_FLOAT(TerrainSceneData, lodBias, "LOD Bias");
+                biasField.category = "LOD";
+                Spark::FieldInfo colField = FIELD_BOOL(TerrainSceneData, generateCollider, "Generate Collider");
+                colField.category = "Physics";
+                Spark::FieldInfo csField = FIELD_BOOL(TerrainSceneData, castShadows, "Cast Shadows");
+                csField.category = "Physics";
+                Spark::FieldInfo rsField = FIELD_BOOL(TerrainSceneData, receiveShadows, "Receive Shadows");
+                rsField.category = "Physics";
+
+                const std::vector<Spark::FieldInfo> fields = {resField, sizeField, hsField,  minHField, maxHField,
+                                                              lodField, biasField, colField, csField,   rsField};
+                RenderReflectedFields(d, fields);
+            }
+            else
+            {
+                ImGui::TextDisabled("(Component data unavailable)");
+            }
+            ImGui::Unindent(4);
+        }
     }
 
 } // namespace SparkEditor

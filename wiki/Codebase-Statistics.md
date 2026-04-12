@@ -8,19 +8,19 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 272545 |
-| **SparkEditor/Source** | 88512 |
+| **SparkEngine/Source** | 272746 |
+| **SparkEditor/Source** | 88538 |
 | **GameModules** | 58460 |
 | **Tests** | 127543 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~549461** |
+| **Total C++ (excl. ThirdParty)** | **~549688** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 751 |
+| Header files (.h/.hpp) | 752 |
 | Implementation files (.cpp) | 1032 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
@@ -33,8 +33,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Value |
 |--------|-------|
 | Average lines per .cpp file | ~776 |
-| Average lines per .h file | ~583 |
-| Largest codebase section | Graphics (108952 lines — 39% of SparkEngine/Source) |
+| Average lines per .h file | ~582 |
+| Largest codebase section | Graphics (108957 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 108952 | 39.9% |
-| Engine (all subsystems) | 80494 | 29.5% |
+| Graphics | 108957 | 39.9% |
+| Engine (all subsystems) | 80352 | 29.4% |
 | Utils | 36987 | 13.5% |
-| Core | 21051 | 7.7% |
+| Core | 21389 | 7.8% |
 | Physics | 10101 | 3.7% |
 | Audio | 5548 | 2.0% |
 | Input | 3895 | 1.4% |
@@ -64,8 +64,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Gameplay | 7511 |
 | Animation | 6554 |
 | Scripting | 4445 |
-| UI | 2579 |
 | SaveSystem | 2491 |
+| UI | 2437 |
 | Streaming | 1767 |
 | World | 1588 |
 | Editor | 1556 |
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 88512 |
+| Total editor lines | 88538 |
 
 ## Testing Metrics
 
