@@ -4,12 +4,160 @@
  */
 
 #include "EngineSettings.h"
+#include "Reflection.h"
 #include "Utils/Assert.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include <filesystem>
 #include <sstream>
+
+// ============================================================================
+// Reflection registrations for settings structs.
+// field.name is used as the INI config key (e.g., "WindowWidth").
+// ============================================================================
+
+using GS = EngineSettings::GraphicsSettings;
+SPARK_REFLECT_TYPE(GS)
+SPARK_REFLECT_FIELD(GS, windowWidth, "WindowWidth")
+SPARK_REFLECT_FIELD(GS, windowHeight, "WindowHeight")
+SPARK_REFLECT_FIELD(GS, fullscreen, "Fullscreen")
+SPARK_REFLECT_FIELD(GS, vsync, "VSync")
+SPARK_REFLECT_FIELD(GS, antiAliasing, "AntiAliasing")
+SPARK_REFLECT_FIELD(GS, shadowQuality, "ShadowQuality")
+SPARK_REFLECT_FIELD(GS, renderScale, "RenderScale")
+SPARK_REFLECT_FIELD(GS, hdr, "HDR")
+SPARK_REFLECT_FIELD(GS, refreshRate, "RefreshRate")
+SPARK_REFLECT_FIELD(GS, borderlessWindowed, "BorderlessWindowed")
+SPARK_REFLECT_FIELD(GS, monitor, "Monitor")
+SPARK_REFLECT_FIELD(GS, tripleBuffering, "TripleBuffering")
+SPARK_REFLECT_FIELD(GS, maxFrameLatency, "MaxFrameLatency")
+SPARK_REFLECT_END(GS)
+
+using AS = EngineSettings::AudioSettings;
+SPARK_REFLECT_TYPE(AS)
+SPARK_REFLECT_FIELD(AS, masterVolume, "MasterVolume")
+SPARK_REFLECT_FIELD(AS, sfxVolume, "SFXVolume")
+SPARK_REFLECT_FIELD(AS, musicVolume, "MusicVolume")
+SPARK_REFLECT_FIELD(AS, voiceVolume, "VoiceVolume")
+SPARK_REFLECT_FIELD(AS, ambienceVolume, "AmbienceVolume")
+SPARK_REFLECT_FIELD(AS, muteOnFocusLoss, "MuteOnFocusLoss")
+SPARK_REFLECT_FIELD(AS, muteAll, "MuteAll")
+SPARK_REFLECT_END(AS)
+
+using GameS = EngineSettings::GameSettings;
+SPARK_REFLECT_TYPE(GameS)
+SPARK_REFLECT_FIELD(GameS, difficulty, "Difficulty")
+SPARK_REFLECT_FIELD(GameS, showFPS, "ShowFPS")
+SPARK_REFLECT_FIELD(GameS, showDebugInfo, "ShowDebugInfo")
+SPARK_REFLECT_FIELD(GameS, fieldOfView, "FieldOfView")
+SPARK_REFLECT_FIELD(GameS, language, "Language")
+SPARK_REFLECT_FIELD(GameS, pauseOnFocusLoss, "PauseOnFocusLoss")
+SPARK_REFLECT_END(GameS)
+
+using PS = EngineSettings::PhysicsSettings;
+SPARK_REFLECT_TYPE(PS)
+SPARK_REFLECT_FIELD(PS, gravityX, "GravityX")
+SPARK_REFLECT_FIELD(PS, gravityY, "GravityY")
+SPARK_REFLECT_FIELD(PS, gravityZ, "GravityZ")
+SPARK_REFLECT_FIELD(PS, fixedTimestep, "FixedTimestep")
+SPARK_REFLECT_FIELD(PS, maxSubSteps, "MaxSubSteps")
+SPARK_REFLECT_FIELD(PS, defaultFriction, "DefaultFriction")
+SPARK_REFLECT_FIELD(PS, defaultRestitution, "DefaultRestitution")
+SPARK_REFLECT_FIELD(PS, defaultLinearDamping, "DefaultLinearDamping")
+SPARK_REFLECT_FIELD(PS, defaultAngularDamping, "DefaultAngularDamping")
+SPARK_REFLECT_FIELD(PS, debugDraw, "DebugDraw")
+SPARK_REFLECT_END(PS)
+
+using CamS = EngineSettings::CameraSettings;
+SPARK_REFLECT_TYPE(CamS)
+SPARK_REFLECT_FIELD(CamS, moveSpeed, "MoveSpeed")
+SPARK_REFLECT_FIELD(CamS, rotationSpeed, "RotationSpeed")
+SPARK_REFLECT_FIELD(CamS, defaultFov, "DefaultFov")
+SPARK_REFLECT_FIELD(CamS, zoomedFov, "ZoomedFov")
+SPARK_REFLECT_FIELD(CamS, smoothMovement, "SmoothMovement")
+SPARK_REFLECT_FIELD(CamS, nearPlane, "NearPlane")
+SPARK_REFLECT_FIELD(CamS, farPlane, "FarPlane")
+SPARK_REFLECT_END(CamS)
+
+// ============================================================================
+// Generic reflection-driven config read/write.
+// Uses field.name as config key, struct defaults as fallback values.
+// ============================================================================
+
+namespace
+{
+
+    template <typename T>
+    void ReadReflectedConfig(T& settings, const Spark::ConfigParser& cfg, const std::string& section)
+    {
+        const auto* typeInfo = Spark::TypeRegistry::Get().FindType(GetTypeId<T>());
+        if (!typeInfo)
+            return;
+
+        auto* base = reinterpret_cast<char*>(&settings);
+        for (const auto& field : typeInfo->fields)
+        {
+            const std::string& key = field.name; // field.name holds the config key
+            auto* dst = base + field.offset;
+
+            switch (field.type)
+            {
+            case Spark::FieldType::Int:
+                *reinterpret_cast<int*>(dst) = cfg.GetInt(section, key, *reinterpret_cast<const int*>(dst));
+                break;
+            case Spark::FieldType::Float:
+                *reinterpret_cast<float*>(dst) = cfg.GetFloat(section, key, *reinterpret_cast<const float*>(dst));
+                break;
+            case Spark::FieldType::Bool:
+                *reinterpret_cast<bool*>(dst) = cfg.GetBool(section, key, *reinterpret_cast<const bool*>(dst));
+                break;
+            case Spark::FieldType::String:
+            {
+                auto* str = reinterpret_cast<std::string*>(dst);
+                *str = cfg.GetString(section, key, *str);
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
+
+    template <typename T>
+    void WriteReflectedConfig(const T& settings, Spark::ConfigParser& cfg, const std::string& section)
+    {
+        const auto* typeInfo = Spark::TypeRegistry::Get().FindType(GetTypeId<T>());
+        if (!typeInfo)
+            return;
+
+        const auto* base = reinterpret_cast<const char*>(&settings);
+        for (const auto& field : typeInfo->fields)
+        {
+            const std::string& key = field.name;
+            const auto* src = base + field.offset;
+
+            switch (field.type)
+            {
+            case Spark::FieldType::Int:
+                cfg.SetInt(section, key, *reinterpret_cast<const int*>(src));
+                break;
+            case Spark::FieldType::Float:
+                cfg.SetFloat(section, key, *reinterpret_cast<const float*>(src));
+                break;
+            case Spark::FieldType::Bool:
+                cfg.SetBool(section, key, *reinterpret_cast<const bool*>(src));
+                break;
+            case Spark::FieldType::String:
+                cfg.SetString(section, key, *reinterpret_cast<const std::string*>(src));
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+} // anonymous namespace
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -200,29 +348,11 @@ void EngineSettings::ApplyDebugSettings()
 // =============================================================================
 void EngineSettings::ReadFromConfig()
 {
-    // Graphics
-    m_graphics.windowWidth = m_config.GetInt("Graphics", "WindowWidth", 1280);
-    m_graphics.windowHeight = m_config.GetInt("Graphics", "WindowHeight", 720);
-    m_graphics.fullscreen = m_config.GetBool("Graphics", "Fullscreen", false);
-    m_graphics.vsync = m_config.GetBool("Graphics", "VSync", true);
-    m_graphics.antiAliasing = m_config.GetInt("Graphics", "AntiAliasing", 4);
-    m_graphics.shadowQuality = m_config.GetInt("Graphics", "ShadowQuality", 2);
-    m_graphics.renderScale = m_config.GetFloat("Graphics", "RenderScale", 1.0f);
-    m_graphics.hdr = m_config.GetBool("Graphics", "HDR", false);
-    m_graphics.refreshRate = m_config.GetInt("Graphics", "RefreshRate", 0);
-    m_graphics.borderlessWindowed = m_config.GetBool("Graphics", "BorderlessWindowed", false);
-    m_graphics.monitor = m_config.GetInt("Graphics", "Monitor", 0);
-    m_graphics.tripleBuffering = m_config.GetBool("Graphics", "TripleBuffering", false);
-    m_graphics.maxFrameLatency = m_config.GetInt("Graphics", "MaxFrameLatency", 2);
+    // Graphics — reflection-driven (fields registered in SPARK_REFLECT_TYPE(GS))
+    ReadReflectedConfig(m_graphics, m_config, "Graphics");
 
-    // Audio
-    m_audio.masterVolume = m_config.GetFloat("Audio", "MasterVolume", 1.0f);
-    m_audio.sfxVolume = m_config.GetFloat("Audio", "SFXVolume", 0.8f);
-    m_audio.musicVolume = m_config.GetFloat("Audio", "MusicVolume", 0.6f);
-    m_audio.voiceVolume = m_config.GetFloat("Audio", "VoiceVolume", 1.0f);
-    m_audio.ambienceVolume = m_config.GetFloat("Audio", "AmbienceVolume", 0.7f);
-    m_audio.muteOnFocusLoss = m_config.GetBool("Audio", "MuteOnFocusLoss", true);
-    m_audio.muteAll = m_config.GetBool("Audio", "MuteAll", false);
+    // Audio — reflection-driven
+    ReadReflectedConfig(m_audio, m_config, "Audio");
 
     // Controls
     m_controls.mouseSensitivity = m_config.GetFloat("Controls", "MouseSensitivity", 1.0f);
@@ -236,13 +366,8 @@ void EngineSettings::ReadFromConfig()
     m_controls.controllerVibration = m_config.GetBool("Controls", "ControllerVibration", true);
     m_controls.invertControllerY = m_config.GetBool("Controls", "InvertControllerY", false);
 
-    // Game
-    m_game.difficulty = m_config.GetString("Game", "Difficulty", "Normal");
-    m_game.showFPS = m_config.GetBool("Game", "ShowFPS", true);
-    m_game.showDebugInfo = m_config.GetBool("Game", "ShowDebugInfo", false);
-    m_game.fieldOfView = m_config.GetFloat("Game", "FieldOfView", 90.0f);
-    m_game.language = m_config.GetString("Game", "Language", "en");
-    m_game.pauseOnFocusLoss = m_config.GetBool("Game", "PauseOnFocusLoss", true);
+    // Game — reflection-driven
+    ReadReflectedConfig(m_game, m_config, "Game");
 
     // Rendering
     m_rendering.renderPath = m_config.GetInt("Rendering", "RenderPath", 1);
@@ -362,17 +487,8 @@ void EngineSettings::ReadFromConfig()
     m_audioExtended.enableEAX = m_config.GetBool("AudioExtended", "EnableEAX", false);
     m_audioExtended.maxSources = m_config.GetInt("AudioExtended", "MaxSources", 32);
 
-    // Physics
-    m_physics.gravityX = m_config.GetFloat("Physics", "GravityX", 0.0f);
-    m_physics.gravityY = m_config.GetFloat("Physics", "GravityY", -20.0f);
-    m_physics.gravityZ = m_config.GetFloat("Physics", "GravityZ", 0.0f);
-    m_physics.fixedTimestep = m_config.GetFloat("Physics", "FixedTimestep", 0.016667f);
-    m_physics.maxSubSteps = m_config.GetInt("Physics", "MaxSubSteps", 4);
-    m_physics.defaultFriction = m_config.GetFloat("Physics", "DefaultFriction", 0.5f);
-    m_physics.defaultRestitution = m_config.GetFloat("Physics", "DefaultRestitution", 0.3f);
-    m_physics.defaultLinearDamping = m_config.GetFloat("Physics", "DefaultLinearDamping", 0.0f);
-    m_physics.defaultAngularDamping = m_config.GetFloat("Physics", "DefaultAngularDamping", 0.05f);
-    m_physics.debugDraw = m_config.GetBool("Physics", "DebugDraw", false);
+    // Physics — reflection-driven
+    ReadReflectedConfig(m_physics, m_config, "Physics");
 
     // AI
     m_ai.detectionRange = m_config.GetFloat("AI", "DetectionRange", 30.0f);
@@ -426,14 +542,8 @@ void EngineSettings::ReadFromConfig()
     m_gameMode.objectivePoints = m_config.GetInt("GameMode", "ObjectivePoints", 200);
     m_gameMode.headshotBonus = m_config.GetInt("GameMode", "HeadshotBonus", 50);
 
-    // Camera
-    m_camera.moveSpeed = m_config.GetFloat("Camera", "MoveSpeed", 10.0f);
-    m_camera.rotationSpeed = m_config.GetFloat("Camera", "RotationSpeed", 2.0f);
-    m_camera.defaultFov = m_config.GetFloat("Camera", "DefaultFov", 90.0f);
-    m_camera.zoomedFov = m_config.GetFloat("Camera", "ZoomedFov", 45.0f);
-    m_camera.smoothMovement = m_config.GetBool("Camera", "SmoothMovement", true);
-    m_camera.nearPlane = m_config.GetFloat("Camera", "NearPlane", 0.1f);
-    m_camera.farPlane = m_config.GetFloat("Camera", "FarPlane", 1000.0f);
+    // Camera — reflection-driven
+    ReadReflectedConfig(m_camera, m_config, "Camera");
 
     // Editor
     m_editor.gridSize = m_config.GetFloat("Editor", "GridSize", 1.0f);
@@ -746,29 +856,11 @@ void EngineSettings::ReadFromConfig()
 // =============================================================================
 void EngineSettings::WriteToConfig() const
 {
-    // Graphics
-    m_config.SetInt("Graphics", "WindowWidth", m_graphics.windowWidth);
-    m_config.SetInt("Graphics", "WindowHeight", m_graphics.windowHeight);
-    m_config.SetBool("Graphics", "Fullscreen", m_graphics.fullscreen);
-    m_config.SetBool("Graphics", "VSync", m_graphics.vsync);
-    m_config.SetInt("Graphics", "AntiAliasing", m_graphics.antiAliasing);
-    m_config.SetInt("Graphics", "ShadowQuality", m_graphics.shadowQuality);
-    m_config.SetFloat("Graphics", "RenderScale", m_graphics.renderScale);
-    m_config.SetBool("Graphics", "HDR", m_graphics.hdr);
-    m_config.SetInt("Graphics", "RefreshRate", m_graphics.refreshRate);
-    m_config.SetBool("Graphics", "BorderlessWindowed", m_graphics.borderlessWindowed);
-    m_config.SetInt("Graphics", "Monitor", m_graphics.monitor);
-    m_config.SetBool("Graphics", "TripleBuffering", m_graphics.tripleBuffering);
-    m_config.SetInt("Graphics", "MaxFrameLatency", m_graphics.maxFrameLatency);
+    // Graphics — reflection-driven
+    WriteReflectedConfig(m_graphics, m_config, "Graphics");
 
-    // Audio
-    m_config.SetFloat("Audio", "MasterVolume", m_audio.masterVolume);
-    m_config.SetFloat("Audio", "SFXVolume", m_audio.sfxVolume);
-    m_config.SetFloat("Audio", "MusicVolume", m_audio.musicVolume);
-    m_config.SetFloat("Audio", "VoiceVolume", m_audio.voiceVolume);
-    m_config.SetFloat("Audio", "AmbienceVolume", m_audio.ambienceVolume);
-    m_config.SetBool("Audio", "MuteOnFocusLoss", m_audio.muteOnFocusLoss);
-    m_config.SetBool("Audio", "MuteAll", m_audio.muteAll);
+    // Audio — reflection-driven
+    WriteReflectedConfig(m_audio, m_config, "Audio");
 
     // Controls
     m_config.SetFloat("Controls", "MouseSensitivity", m_controls.mouseSensitivity);
@@ -782,13 +874,8 @@ void EngineSettings::WriteToConfig() const
     m_config.SetBool("Controls", "ControllerVibration", m_controls.controllerVibration);
     m_config.SetBool("Controls", "InvertControllerY", m_controls.invertControllerY);
 
-    // Game
-    m_config.SetString("Game", "Difficulty", m_game.difficulty);
-    m_config.SetBool("Game", "ShowFPS", m_game.showFPS);
-    m_config.SetBool("Game", "ShowDebugInfo", m_game.showDebugInfo);
-    m_config.SetFloat("Game", "FieldOfView", m_game.fieldOfView);
-    m_config.SetString("Game", "Language", m_game.language);
-    m_config.SetBool("Game", "PauseOnFocusLoss", m_game.pauseOnFocusLoss);
+    // Game — reflection-driven
+    WriteReflectedConfig(m_game, m_config, "Game");
 
     // Rendering
     m_config.SetInt("Rendering", "RenderPath", m_rendering.renderPath);
@@ -908,17 +995,8 @@ void EngineSettings::WriteToConfig() const
     m_config.SetBool("AudioExtended", "EnableEAX", m_audioExtended.enableEAX);
     m_config.SetInt("AudioExtended", "MaxSources", m_audioExtended.maxSources);
 
-    // Physics
-    m_config.SetFloat("Physics", "GravityX", m_physics.gravityX);
-    m_config.SetFloat("Physics", "GravityY", m_physics.gravityY);
-    m_config.SetFloat("Physics", "GravityZ", m_physics.gravityZ);
-    m_config.SetFloat("Physics", "FixedTimestep", m_physics.fixedTimestep);
-    m_config.SetInt("Physics", "MaxSubSteps", m_physics.maxSubSteps);
-    m_config.SetFloat("Physics", "DefaultFriction", m_physics.defaultFriction);
-    m_config.SetFloat("Physics", "DefaultRestitution", m_physics.defaultRestitution);
-    m_config.SetFloat("Physics", "DefaultLinearDamping", m_physics.defaultLinearDamping);
-    m_config.SetFloat("Physics", "DefaultAngularDamping", m_physics.defaultAngularDamping);
-    m_config.SetBool("Physics", "DebugDraw", m_physics.debugDraw);
+    // Physics — reflection-driven
+    WriteReflectedConfig(m_physics, m_config, "Physics");
 
     // AI
     m_config.SetFloat("AI", "DetectionRange", m_ai.detectionRange);
@@ -972,14 +1050,8 @@ void EngineSettings::WriteToConfig() const
     m_config.SetInt("GameMode", "ObjectivePoints", m_gameMode.objectivePoints);
     m_config.SetInt("GameMode", "HeadshotBonus", m_gameMode.headshotBonus);
 
-    // Camera
-    m_config.SetFloat("Camera", "MoveSpeed", m_camera.moveSpeed);
-    m_config.SetFloat("Camera", "RotationSpeed", m_camera.rotationSpeed);
-    m_config.SetFloat("Camera", "DefaultFov", m_camera.defaultFov);
-    m_config.SetFloat("Camera", "ZoomedFov", m_camera.zoomedFov);
-    m_config.SetBool("Camera", "SmoothMovement", m_camera.smoothMovement);
-    m_config.SetFloat("Camera", "NearPlane", m_camera.nearPlane);
-    m_config.SetFloat("Camera", "FarPlane", m_camera.farPlane);
+    // Camera — reflection-driven
+    WriteReflectedConfig(m_camera, m_config, "Camera");
 
     // Editor
     m_config.SetFloat("Editor", "GridSize", m_editor.gridSize);
