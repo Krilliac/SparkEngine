@@ -15,6 +15,9 @@
 #include "Graphics/RHI/RHIFactory.h"
 #include "Graphics/RHI/RHITypes.h"
 #include "Graphics/Shader.h"
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 using namespace Spark::RHI;
 
@@ -266,4 +269,210 @@ TEST(GLSLPipeline_CrossCompileHLSLtoGLSL_EmptyInput_ReturnsEmpty)
 {
     std::string result = CrossCompileHLSLtoGLSL("", RHIShaderStage::Pixel, "main");
     EXPECT_TRUE(result.empty());
+}
+
+// ============================================================================
+// Real GLSL Shader File Tests — loads production shaders from disk
+// ============================================================================
+
+// Helper: find the Shaders/GLSL directory (search from CWD and common paths)
+static std::string FindGLSLDir()
+{
+    const char* candidates[] = {
+        "Shaders/GLSL",
+        "../Shaders/GLSL",
+        "../../Shaders/GLSL",
+    };
+    for (auto* dir : candidates)
+    {
+        if (std::filesystem::exists(dir))
+            return dir;
+    }
+    return "";
+}
+
+TEST(GLSLPipeline_LoadRealBasicVS_CompilesToGLSL)
+{
+    std::string glslDir = FindGLSLDir();
+    if (glslDir.empty())
+    {
+        // Shader files not found — skip (CI may not copy them)
+        return;
+    }
+
+    std::string vsPath = glslDir + "/BasicVS.glsl";
+    EXPECT_TRUE(std::filesystem::exists(vsPath));
+
+    ShaderCompileOptions options;
+    options.stage = RHIShaderStage::Vertex;
+    options.sourceFile = vsPath;
+    options.sourceLanguage = ShaderLanguage::GLSL;
+    options.targetLanguage = ShaderLanguage::GLSL;
+    options.targetBackend = GraphicsBackend::OpenGL;
+
+    // Read file
+    std::ifstream f(vsPath);
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    options.sourceCode = ss.str();
+
+    ShaderCompileResult result = CompileShader(options);
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(!result.bytecode.empty());
+
+    // Bytecode should contain GLSL version header
+    std::string code(result.bytecode.begin(), result.bytecode.end());
+    EXPECT_TRUE(code.find("#version 460") != std::string::npos);
+}
+
+TEST(GLSLPipeline_LoadRealBasicPS_CompilesToGLSL)
+{
+    std::string glslDir = FindGLSLDir();
+    if (glslDir.empty())
+        return;
+
+    std::string psPath = glslDir + "/BasicPS.glsl";
+    EXPECT_TRUE(std::filesystem::exists(psPath));
+
+    ShaderCompileOptions options;
+    options.stage = RHIShaderStage::Pixel;
+    options.sourceFile = psPath;
+    options.sourceLanguage = ShaderLanguage::GLSL;
+    options.targetLanguage = ShaderLanguage::GLSL;
+    options.targetBackend = GraphicsBackend::OpenGL;
+
+    std::ifstream f(psPath);
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    options.sourceCode = ss.str();
+
+    ShaderCompileResult result = CompileShader(options);
+    EXPECT_TRUE(result.success);
+
+    std::string code(result.bytecode.begin(), result.bytecode.end());
+    EXPECT_TRUE(code.find("#version 460") != std::string::npos);
+    // Should contain PBR lighting code
+    EXPECT_TRUE(code.find("outColor") != std::string::npos);
+}
+
+TEST(GLSLPipeline_ShaderClass_LoadVertexShader_StoresSource)
+{
+    std::string glslDir = FindGLSLDir();
+    if (glslDir.empty())
+    {
+        return;
+    }
+
+    Shader shader;
+    HRESULT initHr = shader.Initialize(nullptr, nullptr);
+    EXPECT_EQ(initHr, S_OK);
+
+    std::wstring vsPath(glslDir.begin(), glslDir.end());
+    vsPath += L"/BasicVS.glsl";
+
+    // Verify the file actually exists at this path
+    std::string narrowPath(vsPath.begin(), vsPath.end());
+    EXPECT_TRUE(std::filesystem::exists(narrowPath));
+
+    HRESULT hr = shader.LoadVertexShader(vsPath);
+    EXPECT_EQ(hr, S_OK);
+    EXPECT_TRUE(shader.IsValid());
+    EXPECT_TRUE(!shader.GetCompiledVertexSource().empty());
+    if (!shader.GetCompiledVertexSource().empty())
+    {
+        EXPECT_TRUE(shader.GetCompiledVertexSource().find("#version 460") != std::string::npos);
+    }
+
+    shader.Shutdown();
+}
+
+TEST(GLSLPipeline_ShaderClass_LoadPixelShader_StoresSource)
+{
+    std::string glslDir = FindGLSLDir();
+    if (glslDir.empty())
+        return;
+
+    Shader shader;
+    shader.Initialize(nullptr, nullptr);
+
+    std::wstring psPath(glslDir.begin(), glslDir.end());
+    psPath += L"/BasicPS.glsl";
+
+    HRESULT hr = shader.LoadPixelShader(psPath);
+    EXPECT_EQ(hr, S_OK);
+    EXPECT_TRUE(!shader.GetCompiledPixelSource().empty());
+    EXPECT_TRUE(shader.GetCompiledPixelSource().find("outColor") != std::string::npos);
+
+    shader.Shutdown();
+}
+
+TEST(GLSLPipeline_ShaderClass_LoadBothShaders_SourcesStored)
+{
+    std::string glslDir = FindGLSLDir();
+    if (glslDir.empty())
+        return;
+
+    Shader shader;
+    shader.Initialize(nullptr, nullptr);
+
+    std::wstring vsPath(glslDir.begin(), glslDir.end());
+    vsPath += L"/BasicVS.glsl";
+    std::wstring psPath(glslDir.begin(), glslDir.end());
+    psPath += L"/BasicPS.glsl";
+
+    EXPECT_EQ(shader.LoadVertexShader(vsPath), S_OK);
+    EXPECT_EQ(shader.LoadPixelShader(psPath), S_OK);
+
+    // Both sources stored — ready for RHI pipeline creation
+    EXPECT_TRUE(!shader.GetCompiledVertexSource().empty());
+    EXPECT_TRUE(!shader.GetCompiledPixelSource().empty());
+    EXPECT_TRUE(shader.GetCompiledVertexSource().find("#version 460") != std::string::npos);
+    EXPECT_TRUE(shader.GetCompiledPixelSource().find("outColor") != std::string::npos);
+
+    // Pipeline state creation requires the global RHI bridge to be
+    // initialized (full engine startup). In unit tests without a global
+    // RHI device, m_rhiDevice is nullptr and the pipeline is deferred.
+    // The pipeline creation path is exercised by the NullRHI draw test above.
+
+    shader.Shutdown();
+}
+
+TEST(GLSLPipeline_AllGLSLShaders_Compile)
+{
+    std::string glslDir = FindGLSLDir();
+    if (glslDir.empty())
+        return;
+
+    int compiled = 0;
+    for (auto& entry : std::filesystem::directory_iterator(glslDir))
+    {
+        if (entry.path().extension() != ".glsl")
+            continue;
+
+        std::ifstream f(entry.path());
+        std::ostringstream ss;
+        ss << f.rdbuf();
+        std::string source = ss.str();
+
+        // Determine stage from filename convention
+        std::string stem = entry.path().stem().string();
+        RHIShaderStage stage = RHIShaderStage::Pixel; // default
+        if (stem.find("VS") != std::string::npos || stem.find("Quad") != std::string::npos)
+            stage = RHIShaderStage::Vertex;
+
+        ShaderCompileOptions options;
+        options.stage = stage;
+        options.sourceCode = source;
+        options.sourceFile = entry.path().string();
+        options.sourceLanguage = ShaderLanguage::GLSL;
+        options.targetLanguage = ShaderLanguage::GLSL;
+        options.targetBackend = GraphicsBackend::OpenGL;
+
+        ShaderCompileResult result = CompileShader(options);
+        EXPECT_TRUE(result.success);
+        compiled++;
+    }
+
+    // Should have found at least the 14 known GLSL shaders
+    EXPECT_TRUE(compiled >= 14);
 }

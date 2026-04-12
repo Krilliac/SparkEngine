@@ -8,24 +8,24 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 273282 |
+| **SparkEngine/Source** | 273442 |
 | **SparkEditor/Source** | 88721 |
 | **GameModules** | 58460 |
-| **Tests** | 129326 |
+| **Tests** | 129804 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~552190** |
+| **Total C++ (excl. ThirdParty)** | **~552828** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hpp) | 752 |
-| Implementation files (.cpp) | 1039 |
+| Implementation files (.cpp) | 1040 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 460 |
+| Test files (.cpp) | 461 |
 | Wiki pages (.md) | 125 |
 
 ### Code Density
@@ -33,8 +33,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Value |
 |--------|-------|
 | Average lines per .cpp file | ~778 |
-| Average lines per .h file | ~583 |
-| Largest codebase section | Graphics (109077 lines — 39% of SparkEngine/Source) |
+| Average lines per .h file | ~584 |
+| Largest codebase section | Graphics (109237 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,8 +42,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 109077 | 39.9% |
-| Engine (all subsystems) | 80368 | 29.4% |
+| Graphics | 109237 | 39.9% |
+| Engine (all subsystems) | 80368 | 29.3% |
 | Utils | 36987 | 13.5% |
 | Core | 21789 | 7.9% |
 | Physics | 10101 | 3.6% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 460 |
-| TEST() definitions | 5674 |
+| Test files | 461 |
+| TEST() definitions | 5692 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 

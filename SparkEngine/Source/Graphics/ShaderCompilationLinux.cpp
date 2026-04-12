@@ -183,9 +183,19 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
     options.debugInfoEnabled = flags.enableDebug;
     options.defines = flags.defines;
     options.includePaths = flags.includePaths;
+    // Detect source language from the file extension; set target to match
+    // so GLSL files compile as GLSL→GLSL (not GLSL→HLSL which is unsupported).
     options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
     options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
     options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+    std::string ext = std::filesystem::path(narrowPath).extension().string();
+    if (ext == ".glsl" || ext == ".vert" || ext == ".frag")
+    {
+        options.sourceLanguage = Spark::RHI::ShaderLanguage::GLSL;
+        options.targetLanguage = Spark::RHI::ShaderLanguage::GLSL;
+        options.targetBackend = Spark::RHI::GraphicsBackend::OpenGL;
+    }
 
     Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
 
@@ -220,7 +230,6 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
     // Store the compiled source so callers can create RHI pipeline states.
     // For GLSL→GLSL passthrough, the bytecode IS the GLSL source text.
     m_compiledVertexSource.assign(reinterpret_cast<const char*>(result.bytecode.data()), result.bytecode.size());
-
     // Phase U: register the parent directory with the ShaderHotReload
     // singleton so runtime file-watching picks up this file.
     {
@@ -277,9 +286,20 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
     options.debugInfoEnabled = flags.enableDebug;
     options.defines = flags.defines;
     options.includePaths = flags.includePaths;
+
+    // Detect source language from the file extension; set target to match
+    // so GLSL files compile as GLSL→GLSL (not GLSL→HLSL which is unsupported).
     options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
     options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
     options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+    std::string psExt = std::filesystem::path(narrowPath).extension().string();
+    if (psExt == ".glsl" || psExt == ".vert" || psExt == ".frag")
+    {
+        options.sourceLanguage = Spark::RHI::ShaderLanguage::GLSL;
+        options.targetLanguage = Spark::RHI::ShaderLanguage::GLSL;
+        options.targetBackend = Spark::RHI::GraphicsBackend::OpenGL;
+    }
 
     Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
 
