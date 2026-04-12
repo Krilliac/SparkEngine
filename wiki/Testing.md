@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*458 test files, 5668+ test cases*
+*459 test files, 5678+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -687,6 +687,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 8 |
 | `TestFPSComponents` | 23 |
+| `TestFPSGameplayIntegration` | 10 |
 | `TestFPSMultiplayer` | 10 |
 | `TestFastNoise2SIMD` | 29 |
 | `TestFaultIsolation` | 14 |

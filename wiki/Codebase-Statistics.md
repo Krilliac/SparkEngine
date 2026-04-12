@@ -11,21 +11,21 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | **SparkEngine/Source** | 273282 |
 | **SparkEditor/Source** | 88721 |
 | **GameModules** | 58460 |
-| **Tests** | 129158 |
+| **Tests** | 129326 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~552022** |
+| **Total C++ (excl. ThirdParty)** | **~552190** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hpp) | 752 |
-| Implementation files (.cpp) | 1038 |
+| Implementation files (.cpp) | 1039 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 459 |
+| Test files (.cpp) | 460 |
 | Wiki pages (.md) | 125 |
 
 ### Code Density
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 459 |
-| TEST() definitions | 5664 |
+| Test files | 460 |
+| TEST() definitions | 5674 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
