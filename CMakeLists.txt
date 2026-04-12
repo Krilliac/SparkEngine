@@ -897,11 +897,17 @@ file(GLOB_RECURSE SPARK_ENGINE_SOURCES
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*/[Tt]est[^a-z].*|.*/[Tt]ests/.*")
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
-# Separate entry point from library sources
-# SparkEngine.cpp contains wWinMain/main - it goes in the exe only
-set(SPARK_ENGINE_ENTRY_POINT "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp")
+# Separate entry point files from library sources
+# SparkEngine*.cpp contains wWinMain/main + shared globals — they go in the exe only
+set(SPARK_ENGINE_ENTRY_POINTS
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux.cpp"
+)
 set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
-list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${SPARK_ENGINE_ENTRY_POINT}")
+foreach(_ep ${SPARK_ENGINE_ENTRY_POINTS})
+    list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${_ep}")
+endforeach()
 
 # Exclude source files whose third-party dependencies are missing
 if(NOT JOLT_FOUND)
@@ -953,9 +959,9 @@ set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
 
 # 9b) SparkEngine - Executable (entry point + module loader)
 if(WIN32)
-    add_executable(SparkEngine WIN32 "${SPARK_ENGINE_ENTRY_POINT}")
+    add_executable(SparkEngine WIN32 ${SPARK_ENGINE_ENTRY_POINTS})
 else()
-    add_executable(SparkEngine "${SPARK_ENGINE_ENTRY_POINT}")
+    add_executable(SparkEngine ${SPARK_ENGINE_ENTRY_POINTS})
 endif()
 target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
 # MinGW: -municode enables wWinMain as the entry point (Unicode command line)

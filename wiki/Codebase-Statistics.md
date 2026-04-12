@@ -8,20 +8,20 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 271988 |
-| **SparkEditor/Source** | 88463 |
+| **SparkEngine/Source** | 272545 |
+| **SparkEditor/Source** | 88512 |
 | **GameModules** | 58460 |
 | **Tests** | 127543 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~548855** |
+| **Total C++ (excl. ThirdParty)** | **~549461** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hpp) | 751 |
-| Implementation files (.cpp) | 992 |
+| Implementation files (.cpp) | 1032 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -32,9 +32,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~848 |
-| Average lines per .h file | ~582 |
-| Largest codebase section | Graphics (108565 lines — 39% of SparkEngine/Source) |
+| Average lines per .cpp file | ~776 |
+| Average lines per .h file | ~583 |
+| Largest codebase section | Graphics (108952 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,10 +42,10 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 108565 | 39.9% |
+| Graphics | 108952 | 39.9% |
 | Engine (all subsystems) | 80494 | 29.5% |
 | Utils | 36987 | 13.5% |
-| Core | 20881 | 7.6% |
+| Core | 21051 | 7.7% |
 | Physics | 10101 | 3.7% |
 | Audio | 5548 | 2.0% |
 | Input | 3895 | 1.4% |
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 88463 |
+| Total editor lines | 88512 |
 
 ## Testing Metrics
 
@@ -155,15 +155,15 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | File | Lines |
 |------|------:|
 | `OpenGLDevice.cpp` | 1978 |
-| `SparkEngine.cpp` | 1957 |
-| `GraphicsEngine.cpp` | 1897 |
 | `VulkanDevice.cpp` | 1858 |
 | `D3D12Device.cpp` | 1577 |
 | `EngineSettings.cpp` | 1554 |
 | `PostProcessingPipeline.cpp` | 1530 |
 | `D3D11Device.cpp` | 1486 |
-| `ShaderCompilation.cpp` | 1418 |
-| `LightingSystem.cpp` | 1341 |
+| `GraphicsEngineWindows.cpp` | 1433 |
+| `CrashHandler.cpp` | 1322 |
+| `GameplayLifecycleShared.cpp` | 1319 |
+| `SaveSystem.cpp` | 1275 |
 
 ### SparkEngine .h Files (by line count)
 
