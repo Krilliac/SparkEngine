@@ -65,6 +65,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Engine next-steps Phase DD (AIDebugRenderer singleton wired + DirtyRegionGrid real-class tests) | [knowledge/engine-next-steps-phase-dd-2026-04-11.md](knowledge/engine-next-steps-phase-dd-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Engine deep-wire session (Phases EE/FF/GG/HH/II — 13 orphans wired using parallel sweep agents + multiple heuristics) | [knowledge/engine-deep-wire-session-2026-04-11.md](knowledge/engine-deep-wire-session-2026-04-11.md) | Observation | Active | 2026-04-11 |
 | Fake-coverage conversion — Phases JJ/KK/LL (18 real-class test files replacing fake anon-namespace reimpls, 111 tests) | [knowledge/fake-coverage-conversion-2026-04-11.md](knowledge/fake-coverage-conversion-2026-04-11.md) | Observation | Active | 2026-04-11 |
+| Engine next-steps Themes 1-6 (16 real-class test files, bloat baseline, SelectionManager wiring, shallow-wire audit) | [knowledge/engine-next-steps-themes-1-6-2026-04-12.md](knowledge/engine-next-steps-themes-1-6-2026-04-12.md) | Observation | Active | 2026-04-12 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-12)
