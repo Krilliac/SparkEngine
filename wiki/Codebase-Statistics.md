@@ -8,20 +8,20 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 270763 |
-| **SparkEditor/Source** | 88444 |
+| **SparkEngine/Source** | 270785 |
+| **SparkEditor/Source** | 88463 |
 | **GameModules** | 58460 |
-| **Tests** | 127541 |
+| **Tests** | 127543 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~547609** |
+| **Total C++ (excl. ThirdParty)** | **~547652** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hpp) | 751 |
-| Implementation files (.cpp) | 978 |
+| Implementation files (.cpp) | 981 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -32,9 +32,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~873 |
+| Average lines per .cpp file | ~867 |
 | Average lines per .h file | ~580 |
-| Largest codebase section | Graphics (107340 lines — 39% of SparkEngine/Source) |
+| Largest codebase section | Graphics (107362 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 107340 | 39.6% |
+| Graphics | 107362 | 39.6% |
 | Engine (all subsystems) | 80494 | 29.7% |
 | Utils | 36987 | 13.6% |
 | Core | 20881 | 7.7% |
@@ -99,7 +99,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 88444 |
+| Total editor lines | 88463 |
 
 ## Testing Metrics
 
@@ -160,7 +160,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `VulkanDevice.cpp` | 1858 |
 | `D3D12Device.cpp` | 1577 |
 | `EngineSettings.cpp` | 1554 |
-| `PostProcessingPipeline.cpp` | 1504 |
+| `PostProcessingPipeline.cpp` | 1530 |
 | `D3D11Device.cpp` | 1486 |
 | `ShaderCompilation.cpp` | 1418 |
 | `LightingSystem.cpp` | 1341 |
