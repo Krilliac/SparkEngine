@@ -10,7 +10,7 @@
 | 4 (Network) | **Prep done** | Transform/Health/NetworkIdentity fields marked `replicated=true`. EntityReplicator not yet modified |
 | 5 (Materials) | Planned | |
 | 6 (AngelScript) | Planned | |
-| 7 (Settings) | **Partial** | Generic ReadReflectedConfig/WriteReflectedConfig created, 5 groups migrated (Graphics, Audio, Game, Physics, Camera) — ~90 manual lines → 10 |
+| 7 (Settings) | **Mostly done** | 14 of 33 groups migrated (Graphics, Audio, Game, Physics, Camera, Controls, Rendering, PostProcess, SSAO, AI, Player, Editor, Network, Debug) — 189 fields, ~378 manual R/W lines → 28 one-liners |
 | 8B (UI Bindings) | **Done** | UITypedBinding\<T\> replaces 4 concrete classes, backward-compatible aliases |
 
 ## Context

@@ -80,6 +80,153 @@ SPARK_REFLECT_FIELD(CamS, nearPlane, "NearPlane")
 SPARK_REFLECT_FIELD(CamS, farPlane, "FarPlane")
 SPARK_REFLECT_END(CamS)
 
+using CS = EngineSettings::ControlsSettings;
+SPARK_REFLECT_TYPE(CS)
+SPARK_REFLECT_FIELD(CS, mouseSensitivity, "MouseSensitivity")
+SPARK_REFLECT_FIELD(CS, invertMouseY, "InvertMouse") // config key differs from field name
+SPARK_REFLECT_FIELD(CS, mouseDeadZone, "MouseDeadZone")
+SPARK_REFLECT_FIELD(CS, rawMouseInput, "RawMouseInput")
+SPARK_REFLECT_FIELD(CS, mouseAcceleration, "MouseAcceleration")
+SPARK_REFLECT_FIELD(CS, controllerDeadZoneLeft, "ControllerDeadZoneLeft")
+SPARK_REFLECT_FIELD(CS, controllerDeadZoneRight, "ControllerDeadZoneRight")
+SPARK_REFLECT_FIELD(CS, controllerSensitivity, "ControllerSensitivity")
+SPARK_REFLECT_FIELD(CS, controllerVibration, "ControllerVibration")
+SPARK_REFLECT_FIELD(CS, invertControllerY, "InvertControllerY")
+SPARK_REFLECT_END(CS)
+
+using RS = EngineSettings::RenderingSettings;
+SPARK_REFLECT_TYPE(RS)
+SPARK_REFLECT_FIELD(RS, renderPath, "RenderPath")
+SPARK_REFLECT_FIELD(RS, qualityPreset, "QualityPreset")
+SPARK_REFLECT_FIELD(RS, maxTextureSize, "MaxTextureSize")
+SPARK_REFLECT_FIELD(RS, anisotropicFiltering, "AnisotropicFiltering")
+SPARK_REFLECT_FIELD(RS, anisotropyLevel, "AnisotropyLevel")
+SPARK_REFLECT_FIELD(RS, shadows, "Shadows")
+SPARK_REFLECT_FIELD(RS, shadowMapSize, "ShadowMapSize")
+SPARK_REFLECT_FIELD(RS, cascadeCount, "CascadeCount")
+SPARK_REFLECT_FIELD(RS, bloom, "Bloom")
+SPARK_REFLECT_FIELD(RS, ssao, "SSAO")
+SPARK_REFLECT_FIELD(RS, taa, "TAA")
+SPARK_REFLECT_FIELD(RS, motionBlur, "MotionBlur")
+SPARK_REFLECT_FIELD(RS, frustumCulling, "FrustumCulling")
+SPARK_REFLECT_FIELD(RS, occlusionCulling, "OcclusionCulling")
+SPARK_REFLECT_FIELD(RS, portalCulling, "PortalCulling")
+SPARK_REFLECT_FIELD(RS, levelOfDetail, "LevelOfDetail")
+SPARK_REFLECT_FIELD(RS, maxDrawCalls, "MaxDrawCalls")
+SPARK_REFLECT_FIELD(RS, wireframeMode, "WireframeMode")
+SPARK_REFLECT_FIELD(RS, debugMode, "DebugMode")
+SPARK_REFLECT_FIELD(RS, enableGPUTiming, "EnableGPUTiming")
+SPARK_REFLECT_END(RS)
+
+using PPS = EngineSettings::PostProcessSettings;
+SPARK_REFLECT_TYPE(PPS)
+SPARK_REFLECT_FIELD(PPS, bloomEnabled, "BloomEnabled")
+SPARK_REFLECT_FIELD(PPS, bloomThreshold, "BloomThreshold")
+SPARK_REFLECT_FIELD(PPS, bloomIntensity, "BloomIntensity")
+SPARK_REFLECT_FIELD(PPS, bloomRadius, "BloomRadius")
+SPARK_REFLECT_FIELD(PPS, bloomSoftKnee, "BloomSoftKnee")
+SPARK_REFLECT_FIELD(PPS, bloomIterations, "BloomIterations")
+SPARK_REFLECT_FIELD(PPS, toneMappingOperator, "ToneMappingOperator")
+SPARK_REFLECT_FIELD(PPS, exposure, "Exposure")
+SPARK_REFLECT_FIELD(PPS, gamma, "Gamma")
+SPARK_REFLECT_FIELD(PPS, whitePoint, "WhitePoint")
+SPARK_REFLECT_FIELD(PPS, colorGradingEnabled, "ColorGradingEnabled")
+SPARK_REFLECT_FIELD(PPS, temperature, "Temperature")
+SPARK_REFLECT_FIELD(PPS, tint, "Tint")
+SPARK_REFLECT_FIELD(PPS, contrast, "Contrast")
+SPARK_REFLECT_FIELD(PPS, brightness, "Brightness")
+SPARK_REFLECT_FIELD(PPS, saturation, "Saturation")
+SPARK_REFLECT_END(PPS)
+
+using SSAOSet = EngineSettings::SSAOSettings;
+SPARK_REFLECT_TYPE(SSAOSet)
+SPARK_REFLECT_FIELD(SSAOSet, enabled, "Enabled")
+SPARK_REFLECT_FIELD(SSAOSet, radius, "Radius")
+SPARK_REFLECT_FIELD(SSAOSet, intensity, "Intensity")
+SPARK_REFLECT_FIELD(SSAOSet, sampleCount, "SampleCount")
+SPARK_REFLECT_FIELD(SSAOSet, bias, "Bias")
+SPARK_REFLECT_FIELD(SSAOSet, blur, "Blur")
+SPARK_REFLECT_END(SSAOSet)
+
+using AIS = EngineSettings::AISettings;
+SPARK_REFLECT_TYPE(AIS)
+SPARK_REFLECT_FIELD(AIS, detectionRange, "DetectionRange")
+SPARK_REFLECT_FIELD(AIS, attackRange, "AttackRange")
+SPARK_REFLECT_FIELD(AIS, meleeRange, "MeleeRange")
+SPARK_REFLECT_FIELD(AIS, moveSpeed, "MoveSpeed")
+SPARK_REFLECT_FIELD(AIS, turnSpeed, "TurnSpeed")
+SPARK_REFLECT_FIELD(AIS, accuracy, "Accuracy")
+SPARK_REFLECT_FIELD(AIS, reactionTime, "ReactionTime")
+SPARK_REFLECT_FIELD(AIS, coverSearchRadius, "CoverSearchRadius")
+SPARK_REFLECT_FIELD(AIS, canStrafe, "CanStrafe")
+SPARK_REFLECT_FIELD(AIS, canSprint, "CanSprint")
+SPARK_REFLECT_FIELD(AIS, canUseCover, "CanUseCover")
+SPARK_REFLECT_END(AIS)
+
+using PlS = EngineSettings::PlayerSettings;
+SPARK_REFLECT_TYPE(PlS)
+SPARK_REFLECT_FIELD(PlS, maxHealth, "MaxHealth")
+SPARK_REFLECT_FIELD(PlS, maxArmor, "MaxArmor")
+SPARK_REFLECT_FIELD(PlS, moveSpeed, "MoveSpeed")
+SPARK_REFLECT_FIELD(PlS, jumpHeight, "JumpHeight")
+SPARK_REFLECT_FIELD(PlS, gravityForce, "GravityForce")
+SPARK_REFLECT_FIELD(PlS, friction, "Friction")
+SPARK_REFLECT_FIELD(PlS, sprintMultiplier, "SprintMultiplier")
+SPARK_REFLECT_FIELD(PlS, crouchMultiplier, "CrouchMultiplier")
+SPARK_REFLECT_FIELD(PlS, adsSpeedMultiplier, "ADSSpeedMultiplier") // config key differs
+SPARK_REFLECT_FIELD(PlS, maxShield, "MaxShield")
+SPARK_REFLECT_FIELD(PlS, shieldRechargeRate, "ShieldRechargeRate")
+SPARK_REFLECT_FIELD(PlS, shieldRechargeDelay, "ShieldRechargeDelay")
+SPARK_REFLECT_FIELD(PlS, maxEnergy, "MaxEnergy")
+SPARK_REFLECT_FIELD(PlS, energyRegenRate, "EnergyRegenRate")
+SPARK_REFLECT_END(PlS)
+
+using ES = EngineSettings::EditorSettings;
+SPARK_REFLECT_TYPE(ES)
+SPARK_REFLECT_FIELD(ES, gridSize, "GridSize")
+SPARK_REFLECT_FIELD(ES, snapToGrid, "SnapToGrid")
+SPARK_REFLECT_FIELD(ES, showGrid, "ShowGrid")
+SPARK_REFLECT_FIELD(ES, gizmoScale, "GizmoScale")
+SPARK_REFLECT_FIELD(ES, autosaveEnabled, "AutosaveEnabled")
+SPARK_REFLECT_FIELD(ES, autosaveIntervalSeconds, "AutosaveIntervalSeconds")
+SPARK_REFLECT_FIELD(ES, undoHistorySize, "UndoHistorySize")
+SPARK_REFLECT_FIELD(ES, rotationSnap, "RotationSnap")
+SPARK_REFLECT_FIELD(ES, scaleSnap, "ScaleSnap")
+SPARK_REFLECT_FIELD(ES, showGizmoLabels, "ShowGizmoLabels")
+SPARK_REFLECT_FIELD(ES, showWireframeOverlay, "ShowWireframeOverlay")
+SPARK_REFLECT_FIELD(ES, showBounds, "ShowBounds")
+SPARK_REFLECT_FIELD(ES, showColliders, "ShowColliders")
+SPARK_REFLECT_FIELD(ES, showNavMesh, "ShowNavMesh")
+SPARK_REFLECT_FIELD(ES, showLightRadius, "ShowLightRadius")
+SPARK_REFLECT_FIELD(ES, cameraSpeedMultiplier, "CameraSpeedMultiplier")
+SPARK_REFLECT_FIELD(ES, recentFilesMax, "RecentFilesMax")
+SPARK_REFLECT_FIELD(ES, enableCollaboration, "EnableCollaboration")
+SPARK_REFLECT_END(ES)
+
+using NS = EngineSettings::NetworkSettings;
+SPARK_REFLECT_TYPE(NS)
+SPARK_REFLECT_FIELD(NS, serverPort, "ServerPort")
+SPARK_REFLECT_FIELD(NS, maxClients, "MaxClients")
+SPARK_REFLECT_FIELD(NS, connectionTimeout, "ConnectionTimeout")
+SPARK_REFLECT_FIELD(NS, heartbeatInterval, "HeartbeatInterval")
+SPARK_REFLECT_FIELD(NS, replicationRate, "ReplicationRate")
+SPARK_REFLECT_FIELD(NS, reliableRetransmitBase, "ReliableRetransmitBase")
+SPARK_REFLECT_FIELD(NS, maxReliableRetries, "MaxReliableRetries")
+SPARK_REFLECT_FIELD(NS, sendBufferSize, "SendBufferSize")
+SPARK_REFLECT_FIELD(NS, receiveBufferSize, "ReceiveBufferSize")
+SPARK_REFLECT_FIELD(NS, enableCompression, "EnableCompression")
+SPARK_REFLECT_FIELD(NS, enableEncryption, "EnableEncryption")
+SPARK_REFLECT_FIELD(NS, simulatedLatencyMs, "SimulatedLatencyMs")
+SPARK_REFLECT_FIELD(NS, simulatedPacketLoss, "SimulatedPacketLoss")
+SPARK_REFLECT_FIELD(NS, simulatedJitterMs, "SimulatedJitterMs")
+SPARK_REFLECT_END(NS)
+
+using DS = EngineSettings::DebugSettings;
+SPARK_REFLECT_TYPE(DS)
+SPARK_REFLECT_FIELD(DS, suppressFatalAsserts, "SuppressFatalAsserts")
+SPARK_REFLECT_FIELD(DS, breakOnSuppressedAsserts, "BreakOnSuppressedAsserts")
+SPARK_REFLECT_END(DS)
+
 // ============================================================================
 // Generic reflection-driven config read/write.
 // Uses field.name as config key, struct defaults as fallback values.
@@ -354,68 +501,20 @@ void EngineSettings::ReadFromConfig()
     // Audio — reflection-driven
     ReadReflectedConfig(m_audio, m_config, "Audio");
 
-    // Controls
-    m_controls.mouseSensitivity = m_config.GetFloat("Controls", "MouseSensitivity", 1.0f);
-    m_controls.invertMouseY = m_config.GetBool("Controls", "InvertMouse", false);
-    m_controls.mouseDeadZone = m_config.GetFloat("Controls", "MouseDeadZone", 0.0f);
-    m_controls.rawMouseInput = m_config.GetBool("Controls", "RawMouseInput", false);
-    m_controls.mouseAcceleration = m_config.GetBool("Controls", "MouseAcceleration", false);
-    m_controls.controllerDeadZoneLeft = m_config.GetFloat("Controls", "ControllerDeadZoneLeft", 0.15f);
-    m_controls.controllerDeadZoneRight = m_config.GetFloat("Controls", "ControllerDeadZoneRight", 0.1f);
-    m_controls.controllerSensitivity = m_config.GetFloat("Controls", "ControllerSensitivity", 1.0f);
-    m_controls.controllerVibration = m_config.GetBool("Controls", "ControllerVibration", true);
-    m_controls.invertControllerY = m_config.GetBool("Controls", "InvertControllerY", false);
+    // Controls — reflection-driven
+    ReadReflectedConfig(m_controls, m_config, "Controls");
 
     // Game — reflection-driven
     ReadReflectedConfig(m_game, m_config, "Game");
 
-    // Rendering
-    m_rendering.renderPath = m_config.GetInt("Rendering", "RenderPath", 1);
-    m_rendering.qualityPreset = m_config.GetInt("Rendering", "QualityPreset", 2);
-    m_rendering.maxTextureSize = m_config.GetInt("Rendering", "MaxTextureSize", 2048);
-    m_rendering.anisotropicFiltering = m_config.GetBool("Rendering", "AnisotropicFiltering", true);
-    m_rendering.anisotropyLevel = m_config.GetInt("Rendering", "AnisotropyLevel", 16);
-    m_rendering.shadows = m_config.GetBool("Rendering", "Shadows", true);
-    m_rendering.shadowMapSize = m_config.GetInt("Rendering", "ShadowMapSize", 2048);
-    m_rendering.cascadeCount = m_config.GetInt("Rendering", "CascadeCount", 3);
-    m_rendering.bloom = m_config.GetBool("Rendering", "Bloom", true);
-    m_rendering.ssao = m_config.GetBool("Rendering", "SSAO", false);
-    m_rendering.taa = m_config.GetBool("Rendering", "TAA", false);
-    m_rendering.motionBlur = m_config.GetBool("Rendering", "MotionBlur", false);
-    m_rendering.frustumCulling = m_config.GetBool("Rendering", "FrustumCulling", true);
-    m_rendering.occlusionCulling = m_config.GetBool("Rendering", "OcclusionCulling", false);
-    m_rendering.portalCulling = m_config.GetBool("Rendering", "PortalCulling", false);
-    m_rendering.levelOfDetail = m_config.GetBool("Rendering", "LevelOfDetail", true);
-    m_rendering.maxDrawCalls = m_config.GetInt("Rendering", "MaxDrawCalls", 1000);
-    m_rendering.wireframeMode = m_config.GetBool("Rendering", "WireframeMode", false);
-    m_rendering.debugMode = m_config.GetBool("Rendering", "DebugMode", false);
-    m_rendering.enableGPUTiming = m_config.GetBool("Rendering", "EnableGPUTiming", false);
+    // Rendering — reflection-driven
+    ReadReflectedConfig(m_rendering, m_config, "Rendering");
 
-    // PostProcess
-    m_postProcess.bloomEnabled = m_config.GetBool("PostProcess", "BloomEnabled", true);
-    m_postProcess.bloomThreshold = m_config.GetFloat("PostProcess", "BloomThreshold", 1.0f);
-    m_postProcess.bloomIntensity = m_config.GetFloat("PostProcess", "BloomIntensity", 1.0f);
-    m_postProcess.bloomRadius = m_config.GetFloat("PostProcess", "BloomRadius", 1.0f);
-    m_postProcess.bloomSoftKnee = m_config.GetFloat("PostProcess", "BloomSoftKnee", 0.5f);
-    m_postProcess.bloomIterations = m_config.GetInt("PostProcess", "BloomIterations", 6);
-    m_postProcess.toneMappingOperator = m_config.GetInt("PostProcess", "ToneMappingOperator", 4);
-    m_postProcess.exposure = m_config.GetFloat("PostProcess", "Exposure", 1.0f);
-    m_postProcess.gamma = m_config.GetFloat("PostProcess", "Gamma", 2.2f);
-    m_postProcess.whitePoint = m_config.GetFloat("PostProcess", "WhitePoint", 11.2f);
-    m_postProcess.colorGradingEnabled = m_config.GetBool("PostProcess", "ColorGradingEnabled", false);
-    m_postProcess.temperature = m_config.GetFloat("PostProcess", "Temperature", 0.0f);
-    m_postProcess.tint = m_config.GetFloat("PostProcess", "Tint", 0.0f);
-    m_postProcess.contrast = m_config.GetFloat("PostProcess", "Contrast", 1.0f);
-    m_postProcess.brightness = m_config.GetFloat("PostProcess", "Brightness", 0.0f);
-    m_postProcess.saturation = m_config.GetFloat("PostProcess", "Saturation", 1.0f);
+    // PostProcess — reflection-driven
+    ReadReflectedConfig(m_postProcess, m_config, "PostProcess");
 
-    // SSAO
-    m_ssao.enabled = m_config.GetBool("SSAO", "Enabled", false);
-    m_ssao.radius = m_config.GetFloat("SSAO", "Radius", 0.5f);
-    m_ssao.intensity = m_config.GetFloat("SSAO", "Intensity", 1.0f);
-    m_ssao.sampleCount = m_config.GetInt("SSAO", "SampleCount", 16);
-    m_ssao.bias = m_config.GetFloat("SSAO", "Bias", 0.025f);
-    m_ssao.blur = m_config.GetBool("SSAO", "Blur", true);
+    // SSAO — reflection-driven
+    ReadReflectedConfig(m_ssao, m_config, "SSAO");
 
     // SSR
     m_ssr.enabled = m_config.GetBool("SSR", "Enabled", false);
@@ -490,34 +589,11 @@ void EngineSettings::ReadFromConfig()
     // Physics — reflection-driven
     ReadReflectedConfig(m_physics, m_config, "Physics");
 
-    // AI
-    m_ai.detectionRange = m_config.GetFloat("AI", "DetectionRange", 30.0f);
-    m_ai.attackRange = m_config.GetFloat("AI", "AttackRange", 15.0f);
-    m_ai.meleeRange = m_config.GetFloat("AI", "MeleeRange", 2.0f);
-    m_ai.moveSpeed = m_config.GetFloat("AI", "MoveSpeed", 5.0f);
-    m_ai.turnSpeed = m_config.GetFloat("AI", "TurnSpeed", 180.0f);
-    m_ai.accuracy = m_config.GetFloat("AI", "Accuracy", 0.7f);
-    m_ai.reactionTime = m_config.GetFloat("AI", "ReactionTime", 0.3f);
-    m_ai.coverSearchRadius = m_config.GetFloat("AI", "CoverSearchRadius", 20.0f);
-    m_ai.canStrafe = m_config.GetBool("AI", "CanStrafe", true);
-    m_ai.canSprint = m_config.GetBool("AI", "CanSprint", true);
-    m_ai.canUseCover = m_config.GetBool("AI", "CanUseCover", true);
+    // AI — reflection-driven
+    ReadReflectedConfig(m_ai, m_config, "AI");
 
-    // Player
-    m_player.maxHealth = m_config.GetFloat("Player", "MaxHealth", 100.0f);
-    m_player.maxArmor = m_config.GetFloat("Player", "MaxArmor", 100.0f);
-    m_player.moveSpeed = m_config.GetFloat("Player", "MoveSpeed", 5.0f);
-    m_player.jumpHeight = m_config.GetFloat("Player", "JumpHeight", 3.0f);
-    m_player.gravityForce = m_config.GetFloat("Player", "GravityForce", 20.0f);
-    m_player.friction = m_config.GetFloat("Player", "Friction", 0.9f);
-    m_player.sprintMultiplier = m_config.GetFloat("Player", "SprintMultiplier", 2.0f);
-    m_player.crouchMultiplier = m_config.GetFloat("Player", "CrouchMultiplier", 0.5f);
-    m_player.adsSpeedMultiplier = m_config.GetFloat("Player", "ADSSpeedMultiplier", 0.5f);
-    m_player.maxShield = m_config.GetFloat("Player", "MaxShield", 50.0f);
-    m_player.shieldRechargeRate = m_config.GetFloat("Player", "ShieldRechargeRate", 10.0f);
-    m_player.shieldRechargeDelay = m_config.GetFloat("Player", "ShieldRechargeDelay", 6.0f);
-    m_player.maxEnergy = m_config.GetFloat("Player", "MaxEnergy", 100.0f);
-    m_player.energyRegenRate = m_config.GetFloat("Player", "EnergyRegenRate", 10.0f);
+    // Player — reflection-driven
+    ReadReflectedConfig(m_player, m_config, "Player");
 
     // GameMode
     m_gameMode.scoreLimit = m_config.GetInt("GameMode", "ScoreLimit", 50);
@@ -545,41 +621,11 @@ void EngineSettings::ReadFromConfig()
     // Camera — reflection-driven
     ReadReflectedConfig(m_camera, m_config, "Camera");
 
-    // Editor
-    m_editor.gridSize = m_config.GetFloat("Editor", "GridSize", 1.0f);
-    m_editor.snapToGrid = m_config.GetBool("Editor", "SnapToGrid", true);
-    m_editor.showGrid = m_config.GetBool("Editor", "ShowGrid", true);
-    m_editor.gizmoScale = m_config.GetFloat("Editor", "GizmoScale", 1.0f);
-    m_editor.autosaveEnabled = m_config.GetBool("Editor", "AutosaveEnabled", true);
-    m_editor.autosaveIntervalSeconds = m_config.GetFloat("Editor", "AutosaveIntervalSeconds", 300.0f);
-    m_editor.undoHistorySize = m_config.GetInt("Editor", "UndoHistorySize", 100);
-    m_editor.rotationSnap = m_config.GetFloat("Editor", "RotationSnap", 15.0f);
-    m_editor.scaleSnap = m_config.GetFloat("Editor", "ScaleSnap", 0.25f);
-    m_editor.showGizmoLabels = m_config.GetBool("Editor", "ShowGizmoLabels", true);
-    m_editor.showWireframeOverlay = m_config.GetBool("Editor", "ShowWireframeOverlay", false);
-    m_editor.showBounds = m_config.GetBool("Editor", "ShowBounds", false);
-    m_editor.showColliders = m_config.GetBool("Editor", "ShowColliders", false);
-    m_editor.showNavMesh = m_config.GetBool("Editor", "ShowNavMesh", false);
-    m_editor.showLightRadius = m_config.GetBool("Editor", "ShowLightRadius", true);
-    m_editor.cameraSpeedMultiplier = m_config.GetFloat("Editor", "CameraSpeedMultiplier", 1.0f);
-    m_editor.recentFilesMax = m_config.GetInt("Editor", "RecentFilesMax", 10);
-    m_editor.enableCollaboration = m_config.GetBool("Editor", "EnableCollaboration", false);
+    // Editor — reflection-driven
+    ReadReflectedConfig(m_editor, m_config, "Editor");
 
-    // Network
-    m_network.serverPort = m_config.GetInt("Network", "ServerPort", 27015);
-    m_network.maxClients = m_config.GetInt("Network", "MaxClients", 32);
-    m_network.connectionTimeout = m_config.GetFloat("Network", "ConnectionTimeout", 10.0f);
-    m_network.heartbeatInterval = m_config.GetFloat("Network", "HeartbeatInterval", 1.0f);
-    m_network.replicationRate = m_config.GetFloat("Network", "ReplicationRate", 20.0f);
-    m_network.reliableRetransmitBase = m_config.GetFloat("Network", "ReliableRetransmitBase", 0.5f);
-    m_network.maxReliableRetries = m_config.GetInt("Network", "MaxReliableRetries", 5);
-    m_network.sendBufferSize = m_config.GetInt("Network", "SendBufferSize", 65536);
-    m_network.receiveBufferSize = m_config.GetInt("Network", "ReceiveBufferSize", 65536);
-    m_network.enableCompression = m_config.GetBool("Network", "EnableCompression", false);
-    m_network.enableEncryption = m_config.GetBool("Network", "EnableEncryption", false);
-    m_network.simulatedLatencyMs = m_config.GetFloat("Network", "SimulatedLatencyMs", 0.0f);
-    m_network.simulatedPacketLoss = m_config.GetFloat("Network", "SimulatedPacketLoss", 0.0f);
-    m_network.simulatedJitterMs = m_config.GetFloat("Network", "SimulatedJitterMs", 0.0f);
+    // Network — reflection-driven
+    ReadReflectedConfig(m_network, m_config, "Network");
 
     // Scripting
     m_scripting.hotReloadEnabled = m_config.GetBool("Scripting", "HotReloadEnabled", true);
@@ -622,9 +668,8 @@ void EngineSettings::ReadFromConfig()
     m_crashReporting.emailTo = m_config.GetString("CrashReporting", "EmailTo", "");
     m_crashReporting.emailFrom = m_config.GetString("CrashReporting", "EmailFrom", "crashreporter@sparkengine.dev");
 
-    // Debug
-    m_debug.suppressFatalAsserts = m_config.GetBool("Debug", "SuppressFatalAsserts", false);
-    m_debug.breakOnSuppressedAsserts = m_config.GetBool("Debug", "BreakOnSuppressedAsserts", true);
+    // Debug — reflection-driven
+    ReadReflectedConfig(m_debug, m_config, "Debug");
 
     // Weather
     m_weather.weatherType = m_config.GetInt("Weather", "WeatherType", 0);
@@ -862,65 +907,20 @@ void EngineSettings::WriteToConfig() const
     // Audio — reflection-driven
     WriteReflectedConfig(m_audio, m_config, "Audio");
 
-    // Controls
-    m_config.SetFloat("Controls", "MouseSensitivity", m_controls.mouseSensitivity);
-    m_config.SetBool("Controls", "InvertMouse", m_controls.invertMouseY);
-    m_config.SetFloat("Controls", "MouseDeadZone", m_controls.mouseDeadZone);
-    m_config.SetBool("Controls", "RawMouseInput", m_controls.rawMouseInput);
-    m_config.SetBool("Controls", "MouseAcceleration", m_controls.mouseAcceleration);
-    m_config.SetFloat("Controls", "ControllerDeadZoneLeft", m_controls.controllerDeadZoneLeft);
-    m_config.SetFloat("Controls", "ControllerDeadZoneRight", m_controls.controllerDeadZoneRight);
-    m_config.SetFloat("Controls", "ControllerSensitivity", m_controls.controllerSensitivity);
-    m_config.SetBool("Controls", "ControllerVibration", m_controls.controllerVibration);
-    m_config.SetBool("Controls", "InvertControllerY", m_controls.invertControllerY);
+    // Controls — reflection-driven
+    WriteReflectedConfig(m_controls, m_config, "Controls");
 
     // Game — reflection-driven
     WriteReflectedConfig(m_game, m_config, "Game");
 
-    // Rendering
-    m_config.SetInt("Rendering", "RenderPath", m_rendering.renderPath);
-    m_config.SetInt("Rendering", "QualityPreset", m_rendering.qualityPreset);
-    m_config.SetInt("Rendering", "MaxTextureSize", m_rendering.maxTextureSize);
-    m_config.SetBool("Rendering", "AnisotropicFiltering", m_rendering.anisotropicFiltering);
-    m_config.SetInt("Rendering", "AnisotropyLevel", m_rendering.anisotropyLevel);
-    m_config.SetBool("Rendering", "Shadows", m_rendering.shadows);
-    m_config.SetInt("Rendering", "ShadowMapSize", m_rendering.shadowMapSize);
-    m_config.SetInt("Rendering", "CascadeCount", m_rendering.cascadeCount);
-    m_config.SetBool("Rendering", "Bloom", m_rendering.bloom);
-    m_config.SetBool("Rendering", "SSAO", m_rendering.ssao);
-    m_config.SetBool("Rendering", "TAA", m_rendering.taa);
-    m_config.SetBool("Rendering", "MotionBlur", m_rendering.motionBlur);
-    m_config.SetBool("Rendering", "FrustumCulling", m_rendering.frustumCulling);
-    m_config.SetBool("Rendering", "OcclusionCulling", m_rendering.occlusionCulling);
-    m_config.SetBool("Rendering", "PortalCulling", m_rendering.portalCulling);
-    m_config.SetBool("Rendering", "LevelOfDetail", m_rendering.levelOfDetail);
-    m_config.SetInt("Rendering", "MaxDrawCalls", m_rendering.maxDrawCalls);
-    m_config.SetBool("Rendering", "WireframeMode", m_rendering.wireframeMode);
-    m_config.SetBool("Rendering", "DebugMode", m_rendering.debugMode);
-    m_config.SetBool("Rendering", "EnableGPUTiming", m_rendering.enableGPUTiming);
+    // Rendering — reflection-driven
+    WriteReflectedConfig(m_rendering, m_config, "Rendering");
 
-    // PostProcess
-    m_config.SetBool("PostProcess", "BloomEnabled", m_postProcess.bloomEnabled);
-    m_config.SetFloat("PostProcess", "BloomThreshold", m_postProcess.bloomThreshold);
-    m_config.SetFloat("PostProcess", "BloomIntensity", m_postProcess.bloomIntensity);
-    m_config.SetFloat("PostProcess", "BloomRadius", m_postProcess.bloomRadius);
-    m_config.SetFloat("PostProcess", "BloomSoftKnee", m_postProcess.bloomSoftKnee);
-    m_config.SetInt("PostProcess", "BloomIterations", m_postProcess.bloomIterations);
-    m_config.SetInt("PostProcess", "ToneMappingOperator", m_postProcess.toneMappingOperator);
-    m_config.SetFloat("PostProcess", "Exposure", m_postProcess.exposure);
-    m_config.SetFloat("PostProcess", "Gamma", m_postProcess.gamma);
-    m_config.SetFloat("PostProcess", "WhitePoint", m_postProcess.whitePoint);
-    m_config.SetBool("PostProcess", "ColorGradingEnabled", m_postProcess.colorGradingEnabled);
-    m_config.SetFloat("PostProcess", "Temperature", m_postProcess.temperature);
-    m_config.SetFloat("PostProcess", "Tint", m_postProcess.tint);
-    m_config.SetFloat("PostProcess", "Contrast", m_postProcess.contrast);
-    m_config.SetFloat("PostProcess", "Brightness", m_postProcess.brightness);
-    m_config.SetFloat("PostProcess", "Saturation", m_postProcess.saturation);
+    // PostProcess — reflection-driven
+    WriteReflectedConfig(m_postProcess, m_config, "PostProcess");
 
-    // SSAO
-    m_config.SetBool("SSAO", "Enabled", m_ssao.enabled);
-    m_config.SetFloat("SSAO", "Radius", m_ssao.radius);
-    m_config.SetFloat("SSAO", "Intensity", m_ssao.intensity);
+    // SSAO — reflection-driven
+    WriteReflectedConfig(m_ssao, m_config, "SSAO");
     m_config.SetInt("SSAO", "SampleCount", m_ssao.sampleCount);
     m_config.SetFloat("SSAO", "Bias", m_ssao.bias);
     m_config.SetBool("SSAO", "Blur", m_ssao.blur);
@@ -998,34 +998,11 @@ void EngineSettings::WriteToConfig() const
     // Physics — reflection-driven
     WriteReflectedConfig(m_physics, m_config, "Physics");
 
-    // AI
-    m_config.SetFloat("AI", "DetectionRange", m_ai.detectionRange);
-    m_config.SetFloat("AI", "AttackRange", m_ai.attackRange);
-    m_config.SetFloat("AI", "MeleeRange", m_ai.meleeRange);
-    m_config.SetFloat("AI", "MoveSpeed", m_ai.moveSpeed);
-    m_config.SetFloat("AI", "TurnSpeed", m_ai.turnSpeed);
-    m_config.SetFloat("AI", "Accuracy", m_ai.accuracy);
-    m_config.SetFloat("AI", "ReactionTime", m_ai.reactionTime);
-    m_config.SetFloat("AI", "CoverSearchRadius", m_ai.coverSearchRadius);
-    m_config.SetBool("AI", "CanStrafe", m_ai.canStrafe);
-    m_config.SetBool("AI", "CanSprint", m_ai.canSprint);
-    m_config.SetBool("AI", "CanUseCover", m_ai.canUseCover);
+    // AI — reflection-driven
+    WriteReflectedConfig(m_ai, m_config, "AI");
 
-    // Player
-    m_config.SetFloat("Player", "MaxHealth", m_player.maxHealth);
-    m_config.SetFloat("Player", "MaxArmor", m_player.maxArmor);
-    m_config.SetFloat("Player", "MoveSpeed", m_player.moveSpeed);
-    m_config.SetFloat("Player", "JumpHeight", m_player.jumpHeight);
-    m_config.SetFloat("Player", "GravityForce", m_player.gravityForce);
-    m_config.SetFloat("Player", "Friction", m_player.friction);
-    m_config.SetFloat("Player", "SprintMultiplier", m_player.sprintMultiplier);
-    m_config.SetFloat("Player", "CrouchMultiplier", m_player.crouchMultiplier);
-    m_config.SetFloat("Player", "ADSSpeedMultiplier", m_player.adsSpeedMultiplier);
-    m_config.SetFloat("Player", "MaxShield", m_player.maxShield);
-    m_config.SetFloat("Player", "ShieldRechargeRate", m_player.shieldRechargeRate);
-    m_config.SetFloat("Player", "ShieldRechargeDelay", m_player.shieldRechargeDelay);
-    m_config.SetFloat("Player", "MaxEnergy", m_player.maxEnergy);
-    m_config.SetFloat("Player", "EnergyRegenRate", m_player.energyRegenRate);
+    // Player — reflection-driven
+    WriteReflectedConfig(m_player, m_config, "Player");
 
     // GameMode
     m_config.SetInt("GameMode", "ScoreLimit", m_gameMode.scoreLimit);
@@ -1053,41 +1030,11 @@ void EngineSettings::WriteToConfig() const
     // Camera — reflection-driven
     WriteReflectedConfig(m_camera, m_config, "Camera");
 
-    // Editor
-    m_config.SetFloat("Editor", "GridSize", m_editor.gridSize);
-    m_config.SetBool("Editor", "SnapToGrid", m_editor.snapToGrid);
-    m_config.SetBool("Editor", "ShowGrid", m_editor.showGrid);
-    m_config.SetFloat("Editor", "GizmoScale", m_editor.gizmoScale);
-    m_config.SetBool("Editor", "AutosaveEnabled", m_editor.autosaveEnabled);
-    m_config.SetFloat("Editor", "AutosaveIntervalSeconds", m_editor.autosaveIntervalSeconds);
-    m_config.SetInt("Editor", "UndoHistorySize", m_editor.undoHistorySize);
-    m_config.SetFloat("Editor", "RotationSnap", m_editor.rotationSnap);
-    m_config.SetFloat("Editor", "ScaleSnap", m_editor.scaleSnap);
-    m_config.SetBool("Editor", "ShowGizmoLabels", m_editor.showGizmoLabels);
-    m_config.SetBool("Editor", "ShowWireframeOverlay", m_editor.showWireframeOverlay);
-    m_config.SetBool("Editor", "ShowBounds", m_editor.showBounds);
-    m_config.SetBool("Editor", "ShowColliders", m_editor.showColliders);
-    m_config.SetBool("Editor", "ShowNavMesh", m_editor.showNavMesh);
-    m_config.SetBool("Editor", "ShowLightRadius", m_editor.showLightRadius);
-    m_config.SetFloat("Editor", "CameraSpeedMultiplier", m_editor.cameraSpeedMultiplier);
-    m_config.SetInt("Editor", "RecentFilesMax", m_editor.recentFilesMax);
-    m_config.SetBool("Editor", "EnableCollaboration", m_editor.enableCollaboration);
+    // Editor — reflection-driven
+    WriteReflectedConfig(m_editor, m_config, "Editor");
 
-    // Network
-    m_config.SetInt("Network", "ServerPort", m_network.serverPort);
-    m_config.SetInt("Network", "MaxClients", m_network.maxClients);
-    m_config.SetFloat("Network", "ConnectionTimeout", m_network.connectionTimeout);
-    m_config.SetFloat("Network", "HeartbeatInterval", m_network.heartbeatInterval);
-    m_config.SetFloat("Network", "ReplicationRate", m_network.replicationRate);
-    m_config.SetFloat("Network", "ReliableRetransmitBase", m_network.reliableRetransmitBase);
-    m_config.SetInt("Network", "MaxReliableRetries", m_network.maxReliableRetries);
-    m_config.SetInt("Network", "SendBufferSize", m_network.sendBufferSize);
-    m_config.SetInt("Network", "ReceiveBufferSize", m_network.receiveBufferSize);
-    m_config.SetBool("Network", "EnableCompression", m_network.enableCompression);
-    m_config.SetBool("Network", "EnableEncryption", m_network.enableEncryption);
-    m_config.SetFloat("Network", "SimulatedLatencyMs", m_network.simulatedLatencyMs);
-    m_config.SetFloat("Network", "SimulatedPacketLoss", m_network.simulatedPacketLoss);
-    m_config.SetFloat("Network", "SimulatedJitterMs", m_network.simulatedJitterMs);
+    // Network — reflection-driven
+    WriteReflectedConfig(m_network, m_config, "Network");
 
     // Scripting
     m_config.SetBool("Scripting", "HotReloadEnabled", m_scripting.hotReloadEnabled);
@@ -1130,9 +1077,8 @@ void EngineSettings::WriteToConfig() const
     m_config.SetString("CrashReporting", "EmailTo", m_crashReporting.emailTo);
     m_config.SetString("CrashReporting", "EmailFrom", m_crashReporting.emailFrom);
 
-    // Debug
-    m_config.SetBool("Debug", "SuppressFatalAsserts", m_debug.suppressFatalAsserts);
-    m_config.SetBool("Debug", "BreakOnSuppressedAsserts", m_debug.breakOnSuppressedAsserts);
+    // Debug — reflection-driven
+    WriteReflectedConfig(m_debug, m_config, "Debug");
 
     // Weather
     m_config.SetInt("Weather", "WeatherType", m_weather.weatherType);
