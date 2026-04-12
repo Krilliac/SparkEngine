@@ -109,6 +109,31 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_renderPipeline->SetGraphicsEngine(this);
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
+    // Initialize the subsystems whose Linux implementations accept a null
+    // D3D11 device (TextureSystem and MaterialSystem assert non-null on
+    // Linux, so they remain uninitialized in headless mode — SetDevice
+    // paths will wire them up later when a real device is available).
+    if (m_lightingSystem)
+    {
+        HRESULT hr = m_lightingSystem->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): LightingSystem::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
+    if (m_assetPipeline)
+    {
+        HRESULT hr = m_assetPipeline->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): AssetPipeline::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
+
     // Phase Q: mirror the Windows denoiser activation so Linux /
     // headless builds have the same live IDenoiser instance and
     // tests exercising GraphicsEngine directly see consistent state.
