@@ -3,7 +3,7 @@
  * @brief CPU-portable impostor atlas layout and UV math
  *
  * GPU-side atlas baking (FoliageImpostorAtlas) lives in
- * FoliageImpostorBakerGPU.cpp. This file contains only the portable
+ * FoliageImpostorBakerWindows.cpp. This file contains only the portable
  * static helpers: atlas layout, angle slot selection, UV computation.
  *
  * Packing strategy: a simple row-major placement. Every species slot has
@@ -16,7 +16,7 @@
 
 #include "FoliageImpostorBaker.h"
 
-// GPU-only includes live in FoliageImpostorBakerGPU.cpp
+// GPU-only includes live in FoliageImpostorBakerWindows.cpp
 
 #include <algorithm>
 #include <cmath>
@@ -171,6 +171,6 @@ namespace Spark::Graphics
     }
 
 
-    // FoliageImpostorAtlas GPU implementation lives in FoliageImpostorBakerGPU.cpp.
+    // FoliageImpostorAtlas GPU implementation lives in FoliageImpostorBakerWindows.cpp.
 
 } // namespace Spark::Graphics

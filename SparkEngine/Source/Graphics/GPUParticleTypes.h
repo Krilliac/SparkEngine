@@ -11,10 +11,7 @@
 #pragma once
 #include "../Core/Platform.h"
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <d3d11.h>
-#include <DirectXMath.h>
-#endif // SPARK_PLATFORM_WINDOWS
+// DirectXMath and d3d11.h types provided by Platform.h (stubs on Linux).
 #include <string>
 #include <vector>
 #include <utility>

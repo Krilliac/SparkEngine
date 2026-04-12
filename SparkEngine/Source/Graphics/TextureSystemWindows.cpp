@@ -1,5 +1,5 @@
 /**
- * @file TextureSystemGPU.cpp
+ * @file TextureSystemWindows.cpp
  * @brief D3D11 GPU texture loading, creation, and binding
  */
 

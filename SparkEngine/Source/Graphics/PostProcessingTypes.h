@@ -16,9 +16,7 @@
 #include "GTAOEffect.h"   // Provides GTAOSettings for the GTAO post-process pass
 #include "SSAOTemporal.h" // Provides SSAOTemporalSettings for the SSAOTemporal post-process pass
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
-#endif
+// DirectXMath types provided by Platform.h (stubs on Linux).
 
 #include <string>
 #include <cstdint>

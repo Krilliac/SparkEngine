@@ -1,5 +1,5 @@
 /**
- * @file FoliageImpostorBakerGPU.cpp
+ * @file FoliageImpostorBakerWindows.cpp
  * @brief D3D11 GPU implementation of FoliageImpostorAtlas
  *
  * Split from FoliageImpostorBaker.cpp. Contains all Windows-only GPU

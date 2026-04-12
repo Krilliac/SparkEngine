@@ -1,5 +1,5 @@
 /**
- * @file PostProcessingPipelineGPU.cpp
+ * @file PostProcessingPipelineWindows.cpp
  * @brief D3D11 GPU implementation of post-processing passes
  *
  * Split from PostProcessingPipeline.cpp. Contains render target creation,

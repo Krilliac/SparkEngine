@@ -13,9 +13,7 @@
 #include "../../Core/Platform.h"
 #include "../RHI/RHITypes.h"
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
-#endif
+// DirectXMath types provided by Platform.h (stubs on Linux).
 
 #include <cstdint>
 #include <string>

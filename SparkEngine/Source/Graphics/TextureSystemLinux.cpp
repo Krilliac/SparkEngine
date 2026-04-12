@@ -1,5 +1,5 @@
 /**
- * @file TextureSystem.cpp
+ * @file TextureSystemLinux.cpp
  * @brief CPU-portable texture system logic (metadata, caching, format detection)
  */
 

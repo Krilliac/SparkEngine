@@ -1,5 +1,5 @@
 /**
- * @file FoliageRendererGPU.cpp
+ * @file FoliageRendererWindows.cpp
  * @brief GPU-side foliage rendering — D3D11 upload, shader compilation, draw calls
  *
  * Split from FoliageRenderer.cpp (Phase Theme 3 refactor). Contains all

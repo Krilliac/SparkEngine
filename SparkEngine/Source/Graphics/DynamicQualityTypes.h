@@ -13,10 +13,8 @@
 
 #include "../Core/Platform.h"
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
-#include <d3d11.h>
-#endif
+// DirectXMath types provided by Platform.h (stubs on Linux).
+// d3d11.h types provided by Platform.h (stubs on Linux).
 
 #include <algorithm>
 #include <cmath>

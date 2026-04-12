@@ -15,7 +15,7 @@
  *   - UpscalingSystem::DetectFeatures (feature availability probing)
  *
  * GPU-side methods (resource creation, shader compilation, Execute dispatches)
- * live in UpscalingSystemGPU.cpp.
+ * live in UpscalingSystemWindows.cpp.
  */
 
 #include "UpscalingSystem.h"

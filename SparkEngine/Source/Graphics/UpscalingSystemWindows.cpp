@@ -1,5 +1,5 @@
 /**
- * @file UpscalingSystemGPU.cpp
+ * @file UpscalingSystemWindows.cpp
  * @brief GPU-side upscaling implementation: D3D11 resource creation, shader compilation, execute dispatches
  * @author Spark Engine Team
  * @date 2026

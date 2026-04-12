@@ -12,7 +12,7 @@
  * The CPU path is entirely platform-agnostic so that
  * `Tests/TestFoliageRenderer.cpp` can run under GCC/Clang on Linux CI
  * without any D3D11 device. GPU-side upload, shader compilation, and
- * draw calls live in FoliageRendererGPU.cpp (Windows only).
+ * draw calls live in FoliageRendererWindows.cpp (Windows only).
  */
 
 #include "FoliageRenderer.h"
@@ -28,7 +28,7 @@
 #include <unordered_set>
 #include <utility>
 
-// GPU-only includes live in FoliageRendererGPU.cpp
+// GPU-only includes live in FoliageRendererWindows.cpp
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "GraphicsEngine.h"
 #endif
@@ -442,9 +442,9 @@ namespace Spark::Graphics
 
     // GPU methods (BakeImpostorAtlasIfNeeded, UploadToSceneBuffer,
     // GetOrLoadAlbedoSRV, CreatePassResources, RenderFoliagePass)
-    // live in FoliageRendererGPU.cpp — Windows only.
+    // live in FoliageRendererWindows.cpp — Windows only.
 
-    // (GPU code removed — see FoliageRendererGPU.cpp)
+    // (GPU code removed — see FoliageRendererWindows.cpp)
 
     // ========================================================================
     // Diagnostics
