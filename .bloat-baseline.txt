@@ -50,7 +50,6 @@ SparkEditor/Source/Core/EditorTheme.cpp
 SparkEditor/Source/Core/EditorTheme.h
 SparkEditor/Source/Core/EditorUI.cpp
 SparkEditor/Source/Core/EditorUI.h
-SparkEditor/Source/Core/EditorWindowManager.h
 SparkEditor/Source/Core/ProjectManager.cpp
 SparkEditor/Source/Core/TutorialSystem.h
 SparkEditor/Source/Gizmos/GizmoSystem.cpp
@@ -227,9 +226,7 @@ SparkEngine/Source/Graphics/FBXImporter.cpp
 SparkEngine/Source/Graphics/FBXImporter.h
 SparkEngine/Source/Graphics/FastNoise2SIMD.h
 SparkEngine/Source/Graphics/FastNoiseLite.h
-SparkEngine/Source/Graphics/FoliageImpostorBaker.cpp
 SparkEngine/Source/Graphics/FoliageImpostorBaker.h
-SparkEngine/Source/Graphics/FoliageRenderer.cpp
 SparkEngine/Source/Graphics/FoliageRenderer.h
 SparkEngine/Source/Graphics/FrustumCulling.h
 SparkEngine/Source/Graphics/GPUDebugMarkers.h

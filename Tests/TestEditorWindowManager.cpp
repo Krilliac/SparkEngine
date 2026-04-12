@@ -3,6 +3,7 @@
 
 #include "TestFramework.h"
 #include <cstdint>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -224,6 +225,7 @@ TEST(EditorWinMgr_ConsoleStatus)
 #include "Core/EditorWindowManager.h"
 
 #include <filesystem>
+#include <fstream>
 
 namespace
 {

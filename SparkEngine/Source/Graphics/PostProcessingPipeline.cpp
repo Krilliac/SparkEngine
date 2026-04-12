@@ -75,6 +75,32 @@ namespace Spark::Graphics
         return true;
     }
 
+    void PostProcessingPipeline::Resize(uint32_t width, uint32_t height)
+    {
+        if (width == 0 || height == 0)
+            return;
+        if (m_width == width && m_height == height)
+            return;
+
+        m_width = width;
+        m_height = height;
+
+        if (m_initialized && m_device)
+            CreatePingPongTargets();
+
+        if (m_ssaoTemporalFilter.IsInitialized())
+            m_ssaoTemporalFilter.Resize(width, height);
+
+        if (m_rtHandleSystem.IsInitialized())
+            m_rtHandleSystem.SetReferenceSize(width, height);
+    }
+
+    void PostProcessingPipeline::SetDevice(ID3D11Device* device, ID3D11DeviceContext* context)
+    {
+        m_device = device;
+        m_context = context;
+    }
+
     void PostProcessingPipeline::Shutdown()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "PostProcessingPipeline shutting down");
