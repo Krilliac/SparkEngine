@@ -5,13 +5,15 @@
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 1 (Inspector) | **Done** | FieldInfo extended (tooltip/category/isAssetPath/replicated/serialized/enumNames/Vector2), SPARK_REFLECT_FIELD_ATTR macros, RenderReflectedFields with category/tooltip/enum/vec2, 17 of 35 renderers migrated |
-| 2 (Serialization) | **Foundation done** | ReflectionSerializer.h created (SerializeToProperties/DeserializeFromProperties/binary), not yet wired into JSONSceneSerializer |
-| 3 (Save/Load) | **Partial** | 3 hand-written serializers removed (MeshRenderer, Camera, ActiveComponent) — reflection fallback handles them. 10 remain (custom format) |
-| 4 (Network) | **Prep done** | Transform/Health/NetworkIdentity fields marked `replicated=true`. EntityReplicator not yet modified |
+| 2 (Serialization) | **Done** | ReflectionSerializer.h created. JSONSceneSerializer ComponentType switch replaced with data-driven map |
+| 3 (Save/Load) | **Done (practical)** | 4 hand-written serializers removed (MeshRenderer, Camera, ActiveComponent, AudioSourceComponent). Remaining 9 have custom key formats (short keys, comma-separated vectors) that differ from reflection field names — intentionally kept |
+| 4 (Network) | **Prep done** | Transform/Health/NetworkIdentity fields marked `replicated=true`. EntityReplicator not yet modified (existing ReplicatedField\<T\> system is already well-designed) |
 | 5 (Materials) | **Partial** | PBRProperties + MaterialRenderState registered, [PBR] and [RenderState] sections reflection-driven. [Advanced]/[Textures]/[Variants] stay manual |
 | 6 (AngelScript) | **Done** | Generic getComponentField/setComponentField/hasComponent registered via AutoRegisterReflectedTypes(). Scripts access any of 37+ reflected components by name. Manual bindings kept for complex APIs |
 | 7 (Settings) | **Done** | 43 of 44 groups migrated (all except Logging with hex categoryMask). 441 manual Read + 442 manual Write lines → 88 one-liners + registrations |
 | 8B (UI Bindings) | **Done** | UITypedBinding\<T\> replaces 4 concrete classes, backward-compatible aliases |
+| 8C (Physics) | **Deferred** | IPhysicsBackend API (raw uint32_t IDs) mismatches PhysicsSystem's higher-level API (named bodies, PhysicsBody*). Would require adapter layer — not a simple inheritance |
+| 8D (Editor Panels) | **Deferred** | Optional categorization; adds code without removing any |
 
 ## Context
 

@@ -56,61 +56,39 @@ namespace SparkEditor
         return out;
     }
 
+    // Data-driven component type ↔ string mapping.
+    // Adding a new component type requires only adding one entry here.
+    static const std::pair<ComponentType, const char*> s_componentTypeMap[] = {
+        {ComponentType::TRANSFORM, "Transform"},
+        {ComponentType::MESH_RENDERER, "MeshRenderer"},
+        {ComponentType::LIGHT, "Light"},
+        {ComponentType::CAMERA, "Camera"},
+        {ComponentType::RIGID_BODY, "RigidBody"},
+        {ComponentType::COLLIDER, "Collider"},
+        {ComponentType::AUDIO_SOURCE, "AudioSource"},
+        {ComponentType::SCRIPT, "Script"},
+        {ComponentType::PARTICLE_SYSTEM, "ParticleSystem"},
+        {ComponentType::ANIMATION, "Animation"},
+        {ComponentType::TERRAIN, "Terrain"},
+    };
+
     static std::string ComponentTypeToString(ComponentType type)
     {
-        switch (type)
+        for (const auto& [ct, name] : s_componentTypeMap)
         {
-        case ComponentType::TRANSFORM:
-            return "Transform";
-        case ComponentType::MESH_RENDERER:
-            return "MeshRenderer";
-        case ComponentType::LIGHT:
-            return "Light";
-        case ComponentType::CAMERA:
-            return "Camera";
-        case ComponentType::RIGID_BODY:
-            return "RigidBody";
-        case ComponentType::COLLIDER:
-            return "Collider";
-        case ComponentType::AUDIO_SOURCE:
-            return "AudioSource";
-        case ComponentType::SCRIPT:
-            return "Script";
-        case ComponentType::PARTICLE_SYSTEM:
-            return "ParticleSystem";
-        case ComponentType::ANIMATION:
-            return "Animation";
-        case ComponentType::TERRAIN:
-            return "Terrain";
-        default:
-            return "Custom_" + std::to_string(static_cast<uint32_t>(type));
+            if (ct == type)
+                return name;
         }
+        return "Custom_" + std::to_string(static_cast<uint32_t>(type));
     }
 
     static ComponentType StringToComponentType(const std::string& s)
     {
-        if (s == "Transform")
-            return ComponentType::TRANSFORM;
-        if (s == "MeshRenderer")
-            return ComponentType::MESH_RENDERER;
-        if (s == "Light")
-            return ComponentType::LIGHT;
-        if (s == "Camera")
-            return ComponentType::CAMERA;
-        if (s == "RigidBody")
-            return ComponentType::RIGID_BODY;
-        if (s == "Collider")
-            return ComponentType::COLLIDER;
-        if (s == "AudioSource")
-            return ComponentType::AUDIO_SOURCE;
-        if (s == "Script")
-            return ComponentType::SCRIPT;
-        if (s == "ParticleSystem")
-            return ComponentType::PARTICLE_SYSTEM;
-        if (s == "Animation")
-            return ComponentType::ANIMATION;
-        if (s == "Terrain")
-            return ComponentType::TERRAIN;
+        for (const auto& [ct, name] : s_componentTypeMap)
+        {
+            if (s == name)
+                return ct;
+        }
         return ComponentType::CUSTOM;
     }
 
