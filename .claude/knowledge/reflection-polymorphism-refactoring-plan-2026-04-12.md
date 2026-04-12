@@ -8,7 +8,7 @@
 | 2 (Serialization) | **Foundation done** | ReflectionSerializer.h created (SerializeToProperties/DeserializeFromProperties/binary), not yet wired into JSONSceneSerializer |
 | 3 (Save/Load) | **Partial** | 3 hand-written serializers removed (MeshRenderer, Camera, ActiveComponent) — reflection fallback handles them. 10 remain (custom format) |
 | 4 (Network) | **Prep done** | Transform/Health/NetworkIdentity fields marked `replicated=true`. EntityReplicator not yet modified |
-| 5 (Materials) | Planned | |
+| 5 (Materials) | **Partial** | PBRProperties + MaterialRenderState registered, [PBR] and [RenderState] sections in SaveToFile/LoadFromFile reflection-driven. [Advanced]/[Textures]/[Variants] stay manual (conditional/map logic) |
 | 6 (AngelScript) | Planned | |
 | 7 (Settings) | **Done** | 43 of 44 groups migrated (all except Logging with hex categoryMask). 441 manual Read + 442 manual Write lines → 88 one-liners + registrations |
 | 8B (UI Bindings) | **Done** | UITypedBinding\<T\> replaces 4 concrete classes, backward-compatible aliases |
