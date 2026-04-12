@@ -217,6 +217,10 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
     m_type = ShaderType::VERTEX_SHADER;
     m_filePath = narrowPath;
 
+    // Store the compiled source so callers can create RHI pipeline states.
+    // For GLSL→GLSL passthrough, the bytecode IS the GLSL source text.
+    m_compiledVertexSource.assign(reinterpret_cast<const char*>(result.bytecode.data()), result.bytecode.size());
+
     // Phase U: register the parent directory with the ShaderHotReload
     // singleton so runtime file-watching picks up this file.
     {
@@ -305,6 +309,9 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
 
     m_isCompiled = true;
     m_filePath = narrowPath;
+
+    // Store the compiled source so callers can create RHI pipeline states.
+    m_compiledPixelSource.assign(reinterpret_cast<const char*>(result.bytecode.data()), result.bytecode.size());
 
     // Phase U: register the parent directory with the ShaderHotReload
     // singleton so runtime file-watching picks up this file.

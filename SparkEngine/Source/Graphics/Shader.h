@@ -624,4 +624,18 @@ class Shader
     bool m_isCompiled = false;                     ///< Compilation status
     ID3D11DeviceChild* m_shader = nullptr;         ///< Generic shader interface
     Spark::LocalFileCache* m_fileCache = nullptr;  ///< Optional file cache for shader source reads
+
+    /// Compiled shader source stored after RHI compilation. On OpenGL this is
+    /// the GLSL text; on D3D11 the bytecodes live in the VertexShaderResource /
+    /// PixelShaderResource ComPtrs above. Callers that build RHI pipeline states
+    /// can retrieve these via GetCompiledVertexSource() / GetCompiledPixelSource().
+    std::string m_compiledVertexSource;
+    std::string m_compiledPixelSource;
+
+  public:
+    /// @brief Get the compiled vertex shader source (GLSL on OpenGL, empty on D3D11).
+    const std::string& GetCompiledVertexSource() const { return m_compiledVertexSource; }
+
+    /// @brief Get the compiled pixel shader source (GLSL on OpenGL, empty on D3D11).
+    const std::string& GetCompiledPixelSource() const { return m_compiledPixelSource; }
 };
