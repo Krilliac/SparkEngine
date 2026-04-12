@@ -8,24 +8,24 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 273153 |
+| **SparkEngine/Source** | 273282 |
 | **SparkEditor/Source** | 88721 |
 | **GameModules** | 58460 |
-| **Tests** | 127940 |
+| **Tests** | 128602 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~550675** |
+| **Total C++ (excl. ThirdParty)** | **~551466** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hpp) | 752 |
-| Implementation files (.cpp) | 1032 |
+| Implementation files (.cpp) | 1035 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 453 |
+| Test files (.cpp) | 456 |
 | Wiki pages (.md) | 125 |
 
 ### Code Density
@@ -34,7 +34,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 |--------|-------|
 | Average lines per .cpp file | ~778 |
 | Average lines per .h file | ~583 |
-| Largest codebase section | Graphics (108948 lines — 39% of SparkEngine/Source) |
+| Largest codebase section | Graphics (109077 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 108948 | 39.8% |
+| Graphics | 109077 | 39.9% |
 | Engine (all subsystems) | 80368 | 29.4% |
 | Utils | 36987 | 13.5% |
 | Core | 21789 | 7.9% |
@@ -105,8 +105,8 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Metric | Count |
 |--------|------:|
-| Test files | 453 |
-| TEST() definitions | 5581 |
+| Test files | 456 |
+| TEST() definitions | 5624 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -154,7 +154,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | File | Lines |
 |------|------:|
-| `OpenGLDevice.cpp` | 1978 |
+| `OpenGLDevice.cpp` | 2067 |
 | `VulkanDevice.cpp` | 1858 |
 | `D3D12Device.cpp` | 1577 |
 | `PostProcessingPipeline.cpp` | 1530 |

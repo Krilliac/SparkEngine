@@ -442,6 +442,10 @@ add_executable(SparkTests
     TestNetworkDebugPanel.cpp
     TestContracts.cpp
     TestSafetyCoreUtils.cpp
+    # Critical-path integration tests
+    TestRHIBridgeIntegration.cpp
+    TestNetworkManagerIntegration.cpp
+    TestSystemManagerIntegration.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
     # Comprehensive subsystem coverage

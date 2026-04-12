@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*452 test files, 5585+ test cases*
+*455 test files, 5628+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -800,6 +800,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
 | `TestNetworkManagerEdgeCases` | 23 |
+| `TestNetworkManagerIntegration` | 14 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
 | `TestNetworkReplicationIntegration` | 11 |
@@ -845,6 +846,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
+| `TestRHIBridgeIntegration` | 18 |
 | `TestRHICapabilityParity` | 4 |
 | `TestRHIHandlePool` | 10 |
 | `TestRHIHandlePoolPhaseX` | 15 |
@@ -928,6 +930,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestStringUtilsReal` | 9 |
 | `TestSubTickInput` | 5 |
 | `TestSubsystemConsoleCommands` | 14 |
+| `TestSystemManagerIntegration` | 11 |
 | `TestTacticalPointSystem` | 4 |
 | `TestTelemetry` | 15 |
 | `TestTelemetryPhaseFF` | 7 |
