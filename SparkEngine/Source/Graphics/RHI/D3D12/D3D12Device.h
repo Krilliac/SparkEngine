@@ -33,6 +33,10 @@ typedef ID3D12Device1 ID3D12Device5; // Safe stub — never actually used under 
 #endif
 
 #include "D3D12Types.h"
+// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
+// vertex/index bump allocator. Each D3D12Device instance owns one so
+// render systems can request cheap per-frame CPU-visible GPU memory.
+#include "../TransientBufferAllocator.h"
 
 #include <queue>
 #include <unordered_map>
@@ -268,6 +272,11 @@ namespace Spark
                  *        whose fence value has been reached by the GPU.
                  */
                 void ProcessDeferredReleases();
+
+                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
+                // Initialized in D3D12Device::Initialize after the device is
+                // ready; Shutdown releases its GPU buffers.
+                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace D3D12

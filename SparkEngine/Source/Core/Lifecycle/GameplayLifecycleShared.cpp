@@ -86,6 +86,45 @@
 #include "Engine/Animation/AnimNotify.h"
 #include "Engine/ECS/RuntimePrefab.h"
 #include "Engine/Gameplay/GameplaySystemExtension.h"
+// Phase BB Theme 3D: activated two SparkEngine singleton orphans that
+// had existing implementations but zero external call sites. See the
+// lifecycle Initialize / Shutdown blocks below for the touch-based
+// wire-up that keeps them reachable from any code path.
+#include "Engine/Scripting/ScriptHookManager.h"
+#include "Graphics/DynamicQualityScaler.h"
+// Phase CC Theme 3D: two more singleton orphans surfaced by a broader
+// sweep. `GPUStallProfiler` lives in Utils and tracks CPU-GPU frame
+// overlap; `AsyncComputeScheduler` manages compute workloads with a
+// D3D11 synchronous fallback.
+#include "Utils/GPUStallProfiler.h"
+#include "Graphics/AsyncComputeScheduler.h"
+// Phase DD Theme 3D: AIDebugRenderer singleton — renders NavMesh,
+// paths, perception cones, behavior-tree state, and cover points via
+// the engine DebugDraw system. Was previously unreferenced by any
+// production code; Phase DD lands the lifecycle seam.
+#include "Engine/AI/AIDebugRenderer.h"
+// Phase EE Theme 3D: three more SparkEngine singleton orphans
+// surfaced by a deep parallel sweep. All three are low-risk pure-CPU
+// utilities with default constructors and no platform guards.
+#include "Engine/Gameplay/EventResponseSystem.h"
+#include "Engine/ECS/EntityPresetManager.h"
+#include "Core/AssetMigration.h"
+// Phase FF Theme 3D: two diagnostics/analytics singletons. Both are
+// Utils-folder pure-CPU classes with zero external wire-up.
+#include "Utils/Telemetry.h"
+#include "Utils/CacheDebugger.h"
+// Phase GG Theme 3D: four more orphans — static random-number init,
+// CPU section profiler, mesh LOD generator, and GPU texture
+// compressor. All pure-CPU utilities with clean public APIs.
+#include "Utils/MathUtilsExtended.h"
+#include "Utils/CpuDebugger.h"
+#include "Graphics/LODGenerator.h"
+#include "Graphics/TextureCompressor.h"
+// Phase HH Theme 3D: Networking data registry singleton. Servers
+// register immutable datablocks at startup (weapon stats, vehicle
+// configs, item templates) which clients then reference by ID,
+// eliminating per-tick replication for shared configuration data.
+#include "Engine/Networking/DatablockRegistry.h"
 #include "Engine/Gameplay/GameplayTags.h"
 #include "Utils/GameplayDebugger.h"
 #include "Graphics/ScreenCapture.h"
@@ -486,6 +525,124 @@ namespace Spark::Core::Lifecycle
         // implementations here; the engine QuestSystem / DialogueSystem
         // delegates to matching extensions at runtime.
         (void)Spark::Gameplay::GameplayExtensionRegistry::GetInstance();
+
+        // Phase BB Theme 3D: Script hook dispatcher for gameplay events.
+        // Touch the singleton so scripts that call RegisterHook during
+        // module load find it in a constructed state. Hot-reloading a
+        // script calls UnregisterAllForScript on the same singleton, so
+        // having it alive from engine startup is the correct lifetime.
+        (void)Spark::Scripting::ScriptHookManager::GetInstance();
+
+        // Phase BB Theme 3D: Dynamic resolution scaler — tracks FPS over
+        // a sliding window and adjusts render scale toward a target
+        // frame rate. Initialised here with sensible defaults; the
+        // upscaling pipeline can re-initialise with game-specific
+        // thresholds later. RecordFrameTime is pumped from the main
+        // render loop wherever the caller has access to delta-time.
+        {
+            Spark::Graphics::DynamicQualityThresholds dqsDefaults;
+            dqsDefaults.targetFPS = 60.0f;
+            dqsDefaults.headroomPercent = 10.0f;
+            dqsDefaults.dropThresholdPercent = 5.0f;
+            dqsDefaults.minScale = 0.5f;
+            dqsDefaults.maxScale = 1.0f;
+            Spark::Graphics::DynamicQualityScaler::GetInstance().Initialize(dqsDefaults);
+        }
+
+        // Phase CC Theme 3D: GPU stall profiler — tracks CPU/GPU frame
+        // overlap and classifies each frame as CPU-bound, GPU-bound,
+        // balanced, or a pipeline bubble. Initialize clears the
+        // history ring; actual BeginCPUWork / EndCPUWork / EndFrame
+        // calls are made from the render loop when a real profiler
+        // feed is wired (Phase CC only lands the lifecycle seam).
+        Spark::GPUStallProfiler::GetInstance().Initialize();
+
+        // Phase CC Theme 3D: Async compute scheduler — submits compute
+        // workloads with a D3D11 synchronous-immediate fallback.
+        // Initialize sets up the pending queue; SetDeviceContext is
+        // called from the D3D11 render path on Windows when the device
+        // is ready, and Flush/BeginFrame are pumped from the render
+        // loop once a consumer exists.
+        Spark::Graphics::AsyncComputeScheduler::GetInstance().Initialize();
+
+        // Phase DD Theme 3D: AI debug renderer — initializes as
+        // disabled (IsEnabled() returns false until SetEnabled(true)).
+        // Update(dt) is pumped by the AI system when debug mode is
+        // toggled on; the singleton just needs to be alive so
+        // ImGui menu toggles can reach it.
+        Spark::AI::AIDebugRenderer::GetInstance().Initialize();
+
+        // Phase EE Theme 3D: Event response rule engine — data-driven
+        // "When/If/Then" gameplay logic for no-code designers. Rules
+        // are attached via AddRule / LoadFromJson; Initialize
+        // subscribes to the event bus. Update(dt) is pumped from the
+        // gameplay update phase when rules need per-frame timing
+        // (OnTimer triggers).
+        Spark::Gameplay::EventResponseSystem::GetInstance().Initialize();
+
+        // Phase EE Theme 3D: Entity preset registry — pre-configured
+        // entity templates for no-code entity spawning. Initialize
+        // registers built-in presets; editor panels query it for the
+        // spawn menu.
+        Spark::ECS::EntityPresetManager::GetInstance().Initialize();
+
+        // Phase EE Theme 3D: Asset migration registry — manages
+        // versioned migration steps for asset schema upgrades. Real
+        // migration steps are registered by asset loaders before
+        // Execute(asset, version) is called. Initialize clears the
+        // previous state so the registry can be re-populated.
+        Spark::AssetMigrationRegistry::GetInstance().Initialize();
+
+        // Phase FF Theme 3D: Telemetry system — event recording,
+        // batching, and backend dispatch. Initialized with
+        // consent=false + enabled=false by default so nothing is
+        // sent unless a game opts in (privacy-first). Games can
+        // re-initialize with a concrete TelemetryConfig when the
+        // user accepts data collection.
+        {
+            Spark::TelemetryConfig telemetryCfg;
+            telemetryCfg.enabled = false;
+            telemetryCfg.consentGiven = false;
+            Spark::TelemetrySystem::GetInstance().Initialize(telemetryCfg);
+        }
+
+        // Phase FF Theme 3D: Cache performance debugger — tracks
+        // hit/miss rates for engine caches. Lazy-initialised on
+        // first GetInstance() access; enabled by default. The touch
+        // here guarantees it exists for any cache that registers
+        // during engine startup.
+        (void)Spark::CacheDebugger::GetInstance();
+
+        // Phase GG Theme 3D: Seed the random number generator for
+        // all MathUtilsExtended::Random* functions. This is the
+        // once-per-process initialization the class docs recommend.
+        MathUtilsExtended::InitializeRandom();
+
+        // Phase GG Theme 3D: CPU section profiler (begin/end
+        // timed sections, aggregates statistics). Lazy singleton
+        // enabled by default — the touch makes it reachable from
+        // any profiling code before the first section timer fires.
+        (void)Spark::CpuDebugger::GetInstance();
+
+        // Phase GG Theme 3D: Mesh LOD generator (Quadric Error
+        // Metric simplification). Lazy utility singleton — asset
+        // cookers and runtime mesh optimizers call Generate() /
+        // Simplify() on demand. Touch so it's reachable from any
+        // mesh-loading code path.
+        (void)Spark::Graphics::LODGenerator::GetInstance();
+
+        // Phase GG Theme 3D: GPU texture compressor (BC1/BC7/ASTC).
+        // Lazy utility singleton — texture loaders call
+        // Compress() / SaveCompressed() on demand. Touch so the
+        // instance is constructed before any asset cooker needs it.
+        (void)Spark::Graphics::TextureCompressor::GetInstance();
+
+        // Phase HH Theme 3D: Datablock registry — Torque3D-inspired
+        // immutable shared-data table (sent once at connect time).
+        // Servers register datablocks during startup; clients
+        // deserialize on connect. Touch so the singleton exists
+        // before any network handshake fires.
+        (void)Spark::Net::DatablockRegistry::Get();
 
         Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
@@ -1061,6 +1218,28 @@ namespace Spark::Core::Lifecycle
 
         // Engine-orphan singletons wired in this branch — teardown
         // mirrors the startup order so dependents are released first.
+        // Phase HH Theme 3D additions:
+        Spark::Net::DatablockRegistry::Get().Clear();
+        // Phase FF Theme 3D additions:
+        Spark::CacheDebugger::GetInstance().Reset();
+        Spark::TelemetrySystem::GetInstance().Shutdown();
+        // Phase EE Theme 3D additions (released first — they hold no
+        // GPU handles so the order relative to render-loop teardown
+        // does not matter). EntityPresetManager has no explicit
+        // Shutdown API because it owns only pure in-memory data;
+        // the process-exit destructor handles cleanup.
+        Spark::AssetMigrationRegistry::GetInstance().Shutdown();
+        Spark::Gameplay::EventResponseSystem::GetInstance().Shutdown();
+        // Phase DD Theme 3D addition:
+        Spark::AI::AIDebugRenderer::GetInstance().Shutdown();
+        // Phase CC Theme 3D additions (released first — they depend on
+        // the render loop being alive, so tear them down before the
+        // rest of the engine winds down):
+        Spark::Graphics::AsyncComputeScheduler::GetInstance().Shutdown();
+        Spark::GPUStallProfiler::GetInstance().Shutdown();
+        // Phase BB Theme 3D additions:
+        Spark::Graphics::DynamicQualityScaler::GetInstance().Reset();
+        Spark::Scripting::ScriptHookManager::GetInstance().Clear();
         Spark::Gameplay::GameplayExtensionRegistry::GetInstance().Clear();
         Spark::AI::NavMeshLinkSystem::GetInstance().Shutdown();
 

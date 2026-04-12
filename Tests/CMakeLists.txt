@@ -326,6 +326,67 @@ add_executable(SparkTests
     TestNeuralPostProcessing.cpp
     TestGPUProfiler.cpp
     TestShaderHotReloadCompilation.cpp
+    TestShaderHotReloadPhaseU.cpp
+    TestShaderDiskCachePhaseV.cpp
+    TestShaderCrossCompilerPhaseW.cpp
+    TestRHIHandlePoolPhaseX.cpp
+    TestTransientBufferAllocatorPhaseX.cpp
+    TestNullRHIDevicePhaseY.cpp
+    TestScriptHookManagerPhaseBB.cpp
+    TestDynamicQualityScalerPhaseBB.cpp
+    TestGPUStallProfilerPhaseCC.cpp
+    TestAsyncComputeSchedulerPhaseCC.cpp
+    TestAIDebugRendererPhaseDD.cpp
+    TestDirtyRegionGridPhaseDD.cpp
+    TestEventResponseSystemPhaseEE.cpp
+    TestEntityPresetManagerPhaseEE.cpp
+    TestAssetMigrationPhaseEE.cpp
+    TestTelemetryPhaseFF.cpp
+    TestCacheDebuggerPhaseFF.cpp
+    TestMathUtilsExtendedPhaseGG.cpp
+    TestCpuDebuggerPhaseGG.cpp
+    TestLODGeneratorPhaseGG.cpp
+    TestTextureCompressorPhaseGG.cpp
+    TestDatablockRegistryPhaseHH.cpp
+    TestNetworkSecurityPhaseHH.cpp
+    TestAIDirectorPhaseII.cpp
+    TestHLODBuilderPhaseII.cpp
+    TestAngleUtilsReal.cpp
+    TestBitUtilsReal.cpp
+    TestBitFlagsReal.cpp
+    TestTweenReal.cpp
+    TestSplineMathReal.cpp
+    TestSpatialGridReal.cpp
+    TestSteeringBehaviorsReal.cpp
+    TestCoverSystemReal.cpp
+    TestAlignedHeapArrayReal.cpp
+    TestAtomicSharedPtrReal.cpp
+    TestDeferredDeletionReal.cpp
+    TestPerformanceStatsReal.cpp
+    TestBlendSpaceReal.cpp
+    TestSequencerReal.cpp
+    TestFaultIsolationReal.cpp
+    TestColorUtilsReal.cpp
+    TestStateMachineReal.cpp
+    TestEventBusReal.cpp
+    TestCompressionUtilsReal.cpp
+    TestEntityEventBusReal.cpp
+    TestConfigParserReal.cpp
+    TestReflectionReal.cpp
+    TestGameplayTagsReal.cpp
+    TestInventorySystemReal.cpp
+    TestLoadingScreenReal.cpp
+    TestDelegateReal.cpp
+    TestRingBufferReal.cpp
+    TestAnimationCompressionReal.cpp
+    TestStringUtilsReal.cpp
+    TestTimerManagerReal.cpp
+    TestObjectPoolReal.cpp
+    TestHashReal.cpp
+    TestCooldownReal.cpp
+    TestDeltaSmootherReal.cpp
+    TestTimerReal.cpp
+    TestFileUtilsReal.cpp
     # Editor, gameplay, LOD, AI debug
     TestEditorCommands.cpp
     TestEditorWindowManager.cpp
@@ -511,6 +572,12 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlGitOps.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlHelpers.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/VersionControl/VersionControlRender.cpp"
+        # Phase AA Theme 3C: tests for LevelStreamingSystem and
+        # VersionControlSystem. Gated behind the ImGui-available block
+        # because both classes are EditorPanel subclasses whose .cpp
+        # files require ImGui to link.
+        "${CMAKE_SOURCE_DIR}/Tests/TestLevelStreamingSystemPhaseAA.cpp"
+        "${CMAKE_SOURCE_DIR}/Tests/TestVersionControlSystemPhaseAA.cpp"
     )
 
     message(STATUS "[Tests] ImGui available — gated editor + 6 game module tests enabled")

@@ -376,4 +376,19 @@ namespace Spark::Graphics
         bool m_initialized = false;
     };
 
+    /**
+     * @brief Process-wide singleton accessor for the shader cross-compiler.
+     *
+     * Phase W activation helper. Returns a Meyers singleton so every
+     * translation unit that includes this header talks to the same
+     * `ShaderCrossCompiler` instance. `Shader::Initialize` calls
+     * `GetShaderCrossCompiler().Initialize()` once per process so the
+     * in-memory compile cache is reachable from any Shader call path.
+     */
+    inline ShaderCrossCompiler& GetShaderCrossCompiler()
+    {
+        static ShaderCrossCompiler s_compiler;
+        return s_compiler;
+    }
+
 } // namespace Spark::Graphics

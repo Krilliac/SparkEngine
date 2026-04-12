@@ -1461,6 +1461,12 @@ using Spark::Graphics::PostProcessingPipeline;
 #include "TemporalEffects.h"
 #include "ScreenSpaceEffects.h"
 #include "ShadowAtlas.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Pumped from the Linux BeginFrame so headless / RHI builds
+// share the same per-frame hot-reload poll that the Windows branch gets
+// via Shader::HotReloadShaders.
+#include "ShaderHotReload.h"
+#include "Shader.h"
 #include "../Physics/PhysicsSystem.h"
 #include "../Game/GameObject.h"
 #include "RHI/RHI.h"
@@ -1685,6 +1691,13 @@ void GraphicsEngine::BeginFrame()
     // Update VRAM budget monitor (lightweight query)
     if (m_vramBudgetMonitor)
         m_vramBudgetMonitor->Update();
+
+    // Phase U: pump the Spark::Graphics::ShaderHotReload singleton each
+    // frame so runtime shader hot-reload runs on Linux and headless
+    // builds. The singleton has its own poll-interval gating (default
+    // 0.5 s) so a fixed nominal delta is both safe and cheap.
+    if (m_shader)
+        m_shader->HotReloadShaders();
 
     // Clear the back buffer
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();

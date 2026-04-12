@@ -264,6 +264,10 @@ namespace Spark
                                    m_pushDescriptorSupported ? "yes" : "no", m_hostImageCopySupported ? "yes" : "no");
                 }
 
+                // Phase Z Theme 3B: wire the transient vertex/index allocator
+                // into the lifecycle after the vk device is ready.
+                m_transientBuffers.Initialize(this);
+
                 return true;
             }
 
@@ -889,8 +893,20 @@ namespace Spark
             {
                 SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "VulkanDevice::Shutdown");
+
+                // Phase Z Theme 3B (fix for Codex P1 review comment on PR #459):
+                // Drain the device BEFORE destroying transient allocator buffers.
+                // TransientBufferAllocator::Shutdown immediately destroys its
+                // VulkanBuffer objects, whose destructors call vkDestroyBuffer /
+                // vkFreeMemory. If the previous frame is still executing those
+                // buffers may be in flight, so we must first wait for the device
+                // to go idle — otherwise Vulkan validation layers report
+                // destroy-on-in-flight-resource errors and some drivers may
+                // fault during shutdown.
                 if (m_device != VK_NULL_HANDLE)
                     vkDeviceWaitIdle(m_device);
+
+                m_transientBuffers.Shutdown(this);
 
                 m_immediateCommandList.reset();
 
@@ -1649,10 +1665,17 @@ namespace Spark
                     vkWaitForFences(m_device, 1, &m_frameFences[m_currentFrame], VK_TRUE, UINT64_MAX);
                     vkResetFences(m_device, 1, &m_frameFences[m_currentFrame]);
                 }
+
+                // Phase Z Theme 3B: pump the transient allocator each frame.
+                m_transientBuffers.BeginFrame(this);
             }
 
             void VulkanDevice::EndFrame()
             {
+                // Phase Z Theme 3B: release the frame's transient mapping
+                // before submitting the frame's command list.
+                m_transientBuffers.EndFrame(this);
+
                 // Submit the immediate command list if recording
                 auto* cmdList = static_cast<VulkanCommandList*>(GetImmediateCommandList());
                 VkCommandBuffer cmd = cmdList->GetVkCommandBuffer();

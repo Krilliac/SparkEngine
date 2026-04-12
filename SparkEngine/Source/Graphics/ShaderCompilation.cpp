@@ -14,6 +14,16 @@
 #include "../Utils/ContainerUtils.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Each successful LoadFromFile / LoadVertexShader /
+// LoadPixelShader call registers the parent directory with the singleton
+// so runtime file-watching covers every shader that is actually loaded.
+#include "ShaderHotReload.h"
+// Phase V: activated Tier 2 graphics orphan — persistent on-disk shader
+// cache. LoadShaderFromSource consults the cache before compiling and
+// stores the compiled bytecode on success so subsequent process runs
+// pick up the cached blob.
+#include "ShaderDiskCache.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -21,6 +31,7 @@
 #include "RHI/RHIFactory.h"
 #include "RHI/RHITypes.h"
 #include "Utils/LocalFileCache.h"
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -130,6 +141,18 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
     }
 
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::string narrowFile(filename.begin(), filename.end());
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowFile).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
+
     return hr;
 }
 
@@ -182,6 +205,18 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
     {
         std::wstring errorMsg = L"CreatePixelShader failed with HR=0x" + std::to_wstring(hr);
         LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+    }
+
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::string narrowFile(filename.begin(), filename.end());
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowFile).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
     }
 
     return hr;
@@ -452,6 +487,52 @@ HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type,
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader compiled from source in %.2f ms", compileTimeMs);
         LOG_TO_CONSOLE_IMMEDIATE(L"Shader compiled from source successfully", L"SUCCESS");
         m_isCompiled = true;
+
+        // Phase V: store the compiled DXBC bytecode in the shared disk
+        // cache. The Windows branch is store-only for now — the
+        // lookup path would need to wrap D3DCreateBlob around the
+        // cached bytes for CreateInputLayout; that expansion lands in
+        // a follow-up. The store-only path already populates the
+        // shared cache so Linux / headless builds sharing the same
+        // `ShaderCache/` directory can reuse the blob.
+        auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+        if (diskCache.IsInitialized() && shaderBlob)
+        {
+            Spark::Graphics::ShaderSource cacheSource;
+            cacheSource.hlslCode = source;
+            cacheSource.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+            switch (type)
+            {
+            case ShaderType::VERTEX_SHADER:
+                cacheSource.stage = Spark::Graphics::ShaderStage::Vertex;
+                break;
+            case ShaderType::PIXEL_SHADER:
+                cacheSource.stage = Spark::Graphics::ShaderStage::Pixel;
+                break;
+            case ShaderType::GEOMETRY_SHADER:
+                cacheSource.stage = Spark::Graphics::ShaderStage::Geometry;
+                break;
+            case ShaderType::HULL_SHADER:
+                cacheSource.stage = Spark::Graphics::ShaderStage::Hull;
+                break;
+            case ShaderType::DOMAIN_SHADER:
+                cacheSource.stage = Spark::Graphics::ShaderStage::Domain;
+                break;
+            case ShaderType::COMPUTE_SHADER:
+                cacheSource.stage = Spark::Graphics::ShaderStage::Compute;
+                break;
+            }
+            cacheSource.defines = flags.defines;
+
+            Spark::Graphics::CompiledShaderBlob blob;
+            const uint8_t* bytes = static_cast<const uint8_t*>(shaderBlob->GetBufferPointer());
+            blob.bytecode.assign(bytes, bytes + shaderBlob->GetBufferSize());
+            blob.target = Spark::Graphics::ShaderTarget::DXBC;
+            blob.stage = cacheSource.stage;
+            blob.entryPoint = cacheSource.entryPoint;
+            blob.success = true;
+            diskCache.Store(cacheSource, Spark::Graphics::ShaderTarget::DXBC, blob);
+        }
     }
 
     return hr;
@@ -535,6 +616,18 @@ HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const
 
     // Add to watched files for hot reload
     m_watchedFiles.push_back(wFilePath);
+
+    // Phase U: register the parent directory with the
+    // Spark::Graphics::ShaderHotReload singleton so runtime file-watching
+    // picks up this file and its siblings.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(m_filePath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
 
     return LoadShaderFromSource(source, type, flags);
 }
@@ -647,10 +740,19 @@ bool Shader::CompileWithRHI(const std::string& sourceFile, ShaderType type, int 
 // ============================================================================
 
 #include "Shader.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Linux branch needs the same include so the singleton is
+// reachable from LoadVertexShader/LoadPixelShader/LoadFromFile.
+#include "ShaderHotReload.h"
+// Phase V: activated Tier 2 graphics orphan — persistent on-disk shader
+// cache. Linux branch needs the same include so LoadShaderFromSource
+// consults the cache on every backend build.
+#include "ShaderDiskCache.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -725,6 +827,45 @@ static Spark::RHI::RHIShaderStage ShaderTypeToRHIStage(ShaderType type)
     default:
         return Spark::RHI::RHIShaderStage::Vertex;
     }
+}
+
+// Phase V helper: convert ShaderType to Spark::Graphics::ShaderStage for
+// disk-cache key construction. The cache keys shader compilations by
+// (hlslCode + defines + target + stage) so every stage must round-trip.
+static Spark::Graphics::ShaderStage ShaderTypeToGraphicsStage(ShaderType type)
+{
+    switch (type)
+    {
+    case ShaderType::VERTEX_SHADER:
+        return Spark::Graphics::ShaderStage::Vertex;
+    case ShaderType::PIXEL_SHADER:
+        return Spark::Graphics::ShaderStage::Pixel;
+    case ShaderType::GEOMETRY_SHADER:
+        return Spark::Graphics::ShaderStage::Geometry;
+    case ShaderType::HULL_SHADER:
+        return Spark::Graphics::ShaderStage::Hull;
+    case ShaderType::DOMAIN_SHADER:
+        return Spark::Graphics::ShaderStage::Domain;
+    case ShaderType::COMPUTE_SHADER:
+        return Spark::Graphics::ShaderStage::Compute;
+    default:
+        return Spark::Graphics::ShaderStage::Vertex;
+    }
+}
+
+// Phase V helper: construct the ShaderSource cache key from the local
+// LoadShaderFromSource inputs. The cache hash covers the hlsl code,
+// preprocessor defines, target, and stage — anything that changes the
+// produced bytecode must feed into the key.
+static Spark::Graphics::ShaderSource MakeCacheSource(const std::string& source, ShaderType type,
+                                                     const ShaderCompilationFlags& flags)
+{
+    Spark::Graphics::ShaderSource s;
+    s.hlslCode = source;
+    s.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+    s.stage = ShaderTypeToGraphicsStage(type);
+    s.defines = flags.defines;
+    return s;
 }
 
 // ============================================================================
@@ -805,6 +946,17 @@ HRESULT Shader::LoadVertexShader(const std::wstring& filename, const ShaderCompi
     m_type = ShaderType::VERTEX_SHADER;
     m_filePath = narrowPath;
 
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowPath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Vertex shader compiled (RHI): " + filename, L"SUCCESS");
     NotifyStateChange();
     return S_OK;
@@ -883,6 +1035,17 @@ HRESULT Shader::LoadPixelShader(const std::wstring& filename, const ShaderCompil
     m_isCompiled = true;
     m_filePath = narrowPath;
 
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(narrowPath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
+
     LOG_TO_CONSOLE_IMMEDIATE(L"Pixel shader compiled (RHI): " + filename, L"SUCCESS");
     NotifyStateChange();
     return S_OK;
@@ -892,19 +1055,44 @@ HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type,
 {
     auto startTime = std::chrono::high_resolution_clock::now();
 
-    Spark::RHI::ShaderCompileOptions options;
-    options.stage = ShaderTypeToRHIStage(type);
-    options.sourceCode = source;
-    options.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
-    options.optimizationEnabled = flags.enableOptimization;
-    options.debugInfoEnabled = flags.enableDebug;
-    options.defines = flags.defines;
-    options.includePaths = flags.includePaths;
-    options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
-    options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
-    options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+    // Phase V: disk-cache lookup. Construct the cache key from the
+    // hlsl source + defines + stage; on a hit we skip the RHI compile
+    // and reuse the stored bytecode directly. Target is pinned to DXBC
+    // as a canonical key — a future pass can switch per-backend when
+    // the RHI cross-compile pipeline wires all backends through this
+    // code path.
+    auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+    const auto cacheSource = MakeCacheSource(source, type, flags);
+    constexpr auto kCacheTarget = Spark::Graphics::ShaderTarget::DXBC;
 
-    Spark::RHI::ShaderCompileResult result = Spark::RHI::CompileShader(options);
+    Spark::RHI::ShaderCompileResult result;
+    bool cacheHit = false;
+    if (diskCache.IsInitialized())
+    {
+        if (auto cached = diskCache.Lookup(cacheSource, kCacheTarget); cached.has_value())
+        {
+            result.success = true;
+            result.bytecode = cached->bytecode;
+            cacheHit = true;
+        }
+    }
+
+    if (!cacheHit)
+    {
+        Spark::RHI::ShaderCompileOptions options;
+        options.stage = ShaderTypeToRHIStage(type);
+        options.sourceCode = source;
+        options.entryPoint = flags.entryPoint.empty() ? "main" : flags.entryPoint;
+        options.optimizationEnabled = flags.enableOptimization;
+        options.debugInfoEnabled = flags.enableDebug;
+        options.defines = flags.defines;
+        options.includePaths = flags.includePaths;
+        options.sourceLanguage = Spark::RHI::ShaderLanguage::Auto;
+        options.targetLanguage = Spark::RHI::ShaderLanguage::Auto;
+        options.targetBackend = Spark::RHI::GraphicsBackend::Auto;
+
+        result = Spark::RHI::CompileShader(options);
+    }
 
     auto endTime = std::chrono::high_resolution_clock::now();
     float compileTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
@@ -922,6 +1110,21 @@ HRESULT Shader::LoadShaderFromSource(const std::string& source, ShaderType type,
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         m_metrics.failedCompilations++;
         return E_FAIL;
+    }
+
+    // Phase V: store the freshly compiled bytecode in the disk cache so
+    // subsequent process runs (and sibling Shader instances) skip the
+    // backend compile. Cache hits skip the store entirely — the blob is
+    // already on disk.
+    if (!cacheHit && diskCache.IsInitialized())
+    {
+        Spark::Graphics::CompiledShaderBlob blob;
+        blob.bytecode = result.bytecode;
+        blob.target = kCacheTarget;
+        blob.stage = cacheSource.stage;
+        blob.entryPoint = cacheSource.entryPoint;
+        blob.success = true;
+        diskCache.Store(cacheSource, kCacheTarget, blob);
     }
 
     {
@@ -995,6 +1198,17 @@ HRESULT Shader::LoadFromFile(const std::string& filePath, ShaderType type, const
     uint64_t modTime = GetFileModTime(filePath);
     m_lastModified.dwLowDateTime = static_cast<uint32_t>(modTime & 0xFFFFFFFF);
     m_lastModified.dwHighDateTime = static_cast<uint32_t>((modTime >> 32) & 0xFFFFFFFF);
+
+    // Phase U: register the parent directory with the ShaderHotReload
+    // singleton so runtime file-watching picks up this file.
+    {
+        std::error_code ec;
+        std::filesystem::path parent = std::filesystem::path(filePath).parent_path();
+        if (!parent.empty() && std::filesystem::exists(parent, ec))
+        {
+            Spark::Graphics::ShaderHotReload::GetInstance().AddWatchDirectory(parent.string());
+        }
+    }
 
     return LoadShaderFromSource(sourceCode, type, flags);
 }

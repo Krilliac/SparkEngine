@@ -13,6 +13,10 @@
 
 #include "../RHIDevice.h"
 #include "../RHIResources.h"
+// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
+// vertex/index bump allocator. Each VulkanDevice instance owns one so
+// render systems can request cheap per-frame CPU-visible GPU memory.
+#include "../TransientBufferAllocator.h"
 
 // Vulkan availability is checked at build time
 #ifdef SPARK_VULKAN_SUPPORT
@@ -485,6 +489,11 @@ namespace Spark
                 bool m_hostImageCopySupported = false;
 
                 const std::vector<const char*> m_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
+                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
+                // Initialized in VulkanDevice::Initialize after the vk device
+                // is ready; Shutdown releases its device-local buffers.
+                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace Vulkan

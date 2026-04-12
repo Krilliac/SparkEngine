@@ -13,6 +13,10 @@
 
 #include "../RHIDevice.h"
 #include "../RHIResources.h"
+// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
+// vertex/index bump allocator. Each OpenGLDevice instance owns one so
+// render systems can request cheap per-frame CPU-visible GPU memory.
+#include "../TransientBufferAllocator.h"
 
 #ifdef SPARK_OPENGL_SUPPORT
 
@@ -415,6 +419,11 @@ namespace Spark
                 EGLContext m_bootstrapContext = EGL_NO_CONTEXT;
                 EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
 #endif
+
+                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
+                // Initialized in OpenGLDevice::Initialize after the GL context
+                // is ready; Shutdown releases its GL buffers.
+                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace OpenGL

@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-11.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-12.
 
 ## Code Volume
 
@@ -8,33 +8,33 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 268506 |
-| **SparkEditor/Source** | 88369 |
+| **SparkEngine/Source** | 270725 |
+| **SparkEditor/Source** | 88388 |
 | **GameModules** | 58460 |
-| **Tests** | 111985 |
+| **Tests** | 124994 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~529721** |
+| **Total C++ (excl. ThirdParty)** | **~544968** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 750 |
-| Implementation files (.cpp) | 881 |
+| Header files (.h/.hpp) | 751 |
+| Implementation files (.cpp) | 962 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test files (.cpp) | 356 |
+| Test files (.cpp) | 437 |
 | Wiki pages (.md) | 125 |
 
 ### Code Density
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~868 |
-| Average lines per .h file | ~577 |
-| Largest codebase section | Graphics (105324 lines — 39% of SparkEngine/Source) |
+| Average lines per .cpp file | ~873 |
+| Average lines per .h file | ~580 |
+| Largest codebase section | Graphics (107302 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,14 +42,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 105324 | 39.2% |
-| Engine (all subsystems) | 80436 | 29.9% |
-| Utils | 36987 | 13.7% |
-| Core | 20698 | 7.7% |
+| Graphics | 107302 | 39.6% |
+| Engine (all subsystems) | 80494 | 29.7% |
+| Utils | 36987 | 13.6% |
+| Core | 20881 | 7.7% |
 | Physics | 10101 | 3.7% |
 | Audio | 5548 | 2.0% |
 | Input | 3895 | 1.4% |
-| SceneManager | 1886 | 0.7% |
+| SceneManager | 1886 | 0.6% |
 | Enums | 1423 | 0.5% |
 | Game | 1272 | 0.4% |
 | Camera | 868 | 0.3% |
@@ -64,7 +64,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Gameplay | 7511 |
 | Animation | 6554 |
 | Scripting | 4445 |
-| UI | 2521 |
+| UI | 2579 |
 | SaveSystem | 2491 |
 | Streaming | 1767 |
 | World | 1588 |
@@ -99,14 +99,14 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Metric | Count |
 |--------|------:|
 | Editor panel classes | 59 |
-| Total editor lines | 88369 |
+| Total editor lines | 88388 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 356 |
-| TEST() definitions | 4605 |
+| Test files | 437 |
+| TEST() definitions | 5385 |
 | Subsystems covered | All major |
 | Sanitizer coverage | ASan + UBSan + LSan + TSan + MSan |
 
@@ -154,16 +154,16 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | File | Lines |
 |------|------:|
-| `OpenGLDevice.cpp` | 1965 |
+| `OpenGLDevice.cpp` | 1978 |
 | `SparkEngine.cpp` | 1957 |
-| `VulkanDevice.cpp` | 1835 |
-| `GraphicsEngine.cpp` | 1737 |
-| `D3D12Device.cpp` | 1565 |
+| `GraphicsEngine.cpp` | 1897 |
+| `VulkanDevice.cpp` | 1850 |
+| `D3D12Device.cpp` | 1577 |
 | `EngineSettings.cpp` | 1554 |
-| `D3D11Device.cpp` | 1471 |
-| `GraphicsDeviceResources.cpp` | 1335 |
-| `CrashHandler.cpp` | 1322 |
-| `LightingSystem.cpp` | 1283 |
+| `PostProcessingPipeline.cpp` | 1504 |
+| `D3D11Device.cpp` | 1486 |
+| `ShaderCompilation.cpp` | 1418 |
+| `LightingSystem.cpp` | 1341 |
 
 ### SparkEngine .h Files (by line count)
 
@@ -173,12 +173,12 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | `EngineSettings.h` | 1079 |
 | `JsonUtils.h` | 963 |
 | `BasisTranscoder.h` | 912 |
+| `GraphicsEngine.h` | 875 |
 | `ECSystems.h` | 849 |
 | `MeshClusterSystem.h` | 824 |
 | `SVGRenderer.h` | 803 |
 | `DataTableSystem.h` | 800 |
 | `PhysicsTypes.h` | 779 |
-| `FastNoise2SIMD.h` | 752 |
 
 ### SparkEditor .cpp Files (by line count)
 

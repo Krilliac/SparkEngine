@@ -105,7 +105,14 @@ namespace SparkEditor
         {
             return it->second;
         }
-        return FileStatus::UP_TO_DATE;
+        // Cache miss → the file has not been observed by a status scan,
+        // so we do not know anything about it. Returning UP_TO_DATE
+        // misreports a random path as "tracked and clean", which breaks
+        // IsFileTracked/IsFileLocked for any file not yet cached. The
+        // correct default is UNTRACKED — both semantically (we have no
+        // VCS record) and practically (it makes the "without repo"
+        // queries below return false for unknown paths).
+        return FileStatus::UNTRACKED;
     }
 
     bool VersionControlSystem::IsFileTracked(const std::string& filePath) const

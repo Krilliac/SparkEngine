@@ -16,10 +16,13 @@
 #include "../Panels/GameViewPanel.h"
 #include "../Panels/WeaponEditorPanel.h"
 #include "../Panels/FPSToolsPanel.h"
-#include "../Panels/ProjectBrowserPanel.h"
 #include "../Panels/DebugVisualizerPanel.h"
 #include "../Panels/ObjectPlacementPanel.h"
 #include "../Panels/BuildCookPanel.h"
+// Phase AA Theme 3C: ProjectBrowserPanel is instantiated separately in
+// EditorUI::Initialize as `m_projectBrowserPanel` (a modal overlay, not
+// a dockable panel), so it does not need to be included here. The stale
+// include has been removed.
 #include "../Panels/SpriteEditorPanel.h"
 #include "../Panels/TilemapEditorPanel.h"
 #include "../Panels/SpriteAnimationEditorPanel.h"
@@ -69,6 +72,13 @@
 #include "../Panels/NetworkDebugPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
+// Phase AA Theme 3C: activate the two remaining orphan EditorPanel
+// subclasses that live outside the Panels/ directory. Both were
+// EditorPanel-derived with real Initialize / Update / Render / Shutdown
+// overrides but zero production call sites, which made them
+// unreachable from the Window menu and the dockspace.
+#include "../LevelStreaming/LevelStreamingSystem.h"
+#include "../VersionControl/VersionControlSystem.h"
 #include "EditorIcons.h"
 #include <imgui.h>
 
@@ -151,6 +161,12 @@ namespace SparkEditor
         registerPanel("CSGEditor", std::make_shared<CSGEditorPanel>());
         registerPanel("NetworkDebug", std::make_shared<NetworkDebugPanel>());
 
+        // Phase AA Theme 3C: register the two orphaned EditorPanel
+        // subclasses that live outside Panels/ so they appear in the
+        // Window menu alongside every other panel.
+        registerPanel("LevelStreaming", std::make_shared<LevelStreamingSystem>());
+        registerPanel("VersionControl", std::make_shared<VersionControlSystem>());
+
         auto workflowPanel = std::make_shared<WorkflowPanel>();
         workflowPanel->SetEditorUI(this);
         registerPanel("Workflows", workflowPanel);
@@ -217,6 +233,9 @@ namespace SparkEditor
             {"ScriptDebugger", ICON_FA_BUG},
             {"CSGEditor", ICON_FA_CUBES},
             {"NetworkDebug", ICON_FA_NETWORK_WIRED},
+            // Phase AA Theme 3C: icons for the two newly-activated panels.
+            {"LevelStreaming", ICON_FA_MAP},
+            {"VersionControl", ICON_FA_CODE_BRANCH},
         };
 
         for (const auto& [name, icon] : panelIcons)

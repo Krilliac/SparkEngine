@@ -11,6 +11,11 @@
  * Split from Shader.cpp for maintainability.
  */
 #include "Shader.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Shader::HotReloadShaders pumps the singleton's Update(dt) on
+// both Windows and Linux branches so runtime file-watching co-exists
+// with the legacy per-Shader watcher.
+#include "ShaderHotReload.h"
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -90,6 +95,12 @@ void Shader::SetActiveVariant(int variantId)
 
 int Shader::HotReloadShaders()
 {
+    // Phase U: pump the Spark::Graphics::ShaderHotReload singleton each
+    // time the legacy per-Shader reloader runs. The singleton owns its
+    // own poll-interval gating (default 0.5 s) so calling it every frame
+    // with a small nominal delta is safe and cheap.
+    Spark::Graphics::ShaderHotReload::GetInstance().Update(0.016f);
+
     if (!m_hotReloadEnabled)
     {
         return 0;
@@ -157,6 +168,10 @@ void Shader::UpdateFileMonitoring()
 // ============================================================================
 
 #include "Shader.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Mirror of the Windows include so the Linux
+// Shader::HotReloadShaders pumps the singleton Update.
+#include "ShaderHotReload.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
@@ -314,6 +329,11 @@ void Shader::SetActiveVariant(int variantId)
 
 int Shader::HotReloadShaders()
 {
+    // Phase U: pump the Spark::Graphics::ShaderHotReload singleton on
+    // the Linux branch. Mirrors the Windows pump so headless and RHI
+    // builds also exercise the shared file watcher.
+    Spark::Graphics::ShaderHotReload::GetInstance().Update(0.016f);
+
     int reloadCount = 0;
 
     for (const auto& watchedFile : m_watchedFiles)

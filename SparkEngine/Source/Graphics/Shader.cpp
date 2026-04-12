@@ -14,6 +14,21 @@
 #include "Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide singleton file
+// watcher that recompiles shaders when their source .hlsl files change on
+// disk. Wired into Shader::Initialize / Shader::LoadFromFile /
+// Shader::HotReloadShaders so every Shader instance shares the same
+// registry of watched directories.
+#include "ShaderHotReload.h"
+// Phase V: activated Tier 2 graphics orphan — persistent on-disk shader
+// cache. Wired into Shader::Initialize so every Shader instance queries
+// the same process-wide cache before calling the backend compiler.
+#include "ShaderDiskCache.h"
+// Phase W: activated Tier 2 graphics orphan — in-memory shader cross-
+// compilation cache. Shared singleton reachable from any Shader call
+// path so asset cookers and tests have a stable handle to the cross-
+// compile surface.
+#include "ShaderCrossCompiler.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -21,6 +36,7 @@
 #include "RHI/RHIFactory.h"
 #include "RHI/RHITypes.h"
 #include "Utils/LocalFileCache.h"
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -133,6 +149,68 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     // shader resources. Zero dependencies on the D3D11 device — pure
     // CPU keyword / variant bookkeeping.
     m_variantSystem.Initialize();
+
+    // Phase U: activate Spark::Graphics::ShaderHotReload singleton. The
+    // first Shader::Initialize call initialises the process-wide file
+    // watcher with each search path that exists on disk; subsequent
+    // Shader instances and LoadFromFile calls add further watch
+    // directories on demand via AddWatchDirectory.
+    auto& hotReload = Spark::Graphics::ShaderHotReload::GetInstance();
+    if (!hotReload.IsWatching())
+    {
+        std::error_code ec;
+        bool initialized = false;
+        for (const auto& path : m_searchPaths)
+        {
+            if (std::filesystem::exists(path, ec))
+            {
+                hotReload.Initialize(path);
+                initialized = true;
+                break;
+            }
+        }
+        if (!initialized)
+        {
+            hotReload.Initialize(".");
+        }
+    }
+    else
+    {
+        for (const auto& path : m_searchPaths)
+        {
+            std::error_code ec;
+            if (std::filesystem::exists(path, ec))
+            {
+                hotReload.AddWatchDirectory(path);
+            }
+        }
+    }
+
+    // Phase V: activate Spark::Graphics::ShaderDiskCache singleton. The
+    // first Shader::Initialize call creates the cache directory under
+    // the working directory ("ShaderCache/"); subsequent Shader
+    // instances reuse the same cache. Tests may override the directory
+    // via GetShaderDiskCache().Initialize(path) before the first
+    // Shader::Initialize runs.
+    auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+    if (!diskCache.IsInitialized())
+    {
+        diskCache.Initialize(std::filesystem::path("ShaderCache"));
+    }
+
+    // Phase W: activate Spark::Graphics::ShaderCrossCompiler singleton.
+    // In-memory compile cache used by CompileAll / CompileAsync. The
+    // internal per-target Compile* functions are currently stubs that
+    // report success without producing bytecode — Phase W wires the
+    // lifecycle so tests and future asset cookers that need a
+    // cross-target compile surface have a shared instance to talk to,
+    // and so any real DXC / SPIRV-Cross integration slots into this
+    // existing activation.
+    auto& crossCompiler = Spark::Graphics::GetShaderCrossCompiler();
+    if (!crossCompiler.IsInitialized())
+    {
+        crossCompiler.Initialize();
+    }
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Shader system initialized");
     return S_OK;
@@ -422,10 +500,23 @@ Shader::ShaderMetrics Shader::GetMetricsThreadSafe() const
 // ============================================================================
 
 #include "Shader.h"
+// Phase U: activated Tier 2 graphics orphan — process-wide shader file
+// watcher. Mirrors the Windows include block so the Linux branch can
+// reach the Spark::Graphics::ShaderHotReload singleton from Initialize.
+#include "ShaderHotReload.h"
+// Phase V: activated Tier 2 graphics orphan — persistent on-disk shader
+// cache. Mirrors the Windows include block so the Linux branch shares
+// the same cache singleton on headless / RHI builds.
+#include "ShaderDiskCache.h"
+// Phase W: activated Tier 2 graphics orphan — in-memory cross-compile
+// cache. Mirrors the Windows include so Linux Shader::Initialize
+// also primes the shared singleton.
+#include "ShaderCrossCompiler.h"
 #include "RHI/RHIFactory.h"
 #include "../Utils/Validate.h"
 #include "../Utils/SparkConsole.h"
 #include "Utils/LocalFileCache.h"
+#include <filesystem>
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -517,6 +608,60 @@ HRESULT Shader::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     // Phase O: activate the shader variant system on Linux too so
     // headless builds can still register keywords and query variants.
     m_variantSystem.Initialize();
+
+    // Phase U: activate Spark::Graphics::ShaderHotReload singleton on
+    // the Linux branch. Mirrors the Windows path so headless / RHI
+    // builds also get runtime file-watching for shader source changes.
+    auto& hotReload = Spark::Graphics::ShaderHotReload::GetInstance();
+    if (!hotReload.IsWatching())
+    {
+        std::error_code ec;
+        bool initialized = false;
+        for (const auto& path : m_searchPaths)
+        {
+            if (std::filesystem::exists(path, ec))
+            {
+                hotReload.Initialize(path);
+                initialized = true;
+                break;
+            }
+        }
+        if (!initialized)
+        {
+            hotReload.Initialize(".");
+        }
+    }
+    else
+    {
+        for (const auto& path : m_searchPaths)
+        {
+            std::error_code ec;
+            if (std::filesystem::exists(path, ec))
+            {
+                hotReload.AddWatchDirectory(path);
+            }
+        }
+    }
+
+    // Phase V: activate Spark::Graphics::ShaderDiskCache singleton on
+    // the Linux branch. Matches the Windows path: first Initialize call
+    // creates "ShaderCache/" under the working directory; subsequent
+    // Shader instances reuse the same cache. Tests may pre-initialise
+    // the singleton with a different path via GetShaderDiskCache().
+    auto& diskCache = Spark::Graphics::GetShaderDiskCache();
+    if (!diskCache.IsInitialized())
+    {
+        diskCache.Initialize(std::filesystem::path("ShaderCache"));
+    }
+
+    // Phase W: activate Spark::Graphics::ShaderCrossCompiler singleton
+    // on the Linux branch. Matches the Windows path — the first
+    // Shader::Initialize primes the in-memory compile cache.
+    auto& crossCompiler = Spark::Graphics::GetShaderCrossCompiler();
+    if (!crossCompiler.IsInitialized())
+    {
+        crossCompiler.Initialize();
+    }
 
     return S_OK;
 }

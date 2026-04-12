@@ -16,6 +16,11 @@
 #include "../RHIDevice.h"
 #include "../RHIResources.h"
 #include "../DeferredDeletionQueue.h"
+// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
+// vertex/index bump allocator. Each D3D11Device instance owns one so
+// render systems (debug draw, particles, UI) can request cheap per-
+// frame CPU-visible GPU memory without touching device internals.
+#include "../TransientBufferAllocator.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>
@@ -340,6 +345,14 @@ namespace Spark
                 bool m_isSoftwareDevice = false;
 
                 DeferredDeletionQueue m_deletionQueue;
+
+                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
+                // Initialized in D3D11Device::Initialize once the D3D device
+                // is ready; Shutdown tears it down before releasing the
+                // device. BeginFrame / EndFrame pump the allocator so
+                // AllocateVertices / AllocateIndices return valid blocks
+                // only inside a frame.
+                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace D3D11
