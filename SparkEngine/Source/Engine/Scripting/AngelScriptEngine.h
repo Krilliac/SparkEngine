@@ -269,6 +269,8 @@ class AngelScriptEngine
     void RegisterComponentTypes();
     /** @brief Register global utility functions (print, createEntity, etc.) */
     void RegisterGlobalFunctions();
+    /** @brief Auto-register all reflected types from TypeRegistry as script-accessible types */
+    void AutoRegisterReflectedTypes();
 
     // ========================================================================
     // Internal Helpers

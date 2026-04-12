@@ -12,6 +12,7 @@
 #include "../../Input/InputManager.h"
 #include "../../Core/SparkEngine.h"
 #include "../../Core/EngineContext.h"
+#include "../../Core/Reflection.h"
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
@@ -854,6 +855,7 @@ void AngelScriptEngine::RegisterEngineAPI()
     RegisterMathTypes();
     RegisterComponentTypes();
     RegisterGlobalFunctions();
+    AutoRegisterReflectedTypes();
 }
 
 void AngelScriptEngine::RegisterMathTypes()
@@ -914,6 +916,95 @@ void AngelScriptEngine::RegisterGlobalFunctions()
     m_engine->RegisterGlobalFunction("void fireEvent(const string &in)", asFUNCTION(ASFireEvent), asCALL_CDECL);
     m_engine->RegisterGlobalFunction("void debugTrace(uint, const string &in, const string &in)",
                                      asFUNCTION(ASDebugTrace), asCALL_CDECL);
+}
+
+// -------------------------------------------------------------------------
+// Reflection-driven auto-registration
+// -------------------------------------------------------------------------
+
+namespace
+{
+
+    // Generic script function: get any reflected field by component type and field name
+    std::string ASGetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName)
+    {
+        auto* world = AngelScriptEngine::GetBoundWorld();
+        if (!world)
+            return "";
+
+        auto& factory = Spark::ComponentFactory::Get();
+        void* raw = factory.GetComponentRaw(compType, world, entityId);
+        if (!raw)
+            return "";
+
+        const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(compType);
+        if (!typeInfo)
+            return "";
+
+        const auto* field = typeInfo->FindField(fieldName);
+        if (!field)
+            return "";
+
+        return Spark::GetFieldAsString(raw, *field);
+    }
+
+    // Generic script function: set any reflected field by component type and field name
+    void ASSetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName,
+                             const std::string& value)
+    {
+        auto* world = AngelScriptEngine::GetBoundWorld();
+        if (!world)
+            return;
+
+        auto& factory = Spark::ComponentFactory::Get();
+        void* raw = factory.GetComponentRaw(compType, world, entityId);
+        if (!raw)
+            return;
+
+        const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(compType);
+        if (!typeInfo)
+            return;
+
+        const auto* field = typeInfo->FindField(fieldName);
+        if (!field)
+            return;
+
+        Spark::SetFieldFromString(raw, *field, value);
+    }
+
+    // Generic script function: check if entity has a component by type name
+    bool ASHasComponent(uint32_t entityId, const std::string& compType)
+    {
+        auto* world = AngelScriptEngine::GetBoundWorld();
+        if (!world)
+            return false;
+        return Spark::ComponentFactory::Get().HasComponent(compType, world, entityId);
+    }
+
+} // anonymous namespace
+
+void AngelScriptEngine::AutoRegisterReflectedTypes()
+{
+    // Register generic component field access functions.
+    // Scripts can read/write ANY reflected field on ANY registered component:
+    //   string val = getComponentField(entity, "HealthComponent", "health");
+    //   setComponentField(entity, "HealthComponent", "health", "50.0");
+    //   bool has = hasComponent(entity, "Transform");
+    m_engine->RegisterGlobalFunction("string getComponentField(EntityID, const string &in, const string &in)",
+                                     asFUNCTION(ASGetComponentField), asCALL_CDECL);
+
+    m_engine->RegisterGlobalFunction(
+        "void setComponentField(EntityID, const string &in, const string &in, const string &in)",
+        asFUNCTION(ASSetComponentField), asCALL_CDECL);
+
+    m_engine->RegisterGlobalFunction("bool hasComponent(EntityID, const string &in)", asFUNCTION(ASHasComponent),
+                                     asCALL_CDECL);
+
+    SPARK_LOG_INFO(
+        Spark::LogCategory::Scripting,
+        "AngelScript: registered generic getComponentField/setComponentField/hasComponent (reflection-driven, "
+        "%zu component types available)",
+        Spark::ComponentFactory::Get().GetRegisteredCount());
 }
 
 // -------------------------------------------------------------------------
@@ -1087,6 +1178,11 @@ void AngelScriptEngine::RegisterComponentTypes()
 }
 
 void AngelScriptEngine::RegisterGlobalFunctions()
+{
+    // No-op without AngelScript.
+}
+
+void AngelScriptEngine::AutoRegisterReflectedTypes()
 {
     // No-op without AngelScript.
 }
