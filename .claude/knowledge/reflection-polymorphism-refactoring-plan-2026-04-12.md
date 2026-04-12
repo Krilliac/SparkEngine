@@ -10,7 +10,7 @@
 | 4 (Network) | **Prep done** | Transform/Health/NetworkIdentity fields marked `replicated=true`. EntityReplicator not yet modified |
 | 5 (Materials) | Planned | |
 | 6 (AngelScript) | Planned | |
-| 7 (Settings) | **Mostly done** | 14 of 33 groups migrated (Graphics, Audio, Game, Physics, Camera, Controls, Rendering, PostProcess, SSAO, AI, Player, Editor, Network, Debug) — 189 fields, ~378 manual R/W lines → 28 one-liners |
+| 7 (Settings) | **Done** | 43 of 44 groups migrated (all except Logging with hex categoryMask). 441 manual Read + 442 manual Write lines → 88 one-liners + registrations |
 | 8B (UI Bindings) | **Done** | UITypedBinding\<T\> replaces 4 concrete classes, backward-compatible aliases |
 
 ## Context
