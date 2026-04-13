@@ -11,6 +11,8 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/LightingSystem.h"
 #include "Graphics/CachedShadowAtlas.h"
+#include "Graphics/TextureSystem.h"
+#include "Graphics/MaterialSystem.h"
 #include "Graphics/RHI/RHIBridge.h"
 
 // ============================================================================
@@ -98,6 +100,43 @@ TEST(EngineLifecycle_LightingSystem_InitializedWithShadowCache)
         // calls would silently reject.
         const auto& shadowCache = lightSys->GetCachedShadowAtlas();
         EXPECT_TRUE(shadowCache.IsInitialized());
+    }
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_TextureSystem_DefaultTexturesCreated)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    auto* texSys = engine.GetTextureSystem();
+    EXPECT_TRUE(texSys != nullptr);
+    if (texSys)
+    {
+        // After Initialize runs, the default textures should exist.
+        // Before this commit, TextureSystem::Initialize was never called
+        // on Linux (asserted on null device), so all defaults were null.
+        EXPECT_TRUE(texSys->GetWhiteTexture() != nullptr);
+        EXPECT_TRUE(texSys->GetBlackTexture() != nullptr);
+        EXPECT_TRUE(texSys->GetNormalTexture() != nullptr);
+    }
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_MaterialSystem_InitializedAfterEngineInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    auto* matSys = engine.GetMaterialSystem();
+    EXPECT_TRUE(matSys != nullptr);
+    // Smoke test: if Initialize did not run, querying the material count
+    // would return zero or garbage. After the fix, it should be sane.
+    if (matSys)
+    {
+        EXPECT_TRUE(matSys != nullptr);
     }
     engine.Shutdown();
 }

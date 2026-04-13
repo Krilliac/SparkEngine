@@ -186,8 +186,10 @@ TextureSystem::~TextureSystem()
 
 HRESULT TextureSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    ASSERT_NOT_NULL(device);
-    ASSERT_NOT_NULL(context);
+    // On Linux the D3D11 device/context are stubs — the implementation below
+    // passes nullptr to CreateFromData and operates on CPU-side metadata only.
+    // Accept null inputs in headless mode so GraphicsEngine can initialize the
+    // subsystem without a real GPU.
     m_device = device;
     m_context = context;
     memset(&m_metrics, 0, sizeof(m_metrics));

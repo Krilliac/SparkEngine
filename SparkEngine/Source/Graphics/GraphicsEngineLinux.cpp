@@ -109,10 +109,29 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_renderPipeline->SetGraphicsEngine(this);
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
-    // Initialize the subsystems whose Linux implementations accept a null
-    // D3D11 device (TextureSystem and MaterialSystem assert non-null on
-    // Linux, so they remain uninitialized in headless mode — SetDevice
-    // paths will wire them up later when a real device is available).
+    // Initialize subsystems in headless mode. All four accept null
+    // device/context on Linux; the Linux-specific implementations operate on
+    // CPU-side state only and don't touch the D3D11 stubs.
+    if (m_textureSystem)
+    {
+        HRESULT hr = m_textureSystem->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): TextureSystem::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
+    if (m_materialSystem)
+    {
+        HRESULT hr = m_materialSystem->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): MaterialSystem::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
     if (m_lightingSystem)
     {
         HRESULT hr = m_lightingSystem->Initialize(nullptr, nullptr);
