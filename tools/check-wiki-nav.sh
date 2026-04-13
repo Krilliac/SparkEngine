@@ -37,8 +37,8 @@ log_info "Checking wiki navigation consistency..."
 # Only match the link target (after ]), skip external links (containing .., /, or .)
 sidebar_pages=$(grep -oP '\]\(([A-Za-z0-9_-]+)\)' "$SIDEBAR" | sed 's/\](//;s/)//' | sort -u)
 
-# List actual wiki .md files (minus _Sidebar.md and Engine-Architecture-Flowchart.md)
-actual_pages=$(find "$WIKI_DIR" -maxdepth 1 -name '*.md' ! -name '_Sidebar.md' -printf '%f\n' | sed 's/\.md$//' | sort -u)
+# List actual wiki .md files, excluding internal helper docs prefixed with "_"
+actual_pages=$(find "$WIKI_DIR" -maxdepth 1 -name '*.md' ! -name '_*.md' -printf '%f\n' | sed 's/\.md$//' | sort -u)
 
 # Pages in wiki/ but not in sidebar
 orphaned=$(comm -23 <(echo "$actual_pages") <(echo "$sidebar_pages"))

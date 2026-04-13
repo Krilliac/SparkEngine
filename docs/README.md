@@ -46,6 +46,7 @@ tools/validate-all.sh --warn-only  # Report but don't fail
 | `check-wiring.sh` | Systems with Initialize() are actually called | None |
 | `check-bloat.sh` | File size thresholds (500-line .cpp, 300-line .h) | None |
 | `check-doxygen-coverage.sh` | Headers have @file/@brief docs (95% threshold) | None |
+| `check-wiki-quality.sh` | Wiki template + stale metric quality checks | None |
 
 ### Legacy Doxygen (optional, requires doxygen + graphviz)
 
