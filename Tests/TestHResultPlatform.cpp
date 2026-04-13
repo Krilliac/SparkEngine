@@ -9,7 +9,15 @@
  */
 
 #include "TestFramework.h"
+// On Linux/macOS, PlatformTypes.h provides the HRESULT type and macros used
+// below. On Windows, these come from the system's <windows.h> — include it
+// directly so this test compiles on both platforms.
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
 #include "Core/PlatformTypes.h"
+#endif
 #include <cstdint>
 #include <type_traits>
 

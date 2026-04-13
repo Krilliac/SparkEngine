@@ -422,6 +422,7 @@ namespace Spark
                 EGLDisplay m_bootstrapDisplay = EGL_NO_DISPLAY;
                 EGLContext m_bootstrapContext = EGL_NO_CONTEXT;
                 EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
+                bool m_ownsEglContext = true; ///< False when host (e.g. SDL2) created the context
 #endif
 
                 // Phase Z Theme 3B: per-frame transient vertex/index allocator.

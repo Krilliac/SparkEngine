@@ -875,6 +875,32 @@ namespace Spark
                 // On Linux with EGL, we create a surfaceless EGL context using Mesa's software
                 // renderer (llvmpipe). This enables full GL rendering without a GPU or display.
 #if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+                // If SDL2 (or any other host) already created a GL context, reuse it
+                // instead of bootstrapping an EGL pbuffer. This is critical: when SDL
+                // owns the window's GL context, creating a separate EGL pbuffer and
+                // making it current would route all rendering to the pbuffer while
+                // SDL_GL_SwapWindow still swaps the window — frames never reach the
+                // screen. Match the GLX branch's detect-and-reuse pattern.
+                if (eglGetCurrentContext() != EGL_NO_CONTEXT)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                                   "Existing EGL context detected (SDL2/host-owned) — skipping EGL bootstrap");
+                    m_bootstrapDisplay = eglGetCurrentDisplay();
+                    m_bootstrapContext = eglGetCurrentContext();
+                    m_bootstrapSurface = eglGetCurrentSurface(EGL_DRAW);
+                    m_ownsEglContext = false; // host owns this context
+                    if (!gladLoadGL())
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
+                        return false;
+                    }
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
+                                   reinterpret_cast<const char*>(glGetString(GL_VERSION)),
+                                   reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
+                                   reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+                    return true;
+                }
+
                 // EGL headless bootstrap — works with Mesa llvmpipe, no X11/GPU required
                 m_bootstrapDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
                 if (m_bootstrapDisplay == EGL_NO_DISPLAY)
@@ -1280,12 +1306,19 @@ namespace Spark
 #elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
                 if (m_bootstrapDisplay != EGL_NO_DISPLAY)
                 {
-                    eglMakeCurrent(m_bootstrapDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-                    if (m_bootstrapContext != EGL_NO_CONTEXT)
-                        eglDestroyContext(m_bootstrapDisplay, m_bootstrapContext);
-                    if (m_bootstrapSurface != EGL_NO_SURFACE)
-                        eglDestroySurface(m_bootstrapDisplay, m_bootstrapSurface);
-                    eglTerminate(m_bootstrapDisplay);
+                    if (m_ownsEglContext)
+                    {
+                        // Only destroy resources we created (EGL bootstrap path).
+                        // When the host (SDL2) created the context, it owns it and
+                        // will destroy it — we must not call eglTerminate on a
+                        // display we didn't initialize.
+                        eglMakeCurrent(m_bootstrapDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+                        if (m_bootstrapContext != EGL_NO_CONTEXT)
+                            eglDestroyContext(m_bootstrapDisplay, m_bootstrapContext);
+                        if (m_bootstrapSurface != EGL_NO_SURFACE)
+                            eglDestroySurface(m_bootstrapDisplay, m_bootstrapSurface);
+                        eglTerminate(m_bootstrapDisplay);
+                    }
                     m_bootstrapDisplay = EGL_NO_DISPLAY;
                     m_bootstrapContext = EGL_NO_CONTEXT;
                     m_bootstrapSurface = EGL_NO_SURFACE;
