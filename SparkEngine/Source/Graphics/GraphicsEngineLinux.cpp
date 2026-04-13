@@ -244,11 +244,30 @@ void GraphicsEngine::Shutdown()
     if (!rhi.initialized)
         return;
 
+    // Explicit Shutdown() on all subsystems that were initialized in
+    // Initialize(), in reverse order. Mirrors the Windows path — destructors
+    // alone are insufficient because some subsystems hold references or
+    // emit diagnostic logs only from Shutdown.
+    if (m_upscalingSystem)
+        m_upscalingSystem->Shutdown();
+    if (m_lightManager)
+        m_lightManager->Shutdown();
+    if (m_postProcessing)
+        m_postProcessing->Shutdown();
+    if (m_assetPipeline)
+        m_assetPipeline->Shutdown();
+    if (m_lightingSystem)
+        m_lightingSystem->Shutdown();
+    if (m_materialSystem)
+        m_materialSystem->Shutdown();
+    if (m_textureSystem)
+        m_textureSystem->Shutdown();
+
     m_textureSystem.reset();
     m_materialSystem.reset();
     m_lightingSystem.reset();
-    m_postProcessing.reset();
     m_assetPipeline.reset();
+    m_upscalingSystem.reset();
     m_vramBudgetMonitor.reset();
     m_physicsSystem = nullptr;
     m_lightManager.reset();
