@@ -164,6 +164,24 @@ TEST(EngineLifecycle_BeginEndFrame_InvokesSubsystemUpdates)
     engine.Shutdown();
 }
 
+TEST(EngineLifecycle_TemporalEffects_InitializedAfterEngineInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    // Before the fix, m_temporalEffects was never created on Linux
+    // (only Windows created it). After init, the accessor should
+    // return non-null and IsInitialized() should be true.
+    auto* temporalEffects = engine.GetTemporalEffects();
+    EXPECT_TRUE(temporalEffects != nullptr);
+    if (temporalEffects)
+    {
+        EXPECT_TRUE(temporalEffects->IsInitialized());
+    }
+    engine.Shutdown();
+}
+
 TEST(EngineLifecycle_LightManager_InitializedWithTileGrid)
 {
     GraphicsEngine engine;

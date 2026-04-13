@@ -260,6 +260,7 @@ class GraphicsEngine
     MaterialSystem* GetMaterialSystem() const;
     LightingSystem* GetLightingSystem() const;
     Spark::Graphics::PostProcessingPipeline* GetPostProcessingPipeline() const;
+    TemporalEffects* GetTemporalEffects() const { return m_temporalEffects.get(); }
     Spark::Graphics::ShadowAtlas* GetShadowAtlas() const { return m_shadowAtlas.get(); }
     Spark::Graphics::ScreenSpaceEffects* GetScreenSpaceEffects() const { return m_screenSpaceEffects.get(); }
     AssetPipeline* GetAssetPipeline() const;

@@ -189,6 +189,16 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
+    // TemporalEffects tracks CPU-side jitter, history, and motion vectors
+    // even without a D3D11 device. Windows only calls SetDevice() to opt in
+    // to the GPU path. On Linux we init the CPU state only.
+    m_temporalEffects = std::make_unique<TemporalEffects>();
+    if (!m_temporalEffects->Initialize(m_width, m_height))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): TemporalEffects::Initialize returned false");
+    }
+
     // Phase Q: mirror the Windows denoiser activation so Linux /
     // headless builds have the same live IDenoiser instance and
     // tests exercising GraphicsEngine directly see consistent state.
@@ -248,6 +258,8 @@ void GraphicsEngine::Shutdown()
     // Initialize(), in reverse order. Mirrors the Windows path — destructors
     // alone are insufficient because some subsystems hold references or
     // emit diagnostic logs only from Shutdown.
+    if (m_temporalEffects)
+        m_temporalEffects->Shutdown();
     if (m_upscalingSystem)
         m_upscalingSystem->Shutdown();
     if (m_lightManager)
@@ -389,6 +401,9 @@ void GraphicsEngine::BeginFrame()
         DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
         m_lightingSystem->Update(kNominalDeltaTime, identity, identity);
     }
+
+    if (m_temporalEffects)
+        m_temporalEffects->Update(kNominalDeltaTime);
 
     // Clear the back buffer
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
