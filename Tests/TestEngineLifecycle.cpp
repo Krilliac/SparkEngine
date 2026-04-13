@@ -13,6 +13,7 @@
 #include "Graphics/CachedShadowAtlas.h"
 #include "Graphics/TextureSystem.h"
 #include "Graphics/MaterialSystem.h"
+#include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/RHI/RHIBridge.h"
 
 // ============================================================================
@@ -120,6 +121,24 @@ TEST(EngineLifecycle_TextureSystem_DefaultTexturesCreated)
         EXPECT_TRUE(texSys->GetWhiteTexture() != nullptr);
         EXPECT_TRUE(texSys->GetBlackTexture() != nullptr);
         EXPECT_TRUE(texSys->GetNormalTexture() != nullptr);
+    }
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_PostProcessingPipeline_InitializedAfterEngineInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    auto* postProc = engine.GetPostProcessingPipeline();
+    EXPECT_TRUE(postProc != nullptr);
+    if (postProc)
+    {
+        // Before this commit, Initialize was never called on Linux, so
+        // m_initialized stayed false and Process() would early-out
+        // silently, skipping all post-process effects.
+        EXPECT_TRUE(postProc->IsInitialized());
     }
     engine.Shutdown();
 }

@@ -153,6 +153,19 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
+    // PostProcessingPipeline has no device requirement for its CPU-side
+    // state (temporal filter, volume manager, RT handle system). The
+    // GPU-backed effects are behind #ifdef SPARK_PLATFORM_WINDOWS guards
+    // that check m_device, so a null device is safe in headless mode.
+    if (m_postProcessing)
+    {
+        if (!m_postProcessing->Initialize(m_width, m_height))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): PostProcessingPipeline::Initialize returned false");
+        }
+    }
+
     // Phase Q: mirror the Windows denoiser activation so Linux /
     // headless builds have the same live IDenoiser instance and
     // tests exercising GraphicsEngine directly see consistent state.
