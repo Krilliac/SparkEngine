@@ -14,6 +14,7 @@
 #include "Graphics/TextureSystem.h"
 #include "Graphics/MaterialSystem.h"
 #include "Graphics/PostProcessingPipeline.h"
+#include "Graphics/LightManager.h"
 #include "Graphics/RHI/RHIBridge.h"
 
 // ============================================================================
@@ -139,6 +140,24 @@ TEST(EngineLifecycle_PostProcessingPipeline_InitializedAfterEngineInit)
         // m_initialized stayed false and Process() would early-out
         // silently, skipping all post-process effects.
         EXPECT_TRUE(postProc->IsInitialized());
+    }
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_LightManager_InitializedWithTileGrid)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    auto* lightMgr = engine.GetLightManager();
+    EXPECT_TRUE(lightMgr != nullptr);
+    if (lightMgr)
+    {
+        // After Initialize is wired up, GetTilesX/Y should return non-zero
+        // values (1280/16 = 80, 720/16 = 45). Before the fix, they were 0.
+        EXPECT_TRUE(lightMgr->GetTilesX() > 0);
+        EXPECT_TRUE(lightMgr->GetTilesY() > 0);
     }
     engine.Shutdown();
 }

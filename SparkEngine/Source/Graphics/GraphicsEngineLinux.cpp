@@ -166,6 +166,29 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         }
     }
 
+    // LightManager has no device dependency — pure CPU tile binning + shadow
+    // atlas slot tracking. Safe to initialize in headless mode.
+    if (m_lightManager)
+    {
+        if (!m_lightManager->Initialize(m_width, m_height, 16))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): LightManager::Initialize returned false");
+        }
+    }
+
+    // UpscalingSystem's Linux CreateGPUResources is a no-op (returns true),
+    // so Initialize with null device/context succeeds and the system tracks
+    // render/display resolution on the CPU side.
+    if (m_upscalingSystem)
+    {
+        if (!m_upscalingSystem->Initialize(nullptr, nullptr, m_width, m_height))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): UpscalingSystem::Initialize returned false");
+        }
+    }
+
     // Phase Q: mirror the Windows denoiser activation so Linux /
     // headless builds have the same live IDenoiser instance and
     // tests exercising GraphicsEngine directly see consistent state.

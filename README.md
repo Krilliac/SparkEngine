@@ -23,7 +23,7 @@
 
 **Quality & Testing:**
 
-[![Tests](https://img.shields.io/badge/tests-5720_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/Working/Tests)
+[![Tests](https://img.shields.io/badge/tests-5722_cases-brightgreen)](https://github.com/Krilliac/SparkEngine/tree/Working/Tests)
 [![clang--format](https://img.shields.io/badge/style-clang--format-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-format)
 [![clang--tidy](https://img.shields.io/badge/analysis-clang--tidy-blue)](https://github.com/Krilliac/SparkEngine/blob/Working/.clang-tidy)
 
@@ -427,7 +427,7 @@ SparkEngine/
 |   |-- Scenes/             # Level/scene JSON files
 |   |-- Scripts/            # AngelScript game scripts
 |-- Templates/               # Game module project templates
-|-- Tests/                   # 5720 unit tests across 462 files (CTest + 5 sanitizers)
+|-- Tests/                   # 5722 unit tests across 462 files (CTest + 5 sanitizers)
 |-- tools/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
@@ -472,7 +472,7 @@ The following libraries are included directly in the source tree:
 
 ## Tests
 
-5720 unit tests across 462 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
+5722 unit tests across 462 test files covering all major engine systems, built with a lightweight internal test framework (no external test dependencies). Integrated with CMake's CTest.
 
 ```bash
 # Build and run tests
