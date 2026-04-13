@@ -164,6 +164,34 @@ TEST(EngineLifecycle_BeginEndFrame_InvokesSubsystemUpdates)
     engine.Shutdown();
 }
 
+TEST(EngineLifecycle_ShadowAtlas_CreatedAfterEngineInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    // Before this commit, m_shadowAtlas was created only on Windows.
+    // Linux left it as nullptr, so any downstream shadow tile allocation
+    // would silently skip.
+    auto* shadowAtlas = engine.GetShadowAtlas();
+    EXPECT_TRUE(shadowAtlas != nullptr);
+    engine.Shutdown();
+}
+
+TEST(EngineLifecycle_ScreenSpaceEffects_CreatedAfterEngineInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    // Before this commit, m_screenSpaceEffects was created only on
+    // Windows. Linux left it nullptr, so SSAO/SSR/contact-shadows were
+    // silently unavailable.
+    auto* sse = engine.GetScreenSpaceEffects();
+    EXPECT_TRUE(sse != nullptr);
+    engine.Shutdown();
+}
+
 TEST(EngineLifecycle_TemporalEffects_InitializedAfterEngineInit)
 {
     GraphicsEngine engine;
