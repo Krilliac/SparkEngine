@@ -10,6 +10,7 @@
 - [Artist Workflow Guide](Artist-Workflow-Guide)
 - [Editor Walkthrough](Editor-Walkthrough)
 - [Migration Guide](Migration-Guide)
+- [How SparkEngine Works](How-SparkEngine-Works)
 - [Architecture Overview](Architecture-Overview)
 - [Engine Architecture Flowchart](Engine-Architecture-Flowchart)
 - [Creating a Game Module](Creating-a-Game-Module)
