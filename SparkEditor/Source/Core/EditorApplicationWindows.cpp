@@ -12,6 +12,7 @@
 
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "EditorWindowManager.h"
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
