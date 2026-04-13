@@ -53,6 +53,11 @@ namespace SparkEditor
      */
         void SetInspectedObject(const std::string& objectId);
 
+        /// Helper: draw a labeled XYZ drag-float control with colored reset buttons.
+        /// Public so reflection-based component renderers (outside the panel
+        /// translation unit) can reuse it for Vector3 field rendering.
+        static void DrawVec3Control(const char* label, float* values, float resetValue, float speed);
+
       private:
         void RenderObjectProperties();
         void RenderComponentList();
@@ -122,9 +127,6 @@ namespace SparkEditor
 
         /// Helper: find a component by type on a given object
         static Component* FindComponent(SceneFile* scene, ObjectID objectID, ComponentType type);
-
-        /// Helper: draw a labeled XYZ drag-float control with colored reset buttons
-        static void DrawVec3Control(const char* label, float* values, float resetValue, float speed);
 
         /**
          * @brief Auto-render ImGui widgets for all fields described by a FieldInfo list.

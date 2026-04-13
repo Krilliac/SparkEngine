@@ -191,29 +191,10 @@ namespace Spark
         {
             ShaderCompileResult result;
 
-            // Determine target language based on backend
-            ShaderLanguage target = options.targetLanguage;
-            if (target == ShaderLanguage::Auto)
-            {
-                switch (options.targetBackend)
-                {
-                case GraphicsBackend::D3D11:
-                case GraphicsBackend::D3D12:
-                    target = ShaderLanguage::HLSL;
-                    break;
-                case GraphicsBackend::Vulkan:
-                    target = ShaderLanguage::SPIRV;
-                    break;
-                case GraphicsBackend::OpenGL:
-                    target = ShaderLanguage::GLSL;
-                    break;
-                default:
-                    target = ShaderLanguage::HLSL;
-                    break;
-                }
-            }
-
-            // Source language detection
+            // Source language detection first — needed as a fallback for the
+            // target when both options.targetLanguage and options.targetBackend
+            // are Auto. Previously target defaulted to HLSL when the backend
+            // was unknown, producing unsupported GLSL→HLSL paths.
             ShaderLanguage source = options.sourceLanguage;
             if (source == ShaderLanguage::Auto)
             {
@@ -232,6 +213,31 @@ namespace Spark
                 else
                 {
                     source = ShaderLanguage::HLSL;
+                }
+            }
+
+            // Determine target language based on backend. If the backend is
+            // unknown, fall back to the source language (passthrough) rather
+            // than HLSL — preserves GLSL→GLSL and HLSL→HLSL defaults.
+            ShaderLanguage target = options.targetLanguage;
+            if (target == ShaderLanguage::Auto)
+            {
+                switch (options.targetBackend)
+                {
+                case GraphicsBackend::D3D11:
+                case GraphicsBackend::D3D12:
+                    target = ShaderLanguage::HLSL;
+                    break;
+                case GraphicsBackend::Vulkan:
+                    target = ShaderLanguage::SPIRV;
+                    break;
+                case GraphicsBackend::OpenGL:
+                    target = ShaderLanguage::GLSL;
+                    break;
+                default:
+                    // Backend unknown — passthrough: target matches source
+                    target = source;
+                    break;
                 }
             }
 

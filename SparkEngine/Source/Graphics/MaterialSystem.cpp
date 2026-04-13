@@ -41,13 +41,16 @@ MaterialSystem::~MaterialSystem()
 
 HRESULT MaterialSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_EXPECTS(device != nullptr);
-    SPARK_EXPECTS(context != nullptr);
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
 #ifdef SPARK_PLATFORM_WINDOWS
+    SPARK_EXPECTS(device != nullptr);
+    SPARK_EXPECTS(context != nullptr);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, device);
     SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Graphics, context);
 #endif
+    // On Linux the D3D11 device/context are stubs — accept null in headless
+    // mode. The Linux branch of CreateDefaultMaterials operates entirely on
+    // CPU-side Material objects and doesn't touch the device pointer.
     m_device = device;
     m_context = context;
     memset(&m_metrics, 0, sizeof(m_metrics));

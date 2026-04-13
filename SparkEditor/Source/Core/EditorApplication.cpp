@@ -51,8 +51,11 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 namespace SparkEditor
 {
 
-    // Static instance pointer for message handling
-    static EditorApplication* s_instance = nullptr;
+    // Out-of-class definition of the static application pointer. The
+    // declaration lives in EditorApplication.h so WindowProc and other
+    // methods defined in EditorApplicationWindows.cpp can reach it via
+    // the class scope (EditorApplication::s_instance).
+    EditorApplication* EditorApplication::s_instance = nullptr;
 
     EditorApplication::EditorApplication()
         : m_startTime(std::chrono::high_resolution_clock::now()), m_lastFrameTime(m_startTime)

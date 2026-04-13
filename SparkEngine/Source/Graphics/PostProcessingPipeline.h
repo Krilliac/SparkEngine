@@ -96,6 +96,9 @@ namespace Spark::Graphics
         /** @brief Shutdown and release all resources */
         void Shutdown();
 
+        /** @brief Check whether Initialize has run successfully */
+        bool IsInitialized() const { return m_initialized; }
+
         /**
          * @brief Process all enabled effects in order
          * @param deltaTime Frame delta time for animated effects

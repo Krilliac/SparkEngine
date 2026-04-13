@@ -260,8 +260,10 @@ class GraphicsEngine
     MaterialSystem* GetMaterialSystem() const;
     LightingSystem* GetLightingSystem() const;
     Spark::Graphics::PostProcessingPipeline* GetPostProcessingPipeline() const;
+    TemporalEffects* GetTemporalEffects() const { return m_temporalEffects.get(); }
     Spark::Graphics::ShadowAtlas* GetShadowAtlas() const { return m_shadowAtlas.get(); }
     Spark::Graphics::ScreenSpaceEffects* GetScreenSpaceEffects() const { return m_screenSpaceEffects.get(); }
+    Spark::Graphics::TerrainRenderer* GetTerrainRenderer() const { return m_terrainRenderer.get(); }
     AssetPipeline* GetAssetPipeline() const;
     UpscalingSystem* GetUpscalingSystem() const { return m_upscalingSystem.get(); }
     VRAMBudgetMonitor* GetVRAMBudgetMonitor() const { return m_vramBudgetMonitor.get(); }

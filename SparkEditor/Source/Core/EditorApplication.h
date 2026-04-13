@@ -85,6 +85,12 @@ namespace SparkEditor
         static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
 
+        /// Static application pointer shared across translation units (set by
+        /// the constructor, cleared by the destructor). Previously defined
+        /// as a file-local static in EditorApplication.cpp, which made it
+        /// unreachable from EditorApplicationWindows.cpp::WindowProc.
+        static EditorApplication* s_instance;
+
       private:
         bool CreateMainWindow(const EditorConfig& config);
         bool InitializeGraphics();

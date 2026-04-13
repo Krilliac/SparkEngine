@@ -29,6 +29,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include "TemporalEffects.h"
 #include "ScreenSpaceEffects.h"
 #include "ShadowAtlas.h"
+#include "TerrainRenderer.h"
 // Phase U: activated Tier 2 graphics orphan — process-wide shader file
 // watcher. Pumped from the Linux BeginFrame so headless / RHI builds
 // share the same per-frame hot-reload poll that the Windows branch gets
@@ -77,7 +78,15 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     auto& rhi = GetRHI();
 
-    Spark::RHI::GraphicsBackend backend = Spark::RHI::RHIBridge::GetRecommendedBackend();
+    // Headless mode: when no window is provided, force NullRHI instead of
+    // picking up an available GPU backend. Vulkan Lavapipe / OpenGL / etc.
+    // can initialize successfully but then hang or misbehave without a
+    // surface to present to, so headless tests and tools must stay on
+    // NullRHI. The backend fallback inside RHIBridge::Initialize still
+    // handles the case where the preferred GPU backend fails for a real
+    // window, falling through to NullRHI on its own.
+    Spark::RHI::GraphicsBackend backend =
+        (hWnd == nullptr) ? Spark::RHI::GraphicsBackend::None : Spark::RHI::RHIBridge::GetRecommendedBackend();
 
     bool ok = rhi.bridge.Initialize(static_cast<void*>(hWnd), m_width, m_height, backend,
 #ifndef NDEBUG
@@ -109,6 +118,121 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     m_renderPipeline->SetGraphicsEngine(this);
     m_postProcessing = std::make_unique<PostProcessingPipeline>();
 
+    // Initialize subsystems in headless mode. All four accept null
+    // device/context on Linux; the Linux-specific implementations operate on
+    // CPU-side state only and don't touch the D3D11 stubs.
+    if (m_textureSystem)
+    {
+        HRESULT hr = m_textureSystem->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): TextureSystem::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
+    if (m_materialSystem)
+    {
+        HRESULT hr = m_materialSystem->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): MaterialSystem::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
+    if (m_lightingSystem)
+    {
+        HRESULT hr = m_lightingSystem->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): LightingSystem::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
+    if (m_assetPipeline)
+    {
+        HRESULT hr = m_assetPipeline->Initialize(nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): AssetPipeline::Initialize failed (hr=0x%08X)",
+                           static_cast<unsigned>(hr));
+        }
+    }
+
+    // PostProcessingPipeline has no device requirement for its CPU-side
+    // state (temporal filter, volume manager, RT handle system). The
+    // GPU-backed effects are behind #ifdef SPARK_PLATFORM_WINDOWS guards
+    // that check m_device, so a null device is safe in headless mode.
+    if (m_postProcessing)
+    {
+        if (!m_postProcessing->Initialize(m_width, m_height))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): PostProcessingPipeline::Initialize returned false");
+        }
+    }
+
+    // LightManager has no device dependency — pure CPU tile binning + shadow
+    // atlas slot tracking. Safe to initialize in headless mode.
+    if (m_lightManager)
+    {
+        if (!m_lightManager->Initialize(m_width, m_height, 16))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): LightManager::Initialize returned false");
+        }
+    }
+
+    // UpscalingSystem's Linux CreateGPUResources is a no-op (returns true),
+    // so Initialize with null device/context succeeds and the system tracks
+    // render/display resolution on the CPU side.
+    if (m_upscalingSystem)
+    {
+        if (!m_upscalingSystem->Initialize(nullptr, nullptr, m_width, m_height))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "GraphicsEngine (Linux): UpscalingSystem::Initialize returned false");
+        }
+    }
+
+    // TemporalEffects tracks CPU-side jitter, history, and motion vectors
+    // even without a D3D11 device. Windows only calls SetDevice() to opt in
+    // to the GPU path. On Linux we init the CPU state only.
+    m_temporalEffects = std::make_unique<TemporalEffects>();
+    if (!m_temporalEffects->Initialize(m_width, m_height))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): TemporalEffects::Initialize returned false");
+    }
+
+    // ShadowAtlas is pure CPU bookkeeping — allocation tracker + tile LRU.
+    m_shadowAtlas = std::make_unique<Spark::Graphics::ShadowAtlas>();
+    if (!m_shadowAtlas->Initialize(m_settings.shadowMapSize * 2))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GraphicsEngine (Linux): ShadowAtlas::Initialize returned false");
+    }
+
+    // ScreenSpaceEffects generates CPU-side SSAO kernel and noise texture
+    // data; GPU resource creation is a stub until SetDevice is called.
+    m_screenSpaceEffects = std::make_unique<Spark::Graphics::ScreenSpaceEffects>();
+    if (!m_screenSpaceEffects->Initialize(m_width, m_height))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): ScreenSpaceEffects::Initialize returned false");
+    }
+
+    // TerrainRenderer has a Linux-specific no-device Initialize. The CPU
+    // tile LRU + heightfield sampling state runs without a GPU.
+    m_terrainRenderer = std::make_unique<Spark::Graphics::TerrainRenderer>();
+    if (!m_terrainRenderer->Initialize())
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): TerrainRenderer::Initialize returned false");
+    }
+
     // Phase Q: mirror the Windows denoiser activation so Linux /
     // headless builds have the same live IDenoiser instance and
     // tests exercising GraphicsEngine directly see consistent state.
@@ -116,7 +240,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     Spark::Graphics::DenoiserSettings denoiserSettings;
     denoiserSettings.backend = Spark::Graphics::DenoiserBackend::Software;
     denoiserSettings.quality = Spark::Graphics::DenoiserQuality::Balanced;
-    m_denoiser->Initialize(denoiserSettings);
+    if (!m_denoiser->Initialize(denoiserSettings))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Denoiser::Initialize failed — continuing with stub");
+    }
 
     // Phase S: mirror the procedural noise graph activation on
     // Linux / headless so tests exercising GraphicsEngine see the
@@ -137,7 +264,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         vctSettings.enabled = false;
         vctSettings.voxelResolution = 32;
         vctSettings.worldExtent = 50.0f;
-        m_vctSystem->Initialize(vctSettings);
+        if (!m_vctSystem->Initialize(vctSettings))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "VCTSystem::Initialize failed — continuing without VCT");
+        }
     }
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Initialized on Linux via RHI (%s)",
@@ -158,11 +288,38 @@ void GraphicsEngine::Shutdown()
     if (!rhi.initialized)
         return;
 
+    // Explicit Shutdown() on all subsystems that were initialized in
+    // Initialize(), in reverse order. Mirrors the Windows path — destructors
+    // alone are insufficient because some subsystems hold references or
+    // emit diagnostic logs only from Shutdown.
+    if (m_terrainRenderer)
+        m_terrainRenderer->Shutdown();
+    if (m_screenSpaceEffects)
+        m_screenSpaceEffects->Shutdown();
+    if (m_shadowAtlas)
+        m_shadowAtlas->Shutdown();
+    if (m_temporalEffects)
+        m_temporalEffects->Shutdown();
+    if (m_upscalingSystem)
+        m_upscalingSystem->Shutdown();
+    if (m_lightManager)
+        m_lightManager->Shutdown();
+    if (m_postProcessing)
+        m_postProcessing->Shutdown();
+    if (m_assetPipeline)
+        m_assetPipeline->Shutdown();
+    if (m_lightingSystem)
+        m_lightingSystem->Shutdown();
+    if (m_materialSystem)
+        m_materialSystem->Shutdown();
+    if (m_textureSystem)
+        m_textureSystem->Shutdown();
+
     m_textureSystem.reset();
     m_materialSystem.reset();
     m_lightingSystem.reset();
-    m_postProcessing.reset();
     m_assetPipeline.reset();
+    m_upscalingSystem.reset();
     m_vramBudgetMonitor.reset();
     m_physicsSystem = nullptr;
     m_lightManager.reset();
@@ -235,6 +392,18 @@ HRESULT GraphicsEngine::Resize(uint32_t width, uint32_t height)
     rhi.width = width;
     rhi.height = height;
 
+    // Propagate the new viewport to every subsystem that tracks resolution.
+    // Without this, the subsystems keep their initial m_width/m_height and
+    // any subsequent render would use stale data.
+    if (m_postProcessing)
+        m_postProcessing->Resize(width, height);
+    if (m_temporalEffects)
+        m_temporalEffects->Resize(width, height);
+    if (m_screenSpaceEffects)
+        m_screenSpaceEffects->Resize(width, height);
+    if (m_lightManager)
+        m_lightManager->Resize(width, height);
+
     return S_OK;
 }
 
@@ -263,9 +432,30 @@ void GraphicsEngine::BeginFrame()
     // Phase U: pump the Spark::Graphics::ShaderHotReload singleton each
     // frame so runtime shader hot-reload runs on Linux and headless
     // builds. The singleton has its own poll-interval gating (default
-    // 0.5 s) so a fixed nominal delta is both safe and cheap.
-    if (m_shader)
-        m_shader->HotReloadShaders();
+    // 0.5 s) so a fixed nominal delta is both safe and cheap. Previously
+    // guarded by `if (m_shader)`, but m_shader is never instantiated on
+    // either platform — calling the singleton directly bypasses the
+    // dead member and actually runs the file watcher.
+    Spark::Graphics::ShaderHotReload::GetInstance().Update(1.0f / 60.0f);
+
+    // Per-frame subsystem updates. These advance async load queues,
+    // tile-binning counters, shadow cache frame state, and temporal
+    // effect history. Without them, the subsystems silently stall.
+    const float kNominalDeltaTime = 1.0f / 60.0f;
+
+    if (m_assetPipeline)
+        m_assetPipeline->Update(kNominalDeltaTime);
+
+    if (m_lightingSystem)
+    {
+        // Identity view/proj in headless mode — the lighting system reads
+        // the view matrix only to extract camera position from its inverse.
+        DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
+        m_lightingSystem->Update(kNominalDeltaTime, identity, identity);
+    }
+
+    if (m_temporalEffects)
+        m_temporalEffects->Update(kNominalDeltaTime);
 
     // Clear the back buffer
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
@@ -314,6 +504,14 @@ void GraphicsEngine::EndFrame()
         return;
     if (!m_frameInProgress.load())
         return;
+
+    // Post-processing runs after scene rendering and before Present.
+    // Without this call, all 16 effect passes (Bloom, DoF, Tonemapping,
+    // ColorGrading, etc.) were silently skipped on Linux.
+    if (m_postProcessing && m_postProcessing->IsInitialized())
+    {
+        m_postProcessing->Process(1.0f / 60.0f);
+    }
 
     rhi.bridge.EndFrame();
     rhi.bridge.Present(m_settings.vsync);

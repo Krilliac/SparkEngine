@@ -224,6 +224,15 @@ static void TickFrame(float dt)
     if (g_moduleHotReload)
         g_moduleHotReload->PollChanges();
 
+    // Pump the audio engine: advances source state machine (stops finished
+    // sources), applies 3D spatialization, and processes distance attenuation.
+    // Pre-existing bug: AudioEngine::Update was never called from the main
+    // loop on any platform.
+    SPARK_GUARDED_UPDATE("Audio", "Core", {
+        if (g_audioEngine)
+            g_audioEngine->Update(dt);
+    });
+
     UpdateGameplaySystems(dt);
     UpdateDebugSystems(dt);
     SPARK_GUARDED_UPDATE("Console", "Core", {
@@ -309,7 +318,10 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
 
     // Initialize neural inference engine (GPU compute-based, no external ML deps)
     auto& neuralInference = Spark::Graphics::Neural::NeuralInferenceEngine::GetInstance();
-    neuralInference.Initialize();
+    if (!neuralInference.Initialize())
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "NeuralInferenceEngine::Initialize failed — continuing without ML");
+    }
     ctx->RegisterSystem<Spark::Graphics::Neural::NeuralInferenceEngine>(&neuralInference);
 
     if (registerGameplay)
@@ -454,6 +466,12 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
         if (g_moduleHotReload)
             g_moduleHotReload->PollChanges();
+
+        // Pump the audio engine — see TickFrame for the rationale.
+        SPARK_GUARDED_UPDATE("Audio", "Core", {
+            if (g_audioEngine)
+                g_audioEngine->Update(dt);
+        });
 
         UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);

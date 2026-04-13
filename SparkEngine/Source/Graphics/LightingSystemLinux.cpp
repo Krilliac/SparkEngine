@@ -142,8 +142,12 @@ HRESULT LightingSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     // Phase M: the Tier 2 orphan caches run on every platform because
     // they are pure CPU. The Linux stub tracks the exact same lifecycle
     // as the Windows path so portable tests see consistent state.
-    m_shadowCache.Initialize(2048, 4096, 256);
-    m_probeCache.Initialize(64, 4);
+    if (!m_shadowCache.Initialize(2048, 4096, 256))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "LightingSystem (Linux): CachedShadowAtlas::Initialize returned false");
+    }
+    m_probeCache.Initialize(64, 4); // void return
 
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightingSystem (Linux) initialized");
     return S_OK;

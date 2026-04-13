@@ -275,14 +275,18 @@ namespace Spark
               private:
                 RHISwapChainDesc m_desc;
                 std::unique_ptr<GLTexture> m_backBuffer;
+                bool m_windowed = false; ///< True when rendering to an on-screen window
 
 #ifdef _WIN32
                 HDC m_hdc = nullptr;
                 HGLRC m_hglrc = nullptr;
-#elif defined(__linux__) && defined(SPARK_EGL_SUPPORT)
+#elif defined(__linux__)
+                void* m_sdlWindow = nullptr; ///< SDL_Window* for windowed Present
+#ifdef SPARK_EGL_SUPPORT
                 EGLDisplay m_eglDisplay = EGL_NO_DISPLAY;
                 EGLSurface m_eglSurface = EGL_NO_SURFACE;
                 EGLContext m_eglContext = EGL_NO_CONTEXT;
+#endif
 #endif
             };
 
@@ -418,6 +422,7 @@ namespace Spark
                 EGLDisplay m_bootstrapDisplay = EGL_NO_DISPLAY;
                 EGLContext m_bootstrapContext = EGL_NO_CONTEXT;
                 EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
+                bool m_ownsEglContext = true; ///< False when host (e.g. SDL2) created the context
 #endif
 
                 // Phase Z Theme 3B: per-frame transient vertex/index allocator.

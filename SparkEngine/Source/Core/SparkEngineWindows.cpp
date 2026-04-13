@@ -254,7 +254,7 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
     return manager.LoadModulesFromDirectory(exeDir.string());
 }
 
-#endif // SPARK_PLATFORM_WINDOWS — end of the block that started above; SetupCrashHandler                            \
+#endif // SPARK_PLATFORM_WINDOWS — end of the block that started above; SetupCrashHandler
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
@@ -386,6 +386,14 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
         if (g_moduleHotReload)
             g_moduleHotReload->PollChanges();
+
+        // Pump the audio engine: advances source state machine, applies
+        // 3D spatialization and distance attenuation. Pre-existing bug —
+        // AudioEngine::Update was never called from the main loop.
+        SPARK_GUARDED_UPDATE("Audio", "Core", {
+            if (g_audioEngine)
+                g_audioEngine->Update(dt);
+        });
 
         UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
@@ -653,6 +661,14 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 
             if (g_moduleHotReload)
                 g_moduleHotReload->PollChanges();
+
+            // Pump the audio engine: advances source state machine, applies
+            // 3D spatialization and distance attenuation. Pre-existing bug —
+            // AudioEngine::Update was never called from the main loop.
+            SPARK_GUARDED_UPDATE("Audio", "Core", {
+                if (g_audioEngine)
+                    g_audioEngine->Update(dt);
+            });
 
             UpdateGameplaySystems(dt);
             UpdateDebugSystems(dt);

@@ -44,43 +44,46 @@ using HMODULE = void*;
 using SIZE_T = size_t;
 
 // --- HRESULT ---
-using HRESULT = long;
+// Must be 32-bit signed to match the Windows ABI. On 64-bit Linux, 'long'
+// is 8 bytes which makes error codes like E_FAIL (0x80004005) positive —
+// breaking SUCCEEDED()/FAILED() entirely. Use int32_t for correctness.
+using HRESULT = int32_t;
 
 #ifndef S_OK
-#define S_OK ((HRESULT)0L)
+#define S_OK ((HRESULT)0)
 #endif
 #ifndef S_FALSE
-#define S_FALSE ((HRESULT)1L)
+#define S_FALSE ((HRESULT)1)
 #endif
 #ifndef E_FAIL
-#define E_FAIL ((HRESULT)0x80004005L)
+#define E_FAIL ((HRESULT)0x80004005)
 #endif
 #ifndef E_INVALIDARG
-#define E_INVALIDARG ((HRESULT)0x80070057L)
+#define E_INVALIDARG ((HRESULT)0x80070057)
 #endif
 #ifndef E_OUTOFMEMORY
-#define E_OUTOFMEMORY ((HRESULT)0x8007000EL)
+#define E_OUTOFMEMORY ((HRESULT)0x8007000E)
 #endif
 #ifndef E_NOTIMPL
-#define E_NOTIMPL ((HRESULT)0x80004001L)
+#define E_NOTIMPL ((HRESULT)0x80004001)
 #endif
 #ifndef E_NOINTERFACE
-#define E_NOINTERFACE ((HRESULT)0x80004002L)
+#define E_NOINTERFACE ((HRESULT)0x80004002)
 #endif
 #ifndef E_POINTER
-#define E_POINTER ((HRESULT)0x80004003L)
+#define E_POINTER ((HRESULT)0x80004003)
 #endif
 #ifndef E_ABORT
-#define E_ABORT ((HRESULT)0x80004004L)
+#define E_ABORT ((HRESULT)0x80004004)
 #endif
 #ifndef E_UNEXPECTED
-#define E_UNEXPECTED ((HRESULT)0x8000FFFFL)
+#define E_UNEXPECTED ((HRESULT)0x8000FFFF)
 #endif
 #ifndef DXGI_ERROR_DEVICE_REMOVED
-#define DXGI_ERROR_DEVICE_REMOVED ((HRESULT)0x887A0005L)
+#define DXGI_ERROR_DEVICE_REMOVED ((HRESULT)0x887A0005)
 #endif
 #ifndef DXGI_ERROR_DEVICE_RESET
-#define DXGI_ERROR_DEVICE_RESET ((HRESULT)0x887A0007L)
+#define DXGI_ERROR_DEVICE_RESET ((HRESULT)0x887A0007)
 #endif
 
 #ifndef SUCCEEDED
@@ -89,6 +92,11 @@ using HRESULT = long;
 #ifndef FAILED
 #define FAILED(hr) (((HRESULT)(hr)) < 0)
 #endif
+
+// For HRESULT failure logging, use the existing SPARK_HR_CHECK macro from
+// Utils/SparkError.h, which handles Windows FormatMessage translation and
+// stack-trace capture uniformly. That macro depends on FAILED() working
+// correctly, which is now guaranteed by the int32_t HRESULT above.
 
 // --- Boolean constants ---
 #ifndef TRUE

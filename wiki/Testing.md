@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*452 test files, 5585+ test cases*
+*461 test files, 5729+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -556,6 +556,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAssetMigration` | 21 |
 | `TestAssetMigrationPhaseEE` | 10 |
 | `TestAssetPipelineCache` | 22 |
+| `TestAssetPipelineIntegration` | 16 |
 | `TestAssetPipelineReal` | 17 |
 | `TestAssetStallDetector` | 0 |
 | `TestAssetValidator` | 7 |
@@ -665,6 +666,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorWindowManager` | 14 |
 | `TestEngineContext` | 18 |
 | `TestEngineDiagnostics` | 4 |
+| `TestEngineLifecycle` | 18 |
 | `TestEngineLoadTest` | 21 |
 | `TestEngineMonitor` | 10 |
 | `TestEngineSettingsEdgeCases` | 45 |
@@ -685,6 +687,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 8 |
 | `TestFPSComponents` | 23 |
+| `TestFPSGameplayIntegration` | 10 |
 | `TestFPSMultiplayer` | 10 |
 | `TestFastNoise2SIMD` | 29 |
 | `TestFaultIsolation` | 14 |
@@ -704,6 +707,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFreezeSystem` | 5 |
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 7 |
+| `TestGLSLPipelineIntegration` | 19 |
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 13 |
 | `TestGPUParticleSystem` | 11 |
@@ -740,6 +744,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGroupAI` | 5 |
 | `TestHLODBuilderPhaseII` | 8 |
 | `TestHLODSystem` | 9 |
+| `TestHResultPlatform` | 24 |
 | `TestHash` | 18 |
 | `TestHashReal` | 9 |
 | `TestHitchDetector` | 0 |
@@ -771,6 +776,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
 | `TestMaterialSystemEdgeCases` | 10 |
+| `TestMaterialSystemIntegration` | 14 |
 | `TestMaterialSystemReal` | 13 |
 | `TestMaterialSystemValidation` | 31 |
 | `TestMathUtils` | 11 |
@@ -800,6 +806,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkInterpolation` | 12 |
 | `TestNetworkMMOIntegration` | 11 |
 | `TestNetworkManagerEdgeCases` | 23 |
+| `TestNetworkManagerIntegration` | 14 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
 | `TestNetworkReplicationIntegration` | 11 |
@@ -845,6 +852,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
+| `TestRHIBridgeIntegration` | 18 |
 | `TestRHICapabilityParity` | 4 |
 | `TestRHIHandlePool` | 10 |
 | `TestRHIHandlePoolPhaseX` | 15 |
@@ -928,6 +936,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestStringUtilsReal` | 9 |
 | `TestSubTickInput` | 5 |
 | `TestSubsystemConsoleCommands` | 14 |
+| `TestSystemManagerIntegration` | 11 |
 | `TestTacticalPointSystem` | 4 |
 | `TestTelemetry` | 15 |
 | `TestTelemetryPhaseFF` | 7 |

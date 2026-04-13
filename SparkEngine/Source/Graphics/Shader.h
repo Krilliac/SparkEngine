@@ -16,6 +16,17 @@
 // Phase O: activated Tier 2 graphics orphan — pure CPU keyword / variant
 // bookkeeping, lives outside the Windows guard.
 #include "ShaderVariantSystem.h"
+
+// Forward declarations for RHI types used by the Linux rendering path.
+// Full headers are included only in the .cpp files that need them.
+namespace Spark::RHI
+{
+    class IRHIDevice;
+    class IRHIShader;
+    class IRHIPipelineState;
+    class IRHIBuffer;
+    enum class RHIShaderStage;
+} // namespace Spark::RHI
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -624,4 +635,33 @@ class Shader
     bool m_isCompiled = false;                     ///< Compilation status
     ID3D11DeviceChild* m_shader = nullptr;         ///< Generic shader interface
     Spark::LocalFileCache* m_fileCache = nullptr;  ///< Optional file cache for shader source reads
+
+    /// Compiled shader source stored after RHI compilation. On OpenGL this is
+    /// the GLSL text; on D3D11 the bytecodes live in the VertexShaderResource /
+    /// PixelShaderResource ComPtrs above. Callers that build RHI pipeline states
+    /// can retrieve these via GetCompiledVertexSource() / GetCompiledPixelSource().
+    std::string m_compiledVertexSource;
+    std::string m_compiledPixelSource;
+
+    /// RHI shader objects and pipeline state (used on Linux / OpenGL path).
+    /// Created lazily after both VS and PS are compiled; bound from SetShaders().
+    Spark::RHI::IRHIDevice* m_rhiDevice = nullptr;
+    std::unique_ptr<Spark::RHI::IRHIShader> m_rhiVertexShader;
+    std::unique_ptr<Spark::RHI::IRHIShader> m_rhiPixelShader;
+    std::unique_ptr<Spark::RHI::IRHIPipelineState> m_rhiPipeline;
+    std::unique_ptr<Spark::RHI::IRHIBuffer> m_rhiPerFrameCB;
+    std::unique_ptr<Spark::RHI::IRHIBuffer> m_rhiPerObjectCB;
+
+    /// Create RHI shader objects from stored source and build pipeline state.
+    void CreateRHIPipelineIfReady();
+
+  public:
+    /// @brief Get the compiled vertex shader source (GLSL on OpenGL, empty on D3D11).
+    const std::string& GetCompiledVertexSource() const { return m_compiledVertexSource; }
+
+    /// @brief Get the compiled pixel shader source (GLSL on OpenGL, empty on D3D11).
+    const std::string& GetCompiledPixelSource() const { return m_compiledPixelSource; }
+
+    /// @brief Get the RHI pipeline state (non-null when both VS and PS compiled on Linux).
+    Spark::RHI::IRHIPipelineState* GetRHIPipelineState() const { return m_rhiPipeline.get(); }
 };
