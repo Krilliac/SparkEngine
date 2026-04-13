@@ -4,10 +4,19 @@
  *
  * Tests the AssetPipeline orchestration: Initialize → Update → Shutdown,
  * plus the AssetCache LRU behavior and asset type detection utility.
- * All tests run on Linux without a GPU (the Linux path accepts nullptr device).
+ *
+ * NOTE: These tests exercise the Linux code path which accepts a null D3D11
+ * device/context. On Windows, `AssetPipeline::Initialize` asserts
+ * SPARK_REQUIRE_NOT_NULL on the device pointer and crashes the test process,
+ * so the entire file body is guarded behind `#ifndef _WIN32`. If Windows
+ * coverage of AssetPipeline is ever needed, a separate test file should be
+ * written that creates a real D3D11 device first.
  */
 
 #include "TestFramework.h"
+
+#ifndef _WIN32
+
 #include "Graphics/AssetPipeline.h"
 
 // ============================================================================
@@ -188,3 +197,5 @@ TEST(AssetPipeline_HotReloading_ToggleOnOff)
 
     pipeline.Shutdown();
 }
+
+#endif // !_WIN32

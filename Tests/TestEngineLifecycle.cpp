@@ -5,9 +5,19 @@
  * Validates the full engine initialization → frame ticks → shutdown sequence
  * using NullRHI (headless). Tests that the engine subsystem graph starts and
  * stops cleanly without any GPU or display.
+ *
+ * NOTE: These tests call `engine.Initialize(nullptr)` with a null window
+ * handle, which the Linux path maps to NullRHI (headless). On Windows the
+ * same call returns E_INVALIDARG from `GraphicsEngineWindows.cpp:170` after
+ * failing the hWnd null check, and subsequent subsystem initialization
+ * triggers SPARK_REQUIRE_NOT_NULL asserts on D3D11 device/context that abort
+ * the test process. These tests are therefore scoped to non-Windows builds.
  */
 
 #include "TestFramework.h"
+
+#ifndef _WIN32
+
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/LightingSystem.h"
 #include "Graphics/CachedShadowAtlas.h"
@@ -384,3 +394,5 @@ TEST(EngineLifecycle_RHIBridge_FullCycle)
 
     bridge.Shutdown();
 }
+
+#endif // !_WIN32

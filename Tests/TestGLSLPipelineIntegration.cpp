@@ -8,9 +8,20 @@
  *
  * Also tests that the Shader class stores compiled GLSL source after compilation
  * on Linux, making it available for RHI pipeline state creation.
+ *
+ * NOTE: Some tests call `Shader::LoadVertexShader`/`LoadPixelShader` which
+ * route to `ShaderCompilationWindows.cpp::LoadVertexShader` on Windows.
+ * That path uses SPARK_REQUIRE_NOT_NULL(m_device) at line 92 — since the
+ * tests initialize Shader with a null D3D11 device (there is no real GPU in
+ * CI), the check always aborts on Windows. Scope the whole file to
+ * non-Windows builds; a separate Windows-specific GLSL pipeline test would
+ * need a real D3D11 device first.
  */
 
 #include "TestFramework.h"
+
+#ifndef _WIN32
+
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "Graphics/RHI/RHIFactory.h"
@@ -516,3 +527,5 @@ TEST(GLSLPipeline_AllGLSLShaders_Compile)
     // Should have found at least the 14 known GLSL shaders
     EXPECT_TRUE(compiled >= 14);
 }
+
+#endif // !_WIN32
