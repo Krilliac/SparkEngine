@@ -1,6 +1,6 @@
 # Testing
 
-SparkEngine includes a comprehensive test suite with 244 test files and 3,119 test cases using a lightweight internal test framework with CTest integration.
+SparkEngine includes a comprehensive test suite using a lightweight internal test framework with CTest integration. For current test file and test case counts, see the auto-generated inventory section on this page.
 
 **Source:** `Tests/TestFramework.h`, `Tests/`
 
@@ -125,14 +125,14 @@ Cross-compile with MinGW and run the exact same Windows D3D11 code paths under W
 cmake --preset linux-mingw-release
 cmake --build build/linux-mingw-release --parallel $(nproc)
 
-# Run all 3,119 tests under Wine
+# Run the full SparkTests suite under Wine
 tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
 
 # Or run the full automated test suite (unit tests + live engine + stress + break tests)
 python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
 ```
 
-Results: ~3,114/3,119 tests pass (99.8%). See [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) for full setup and troubleshooting.
+Results vary by branch and platform image. See [Cross-Compilation: Wine Testing](Cross-Compilation-Wine-Testing) for full setup and troubleshooting.
 
 ### Engine/Editor Test Mode Flags
 
@@ -150,7 +150,7 @@ wine64 SparkEditor.exe --test-mode --test-frames 120       # Wine
 
 ## Test Categories and Coverage
 
-The 244 test files cover all major engine subsystems:
+The test files cover all major engine subsystems:
 
 ### Core & Utilities
 
@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*461 test files, 5729+ test cases*
+*461 test files, 5733+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -666,7 +666,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorWindowManager` | 14 |
 | `TestEngineContext` | 18 |
 | `TestEngineDiagnostics` | 4 |
-| `TestEngineLifecycle` | 18 |
+| `TestEngineLifecycle` | 22 |
 | `TestEngineLoadTest` | 21 |
 | `TestEngineMonitor` | 10 |
 | `TestEngineSettingsEdgeCases` | 45 |

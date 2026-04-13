@@ -51,6 +51,7 @@ case "${1:-check}" in
         echo "  tools/check-doxygen-coverage.sh  Doxygen comment coverage"
         echo "  tools/check-cross-utilization.sh Architectural dependency boundaries"
         echo "  tools/check-di-singletons.sh      DI singleton guardrails"
+        echo "  tools/check-wiki-quality.sh       Wiki quality and stale-metric checks"
         exit 0
         ;;
 esac
@@ -97,6 +98,7 @@ run_check "Bloat Thresholds (New Only)"  "check-bloat.sh" "new-only"
 run_check "Doxygen Coverage"             "check-doxygen-coverage.sh" "check"
 run_check "Cross-Utilization Boundaries" "check-cross-utilization.sh"
 run_check "DI Singleton Guardrails"     "check-di-singletons.sh"
+run_check "Wiki Quality (Warn-Only)"    "check-wiki-quality.sh" "--warn-only"
 
 # Summary
 echo ""

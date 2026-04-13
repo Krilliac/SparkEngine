@@ -35,6 +35,7 @@ log_error()   { echo -e "${RED}[WIKI-SYNC]${NC} $1"; }
 
 CHANGES_MADE=0
 WARNINGS=0
+CHECK_MODE=false
 
 # ============================================================================
 # Helper: Update a block between markers in a file
@@ -143,10 +144,18 @@ collect_inventory() {
 
     # --- Header count ---
     HEADER_COUNT=0
-    for dir in "$PROJECT_ROOT/SparkEngine/Source" "$PROJECT_ROOT/SparkEditor/Source" "$PROJECT_ROOT/GameModules/SparkGame/Source" "$PROJECT_ROOT/GameModules/SparkGameMMO/Source"; do
-        [ -d "$dir" ] || continue
-        HEADER_COUNT=$((HEADER_COUNT + $(find "$dir" -name '*.h' | wc -l)))
-    done
+    while IFS= read -r header_dir; do
+        [ -d "$header_dir" ] || continue
+        HEADER_COUNT=$((HEADER_COUNT + $(find "$header_dir" -name '*.h' | wc -l)))
+    done < <(
+        printf '%s\n' \
+            "$PROJECT_ROOT/SparkEngine/Source" \
+            "$PROJECT_ROOT/SparkEditor/Source" \
+            "$PROJECT_ROOT/SparkConsole/src" \
+            "$PROJECT_ROOT/SparkShaderCompiler/src" \
+            "$PROJECT_ROOT/SparkSDK"
+        find "$PROJECT_ROOT/GameModules" -mindepth 2 -maxdepth 2 -type d -name Source 2>/dev/null | sort
+    )
 
     # --- Wiki pages ---
     WIKI_PAGE_COUNT=$(find "$WIKI_DIR" -name '*.md' ! -name '_Sidebar.md' | wc -l)
@@ -284,17 +293,25 @@ sync_home_page() {
     local panel_count
     panel_count=$(echo -e "$PANEL_LIST" | grep -c '[A-Z]' || true)
 
+    local last_synced
+    if [ "$CHECK_MODE" = true ]; then
+        last_synced=$(grep -E '^\| \*Last synced\* \| \*.*\* \|$' "$page" | sed -E 's/^\| \*Last synced\* \| \*(.*)\* \|$/\1/' | head -1)
+        [ -n "$last_synced" ] || last_synced="N/A"
+    else
+        last_synced="$(date '+%Y-%m-%d %H:%M')"
+    fi
+
     local stats_content
     stats_content="| Metric | Count |
 |--------|-------|
 | Header files | ${HEADER_COUNT} |
 | ECS Components | ${comp_count} |
-| ECS Systems | ${sys_count} |
+| Engine System Classes | ${sys_count} |
 | Editor Panels | ${panel_count} |
 | Test files | ${TEST_FILE_COUNT} |
 | Test cases | ${TEST_COUNT}+ |
 | Wiki pages | ${WIKI_PAGE_COUNT} |
-| *Last synced* | *$(date '+%Y-%m-%d %H:%M')* |"
+| *Last synced* | *${last_synced}* |"
 
     update_auto_section "$page" "stats" "$stats_content"
 }
@@ -326,7 +343,7 @@ sync_sidebar() {
 
     # Check if any wiki .md files exist that aren't in the sidebar
     local missing=0
-    find "$WIKI_DIR" -name '*.md' ! -name '_Sidebar.md' | while IFS= read -r wfile; do
+    find "$WIKI_DIR" -name '*.md' ! -name '_*.md' | while IFS= read -r wfile; do
         local page_name
         page_name=$(basename "$wfile" .md)
         if ! grep -qF "$page_name" "$sidebar" 2>/dev/null; then
@@ -368,6 +385,7 @@ main() {
         check)
             log_info "Dry-run: checking wiki freshness..."
             echo ""
+            CHECK_MODE=true
 
             collect_inventory
             check_stale_references
@@ -424,7 +442,7 @@ main() {
             log_info "Codebase inventory:"
             echo "  Headers:      $HEADER_COUNT"
             echo "  Components:   $comp_count"
-            echo "  Systems:      $sys_count"
+            echo "  System classes: $sys_count"
             echo "  Panels:       $panel_count"
             echo "  Test files:   $TEST_FILE_COUNT"
             echo "  Test cases:   $TEST_COUNT+"

@@ -251,6 +251,21 @@ Any code change that affects user-facing features **must** include documentation
 3. **Code comments** — Add inline comments for non-obvious logic
 4. **CLAUDE.md** — Update if the change affects architecture, build flags, or execution order
 
+### Wiki Authoring Standard
+
+Use `wiki/_Template.md` when adding new wiki pages. New subsystem or workflow pages should include these sections:
+
+- `## Overview`
+- `## When to Use`
+- `## Threading Model`
+- `## Platform and Backend Support`
+- `## Key APIs and Types`
+- `## Performance Notes`
+- `## Troubleshooting`
+- `## Related Pages`
+
+The quality checker (`tools/check-wiki-quality.sh`) validates template presence, stale metric guardrails, and this standards section.
+
 ### Adding a New Subsystem Checklist
 
 When contributing a new engine subsystem:
@@ -263,7 +278,7 @@ When contributing a new engine subsystem:
 - [ ] Add unit tests in Tests/Test**YourSystem**.cpp (e.g., `Tests/TestPhysicsSystem.cpp`)
 - [ ] Create wiki page in `wiki/Your-System.md`
 - [ ] Add to `wiki/_Sidebar.md` navigation
-- [ ] Update `wiki/Home.md` navigation
+- [ ] Ensure `wiki/Home.md` still points to `_Sidebar.md` as canonical navigation
 - [ ] Run `docs/generate-api-docs.sh check` and `docs/sync-wiki.sh sync`
 
 ---
