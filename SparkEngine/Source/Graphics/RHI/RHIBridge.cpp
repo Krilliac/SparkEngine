@@ -77,10 +77,14 @@ namespace Spark
                 if (!file.is_open())
                     return nullptr;
 
-                size_t size = file.tellg();
+                const std::streamsize streamSize = file.tellg();
+                if (streamSize <= 0)
+                    return nullptr;
                 file.seekg(0);
+                const size_t size = static_cast<size_t>(streamSize);
                 std::vector<uint8_t> buffer(size);
-                file.read(reinterpret_cast<char*>(buffer.data()), size);
+                if (!file.read(reinterpret_cast<char*>(buffer.data()), streamSize))
+                    return nullptr;
                 desc.bytecode = buffer.data();
                 desc.bytecodeSize = size;
 

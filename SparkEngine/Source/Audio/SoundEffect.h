@@ -174,16 +174,18 @@ class SoundEffect
 
     /**
      * @brief Read data from a located chunk
-     * 
-     * Reads the specified number of bytes from a chunk at the given position.
-     * 
+     *
+     * Reads the specified number of bytes from a chunk at the given position,
+     * validating that the read stays inside the source buffer.
+     *
      * @param data Pointer to source data
+     * @param srcSize Total size of the source buffer (for bounds checking)
      * @param pos Position within the data to start reading
      * @param out Output buffer for read data
      * @param bytes Number of bytes to read
      * @return HRESULT indicating success or failure of read operation
      */
-    HRESULT ReadChunkData(const BYTE* data, DWORD pos, void* out, DWORD bytes);
+    HRESULT ReadChunkData(const BYTE* data, DWORD srcSize, DWORD pos, void* out, DWORD bytes);
 
     // grant factory access to internals
     friend class SoundEffectFactory;

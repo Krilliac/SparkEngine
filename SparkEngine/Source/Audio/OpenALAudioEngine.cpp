@@ -568,6 +568,19 @@ namespace Spark::Audio
         file.seekg(0, std::ios::end);
         auto fileSize = file.tellg();
         file.seekg(0, std::ios::beg);
+        if (fileSize <= 0)
+        {
+            fprintf(stderr, "[OpenAL] Empty or unreadable WAV file: %s\n", filename.c_str());
+            return false;
+        }
+        // Reject absurdly large files up-front (256 MB cap) to avoid std::bad_alloc.
+        constexpr std::streamoff kMaxWavBytes = 256ll * 1024ll * 1024ll;
+        if (fileSize > kMaxWavBytes)
+        {
+            fprintf(stderr, "[OpenAL] WAV file too large (%lld bytes): %s\n", static_cast<long long>(fileSize),
+                    filename.c_str());
+            return false;
+        }
         std::vector<uint8_t> fileData(static_cast<size_t>(fileSize));
         file.read(reinterpret_cast<char*>(fileData.data()), fileSize);
         file.close();
@@ -593,13 +606,19 @@ namespace Spark::Audio
         {
             auto* chunk = reinterpret_cast<const WAVChunkHeader*>(fileData.data() + offset);
 
+            // Validate chunk body fits inside the file before touching it.
+            const size_t chunkBodyStart = offset + sizeof(WAVChunkHeader);
+            if (chunk->size > fileData.size() || chunkBodyStart + chunk->size > fileData.size())
+                break; // truncated / corrupt chunk
+
             if (std::memcmp(chunk->id, "fmt ", 4) == 0)
             {
-                fmt = reinterpret_cast<const WAVFmtChunk*>(fileData.data() + offset + sizeof(WAVChunkHeader));
+                if (chunk->size >= sizeof(WAVFmtChunk))
+                    fmt = reinterpret_cast<const WAVFmtChunk*>(fileData.data() + chunkBodyStart);
             }
             else if (std::memcmp(chunk->id, "data", 4) == 0)
             {
-                dataChunk = fileData.data() + offset + sizeof(WAVChunkHeader);
+                dataChunk = fileData.data() + chunkBodyStart;
                 dataSize = chunk->size;
             }
 

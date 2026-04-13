@@ -219,7 +219,15 @@ namespace Spark::Streaming
                     return;
                 }
 
-                uint64_t fileSize = static_cast<uint64_t>(file.tellg());
+                const std::streamsize rawSize = file.tellg();
+                if (rawSize < 0)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Scene, "tellg() failed for async load: %s",
+                                    req->request.filePath.c_str());
+                    req->status = LoadStatus::Failed;
+                    return;
+                }
+                uint64_t fileSize = static_cast<uint64_t>(rawSize);
                 uint64_t readOffset = req->request.fileOffset;
                 uint64_t readSize = req->request.loadSize;
 

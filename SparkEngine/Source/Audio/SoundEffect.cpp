@@ -4,11 +4,12 @@
 #include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "../Utils/Validate.h"
-#include <fstream>
+#include <algorithm>
 #include <cmath>
-#include <random>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <random>
 
 //------------------------------------------------------------------------------
 //  SoundEffect implementation
@@ -26,7 +27,11 @@ SoundEffect::~SoundEffect()
 HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Audio);
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, !filename.empty(), "SoundEffect::LoadFromFile - empty filename");
+    if (filename.empty())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect::LoadFromFile - empty filename");
+        return E_INVALIDARG;
+    }
 
 #if defined(SPARK_PLATFORM_WINDOWS) && defined(_MSC_VER)
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
@@ -42,7 +47,20 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
     }
 
     std::streamsize size = file.tellg();
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, size > 0, "Zero-length WAV file");
+    if (size <= 0)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: Zero-length or unreadable WAV file");
+        return E_FAIL;
+    }
+    // Reject files larger than 256 MB up-front so a corrupted/huge file
+    // cannot trigger an unbounded allocation.
+    constexpr std::streamsize kMaxWavBytes = 256ll * 1024ll * 1024ll;
+    if (size > kMaxWavBytes)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: WAV file too large (%lld bytes)",
+                        static_cast<long long>(size));
+        return E_FAIL;
+    }
     file.seekg(0, std::ios::beg);
 
     std::vector<BYTE> buffer(static_cast<size_t>(size));
@@ -79,8 +97,12 @@ float SoundEffect::GetDuration() const
 // ---------------------------------------------------------------------------
 HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 {
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Audio, data);
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, size >= 44, "WAV data too small for minimum header");
+    if (!data || size < 44)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: WAV data too small (%lu bytes)",
+                        static_cast<unsigned long>(size));
+        return E_FAIL;
+    }
 
     DWORD fmtSize = 0, fmtPos = 0;
     if (FAILED(FindChunk(data, size, 0x20746d66, fmtSize, fmtPos))) // 'fmt '
@@ -89,7 +111,12 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
         return E_FAIL;
     }
 
-    if (FAILED(ReadChunkData(data, fmtPos, &m_format, fmtSize)))
+    // The fmt chunk must fit inside our WAVEFORMATEX buffer — a corrupted file
+    // could claim an enormous fmt size and corrupt the stack/heap otherwise.
+    const DWORD maxFmtCopy = static_cast<DWORD>(sizeof(m_format));
+    const DWORD fmtCopy = std::min(fmtSize, maxFmtCopy);
+    ZeroMemory(&m_format, sizeof(m_format));
+    if (FAILED(ReadChunkData(data, size, fmtPos, &m_format, fmtCopy)))
         return E_FAIL;
 
     DWORD dataSize = 0, dataPos = 0;
@@ -99,8 +126,18 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
         return E_FAIL;
     }
 
+    // Validate that the declared data chunk actually fits in the buffer.
+    if (dataPos > size || dataSize > size - dataPos)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio,
+                        "SoundEffect: WAV 'data' chunk out of range (pos=%lu size=%lu fileSize=%lu)",
+                        static_cast<unsigned long>(dataPos), static_cast<unsigned long>(dataSize),
+                        static_cast<unsigned long>(size));
+        return E_FAIL;
+    }
+
     m_audioData.resize(dataSize);
-    if (FAILED(ReadChunkData(data, dataPos, m_audioData.data(), dataSize)))
+    if (FAILED(ReadChunkData(data, size, dataPos, m_audioData.data(), dataSize)))
         return E_FAIL;
 
     m_audioDataSize = dataSize;
@@ -111,7 +148,11 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 
 HRESULT SoundEffect::FindChunk(const BYTE* data, DWORD dataSize, DWORD fourCC, DWORD& outSize, DWORD& outPos)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Audio, dataSize > 12, "WAV data too small for RIFF header");
+    if (dataSize <= 12)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: WAV data too small for RIFF header");
+        return E_FAIL;
+    }
     DWORD offset = 12; // skip RIFF + WAVE ids
 
     while (offset + 8 <= dataSize)
@@ -119,19 +160,37 @@ HRESULT SoundEffect::FindChunk(const BYTE* data, DWORD dataSize, DWORD fourCC, D
         DWORD type = *reinterpret_cast<const DWORD*>(data + offset);
         DWORD size = *reinterpret_cast<const DWORD*>(data + offset + 4);
 
+        // Validate that the chunk body fits entirely in the buffer. Without
+        // this check a corrupted size field would let us read past the end
+        // when a caller subsequently copies data out.
+        const DWORD bodyStart = offset + 8;
+        if (size > dataSize || bodyStart > dataSize || size > dataSize - bodyStart)
+            return E_FAIL;
+
         if (type == fourCC)
         {
             outSize = size;
-            outPos = offset + 8;
+            outPos = bodyStart;
             return S_OK;
         }
-        offset += 8 + size + (size & 1); // pad to word
+        // Advance with explicit overflow check on the pad byte.
+        DWORD pad = size & 1u;
+        if (size > 0xFFFFFFFFu - 8u - pad)
+            return E_FAIL;
+        DWORD step = 8u + size + pad;
+        if (offset > 0xFFFFFFFFu - step)
+            return E_FAIL;
+        offset += step;
     }
     return E_FAIL;
 }
 
-HRESULT SoundEffect::ReadChunkData(const BYTE* src, DWORD pos, void* dst, DWORD bytes)
+HRESULT SoundEffect::ReadChunkData(const BYTE* src, DWORD srcSize, DWORD pos, void* dst, DWORD bytes)
 {
+    if (!src || !dst)
+        return E_POINTER;
+    if (pos > srcSize || bytes > srcSize - pos)
+        return E_FAIL;
     memcpy(dst, src + pos, bytes);
     return S_OK;
 }

@@ -313,11 +313,22 @@ namespace Spark
                 return result;
             }
 
-            size_t fileSize = static_cast<size_t>(file.tellg());
+            const std::streamsize streamSize = file.tellg();
+            if (streamSize <= 0)
+            {
+                result.errorMessage = "Empty or unreadable shader file: " + filePath;
+                return result;
+            }
             file.seekg(0, std::ios::beg);
 
+            const size_t fileSize = static_cast<size_t>(streamSize);
             result.bytecode.resize(fileSize);
-            file.read(reinterpret_cast<char*>(result.bytecode.data()), fileSize);
+            if (!file.read(reinterpret_cast<char*>(result.bytecode.data()), streamSize))
+            {
+                result.errorMessage = "Failed to read shader file: " + filePath;
+                result.bytecode.clear();
+                return result;
+            }
             result.success = true;
 
             return result;
