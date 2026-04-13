@@ -44,7 +44,7 @@ jobs:
       github.event.sender.login == 'chatgpt-codex[bot]'
     steps:
       - name: Apply Codex suggestion blocks to PR branch
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -232,7 +232,7 @@ jobs:
         if: >-
           github.event_name == 'pull_request_review' &&
           github.event.review.state == 'changes_requested'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -250,7 +250,7 @@ jobs:
             });
 
       - name: Resolve Codex review threads
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;

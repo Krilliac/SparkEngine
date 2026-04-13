@@ -1033,7 +1033,7 @@ jobs:
 
       - name: Post coverage summary to PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -1213,7 +1213,7 @@ jobs:
         continue-on-error: true
 
       - name: Post consolidated error report
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           ARTIFACT_DIR: ci-error-summaries
         with:
