@@ -387,6 +387,14 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
         if (g_moduleHotReload)
             g_moduleHotReload->PollChanges();
 
+        // Pump the audio engine: advances source state machine, applies
+        // 3D spatialization and distance attenuation. Pre-existing bug —
+        // AudioEngine::Update was never called from the main loop.
+        SPARK_GUARDED_UPDATE("Audio", "Core", {
+            if (g_audioEngine)
+                g_audioEngine->Update(dt);
+        });
+
         UpdateGameplaySystems(dt);
         UpdateDebugSystems(dt);
         SPARK_GUARDED_UPDATE("Console", "Core", {
@@ -653,6 +661,14 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 
             if (g_moduleHotReload)
                 g_moduleHotReload->PollChanges();
+
+            // Pump the audio engine: advances source state machine, applies
+            // 3D spatialization and distance attenuation. Pre-existing bug —
+            // AudioEngine::Update was never called from the main loop.
+            SPARK_GUARDED_UPDATE("Audio", "Core", {
+                if (g_audioEngine)
+                    g_audioEngine->Update(dt);
+            });
 
             UpdateGameplaySystems(dt);
             UpdateDebugSystems(dt);
