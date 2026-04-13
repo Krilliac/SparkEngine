@@ -38,6 +38,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #endif
 #endif
 #include "Shader.h"
+#include "ShaderHotReload.h"
 #include "RenderTarget.h"
 #include "GPUDrivenRenderer.h"
 #include "../Physics/PhysicsSystem.h"
@@ -855,9 +856,10 @@ void GraphicsEngine::BeginFrame()
     if (m_vramBudgetMonitor)
         m_vramBudgetMonitor->Update();
 
-    // Shader hot-reload: check for modified .hlsl files each frame
-    if (m_shader)
-        m_shader->HotReloadShaders();
+    // Shader hot-reload: check for modified .hlsl files each frame.
+    // m_shader is never instantiated, so calling via HotReloadShaders()
+    // would be dead code. Pump the singleton directly instead.
+    Spark::Graphics::ShaderHotReload::GetInstance().Update(1.0f / 60.0f);
 
     ASSERT(m_context && m_renderTargetView && m_depthStencilView);
 
