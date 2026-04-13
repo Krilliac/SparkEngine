@@ -377,7 +377,7 @@ namespace SparkEditor
             return true;
 
         // Get application instance
-        EditorApplication* app = s_instance;
+        EditorApplication* app = EditorApplication::s_instance;
         if (!app && msg == WM_CREATE)
         {
             CREATESTRUCTW* createStruct = reinterpret_cast<CREATESTRUCTW*>(lParam);
