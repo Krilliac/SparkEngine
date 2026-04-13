@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*461 test files, 5727+ test cases*
+*461 test files, 5728+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -707,7 +707,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestFreezeSystem` | 5 |
 | `TestFrustumCulling` | 11 |
 | `TestFullEngineDiagnostics` | 7 |
-| `TestGLSLPipelineIntegration` | 18 |
+| `TestGLSLPipelineIntegration` | 19 |
 | `TestGPUClusterCulling` | 11 |
 | `TestGPUDrivenRenderer` | 13 |
 | `TestGPUParticleSystem` | 11 |
