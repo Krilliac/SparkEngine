@@ -78,7 +78,15 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 
     auto& rhi = GetRHI();
 
-    Spark::RHI::GraphicsBackend backend = Spark::RHI::RHIBridge::GetRecommendedBackend();
+    // Headless mode: when no window is provided, force NullRHI instead of
+    // picking up an available GPU backend. Vulkan Lavapipe / OpenGL / etc.
+    // can initialize successfully but then hang or misbehave without a
+    // surface to present to, so headless tests and tools must stay on
+    // NullRHI. The backend fallback inside RHIBridge::Initialize still
+    // handles the case where the preferred GPU backend fails for a real
+    // window, falling through to NullRHI on its own.
+    Spark::RHI::GraphicsBackend backend =
+        (hWnd == nullptr) ? Spark::RHI::GraphicsBackend::None : Spark::RHI::RHIBridge::GetRecommendedBackend();
 
     bool ok = rhi.bridge.Initialize(static_cast<void*>(hWnd), m_width, m_height, backend,
 #ifndef NDEBUG

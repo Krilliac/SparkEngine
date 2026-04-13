@@ -149,6 +149,19 @@ namespace Spark
             m_height = height;
             m_headless = false;
 
+            // Headless safety: if no window was supplied, force NullRHI. GPU
+            // backends (Vulkan/OpenGL/D3D) can fail or hang when asked to
+            // initialize without a presentation surface, so callers that only
+            // need device-side resources (tests, tools, dedicated servers)
+            // must stay on the null backend regardless of what Auto / a
+            // recommended backend would choose.
+            if (windowHandle == nullptr && backend != GraphicsBackend::None)
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                               "RHIBridge::Initialize: null windowHandle — forcing NullRHI backend");
+                backend = GraphicsBackend::None;
+            }
+
             // Auto-select backend if requested
             if (backend == GraphicsBackend::Auto)
                 backend = SelectBestBackend();
