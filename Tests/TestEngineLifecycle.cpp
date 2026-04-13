@@ -144,6 +144,26 @@ TEST(EngineLifecycle_PostProcessingPipeline_InitializedAfterEngineInit)
     engine.Shutdown();
 }
 
+TEST(EngineLifecycle_BeginEndFrame_InvokesSubsystemUpdates)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    // Run a full BeginFrame/EndFrame cycle. Before the update wiring fix,
+    // AssetPipeline::Update, LightingSystem::Update, and
+    // PostProcessingPipeline::Process were never called — the frame loop
+    // only called rhi.bridge.BeginFrame/EndFrame and did no subsystem work.
+    // This test verifies the sequence runs without crashing.
+    for (int i = 0; i < 3; ++i)
+    {
+        engine.BeginFrame();
+        engine.EndFrame();
+    }
+
+    engine.Shutdown();
+}
+
 TEST(EngineLifecycle_LightManager_InitializedWithTileGrid)
 {
     GraphicsEngine engine;

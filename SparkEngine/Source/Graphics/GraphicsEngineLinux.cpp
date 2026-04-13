@@ -372,6 +372,22 @@ void GraphicsEngine::BeginFrame()
     if (m_shader)
         m_shader->HotReloadShaders();
 
+    // Per-frame subsystem updates. These advance async load queues,
+    // tile-binning counters, shadow cache frame state, and temporal
+    // effect history. Without them, the subsystems silently stall.
+    const float kNominalDeltaTime = 1.0f / 60.0f;
+
+    if (m_assetPipeline)
+        m_assetPipeline->Update(kNominalDeltaTime);
+
+    if (m_lightingSystem)
+    {
+        // Identity view/proj in headless mode — the lighting system reads
+        // the view matrix only to extract camera position from its inverse.
+        DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
+        m_lightingSystem->Update(kNominalDeltaTime, identity, identity);
+    }
+
     // Clear the back buffer
     Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
     if (cmd)
@@ -419,6 +435,14 @@ void GraphicsEngine::EndFrame()
         return;
     if (!m_frameInProgress.load())
         return;
+
+    // Post-processing runs after scene rendering and before Present.
+    // Without this call, all 16 effect passes (Bloom, DoF, Tonemapping,
+    // ColorGrading, etc.) were silently skipped on Linux.
+    if (m_postProcessing && m_postProcessing->IsInitialized())
+    {
+        m_postProcessing->Process(1.0f / 60.0f);
+    }
 
     rhi.bridge.EndFrame();
     rhi.bridge.Present(m_settings.vsync);
