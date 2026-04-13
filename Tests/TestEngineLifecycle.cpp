@@ -164,6 +164,20 @@ TEST(EngineLifecycle_BeginEndFrame_InvokesSubsystemUpdates)
     engine.Shutdown();
 }
 
+TEST(EngineLifecycle_TerrainRenderer_CreatedAfterEngineInit)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    // Before this commit, m_terrainRenderer was created only on Windows.
+    // Linux left it nullptr, so heightfield terrain streaming / LOD
+    // management would silently no-op.
+    auto* terrain = engine.GetTerrainRenderer();
+    EXPECT_TRUE(terrain != nullptr);
+    engine.Shutdown();
+}
+
 TEST(EngineLifecycle_ShadowAtlas_CreatedAfterEngineInit)
 {
     GraphicsEngine engine;

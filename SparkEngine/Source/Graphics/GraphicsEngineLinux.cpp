@@ -29,6 +29,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include "TemporalEffects.h"
 #include "ScreenSpaceEffects.h"
 #include "ShadowAtlas.h"
+#include "TerrainRenderer.h"
 // Phase U: activated Tier 2 graphics orphan — process-wide shader file
 // watcher. Pumped from the Linux BeginFrame so headless / RHI builds
 // share the same per-frame hot-reload poll that the Windows branch gets
@@ -215,6 +216,15 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
                        "GraphicsEngine (Linux): ScreenSpaceEffects::Initialize returned false");
     }
 
+    // TerrainRenderer has a Linux-specific no-device Initialize. The CPU
+    // tile LRU + heightfield sampling state runs without a GPU.
+    m_terrainRenderer = std::make_unique<Spark::Graphics::TerrainRenderer>();
+    if (!m_terrainRenderer->Initialize())
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): TerrainRenderer::Initialize returned false");
+    }
+
     // Phase Q: mirror the Windows denoiser activation so Linux /
     // headless builds have the same live IDenoiser instance and
     // tests exercising GraphicsEngine directly see consistent state.
@@ -274,6 +284,8 @@ void GraphicsEngine::Shutdown()
     // Initialize(), in reverse order. Mirrors the Windows path — destructors
     // alone are insufficient because some subsystems hold references or
     // emit diagnostic logs only from Shutdown.
+    if (m_terrainRenderer)
+        m_terrainRenderer->Shutdown();
     if (m_screenSpaceEffects)
         m_screenSpaceEffects->Shutdown();
     if (m_shadowAtlas)
