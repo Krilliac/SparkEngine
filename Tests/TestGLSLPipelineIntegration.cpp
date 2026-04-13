@@ -11,6 +11,7 @@
  */
 
 #include "TestFramework.h"
+#include "Graphics/GraphicsEngine.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "Graphics/RHI/RHIFactory.h"
 #include "Graphics/RHI/RHITypes.h"
@@ -404,6 +405,45 @@ TEST(GLSLPipeline_ShaderClass_LoadPixelShader_StoresSource)
     EXPECT_TRUE(shader.GetCompiledPixelSource().find("outColor") != std::string::npos);
 
     shader.Shutdown();
+}
+
+TEST(GLSLPipeline_ShaderClass_WithGraphicsEngine_CreatesRHIPipeline)
+{
+    std::string glslDir = FindGLSLDir();
+    if (glslDir.empty())
+        return;
+
+    // Initialize the global GraphicsEngine — this sets up the Linux RHI
+    // state singleton that Shader::Initialize reads from.
+    ::GraphicsEngine engine;
+    HRESULT engineHr = engine.Initialize(nullptr);
+    EXPECT_EQ(engineHr, S_OK);
+
+    Shader shader;
+    EXPECT_EQ(shader.Initialize(nullptr, nullptr), S_OK);
+
+    std::wstring vsPath(glslDir.begin(), glslDir.end());
+    vsPath += L"/BasicVS.glsl";
+    std::wstring psPath(glslDir.begin(), glslDir.end());
+    psPath += L"/BasicPS.glsl";
+
+    EXPECT_EQ(shader.LoadVertexShader(vsPath), S_OK);
+    EXPECT_EQ(shader.LoadPixelShader(psPath), S_OK);
+
+    // Sources stored
+    EXPECT_TRUE(!shader.GetCompiledVertexSource().empty());
+    EXPECT_TRUE(!shader.GetCompiledPixelSource().empty());
+
+    // Now SetShaders should create the pipeline state — the global RHI
+    // bridge is initialized via GraphicsEngine, so m_rhiDevice is valid.
+    shader.SetShaders();
+
+    // With the global RHI bridge running, the pipeline state is created
+    // through the NullRHI device (which always succeeds).
+    EXPECT_TRUE(shader.GetRHIPipelineState() != nullptr);
+
+    shader.Shutdown();
+    engine.Shutdown();
 }
 
 TEST(GLSLPipeline_ShaderClass_LoadBothShaders_SourcesStored)
