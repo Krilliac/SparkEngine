@@ -16,6 +16,8 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"
+#include <chrono>
+#include <iostream>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
