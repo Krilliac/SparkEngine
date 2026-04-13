@@ -279,10 +279,20 @@ namespace Spark
             if (width == 0 || height == 0)
                 return false;
 
-            m_device->WaitForIdle();
+            if (m_device)
+                m_device->WaitForIdle();
 
             // Release old depth buffer
             m_depthBuffer.reset();
+
+            // Headless mode has no swap chain or depth buffer; track the new
+            // size but skip the GPU resource recreation.
+            if (!m_swapChain)
+            {
+                m_width = width;
+                m_height = height;
+                return true;
+            }
 
             // Resize swap chain
             if (!m_swapChain->Resize(width, height))

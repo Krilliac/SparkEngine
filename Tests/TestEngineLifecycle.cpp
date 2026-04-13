@@ -164,6 +164,31 @@ TEST(EngineLifecycle_BeginEndFrame_InvokesSubsystemUpdates)
     engine.Shutdown();
 }
 
+TEST(EngineLifecycle_Resize_PropagatesToSubsystems)
+{
+    GraphicsEngine engine;
+    HRESULT hr = engine.Initialize(nullptr);
+    EXPECT_EQ(hr, S_OK);
+
+    // Resize from 1280x720 to 1920x1080 and verify the wired subsystems
+    // received the new dimensions. Before this commit, Resize only
+    // touched the RHI bridge and left subsystems with stale dimensions.
+    HRESULT resizeHr = engine.Resize(1920, 1080);
+    EXPECT_EQ(resizeHr, S_OK);
+
+    // LightManager exposes the tile grid — it should have recomputed
+    // based on the new width/height.
+    auto* lightMgr = engine.GetLightManager();
+    if (lightMgr)
+    {
+        // 1920/16 = 120, 1080/16 = 67.5 → 68 (ceiling div)
+        EXPECT_TRUE(lightMgr->GetTilesX() == 120);
+        EXPECT_TRUE(lightMgr->GetTilesY() == 68);
+    }
+
+    engine.Shutdown();
+}
+
 TEST(EngineLifecycle_TerrainRenderer_CreatedAfterEngineInit)
 {
     GraphicsEngine engine;

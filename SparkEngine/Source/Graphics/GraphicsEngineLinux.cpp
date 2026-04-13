@@ -384,6 +384,18 @@ HRESULT GraphicsEngine::Resize(uint32_t width, uint32_t height)
     rhi.width = width;
     rhi.height = height;
 
+    // Propagate the new viewport to every subsystem that tracks resolution.
+    // Without this, the subsystems keep their initial m_width/m_height and
+    // any subsequent render would use stale data.
+    if (m_postProcessing)
+        m_postProcessing->Resize(width, height);
+    if (m_temporalEffects)
+        m_temporalEffects->Resize(width, height);
+    if (m_screenSpaceEffects)
+        m_screenSpaceEffects->Resize(width, height);
+    if (m_lightManager)
+        m_lightManager->Resize(width, height);
+
     return S_OK;
 }
 
