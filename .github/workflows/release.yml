@@ -323,7 +323,7 @@ jobs:
 
     - name: Create stable versioned release
       if: needs.prepare.outputs.is_versioned == 'true'
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ needs.prepare.outputs.tag }}
         name: "SparkEngine ${{ needs.prepare.outputs.version }} (Stable)${{ steps.suffix.outputs.label }}"
@@ -344,7 +344,7 @@ jobs:
 
     - name: Create or update nightly rolling release
       if: needs.prepare.outputs.is_versioned == 'false'
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: nightly
         name: "Nightly Build (${{ steps.sha.outputs.short }})${{ steps.suffix.outputs.label }}"
