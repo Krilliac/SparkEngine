@@ -114,8 +114,10 @@ TEST(RHIBridge_GetAvailableBackends_DoesNotCrash)
 {
     auto backends = RHIBridge::GetAvailableBackends();
     // May be empty if no GPU packages installed (CI headless environment)
-    // Just verify the call doesn't crash and returns a valid vector
-    EXPECT_TRUE(backends.size() >= 0u); // always true — validates no crash
+    // Just verify the call doesn't crash — use the vector to suppress
+    // -Wtype-limits on the always-true size()>=0 comparison.
+    (void)backends;
+    EXPECT_TRUE(true);
 }
 
 TEST(RHIBridge_GetRecommendedBackend_DoesNotCrash)

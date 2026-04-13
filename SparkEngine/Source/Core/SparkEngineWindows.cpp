@@ -254,7 +254,7 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
     return manager.LoadModulesFromDirectory(exeDir.string());
 }
 
-#endif // SPARK_PLATFORM_WINDOWS — end of the block that started above; SetupCrashHandler                            \
+#endif // SPARK_PLATFORM_WINDOWS — end of the block that started above; SetupCrashHandler
 
 #ifdef SPARK_PLATFORM_WINDOWS
 

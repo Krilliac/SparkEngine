@@ -118,7 +118,8 @@ TEST(MaterialInteg_GetAvailableVariants_DoesNotCrash)
     Material mat("VariantTest");
     auto variants = mat.GetAvailableVariants();
     // May be empty if no variants registered — just verify no crash
-    EXPECT_TRUE(variants.size() >= 0u);
+    (void)variants;
+    EXPECT_TRUE(true);
 }
 
 // ============================================================================

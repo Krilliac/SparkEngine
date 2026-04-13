@@ -130,7 +130,6 @@ TEST(NetworkManager_ServerUpdate_ProcessesWithoutClients)
     for (int i = 0; i < 5; ++i)
         nm.Update(0.016f);
 
-    auto stats = nm.GetStats();
     // Server should be running without errors
     EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
 

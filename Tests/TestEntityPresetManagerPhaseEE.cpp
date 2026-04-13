@@ -118,5 +118,7 @@ TEST(EntityPresetManagerPhaseEE_ReinitializeResetsToBuiltins)
     // valid designs; we just verify the call is safe.
     const auto* after = mgr.FindPreset("PhaseEE_ToBeWipedOnReinit");
     (void)after;
-    EXPECT_TRUE(mgr.GetPresets().size() >= static_cast<size_t>(0));
+    // Any size is acceptable — just verify GetPresets() doesn't crash.
+    (void)mgr.GetPresets();
+    EXPECT_TRUE(true);
 }
