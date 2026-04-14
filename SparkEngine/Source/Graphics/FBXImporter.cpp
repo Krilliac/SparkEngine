@@ -427,10 +427,22 @@ namespace Spark::Graphics
         }
 
         auto fileSize = file.tellg();
+        if (fileSize <= 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBXImporter: empty or unreadable file '%s'",
+                            filePath.c_str());
+            result.warnings.push_back("Empty or unreadable file: " + filePath);
+            return result;
+        }
         file.seekg(0);
 
         std::vector<uint8_t> data(static_cast<size_t>(fileSize));
-        file.read(reinterpret_cast<char*>(data.data()), fileSize);
+        if (!file.read(reinterpret_cast<char*>(data.data()), fileSize))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "FBXImporter: read failed for '%s'", filePath.c_str());
+            result.warnings.push_back("Read failed: " + filePath);
+            return result;
+        }
 
         return ImportFromMemory(data.data(), data.size(), options);
     }

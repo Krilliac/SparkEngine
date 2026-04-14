@@ -66,7 +66,9 @@ namespace Spark::AI
      */
     struct AgentBudgetEntry
     {
-        EntityID entityId = entt::null;
+        // Spark::AI::EntityID is a uint32_t alias (see MovementSystem.h);
+        // entt::null is an entt::entity, so use the unsigned-int sentinel.
+        EntityID entityId = static_cast<EntityID>(-1);
 
         /// World-space position of the agent (cached for distance computation)
         DirectX::XMFLOAT3 position{0.0f, 0.0f, 0.0f};

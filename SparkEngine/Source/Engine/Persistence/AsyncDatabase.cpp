@@ -27,7 +27,14 @@ namespace Spark::Persistence
                             columns.size());
             return 0;
         }
-        return std::get<int64_t>(columns[col]);
+        if (const auto* v = std::get_if<int64_t>(&columns[col]))
+            return *v;
+        // Allow safe widening from double if the storage happens to be floating point.
+        if (const auto* v = std::get_if<double>(&columns[col]))
+            return static_cast<int64_t>(*v);
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "QueryRow::GetInt column %zu holds a non-integer variant (index=%zu)",
+                       col, columns[col].index());
+        return 0;
     }
 
     double QueryRow::GetDouble(size_t col) const
@@ -38,19 +45,31 @@ namespace Spark::Persistence
                             columns.size());
             return 0.0;
         }
-        return std::get<double>(columns[col]);
+        if (const auto* v = std::get_if<double>(&columns[col]))
+            return *v;
+        if (const auto* v = std::get_if<int64_t>(&columns[col]))
+            return static_cast<double>(*v);
+        SPARK_LOG_WARN(Spark::LogCategory::Core,
+                       "QueryRow::GetDouble column %zu holds a non-numeric variant (index=%zu)", col,
+                       columns[col].index());
+        return 0.0;
     }
 
     const std::string& QueryRow::GetString(size_t col) const
     {
+        static const std::string empty;
         if (col >= columns.size())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "QueryRow::GetString column %zu out of range (size=%zu)", col,
                             columns.size());
-            static const std::string empty;
             return empty;
         }
-        return std::get<std::string>(columns[col]);
+        if (const auto* v = std::get_if<std::string>(&columns[col]))
+            return *v;
+        SPARK_LOG_WARN(Spark::LogCategory::Core,
+                       "QueryRow::GetString column %zu holds a non-string variant (index=%zu)", col,
+                       columns[col].index());
+        return empty;
     }
 
     bool QueryRow::IsNull(size_t col) const

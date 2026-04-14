@@ -1,0 +1,125 @@
+From 6db96945dc59d19de720fe47805fd5e45d2d4d03 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 14 Apr 2026 08:51:04 +0000
+Subject: [PATCH] ntdll: prefer arch_prctl for set_gs_base; fall back to
+ wrgsbase only on failure.
+
+The previous guard on PF_RDWRFSGSBASE_AVAILABLE addressed an
+unconditional-SIGILL concern but inadvertently broke the exact
+gVisor scenario the patch was written for. Under gVisor's runsc
+sentry, CR4.FSGSBASE is enabled at the vCPU level and wrgsbase
+works correctly, but Wine's PF_RDWRFSGSBASE_AVAILABLE flag is
+computed as `cpuid(7).ebx[0] & (getauxval(AT_HWCAP2) & 2)`, and
+gVisor's AT_HWCAP2 does NOT set the fsgsbase bit. Wine therefore
+concludes the feature is unavailable, takes the arch_prctl
+fallback, and hits the very bug this patch was introduced to fix:
+arch_prctl(ARCH_SET_GS) under gVisor returns -1 (or silently
+discards the write on other emulators), leaving gs.base pointing
+at a glibc-private address and turning every `%gs:0x30` in PE
+ntdll into a NULL-derived dereference.
+
+Restructure set_gs_base to try arch_prctl first and verify the
+write took effect, falling through to wrgsbase only if arch_prctl
+either failed or lied. This preserves the exact pre-patch
+behaviour on every environment where arch_prctl works correctly -
+including hosts that disable CR4.FSGSBASE, where the arch_prctl
+success path is always taken and the wrgsbase fallback is never
+executed, so there is no SIGILL risk from wrgsbase. The only hosts
+that reach the wrgsbase fallback are ones where arch_prctl has
+already been proven broken at runtime, which in practice means
+user-mode Linux kernels (gVisor) that DO expose FSGSBASE to user
+mode even though they under-report AT_HWCAP2.
+
+Verified by rebuilding wine-11.6 with this refactor, installing
+to a gVisor-hosted prefix, and running a MinGW-cross-compiled
+hello.exe to completion:
+
+    $ wine /tmp/hello.exe; echo rc=$?
+    hello from wine, argc=1
+    rc=42
+
+Addresses the regression introduced by the previous commit
+(be4282b) while preserving its intent of not executing wrgsbase
+on hosts where it would trap.
+---
+ dlls/ntdll/unix/signal_x86_64.c | 57 +++++++++++++++++++++------------
+ 1 file changed, 36 insertions(+), 21 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index c564a41..912c090 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -774,34 +774,49 @@ __ASM_GLOBAL_FUNC( clear_alignment_flag,
+ /***********************************************************************
+  *           set_gs_base
+  *
+- * Set the gs.base MSR to point at the given TEB. Normally this is done
+- * via arch_prctl(ARCH_SET_GS), but some user-mode Linux kernel
+- * emulators (notably gVisor's runsc sentry) silently ignore
+- * arch_prctl(ARCH_SET_GS) calls: the syscall returns success but the
+- * write never takes effect, leaving gs.base at whatever the emulator
+- * initially chose (often a glibc-private address). Under those
+- * conditions Wine's PE ntdll hits NULL-pointer faults every time it
+- * reads NtCurrentTeb() via `%gs:0x30`.
++ * Set the gs.base MSR to point at the given TEB.
+  *
+- * Use the wrgsbase instruction as the primary path - it modifies the
+- * gs.base MSR directly and works on every environment that exposes
+- * the fsgsbase feature to user mode, including gVisor. Verify by
+- * re-reading via a %gs-prefixed load (since rdgsbase can also be
+- * broken on emulators). Fall back to arch_prctl if wrgsbase had no
+- * effect, so that this helper is safe on hosts that disable
+- * CR4.FSGSBASE. If both paths fail, the caller sees a gs.base that
+- * still doesn't match teb and can escalate.
++ * On bare-metal Linux, arch_prctl(ARCH_SET_GS) is the canonical path
++ * and always works. On user-mode Linux kernel emulators - notably
++ * gVisor's runsc sentry - arch_prctl(ARCH_SET_GS) either returns
++ * failure or lies (returns success but never writes the MSR), leaving
++ * gs.base at whatever the emulator initially chose (often a
++ * glibc-private address). Under those conditions Wine's PE ntdll hits
++ * NULL-pointer faults every time it reads NtCurrentTeb() via
++ * `%gs:0x30`.
++ *
++ * Try arch_prctl first and VERIFY the write took effect by reading
++ * `%gs:0x30` (which, on a correctly-initialised TEB, equals teb
++ * because teb->NtTib.Self is set to &teb->Tib and Tib is at offset 0
++ * inside TEB). If either the syscall failed or the verification
++ * mismatched, fall through to wrgsbase - a direct CPU instruction,
++ * not a syscall, that cannot be intercepted by an emulator.
++ *
++ * This layout keeps the pre-patch behaviour on every host that
++ * implements arch_prctl correctly, INCLUDING hosts that disable
++ * CR4.FSGSBASE. On those hosts arch_prctl works, verification
++ * passes, and the wrgsbase fallback is never executed, so there is
++ * no risk of an unconditional SIGILL from wrgsbase on a host where
++ * FSGSBASE is not enabled. The wrgsbase fallback is only reached
++ * when arch_prctl has already been proven broken, which in practice
++ * means a user-mode Linux kernel that does expose the FSGSBASE
++ * feature to user space (such as gVisor).
+  */
+ static inline void set_gs_base( TEB *teb )
+ {
+-    if (user_shared_data->ProcessorFeatures[PF_RDWRFSGSBASE_AVAILABLE])
++    ULONG_PTR probe = 0;
++
++    if (arch_prctl( ARCH_SET_GS, teb ) == 0)
+     {
+-        ULONG_PTR probe = 0;
+-        __asm__ volatile("wrgsbase %0" :: "r"((ULONG_PTR)teb));
+-        __asm__ volatile("mov %%gs:0x30, %0" : "=r"(probe));
++        __asm__ volatile( "movq %%gs:0x30, %0" : "=r"(probe) );
+         if (probe == (ULONG_PTR)teb) return;
+     }
+-    arch_prctl( ARCH_SET_GS, teb );
++    /* arch_prctl failed or silently discarded the write - fall back
++     * to the wrgsbase instruction. This is only reached on broken
++     * hosts; on bare-metal Linux the early return above is always
++     * taken and wrgsbase is never executed, so hosts with
++     * CR4.FSGSBASE cleared are unaffected. */
++    __asm__ volatile( "wrgsbase %0" :: "r"((ULONG_PTR)teb) );
+ }
+ 
+ 
+-- 
+2.43.0
+

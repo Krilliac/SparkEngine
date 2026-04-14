@@ -19,6 +19,18 @@
  *     6. budgetLimiter.EndFrame()
  * ```
  *
+ * @note **WIRED 2026-04-14 (as a singleton).** `AIIntegratedSystem` is
+ * now initialized and ticked from `GameplayLifecycleShared.cpp` via its
+ * singleton accessor `GetInstance()`. The default configuration runs
+ * **only the additive subsystems** (parallel perception spatial index +
+ * NavMesh obstacle update); the inner heavy `Spark::AI::AISystem::Update`
+ * pipeline is gated behind `AIIntegrationConfig::runCoreAISystem` and
+ * defaults to `false` so it does not double-tick behavior trees alongside
+ * the existing `Spark::ECS::AIUpdateSystem` (registered in
+ * `EngineSetup.h`). Game modules that want the full heavy pipeline can
+ * opt in via `AIIntegratedSystem::GetInstance().SetRunCoreAISystem(true)`
+ * after disabling `AIUpdateSystem` on the PhaseSystemManager.
+ *
  * @see AISystem.h, ParallelPerception.h, AIBudgetLimiter.h, NavMeshObstacles.h
  */
 
@@ -72,6 +84,14 @@ namespace Spark::AI
 
         /// Minimum agents per parallel batch (below this, runs single-threaded)
         int minPerceptionBatchSize = 4;
+
+        /// If true, `Update()` calls the inner `Spark::AI::AISystem::Update()`
+        /// (the heavy parallel perception + behavior + movement pipeline).
+        /// Default false to coexist with `Spark::ECS::AIUpdateSystem` without
+        /// double-ticking behavior trees. Game modules that want the heavy
+        /// pipeline should also disable `AIUpdateSystem` on their
+        /// `PhaseSystemManager` before flipping this flag.
+        bool runCoreAISystem = false;
     };
 
     /**
@@ -93,6 +113,20 @@ namespace Spark::AI
         // Non-copyable
         AIIntegratedSystem(const AIIntegratedSystem&) = delete;
         AIIntegratedSystem& operator=(const AIIntegratedSystem&) = delete;
+
+        /**
+         * @brief Process-wide singleton accessor.
+         *
+         * Used by the engine lifecycle (GameplayLifecycleShared.cpp) so the
+         * subsystem is reachable without threading a pointer through
+         * EngineContext. Game-module code that wants its own instance can
+         * still construct one directly.
+         */
+        static AIIntegratedSystem& GetInstance()
+        {
+            static AIIntegratedSystem s_instance;
+            return s_instance;
+        }
 
         /**
          * @brief Initialize all AI subsystems with the given configuration.
@@ -117,10 +151,12 @@ namespace Spark::AI
                 m_budgetLimiter->SetMaxStaleFrames(m_config.maxStaleFrames);
             }
 
-            // Initialize obstacle manager
+            // Bind the obstacle manager — it is a process-wide singleton owned
+            // outside this class, so we just cache a non-owning pointer when
+            // the feature is enabled. Disable mode leaves the pointer null.
             if (m_config.enableNavMeshObstacles)
             {
-                m_obstacleManager = std::make_unique<NavMeshObstacleManager>();
+                m_obstacleManager = &NavMeshObstacleManager::GetInstance();
             }
 
             m_initialized = true;
@@ -131,14 +167,21 @@ namespace Spark::AI
          */
         void Shutdown()
         {
-            m_obstacleManager.reset();
+            m_obstacleManager = nullptr;
             m_budgetLimiter.reset();
             m_parallelPerception.reset();
             m_initialized = false;
         }
 
         /**
-         * @brief ISystem update — runs the full AI pipeline.
+         * @brief ISystem update — runs the additive AI pipeline subsystems
+         *        (parallel perception spatial index, NavMesh obstacle
+         *        ticking) and, optionally, the inner `AISystem` heavy
+         *        pipeline if `m_config.runCoreAISystem` is true.
+         *
+         * This is intentionally cooperative with `Spark::ECS::AIUpdateSystem`:
+         * by default the inner heavy pipeline is skipped so behavior trees
+         * are ticked exactly once per frame.
          */
         void Update(World& world, float deltaTime) override
         {
@@ -154,16 +197,32 @@ namespace Spark::AI
                 m_parallelPerception->UpdateAllAgents(world, m_worldTime);
             }
 
-            // Step 2: Update NavMesh obstacles
-            if (m_obstacleManager)
-            {
-                m_obstacleManager->Update();
-            }
+            // Step 2: NavMeshObstacleManager is intentionally a *passive*
+            // registry — obstacles are added/removed at level-load time and
+            // queried by AI code. The class has no per-frame Update() method,
+            // so this step is a no-op other than keeping the cached pointer
+            // alive for accessor-based queries.
+            (void)m_obstacleManager;
 
-            // Step 3: Run core AI system (behavior + movement)
-            // The AISystem handles its own parallel execution internally
-            m_aiSystem.Update(world, deltaTime);
+            // Step 3: Run core AI system (behavior + movement) —
+            // **opt-in only**, see runCoreAISystem doc on AIIntegrationConfig.
+            if (m_config.runCoreAISystem)
+            {
+                m_aiSystem.Update(world, deltaTime);
+            }
         }
+
+        /**
+         * @brief Toggle the inner AISystem.Update() pass at runtime.
+         *
+         * Intended for game modules that want the full heavy pipeline. Make
+         * sure to also disable `Spark::ECS::AIUpdateSystem` on the
+         * PhaseSystemManager before enabling this, or behavior trees will be
+         * ticked twice per frame.
+         */
+        void SetRunCoreAISystem(bool enabled) { m_config.runCoreAISystem = enabled; }
+        [[nodiscard]] bool RunCoreAISystem() const { return m_config.runCoreAISystem; }
+        [[nodiscard]] bool IsInitialized() const { return m_initialized.load(); }
 
         const char* GetName() const override { return "AIIntegratedSystem"; }
 
@@ -174,7 +233,7 @@ namespace Spark::AI
 
         ParallelPerceptionSystem* GetParallelPerception() { return m_parallelPerception.get(); }
         AIBudgetLimiter* GetBudgetLimiter() { return m_budgetLimiter.get(); }
-        NavMeshObstacleManager* GetObstacleManager() { return m_obstacleManager.get(); }
+        NavMeshObstacleManager* GetObstacleManager() { return m_obstacleManager; }
 
         /**
          * @brief Set the player position for budget-limited prioritization.
@@ -218,7 +277,8 @@ namespace Spark::AI
         AISystem m_aiSystem;
         std::unique_ptr<ParallelPerceptionSystem> m_parallelPerception;
         std::unique_ptr<AIBudgetLimiter> m_budgetLimiter;
-        std::unique_ptr<NavMeshObstacleManager> m_obstacleManager;
+        // Non-owning: NavMeshObstacleManager is a process-wide singleton.
+        NavMeshObstacleManager* m_obstacleManager = nullptr;
 
         AIIntegrationConfig m_config;
         DirectX::XMFLOAT3 m_playerPosition{0.0f, 0.0f, 0.0f};

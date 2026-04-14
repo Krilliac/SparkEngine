@@ -133,6 +133,28 @@ namespace Spark
             return false;
 #endif
 
+        // Sanity-check header sizes against physical file size to avoid std::bad_alloc
+        // on a corrupted or truncated archive (tocSize/tocRawSize/fileCount are all
+        // untrusted inputs from disk).
+        if (PAK_FSEEK(m_file, 0, SEEK_END) != 0)
+            return false;
+        const uint64_t fileSize = PAK_FTELL(m_file);
+
+        // Hard upper bounds to reject pathological headers early.
+        constexpr uint64_t kMaxTocBytes = 256ull * 1024ull * 1024ull; // 256 MB
+        constexpr uint32_t kMaxFileCount = 10'000'000u;               // 10M entries
+
+        if (m_header.tocSize == 0 || m_header.tocSize > kMaxTocBytes)
+            return false;
+        if (m_header.tocRawSize == 0 || m_header.tocRawSize > kMaxTocBytes)
+            return false;
+        if (m_header.fileCount > kMaxFileCount)
+            return false;
+        if (m_header.tocOffset >= fileSize)
+            return false;
+        if (m_header.tocOffset + m_header.tocSize > fileSize)
+            return false;
+
         // Seek to TOC
         if (PAK_FSEEK(m_file, m_header.tocOffset, SEEK_SET) != 0)
             return false;
@@ -165,12 +187,17 @@ namespace Spark
         const uint8_t* ptr = tocRaw.data();
         const uint8_t* end = ptr + tocRaw.size();
 
-        m_entries.reserve(m_header.fileCount);
+        // Reserve conservatively — use the smaller of the declared count and the
+        // raw TOC size divided by the minimum per-entry size (27 bytes). This keeps
+        // a corrupted-but-bounded fileCount from reserving an absurdly large hash map.
+        constexpr size_t kMinEntryBytes = 27;
+        const size_t maxPossibleEntries = tocRaw.size() / kMinEntryBytes;
+        m_entries.reserve(std::min<size_t>(m_header.fileCount, maxPossibleEntries));
         for (uint32_t i = 0; i < m_header.fileCount; ++i)
         {
             // Need at least: pathHash(8) + dataOffset(8) + compressedSize(4) + originalSize(4) + compression(1) +
             // pathLength(2) = 27 bytes
-            if (ptr + 27 > end)
+            if (static_cast<size_t>(end - ptr) < 27)
                 return false;
 
             PakEntry entry;
@@ -189,7 +216,7 @@ namespace Spark
             std::memcpy(&pathLen, ptr, 2);
             ptr += 2;
 
-            if (ptr + pathLen > end)
+            if (static_cast<size_t>(end - ptr) < pathLen)
                 return false;
 
             entry.virtualPath.assign(reinterpret_cast<const char*>(ptr), pathLen);
@@ -224,6 +251,12 @@ namespace Spark
             return {};
 
         const auto& entry = it->second;
+
+        // Sanity-check sizes against the known file size so a corrupted entry
+        // can't trigger an unbounded std::bad_alloc.
+        constexpr uint32_t kMaxEntryBytes = 2u * 1024u * 1024u * 1024u; // 2 GB
+        if (entry.compressedSize > kMaxEntryBytes || entry.originalSize > kMaxEntryBytes)
+            return {};
 
         // Seek and read compressed data
         if (PAK_FSEEK(m_file, entry.dataOffset, SEEK_SET) != 0)

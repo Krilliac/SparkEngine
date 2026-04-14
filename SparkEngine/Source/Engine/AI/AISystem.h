@@ -145,10 +145,12 @@ namespace Spark::AI
      * @brief EntityID of the current primary threat/target.
      *
      * Set by the perception system when the player or another threat is detected.
-     * `entt::null` indicates no active target. Behavior tree conditions read this
-     * to decide between attack, patrol, and idle branches.
+     * `static_cast<EntityID>(-1)` indicates no active target. Behavior tree
+     * conditions read this to decide between attack, patrol, and idle branches.
+     * (Spark::AI::EntityID is a `uint32_t` alias from MovementSystem.h, distinct
+     * from `entt::entity`.)
      */
-        EntityID targetEntity = entt::null;
+        EntityID targetEntity = static_cast<EntityID>(-1);
 
         /**
      * @brief Last confirmed world-space position of the primary target.
