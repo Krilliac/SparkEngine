@@ -282,9 +282,15 @@ namespace Spark::Core::Lifecycle
         Spark::DebugHookManager::GetInstance().SetEnabled(true);
         SPARK_DEBUG_HOOK(EnginePreInit, 0, 0.0f);
 
-        // Initialize the unified Logger with a stderr sink so SPARK_LOG_* output is visible
+        // Initialize the unified Logger with a stderr sink so SPARK_LOG_* output is visible.
+        // Platform entry points (SparkEngineLinux.cpp main, SparkEngineWindows.cpp wWinMain)
+        // may have already called Initialize + AddSink early so startup logs are captured,
+        // in which case Initialize here is idempotent. ClearSinks() before AddSink makes
+        // this function idempotent w.r.t. the StderrSink too — otherwise every log line
+        // would be written twice.
         auto& logger = Spark::Logger::Get();
         logger.Initialize(/*enableAsync=*/false);
+        logger.ClearSinks();
         logger.AddSink(std::make_unique<Spark::StderrSink>());
 
         // Apply logging configuration from settings.ini [Logging] section

@@ -739,6 +739,18 @@ static int RunSDL2Windowed(int argc, char* argv[])
 {
     Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Linux Build) ===");
 
+    // Force SDL2 to use EGL instead of GLX on X11 so that OpenGLDevice's
+    // existing "detect host-owned EGL context and reuse it" path (see
+    // OpenGLDevice.cpp:884) kicks in. With the default GLX backend the
+    // OpenGLDevice falls back to its own EGL pbuffer bootstrap, which
+    // conflicts with SDL2's current GLX context and produces an
+    // eglMakeCurrent EGL_BAD_ACCESS (0x3002) error before the engine
+    // falls back to NullRHIDevice. Forcing EGL makes the host context
+    // directly reusable and lets software rasterizers (Mesa llvmpipe)
+    // drive the engine under Xvfb / Wayland without a GPU.
+    SDL_SetHint("SDL_VIDEO_X11_FORCE_EGL", "1");
+    SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
         Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_Init failed: ") + SDL_GetError());
@@ -863,6 +875,21 @@ int main(int argc, char* argv[])
     // on Linux go through the same crash-report pipeline that wWinMain uses on
     // Windows. Without this, fatal signals on Linux bypass the reporter entirely.
     SetupCrashHandler();
+
+    // Initialize the unified Logger with a stderr sink as the *very first* engine
+    // action so every SPARK_LOG_* call during early init (graphics bring-up, core
+    // subsystem registration, module loading, etc.) is captured. Without this,
+    // the SDL2 windowed path silently dropped ~10 MB of log output during the
+    // gap between subsystem construction and InitDebugSystemsImpl, because
+    // Logger::Log() early-returns while m_initialized is still false. The later
+    // InitDebugSystemsImpl::Logger::Initialize() call becomes a no-op (idempotent
+    // via the m_initialized check). ApplyConfig / FileLogger / ChromeTracing all
+    // still happen in InitDebugSystemsImpl as before.
+    {
+        auto& earlyLogger = Spark::Logger::Get();
+        earlyLogger.Initialize(/*enableAsync=*/false);
+        earlyLogger.AddSink(std::make_unique<Spark::StderrSink>());
+    }
 
     try
     {

@@ -213,7 +213,13 @@ namespace Spark::Streaming
                 std::ifstream file(req->request.filePath, std::ios::binary | std::ios::ate);
                 if (!file.is_open())
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Scene, "Failed to open file for async load: %s",
+                    // A missing asset is an *expected* failure mode for an
+                    // async streaming loader — callers (e.g. AreaAssetLoader)
+                    // aggregate the per-area success/failure counts and log a
+                    // single WARN. Logging an ERROR here with a stack trace
+                    // spams the console whenever a manifest lists optional or
+                    // not-yet-shipped files (see OpenWorld showcase).
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Failed to open file for async load: %s",
                                     req->request.filePath.c_str());
                     req->status = LoadStatus::Failed;
                     return;
@@ -222,7 +228,7 @@ namespace Spark::Streaming
                 const std::streamsize rawSize = file.tellg();
                 if (rawSize < 0)
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Scene, "tellg() failed for async load: %s",
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "tellg() failed for async load: %s",
                                     req->request.filePath.c_str());
                     req->status = LoadStatus::Failed;
                     return;
@@ -255,7 +261,7 @@ namespace Spark::Streaming
 
                 if (!file.good() && !file.eof())
                 {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Scene, "Read error on file: %s", req->request.filePath.c_str());
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Read error on file: %s", req->request.filePath.c_str());
                     req->status = LoadStatus::Failed;
                     return;
                 }
