@@ -173,27 +173,69 @@ probe_wine_environment() {
     local probe_log
     probe_log="$(mktemp)"
     local probe_rc=0
-    if ! timeout 15 "${WINE}" "${probe}" > "${probe_log}" 2>&1; then
+    # Force err+seh,err+virtual for the probe regardless of the ambient
+    # WINEDEBUG. The default ambient value is "-all" (to keep the real run
+    # quiet), which silently hides the very "Got unexpected trap 0" and
+    # "virtual_setup_exception stack overflow" strings we grep for below.
+    # Without this override the probe reports success even when Wine is
+    # spinning in the segv loop and never executes a single instruction of
+    # the target .exe — empirically confirmed on the SparkEngine container
+    # harness (same class of signal-handler sandbox as gVisor).
+    if ! WINEDEBUG="err+seh,err+virtual" timeout 15 "${WINE}" "${probe}" > "${probe_log}" 2>&1; then
         probe_rc=$?
     fi
 
-    # Detect the two gVisor-specific failure modes:
-    #   1. "Got unexpected trap 0" loop (Wine segv_handler sees trap_no==0)
-    #   2. "virtual_setup_exception stack overflow" after #1 is worked around
-    if grep -q 'segv_handler Got unexpected trap 0' "${probe_log}" || \
-       grep -q 'virtual_setup_exception stack overflow' "${probe_log}"; then
+    # Detect the two gVisor-class failure modes in order of severity:
+    #
+    #   1. "Got unexpected trap 0" loop — Wine's segv_handler sees trap_no==0
+    #      because the user-mode kernel doesn't populate the x86_64 ucontext
+    #      REG_TRAPNO slot. Fixed by tools/gvisor-wine-shim.so (LD_PRELOAD).
+    #
+    #   2. "virtual_setup_exception stack overflow" — Wine can't build the
+    #      Windows-side exception frame because the thread stack layout
+    #      differs from Wine's expectations. NOT fixed by the shim; requires
+    #      an actual Wine source patch (wine-mirror/wine#62).
+    #
+    # Reporting the right cause matters because "trap 0" with the shim loaded
+    # means the shim isn't taking effect, while "virtual_setup_exception" with
+    # the shim loaded means the shim works but the environment is still too
+    # restrictive and the user needs tier 2/3/4 instead.
+    local saw_trap0=0 saw_vse=0
+    grep -q 'segv_handler Got unexpected trap 0' "${probe_log}" && saw_trap0=1
+    grep -q 'virtual_setup_exception stack overflow' "${probe_log}" && saw_vse=1
+    if [ "${saw_trap0}" = "1" ] || [ "${saw_vse}" = "1" ]; then
         echo "[wine-run] ERROR: Wine cannot execute Windows binaries in this environment." >&2
-        echo "[wine-run]        Detected gVisor-style signal handling where" >&2
-        echo "[wine-run]        ucontext trap_no is not populated. Wine's segv_handler" >&2
-        echo "[wine-run]        loops on 'Got unexpected trap 0' during startup." >&2
-        echo "[wine-run]" >&2
-        echo "[wine-run]        This is a known upstream incompatibility between" >&2
-        echo "[wine-run]        Wine 9.0 and gVisor's runsc user-mode kernel. Run" >&2
-        echo "[wine-run]        MinGW-compiled artifacts on a Linux host with a real" >&2
-        echo "[wine-run]        kernel (Docker runc, bare metal, or a conventional" >&2
-        echo "[wine-run]        VM) to exercise the Wine path." >&2
+        if [ "${saw_trap0}" = "1" ] && [ "${saw_vse}" = "0" ]; then
+            echo "[wine-run]        Failure mode: 'Got unexpected trap 0' segv_handler loop." >&2
+            echo "[wine-run]        Wine's segv_handler reads REG_TRAPNO from the ucontext," >&2
+            echo "[wine-run]        but this sandbox's kernel leaves it at 0. The faulting" >&2
+            echo "[wine-run]        instruction never gets repaired so the loop is infinite." >&2
+            echo "[wine-run]" >&2
+            echo "[wine-run]        Fix: build and load the LD_PRELOAD shim:" >&2
+            echo "[wine-run]          gcc -shared -fPIC -O2 -o tools/gvisor-wine-shim.so \\" >&2
+            echo "[wine-run]              tools/gvisor-wine-shim.c -ldl" >&2
+            echo "[wine-run]          SPARK_WINE_GVISOR_SHIM=1 tools/wine-run.sh <exe>" >&2
+        elif [ "${saw_vse}" = "1" ] && [ "${saw_trap0}" = "0" ]; then
+            echo "[wine-run]        Failure mode: 'virtual_setup_exception stack overflow'." >&2
+            echo "[wine-run]        Wine is past the trap_no loop (shim is working) but cannot" >&2
+            echo "[wine-run]        build the Windows-side exception frame. This is a second," >&2
+            echo "[wine-run]        deeper incompatibility the shim does not cover and which" >&2
+            echo "[wine-run]        requires a Wine source patch (wine-mirror/wine#62)." >&2
+            echo "[wine-run]" >&2
+            echo "[wine-run]        Workaround: fall back to tier 4 of the ladder —" >&2
+            echo "[wine-run]          SPARK_SKIP_WINE=1 tools/wine-run.sh <exe>" >&2
+            echo "[wine-run]        or set SPARK_WINE_AUTO_TIER4=1 to auto-fall-through." >&2
+        else
+            echo "[wine-run]        Failure mode: both trap_no loop AND virtual_setup_exception." >&2
+            echo "[wine-run]        Shim is not loaded, or is loaded but the loop is still" >&2
+            echo "[wine-run]        racing the frame builder. Build the shim and set" >&2
+            echo "[wine-run]        SPARK_WINE_GVISOR_SHIM=1; if that still reports" >&2
+            echo "[wine-run]        virtual_setup_exception, fall back to tier 4:" >&2
+            echo "[wine-run]          SPARK_SKIP_WINE=1 tools/wine-run.sh <exe>" >&2
+        fi
         echo "[wine-run]" >&2
         echo "[wine-run]        See .claude/knowledge/wine-gvisor-incompatibility.md" >&2
+        echo "[wine-run]        and .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md" >&2
         rm -f "${probe_log}"
         return 2
     fi
@@ -497,32 +539,50 @@ if [ "${SPARK_WINE_LOG:-0}" = "1" ]; then
     export WINEDEBUG="warn+all"
 fi
 
-# Optional: probe the Wine environment with a pre-built hello-world .exe
-# before running the real target, so sandboxed / gVisor environments fail
-# fast with a clear diagnostic instead of spinning in Wine's segv loop.
-# Enable by setting SPARK_WINE_PROBE=/path/to/hello.exe
-if [ -n "${SPARK_WINE_PROBE:-}" ]; then
-    if ! probe_wine_environment "${SPARK_WINE_PROBE}"; then
-        exit 2
-    fi
-fi
-
-info "Running: "${WINE}" $EXE $*"
-info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
-info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
-
-# Optional LD_PRELOAD shim to patch Wine's segv_handler under gVisor.
+# Optional LD_PRELOAD shim to patch Wine's segv_handler under gVisor. MUST
+# be applied BEFORE the probe runs, otherwise the probe sees an environment
+# that the user intends to be shimmed but isn't and short-circuits the run.
 # Build with: gcc -shared -fPIC -o tools/gvisor-wine-shim.so tools/gvisor-wine-shim.c -ldl
 # Enable by setting SPARK_WINE_GVISOR_SHIM=1 (auto-detects tools/gvisor-wine-shim.so).
 if [ "${SPARK_WINE_GVISOR_SHIM:-0}" = "1" ]; then
     _shim="${PROJECT_ROOT}/tools/gvisor-wine-shim.so"
     if [ -f "${_shim}" ]; then
         export LD_PRELOAD="${_shim}${LD_PRELOAD:+:${LD_PRELOAD}}"
-        info "  gVisor shim: ${_shim}"
+        info "gVisor shim loaded: ${_shim}"
     else
-        info "  gVisor shim: not built — run 'make -C tools gvisor-wine-shim.so'"
+        info "gVisor shim: not built — build with 'gcc -shared -fPIC -O2 -o ${_shim} ${PROJECT_ROOT}/tools/gvisor-wine-shim.c -ldl'"
     fi
 fi
+
+# Optional: probe the Wine environment with a pre-built hello-world .exe
+# before running the real target, so sandboxed / gVisor environments fail
+# fast with a clear diagnostic instead of spinning in Wine's segv loop.
+# Enable by setting SPARK_WINE_PROBE=/path/to/hello.exe
+if [ -n "${SPARK_WINE_PROBE:-}" ]; then
+    if ! probe_wine_environment "${SPARK_WINE_PROBE}"; then
+        # Probe failed — offer the tier-4 fallthrough automatically if the
+        # user has set SPARK_WINE_AUTO_TIER4=1. This is the pragmatic thing
+        # to do in CI: if Wine is broken in this specific environment and
+        # the user has pre-opted-in to tier 4, transparently skip Wine and
+        # run the native Linux equivalent. Without the opt-in we still
+        # exit 2 so a human-driven run sees the diagnostic and chooses.
+        if [ "${SPARK_WINE_AUTO_TIER4:-0}" = "1" ]; then
+            info "SPARK_WINE_AUTO_TIER4=1 — probe failed, attempting tier-4 fallthrough"
+            NATIVE_EXE="$(find_native_linux_equivalent "$EXE" || true)"
+            if [ -n "$NATIVE_EXE" ] && [ -x "$NATIVE_EXE" ]; then
+                info "Running native: $NATIVE_EXE $*"
+                export SPARK_RHI_BACKEND="${SPARK_RHI_BACKEND:-null}"
+                exec "$NATIVE_EXE" "$@"
+            fi
+            info "Tier-4 fallthrough requested but no native Linux build found — exiting with probe failure"
+        fi
+        exit 2
+    fi
+fi
+
+info "Running: ${WINE} $EXE $*"
+info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
+info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
 
 # Run under Wine
 exec "${WINE}" "$EXE" "$@"

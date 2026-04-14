@@ -84,13 +84,26 @@ namespace Spark
                 }
             }
 
-            // 2. /proc/1/comm — on gVisor, PID 1 is "runsc" (or
-            //    "runsc-sandbox"). This is the most reliable signal when /proc
-            //    is mounted.
+            // 2. /proc/1/comm — on user-mode-kernel sandboxes PID 1 is a
+            //    well-known sentinel. We match any of these because they all
+            //    exhibit the same ucontext trap_no / virtual_setup_exception
+            //    failure modes that break Wine 9.0's signal handling:
+            //      - "runsc" / "runsc-sandbox" — gVisor (Google)
+            //      - "process_api"            — Claude Code harness
+            //        (SparkEngine container), empirically confirmed 2026-04-14
+            //        by reproducing the "Got unexpected trap 0" segv loop
+            //        on Wine 9.0 inside it. See
+            //        .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md
+            //
+            //    If more sandbox families turn up with the same quirk, add
+            //    their PID 1 comm here rather than broadening the function
+            //    name — the contract is "this sandbox breaks Wine signal
+            //    handling the same way gVisor does", not "this is literally
+            //    runsc".
             std::string comm;
             if (ReadFileFirstLine("/proc/1/comm", comm))
             {
-                if (comm.find("runsc") != std::string::npos)
+                if (comm.find("runsc") != std::string::npos || comm.find("process_api") != std::string::npos)
                 {
                     return true;
                 }
