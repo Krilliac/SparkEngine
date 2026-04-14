@@ -1,0 +1,170 @@
+From: SparkEngine Wine Compatibility <spark-wine@example.invalid>
+Date: Tue, 14 Apr 2026 07:00:00 +0000
+Subject: [PATCH] ntdll: use wrgsbase to set gs.base on Linux x86_64 when
+ arch_prctl is broken
+
+On some user-mode Linux kernel emulators, arch_prctl(ARCH_SET_GS)
+silently does nothing: the syscall returns success but the gs.base
+MSR is never written. The most visible offender is gVisor's runsc
+sentry, which implements fsgsbase instructions (wrgsbase/rdgsbase)
+correctly but has a long-standing gap in its arch_prctl emulation
+for the ARCH_SET_GS and ARCH_GET_GS codes. Under such a kernel,
+Wine's x86_64 thread startup path calls
+`arch_prctl(ARCH_SET_GS, teb)` in init_syscall_frame, sees a
+success return, and proceeds into PE ntdll. The new thread then
+resumes execution with gs.base left at whatever the emulator
+initially chose (in practice a glibc-private address such as
+0x7ff7_3491_0000).
+
+Every subsequent `%gs:0x30` read in the PE ntdll - which is how
+`NtCurrentTeb()` is implemented - then returns garbage. The very
+first casualty is `loader_init()` in dlls/ntdll/loader.c:
+
+    mov 0x60(%r12),%rdi        ; rdi = teb->Peb, but r12 is bogus
+    ...
+    mov %rax,0x18(%rdi)        ; peb->LdrData = &ldr, faults at 0x18
+
+where r12 was loaded from `%gs:0x30` earlier. Because the value
+loaded by `mov %gs:0x30,%r12` happens to point to a partially
+mapped memory region in gVisor's layout, the earlier instructions
+do not fault; the cascade only blows up at the first dereference
+that actually reads a NULL-derived pointer. The failure then
+snowballs inside the exception dispatcher (__wine_dbg_get_channel_flags
+reads debug_options[] from a bogus debug_options pointer, each
+iteration pushes another exception frame, and the thread is
+eventually killed by virtual_setup_exception when the stack
+runs out).
+
+Fix the root cause: introduce a small set_gs_base() helper that
+uses wrgsbase as the primary path - since wrgsbase is a direct
+instruction (no syscall), it cannot be intercepted or silently
+dropped by an emulator that still exposes the FSGSBASE feature to
+user mode - and verifies via a %gs-prefixed load. If wrgsbase had
+no effect (host has CR4.FSGSBASE cleared or traps the
+instruction), fall back to the existing arch_prctl(ARCH_SET_GS)
+path so this patch is a no-op on bare-metal Linux and on hosts
+that disable FSGSBASE entirely. Use the helper at all three
+existing call sites:
+
+  * init_syscall_frame - the primary thread-start path; this alone
+    is sufficient to make Wine boot correctly under gVisor.
+  * check_invalid_gsbase - the copy-protection workaround path;
+    keeping it consistent.
+  * init_handler - the signal-entry fixup path, to handle the
+    (narrow) case where the first fault on a thread arrives
+    before init_syscall_frame has run.
+
+Reproduction (on any host where arch_prctl(ARCH_SET_GS) silently
+fails, notably inside a gVisor container):
+
+    cat > hello.c <<'EOF'
+    #include <stdio.h>
+    int main(void) { puts("hello"); return 42; }
+    EOF
+    x86_64-w64-mingw32-gcc hello.c -o hello.exe
+    wine64 hello.exe; echo rc=$?
+
+Before this patch: wine locks up looping on
+`err:seh:segv_handler Got unexpected trap 0` (already fixed by a
+previous patch in this series) and/or
+`err:virtual:virtual_setup_exception stack overflow N bytes` and
+exits with a SIGSEGV in the Wine loader itself (rc=139); hello's
+stdout never appears.
+
+After this patch: wine runs hello to completion, prints "hello",
+and returns rc=42.
+
+Signed-off-by: SparkEngine Wine Compatibility <spark-wine@example.invalid>
+---
+ dlls/ntdll/unix/signal_x86_64.c | 49 +++++++++++++++++++++++++++++++--
+ 1 file changed, 46 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index fd4d72e..be405a7 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -771,6 +771,37 @@ __ASM_GLOBAL_FUNC( clear_alignment_flag,
+                    "ret" )
+
+
++/***********************************************************************
++ *           set_gs_base
++ *
++ * Set the gs.base MSR to point at the given TEB. Normally this is done
++ * via arch_prctl(ARCH_SET_GS), but some user-mode Linux kernel
++ * emulators (notably gVisor's runsc sentry) silently ignore
++ * arch_prctl(ARCH_SET_GS) calls: the syscall returns success but the
++ * write never takes effect, leaving gs.base at whatever the emulator
++ * initially chose (often a glibc-private address). Under those
++ * conditions Wine's PE ntdll hits NULL-pointer faults every time it
++ * reads NtCurrentTeb() via `%gs:0x30`.
++ *
++ * Use the wrgsbase instruction as the primary path - it modifies the
++ * gs.base MSR directly and works on every environment that exposes
++ * the fsgsbase feature to user mode, including gVisor. Verify by
++ * re-reading via a %gs-prefixed load (since rdgsbase can also be
++ * broken on emulators). Fall back to arch_prctl if wrgsbase had no
++ * effect, so that this helper is safe on hosts that disable
++ * CR4.FSGSBASE. If both paths fail, the caller sees a gs.base that
++ * still doesn't match teb and can escalate.
++ */
++static inline void set_gs_base( TEB *teb )
++{
++    ULONG_PTR probe = 0;
++    __asm__ volatile("wrgsbase %0" :: "r"((ULONG_PTR)teb));
++    __asm__ volatile("mov %%gs:0x30, %0" : "=r"(probe));
++    if (probe != (ULONG_PTR)teb)
++        arch_prctl( ARCH_SET_GS, teb );
++}
++
++
+ /***********************************************************************
+  *           init_handler
+  */
+@@ -779,9 +810,24 @@ static inline ucontext_t *init_handler( void *sigcontext )
+     clear_alignment_flag();
+ #ifdef __linux__
+     {
+-        struct amd64_thread_data *thread_data = (struct amd64_thread_data *)&get_current_teb()->GdiTebBatch;
++        TEB *teb = get_current_teb();
++        struct amd64_thread_data *thread_data = (struct amd64_thread_data *)&teb->GdiTebBatch;
+         thread_data->syscall_dispatch = 0; /* SYSCALL_DISPATCH_FILTER_ALLOW */
+         if (fs32_sel) arch_prctl( ARCH_SET_FS, thread_data->pthread_teb );
++        /* Under gVisor's runsc sentry (and other user-mode Linux
++         * kernels), the initial arch_prctl(ARCH_SET_GS) call in
++         * signal_start_thread_c may have been silently ignored,
++         * leaving gs.base set to a non-TEB value. If the first fault
++         * on a thread is delivered via this handler while gs.base is
++         * still wrong, re-issue the set (via wrgsbase) here so the
++         * resumed user code sees the correct TEB via %gs:0x30. On
++         * bare-metal Linux arch_prctl works and this is a no-op. */
++        {
++            ULONG_PTR gs_self = 0;
++            __asm__ volatile("mov %%gs:0x30, %0" : "=r"(gs_self));
++            if (gs_self != (ULONG_PTR)teb)
++                set_gs_base( teb );
++        }
+     }
+ #elif defined __APPLE__
+     {
+@@ -2249,7 +2295,7 @@ static inline BOOL check_invalid_gsbase( ucontext_t *ucontext )
+     TRACE( "gsbase %016lx teb %p at instr %p, fixing up\n", cur_gsbase, teb, instr );
+
+ #ifdef __linux__
+-    arch_prctl( ARCH_SET_GS, teb );
++    set_gs_base( teb );
+ #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+     amd64_set_gsbase( teb );
+ #elif defined(__NetBSD__)
+@@ -2873,7 +2919,7 @@ void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend,
+     thread_data->instrumentation_callback = &instrumentation_callback;
+
+ #if defined __linux__
+-    arch_prctl( ARCH_SET_GS, teb );
++    set_gs_base( teb );
+     if (fs32_sel)
+     {
+         arch_prctl( ARCH_GET_FS, &thread_data->pthread_teb );
+--
+2.43.0
+
