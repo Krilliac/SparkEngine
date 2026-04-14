@@ -22,6 +22,12 @@
  *   perceptionSys.UpdateAllAgents(world, currentTime);
  * @endcode
  *
+ * @warning **UNWIRED as of 2026-04-14.** No code in the engine
+ * instantiates `ParallelPerceptionSystem`. Its only intended owner was
+ * `AIIntegratedSystem` (`AIIntegration.h`), which is itself unwired.
+ * See `.claude/knowledge/stub-and-abandoned-features-2026-04-10.md`
+ * (Tier 3) for the audit entry.
+ *
  * @see JobSystem.h, Octree.h, PerceptionSystem.h, AISystem.h
  */
 

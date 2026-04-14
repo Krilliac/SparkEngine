@@ -19,6 +19,18 @@
  *     6. budgetLimiter.EndFrame()
  * ```
  *
+ * @warning **UNWIRED as of 2026-04-14.** `AIIntegratedSystem` is not
+ * instantiated anywhere in the engine. The currently-running AI path is
+ * the lighter `Spark::ECS::AIUpdateSystem` (registered in
+ * `EngineSetup.h`), which ticks behavior trees per agent but does not
+ * run parallel perception, budget limiting, or NavMesh obstacle updates.
+ * Wiring this class in requires *replacing* `AIUpdateSystem` (per the
+ * comment on the class below) to avoid double-ticking behavior trees,
+ * which is a behaviour-affecting refactor and should not be done without
+ * explicit owner sign-off. See
+ * `.claude/knowledge/stub-and-abandoned-features-2026-04-10.md` (Tier 3)
+ * for the full audit entry.
+ *
  * @see AISystem.h, ParallelPerception.h, AIBudgetLimiter.h, NavMeshObstacles.h
  */
 
