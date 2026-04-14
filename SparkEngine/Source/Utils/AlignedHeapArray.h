@@ -17,6 +17,10 @@
 #include <type_traits>
 #include <utility>
 
+#ifdef _WIN32
+#include <malloc.h>
+#endif
+
 namespace Spark
 {
 
@@ -24,7 +28,7 @@ namespace Spark
     {
         inline void* AlignedAlloc(size_t size, size_t alignment)
         {
-#ifdef _MSC_VER
+#ifdef _WIN32
             return _aligned_malloc(size, alignment);
 #else
             void* ptr = nullptr;
@@ -36,7 +40,7 @@ namespace Spark
 
         inline void AlignedFree(void* ptr)
         {
-#ifdef _MSC_VER
+#ifdef _WIN32
             _aligned_free(ptr);
 #else
             free(ptr);
