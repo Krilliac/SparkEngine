@@ -36,6 +36,7 @@
 #include "Graphics/Neural/NeuralInference.h"
 #include "Utils/DebugHookManager.h"
 #include "Utils/Logger.h"
+#include "Utils/WineDetection.h"
 #include "Utils/JobSystem.h"
 #include "Utils/FreezeDetector.h"
 #include "Utils/DeadlockDetector.h"
@@ -699,6 +700,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     ASSERT(hInstance != nullptr);
 
     SetupCrashHandler();
+
+    // Initialize the unified Logger with a stderr sink as the very first
+    // engine action so early init SPARK_LOG_* calls are visible. Matches
+    // the same fix applied on the Linux path (SparkEngineLinux.cpp main).
+    // The later InitializeDebugSystemsImpl ClearSinks()+AddSink() keeps
+    // this idempotent.
+    {
+        auto& earlyLogger = Spark::Logger::Get();
+        earlyLogger.Initialize(/*enableAsync=*/false);
+        earlyLogger.AddSink(std::make_unique<Spark::StderrSink>());
+    }
+
+    // Log whether we're under Wine so operators can tell at a glance
+    // when debugging a cross-host issue. No-op on native Windows.
+    Spark::LogWineEnvironmentIfApplicable();
 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
     ParseWindowSizeOverride(lpCmdLine);

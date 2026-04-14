@@ -35,6 +35,7 @@
 #include "Graphics/Neural/NeuralInference.h"
 #include "Utils/DebugHookManager.h"
 #include "Utils/Logger.h"
+#include "Utils/WineDetection.h"
 #include "Utils/JobSystem.h"
 #include "Utils/FreezeDetector.h"
 #include "Utils/DeadlockDetector.h"
@@ -890,6 +891,13 @@ int main(int argc, char* argv[])
         earlyLogger.Initialize(/*enableAsync=*/false);
         earlyLogger.AddSink(std::make_unique<Spark::StderrSink>());
     }
+
+    // Log Wine environment if applicable. On native Linux this is a no-op
+    // (Spark::IsRunningUnderWine always returns false in the non-Windows
+    // build); it's here for symmetry and so builds compiled with MinGW
+    // that fall through to the Linux main (via _WIN32 being undefined in
+    // some cross-compile permutations) still get the banner.
+    Spark::LogWineEnvironmentIfApplicable();
 
     try
     {
