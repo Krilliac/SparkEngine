@@ -41,3 +41,56 @@ set(CMAKE_SHARED_LINKER_FLAGS_INIT "-static-libgcc -static-libstdc++")
 
 # Tell SparkEngine's CMakeLists.txt this is a MinGW cross-compilation build
 set(SPARK_MINGW_CROSS ON CACHE BOOL "MinGW cross-compilation from Linux" FORCE)
+
+# Shim directory for headers whose MinGW filename differs from (or is a
+# reduced-content copy of) the Windows SDK filename. MinGW-w64 ships
+# `directxmath.h` (lowercase, and only the XMFLOAT* storage types — no
+# XMVECTOR/XMMATRIX/intrinsics), so engine code that `#include <DirectXMath.h>`
+# would either fail (Linux case-sensitive fs) or compile against an incomplete
+# header missing XMMATRIX. The fix is to add the real Microsoft DirectXMath
+# headers via FetchContent (license: MIT), then prepend the downloaded Inc/
+# directory AND the local cmake/mingw-shims/ directory to the include path.
+#
+# Offline builds can drop the Microsoft DirectXMath headers directly into
+# cmake/mingw-shims/ — FetchContent will be skipped. See the README in that
+# directory for details.
+set(_spark_mingw_shim_dir "${CMAKE_CURRENT_LIST_DIR}/../mingw-shims")
+include_directories(BEFORE SYSTEM "${_spark_mingw_shim_dir}")
+
+if(NOT EXISTS "${_spark_mingw_shim_dir}/DirectXMath.h")
+    # Headers not pre-staged — download straight to cmake/mingw-shims/ using
+    # file(DOWNLOAD) + file(ARCHIVE_EXTRACT). We intentionally avoid
+    # FetchContent_MakeAvailable here because this toolchain file runs during
+    # CMakeSystem.cmake (before the main project() call), when add_subdirectory
+    # would recursively enter another project() and fail.
+    set(_dxmath_zip "${CMAKE_CURRENT_LIST_DIR}/../../build/.dxmath-cache/oct2024.zip")
+    set(_dxmath_extract_dir "${CMAKE_CURRENT_LIST_DIR}/../../build/.dxmath-cache/extract")
+    set(_dxmath_expected_hash "b215087ddd085381839c6fc6f51185579f3a1c55804190b2ccc5969e9520b0bd")
+
+    if(NOT EXISTS "${_dxmath_zip}")
+        message(STATUS "MinGW toolchain: downloading DirectXMath (oct2024) from Microsoft GitHub")
+        file(DOWNLOAD
+             "https://github.com/microsoft/DirectXMath/archive/refs/tags/oct2024.zip"
+             "${_dxmath_zip}"
+             EXPECTED_HASH "SHA256=${_dxmath_expected_hash}"
+             STATUS _dxmath_status)
+        list(GET _dxmath_status 0 _dxmath_rc)
+        if(NOT _dxmath_rc EQUAL 0)
+            message(WARNING "MinGW toolchain: DirectXMath download failed (${_dxmath_status}) — engine build will fail. "
+                            "Drop the headers into cmake/mingw-shims/ manually, see its README.md.")
+        endif()
+    endif()
+
+    if(EXISTS "${_dxmath_zip}" AND NOT EXISTS "${_dxmath_extract_dir}/DirectXMath-oct2024/Inc/DirectXMath.h")
+        file(MAKE_DIRECTORY "${_dxmath_extract_dir}")
+        file(ARCHIVE_EXTRACT INPUT "${_dxmath_zip}" DESTINATION "${_dxmath_extract_dir}")
+    endif()
+
+    if(EXISTS "${_dxmath_extract_dir}/DirectXMath-oct2024/Inc/DirectXMath.h")
+        include_directories(BEFORE SYSTEM "${_dxmath_extract_dir}/DirectXMath-oct2024/Inc")
+        message(STATUS "MinGW toolchain: using fetched DirectXMath headers from "
+                       "${_dxmath_extract_dir}/DirectXMath-oct2024/Inc")
+    endif()
+else()
+    message(STATUS "MinGW toolchain: using local DirectXMath headers from ${_spark_mingw_shim_dir}")
+endif()

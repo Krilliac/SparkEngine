@@ -222,7 +222,8 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang|IntelLLVM")
 
     # Full RELRO — mark the GOT read-only after relocation (Linux ELF only).
     # Prevents GOT overwrite attacks. -z,now forces immediate binding (no lazy PLT).
-    if(NOT APPLE)
+    # Skip on MinGW / Windows: PE linkers don't understand -z and would fail.
+    if(NOT APPLE AND NOT WIN32 AND NOT MINGW)
         add_link_options(-Wl,-z,relro,-z,now)
     endif()
 

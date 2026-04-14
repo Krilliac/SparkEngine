@@ -6,7 +6,7 @@
 # on a Linux machine. Combined with Mesa Lavapipe, this works without a GPU.
 #
 # Prerequisites:
-#   sudo apt-get install wine64 mesa-vulkan-drivers
+#   sudo apt-get install "${WINE}" mesa-vulkan-drivers
 #   # Optional: install DXVK for D3D11 support
 #   # DXVK is auto-detected from /usr/share/dxvk or $DXVK_PATH
 #
@@ -59,13 +59,24 @@ error() {
     exit 1
 }
 
+# Pick the Wine launcher to use. On Ubuntu 22.04+ / Debian 12+, the `wine64`
+# binary has been removed — the plain `wine` handles both 32- and 64-bit .exes
+# now. Fall back to `wine64` for older distros that still ship it.
+if command -v wine &>/dev/null; then
+    WINE="${WINE:-wine}"
+elif command -v wine64 &>/dev/null; then
+    WINE="${WINE:-wine64}"
+else
+    WINE="${WINE:-wine}"
+fi
+
 check_prerequisites() {
-    if ! command -v wine64 &>/dev/null && ! command -v wine &>/dev/null; then
-        error "Wine not found. Install with: sudo apt-get install wine64"
+    if ! command -v "${WINE}" &>/dev/null; then
+        error "Wine not found. Install with: sudo apt-get install wine"
     fi
 
     if ! command -v wineboot &>/dev/null; then
-        error "wineboot not found. Install with: sudo apt-get install wine64"
+        error "wineboot not found. Install with: sudo apt-get install wine"
     fi
 }
 
@@ -104,8 +115,8 @@ detect_dxvk() {
         cp -f "$dxvk_path/dxgi.dll" "$sys32/" 2>/dev/null || true
 
         # Tell Wine to use the native DLLs
-        wine64 reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
-        wine64 reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
+        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
+        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else
@@ -135,7 +146,7 @@ detect_vkd3d() {
         local sys32="$WINEPREFIX/drive_c/windows/system32"
         cp -f "$vkd3d_path/d3d12.dll" "$sys32/" 2>/dev/null || true
 
-        wine64 reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
+        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else
@@ -192,7 +203,7 @@ print_info() {
     echo "LIBGL_SW:     ${LIBGL_ALWAYS_SOFTWARE:-0}"
     echo "DXVK_CACHE:   ${DXVK_STATE_CACHE_PATH:-<not set>}"
     echo ""
-    wine64 --version 2>/dev/null || wine --version 2>/dev/null || echo "Wine: not installed"
+    "${WINE}" --version 2>/dev/null || wine --version 2>/dev/null || echo "Wine: not installed"
     echo ""
     # GPU detection
     if command -v vulkaninfo &>/dev/null; then
@@ -256,9 +267,9 @@ if [ "${SPARK_WINE_LOG:-0}" = "1" ]; then
     export WINEDEBUG="warn+all"
 fi
 
-info "Running: wine64 $EXE $*"
+info "Running: "${WINE}" $EXE $*"
 info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
 info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
 
 # Run under Wine
-exec wine64 "$EXE" "$@"
+exec "${WINE}" "$EXE" "$@"
