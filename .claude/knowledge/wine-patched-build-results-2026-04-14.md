@@ -28,18 +28,60 @@ without the `tools/gvisor-wine-shim.c` LD_PRELOAD workaround loaded.
 Patch 1 is an unqualified success and should be submitted upstream as
 a standalone fix.
 
-## Patch 2 verdict: WRONG DIAGNOSIS, WITHDRAWN — superseded by real fix
+## Patch 2 verdict: FIXES A DIFFERENT BUG — open upstream as PR #62, complements PR #63
 
-**Update 2026-04-14 (same day, later session):** the initial
-"pthread-refresh" diagnosis below turned out to be completely wrong.
-A follow-up investigation in the same day found the real root cause,
-fixed it upstream-style, and verified the fix runs a MinGW-cross
-`hello.exe` to completion under gVisor. The sections below are
-preserved for historical reference because the strace evidence and
-the reasoning about Wine's thread-stack mmap model are still
-correct — but the **fix direction was wrong**, and nothing about
-`virtual_setup_exception`, `pthread_getattr_np`, or
-stack-bound refresh is actually involved in the real bug.
+**Update 2026-04-14 (same day, later session, corrected again after
+upstream state check):** an earlier draft of this entry said patch 2
+was "wrong diagnosis, withdrawn". That was incorrect on two counts:
+
+1. **PR #62 is OPEN, not closed.** Krilliac closed it briefly after
+   the first review round (realising that the specific failure in
+   the SparkEngine test was not fixed by patch 2 alone), then
+   **reopened it** 1 hour later explicitly so that the TEB/pthread
+   stack-bounds refresh can be reviewed upstream **alongside** the
+   wrgsbase gs.base fix in PR #63. The author's own description of
+   the series is "The two parts are independent fixes, but on
+   gVisor you need both to run a guest binary to completion" — not
+   "patch 2 supersedes patch 3" or vice versa.
+
+2. **Patches 2 and 3 address different failure modes.** Patch 3
+   (wrgsbase) fixes the `gs.base`-never-set bug that produces the
+   NULL-pointer cascade in `loader_init` I empirically reproduced
+   this session. Patch 2 (pthread-refresh) fixes a different
+   latent bug: when a gVisor-or-similar host hands the Windows
+   thread a pthread stack mapping **narrower** than what Wine
+   cached in the TEB at thread creation, `virtual_setup_exception`
+   kills the thread with a bogus "stack overflow N bytes" abort
+   even though the real rsp is still well inside a mapped,
+   writable page. Patch 2 queries the kernel via
+   `pthread_getattr_np()` (cached to keep the signal path
+   async-signal-safe) and widens `stack_info->start` down to the
+   real pthread-reported start before retrying the range check.
+   On hosts where the TEB and pthread bounds already agree, the
+   check short-circuits and the path is a strict no-op.
+
+   The scenario patch 2 fixes is **distinct** from the
+   `gs.base`-cascade I observed: my reproducer's pthread_start
+   was numerically **above** the TEB stack's start (the two were
+   ~1 TB apart in memory), so patch 2's refresh check returns
+   FALSE on my test, does nothing, and the underlying cause of my
+   fault was a different bug entirely. My earlier "wrong
+   diagnosis, superseded" verdict confused "doesn't fix my
+   specific reproducer" with "doesn't fix anything". It was an
+   overstep. Patch 2 still fires on the configurations it was
+   written for — most commonly sandbox runtimes whose pthread
+   allocator hands Wine a tighter stack mapping than
+   `pthread_create` originally requested.
+
+The sections below are preserved as a record of the
+`gs.base`-cascade reproducer and its misdiagnosis path, because
+that path surfaced the real root cause fixed by PR #63. Treat
+the "Why the stack overflow is a symptom, not a cause" subsection
+as accurate only for the specific reproducer I ran (bare
+`hello.exe` with one worker thread); on other binaries or on
+other sandbox runtimes the stack overflow in
+`virtual_setup_exception` may have an entirely different genuine
+trigger that patch 2 is the right fix for.
 
 **TL;DR of the real bug and the real fix** (full details in
 `.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md`):
@@ -148,40 +190,93 @@ are reliable.
 
 ### Upstream / fork status at time of writing
 
-  * `wine-mirror/wine#62` (Krilliac's pthread-refresh PR) was
-    **closed** upstream without a second review round. No further
-    action required on that PR; patch 3 supersedes it.
-  * `Krilliac/wine:claude/wine-stack-pthread-refresh` still holds
-    commits `0c00c2b` + `93195fb`. Leave as historical reference or
-    rename `do-not-submit`.
-  * `Krilliac/wine:claude/wine-wrgsbase-fallback` holds `f0f9846` +
-    `be4282b`. Apply `0004-...patch` on top of it (or force-push the
-    squashed `0003-...patch` version) to restore gVisor correctness.
-  * `Krilliac/wine:claude/wine-trap-siginfo-fallback` still holds the
-    correct trap-siginfo fallback at `e4ae52e`. Keep as-is; still
-    submit as `[PATCH 1/2]` alongside the wrgsbase fix.
+**All three patches are now open upstream PRs on `wine-mirror/wine`.**
+Krilliac submitted them as a three-part series targeting
+`wine-mirror:master`:
+
+| Upstream PR | Fork branch | Commits | State | Fixes |
+|---|---|---|---|---|
+| [`wine-mirror/wine#61`](https://github.com/wine-mirror/wine/pull/61) | `Krilliac/wine:claude/wine-trap-siginfo-fallback` | `e4ae52e` | **Open** | Bug 1 — `segv_handler`'s infinite `Got unexpected trap 0` loop on hosts where `gregs[REG_TRAPNO]` is left zeroed. Adds a siginfo fallback. |
+| [`wine-mirror/wine#62`](https://github.com/wine-mirror/wine/pull/62) | `Krilliac/wine:claude/wine-stack-pthread-refresh` | `0c00c2b` + `93195fb` | **Open** (closed briefly, reopened same day) | Bug 2 — `virtual_setup_exception` killing threads with bogus "stack overflow N bytes" because the cached TEB `DeallocationStack`/`StackBase` bounds don't match the pthread stack the kernel actually mapped. Refreshes `stack_info->start` from a cached `pthread_getattr_np()` reading taken once at thread init (signal-safe). |
+| [`wine-mirror/wine#63`](https://github.com/wine-mirror/wine/pull/63) | `Krilliac/wine:claude/wine-wrgsbase-fallback` | `f0f9846` + `be4282b` + `5cc6634` | **Open** | Bug 3 — `arch_prctl(ARCH_SET_GS, teb)` being silently ignored by gVisor's runsc sentry, leaving `gs.base` at a glibc-private address and making every `NtCurrentTeb()` in PE ntdll deref garbage. Adds a `set_gs_base()` helper that tries `arch_prctl` first, verifies via `%gs:0x30`, and falls back to `wrgsbase` only if arch_prctl failed or lied. Three commits on the branch: original wrgsbase-first version, Codex-review guard, and the final arch_prctl-first refactor (this session's iteration 3). |
+
+Per the author's own PR description on #62: *"The two parts are
+independent fixes, but on gVisor you need both to run a guest
+binary to completion."* Krilliac treats #61 + #62 + #63 as a
+mutually-reinforcing series, not as competing proposals. My
+earlier draft treating #62 as "superseded" by #63 was wrong —
+the two fix **different failure modes**, both of which can show
+up on the same gVisor host depending on which binary is run and
+which kernel-vs-Wine-bookkeeping mismatch happens first.
+
+PR #63's commit `5cc6634` is functionally identical to the local
+commit `6db9694` I produced in the build tree and to the
+`0004-ntdll-prefer-arch_prctl-for-set_gs_base.patch` file in
+`docs/wine-upstream/` — the small hash difference is from the
+commit's author/date metadata being touched when the patch was
+replayed onto the fork branch. Logically they are the same fix.
+
+Next steps for upstream submission are now **watching / replying**,
+not submitting:
+
+  1. Watch for upstream reviewer feedback on **all three** PRs.
+     Respond promptly with any fixups. Each PR is a small,
+     localised change and should not need major restructuring.
+  2. If upstream asks for a squashed single-commit version of
+     #63, the clean form lives at
+     `docs/wine-upstream/0003-ntdll-use-wrgsbase-when-arch_prctl-is-broken.patch`.
+     `git am` that onto a fresh branch off wine master and
+     force-push it over `claude/wine-wrgsbase-fallback` if
+     reviewers prefer.
+  3. If upstream asks for a reproducer for #62 specifically,
+     the refresh path fires on configurations where the pthread
+     allocator hands Wine a stack narrower than the TEB's
+     cached bounds. The SparkEngine `hello.exe` reproducer used
+     this session does **not** exercise that path (my pthread
+     stack was numerically above the TEB, so the `refresh_
+     stack_info_from_pthread()` check short-circuits and returns
+     without widening). Reviewers asking for a repro may need
+     to probe a specific gVisor configuration or a different
+     sandbox runtime.
+  4. Once the three PRs merge, rebase `Krilliac/wine:master` off
+     upstream so SparkEngine's CI can pick up the fixes without
+     the local fork's extra commits.
 
 ---
 
-### Original (wrong) pthread-refresh analysis — historical reference
+### Reproducer-specific pthread-refresh analysis — historical reference
 
 The rest of this section records the pthread-refresh diagnosis that
-this session chased and discarded. It's kept because the strace
+this session chased on a **specific `hello.exe` reproducer** inside
+a **specific gVisor instance**. It's kept because the strace
 evidence and the Wine thread-stack mmap observations are still
-accurate — only the conclusion ("refresh pthread bounds from the
-signal handler") was wrong.
+accurate *for that reproducer*. An earlier draft of this file
+concluded from this data that "refresh pthread bounds from the
+signal handler" (patch 2) was wrong in general — that conclusion
+was an overstep. Patch 2 is correct for the configurations it
+was written for (sandboxes where the pthread stack is narrower
+than the TEB's cached bounds); my reproducer simply didn't hit
+that path. What it **did** hit was a different bug — the
+`arch_prctl(ARCH_SET_GS)` silent no-op fixed by patch 3 — and the
+observations below are the breadcrumbs that led to that
+discovery, not evidence against patch 2.
 
 Patch 2 sometimes prints its intended `warn:virtual:virtual_setup_exception
-stack_info start widened from TEB value to pthread value` message and
-proceeds — but examination of the cases where it "works" shows the
-refresh is widening `stack_info->start` to an address many GB below the
-current stack mapping, not into the actual pthread stack. The refresh
-happens to unblock the range check by coincidence: the address it
-widens to is inside unrelated memory, and the subsequent write only
-succeeds because the real rsp is still well above the Wine-allocated
-Windows stack's true limit.
+stack_info start widened from TEB value to pthread value` message
+on **my** reproducer and proceeds — but examination of the cases
+where it "works" on this reproducer shows the refresh is widening
+`stack_info->start` to an address many GB below the current stack
+mapping, not into the actual pthread stack. For this reproducer's
+fault, the refresh happens to unblock the range check by
+coincidence: the address it widens to is inside unrelated memory,
+and the subsequent write only succeeds because the real rsp is
+still well above the Wine-allocated Windows stack's true limit.
+This only tells you that patch 2 is the wrong fix **for the
+gs.base-cascade reproducer**; it does not tell you anything about
+the genuine TEB/pthread stack-bounds mismatch scenario that patch 2
+is actually designed for.
 
-#### Why the mental model is wrong
+#### Why the mental model is wrong for THIS reproducer
 
 Patch 2 (both the original and the cached rewrite) assumes the **TEB
 stack** (`DeallocationStack..StackBase`) and the **pthread stack**
@@ -366,53 +461,69 @@ knowledge entry.
 
 ## What to do next
 
-1. **Submit patches 1 + 3 upstream** to `wine-devel@winehq.org` as a
-   two-patch series. Both are correct, minimal, and reproduce cleanly
-   on any user-mode Linux kernel. The patch files are checked into
-   SparkEngine at:
-   - `docs/wine-upstream/0001-ntdll-fall-back-to-siginfo-for-trap-code.patch`
-     — subject `[PATCH 1/2] ntdll: fall back to siginfo for trap code
-     when REG_TRAPNO is zero`.
-   - `docs/wine-upstream/0003-ntdll-use-wrgsbase-when-arch_prctl-is-broken.patch`
-     — subject `[PATCH 2/2] ntdll: use wrgsbase as a fallback when
-     arch_prctl(ARCH_SET_GS) is broken`. Single squashed commit with
-     the arch_prctl-first / verify / wrgsbase-fallback layout.
+1. **Watch the three upstream PRs for reviewer feedback.** All three
+   are open and form Krilliac's `wine-mirror/wine` gVisor-compat
+   series. Respond promptly to any review comments:
+   - [`wine-mirror/wine#61`](https://github.com/wine-mirror/wine/pull/61)
+     — trap-siginfo fallback, commit `e4ae52e`. Patch file:
+     `docs/wine-upstream/0001-ntdll-fall-back-to-siginfo-for-trap-code.patch`.
+   - [`wine-mirror/wine#62`](https://github.com/wine-mirror/wine/pull/62)
+     — `virtual_setup_exception` pthread-bounds refresh, commits
+     `0c00c2b + 93195fb`. Patch file:
+     `docs/wine-upstream/0002-ntdll-refresh-stack-info-from-pthread-under-gVisor.patch`.
+   - [`wine-mirror/wine#63`](https://github.com/wine-mirror/wine/pull/63)
+     — `set_gs_base()` wrgsbase fallback, commits
+     `f0f9846 + be4282b + 5cc6634`. Patch file:
+     `docs/wine-upstream/0003-ntdll-use-wrgsbase-when-arch_prctl-is-broken.patch`
+     (the squashed single-commit form, in case upstream asks for it).
 
-2. **Do not submit patch 2 upstream.** Upstream already closed
-   `wine-mirror/wine#62` (the pthread-refresh PR from the earlier
-   session); no action required on that PR. The
-   `Krilliac/wine:claude/wine-stack-pthread-refresh` branch still
-   holds `0c00c2b + 93195fb` as historical reference — leave or
-   rename to `do-not-submit`.
+2. **Be ready to explain why #62 and #63 coexist.** Reviewers may
+   ask whether they are redundant. The answer is no: they fix
+   distinct symptoms of the same Wine-on-user-mode-Linux
+   incompatibility class.
 
-3. **Update the Krilliac/wine wrgsbase-fallback branch in place.**
-   The branch currently holds `f0f9846 + be4282b`, both of which have
-   the gVisor-silent-no-op regression from the Codex review round
-   trip. Apply
-   `docs/wine-upstream/0004-ntdll-prefer-arch_prctl-for-set_gs_base.patch`
-   on top of `be4282b` to restore correctness without rewriting
-   history:
-   ```bash
-   cd /path/to/wine-fork
-   git fetch origin claude/wine-wrgsbase-fallback
-   git checkout claude/wine-wrgsbase-fallback
-   git am docs/wine-upstream/0004-ntdll-prefer-arch_prctl-for-set_gs_base.patch
-   git push origin HEAD:claude/wine-wrgsbase-fallback
-   ```
-   Alternatively, force-push the squashed `0003-...patch` version to
-   collapse all three iterations into a single clean commit on the
-   branch.
+   - #63 fixes the case where `arch_prctl(ARCH_SET_GS, teb)` is
+     silently ignored, leaving `gs.base` at a glibc-private
+     address and making every `NtCurrentTeb()` in PE ntdll deref
+     garbage. This is what I reproduced end-to-end this session.
+   - #62 fixes the case where the pthread stack the kernel
+     actually mapped is narrower than what Wine cached in the TEB,
+     so `virtual_setup_exception` kills a thread with a bogus
+     "stack overflow" abort even though rsp is in a writable page.
+     My reproducer did not hit that path — in my test the pthread
+     start was numerically above the TEB stack, so the refresh
+     short-circuits — but it's a real bug on configurations where
+     the mismatch goes the other way, which is what Krilliac wrote
+     patch 2 for.
 
-4. **SparkTests.exe under Wine is a separate workstream.** The real
-   gs.base fix is enough to get minimal MinGW-cross binaries running
-   end-to-end under patched Wine inside gVisor. SparkTests.exe has
-   its own engine-init dependencies (Vulkan, X11 driver, full Wine
-   DLL set, wow64 support) that the minimal `--enable-win64
-   --disable-tests --without-freetype --without-gstreamer` Wine build
-   we made does not cover. That work is not blocked by Wine itself
-   anymore — it needs a richer Wine build and/or the CI job.
+   Both patches are guarded so they compile to no-op on bare-metal
+   Linux: #62's refresh check short-circuits when the kernel and
+   TEB agree, #63's wrgsbase fallback is never reached when
+   `arch_prctl` succeeds.
 
-5. **For SparkEngine itself** — the two MinGW source fixes landed in
+3. **Do not re-submit anything.** All three patch files in
+   `docs/wine-upstream/` are already represented upstream. The
+   knowledge entries in `.claude/knowledge/` are documentation,
+   not a to-do list.
+
+4. **Update the Krilliac/wine wrgsbase-fallback branch in place if
+   upstream asks for a squashed #63.** The branch currently holds
+   `f0f9846 + be4282b + 5cc6634` (three commits, evolution
+   visible). If reviewers prefer a single clean commit, `git am`
+   `docs/wine-upstream/0003-ntdll-use-wrgsbase-when-arch_prctl-is-broken.patch`
+   onto a fresh branch off wine master and force-push over
+   `claude/wine-wrgsbase-fallback`.
+
+5. **SparkTests.exe under Wine is a separate workstream.** The
+   `set_gs_base` fix is enough to get minimal MinGW-cross binaries
+   running end-to-end under patched Wine inside gVisor. SparkTests.exe
+   has its own engine-init dependencies (Vulkan, X11 driver, full
+   Wine DLL set, wow64 support) that the minimal `--enable-win64
+   --disable-tests --without-freetype --without-gstreamer` Wine
+   build we made does not cover. That work is not blocked by Wine
+   itself anymore — it needs a richer Wine build and/or the CI job.
+
+6. **For SparkEngine itself** — the two MinGW source fixes landed in
    this session are worth merging regardless of Wine's state, since
    they are genuine cross-build correctness improvements that the
    CI `build-linux-mingw-wine` job will exercise.
