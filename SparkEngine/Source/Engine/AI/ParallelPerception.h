@@ -22,13 +22,15 @@
  *   perceptionSys.UpdateAllAgents(world, currentTime);
  * @endcode
  *
- * @warning **UNWIRED as of 2026-04-14.** No code in the engine
- * instantiates `ParallelPerceptionSystem`. Its only intended owner was
- * `AIIntegratedSystem` (`AIIntegration.h`), which is itself unwired.
- * See `.claude/knowledge/stub-and-abandoned-features-2026-04-10.md`
- * (Tier 3) for the audit entry.
+ * @note **WIRED 2026-04-14.** `ParallelPerceptionSystem` is now owned and
+ * ticked by `Spark::AI::AIIntegratedSystem` (`AIIntegration.h`), which
+ * itself is initialized from `GameplayLifecycleShared.cpp`. The default
+ * configuration enables this subsystem, so `Initialize` /
+ * `RebuildSpatialIndex` / `UpdateAllAgents` run every frame on the live
+ * world without any extra setup. Game modules that want to allocate
+ * additional standalone instances are still free to do so.
  *
- * @see JobSystem.h, Octree.h, PerceptionSystem.h, AISystem.h
+ * @see JobSystem.h, Octree.h, PerceptionSystem.h, AISystem.h, AIIntegration.h
  */
 
 #pragma once
@@ -62,7 +64,7 @@ namespace Spark::AI
      */
     struct PerceivableEntity
     {
-        EntityID entityId = entt::null;
+        EntityID entityId = static_cast<EntityID>(-1);
         DirectX::XMFLOAT3 position{0.0f, 0.0f, 0.0f};
     };
 
@@ -84,7 +86,9 @@ namespace Spark::AI
      */
     struct AgentPerceptionJob
     {
-        EntityID entityId = entt::null;
+        // Spark::AI::EntityID is a uint32_t alias (see MovementSystem.h);
+        // entt::null is an entt::entity, so use the unsigned-int sentinel.
+        EntityID entityId = static_cast<EntityID>(-1);
         DirectX::XMFLOAT3 position{0.0f, 0.0f, 0.0f};
         DirectX::XMFLOAT3 forward{0.0f, 0.0f, 1.0f};
         PerceptionComponent perception;

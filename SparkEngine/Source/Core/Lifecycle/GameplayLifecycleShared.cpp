@@ -54,6 +54,7 @@
 #include "Engine/AI/FormationSystem.h"
 #include "Engine/AI/GroupAI.h"
 #include "Engine/AI/CollisionAvoidance.h"
+#include "Engine/AI/AIIntegration.h"
 #include "Engine/Gameplay/MaterialEffects.h"
 #include "Engine/Gameplay/AchievementSystem.h"
 #include "Engine/Accessibility/AccessibilitySystem.h"
@@ -435,6 +436,11 @@ namespace Spark::Core::Lifecycle
         Spark::AI::FormationSystem::GetInstance().Initialize();
         Spark::AI::GroupAISystem::GetInstance().Initialize();
         Spark::AI::CollisionAvoidanceSystem::GetInstance().Initialize();
+        // AIIntegratedSystem owns ParallelPerceptionSystem + NavMeshObstacleManager
+        // and (optionally) the heavy AISystem pipeline. Default config keeps
+        // runCoreAISystem=false so behavior trees are not double-ticked
+        // alongside Spark::ECS::AIUpdateSystem (registered in EngineSetup.h).
+        Spark::AI::AIIntegratedSystem::GetInstance().Initialize();
         Spark::Gameplay::MaterialEffectSystem::GetInstance().Initialize();
         Spark::Dialogue::DynamicResponseSystem::GetInstance().Initialize();
         Spark::ECS::EntityArchetypeSystem::GetInstance().Initialize();
@@ -865,6 +871,16 @@ namespace Spark::Core::Lifecycle
             SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AI_Movement", 0.0);
         });
 
+        // AIIntegratedSystem owns the parallel perception spatial index and
+        // (optionally) the heavy AISystem pipeline. Default config skips the
+        // inner AISystem so behavior trees aren't double-ticked alongside the
+        // ECS AIUpdateSystem registered in EngineSetup.h.
+        SPARK_GUARDED_UPDATE("AIIntegrated", "Core", {
+            SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AIIntegrated", 0.0);
+            Spark::AI::AIIntegratedSystem::GetInstance().Update(*world, dt);
+            SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "AIIntegrated", 0.0);
+        });
+
         SPARK_GUARDED_UPDATE("Coroutine", "Core", { Spark::CoroutineScheduler::GetInstance().Update(dt); });
 
         SPARK_GUARDED_UPDATE("MusicManager", "Core", { Spark::Audio::MusicManager::GetInstance().Update(dt); });
@@ -1123,6 +1139,7 @@ namespace Spark::Core::Lifecycle
         Spark::ECS::EntityArchetypeSystem::GetInstance().Shutdown();
         Spark::Dialogue::DynamicResponseSystem::GetInstance().Shutdown();
         Spark::Gameplay::MaterialEffectSystem::GetInstance().Shutdown();
+        Spark::AI::AIIntegratedSystem::GetInstance().Shutdown();
         Spark::AI::CollisionAvoidanceSystem::GetInstance().Shutdown();
         Spark::AI::GroupAISystem::GetInstance().Shutdown();
         Spark::AI::FormationSystem::GetInstance().Shutdown();
