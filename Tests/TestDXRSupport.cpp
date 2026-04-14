@@ -12,8 +12,17 @@
 // in CI, so this file deliberately covers only the public API contract
 // that DXRManager exposes regardless of platform — the bits that the
 // rest of the engine depends on.
+//
+// On MinGW the engine build excludes DXRSupport.cpp entirely (see the
+// SPARK_NO_D3D12 block in CMakeLists.txt — MinGW's d3d12.h headers are
+// too old for ID3D12Device5 etc.), so the DXRManager symbols this file
+// references don't exist in the link image. Compile the whole file out
+// when SPARK_NO_D3D12 is defined.
 
 #include "TestFramework.h"
+
+#ifndef SPARK_NO_D3D12
+
 #include "Graphics/RHI/DXRSupport.h"
 
 #include <cstdint>
@@ -225,3 +234,5 @@ TEST(DXR_Manager_ConsoleStatusFormat)
     EXPECT_TRUE(status.find("Available") != std::string::npos);
     EXPECT_TRUE(status.find("Initialized") != std::string::npos);
 }
+
+#endif // !SPARK_NO_D3D12
