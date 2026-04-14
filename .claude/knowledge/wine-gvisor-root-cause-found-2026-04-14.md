@@ -1,9 +1,26 @@
 # Wine + gVisor: root cause found and fixed
 
-**Date:** 2026-04-14
+**Date:** 2026-04-14 (updated later the same day to address Codex review)
 **Type:** Observation + Fix
-**Status:** **RESOLVED**
-**Session:** deep investigation + empirical fix + verified working
+**Status:** **RESOLVED (iteration 3 — final)**
+**Session:** deep investigation + empirical fix + Codex review round-trip + verified working
+
+## Iteration history
+
+| Rev | Commit | Strategy | Outcome |
+|-----|--------|----------|---------|
+| 1 | `f0f9846` | wrgsbase first, arch_prctl fallback, unconditional | Fixes gVisor but flagged by Codex review for SIGILL risk on hosts with `CR4.FSGSBASE` cleared |
+| 2 | `be4282b` | Guard wrgsbase on `PF_RDWRFSGSBASE_AVAILABLE`, arch_prctl fallback | Addresses Codex, but **silently no-ops on gVisor** because gVisor under-reports `AT_HWCAP2` and Wine's feature flag is AND-gated on that bit |
+| 3 | `6db9694` (this version) | **arch_prctl first, verify via `%gs:0x30`, wrgsbase fallback only on failure** | Fixes gVisor AND avoids unconditional SIGILL on bare-metal hosts. Final. |
+
+Key insight for iteration 3: on bare-metal Linux `arch_prctl`
+succeeds, verification passes, and the `wrgsbase` fallback is
+**never executed** — so hosts with `CR4.FSGSBASE` disabled simply
+never reach the problematic instruction. The only hosts that get
+to `wrgsbase` are those where `arch_prctl` has already been proven
+broken at runtime, which in practice means user-mode Linux kernels
+that do expose the fsgsbase feature to user mode (such as gVisor).
+This gets correctness and safety without the Codex trade-off.
 
 ## Executive summary
 
