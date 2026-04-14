@@ -3,19 +3,29 @@
 This directory holds patches against Wine that fix real bugs we hit
 running MinGW-cross-compiled SparkEngine binaries under Wine inside a
 gVisor-backed sandbox. PR #470 on this repo already landed two earlier
-patches that were merged back into `Working`. This directory now holds
-the one patch that's still pending upstream submission:
+patches that were merged back into `Working`. This directory now holds:
 
 | # | File | Target | Status |
 |---|------|--------|--------|
-| 3 | `0003-ntdll-use-wrgsbase-when-arch_prctl-is-broken.patch` | `dlls/ntdll/unix/signal_x86_64.c` | **Verified end-to-end**, ready to submit |
+| 3 | `0003-ntdll-use-wrgsbase-when-arch_prctl-is-broken.patch` | `dlls/ntdll/unix/signal_x86_64.c` | **Final squashed patch**, ready to submit |
+| 4 | `0004-ntdll-prefer-arch_prctl-for-set_gs_base.patch` | `dlls/ntdll/unix/signal_x86_64.c` | **Codex-review fix commit**, apply on top of the existing `claude/wine-wrgsbase-fallback` branch on `Krilliac/wine` |
+
+The two files capture the same fix in two forms. Use patch 3 for
+upstream submission; it is a single clean commit ready to `git am`
+onto Wine master. Use patch 4 to update the existing
+`Krilliac/wine:claude/wine-wrgsbase-fallback` branch in place: the
+branch already holds two earlier commits (`f0f9846` + `be4282b`) from
+the Codex-review iteration, and this commit sits on top of them to
+restore gVisor correctness while keeping the no-unconditional-SIGILL
+guarantee.
 
 Patches 1 and 2 from the previous session (trap-siginfo fallback and
 pthread stack refresh) are on `Krilliac/wine` branches
-`claude/wine-trap-siginfo-fallback` and `claude/wine-stack-pthread-refresh`.
-**Patch 2 should be withdrawn** — follow-up investigation (see
-`.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md`)
-proved the diagnosis wrong. Patch 3 supersedes it.
+`claude/wine-trap-siginfo-fallback` (still correct, keep) and
+`claude/wine-stack-pthread-refresh` (wrong diagnosis, withdraw).
+`wine-mirror/wine#62` is the PR that tried to merge patch 2; it has
+already been **closed** by upstream and no further action is needed
+on it. Patch 3 supersedes patch 2 entirely.
 
 ## What patch 0003 fixes
 
@@ -29,14 +39,33 @@ which cascades into a NULL-pointer write in `loader_init` at
 
 **Fix:** Wine currently writes gs.base via `arch_prctl(ARCH_SET_GS)`
 in three places. Replace all three with a `set_gs_base()` helper that
-uses the `wrgsbase` instruction (a direct CPU instruction, not a
-syscall, cannot be intercepted), verifies the write took effect via
-`mov %gs:0x30`, and falls back to `arch_prctl` only if the read-back
-mismatches.
+tries `arch_prctl` first and **verifies** the write took effect by
+reading `%gs:0x30` back. On a correctly-initialised TEB, that read
+equals `teb` because `teb->NtTib.Self = &teb->Tib` and `Tib` is at
+offset 0 inside TEB. If the syscall failed or the verification
+mismatched, fall through to `wrgsbase` — a direct CPU instruction,
+not a syscall, that cannot be intercepted. On bare-metal Linux
+`arch_prctl` always works and verification always passes, so the
+`wrgsbase` fallback is never reached — even on kernels with
+`CR4.FSGSBASE` cleared or booted with `nofsgsbase`. **There is no
+unconditional SIGILL risk from this patch.**
+
+An earlier iteration used wrgsbase as the primary path and fell
+back to `arch_prctl`. That version was flagged by a Codex review
+for SIGILL risk on hosts without CR4.FSGSBASE enabled. A second
+iteration guarded `wrgsbase` on
+`user_shared_data->ProcessorFeatures[PF_RDWRFSGSBASE_AVAILABLE]`,
+which made the patch silent-no-op on gVisor — gVisor does expose
+fsgsbase instructions to user mode, but Wine's feature flag is
+computed as `cpuid(7).ebx[0] & (AT_HWCAP2 & 2)`, and gVisor
+under-reports `AT_HWCAP2`. The final version in this patch swaps
+the priority: arch_prctl first, verify, wrgsbase only on failure.
+This gets both correctness (gVisor works) and safety (bare-metal
+hosts never execute `wrgsbase` on a disabled CR4.FSGSBASE).
 
 **Verified working:** after this patch, a minimal MinGW-compiled
 `hello` program runs under Wine inside gVisor, prints its output, and
-returns the correct exit code. Before the patch it either loops
+returns the correct exit code 42. Before the patch it either loops
 forever or crashes the Wine loader.
 
 ## Applying the patch
@@ -54,6 +83,47 @@ patch -p1 < /path/to/SparkEngine/docs/wine-upstream/0003-ntdll-use-wrgsbase-when
 git add dlls/ntdll/unix/signal_x86_64.c
 git commit -F <(sed -n '/^Subject:/,/^---$/p' /path/to/SparkEngine/docs/wine-upstream/0003-ntdll-use-wrgsbase-when-arch_prctl-is-broken.patch | head -n -1)
 ```
+
+## Updating the Krilliac/wine fork's existing wrgsbase branch
+
+The fork at `https://github.com/Krilliac/wine` already has a branch
+`claude/wine-wrgsbase-fallback` that holds two earlier iterations of
+this fix:
+
+```
+be4282b ntdll: guard wrgsbase with PF_RDWRFSGSBASE_AVAILABLE in set_gs_base.
+f0f9846 ntdll: use wrgsbase to set gs.base on Linux x86_64 when arch_prctl is broken.
+```
+
+Both commits have the **silent-no-op-on-gVisor** regression described
+above. To fix that branch without rewriting history, apply patch 0004
+on top of `be4282b` — it adds a third commit that restructures
+`set_gs_base()` to the final arch_prctl-first-then-wrgsbase layout:
+
+```bash
+cd /path/to/wine-fork
+git fetch origin claude/wine-wrgsbase-fallback
+git checkout claude/wine-wrgsbase-fallback
+git am /path/to/SparkEngine/docs/wine-upstream/0004-ntdll-prefer-arch_prctl-for-set_gs_base.patch
+git push origin HEAD:claude/wine-wrgsbase-fallback
+```
+
+After push, the branch will have three commits:
+
+```
+XXXXXXX ntdll: prefer arch_prctl for set_gs_base; fall back to wrgsbase only on failure.  [new]
+be4282b ntdll: guard wrgsbase with PF_RDWRFSGSBASE_AVAILABLE in set_gs_base.
+f0f9846 ntdll: use wrgsbase to set gs.base on Linux x86_64 when arch_prctl is broken.
+```
+
+For upstream submission, use the squashed patch 0003 instead — it
+collapses all three iterations into a single clean commit that
+represents the final state.
+
+Alternative: if you're willing to rewrite the branch history,
+`git reset --hard f0f9846^` then `git am` patch 0003 to produce a
+single clean commit on the branch. **Do not** force-push over a
+branch that has open PRs unless you've coordinated with reviewers.
 
 ## Building a patched Wine
 
