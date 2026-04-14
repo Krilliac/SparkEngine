@@ -6,7 +6,7 @@
 # on a Linux machine. Combined with Mesa Lavapipe, this works without a GPU.
 #
 # Prerequisites:
-#   sudo apt-get install wine64 mesa-vulkan-drivers
+#   sudo apt-get install "${WINE}" mesa-vulkan-drivers
 #   # Optional: install DXVK for D3D11 support
 #   # DXVK is auto-detected from /usr/share/dxvk or $DXVK_PATH
 #
@@ -59,14 +59,90 @@ error() {
     exit 1
 }
 
+# Pick the Wine launcher to use. We have to jump through hoops for Ubuntu's
+# packaging:
+#
+#   - Debian/Ubuntu ship `/usr/bin/wine` as a shell wrapper that *always*
+#     prefers `/usr/lib/wine/wine` (32-bit) when that file is test -x, even
+#     for pure 64-bit .exes. On systems without working 32-bit libc
+#     (minimal containers, gVisor, nested sandboxes) the 32-bit binary
+#     can't even start — the wrapper fails with "Exec format error"
+#     before the wrapper reaches the wine64 fallback branch.
+#   - On Ubuntu 22.04+, `wine64` exists as a standalone command when
+#     `apt install wine64` has been run, but the `wine64` alternative
+#     isn't always linked — sometimes only `/usr/lib/wine/wine64` exists.
+#
+# Resolution order (stop at the first match that can actually execute a
+# 64-bit .exe):
+#   1. Env override: $WINE
+#   2. `wine64` on $PATH (cleanest, modern distros)
+#   3. `/usr/lib/wine/wine64` direct path (bypasses the wrapper)
+#   4. `wine` on $PATH as a last resort (may fail with 32-bit .exe)
+if [ -n "${WINE:-}" ]; then
+    :  # explicit override — honor as-is
+elif command -v wine64 &>/dev/null; then
+    WINE="wine64"
+elif [ -x "/usr/lib/wine/wine64" ]; then
+    WINE="/usr/lib/wine/wine64"
+    # Also export WINELOADER so Wine's own dll loader picks 64-bit.
+    export WINELOADER="${WINELOADER:-/usr/lib/wine/wine64}"
+elif command -v wine &>/dev/null; then
+    WINE="wine"
+else
+    WINE="wine"
+fi
+
 check_prerequisites() {
-    if ! command -v wine64 &>/dev/null && ! command -v wine &>/dev/null; then
-        error "Wine not found. Install with: sudo apt-get install wine64"
+    if ! command -v "${WINE}" &>/dev/null && [ ! -x "${WINE}" ]; then
+        error "Wine not found. Install with: sudo apt-get install wine64 wine"
     fi
 
     if ! command -v wineboot &>/dev/null; then
-        error "wineboot not found. Install with: sudo apt-get install wine64"
+        error "wineboot not found. Install with: sudo apt-get install wine64 wine"
     fi
+}
+
+# Run a tiny PE probe under Wine to verify the environment can actually
+# execute 64-bit Windows binaries. Useful in minimal containers / sandboxes
+# (e.g. gVisor) where Wine fails with a "Got unexpected trap 0" loop because
+# the ucontext trap_no field isn't populated. Returns 0 on success,
+# non-zero otherwise. Caller passes the probe path.
+probe_wine_environment() {
+    local probe="${1:-}"
+    if [ -z "$probe" ] || [ ! -f "$probe" ]; then
+        return 0  # nothing to probe
+    fi
+
+    info "Probing Wine environment with ${probe}..."
+    local probe_log
+    probe_log="$(mktemp)"
+    local probe_rc=0
+    if ! timeout 15 "${WINE}" "${probe}" > "${probe_log}" 2>&1; then
+        probe_rc=$?
+    fi
+
+    # Detect the two gVisor-specific failure modes:
+    #   1. "Got unexpected trap 0" loop (Wine segv_handler sees trap_no==0)
+    #   2. "virtual_setup_exception stack overflow" after #1 is worked around
+    if grep -q 'segv_handler Got unexpected trap 0' "${probe_log}" || \
+       grep -q 'virtual_setup_exception stack overflow' "${probe_log}"; then
+        echo "[wine-run] ERROR: Wine cannot execute Windows binaries in this environment." >&2
+        echo "[wine-run]        Detected gVisor-style signal handling where" >&2
+        echo "[wine-run]        ucontext trap_no is not populated. Wine's segv_handler" >&2
+        echo "[wine-run]        loops on 'Got unexpected trap 0' during startup." >&2
+        echo "[wine-run]" >&2
+        echo "[wine-run]        This is a known upstream incompatibility between" >&2
+        echo "[wine-run]        Wine 9.0 and gVisor's runsc user-mode kernel. Run" >&2
+        echo "[wine-run]        MinGW-compiled artifacts on a Linux host with a real" >&2
+        echo "[wine-run]        kernel (Docker runc, bare metal, or a conventional" >&2
+        echo "[wine-run]        VM) to exercise the Wine path." >&2
+        echo "[wine-run]" >&2
+        echo "[wine-run]        See .claude/knowledge/wine-gvisor-incompatibility.md" >&2
+        rm -f "${probe_log}"
+        return 2
+    fi
+    rm -f "${probe_log}"
+    return "${probe_rc}"
 }
 
 setup_wineprefix() {
@@ -104,8 +180,8 @@ detect_dxvk() {
         cp -f "$dxvk_path/dxgi.dll" "$sys32/" 2>/dev/null || true
 
         # Tell Wine to use the native DLLs
-        wine64 reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
-        wine64 reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
+        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
+        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else
@@ -135,7 +211,7 @@ detect_vkd3d() {
         local sys32="$WINEPREFIX/drive_c/windows/system32"
         cp -f "$vkd3d_path/d3d12.dll" "$sys32/" 2>/dev/null || true
 
-        wine64 reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
+        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else
@@ -192,7 +268,7 @@ print_info() {
     echo "LIBGL_SW:     ${LIBGL_ALWAYS_SOFTWARE:-0}"
     echo "DXVK_CACHE:   ${DXVK_STATE_CACHE_PATH:-<not set>}"
     echo ""
-    wine64 --version 2>/dev/null || wine --version 2>/dev/null || echo "Wine: not installed"
+    "${WINE}" --version 2>/dev/null || wine --version 2>/dev/null || echo "Wine: not installed"
     echo ""
     # GPU detection
     if command -v vulkaninfo &>/dev/null; then
@@ -256,9 +332,32 @@ if [ "${SPARK_WINE_LOG:-0}" = "1" ]; then
     export WINEDEBUG="warn+all"
 fi
 
-info "Running: wine64 $EXE $*"
+# Optional: probe the Wine environment with a pre-built hello-world .exe
+# before running the real target, so sandboxed / gVisor environments fail
+# fast with a clear diagnostic instead of spinning in Wine's segv loop.
+# Enable by setting SPARK_WINE_PROBE=/path/to/hello.exe
+if [ -n "${SPARK_WINE_PROBE:-}" ]; then
+    if ! probe_wine_environment "${SPARK_WINE_PROBE}"; then
+        exit 2
+    fi
+fi
+
+info "Running: "${WINE}" $EXE $*"
 info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
 info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
 
+# Optional LD_PRELOAD shim to patch Wine's segv_handler under gVisor.
+# Build with: gcc -shared -fPIC -o tools/gvisor-wine-shim.so tools/gvisor-wine-shim.c -ldl
+# Enable by setting SPARK_WINE_GVISOR_SHIM=1 (auto-detects tools/gvisor-wine-shim.so).
+if [ "${SPARK_WINE_GVISOR_SHIM:-0}" = "1" ]; then
+    _shim="${PROJECT_ROOT}/tools/gvisor-wine-shim.so"
+    if [ -f "${_shim}" ]; then
+        export LD_PRELOAD="${_shim}${LD_PRELOAD:+:${LD_PRELOAD}}"
+        info "  gVisor shim: ${_shim}"
+    else
+        info "  gVisor shim: not built — run 'make -C tools gvisor-wine-shim.so'"
+    fi
+fi
+
 # Run under Wine
-exec wine64 "$EXE" "$@"
+exec "${WINE}" "$EXE" "$@"

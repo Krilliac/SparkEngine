@@ -212,6 +212,7 @@ add_executable(SparkTests
     TestBehaviorTreeNodes.cpp
     TestAIBudgetLimiter.cpp
     TestAIDirector.cpp
+    TestAIIntegratedSystem.cpp
     TestWorldOriginSystem.cpp
     TestModSystem.cpp
     TestReplaySystem.cpp
