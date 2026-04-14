@@ -1,0 +1,144 @@
+From: SparkEngine Wine Compatibility <spark-wine@example.invalid>
+Date: Tue, 14 Apr 2026 00:00:01 +0000
+Subject: [PATCH 2/2] ntdll: refresh thread_stack_info from pthread bounds
+ before declaring stack overflow
+
+virtual_setup_exception() range-checks the address at which it is
+about to write the Windows exception frame against DeallocationStack
+and StackBase cached in the TEB at thread creation time. When the
+proposed frame would land in the first 4 KB of the cached mapping
+(the guard region), it calls abort_thread() with an "unrecoverable
+stack overflow" error and kills the thread.
+
+On conventional Linux kernels the TEB bounds exactly reflect the
+mapping the pthread's stack actually occupies, so the check is
+correct. On user-mode Linux kernels this is not always the case:
+
+  * gVisor's runsc sentry places pthread stacks through its own Go
+    allocator and does not necessarily hand Wine a mapping that
+    starts at the DeallocationStack the TEB caches.
+  * Firecracker and some sandbox runtimes exhibit similar drift
+    between Wine's bookkeeping and the kernel's view.
+  * Containerised setups with unusual mount/mmap_min_addr tuning
+    can produce the same result.
+
+The visible symptom after applying the companion patch that fixes
+segv_handler's zero-trap loop (patch 1/2 in this series) is a
+"stack overflow 64 bytes" ERR followed by a silent abort_thread()
+on the first exception the guest raises, even though the underlying
+pthread stack has megabytes of headroom.
+
+Ask the kernel directly via pthread_getattr_np() +
+pthread_attr_getstack() before aborting. If the kernel reports a
+start address below the cached DeallocationStack, widen stack_info
+and retry the range check. On bare metal the kernel's view and the
+cached TEB view agree, so this path is a no-op. On gVisor and
+similar environments the widened bounds let the exception frame be
+written into genuinely mapped, writable memory.
+
+Only take the refresh path when the cached bounds are about to
+reject the frame; the happy path is unchanged. Guarded with
+__linux__ && __GLIBC__ because pthread_getattr_np() is a glibc
+extension; on other C libraries and non-Linux targets the helper is
+a no-op and behavior is unchanged.
+
+Signed-off-by: SparkEngine Wine Compatibility <spark-wine@example.invalid>
+---
+ dlls/ntdll/unix/virtual.c | 76 +++++++++++++++++++++++++++++++++------
+ 1 file changed, 65 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index abe1b4d..15b24c8 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -4018,6 +4018,53 @@ NTSTATUS virtual_handle_fault( void *addr, DWORD err, void *stack )
+ }
+
+
++/***********************************************************************
++ *           refresh_stack_info_from_pthread
++ *
++ * Some environments (gVisor's runsc sentry, user-mode Linux kernels,
++ * Firecracker, certain seccomp/mount namespace layouts) allocate the
++ * pthread stack at an address range that does not exactly match the
++ * DeallocationStack/StackBase bounds cached in the TEB at thread
++ * creation time. When the TEB bounds look too narrow (e.g. because
++ * the active pthread stack lives at a lower address than
++ * DeallocationStack), virtual_setup_exception can reject a legitimate
++ * exception frame as a stack overflow and kill the thread.
++ *
++ * Query the real pthread stack bounds from the kernel via
++ * pthread_getattr_np(). If the kernel reports a lower start address
++ * than the cached TEB bounds, widen stack_info->start so the caller
++ * can finish writing the exception frame into memory that is in fact
++ * mapped and writable. On all conventional Linux kernels the pthread
++ * bounds and the TEB bounds agree, and this helper is a no-op.
++ *
++ * Returns TRUE if stack_info->start was widened.
++ */
++static BOOL refresh_stack_info_from_pthread( struct thread_stack_info *stack_info )
++{
++#if defined(__linux__) && defined(__GLIBC__)
++    pthread_attr_t attr;
++    void *addr;
++    size_t sz;
++    BOOL ret = FALSE;
++
++    if (pthread_getattr_np( pthread_self(), &attr )) return FALSE;
++    if (!pthread_attr_getstack( &attr, &addr, &sz ))
++    {
++        if ((char *)addr < stack_info->start)
++        {
++            stack_info->start = (char *)addr;
++            ret = TRUE;
++        }
++    }
++    pthread_attr_destroy( &attr );
++    return ret;
++#else
++    (void)stack_info;
++    return FALSE;
++#endif
++}
++
++
+ /***********************************************************************
+  *           virtual_setup_exception
+  */
+@@ -4043,11 +4090,28 @@ void *virtual_setup_exception( void *stack_ptr, size_t size, EXCEPTION_RECORD *r
+
+     if (stack < stack_info.start + 4096)
+     {
+-        /* stack overflow on last page, unrecoverable */
+-        UINT diff = stack_info.start + 4096 - stack;
+-        ERR( "stack overflow %u bytes addr %p stack %p (%p-%p-%p)\n",
+-             diff, rec->ExceptionAddress, stack, stack_info.start, stack_info.limit, stack_info.end );
+-        abort_thread(1);
++        /* The proposed exception frame would land in the guard page of
++         * the thread stack as known to the TEB. Before declaring this an
++         * unrecoverable overflow, give the kernel one chance to correct
++         * our bookkeeping: under user-mode Linux kernels (gVisor,
++         * Firecracker, etc.) the actual pthread stack may extend below
++         * the cached DeallocationStack. */
++        if (refresh_stack_info_from_pthread( &stack_info ) &&
++            stack >= stack_info.start + 4096)
++        {
++            WARN( "stack_info start widened from TEB value to pthread value;"
++                  " proceeding with exception frame addr %p stack %p (%p-%p-%p)\n",
++                  rec->ExceptionAddress, stack, stack_info.start,
++                  stack_info.limit, stack_info.end );
++        }
++        else
++        {
++            /* stack overflow on last page, unrecoverable */
++            UINT diff = stack_info.start + 4096 - stack;
++            ERR( "stack overflow %u bytes addr %p stack %p (%p-%p-%p)\n",
++                 diff, rec->ExceptionAddress, stack, stack_info.start, stack_info.limit, stack_info.end );
++            abort_thread(1);
++        }
+     }
+     else if (stack < stack_info.limit)
+     {
+--
+2.43.0
+

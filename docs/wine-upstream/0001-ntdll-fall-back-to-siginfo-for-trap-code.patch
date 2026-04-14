@@ -1,0 +1,144 @@
+From: SparkEngine Wine Compatibility <spark-wine@example.invalid>
+Date: Tue, 14 Apr 2026 00:00:00 +0000
+Subject: [PATCH 1/2] ntdll: fall back to siginfo for trap code when REG_TRAPNO
+ is zero
+
+Wine's x86_64 signal handlers read the hardware trap number directly
+from uc_mcontext.gregs[REG_TRAPNO] via the TRAP_sig() macro. The Linux
+kernel populates that field for every synchronous signal delivery on
+bare metal and inside normal hypervisor VMs, so this works in practice.
+
+Some environments deliver signals without populating gregs[REG_TRAPNO]:
+
+  * gVisor's runsc sentry (a user-mode Go kernel) synthesises signals
+    and leaves REG_TRAPNO at 0.
+  * Firecracker's vmm and certain seccomp-bpf cages exhibit the same
+    behaviour for traps generated outside the usual hardware path.
+  * Qemu-user's linux-user personality populates si_code but zeroes
+    the ucontext trap fields for synthesized signals.
+
+In those environments segv_handler() reads TRAP_sig == 0, falls through
+to its switch default, emits "Got unexpected trap 0", and returns. The
+faulting instruction is never repaired by virtual_handle_fault() or
+escalated to the guest as an exception, so the faulting instruction
+re-executes, takes the same fault, runs the same handler, and loops
+forever.
+
+A minimal reproducer (any x86_64 PE binary) loops indefinitely on its
+first instruction under `wine64 hello.exe`, logging thousands of
+"Got unexpected trap 0" lines per second.
+
+The siginfo_t the kernel delivers alongside the ucontext carries
+enough information to identify the fault type regardless of whether
+the ucontext trap fields are populated. si_code is set by the common
+signal path and is always valid. Introduce a small helper that reads
+TRAP_sig() first and falls back to siginfo-based derivation only when
+the ucontext did not provide a trap number. On conventional Linux the
+helper returns the unchanged hardware value and the fallback is never
+exercised, so behavior on bare metal is bit-identical.
+
+Use the helper from segv_handler() and trap_handler(). fpe_handler()
+still reads TRAP_sig() directly for the distinct purpose of detecting
+TRAP_x86_CACHEFLT in the middle of a SIGFPE flow; that call site is
+left unchanged because the siginfo-based derivation for SIGFPE is
+less precise than what the caller needs there.
+
+The "Got unexpected trap" error log is extended to print both the
+effective trap code and the raw hardware value so that environments
+producing a zero-ucontext are distinguishable in bug reports from
+real unknown traps.
+
+Signed-off-by: SparkEngine Wine Compatibility <spark-wine@example.invalid>
+---
+ dlls/ntdll/unix/signal_x86_64.c | 50 ++++++++++++++++++++++++++++++---
+ 1 file changed, 47 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index ab54490..eff772b 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -1919,6 +1919,49 @@ static BOOL handle_syscall_trap( ucontext_t *sigcontext )
+ }
+
+
++/**********************************************************************
++ *		get_signal_trap_code
++ *
++ * Return an effective x86 trap number for a signal. The hardware trap
++ * number is normally read from gregs[REG_TRAPNO], which the Linux kernel
++ * populates on every synchronous signal delivery. Some environments
++ * synthesise signals without populating that field (e.g. gVisor's
++ * runsc sentry kernel, Firecracker's vmm, and certain emulators): in
++ * that case we fall back to deriving a sensible trap number from the
++ * siginfo, which is always populated by the common kernel signal path.
++ *
++ * On bare-metal and hypervisor Linux, gregs[REG_TRAPNO] is non-zero, so
++ * this helper returns the unchanged hardware value and the fallback is
++ * never exercised.
++ */
++static inline unsigned int get_signal_trap_code( int signal, const ucontext_t *ucontext,
++                                                 const siginfo_t *siginfo )
++{
++    unsigned int trap = TRAP_sig(ucontext);
++    if (trap) return trap;
++
++    switch (signal)
++    {
++    case SIGSEGV:
++        if (siginfo->si_code == SEGV_MAPERR || siginfo->si_code == SEGV_ACCERR)
++            return TRAP_x86_PAGEFLT;
++        return TRAP_x86_PAGEFLT;
++    case SIGBUS:
++        if (siginfo->si_code == BUS_ADRALN) return TRAP_x86_ALIGNFLT;
++        return TRAP_x86_PAGEFLT;
++    case SIGILL:
++        return TRAP_x86_PRIVINFLT;
++    case SIGTRAP:
++        if (siginfo->si_code == TRAP_BRKPT) return TRAP_x86_BPTFLT;
++        return TRAP_x86_TRCTRAP;
++    case SIGFPE:
++        return TRAP_x86_ARITHTRAP;
++    default:
++        return 0;
++    }
++}
++
++
+ /**********************************************************************
+  *		segv_handler
+  *
+@@ -1929,11 +1972,12 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+     EXCEPTION_RECORD rec = { 0 };
+     struct xcontext context;
+     ucontext_t *ucontext = init_handler( sigcontext );
++    unsigned int trap_code = get_signal_trap_code( signal, ucontext, siginfo );
+
+     rec.ExceptionAddress = (void *)RIP_sig(ucontext);
+     save_context( &context, ucontext );
+
+-    switch(TRAP_sig(ucontext))
++    switch (trap_code)
+     {
+     case TRAP_x86_OFLOW:   /* Overflow exception */
+         rec.ExceptionCode = EXCEPTION_INT_OVERFLOW;
+@@ -1990,7 +2034,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+         rec.ExceptionCode = EXCEPTION_DATATYPE_MISALIGNMENT;
+         break;
+     default:
+-        ERR_(seh)( "Got unexpected trap %ld\n", (ULONG_PTR)TRAP_sig(ucontext) );
++        ERR_(seh)( "Got unexpected trap %u (hw %ld)\n", trap_code, (ULONG_PTR)TRAP_sig(ucontext) );
+         /* fall through */
+     case TRAP_x86_NMI:       /* NMI interrupt */
+     case TRAP_x86_DNA:       /* Device not available exception */
+@@ -2022,7 +2066,7 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+     rec.ExceptionAddress = (void *)RIP_sig(ucontext);
+     save_context( &context, ucontext );
+
+-    switch (TRAP_sig(ucontext))
++    switch (get_signal_trap_code( signal, ucontext, siginfo ))
+     {
+     case TRAP_x86_TRCTRAP:
+         rec.ExceptionCode = EXCEPTION_SINGLE_STEP;
+--
+2.43.0
+
