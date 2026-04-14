@@ -559,15 +559,16 @@ namespace Spark
 
         GraphicsBackend RHIBridge::GetRecommendedBackend()
         {
-#ifdef _WIN32
-            return GraphicsBackend::D3D11;
-#elif defined(SPARK_VULKAN_SUPPORT)
-            return GraphicsBackend::Vulkan;
-#elif defined(SPARK_OPENGL_SUPPORT)
-            return GraphicsBackend::OpenGL;
-#else
-            return GraphicsBackend::Auto;
-#endif
+            // Delegate to the factory's GetRecommendedBackend() so the
+            // SPARK_RHI_BACKEND env-var override and the gVisor-aware
+            // fallback live in a single place. Previously this method
+            // hard-coded D3D11/Vulkan/OpenGL at compile time and ignored
+            // runtime overrides, which meant Linux startup paths (the
+            // Graphics*Linux.cpp translation units) couldn't honor the
+            // env var — see
+            // .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md
+            // action item #5.
+            return ::Spark::RHI::GetRecommendedBackend();
         }
 
         // ============================================================================

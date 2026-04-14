@@ -16,10 +16,42 @@
 #   tools/wine-run.sh --info                # Print environment info
 #
 # Environment Variables:
-#   WINEPREFIX      — Wine prefix directory (default: build/.wineprefix)
-#   DXVK_PATH       — Path to DXVK installation (auto-detected)
-#   VKD3D_PATH      — Path to VKD3D-Proton installation (auto-detected)
-#   SPARK_WINE_LOG  — Set to 1 for verbose Wine debug output
+#   WINEPREFIX            — Wine prefix directory (default: build/.wineprefix)
+#   DXVK_PATH             — Path to DXVK installation (auto-detected)
+#   VKD3D_PATH            — Path to VKD3D-Proton installation (auto-detected)
+#   SPARK_WINE_LOG        — Set to 1 for verbose Wine debug output
+#
+# Fallback ladder controls (see .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md):
+#   SPARK_WINE_BACKEND={dxvk|wined3d|null}
+#                         — Pin the D3D11 translator layer to a specific rung
+#                           of the fallback ladder:
+#                             dxvk    = tier 1 (MinGW → Wine → DXVK → Vulkan → Lavapipe)
+#                             wined3d = tier 2 (MinGW → Wine → WineD3D → OpenGL → llvmpipe)
+#                             null    = tier 3 (MinGW → Wine → SparkEngine NullRHIDevice)
+#                           Unset = auto-detect (current behavior: prefer DXVK).
+#   SPARK_FORCE_SOFTWARE_GFX=1
+#                         — Umbrella knob that forces every graphics layer
+#                           onto its CPU rasterizer: sets LIBGL_ALWAYS_SOFTWARE,
+#                           GALLIUM_DRIVER=llvmpipe, MESA_LOADER_DRIVER_OVERRIDE,
+#                           a Lavapipe-only VK_ICD_FILENAMES, and forces WineD3D
+#                           via WINEDLLOVERRIDES when SPARK_WINE_BACKEND is not
+#                           already pinning a tier.
+#   SPARK_SKIP_WINE=1
+#                         — Skip Wine entirely (tier 4). The script locates the
+#                           matching native Linux build of the target and runs
+#                           it directly, so a developer on a host where Wine is
+#                           broken (e.g. under gVisor) still gets engine /
+#                           test coverage.
+#   SPARK_SKIP_WINE_NATIVE_DIR
+#                         — Override the directory where tier-4 looks for the
+#                           native Linux build (default: auto-detect from
+#                           build/linux-gcc-release/bin, build/linux-gcc-debug/bin,
+#                           build/linux-clang-release/bin, build/linux-clang-debug/bin).
+#   SPARK_WINE_PROBE      — Pre-flight a known-good PE binary so the script
+#                           fails fast instead of spinning in Wine's segv loop.
+#   SPARK_WINE_GVISOR_SHIM=1
+#                         — LD_PRELOAD tools/gvisor-wine-shim.so to patch
+#                           Wine's segv_handler under gVisor's runsc kernel.
 
 set -euo pipefail
 
@@ -45,6 +77,30 @@ fi
 
 # Force software rendering for Mesa
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
+
+# SPARK_FORCE_SOFTWARE_GFX — one-shot umbrella that pins every graphics
+# layer to its CPU rasterizer so a developer can match what CI sees without
+# remembering all five env vars. Overrides any GPU that detect_gpu might
+# have picked, so it runs last at the top of main() as well (see below).
+if [ "${SPARK_FORCE_SOFTWARE_GFX:-0}" = "1" ]; then
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export GALLIUM_DRIVER=llvmpipe
+    export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+    for icd in \
+        /usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
+        /usr/share/vulkan/icd.d/lvp_icd.json; do
+        if [ -f "$icd" ]; then
+            export VK_ICD_FILENAMES="$icd"
+            break
+        fi
+    done
+    # If the user hasn't pinned a Wine backend, default to WineD3D +
+    # llvmpipe (tier 2) since that's the most thoroughly-exercised CPU
+    # path in Mesa.
+    if [ -z "${SPARK_WINE_BACKEND:-}" ]; then
+        SPARK_WINE_BACKEND="wined3d"
+    fi
+fi
 
 # ============================================================================
 # Functions
@@ -263,10 +319,18 @@ setup_dxvk_cache() {
 
 print_info() {
     echo "=== Wine Run Environment ==="
-    echo "WINEPREFIX:   $WINEPREFIX"
-    echo "VK_ICD_FILES: ${VK_ICD_FILENAMES:-<system default>}"
-    echo "LIBGL_SW:     ${LIBGL_ALWAYS_SOFTWARE:-0}"
-    echo "DXVK_CACHE:   ${DXVK_STATE_CACHE_PATH:-<not set>}"
+    echo "WINEPREFIX:          $WINEPREFIX"
+    echo "VK_ICD_FILES:        ${VK_ICD_FILENAMES:-<system default>}"
+    echo "LIBGL_SW:            ${LIBGL_ALWAYS_SOFTWARE:-0}"
+    echo "GALLIUM_DRIVER:      ${GALLIUM_DRIVER:-<unset>}"
+    echo "DXVK_CACHE:          ${DXVK_STATE_CACHE_PATH:-<not set>}"
+    echo ""
+    echo "Fallback-ladder knobs:"
+    echo "  SPARK_WINE_BACKEND        = ${SPARK_WINE_BACKEND:-<auto>}"
+    echo "  SPARK_FORCE_SOFTWARE_GFX  = ${SPARK_FORCE_SOFTWARE_GFX:-0}"
+    echo "  SPARK_SKIP_WINE           = ${SPARK_SKIP_WINE:-0}"
+    echo "  SPARK_RHI_BACKEND         = ${SPARK_RHI_BACKEND:-<auto>}"
+    echo "  SPARK_WINE_GVISOR_SHIM    = ${SPARK_WINE_GVISOR_SHIM:-0}"
     echo ""
     "${WINE}" --version 2>/dev/null || wine --version 2>/dev/null || echo "Wine: not installed"
     echo ""
@@ -280,6 +344,38 @@ print_info() {
         echo "Vulkan ICD:   $VK_ICD_FILENAMES"
     fi
     echo "============================="
+}
+
+# Tier-4 fallthrough: given a MinGW .exe path, try to find the equivalent
+# native Linux ELF in a sibling build tree. Used by SPARK_SKIP_WINE=1 so a
+# developer on a host where Wine is broken (e.g. under gVisor) still gets
+# engine / test coverage from the same CMake target.
+find_native_linux_equivalent() {
+    local exe="$1"
+    local basename_noext
+    basename_noext="$(basename "$exe" .exe)"
+    # Explicit override wins.
+    if [ -n "${SPARK_SKIP_WINE_NATIVE_DIR:-}" ]; then
+        if [ -x "${SPARK_SKIP_WINE_NATIVE_DIR}/${basename_noext}" ]; then
+            echo "${SPARK_SKIP_WINE_NATIVE_DIR}/${basename_noext}"
+            return 0
+        fi
+        return 1
+    fi
+    # Default probe order — prefer release over debug, GCC over Clang, for
+    # consistency with the Linux CI jobs documented in CLAUDE.md.
+    for candidate_dir in \
+        "${PROJECT_ROOT}/build/linux-gcc-release/bin" \
+        "${PROJECT_ROOT}/build/linux-clang-release/bin" \
+        "${PROJECT_ROOT}/build/linux-gcc-debug/bin" \
+        "${PROJECT_ROOT}/build/linux-clang-debug/bin" \
+        "${PROJECT_ROOT}/build/bin"; do
+        if [ -x "${candidate_dir}/${basename_noext}" ]; then
+            echo "${candidate_dir}/${basename_noext}"
+            return 0
+        fi
+    done
+    return 1
 }
 
 # ============================================================================
@@ -318,14 +414,83 @@ if [ ! -f "$EXE" ]; then
     error "File not found: $EXE"
 fi
 
+# SPARK_SKIP_WINE — tier-4 short-circuit. Skip Wine entirely and run the
+# matching native Linux build of the target. The tier-4 entry in the
+# software-rendering ladder (see
+# .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md) exists
+# precisely for hosts where Wine itself is broken — gVisor's runsc kernel
+# being the current motivating case. This is the only rung that doesn't
+# exercise the PE / Win32 code path, so it's a diagnostic fallback, not
+# the default.
+if [ "${SPARK_SKIP_WINE:-0}" = "1" ]; then
+    info "SPARK_SKIP_WINE=1 — skipping Wine, looking for native Linux equivalent of ${EXE}"
+    NATIVE_EXE="$(find_native_linux_equivalent "$EXE" || true)"
+    if [ -z "$NATIVE_EXE" ] || [ ! -x "$NATIVE_EXE" ]; then
+        error "SPARK_SKIP_WINE=1 but no native Linux build of '$(basename "$EXE" .exe)' found. \
+Build one with: cmake --preset linux-gcc-release && cmake --build build/linux-gcc-release \
+OR set SPARK_SKIP_WINE_NATIVE_DIR=<dir> to point at an existing bin/ directory."
+    fi
+    info "Running native: $NATIVE_EXE $*"
+    # Engine-side env-var fallback — no argv control needed. If the caller
+    # hasn't already pinned a backend, default to NullRHI so tier-4 comes up
+    # headless instead of attempting any GPU ioctls that gVisor blocks.
+    export SPARK_RHI_BACKEND="${SPARK_RHI_BACKEND:-null}"
+    exec "$NATIVE_EXE" "$@"
+fi
+
 # Set up environment
 setup_wineprefix
 
-# Try to use real GPU if available (skips Lavapipe)
-detect_gpu || true
+# Try to use real GPU if available (skips Lavapipe) — unless we're forcing
+# software rendering via SPARK_FORCE_SOFTWARE_GFX, in which case GPU
+# detection would undo our careful Lavapipe-only setup above.
+if [ "${SPARK_FORCE_SOFTWARE_GFX:-0}" != "1" ]; then
+    detect_gpu || true
+fi
 
-detect_dxvk && setup_dxvk_cache || true
-detect_vkd3d || true
+# SPARK_WINE_BACKEND — pin the D3D11 translator layer to a specific rung
+# of the fallback ladder. Processed AFTER the auto-detect paths so the
+# user's choice wins, but BEFORE the probe/launch so WINEDLLOVERRIDES is
+# honored for the target .exe.
+case "${SPARK_WINE_BACKEND:-}" in
+    "")
+        # Unset — default behavior: prefer DXVK if present, fall through.
+        detect_dxvk && setup_dxvk_cache || true
+        detect_vkd3d || true
+        ;;
+    dxvk|DXVK)
+        info "SPARK_WINE_BACKEND=dxvk — pinning tier 1 (DXVK → Vulkan → Lavapipe)"
+        if ! detect_dxvk; then
+            error "SPARK_WINE_BACKEND=dxvk but DXVK was not found. \
+Install with: sudo apt-get install dxvk   (or set DXVK_PATH=<path-to-dxvk/x64>)"
+        fi
+        setup_dxvk_cache
+        detect_vkd3d || true
+        export WINEDLLOVERRIDES="d3d11=n,b;dxgi=n,b${WINEDLLOVERRIDES:+;${WINEDLLOVERRIDES}}"
+        ;;
+    wined3d|WineD3D|WINED3D)
+        info "SPARK_WINE_BACKEND=wined3d — pinning tier 2 (WineD3D → OpenGL → llvmpipe)"
+        # Do not copy DXVK DLLs into the prefix. Force Wine's built-in
+        # implementations of d3d11/dxgi (so any previously-installed DXVK
+        # override is bypassed for this run).
+        export WINEDLLOVERRIDES="d3d11=b;dxgi=b${WINEDLLOVERRIDES:+;${WINEDLLOVERRIDES}}"
+        # llvmpipe is the OpenGL-side software rasterizer WineD3D feeds into.
+        export LIBGL_ALWAYS_SOFTWARE=1
+        export GALLIUM_DRIVER="${GALLIUM_DRIVER:-llvmpipe}"
+        export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-llvmpipe}"
+        detect_vkd3d || true
+        ;;
+    null|NULL|none|None)
+        info "SPARK_WINE_BACKEND=null — pinning tier 3 (Wine + SparkEngine NullRHIDevice)"
+        # Force the engine to select NullRHI regardless of argv. This mirrors
+        # action item #5 in wine-role-and-fallback-tiers-2026-04-14.md.
+        export SPARK_RHI_BACKEND="${SPARK_RHI_BACKEND:-null}"
+        # Skip DXVK/VKD3D copy entirely — they'd be dead code on tier 3.
+        ;;
+    *)
+        error "Unknown SPARK_WINE_BACKEND='${SPARK_WINE_BACKEND}'. Expected one of: dxvk, wined3d, null"
+        ;;
+esac
 
 # Enable verbose Wine logging if requested
 if [ "${SPARK_WINE_LOG:-0}" = "1" ]; then
