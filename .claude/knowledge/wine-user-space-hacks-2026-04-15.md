@@ -386,6 +386,142 @@ on a real Linux host. On those environments, `tools/wine-run.sh
 SparkEngine.exe` produces a clean 5-frame run with structured
 init-path logging on first try.
 
+## Iteration 4 — signal-safe `/proc/self/maps` rescan in the SIGSEGV trampoline
+
+**The missing piece of Wine PR #63's `init_handler` safety net, implemented
+entirely in user space.** The previous iterations' gs.base repair path had a
+known race: if Wine allocated a TEB for a new thread *after* our last
+`scan_maps_for_tebs()` call (which only runs at shim-init and each
+arch_prctl-interception), but *before* the thread's own `init_syscall_frame`
+had a chance to run, then the first fault on that thread would find no
+matching TEB in `g_known_tebs[]` and the repair would fail. The trampoline
+would chain into Wine's `init_handler` with bad gs.base and the cascade would
+start.
+
+**Iteration 4 closes this race.** When the trampoline fires with bad gs.base
+*and* the fast `g_known_tebs[]` lookup doesn't match the current rsp, it now
+does a **signal-safe re-read of `/proc/self/maps` right there in the
+handler**, parses every `rw-` region, walks each page within the region
+looking for the `TIB.Self` invariant (`*(teb + 0x30) == teb`), and matches
+the rsp against the TEB's cached `StackBase`/`StackLimit`. If it finds a
+match, `wrgsbase` is issued and Wine's handler sees a correct gs.base as
+though `init_syscall_frame` had already run.
+
+### Signal-safety design
+
+POSIX's async-signal-safe function list includes `open`, `read`, and `close`
+— but **not** `fopen`, `fgets`, `sscanf`, `fprintf`, or `malloc`. Everything
+in the new path uses only AS-safe primitives:
+
+1. **`read_proc_maps_signal_safe`** — raw `open()` / `read()` / `close()`
+   into a local stack buffer. No FILE*, no libc stdio, no heap.
+2. **`parse_maps_line`** — hand-written hex parser. No `sscanf`. Walks the
+   buffer byte-by-byte, parsing `start-end perms ...` into locals.
+3. **`find_teb_for_rsp_signal_safe`** — the parser loop + per-page scan.
+   Buffer is a **stack local** `char buf[16 * 1024]`, not `__thread`. The
+   reason: `__thread` inside a shared library is `global-dynamic` TLS by
+   default, and first-time access from a signal handler goes through
+   `__tls_get_addr` which is **not** async-signal-safe. A stack local is
+   trivially signal-safe (each frame has its own copy) and 16 KiB fits in
+   any reasonable thread stack.
+4. **`as_safe_puts` / `as_safe_hex`** — debug output via `write(2, ...)`
+   (AS-safe) instead of `fprintf`. Gated on `SPARK_WINE_GVISOR_SHIM_VERBOSE`.
+
+### The coalesced-region bug
+
+The first draft of `find_teb_for_rsp_signal_safe` checked the TIB.Self
+invariant only at the reported region **base** — `teb = start; *(teb + 0x30)
+== start`. This failed on the unit-test fixture because Linux **coalesces
+adjacent anonymous mmap regions with identical permissions** into a single
+`/proc/self/maps` entry. A fake 4 KiB TEB at `0x7ee0e8685000` was reported
+as part of a larger 0x4000-byte region starting at `0x7ee0e8684000`; the base
+of that region was page 0 of the coalesced run, and its TIB.Self was zero.
+The fix: **scan every page** inside each writable region for the TIB.Self
+invariant. Per-page scanning is cheap (`region_size / 4096` iterations, bounded
+by `size <= 16 MiB`) compared to the signal-delivery overhead of getting to
+the handler in the first place. Both `find_teb_for_rsp_signal_safe` and the
+non-signal-safe `scan_maps_for_tebs` were updated to do per-page scanning
+and the upper-size filter was bumped from 1 MiB to 16 MiB to accommodate
+coalesced runs.
+
+### Trampoline integration
+
+```c
+if (!gs_looks_valid)
+{
+    int repaired = 0;
+    /* Fast path: known_tebs cache. */
+    for (i = 0; i < g_known_tebs_count; ++i) {
+        /* match by stack range ... */
+        if (matched) { wrgsbase(candidate); repaired = 1; break; }
+    }
+    /* Slow path: signal-safe /proc/self/maps rescan. */
+    if (!repaired) {
+        unsigned long rescued = find_teb_for_rsp_signal_safe(old_rsp);
+        if (rescued) { wrgsbase(rescued); }
+    }
+}
+```
+
+The fast path is unchanged — `g_known_tebs[]` lookups are O(known TEBs count)
+and don't syscall. The slow path only fires when the fast path fails, i.e.,
+on a thread whose TEB was allocated after the last cache seeding. Both paths
+log once with `SPARK_WINE_GVISOR_SHIM_VERBOSE=1` so operators can tell which
+mechanism saved them.
+
+### Other iteration-4 refinements
+
+- **`MAX_KNOWN_TEBS` bumped 16 → 64.** The SparkEngine process with
+  `-minimal-init -no-subprocess` still creates a handful of worker threads
+  (JobSystem, FileCache, SaveSystem). Full-engine runs can easily exceed 16
+  TEBs.
+- **Forward declaration of `g_trampoline_verbose`** at the top of the file,
+  since the new signal-safe helpers need to check it and appear earlier in
+  the file than its original definition.
+
+### Unit + E2E test coverage
+
+Two test harnesses verify the fix works:
+
+| Test | What it exercises | Result |
+|------|-------------------|--------|
+| `shim-parser-test.c` (unit) | read_proc_maps_signal_safe, parse_maps_line walks 21 real lines, find_teb_for_rsp_signal_safe matches a fake TEB, correctly rejects out-of-range rsps, remember_teb records found TEBs | **6/6 PASS** |
+| `shim-e2e3.c` (end-to-end) | Full trampoline rescue flow: fake TEB + fake Wine segv handler + known_tebs cleared after sigaction + raise SIGSEGV; trampoline must reach the signal-safe scan and succeed | **PASS — rescue log fires, gs.base repaired, fake Wine handler reads correct gs.base** |
+
+Both harnesses compile the shim source directly (`#define main
+_shim_main_unused; #include "gvisor-wine-shim.c"`) so they can call the
+static helpers without modifying the shim's ABI.
+
+### What this does NOT fix
+
+The rescue path requires the TEB to **exist in `/proc/self/maps`** at fault
+time. If Wine hasn't yet mmap'd the TEB for the faulting thread (allocation
+racing with signal delivery on the same thread), the rescan will find
+nothing. In practice Wine always allocates the TEB parent-side before
+spawning the Unix thread, so by the time any code on the new thread can
+fault, the TEB mapping is already visible. This rescue therefore handles the
+vast majority of the race window — everything between "TEB mmap'd" and
+"init_syscall_frame completes". The only remaining gap is the sub-microsecond
+window between `virtual_alloc_teb()` and `pthread_create()`, during which no
+user-space code runs on the child thread anyway.
+
+### Empirical state after iteration 4
+
+| Scenario | Result |
+|----------|--------|
+| Unit test `shim-parser-test` | All 6 assertions PASS |
+| E2E test `shim-e2e3` forcing rescue path | PASS — verbose logs show "MATCH rsp in range" and "rescued via /proc/self/maps rescan" |
+| Shim constructor + wrgsbase probe | Still PASS |
+| Simple syscall forwarding (getpid) | Still PASS |
+| Wine boot on gVisor (iteration 3 repeat) | **Improved**: the failure mode that required the rescue fallback now resolves instead of cascading. Race narrowed to the sub-microsecond parent-side TEB-alloc window. |
+
+### Key files touched
+
+| File | Change |
+|------|--------|
+| `tools/gvisor-wine-shim.c` | `read_proc_maps_signal_safe` + `parse_maps_line` + `find_teb_for_rsp_signal_safe` with per-page coalesced-region handling; `as_safe_puts`/`as_safe_hex` AS-safe debug helpers; `scan_maps_for_tebs` updated to match; MAX_KNOWN_TEBS 16→64; trampoline gets a rescue-path arm |
+| `.claude/knowledge/wine-user-space-hacks-2026-04-15.md` | This section |
+
 ## Remaining work for a future session
 
 1. **Find a way to inject the `init_handler` safety net into Wine's

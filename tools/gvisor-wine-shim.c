@@ -111,6 +111,7 @@
 
 #define _GNU_SOURCE
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -118,6 +119,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
+#include <sys/types.h>
 #include <sys/ucontext.h>
 #include <ucontext.h>
 #include <unistd.h>
@@ -138,11 +140,16 @@ static syscall_fn g_real_syscall = NULL;
 /* Ring buffer of TEB addresses we've seen via arch_prctl(ARCH_SET_GS, teb).
  * Used by the SIGSEGV trampoline to repair gs.base when a fault arrives on
  * a thread before its init_syscall_frame has run (Wine PR #63's init_handler
- * fix). 16 entries is enough — we care about main thread + a handful of
- * auxiliary threads during early startup. */
-#define MAX_KNOWN_TEBS 16
+ * fix). Bumped from 16 to 64 in iteration 4 to accommodate Wine processes
+ * with many worker threads — the engine's JobSystem, SparkConsole subprocess
+ * IPC thread, audio thread, and network threads add up. */
+#define MAX_KNOWN_TEBS 64
 static volatile unsigned long g_known_tebs[MAX_KNOWN_TEBS] = {0};
 static volatile int g_known_tebs_count = 0;
+
+/* Forward declaration — defined further down but referenced from the
+ * signal-safe helpers that themselves appear ahead of the config block. */
+static int g_trampoline_verbose;
 
 static void remember_teb(unsigned long teb)
 {
@@ -178,26 +185,251 @@ static void scan_maps_for_tebs(void)
         unsigned long start = 0, end = 0;
         char perms[5] = {0};
         if (sscanf(line, "%lx-%lx %4s", &start, &end, perms) != 3) continue;
-        /* TEBs are writable, read-writable, and typically small (4-64 KiB).
-         * Filter to keep the scan bounded. */
         if (perms[1] != 'w') continue;
         unsigned long size = end - start;
-        if (size < 0x1000 || size > 0x100000) continue;
+        /* Upper limit bumped from 0x100000 to 0x1000000 to handle the case
+         * where Linux coalesces many adjacent anonymous mmaps (TEBs + their
+         * stacks + scratch regions) into a single /proc/self/maps entry. We
+         * then scan each page inside the entry for the TIB.Self invariant. */
+        if (size < 0x1000 || size > 0x1000000) continue;
 
-        /* Verify TIB.Self == mapping base. */
-        volatile unsigned long *candidate = (volatile unsigned long *)start;
-        /* Self pointer at offset 0x30 of NT_TIB. */
-        if (candidate[6] != start) continue;
-        /* StackBase at offset 0x08, StackLimit at offset 0x10. */
-        unsigned long stack_base = candidate[1];
-        unsigned long stack_limit = candidate[2];
-        if (stack_base == 0 || stack_limit == 0) continue;
-        if (stack_limit >= stack_base) continue;
-        if ((stack_base & 0xFFF) != 0 || (stack_limit & 0xFFF) != 0) continue;
-        /* Looks like a real Wine TEB. Record it. */
-        remember_teb(start);
+        /* Walk the region page by page — see find_teb_for_rsp_signal_safe
+         * for rationale. */
+        for (unsigned long page = start; page + 0x38 <= end; page += 0x1000)
+        {
+            volatile unsigned long *candidate = (volatile unsigned long *)page;
+            if (candidate[6] != page) continue;
+            unsigned long stack_base = candidate[1];
+            unsigned long stack_limit = candidate[2];
+            if (stack_base == 0 || stack_limit == 0) continue;
+            if (stack_limit >= stack_base) continue;
+            if ((stack_base & 0xFFF) != 0 || (stack_limit & 0xFFF) != 0) continue;
+            remember_teb(page);
+        }
     }
     fclose(f);
+}
+
+/* ============================================================================
+ *  Signal-safe /proc/self/maps walk (iteration 4)
+ * ============================================================================
+ *
+ * The non-signal-safe scan above uses fopen/fgets/sscanf which may allocate,
+ * take locks, or otherwise be async-signal-unsafe. For the race where a fault
+ * arrives on a Wine thread whose TEB Wine allocated *after* our last scan but
+ * *before* the thread's first arch_prctl ran, we need to walk /proc/self/maps
+ * from inside the SIGSEGV trampoline. That means strictly signal-safe code:
+ * raw open()/read()/close() syscalls, manual hex parsing, no libc stdio, no
+ * malloc, no shared mutable state except __thread (which uses fs.base and is
+ * always safe even when gs.base is the reason we're in the handler).
+ *
+ * Per POSIX, `open`, `read`, and `close` are async-signal-safe, so the libc
+ * wrappers are fine. We avoid FILE*, fgets, fscanf, sscanf, and malloc. */
+
+static ssize_t read_proc_maps_signal_safe(char *buf, size_t bufsz)
+{
+    int fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return 0;
+    ssize_t total = 0;
+    while ((size_t)total + 1 < bufsz)
+    {
+        ssize_t n = read(fd, buf + total, bufsz - 1 - (size_t)total);
+        if (n < 0)
+        {
+            /* EINTR — retry; any other error — bail. */
+            if (n == -1) { /* fallthrough to break on any negative */ }
+            break;
+        }
+        if (n == 0) break;
+        total += n;
+    }
+    close(fd);
+    if (total < 0) total = 0;
+    buf[total] = 0;
+    return total;
+}
+
+/* Parse one /proc/self/maps line from buf+0 up to the first newline or EOF.
+ * Fills *out_start, *out_end, out_perms[0..3]. Returns the number of bytes
+ * consumed (including the newline). On a malformed line, still advances past
+ * the newline and returns the consumed byte count so the caller can continue. */
+static size_t parse_maps_line(const char *buf, size_t len,
+                              unsigned long *out_start, unsigned long *out_end,
+                              char out_perms[4])
+{
+    size_t i = 0;
+    *out_start = 0;
+    *out_end = 0;
+    out_perms[0] = out_perms[1] = out_perms[2] = out_perms[3] = 0;
+
+    /* start (hex) */
+    while (i < len)
+    {
+        char c = buf[i];
+        unsigned d;
+        if (c >= '0' && c <= '9') d = (unsigned)(c - '0');
+        else if (c >= 'a' && c <= 'f') d = 10u + (unsigned)(c - 'a');
+        else if (c >= 'A' && c <= 'F') d = 10u + (unsigned)(c - 'A');
+        else break;
+        *out_start = (*out_start << 4) | d;
+        ++i;
+    }
+    if (i >= len || buf[i] != '-') goto eol;
+    ++i;
+
+    /* end (hex) */
+    while (i < len)
+    {
+        char c = buf[i];
+        unsigned d;
+        if (c >= '0' && c <= '9') d = (unsigned)(c - '0');
+        else if (c >= 'a' && c <= 'f') d = 10u + (unsigned)(c - 'a');
+        else if (c >= 'A' && c <= 'F') d = 10u + (unsigned)(c - 'A');
+        else break;
+        *out_end = (*out_end << 4) | d;
+        ++i;
+    }
+    if (i >= len || buf[i] != ' ') goto eol;
+    ++i;
+
+    /* perms — exactly four chars like "rw-p". */
+    if (i + 4 > len) goto eol;
+    out_perms[0] = buf[i++];
+    out_perms[1] = buf[i++];
+    out_perms[2] = buf[i++];
+    out_perms[3] = buf[i++];
+
+eol:
+    while (i < len && buf[i] != '\n') ++i;
+    if (i < len) ++i; /* consume newline */
+    return i;
+}
+
+/* Signal-safe: walk /proc/self/maps looking for a Wine TEB whose stack range
+ * [StackLimit, StackBase] contains target_rsp. Returns the TEB base address
+ * or 0 on failure. Side-effect: every valid TEB found is recorded in
+ * g_known_tebs[] so subsequent faults can match without a rescan.
+ *
+ * Buffer is a plain stack local rather than __thread because __thread inside
+ * a shared library is "global-dynamic" TLS by default, and first-time access
+ * from a signal handler goes through `__tls_get_addr` which is NOT
+ * async-signal-safe. A stack local is trivially signal-safe (each frame has
+ * its own copy), and 16 KiB fits easily in any sane thread stack — even
+ * Wine's Windows-side stacks, which are typically 1 MiB. 16 KiB is enough
+ * for /proc/self/maps on a medium-sized Wine process (~100 regions); larger
+ * processes may truncate, but truncation just means we scan fewer entries,
+ * which is still strictly better than zero entries. */
+/* write() a short async-signal-safe banner for debugging — unlike fprintf,
+ * write() is on POSIX's AS-safe list. Not a hot path; only compiled in when
+ * SPARK_WINE_GVISOR_SHIM_VERBOSE is set at runtime. */
+static void as_safe_puts(const char *s)
+{
+    size_t len = 0;
+    while (s[len]) ++len;
+    (void)!write(2, s, len);
+}
+static void as_safe_hex(unsigned long v)
+{
+    char buf[19];
+    buf[0] = '0'; buf[1] = 'x';
+    for (int i = 0; i < 16; ++i)
+    {
+        unsigned nib = (v >> ((15 - i) * 4)) & 0xF;
+        buf[2 + i] = (char)(nib < 10 ? '0' + nib : 'a' + nib - 10);
+    }
+    buf[18] = 0;
+    as_safe_puts(buf);
+}
+
+static unsigned long find_teb_for_rsp_signal_safe(unsigned long target_rsp)
+{
+    char buf[16 * 1024];
+    ssize_t total = read_proc_maps_signal_safe(buf, sizeof(buf));
+    if (g_trampoline_verbose)
+    {
+        as_safe_puts("[gvisor-shim][find] read total=");
+        as_safe_hex((unsigned long)total);
+        as_safe_puts(" target_rsp=");
+        as_safe_hex(target_rsp);
+        as_safe_puts("\n");
+    }
+    if (total <= 0) return 0;
+
+    size_t pos = 0;
+    int rw_matches = 0;
+    int tib_self_matches = 0;
+    while (pos < (size_t)total)
+    {
+        unsigned long start = 0, end = 0;
+        char perms[4] = {0};
+        size_t advance = parse_maps_line(buf + pos, (size_t)total - pos,
+                                         &start, &end, perms);
+        if (advance == 0) break;
+        pos += advance;
+
+        if (start == 0 || end <= start) continue;
+        /* TEBs are writable. */
+        if (perms[1] != 'w') continue;
+        unsigned long size = end - start;
+        /* Upper-size filter only — Linux coalesces adjacent anonymous mmaps
+         * with identical permissions into single /proc/self/maps entries, so
+         * a TEB can live at any page offset inside a larger coalesced rw
+         * region. Accept regions as large as 16 MiB and scan each page
+         * individually for the TIB.Self invariant. Below 4 KiB there's no
+         * room for a Wine TEB so skip. */
+        if (size < 0x1000 || size > 0x1000000) continue;
+        ++rw_matches;
+
+        /* Walk the region page by page. A Wine TEB is always page-aligned
+         * and its Tib.Self (offset 0x30) equals the TEB base. Scanning every
+         * page within a coalesced region is O(region_size / 4K) which is
+         * cheap compared to the signal overhead of getting here. */
+        for (unsigned long page = start; page + 0x38 <= end; page += 0x1000)
+        {
+            volatile unsigned long *teb = (volatile unsigned long *)page;
+            if (teb[6] != page) continue;
+            ++tib_self_matches;
+
+            unsigned long stack_base  = teb[1]; /* offset 0x08 */
+            unsigned long stack_limit = teb[2]; /* offset 0x10 */
+            if (g_trampoline_verbose)
+            {
+                as_safe_puts("[gvisor-shim][find] candidate TEB=");
+                as_safe_hex(page);
+                as_safe_puts(" sb=");
+                as_safe_hex(stack_base);
+                as_safe_puts(" sl=");
+                as_safe_hex(stack_limit);
+                as_safe_puts("\n");
+            }
+            if (!stack_base || !stack_limit) continue;
+            if (stack_limit >= stack_base) continue;
+            if ((stack_base  & 0xFFF) != 0) continue;
+            if ((stack_limit & 0xFFF) != 0) continue;
+
+            /* Cache for next time so we can short-circuit future faults. */
+            remember_teb(page);
+
+            /* The payload: does this TEB's stack range bracket the current rsp? */
+            if (target_rsp >= stack_limit && target_rsp <= stack_base)
+            {
+                if (g_trampoline_verbose)
+                {
+                    as_safe_puts("[gvisor-shim][find] MATCH rsp in range\n");
+                }
+                return page;
+            }
+        }
+    }
+    if (g_trampoline_verbose)
+    {
+        as_safe_puts("[gvisor-shim][find] no match (rw regions=");
+        as_safe_hex((unsigned long)rw_matches);
+        as_safe_puts(" TIB.Self matches=");
+        as_safe_hex((unsigned long)tib_self_matches);
+        as_safe_puts(")\n");
+    }
+    return 0;
 }
 
 /* Whether the wrgsbase instruction is usable on this host. Probed once at
@@ -212,8 +444,9 @@ static int g_fix_rsp_enabled = 0;
 
 /* Verbose trampoline logging — prints rsp, gs.base bounds, and si_addr on
  * every SIGSEGV so we can diagnose which faults the heuristic catches and
- * which it misses. Off by default; set SPARK_WINE_GVISOR_SHIM_VERBOSE=1. */
-static int g_trampoline_verbose = 0;
+ * which it misses. Off by default; set SPARK_WINE_GVISOR_SHIM_VERBOSE=1.
+ * (Forward-declared near the top of the file so signal-safe helpers that
+ * appear above this block can reference it.) */
 
 /* SIGILL probe envelope for wrgsbase. */
 static sigjmp_buf g_sigill_env;
@@ -363,6 +596,7 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
              old_rsp >= stack_limit && old_rsp <= stack_base);
         if (!gs_looks_valid)
         {
+            int repaired = 0;
             int n = g_known_tebs_count;
             for (int i = 0; i < n && i < MAX_KNOWN_TEBS; ++i)
             {
@@ -389,7 +623,59 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
                                 candidate, cand_base);
                         repaired_logged = 1;
                     }
+                    repaired = 1;
                     break;
+                }
+            }
+
+            /* ----------------------------------------------------------------
+             * Iteration 4: signal-safe /proc/self/maps fallback
+             * ----------------------------------------------------------------
+             *
+             * If the known_tebs loop didn't find a match, this is the race
+             * case: Wine allocated a TEB for a new thread *after* our last
+             * scan_maps_for_tebs() call (which runs at sigaction-install and
+             * arch_prctl-interception times), but *before* the thread's own
+             * init_syscall_frame ran — so the new TEB isn't in g_known_tebs[]
+             * yet. Do a fresh /proc/self/maps walk from inside the signal
+             * handler, signal-safely, looking for a TEB whose stack range
+             * contains the current rsp. This is the thing that "blocks" the
+             * thread at its fault and tells Wine that gs.base is "fully
+             * acquired" before chaining to Wine's init_handler.
+             *
+             * Note: find_teb_for_rsp_signal_safe also calls remember_teb()
+             * on every valid TEB it encounters, so the next fault on ANY
+             * thread will short-circuit via the fast known_tebs path above.
+             */
+            if (!repaired)
+            {
+                unsigned long rescued = find_teb_for_rsp_signal_safe(old_rsp);
+                if (rescued)
+                {
+                    __asm__ volatile("wrgsbase %0" :: "r"(rescued));
+                    __asm__ volatile("movq %%gs:0x30, %0" : "=r"(teb_self));
+                    __asm__ volatile("movq %%gs:0x8, %0"  : "=r"(stack_base));
+                    __asm__ volatile("movq %%gs:0x10, %0" : "=r"(stack_limit));
+                    static int rescue_logged = 0;
+                    if (!rescue_logged || g_trampoline_verbose)
+                    {
+                        fprintf(stderr,
+                                "[gvisor-shim] trampoline: gs.base was wrong "
+                                "AND no cached TEB matched; rescued via "
+                                "/proc/self/maps rescan to TEB 0x%lx "
+                                "(StackBase=0x%lx, StackLimit=0x%lx, "
+                                "rsp=0x%lx)\n",
+                                rescued, stack_base, stack_limit, old_rsp);
+                        rescue_logged = 1;
+                    }
+                }
+                else if (g_trampoline_verbose)
+                {
+                    fprintf(stderr,
+                            "[gvisor-shim] trampoline: gs.base repair failed "
+                            "— no TEB in known_tebs or /proc/self/maps whose "
+                            "stack range contains rsp=0x%lx. Chaining to "
+                            "Wine anyway; cascade likely.\n", old_rsp);
                 }
             }
         }
