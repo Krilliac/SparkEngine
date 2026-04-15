@@ -83,6 +83,7 @@ extern std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
 extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 extern int g_testFrameLimit;
 extern uint32_t g_maxWorkerThreads;
+extern bool g_noSubprocess;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -815,6 +816,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
+    g_noSubprocess = (std::wstring(lpCmdLine).find(L"-no-subprocess") != std::wstring::npos);
     ParseWindowSizeOverride(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT

@@ -110,6 +110,10 @@ info() {
     echo "[wine-run] $*"
 }
 
+warn() {
+    echo "[wine-run] WARN: $*" >&2
+}
+
 error() {
     echo "[wine-run] ERROR: $*" >&2
     exit 1
@@ -287,6 +291,34 @@ setup_wineprefix() {
         WINEDEBUG=-all "${WINE}" wineboot --init 2>/dev/null || true
         # Wait for wineserver to finish
         "${WINE%wine64}wineserver" --wait 2>/dev/null || true
+
+        # Under gVisor-class sandboxes wineboot often crashes partway
+        # through because services.exe / explorer.exe both lose the
+        # gs.base race. Drop a minimal stub system.reg so the
+        # `if [ ! -f system.reg ]` guard above short-circuits on the
+        # next run — we only need the prefix to LOOK initialized for
+        # Wine to skip its own auto-wineboot. The DLLs we already
+        # copied from $wine_dll_src give SparkEngine.exe everything it
+        # needs to link at load time.
+        if [ ! -f "$WINEPREFIX/system.reg" ]; then
+            warn "wineboot --init did not create system.reg (sandbox likely)"
+            warn "Writing a stub system.reg so future runs skip wineboot"
+            cat > "$WINEPREFIX/system.reg" <<'REGEOF'
+WINE REGISTRY Version 2
+;; Minimal stub written by tools/wine-run.sh to let Wine skip auto-
+;; wineboot on prefixes where the real wineboot failed mid-init
+;; (typically gVisor-class sandboxes where the gs.base race kills
+;; services.exe). SparkEngine.exe only needs kernel32 / ntdll / user32
+;; to resolve imports, which are satisfied by the DLLs we copied into
+;; drive_c/windows/system32 directly. This stub satisfies Wine's
+;; "prefix already exists" check so subsequent launches go straight
+;; to the guest binary without re-running wineboot.
+
+[Software\\Wine] 0
+REGEOF
+            touch "$WINEPREFIX/user.reg" "$WINEPREFIX/userdef.reg"
+        fi
+
         info "Wine prefix ready"
     fi
 }

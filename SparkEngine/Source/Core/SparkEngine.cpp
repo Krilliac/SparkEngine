@@ -129,6 +129,10 @@ std::unique_ptr<PhysicsSystem> g_physicsOwned;
 // Remaining functions below: InitPhysics, InitConsole, ShutdownPhysics, ShutdownEngine
 // (engine lifecycle that depends on globals defined in this file)
 
+// Forward declaration of globals defined later in this file so InitConsole
+// can read them. Keeps the definition near the other globals at the bottom
+// for documentation grouping.
+extern bool g_noSubprocess;
 
 void InitPhysics()
 {
@@ -157,9 +161,20 @@ void InitConsole()
     console.Initialize();
     console.LogSuccess("Spark Engine runtime initialized");
 
-    if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
+    // Subprocess spawn: optional. On a gVisor-class sandbox every Wine
+    // process has to survive the gs.base race independently, so `-no-subprocess`
+    // avoids the second Wine process entirely. In-process console (SimpleConsole)
+    // still works; only the standalone SparkConsole.exe UI is skipped.
+    if (!g_noSubprocess)
     {
-        console.LogWarning("ConsoleProcessManager failed to initialize — SparkConsole subprocess unavailable");
+        if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
+        {
+            console.LogWarning("ConsoleProcessManager failed to initialize — SparkConsole subprocess unavailable");
+        }
+    }
+    else
+    {
+        console.LogInfo("ConsoleProcessManager skipped (-no-subprocess)");
     }
     InitDebugSystems();
     InitGameplaySystems();
@@ -274,6 +289,16 @@ int g_testFrameLimit = 0;
 // minimises the number of Wine worker threads and maximises the chance
 // of the engine reaching its main loop on a flaky sandbox run.
 uint32_t g_maxWorkerThreads = 0;
+
+// Skip the SparkConsole.exe subprocess spawn (see ConsoleProcessManager).
+// Parsed from `-no-subprocess` on both platforms. Subprocess launches
+// are the single biggest "extra Wine process" the engine creates after
+// JobSystem initialization, and under a gVisor sandbox each new Wine
+// process has to survive the gs.base race independently. Developers
+// can pass this flag to minimise the chance of losing the race at the
+// cost of losing access to the standalone SparkConsole UI. The engine-
+// side in-process console (SimpleConsole) still works.
+bool g_noSubprocess = false;
 
 // Window size override from command line (-window-size WxH).
 // 0 means use default from EngineSettings.
