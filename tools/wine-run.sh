@@ -131,11 +131,22 @@ error() {
 # Resolution order (stop at the first match that can actually execute a
 # 64-bit .exe):
 #   1. Env override: $WINE
-#   2. `wine64` on $PATH (cleanest, modern distros)
-#   3. `/usr/lib/wine/wine64` direct path (bypasses the wrapper)
-#   4. `wine` on $PATH as a last resort (may fail with 32-bit .exe)
+#   2. `/opt/wine-patched/bin/wine64` if `tools/build-wine-patched.sh` has
+#      installed a SparkEngine-patched Wine (gVisor-compat — see
+#      `.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md`)
+#   3. `wine64` on $PATH (cleanest, modern distros)
+#   4. `/usr/lib/wine/wine64` direct path (bypasses the wrapper)
+#   5. `wine` on $PATH as a last resort (may fail with 32-bit .exe)
 if [ -n "${WINE:-}" ]; then
     :  # explicit override — honor as-is
+elif [ -x "/opt/wine-patched/bin/wine64" ]; then
+    WINE="/opt/wine-patched/bin/wine64"
+    export WINELOADER="${WINELOADER:-/opt/wine-patched/bin/wine64}"
+    info "Using SparkEngine-patched Wine at /opt/wine-patched (gVisor-compat)"
+elif [ -x "/opt/wine-patched/bin/wine" ]; then
+    WINE="/opt/wine-patched/bin/wine"
+    export WINELOADER="${WINELOADER:-/opt/wine-patched/bin/wine}"
+    info "Using SparkEngine-patched Wine at /opt/wine-patched (gVisor-compat)"
 elif command -v wine64 &>/dev/null; then
     WINE="wine64"
 elif [ -x "/usr/lib/wine/wine64" ]; then
