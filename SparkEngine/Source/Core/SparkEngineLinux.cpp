@@ -82,6 +82,7 @@ extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 extern int g_testFrameLimit;
 extern uint32_t g_maxWorkerThreads;
 extern bool g_noSubprocess;
+extern bool g_minimalInit;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -445,16 +446,29 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
     InitConsole();
 
-    InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
-    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
-    Spark::FreezeDetector::GetInstance().Start();
-    Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
-    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
-    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
-    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
-    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
-    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
-    Assert::RegisterConsoleCommands();
+    // Minimal-init mode skips module loading and all detector singletons.
+    // See SparkEngine.cpp::g_minimalInit for the full rationale — on a
+    // gVisor sandbox every detector thread is another roll of the dice
+    // against the Wine gs.base race, and the main loop runs fine without
+    // any of them registered.
+    if (!g_minimalInit)
+    {
+        InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
+        Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+        Spark::FreezeDetector::GetInstance().Start();
+        Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
+        Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+        Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+        Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+        Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+        Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
+        Assert::RegisterConsoleCommands();
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
+    }
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -925,6 +939,7 @@ int main(int argc, char* argv[])
         g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
         g_maxWorkerThreads = ParseThreadCountArgs(argc, argv);
         g_noSubprocess = ParseFlag(argc, argv, "-no-subprocess");
+        g_minimalInit = ParseFlag(argc, argv, "-minimal-init");
         ParseWindowSizeOverrideArgs(argc, argv);
 
 #ifdef SPARK_HEADLESS_SUPPORT

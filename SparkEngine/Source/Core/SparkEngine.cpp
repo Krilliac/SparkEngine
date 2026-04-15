@@ -133,6 +133,7 @@ std::unique_ptr<PhysicsSystem> g_physicsOwned;
 // can read them. Keeps the definition near the other globals at the bottom
 // for documentation grouping.
 extern bool g_noSubprocess;
+extern bool g_minimalInit;
 
 void InitPhysics()
 {
@@ -184,10 +185,17 @@ void InitConsole()
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: ConsoleProcessManager skipped (-no-subprocess)");
     }
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems");
-    InitDebugSystems();
-    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");
-    InitGameplaySystems();
+    if (!g_minimalInit)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems");
+        InitDebugSystems();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");
+        InitGameplaySystems();
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems + InitGameplaySystems skipped (-minimal-init)");
+    }
 
     // Publish EngineStartEvent — all systems initialized
     if (g_eventBus)
@@ -311,6 +319,26 @@ uint32_t g_maxWorkerThreads = 0;
 // cost of losing access to the standalone SparkConsole UI. The engine-
 // side in-process console (SimpleConsole) still works.
 bool g_noSubprocess = false;
+
+// Minimal init mode: skip everything non-essential to reaching the main
+// loop. Parsed from `-minimal-init` on both platforms. When set:
+//   * InitDebugSystems is a no-op (no LifecycleCompositionRoot registration).
+//   * Detector singletons (Freeze/Deadlock/Hitch/AssetStall/NetworkHealth/
+//     GPUResourceLeak/InvalidState/MemoryMonitor) are not registered or
+//     started.
+//   * LoadHeadlessModules skips dlopen'ing game modules entirely.
+//   * The engine still initializes Timer, EventBus, EngineContext,
+//     FileCache, JobSystem (capped at -threads N), SaveSystem, and
+//     SimpleConsole — enough to reach RunHeadlessWindows's main loop.
+//
+// Primary use case: validating that the engine's core init path reaches
+// the main loop on a flaky Wine sandbox where the gs.base race kills
+// every extra thread / subprocess the normal init path would spawn.
+// This is also what the engine's startup path looked like in earlier
+// sessions before the broad wiring of gameplay and debug subsystems —
+// the user ran into "it all worked flawlessly" historically and the
+// breakage is specifically accumulated subsystem registrations.
+bool g_minimalInit = false;
 
 // Window size override from command line (-window-size WxH).
 // 0 means use default from EngineSettings.

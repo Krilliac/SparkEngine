@@ -84,6 +84,7 @@ extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 extern int g_testFrameLimit;
 extern uint32_t g_maxWorkerThreads;
 extern bool g_noSubprocess;
+extern bool g_minimalInit;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -415,16 +416,34 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
     InitConsole();
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: InitConsole returned");
-    LoadHeadlessModules(lpCmdLine);
-    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
-    Spark::FreezeDetector::GetInstance().Start();
-    Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
-    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
-    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
-    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
-    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
-    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
-    Assert::RegisterConsoleCommands();
+
+    // Minimal-init mode skips module loading and all detector singletons.
+    // Each detector's GetInstance() is a Meyers singleton construction and
+    // most of them spawn a worker thread in Start() — every one is another
+    // roll of the dice against the Wine gs.base race on a gVisor sandbox.
+    // The main loop can still run useful engine update ticks without any
+    // of them registered.
+    if (!g_minimalInit)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: LoadHeadlessModules");
+        LoadHeadlessModules(lpCmdLine);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: detector singletons");
+        Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+        Spark::FreezeDetector::GetInstance().Start();
+        Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
+        Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+        Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+        Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+        Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+        Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
+        Assert::RegisterConsoleCommands();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: detectors registered");
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "RunHeadlessWindows: LoadHeadlessModules + detectors skipped (-minimal-init)");
+    }
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -821,6 +840,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
     g_noSubprocess = (std::wstring(lpCmdLine).find(L"-no-subprocess") != std::wstring::npos);
+    g_minimalInit = (std::wstring(lpCmdLine).find(L"-minimal-init") != std::wstring::npos);
     ParseWindowSizeOverride(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT
