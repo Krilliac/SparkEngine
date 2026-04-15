@@ -245,6 +245,15 @@ namespace Spark
                     backendsToTry.insert(backendsToTry.begin(), backend);
             }
 
+            RHISwapChainDesc swapDesc;
+            swapDesc.windowHandle = windowHandle;
+            swapDesc.width = width;
+            swapDesc.height = height;
+            swapDesc.format = PixelFormat::R8G8B8A8_UNORM;
+            swapDesc.bufferCount = 2;
+            swapDesc.fullscreen = false;
+            swapDesc.vsync = true;
+
             bool deviceReady = false;
             for (auto candidate : backendsToTry)
             {
@@ -258,21 +267,47 @@ namespace Spark
                 deviceDesc.enableGPUValidation = enableDebug;
                 deviceDesc.applicationName = "SparkEngine";
 
-                if (m_device->Initialize(deviceDesc))
+                if (!m_device->Initialize(deviceDesc))
                 {
-                    if (candidate != backend)
-                    {
-                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                                       "Preferred backend '%s' unavailable — fell back to '%s'",
-                                       Spark::RHI::GetBackendName(backend), Spark::RHI::GetBackendName(candidate));
-                    }
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Backend '%s' failed to initialize — trying next",
+                                   Spark::RHI::GetBackendName(candidate));
+                    m_device.reset();
+                    continue;
+                }
+
+                // The NullRHIDevice explicitly does not own a swap chain, so
+                // don't try to build one on top of it — leave that to the
+                // headless branch below.
+                if (m_device->GetBackendType() == GraphicsBackend::None)
+                {
                     deviceReady = true;
                     break;
                 }
 
-                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Backend '%s' failed to initialize — trying next",
-                               Spark::RHI::GetBackendName(candidate));
-                m_device.reset();
+                // Device init succeeded — try to stand up the swap chain on
+                // this backend. If swap-chain creation fails (e.g. a Vulkan
+                // ICD is present but cannot create a surface for this window),
+                // tear the device back down and continue to the next
+                // candidate instead of aborting the whole Initialize().
+                m_swapChain = m_device->CreateSwapChain(swapDesc);
+                if (!m_swapChain)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "Backend '%s' failed to create swap chain — trying next",
+                                   Spark::RHI::GetBackendName(candidate));
+                    m_device->Shutdown();
+                    m_device.reset();
+                    continue;
+                }
+
+                if (candidate != backend)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "Preferred backend '%s' unavailable — fell back to '%s'",
+                                   Spark::RHI::GetBackendName(backend), Spark::RHI::GetBackendName(candidate));
+                }
+                deviceReady = true;
+                break;
             }
 
             if (!deviceReady)
@@ -298,25 +333,8 @@ namespace Spark
                 return true;
             }
 
-            // Create swap chain
-            RHISwapChainDesc swapDesc;
-            swapDesc.windowHandle = windowHandle;
-            swapDesc.width = width;
-            swapDesc.height = height;
-            swapDesc.format = PixelFormat::R8G8B8A8_UNORM;
-            swapDesc.bufferCount = 2;
-            swapDesc.fullscreen = false;
-            swapDesc.vsync = true;
-
-            m_swapChain = m_device->CreateSwapChain(swapDesc);
-            if (!m_swapChain)
-            {
-                m_device->Shutdown();
-                m_device.reset();
-                return false;
-            }
-
-            // Create depth buffer
+            // At this point the swap chain was created inside the backend
+            // loop above. Only the depth buffer is left to stand up.
             if (!CreateDepthBufferInternal(width, height))
             {
                 m_swapChain.reset();

@@ -25,6 +25,17 @@
 #include <cstring>
 #include <set>
 
+#if defined(SPARK_SDL2_AVAILABLE) && !defined(_WIN32)
+// SDL2 owns the native window on Linux/macOS, so we go through
+// SDL_Vulkan_CreateSurface to get a VkSurfaceKHR without pulling in
+// xlib/xcb/wayland-client ourselves. This avoids the null-surface
+// segfault that hits vkGetPhysicalDeviceSurfaceCapabilitiesKHR inside
+// VulkanSwapChain::CreateSwapChain when the platform-specific surface
+// creation branch is missing.
+#include <SDL.h>
+#include <SDL_vulkan.h>
+#endif
+
 namespace Spark
 {
     namespace RHI
@@ -312,8 +323,19 @@ namespace Spark
                     if (hasInstanceExt(VK_KHR_WIN32_SURFACE_EXTENSION_NAME))
                         extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 #elif defined(__linux__)
+                    // Enable every Linux windowing-system surface extension
+                    // the ICD advertises. SDL2 picks whichever matches its
+                    // video driver (xlib by default, xcb/wayland if the env
+                    // has been configured that way), and we don't know which
+                    // until SDL_Vulkan_CreateSurface runs — so enable the
+                    // superset now so surface creation can't fail later for
+                    // a trivial missing-extension reason.
                     if (hasInstanceExt(VK_KHR_XCB_SURFACE_EXTENSION_NAME))
                         extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+                    if (hasInstanceExt(VK_KHR_XLIB_SURFACE_EXTENSION_NAME))
+                        extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+                    if (hasInstanceExt(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
+                        extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
 #endif
                 }
 
@@ -973,6 +995,18 @@ namespace Spark
                 if (m_device == VK_NULL_HANDLE || m_instance == VK_NULL_HANDLE)
                     return nullptr;
 
+                // A null window handle means the caller is running headless.
+                // We can't build a presentable swap chain without a window,
+                // and the downstream vkGetPhysicalDeviceSurfaceCapabilitiesKHR
+                // call will segfault if we pass it VK_NULL_HANDLE, so bail
+                // early and let RHIBridge fall back to the next backend.
+                if (desc.windowHandle == nullptr)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "VulkanDevice::CreateSwapChain: null windowHandle — cannot create surface");
+                    return nullptr;
+                }
+
                 VkSurfaceKHR surface = VK_NULL_HANDLE;
 
 #ifdef _WIN32
@@ -982,6 +1016,27 @@ namespace Spark
                 surfaceInfo.hinstance = GetModuleHandle(nullptr);
                 if (vkCreateWin32SurfaceKHR(m_instance, &surfaceInfo, nullptr, &surface) != VK_SUCCESS)
                     return nullptr;
+#elif defined(SPARK_SDL2_AVAILABLE)
+                // On Linux/macOS the RHISwapChainDesc::windowHandle is the
+                // SDL_Window* owned by SparkEngine's SDL2 runtime. Let SDL2
+                // build the platform-specific surface (xlib/xcb/wayland/metal)
+                // for us — this is the only supported path on these platforms.
+                SDL_Window* sdlWindow = static_cast<SDL_Window*>(desc.windowHandle);
+                if (!SDL_Vulkan_CreateSurface(sdlWindow, m_instance, &surface))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::CreateSwapChain: SDL_Vulkan_CreateSurface failed: %s",
+                                    SDL_GetError());
+                    return nullptr;
+                }
+#else
+                // No surface-creation path compiled in for this platform.
+                // Returning null lets RHIBridge fall through to the next
+                // available backend (e.g. OpenGL) rather than crashing.
+                (void)desc;
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "VulkanDevice::CreateSwapChain: no platform surface support compiled in");
+                return nullptr;
 #endif
 
                 return std::make_unique<VulkanSwapChain>(m_device, m_physicalDevice, surface, desc, m_queueFamilies,
