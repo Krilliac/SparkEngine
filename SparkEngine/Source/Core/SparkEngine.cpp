@@ -157,6 +157,13 @@ void InitPhysics()
  */
 void InitConsole()
 {
+    // Progress breadcrumbs via SPARK_LOG_INFO (routed through Logger's
+    // stderr sink) rather than SimpleConsole::LogInfo (which only writes
+    // to an in-memory buffer and is invisible to operators running under
+    // Wine-in-terminal). These make it possible to tell from outside the
+    // engine process exactly how far InitConsole progressed on a run that
+    // crashed mid-init.
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: SimpleConsole::Initialize");
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
     console.LogSuccess("Spark Engine runtime initialized");
@@ -167,6 +174,7 @@ void InitConsole()
     // still works; only the standalone SparkConsole.exe UI is skipped.
     if (!g_noSubprocess)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: ConsoleProcessManager::Initialize");
         if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
         {
             console.LogWarning("ConsoleProcessManager failed to initialize — SparkConsole subprocess unavailable");
@@ -174,17 +182,21 @@ void InitConsole()
     }
     else
     {
-        console.LogInfo("ConsoleProcessManager skipped (-no-subprocess)");
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: ConsoleProcessManager skipped (-no-subprocess)");
     }
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems");
     InitDebugSystems();
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");
     InitGameplaySystems();
 
     // Publish EngineStartEvent — all systems initialized
     if (g_eventBus)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: Publishing EngineStartEvent");
         g_eventBus->Publish(Spark::EngineStartEvent{});
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: complete");
     SPARK_DEBUG_HOOK(EnginePostInit, 0, 0.0f);
 }
 

@@ -347,9 +347,15 @@ detect_dxvk() {
         cp -f "$dxvk_path/d3d11.dll" "$sys32/" 2>/dev/null || true
         cp -f "$dxvk_path/dxgi.dll" "$sys32/" 2>/dev/null || true
 
-        # Tell Wine to use the native DLLs
-        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
-        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
+        # Tell Wine to use the native DXVK DLLs. We set both via the
+        # environment variable (honoured at guest startup) AND via
+        # `wine reg add` with a short timeout. The env var is always
+        # safe; the reg add is best-effort and must not hang. On a
+        # sandbox where wineboot is broken, `wine reg add` can block
+        # trying to auto-init the prefix, so cap it at 5 seconds.
+        export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-}${WINEDLLOVERRIDES:+,}d3d11=n,b;dxgi=n,b"
+        timeout 5 "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
+        timeout 5 "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else
@@ -379,7 +385,8 @@ detect_vkd3d() {
         local sys32="$WINEPREFIX/drive_c/windows/system32"
         cp -f "$vkd3d_path/d3d12.dll" "$sys32/" 2>/dev/null || true
 
-        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
+        export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-}${WINEDLLOVERRIDES:+,}d3d12=n,b"
+        timeout 5 "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else

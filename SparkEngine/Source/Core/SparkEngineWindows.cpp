@@ -406,11 +406,15 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     if (!InitHeadlessEngineContext())
         return 1;
 
+    // Progress breadcrumbs via Logger (SimpleConsole.LogInfo only writes
+    // to an in-memory buffer and is invisible to terminal Wine runs).
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem::Initialize");
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
-    Spark::SimpleConsole::GetInstance().LogInfo("SaveSystem initialized");
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem initialized");
 
     InitConsole();
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: InitConsole returned");
     LoadHeadlessModules(lpCmdLine);
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
