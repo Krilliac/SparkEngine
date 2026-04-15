@@ -561,48 +561,56 @@ namespace Spark
                 }
 #endif
 
-                // Build extension list — software devices don't need VK_KHR_swapchain
+                // Enumerate device extensions once so we can conditionally
+                // request everything the ICD actually advertises.
+                uint32_t extCount = 0;
+                vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
+                std::vector<VkExtensionProperties> availableExts(extCount);
+                vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, availableExts.data());
+
+                auto hasExt = [&](const char* name)
+                {
+                    for (const auto& e : availableExts)
+                        if (std::strcmp(e.extensionName, name) == 0)
+                            return true;
+                    return false;
+                };
+
+                // Build extension list. VK_KHR_swapchain is required for
+                // windowed rendering — including on software devices like
+                // Mesa Lavapipe, which advertises VK_KHR_swapchain when
+                // the matching host libs are present. The old "software
+                // devices don't need VK_KHR_swapchain" shortcut was wrong
+                // for SDL_WINDOW_VULKAN runs over llvmpipe: vkCreateDevice
+                // would succeed without swapchain support, then
+                // vkCreateSwapchainKHR's function pointer would be NULL
+                // and VulkanSwapChain::CreateSwapChain would SIGABRT.
+                // Request swapchain whenever the extension is advertised.
                 std::vector<const char*> enabledExtensions;
-                if (!m_isSoftwareDevice)
+                if (hasExt(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+                    enabledExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+                const char* rtExts[] = {
+                    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+                    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+                    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+                    VK_KHR_RAY_QUERY_EXTENSION_NAME,
+                };
+                for (const char* ext : rtExts)
                 {
-                    enabledExtensions.assign(m_deviceExtensions.begin(), m_deviceExtensions.end());
+                    if (hasExt(ext))
+                        enabledExtensions.push_back(ext);
                 }
+
+                // VRS for adaptive ray tracing resolution
+                if (hasExt(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME))
+                    enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+
+                // Push descriptors as extension fallback for pre-1.4 devices
+                if (!m_vulkan14Available && hasExt(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME))
                 {
-                    uint32_t extCount = 0;
-                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
-                    std::vector<VkExtensionProperties> availableExts(extCount);
-                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, availableExts.data());
-
-                    auto hasExt = [&](const char* name)
-                    {
-                        for (const auto& e : availableExts)
-                            if (std::strcmp(e.extensionName, name) == 0)
-                                return true;
-                        return false;
-                    };
-
-                    const char* rtExts[] = {
-                        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-                        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-                        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-                        VK_KHR_RAY_QUERY_EXTENSION_NAME,
-                    };
-                    for (const char* ext : rtExts)
-                    {
-                        if (hasExt(ext))
-                            enabledExtensions.push_back(ext);
-                    }
-
-                    // VRS for adaptive ray tracing resolution
-                    if (hasExt(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME))
-                        enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
-
-                    // Push descriptors as extension fallback for pre-1.4 devices
-                    if (!m_vulkan14Available && hasExt(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME))
-                    {
-                        enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
-                        m_pushDescriptorSupported = true;
-                    }
+                    enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+                    m_pushDescriptorSupported = true;
                 }
 
                 VkDeviceCreateInfo createInfo = {};

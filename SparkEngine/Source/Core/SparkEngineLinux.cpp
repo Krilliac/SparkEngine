@@ -17,6 +17,8 @@
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/GraphicsConsoleCommands.h"
+#include "Graphics/RHI/RHIBridge.h"
+#include "Graphics/RHI/RHIFactory.h"
 #include "Input/InputManager.h"
 #include "Audio/AudioEngine.h"
 #include "Audio/AudioBackendFactory.h"
@@ -57,6 +59,7 @@
 #include <cstring>
 #ifdef SPARK_SDL2_AVAILABLE
 #include <SDL.h>
+#include <SDL_vulkan.h>
 #endif
 #include <atomic>
 #include <memory>
@@ -466,8 +469,7 @@ static int RunHeadlessLinux(int argc, char* argv[])
     }
     else
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Core,
-                       "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
     }
 
     // Fixed 60 Hz server loop
@@ -799,43 +801,110 @@ static int RunSDL2Windowed(int argc, char* argv[])
     int winW = g_windowWidthOverride > 0 ? g_windowWidthOverride : settings.Graphics().windowWidth;
     int winH = g_windowHeightOverride > 0 ? g_windowHeightOverride : settings.Graphics().windowHeight;
 
-    // Set OpenGL attributes before window creation (required for Mesa/llvmpipe)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    // Decide which graphics backend to use *before* creating the window.
+    // SDL2 requires the backend-specific flag at window creation time:
+    // SDL_WINDOW_VULKAN for Vulkan, SDL_WINDOW_OPENGL for OpenGL. There
+    // is no way to retrofit a Vulkan surface onto an OpenGL window (or
+    // vice versa) after the fact, so this decision is one-shot.
+    //
+    // GetRecommendedBackend() honors SPARK_DISABLE_VULKAN / _OPENGL /
+    // _D3D11 env-var escape hatches, so users who hit a broken Vulkan
+    // ICD can set SPARK_DISABLE_VULKAN=1 and this branch will pick
+    // OpenGL instead — matching what the RHIBridge will also choose.
+    bool preferVulkan = false;
+    {
+        const char* sdlDriver = SDL_GetCurrentVideoDriver();
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 video driver: %s", sdlDriver ? sdlDriver : "<null>");
+
+        const auto recommended = Spark::RHI::RHIBridge::GetRecommendedBackend();
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RunSDL2Windowed: recommended backend = %s",
+                       Spark::RHI::GetBackendName(recommended));
+
+        // Drivers that don't support Vulkan at all (SDL_Vulkan_LoadLibrary
+        // will always fail against them). Detect upfront so we don't even
+        // attempt the Vulkan path — makes the log cleaner on headless CI
+        // and sandboxed hosts where x11 isn't reachable.
+        const bool driverHasVulkan =
+            sdlDriver && (std::strcmp(sdlDriver, "x11") == 0 || std::strcmp(sdlDriver, "wayland") == 0 ||
+                          std::strcmp(sdlDriver, "cocoa") == 0 || std::strcmp(sdlDriver, "windows") == 0 ||
+                          std::strcmp(sdlDriver, "KMSDRM") == 0);
+
+        if (recommended == Spark::RHI::GraphicsBackend::Vulkan && driverHasVulkan)
+        {
+            // Try to load libvulkan through SDL. If it isn't installed
+            // on this host, fall straight back to OpenGL and tell the
+            // engine the same via the existing env-var opt-out, so
+            // RHIBridge doesn't try to spin up VulkanDevice only to
+            // discover libvulkan isn't there.
+            if (SDL_Vulkan_LoadLibrary(nullptr) == 0)
+            {
+                preferVulkan = true;
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 Vulkan loader initialized — creating Vulkan window");
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "SDL_Vulkan_LoadLibrary failed: %s — falling back to OpenGL", SDL_GetError());
+                setenv("SPARK_DISABLE_VULKAN", "1", /*overwrite=*/1);
+            }
+        }
+        else if (recommended == Spark::RHI::GraphicsBackend::Vulkan && !driverHasVulkan)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                           "SDL2 driver '%s' has no Vulkan support — falling back to OpenGL",
+                           sdlDriver ? sdlDriver : "<null>");
+            setenv("SPARK_DISABLE_VULKAN", "1", /*overwrite=*/1);
+        }
+    }
+
+    if (!preferVulkan)
+    {
+        // OpenGL path — set attributes before window creation (required
+        // for Mesa llvmpipe and other software rasterizers).
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    }
 
     Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     if (settings.Graphics().fullscreen)
         windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    windowFlags |= SDL_WINDOW_OPENGL;
+    windowFlags |= preferVulkan ? SDL_WINDOW_VULKAN : SDL_WINDOW_OPENGL;
 
     SDL_Window* window =
         SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
     if (!window)
     {
         Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
+        if (preferVulkan)
+            SDL_Vulkan_UnloadLibrary();
         SDL_Quit();
         return -1;
     }
 
-    // Create SDL GL context and make it current before engine graphics init.
-    // This ensures Mesa llvmpipe and other software renderers work correctly —
-    // the GraphicsEngine can then share or skip its own bootstrap context.
-    SDL_GLContext glContext = SDL_GL_CreateContext(window);
-    if (!glContext)
+    // OpenGL needs an SDL-owned GL context up front so the engine's
+    // OpenGLDevice can detect it and skip its own EGL/GLX bootstrap.
+    // Vulkan has no matching pre-init step — VulkanDevice pulls the
+    // surface out of SDL_Vulkan_CreateSurface() inside CreateSwapChain().
+    SDL_GLContext glContext = nullptr;
+    if (!preferVulkan)
     {
-        Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_GL_CreateContext failed: ") + SDL_GetError() +
-                                                       " — engine will try headless fallback");
-    }
-    else
-    {
-        SDL_GL_MakeCurrent(window, glContext);
-        SDL_GL_SetSwapInterval(1);
-        Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created successfully");
+        glContext = SDL_GL_CreateContext(window);
+        if (!glContext)
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_GL_CreateContext failed: ") +
+                                                           SDL_GetError() + " — engine will try headless fallback");
+        }
+        else
+        {
+            SDL_GL_MakeCurrent(window, glContext);
+            SDL_GL_SetSwapInterval(1);
+            Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created successfully");
+        }
     }
 
     InitializeSDL2Subsystems(window, argc, argv);
@@ -845,6 +914,8 @@ static int RunSDL2Windowed(int argc, char* argv[])
     if (glContext)
         SDL_GL_DeleteContext(glContext);
     SDL_DestroyWindow(window);
+    if (preferVulkan)
+        SDL_Vulkan_UnloadLibrary();
     SDL_Quit();
     return 0;
 }
