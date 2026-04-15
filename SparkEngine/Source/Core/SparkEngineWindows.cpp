@@ -263,14 +263,26 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
 
 /**
  * @brief Attach a Win32 console for headless stdout/stderr/stdin.
+ *
+ * AllocConsole() may fail when the process is already attached to a console
+ * (normal case when invoked from a terminal, including Wine running from a
+ * Linux shell) — fall through to leaving the inherited stdio alone. We only
+ * rebind stdio to CONOUT$/CONIN$ when AllocConsole actually creates a new
+ * console, otherwise freopen_s blocks waiting for a console we don't have.
+ * Under Wine in a headless sandbox (no stdin), the stdin rebind would also
+ * hang, so we try it last and tolerate failure.
  */
 static void AllocHeadlessConsole()
 {
-    AllocConsole();
-    FILE* fp = nullptr;
-    freopen_s(&fp, "CONOUT$", "w", stdout);
-    freopen_s(&fp, "CONOUT$", "w", stderr);
-    freopen_s(&fp, "CONIN$", "r", stdin);
+    if (AllocConsole())
+    {
+        FILE* fp = nullptr;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
+        freopen_s(&fp, "CONIN$", "r", stdin);
+    }
+    // SetConsoleCtrlHandler still works with an inherited console and is
+    // the primary way we catch Ctrl+C for graceful shutdown.
     SetConsoleCtrlHandler(HeadlessCtrlHandler, TRUE);
 }
 
@@ -371,8 +383,23 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     console.LogInfo("Starting headless server loop (60 Hz)...");
     console.LogInfo("Press Ctrl+C or type 'quit' to stop.");
 
+    if (g_testFrameLimit > 0)
+        console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
+
+    int frameCount = 0;
+
     while (!g_shutdownRequested)
     {
+        // Honor -test-frames N for automated smoke testing under Wine/CI.
+        // Matches the behaviour already present in SparkEngineLinux.cpp's
+        // RunHeadlessLinux — without this parity the Windows headless loop
+        // runs forever even on -test-frames and CI jobs time out.
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        {
+            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            break;
+        }
+
         SPARK_HEARTBEAT();
         auto tickStart = std::chrono::steady_clock::now();
 
@@ -403,6 +430,8 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
             console.Update();
         });
 
+        ++frameCount;
+
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
         if (elapsed < TICK_INTERVAL)
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
@@ -414,6 +443,9 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     g_fileCache.reset();
     ShutdownEngine();
 
+    // Only free the console if we successfully allocated one in
+    // AllocHeadlessConsole. Calling FreeConsole on an inherited console
+    // detaches us from the parent's console, which we don't want.
     FreeConsole();
     return 0;
 }
@@ -696,16 +728,32 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 // ===================================================================================
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-    ASSERT(hInstance != nullptr);
-
-    SetupCrashHandler();
-
-    // Initialize the unified Logger with a stderr sink as the very first
-    // engine action so early init SPARK_LOG_* calls are visible. Matches
-    // the same fix applied on the Linux path (SparkEngineLinux.cpp main).
-    // The later InitializeDebugSystemsImpl ClearSinks()+AddSink() keeps
-    // this idempotent.
+    // SparkEngine is linked as a GUI-subsystem PE (add_executable(... WIN32)),
+    // which means stdout/stderr/stdin handles are NOT automatically connected
+    // to the parent terminal — under Wine in a console, fprintf(stderr, ...)
+    // from wWinMain silently discards its output, making early-init crashes
+    // invisible in `tools/wine-run.sh`. AttachConsole(ATTACH_PARENT_PROCESS)
+    // hooks us up to the parent's console if there is one, and we rebind
+    // stdio via freopen so the CRT's stderr is pointed at the right HANDLE.
+    // On a native Windows double-click launch there's no parent console,
+    // AttachConsole returns FALSE, and we fall back to the usual GUI
+    // behaviour (nothing visible on stdio, which is what GUI apps do).
+    if (AttachConsole(ATTACH_PARENT_PROCESS))
+    {
+        FILE* fp = nullptr;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
+        // Don't rebind stdin: under Wine in a headless sandbox there's no
+        // interactive input, and CONIN$ can block during open.
+    }
+    // Initialize the unified Logger with a stderr sink as the *very first*
+    // engine action — before SetupCrashHandler, before anything that could
+    // fault — so any crash in EngineSettings or the crash handler install
+    // path itself is visible. Previously this block lived after
+    // SetupCrashHandler and a crash during settings load would leave us
+    // with no output at all. Matches the Linux path ordering in
+    // SparkEngineLinux.cpp::main. The later InitializeDebugSystemsImpl
+    // ClearSinks()+AddSink() keeps this idempotent.
     {
         auto& earlyLogger = Spark::Logger::Get();
         earlyLogger.Initialize(/*enableAsync=*/false);
@@ -715,6 +763,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // Log whether we're under Wine so operators can tell at a glance
     // when debugging a cross-host issue. No-op on native Windows.
     Spark::LogWineEnvironmentIfApplicable();
+
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    ASSERT(hInstance != nullptr);
+
+    SetupCrashHandler();
 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
     ParseWindowSizeOverride(lpCmdLine);
