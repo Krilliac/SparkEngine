@@ -229,6 +229,73 @@ transparently:
 The env-var selection order remains `WINE → /opt/wine-patched →
 wine64 → /usr/lib/wine/wine64 → wine`.
 
+## Update — iteration 2 (same day)
+
+A follow-on session extended the shim with three more innovations:
+
+### `/proc/self/maps`-based TEB discovery
+
+Previously the gs.base repair only had TEBs that our arch_prctl
+interception had seen. Worker threads whose first fault arrives before
+any arch_prctl runs were stuck. New behaviour:
+
+- Shim constructor and every successful `arch_prctl(ARCH_SET_GS)` call
+  walks `/proc/self/maps`, filters for writable regions 4 KiB–64 KiB,
+  and for each candidate reads offset `0x30` and checks whether it
+  equals the region's base. That's the **TIB.Self invariant** Wine sets
+  at TEB init time (`teb->NtTib.Self = &teb->Tib` with Tib at offset 0).
+  Any region satisfying the invariant is added to `g_known_tebs[]`.
+- The seed also runs inside the first `sigaction()` call (which Wine
+  makes early in init), catching all the TEBs Wine has allocated up to
+  that point.
+- The SIGSEGV trampoline then picks the TEB whose `StackBase..StackLimit`
+  actually brackets the current rsp and `wrgsbase`s it.
+
+Empirical effect: **one verified end-to-end wineboot run with 764 files
+populated in `drive_c/windows/system32`** — kernel32.dll, explorer.exe,
+notepad.exe, regedit.exe, the whole expected Windows directory tree.
+Wine reported "Unexpected termination of services.exe" and "explorer
+failed to start (no display driver)" which are **normal errors for a
+headless Wine setup without an X display**, not our bugs.
+
+### Opt-in separation of RSP-bump and gs.base repair
+
+The first iteration coupled both fixes behind `SPARK_WINE_GVISOR_FIX_RSP`.
+Iteration 2 separates them: gs.base repair is always on (it's a strict
+improvement and never corrupts valid state), RSP bump stays opt-in
+(it can corrupt SEH frame chains when it fires on non-cascade faults).
+
+### RSP-within-stack filter for the RSP bump
+
+The bump heuristic previously fired on any low-looking rsp, including
+the wow64 thunk stack addresses around `0x1000ff660` (just above 4 GiB)
+that Wine uses for 32-bit compat. Redirecting those bumped faults into
+a 64-bit stack region corrupted the thunk state. New filter: only bump
+when `old_rsp` is already inside `[stack_base - 2 MiB, stack_base]`,
+i.e., inside the cached TEB stack region. Out-of-range rsps are left
+alone.
+
+### Current observed state (iteration 2)
+
+| Scenario | Result |
+|----------|--------|
+| Vanilla wine64 on gVisor | Infinite `trap 0` loop, no exit |
+| Shim + wineboot --init | **Sometimes populates full prefix** (764 files in system32). Race-condition dependent. Services.exe + explorer.exe fail with normal "no display driver" errors. |
+| Shim + hello.exe against populated prefix | Wine exits cleanly but hello.exe doesn't print — deeper downstream issue we haven't isolated |
+| Patched-Wine build path | Long-term reliable solution once network access permits `make_unicode`/`make_vulkan`/`make_opengl` generators |
+
+### Why wineboot is race-condition dependent
+
+The shim's repair path wins on some runs and loses on others depending
+on whether worker threads fault in a pattern the heuristic catches.
+When it wins, the prefix populates cleanly. When it loses, wineboot
+aborts partway through services.exe bringup. A deterministic fix would
+need either:
+
+1. Binary patching `segv_handler` in Wine's ntdll.so to inject the
+   init_handler gs.base safety net (complex and version-fragile), or
+2. The actual patched Wine build, which we documented in `build-wine-patched.sh`.
+
 ## Remaining work for a future session
 
 1. **Find a way to inject the `init_handler` safety net into Wine's

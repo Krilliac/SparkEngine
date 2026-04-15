@@ -159,6 +159,47 @@ static void remember_teb(unsigned long teb)
     }
 }
 
+/* Async-signal-unsafe /proc/self/maps scan to discover Wine thread TEBs that
+ * we haven't seen via the arch_prctl interception path yet. Should only be
+ * called from user-mode code (syscall interposer), NOT from inside a signal
+ * handler. For every writable mapping, read offset 0x30 (TIB.Self) and check
+ * whether it equals the mapping's own base address — that's the invariant
+ * every correctly-initialised TEB satisfies. Also check that the mapping's
+ * offset 0x08 (StackBase) and 0x10 (StackLimit) form a plausible stack
+ * range (StackLimit < StackBase, both nonzero, both page-aligned). */
+static void scan_maps_for_tebs(void)
+{
+    FILE *f = fopen("/proc/self/maps", "r");
+    if (!f) return;
+
+    char line[512];
+    while (fgets(line, sizeof(line), f))
+    {
+        unsigned long start = 0, end = 0;
+        char perms[5] = {0};
+        if (sscanf(line, "%lx-%lx %4s", &start, &end, perms) != 3) continue;
+        /* TEBs are writable, read-writable, and typically small (4-64 KiB).
+         * Filter to keep the scan bounded. */
+        if (perms[1] != 'w') continue;
+        unsigned long size = end - start;
+        if (size < 0x1000 || size > 0x100000) continue;
+
+        /* Verify TIB.Self == mapping base. */
+        volatile unsigned long *candidate = (volatile unsigned long *)start;
+        /* Self pointer at offset 0x30 of NT_TIB. */
+        if (candidate[6] != start) continue;
+        /* StackBase at offset 0x08, StackLimit at offset 0x10. */
+        unsigned long stack_base = candidate[1];
+        unsigned long stack_limit = candidate[2];
+        if (stack_base == 0 || stack_limit == 0) continue;
+        if (stack_limit >= stack_base) continue;
+        if ((stack_base & 0xFFF) != 0 || (stack_limit & 0xFFF) != 0) continue;
+        /* Looks like a real Wine TEB. Record it. */
+        remember_teb(start);
+    }
+    fclose(f);
+}
+
 /* Whether the wrgsbase instruction is usable on this host. Probed once at
  * shim init via a SIGILL envelope so we never crash on hosts that disable
  * CR4.FSGSBASE. -1 = not yet probed, 0 = unsafe, 1 = safe. */
@@ -284,11 +325,17 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
      *
      * Disabled by default; enable with `SPARK_WINE_GVISOR_FIX_RSP=1`.
      */
-    if (g_fix_rsp_enabled)
+    /* The gs.base repair path is ALWAYS on — it's a strict improvement
+     * over the cascade and has no known side-effects on normal Wine
+     * execution. The RSP-bump path is opt-in via SPARK_WINE_GVISOR_FIX_RSP
+     * because it can corrupt SEH frame chains when it fires on faults
+     * that don't need it. */
     {
         unsigned long stack_base = 0;
         unsigned long stack_limit = 0;
         unsigned long teb_self = 0;
+        unsigned long gs_base = 0;
+        __asm__ volatile("rdgsbase %0" : "=r"(gs_base));
         __asm__ volatile("movq %%gs:0x30, %0" : "=r"(teb_self));
         __asm__ volatile("movq %%gs:0x8, %0" : "=r"(stack_base));
         __asm__ volatile("movq %%gs:0x10, %0" : "=r"(stack_limit));
@@ -298,8 +345,23 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
          * init_syscall_frame hasn't run yet leaves gs.base pointing at a
          * glibc-private region (where TIB.Self != self). Try each of the
          * TEBs we've previously seen; the right one is the TEB whose
-         * StackBase contains the current rsp. */
-        if (teb_self == 0 || teb_self > 0x800000000000UL)
+         * StackBase contains the current rsp.
+         *
+         * Detect "gs.base is wrong" heuristically. The strong check would
+         * be `rdgsbase == %gs:0x30` (TIB.Self invariant), but empirically
+         * that's too strict on Wine 9.0 — Wine mid-init sometimes runs
+         * with gs.base correct but TIB.Self not yet populated, and we
+         * don't want to repair in that window. Instead, accept the
+         * current gs.base as long as the stack layout fields look
+         * plausible (non-NULL, valid ordering, rsp inside the range).
+         * This is a heuristic but in practice catches the worker-thread-
+         * faults-before-init-syscall-frame cascade without misdiagnosing
+         * legitimate mid-init state. */
+        int gs_looks_valid =
+            (stack_base != 0 && stack_limit != 0 &&
+             stack_limit < stack_base &&
+             old_rsp >= stack_limit && old_rsp <= stack_base);
+        if (!gs_looks_valid)
         {
             int n = g_known_tebs_count;
             for (int i = 0; i < n && i < MAX_KNOWN_TEBS; ++i)
@@ -341,8 +403,17 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
         }
 
         /* Heuristic sanity: stack_base must be page-aligned and look like a
-         * userspace pointer (not 0, not in the kernel half). */
-        if (stack_base != 0 && (stack_base & 0xFFF) == 0 && stack_base < 0x800000000000UL)
+         * userspace pointer. Also require that the original rsp is inside
+         * the cached TEB stack region — otherwise we're bumping a fault
+         * that didn't originate on this thread's stack and would corrupt
+         * unrelated code. Typical Wine 64-bit thread stacks live in the
+         * upper 128 TiB range (0x7e...0x7f...), so an old_rsp of
+         * ~0x1000ff660 (a wow64 thunk address) wouldn't match any real
+         * stack region — we leave those faults alone. */
+        unsigned long stack_span_lo = stack_base - 0x200000; /* ~2 MiB stack */
+        if (g_fix_rsp_enabled &&
+            stack_base != 0 && (stack_base & 0xFFF) == 0 && stack_base < 0x800000000000UL &&
+            old_rsp >= stack_span_lo && old_rsp <= stack_base)
         {
             /* Use a per-thread bump counter so cascading faults don't
              * overwrite each other's exception frames. Each new fault on the
@@ -352,17 +423,13 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
             static __thread unsigned int bump_count = 0;
             unsigned long new_rsp = (stack_base - 0x80000 - ((unsigned long)bump_count * 0x10000)) & ~0xFUL;
             ++bump_count;
-            /* Always intervene when the saved RSP is below stack_limit (in
-             * the guard region) OR within 32 KiB of the bottom of any
-             * 2 MiB-aligned region. The check covers both "Wine's TEB
-             * thinks the stack is here" (use TEB bounds directly) and
-             * "the saved RSP is in some other low-stack mapping" (use
-             * 2 MiB heuristic). */
+            /* Intervene only when rsp is genuinely inside the guard page
+             * of the cached TEB stack — i.e., below StackLimit — so
+             * virtual_setup_exception would definitely fire. Being less
+             * aggressive avoids corrupting the SEH frame chain during
+             * normal exception dispatch. */
             int bump = 0;
-            if (stack_limit && old_rsp < stack_limit + 0x4000)
-                bump = 1;
-            unsigned long region_bottom = old_rsp & ~0x1FFFFFUL;
-            if (old_rsp - region_bottom < 0x8000)
+            if (stack_limit && old_rsp < stack_limit + 0x200)
                 bump = 1;
 
             if (bump)
@@ -413,6 +480,16 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
                 "[gvisor-shim] installed SIGSEGV trampoline "
                 "(wine handler=%p)\n",
                 (void*)g_wine_segv_handler);
+        /* Seed our TEB cache from /proc/self/maps so the trampoline has
+         * candidates to try even if a fault arrives before any arch_prctl
+         * has run. Wine allocates all its initial TEBs before it installs
+         * the SIGSEGV handler, so scanning at this point catches them. */
+        scan_maps_for_tebs();
+        if (g_trampoline_verbose)
+        {
+            fprintf(stderr, "[gvisor-shim] TEB cache seeded: %d known TEBs\n",
+                    g_known_tebs_count);
+        }
         return real(signum, &wrapped, oldact);
     }
 
@@ -499,8 +576,15 @@ long syscall(long number, ...)
     __asm__ volatile("movq %%gs:0x30, %0" : "=r"(probe));
 
     /* Record this TEB so the SIGSEGV trampoline can recover from a race
-     * where a worker thread faults before its own arch_prctl runs. */
+     * where a worker thread faults before its own arch_prctl runs. Also
+     * scan /proc/self/maps for any other TEBs we haven't seen yet —
+     * this is what catches TEBs for threads whose init_syscall_frame
+     * hasn't been reached yet, or which Wine creates without going
+     * through our libc-interposed path. Re-scan on every new ARCH_SET_GS
+     * call because Wine allocates TEBs lazily and the one that faults
+     * later in the run might not exist yet on the first scan. */
     remember_teb(teb);
+    scan_maps_for_tebs();
 
     static int logged = 0;
     if (!logged)
@@ -523,6 +607,9 @@ __attribute__((constructor))
 static void shim_init(void)
 {
     g_wrgsbase_usable = probe_wrgsbase_usable();
+    /* RSP-bump fix is opt-in because it can corrupt SEH frame chains when
+     * it fires on faults that don't need it. The gs.base repair path, by
+     * contrast, is always on — it's a strict improvement. */
     g_fix_rsp_enabled = (getenv("SPARK_WINE_GVISOR_FIX_RSP") != NULL);
     g_trampoline_verbose = (getenv("SPARK_WINE_GVISOR_SHIM_VERBOSE") != NULL);
     if (g_trampoline_verbose)
