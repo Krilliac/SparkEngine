@@ -255,11 +255,38 @@ probe_wine_environment() {
 }
 
 setup_wineprefix() {
-    if [ ! -d "$WINEPREFIX/drive_c" ]; then
+    # Pre-populate drive_c/windows/system32 with Wine's shipped Windows DLLs
+    # BEFORE running wineboot. Under gVisor-class sandboxes, wineboot's own
+    # service startup races with the broken Wine signal delivery and often
+    # leaves system32 empty, so a subsequent wine64 run fails with
+    # `could not load kernel32.dll, status c0000135`. Hand-populating
+    # ensures kernel32/ntdll/user32/etc. are present regardless of whether
+    # wineboot itself completes cleanly.
+    #
+    # The source directory `/usr/lib/x86_64-linux-gnu/wine/x86_64-windows`
+    # ships with Ubuntu's libwine package and contains the same set of DLLs
+    # wineboot would symlink in. Copying is slightly wasteful vs symlinking
+    # but makes the prefix self-contained for archival/relocation.
+    local sys32="$WINEPREFIX/drive_c/windows/system32"
+    local wine_dll_src="/usr/lib/x86_64-linux-gnu/wine/x86_64-windows"
+    if [ ! -f "$sys32/kernel32.dll" ] && [ -d "$wine_dll_src" ]; then
+        mkdir -p "$sys32"
+        info "Pre-populating $sys32 from $wine_dll_src"
+        cp "$wine_dll_src"/*.dll "$sys32/" 2>/dev/null || true
+    fi
+
+    # Disable explorer.exe and winemenubuilder.exe during wineboot. Both
+    # try to create X11 windows, which fails hard in a headless sandbox
+    # and takes the rest of wineboot with it. Setting the override only
+    # affects this session — the prefix's registry is untouched so a
+    # later graphical run (with a real DISPLAY) still works.
+    export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-explorer.exe,winemenubuilder.exe=d}"
+
+    if [ ! -f "$WINEPREFIX/system.reg" ]; then
         info "Initializing Wine prefix at $WINEPREFIX"
-        WINEDEBUG=-all wineboot --init 2>/dev/null || true
+        WINEDEBUG=-all "${WINE}" wineboot --init 2>/dev/null || true
         # Wait for wineserver to finish
-        wineserver --wait 2>/dev/null || true
+        "${WINE%wine64}wineserver" --wait 2>/dev/null || true
         info "Wine prefix ready"
     fi
 }
