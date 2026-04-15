@@ -80,6 +80,7 @@ extern std::unique_ptr<AudioEngine> g_audioEngine;
 extern std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
 extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 extern int g_testFrameLimit;
+extern uint32_t g_maxWorkerThreads;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -115,6 +116,25 @@ static int ParseTestFrameLimitArgs(int argc, char* argv[])
             return std::max(0, std::atoi(argv[i + 1]));
     }
     return 0;
+}
+
+/**
+ * @brief Parse -threads N from argv, with SPARK_MAX_WORKER_THREADS env
+ *        fallback. Command line wins on conflict. See the Windows path's
+ *        ParseThreadCount for the full rationale.
+ */
+static uint32_t ParseThreadCountArgs(int argc, char* argv[])
+{
+    uint32_t fromEnv = 0;
+    if (const char* env = std::getenv("SPARK_MAX_WORKER_THREADS"))
+        fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env)));
+
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], "-threads") == 0 || strcmp(argv[i], "--threads") == 0)
+            return static_cast<uint32_t>(std::max(0, std::atoi(argv[i + 1])));
+    }
+    return fromEnv;
 }
 
 static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
@@ -302,7 +322,7 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem();
+    Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
 
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
     {
@@ -902,6 +922,7 @@ int main(int argc, char* argv[])
     try
     {
         g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
+        g_maxWorkerThreads = ParseThreadCountArgs(argc, argv);
         ParseWindowSizeOverrideArgs(argc, argv);
 
 #ifdef SPARK_HEADLESS_SUPPORT

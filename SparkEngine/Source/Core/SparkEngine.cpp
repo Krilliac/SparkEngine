@@ -265,6 +265,16 @@ void ShutdownEngine()
 // Parsed from -test-frames N on the command line (both platforms).
 int g_testFrameLimit = 0;
 
+// JobSystem thread pool size override from command line (-threads N) or
+// SPARK_MAX_WORKER_THREADS env var. 0 = use the default
+// hardware_concurrency - 1. Primarily intended for running the engine
+// under Wine on a sandbox where every extra worker thread is another
+// roll of the dice against the gs.base race documented in
+// .claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md — `-threads 1`
+// minimises the number of Wine worker threads and maximises the chance
+// of the engine reaching its main loop on a flaky sandbox run.
+uint32_t g_maxWorkerThreads = 0;
+
 // Window size override from command line (-window-size WxH).
 // 0 means use default from EngineSettings.
 int g_windowWidthOverride = 0;

@@ -82,6 +82,7 @@ extern std::unique_ptr<AudioEngine> g_audioEngine;
 extern std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
 extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 extern int g_testFrameLimit;
+extern uint32_t g_maxWorkerThreads;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -113,6 +114,49 @@ static int ParseTestFrameLimit(LPWSTR cmdLine)
     catch (const std::exception&)
     {
         return 0;
+    }
+}
+
+/**
+ * @brief Parse -threads N from a wide command line string (Windows).
+ *
+ * Controls the size of the JobSystem worker pool. Returns 0 (meaning
+ * "use the default of hardware_concurrency - 1") when the flag is not
+ * provided. Primarily intended for running the engine under Wine on
+ * a sandbox where every worker thread is another roll of the dice
+ * against the gs.base race documented in
+ * `.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md` —
+ * a developer can pass `-threads 1` to minimise the number of Wine
+ * worker threads and maximise the chance of reaching the main loop
+ * on a flaky run. Also honoured via the `SPARK_MAX_WORKER_THREADS`
+ * environment variable (command-line wins on conflict).
+ */
+static uint32_t ParseThreadCount(LPWSTR cmdLine)
+{
+    // Env var fallback first so -threads overrides it when both are set.
+    uint32_t fromEnv = 0;
+    if (const char* env = std::getenv("SPARK_MAX_WORKER_THREADS"))
+    {
+        try { fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env))); }
+        catch (...) {}
+    }
+
+    std::wstring cmd(cmdLine);
+    auto pos = cmd.find(L"-threads");
+    if (pos == std::wstring::npos)
+        return fromEnv;
+    pos += 8; // length of "-threads"
+    while (pos < cmd.size() && cmd[pos] == L' ')
+        ++pos;
+    if (pos >= cmd.size())
+        return fromEnv;
+    try
+    {
+        return static_cast<uint32_t>(std::max(0, std::stoi(std::wstring(cmd.substr(pos)))));
+    }
+    catch (const std::exception&)
+    {
+        return fromEnv;
     }
 }
 
@@ -311,7 +355,7 @@ static bool InitHeadlessEngineContext()
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem();
+    Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
 
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
@@ -476,7 +520,7 @@ static void InitEngineContext()
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem();
+    Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
 
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
@@ -770,6 +814,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     SetupCrashHandler();
 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
+    g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
     ParseWindowSizeOverride(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT
