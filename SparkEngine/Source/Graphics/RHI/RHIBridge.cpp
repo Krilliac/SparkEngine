@@ -224,6 +224,12 @@ namespace Spark
             // hatch), we must decide whether to honor it or filter it out.
             //
             //  - None: always honor — it's the explicit headless path.
+            //  - Auto: never insert — it's a sentinel meaning "pick one
+            //    for me". If the list is empty we want to fall straight
+            //    through to the NullRHI fallback below, not feed Auto to
+            //    RHIFactory::CreateDevice (which would resolve Auto via
+            //    its own GetRecommendedBackend, bypassing our env-var
+            //    opt-outs).
             //  - A GPU backend that was disabled via SPARK_DISABLE_*: drop
             //    it entirely, otherwise we'd crash on the very backend the
             //    user asked us to skip.
@@ -235,7 +241,7 @@ namespace Spark
             {
                 std::rotate(backendsToTry.begin(), it, it + 1);
             }
-            else if (it == backendsToTry.end())
+            else if (it == backendsToTry.end() && backend != GraphicsBackend::Auto)
             {
                 const bool disabledByEnv =
                     (backend == GraphicsBackend::Vulkan && EnvFlagTrue("SPARK_DISABLE_VULKAN")) ||
@@ -608,6 +614,8 @@ namespace Spark
                 return "OpenGL";
             case GraphicsBackend::Metal:
                 return "Metal";
+            case GraphicsBackend::None:
+                return "NullRHI (headless)";
             default:
                 return "Unknown";
             }
