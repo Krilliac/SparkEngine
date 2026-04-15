@@ -11,8 +11,38 @@
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 #include <cassert>
+#include <cstdlib>
 #include <fstream>
 #include <algorithm>
+
+namespace
+{
+    // Returns true when an environment variable is set to a truthy value
+    // ("1", "true", "yes", "on" — case-insensitive). Used as an opt-out for
+    // GPU backends that are known to crash on the current host (e.g. Mesa
+    // Lavapipe under gVisor SIGSEGVs during VulkanDevice init — set
+    // SPARK_DISABLE_VULKAN=1 to skip Vulkan and fall straight through to
+    // the OpenGL/Null backends).
+    bool EnvFlagTrue(const char* name)
+    {
+        const char* v = std::getenv(name);
+        if (!v || !*v)
+            return false;
+        // Case-insensitive compare against common truthy spellings.
+        auto ieq = [](const char* a, const char* b)
+        {
+            for (; *a && *b; ++a, ++b)
+            {
+                const int ca = *a >= 'A' && *a <= 'Z' ? *a + 32 : *a;
+                const int cb = *b >= 'A' && *b <= 'Z' ? *b + 32 : *b;
+                if (ca != cb)
+                    return false;
+            }
+            return *a == *b;
+        };
+        return ieq(v, "1") || ieq(v, "true") || ieq(v, "yes") || ieq(v, "on");
+    }
+} // namespace
 
 namespace Spark
 {
@@ -170,17 +200,50 @@ namespace Spark
             if (backend == GraphicsBackend::Auto)
                 backend = SelectBestBackend();
 
+            // Surface the env-var escape hatches so users can see why a
+            // backend was skipped. This is especially useful in CI/sandbox
+            // runs where a broken Vulkan ICD would otherwise crash the
+            // process instead of failing cleanly through the fallback loop.
+            if (EnvFlagTrue("SPARK_DISABLE_VULKAN"))
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SPARK_DISABLE_VULKAN=1 — Vulkan backend skipped");
+            if (EnvFlagTrue("SPARK_DISABLE_OPENGL"))
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SPARK_DISABLE_OPENGL=1 — OpenGL backend skipped");
+            if (EnvFlagTrue("SPARK_DISABLE_D3D11"))
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SPARK_DISABLE_D3D11=1 — D3D11 backend skipped");
+
             // Try the preferred backend first, then fall back to alternatives.
             // This handles the common case where Vulkan is preferred on Linux but
             // no Vulkan driver is present — the engine falls back to OpenGL.
             auto backendsToTry = GetAvailableBackends();
 
-            // Move the preferred backend to the front of the list
+            // Move the preferred backend to the front of the list.
+            //
+            // If the caller explicitly requested a backend that isn't in
+            // the "available" set (e.g. GraphicsBackend::None to force
+            // NullRHIDevice, or a disabled backend from an env-var escape
+            // hatch), we must decide whether to honor it or filter it out.
+            //
+            //  - None: always honor — it's the explicit headless path.
+            //  - A GPU backend that was disabled via SPARK_DISABLE_*: drop
+            //    it entirely, otherwise we'd crash on the very backend the
+            //    user asked us to skip.
+            //  - Anything else not in the list (unsupported on this build):
+            //    insert it at the front so CreateDevice gets a chance to
+            //    handle it — this preserves pre-existing defensive behavior.
             auto it = std::find(backendsToTry.begin(), backendsToTry.end(), backend);
             if (it != backendsToTry.end() && it != backendsToTry.begin())
+            {
                 std::rotate(backendsToTry.begin(), it, it + 1);
+            }
             else if (it == backendsToTry.end())
-                backendsToTry.insert(backendsToTry.begin(), backend);
+            {
+                const bool disabledByEnv =
+                    (backend == GraphicsBackend::Vulkan && EnvFlagTrue("SPARK_DISABLE_VULKAN")) ||
+                    (backend == GraphicsBackend::OpenGL && EnvFlagTrue("SPARK_DISABLE_OPENGL")) ||
+                    (backend == GraphicsBackend::D3D11 && EnvFlagTrue("SPARK_DISABLE_D3D11"));
+                if (!disabledByEnv)
+                    backendsToTry.insert(backendsToTry.begin(), backend);
+            }
 
             bool deviceReady = false;
             for (auto candidate : backendsToTry)
@@ -542,16 +605,34 @@ namespace Spark
         {
             std::vector<GraphicsBackend> backends;
 
+            // Environment escape hatches — set SPARK_DISABLE_<BACKEND>=1 to
+            // skip a backend that is known to misbehave on the current host.
+            // This exists because some GPU drivers (e.g. Mesa Lavapipe under
+            // gVisor) crash rather than returning a clean error from
+            // Initialize(), which defeats RHIBridge's soft fallback loop.
+            const bool disableD3D11 = EnvFlagTrue("SPARK_DISABLE_D3D11");
+            const bool disableVulkan = EnvFlagTrue("SPARK_DISABLE_VULKAN");
+            const bool disableOpenGL = EnvFlagTrue("SPARK_DISABLE_OPENGL");
+
 #ifdef _WIN32
-            backends.push_back(GraphicsBackend::D3D11);
+            if (!disableD3D11)
+                backends.push_back(GraphicsBackend::D3D11);
+#else
+            (void)disableD3D11;
 #endif
 
 #ifdef SPARK_VULKAN_SUPPORT
-            backends.push_back(GraphicsBackend::Vulkan);
+            if (!disableVulkan)
+                backends.push_back(GraphicsBackend::Vulkan);
+#else
+            (void)disableVulkan;
 #endif
 
 #ifdef SPARK_OPENGL_SUPPORT
-            backends.push_back(GraphicsBackend::OpenGL);
+            if (!disableOpenGL)
+                backends.push_back(GraphicsBackend::OpenGL);
+#else
+            (void)disableOpenGL;
 #endif
 
             return backends;
