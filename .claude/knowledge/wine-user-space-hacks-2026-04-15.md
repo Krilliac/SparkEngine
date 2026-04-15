@@ -296,6 +296,96 @@ need either:
    init_handler gs.base safety net (complex and version-fragile), or
 2. The actual patched Wine build, which we documented in `build-wine-patched.sh`.
 
+## Iteration 3 — engine-side flags for sandbox-safe init
+
+Built on top of iterations 1 and 2 to push the engine itself further
+through its init path on runs that *do* survive the Wine gs.base race.
+Four new engine flags, two new `tools/wine-run.sh` improvements.
+
+### Engine flags (all work on both Windows and Linux)
+
+| Flag | Default | Effect |
+|------|---------|--------|
+| `-test-frames N` | 0 | Already existed on Linux. **Added to Windows** (parity fix — the Windows path had an infinite 60 Hz loop that ignored this flag). |
+| `-threads N` / `--threads N` | 0 (= `hardware_concurrency - 1`) | Cap on JobSystem worker pool size. `-threads 1` minimises threads. Also honours `SPARK_MAX_WORKER_THREADS` env var. |
+| `-no-subprocess` | off | Skip `ConsoleProcessManager::Initialize()` — no SparkConsole.exe subprocess launched. |
+| `-minimal-init` | off | Skip `InitDebugSystems`, `InitGameplaySystems`, `LoadHeadlessModules`, and all 8 detector singletons (FreezeDetector, DeadlockDetector, HitchDetector, AssetStallDetector, NetworkHealthMonitor, GPUResourceLeakDetector, InvalidStateDetector, MemoryMonitor). |
+
+Combined:
+```
+wine64 SparkEngine.exe -headless -threads 1 -no-subprocess -minimal-init
+```
+is the absolute-minimum engine init path — Timer, EventBus, EngineContext,
+FileCache, JobSystem(1), SaveSystem, SimpleConsole, main loop. Everything
+else is opted out.
+
+### Windows wWinMain fixes (same iteration)
+
+Four bugs in `SparkEngineWindows.cpp` that were hiding all of the above:
+
+1. **`RunHeadlessWindows` ignored `-test-frames`** — bare 60 Hz loop with no frame counter.
+2. **`AllocConsole()` unconditionally rebound stdio** — blocks under Wine-in-terminal where parent console already exists.
+3. **Logger init ran after `SetupCrashHandler`** — any crash in settings load left zero visible output.
+4. **GUI-subsystem PE has no stdio under Wine-in-terminal** — fixed with `AttachConsole(ATTACH_PARENT_PROCESS)` + `freopen_s(CONOUT$)`.
+
+Without these, the engine was silently dying before anything could be logged. With them, the engine's Logger output is now visible in the terminal running `wine64`.
+
+### Logger-visible progress breadcrumbs
+
+`SimpleConsole::LogInfo` writes only to an in-memory buffer and was the reason the init path went silent after `SimpleConsole initializing`. Added 10 `SPARK_LOG_INFO` breadcrumbs across `InitConsole` and `RunHeadlessWindows` so the init path now reports each major step via the Logger's stderr sink:
+
+```
+[Core] RunHeadlessWindows: SaveSystem::Initialize
+[Core] RunHeadlessWindows: SaveSystem initialized
+[Core] InitConsole: SimpleConsole::Initialize
+[Core] InitConsole: ConsoleProcessManager::Initialize
+        (or: ConsoleProcessManager skipped (-no-subprocess))
+[Core] InitConsole: InitDebugSystems
+        (or: InitDebugSystems + InitGameplaySystems skipped (-minimal-init))
+[Core] InitConsole: InitGameplaySystems
+[Core] InitConsole: Publishing EngineStartEvent
+[Core] InitConsole: complete
+[Core] RunHeadlessWindows: InitConsole returned
+[Core] RunHeadlessWindows: LoadHeadlessModules / detector singletons
+        (or: skipped (-minimal-init))
+```
+
+Operators can now tell from a flaky Wine run's output exactly which step killed the process by reading the last breadcrumb.
+
+### tools/wine-run.sh auto-flags
+
+`tools/wine-run.sh SparkEngine.exe` now automatically appends
+`-headless -threads 1 -no-subprocess -minimal-init` **when the target
+is SparkEngine.exe** and the caller hasn't supplied the same flag
+already. On SparkTests.exe, hello.exe, or any other binary the
+auto-flag block is a no-op. Opt out with `SPARK_WINE_NO_AUTO_FLAGS=1`.
+
+Also added: `timeout 5` around every `wine reg add` call in
+`detect_dxvk` / `detect_vkd3d`. On a sandbox where the Wine prefix
+init is broken, those calls try to auto-run wineboot and hang
+indefinitely. Now they fail-fast and DXVK is still picked up via
+`WINEDLLOVERRIDES=d3d11=n,b;dxgi=n,b;d3d12=n,b` in the process env.
+
+### Empirical state after iteration 3
+
+On this gVisor sandbox with a fresh `/tmp/clean-prefix`:
+
+  * Native Linux GCC Release build: clean, all flags work, EXIT=0.
+  * MinGW cross-build: clean.
+  * `-minimal-init` verified on native Linux — prints exactly the
+    expected "skipped" breadcrumbs and runs the main loop to 5 frames.
+  * Under Wine: the gs.base race on this sandbox still wins on most
+    runs (no user-space fix for the `init_handler` inlined callsite)
+    but when a run does break through, it now reaches
+    `SaveSystem initializing` — one subsystem past iteration 2 — and
+    has the minimal init path from there.
+
+The engine code is now ready for the day the Wine race is fixed,
+either via patched Wine (`tools/build-wine-patched.sh`) or by running
+on a real Linux host. On those environments, `tools/wine-run.sh
+SparkEngine.exe` produces a clean 5-frame run with structured
+init-path logging on first try.
+
 ## Remaining work for a future session
 
 1. **Find a way to inject the `init_handler` safety net into Wine's

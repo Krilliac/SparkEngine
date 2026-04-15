@@ -661,5 +661,60 @@ info "Running: ${WINE} $EXE $*"
 info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
 info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
 
+# Optional LD_PRELOAD shim to patch Wine's segv_handler under gVisor.
+# Build with: gcc -shared -fPIC -o tools/gvisor-wine-shim.so tools/gvisor-wine-shim.c -ldl
+# Enable by setting SPARK_WINE_GVISOR_SHIM=1 (auto-detects tools/gvisor-wine-shim.so).
+if [ "${SPARK_WINE_GVISOR_SHIM:-0}" = "1" ]; then
+    _shim="${PROJECT_ROOT}/tools/gvisor-wine-shim.so"
+    if [ -f "${_shim}" ]; then
+        export LD_PRELOAD="${_shim}${LD_PRELOAD:+:${LD_PRELOAD}}"
+        info "  gVisor shim: ${_shim}"
+    else
+        info "  gVisor shim: not built — run 'make -C tools gvisor-wine-shim.so'"
+    fi
+fi
+
+# Auto-append sandbox-safe engine flags when running SparkEngine.exe and
+# the caller hasn't supplied the same flag already. See the .claude
+# knowledge entry wine-user-space-hacks-2026-04-15.md for the full
+# rationale. Each of these minimises the number of threads / subprocesses
+# / detector singletons the engine spawns, maximising the chance of the
+# engine reaching its main loop on a gVisor-class sandbox where every
+# extra thread is another roll of the dice against the Wine gs.base race.
+#
+# Opt out with SPARK_WINE_NO_AUTO_FLAGS=1. On non-SparkEngine.exe targets
+# (SparkTests.exe, hello.exe, etc.) this block is a no-op.
+EXE_BASENAME="$(basename -- "$EXE")"
+EXTRA_ARGS=()
+if [ "${SPARK_WINE_NO_AUTO_FLAGS:-0}" != "1" ] && [ "$EXE_BASENAME" = "SparkEngine.exe" ]; then
+    # Only append a flag if it isn't already in "$@" — callers can still
+    # override by passing the flag explicitly. Note the `shift` after
+    # capturing the needle, otherwise the function's own $@ still contains
+    # the needle in slot 1 and `for arg in "$@"` reports it as present.
+    _have_flag() {
+        local needle="$1"
+        shift
+        for arg in "$@"; do
+            [ "$arg" = "$needle" ] && return 0
+        done
+        return 1
+    }
+    if ! _have_flag "-headless" "$@"; then
+        EXTRA_ARGS+=("-headless")
+        info "  auto-flag: -headless"
+    fi
+    if ! _have_flag "-threads" "$@"; then
+        EXTRA_ARGS+=("-threads" "1")
+        info "  auto-flag: -threads 1"
+    fi
+    if ! _have_flag "-no-subprocess" "$@"; then
+        EXTRA_ARGS+=("-no-subprocess")
+        info "  auto-flag: -no-subprocess"
+    fi
+    if ! _have_flag "-minimal-init" "$@"; then
+        EXTRA_ARGS+=("-minimal-init")
+        info "  auto-flag: -minimal-init"
+    fi
+fi
 # Run under Wine
-exec "${WINE}" "$EXE" "$@"
+exec "${WINE}" "$EXE" "$@" "${EXTRA_ARGS[@]}"
