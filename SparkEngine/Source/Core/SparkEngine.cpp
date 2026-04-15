@@ -194,7 +194,8 @@ void InitConsole()
     }
     else
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems + InitGameplaySystems skipped (-minimal-init)");
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "InitConsole: InitDebugSystems + InitGameplaySystems skipped (-minimal-init)");
     }
 
     // Publish EngineStartEvent — all systems initialized
@@ -339,6 +340,19 @@ bool g_noSubprocess = false;
 // the user ran into "it all worked flawlessly" historically and the
 // breakage is specifically accumulated subsystem registrations.
 bool g_minimalInit = false;
+
+// Skip JobSystem initialization entirely, so the engine runs everything
+// on the main thread and spawns zero worker threads. Parsed from
+// `-no-jobsystem` on both platforms.
+//
+// Rationale: under a gVisor-backed Wine sandbox, every new Windows
+// thread rolls the dice on the gs.base race (see
+// tools/gvisor-wine-shim.c). `-threads 1` still spawns one worker,
+// which is enough to trigger the race. `-no-jobsystem` eliminates
+// worker threads completely, and code paths that dispatch work via
+// JobSystem::Get().Dispatch(...) fall back to inline execution on
+// the main thread because JobSystem::IsInitialized() returns false.
+bool g_noJobSystem = false;
 
 // Window size override from command line (-window-size WxH).
 // 0 means use default from EngineSettings.

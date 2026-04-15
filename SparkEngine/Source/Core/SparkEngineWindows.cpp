@@ -85,6 +85,7 @@ extern int g_testFrameLimit;
 extern uint32_t g_maxWorkerThreads;
 extern bool g_noSubprocess;
 extern bool g_minimalInit;
+extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -139,8 +140,13 @@ static uint32_t ParseThreadCount(LPWSTR cmdLine)
     uint32_t fromEnv = 0;
     if (const char* env = std::getenv("SPARK_MAX_WORKER_THREADS"))
     {
-        try { fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env))); }
-        catch (...) {}
+        try
+        {
+            fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env)));
+        }
+        catch (...)
+        {
+        }
     }
 
     std::wstring cmd(cmdLine);
@@ -357,7 +363,14 @@ static bool InitHeadlessEngineContext()
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    if (!g_noJobSystem)
+    {
+        Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "-no-jobsystem: JobSystem worker threads skipped");
+    }
 
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
@@ -544,7 +557,14 @@ static void InitEngineContext()
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    if (!g_noJobSystem)
+    {
+        Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "-no-jobsystem: JobSystem worker threads skipped");
+    }
 
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
@@ -841,6 +861,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
     g_noSubprocess = (std::wstring(lpCmdLine).find(L"-no-subprocess") != std::wstring::npos);
     g_minimalInit = (std::wstring(lpCmdLine).find(L"-minimal-init") != std::wstring::npos);
+    g_noJobSystem = (std::wstring(lpCmdLine).find(L"-no-jobsystem") != std::wstring::npos);
     ParseWindowSizeOverride(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT

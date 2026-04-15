@@ -86,6 +86,7 @@ extern int g_testFrameLimit;
 extern uint32_t g_maxWorkerThreads;
 extern bool g_noSubprocess;
 extern bool g_minimalInit;
+extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -327,7 +328,14 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    if (!g_noJobSystem)
+    {
+        Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "-no-jobsystem: JobSystem worker threads skipped");
+    }
 
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
     {
@@ -1011,6 +1019,7 @@ int main(int argc, char* argv[])
         g_maxWorkerThreads = ParseThreadCountArgs(argc, argv);
         g_noSubprocess = ParseFlag(argc, argv, "-no-subprocess");
         g_minimalInit = ParseFlag(argc, argv, "-minimal-init");
+        g_noJobSystem = ParseFlag(argc, argv, "-no-jobsystem");
         ParseWindowSizeOverrideArgs(argc, argv);
 
 #ifdef SPARK_HEADLESS_SUPPORT
