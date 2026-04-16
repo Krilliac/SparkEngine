@@ -17,6 +17,7 @@
 #include "ServiceBase.h"
 
 #include <atomic>
+#include <chrono>
 #include <expected>
 #include <memory>
 #include <mutex>
@@ -48,6 +49,10 @@ namespace Spark::Daemon
         /// server from the inside.
         [[nodiscard]] std::atomic<bool>& GetShouldStopFlag() noexcept { return m_shouldStop; }
 
+        /// Produce a DaemonStats snapshot (uptime + registered service IDs).
+        /// Used by ControlService to answer `StatsRequest`.
+        [[nodiscard]] DaemonStats SnapshotStats() const;
+
         /**
          * @brief Bind, listen, accept, dispatch. Blocks until `Stop()` or a
          *        `ControlMessage::ShutdownRequest` arrives.
@@ -71,6 +76,7 @@ namespace Spark::Daemon
         std::atomic<bool> m_shouldStop{false};
         std::intptr_t m_listenFd = -1;
         std::string m_boundPath;
+        std::chrono::steady_clock::time_point m_runStartedAt;
     };
 
 } // namespace Spark::Daemon

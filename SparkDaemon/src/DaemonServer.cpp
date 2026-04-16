@@ -6,6 +6,7 @@
 #include "DaemonServer.h"
 #include "Utils/DaemonFraming.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -131,6 +132,7 @@ namespace Spark::Daemon
         m_listenFd = FromNative(static_cast<NativeSocket>(listenFd));
         m_boundPath = socketPath;
         m_shouldStop.store(false, std::memory_order_release);
+        m_runStartedAt = std::chrono::steady_clock::now();
 
         while (!m_shouldStop.load(std::memory_order_acquire))
         {
@@ -186,6 +188,23 @@ namespace Spark::Daemon
         m_boundPath.clear();
         return {};
 #endif
+    }
+
+    DaemonStats DaemonServer::SnapshotStats() const
+    {
+        DaemonStats stats;
+        stats.protocolVersion = kProtocolVersion;
+        if (m_runStartedAt.time_since_epoch().count() != 0)
+        {
+            auto elapsed = std::chrono::steady_clock::now() - m_runStartedAt;
+            stats.uptimeSeconds =
+                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+        }
+        stats.registeredIds.reserve(m_services.size());
+        for (const auto& [id, service] : m_services)
+            stats.registeredIds.push_back(id);
+        std::sort(stats.registeredIds.begin(), stats.registeredIds.end());
+        return stats;
     }
 
     void DaemonServer::HandleConnection(std::intptr_t connFdHandle)

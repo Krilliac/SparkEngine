@@ -89,7 +89,8 @@ int main(int argc, char** argv)
     }
 
     Spark::Daemon::DaemonServer server;
-    server.AddService(std::make_unique<Spark::Daemon::ControlService>(server.GetShouldStopFlag()));
+    auto statsProvider = [&server] { return server.SnapshotStats(); };
+    server.AddService(std::make_unique<Spark::Daemon::ControlService>(server.GetShouldStopFlag(), statsProvider));
 
     auto shader = std::make_unique<Spark::Daemon::ShaderService>();
     if (!cacheDir.empty())

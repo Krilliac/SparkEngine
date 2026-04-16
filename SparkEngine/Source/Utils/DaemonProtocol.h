@@ -50,11 +50,108 @@ namespace Spark::Daemon
         VersionResponse = 0x0004, ///< Payload: string semver (e.g. `"1.0.0"`).
         ShutdownRequest = 0x0005, ///< Empty payload. Ack then exits.
         ShutdownAck = 0x0006,     ///< Empty payload.
+        StatsRequest = 0x0007,    ///< Empty payload.
+        StatsResponse = 0x0008,   ///< Payload: DaemonStats (see below).
         ErrorResponse = 0x00FF,   ///< Payload: string error message. Wire value 0x00FF
                                   ///< is RESERVED across every service — any service may
                                   ///< return it when a request fails, and clients treat
                                   ///< that message type as an error uniformly.
     };
+
+    /**
+     * @brief Aggregate daemon-wide stats returned by `ControlMessage::StatsRequest`.
+     *
+     * Per-service counters (cache entry counts, hit/miss) continue to live
+     * behind each service's own `GetCacheStatsRequest`. These numbers are the
+     * daemon-level summary: how long has the process been up, what's the
+     * protocol version, and what services have been registered.
+     */
+    struct DaemonStats
+    {
+        uint64_t uptimeSeconds = 0;          ///< Seconds since the daemon started its accept loop.
+        std::string protocolVersion;         ///< Matches `kProtocolVersion` at compile time.
+        std::vector<uint16_t> registeredIds; ///< Registered ServiceId values (sorted ascending).
+    };
+
+    [[nodiscard]] inline std::vector<uint8_t> EncodeDaemonStats(const DaemonStats& stats)
+    {
+        std::vector<uint8_t> out;
+        auto appendU64 = [&](uint64_t v)
+        {
+            for (int i = 0; i < 8; ++i)
+                out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFFu));
+        };
+        auto appendU32 = [&](uint32_t v)
+        {
+            for (int i = 0; i < 4; ++i)
+                out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFFu));
+        };
+        auto appendU16 = [&](uint16_t v)
+        {
+            out.push_back(static_cast<uint8_t>(v & 0xFFu));
+            out.push_back(static_cast<uint8_t>((v >> 8) & 0xFFu));
+        };
+        appendU64(stats.uptimeSeconds);
+        appendU32(static_cast<uint32_t>(stats.protocolVersion.size()));
+        out.insert(out.end(), stats.protocolVersion.begin(), stats.protocolVersion.end());
+        appendU32(static_cast<uint32_t>(stats.registeredIds.size()));
+        for (uint16_t id : stats.registeredIds)
+            appendU16(id);
+        return out;
+    }
+
+    [[nodiscard]] inline bool DecodeDaemonStats(const std::vector<uint8_t>& bytes, DaemonStats& out)
+    {
+        size_t pos = 0;
+        auto need = [&](size_t n) { return pos + n <= bytes.size(); };
+        auto readU64 = [&](uint64_t& v) -> bool
+        {
+            if (!need(8))
+                return false;
+            v = 0;
+            for (int i = 0; i < 8; ++i)
+                v |= static_cast<uint64_t>(bytes[pos++]) << (i * 8);
+            return true;
+        };
+        auto readU32 = [&](uint32_t& v) -> bool
+        {
+            if (!need(4))
+                return false;
+            v = 0;
+            for (int i = 0; i < 4; ++i)
+                v |= static_cast<uint32_t>(bytes[pos++]) << (i * 8);
+            return true;
+        };
+        auto readU16 = [&](uint16_t& v) -> bool
+        {
+            if (!need(2))
+                return false;
+            v = static_cast<uint16_t>(bytes[pos] | (static_cast<uint16_t>(bytes[pos + 1]) << 8));
+            pos += 2;
+            return true;
+        };
+
+        if (!readU64(out.uptimeSeconds))
+            return false;
+        uint32_t vLen = 0;
+        if (!readU32(vLen) || !need(vLen))
+            return false;
+        out.protocolVersion.assign(reinterpret_cast<const char*>(bytes.data() + pos), vLen);
+        pos += vLen;
+        uint32_t idCount = 0;
+        if (!readU32(idCount))
+            return false;
+        out.registeredIds.clear();
+        out.registeredIds.reserve(idCount);
+        for (uint32_t i = 0; i < idCount; ++i)
+        {
+            uint16_t id = 0;
+            if (!readU16(id))
+                return false;
+            out.registeredIds.push_back(id);
+        }
+        return true;
+    }
 
     /// Wire-format frame header. All fields little-endian on the wire.
     struct FrameHeader

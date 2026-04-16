@@ -62,6 +62,7 @@
 - [SparkEditor](SparkEditor)
 - [Editor Tutorials](Editor-Tutorials)
 - [SparkConsole](SparkConsole)
+- [SparkDaemon](SparkDaemon)
 - [Shader Pipeline](Shader-Pipeline)
 - [Asset Pipeline](Asset-Pipeline)
 - [Asset Validation](Asset-Validation)

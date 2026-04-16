@@ -471,6 +471,8 @@ add_executable(SparkTests
     TestShaderDiskCacheDaemon.cpp
     # Engine-level daemon lifecycle (Phase 3c)
     TestDaemonLifecycle.cpp
+    # Concurrent clients + StatsRequest (Phase 4)
+    TestDaemonConcurrent.cpp
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp

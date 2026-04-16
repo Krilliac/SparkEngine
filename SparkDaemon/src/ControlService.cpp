@@ -39,6 +39,18 @@ namespace Spark::Daemon
             r.messageType = static_cast<uint16_t>(ControlMessage::ShutdownAck);
             return r;
         }
+        case ControlMessage::StatsRequest:
+        {
+            DaemonStats stats;
+            if (m_statsProvider)
+                stats = m_statsProvider();
+            else
+                stats.protocolVersion = kProtocolVersion;
+            ServiceResponse r;
+            r.messageType = static_cast<uint16_t>(ControlMessage::StatsResponse);
+            r.payload = EncodeDaemonStats(stats);
+            return r;
+        }
         default:
         {
             std::string_view msg = "unsupported control message";

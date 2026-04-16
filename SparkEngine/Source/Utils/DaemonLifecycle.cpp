@@ -7,13 +7,18 @@
 
 #include "ConsoleVariable.h"
 #include "DaemonConnection.h"
+#include "DaemonProtocol.h"
 #include "LogMacros.h"
+#include "Process.h"
 #include "ShaderServiceClient.h"
 
 #include "../Graphics/ShaderDiskCache.h"
 
+#include <chrono>
+#include <filesystem>
 #include <memory>
 #include <mutex>
+#include <thread>
 
 namespace
 {
@@ -29,9 +34,67 @@ namespace
     Spark::CVar<std::string> cv_DaemonSocket("spark.daemon.socket_path", std::string{}, Spark::CVarFlags::Save,
                                              "Override the daemon socket path (empty = ./.spark-daemon.sock).");
 
+    // When enabled, if `TryConnect` fails (no running daemon), the lifecycle
+    // helper launches `SparkDaemon` itself as a detached subprocess and retries
+    // the connect. Default off — operators may want to control daemon launch
+    // themselves (e.g. from a shell init script).
+    Spark::CVar<bool> cv_DaemonAutoSpawn("spark.daemon.auto_spawn", false, Spark::CVarFlags::Save,
+                                         "If the daemon isn't running, launch it as a detached subprocess.");
+
+    // Empty = try `./SparkDaemon` relative to CWD. Override to point at a
+    // specific binary (typical for installed builds where the daemon lives
+    // elsewhere on disk).
+    Spark::CVar<std::string> cv_DaemonBinary("spark.daemon.binary_path", std::string{}, Spark::CVarFlags::Save,
+                                             "Override the SparkDaemon executable path (empty = ./SparkDaemon).");
+
     std::mutex g_lifecycleMutex;
     std::unique_ptr<Spark::Daemon::ShaderServiceClient> g_shaderClient;
     bool g_active = false;
+
+    bool TrySpawnDaemon(const std::string& socketPath)
+    {
+        std::string binary = cv_DaemonBinary.Get();
+        if (binary.empty())
+            binary = "./SparkDaemon";
+
+        // Only attempt spawn if the binary is present on disk — failing fast
+        // here keeps log noise down on machines where the daemon isn't
+        // installed at all.
+        std::error_code ec;
+        if (!std::filesystem::exists(binary, ec))
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Daemon auto-spawn: binary not found at %s", binary.c_str());
+            return false;
+        }
+
+        auto builder = Spark::Process::Builder(binary).Detached();
+        if (!socketPath.empty())
+        {
+            builder.Arg("--socket").Arg(socketPath);
+        }
+        auto result = builder.Launch();
+        if (!result)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Daemon auto-spawn: launch failed: %s", result.error().c_str());
+            return false;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "Daemon auto-spawn: launched %s", binary.c_str());
+
+        // Poll briefly for the socket to appear before retrying connect().
+        // 2 s ceiling — the daemon binds in its first few ms of execution; a
+        // longer wait almost certainly means the subprocess crashed on start.
+        const std::string probePath =
+            socketPath.empty() ? std::string("./") + Spark::Daemon::kDefaultSocketName : socketPath;
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            if (std::filesystem::exists(probePath, ec))
+                return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "Daemon auto-spawn: socket never appeared at %s", probePath.c_str());
+        return false;
+    }
 } // namespace
 
 namespace Spark::Daemon
@@ -50,7 +113,17 @@ namespace Spark::Daemon
         }
 
         auto& conn = DaemonConnection::Instance();
-        if (!conn.TryConnect(cv_DaemonSocket.Get()))
+        const std::string& socketPath = cv_DaemonSocket.Get();
+
+        if (!conn.TryConnect(socketPath))
+        {
+            if (cv_DaemonAutoSpawn.Get() && TrySpawnDaemon(socketPath))
+            {
+                (void)conn.TryConnect(socketPath);
+            }
+        }
+
+        if (!conn.IsConnected())
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core,
                            "Daemon requested but unreachable — engine will run with in-process caches only");
