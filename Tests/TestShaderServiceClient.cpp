@@ -212,4 +212,219 @@ TEST(ShaderService_DifferentTargetsAreDistinctEntries)
     EXPECT_EQ(stats->entryCount, 3u);
 }
 
+// =========================================================================
+// Phase 2b — disk persistence
+// =========================================================================
+
+#include <filesystem>
+#include <fstream>
+
+namespace
+{
+    std::filesystem::path UniqueCacheDir(const char* tag)
+    {
+        char buf[96];
+        std::snprintf(buf, sizeof(buf), "/tmp/spark-shader-cache-%s-%d", tag, static_cast<int>(::getpid()));
+        std::filesystem::path p(buf);
+        std::error_code ec;
+        std::filesystem::remove_all(p, ec);
+        return p;
+    }
+
+    /// Fixture that owns a disk-backed daemon on the same socket+cache for the
+    /// full test — optionally allows restarting the daemon to simulate reload.
+    struct PersistentShaderFixture
+    {
+        std::string sockPath;
+        std::filesystem::path cacheDir;
+        std::unique_ptr<Spark::Daemon::DaemonServer> server;
+        std::thread thread;
+
+        explicit PersistentShaderFixture(const char* tag)
+            : sockPath(UniqueShaderSockPath(tag)), cacheDir(UniqueCacheDir(tag))
+        {
+            StartServer();
+        }
+
+        void StartServer()
+        {
+            server = std::make_unique<Spark::Daemon::DaemonServer>();
+            server->AddService(std::make_unique<Spark::Daemon::ControlService>(server->GetShouldStopFlag()));
+            auto shaderSvc = std::make_unique<Spark::Daemon::ShaderService>();
+            auto loaded = shaderSvc->Initialize(cacheDir);
+            EXPECT_TRUE(loaded.has_value());
+            server->AddService(std::move(shaderSvc));
+            thread = std::thread([this] { (void)server->Run(sockPath); });
+            EXPECT_TRUE(WaitForShaderSocket(sockPath, std::chrono::milliseconds(2000)));
+        }
+
+        void RestartServer()
+        {
+            if (server)
+                server->Stop();
+            if (thread.joinable())
+                thread.join();
+            server.reset();
+            // Give the kernel a moment to release the socket path before rebinding.
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            StartServer();
+        }
+
+        ~PersistentShaderFixture()
+        {
+            if (server)
+                server->Stop();
+            if (thread.joinable())
+                thread.join();
+            ::unlink(sockPath.c_str());
+            std::error_code ec;
+            std::filesystem::remove_all(cacheDir, ec);
+        }
+    };
+} // namespace
+
+TEST(ShaderService_PutWritesFileToDisk)
+{
+    PersistentShaderFixture fx("put-disk");
+
+    Spark::Daemon::DaemonClient client;
+    EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+    Spark::Daemon::ShaderServiceClient shader(client);
+
+    EXPECT_TRUE(shader.PutCacheEntry(0xABCDEFull, /*target*/ 1, /*stage*/ 2, {1, 2, 3, 4, 5}).has_value());
+
+    // Exactly one .blob file should exist, with non-zero size.
+    size_t blobCount = 0;
+    size_t totalBytes = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(fx.cacheDir))
+    {
+        if (entry.path().extension() == ".blob")
+        {
+            ++blobCount;
+            totalBytes += entry.file_size();
+        }
+    }
+    EXPECT_EQ(blobCount, 1u);
+    EXPECT_EQ(totalBytes, 5u);
+}
+
+TEST(ShaderService_ReloadsFromDiskOnRestart)
+{
+    PersistentShaderFixture fx("reload");
+
+    {
+        Spark::Daemon::DaemonClient client;
+        EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+        Spark::Daemon::ShaderServiceClient shader(client);
+        EXPECT_TRUE(shader.PutCacheEntry(0x1111ull, 0, 0, {0xA0, 0xA1}).has_value());
+        EXPECT_TRUE(shader.PutCacheEntry(0x2222ull, 1, 1, {0xB0, 0xB1, 0xB2}).has_value());
+        EXPECT_TRUE(shader.PutCacheEntry(0x3333ull, 2, 2, {0xC0, 0xC1, 0xC2, 0xC3}).has_value());
+    }
+
+    // Tear down and restart the server — warm-cache entries should survive.
+    fx.RestartServer();
+
+    Spark::Daemon::DaemonClient client;
+    EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+    Spark::Daemon::ShaderServiceClient shader(client);
+
+    auto stats = shader.GetCacheStats();
+    EXPECT_TRUE(stats.has_value());
+    EXPECT_EQ(stats->entryCount, 3u);
+    EXPECT_EQ(stats->totalBytes, 2u + 3u + 4u);
+
+    auto first = shader.GetCacheEntry(0x1111ull, 0, 0);
+    auto second = shader.GetCacheEntry(0x2222ull, 1, 1);
+    auto third = shader.GetCacheEntry(0x3333ull, 2, 2);
+    EXPECT_TRUE(first && first->found && first->blob.size() == 2u && first->blob[0] == 0xA0u);
+    EXPECT_TRUE(second && second->found && second->blob.size() == 3u && second->blob[1] == 0xB1u);
+    EXPECT_TRUE(third && third->found && third->blob.size() == 4u && third->blob[3] == 0xC3u);
+}
+
+TEST(ShaderService_ClearRemovesBlobFiles)
+{
+    PersistentShaderFixture fx("clear-disk");
+
+    Spark::Daemon::DaemonClient client;
+    EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+    Spark::Daemon::ShaderServiceClient shader(client);
+
+    EXPECT_TRUE(shader.PutCacheEntry(1ull, 0, 0, {1}).has_value());
+    EXPECT_TRUE(shader.PutCacheEntry(2ull, 0, 0, {2}).has_value());
+
+    size_t beforeClear = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(fx.cacheDir))
+        if (entry.path().extension() == ".blob")
+            ++beforeClear;
+    EXPECT_EQ(beforeClear, 2u);
+
+    EXPECT_TRUE(shader.ClearCache().has_value());
+
+    size_t afterClear = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(fx.cacheDir))
+        if (entry.path().extension() == ".blob")
+            ++afterClear;
+    EXPECT_EQ(afterClear, 0u);
+}
+
+TEST(ShaderService_OverwriteReplacesFileContents)
+{
+    PersistentShaderFixture fx("overwrite-disk");
+
+    Spark::Daemon::DaemonClient client;
+    EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+    Spark::Daemon::ShaderServiceClient shader(client);
+
+    EXPECT_TRUE(shader.PutCacheEntry(77ull, 3, 3, std::vector<uint8_t>(100, 0xAA)).has_value());
+    EXPECT_TRUE(shader.PutCacheEntry(77ull, 3, 3, std::vector<uint8_t>(50, 0xBB)).has_value());
+
+    fx.RestartServer();
+
+    Spark::Daemon::DaemonClient client2;
+    EXPECT_TRUE(client2.Connect(fx.sockPath).has_value());
+    Spark::Daemon::ShaderServiceClient shader2(client2);
+
+    auto get = shader2.GetCacheEntry(77ull, 3, 3);
+    EXPECT_TRUE(get && get->found);
+    EXPECT_EQ(get->blob.size(), 50u);
+    EXPECT_EQ(get->blob[0], 0xBBu);
+
+    auto stats = shader2.GetCacheStats();
+    EXPECT_TRUE(stats && stats->entryCount == 1u && stats->totalBytes == 50u);
+}
+
+TEST(ShaderService_MalformedFilenameIsIgnoredOnLoad)
+{
+    // Pre-populate the cache dir with a junk file + one valid blob, then start
+    // the daemon. Only the valid blob should be loaded.
+    auto cacheDir = UniqueCacheDir("junk");
+    std::filesystem::create_directories(cacheDir);
+
+    // Valid filename: hash=0x0000000012345678, target=001, stage=002
+    {
+        std::ofstream out(cacheDir / "0000000012345678_001_002.blob", std::ios::binary);
+        const char bytes[] = {'O', 'K', '!'};
+        out.write(bytes, sizeof(bytes));
+    }
+    // Garbage filename — right extension, wrong format.
+    {
+        std::ofstream out(cacheDir / "not-a-valid-name.blob", std::ios::binary);
+        out.write("junk", 4);
+    }
+    // Wrong extension entirely.
+    {
+        std::ofstream out(cacheDir / "0000000011111111_001_002.txt", std::ios::binary);
+        out.write("other", 5);
+    }
+
+    Spark::Daemon::ShaderService svc;
+    auto loaded = svc.Initialize(cacheDir);
+    EXPECT_TRUE(loaded.has_value());
+    EXPECT_EQ(*loaded, 1u);
+    EXPECT_EQ(svc.GetEntryCount(), 1u);
+
+    std::error_code ec;
+    std::filesystem::remove_all(cacheDir, ec);
+}
+
 #endif // POSIX

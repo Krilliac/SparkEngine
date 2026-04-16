@@ -3,15 +3,16 @@
  * @brief SparkDaemon entry point.
  *
  * Usage:
- *   SparkDaemon [--socket <path>]
+ *   SparkDaemon [--socket <path>] [--cache-dir <path>]
  *
- * Defaults to `<cwd>/.spark-daemon.sock` when `--socket` is omitted. The
- * socket file is removed on clean shutdown. SIGINT / SIGTERM trigger a
- * graceful exit.
+ * Defaults:
+ *   --socket      `./.spark-daemon.sock`
+ *   --cache-dir   disabled (in-memory shader cache only)
  *
- * Phase 1 registers only the built-in Control service (ping, version,
- * shutdown). Asset, Shader, Collab, and Build services are added in
- * subsequent phases.
+ * The socket file is removed on clean shutdown. SIGINT / SIGTERM trigger a
+ * graceful exit. When `--cache-dir` is set, the ShaderService scans it for
+ * existing `.blob` files on startup and persists new `PutCacheEntry` writes
+ * to disk so warm cache survives daemon restarts.
  */
 
 #include "ControlService.h"
@@ -22,6 +23,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -55,6 +57,7 @@ namespace
 int main(int argc, char** argv)
 {
     std::string socketPath = DefaultSocketPath();
+    std::string cacheDir;
     for (int i = 1; i < argc; ++i)
     {
         std::string_view arg = argv[i];
@@ -62,9 +65,13 @@ int main(int argc, char** argv)
         {
             socketPath = argv[++i];
         }
+        else if (arg == "--cache-dir" && i + 1 < argc)
+        {
+            cacheDir = argv[++i];
+        }
         else if (arg == "--help" || arg == "-h")
         {
-            std::puts("SparkDaemon [--socket <path>]");
+            std::puts("SparkDaemon [--socket <path>] [--cache-dir <path>]");
             return 0;
         }
         else
@@ -76,7 +83,19 @@ int main(int argc, char** argv)
 
     Spark::Daemon::DaemonServer server;
     server.AddService(std::make_unique<Spark::Daemon::ControlService>(server.GetShouldStopFlag()));
-    server.AddService(std::make_unique<Spark::Daemon::ShaderService>());
+
+    auto shader = std::make_unique<Spark::Daemon::ShaderService>();
+    if (!cacheDir.empty())
+    {
+        auto loaded = shader->Initialize(std::filesystem::path{cacheDir});
+        if (!loaded)
+        {
+            std::fprintf(stderr, "SparkDaemon: could not open cache directory %s\n", cacheDir.c_str());
+            return 1;
+        }
+        std::printf("SparkDaemon: shader cache %s (%zu entries loaded)\n", cacheDir.c_str(), *loaded);
+    }
+    server.AddService(std::move(shader));
 
     g_serverForSignal = &server;
 #if !defined(_WIN32)
