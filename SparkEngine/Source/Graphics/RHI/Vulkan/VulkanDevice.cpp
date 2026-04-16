@@ -332,10 +332,14 @@ namespace Spark
                     // a trivial missing-extension reason.
                     if (hasInstanceExt(VK_KHR_XCB_SURFACE_EXTENSION_NAME))
                         extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#ifdef VK_USE_PLATFORM_XLIB_KHR
                     if (hasInstanceExt(VK_KHR_XLIB_SURFACE_EXTENSION_NAME))
                         extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+#endif
+#ifdef VK_USE_PLATFORM_WAYLAND_KHR
                     if (hasInstanceExt(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
                         extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+#endif
 #endif
                 }
 
