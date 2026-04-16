@@ -51,15 +51,15 @@ namespace Spark::Daemon
     DaemonServer::~DaemonServer()
     {
         Stop();
-        std::vector<std::thread> toJoin;
+        std::list<ClientWorker> toJoin;
         {
             std::lock_guard lock(m_threadsMutex);
-            toJoin = std::move(m_clientThreads);
+            toJoin = std::move(m_clientWorkers);
         }
-        for (auto& t : toJoin)
+        for (auto& worker : toJoin)
         {
-            if (t.joinable())
-                t.join();
+            if (worker.thread.joinable())
+                worker.thread.join();
         }
 #if !defined(_WIN32)
         if (!m_boundPath.empty())
@@ -134,6 +134,8 @@ namespace Spark::Daemon
         m_shouldStop.store(false, std::memory_order_release);
         m_runStartedAt = std::chrono::steady_clock::now();
 
+        std::string fatalError;
+
         while (!m_shouldStop.load(std::memory_order_acquire))
         {
             pollfd pfd{};
@@ -144,10 +146,18 @@ namespace Spark::Daemon
             {
                 if (errno == EINTR)
                     continue;
+                // Non-recoverable poll() error. Record, exit the loop, surface
+                // as unexpected() to the caller so upstream recovery logic can
+                // distinguish from a clean shutdown.
+                fatalError = std::string("DaemonServer: poll() failed: ") + std::strerror(errno);
                 break;
             }
             if (pn == 0)
-                continue; // timeout — recheck m_shouldStop
+            {
+                // Timeout tick — good opportunity to join any finished workers.
+                ReapFinishedWorkers();
+                continue; // recheck m_shouldStop
+            }
 
             sockaddr_un peer{};
             socklen_t peerLen = sizeof(peer);
@@ -156,26 +166,36 @@ namespace Spark::Daemon
             {
                 if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
                     continue;
+                fatalError = std::string("DaemonServer: accept() failed: ") + std::strerror(errno);
                 break;
             }
 
             timeval tv{0, 500'000};
             ::setsockopt(connFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
+            // Reap finished workers before pushing a new one so a slow spawn
+            // rate of reconnecting clients doesn't let the list grow unboundedly
+            // between poll timeouts.
+            ReapFinishedWorkers();
+
             std::lock_guard lock(m_threadsMutex);
-            m_clientThreads.emplace_back([this, connFd] { HandleConnection(static_cast<std::intptr_t>(connFd)); });
+            auto& worker = m_clientWorkers.emplace_back();
+            std::atomic<bool>& doneFlag = worker.done;
+            worker.thread = std::thread([this, connFd, &doneFlag]
+                                        { HandleConnection(static_cast<std::intptr_t>(connFd), doneFlag); });
         }
 
-        // Drain any clients that finished after we stopped accepting.
-        std::vector<std::thread> toJoin;
+        // Drain any clients still running when we stopped accepting. These are
+        // joined unconditionally regardless of `done` state.
+        std::list<ClientWorker> toJoin;
         {
             std::lock_guard lock(m_threadsMutex);
-            toJoin = std::move(m_clientThreads);
+            toJoin = std::move(m_clientWorkers);
         }
-        for (auto& t : toJoin)
+        for (auto& worker : toJoin)
         {
-            if (t.joinable())
-                t.join();
+            if (worker.thread.joinable())
+                worker.thread.join();
         }
 
         auto s = ToNative(m_listenFd);
@@ -186,8 +206,29 @@ namespace Spark::Daemon
         }
         ::unlink(m_boundPath.c_str());
         m_boundPath.clear();
+
+        if (!fatalError.empty())
+            return std::unexpected<std::string>(std::move(fatalError));
         return {};
 #endif
+    }
+
+    void DaemonServer::ReapFinishedWorkers()
+    {
+        std::lock_guard lock(m_threadsMutex);
+        for (auto it = m_clientWorkers.begin(); it != m_clientWorkers.end();)
+        {
+            if (it->done.load(std::memory_order_acquire))
+            {
+                if (it->thread.joinable())
+                    it->thread.join();
+                it = m_clientWorkers.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 
     DaemonStats DaemonServer::SnapshotStats() const
@@ -207,7 +248,7 @@ namespace Spark::Daemon
         return stats;
     }
 
-    void DaemonServer::HandleConnection(std::intptr_t connFdHandle)
+    void DaemonServer::HandleConnection(std::intptr_t connFdHandle, std::atomic<bool>& doneFlag)
     {
         auto s = ToNative(connFdHandle);
         while (!m_shouldStop.load(std::memory_order_acquire))
@@ -240,6 +281,10 @@ namespace Spark::Daemon
                 break;
         }
         CloseSocket(s);
+        // Signal the accept loop that this worker is ready to be reaped.
+        // Release so the reap pass's acquire-load observes the thread fully
+        // exiting any prior state touched by CloseSocket et al.
+        doneFlag.store(true, std::memory_order_release);
     }
 
 } // namespace Spark::Daemon

@@ -475,6 +475,8 @@ add_executable(SparkTests
     TestDaemonConcurrent.cpp
     # LRU cache eviction (Phase 5)
     TestDaemonLRU.cpp
+    # Codex PR #478 review fixes (thread reap, fatal error, strict filename parsing)
+    TestDaemonCodexFixes.cpp
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp

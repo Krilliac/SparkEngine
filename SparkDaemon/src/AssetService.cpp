@@ -312,12 +312,27 @@ namespace Spark::Daemon
 
         // Filename carries the platform — parse it out first so we know which
         // bucket this entry belongs to even before reading the header.
+        //
+        // Strict grammar: "<16 hex digits>_<3 decimal digits>" (no trailing
+        // extension — the ".asset" suffix was already stripped by stem()).
+        // Each character is validated explicitly; std::stoul silently accepts
+        // "1a2" as 1, so a handwritten check is the only way to reject
+        // malformed filenames the Initialize-scan might encounter.
         auto stem = file.stem().string();
-        if (stem.size() < 16 + 1 + 3 || stem[16] != '_')
+        if (stem.size() != 16 + 1 + 3 || stem[16] != '_')
             return false;
+        auto isHex = [](char c) -> bool
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); };
+        auto isDec = [](char c) -> bool { return c >= '0' && c <= '9'; };
+        for (size_t i = 0; i < 16; ++i)
+            if (!isHex(stem[i]))
+                return false;
+        for (size_t i = 17; i < 20; ++i)
+            if (!isDec(stem[i]))
+                return false;
         try
         {
-            unsigned platform = std::stoul(stem.substr(17));
+            unsigned platform = std::stoul(stem.substr(17, 3));
             if (platform > 0xFFu)
                 return false;
             outKey.platform = static_cast<uint8_t>(platform);

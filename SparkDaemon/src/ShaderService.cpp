@@ -252,11 +252,28 @@ namespace Spark::Daemon
 
     std::optional<ShaderService::Key> ShaderService::ParseBlobFilename(const std::string& stem)
     {
-        // stem = "<16 hex digits>_<3 digits>_<3 digits>"
+        // Strict grammar: "<16 hex digits>_<3 decimal digits>_<3 decimal digits>"
+        // Every character position is validated explicitly — std::stoul / stoull
+        // silently stop at the first non-digit, so they'd accept garbage like
+        // "0000000000000001_1a2_003" as target=1 instead of rejecting it.
         if (stem.size() != 16 + 1 + 3 + 1 + 3)
             return std::nullopt;
         if (stem[16] != '_' || stem[20] != '_')
             return std::nullopt;
+
+        auto isHex = [](char c) -> bool
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); };
+        auto isDec = [](char c) -> bool { return c >= '0' && c <= '9'; };
+
+        for (size_t i = 0; i < 16; ++i)
+            if (!isHex(stem[i]))
+                return std::nullopt;
+        for (size_t i = 17; i < 20; ++i)
+            if (!isDec(stem[i]))
+                return std::nullopt;
+        for (size_t i = 21; i < 24; ++i)
+            if (!isDec(stem[i]))
+                return std::nullopt;
 
         Key key;
         try

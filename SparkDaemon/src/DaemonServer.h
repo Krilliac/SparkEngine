@@ -19,6 +19,7 @@
 #include <atomic>
 #include <chrono>
 #include <expected>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -57,6 +58,10 @@ namespace Spark::Daemon
          * @brief Bind, listen, accept, dispatch. Blocks until `Stop()` or a
          *        `ControlMessage::ShutdownRequest` arrives.
          *
+         * Returns on:
+         *   - clean shutdown (success);
+         *   - fatal `poll()` / `accept()` error (returns the error string).
+         *
          * @param socketPath  AF_UNIX socket path. File is unlinked first if it
          *                    exists, recreated with permissions 0600 so only
          *                    the owning user can connect.
@@ -68,11 +73,29 @@ namespace Spark::Daemon
         void Stop();
 
       private:
-        void HandleConnection(std::intptr_t connFd);
+        /// Per-accept worker state. `done` flips when `HandleConnection` returns,
+        /// so the accept loop can reap finished threads without blocking on a
+        /// still-live connection — important for long-running daemons where
+        /// clients reconnect repeatedly.
+        struct ClientWorker
+        {
+            std::thread thread;
+            std::atomic<bool> done{false};
+
+            ClientWorker() = default;
+            ClientWorker(const ClientWorker&) = delete;
+            ClientWorker& operator=(const ClientWorker&) = delete;
+            // `std::list` only requires move-construction for `emplace_back` / `splice`
+            // in edge cases; we build ClientWorkers in place via `emplace_back` and
+            // never copy them, so the atomic<bool> doesn't need a move constructor.
+        };
+
+        void HandleConnection(std::intptr_t connFd, std::atomic<bool>& doneFlag);
+        void ReapFinishedWorkers();
 
         std::unordered_map<uint16_t, std::unique_ptr<ServiceBase>> m_services;
         std::mutex m_threadsMutex;
-        std::vector<std::thread> m_clientThreads;
+        std::list<ClientWorker> m_clientWorkers;
         std::atomic<bool> m_shouldStop{false};
         std::intptr_t m_listenFd = -1;
         std::string m_boundPath;
