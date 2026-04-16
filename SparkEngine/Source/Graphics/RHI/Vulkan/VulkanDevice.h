@@ -21,16 +21,64 @@
 // Vulkan availability is checked at build time
 #ifdef SPARK_VULKAN_SUPPORT
 
-// Platform detection for Vulkan surface creation
+// Platform detection for Vulkan surface creation.
+//
+// On Linux we want the union of XCB + Xlib + Wayland surface support
+// because SDL2 decides at runtime which windowing-system surface to
+// create (xlib by default, xcb/wayland if the env has been configured
+// that way). Enabling all three at compile time means
+// SDL_Vulkan_CreateSurface can pick whichever the host actually uses.
+//
+// Guard each platform define behind __has_include so we don't pull in
+// headers that aren't installed (e.g. CI has libvulkan-dev but not
+// libwayland-dev, and VK_USE_PLATFORM_WAYLAND_KHR would make
+// <vulkan/vulkan.h> try to #include <wayland-client.h>).
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
 #elif defined(__linux__)
 #define VK_USE_PLATFORM_XCB_KHR
+#if __has_include(<X11/Xlib.h>)
+#define VK_USE_PLATFORM_XLIB_KHR
+#endif
+#if __has_include(<wayland-client.h>)
+#define VK_USE_PLATFORM_WAYLAND_KHR
+#endif
 #elif defined(__APPLE__)
 #define VK_USE_PLATFORM_METAL_EXT
 #endif
 
 #include <vulkan/vulkan.h>
+
+// Xlib's headers — pulled in transitively on Linux via
+// VK_USE_PLATFORM_XLIB_KHR — #define a handful of unqualified macros
+// (`None`, `Status`, `Success`, `Bool`, `True`, `False`, `Always`) that
+// collide with identifiers in the engine (e.g. `RHICullMode::None`).
+// Undefine them immediately after the Vulkan include so the rest of
+// the engine isn't poisoned. This is the standard mitigation used by
+// every cross-platform C++ codebase that has to coexist with Xlib.
+#if defined(__linux__) && defined(VK_USE_PLATFORM_XLIB_KHR)
+#ifdef None
+#undef None
+#endif
+#ifdef Status
+#undef Status
+#endif
+#ifdef Success
+#undef Success
+#endif
+#ifdef Bool
+#undef Bool
+#endif
+#ifdef True
+#undef True
+#endif
+#ifdef False
+#undef False
+#endif
+#ifdef Always
+#undef Always
+#endif
+#endif
 #include <vector>
 #include <unordered_map>
 #include <optional>

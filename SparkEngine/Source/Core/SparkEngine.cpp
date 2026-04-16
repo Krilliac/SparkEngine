@@ -129,6 +129,11 @@ std::unique_ptr<PhysicsSystem> g_physicsOwned;
 // Remaining functions below: InitPhysics, InitConsole, ShutdownPhysics, ShutdownEngine
 // (engine lifecycle that depends on globals defined in this file)
 
+// Forward declaration of globals defined later in this file so InitConsole
+// can read them. Keeps the definition near the other globals at the bottom
+// for documentation grouping.
+extern bool g_noSubprocess;
+extern bool g_minimalInit;
 
 void InitPhysics()
 {
@@ -153,23 +158,54 @@ void InitPhysics()
  */
 void InitConsole()
 {
+    // Progress breadcrumbs via SPARK_LOG_INFO (routed through Logger's
+    // stderr sink) rather than SimpleConsole::LogInfo (which only writes
+    // to an in-memory buffer and is invisible to operators running under
+    // Wine-in-terminal). These make it possible to tell from outside the
+    // engine process exactly how far InitConsole progressed on a run that
+    // crashed mid-init.
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: SimpleConsole::Initialize");
     auto& console = Spark::SimpleConsole::GetInstance();
     console.Initialize();
     console.LogSuccess("Spark Engine runtime initialized");
 
-    if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
+    // Subprocess spawn: optional. On a gVisor-class sandbox every Wine
+    // process has to survive the gs.base race independently, so `-no-subprocess`
+    // avoids the second Wine process entirely. In-process console (SimpleConsole)
+    // still works; only the standalone SparkConsole.exe UI is skipped.
+    if (!g_noSubprocess)
     {
-        console.LogWarning("ConsoleProcessManager failed to initialize — SparkConsole subprocess unavailable");
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: ConsoleProcessManager::Initialize");
+        if (!Spark::ConsoleProcessManager::GetInstance().Initialize())
+        {
+            console.LogWarning("ConsoleProcessManager failed to initialize — SparkConsole subprocess unavailable");
+        }
     }
-    InitDebugSystems();
-    InitGameplaySystems();
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: ConsoleProcessManager skipped (-no-subprocess)");
+    }
+    if (!g_minimalInit)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitDebugSystems");
+        InitDebugSystems();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");
+        InitGameplaySystems();
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "InitConsole: InitDebugSystems + InitGameplaySystems skipped (-minimal-init)");
+    }
 
     // Publish EngineStartEvent — all systems initialized
     if (g_eventBus)
     {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: Publishing EngineStartEvent");
         g_eventBus->Publish(Spark::EngineStartEvent{});
     }
 
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: complete");
     SPARK_DEBUG_HOOK(EnginePostInit, 0, 0.0f);
 }
 
@@ -264,6 +300,59 @@ void ShutdownEngine()
 // Test automation: exit after N frames (0 = run indefinitely).
 // Parsed from -test-frames N on the command line (both platforms).
 int g_testFrameLimit = 0;
+
+// JobSystem thread pool size override from command line (-threads N) or
+// SPARK_MAX_WORKER_THREADS env var. 0 = use the default
+// hardware_concurrency - 1. Primarily intended for running the engine
+// under Wine on a sandbox where every extra worker thread is another
+// roll of the dice against the gs.base race documented in
+// .claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md — `-threads 1`
+// minimises the number of Wine worker threads and maximises the chance
+// of the engine reaching its main loop on a flaky sandbox run.
+uint32_t g_maxWorkerThreads = 0;
+
+// Skip the SparkConsole.exe subprocess spawn (see ConsoleProcessManager).
+// Parsed from `-no-subprocess` on both platforms. Subprocess launches
+// are the single biggest "extra Wine process" the engine creates after
+// JobSystem initialization, and under a gVisor sandbox each new Wine
+// process has to survive the gs.base race independently. Developers
+// can pass this flag to minimise the chance of losing the race at the
+// cost of losing access to the standalone SparkConsole UI. The engine-
+// side in-process console (SimpleConsole) still works.
+bool g_noSubprocess = false;
+
+// Minimal init mode: skip everything non-essential to reaching the main
+// loop. Parsed from `-minimal-init` on both platforms. When set:
+//   * InitDebugSystems is a no-op (no LifecycleCompositionRoot registration).
+//   * Detector singletons (Freeze/Deadlock/Hitch/AssetStall/NetworkHealth/
+//     GPUResourceLeak/InvalidState/MemoryMonitor) are not registered or
+//     started.
+//   * LoadHeadlessModules skips dlopen'ing game modules entirely.
+//   * The engine still initializes Timer, EventBus, EngineContext,
+//     FileCache, JobSystem (capped at -threads N), SaveSystem, and
+//     SimpleConsole — enough to reach RunHeadlessWindows's main loop.
+//
+// Primary use case: validating that the engine's core init path reaches
+// the main loop on a flaky Wine sandbox where the gs.base race kills
+// every extra thread / subprocess the normal init path would spawn.
+// This is also what the engine's startup path looked like in earlier
+// sessions before the broad wiring of gameplay and debug subsystems —
+// the user ran into "it all worked flawlessly" historically and the
+// breakage is specifically accumulated subsystem registrations.
+bool g_minimalInit = false;
+
+// Skip JobSystem initialization entirely, so the engine runs everything
+// on the main thread and spawns zero worker threads. Parsed from
+// `-no-jobsystem` on both platforms.
+//
+// Rationale: under a gVisor-backed Wine sandbox, every new Windows
+// thread rolls the dice on the gs.base race (see
+// tools/gvisor-wine-shim.c). `-threads 1` still spawns one worker,
+// which is enough to trigger the race. `-no-jobsystem` eliminates
+// worker threads completely, and code paths that dispatch work via
+// JobSystem::Get().Dispatch(...) fall back to inline execution on
+// the main thread because JobSystem::IsInitialized() returns false.
+bool g_noJobSystem = false;
 
 // Window size override from command line (-window-size WxH).
 // 0 means use default from EngineSettings.

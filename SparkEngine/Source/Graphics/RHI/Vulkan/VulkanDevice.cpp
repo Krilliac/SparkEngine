@@ -25,6 +25,17 @@
 #include <cstring>
 #include <set>
 
+#if defined(SPARK_SDL2_AVAILABLE) && !defined(_WIN32)
+// SDL2 owns the native window on Linux/macOS, so we go through
+// SDL_Vulkan_CreateSurface to get a VkSurfaceKHR without pulling in
+// xlib/xcb/wayland-client ourselves. This avoids the null-surface
+// segfault that hits vkGetPhysicalDeviceSurfaceCapabilitiesKHR inside
+// VulkanSwapChain::CreateSwapChain when the platform-specific surface
+// creation branch is missing.
+#include <SDL.h>
+#include <SDL_vulkan.h>
+#endif
+
 namespace Spark
 {
     namespace RHI
@@ -312,8 +323,23 @@ namespace Spark
                     if (hasInstanceExt(VK_KHR_WIN32_SURFACE_EXTENSION_NAME))
                         extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
 #elif defined(__linux__)
+                    // Enable every Linux windowing-system surface extension
+                    // the ICD advertises. SDL2 picks whichever matches its
+                    // video driver (xlib by default, xcb/wayland if the env
+                    // has been configured that way), and we don't know which
+                    // until SDL_Vulkan_CreateSurface runs — so enable the
+                    // superset now so surface creation can't fail later for
+                    // a trivial missing-extension reason.
                     if (hasInstanceExt(VK_KHR_XCB_SURFACE_EXTENSION_NAME))
                         extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#ifdef VK_USE_PLATFORM_XLIB_KHR
+                    if (hasInstanceExt(VK_KHR_XLIB_SURFACE_EXTENSION_NAME))
+                        extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+#endif
+#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+                    if (hasInstanceExt(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME))
+                        extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+#endif
 #endif
                 }
 
@@ -539,48 +565,56 @@ namespace Spark
                 }
 #endif
 
-                // Build extension list — software devices don't need VK_KHR_swapchain
+                // Enumerate device extensions once so we can conditionally
+                // request everything the ICD actually advertises.
+                uint32_t extCount = 0;
+                vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
+                std::vector<VkExtensionProperties> availableExts(extCount);
+                vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, availableExts.data());
+
+                auto hasExt = [&](const char* name)
+                {
+                    for (const auto& e : availableExts)
+                        if (std::strcmp(e.extensionName, name) == 0)
+                            return true;
+                    return false;
+                };
+
+                // Build extension list. VK_KHR_swapchain is required for
+                // windowed rendering — including on software devices like
+                // Mesa Lavapipe, which advertises VK_KHR_swapchain when
+                // the matching host libs are present. The old "software
+                // devices don't need VK_KHR_swapchain" shortcut was wrong
+                // for SDL_WINDOW_VULKAN runs over llvmpipe: vkCreateDevice
+                // would succeed without swapchain support, then
+                // vkCreateSwapchainKHR's function pointer would be NULL
+                // and VulkanSwapChain::CreateSwapChain would SIGABRT.
+                // Request swapchain whenever the extension is advertised.
                 std::vector<const char*> enabledExtensions;
-                if (!m_isSoftwareDevice)
+                if (hasExt(VK_KHR_SWAPCHAIN_EXTENSION_NAME))
+                    enabledExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+                const char* rtExts[] = {
+                    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+                    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+                    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+                    VK_KHR_RAY_QUERY_EXTENSION_NAME,
+                };
+                for (const char* ext : rtExts)
                 {
-                    enabledExtensions.assign(m_deviceExtensions.begin(), m_deviceExtensions.end());
+                    if (hasExt(ext))
+                        enabledExtensions.push_back(ext);
                 }
+
+                // VRS for adaptive ray tracing resolution
+                if (hasExt(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME))
+                    enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+
+                // Push descriptors as extension fallback for pre-1.4 devices
+                if (!m_vulkan14Available && hasExt(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME))
                 {
-                    uint32_t extCount = 0;
-                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, nullptr);
-                    std::vector<VkExtensionProperties> availableExts(extCount);
-                    vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &extCount, availableExts.data());
-
-                    auto hasExt = [&](const char* name)
-                    {
-                        for (const auto& e : availableExts)
-                            if (std::strcmp(e.extensionName, name) == 0)
-                                return true;
-                        return false;
-                    };
-
-                    const char* rtExts[] = {
-                        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-                        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-                        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-                        VK_KHR_RAY_QUERY_EXTENSION_NAME,
-                    };
-                    for (const char* ext : rtExts)
-                    {
-                        if (hasExt(ext))
-                            enabledExtensions.push_back(ext);
-                    }
-
-                    // VRS for adaptive ray tracing resolution
-                    if (hasExt(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME))
-                        enabledExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
-
-                    // Push descriptors as extension fallback for pre-1.4 devices
-                    if (!m_vulkan14Available && hasExt(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME))
-                    {
-                        enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
-                        m_pushDescriptorSupported = true;
-                    }
+                    enabledExtensions.push_back(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+                    m_pushDescriptorSupported = true;
                 }
 
                 VkDeviceCreateInfo createInfo = {};
@@ -973,6 +1007,18 @@ namespace Spark
                 if (m_device == VK_NULL_HANDLE || m_instance == VK_NULL_HANDLE)
                     return nullptr;
 
+                // A null window handle means the caller is running headless.
+                // We can't build a presentable swap chain without a window,
+                // and the downstream vkGetPhysicalDeviceSurfaceCapabilitiesKHR
+                // call will segfault if we pass it VK_NULL_HANDLE, so bail
+                // early and let RHIBridge fall back to the next backend.
+                if (desc.windowHandle == nullptr)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "VulkanDevice::CreateSwapChain: null windowHandle — cannot create surface");
+                    return nullptr;
+                }
+
                 VkSurfaceKHR surface = VK_NULL_HANDLE;
 
 #ifdef _WIN32
@@ -982,6 +1028,27 @@ namespace Spark
                 surfaceInfo.hinstance = GetModuleHandle(nullptr);
                 if (vkCreateWin32SurfaceKHR(m_instance, &surfaceInfo, nullptr, &surface) != VK_SUCCESS)
                     return nullptr;
+#elif defined(SPARK_SDL2_AVAILABLE)
+                // On Linux/macOS the RHISwapChainDesc::windowHandle is the
+                // SDL_Window* owned by SparkEngine's SDL2 runtime. Let SDL2
+                // build the platform-specific surface (xlib/xcb/wayland/metal)
+                // for us — this is the only supported path on these platforms.
+                SDL_Window* sdlWindow = static_cast<SDL_Window*>(desc.windowHandle);
+                if (!SDL_Vulkan_CreateSurface(sdlWindow, m_instance, &surface))
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::CreateSwapChain: SDL_Vulkan_CreateSurface failed: %s",
+                                    SDL_GetError());
+                    return nullptr;
+                }
+#else
+                // No surface-creation path compiled in for this platform.
+                // Returning null lets RHIBridge fall through to the next
+                // available backend (e.g. OpenGL) rather than crashing.
+                (void)desc;
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "VulkanDevice::CreateSwapChain: no platform surface support compiled in");
+                return nullptr;
 #endif
 
                 return std::make_unique<VulkanSwapChain>(m_device, m_physicalDevice, surface, desc, m_queueFamilies,

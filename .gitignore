@@ -481,3 +481,7 @@ Testing/
 mmo_data.db
 spark_trace.json
 ThirdParty/dxvk/
+
+# Transient screenshots captured by live editor/engine test runs under
+# Xvfb — these are ephemeral artifacts and should never be committed.
+tmp-screenshots/

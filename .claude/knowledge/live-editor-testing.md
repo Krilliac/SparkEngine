@@ -1,8 +1,180 @@
 # Live Editor Testing on Linux (Software Rendering)
 
-**Last updated:** 2026-04-07
+**Last updated:** 2026-04-15
 **Type:** Pattern
 **Status:** Active
+
+## 2026-04-15 update (part 2) — Vulkan SIGSEGV root cause + real fix
+
+Follow-up on the `SPARK_DISABLE_VULKAN` escape hatch committed earlier
+today. Running the engine under `gdb` gave a concrete backtrace:
+
+```
+Thread 1 (crashed):
+#0 libvulkan.so.1 (??)
+#1 VulkanSwapChain::CreateSwapChain    (VulkanCommandList.cpp:53)
+#2 VulkanDevice::CreateSwapChain       (VulkanDevice.cpp:971)
+#3 RHIBridge::Initialize               (RHIBridge.cpp:311)
+#4 GraphicsEngine::Initialize          (GraphicsEngineLinux.cpp:91)
+#5 main                                (SparkEngineLinux.cpp:683)
+```
+
+The crash is **not** inside `VulkanDevice::Initialize` as I originally
+thought. `VulkanDevice::Initialize` completes successfully — instance,
+physical device, logical device, queues, command pool, etc. all come
+up fine. The SIGSEGV is on the very first line of
+`VulkanSwapChain::CreateSwapChain`:
+
+```cpp
+VkSurfaceKHR m_surface = VK_NULL_HANDLE; // never set on Linux!
+...
+vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physDevice, m_surface, &capabilities);
+```
+
+…and the reason is simple: `VulkanDevice::CreateSwapChain` only had a
+`#ifdef _WIN32` surface-creation branch. On Linux there was no surface
+creation path at all, so `m_surface` stayed `VK_NULL_HANDLE`, and
+`vkGetPhysicalDeviceSurfaceCapabilitiesKHR` promptly dereferenced a
+null surface and died. The Mesa Lavapipe ICD is blameless.
+
+### The real fix (three parts)
+
+1. **`VulkanDevice.h`** — enable XCB + Xlib + Wayland surface macros on
+   Linux so the Vulkan header pulls in all three sets of surface
+   extension names. Also `#undef` Xlib's unqualified macros (`None`,
+   `Status`, `Success`, `Bool`, `True`, `False`, `Always`) that
+   otherwise poison the rest of the engine (`RHICullMode::None` and
+   friends stop compiling).
+
+2. **`VulkanDevice.cpp`** — enable the matching instance extensions
+   (`VK_KHR_xcb_surface`, `VK_KHR_xlib_surface`, `VK_KHR_wayland_surface`)
+   when the ICD advertises them, and add an `#elif defined(SPARK_SDL2_AVAILABLE)`
+   branch to `CreateSwapChain` that calls `SDL_Vulkan_CreateSurface(sdlWindow,
+   m_instance, &surface)`. We also bail early with a `nullptr` return when
+   `desc.windowHandle` is null so the downstream
+   `vkGetPhysicalDeviceSurfaceCapabilitiesKHR` can never be called with
+   `VK_NULL_HANDLE`.
+
+3. **`RHIBridge.cpp`** — fold swap-chain creation into the backend
+   fallback loop. Previously, if `Initialize()` succeeded but
+   `CreateSwapChain()` returned nullptr, the whole `RHIBridge::Initialize`
+   bailed with `return false` — no retry with a different backend.
+   Now a swap-chain failure logs `Backend 'X' failed to create swap
+   chain — trying next`, tears the device down, and loops to the next
+   candidate. This is what makes OpenGL actually get tried when Vulkan
+   can't make a surface.
+
+### Observed behavior now (default, no env vars)
+
+```
+RHIBridge::Initialize 1280x720
+VulkanDevice::Initialize starting
+Vulkan: selected software device 'llvmpipe (LLVM 20.1.2, 256 bits)' (Lavapipe/CPU)
+VulkanDevice::CreateSwapChain: SDL_Vulkan_CreateSurface failed: The specified window isn't a Vulkan window
+Backend 'Vulkan' failed to create swap chain — trying next
+VulkanDevice::Shutdown
+GLDevice::Initialize starting
+OpenGL swap chain: windowed mode (1280x720)
+Preferred backend 'Vulkan' unavailable — fell back to 'OpenGL'
+Initialized on Linux via RHI (OpenGL)
+...120 frames run cleanly, RC=0
+```
+
+No more SIGSEGV. The Vulkan path fails fast with a clear error
+(`SDL_Vulkan_CreateSurface failed: The specified window isn't a Vulkan
+window` — because `SparkEngineLinux::RunSDL2Windowed` creates the SDL
+window with `SDL_WINDOW_OPENGL` and not `SDL_WINDOW_VULKAN`), RHIBridge's
+fallback loop correctly drops to OpenGL, and the engine boots via
+llvmpipe as it should.
+
+`SPARK_DISABLE_VULKAN=1` from the earlier commit **still works** as a
+user-level escape hatch — it short-circuits the loop entirely by
+dropping Vulkan from `GetAvailableBackends()` before the loop even
+runs, which is slightly faster and more explicit in logs. But it is no
+longer required: the default path is crash-free.
+
+### Follow-up — enabling real Vulkan rendering on Linux
+
+The above fix makes Vulkan **fail cleanly**. To actually render via
+Vulkan on Linux, `RunSDL2Windowed()` in `SparkEngineLinux.cpp` would
+need to:
+
+1. Decide at startup whether Vulkan or OpenGL is the preferred backend
+   (currently hardcoded to `SDL_WINDOW_OPENGL`).
+2. Create the SDL window with `SDL_WINDOW_VULKAN` instead when Vulkan
+   is preferred.
+3. Load libvulkan via `SDL_Vulkan_LoadLibrary` before creating the
+   instance.
+
+That is a separate, larger change and is not blocking anything today
+— OpenGL/llvmpipe is the working path for headless Linux CI.
+
+### Test coverage
+- Full `SparkTests` suite: 5660 passed / 0 failed / 1 pre-existing
+  flaky-list tolerated warning (5661 total).
+- Live engine boot, default env: RC=0 via Vulkan→OpenGL fallback.
+- Live engine boot, `SPARK_DISABLE_VULKAN=1`: RC=0 via direct OpenGL.
+
+
+## 2026-04-15 update — SPARK_DISABLE_VULKAN env-var escape hatch
+
+On a headless gVisor host with Mesa 25.2.8 Lavapipe, SparkEngine's
+`VulkanDevice::Initialize` **SIGSEGVs (RC=139)** a few milliseconds after
+logging `Vulkan: selected software device 'llvmpipe' (Lavapipe/CPU)`:
+
+```
+[INFO ] RHIBridge::Initialize 1280x720
+[INFO ] VulkanDevice::Initialize starting
+[INFO ] Vulkan: selected software device 'llvmpipe (LLVM 20.1.2, 256 bits)' (Lavapipe/CPU)
+*** Segmentation fault (core dumped), RC=139 ***
+```
+
+`RHIBridge`'s fallback loop is designed to drop to OpenGL when a backend's
+`Initialize()` returns false, but Vulkan **crashes** rather than returning
+a clean failure, so the fallback never runs and the whole engine dies.
+
+**Fix (`SparkEngine/Source/Graphics/RHI/RHIBridge.cpp`):** `GetAvailableBackends()`
+and `GetRecommendedBackend()` now honor three env-var escape hatches:
+
+| Env var | Effect |
+|---|---|
+| `SPARK_DISABLE_VULKAN=1` | Vulkan dropped from the backend list before the fallback loop runs |
+| `SPARK_DISABLE_OPENGL=1` | OpenGL dropped |
+| `SPARK_DISABLE_D3D11=1` | D3D11 dropped (Windows only) |
+
+When a backend is dropped, RHIBridge logs `SPARK_DISABLE_<NAME>=1 — <Name>
+backend skipped` at init time, and the fallback loop picks up the next
+available backend. Setting `SPARK_DISABLE_VULKAN=1` on gVisor produces a
+clean boot through OpenGL/llvmpipe:
+
+```
+[INFO ] SPARK_DISABLE_VULKAN=1 — Vulkan backend skipped
+[INFO ] GLDevice::Initialize starting
+[INFO ] Existing EGL context detected (SDL2/host-owned) — skipping EGL bootstrap
+[INFO ] OpenGL 3.3 (Core Profile) Mesa 25.2.8 — Renderer: llvmpipe (LLVM 20.1.2, 256 bits)
+[INFO ] Initialized on Linux via RHI (OpenGL)
+...120 frames run, clean shutdown, RC=0
+```
+
+**Recipe for gVisor/headless Linux runs:**
+
+```bash
+DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+  MESA_GL_VERSION_OVERRIDE=3.3 SPARK_DISABLE_VULKAN=1 SPARK_MAX_WORKER_THREADS=1 \
+  ./SparkEngine -test-frames 120 -threads 1 -no-subprocess -window-size 1280x720
+```
+
+This is the workaround until `VulkanDevice::Initialize` is hardened to
+return `false` instead of SIGSEGVing on broken Lavapipe ICDs.
+
+The previous workaround (`VK_ICD_FILENAMES=/tmp/nonexistent-vk.json`) still
+works as a libvulkan-level escape hatch, but `SPARK_DISABLE_VULKAN=1` is
+cleaner because it's project-level and self-documenting.
+
+Also preserved: explicitly passing `backend=GraphicsBackend::None` with a
+valid window handle still routes to `NullRHIDevice` (the RHIBridge test
+suite depends on this). The env-var filter only affects GPU backends.
+
 
 ## Description
 

@@ -453,6 +453,7 @@ add_executable(SparkTests
     TestFPSGameplayIntegration.cpp
     TestGLSLPipelineIntegration.cpp
     TestHResultPlatform.cpp
+    TestEngineBootPlatforms.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
     # Comprehensive subsystem coverage
@@ -631,6 +632,15 @@ endif()
 if(ENABLE_MOBILE)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_MOBILE)
 endif()
+
+# Disable LTO for the test executable. ThinLTO + --gc-sections can discard
+# Logger/LogMacros symbols that tests reference only through macro-expanded
+# inline code. CI disables LTO project-wide for Clang (-DENABLE_LTO=OFF);
+# this property is a safety net for local builds.
+set_target_properties(SparkTests PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION OFF
+    INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
+)
 
 # Add to CTest
 enable_testing()

@@ -82,6 +82,10 @@ extern std::unique_ptr<AudioEngine> g_audioEngine;
 extern std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
 extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 extern int g_testFrameLimit;
+extern uint32_t g_maxWorkerThreads;
+extern bool g_noSubprocess;
+extern bool g_minimalInit;
+extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -113,6 +117,54 @@ static int ParseTestFrameLimit(LPWSTR cmdLine)
     catch (const std::exception&)
     {
         return 0;
+    }
+}
+
+/**
+ * @brief Parse -threads N from a wide command line string (Windows).
+ *
+ * Controls the size of the JobSystem worker pool. Returns 0 (meaning
+ * "use the default of hardware_concurrency - 1") when the flag is not
+ * provided. Primarily intended for running the engine under Wine on
+ * a sandbox where every worker thread is another roll of the dice
+ * against the gs.base race documented in
+ * `.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md` —
+ * a developer can pass `-threads 1` to minimise the number of Wine
+ * worker threads and maximise the chance of reaching the main loop
+ * on a flaky run. Also honoured via the `SPARK_MAX_WORKER_THREADS`
+ * environment variable (command-line wins on conflict).
+ */
+static uint32_t ParseThreadCount(LPWSTR cmdLine)
+{
+    // Env var fallback first so -threads overrides it when both are set.
+    uint32_t fromEnv = 0;
+    if (const char* env = std::getenv("SPARK_MAX_WORKER_THREADS"))
+    {
+        try
+        {
+            fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env)));
+        }
+        catch (...)
+        {
+        }
+    }
+
+    std::wstring cmd(cmdLine);
+    auto pos = cmd.find(L"-threads");
+    if (pos == std::wstring::npos)
+        return fromEnv;
+    pos += 8; // length of "-threads"
+    while (pos < cmd.size() && cmd[pos] == L' ')
+        ++pos;
+    if (pos >= cmd.size())
+        return fromEnv;
+    try
+    {
+        return static_cast<uint32_t>(std::max(0, std::stoi(std::wstring(cmd.substr(pos)))));
+    }
+    catch (const std::exception&)
+    {
+        return fromEnv;
     }
 }
 
@@ -263,14 +315,26 @@ static bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
 
 /**
  * @brief Attach a Win32 console for headless stdout/stderr/stdin.
+ *
+ * AllocConsole() may fail when the process is already attached to a console
+ * (normal case when invoked from a terminal, including Wine running from a
+ * Linux shell) — fall through to leaving the inherited stdio alone. We only
+ * rebind stdio to CONOUT$/CONIN$ when AllocConsole actually creates a new
+ * console, otherwise freopen_s blocks waiting for a console we don't have.
+ * Under Wine in a headless sandbox (no stdin), the stdin rebind would also
+ * hang, so we try it last and tolerate failure.
  */
 static void AllocHeadlessConsole()
 {
-    AllocConsole();
-    FILE* fp = nullptr;
-    freopen_s(&fp, "CONOUT$", "w", stdout);
-    freopen_s(&fp, "CONOUT$", "w", stderr);
-    freopen_s(&fp, "CONIN$", "r", stdin);
+    if (AllocConsole())
+    {
+        FILE* fp = nullptr;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
+        freopen_s(&fp, "CONIN$", "r", stdin);
+    }
+    // SetConsoleCtrlHandler still works with an inherited console and is
+    // the primary way we catch Ctrl+C for graceful shutdown.
     SetConsoleCtrlHandler(HeadlessCtrlHandler, TRUE);
 }
 
@@ -299,7 +363,14 @@ static bool InitHeadlessEngineContext()
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem();
+    if (!g_noJobSystem)
+    {
+        Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "-no-jobsystem: JobSystem worker threads skipped");
+    }
 
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
@@ -349,21 +420,43 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     if (!InitHeadlessEngineContext())
         return 1;
 
+    // Progress breadcrumbs via Logger (SimpleConsole.LogInfo only writes
+    // to an in-memory buffer and is invisible to terminal Wine runs).
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem::Initialize");
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
-    Spark::SimpleConsole::GetInstance().LogInfo("SaveSystem initialized");
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem initialized");
 
     InitConsole();
-    LoadHeadlessModules(lpCmdLine);
-    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
-    Spark::FreezeDetector::GetInstance().Start();
-    Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
-    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
-    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
-    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
-    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
-    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
-    Assert::RegisterConsoleCommands();
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: InitConsole returned");
+
+    // Minimal-init mode skips module loading and all detector singletons.
+    // Each detector's GetInstance() is a Meyers singleton construction and
+    // most of them spawn a worker thread in Start() — every one is another
+    // roll of the dice against the Wine gs.base race on a gVisor sandbox.
+    // The main loop can still run useful engine update ticks without any
+    // of them registered.
+    if (!g_minimalInit)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: LoadHeadlessModules");
+        LoadHeadlessModules(lpCmdLine);
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: detector singletons");
+        Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+        Spark::FreezeDetector::GetInstance().Start();
+        Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
+        Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+        Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+        Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+        Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+        Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
+        Assert::RegisterConsoleCommands();
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: detectors registered");
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core,
+                       "RunHeadlessWindows: LoadHeadlessModules + detectors skipped (-minimal-init)");
+    }
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -371,8 +464,23 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     console.LogInfo("Starting headless server loop (60 Hz)...");
     console.LogInfo("Press Ctrl+C or type 'quit' to stop.");
 
+    if (g_testFrameLimit > 0)
+        console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
+
+    int frameCount = 0;
+
     while (!g_shutdownRequested)
     {
+        // Honor -test-frames N for automated smoke testing under Wine/CI.
+        // Matches the behaviour already present in SparkEngineLinux.cpp's
+        // RunHeadlessLinux — without this parity the Windows headless loop
+        // runs forever even on -test-frames and CI jobs time out.
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        {
+            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            break;
+        }
+
         SPARK_HEARTBEAT();
         auto tickStart = std::chrono::steady_clock::now();
 
@@ -403,6 +511,8 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
             console.Update();
         });
 
+        ++frameCount;
+
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
         if (elapsed < TICK_INTERVAL)
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
@@ -414,6 +524,9 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     g_fileCache.reset();
     ShutdownEngine();
 
+    // Only free the console if we successfully allocated one in
+    // AllocHeadlessConsole. Calling FreeConsole on an inherited console
+    // detaches us from the parent's console, which we don't want.
     FreeConsole();
     return 0;
 }
@@ -444,7 +557,14 @@ static void InitEngineContext()
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem();
+    if (!g_noJobSystem)
+    {
+        Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "-no-jobsystem: JobSystem worker threads skipped");
+    }
 
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
@@ -696,16 +816,32 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 // ===================================================================================
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-    ASSERT(hInstance != nullptr);
-
-    SetupCrashHandler();
-
-    // Initialize the unified Logger with a stderr sink as the very first
-    // engine action so early init SPARK_LOG_* calls are visible. Matches
-    // the same fix applied on the Linux path (SparkEngineLinux.cpp main).
-    // The later InitializeDebugSystemsImpl ClearSinks()+AddSink() keeps
-    // this idempotent.
+    // SparkEngine is linked as a GUI-subsystem PE (add_executable(... WIN32)),
+    // which means stdout/stderr/stdin handles are NOT automatically connected
+    // to the parent terminal — under Wine in a console, fprintf(stderr, ...)
+    // from wWinMain silently discards its output, making early-init crashes
+    // invisible in `tools/wine-run.sh`. AttachConsole(ATTACH_PARENT_PROCESS)
+    // hooks us up to the parent's console if there is one, and we rebind
+    // stdio via freopen so the CRT's stderr is pointed at the right HANDLE.
+    // On a native Windows double-click launch there's no parent console,
+    // AttachConsole returns FALSE, and we fall back to the usual GUI
+    // behaviour (nothing visible on stdio, which is what GUI apps do).
+    if (AttachConsole(ATTACH_PARENT_PROCESS))
+    {
+        FILE* fp = nullptr;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
+        // Don't rebind stdin: under Wine in a headless sandbox there's no
+        // interactive input, and CONIN$ can block during open.
+    }
+    // Initialize the unified Logger with a stderr sink as the *very first*
+    // engine action — before SetupCrashHandler, before anything that could
+    // fault — so any crash in EngineSettings or the crash handler install
+    // path itself is visible. Previously this block lived after
+    // SetupCrashHandler and a crash during settings load would leave us
+    // with no output at all. Matches the Linux path ordering in
+    // SparkEngineLinux.cpp::main. The later InitializeDebugSystemsImpl
+    // ClearSinks()+AddSink() keeps this idempotent.
     {
         auto& earlyLogger = Spark::Logger::Get();
         earlyLogger.Initialize(/*enableAsync=*/false);
@@ -716,7 +852,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     // when debugging a cross-host issue. No-op on native Windows.
     Spark::LogWineEnvironmentIfApplicable();
 
+    SPARK_TRACE_ENTER(Spark::LogCategory::Core);
+    ASSERT(hInstance != nullptr);
+
+    SetupCrashHandler();
+
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
+    g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
+    g_noSubprocess = (std::wstring(lpCmdLine).find(L"-no-subprocess") != std::wstring::npos);
+    g_minimalInit = (std::wstring(lpCmdLine).find(L"-minimal-init") != std::wstring::npos);
+    g_noJobSystem = (std::wstring(lpCmdLine).find(L"-no-jobsystem") != std::wstring::npos);
     ParseWindowSizeOverride(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT

@@ -62,6 +62,19 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export WINEPREFIX="${WINEPREFIX:-$PROJECT_ROOT/build/.wineprefix}"
 export WINEDEBUG="${WINEDEBUG:--all}"  # Suppress Wine debug spam by default
 
+# Ensure wineserver is killed on script exit — even if the caller's
+# `timeout` or Ctrl+C leaves a half-dead Wine process tree. Without
+# this, a flaky Wine run (common on gVisor-class sandboxes where the
+# gs.base race sometimes outruns the LD_PRELOAD shim) can leave
+# orphaned wineserver processes holding the prefix lock, breaking
+# subsequent runs until manually cleared.
+cleanup_wineserver() {
+    local wineserver_bin
+    wineserver_bin="$(command -v wineserver 2>/dev/null || echo "$(dirname "$WINE")/wineserver")"
+    [ -x "$wineserver_bin" ] && "$wineserver_bin" --kill 2>/dev/null || true
+}
+trap cleanup_wineserver EXIT INT TERM
+
 # Use Lavapipe (software Vulkan) if no GPU is available
 if [ -z "${VK_ICD_FILENAMES:-}" ]; then
     for icd in \
@@ -110,6 +123,10 @@ info() {
     echo "[wine-run] $*"
 }
 
+warn() {
+    echo "[wine-run] WARN: $*" >&2
+}
+
 error() {
     echo "[wine-run] ERROR: $*" >&2
     exit 1
@@ -131,11 +148,22 @@ error() {
 # Resolution order (stop at the first match that can actually execute a
 # 64-bit .exe):
 #   1. Env override: $WINE
-#   2. `wine64` on $PATH (cleanest, modern distros)
-#   3. `/usr/lib/wine/wine64` direct path (bypasses the wrapper)
-#   4. `wine` on $PATH as a last resort (may fail with 32-bit .exe)
+#   2. `/opt/wine-patched/bin/wine64` if `tools/build-wine-patched.sh` has
+#      installed a SparkEngine-patched Wine (gVisor-compat — see
+#      `.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md`)
+#   3. `wine64` on $PATH (cleanest, modern distros)
+#   4. `/usr/lib/wine/wine64` direct path (bypasses the wrapper)
+#   5. `wine` on $PATH as a last resort (may fail with 32-bit .exe)
 if [ -n "${WINE:-}" ]; then
     :  # explicit override — honor as-is
+elif [ -x "/opt/wine-patched/bin/wine64" ]; then
+    WINE="/opt/wine-patched/bin/wine64"
+    export WINELOADER="${WINELOADER:-/opt/wine-patched/bin/wine64}"
+    info "Using SparkEngine-patched Wine at /opt/wine-patched (gVisor-compat)"
+elif [ -x "/opt/wine-patched/bin/wine" ]; then
+    WINE="/opt/wine-patched/bin/wine"
+    export WINELOADER="${WINELOADER:-/opt/wine-patched/bin/wine}"
+    info "Using SparkEngine-patched Wine at /opt/wine-patched (gVisor-compat)"
 elif command -v wine64 &>/dev/null; then
     WINE="wine64"
 elif [ -x "/usr/lib/wine/wine64" ]; then
@@ -244,11 +272,87 @@ probe_wine_environment() {
 }
 
 setup_wineprefix() {
-    if [ ! -d "$WINEPREFIX/drive_c" ]; then
+    # Pre-populate drive_c/windows/system32 with Wine's shipped Windows DLLs
+    # BEFORE running wineboot. Under gVisor-class sandboxes, wineboot's own
+    # service startup races with the broken Wine signal delivery and often
+    # leaves system32 empty, so a subsequent wine64 run fails with
+    # `could not load kernel32.dll, status c0000135`. Hand-populating
+    # ensures kernel32/ntdll/user32/etc. are present regardless of whether
+    # wineboot itself completes cleanly.
+    #
+    # The source directory `/usr/lib/x86_64-linux-gnu/wine/x86_64-windows`
+    # ships with Ubuntu's libwine package and contains the same set of DLLs
+    # wineboot would symlink in. Copying is slightly wasteful vs symlinking
+    # but makes the prefix self-contained for archival/relocation.
+    local sys32="$WINEPREFIX/drive_c/windows/system32"
+    local wine_dll_src="/usr/lib/x86_64-linux-gnu/wine/x86_64-windows"
+    if [ ! -f "$sys32/kernel32.dll" ] && [ -d "$wine_dll_src" ]; then
+        mkdir -p "$sys32"
+        info "Pre-populating $sys32 from $wine_dll_src"
+        cp "$wine_dll_src"/*.dll "$sys32/" 2>/dev/null || true
+    fi
+
+    # Disable explorer.exe and winemenubuilder.exe during wineboot. Both
+    # try to create X11 windows, which fails hard in a headless sandbox
+    # and takes the rest of wineboot with it. Setting the override only
+    # affects this session — the prefix's registry is untouched so a
+    # later graphical run (with a real DISPLAY) still works.
+    export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-explorer.exe,winemenubuilder.exe=d}"
+
+    if [ ! -f "$WINEPREFIX/system.reg" ]; then
         info "Initializing Wine prefix at $WINEPREFIX"
-        WINEDEBUG=-all wineboot --init 2>/dev/null || true
+        WINEDEBUG=-all "${WINE}" wineboot --init 2>/dev/null || true
         # Wait for wineserver to finish
-        wineserver --wait 2>/dev/null || true
+        "${WINE%wine64}wineserver" --wait 2>/dev/null || true
+
+        # Under gVisor-class sandboxes wineboot often crashes partway
+        # through because services.exe / explorer.exe both lose the
+        # gs.base race. Drop a minimal stub system.reg so the
+        # `if [ ! -f system.reg ]` guard above short-circuits on the
+        # next run — we only need the prefix to LOOK initialized for
+        # Wine to skip its own auto-wineboot. The DLLs we already
+        # copied from $wine_dll_src give SparkEngine.exe everything it
+        # needs to link at load time.
+        if [ ! -f "$WINEPREFIX/system.reg" ]; then
+            warn "wineboot --init did not create system.reg (sandbox likely)"
+            warn "Writing a stub system.reg so future runs skip wineboot"
+            cat > "$WINEPREFIX/system.reg" <<'REGEOF'
+WINE REGISTRY Version 2
+;; Minimal stub written by tools/wine-run.sh to let Wine skip auto-
+;; wineboot on prefixes where the real wineboot failed mid-init
+;; (typically gVisor-class sandboxes where the gs.base race kills
+;; services.exe). SparkEngine.exe only needs kernel32 / ntdll / user32
+;; to resolve imports, which are satisfied by the DLLs we copied into
+;; drive_c/windows/system32 directly. This stub satisfies Wine's
+;; "prefix already exists" check so subsequent launches go straight
+;; to the guest binary without re-running wineboot.
+
+[Software\\Wine] 0
+REGEOF
+            touch "$WINEPREFIX/user.reg" "$WINEPREFIX/userdef.reg"
+        fi
+
+        # Disable the Wine crash debugger auto-attach regardless of whether
+        # the real wineboot succeeded or we fell through to the stub
+        # system.reg above. Without this, an unhandled page fault makes
+        # Wine print "Unhandled page fault ... starting debugger..." and
+        # then block forever waiting for winedbg to attach — which on
+        # gVisor-class sandboxes doesn't work (winedbg itself loses the
+        # same gs.base race) and hangs the parent process indefinitely.
+        #
+        # Append AeDebug entries to system.reg if they aren't already
+        # present. We do this as a direct text append (rather than via
+        # `wine reg add`) so it works even when the prefix is in the
+        # semi-broken state where wineboot failed — reg.exe would lose
+        # the gs.base race the same way winedbg does.
+        if ! grep -q 'AeDebug' "$WINEPREFIX/system.reg" 2>/dev/null; then
+            cat >> "$WINEPREFIX/system.reg" <<'REGEOF'
+
+[Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug] 0
+"Auto"="0"
+REGEOF
+        fi
+
         info "Wine prefix ready"
     fi
 }
@@ -277,9 +381,15 @@ detect_dxvk() {
         cp -f "$dxvk_path/d3d11.dll" "$sys32/" 2>/dev/null || true
         cp -f "$dxvk_path/dxgi.dll" "$sys32/" 2>/dev/null || true
 
-        # Tell Wine to use the native DLLs
-        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
-        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
+        # Tell Wine to use the native DXVK DLLs. We set both via the
+        # environment variable (honoured at guest startup) AND via
+        # `wine reg add` with a short timeout. The env var is always
+        # safe; the reg add is best-effort and must not hang. On a
+        # sandbox where wineboot is broken, `wine reg add` can block
+        # trying to auto-init the prefix, so cap it at 5 seconds.
+        export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-}${WINEDLLOVERRIDES:+,}d3d11=n,b;dxgi=n,b"
+        timeout 5 "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d11 /t REG_SZ /d native /f 2>/dev/null || true
+        timeout 5 "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v dxgi /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else
@@ -309,7 +419,8 @@ detect_vkd3d() {
         local sys32="$WINEPREFIX/drive_c/windows/system32"
         cp -f "$vkd3d_path/d3d12.dll" "$sys32/" 2>/dev/null || true
 
-        "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
+        export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-}${WINEDLLOVERRIDES:+,}d3d12=n,b"
+        timeout 5 "${WINE}" reg add 'HKCU\Software\Wine\DllOverrides' /v d3d12 /t REG_SZ /d native /f 2>/dev/null || true
         wineserver --wait 2>/dev/null || true
         return 0
     else
@@ -584,5 +695,67 @@ info "Running: ${WINE} $EXE $*"
 info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
 info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
 
+# LD_PRELOAD shim that patches Wine's segv_handler + arch_prctl(ARCH_SET_GS)
+# path under gVisor. Auto-activates when tools/gvisor-wine-shim.so exists.
+# Build with: make -C tools gvisor-wine-shim.so
+#
+# The shim is strictly additive on hosts where Wine's native SEH already
+# works, so defaulting it on costs nothing. Opt out explicitly with
+# SPARK_WINE_GVISOR_SHIM=0 if you want to disable it (e.g. to reproduce
+# the unshimmed cascade for debugging).
+_shim="${PROJECT_ROOT}/tools/gvisor-wine-shim.so"
+if [ "${SPARK_WINE_GVISOR_SHIM:-auto}" != "0" ] && [ -f "${_shim}" ]; then
+    export LD_PRELOAD="${_shim}${LD_PRELOAD:+:${LD_PRELOAD}}"
+    info "  gVisor shim: ${_shim}"
+elif [ "${SPARK_WINE_GVISOR_SHIM:-auto}" = "1" ]; then
+    info "  gVisor shim: not built — run 'make -C tools gvisor-wine-shim.so'"
+fi
+
+# Auto-append sandbox-safe engine flags when running SparkEngine.exe and
+# the caller hasn't supplied the same flag already. See the .claude
+# knowledge entry wine-user-space-hacks-2026-04-15.md for the full
+# rationale. Each of these minimises the number of threads / subprocesses
+# / detector singletons the engine spawns, maximising the chance of the
+# engine reaching its main loop on a gVisor-class sandbox where every
+# extra thread is another roll of the dice against the Wine gs.base race.
+#
+# Opt out with SPARK_WINE_NO_AUTO_FLAGS=1. On non-SparkEngine.exe targets
+# (SparkTests.exe, hello.exe, etc.) this block is a no-op.
+EXE_BASENAME="$(basename -- "$EXE")"
+EXTRA_ARGS=()
+if [ "${SPARK_WINE_NO_AUTO_FLAGS:-0}" != "1" ] && [ "$EXE_BASENAME" = "SparkEngine.exe" ]; then
+    # Only append a flag if it isn't already in "$@" — callers can still
+    # override by passing the flag explicitly. Note the `shift` after
+    # capturing the needle, otherwise the function's own $@ still contains
+    # the needle in slot 1 and `for arg in "$@"` reports it as present.
+    _have_flag() {
+        local needle="$1"
+        shift
+        for arg in "$@"; do
+            [ "$arg" = "$needle" ] && return 0
+        done
+        return 1
+    }
+    if ! _have_flag "-headless" "$@"; then
+        EXTRA_ARGS+=("-headless")
+        info "  auto-flag: -headless"
+    fi
+    if ! _have_flag "-threads" "$@"; then
+        EXTRA_ARGS+=("-threads" "1")
+        info "  auto-flag: -threads 1"
+    fi
+    if ! _have_flag "-no-subprocess" "$@"; then
+        EXTRA_ARGS+=("-no-subprocess")
+        info "  auto-flag: -no-subprocess"
+    fi
+    if ! _have_flag "-minimal-init" "$@"; then
+        EXTRA_ARGS+=("-minimal-init")
+        info "  auto-flag: -minimal-init"
+    fi
+    if ! _have_flag "-no-jobsystem" "$@"; then
+        EXTRA_ARGS+=("-no-jobsystem")
+        info "  auto-flag: -no-jobsystem"
+    fi
+fi
 # Run under Wine
-exec "${WINE}" "$EXE" "$@"
+exec "${WINE}" "$EXE" "$@" "${EXTRA_ARGS[@]}"

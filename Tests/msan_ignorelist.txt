@@ -23,6 +23,9 @@ src:*/imgui_*.cpp
 # tinyobjloader
 src:*/ThirdParty/Utils/tinyobjloader/*
 
+# SDL2 — C library incompatible with MSan instrumentation
+src:*/ThirdParty/SDL2/*
+
 # miniz
 src:*/ThirdParty/Utils/miniz/*
 

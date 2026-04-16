@@ -210,6 +210,96 @@ namespace Spark
 } // namespace Spark
 
 // ============================================================================
+// std::expected polyfill (for compilers where __cpp_lib_expected is absent)
+// ============================================================================
+
+#ifdef SPARK_HAS_EXPECTED
+#include <expected>
+#else
+
+namespace std
+{
+    template <typename E> class unexpected
+    {
+      public:
+        explicit unexpected(E e) : m_error(static_cast<E&&>(e)) {}
+        const E& error() const& { return m_error; }
+        E& error() & { return m_error; }
+
+      private:
+        E m_error;
+    };
+
+    template <typename T, typename E> class expected
+    {
+      public:
+        expected(T val) : m_hasValue(true) { new (&m_val) T(static_cast<T&&>(val)); }                  // NOLINT
+        expected(unexpected<E> u) : m_hasValue(false) { new (&m_err) E(static_cast<E&&>(u.error())); } // NOLINT
+        ~expected()
+        {
+            if (m_hasValue)
+                m_val.~T();
+            else
+                m_err.~E();
+        }
+        expected(const expected& o) : m_hasValue(o.m_hasValue)
+        {
+            if (m_hasValue)
+                new (&m_val) T(o.m_val);
+            else
+                new (&m_err) E(o.m_err);
+        }
+        expected(expected&& o) noexcept : m_hasValue(o.m_hasValue)
+        {
+            if (m_hasValue)
+                new (&m_val) T(static_cast<T&&>(o.m_val));
+            else
+                new (&m_err) E(static_cast<E&&>(o.m_err));
+        }
+        expected& operator=(const expected&) = delete;
+        expected& operator=(expected&&) = delete;
+
+        explicit operator bool() const { return m_hasValue; }
+        bool has_value() const { return m_hasValue; }
+
+        T& value() { return m_val; }
+        const T& value() const { return m_val; }
+        T& operator*() { return m_val; }
+        const T& operator*() const { return m_val; }
+        T* operator->() { return &m_val; }
+        const T* operator->() const { return &m_val; }
+
+        const E& error() const { return m_err; }
+
+      private:
+        bool m_hasValue;
+        union
+        {
+            T m_val;
+            E m_err;
+        };
+    };
+
+    // Specialization for expected<void, E>
+    template <typename E> class expected<void, E>
+    {
+      public:
+        expected() : m_hasError(false) {}                                                   // success
+        expected(unexpected<E> u) : m_hasError(true), m_err(static_cast<E&&>(u.error())) {} // NOLINT
+
+        explicit operator bool() const { return !m_hasError; }
+        bool has_value() const { return !m_hasError; }
+        void value() const {}
+        const E& error() const { return m_err; }
+
+      private:
+        bool m_hasError;
+        E m_err{};
+    };
+} // namespace std
+#endif // SPARK_HAS_EXPECTED
+
+// ============================================================================
 // Windows: Use native types
 // ============================================================================
 

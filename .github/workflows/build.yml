@@ -160,7 +160,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -250,7 +252,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 
     - name: Build
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -335,6 +339,7 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
+          -DENABLE_SDL2=OFF \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -345,7 +350,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
 
     - name: Build (SparkTests only)
-      run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -417,10 +424,14 @@ jobs:
           build-windows-vs2022-${{ matrix.config }}-
 
     - name: Configure CMake (VS 2022 / v143)
+      shell: bash
       run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 2>&1 | tee cmake-configure.log
 
     - name: Build
-      run: cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
+      shell: bash
+      run: |
+        set -o pipefail
+        cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
 
     - name: Print sccache stats
       if: always()
@@ -428,7 +439,10 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
+      shell: bash
+      run: |
+        set -o pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
 
     - name: Extract error summary
       if: failure()
@@ -588,24 +602,28 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        find build -name '*.pch' -delete 2>/dev/null || true
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
     - name: Run Tests
-      run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
+      run: |
+        set -o pipefail
+        cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Assert Vulkan preset is enabled (Release gate)
       if: matrix.config == 'Release'
-      run: |
-        cmake --preset linux-gcc-release
-        grep -q "ENABLE_VULKAN:BOOL=ON" build/linux-gcc-release/CMakeCache.txt
+      run: grep -q "ENABLE_VULKAN:BOOL=ON" build/CMakeCache.txt
 
     - name: Assert Vulkan shader compile parity test ran (Release gate)
       if: matrix.config == 'Release'
       run: |
+        echo "Test results: $(wc -l < test-results.log) lines"
         grep -q "VulkanParity_ShaderCompilePath_Asserted" test-results.log
         grep -q "VulkanParity_D3D11MilestoneSnapshot" test-results.log
 
@@ -686,20 +704,28 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
+          -DENABLE_LTO=OFF \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        # Remove stale PCH files — cached build dirs may have PCH built against
+        # older system headers (e.g. unistd_64.h mtime changes after apt-get).
+        find build -name '*.pch' -delete 2>/dev/null || true
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
     - name: Run Tests
-      run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
+      run: |
+        set -o pipefail
+        cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Extract error summary
       if: failure()
@@ -788,7 +814,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build (Windows .exe via MinGW)
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -887,7 +915,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build
-      run: cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -895,7 +925,9 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
+      run: |
+        set -o pipefail
+        cd build && ./bin/SparkTests 2>&1 | tee ../test-results.log
 
     - name: Extract error summary
       if: failure()

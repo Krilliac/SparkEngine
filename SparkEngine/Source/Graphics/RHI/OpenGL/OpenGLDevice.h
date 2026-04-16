@@ -31,6 +31,16 @@
 #ifdef SPARK_EGL_SUPPORT
 #include <EGL/egl.h>
 #else
+// VulkanDevice.h #undefs X11 macros (Bool, Status, None, etc.) after its
+// Vulkan include to prevent collisions with C++ identifiers.  GLX headers
+// need those macros, so restore them before pulling in glx.h.  Re-including
+// <X11/Xlib.h> is a no-op (include guard), so we redefine directly.
+#ifndef Bool
+#define Bool int
+#endif
+#ifndef Status
+#define Status int
+#endif
 #include <GL/glx.h>
 // glxext.h provides ARB extension typedefs (e.g. PFNGLXCREATECONTEXTATTRIBSARBPROC)
 #if __has_include(<GL/glxext.h>)

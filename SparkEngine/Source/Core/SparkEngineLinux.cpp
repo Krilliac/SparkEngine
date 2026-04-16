@@ -17,6 +17,8 @@
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/GraphicsConsoleCommands.h"
+#include "Graphics/RHI/RHIBridge.h"
+#include "Graphics/RHI/RHIFactory.h"
 #include "Input/InputManager.h"
 #include "Audio/AudioEngine.h"
 #include "Audio/AudioBackendFactory.h"
@@ -57,6 +59,7 @@
 #include <cstring>
 #ifdef SPARK_SDL2_AVAILABLE
 #include <SDL.h>
+#include <SDL_vulkan.h>
 #endif
 #include <atomic>
 #include <memory>
@@ -80,6 +83,10 @@ extern std::unique_ptr<AudioEngine> g_audioEngine;
 extern std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
 extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
 extern int g_testFrameLimit;
+extern uint32_t g_maxWorkerThreads;
+extern bool g_noSubprocess;
+extern bool g_minimalInit;
+extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
 extern void InitPhysics();
@@ -115,6 +122,25 @@ static int ParseTestFrameLimitArgs(int argc, char* argv[])
             return std::max(0, std::atoi(argv[i + 1]));
     }
     return 0;
+}
+
+/**
+ * @brief Parse -threads N from argv, with SPARK_MAX_WORKER_THREADS env
+ *        fallback. Command line wins on conflict. See the Windows path's
+ *        ParseThreadCount for the full rationale.
+ */
+static uint32_t ParseThreadCountArgs(int argc, char* argv[])
+{
+    uint32_t fromEnv = 0;
+    if (const char* env = std::getenv("SPARK_MAX_WORKER_THREADS"))
+        fromEnv = static_cast<uint32_t>(std::max(0, std::atoi(env)));
+
+    for (int i = 1; i < argc - 1; ++i)
+    {
+        if (strcmp(argv[i], "-threads") == 0 || strcmp(argv[i], "--threads") == 0)
+            return static_cast<uint32_t>(std::max(0, std::atoi(argv[i + 1])));
+    }
+    return fromEnv;
 }
 
 static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
@@ -302,7 +328,14 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     InitPhysics();
 
     Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
-    Spark::EngineSetup::InitializeJobSystem();
+    if (!g_noJobSystem)
+    {
+        Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "-no-jobsystem: JobSystem worker threads skipped");
+    }
 
     if (!Spark::SaveSystem::GetInstance().Initialize("Saves"))
     {
@@ -424,16 +457,28 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
     InitConsole();
 
-    InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
-    Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
-    Spark::FreezeDetector::GetInstance().Start();
-    Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
-    Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
-    Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
-    Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
-    Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
-    Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
-    Assert::RegisterConsoleCommands();
+    // Minimal-init mode skips module loading and all detector singletons.
+    // See SparkEngine.cpp::g_minimalInit for the full rationale — on a
+    // gVisor sandbox every detector thread is another roll of the dice
+    // against the Wine gs.base race, and the main loop runs fine without
+    // any of them registered.
+    if (!g_minimalInit)
+    {
+        InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
+        Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+        Spark::FreezeDetector::GetInstance().Start();
+        Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
+        Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+        Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+        Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+        Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+        Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
+        Assert::RegisterConsoleCommands();
+    }
+    else
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
+    }
 
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
@@ -764,43 +809,153 @@ static int RunSDL2Windowed(int argc, char* argv[])
     int winW = g_windowWidthOverride > 0 ? g_windowWidthOverride : settings.Graphics().windowWidth;
     int winH = g_windowHeightOverride > 0 ? g_windowHeightOverride : settings.Graphics().windowHeight;
 
-    // Set OpenGL attributes before window creation (required for Mesa/llvmpipe)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    // Decide which graphics backend to use *before* creating the window.
+    // SDL2 requires the backend-specific flag at window creation time:
+    // SDL_WINDOW_VULKAN for Vulkan, SDL_WINDOW_OPENGL for OpenGL. There
+    // is no way to retrofit a Vulkan surface onto an OpenGL window (or
+    // vice versa) after the fact, so this decision is one-shot.
+    //
+    // GetRecommendedBackend() honors SPARK_DISABLE_VULKAN / _OPENGL /
+    // _D3D11 env-var escape hatches, so users who hit a broken Vulkan
+    // ICD can set SPARK_DISABLE_VULKAN=1 and this branch will pick
+    // OpenGL instead — matching what the RHIBridge will also choose.
+    bool preferVulkan = false;
+    {
+        const char* sdlDriver = SDL_GetCurrentVideoDriver();
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 video driver: %s", sdlDriver ? sdlDriver : "<null>");
+
+        const auto recommended = Spark::RHI::RHIBridge::GetRecommendedBackend();
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RunSDL2Windowed: recommended backend = %s",
+                       Spark::RHI::GetBackendName(recommended));
+
+        // Drivers that don't support Vulkan at all (SDL_Vulkan_LoadLibrary
+        // will always fail against them). Detect upfront so we don't even
+        // attempt the Vulkan path — makes the log cleaner on headless CI
+        // and sandboxed hosts where x11 isn't reachable.
+        const bool driverHasVulkan =
+            sdlDriver && (std::strcmp(sdlDriver, "x11") == 0 || std::strcmp(sdlDriver, "wayland") == 0 ||
+                          std::strcmp(sdlDriver, "cocoa") == 0 || std::strcmp(sdlDriver, "windows") == 0 ||
+                          std::strcmp(sdlDriver, "KMSDRM") == 0);
+
+        if (recommended == Spark::RHI::GraphicsBackend::Vulkan && driverHasVulkan)
+        {
+            // Try to load libvulkan through SDL. If it isn't installed
+            // on this host, fall straight back to OpenGL and tell the
+            // engine the same via the existing env-var opt-out, so
+            // RHIBridge doesn't try to spin up VulkanDevice only to
+            // discover libvulkan isn't there.
+            if (SDL_Vulkan_LoadLibrary(nullptr) == 0)
+            {
+                preferVulkan = true;
+                SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 Vulkan loader initialized — creating Vulkan window");
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "SDL_Vulkan_LoadLibrary failed: %s — falling back to OpenGL", SDL_GetError());
+                setenv("SPARK_DISABLE_VULKAN", "1", /*overwrite=*/1);
+            }
+        }
+        else if (recommended == Spark::RHI::GraphicsBackend::Vulkan && !driverHasVulkan)
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                           "SDL2 driver '%s' has no Vulkan support — falling back to OpenGL",
+                           sdlDriver ? sdlDriver : "<null>");
+            setenv("SPARK_DISABLE_VULKAN", "1", /*overwrite=*/1);
+        }
+    }
+
+    if (!preferVulkan)
+    {
+        // OpenGL path — set attributes before window creation (required
+        // for Mesa llvmpipe and other software rasterizers).
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    }
 
     Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     if (settings.Graphics().fullscreen)
         windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    windowFlags |= SDL_WINDOW_OPENGL;
+    windowFlags |= preferVulkan ? SDL_WINDOW_VULKAN : SDL_WINDOW_OPENGL;
 
     SDL_Window* window =
         SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
     if (!window)
     {
         Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
+        if (preferVulkan)
+            SDL_Vulkan_UnloadLibrary();
         SDL_Quit();
         return -1;
     }
 
-    // Create SDL GL context and make it current before engine graphics init.
-    // This ensures Mesa llvmpipe and other software renderers work correctly —
-    // the GraphicsEngine can then share or skip its own bootstrap context.
-    SDL_GLContext glContext = SDL_GL_CreateContext(window);
-    if (!glContext)
+    // OpenGL needs an SDL-owned GL context up front so the engine's
+    // OpenGLDevice can detect it and skip its own EGL/GLX bootstrap.
+    // Vulkan has no matching pre-init step — VulkanDevice pulls the
+    // surface out of SDL_Vulkan_CreateSurface() inside CreateSwapChain().
+    SDL_GLContext glContext = nullptr;
+    if (!preferVulkan)
     {
-        Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_GL_CreateContext failed: ") + SDL_GetError() +
-                                                       " — engine will try headless fallback");
+        glContext = SDL_GL_CreateContext(window);
+        if (!glContext)
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_GL_CreateContext failed: ") +
+                                                           SDL_GetError() + " — engine will try headless fallback");
+        }
+        else
+        {
+            SDL_GL_MakeCurrent(window, glContext);
+            SDL_GL_SetSwapInterval(1);
+            Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created successfully");
+        }
     }
     else
     {
-        SDL_GL_MakeCurrent(window, glContext);
-        SDL_GL_SetSwapInterval(1);
-        Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created successfully");
+        // Vulkan was preferred but RHIBridge may fall back to OpenGL if
+        // VulkanDevice fails. Pre-set GL attributes so a context can be
+        // created on a recreated window if needed (see fallback below).
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    }
+
+    // If the engine was created with a Vulkan window but GraphicsEngine
+    // fell back to OpenGL (Vulkan loaded but couldn't create a usable
+    // surface/device), recreate the window with OpenGL flags and create
+    // a GL context so the fallback backend can actually render.
+    if (preferVulkan && g_graphics)
+    {
+        auto* rhiDevice = g_graphics->GetRHIDevice();
+        bool vulkanActive = rhiDevice && rhiDevice->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
+        if (!vulkanActive && !g_graphics->IsHeadless())
+        {
+            Spark::SimpleConsole::GetInstance().LogInfo(
+                "Vulkan backend unavailable — recreating window with OpenGL support");
+            SDL_DestroyWindow(window);
+            windowFlags = (windowFlags & ~SDL_WINDOW_VULKAN) | SDL_WINDOW_OPENGL;
+            window = SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH,
+                                      windowFlags);
+            if (window)
+            {
+                glContext = SDL_GL_CreateContext(window);
+                if (glContext)
+                {
+                    SDL_GL_MakeCurrent(window, glContext);
+                    SDL_GL_SetSwapInterval(1);
+                }
+                g_graphics->Shutdown();
+                g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
+            }
+        }
     }
 
     InitializeSDL2Subsystems(window, argc, argv);
@@ -810,6 +965,8 @@ static int RunSDL2Windowed(int argc, char* argv[])
     if (glContext)
         SDL_GL_DeleteContext(glContext);
     SDL_DestroyWindow(window);
+    if (preferVulkan)
+        SDL_Vulkan_UnloadLibrary();
     SDL_Quit();
     return 0;
 }
@@ -902,6 +1059,10 @@ int main(int argc, char* argv[])
     try
     {
         g_testFrameLimit = ParseTestFrameLimitArgs(argc, argv);
+        g_maxWorkerThreads = ParseThreadCountArgs(argc, argv);
+        g_noSubprocess = ParseFlag(argc, argv, "-no-subprocess");
+        g_minimalInit = ParseFlag(argc, argv, "-minimal-init");
+        g_noJobSystem = ParseFlag(argc, argv, "-no-jobsystem");
         ParseWindowSizeOverrideArgs(argc, argv);
 
 #ifdef SPARK_HEADLESS_SUPPORT
