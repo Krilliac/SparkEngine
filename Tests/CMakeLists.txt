@@ -469,6 +469,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkDaemon/src/AssetService.cpp"
     # Engine-side daemon wiring (Phase 3b)
     TestShaderDiskCacheDaemon.cpp
+    # Engine-level daemon lifecycle (Phase 3c)
+    TestDaemonLifecycle.cpp
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp
