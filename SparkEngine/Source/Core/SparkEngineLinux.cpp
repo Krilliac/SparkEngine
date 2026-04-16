@@ -914,6 +914,49 @@ static int RunSDL2Windowed(int argc, char* argv[])
             Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created successfully");
         }
     }
+    else
+    {
+        // Vulkan was preferred but RHIBridge may fall back to OpenGL if
+        // VulkanDevice fails. Pre-set GL attributes so a context can be
+        // created on a recreated window if needed (see fallback below).
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    }
+
+    // If the engine was created with a Vulkan window but GraphicsEngine
+    // fell back to OpenGL (Vulkan loaded but couldn't create a usable
+    // surface/device), recreate the window with OpenGL flags and create
+    // a GL context so the fallback backend can actually render.
+    if (preferVulkan && g_graphics)
+    {
+        auto* rhiDevice = g_graphics->GetRHIDevice();
+        bool vulkanActive = rhiDevice && rhiDevice->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
+        if (!vulkanActive && !g_graphics->IsHeadless())
+        {
+            Spark::SimpleConsole::GetInstance().LogInfo(
+                "Vulkan backend unavailable — recreating window with OpenGL support");
+            SDL_DestroyWindow(window);
+            windowFlags = (windowFlags & ~SDL_WINDOW_VULKAN) | SDL_WINDOW_OPENGL;
+            window = SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH,
+                                      windowFlags);
+            if (window)
+            {
+                glContext = SDL_GL_CreateContext(window);
+                if (glContext)
+                {
+                    SDL_GL_MakeCurrent(window, glContext);
+                    SDL_GL_SetSwapInterval(1);
+                }
+                g_graphics->Shutdown();
+                g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
+            }
+        }
+    }
 
     InitializeSDL2Subsystems(window, argc, argv);
     RunSDL2MainLoop();

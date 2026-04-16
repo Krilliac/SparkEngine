@@ -69,7 +69,8 @@ export WINEDEBUG="${WINEDEBUG:--all}"  # Suppress Wine debug spam by default
 # orphaned wineserver processes holding the prefix lock, breaking
 # subsequent runs until manually cleared.
 cleanup_wineserver() {
-    local wineserver_bin="${WINE%wine64}wineserver"
+    local wineserver_bin
+    wineserver_bin="$(command -v wineserver 2>/dev/null || echo "$(dirname "$WINE")/wineserver")"
     [ -x "$wineserver_bin" ] && "$wineserver_bin" --kill 2>/dev/null || true
 }
 trap cleanup_wineserver EXIT INT TERM
