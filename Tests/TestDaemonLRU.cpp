@@ -341,4 +341,94 @@ TEST(AssetLRU_ReloadAfterRestartRespectsLimit)
     std::filesystem::remove_all(cacheDir, ec);
 }
 
+// =========================================================================
+// evictionCount wire coverage (Phase 5 follow-up)
+// =========================================================================
+
+TEST(ShaderLRU_StatsReportEvictionCount)
+{
+    ShaderService svc;
+    svc.SetMaxBytes(300); // holds 3 x 100-byte entries
+
+    EXPECT_EQ(ShaderStats(svc).evictionCount, 0u);
+
+    ShaderPut(svc, 1, 0, 0, Blob(100, 0x01));
+    ShaderPut(svc, 2, 0, 0, Blob(100, 0x02));
+    ShaderPut(svc, 3, 0, 0, Blob(100, 0x03));
+    EXPECT_EQ(ShaderStats(svc).evictionCount, 0u); // nothing evicted yet
+
+    ShaderPut(svc, 4, 0, 0, Blob(100, 0x04)); // evicts key=1
+    ShaderPut(svc, 5, 0, 0, Blob(100, 0x05)); // evicts key=2
+    EXPECT_EQ(ShaderStats(svc).evictionCount, 2u);
+}
+
+TEST(ShaderLRU_ClearCacheResetsEvictionCount)
+{
+    ShaderService svc;
+    svc.SetMaxBytes(200);
+    ShaderPut(svc, 1, 0, 0, Blob(100, 0x01));
+    ShaderPut(svc, 2, 0, 0, Blob(100, 0x02));
+    ShaderPut(svc, 3, 0, 0, Blob(100, 0x03)); // evicts key=1
+    EXPECT_EQ(ShaderStats(svc).evictionCount, 1u);
+
+    auto resp = svc.HandleMessage(static_cast<uint16_t>(ShaderMessage::ClearCacheRequest), {});
+    EXPECT_TRUE(resp.has_value());
+    EXPECT_EQ(ShaderStats(svc).evictionCount, 0u);
+}
+
+TEST(AssetLRU_StatsReportEvictionCount)
+{
+    AssetService svc;
+    svc.SetMaxBytes(300);
+
+    EXPECT_EQ(AssetStats(svc).evictionCount, 0u);
+
+    AssetPut(svc, "a.png", 0, Blob(100, 0x01));
+    AssetPut(svc, "b.png", 0, Blob(100, 0x02));
+    AssetPut(svc, "c.png", 0, Blob(100, 0x03));
+    EXPECT_EQ(AssetStats(svc).evictionCount, 0u);
+
+    AssetPut(svc, "d.png", 0, Blob(100, 0x04));
+    AssetPut(svc, "e.png", 0, Blob(100, 0x05));
+    AssetPut(svc, "f.png", 0, Blob(100, 0x06));
+    EXPECT_EQ(AssetStats(svc).evictionCount, 3u);
+}
+
+TEST(ShaderCacheStats_DecoderToleratesLegacyPayload)
+{
+    // Prior to the Phase 5 follow-up, the payload was 4 x uint64 (32 bytes).
+    // Simulate an older daemon by encoding only the first four fields; the
+    // decoder should succeed and leave evictionCount at its default zero.
+    Spark::BinaryWriter w;
+    w.Write<uint64_t>(11u); // entryCount
+    w.Write<uint64_t>(22u); // totalBytes
+    w.Write<uint64_t>(33u); // hitCount
+    w.Write<uint64_t>(44u); // missCount
+    auto legacy = w.TakeBuffer();
+    EXPECT_EQ(legacy.size(), 32u);
+
+    ShaderCacheStats decoded;
+    EXPECT_TRUE(DecodeShaderCacheStats(legacy, decoded));
+    EXPECT_EQ(decoded.entryCount, 11u);
+    EXPECT_EQ(decoded.missCount, 44u);
+    EXPECT_EQ(decoded.evictionCount, 0u);
+}
+
+TEST(AssetCacheStats_DecoderToleratesLegacyPayload)
+{
+    Spark::BinaryWriter w;
+    w.Write<uint64_t>(5u);
+    w.Write<uint64_t>(6u);
+    w.Write<uint64_t>(7u);
+    w.Write<uint64_t>(8u);
+    auto legacy = w.TakeBuffer();
+    EXPECT_EQ(legacy.size(), 32u);
+
+    AssetCacheStats decoded;
+    EXPECT_TRUE(DecodeAssetCacheStats(legacy, decoded));
+    EXPECT_EQ(decoded.entryCount, 5u);
+    EXPECT_EQ(decoded.missCount, 8u);
+    EXPECT_EQ(decoded.evictionCount, 0u);
+}
+
 #endif // POSIX

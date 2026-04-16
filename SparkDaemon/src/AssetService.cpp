@@ -191,6 +191,7 @@ namespace Spark::Daemon
         }
         stats.hitCount = m_hitCount.load(std::memory_order_relaxed);
         stats.missCount = m_missCount.load(std::memory_order_relaxed);
+        stats.evictionCount = m_evictionCount.load(std::memory_order_relaxed);
 
         ServiceResponse out;
         out.messageType = static_cast<uint16_t>(AssetMessage::GetCacheStatsResponse);
