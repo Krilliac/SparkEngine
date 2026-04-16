@@ -8,8 +8,12 @@
 #include "RHIFactory.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
-#include <fstream>
+#include "../../Utils/WineDetection.h"
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <string>
 
 // Backend headers (conditionally included)
 #ifdef _WIN32
@@ -71,8 +75,102 @@ namespace Spark
             return backends;
         }
 
+        // Resolve a backend name (from env var / command line) to a
+        // GraphicsBackend enum. Case-insensitive. Returns GraphicsBackend::Auto
+        // if the name is empty or not recognized, letting the caller fall
+        // back to the normal auto-selection path.
+        static GraphicsBackend ParseBackendName(const char* name)
+        {
+            if (name == nullptr || name[0] == '\0')
+            {
+                return GraphicsBackend::Auto;
+            }
+            std::string lower;
+            lower.reserve(16);
+            for (const char* p = name; *p != '\0'; ++p)
+            {
+                lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(*p))));
+            }
+            if (lower == "null" || lower == "none" || lower == "headless")
+            {
+                return GraphicsBackend::None;
+            }
+            if (lower == "d3d11" || lower == "dx11" || lower == "directx11")
+            {
+                return GraphicsBackend::D3D11;
+            }
+            if (lower == "d3d12" || lower == "dx12" || lower == "directx12")
+            {
+                return GraphicsBackend::D3D12;
+            }
+            if (lower == "vulkan" || lower == "vk")
+            {
+                return GraphicsBackend::Vulkan;
+            }
+            if (lower == "opengl" || lower == "gl")
+            {
+                return GraphicsBackend::OpenGL;
+            }
+            if (lower == "metal" || lower == "mtl")
+            {
+                return GraphicsBackend::Metal;
+            }
+            if (lower == "auto" || lower == "default")
+            {
+                return GraphicsBackend::Auto;
+            }
+            return GraphicsBackend::Auto;
+        }
+
         GraphicsBackend GetRecommendedBackend()
         {
+            // Env-var override — equivalent of a command-line `-rhi=<name>`
+            // flag for launchers that don't control argv (e.g. the editor
+            // host, CI runners invoking the binary via wine-run.sh, anything
+            // wrapped by SparkBuild). Honored before the platform default so
+            // a developer can force e.g. NullRHI or OpenGL on a CPU-only host
+            // without recompiling. See
+            // .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md —
+            // action item #5.
+            if (const char* env = std::getenv("SPARK_RHI_BACKEND"))
+            {
+                GraphicsBackend parsed = ParseBackendName(env);
+                if (parsed == GraphicsBackend::None)
+                {
+                    SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                                   "SPARK_RHI_BACKEND=%s — forcing NullRHIDevice (headless)", env);
+                    return GraphicsBackend::None;
+                }
+                if (parsed != GraphicsBackend::Auto)
+                {
+                    if (IsBackendAvailable(parsed))
+                    {
+                        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SPARK_RHI_BACKEND=%s — using %s", env,
+                                       GetBackendName(parsed));
+                        return parsed;
+                    }
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "SPARK_RHI_BACKEND=%s — backend '%s' is not available in this build, "
+                                   "falling back to auto-selection",
+                                   env, GetBackendName(parsed));
+                    // Fall through to normal auto-selection below.
+                }
+            }
+
+            // Under gVisor, D3D11 auto-selection routes through DXVK →
+            // Vulkan → software ICD and Wine signal handling is known-broken
+            // (see .claude/knowledge/wine-gvisor-incompatibility.md). Prefer
+            // NullRHIDevice so the engine comes up cleanly instead of looping
+            // in Wine's segv_handler. The user can still override with
+            // SPARK_RHI_BACKEND=d3d11 if they've installed the gVisor shim.
+            if (Spark::IsRunningUnderGvisor())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                               "gVisor detected — recommending NullRHIDevice to avoid Wine signal-handler "
+                               "incompatibility. Override with SPARK_RHI_BACKEND=<backend> if needed");
+                return GraphicsBackend::None;
+            }
+
             auto backends = DetectAvailableBackends();
 
             if (backends.empty())

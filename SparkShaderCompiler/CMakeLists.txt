@@ -19,6 +19,11 @@ set(RHI_SOURCES
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI/RHIFactory.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/DebugHookManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/Logger.cpp"
+    # WineDetection.cpp is a hard dependency of RHIFactory since
+    # GetRecommendedBackend() now calls IsRunningUnderGvisor() to auto-select
+    # NullRHIDevice under gVisor. See
+    # .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md action item #4.
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/WineDetection.cpp"
 )
 
 # Backend implementation files (needed by RHIFactory::CreateDevice)
