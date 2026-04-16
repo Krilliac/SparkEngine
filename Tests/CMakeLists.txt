@@ -456,6 +456,11 @@ add_executable(SparkTests
     TestEngineBootPlatforms.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
+    # SparkDaemon foundation (Phase 1)
+    TestDaemonProtocol.cpp
+    TestDaemonFoundation.cpp
+    "${CMAKE_SOURCE_DIR}/SparkDaemon/src/DaemonServer.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkDaemon/src/ControlService.cpp"
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp
@@ -486,6 +491,7 @@ add_executable(SparkTests
 target_include_directories(SparkTests PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source"
+    "${CMAKE_SOURCE_DIR}/SparkDaemon/src"
     "${CMAKE_SOURCE_DIR}/ThirdParty"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameOpenWorld/Source"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source"

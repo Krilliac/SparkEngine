@@ -77,6 +77,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | Reflection & polymorphism refactoring (Phase 1+2+8B done, FieldInfo attrs, ReflectionSerializer, UITypedBinding\<T\>) | [knowledge/reflection-polymorphism-refactoring-plan-2026-04-12.md](knowledge/reflection-polymorphism-refactoring-plan-2026-04-12.md) | Plan | Active | 2026-04-12 |
 | Project priorities session (OpenGL rendering fix + 94 integration tests for 7 critical systems) | [knowledge/project-priorities-session-2026-04-12.md](knowledge/project-priorities-session-2026-04-12.md) | Observation | Active | 2026-04-12 |
 | SparkDaemon services architecture (Asset, Shader, Collab Broker, Build Monitor — 4 phases) | [knowledge/daemon-services-architecture-2026-04-16.md](knowledge/daemon-services-architecture-2026-04-16.md) | Plan | Active | 2026-04-16 |
+| SparkDaemon Phase 1 foundation implemented (protocol + client + server + Control service + executable, 10 new tests) | [knowledge/daemon-phase-1-foundation-2026-04-16.md](knowledge/daemon-phase-1-foundation-2026-04-16.md) | Observation | Active | 2026-04-16 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-16)
