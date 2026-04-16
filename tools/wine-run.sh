@@ -62,6 +62,18 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export WINEPREFIX="${WINEPREFIX:-$PROJECT_ROOT/build/.wineprefix}"
 export WINEDEBUG="${WINEDEBUG:--all}"  # Suppress Wine debug spam by default
 
+# Ensure wineserver is killed on script exit — even if the caller's
+# `timeout` or Ctrl+C leaves a half-dead Wine process tree. Without
+# this, a flaky Wine run (common on gVisor-class sandboxes where the
+# gs.base race sometimes outruns the LD_PRELOAD shim) can leave
+# orphaned wineserver processes holding the prefix lock, breaking
+# subsequent runs until manually cleared.
+cleanup_wineserver() {
+    local wineserver_bin="${WINE%wine64}wineserver"
+    [ -x "$wineserver_bin" ] && "$wineserver_bin" --kill 2>/dev/null || true
+}
+trap cleanup_wineserver EXIT INT TERM
+
 # Use Lavapipe (software Vulkan) if no GPU is available
 if [ -z "${VK_ICD_FILENAMES:-}" ]; then
     for icd in \
@@ -317,6 +329,27 @@ WINE REGISTRY Version 2
 [Software\\Wine] 0
 REGEOF
             touch "$WINEPREFIX/user.reg" "$WINEPREFIX/userdef.reg"
+        fi
+
+        # Disable the Wine crash debugger auto-attach regardless of whether
+        # the real wineboot succeeded or we fell through to the stub
+        # system.reg above. Without this, an unhandled page fault makes
+        # Wine print "Unhandled page fault ... starting debugger..." and
+        # then block forever waiting for winedbg to attach — which on
+        # gVisor-class sandboxes doesn't work (winedbg itself loses the
+        # same gs.base race) and hangs the parent process indefinitely.
+        #
+        # Append AeDebug entries to system.reg if they aren't already
+        # present. We do this as a direct text append (rather than via
+        # `wine reg add`) so it works even when the prefix is in the
+        # semi-broken state where wineboot failed — reg.exe would lose
+        # the gs.base race the same way winedbg does.
+        if ! grep -q 'AeDebug' "$WINEPREFIX/system.reg" 2>/dev/null; then
+            cat >> "$WINEPREFIX/system.reg" <<'REGEOF'
+
+[Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug] 0
+"Auto"="0"
+REGEOF
         fi
 
         info "Wine prefix ready"
@@ -661,17 +694,20 @@ info "Running: ${WINE} $EXE $*"
 info "  Vulkan ICD: ${VK_ICD_FILENAMES:-<system default>}"
 info "  DXVK cache: ${DXVK_STATE_CACHE_PATH:-<disabled>}"
 
-# Optional LD_PRELOAD shim to patch Wine's segv_handler under gVisor.
-# Build with: gcc -shared -fPIC -o tools/gvisor-wine-shim.so tools/gvisor-wine-shim.c -ldl
-# Enable by setting SPARK_WINE_GVISOR_SHIM=1 (auto-detects tools/gvisor-wine-shim.so).
-if [ "${SPARK_WINE_GVISOR_SHIM:-0}" = "1" ]; then
-    _shim="${PROJECT_ROOT}/tools/gvisor-wine-shim.so"
-    if [ -f "${_shim}" ]; then
-        export LD_PRELOAD="${_shim}${LD_PRELOAD:+:${LD_PRELOAD}}"
-        info "  gVisor shim: ${_shim}"
-    else
-        info "  gVisor shim: not built — run 'make -C tools gvisor-wine-shim.so'"
-    fi
+# LD_PRELOAD shim that patches Wine's segv_handler + arch_prctl(ARCH_SET_GS)
+# path under gVisor. Auto-activates when tools/gvisor-wine-shim.so exists.
+# Build with: make -C tools gvisor-wine-shim.so
+#
+# The shim is strictly additive on hosts where Wine's native SEH already
+# works, so defaulting it on costs nothing. Opt out explicitly with
+# SPARK_WINE_GVISOR_SHIM=0 if you want to disable it (e.g. to reproduce
+# the unshimmed cascade for debugging).
+_shim="${PROJECT_ROOT}/tools/gvisor-wine-shim.so"
+if [ "${SPARK_WINE_GVISOR_SHIM:-auto}" != "0" ] && [ -f "${_shim}" ]; then
+    export LD_PRELOAD="${_shim}${LD_PRELOAD:+:${LD_PRELOAD}}"
+    info "  gVisor shim: ${_shim}"
+elif [ "${SPARK_WINE_GVISOR_SHIM:-auto}" = "1" ]; then
+    info "  gVisor shim: not built — run 'make -C tools gvisor-wine-shim.so'"
 fi
 
 # Auto-append sandbox-safe engine flags when running SparkEngine.exe and
@@ -714,6 +750,10 @@ if [ "${SPARK_WINE_NO_AUTO_FLAGS:-0}" != "1" ] && [ "$EXE_BASENAME" = "SparkEngi
     if ! _have_flag "-minimal-init" "$@"; then
         EXTRA_ARGS+=("-minimal-init")
         info "  auto-flag: -minimal-init"
+    fi
+    if ! _have_flag "-no-jobsystem" "$@"; then
+        EXTRA_ARGS+=("-no-jobsystem")
+        info "  auto-flag: -no-jobsystem"
     fi
 fi
 # Run under Wine
