@@ -76,6 +76,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | GPU/CPU separation plan (7 splits done, 4 deferred, portability + wiring + RHI parity roadmap) | [knowledge/gpu-cpu-separation-plan-2026-04-12.md](knowledge/gpu-cpu-separation-plan-2026-04-12.md) | Plan | Active | 2026-04-12 |
 | Reflection & polymorphism refactoring (Phase 1+2+8B done, FieldInfo attrs, ReflectionSerializer, UITypedBinding\<T\>) | [knowledge/reflection-polymorphism-refactoring-plan-2026-04-12.md](knowledge/reflection-polymorphism-refactoring-plan-2026-04-12.md) | Plan | Active | 2026-04-12 |
 | Project priorities session (OpenGL rendering fix + 94 integration tests for 7 critical systems) | [knowledge/project-priorities-session-2026-04-12.md](knowledge/project-priorities-session-2026-04-12.md) | Observation | Active | 2026-04-12 |
+| SparkDaemon services architecture (Asset, Shader, Collab Broker, Build Monitor — 4 phases) | [knowledge/daemon-services-architecture-2026-04-16.md](knowledge/daemon-services-architecture-2026-04-16.md) | Plan | Active | 2026-04-16 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-16)
