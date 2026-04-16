@@ -339,6 +339,7 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
+          -DENABLE_SDL2=OFF \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
