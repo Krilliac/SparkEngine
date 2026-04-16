@@ -160,7 +160,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -250,7 +252,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
 
     - name: Build
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -345,7 +349,9 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=memory -stdlib=libc++"
 
     - name: Build (SparkTests only)
-      run: cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) --target SparkTests 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -420,7 +426,9 @@ jobs:
       run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 2>&1 | tee cmake-configure.log
 
     - name: Build
-      run: cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
 
     - name: Print sccache stats
       if: always()
@@ -588,7 +596,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -693,7 +703,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -791,7 +803,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build (Windows .exe via MinGW)
-      run: cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
@@ -890,7 +904,9 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
     - name: Build
-      run: cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
