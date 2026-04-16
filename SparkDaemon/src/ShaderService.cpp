@@ -1,6 +1,6 @@
 /**
  * @file ShaderService.cpp
- * @brief Shader blob cache service (Phase 2a in-memory + Phase 2b disk persistence).
+ * @brief Shader blob cache service (Phase 2a in-memory + 2b disk + Phase 5 LRU).
  */
 
 #include "ShaderService.h"
@@ -54,10 +54,18 @@ namespace Spark::Daemon
                 continue;
 
             m_totalBytes += blob.size();
-            m_entries.emplace(*parsed, std::move(blob));
+            m_lruList.push_front(Entry{*parsed, std::move(blob)});
+            m_index.emplace(*parsed, m_lruList.begin());
             ++loaded;
         }
         return loaded;
+    }
+
+    void ShaderService::SetMaxBytes(uint64_t maxBytes)
+    {
+        std::lock_guard lock(m_mutex);
+        m_maxBytes = maxBytes;
+        EvictUntilUnderBudget();
     }
 
     std::optional<ServiceResponse> ShaderService::HandleMessage(uint16_t messageType,
@@ -81,7 +89,7 @@ namespace Spark::Daemon
     size_t ShaderService::GetEntryCount() const
     {
         std::lock_guard lock(m_mutex);
-        return m_entries.size();
+        return m_lruList.size();
     }
 
     ServiceResponse ShaderService::HandleGetCacheEntry(const std::vector<uint8_t>& payload)
@@ -94,11 +102,13 @@ namespace Spark::Daemon
         GetCacheEntryResponse resp;
         {
             std::lock_guard lock(m_mutex);
-            auto it = m_entries.find(key);
-            if (it != m_entries.end())
+            auto it = m_index.find(key);
+            if (it != m_index.end())
             {
                 resp.found = true;
-                resp.blob = it->second;
+                resp.blob = it->second->blob;
+                // Promote to front of LRU list on hit.
+                m_lruList.splice(m_lruList.begin(), m_lruList, it->second);
             }
         }
         if (resp.found)
@@ -122,19 +132,27 @@ namespace Spark::Daemon
         std::vector<uint8_t> blobCopyForDisk;
         {
             std::lock_guard lock(m_mutex);
-            auto [it, inserted] = m_entries.try_emplace(key, std::move(req.blob));
-            if (!inserted)
-            {
-                m_totalBytes -= it->second.size();
-                it->second = std::move(req.blob);
-            }
-            m_totalBytes += it->second.size();
+            InsertOrReplace(key, std::move(req.blob));
+            EvictUntilUnderBudget();
+            // Grab a copy only if the entry survived the eviction pass (if it
+            // didn't, writing it to disk just to delete it on the next call is
+            // pointless).
             if (m_diskBacked)
-                blobCopyForDisk = it->second;
+            {
+                auto it = m_index.find(key);
+                if (it != m_index.end())
+                    blobCopyForDisk = it->second->blob;
+            }
         }
 
-        if (m_diskBacked)
+        if (m_diskBacked && !blobCopyForDisk.empty())
             WriteBlobFile(key, blobCopyForDisk);
+        else if (m_diskBacked)
+        {
+            // Entry was evicted in the same call (or blob was empty). Make
+            // sure no stale disk file lingers under this key.
+            DeleteBlobFile(key);
+        }
 
         ServiceResponse out;
         out.messageType = static_cast<uint16_t>(ShaderMessage::PutCacheEntryResponse);
@@ -146,12 +164,14 @@ namespace Spark::Daemon
         bool deleteFromDisk = false;
         {
             std::lock_guard lock(m_mutex);
-            m_entries.clear();
+            m_lruList.clear();
+            m_index.clear();
             m_totalBytes = 0;
             deleteFromDisk = m_diskBacked;
         }
         m_hitCount.store(0, std::memory_order_relaxed);
         m_missCount.store(0, std::memory_order_relaxed);
+        m_evictionCount.store(0, std::memory_order_relaxed);
 
         if (deleteFromDisk)
             DeleteAllBlobFiles();
@@ -166,7 +186,7 @@ namespace Spark::Daemon
         ShaderCacheStats stats;
         {
             std::lock_guard lock(m_mutex);
-            stats.entryCount = m_entries.size();
+            stats.entryCount = m_lruList.size();
             stats.totalBytes = m_totalBytes;
         }
         stats.hitCount = m_hitCount.load(std::memory_order_relaxed);
@@ -176,6 +196,39 @@ namespace Spark::Daemon
         out.messageType = static_cast<uint16_t>(ShaderMessage::GetCacheStatsResponse);
         out.payload = EncodeShaderCacheStats(stats);
         return out;
+    }
+
+    void ShaderService::InsertOrReplace(const Key& key, std::vector<uint8_t> blob)
+    {
+        auto it = m_index.find(key);
+        if (it != m_index.end())
+        {
+            m_totalBytes -= it->second->blob.size();
+            it->second->blob = std::move(blob);
+            m_totalBytes += it->second->blob.size();
+            m_lruList.splice(m_lruList.begin(), m_lruList, it->second);
+            return;
+        }
+        m_lruList.push_front(Entry{key, std::move(blob)});
+        m_index.emplace(key, m_lruList.begin());
+        m_totalBytes += m_lruList.front().blob.size();
+    }
+
+    void ShaderService::EvictUntilUnderBudget()
+    {
+        if (m_maxBytes == 0)
+            return;
+        while (m_totalBytes > m_maxBytes && !m_lruList.empty())
+        {
+            Entry& victim = m_lruList.back();
+            m_totalBytes -= victim.blob.size();
+            Key evictedKey = victim.key;
+            m_index.erase(evictedKey);
+            m_lruList.pop_back();
+            m_evictionCount.fetch_add(1, std::memory_order_relaxed);
+            if (m_diskBacked)
+                DeleteBlobFile(evictedKey);
+        }
     }
 
     ServiceResponse ShaderService::MakeError(const std::string& message) const
@@ -250,6 +303,12 @@ namespace Spark::Daemon
             return false;
         }
         return true;
+    }
+
+    void ShaderService::DeleteBlobFile(const Key& key)
+    {
+        std::error_code ec;
+        std::filesystem::remove(BlobPath(key), ec);
     }
 
     void ShaderService::DeleteAllBlobFiles()

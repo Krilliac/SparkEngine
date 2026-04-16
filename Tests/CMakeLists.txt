@@ -473,6 +473,8 @@ add_executable(SparkTests
     TestDaemonLifecycle.cpp
     # Concurrent clients + StatsRequest (Phase 4)
     TestDaemonConcurrent.cpp
+    # LRU cache eviction (Phase 5)
+    TestDaemonLRU.cpp
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp

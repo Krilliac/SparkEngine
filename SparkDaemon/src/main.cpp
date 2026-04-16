@@ -3,12 +3,16 @@
  * @brief SparkDaemon entry point.
  *
  * Usage:
- *   SparkDaemon [--socket <path>] [--cache-dir <path>] [--asset-cache-dir <path>]
+ *   SparkDaemon [--socket <path>]
+ *               [--cache-dir <path>] [--shader-cache-max-mb <N>]
+ *               [--asset-cache-dir <path>] [--asset-cache-max-mb <N>]
  *
  * Defaults:
- *   --socket            `./.spark-daemon.sock`
- *   --cache-dir         disabled (in-memory shader cache only)
- *   --asset-cache-dir   disabled (in-memory asset cache only)
+ *   --socket                 `./.spark-daemon.sock`
+ *   --cache-dir              disabled (in-memory shader cache only)
+ *   --shader-cache-max-mb    0  (unbounded)
+ *   --asset-cache-dir        disabled (in-memory asset cache only)
+ *   --asset-cache-max-mb     0  (unbounded)
  *
  * The socket file is removed on clean shutdown. SIGINT / SIGTERM trigger a
  * graceful exit. `--cache-dir` enables shader blob persistence (loaded on
@@ -61,6 +65,20 @@ int main(int argc, char** argv)
     std::string socketPath = DefaultSocketPath();
     std::string cacheDir;
     std::string assetCacheDir;
+    uint64_t shaderMaxBytes = 0;
+    uint64_t assetMaxBytes = 0;
+    auto parseMb = [](const char* s, uint64_t& out) -> bool
+    {
+        try
+        {
+            out = static_cast<uint64_t>(std::stoull(s)) * 1024ull * 1024ull;
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+    };
     for (int i = 1; i < argc; ++i)
     {
         std::string_view arg = argv[i];
@@ -76,9 +94,27 @@ int main(int argc, char** argv)
         {
             assetCacheDir = argv[++i];
         }
+        else if (arg == "--shader-cache-max-mb" && i + 1 < argc)
+        {
+            if (!parseMb(argv[++i], shaderMaxBytes))
+            {
+                std::fprintf(stderr, "SparkDaemon: invalid --shader-cache-max-mb value '%s'\n", argv[i]);
+                return 2;
+            }
+        }
+        else if (arg == "--asset-cache-max-mb" && i + 1 < argc)
+        {
+            if (!parseMb(argv[++i], assetMaxBytes))
+            {
+                std::fprintf(stderr, "SparkDaemon: invalid --asset-cache-max-mb value '%s'\n", argv[i]);
+                return 2;
+            }
+        }
         else if (arg == "--help" || arg == "-h")
         {
-            std::puts("SparkDaemon [--socket <path>] [--cache-dir <path>] [--asset-cache-dir <path>]");
+            std::puts("SparkDaemon [--socket <path>]\n"
+                      "            [--cache-dir <path>] [--shader-cache-max-mb <N>]\n"
+                      "            [--asset-cache-dir <path>] [--asset-cache-max-mb <N>]");
             return 0;
         }
         else
@@ -103,6 +139,12 @@ int main(int argc, char** argv)
         }
         std::printf("SparkDaemon: shader cache %s (%zu entries loaded)\n", cacheDir.c_str(), *loaded);
     }
+    if (shaderMaxBytes > 0)
+    {
+        shader->SetMaxBytes(shaderMaxBytes);
+        std::printf("SparkDaemon: shader cache capped at %llu MB (LRU eviction)\n",
+                    static_cast<unsigned long long>(shaderMaxBytes / (1024ull * 1024ull)));
+    }
     server.AddService(std::move(shader));
 
     auto asset = std::make_unique<Spark::Daemon::AssetService>();
@@ -115,6 +157,12 @@ int main(int argc, char** argv)
             return 1;
         }
         std::printf("SparkDaemon: asset cache %s (%zu entries loaded)\n", assetCacheDir.c_str(), *loaded);
+    }
+    if (assetMaxBytes > 0)
+    {
+        asset->SetMaxBytes(assetMaxBytes);
+        std::printf("SparkDaemon: asset cache capped at %llu MB (LRU eviction)\n",
+                    static_cast<unsigned long long>(assetMaxBytes / (1024ull * 1024ull)));
     }
     server.AddService(std::move(asset));
 

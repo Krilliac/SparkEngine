@@ -1,6 +1,6 @@
 /**
  * @file AssetService.cpp
- * @brief Asset blob cache service implementation (Phase 3a).
+ * @brief Asset blob cache service (Phase 3a in-memory + 3a disk + Phase 5 LRU).
  */
 
 #include "AssetService.h"
@@ -42,10 +42,18 @@ namespace Spark::Daemon
                 continue;
 
             m_totalBytes += blob.size();
-            m_entries.emplace(std::move(key), std::move(blob));
+            m_lruList.push_front(Entry{std::move(key), std::move(blob)});
+            m_index.emplace(m_lruList.front().key, m_lruList.begin());
             ++loaded;
         }
         return loaded;
+    }
+
+    void AssetService::SetMaxBytes(uint64_t maxBytes)
+    {
+        std::lock_guard lock(m_mutex);
+        m_maxBytes = maxBytes;
+        EvictUntilUnderBudget();
     }
 
     std::optional<ServiceResponse> AssetService::HandleMessage(uint16_t messageType,
@@ -69,7 +77,7 @@ namespace Spark::Daemon
     size_t AssetService::GetEntryCount() const
     {
         std::lock_guard lock(m_mutex);
-        return m_entries.size();
+        return m_lruList.size();
     }
 
     ServiceResponse AssetService::HandleGetAsset(const std::vector<uint8_t>& payload)
@@ -82,11 +90,12 @@ namespace Spark::Daemon
         GetAssetResponse resp;
         {
             std::lock_guard lock(m_mutex);
-            auto it = m_entries.find(key);
-            if (it != m_entries.end())
+            auto it = m_index.find(key);
+            if (it != m_index.end())
             {
                 resp.found = true;
-                resp.blob = it->second;
+                resp.blob = it->second->blob;
+                m_lruList.splice(m_lruList.begin(), m_lruList, it->second);
             }
         }
         if (resp.found)
@@ -108,21 +117,24 @@ namespace Spark::Daemon
 
         Key key{req.key.path, req.key.platform};
         std::vector<uint8_t> blobCopyForDisk;
+        bool entrySurvived = false;
         {
             std::lock_guard lock(m_mutex);
-            auto [it, inserted] = m_entries.try_emplace(key, std::move(req.blob));
-            if (!inserted)
-            {
-                m_totalBytes -= it->second.size();
-                it->second = std::move(req.blob);
-            }
-            m_totalBytes += it->second.size();
-            if (m_diskBacked)
-                blobCopyForDisk = it->second;
+            InsertOrReplace(key, std::move(req.blob));
+            EvictUntilUnderBudget();
+            auto it = m_index.find(key);
+            entrySurvived = (it != m_index.end());
+            if (m_diskBacked && entrySurvived)
+                blobCopyForDisk = it->second->blob;
         }
 
         if (m_diskBacked)
-            WriteBlobFile(key, blobCopyForDisk);
+        {
+            if (entrySurvived)
+                WriteBlobFile(key, blobCopyForDisk);
+            else
+                DeleteBlobFile(key);
+        }
 
         ServiceResponse out;
         out.messageType = static_cast<uint16_t>(AssetMessage::PutAssetResponse);
@@ -138,13 +150,14 @@ namespace Spark::Daemon
         std::vector<Key> removedKeys;
         {
             std::lock_guard lock(m_mutex);
-            for (auto it = m_entries.begin(); it != m_entries.end();)
+            for (auto it = m_lruList.begin(); it != m_lruList.end();)
             {
-                if (it->first.path == req.path)
+                if (it->key.path == req.path)
                 {
-                    m_totalBytes -= it->second.size();
-                    removedKeys.push_back(it->first);
-                    it = m_entries.erase(it);
+                    m_totalBytes -= it->blob.size();
+                    removedKeys.push_back(it->key);
+                    m_index.erase(it->key);
+                    it = m_lruList.erase(it);
                 }
                 else
                 {
@@ -173,7 +186,7 @@ namespace Spark::Daemon
         AssetCacheStats stats;
         {
             std::lock_guard lock(m_mutex);
-            stats.entryCount = m_entries.size();
+            stats.entryCount = m_lruList.size();
             stats.totalBytes = m_totalBytes;
         }
         stats.hitCount = m_hitCount.load(std::memory_order_relaxed);
@@ -183,6 +196,44 @@ namespace Spark::Daemon
         out.messageType = static_cast<uint16_t>(AssetMessage::GetCacheStatsResponse);
         out.payload = EncodeAssetCacheStats(stats);
         return out;
+    }
+
+    void AssetService::InsertOrReplace(Key key, std::vector<uint8_t> blob)
+    {
+        auto it = m_index.find(key);
+        if (it != m_index.end())
+        {
+            m_totalBytes -= it->second->blob.size();
+            it->second->blob = std::move(blob);
+            m_totalBytes += it->second->blob.size();
+            m_lruList.splice(m_lruList.begin(), m_lruList, it->second);
+            return;
+        }
+        m_lruList.push_front(Entry{std::move(key), std::move(blob)});
+        m_index.emplace(m_lruList.front().key, m_lruList.begin());
+        m_totalBytes += m_lruList.front().blob.size();
+    }
+
+    void AssetService::EraseByIterator(EntryIter it)
+    {
+        m_totalBytes -= it->blob.size();
+        m_index.erase(it->key);
+        m_lruList.erase(it);
+    }
+
+    void AssetService::EvictUntilUnderBudget()
+    {
+        if (m_maxBytes == 0)
+            return;
+        while (m_totalBytes > m_maxBytes && !m_lruList.empty())
+        {
+            auto victimIter = std::prev(m_lruList.end());
+            Key evictedKey = victimIter->key;
+            EraseByIterator(victimIter);
+            m_evictionCount.fetch_add(1, std::memory_order_relaxed);
+            if (m_diskBacked)
+                DeleteBlobFile(evictedKey);
+        }
     }
 
     ServiceResponse AssetService::MakeError(const std::string& message) const

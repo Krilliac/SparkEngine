@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <list>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -62,6 +63,13 @@ namespace Spark::Daemon
          */
         std::optional<size_t> Initialize(const std::filesystem::path& cacheDir);
 
+        /**
+         * @brief Cap total cached bytes; oldest entries are evicted on overflow.
+         *
+         * Zero = unbounded (default). Mirrors `ShaderService::SetMaxBytes`.
+         */
+        void SetMaxBytes(uint64_t maxBytes);
+
         std::optional<ServiceResponse> HandleMessage(uint16_t messageType,
                                                      const std::vector<uint8_t>& payload) override;
 
@@ -88,12 +96,25 @@ namespace Spark::Daemon
             }
         };
 
+        struct Entry
+        {
+            Key key;
+            std::vector<uint8_t> blob;
+        };
+        using EntryList = std::list<Entry>;
+        using EntryIter = EntryList::iterator;
+
         ServiceResponse HandleGetAsset(const std::vector<uint8_t>& payload);
         ServiceResponse HandlePutAsset(const std::vector<uint8_t>& payload);
         ServiceResponse HandleInvalidateAsset(const std::vector<uint8_t>& payload);
         ServiceResponse HandleGetCacheStats();
 
         ServiceResponse MakeError(const std::string& message) const;
+
+        // Requires m_mutex held.
+        void EvictUntilUnderBudget();
+        void InsertOrReplace(Key key, std::vector<uint8_t> blob);
+        void EraseByIterator(EntryIter it);
 
         [[nodiscard]] std::filesystem::path BlobPath(const Key& key) const;
         static uint64_t HashPath(const std::string& path) noexcept;
@@ -102,10 +123,13 @@ namespace Spark::Daemon
         void DeleteBlobFile(const Key& key);
 
         mutable std::mutex m_mutex;
-        std::unordered_map<Key, std::vector<uint8_t>, KeyHash> m_entries;
+        EntryList m_lruList;
+        std::unordered_map<Key, EntryIter, KeyHash> m_index;
         uint64_t m_totalBytes = 0;
+        uint64_t m_maxBytes = 0; ///< 0 = unbounded.
         std::atomic<uint64_t> m_hitCount{0};
         std::atomic<uint64_t> m_missCount{0};
+        std::atomic<uint64_t> m_evictionCount{0};
 
         std::filesystem::path m_cacheDir;
         bool m_diskBacked = false;
