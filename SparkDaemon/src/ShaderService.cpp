@@ -1,0 +1,347 @@
+/**
+ * @file ShaderService.cpp
+ * @brief Shader blob cache service (Phase 2a in-memory + 2b disk + Phase 5 LRU).
+ */
+
+#include "ShaderService.h"
+
+#include <cstdio>
+#include <fstream>
+#include <sstream>
+#include <system_error>
+
+namespace Spark::Daemon
+{
+
+    std::optional<size_t> ShaderService::Initialize(const std::filesystem::path& cacheDir)
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(cacheDir, ec);
+        if (ec && !std::filesystem::is_directory(cacheDir, ec))
+            return std::nullopt;
+        if (!std::filesystem::is_directory(cacheDir, ec))
+            return std::nullopt;
+
+        std::lock_guard lock(m_mutex);
+        m_cacheDir = cacheDir;
+        m_diskBacked = true;
+
+        size_t loaded = 0;
+        for (const auto& entry : std::filesystem::directory_iterator(cacheDir, ec))
+        {
+            if (ec)
+                break;
+            if (!entry.is_regular_file())
+                continue;
+            if (entry.path().extension() != ".blob")
+                continue;
+
+            auto parsed = ParseBlobFilename(entry.path().stem().string());
+            if (!parsed)
+                continue;
+
+            std::ifstream in(entry.path(), std::ios::binary);
+            if (!in)
+                continue;
+            in.seekg(0, std::ios::end);
+            auto size = static_cast<size_t>(in.tellg());
+            in.seekg(0, std::ios::beg);
+
+            std::vector<uint8_t> blob(size);
+            if (size > 0)
+                in.read(reinterpret_cast<char*>(blob.data()), static_cast<std::streamsize>(size));
+            if (!in && size > 0)
+                continue;
+
+            m_totalBytes += blob.size();
+            m_lruList.push_front(Entry{*parsed, std::move(blob)});
+            m_index.emplace(*parsed, m_lruList.begin());
+            ++loaded;
+        }
+        return loaded;
+    }
+
+    void ShaderService::SetMaxBytes(uint64_t maxBytes)
+    {
+        std::lock_guard lock(m_mutex);
+        m_maxBytes = maxBytes;
+        EvictUntilUnderBudget();
+    }
+
+    std::optional<ServiceResponse> ShaderService::HandleMessage(uint16_t messageType,
+                                                                const std::vector<uint8_t>& payload)
+    {
+        switch (static_cast<ShaderMessage>(messageType))
+        {
+        case ShaderMessage::GetCacheEntryRequest:
+            return HandleGetCacheEntry(payload);
+        case ShaderMessage::PutCacheEntryRequest:
+            return HandlePutCacheEntry(payload);
+        case ShaderMessage::ClearCacheRequest:
+            return HandleClearCache();
+        case ShaderMessage::GetCacheStatsRequest:
+            return HandleGetCacheStats();
+        default:
+            return MakeError("unsupported shader message");
+        }
+    }
+
+    size_t ShaderService::GetEntryCount() const
+    {
+        std::lock_guard lock(m_mutex);
+        return m_lruList.size();
+    }
+
+    ServiceResponse ShaderService::HandleGetCacheEntry(const std::vector<uint8_t>& payload)
+    {
+        GetCacheEntryRequest req;
+        if (!DecodeGetCacheEntryRequest(payload, req))
+            return MakeError("malformed GetCacheEntry request");
+
+        Key key{req.key.sourceHash, req.key.target, req.key.stage};
+        GetCacheEntryResponse resp;
+        {
+            std::lock_guard lock(m_mutex);
+            auto it = m_index.find(key);
+            if (it != m_index.end())
+            {
+                resp.found = true;
+                resp.blob = it->second->blob;
+                // Promote to front of LRU list on hit.
+                m_lruList.splice(m_lruList.begin(), m_lruList, it->second);
+            }
+        }
+        if (resp.found)
+            m_hitCount.fetch_add(1, std::memory_order_relaxed);
+        else
+            m_missCount.fetch_add(1, std::memory_order_relaxed);
+
+        ServiceResponse out;
+        out.messageType = static_cast<uint16_t>(ShaderMessage::GetCacheEntryResponse);
+        out.payload = EncodeGetCacheEntryResponse(resp);
+        return out;
+    }
+
+    ServiceResponse ShaderService::HandlePutCacheEntry(const std::vector<uint8_t>& payload)
+    {
+        PutCacheEntryRequest req;
+        if (!DecodePutCacheEntryRequest(payload, req))
+            return MakeError("malformed PutCacheEntry request");
+
+        Key key{req.key.sourceHash, req.key.target, req.key.stage};
+        std::vector<uint8_t> blobCopyForDisk;
+        {
+            std::lock_guard lock(m_mutex);
+            InsertOrReplace(key, std::move(req.blob));
+            EvictUntilUnderBudget();
+            // Grab a copy only if the entry survived the eviction pass (if it
+            // didn't, writing it to disk just to delete it on the next call is
+            // pointless).
+            if (m_diskBacked)
+            {
+                auto it = m_index.find(key);
+                if (it != m_index.end())
+                    blobCopyForDisk = it->second->blob;
+            }
+        }
+
+        if (m_diskBacked && !blobCopyForDisk.empty())
+            WriteBlobFile(key, blobCopyForDisk);
+        else if (m_diskBacked)
+        {
+            // Entry was evicted in the same call (or blob was empty). Make
+            // sure no stale disk file lingers under this key.
+            DeleteBlobFile(key);
+        }
+
+        ServiceResponse out;
+        out.messageType = static_cast<uint16_t>(ShaderMessage::PutCacheEntryResponse);
+        return out;
+    }
+
+    ServiceResponse ShaderService::HandleClearCache()
+    {
+        bool deleteFromDisk = false;
+        {
+            std::lock_guard lock(m_mutex);
+            m_lruList.clear();
+            m_index.clear();
+            m_totalBytes = 0;
+            deleteFromDisk = m_diskBacked;
+        }
+        m_hitCount.store(0, std::memory_order_relaxed);
+        m_missCount.store(0, std::memory_order_relaxed);
+        m_evictionCount.store(0, std::memory_order_relaxed);
+
+        if (deleteFromDisk)
+            DeleteAllBlobFiles();
+
+        ServiceResponse out;
+        out.messageType = static_cast<uint16_t>(ShaderMessage::ClearCacheResponse);
+        return out;
+    }
+
+    ServiceResponse ShaderService::HandleGetCacheStats()
+    {
+        ShaderCacheStats stats;
+        {
+            std::lock_guard lock(m_mutex);
+            stats.entryCount = m_lruList.size();
+            stats.totalBytes = m_totalBytes;
+        }
+        stats.hitCount = m_hitCount.load(std::memory_order_relaxed);
+        stats.missCount = m_missCount.load(std::memory_order_relaxed);
+
+        ServiceResponse out;
+        out.messageType = static_cast<uint16_t>(ShaderMessage::GetCacheStatsResponse);
+        out.payload = EncodeShaderCacheStats(stats);
+        return out;
+    }
+
+    void ShaderService::InsertOrReplace(const Key& key, std::vector<uint8_t> blob)
+    {
+        auto it = m_index.find(key);
+        if (it != m_index.end())
+        {
+            m_totalBytes -= it->second->blob.size();
+            it->second->blob = std::move(blob);
+            m_totalBytes += it->second->blob.size();
+            m_lruList.splice(m_lruList.begin(), m_lruList, it->second);
+            return;
+        }
+        m_lruList.push_front(Entry{key, std::move(blob)});
+        m_index.emplace(key, m_lruList.begin());
+        m_totalBytes += m_lruList.front().blob.size();
+    }
+
+    void ShaderService::EvictUntilUnderBudget()
+    {
+        if (m_maxBytes == 0)
+            return;
+        while (m_totalBytes > m_maxBytes && !m_lruList.empty())
+        {
+            Entry& victim = m_lruList.back();
+            m_totalBytes -= victim.blob.size();
+            Key evictedKey = victim.key;
+            m_index.erase(evictedKey);
+            m_lruList.pop_back();
+            m_evictionCount.fetch_add(1, std::memory_order_relaxed);
+            if (m_diskBacked)
+                DeleteBlobFile(evictedKey);
+        }
+    }
+
+    ServiceResponse ShaderService::MakeError(const std::string& message) const
+    {
+        ServiceResponse r;
+        r.messageType = static_cast<uint16_t>(ControlMessage::ErrorResponse);
+        r.payload.assign(message.begin(), message.end());
+        return r;
+    }
+
+    std::filesystem::path ShaderService::BlobPath(const Key& key) const
+    {
+        // Format: <16 hex digits>_<3 digit target>_<3 digit stage>.blob
+        // Zero-padded numeric fields keep filenames sortable and unambiguous
+        // to parse regardless of platform locale.
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%016llx_%03u_%03u.blob", static_cast<unsigned long long>(key.sourceHash),
+                      static_cast<unsigned>(key.target), static_cast<unsigned>(key.stage));
+        return m_cacheDir / buf;
+    }
+
+    std::optional<ShaderService::Key> ShaderService::ParseBlobFilename(const std::string& stem)
+    {
+        // Strict grammar: "<16 hex digits>_<3 decimal digits>_<3 decimal digits>"
+        // Every character position is validated explicitly — std::stoul / stoull
+        // silently stop at the first non-digit, so they'd accept garbage like
+        // "0000000000000001_1a2_003" as target=1 instead of rejecting it.
+        if (stem.size() != 16 + 1 + 3 + 1 + 3)
+            return std::nullopt;
+        if (stem[16] != '_' || stem[20] != '_')
+            return std::nullopt;
+
+        auto isHex = [](char c) -> bool
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); };
+        auto isDec = [](char c) -> bool { return c >= '0' && c <= '9'; };
+
+        for (size_t i = 0; i < 16; ++i)
+            if (!isHex(stem[i]))
+                return std::nullopt;
+        for (size_t i = 17; i < 20; ++i)
+            if (!isDec(stem[i]))
+                return std::nullopt;
+        for (size_t i = 21; i < 24; ++i)
+            if (!isDec(stem[i]))
+                return std::nullopt;
+
+        Key key;
+        try
+        {
+            key.sourceHash = std::stoull(stem.substr(0, 16), nullptr, 16);
+            unsigned target = std::stoul(stem.substr(17, 3));
+            unsigned stage = std::stoul(stem.substr(21, 3));
+            if (target > 0xFFu || stage > 0xFFu)
+                return std::nullopt;
+            key.target = static_cast<uint8_t>(target);
+            key.stage = static_cast<uint8_t>(stage);
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
+        return key;
+    }
+
+    bool ShaderService::WriteBlobFile(const Key& key, const std::vector<uint8_t>& blob)
+    {
+        // Atomic-ish write: stage to a tmp file, then rename over the target.
+        // Avoids leaving a half-written blob visible to concurrent readers if
+        // the daemon crashes mid-write.
+        auto finalPath = BlobPath(key);
+        auto tmpPath = finalPath;
+        tmpPath += ".tmp";
+
+        {
+            std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
+            if (!out)
+                return false;
+            if (!blob.empty())
+                out.write(reinterpret_cast<const char*>(blob.data()), static_cast<std::streamsize>(blob.size()));
+            if (!out)
+                return false;
+        }
+
+        std::error_code ec;
+        std::filesystem::rename(tmpPath, finalPath, ec);
+        if (ec)
+        {
+            std::filesystem::remove(tmpPath, ec);
+            return false;
+        }
+        return true;
+    }
+
+    void ShaderService::DeleteBlobFile(const Key& key)
+    {
+        std::error_code ec;
+        std::filesystem::remove(BlobPath(key), ec);
+    }
+
+    void ShaderService::DeleteAllBlobFiles()
+    {
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(m_cacheDir, ec))
+        {
+            if (ec)
+                return;
+            if (!entry.is_regular_file())
+                continue;
+            if (entry.path().extension() != ".blob")
+                continue;
+            std::filesystem::remove(entry.path(), ec);
+            // Ignore individual failures — best effort.
+        }
+    }
+
+} // namespace Spark::Daemon

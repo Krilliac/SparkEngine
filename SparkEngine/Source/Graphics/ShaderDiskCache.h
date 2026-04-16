@@ -13,11 +13,17 @@
 
 #include "ShaderCrossCompiler.h"
 
+#include <atomic>
 #include <filesystem>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
+
+namespace Spark::Daemon
+{
+    class ShaderServiceClient;
+}
 
 namespace Spark::Graphics
 {
@@ -63,6 +69,26 @@ namespace Spark::Graphics
 
         bool IsInitialized() const { return m_initialized; }
 
+        /**
+         * @brief Attach an optional daemon client for cross-process cache sharing.
+         *
+         * When set, `Lookup` consults the daemon first and falls through to the
+         * local disk on miss or transport error. `Store` always writes locally
+         * and, on success, also pushes the blob to the daemon (best-effort —
+         * transport errors are swallowed so the local cache always stays authoritative).
+         *
+         * Ownership remains with the caller — the pointer must outlive this
+         * `ShaderDiskCache` instance or be cleared via `SetDaemonClient(nullptr)`
+         * before the client is destroyed.
+         */
+        void SetDaemonClient(Spark::Daemon::ShaderServiceClient* client);
+
+        /// @brief Count of daemon hits since initialization (test/diagnostic).
+        uint64_t GetDaemonHits() const { return m_daemonHits.load(std::memory_order_relaxed); }
+
+        /// @brief Count of daemon misses/errors since initialization (test/diagnostic).
+        uint64_t GetDaemonMisses() const { return m_daemonMisses.load(std::memory_order_relaxed); }
+
       private:
         std::filesystem::path GetBlobPath(uint64_t hash, ShaderTarget target, ShaderStage stage) const;
         static uint64_t HashSourceForDisk(const ShaderSource& source, ShaderTarget target);
@@ -72,6 +98,10 @@ namespace Spark::Graphics
         std::filesystem::path m_cacheDir;
         mutable std::mutex m_mutex;
         bool m_initialized = false;
+
+        Spark::Daemon::ShaderServiceClient* m_daemonClient = nullptr;
+        mutable std::atomic<uint64_t> m_daemonHits{0};
+        mutable std::atomic<uint64_t> m_daemonMisses{0};
     };
 
     /**

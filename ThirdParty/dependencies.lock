@@ -2,7 +2,7 @@
 # Format:
 #   "name|source|version_or_commit|license|local_path|required_files_csv|feature_macro|fallback_or_stub_path|severity"
 # severity: ERROR (configure-time fatal), WARN (configure-time warning)
-# Last sync: 2026-04-12 (Platform split: CMakeLists.txt SPARK_ENGINE_ENTRY_POINT changed to SPARK_ENGINE_ENTRY_POINTS list for SparkEngine.cpp/Windows/Linux three-file split — no third-party wiring or vendored dependency changes. Previously — 2026-04-11 Phase G: FXC build step added for FoliageVS/PS + FoliageImpostorBake SM 5.0 validation via host-installed fxc.exe found by find_program)
+# Last sync: 2026-04-16 (SparkDaemon subproject added: `add_subdirectory(SparkDaemon)` in top-level CMakeLists.txt introduces the new first-party SparkDaemon executable + `SparkEngine/Source/Utils/DaemonLifecycle*` engine wiring. No third-party wiring, no vendored deps, no submodule pointer changes — the manifest-sync regex trips on `CMAKE_SOURCE_DIR` ("_DIR" token) inside the new subproject gate. Previously — 2026-04-12 Platform split: CMakeLists.txt SPARK_ENGINE_ENTRY_POINT changed to SPARK_ENGINE_ENTRY_POINTS list for SparkEngine.cpp/Windows/Linux three-file split — no third-party wiring or vendored dependency changes.)
 
 set(SPARK_THIRDPARTY_AUDIT_ENTRIES
     "Jolt Physics|https://github.com/jrouwe/JoltPhysics|v5.5.1 (vendored snapshot)|MIT|ThirdParty/Physics/JoltPhysics|Jolt/Jolt.h,Build/CMakeLists.txt|SPARK_JOLT_PHYSICS_AVAILABLE|SparkEngine/Source/Physics/PhysicsSystemStub.cpp|ERROR"

@@ -877,6 +877,12 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/SparkCrashReporter/CMakeLists.txt")
     add_subdirectory(SparkCrashReporter)
 endif()
 
+# Build SparkDaemon (long-lived shared-state service: Asset/Shader/Collab/Build)
+if(EXISTS "${CMAKE_SOURCE_DIR}/SparkDaemon/CMakeLists.txt")
+    message(STATUS "Building SparkDaemon...")
+    add_subdirectory(SparkDaemon)
+endif()
+
 # ---------------------------------------------------------------------
 # 9) SparkEngine - Static library + Executable
 # ---------------------------------------------------------------------

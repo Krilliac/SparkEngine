@@ -38,6 +38,7 @@
 #include "Utils/Timer.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/ConsoleProcessManager.h"
+#include "Utils/DaemonLifecycle.h"
 #include "EngineSetup.h"
 #include "AssetIntegration.h"
 #include "GameplaySystemLifecycle.h"
@@ -191,6 +192,13 @@ void InitConsole()
         InitDebugSystems();
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitGameplaySystems");
         InitGameplaySystems();
+
+        // Opt-in daemon wiring. Reads spark.daemon.enabled CVar; if set and a
+        // live daemon is reachable on the socket path, attaches the daemon's
+        // ShaderService to the process-wide ShaderDiskCache so compiled
+        // bytecode is shared across engine/editor/tool instances.
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: InitializeDaemonLifecycle");
+        Spark::Daemon::InitializeDaemonLifecycle();
     }
     else
     {
@@ -239,6 +247,10 @@ void ShutdownEngine()
     {
         g_eventBus->Publish(Spark::EngineShutdownEvent{});
     }
+
+    // Tear down the daemon wiring before ShaderDiskCache is destroyed so the
+    // cache never holds a dangling client pointer during gameplay shutdown.
+    Spark::Daemon::ShutdownDaemonLifecycle();
 
     ShutdownGameplaySystems();
     ShutdownDebugSystems();
