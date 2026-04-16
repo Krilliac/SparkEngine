@@ -423,9 +423,11 @@ jobs:
           build-windows-vs2022-${{ matrix.config }}-
 
     - name: Configure CMake (VS 2022 / v143)
+      shell: bash
       run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 2>&1 | tee cmake-configure.log
 
     - name: Build
+      shell: bash
       run: |
         set -o pipefail
         cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
@@ -436,7 +438,10 @@ jobs:
 
     - name: Run Tests
       if: matrix.config == 'Release'
-      run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
+      shell: bash
+      run: |
+        set -o pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel 2>&1 | tee test-results.log
 
     - name: Extract error summary
       if: failure()

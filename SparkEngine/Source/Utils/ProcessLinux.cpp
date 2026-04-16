@@ -187,8 +187,16 @@ namespace Spark
 
         auto makePipe = [](int fds[2], const char* name) -> std::expected<void, std::string>
         {
+#ifdef __linux__
             if (pipe2(fds, O_CLOEXEC) == -1)
                 return std::unexpected(std::string("pipe() failed for ") + name + ": " + strerror(errno));
+#else
+            // macOS lacks pipe2(); use pipe() + fcntl() instead.
+            if (pipe(fds) == -1)
+                return std::unexpected(std::string("pipe() failed for ") + name + ": " + strerror(errno));
+            for (int i = 0; i < 2; ++i)
+                fcntl(fds[i], F_SETFD, fcntl(fds[i], F_GETFD) | FD_CLOEXEC);
+#endif
             return {};
         };
 

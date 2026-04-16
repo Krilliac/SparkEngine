@@ -210,6 +210,71 @@ namespace Spark
 } // namespace Spark
 
 // ============================================================================
+// std::expected polyfill (for compilers where __cpp_lib_expected is absent)
+// ============================================================================
+
+#ifdef SPARK_HAS_EXPECTED
+#include <expected>
+#else
+#include <optional>
+#include <string>
+#include <variant>
+
+namespace std
+{
+    template <typename E> class unexpected
+    {
+      public:
+        explicit unexpected(E e) : m_error(static_cast<E&&>(e)) {}
+        const E& error() const& { return m_error; }
+        E& error() & { return m_error; }
+
+      private:
+        E m_error;
+    };
+
+    template <typename T, typename E> class expected
+    {
+      public:
+        expected(T val) : m_data(static_cast<T&&>(val)) {}                     // NOLINT implicit
+        expected(unexpected<E> u) : m_data(static_cast<unexpected<E>&&>(u)) {} // NOLINT implicit
+
+        explicit operator bool() const { return m_data.index() == 0; }
+        bool has_value() const { return m_data.index() == 0; }
+
+        T& value() { return ::std::get<0>(m_data); }
+        const T& value() const { return ::std::get<0>(m_data); }
+        T& operator*() { return ::std::get<0>(m_data); }
+        const T& operator*() const { return ::std::get<0>(m_data); }
+        T* operator->() { return &::std::get<0>(m_data); }
+        const T* operator->() const { return &::std::get<0>(m_data); }
+
+        const E& error() const { return ::std::get<1>(m_data).error(); }
+
+      private:
+        ::std::variant<T, unexpected<E>> m_data;
+    };
+
+    // Specialization for expected<void, E> — no value, only success/error.
+    template <typename E> class expected<void, E>
+    {
+      public:
+        expected() : m_error() {}                                           // success
+        expected(unexpected<E> u) : m_error(static_cast<E&&>(u.error())) {} // NOLINT implicit
+
+        explicit operator bool() const { return !m_error.has_value(); }
+        bool has_value() const { return !m_error.has_value(); }
+
+        void value() const {}
+        const E& error() const { return *m_error; }
+
+      private:
+        ::std::optional<E> m_error;
+    };
+} // namespace std
+#endif // SPARK_HAS_EXPECTED
+
+// ============================================================================
 // Windows: Use native types
 // ============================================================================
 
