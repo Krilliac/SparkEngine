@@ -123,6 +123,12 @@
 #include <sys/ucontext.h>
 #include <ucontext.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <sched.h>
+
+#ifndef SYS_clone3
+#define SYS_clone3 435
+#endif
 
 #ifndef ARCH_SET_GS
 #define ARCH_SET_GS 0x1001
@@ -517,6 +523,7 @@ static int probe_wrgsbase_usable(void)
 static void trampoline(int sig, siginfo_t* info, void* uctx)
 {
     ucontext_t* uc = (ucontext_t*)uctx;
+    int gs_was_repaired = 0; /* Set to 1 if we fixed gs.base (Option C) */
 #ifdef __x86_64__
     /* Linux's <sys/ucontext.h> defines REG_TRAPNO = 20 and REG_ERR = 19
      * on x86_64. These are indices into gregs[]. */
@@ -624,6 +631,7 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
                         repaired_logged = 1;
                     }
                     repaired = 1;
+                    gs_was_repaired = 1;
                     break;
                 }
             }
@@ -656,6 +664,7 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
                     __asm__ volatile("movq %%gs:0x30, %0" : "=r"(teb_self));
                     __asm__ volatile("movq %%gs:0x8, %0"  : "=r"(stack_base));
                     __asm__ volatile("movq %%gs:0x10, %0" : "=r"(stack_limit));
+                    gs_was_repaired = 1;
                     static int rescue_logged = 0;
                     if (!rescue_logged || g_trampoline_verbose)
                     {
@@ -734,6 +743,54 @@ static void trampoline(int sig, siginfo_t* info, void* uctx)
         }
     }
 #endif
+    /* -----------------------------------------------------------------------
+     * Option C — Retry instead of dispatching when gs.base was repaired.
+     * -----------------------------------------------------------------------
+     *
+     * If our trampoline repaired gs.base for this thread (either from the
+     * known-TEB cache or via /proc/self/maps rescan), the faulting
+     * instruction was almost certainly a TEB-relative access (mov
+     * [gs:offset], reg) that produced a NULL-pointer write because
+     * gs.base was garbage. Now that gs.base points at the correct TEB,
+     * the same instruction will succeed on retry.
+     *
+     * Chaining to Wine's handler is WRONG in this case: Wine tries to
+     * dispatch via SEH, but on threads that haven't finished
+     * init_syscall_frame + signal_init_thread, there is no SEH chain
+     * registered yet. Wine declares the exception unhandled and launches
+     * winedbg, which itself loses the gs.base race and hangs forever.
+     *
+     * By returning from the signal handler instead of chaining, the
+     * kernel restores the saved context (with gs.base now correct) and
+     * re-executes the faulting instruction. This is the correct recovery
+     * for the "thread faults before init_syscall_frame" case.
+     *
+     * We only do this when gs.base was ACTUALLY wrong and we repaired it.
+     * If gs.base looked valid but the thread faulted for some other reason
+     * (genuine NULL deref, real bug), we chain to Wine's handler normally
+     * so SEH dispatch works as Wine expects.
+     */
+    if (gs_was_repaired)
+    {
+        /* gs.base was wrong and we repaired it via wrgsbase. Return from
+         * the signal handler so the kernel restores the saved context
+         * (with gs.base now correct) and re-executes the faulting
+         * instruction. This is the correct recovery for the "thread
+         * faults before init_syscall_frame" case — chaining to Wine's
+         * handler would dispatch via SEH, but there's no SEH chain on
+         * a thread that hasn't finished signal_init_thread yet, so Wine
+         * would declare the exception unhandled and launch winedbg. */
+        static int retry_logged = 0;
+        if (!retry_logged || g_trampoline_verbose)
+        {
+            fprintf(stderr,
+                    "[gvisor-shim] gs.base repaired — retrying faulting "
+                    "instruction (addr=%p)\n",
+                    info ? info->si_addr : NULL);
+            retry_logged = 1;
+        }
+        return;
+    }
     if (g_wine_segv_handler)
     {
         g_wine_segv_handler(sig, info, uctx);
@@ -818,6 +875,41 @@ long syscall(long number, ...)
     long a6 = va_arg(ap, long);
     va_end(ap);
 
+    /* Option B: intercept clone/clone3 to fix gs.base in the child
+     * thread before ANY code (including Wine's start_thread) runs.
+     * This catches threads created via raw clone (bypassing
+     * pthread_create) which our Option A wrapper can't see.
+     *
+     * After clone returns 0 in the child, we rescan /proc/self/maps
+     * to find the TEB for our current stack and wrgsbase it. This
+     * runs before the child's first instruction after returning from
+     * the syscall wrapper, closing the pre-init_syscall_frame window. */
+    if (number == SYS_clone || number == SYS_clone3)
+    {
+        long rc = g_real_syscall(number, a1, a2, a3, a4, a5, a6);
+        if (rc == 0 && g_wrgsbase_usable)
+        {
+            /* We're in the child. Try to fix gs.base immediately. */
+            unsigned long rsp;
+            __asm__ volatile("mov %%rsp, %0" : "=r"(rsp));
+            unsigned long teb = find_teb_for_rsp_signal_safe(rsp);
+            if (teb)
+            {
+                __asm__ volatile("wrgsbase %0" ::"r"(teb));
+                static __thread int clone_logged = 0;
+                if (!clone_logged)
+                {
+                    fprintf(stderr,
+                            "[gvisor-shim] clone child: pre-set gs.base to "
+                            "TEB 0x%lx (rsp=0x%lx)\n",
+                            teb, rsp);
+                    clone_logged = 1;
+                }
+            }
+        }
+        return rc;
+    }
+
     if (number != SYS_arch_prctl || a1 != ARCH_SET_GS)
     {
         return g_real_syscall(number, a1, a2, a3, a4, a5, a6);
@@ -885,6 +977,122 @@ long syscall(long number, ...)
     /* Return success even if the kernel said -1: gs.base now points at the
      * TEB via wrgsbase, which is the only thing Wine's caller cares about. */
     return 0;
+}
+
+/* ============================================================================
+ *  Fix 4 — Option A: pthread_create interception
+ * ============================================================================
+ *
+ * Wrap every new thread's start function so we fix gs.base BEFORE any
+ * Wine code executes on that thread. This closes the window between
+ * clone() and init_syscall_frame where gs.base is garbage and any
+ * gs:offset access faults.
+ *
+ * We interpose pthread_create via LD_PRELOAD, same as sigaction/syscall.
+ * The wrapper allocates a small trampoline struct on the heap that
+ * records the original start function and argument, then calls our
+ * wrapper_start which fixes gs.base before calling the original.
+ */
+
+typedef int (*pthread_create_fn)(pthread_t*, const pthread_attr_t*,
+                                 void* (*)(void*), void*);
+
+struct pthread_wrapper_arg
+{
+    void* (*real_start)(void*);
+    void* real_arg;
+};
+
+static void* pthread_wrapper_start(void* raw)
+{
+    struct pthread_wrapper_arg w = *(struct pthread_wrapper_arg*)raw;
+    free(raw);
+
+    /* Fix gs.base for this thread before any Wine code runs.
+     * Walk our known-TEB cache first (fast path); fall back to
+     * /proc/self/maps if no match (new TEB allocated since last scan). */
+    if (g_wrgsbase_usable)
+    {
+        unsigned long rsp;
+        __asm__ volatile("mov %%rsp, %0" : "=r"(rsp));
+
+        int fixed = 0;
+        int n = g_known_tebs_count;
+        for (int i = 0; i < n && i < MAX_KNOWN_TEBS; ++i)
+        {
+            unsigned long cand = g_known_tebs[i];
+            if (!cand)
+                continue;
+            unsigned long cand_base = *(volatile unsigned long*)(cand + 0x08);
+            unsigned long cand_lim = *(volatile unsigned long*)(cand + 0x10);
+            if (cand_base && rsp <= cand_base && rsp >= cand_lim)
+            {
+                __asm__ volatile("wrgsbase %0" ::"r"(cand));
+                fixed = 1;
+                static int pt_logged = 0;
+                if (!pt_logged || g_trampoline_verbose)
+                {
+                    fprintf(stderr,
+                            "[gvisor-shim] pthread_create wrapper: pre-set gs.base "
+                            "to TEB 0x%lx (StackBase=0x%lx) before Wine code\n",
+                            cand, cand_base);
+                    pt_logged = 1;
+                }
+                break;
+            }
+        }
+        if (!fixed)
+        {
+            /* TEB not in cache yet — rescan /proc/self/maps. */
+            unsigned long teb = find_teb_for_rsp_signal_safe(rsp);
+            if (teb)
+            {
+                __asm__ volatile("wrgsbase %0" ::"r"(teb));
+                static int pt_rescan_logged = 0;
+                if (!pt_rescan_logged || g_trampoline_verbose)
+                {
+                    fprintf(stderr,
+                            "[gvisor-shim] pthread_create wrapper: pre-set gs.base "
+                            "via /proc/self/maps rescan to TEB 0x%lx\n",
+                            teb);
+                    pt_rescan_logged = 1;
+                }
+            }
+        }
+    }
+
+    return w.real_start(w.real_arg);
+}
+
+int pthread_create(pthread_t* thread, const pthread_attr_t* attr,
+                   void* (*start_routine)(void*), void* arg)
+{
+    static pthread_create_fn real = NULL;
+    if (!real)
+    {
+        real = (pthread_create_fn)dlsym(RTLD_NEXT, "pthread_create");
+        if (!real)
+        {
+            fprintf(stderr, "[gvisor-shim] dlsym(pthread_create) failed: %s\n",
+                    dlerror());
+            abort();
+        }
+    }
+
+    /* Refresh the TEB cache right before spawning, so the wrapper_start
+     * on the new thread has the best chance of finding its TEB in the
+     * fast path without needing a /proc/self/maps rescan. */
+    scan_maps_for_tebs();
+
+    struct pthread_wrapper_arg* w = (struct pthread_wrapper_arg*)malloc(sizeof(*w));
+    if (!w)
+    {
+        /* OOM — fall back to unwrapped call; the trampoline will catch it. */
+        return real(thread, attr, start_routine, arg);
+    }
+    w->real_start = start_routine;
+    w->real_arg = arg;
+    return real(thread, attr, pthread_wrapper_start, w);
 }
 
 /* Constructor: probe wrgsbase availability before Wine starts so we can
