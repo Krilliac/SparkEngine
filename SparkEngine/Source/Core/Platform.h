@@ -216,9 +216,6 @@ namespace Spark
 #ifdef SPARK_HAS_EXPECTED
 #include <expected>
 #else
-#include <optional>
-#include <string>
-#include <variant>
 
 namespace std
 {
@@ -236,40 +233,68 @@ namespace std
     template <typename T, typename E> class expected
     {
       public:
-        expected(T val) : m_data(static_cast<T&&>(val)) {}                     // NOLINT implicit
-        expected(unexpected<E> u) : m_data(static_cast<unexpected<E>&&>(u)) {} // NOLINT implicit
+        expected(T val) : m_hasValue(true) { new (&m_val) T(static_cast<T&&>(val)); }                  // NOLINT
+        expected(unexpected<E> u) : m_hasValue(false) { new (&m_err) E(static_cast<E&&>(u.error())); } // NOLINT
+        ~expected()
+        {
+            if (m_hasValue)
+                m_val.~T();
+            else
+                m_err.~E();
+        }
+        expected(const expected& o) : m_hasValue(o.m_hasValue)
+        {
+            if (m_hasValue)
+                new (&m_val) T(o.m_val);
+            else
+                new (&m_err) E(o.m_err);
+        }
+        expected(expected&& o) noexcept : m_hasValue(o.m_hasValue)
+        {
+            if (m_hasValue)
+                new (&m_val) T(static_cast<T&&>(o.m_val));
+            else
+                new (&m_err) E(static_cast<E&&>(o.m_err));
+        }
+        expected& operator=(const expected&) = delete;
+        expected& operator=(expected&&) = delete;
 
-        explicit operator bool() const { return m_data.index() == 0; }
-        bool has_value() const { return m_data.index() == 0; }
+        explicit operator bool() const { return m_hasValue; }
+        bool has_value() const { return m_hasValue; }
 
-        T& value() { return ::std::get<0>(m_data); }
-        const T& value() const { return ::std::get<0>(m_data); }
-        T& operator*() { return ::std::get<0>(m_data); }
-        const T& operator*() const { return ::std::get<0>(m_data); }
-        T* operator->() { return &::std::get<0>(m_data); }
-        const T* operator->() const { return &::std::get<0>(m_data); }
+        T& value() { return m_val; }
+        const T& value() const { return m_val; }
+        T& operator*() { return m_val; }
+        const T& operator*() const { return m_val; }
+        T* operator->() { return &m_val; }
+        const T* operator->() const { return &m_val; }
 
-        const E& error() const { return ::std::get<1>(m_data).error(); }
+        const E& error() const { return m_err; }
 
       private:
-        ::std::variant<T, unexpected<E>> m_data;
+        bool m_hasValue;
+        union
+        {
+            T m_val;
+            E m_err;
+        };
     };
 
-    // Specialization for expected<void, E> — no value, only success/error.
+    // Specialization for expected<void, E>
     template <typename E> class expected<void, E>
     {
       public:
-        expected() : m_error() {}                                           // success
-        expected(unexpected<E> u) : m_error(static_cast<E&&>(u.error())) {} // NOLINT implicit
+        expected() : m_hasError(false) {}                                                   // success
+        expected(unexpected<E> u) : m_hasError(true), m_err(static_cast<E&&>(u.error())) {} // NOLINT
 
-        explicit operator bool() const { return !m_error.has_value(); }
-        bool has_value() const { return !m_error.has_value(); }
-
+        explicit operator bool() const { return !m_hasError; }
+        bool has_value() const { return !m_hasError; }
         void value() const {}
-        const E& error() const { return *m_error; }
+        const E& error() const { return m_err; }
 
       private:
-        ::std::optional<E> m_error;
+        bool m_hasError;
+        E m_err{};
     };
 } // namespace std
 #endif // SPARK_HAS_EXPECTED
