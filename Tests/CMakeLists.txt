@@ -636,11 +636,16 @@ endif()
 # Disable LTO for the test executable. ThinLTO + --gc-sections can discard
 # Logger/LogMacros symbols from SparkEngineLib that tests reference only
 # through macro-expanded inline code, causing undefined-reference errors
-# on Clang Release builds.
+# on Clang Release builds. INTERPROCEDURAL_OPTIMIZATION OFF prevents LTO
+# on SparkTests' own TUs; the -fno-lto link flag ensures the linker also
+# skips LTO on bitcode objects pulled from SparkEngineLib.a.
 set_target_properties(SparkTests PROPERTIES
     INTERPROCEDURAL_OPTIMIZATION OFF
     INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
 )
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_link_options(SparkTests PRIVATE -fno-lto)
+endif()
 
 # Add to CTest
 enable_testing()
