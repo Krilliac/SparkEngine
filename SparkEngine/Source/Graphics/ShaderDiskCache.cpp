@@ -6,6 +6,8 @@
 #include "ShaderDiskCache.h"
 
 #include "../Utils/LogMacros.h"
+#include "../Utils/ShaderServiceClient.h"
+#include "ShaderDaemonBridge.h"
 
 #include <cstring>
 #include <fstream>
@@ -45,8 +47,42 @@ namespace Spark::Graphics
         if (!m_initialized)
             return std::nullopt;
 
-        std::lock_guard lock(m_mutex);
         uint64_t hash = HashSourceForDisk(source, target);
+
+        // Consult the daemon first if wired. On hit we return the full blob
+        // (metadata + bytecode) — the daemon carries the complete
+        // CompiledShaderBlob, unlike the local cache which is bytecode-only.
+        //
+        // The daemon client pointer is snapshotted under the lock and then
+        // used unlocked: ShaderServiceClient serialises its own RPCs via the
+        // underlying DaemonClient mutex, and the alternative (holding our
+        // own mutex across a network round-trip) would serialise all local
+        // disk operations behind the slowest daemon call.
+        Spark::Daemon::ShaderServiceClient* daemon = nullptr;
+        {
+            std::lock_guard lock(m_mutex);
+            daemon = m_daemonClient;
+        }
+
+        if (daemon)
+        {
+            auto response =
+                daemon->GetCacheEntry(hash, static_cast<uint8_t>(target), static_cast<uint8_t>(source.stage));
+            if (response && response->found)
+            {
+                CompiledShaderBlob decoded;
+                if (DecodeCompiledShaderBlob(response->blob, decoded))
+                {
+                    m_daemonHits.fetch_add(1, std::memory_order_relaxed);
+                    return decoded;
+                }
+            }
+            // Miss, decode failure, or transport error all count as a miss —
+            // fall through to local disk.
+            m_daemonMisses.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        std::lock_guard lock(m_mutex);
         auto path = GetBlobPath(hash, target, source.stage);
 
         if (!std::filesystem::exists(path))
@@ -77,16 +113,35 @@ namespace Spark::Graphics
         if (!m_initialized || !blob.success || blob.bytecode.empty())
             return;
 
-        std::lock_guard lock(m_mutex);
         uint64_t hash = HashSourceForDisk(source, target);
-        auto path = GetBlobPath(hash, target, source.stage);
 
-        std::ofstream ofs(path, std::ios::binary);
-        if (ofs)
+        Spark::Daemon::ShaderServiceClient* daemon = nullptr;
         {
-            ofs.write(reinterpret_cast<const char*>(blob.bytecode.data()),
-                      static_cast<std::streamsize>(blob.bytecode.size()));
+            std::lock_guard lock(m_mutex);
+            daemon = m_daemonClient;
+            auto path = GetBlobPath(hash, target, source.stage);
+
+            std::ofstream ofs(path, std::ios::binary);
+            if (ofs)
+            {
+                ofs.write(reinterpret_cast<const char*>(blob.bytecode.data()),
+                          static_cast<std::streamsize>(blob.bytecode.size()));
+            }
         }
+
+        if (daemon)
+        {
+            // Best-effort push to the daemon. Transport errors are swallowed —
+            // the local disk cache already holds the authoritative copy.
+            (void)daemon->PutCacheEntry(hash, static_cast<uint8_t>(target), static_cast<uint8_t>(source.stage),
+                                        EncodeCompiledShaderBlob(blob));
+        }
+    }
+
+    void ShaderDiskCache::SetDaemonClient(Spark::Daemon::ShaderServiceClient* client)
+    {
+        std::lock_guard lock(m_mutex);
+        m_daemonClient = client;
     }
 
     void ShaderDiskCache::Clear()

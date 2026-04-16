@@ -81,6 +81,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | SparkDaemon Phase 2a shader cache service (GetCacheEntry / PutCacheEntry / ClearCache / GetCacheStats, 6 loopback tests; ErrorResponse reserved across all services) | [knowledge/daemon-phase-2a-shader-service-2026-04-16.md](knowledge/daemon-phase-2a-shader-service-2026-04-16.md) | Observation | Active | 2026-04-16 |
 | SparkDaemon Phase 2b shader cache disk persistence (--cache-dir flag, atomic rename writes, reload-on-restart, 5 new tests, 11 Shader tests total) | [knowledge/daemon-phase-2b-shader-persistence-2026-04-16.md](knowledge/daemon-phase-2b-shader-persistence-2026-04-16.md) | Observation | Active | 2026-04-16 |
 | SparkDaemon Phase 3a asset cache service (path+platform keyed, InvalidateAsset RPC drops all platform variants, --asset-cache-dir persistence, 10 loopback + disk tests) | [knowledge/daemon-phase-3a-asset-service-2026-04-16.md](knowledge/daemon-phase-3a-asset-service-2026-04-16.md) | Observation | Active | 2026-04-16 |
+| SparkDaemon Phase 3b engine-side wiring (ShaderDiskCache consults daemon first, falls through to local disk; DaemonConnection singleton; ShaderDaemonBridge blob codec; 8 new tests) | [knowledge/daemon-phase-3b-shader-disk-cache-wiring-2026-04-16.md](knowledge/daemon-phase-3b-shader-disk-cache-wiring-2026-04-16.md) | Observation | Active | 2026-04-16 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-16)
