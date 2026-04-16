@@ -50,8 +50,10 @@ namespace Spark::Daemon
         VersionResponse = 0x0004, ///< Payload: string semver (e.g. `"1.0.0"`).
         ShutdownRequest = 0x0005, ///< Empty payload. Ack then exits.
         ShutdownAck = 0x0006,     ///< Empty payload.
-        ErrorResponse = 0x00FF,   ///< Payload: string error message. Returned by server
-                                  ///< when a request cannot be dispatched.
+        ErrorResponse = 0x00FF,   ///< Payload: string error message. Wire value 0x00FF
+                                  ///< is RESERVED across every service — any service may
+                                  ///< return it when a request fails, and clients treat
+                                  ///< that message type as an error uniformly.
     };
 
     /// Wire-format frame header. All fields little-endian on the wire.

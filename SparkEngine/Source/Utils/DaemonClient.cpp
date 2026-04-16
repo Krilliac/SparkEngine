@@ -131,8 +131,10 @@ namespace Spark::Daemon
             header.serviceId != static_cast<uint16_t>(ServiceId::Control))
             return std::unexpected<std::string>("DaemonClient: response service mismatch");
 
-        if (header.serviceId == static_cast<uint16_t>(ServiceId::Control) &&
-            header.messageType == static_cast<uint16_t>(ControlMessage::ErrorResponse))
+        // Message type 0x00FF is reserved across all services for error replies
+        // (see DaemonProtocol.h::ControlMessage::ErrorResponse). Surface these
+        // uniformly so per-service wrappers don't need bespoke error handling.
+        if (header.messageType == static_cast<uint16_t>(ControlMessage::ErrorResponse))
         {
             std::string msg(responsePayload.begin(), responsePayload.end());
             return std::unexpected<std::string>("DaemonClient: server error: " + msg);

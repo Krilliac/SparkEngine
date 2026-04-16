@@ -16,6 +16,7 @@
 
 #include "ControlService.h"
 #include "DaemonServer.h"
+#include "ShaderService.h"
 
 #include <atomic>
 #include <cstdio>
@@ -75,6 +76,7 @@ int main(int argc, char** argv)
 
     Spark::Daemon::DaemonServer server;
     server.AddService(std::make_unique<Spark::Daemon::ControlService>(server.GetShouldStopFlag()));
+    server.AddService(std::make_unique<Spark::Daemon::ShaderService>());
 
     g_serverForSignal = &server;
 #if !defined(_WIN32)
