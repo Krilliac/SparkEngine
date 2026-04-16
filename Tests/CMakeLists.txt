@@ -633,6 +633,15 @@ if(ENABLE_MOBILE)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_MOBILE)
 endif()
 
+# Disable LTO for the test executable. ThinLTO + --gc-sections can discard
+# Logger/LogMacros symbols from SparkEngineLib that tests reference only
+# through macro-expanded inline code, causing undefined-reference errors
+# on Clang Release builds.
+set_target_properties(SparkTests PROPERTIES
+    INTERPROCEDURAL_OPTIMIZATION OFF
+    INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF
+)
+
 # Add to CTest
 enable_testing()
 add_test(NAME SparkEngineTests COMMAND SparkTests)
