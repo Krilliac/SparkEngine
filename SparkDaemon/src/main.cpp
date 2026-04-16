@@ -3,18 +3,20 @@
  * @brief SparkDaemon entry point.
  *
  * Usage:
- *   SparkDaemon [--socket <path>] [--cache-dir <path>]
+ *   SparkDaemon [--socket <path>] [--cache-dir <path>] [--asset-cache-dir <path>]
  *
  * Defaults:
- *   --socket      `./.spark-daemon.sock`
- *   --cache-dir   disabled (in-memory shader cache only)
+ *   --socket            `./.spark-daemon.sock`
+ *   --cache-dir         disabled (in-memory shader cache only)
+ *   --asset-cache-dir   disabled (in-memory asset cache only)
  *
  * The socket file is removed on clean shutdown. SIGINT / SIGTERM trigger a
- * graceful exit. When `--cache-dir` is set, the ShaderService scans it for
- * existing `.blob` files on startup and persists new `PutCacheEntry` writes
- * to disk so warm cache survives daemon restarts.
+ * graceful exit. `--cache-dir` enables shader blob persistence (loaded on
+ * startup, written on PutCacheEntry); `--asset-cache-dir` enables the same
+ * for the asset service.
  */
 
+#include "AssetService.h"
 #include "ControlService.h"
 #include "DaemonServer.h"
 #include "ShaderService.h"
@@ -58,6 +60,7 @@ int main(int argc, char** argv)
 {
     std::string socketPath = DefaultSocketPath();
     std::string cacheDir;
+    std::string assetCacheDir;
     for (int i = 1; i < argc; ++i)
     {
         std::string_view arg = argv[i];
@@ -69,9 +72,13 @@ int main(int argc, char** argv)
         {
             cacheDir = argv[++i];
         }
+        else if (arg == "--asset-cache-dir" && i + 1 < argc)
+        {
+            assetCacheDir = argv[++i];
+        }
         else if (arg == "--help" || arg == "-h")
         {
-            std::puts("SparkDaemon [--socket <path>] [--cache-dir <path>]");
+            std::puts("SparkDaemon [--socket <path>] [--cache-dir <path>] [--asset-cache-dir <path>]");
             return 0;
         }
         else
@@ -90,12 +97,25 @@ int main(int argc, char** argv)
         auto loaded = shader->Initialize(std::filesystem::path{cacheDir});
         if (!loaded)
         {
-            std::fprintf(stderr, "SparkDaemon: could not open cache directory %s\n", cacheDir.c_str());
+            std::fprintf(stderr, "SparkDaemon: could not open shader cache directory %s\n", cacheDir.c_str());
             return 1;
         }
         std::printf("SparkDaemon: shader cache %s (%zu entries loaded)\n", cacheDir.c_str(), *loaded);
     }
     server.AddService(std::move(shader));
+
+    auto asset = std::make_unique<Spark::Daemon::AssetService>();
+    if (!assetCacheDir.empty())
+    {
+        auto loaded = asset->Initialize(std::filesystem::path{assetCacheDir});
+        if (!loaded)
+        {
+            std::fprintf(stderr, "SparkDaemon: could not open asset cache directory %s\n", assetCacheDir.c_str());
+            return 1;
+        }
+        std::printf("SparkDaemon: asset cache %s (%zu entries loaded)\n", assetCacheDir.c_str(), *loaded);
+    }
+    server.AddService(std::move(asset));
 
     g_serverForSignal = &server;
 #if !defined(_WIN32)

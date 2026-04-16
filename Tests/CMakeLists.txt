@@ -464,6 +464,9 @@ add_executable(SparkTests
     # SparkDaemon Shader service (Phase 2a)
     TestShaderServiceClient.cpp
     "${CMAKE_SOURCE_DIR}/SparkDaemon/src/ShaderService.cpp"
+    # SparkDaemon Asset service (Phase 3a)
+    TestAssetServiceClient.cpp
+    "${CMAKE_SOURCE_DIR}/SparkDaemon/src/AssetService.cpp"
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp
