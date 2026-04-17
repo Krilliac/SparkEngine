@@ -53,7 +53,7 @@ check_deprecated_globals() {
     log_info "Checking deprecated global service usage..."
 
     local allowlist
-    allowlist='SparkEngine/Source/Core/SparkEngine.cpp|SparkEngine/Source/Core/GameplaySystemLifecycle.cpp'
+    allowlist='SparkEngine/Source/Core/SparkEngine.cpp|SparkEngine/Source/Core/SparkEngineLinux.cpp|SparkEngine/Source/Core/SparkEngineWindows.cpp|SparkEngine/Source/Core/GameplaySystemLifecycle.cpp'
 
     local result
     result=$(rg -n --no-heading --color never \

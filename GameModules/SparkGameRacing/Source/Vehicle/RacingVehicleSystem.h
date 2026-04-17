@@ -97,9 +97,14 @@ namespace Racing
         /// Apply player input to the player vehicle
         void ApplyInput(float throttle, float brake, float steer, bool nitroPressed, bool driftPressed);
 
+        /// Apply input to a specific vehicle (used by AI and tools)
+        void ApplyInputToVehicle(uint32_t vehicleId, float throttle, float brake, float steer, bool nitroPressed,
+                                 bool driftPressed);
+
         VehicleInstance* GetVehicle(uint32_t id);
         const VehicleInstance* GetVehicle(uint32_t id) const;
         VehicleInstance* GetPlayerVehicle();
+        std::vector<VehicleInstance>& GetVehiclesMutable() { return m_vehicles; }
         const std::vector<VehicleInstance>& GetVehicles() const { return m_vehicles; }
         size_t GetVehicleCount() const { return m_vehicles.size(); }
 
@@ -112,6 +117,8 @@ namespace Racing
         std::string GetVehicleListString() const;
 
       private:
+        void ApplyInputInternal(VehicleInstance& vehicle, float throttle, float brake, float steer, bool nitroPressed,
+                                bool driftPressed);
         void UpdateVehiclePhysics(VehicleInstance& vehicle, float dt);
         void UpdateDriftState(VehicleInstance& vehicle, float steer, bool driftPressed, float dt);
         void ApplyDamage(VehicleInstance& vehicle, float amount);

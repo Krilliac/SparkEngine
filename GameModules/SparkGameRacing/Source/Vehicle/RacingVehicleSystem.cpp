@@ -71,6 +71,7 @@ namespace Racing
     void RacingVehicleSystem::Shutdown()
     {
         m_vehicles.clear();
+        m_nextId = 1;
         m_initialized = false;
     }
 
@@ -102,41 +103,59 @@ namespace Racing
         if (!player)
             return;
 
+        ApplyInputInternal(*player, throttle, brake, steer, nitroPressed, driftPressed);
+    }
+
+    void RacingVehicleSystem::ApplyInputToVehicle(uint32_t vehicleId, float throttle, float brake, float steer,
+                                                  bool nitroPressed, bool driftPressed)
+    {
+        VehicleInstance* vehicle = GetVehicle(vehicleId);
+        if (!vehicle || !vehicle->isActive)
+            return;
+
+        ApplyInputInternal(*vehicle, throttle, brake, steer, nitroPressed, driftPressed);
+    }
+
+    void RacingVehicleSystem::ApplyInputInternal(VehicleInstance& vehicle, float throttle, float brake, float steer,
+                                                 bool nitroPressed, bool driftPressed)
+    {
         // Clamp inputs
         throttle = std::clamp(throttle, 0.0f, 1.0f);
         brake = std::clamp(brake, 0.0f, 1.0f);
         steer = std::clamp(steer, -1.0f, 1.0f);
 
-        player->steerAngle = steer;
+        vehicle.steerAngle = steer;
 
         // Acceleration
-        float accelForce = throttle * player->baseStats.acceleration * 100.0f;
-        float brakeForce = brake * player->baseStats.braking * 150.0f;
-        float drag = player->speed * 0.5f;
+        float accelForce = throttle * vehicle.baseStats.acceleration * 100.0f;
+        float brakeForce = brake * vehicle.baseStats.braking * 150.0f;
+        float drag = vehicle.speed * 0.5f;
 
         // Damage reduces effective acceleration
-        float damagePenalty = 1.0f - std::min(player->damage / player->baseStats.durability, 0.5f);
+        const float durability = std::max(vehicle.baseStats.durability, 1.0f);
+        const float damagePenalty = 1.0f - std::min(vehicle.damage / durability, 0.5f);
         accelForce *= damagePenalty;
 
         // Boost from nitro or drift
         float boostMultiplier = 1.0f;
-        if (player->boostTimer > 0.0f)
+        if (vehicle.boostTimer > 0.0f)
             boostMultiplier = 1.3f;
 
-        player->speed += (accelForce * boostMultiplier - brakeForce - drag) * (1.0f / 60.0f);
-        player->speed = std::clamp(player->speed, 0.0f, player->baseStats.maxSpeed * boostMultiplier);
+        vehicle.speed += (accelForce * boostMultiplier - brakeForce - drag) * (1.0f / 60.0f);
+        vehicle.speed = std::clamp(vehicle.speed, 0.0f, vehicle.baseStats.maxSpeed * boostMultiplier);
 
         // Nitro
-        if (nitroPressed && player->nitro > 0.0f)
+        if (nitroPressed && vehicle.nitro > 0.0f)
         {
-            player->nitro -= 0.01f;
-            player->boostTimer = 0.5f;
+            vehicle.nitro -= 0.01f;
+            vehicle.boostTimer = 0.5f;
         }
 
         // RPM mapping (simplified: proportional to speed fraction)
-        player->rpm = (player->speed / player->baseStats.maxSpeed) * 8000.0f;
+        const float maxSpeed = std::max(vehicle.baseStats.maxSpeed, 1.0f);
+        vehicle.rpm = (vehicle.speed / maxSpeed) * 8000.0f;
 
-        UpdateDriftState(*player, steer, driftPressed, 1.0f / 60.0f);
+        UpdateDriftState(vehicle, steer, driftPressed, 1.0f / 60.0f);
     }
 
     VehicleInstance* RacingVehicleSystem::GetVehicle(uint32_t id)
