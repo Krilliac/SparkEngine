@@ -149,9 +149,14 @@ namespace Spark::ECS
                 if (!clip || clip->frames.empty())
                     continue;
 
+                // Cache frame count once; the clip is immutable during the tick
+                // so four repeated .size() / static_cast probes collapse to one.
+                const int frameCount = static_cast<int>(clip->frames.size());
+                const int lastFrameIdx = frameCount - 1;
+
                 animator.frameTimer += deltaTime * animator.speed;
 
-                int frameIdx = animator.currentFrameIndex % static_cast<int>(clip->frames.size());
+                int frameIdx = animator.currentFrameIndex % frameCount;
                 float frameDuration = clip->frames[frameIdx].duration;
 
                 while (animator.frameTimer >= frameDuration && frameDuration > 0.0f)
@@ -159,7 +164,7 @@ namespace Spark::ECS
                     animator.frameTimer -= frameDuration;
                     animator.currentFrameIndex++;
 
-                    if (animator.currentFrameIndex >= static_cast<int>(clip->frames.size()))
+                    if (animator.currentFrameIndex >= frameCount)
                     {
                         if (clip->loop)
                         {
@@ -167,13 +172,13 @@ namespace Spark::ECS
                         }
                         else
                         {
-                            animator.currentFrameIndex = static_cast<int>(clip->frames.size()) - 1;
+                            animator.currentFrameIndex = lastFrameIdx;
                             animator.playing = false;
                             break;
                         }
                     }
 
-                    frameIdx = animator.currentFrameIndex % static_cast<int>(clip->frames.size());
+                    frameIdx = animator.currentFrameIndex % frameCount;
                     frameDuration = clip->frames[frameIdx].duration;
                 }
 

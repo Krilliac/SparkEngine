@@ -14,7 +14,7 @@
 // RENDERING HELPERS (cross-platform with platform guards)
 // ============================================================================
 
-void AssetPipeline::BindMesh(const std::string& meshPath)
+void AssetPipeline::BindMesh(std::string_view meshPath)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     if (!m_context)
@@ -53,7 +53,7 @@ void AssetPipeline::BindMesh(const std::string& meshPath)
 #endif
 }
 
-void AssetPipeline::BindMaterial(const std::string& materialPath)
+void AssetPipeline::BindMaterial(std::string_view materialPath)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     if (!m_context)

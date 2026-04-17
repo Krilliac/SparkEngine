@@ -12,12 +12,14 @@
 #include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
+#include "Utils/Hash.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
+#include <string_view>
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -357,8 +359,10 @@ class AssetPipeline
     int GetStreamingThreadCount() const { return static_cast<int>(m_loadingThreads.size()); }
 
     // Rendering helpers (bind asset for drawing via graphics context)
-    void BindMesh(const std::string& meshPath);
-    void BindMaterial(const std::string& materialPath);
+    // string_view overloads are hot-path friendly: no temporary std::string is
+    // constructed for lookup when the map uses transparent hashing (see m_assets).
+    void BindMesh(std::string_view meshPath);
+    void BindMaterial(std::string_view materialPath);
     void DrawBoundMesh();
 
     // Asset discovery
@@ -451,8 +455,12 @@ class AssetPipeline
     ID3D11DeviceContext* m_context;
 
     // Asset storage
+    // Transparent hashing enables lookup by std::string_view / const char*
+    // without constructing a temporary std::string — called per-draw-call by
+    // BindMesh / BindMaterial on the render hot path.
     mutable std::mutex m_assetsMutex;
-    std::unordered_map<std::string, std::shared_ptr<Asset>> m_assets;
+    std::unordered_map<std::string, std::shared_ptr<Asset>, Spark::TransparentStringHash, Spark::TransparentStringEqual>
+        m_assets;
     std::unique_ptr<AssetCache> m_cache;
 
     // Loading system

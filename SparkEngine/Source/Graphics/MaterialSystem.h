@@ -13,6 +13,7 @@
 #include "../Core/Platform.h"
 
 #include "Utils/Assert.h"
+#include "Utils/Hash.h"
 // Phase P: activated Tier 2 graphics orphan — pure CPU persistent
 // material constant buffer manager, runs on every platform.
 #include "PersistentMaterialCB.h"
@@ -22,6 +23,7 @@
 #include <DirectXMath.h>
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -529,9 +531,15 @@ class MaterialSystem
     ID3D11Device* m_device;
     ID3D11DeviceContext* m_context;
 
-    // Material storage
-    std::unordered_map<std::string, std::shared_ptr<Material>> m_materials;
-    std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>> m_textureCache;
+    // Material storage — transparent hashing allows lookups by std::string_view
+    // / const char* without allocating a temporary std::string. GetMaterial()
+    // and BindMaterial()-equivalent paths are hit per-draw-call.
+    std::unordered_map<std::string, std::shared_ptr<Material>, Spark::TransparentStringHash,
+                       Spark::TransparentStringEqual>
+        m_materials;
+    std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>, Spark::TransparentStringHash,
+                       Spark::TransparentStringEqual>
+        m_textureCache;
     std::unordered_map<size_t, ComPtr<ID3D11SamplerState>> m_samplerCache;
 
     // Default materials

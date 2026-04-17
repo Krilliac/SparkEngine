@@ -1064,18 +1064,17 @@ void GraphicsEngine::SubmitMeshForRendering(std::string_view meshPath, std::stri
 
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {
-    // Swap the draw list out under the spinlock — minimal hold time.
-    std::vector<MeshDrawCommand> localDrawList;
+    // Swap the draw list with a persistent processing buffer under the spinlock —
+    // minimal hold time. std::swap preserves the allocated capacity on both
+    // vectors, so after the first frame's capacity is established neither side
+    // allocates or frees heap memory on the steady-state submission path.
     {
         SpinlockGuard guard(m_drawListSpinlock);
-        localDrawList = std::move(m_drawList);
-        m_drawList.clear();
-        // Pre-reserve capacity for next frame based on this frame's count
-        if (m_drawList.capacity() == 0 && !localDrawList.empty())
-        {
-            m_drawList.reserve(localDrawList.size());
-        }
+        std::swap(m_drawList, m_processingDrawList);
     }
+
+    // Alias for readability; m_processingDrawList now owns this frame's commands.
+    std::vector<MeshDrawCommand>& localDrawList = m_processingDrawList;
 
     if (localDrawList.empty())
         return;
@@ -1104,7 +1103,10 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
                     ++i;
                 uint32_t batchCount = static_cast<uint32_t>(i - batchStart);
 
-                // Look up the mesh asset for vertex/index buffers and AABB
+                // Look up the mesh asset for vertex/index buffers and AABB.
+                // LoadMesh is cached — the std::string argument is required by the
+                // current loader signature but the hot lookup path inside is
+                // transparent-hash and allocation-free.
                 auto meshAsset = m_assetPipeline->LoadMesh(std::string(batchMesh));
                 if (!meshAsset || !meshAsset->GetVertexBuffer() || !meshAsset->GetIndexBuffer())
                     continue;
@@ -1145,8 +1147,9 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
                     aabbs.push_back(aabb);
                 }
 
-                // Bind material from first instance (batch shares mesh, material may vary)
-                m_assetPipeline->BindMaterial(std::string(localDrawList[batchStart].materialPath));
+                // Bind material from first instance (batch shares mesh, material may vary).
+                // string_view overload avoids per-draw-call std::string allocation.
+                m_assetPipeline->BindMaterial(localDrawList[batchStart].materialPath);
 
                 // GPU cull + indirect draw
                 ID3D11Buffer* vb = meshAsset->GetVertexBuffer();
@@ -1157,6 +1160,7 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
 
                 m_statistics.drawCalls += gpuRenderer.GetVisibleCount();
             }
+            localDrawList.clear();
             return;
         }
     }
@@ -1176,14 +1180,16 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
         // Update per-object constant buffer with world/view/proj matrices
         UpdateBasicConstants(world, viewMatrix, projMatrix);
 
-        // Bind mesh and material through the asset pipeline, then draw
+        // Bind mesh and material through the asset pipeline, then draw.
+        // string_view overloads + transparent-hash lookup keep this allocation-free
+        // on the per-draw-call inner loop.
         if (m_assetPipeline)
         {
-            m_assetPipeline->BindMesh(std::string(cmd.meshPath));
+            m_assetPipeline->BindMesh(cmd.meshPath);
             // Only rebind material when it changes (sorted order)
             if (cmd.materialPath != lastMaterial)
             {
-                m_assetPipeline->BindMaterial(std::string(cmd.materialPath));
+                m_assetPipeline->BindMaterial(cmd.materialPath);
                 lastMaterial = cmd.materialPath;
             }
             m_assetPipeline->DrawBoundMesh();
@@ -1191,6 +1197,10 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
 
         m_statistics.drawCalls++;
     }
+
+    // Clear the processing buffer once drained so the next frame's swap
+    // delivers an empty (but capacity-preserving) buffer back to m_drawList.
+    localDrawList.clear();
 }
 
 // ============================================================================
