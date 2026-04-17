@@ -754,7 +754,13 @@ class GraphicsEngine
     // Per-frame ECS draw list populated by SubmitMeshForRendering(), consumed by ProcessDrawList().
     // Uses a pre-reserved vector and a lightweight spinlock instead of std::mutex
     // to minimize contention on the per-entity submission hot path.
+    //
+    // Double-buffering: ProcessDrawList swaps `m_drawList` with `m_processingDrawList`
+    // under the spinlock rather than moving. This preserves the allocated capacity
+    // on both vectors frame-to-frame, so steady-state draw submission does zero
+    // heap allocations after the first frame's capacity is established.
     std::vector<MeshDrawCommand> m_drawList;
+    std::vector<MeshDrawCommand> m_processingDrawList;
     mutable std::atomic_flag m_drawListSpinlock =
         ATOMIC_FLAG_INIT;               ///< Spinlock for draw list (lower overhead than mutex)
     mutable std::mutex m_drawListMutex; ///< Fallback mutex for GetDrawList() copies (cold path only)
