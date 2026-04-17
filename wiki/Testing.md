@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*463 test files, 5784+ test cases*
+*473 test files, 5871+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -559,6 +559,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAssetPipelineCache` | 22 |
 | `TestAssetPipelineIntegration` | 16 |
 | `TestAssetPipelineReal` | 17 |
+| `TestAssetServiceClient` | 13 |
 | `TestAssetStallDetector` | 0 |
 | `TestAssetValidator` | 7 |
 | `TestAsyncComputeScheduler` | 9 |
@@ -624,6 +625,13 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCrashReportUploader` | 8 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestDXRSupport` | 13 |
+| `TestDaemonCodexFixes` | 4 |
+| `TestDaemonConcurrent` | 5 |
+| `TestDaemonDiagnostics` | 11 |
+| `TestDaemonFoundation` | 4 |
+| `TestDaemonLRU` | 15 |
+| `TestDaemonLifecycle` | 10 |
+| `TestDaemonProtocol` | 6 |
 | `TestDataTableSystem` | 11 |
 | `TestDatablockRegistry` | 10 |
 | `TestDatablockRegistryPhaseHH` | 8 |
@@ -905,11 +913,13 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestServerMockClient` | 31 |
 | `TestShaderCrossCompilerPhaseW` | 19 |
 | `TestShaderDiskCache` | 6 |
+| `TestShaderDiskCacheDaemon` | 8 |
 | `TestShaderDiskCachePhaseV` | 16 |
 | `TestShaderGraphCompiler` | 8 |
 | `TestShaderHotReload` | 8 |
 | `TestShaderHotReloadCompilation` | 9 |
 | `TestShaderHotReloadPhaseU` | 9 |
+| `TestShaderServiceClient` | 11 |
 | `TestShaderVariantSystem` | 21 |
 | `TestShadowAtlas` | 7 |
 | `TestSkyAtmosphere` | 5 |
