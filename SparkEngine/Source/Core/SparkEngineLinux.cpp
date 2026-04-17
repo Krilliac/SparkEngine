@@ -1,13 +1,16 @@
 /**
  * @file SparkEngineLinux.cpp
- * @brief Linux entry point (main) and SDL2 event loop
+ * @brief POSIX entry point (main) and SDL2 event loop (Linux + macOS).
  *
- * Contains the Linux/SDL2 initialization, signal handling, and main loop.
+ * Contains the SDL2 initialization, signal handling, and main loop shared
+ * between Linux and macOS. macOS-specific bits (Metal view, _NSGetExecutablePath)
+ * are isolated in SparkEngineMacOS.cpp behind the Spark::MacOS helper API.
  * Windows counterpart lives in SparkEngineWindows.cpp.
  * Shared globals and SetupCrashHandler stay in SparkEngine.cpp.
  */
 #include "SparkEngine.h"
 #include "Platform.h"
+#include "SparkEngineMacOS.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
@@ -60,9 +63,6 @@
 #ifdef SPARK_SDL2_AVAILABLE
 #include <SDL.h>
 #include <SDL_vulkan.h>
-#ifdef __APPLE__
-#include <SDL_metal.h>
-#endif
 #endif
 #include <atomic>
 #include <memory>
@@ -75,9 +75,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <thread>
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
 
 // Shared globals and functions defined in SparkEngine.cpp
 extern std::unique_ptr<GraphicsEngine> g_graphics;
@@ -168,28 +165,16 @@ static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
 
 static std::filesystem::path GetExecutableDirectoryLinux()
 {
-#if defined(__APPLE__)
-    uint32_t size = 0;
-    _NSGetExecutablePath(nullptr, &size);
-    std::string exePath(size, '\0');
-    if (_NSGetExecutablePath(exePath.data(), &size) == 0)
-    {
-        std::error_code ec;
-        auto canonical = std::filesystem::weakly_canonical(std::filesystem::path(exePath.c_str()), ec);
-        if (!ec)
-        {
-            return canonical.parent_path();
-        }
-    }
-    return std::filesystem::current_path();
-#else
-    // /proc/self/exe is the canonical way on Linux
+    // On macOS the dedicated helper uses _NSGetExecutablePath; on other
+    // platforms it returns an empty path so we fall through to /proc/self/exe.
+    if (auto macDir = Spark::MacOS::GetExecutableDirectory(); !macDir.empty())
+        return macDir;
+
     std::error_code ec;
     auto exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
     if (!ec)
         return exePath.parent_path();
     return std::filesystem::current_path();
-#endif
 }
 
 static std::string FindGameModuleFromArgs(int argc, char* argv[])
@@ -846,7 +831,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
     // ICD can set SPARK_DISABLE_VULKAN=1 and this branch will pick
     // OpenGL instead — matching what the RHIBridge will also choose.
     bool preferVulkan = false;
-    bool preferMetal = false;
+    bool preferMetal = Spark::MacOS::ShouldPreferMetal();
     {
         const char* sdlDriver = SDL_GetCurrentVideoDriver();
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 video driver: %s", sdlDriver ? sdlDriver : "<null>");
@@ -854,14 +839,6 @@ static int RunSDL2Windowed(int argc, char* argv[])
         const auto recommended = Spark::RHI::RHIBridge::GetRecommendedBackend();
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RunSDL2Windowed: recommended backend = %s",
                        Spark::RHI::GetBackendName(recommended));
-
-#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
-        if (recommended == Spark::RHI::GraphicsBackend::Metal)
-        {
-            preferMetal = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 on macOS — creating Metal-backed window");
-        }
-#endif
 
         // Drivers that don't support Vulkan at all (SDL_Vulkan_LoadLibrary
         // will always fail against them). Detect upfront so we don't even
@@ -917,7 +894,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
     if (settings.Graphics().fullscreen)
         windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     if (preferMetal)
-        windowFlags |= SDL_WINDOW_METAL;
+        windowFlags |= Spark::MacOS::GetMetalWindowFlag();
     else if (preferVulkan)
         windowFlags |= SDL_WINDOW_VULKAN;
     else
@@ -934,24 +911,22 @@ static int RunSDL2Windowed(int argc, char* argv[])
         return -1;
     }
 
-#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
     // On macOS, extract a Metal-capable view so MetalDevice can attach a
-    // CAMetalLayer. SDL_Metal_CreateView returns an NSView (opaque void*)
-    // whose layer is already a CAMetalLayer; pass it through as the
-    // NativeWindowHandle so MetalSwapChain::ConfigureMetalLayer() reuses it.
-    SDL_MetalView sdlMetalView = nullptr;
+    // CAMetalLayer. The helper returns an NSView (opaque void*) whose layer
+    // is already a CAMetalLayer; we pass it through as the NativeWindowHandle
+    // so MetalSwapChain::ConfigureMetalLayer() reuses it. On non-macOS the
+    // call is a no-op that returns nullptr.
+    void* sdlMetalView = nullptr;
     if (preferMetal)
     {
-        sdlMetalView = SDL_Metal_CreateView(window);
+        sdlMetalView = Spark::MacOS::CreateMetalView(window);
         if (!sdlMetalView)
         {
-            Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_Metal_CreateView failed: ") + SDL_GetError());
             SDL_DestroyWindow(window);
             SDL_Quit();
             return -1;
         }
     }
-#endif
 
     // OpenGL needs an SDL-owned GL context up front so the engine's
     // OpenGLDevice can detect it and skip its own EGL/GLX bootstrap.
@@ -1018,13 +993,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
         }
     }
 
-    void* nativeRenderHandle = nullptr;
-#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
-    if (preferMetal && sdlMetalView)
-    {
-        nativeRenderHandle = static_cast<void*>(sdlMetalView);
-    }
-#endif
+    void* nativeRenderHandle = (preferMetal && sdlMetalView) ? sdlMetalView : nullptr;
 
     InitializeSDL2Subsystems(window, nativeRenderHandle, argc, argv);
     RunSDL2MainLoop();
@@ -1032,10 +1001,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
     ShutdownLinux();
     if (glContext)
         SDL_GL_DeleteContext(glContext);
-#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
-    if (sdlMetalView)
-        SDL_Metal_DestroyView(sdlMetalView);
-#endif
+    Spark::MacOS::DestroyMetalView(sdlMetalView);
     SDL_DestroyWindow(window);
     if (preferVulkan)
         SDL_Vulkan_UnloadLibrary();

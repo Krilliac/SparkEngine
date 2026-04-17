@@ -976,6 +976,7 @@ set(SPARK_ENGINE_ENTRY_POINTS
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineMacOS.cpp"
 )
 set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
 foreach(_ep ${SPARK_ENGINE_ENTRY_POINTS})

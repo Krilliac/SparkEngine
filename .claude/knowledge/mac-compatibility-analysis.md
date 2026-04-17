@@ -144,6 +144,40 @@ Linux preset (`linux-gcc-release`) still builds `SparkEngine` cleanly;
 only the pre-existing NetworkSecurity test error is outstanding and is
 unrelated to this work.
 
+### 2026-04-17 session #3 — macOS split into dedicated files
+
+Following the prior session, the macOS-specific window/Metal wiring still lived
+inside `SparkEngineLinux.cpp` behind `#ifdef __APPLE__` guards. That file now
+has no macOS preprocessor branches; all Cocoa/Metal/mach-o calls have been
+extracted into a dedicated pair:
+
+- **`SparkEngine/Source/Core/SparkEngineMacOS.h`** — declares the
+  `Spark::MacOS::` helper namespace: `ShouldPreferMetal()`,
+  `GetMetalWindowFlag()`, `CreateMetalView()`, `DestroyMetalView()`,
+  `GetExecutableDirectory()`. These are safe to call on any platform —
+  non-macOS builds link trivial stubs so callers don't need guards.
+- **`SparkEngine/Source/Core/SparkEngineMacOS.cpp`** — under
+  `SPARK_PLATFORM_MACOS`, implements the real helpers using
+  `<SDL_metal.h>`, `<mach-o/dyld.h>`, and `RHIBridge::GetRecommendedBackend()`.
+  On other platforms the same translation unit compiles as no-op stubs.
+- **`SparkEngineLinux.cpp`** — all `#ifdef __APPLE__` blocks removed;
+  `preferMetal`, window flag selection, SDL_Metal view lifecycle, and
+  `_NSGetExecutablePath` dispatch are now single-line helper calls.
+  File brief renamed to "POSIX entry point (Linux + macOS)".
+- **`CMakeLists.txt`** — `SparkEngineMacOS.cpp` added to
+  `SPARK_ENGINE_ENTRY_POINTS` so it links into the executable on every
+  platform (with no-op stubs off macOS, real implementations on macOS).
+
+Other files with mixed POSIX Linux/macOS branches (`CrashHandler.cpp`,
+`ConsoleProcessManager.cpp`, `ProcessLinux.cpp`, `StackTrace.h`,
+`ModuleManager.cpp`, `GamePackager.cpp`) were left alone — their macOS
+branches are single-block alternatives inside shared POSIX functions,
+so extracting would require splitting the shared surrounding code and
+would hurt cohesion more than it helps.
+
+Linux preset (`linux-gcc-release`) still configures and builds cleanly
+with the split in place.
+
 ## Notes
 
 - Metal files are excluded from clang-format CI checks (`-not -path '*/Metal/*'`)
