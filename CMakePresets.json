@@ -237,12 +237,15 @@
         },
         {
             "name": "macos-debug",
-            "displayName": "macOS Debug (Apple Clang)",
+            "displayName": "macOS Debug (Apple Clang, SDL2 + OpenGL + OpenAL)",
             "inherits": "default",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "ENABLE_VULKAN": "ON",
-                "ENABLE_OPENGL": "ON"
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "ON",
+                "ENABLE_METAL": "OFF",
+                "ENABLE_SDL2": "ON",
+                "ENABLE_DXR": "OFF"
             },
             "condition": {
                 "type": "equals",
@@ -252,12 +255,15 @@
         },
         {
             "name": "macos-release",
-            "displayName": "macOS Release (Apple Clang)",
+            "displayName": "macOS Release (Apple Clang, SDL2 + OpenGL + OpenAL)",
             "inherits": "default",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "ENABLE_VULKAN": "ON",
-                "ENABLE_OPENGL": "ON"
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "ON",
+                "ENABLE_METAL": "OFF",
+                "ENABLE_SDL2": "ON",
+                "ENABLE_DXR": "OFF"
             },
             "condition": {
                 "type": "equals",
@@ -267,12 +273,33 @@
         },
         {
             "name": "macos-metal",
-            "displayName": "macOS Release with Metal (Apple Clang)",
+            "displayName": "macOS Release with Metal (Apple Clang, experimental)",
             "inherits": "default",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "ENABLE_METAL": "ON",
-                "ENABLE_VULKAN": "OFF"
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "ON",
+                "ENABLE_SDL2": "ON",
+                "ENABLE_DXR": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "macos-moltenvk",
+            "displayName": "macOS Release with MoltenVK (Vulkan via MoltenVK)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_VULKAN": "ON",
+                "ENABLE_OPENGL": "ON",
+                "ENABLE_METAL": "OFF",
+                "ENABLE_SDL2": "ON",
+                "ENABLE_DXR": "OFF"
             },
             "condition": {
                 "type": "equals",
@@ -354,6 +381,10 @@
         {
             "name": "macos-metal",
             "configurePreset": "macos-metal"
+        },
+        {
+            "name": "macos-moltenvk",
+            "configurePreset": "macos-moltenvk"
         },
         {
             "name": "linux-mingw-release",

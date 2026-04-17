@@ -1,6 +1,6 @@
 # Mac Compatibility Analysis
 
-**Last updated:** 2026-03-28
+**Last updated:** 2026-04-17
 **Type:** Observation
 **Status:** Active
 
@@ -36,6 +36,48 @@ Vulkan via **MoltenVK** — `VulkanDevice.h` already defines `VK_USE_PLATFORM_ME
   - `ConsoleProcessManagerStub.cpp` (excluded macOS from stub)
 - Added macOS framework linking in `CMakeLists.txt` (Cocoa, IOKit, CoreVideo + rpath)
 - Added `build-macos` CI job (continue-on-error, Apple Clang, SDL2+OpenGL)
+
+### 2026-04-17 session — buildable macOS path wired end-to-end
+
+Before this session the macOS path had several silent failures: `macos-debug` /
+`macos-release` presets requested `ENABLE_VULKAN=ON` (Vulkan isn't available on
+macOS without MoltenVK → configure warning), `find_package(X11)` was called
+unconditionally on every non-Windows platform (harmless on macOS but confusing),
+OpenAL was never linked anywhere in CMake (so `OpenALAudioEngine.cpp` compiled
+as a silent stub on both Linux and macOS), and the CI job only installed SDL2.
+
+Fixes in this session:
+
+- **`CMakePresets.json`** — `macos-debug` / `macos-release` now default to
+  `ENABLE_VULKAN=OFF`, `ENABLE_METAL=OFF`, `ENABLE_DXR=OFF`, `ENABLE_SDL2=ON`,
+  `ENABLE_OPENGL=ON`. `macos-metal` preset gets the same baseline plus Metal.
+  New `macos-moltenvk` preset opts in to Vulkan (works when
+  `brew install molten-vk` has run).
+- **`CMakeLists.txt`**:
+  - New `# --- OpenAL Soft ---` block probes Homebrew's `openal-soft` prefix
+    on macOS, runs `find_package(OpenAL)`, and falls back to the system
+    `OpenAL.framework`. When found, defines `SPARK_OPENAL_AVAILABLE=1` so
+    `OpenALAudioEngine.cpp` actually pulls in `AL/al.h` instead of the stubs.
+  - Vulkan detection now adds Homebrew's MoltenVK prefix to `CMAKE_PREFIX_PATH`
+    before `find_package(Vulkan)` when `VULKAN_SDK` is unset on APPLE.
+  - `enable_language(OBJCXX)` is invoked when Metal is enabled so `.mm` files
+    will build once the implementation lands.
+  - macOS framework link list extended: `AudioToolbox`, `CoreAudio`,
+    `CoreFoundation` join Cocoa/IOKit/CoreVideo.
+  - `GL_SILENCE_DEPRECATION=1` defined on APPLE so the GL 4.1 deprecation
+    warnings don't drown out the real build log.
+  - Two X11 lookups guarded with `NOT APPLE` — both the GLX fallback branch
+    in the OpenGL backend block and the generic non-Windows link block.
+    macOS has no X11 by default; the window backend is Cocoa via SDL2.
+- **`.github/workflows/build.yml`** (`build-macos` job):
+  - `brew install cmake sdl2 openal-soft ccache` — openal-soft was the
+    missing piece for working audio.
+  - `brew install molten-vk` best-effort; failure is non-fatal.
+  - Configure now passes `-DENABLE_SDL2=ON`, `-DENABLE_DXR=OFF` explicitly.
+
+Linux sanity check (`cmake --preset linux-gcc-release`) still configures
+cleanly; OpenAL probe correctly logs "not found" and falls back without
+breaking the build.
 
 ### Key files
 - `SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h` — Metal interface (header only)
