@@ -22,6 +22,7 @@
 
 #include "EditorLogger.h"
 #include "EditorLayoutManager.h"
+#include "EditorNotificationManager.h"
 #include "EditorCrashHandler.h"
 #include "ProjectManager.h"
 #include "../UndoRedo/UndoRedoManager.h"
@@ -191,16 +192,8 @@ namespace SparkEditor
         int m_assetDatabaseSize = 0;
         size_t m_assetMemoryUsage = 0;
 
-        // Notifications
-        struct Notification
-        {
-            std::string message;
-            std::string type;
-            float duration;
-            float timeLeft;
-            std::chrono::steady_clock::time_point timestamp;
-        };
-        std::vector<Notification> m_notifications;
+        // Notifications — owned EditorNotificationManager handles state + rendering.
+        std::unique_ptr<EditorNotificationManager> m_notificationManager;
 
         // Dialog state
         struct ModalDialog
@@ -296,7 +289,6 @@ namespace SparkEditor
                                        const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg);
         void RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg);
         void RenderStatusBar();
-        void RenderNotifications();
         void RenderPanels();
         void RenderModalDialogs();
         void RenderWelcomeScreen();
@@ -326,7 +318,6 @@ namespace SparkEditor
         // Update() helpers — separate input from tick logic
         void ProcessSceneShortcuts();
         void ProcessGlobalHotkeys();
-        void UpdateNotifications(float deltaTime);
     };
 
 } // namespace SparkEditor
