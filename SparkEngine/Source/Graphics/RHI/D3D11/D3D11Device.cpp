@@ -1248,11 +1248,6 @@ namespace Spark
                 m_immediateContext->Flush();
             }
 
-            void D3D11Device::ResetStatistics()
-            {
-                m_statistics = {};
-            }
-
             std::string D3D11Device::GetDeviceInfo() const
             {
                 std::string info = "=== D3D11 Device Info ===\n";

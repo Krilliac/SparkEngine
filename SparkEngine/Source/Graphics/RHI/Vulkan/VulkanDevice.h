@@ -12,11 +12,8 @@
 #pragma once
 
 #include "../RHIDevice.h"
+#include "../RHIDeviceBase.h"
 #include "../RHIResources.h"
-// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
-// vertex/index bump allocator. Each VulkanDevice instance owns one so
-// render systems can request cheap per-frame CPU-visible GPU memory.
-#include "../TransientBufferAllocator.h"
 
 // Vulkan availability is checked at build time
 #ifdef SPARK_VULKAN_SUPPORT
@@ -394,7 +391,7 @@ namespace Spark
             // VULKAN DEVICE
             // ============================================================================
 
-            class VulkanDevice : public IRHIDevice
+            class VulkanDevice : public RHIDeviceBase
             {
               public:
                 struct D3D11ParityMilestones
@@ -441,9 +438,6 @@ namespace Spark
                 void WaitForIdle() override;
 
                 GraphicsBackend GetBackendType() const override { return GraphicsBackend::Vulkan; }
-                const RHIDeviceCapabilities& GetCapabilities() const override { return m_capabilities; }
-                const RHIStatistics& GetStatistics() const override { return m_statistics; }
-                void ResetStatistics() override;
                 std::string GetDeviceInfo() const override;
 
                 // Vulkan-specific accessors
@@ -528,8 +522,6 @@ namespace Spark
                 // Push descriptor function pointer (Vulkan 1.4 core / VK_KHR_push_descriptor)
                 PFN_vkCmdPushDescriptorSetKHR m_vkCmdPushDescriptorSet = nullptr;
 
-                RHIDeviceCapabilities m_capabilities;
-                RHIStatistics m_statistics;
                 bool m_validationEnabled = false;
                 bool m_isSoftwareDevice = false;
                 bool m_vulkan14Available = false;
@@ -537,11 +529,6 @@ namespace Spark
                 bool m_hostImageCopySupported = false;
 
                 const std::vector<const char*> m_deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-
-                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
-                // Initialized in VulkanDevice::Initialize after the vk device
-                // is ready; Shutdown releases its device-local buffers.
-                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace Vulkan

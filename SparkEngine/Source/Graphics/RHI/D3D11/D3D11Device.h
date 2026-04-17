@@ -14,13 +14,9 @@
 #ifdef _WIN32
 
 #include "../RHIDevice.h"
+#include "../RHIDeviceBase.h"
 #include "../RHIResources.h"
 #include "../DeferredDeletionQueue.h"
-// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
-// vertex/index bump allocator. Each D3D11Device instance owns one so
-// render systems (debug draw, particles, UI) can request cheap per-
-// frame CPU-visible GPU memory without touching device internals.
-#include "../TransientBufferAllocator.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>
@@ -278,7 +274,7 @@ namespace Spark
             // D3D11 DEVICE
             // ============================================================================
 
-            class D3D11Device : public IRHIDevice
+            class D3D11Device : public RHIDeviceBase
             {
               public:
                 D3D11Device();
@@ -313,9 +309,6 @@ namespace Spark
                 void WaitForIdle() override;
 
                 GraphicsBackend GetBackendType() const override { return GraphicsBackend::D3D11; }
-                const RHIDeviceCapabilities& GetCapabilities() const override { return m_capabilities; }
-                const RHIStatistics& GetStatistics() const override { return m_statistics; }
-                void ResetStatistics() override;
                 std::string GetDeviceInfo() const override;
 
                 // D3D11-specific accessors
@@ -339,20 +332,10 @@ namespace Spark
 
                 std::unique_ptr<D3D11CommandList> m_immediateCommandList;
 
-                RHIDeviceCapabilities m_capabilities;
-                RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
                 bool m_isSoftwareDevice = false;
 
                 DeferredDeletionQueue m_deletionQueue;
-
-                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
-                // Initialized in D3D11Device::Initialize once the D3D device
-                // is ready; Shutdown tears it down before releasing the
-                // device. BeginFrame / EndFrame pump the allocator so
-                // AllocateVertices / AllocateIndices return valid blocks
-                // only inside a frame.
-                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace D3D11

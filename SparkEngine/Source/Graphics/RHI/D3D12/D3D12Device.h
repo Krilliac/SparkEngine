@@ -33,10 +33,7 @@ typedef ID3D12Device1 ID3D12Device5; // Safe stub — never actually used under 
 #endif
 
 #include "D3D12Types.h"
-// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
-// vertex/index bump allocator. Each D3D12Device instance owns one so
-// render systems can request cheap per-frame CPU-visible GPU memory.
-#include "../TransientBufferAllocator.h"
+#include "../RHIDeviceBase.h"
 
 #include <queue>
 #include <unordered_map>
@@ -70,7 +67,7 @@ namespace Spark
              *   - ExecuteCommandList() serialises submissions through an internal
              *     mutex.
              */
-            class D3D12Device : public IRHIDevice
+            class D3D12Device : public RHIDeviceBase
             {
               public:
                 D3D12Device();
@@ -126,9 +123,6 @@ namespace Spark
                 // -- IRHIDevice: Device info -----------------------------------------------
 
                 GraphicsBackend GetBackendType() const override { return GraphicsBackend::D3D12; }
-                const RHIDeviceCapabilities& GetCapabilities() const override { return m_capabilities; }
-                const RHIStatistics& GetStatistics() const override { return m_statistics; }
-                void ResetStatistics() override;
                 std::string GetDeviceInfo() const override;
 
                 // -- D3D12-specific accessors ---------------------------------------------
@@ -243,8 +237,6 @@ namespace Spark
 
                 // -- Capabilities & stats -------------------------------------------------
 
-                RHIDeviceCapabilities m_capabilities;
-                RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
                 bool m_dxrSupported = false;
                 bool m_isSoftwareDevice = false;
@@ -272,11 +264,6 @@ namespace Spark
                  *        whose fence value has been reached by the GPU.
                  */
                 void ProcessDeferredReleases();
-
-                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
-                // Initialized in D3D12Device::Initialize after the device is
-                // ready; Shutdown releases its GPU buffers.
-                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace D3D12

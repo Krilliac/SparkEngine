@@ -1843,11 +1843,6 @@ namespace Spark
                     vkDeviceWaitIdle(m_device);
             }
 
-            void VulkanDevice::ResetStatistics()
-            {
-                m_statistics = {};
-            }
-
             std::string VulkanDevice::GetDeviceInfo() const
             {
                 std::string info = "=== Vulkan Device Info ===\n";

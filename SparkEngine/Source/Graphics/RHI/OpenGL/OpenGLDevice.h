@@ -12,11 +12,8 @@
 #include "../../../Core/Platform.h"
 
 #include "../RHIDevice.h"
+#include "../RHIDeviceBase.h"
 #include "../RHIResources.h"
-// Phase Z Theme 3B: activated Tier 2 RHI orphan — per-frame transient
-// vertex/index bump allocator. Each OpenGLDevice instance owns one so
-// render systems can request cheap per-frame CPU-visible GPU memory.
-#include "../TransientBufferAllocator.h"
 
 #ifdef SPARK_OPENGL_SUPPORT
 
@@ -365,7 +362,7 @@ namespace Spark
             // OPENGL DEVICE
             // ============================================================================
 
-            class GLDevice : public IRHIDevice
+            class GLDevice : public RHIDeviceBase
             {
               public:
                 GLDevice();
@@ -402,9 +399,6 @@ namespace Spark
                 void WaitForIdle() override;
 
                 GraphicsBackend GetBackendType() const override { return GraphicsBackend::OpenGL; }
-                const RHIDeviceCapabilities& GetCapabilities() const override { return m_capabilities; }
-                const RHIStatistics& GetStatistics() const override { return m_statistics; }
-                void ResetStatistics() override;
                 std::string GetDeviceInfo() const override;
 
               private:
@@ -418,8 +412,6 @@ namespace Spark
                 void QueryCapabilities();
 
                 std::unique_ptr<GLCommandList> m_immediateCommandList;
-                RHIDeviceCapabilities m_capabilities;
-                RHIStatistics m_statistics;
                 bool m_debugEnabled = false;
                 bool m_shutdownCalled = false; ///< Guards against double Shutdown() calls
 
@@ -434,11 +426,6 @@ namespace Spark
                 EGLSurface m_bootstrapSurface = EGL_NO_SURFACE;
                 bool m_ownsEglContext = true; ///< False when host (e.g. SDL2) created the context
 #endif
-
-                // Phase Z Theme 3B: per-frame transient vertex/index allocator.
-                // Initialized in OpenGLDevice::Initialize after the GL context
-                // is ready; Shutdown releases its GL buffers.
-                TransientBufferAllocator m_transientBuffers{4 * 1024 * 1024, 2 * 1024 * 1024};
             };
 
         } // namespace OpenGL
