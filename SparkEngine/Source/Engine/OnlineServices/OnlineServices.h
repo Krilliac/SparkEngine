@@ -112,6 +112,18 @@ namespace Spark::OnlineServices
         std::string presence; ///< Status text (e.g. "In Game — Level 5")
     };
 
+    /** @brief Feature capability mask for a platform backend */
+    struct PlatformCapabilities
+    {
+        bool authentication = false;
+        bool sessions = false;
+        bool leaderboards = false;
+        bool achievements = false;
+        bool cloudSave = false;
+        bool friends = false;
+        bool presence = false;
+    };
+
     // ========================================================================
     // Abstract platform interface
     // ========================================================================
@@ -129,6 +141,10 @@ namespace Spark::OnlineServices
 
         /** @brief Get the platform name (e.g. "Steam", "Null") */
         virtual std::string GetPlatformName() const = 0;
+        /** @brief Query which online features the active backend supports. */
+        virtual PlatformCapabilities GetCapabilities() const = 0;
+        /** @brief Last human-readable failure reason from this backend (empty if none). */
+        virtual std::string GetLastError() const = 0;
 
         // --- Authentication ---
         virtual bool Login(const std::string& username, const std::string& token) = 0;
@@ -179,6 +195,19 @@ namespace Spark::OnlineServices
     {
       public:
         std::string GetPlatformName() const override { return "Null (Offline)"; }
+        PlatformCapabilities GetCapabilities() const override
+        {
+            PlatformCapabilities c;
+            c.authentication = true;
+            c.sessions = true;
+            c.leaderboards = true;
+            c.achievements = true;
+            c.cloudSave = true;
+            c.friends = true;
+            c.presence = true;
+            return c;
+        }
+        std::string GetLastError() const override { return m_lastError; }
 
         bool Login(const std::string& username, const std::string& /*token*/) override
         {
@@ -186,6 +215,7 @@ namespace Spark::OnlineServices
             m_player.displayName = username;
             m_player.isOnline = true;
             m_loggedIn = true;
+            m_lastError.clear();
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Online: Login as '%s' (offline mode)", username.c_str());
             return true;
         }
@@ -220,6 +250,7 @@ namespace Spark::OnlineServices
                     return true;
                 }
             }
+            m_lastError = "Session not found: " + sessionId;
             return false;
         }
 
@@ -293,7 +324,13 @@ namespace Spark::OnlineServices
         std::vector<uint8_t> LoadFromCloud(const std::string& slotName) override
         {
             auto it = m_cloudSaves.find(slotName);
-            return (it != m_cloudSaves.end()) ? it->second : std::vector<uint8_t>{};
+            if (it == m_cloudSaves.end())
+            {
+                m_lastError = "Cloud slot not found: " + slotName;
+                return {};
+            }
+            m_lastError.clear();
+            return it->second;
         }
 
         bool DeleteCloudSave(const std::string& slotName) override { return m_cloudSaves.erase(slotName) > 0; }
@@ -318,6 +355,7 @@ namespace Spark::OnlineServices
 
       private:
         bool m_loggedIn = false;
+        std::string m_lastError;
         OnlinePlayerInfo m_player;
         SessionInfo m_currentSession;
         std::vector<SessionInfo> m_sessions;
@@ -381,6 +419,8 @@ namespace Spark::OnlineServices
     {
       public:
         std::string GetPlatformName() const override { return "Steam (Stub)"; }
+        PlatformCapabilities GetCapabilities() const override { return {}; }
+        std::string GetLastError() const override { return "Steamworks SDK unavailable in this build"; }
         bool Login(const std::string&, const std::string&) override { return false; /* SteamAPI_Init() */ }
         void Logout() override { /* SteamAPI_Shutdown() */ }
         bool IsLoggedIn() const override { return false; }
@@ -433,6 +473,8 @@ namespace Spark::OnlineServices
     {
       public:
         std::string GetPlatformName() const override { return "Epic (Stub)"; }
+        PlatformCapabilities GetCapabilities() const override { return {}; }
+        std::string GetLastError() const override { return "EOS SDK unavailable in this build"; }
         bool Login(const std::string&, const std::string&) override { return false; }
         void Logout() override {}
         bool IsLoggedIn() const override { return false; }
@@ -482,6 +524,11 @@ namespace Spark::OnlineServices
     {
       public:
         std::string GetPlatformName() const override { return "Console (Stub)"; }
+        PlatformCapabilities GetCapabilities() const override { return {}; }
+        std::string GetLastError() const override
+        {
+            return "Console SDK unavailable in this build (NDA platform integration required)";
+        }
         bool Login(const std::string&, const std::string&) override { return false; }
         void Logout() override {}
         bool IsLoggedIn() const override { return false; }
@@ -560,6 +607,13 @@ namespace Spark::OnlineServices
          */
         void SetPlatform(std::unique_ptr<IOnlinePlatform> platform)
         {
+            if (!platform)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "OnlineServiceManager::SetPlatform called with null platform, reverting to Null");
+                ResetToNullPlatform();
+                return;
+            }
             m_customPlatform = std::move(platform);
             m_activePlatform = m_customPlatform.get();
             SPARK_LOG_INFO(Spark::LogCategory::Core, "Online platform changed to: %s",
@@ -580,6 +634,18 @@ namespace Spark::OnlineServices
                 return "[OnlineServices] Not initialized";
             std::string status = "[OnlineServices] Platform: ";
             status += m_activePlatform ? m_activePlatform->GetPlatformName() : "None";
+            if (m_activePlatform)
+            {
+                const auto caps = m_activePlatform->GetCapabilities();
+                const bool hasAnyCapability = caps.authentication || caps.sessions || caps.leaderboards ||
+                                              caps.achievements || caps.cloudSave || caps.friends || caps.presence;
+                status += hasAnyCapability ? " | Capabilities: active" : " | Capabilities: none";
+                const std::string error = m_activePlatform->GetLastError();
+                if (!error.empty())
+                {
+                    status += " | LastError: " + error;
+                }
+            }
             if (m_activePlatform && m_activePlatform->IsLoggedIn())
             {
                 auto player = m_activePlatform->GetLocalPlayer();

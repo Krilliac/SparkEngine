@@ -193,6 +193,7 @@ namespace Spark::VR
         std::string Console_GetStatus() const;
 
       private:
+        std::string m_runtimeStatus = "OpenXR runtime not linked in this build."; ///< Human-readable backend state.
         std::atomic<bool> m_initialized{false};                       ///< Whether VR hardware is connected and ready.
         DirectX::XMFLOAT3 m_headPosition{0, 0, 0};                    ///< HMD position in tracking space (meters).
         DirectX::XMFLOAT4 m_headOrientation{0, 0, 0, 1};              ///< HMD orientation quaternion (x, y, z, w).

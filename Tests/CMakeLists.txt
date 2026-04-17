@@ -111,6 +111,7 @@ add_executable(SparkTests
     TestModuleHotReload.cpp
     TestConsoleRBAC.cpp
     TestNetworkIntegration.cpp
+    TestNetworkStack.cpp
     TestConnectionTimeout.cpp
     TestRecastIntegration.cpp
     TestAudioBackendFactory.cpp

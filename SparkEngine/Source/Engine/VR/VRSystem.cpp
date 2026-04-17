@@ -32,9 +32,10 @@ namespace Spark::VR
         //
         // For now, provide the framework stub
         m_initialized = false; // Set to true when OpenXR is linked
+        m_runtimeStatus = "OpenXR runtime not linked in this build (ENABLE_VR currently provides stub backend).";
         if (!m_initialized)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "VRSystem::Initialize — OpenXR not linked, VR unavailable");
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VRSystem::Initialize — %s", m_runtimeStatus.c_str());
         }
         return m_initialized;
     }
@@ -65,8 +66,17 @@ namespace Spark::VR
 
     void VRSystem::TriggerHaptic(bool isLeft, float amplitude, float duration)
     {
+        if (amplitude < 0.0f || amplitude > 1.0f || duration < 0.0f)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "VRSystem::TriggerHaptic invalid params (left=%d amplitude=%.3f duration=%.3f)",
+                           isLeft ? 1 : 0, amplitude, duration);
+            return;
+        }
         if (!m_initialized)
         {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "VRSystem::TriggerHaptic ignored; runtime unavailable: %s",
+                            m_runtimeStatus.c_str());
             return;
         }
         (void)isLeft;
@@ -102,7 +112,7 @@ namespace Spark::VR
         }
         else
         {
-            oss << "VR hardware not detected or OpenXR not linked.\n";
+            oss << "Unavailable reason: " << m_runtimeStatus << "\n";
         }
         return oss.str();
     }
