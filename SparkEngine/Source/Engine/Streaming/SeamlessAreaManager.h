@@ -249,14 +249,33 @@ namespace Spark::Streaming
         // Prediction and streaming logic
         XMFLOAT3 PredictFuturePosition() const;
         float DistanceToArea(const XMFLOAT3& point, const AreaDefinition& area) const;
+
+        /**
+         * @brief Snapshot of the player state used by directional bias calculations.
+         *
+         * Captured once per Update tick so the sort comparator and radius tests
+         * see a consistent value (SetPlayerState() may run on other threads,
+         * which would otherwise break std::sort's strict-weak-ordering).
+         */
+        struct DirectionalSnapshot
+        {
+            XMFLOAT3 position{0, 0, 0};
+            XMFLOAT3 direction{0, 0, 1};
+            bool valid = false;
+        };
+
+        /// @brief Build a snapshot under a single mutex lock.
+        DirectionalSnapshot SnapshotPlayerDirection() const;
+
         /**
          * @brief Compute a distance biased by alignment with the player's movement direction.
          *
-         * Areas lying in front of the player along the movement vector get a
-         * reduced effective distance, biasing them to load first. Returns the
-         * original distance when `directionalBias == 0`.
+         * @param rawDistance  The raw distance to the area
+         * @param area         The area definition
+         * @param snap         A pre-captured player direction snapshot
          */
-        float DirectionalEffectiveDistance(float rawDistance, const AreaDefinition& area) const;
+        float DirectionalEffectiveDistance(float rawDistance, const AreaDefinition& area,
+                                           const DirectionalSnapshot& snap) const;
         void UpdateAreaDistances();
         void ProcessLoadQueue();
         void ProcessUnloadQueue();

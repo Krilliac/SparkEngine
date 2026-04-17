@@ -140,6 +140,33 @@ TEST(VolumetricClouds_ZeroLengthRay)
     clouds.Shutdown();
 }
 
+TEST(VolumetricClouds_HorizontalRayInsideSlab)
+{
+    // Codex P1 regression: a horizontal ray whose origin is between the base
+    // and top altitudes must still march the cloud layer.
+    auto& clouds = VolumetricCloudSystem::GetInstance();
+    VolumetricCloudSettings s;
+    s.coverage = 0.95f;
+    s.density = 0.2f;
+    clouds.Initialize(s);
+    CloudSample out =
+        clouds.SampleAlongRay(0.0f, 2500.0f, 0.0f, 1.0f, 0.0f, 0.0f, 5000.0f); // dirY == 0, origin inside slab
+    EXPECT_LE(out.transmittance, 1.0f);
+    EXPECT_GE(out.transmittance, 0.0f);
+    clouds.Shutdown();
+}
+
+TEST(VolumetricClouds_HorizontalRayOutsideSlab)
+{
+    // Same direction but origin is above the layer — must early out.
+    auto& clouds = VolumetricCloudSystem::GetInstance();
+    clouds.Initialize();
+    CloudSample out = clouds.SampleAlongRay(0.0f, 100.0f, 0.0f, 1.0f, 0.0f, 0.0f, 5000.0f);
+    EXPECT_NEAR(out.transmittance, 1.0f, 0.001f);
+    EXPECT_NEAR(out.luminanceR, 0.0f, 0.001f);
+    clouds.Shutdown();
+}
+
 // =============================================================================
 // Weather integration
 // =============================================================================

@@ -245,41 +245,44 @@ namespace Spark::Streaming
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    float SeamlessAreaManager::DirectionalEffectiveDistance(float rawDistance, const AreaDefinition& area) const
+    SeamlessAreaManager::DirectionalSnapshot SeamlessAreaManager::SnapshotPlayerDirection() const
     {
-        if (m_config.directionalBias <= 0.0f || rawDistance <= 0.0f)
-            return rawDistance;
-
-        XMFLOAT3 playerPos;
-        XMFLOAT3 dir;
+        DirectionalSnapshot snap;
+        std::lock_guard<std::mutex> lock(m_playerMutex);
+        snap.position = m_playerPosition;
+        const float speedSq = m_playerVelocity.x * m_playerVelocity.x + m_playerVelocity.y * m_playerVelocity.y +
+                              m_playerVelocity.z * m_playerVelocity.z;
+        if (speedSq > 0.25f)
         {
-            std::lock_guard<std::mutex> lock(m_playerMutex);
-            playerPos = m_playerPosition;
-            const float speedSq = m_playerVelocity.x * m_playerVelocity.x + m_playerVelocity.y * m_playerVelocity.y +
-                                  m_playerVelocity.z * m_playerVelocity.z;
-            if (speedSq > 0.25f)
-            {
-                const float inv = 1.0f / std::sqrt(speedSq);
-                dir = {m_playerVelocity.x * inv, m_playerVelocity.y * inv, m_playerVelocity.z * inv};
-            }
-            else
-            {
-                dir = m_cameraDirection;
-            }
+            const float inv = 1.0f / std::sqrt(speedSq);
+            snap.direction = {m_playerVelocity.x * inv, m_playerVelocity.y * inv, m_playerVelocity.z * inv};
         }
+        else
+        {
+            snap.direction = m_cameraDirection;
+        }
+        snap.valid = true;
+        return snap;
+    }
+
+    float SeamlessAreaManager::DirectionalEffectiveDistance(float rawDistance, const AreaDefinition& area,
+                                                            const DirectionalSnapshot& snap) const
+    {
+        if (m_config.directionalBias <= 0.0f || rawDistance <= 0.0f || !snap.valid)
+            return rawDistance;
 
         // Vector from player to area centre
         const float cx = 0.5f * (area.boundsMin.x + area.boundsMax.x);
         const float cy = 0.5f * (area.boundsMin.y + area.boundsMax.y);
         const float cz = 0.5f * (area.boundsMin.z + area.boundsMax.z);
-        const float vx = cx - playerPos.x;
-        const float vy = cy - playerPos.y;
-        const float vz = cz - playerPos.z;
+        const float vx = cx - snap.position.x;
+        const float vy = cy - snap.position.y;
+        const float vz = cz - snap.position.z;
         const float vlen = std::sqrt(vx * vx + vy * vy + vz * vz);
         if (vlen < 1e-4f)
             return rawDistance;
 
-        const float dot = (dir.x * vx + dir.y * vy + dir.z * vz) / vlen;
+        const float dot = (snap.direction.x * vx + snap.direction.y * vy + snap.direction.z * vz) / vlen;
         if (dot < m_config.directionalDotThreshold)
             return rawDistance;
 
@@ -345,8 +348,22 @@ namespace Spark::Streaming
     {
         XMFLOAT3 predicted = PredictFuturePosition();
 
-        // Build a sorted list of areas that should be loaded
-        m_loadQueue.clear();
+        // Snapshot player direction once for this tick. SetPlayerState() may run
+        // on other threads, so we must not let live state mutate during sort —
+        // doing so would break std::sort's strict-weak-ordering guarantee.
+        const DirectionalSnapshot snap = SnapshotPlayerDirection();
+
+        // Build a sorted list of areas that should be loaded, paired with their
+        // pre-computed sort key (priority + biased distance).
+        struct Candidate
+        {
+            AreaID id;
+            int priority;
+            float effectiveDistance;
+        };
+        std::vector<Candidate> candidates;
+        candidates.reserve(m_areas.size());
+
         for (auto& [id, area] : m_areas)
         {
             if (area.state != AreaState::Unloaded)
@@ -359,32 +376,30 @@ namespace Spark::Streaming
             // so they preload even if slightly beyond the raw radius.
             float distCurrent = area.distanceToPlayer;
             float distPredicted = DistanceToArea(predicted, area.definition);
-            float biased = DirectionalEffectiveDistance(std::min(distCurrent, distPredicted), area.definition);
+            float biased = DirectionalEffectiveDistance(std::min(distCurrent, distPredicted), area.definition, snap);
 
             if (biased <= m_config.loadRadius)
             {
-                m_loadQueue.push_back(id);
+                candidates.push_back({id, area.definition.priority,
+                                      DirectionalEffectiveDistance(area.distanceToPlayer, area.definition, snap)});
             }
         }
 
-        // Sort by priority (descending), then by distance (ascending)
-        std::sort(m_loadQueue.begin(), m_loadQueue.end(),
-                  [this](AreaID a, AreaID b)
+        // Sort by priority (descending), then by precomputed distance (ascending).
+        // Comparator is now a pure function of the Candidate struct — strict weak
+        // ordering holds regardless of concurrent SetPlayerState() calls.
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const Candidate& a, const Candidate& b)
                   {
-                      auto itA = m_areas.find(a);
-                      auto itB = m_areas.find(b);
-                      if (itA == m_areas.end() || itB == m_areas.end())
-                          return itA != m_areas.end();
-                      const auto& areaA = itA->second;
-                      const auto& areaB = itB->second;
-                      if (areaA.definition.priority != areaB.definition.priority)
-                      {
-                          return areaA.definition.priority > areaB.definition.priority;
-                      }
-                      const float dA = DirectionalEffectiveDistance(areaA.distanceToPlayer, areaA.definition);
-                      const float dB = DirectionalEffectiveDistance(areaB.distanceToPlayer, areaB.definition);
-                      return dA < dB;
+                      if (a.priority != b.priority)
+                          return a.priority > b.priority;
+                      return a.effectiveDistance < b.effectiveDistance;
                   });
+
+        m_loadQueue.clear();
+        m_loadQueue.reserve(candidates.size());
+        for (const Candidate& c : candidates)
+            m_loadQueue.push_back(c.id);
 
         // Start loading up to the concurrent limit
         for (AreaID id : m_loadQueue)

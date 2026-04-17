@@ -331,19 +331,28 @@ namespace Spark::Graphics
         dirZ /= len;
 
         // Intersect ray with the two slab altitudes; march only between them.
-        auto slabDist = [&](float targetY) -> float
+        // Special case: a near-horizontal ray (|dirY| ≈ 0) never crosses the
+        // slab planes — but if its origin already sits between baseAltitude
+        // and topAltitude it still travels through cloud and must be marched.
+        float tMin = 0.0f;
+        float tMax = 0.0f;
+        if (std::abs(dirY) < 1e-4f)
         {
-            if (std::abs(dirY) < 1e-4f)
-                return -1.0f;
-            return (targetY - originY) / dirY;
-        };
-        const float dBottom = slabDist(m_settings.baseAltitude);
-        const float dTop = slabDist(m_settings.topAltitude);
-        float tMin = std::max(0.0f, std::min(dBottom, dTop));
-        float tMax = std::max(dBottom, dTop);
-        if (tMax <= 0.0f)
-            return result;
-        tMax = std::min(tMax, maxDistance);
+            if (originY < m_settings.baseAltitude || originY > m_settings.topAltitude)
+                return result; // parallel and outside the slab — no clouds
+            tMin = 0.0f;
+            tMax = maxDistance;
+        }
+        else
+        {
+            const float dBottom = (m_settings.baseAltitude - originY) / dirY;
+            const float dTop = (m_settings.topAltitude - originY) / dirY;
+            tMin = std::max(0.0f, std::min(dBottom, dTop));
+            tMax = std::max(dBottom, dTop);
+            if (tMax <= 0.0f)
+                return result;
+            tMax = std::min(tMax, maxDistance);
+        }
         if (tMax <= tMin)
             return result;
 
