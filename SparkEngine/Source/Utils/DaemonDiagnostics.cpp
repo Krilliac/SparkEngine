@@ -148,4 +148,15 @@ namespace Spark::Daemon
         return out;
     }
 
+    DaemonCacheScope ParseDaemonCacheScope(const std::string& arg)
+    {
+        if (arg == "shader")
+            return DaemonCacheScope::Shader;
+        if (arg == "asset")
+            return DaemonCacheScope::Asset;
+        if (arg == "all")
+            return DaemonCacheScope::All;
+        return DaemonCacheScope::None;
+    }
+
 } // namespace Spark::Daemon

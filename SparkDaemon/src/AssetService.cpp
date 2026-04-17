@@ -69,6 +69,8 @@ namespace Spark::Daemon
             return HandleInvalidateAsset(payload);
         case AssetMessage::GetCacheStatsRequest:
             return HandleGetCacheStats();
+        case AssetMessage::ClearCacheRequest:
+            return HandleClearCache();
         default:
             return MakeError("unsupported asset message");
         }
@@ -196,6 +198,28 @@ namespace Spark::Daemon
         ServiceResponse out;
         out.messageType = static_cast<uint16_t>(AssetMessage::GetCacheStatsResponse);
         out.payload = EncodeAssetCacheStats(stats);
+        return out;
+    }
+
+    ServiceResponse AssetService::HandleClearCache()
+    {
+        bool deleteFromDisk = false;
+        {
+            std::lock_guard lock(m_mutex);
+            m_lruList.clear();
+            m_index.clear();
+            m_totalBytes = 0;
+            deleteFromDisk = m_diskBacked;
+        }
+        m_hitCount.store(0, std::memory_order_relaxed);
+        m_missCount.store(0, std::memory_order_relaxed);
+        m_evictionCount.store(0, std::memory_order_relaxed);
+
+        if (deleteFromDisk)
+            DeleteAllBlobFiles();
+
+        ServiceResponse out;
+        out.messageType = static_cast<uint16_t>(AssetMessage::ClearCacheResponse);
         return out;
     }
 
@@ -375,6 +399,22 @@ namespace Spark::Daemon
     {
         std::error_code ec;
         std::filesystem::remove(BlobPath(key), ec);
+    }
+
+    void AssetService::DeleteAllBlobFiles()
+    {
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(m_cacheDir, ec))
+        {
+            if (ec)
+                return;
+            if (!entry.is_regular_file())
+                continue;
+            if (entry.path().extension() != ".asset")
+                continue;
+            std::filesystem::remove(entry.path(), ec);
+            // Best-effort — individual removals may fail on locked files.
+        }
     }
 
 } // namespace Spark::Daemon

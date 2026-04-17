@@ -85,4 +85,15 @@ namespace Spark::Daemon
         return stats;
     }
 
+    std::expected<void, std::string> AssetServiceClient::ClearCache()
+    {
+        auto response = m_client.Request(ServiceId::Asset, static_cast<uint16_t>(AssetMessage::ClearCacheRequest),
+                                         /*payload*/ {});
+        if (!response)
+            return WrapError("ClearCache", response.error());
+        if (response->messageType != static_cast<uint16_t>(AssetMessage::ClearCacheResponse))
+            return WrapError("ClearCache", "unexpected response message type");
+        return {};
+    }
+
 } // namespace Spark::Daemon

@@ -54,4 +54,26 @@ namespace Spark::Daemon
      */
     [[nodiscard]] std::string ServiceIdName(uint16_t id);
 
+    /// Which cache(s) a `daemon.clear_cache` invocation should target.
+    /// Bitmask so `All` = `Shader | Asset` falls out naturally.
+    enum class DaemonCacheScope : uint8_t
+    {
+        None = 0,
+        Shader = 1u << 0,
+        Asset = 1u << 1,
+        All = Shader | Asset,
+    };
+
+    /**
+     * @brief Parse a command argument into a `DaemonCacheScope`.
+     *
+     * Recognised (case-sensitive, to match the rest of InGameConsole):
+     *   - `"shader"` → `Shader`
+     *   - `"asset"`  → `Asset`
+     *   - `"all"`    → `All`
+     * Anything else (including empty) returns `None`. The caller is
+     * responsible for rendering a usage hint when it sees `None`.
+     */
+    [[nodiscard]] DaemonCacheScope ParseDaemonCacheScope(const std::string& arg);
+
 } // namespace Spark::Daemon

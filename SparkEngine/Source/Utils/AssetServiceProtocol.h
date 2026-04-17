@@ -40,6 +40,8 @@ namespace Spark::Daemon
         InvalidateAssetResponse = 0x0006,
         GetCacheStatsRequest = 0x0007,
         GetCacheStatsResponse = 0x0008,
+        ClearCacheRequest = 0x0009, ///< Drop every entry (all paths, all platforms). Also zeros stats.
+        ClearCacheResponse = 0x000A,
     };
 
     // =========================================================================

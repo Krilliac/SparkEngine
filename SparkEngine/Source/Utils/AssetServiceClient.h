@@ -63,6 +63,10 @@ namespace Spark::Daemon
         /// Fetch entry count, total bytes, hit and miss counters.
         std::expected<AssetCacheStats, std::string> GetCacheStats();
 
+        /// Drop every entry in the daemon's asset cache (and its on-disk files).
+        /// Zeros hit/miss/eviction counters too.
+        std::expected<void, std::string> ClearCache();
+
       private:
         DaemonClient& m_client;
     };

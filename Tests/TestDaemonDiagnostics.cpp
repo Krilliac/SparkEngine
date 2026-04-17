@@ -131,3 +131,30 @@ TEST(DaemonDiagnostics_ServiceIdNameMapping)
     EXPECT_EQ(ServiceIdName(static_cast<uint16_t>(ServiceId::Build)), "build");
     EXPECT_EQ(ServiceIdName(0x4242), "unknown(0x4242)");
 }
+
+TEST(DaemonDiagnostics_ParseCacheScopeKnownValues)
+{
+    EXPECT_TRUE(ParseDaemonCacheScope("shader") == DaemonCacheScope::Shader);
+    EXPECT_TRUE(ParseDaemonCacheScope("asset") == DaemonCacheScope::Asset);
+    EXPECT_TRUE(ParseDaemonCacheScope("all") == DaemonCacheScope::All);
+}
+
+TEST(DaemonDiagnostics_ParseCacheScopeInvalidReturnsNone)
+{
+    EXPECT_TRUE(ParseDaemonCacheScope("") == DaemonCacheScope::None);
+    EXPECT_TRUE(ParseDaemonCacheScope("Shader") == DaemonCacheScope::None); // case-sensitive
+    EXPECT_TRUE(ParseDaemonCacheScope("assets") == DaemonCacheScope::None); // plural rejected
+    EXPECT_TRUE(ParseDaemonCacheScope("wombat") == DaemonCacheScope::None); // unknown token
+}
+
+TEST(DaemonDiagnostics_CacheScopeAllIsBitwiseUnion)
+{
+    // `All` is declared as `Shader | Asset`; verify the bit math holds so
+    // command runners can do `(scope & Shader) != 0` reliably.
+    const auto allBits = static_cast<uint8_t>(DaemonCacheScope::All);
+    const auto sh = static_cast<uint8_t>(DaemonCacheScope::Shader);
+    const auto as = static_cast<uint8_t>(DaemonCacheScope::Asset);
+    EXPECT_EQ(allBits & sh, sh);
+    EXPECT_EQ(allBits & as, as);
+    EXPECT_EQ(sh & as, 0u);
+}

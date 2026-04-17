@@ -56,8 +56,10 @@ namespace
     std::unique_ptr<Spark::Daemon::AssetServiceClient> g_assetClient;
     bool g_active = false;
     bool g_statsCommandRegistered = false;
+    bool g_clearCacheCommandRegistered = false;
 
     constexpr const char* kStatsCommandName = "daemon.stats";
+    constexpr const char* kClearCacheCommandName = "daemon.clear_cache";
 
     /// Query the daemon and render its state via DaemonDiagnostics.
     /// Returns a user-facing multi-line string.
@@ -121,6 +123,56 @@ namespace
         return Spark::Daemon::FormatDaemonStats(snap);
     }
 
+    /// Drive the ClearCache RPC for the selected scope(s).
+    /// Returns a user-facing summary line. Assumes args has already been
+    /// parsed into `scope` by the console handler.
+    std::string RunClearCacheCommand(Spark::Daemon::DaemonCacheScope scope)
+    {
+        using Spark::Daemon::DaemonCacheScope;
+
+        auto& conn = Spark::Daemon::DaemonConnection::Instance();
+        auto* client = conn.GetClient();
+        if (!conn.IsConnected() || client == nullptr)
+            return "daemon: not connected";
+
+        std::string cleared;
+        std::string failed;
+        auto note = [](std::string& bucket, const char* label)
+        {
+            if (!bucket.empty())
+                bucket += ", ";
+            bucket += label;
+        };
+
+        if ((static_cast<uint8_t>(scope) & static_cast<uint8_t>(DaemonCacheScope::Shader)) != 0)
+        {
+            Spark::Daemon::ShaderServiceClient tmp(*client);
+            auto* c = g_shaderClient ? g_shaderClient.get() : &tmp;
+            if (auto r = c->ClearCache())
+                note(cleared, "shader");
+            else
+                note(failed, "shader");
+        }
+        if ((static_cast<uint8_t>(scope) & static_cast<uint8_t>(DaemonCacheScope::Asset)) != 0)
+        {
+            Spark::Daemon::AssetServiceClient tmp(*client);
+            auto* c = g_assetClient ? g_assetClient.get() : &tmp;
+            if (auto r = c->ClearCache())
+                note(cleared, "asset");
+            else
+                note(failed, "asset");
+        }
+
+        std::string out = "daemon.clear_cache:";
+        if (!cleared.empty())
+            out += " cleared [" + cleared + "]";
+        if (!failed.empty())
+            out += " failed [" + failed + "]";
+        if (cleared.empty() && failed.empty())
+            out += " nothing to do";
+        return out;
+    }
+
     /// Idempotent registration of the `daemon.stats` console command.
     /// Registration is independent of whether a daemon is currently wired —
     /// the command itself handles the disconnected case. This way operators
@@ -142,6 +194,34 @@ namespace
             return;
         Spark::InGameConsole::GetInstance().UnregisterCommand(kStatsCommandName);
         g_statsCommandRegistered = false;
+    }
+
+    void EnsureClearCacheCommandRegistered()
+    {
+        if (g_clearCacheCommandRegistered)
+            return;
+        auto& console = Spark::InGameConsole::GetInstance();
+        console.RegisterCommand(
+            kClearCacheCommandName, "Ask the SparkDaemon to drop entries from its shader and/or asset cache",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.size() != 1)
+                    return "usage: daemon.clear_cache <shader|asset|all>";
+                auto scope = Spark::Daemon::ParseDaemonCacheScope(args[0]);
+                if (scope == Spark::Daemon::DaemonCacheScope::None)
+                    return "usage: daemon.clear_cache <shader|asset|all>";
+                return RunClearCacheCommand(scope);
+            },
+            "daemon.clear_cache <shader|asset|all>");
+        g_clearCacheCommandRegistered = true;
+    }
+
+    void UnregisterClearCacheCommand()
+    {
+        if (!g_clearCacheCommandRegistered)
+            return;
+        Spark::InGameConsole::GetInstance().UnregisterCommand(kClearCacheCommandName);
+        g_clearCacheCommandRegistered = false;
     }
 
     bool TrySpawnDaemon(const std::string& socketPath)
@@ -197,10 +277,11 @@ namespace Spark::Daemon
     {
         std::lock_guard lock(g_lifecycleMutex);
 
-        // Register the diagnostic command regardless of whether the daemon
-        // is reachable — the handler itself renders "not connected" when
+        // Register the diagnostic commands regardless of whether the daemon
+        // is reachable — the handlers themselves render "not connected" when
         // appropriate, so operators always have a way to query state.
         EnsureStatsCommandRegistered();
+        EnsureClearCacheCommandRegistered();
 
         if (g_active)
             return;
@@ -247,6 +328,7 @@ namespace Spark::Daemon
         std::lock_guard lock(g_lifecycleMutex);
 
         UnregisterStatsCommand();
+        UnregisterClearCacheCommand();
 
         if (!g_active)
             return;

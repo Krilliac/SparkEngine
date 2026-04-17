@@ -379,4 +379,77 @@ TEST(AssetService_LongPathSurvivesDiskRoundTrip)
     EXPECT_EQ(get->blob[0], 0xEFu);
 }
 
+// =========================================================================
+// ClearCache (Phase 6 follow-up)
+// =========================================================================
+
+TEST(AssetService_ClearCacheDropsAllEntriesAndZerosStats)
+{
+    InMemoryAssetFixture fx("clear");
+    EXPECT_TRUE(fx.Ready());
+    EXPECT_TRUE(fx.client.Connect(fx.sockPath).has_value());
+
+    Spark::Daemon::AssetServiceClient asset(fx.client);
+    EXPECT_TRUE(asset.PutAsset("a.png", 0, {1, 2, 3}).has_value());
+    EXPECT_TRUE(asset.PutAsset("b.png", 0, {4, 5, 6}).has_value());
+    EXPECT_TRUE(asset.GetAsset("a.png", 0).has_value()); // bump hit counter
+
+    auto before = asset.GetCacheStats();
+    EXPECT_TRUE(before && before->entryCount == 2u);
+    EXPECT_TRUE(before->hitCount > 0u);
+
+    EXPECT_TRUE(asset.ClearCache().has_value());
+
+    auto after = asset.GetCacheStats();
+    EXPECT_TRUE(after);
+    EXPECT_EQ(after->entryCount, 0u);
+    EXPECT_EQ(after->totalBytes, 0u);
+    EXPECT_EQ(after->hitCount, 0u);
+    EXPECT_EQ(after->missCount, 0u);
+    EXPECT_EQ(after->evictionCount, 0u);
+
+    // Previously-stored entries are now missing.
+    auto get = asset.GetAsset("a.png", 0);
+    EXPECT_TRUE(get && !get->found);
+}
+
+TEST(AssetService_ClearCacheRemovesDiskFiles)
+{
+    DiskAssetFixture fx("clear-disk");
+
+    Spark::Daemon::DaemonClient client;
+    EXPECT_TRUE(client.Connect(fx.sockPath).has_value());
+    Spark::Daemon::AssetServiceClient asset(client);
+
+    EXPECT_TRUE(asset.PutAsset("one.bin", 0, {0xAA}).has_value());
+    EXPECT_TRUE(asset.PutAsset("two.bin", 0, {0xBB}).has_value());
+
+    size_t before = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(fx.cacheDir))
+        if (entry.path().extension() == ".asset")
+            ++before;
+    EXPECT_EQ(before, 2u);
+
+    EXPECT_TRUE(asset.ClearCache().has_value());
+
+    size_t after = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(fx.cacheDir))
+        if (entry.path().extension() == ".asset")
+            ++after;
+    EXPECT_EQ(after, 0u);
+}
+
+TEST(AssetService_ClearCacheOnEmptyCacheIsNoOp)
+{
+    InMemoryAssetFixture fx("clear-empty");
+    EXPECT_TRUE(fx.Ready());
+    EXPECT_TRUE(fx.client.Connect(fx.sockPath).has_value());
+
+    Spark::Daemon::AssetServiceClient asset(fx.client);
+    EXPECT_TRUE(asset.ClearCache().has_value());
+
+    auto stats = asset.GetCacheStats();
+    EXPECT_TRUE(stats && stats->entryCount == 0u);
+}
+
 #endif // POSIX
