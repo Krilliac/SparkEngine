@@ -743,6 +743,19 @@ endif()
 
 # --- Vulkan ---
 if(ENABLE_VULKAN)
+    # On macOS, Vulkan only exists via MoltenVK. Probe Homebrew's install path
+    # before find_package so CMake resolves to the MoltenVK loader even when
+    # VULKAN_SDK is unset. Users installing through the official Vulkan SDK
+    # installer already get VULKAN_SDK set and will hit the normal path below.
+    if(APPLE AND NOT DEFINED ENV{VULKAN_SDK})
+        foreach(_brew_prefix /opt/homebrew /usr/local)
+            if(EXISTS "${_brew_prefix}/opt/molten-vk/lib/libMoltenVK.dylib")
+                list(APPEND CMAKE_PREFIX_PATH "${_brew_prefix}/opt/molten-vk")
+                message(STATUS "MoltenVK detected at ${_brew_prefix}/opt/molten-vk — adding to CMAKE_PREFIX_PATH")
+                break()
+            endif()
+        endforeach()
+    endif()
     find_package(Vulkan QUIET)
     if(Vulkan_FOUND)
         set(SPARK_VULKAN_AVAILABLE TRUE)
@@ -846,14 +859,59 @@ endif()
 
 # --- Metal ---
 if(ENABLE_METAL AND APPLE)
+    # Metal requires Objective-C++ (.mm) sources. The current MetalDevice.h is
+    # header-only — flag it so CMake enables the Objective-C++ compiler and
+    # surface a clear message until the .mm implementation lands.
+    enable_language(OBJCXX)
     set(SPARK_METAL_AVAILABLE TRUE)
-    message(STATUS "Metal backend enabled (experimental)")
+    message(STATUS "Metal backend enabled (experimental, requires .mm implementation)")
 else()
     set(SPARK_METAL_AVAILABLE FALSE)
     if(ENABLE_METAL AND NOT APPLE)
         message(STATUS "Metal backend requires macOS — disabled on this platform")
     else()
         message(STATUS "Metal backend disabled by option")
+    endif()
+endif()
+
+# --- OpenAL Soft (audio backend on Linux/macOS) ---
+# The OpenALAudioEngine stubs out every AL call unless SPARK_OPENAL_AVAILABLE is
+# defined and AL/al.h is reachable. Probe for OpenAL so non-Windows platforms
+# actually produce sound. On macOS, Apple ships OpenAL as a system framework
+# (deprecated since 10.15 but still functional); openal-soft via Homebrew is
+# preferred and searched first.
+if(NOT WIN32)
+    set(SPARK_OPENAL_AVAILABLE FALSE)
+    set(SPARK_OPENAL_LIBRARIES "")
+    if(APPLE)
+        foreach(_brew_prefix /opt/homebrew /usr/local)
+            if(EXISTS "${_brew_prefix}/opt/openal-soft/include/AL/al.h")
+                list(APPEND CMAKE_PREFIX_PATH "${_brew_prefix}/opt/openal-soft")
+                break()
+            endif()
+        endforeach()
+    endif()
+    find_package(OpenAL QUIET)
+    if(OPENAL_FOUND)
+        set(SPARK_OPENAL_AVAILABLE TRUE)
+        if(TARGET OpenAL::OpenAL)
+            set(SPARK_OPENAL_LIBRARIES OpenAL::OpenAL)
+        else()
+            set(SPARK_OPENAL_LIBRARIES ${OPENAL_LIBRARY})
+        endif()
+        message(STATUS "OpenAL found: ${OPENAL_LIBRARY} (include: ${OPENAL_INCLUDE_DIR})")
+    elseif(APPLE)
+        # Fall back to the system OpenAL.framework. It still ships in macOS
+        # despite the deprecation notice and suffices for our use.
+        find_library(OPENAL_FRAMEWORK OpenAL)
+        if(OPENAL_FRAMEWORK)
+            set(SPARK_OPENAL_AVAILABLE TRUE)
+            set(SPARK_OPENAL_LIBRARIES "${OPENAL_FRAMEWORK}")
+            message(STATUS "OpenAL: using system OpenAL.framework (install openal-soft via brew for newer builds)")
+        endif()
+    endif()
+    if(NOT SPARK_OPENAL_AVAILABLE)
+        message(STATUS "OpenAL not found — audio will be silent on non-Windows (install openal-soft)")
     endif()
 endif()
 
@@ -1564,14 +1622,17 @@ else()
         target_compile_definitions(SparkEngineLib PUBLIC SPARK_PLATFORM_LINUX)
     endif()
 
-    # X11 for windowing and OpenGL context (GLX)
-    find_package(X11 QUIET)
-    if(X11_FOUND)
-        target_link_libraries(SparkEngineLib PUBLIC ${X11_LIBRARIES})
-        target_include_directories(SparkEngineLib PUBLIC ${X11_INCLUDE_DIR})
-        message(STATUS "X11 found - windowing support enabled")
-    else()
-        message(WARNING "X11 not found — falling back to headless mode only (install libx11-dev for windowed mode)")
+    # X11 for windowing and OpenGL context (GLX) — Linux only.
+    # macOS has no X11 by default; Cocoa/CGL is used instead.
+    if(NOT APPLE)
+        find_package(X11 QUIET)
+        if(X11_FOUND)
+            target_link_libraries(SparkEngineLib PUBLIC ${X11_LIBRARIES})
+            target_include_directories(SparkEngineLib PUBLIC ${X11_INCLUDE_DIR})
+            message(STATUS "X11 found - windowing support enabled")
+        else()
+            message(WARNING "X11 not found — falling back to headless mode only (install libx11-dev for windowed mode)")
+        endif()
     endif()
 endif()
 
@@ -1621,8 +1682,9 @@ if(SPARK_OPENGL_AVAILABLE)
         message(STATUS "SparkEngine: EGL headless rendering ENABLED")
     endif()
 
-    # GLX + X11 for Linux software rendering (via Xvfb when no display)
-    if(NOT WIN32 AND NOT SPARK_EGL_AVAILABLE)
+    # GLX + X11 for Linux software rendering (via Xvfb when no display).
+    # macOS uses CGL/NSOpenGL through Cocoa and has no X11 by default, so skip.
+    if(NOT WIN32 AND NOT APPLE AND NOT SPARK_EGL_AVAILABLE)
         find_package(X11 QUIET)
         if(X11_FOUND)
             target_link_libraries(SparkEngineLib PUBLIC X11::X11)
@@ -1641,15 +1703,38 @@ if(SPARK_METAL_AVAILABLE)
     message(STATUS "SparkEngine: Metal backend ENABLED")
 endif()
 
+# --- OpenAL audio backend (Linux/macOS) ---
+if(SPARK_OPENAL_AVAILABLE)
+    target_compile_definitions(SparkEngineLib PUBLIC SPARK_OPENAL_AVAILABLE=1)
+    if(OPENAL_INCLUDE_DIR)
+        target_include_directories(SparkEngineLib PUBLIC ${OPENAL_INCLUDE_DIR})
+    endif()
+    target_link_libraries(SparkEngineLib PUBLIC ${SPARK_OPENAL_LIBRARIES})
+    message(STATUS "SparkEngine: OpenAL audio backend ENABLED")
+endif()
+
 # --- macOS platform frameworks and rpath ---
 if(APPLE)
-    # Cocoa is needed for windowing when SDL2 is not available
-    target_link_libraries(SparkEngineLib PUBLIC "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
+    # Cocoa is needed for windowing when SDL2 is not available; IOKit/CoreVideo
+    # support HID and display link; AudioToolbox/CoreAudio are required by
+    # OpenAL.framework when the system OpenAL fallback is used.
+    target_link_libraries(SparkEngineLib PUBLIC
+        "-framework Cocoa"
+        "-framework IOKit"
+        "-framework CoreVideo"
+        "-framework AudioToolbox"
+        "-framework CoreAudio"
+        "-framework CoreFoundation"
+    )
+    # Silence the blanket OpenGL deprecation warning: macOS caps system GL at
+    # 4.1 but the backend still functions. MoltenVK/Metal are the long-term
+    # path; until then, GL is the supported non-headless default.
+    target_compile_definitions(SparkEngineLib PUBLIC GL_SILENCE_DEPRECATION=1)
     # Set rpath for .dylib game modules and shared libraries
     set(CMAKE_MACOSX_RPATH ON)
     set(CMAKE_INSTALL_RPATH "@executable_path;@executable_path/../lib")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-    message(STATUS "SparkEngine: macOS frameworks linked (Cocoa, IOKit, CoreVideo)")
+    message(STATUS "SparkEngine: macOS frameworks linked (Cocoa, IOKit, CoreVideo, AudioToolbox, CoreAudio)")
 endif()
 
 # --- Neural Rendering ---

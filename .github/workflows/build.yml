@@ -882,7 +882,13 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies
-      run: brew install cmake sdl2 ccache
+      run: |
+        # SDL2 handles windowing/input, openal-soft gives real audio output.
+        # molten-vk is optional — enables the Vulkan path when the MoltenVK
+        # preset is used. Everything else is build tooling.
+        brew update
+        brew install cmake sdl2 openal-soft ccache
+        brew install molten-vk || echo "::warning::MoltenVK install failed — Vulkan path will be disabled"
 
     - name: Setup ccache
       uses: actions/cache@v5
@@ -905,12 +911,17 @@ jobs:
     - name: Configure CMake
       run: |
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
+        # macOS path: SDL2 + OpenGL + OpenAL. Metal/DXR off (no .mm impl yet),
+        # Vulkan off (MoltenVK covered by its own preset). ENABLE_SDL2=ON is
+        # required — macOS has no X11 fallback.
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
+          -DENABLE_SDL2=ON \
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=ON \
           -DENABLE_METAL=OFF \
+          -DENABLE_DXR=OFF \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
