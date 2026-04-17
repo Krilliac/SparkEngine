@@ -37,6 +37,7 @@
 #include <memory>
 #include <string>
 #include <sstream>
+#include "Utils/LogMacros.h"
 
 namespace Spark::Net
 {
@@ -108,6 +109,17 @@ namespace Spark::Net
 
             if (!m_transport)
                 return false;
+
+            if (!m_transport->Initialize(config.serverPort))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                                "NetworkStack::Initialize failed: transport '%s' could not initialize on port %u",
+                                m_transport->GetTransportName().c_str(), static_cast<unsigned>(config.serverPort));
+                m_transport.reset();
+                m_security.reset();
+                m_initialized = false;
+                return false;
+            }
 
             // Initialize security layer
             if (config.enableEncryption)
@@ -217,6 +229,7 @@ namespace Spark::Net
                 break;
             }
             ss << "\n";
+            ss << "  Ready:          " << ((m_transport && m_transport->IsReady()) ? "YES" : "NO") << "\n";
             ss << "  Encryption:     " << (m_security ? "ENABLED" : "DISABLED") << "\n";
             ss << "  Server:         " << m_config.serverAddress << ":" << m_config.serverPort << "\n";
             ss << "  Token Lifetime: " << m_config.tokenLifetimeSeconds << "s\n";

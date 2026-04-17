@@ -134,6 +134,10 @@ TEST(OnlineServices_SteamStub)
     EXPECT_EQ(steam.GetPlatformName(), std::string("Steam (Stub)"));
     EXPECT_FALSE(steam.Login("test", ""));
     EXPECT_FALSE(steam.IsLoggedIn());
+    EXPECT_TRUE(steam.GetLastError().find("Steamworks SDK unavailable") != std::string::npos);
+    const auto caps = steam.GetCapabilities();
+    EXPECT_FALSE(caps.authentication);
+    EXPECT_FALSE(caps.sessions);
 }
 
 TEST(OnlineServices_EpicStub)
@@ -160,5 +164,8 @@ TEST(OnlineServices_SetPlatform)
 
     mgr.ResetToNullPlatform();
     EXPECT_TRUE(mgr.GetPlatform()->GetPlatformName().find("Null") != std::string::npos);
+    const auto caps = mgr.GetPlatform()->GetCapabilities();
+    EXPECT_TRUE(caps.authentication);
+    EXPECT_TRUE(caps.sessions);
     mgr.Shutdown();
 }

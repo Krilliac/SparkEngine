@@ -32,6 +32,7 @@
 
 #pragma once
 #include "ITransport.h"
+#include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
 
@@ -56,8 +57,10 @@ namespace Spark::Net
 
         bool Initialize(uint16_t /*port*/) override
         {
-            // Stub: returns false until Steamworks SDK is linked.
-            // With SDK: SteamNetworkingSockets()->InitAuthentication() on the given port.
+            // Stub fallback when Steamworks SDK is not integrated in this build.
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "SteamTransport::Initialize failed: Steamworks SDK not linked. "
+                            "Rebuild with ENABLE_STEAMWORKS and SteamNetworkingSockets support.");
             return false;
         }
 
@@ -69,16 +72,16 @@ namespace Spark::Net
 
         bool Send(const uint8_t* /*data*/, size_t /*size*/, const std::string& /*address*/, uint16_t /*port*/) override
         {
-            // Stub: returns false until Steamworks SDK is linked.
-            // With SDK: ISteamNetworkingSockets::SendMessageToConnection().
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "SteamTransport::Send failed: transport unavailable (Steamworks SDK not linked).");
             return false;
         }
 
         int Receive(uint8_t* /*buffer*/, size_t /*bufferSize*/, std::string& /*fromAddress*/,
                     uint16_t& /*fromPort*/) override
         {
-            // Stub: returns -1 until Steamworks SDK is linked.
-            // With SDK: ISteamNetworkingSockets::ReceiveMessagesOnConnection().
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "SteamTransport::Receive failed: transport unavailable (Steamworks SDK not linked).");
             return -1;
         }
 
