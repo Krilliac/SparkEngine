@@ -9,6 +9,7 @@
 #include "SparkEngine.h"
 #include "Platform.h"
 #include "framework.h"
+#include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
@@ -72,15 +73,9 @@
 #include <filesystem>
 #include <thread>
 
-// Shared globals and functions defined in SparkEngine.cpp
-extern std::unique_ptr<GraphicsEngine> g_graphics;
-extern std::unique_ptr<InputManager> g_input;
-extern std::unique_ptr<Timer> g_timer;
-extern std::unique_ptr<Spark::EventBus> g_eventBus;
-extern std::unique_ptr<ModuleManager> g_moduleManager;
-extern std::unique_ptr<AudioEngine> g_audioEngine;
-extern std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
-extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
+// Subsystem ownership lives in GetEngineRuntime() (see EngineRuntime.h).
+// Command-line flags and other cross-file non-subsystem globals still
+// live in SparkEngine.cpp and are declared here as extern.
 extern int g_testFrameLimit;
 extern uint32_t g_maxWorkerThreads;
 extern bool g_noSubprocess;
@@ -346,9 +341,10 @@ static void AllocHeadlessConsole()
  */
 static bool InitHeadlessEngineContext()
 {
-    g_timer = std::make_unique<Timer>();
-    g_eventBus = std::make_unique<Spark::EventBus>();
-    EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, g_timer.get(), g_eventBus.get()));
+    GetEngineRuntime().timer = std::make_unique<Timer>();
+    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
+    EngineContext::SetOwned(std::make_unique<EngineContext>(nullptr, nullptr, GetEngineRuntime().timer.get(),
+                                                            GetEngineRuntime().eventBus.get()));
 
     auto* ctx = EngineContext::Get();
     if (!ctx)
@@ -383,25 +379,27 @@ static bool InitHeadlessEngineContext()
  */
 static void LoadHeadlessModules(LPWSTR lpCmdLine)
 {
-    g_moduleManager = std::make_unique<ModuleManager>();
+    GetEngineRuntime().moduleManager = std::make_unique<ModuleManager>();
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    if (LoadGameModules(*g_moduleManager, lpCmdLine))
+    if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
     {
-        g_moduleManager->InitializeAll(EngineContext::Get());
-        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+        GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
+        console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
+                           " module(s)");
     }
     else
     {
         console.LogWarning("No game modules found. Running engine-only headless mode.");
     }
 
-    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
-    g_moduleHotReload->WatchAllLoadedModules();
-    g_moduleHotReload->Start();
+    GetEngineRuntime().moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    GetEngineRuntime().moduleHotReload->Initialize(GetEngineRuntime().moduleManager.get(), EngineContext::Get());
+    GetEngineRuntime().moduleHotReload->WatchAllLoadedModules();
+    GetEngineRuntime().moduleHotReload->Start();
 
-    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+    Spark::RegisterEngineConsoleCommands(GetEngineRuntime().moduleManager.get(), GetEngineRuntime().audioEngine.get(),
+                                         GetEngineRuntime().moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
 }
@@ -484,24 +482,24 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
         SPARK_HEARTBEAT();
         auto tickStart = std::chrono::steady_clock::now();
 
-        float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+        float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : (1.0f / 60.0f);
 
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
-            if (g_moduleManager && g_moduleManager->HasModules())
-                g_moduleManager->UpdateAll(dt);
+            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+                GetEngineRuntime().moduleManager->UpdateAll(dt);
         });
 
-        if (g_moduleHotReload)
-            g_moduleHotReload->PollChanges();
+        if (GetEngineRuntime().moduleHotReload)
+            GetEngineRuntime().moduleHotReload->PollChanges();
 
         // Pump the audio engine: advances source state machine, applies
         // 3D spatialization and distance attenuation. Pre-existing bug —
         // AudioEngine::Update was never called from the main loop.
         SPARK_GUARDED_UPDATE("Audio", "Core", {
-            if (g_audioEngine)
-                g_audioEngine->Update(dt);
+            if (GetEngineRuntime().audioEngine)
+                GetEngineRuntime().audioEngine->Update(dt);
         });
 
         UpdateGameplaySystems(dt);
@@ -519,7 +517,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
     }
 
     // Shutdown
-    g_moduleHotReload.reset();
+    GetEngineRuntime().moduleHotReload.reset();
     console.LogInfo("Headless server shutting down...");
     g_fileCache.reset();
     ShutdownEngine();
@@ -540,9 +538,10 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
  */
 static void InitEngineContext()
 {
-    g_eventBus = std::make_unique<Spark::EventBus>();
+    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
     EngineContext::SetOwned(
-        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
+        std::make_unique<EngineContext>(GetEngineRuntime().graphics.get(), GetEngineRuntime().input.get(),
+                                        GetEngineRuntime().timer.get(), GetEngineRuntime().eventBus.get()));
 
     auto* ctx = EngineContext::Get();
     if (!ctx)
@@ -572,9 +571,9 @@ static void InitEngineContext()
     static Spark::AssetRegistry g_assetRegistry;
     ctx->SetAssetRegistry(&g_assetRegistry);
 
-    if (g_graphics && g_graphics->GetAssetPipeline())
+    if (GetEngineRuntime().graphics && GetEngineRuntime().graphics->GetAssetPipeline())
     {
-        ctx->SetAssetPipeline(g_graphics->GetAssetPipeline());
+        ctx->SetAssetPipeline(GetEngineRuntime().graphics->GetAssetPipeline());
     }
 
     // Initialize neural inference engine (GPU compute-based, no external ML deps)
@@ -608,14 +607,14 @@ static void InitGameplaySubsystems()
 
 static void LoadAndInitModules(LPWSTR lpCmdLine)
 {
-    g_moduleManager = std::make_unique<ModuleManager>();
+    GetEngineRuntime().moduleManager = std::make_unique<ModuleManager>();
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    if (LoadGameModules(*g_moduleManager, lpCmdLine))
+    if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
     {
-        g_moduleManager->InitializeAll(EngineContext::Get());
+        GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
 
-        auto* primary = g_moduleManager->GetPrimaryModule();
+        auto* primary = GetEngineRuntime().moduleManager->GetPrimaryModule();
         if (primary)
         {
             auto info = primary->GetModuleInfo();
@@ -627,7 +626,8 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
                 SetWindowTextW(hWnd, title.c_str());
         }
 
-        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+        console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
+                           " module(s)");
     }
     else
     {
@@ -637,10 +637,10 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
         console.LogInfo("or create a spark.modules.json manifest.");
     }
 
-    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
-    g_moduleHotReload->WatchAllLoadedModules();
-    g_moduleHotReload->Start();
+    GetEngineRuntime().moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    GetEngineRuntime().moduleHotReload->Initialize(GetEngineRuntime().moduleManager.get(), EngineContext::Get());
+    GetEngineRuntime().moduleHotReload->WatchAllLoadedModules();
+    GetEngineRuntime().moduleHotReload->Start();
 }
 
 static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
@@ -657,27 +657,29 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     console.LogInfo("SaveSystem initialized");
 
     // Initialize AudioEngine before modules so modules can use EngineContext::Get()->GetAudio()
-    g_audioEngine = std::make_unique<AudioEngine>();
-    if (SUCCEEDED(g_audioEngine->Initialize(32)))
+    GetEngineRuntime().audioEngine = std::make_unique<AudioEngine>();
+    if (SUCCEEDED(GetEngineRuntime().audioEngine->Initialize(32)))
     {
         console.LogInfo("AudioEngine initialized (32 sources)");
         if (auto* ctx = EngineContext::Get())
-            ctx->SetAudio(g_audioEngine.get());
+            ctx->SetAudio(GetEngineRuntime().audioEngine.get());
     }
     else
     {
         console.LogWarning("AudioEngine initialization failed - audio commands will be unavailable");
-        g_audioEngine.reset();
+        GetEngineRuntime().audioEngine.reset();
     }
 
     // Create cross-platform audio backend (wraps AudioEngine on Windows, OpenAL on Linux)
-    g_audioBackend = Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto, g_audioEngine.get());
+    GetEngineRuntime().audioBackend =
+        Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto, GetEngineRuntime().audioEngine.get());
 
     LoadAndInitModules(lpCmdLine);
 
-    if (g_graphics)
-        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+    if (GetEngineRuntime().graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*GetEngineRuntime().graphics);
+    Spark::RegisterEngineConsoleCommands(GetEngineRuntime().moduleManager.get(), GetEngineRuntime().audioEngine.get(),
+                                         GetEngineRuntime().moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
@@ -692,9 +694,9 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 
     LogMissingModuleWarnings();
 
-    if (g_weatherSystem && g_eventBus)
+    if (g_weatherSystem && GetEngineRuntime().eventBus)
     {
-        g_weatherSystem->SetEventBus(g_eventBus.get());
+        g_weatherSystem->SetEventBus(GetEngineRuntime().eventBus.get());
     }
 
     InitConsole();
@@ -710,7 +712,7 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 {
     HACCEL accel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SparkEngine));
     MSG msg = {};
-    ASSERT(g_timer);
+    ASSERT(GetEngineRuntime().timer);
 
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Starting main engine loop...");
@@ -754,7 +756,7 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             // Smooth delta time over the last N frames to prevent physics/animation
             // jitter caused by single-frame spikes (e.g. shader compilation stalls,
             // OS scheduling delays). Raw dt is preserved for profiling accuracy.
-            float rawDt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+            float rawDt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : 0.016f;
             float dt = g_deltaSmoother.Smooth(rawDt);
 
             // Advance the global fixed-timestep accumulator so all systems can
@@ -762,33 +764,33 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             Spark::FixedTimestepAccumulator::GetInstance().Advance(rawDt);
 
             SPARK_GUARDED_UPDATE("Input", "Core", {
-                if (g_input)
-                    g_input->Update();
+                if (GetEngineRuntime().input)
+                    GetEngineRuntime().input->Update();
             });
 
-            if (g_moduleManager && g_moduleManager->HasModules())
+            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
             {
                 SPARK_GUARDED_UPDATE("Modules", "Core", {
-                    g_moduleManager->UpdateAll(dt);
-                    g_moduleManager->RenderAll();
+                    GetEngineRuntime().moduleManager->UpdateAll(dt);
+                    GetEngineRuntime().moduleManager->RenderAll();
                 });
             }
-            else if (g_graphics)
+            else if (GetEngineRuntime().graphics)
             {
                 // Engine-only mode: just clear and present
-                g_graphics->BeginFrame();
-                g_graphics->EndFrame();
+                GetEngineRuntime().graphics->BeginFrame();
+                GetEngineRuntime().graphics->EndFrame();
             }
 
-            if (g_moduleHotReload)
-                g_moduleHotReload->PollChanges();
+            if (GetEngineRuntime().moduleHotReload)
+                GetEngineRuntime().moduleHotReload->PollChanges();
 
             // Pump the audio engine: advances source state machine, applies
             // 3D spatialization and distance attenuation. Pre-existing bug —
             // AudioEngine::Update was never called from the main loop.
             SPARK_GUARDED_UPDATE("Audio", "Core", {
-                if (g_audioEngine)
-                    g_audioEngine->Update(dt);
+                if (GetEngineRuntime().audioEngine)
+                    GetEngineRuntime().audioEngine->Update(dt);
             });
 
             UpdateGameplaySystems(dt);
@@ -803,7 +805,7 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
     }
 
     // Shutdown
-    g_moduleHotReload.reset();
+    GetEngineRuntime().moduleHotReload.reset();
     console.LogInfo("Shutting down...");
     g_fileCache.reset();
     ShutdownEngine();
@@ -940,12 +942,12 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
         return FALSE;
     }
 
-    g_timer = std::make_unique<Timer>();
-    ASSERT(g_timer);
+    GetEngineRuntime().timer = std::make_unique<Timer>();
+    ASSERT(GetEngineRuntime().timer);
 
-    g_graphics = std::make_unique<GraphicsEngine>();
-    ASSERT(g_graphics);
-    HRESULT hr = g_graphics->Initialize(hWnd);
+    GetEngineRuntime().graphics = std::make_unique<GraphicsEngine>();
+    ASSERT(GetEngineRuntime().graphics);
+    HRESULT hr = GetEngineRuntime().graphics->Initialize(hWnd);
     if (FAILED(hr))
     {
         wchar_t buf[256];
@@ -955,18 +957,18 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
     }
 
     // Apply VSync setting from INI
-    g_graphics->Console_SetVSync(settings.Graphics().vsync);
+    GetEngineRuntime().graphics->Console_SetVSync(settings.Graphics().vsync);
 
-    g_input = std::make_unique<InputManager>();
-    ASSERT(g_input);
-    g_input->Initialize(hWnd);
+    GetEngineRuntime().input = std::make_unique<InputManager>();
+    ASSERT(GetEngineRuntime().input);
+    GetEngineRuntime().input->Initialize(hWnd);
 
     // Apply input settings from INI
-    g_input->Console_SetMouseSensitivity(settings.Controls().mouseSensitivity);
-    g_input->Console_SetInvertMouseY(settings.Controls().invertMouseY);
-    g_input->Console_SetMouseDeadZone(settings.Controls().mouseDeadZone);
-    g_input->Console_SetRawMouseInput(settings.Controls().rawMouseInput);
-    g_input->Console_SetMouseAcceleration(settings.Controls().mouseAcceleration);
+    GetEngineRuntime().input->Console_SetMouseSensitivity(settings.Controls().mouseSensitivity);
+    GetEngineRuntime().input->Console_SetInvertMouseY(settings.Controls().invertMouseY);
+    GetEngineRuntime().input->Console_SetMouseDeadZone(settings.Controls().mouseDeadZone);
+    GetEngineRuntime().input->Console_SetRawMouseInput(settings.Controls().rawMouseInput);
+    GetEngineRuntime().input->Console_SetMouseAcceleration(settings.Controls().mouseAcceleration);
 
     // Console init is handled by InitConsole() in InitializeWindowedSubsystems()
     ShowWindow(hWnd, nCmdShow);
@@ -991,17 +993,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_LBUTTONUP:
     case WM_RBUTTONDOWN:
     case WM_RBUTTONUP:
-        if (g_input)
-            g_input->HandleMessage(msg, wParam, lParam);
+        if (GetEngineRuntime().input)
+            GetEngineRuntime().input->HandleMessage(msg, wParam, lParam);
         break;
 
     case WM_SIZE:
-        if (g_graphics)
-            g_graphics->OnResize(LOWORD(lParam), HIWORD(lParam));
-        if (g_moduleManager)
-            g_moduleManager->ResizeAll(LOWORD(lParam), HIWORD(lParam));
-        if (g_eventBus)
-            g_eventBus->Publish(Spark::WindowResizeEvent{LOWORD(lParam), HIWORD(lParam)});
+        if (GetEngineRuntime().graphics)
+            GetEngineRuntime().graphics->OnResize(LOWORD(lParam), HIWORD(lParam));
+        if (GetEngineRuntime().moduleManager)
+            GetEngineRuntime().moduleManager->ResizeAll(LOWORD(lParam), HIWORD(lParam));
+        if (GetEngineRuntime().eventBus)
+            GetEngineRuntime().eventBus->Publish(Spark::WindowResizeEvent{LOWORD(lParam), HIWORD(lParam)});
         break;
 
     case WM_DESTROY:

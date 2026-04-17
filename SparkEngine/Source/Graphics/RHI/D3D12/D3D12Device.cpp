@@ -1219,11 +1219,6 @@ namespace Spark
                 }
             }
 
-            void D3D12Device::ResetStatistics()
-            {
-                m_statistics = {};
-            }
-
             std::string D3D12Device::GetDeviceInfo() const
             {
                 std::ostringstream ss;

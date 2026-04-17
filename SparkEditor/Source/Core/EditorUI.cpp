@@ -77,6 +77,7 @@ namespace SparkEditor
     EditorUI::EditorUI()
     {
         m_crashHandler = &EditorCrashHandler::GetInstance();
+        m_notificationManager = std::make_unique<EditorNotificationManager>();
     }
 
     EditorUI::~EditorUI()
@@ -398,7 +399,7 @@ namespace SparkEditor
         ProcessGlobalHotkeys();
 
         // Tick notification lifetimes and remove expired ones
-        UpdateNotifications(deltaTime);
+        m_notificationManager->Update(deltaTime);
 
         // Tick tutorial auto-advance timers so active tutorials progress.
         SPARK_GUARDED_UPDATE("TutorialSystem", "Editor", { TutorialSystem::GetInstance().Update(deltaTime); });
@@ -570,23 +571,6 @@ namespace SparkEditor
         }
     }
 
-    void EditorUI::UpdateNotifications(float deltaTime)
-    {
-        auto it = m_notifications.begin();
-        while (it != m_notifications.end())
-        {
-            it->timeLeft -= deltaTime;
-            if (it->timeLeft <= 0.0f && it->duration > 0.0f)
-            {
-                it = m_notifications.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
-    }
-
     void EditorUI::Render()
     // NOTE: Intentionally exceeds 50-line guideline — linear rendering pipeline dispatch
     {
@@ -630,7 +614,7 @@ namespace SparkEditor
         RenderToolbar();
         RenderPanels();
         RenderStatusBar();
-        RenderNotifications();
+        m_notificationManager->Render();
         RenderModalDialogs();
         RenderWelcomeScreen();
 
@@ -883,94 +867,6 @@ namespace SparkEditor
         ImGui::End();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar();
-    }
-
-    void EditorUI::RenderNotifications()
-    // NOTE: Intentionally exceeds 50-line guideline — linear UI layout code
-    {
-        const float NOTIFICATION_WIDTH = 340.0f;
-        const float NOTIFICATION_HEIGHT = 56.0f;
-        const float NOTIFICATION_SPACING = 8.0f;
-
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        float yOffset = viewport->WorkPos.y + 12.0f;
-
-        for (size_t i = 0; i < m_notifications.size(); ++i)
-        {
-            const auto& notification = m_notifications[i];
-
-            // Fade out in last 0.5 seconds
-            float alpha = 1.0f;
-            if (notification.duration > 0.0f && notification.timeLeft < 0.5f)
-            {
-                alpha = std::max(0.0f, notification.timeLeft / 0.5f);
-            }
-
-            ImVec2 notificationPos(viewport->WorkPos.x + viewport->WorkSize.x - NOTIFICATION_WIDTH - 16.0f,
-                                   yOffset + i * (NOTIFICATION_HEIGHT + NOTIFICATION_SPACING));
-
-            ImGui::SetNextWindowPos(notificationPos);
-            ImGui::SetNextWindowSize(ImVec2(NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT));
-            ImGui::SetNextWindowBgAlpha(0.95f * alpha);
-
-            std::string windowName = "##Notification" + std::to_string(i);
-            ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking |
-                                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-                                     ImGuiWindowFlags_NoSavedSettings;
-
-            // Theme-matched accent colors
-            ImVec4 accentColor(0.102f, 0.686f, 0.737f, alpha); // teal (info)
-            const char* icon = ICON_FA_INFO_CIRCLE;
-            if (notification.type == "error")
-            {
-                accentColor = ImVec4(0.910f, 0.251f, 0.251f, alpha);
-                icon = ICON_FA_TIMES;
-            }
-            else if (notification.type == "warning")
-            {
-                accentColor = ImVec4(0.941f, 0.659f, 0.188f, alpha);
-                icon = ICON_FA_EXCLAMATION;
-            }
-            else if (notification.type == "success")
-            {
-                accentColor = ImVec4(0.239f, 0.839f, 0.549f, alpha);
-                icon = ICON_FA_CHECK;
-            }
-
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.118f, 0.129f, 0.161f, 0.95f * alpha));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(accentColor.x, accentColor.y, accentColor.z, 0.25f * alpha));
-            if (ImGui::Begin(windowName.c_str(), nullptr, flags))
-            {
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                ImVec2 wp = ImGui::GetWindowPos();
-                ImVec2 ws = ImGui::GetWindowSize();
-
-                // Left accent stripe (3px, rounded left corners)
-                dl->AddRectFilled(wp, ImVec2(wp.x + 3, wp.y + ws.y), ImGui::ColorConvertFloat4ToU32(accentColor), 8.0f,
-                                  ImDrawFlags_RoundCornersLeft);
-
-                // Subtle background gradient overlay (darker at bottom)
-                dl->AddRectFilledMultiColor(wp, ImVec2(wp.x + ws.x, wp.y + ws.y),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0)),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0)),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)));
-
-                // Content with padding past the stripe
-                ImGui::SetCursorPos(ImVec2(14, (NOTIFICATION_HEIGHT - ImGui::GetTextLineHeight()) * 0.5f));
-                ImGui::TextColored(accentColor, "%s", icon);
-                ImGui::SameLine(0, 8);
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.847f, 0.863f, 0.902f, alpha));
-                ImGui::TextWrapped("%s", notification.message.c_str());
-                ImGui::PopStyleColor();
-            }
-            ImGui::End();
-            ImGui::PopStyleColor(2);
-            ImGui::PopStyleVar(2);
-        }
     }
 
     void EditorUI::RenderPanels()
@@ -1232,14 +1128,7 @@ namespace SparkEditor
 
     void EditorUI::ShowNotification(const std::string& message, const std::string& type, float duration)
     {
-        Notification notification;
-        notification.message = message;
-        notification.type = type;
-        notification.duration = duration;
-        notification.timeLeft = duration;
-        notification.timestamp = std::chrono::steady_clock::now();
-
-        m_notifications.push_back(notification);
+        m_notificationManager->Show(message, type, duration);
     }
 
     std::string EditorUI::ExecuteCommand(const std::string& command)
@@ -1621,157 +1510,6 @@ namespace SparkEditor
         {
             SetPanelVisible("Search", true);
         }
-    }
-
-    void EditorUI::InitializeCommandPalette()
-    {
-        if (!m_commandPalette)
-        {
-            return;
-        }
-
-        RegisterPanelToggleCommands();
-        RegisterEditCommands();
-        RegisterSceneCommands();
-        RegisterToolCommands();
-    }
-
-    void EditorUI::RegisterPanelToggleCommands()
-    {
-        auto RegisterPanelToggle = [this](const std::string& panelKey, const std::string& displayName)
-        {
-            m_commandPalette->RegisterAction("Toggle " + displayName, "Panel", [this, panelKey]()
-                                             { SetPanelVisible(panelKey, !IsPanelVisible(panelKey)); });
-        };
-
-        // Core panels
-        RegisterPanelToggle("SceneView", "Scene View");
-        RegisterPanelToggle("Console", "Console");
-        RegisterPanelToggle("Hierarchy", "Hierarchy");
-        RegisterPanelToggle("Inspector", "Inspector");
-        RegisterPanelToggle("AssetBrowser", "Asset Browser");
-        RegisterPanelToggle("GameView", "Game View");
-        RegisterPanelToggle("Profiler", "Profiler");
-
-        // FPS / gameplay panels
-        RegisterPanelToggle("WeaponEditor", "Weapon Editor");
-        RegisterPanelToggle("FPSTools", "FPS Tools");
-
-        // 2D panels
-        RegisterPanelToggle("SpriteEditor", "Sprite Editor");
-        RegisterPanelToggle("TilemapEditor", "Tilemap Editor");
-        RegisterPanelToggle("SpriteAnimEditor", "Sprite Animation Editor");
-        RegisterPanelToggle("Physics2D", "Physics 2D");
-        RegisterPanelToggle("Physics3D", "Physics 3D");
-
-        // Editor utility panels
-        RegisterPanelToggle("UndoHistory", "Undo History");
-        RegisterPanelToggle("SceneStats", "Scene Statistics");
-        RegisterPanelToggle("PrefabEditor", "Prefab Editor");
-        RegisterPanelToggle("Search", "Search");
-        RegisterPanelToggle("PostProcessing", "Post Processing");
-
-        // Domain-specific panels
-        RegisterPanelToggle("DialogueEditor", "Dialogue Editor");
-        RegisterPanelToggle("AIEditor", "AI Editor");
-        RegisterPanelToggle("SplineEditor", "Spline Editor");
-        RegisterPanelToggle("ParticleEditor", "Particle Editor");
-        RegisterPanelToggle("EventMonitor", "Event Monitor");
-        RegisterPanelToggle("SaveSystem", "Save System");
-        RegisterPanelToggle("Localization", "Localization");
-        RegisterPanelToggle("WeatherFog", "Weather & Fog");
-        RegisterPanelToggle("CinematicSequencer", "Cinematic Sequencer");
-        RegisterPanelToggle("ProjectSettings", "Project Settings");
-    }
-
-    void EditorUI::RegisterEditCommands()
-    {
-        // Undo / redo
-        m_commandPalette->RegisterAction(
-            "Undo", "Command",
-            [this]()
-            {
-                if (m_undoRedoManager && m_undoRedoManager->CanUndo())
-                {
-                    m_undoRedoManager->Undo();
-                }
-            },
-            "Ctrl+Z");
-
-        m_commandPalette->RegisterAction(
-            "Redo", "Command",
-            [this]()
-            {
-                if (m_undoRedoManager && m_undoRedoManager->CanRedo())
-                {
-                    m_undoRedoManager->Redo();
-                }
-            },
-            "Ctrl+Y");
-
-        // Layout commands
-        m_commandPalette->RegisterAction("Reset Layout", "Layout", [this]() { ResetToDefaultLayout(); });
-        m_commandPalette->RegisterAction("Save Layout", "Layout", [this]() { SaveLayout("Quick Save"); });
-
-        // Prefab commands
-        m_commandPalette->RegisterAction("Create Empty Prefab", "Command",
-                                         [this]()
-                                         {
-                                             if (m_prefabManager)
-                                             {
-                                                 m_prefabManager->CreateEmptyPrefab("New Prefab");
-                                                 SetPanelVisible("PrefabEditor", true);
-                                                 ShowNotification("Created new prefab", "success");
-                                             }
-                                         });
-    }
-
-    void EditorUI::RegisterSceneCommands()
-    {
-        m_commandPalette->RegisterAction("New Scene", "Scene",
-                                         [this]() { ShowNotification("New Scene created!", "success"); });
-
-        m_commandPalette->RegisterAction("Save Scene", "Scene",
-                                         [this]() { ShowNotification("Scene saved!", "success"); });
-
-        // Play mode
-        m_commandPalette->RegisterAction(
-            "Play", "Command",
-            [this]()
-            {
-                m_playMode = PlayMode::Playing;
-                ShowNotification("Playing...", "success");
-            },
-            "F5");
-
-        m_commandPalette->RegisterAction(
-            "Stop", "Command",
-            [this]()
-            {
-                m_playMode = PlayMode::Stopped;
-                ShowNotification("Stopped", "info");
-            },
-            "Shift+F5");
-    }
-
-    void EditorUI::RegisterToolCommands()
-    {
-        // Theme commands
-        m_commandPalette->RegisterAction("Theme: Spark Fusion", "Command", [this]() { ApplyTheme("Spark Fusion"); });
-        m_commandPalette->RegisterAction("Theme: Spark Professional", "Command",
-                                         [this]() { ApplyTheme("Spark Professional"); });
-        m_commandPalette->RegisterAction("Theme: Dark", "Command", [this]() { ApplyTheme("Dark"); });
-        m_commandPalette->RegisterAction("Theme: Light", "Command", [this]() { ApplyTheme("Light"); });
-
-        // Transform tool commands
-        m_commandPalette->RegisterAction(
-            "Tool: Move", "Command", [this]() { m_currentTool = TransformTool::Move; }, "W");
-        m_commandPalette->RegisterAction(
-            "Tool: Rotate", "Command", [this]() { m_currentTool = TransformTool::Rotate; }, "E");
-        m_commandPalette->RegisterAction(
-            "Tool: Scale", "Command", [this]() { m_currentTool = TransformTool::Scale; }, "R");
-
-        m_commandPalette->RegisterAction("Toggle Snap", "Command", [this]() { m_snapEnabled = !m_snapEnabled; });
     }
 
 } // namespace SparkEditor

@@ -23,6 +23,7 @@
 // ============================================================================
 // Common includes (shared between all platforms)
 // ============================================================================
+#include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
@@ -107,17 +108,8 @@
 // ============================================================================
 // Common globals (shared between all platforms)
 // ============================================================================
-std::unique_ptr<GraphicsEngine> g_graphics;
-std::unique_ptr<InputManager> g_input;
-std::unique_ptr<Timer> g_timer;
-std::unique_ptr<Spark::EventBus> g_eventBus;
-std::unique_ptr<ModuleManager> g_moduleManager;
-std::unique_ptr<AudioEngine> g_audioEngine;
-std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
-std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-std::unique_ptr<PhysicsSystem> g_physicsOwned;
-#endif
+// Subsystem ownership lives in the EngineRuntime struct (see EngineRuntime.h).
+// Access via GetEngineRuntime().graphics, .input, .timer, .eventBus, etc.
 
 // ============================================================================
 // Common helper functions (shared across all startup paths)
@@ -140,12 +132,13 @@ void InitPhysics()
 {
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
     ASSERT_NOT_NULL(EngineContext::Get());
-    g_physicsOwned = std::make_unique<PhysicsSystem>();
-    EngineContext::Get()->SetPhysics(g_physicsOwned.get());
-    if (g_graphics)
-        g_graphics->SetPhysicsSystem(g_physicsOwned.get());
-    if (g_eventBus)
-        g_physicsOwned->SetEventBus(g_eventBus.get());
+    auto& rt = GetEngineRuntime();
+    rt.physics = std::make_unique<PhysicsSystem>();
+    EngineContext::Get()->SetPhysics(rt.physics.get());
+    if (rt.graphics)
+        rt.graphics->SetPhysicsSystem(rt.physics.get());
+    if (rt.eventBus)
+        rt.physics->SetEventBus(rt.eventBus.get());
 #endif
 }
 
@@ -207,10 +200,10 @@ void InitConsole()
     }
 
     // Publish EngineStartEvent — all systems initialized
-    if (g_eventBus)
+    if (auto& eventBus = GetEngineRuntime().eventBus)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: Publishing EngineStartEvent");
-        g_eventBus->Publish(Spark::EngineStartEvent{});
+        eventBus->Publish(Spark::EngineStartEvent{});
     }
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "InitConsole: complete");
@@ -220,10 +213,11 @@ void InitConsole()
 void ShutdownPhysics()
 {
 #ifdef SPARK_BULLET_PHYSICS_AVAILABLE
-    if (g_physicsOwned)
+    auto& rt = GetEngineRuntime();
+    if (rt.physics)
     {
-        g_physicsOwned->Shutdown();
-        g_physicsOwned.reset();
+        rt.physics->Shutdown();
+        rt.physics.reset();
     }
 #endif
 }
@@ -242,10 +236,12 @@ void ShutdownEngine()
 
     SPARK_DEBUG_HOOK(EnginePreShutdown, GetGameplayFrameCount(), 0.0f);
 
+    auto& rt = GetEngineRuntime();
+
     // Publish EngineShutdownEvent before tearing down systems
-    if (g_eventBus)
+    if (rt.eventBus)
     {
-        g_eventBus->Publish(Spark::EngineShutdownEvent{});
+        rt.eventBus->Publish(Spark::EngineShutdownEvent{});
     }
 
     // Tear down the daemon wiring before ShaderDiskCache is destroyed so the
@@ -255,17 +251,17 @@ void ShutdownEngine()
     ShutdownGameplaySystems();
     ShutdownDebugSystems();
 
-    if (g_moduleManager)
+    if (rt.moduleManager)
     {
-        g_moduleManager->ShutdownAll();
+        rt.moduleManager->ShutdownAll();
 
         // Clear console commands and EventBus channels BEFORE dlclose()
         // unmaps module code. Command handlers and ChannelOf<E> vtables
         // live in the .so — destroying them after unload segfaults.
         Spark::SimpleConsole::GetInstance().Shutdown();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
-        if (g_eventBus)
-            g_eventBus->ClearAll();
+        if (rt.eventBus)
+            rt.eventBus->ClearAll();
 
         const bool shouldSkipModuleUnload =
 #ifndef _WIN32
@@ -279,12 +275,12 @@ void ShutdownEngine()
             // Linux/headless teardown currently hits a late-shutdown crash path
             // when module-owned callbacks/channels are destroyed after dlclose().
             // Keep modules mapped until process exit in this mode.
-            g_moduleManager.release();
+            rt.moduleManager.release();
         }
         else
         {
-            g_moduleManager->UnloadAll();
-            g_moduleManager.reset();
+            rt.moduleManager->UnloadAll();
+            rt.moduleManager.reset();
         }
     }
     else
@@ -293,17 +289,17 @@ void ShutdownEngine()
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
     }
 
-    g_audioEngine.reset();
+    rt.audioEngine.reset();
     ShutdownPhysics();
 
     // Shut down the job system after all subsystems that submit jobs
     Spark::JobSystem::Get().Shutdown();
 
     EngineContext::ResetOwned();
-    g_eventBus.reset();
-    g_input.reset();
-    g_graphics.reset();
-    g_timer.reset();
+    rt.eventBus.reset();
+    rt.input.reset();
+    rt.graphics.reset();
+    rt.timer.reset();
 
     SPARK_DEBUG_HOOK(EnginePostShutdown, GetGameplayFrameCount(), 0.0f);
     Spark::DebugHookManager::GetInstance().Clear();

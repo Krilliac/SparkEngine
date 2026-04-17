@@ -1843,11 +1843,6 @@ namespace Spark
                 glFinish();
             }
 
-            void GLDevice::ResetStatistics()
-            {
-                m_statistics = {};
-            }
-
             std::string GLDevice::GetDeviceInfo() const
             {
                 std::string info = "=== OpenGL Device Info ===\n";
