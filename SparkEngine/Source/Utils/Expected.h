@@ -37,7 +37,7 @@ namespace Spark::Daemon
     {
       public:
         explicit Unexpected(E e) : m_error(std::move(e)) {}
-        const E& error() const & { return m_error; }
+        const E& error() const& { return m_error; }
         E&& error() && { return std::move(m_error); }
 
       private:
@@ -66,16 +66,16 @@ namespace Spark::Daemon
         explicit operator bool() const noexcept { return m_hasValue; }
 
         T& value() & { return m_value; }
-        const T& value() const & { return m_value; }
+        const T& value() const& { return m_value; }
         T&& value() && { return std::move(m_value); }
 
         T& operator*() & { return m_value; }
-        const T& operator*() const & { return m_value; }
+        const T& operator*() const& { return m_value; }
         T&& operator*() && { return std::move(m_value); }
         T* operator->() { return &m_value; }
         const T* operator->() const { return &m_value; }
 
-        const E& error() const & { return m_error; }
+        const E& error() const& { return m_error; }
         E&& error() && { return std::move(m_error); }
 
       private:
@@ -105,7 +105,7 @@ namespace Spark::Daemon
 
         void value() const {}
 
-        const E& error() const & { return m_error; }
+        const E& error() const& { return m_error; }
         E&& error() && { return std::move(m_error); }
 
       private:
