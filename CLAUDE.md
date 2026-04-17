@@ -80,7 +80,7 @@ These are **guidelines for when to pause and think**, not absolute rules. A clea
 - **Headers**: `#pragma once`, forward-declare where possible
 - **Style**: Allman braces, 4-space indent, 120-col limit (see `.clang-format`)
 - **Zero warnings**: `/W4` on MSVC, `-Wall -Wextra` on GCC/Clang
-- **Service locator**: Use `EngineContext`, not deprecated `g_graphics`/`g_input` globals
+- **Service locator**: Use `EngineContext::Get()->GetX()` for subsystem access. Engine-lifetime ownership lives in the `EngineRuntime` struct (Core-internal; `Core/EngineRuntime.h`) — do not introduce new file-scope `g_*` subsystem globals
 - **Cross-platform types**: `Core/Platform.h` (DirectXMath stubs on Linux)
 
 ## Architecture (key directories)
@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 5867 unit tests across 474 files, CTest
+Tests/                                   — 5869 unit tests across 475 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.

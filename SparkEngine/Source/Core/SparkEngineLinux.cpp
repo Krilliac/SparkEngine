@@ -11,6 +11,7 @@
 #include "SparkEngine.h"
 #include "Platform.h"
 #include "SparkEngineMacOS.h"
+#include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
@@ -76,15 +77,9 @@
 #include <filesystem>
 #include <thread>
 
-// Shared globals and functions defined in SparkEngine.cpp
-extern std::unique_ptr<GraphicsEngine> g_graphics;
-extern std::unique_ptr<InputManager> g_input;
-extern std::unique_ptr<Timer> g_timer;
-extern std::unique_ptr<Spark::EventBus> g_eventBus;
-extern std::unique_ptr<ModuleManager> g_moduleManager;
-extern std::unique_ptr<AudioEngine> g_audioEngine;
-extern std::unique_ptr<Spark::Audio::IAudioBackend> g_audioBackend;
-extern std::unique_ptr<Spark::ModuleHotReloadManager> g_moduleHotReload;
+// Subsystem ownership lives in GetEngineRuntime() (see EngineRuntime.h).
+// Command-line flags and other cross-file non-subsystem globals still
+// live in SparkEngine.cpp and are declared here as extern.
 extern int g_testFrameLimit;
 extern uint32_t g_maxWorkerThreads;
 extern bool g_noSubprocess;
@@ -238,33 +233,33 @@ static void TickFrame(float dt)
     Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
     SPARK_GUARDED_UPDATE("Input", "Core", {
-        if (g_input)
-            g_input->Update();
+        if (GetEngineRuntime().input)
+            GetEngineRuntime().input->Update();
     });
 
-    if (g_moduleManager && g_moduleManager->HasModules())
+    if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
     {
         SPARK_GUARDED_UPDATE("Modules", "Core", {
-            g_moduleManager->UpdateAll(dt);
-            g_moduleManager->RenderAll();
+            GetEngineRuntime().moduleManager->UpdateAll(dt);
+            GetEngineRuntime().moduleManager->RenderAll();
         });
     }
-    else if (g_graphics)
+    else if (GetEngineRuntime().graphics)
     {
-        g_graphics->BeginFrame();
-        g_graphics->EndFrame();
+        GetEngineRuntime().graphics->BeginFrame();
+        GetEngineRuntime().graphics->EndFrame();
     }
 
-    if (g_moduleHotReload)
-        g_moduleHotReload->PollChanges();
+    if (GetEngineRuntime().moduleHotReload)
+        GetEngineRuntime().moduleHotReload->PollChanges();
 
     // Pump the audio engine: advances source state machine (stops finished
     // sources), applies 3D spatialization, and processes distance attenuation.
     // Pre-existing bug: AudioEngine::Update was never called from the main
     // loop on any platform.
     SPARK_GUARDED_UPDATE("Audio", "Core", {
-        if (g_audioEngine)
-            g_audioEngine->Update(dt);
+        if (GetEngineRuntime().audioEngine)
+            GetEngineRuntime().audioEngine->Update(dt);
     });
 
     UpdateGameplaySystems(dt);
@@ -297,9 +292,9 @@ static void RegisterGameplaySubsystems()
     ctx->SetTimeOfDay(&Spark::TimeOfDaySystem::GetInstance());
 
     // Wire WeatherSystem to EventBus for WeatherChangedEvent publishing
-    if (g_eventBus)
+    if (GetEngineRuntime().eventBus)
     {
-        s_weatherSystem.SetEventBus(g_eventBus.get());
+        s_weatherSystem.SetEventBus(GetEngineRuntime().eventBus.get());
     }
 
     static Spark::UI::UISystem s_uiSystem;
@@ -323,7 +318,8 @@ static void RegisterGameplaySubsystems()
 static void InitLinuxCoreSubsystems(bool registerGameplay)
 {
     EngineContext::SetOwned(
-        std::make_unique<EngineContext>(g_graphics.get(), g_input.get(), g_timer.get(), g_eventBus.get()));
+        std::make_unique<EngineContext>(GetEngineRuntime().graphics.get(), GetEngineRuntime().input.get(),
+                                        GetEngineRuntime().timer.get(), GetEngineRuntime().eventBus.get()));
 
     auto* ctx = EngineContext::Get();
     if (!ctx)
@@ -352,9 +348,9 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
 
     // AssetPipeline (owned by GraphicsEngine, exposed via EngineContext for SDK access)
-    if (g_graphics && g_graphics->GetAssetPipeline())
+    if (GetEngineRuntime().graphics && GetEngineRuntime().graphics->GetAssetPipeline())
     {
-        ctx->SetAssetPipeline(g_graphics->GetAssetPipeline());
+        ctx->SetAssetPipeline(GetEngineRuntime().graphics->GetAssetPipeline());
     }
 
     // Initialize neural inference engine (GPU compute-based, no external ML deps)
@@ -390,29 +386,31 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
     // Initialize AudioEngine before modules so modules can use EngineContext::Get()->GetAudio()
     if (initAudio)
     {
-        g_audioEngine = std::make_unique<AudioEngine>();
-        if (SUCCEEDED(g_audioEngine->Initialize(32)))
+        GetEngineRuntime().audioEngine = std::make_unique<AudioEngine>();
+        if (SUCCEEDED(GetEngineRuntime().audioEngine->Initialize(32)))
         {
             console.LogInfo("AudioEngine initialized (32 sources)");
             if (auto* ctx = EngineContext::Get())
-                ctx->SetAudio(g_audioEngine.get());
+                ctx->SetAudio(GetEngineRuntime().audioEngine.get());
         }
         else
         {
             console.LogWarning("AudioEngine initialization failed");
-            g_audioEngine.reset();
+            GetEngineRuntime().audioEngine.reset();
         }
 
         // Create cross-platform audio backend (OpenAL on Linux, wraps AudioEngine on Windows)
-        g_audioBackend = Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto, g_audioEngine.get());
+        GetEngineRuntime().audioBackend = Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto,
+                                                                           GetEngineRuntime().audioEngine.get());
     }
 
-    g_moduleManager = std::make_unique<ModuleManager>();
+    GetEngineRuntime().moduleManager = std::make_unique<ModuleManager>();
 
-    if (LoadGameModulesLinux(*g_moduleManager, argc, argv))
+    if (LoadGameModulesLinux(*GetEngineRuntime().moduleManager, argc, argv))
     {
-        g_moduleManager->InitializeAll(EngineContext::Get());
-        console.LogSuccess("Loaded " + std::to_string(g_moduleManager->GetModuleCount()) + " module(s)");
+        GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
+        console.LogSuccess("Loaded " + std::to_string(GetEngineRuntime().moduleManager->GetModuleCount()) +
+                           " module(s)");
     }
     else
     {
@@ -420,15 +418,16 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
     }
 
     // Module hot-reload watcher
-    g_moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
-    g_moduleHotReload->Initialize(g_moduleManager.get(), EngineContext::Get());
-    g_moduleHotReload->WatchAllLoadedModules();
-    g_moduleHotReload->Start();
+    GetEngineRuntime().moduleHotReload = std::make_unique<Spark::ModuleHotReloadManager>();
+    GetEngineRuntime().moduleHotReload->Initialize(GetEngineRuntime().moduleManager.get(), EngineContext::Get());
+    GetEngineRuntime().moduleHotReload->WatchAllLoadedModules();
+    GetEngineRuntime().moduleHotReload->Start();
 
     // Console commands
-    if (g_graphics)
-        Spark::Graphics::RegisterGraphicsConsoleCommands(*g_graphics);
-    Spark::RegisterEngineConsoleCommands(g_moduleManager.get(), g_audioEngine.get(), g_moduleHotReload.get());
+    if (GetEngineRuntime().graphics)
+        Spark::Graphics::RegisterGraphicsConsoleCommands(*GetEngineRuntime().graphics);
+    Spark::RegisterEngineConsoleCommands(GetEngineRuntime().moduleManager.get(), GetEngineRuntime().audioEngine.get(),
+                                         GetEngineRuntime().moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     Assert::RegisterConsoleCommands();
 
@@ -440,7 +439,7 @@ static void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
  */
 static void ShutdownLinux()
 {
-    g_moduleHotReload.reset();
+    GetEngineRuntime().moduleHotReload.reset();
     Spark::SimpleConsole::GetInstance().LogInfo("Shutting down...");
     ShutdownEngine();
 }
@@ -456,8 +455,8 @@ static int RunHeadlessLinux(int argc, char* argv[])
 {
     Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server - Linux) ===");
 
-    g_eventBus = std::make_unique<Spark::EventBus>();
-    g_timer = std::make_unique<Timer>();
+    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
+    GetEngineRuntime().timer = std::make_unique<Timer>();
 
     // Headless: no gameplay subsystems (no Weather/UI/Dialogue/Modding)
     InitLinuxCoreSubsystems(/*registerGameplay=*/false);
@@ -508,22 +507,22 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
         SPARK_HEARTBEAT();
         auto tickStart = std::chrono::steady_clock::now();
-        float dt = g_timer ? g_timer->GetDeltaTime() : (1.0f / 60.0f);
+        float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : (1.0f / 60.0f);
 
         Spark::FixedTimestepAccumulator::GetInstance().Advance(dt);
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
-            if (g_moduleManager && g_moduleManager->HasModules())
-                g_moduleManager->UpdateAll(dt);
+            if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+                GetEngineRuntime().moduleManager->UpdateAll(dt);
         });
 
-        if (g_moduleHotReload)
-            g_moduleHotReload->PollChanges();
+        if (GetEngineRuntime().moduleHotReload)
+            GetEngineRuntime().moduleHotReload->PollChanges();
 
         // Pump the audio engine — see TickFrame for the rationale.
         SPARK_GUARDED_UPDATE("Audio", "Core", {
-            if (g_audioEngine)
-                g_audioEngine->Update(dt);
+            if (GetEngineRuntime().audioEngine)
+                GetEngineRuntime().audioEngine->Update(dt);
         });
 
         UpdateGameplaySystems(dt);
@@ -632,35 +631,36 @@ static bool HandleSDLEvent(const SDL_Event& event)
         {
             int w = event.window.data1;
             int h = event.window.data2;
-            if (g_graphics)
-                g_graphics->OnResize(w, h);
-            if (g_moduleManager)
-                g_moduleManager->ResizeAll(w, h);
-            if (g_eventBus)
-                g_eventBus->Publish(Spark::WindowResizeEvent{static_cast<uint32_t>(w), static_cast<uint32_t>(h)});
+            if (GetEngineRuntime().graphics)
+                GetEngineRuntime().graphics->OnResize(w, h);
+            if (GetEngineRuntime().moduleManager)
+                GetEngineRuntime().moduleManager->ResizeAll(w, h);
+            if (GetEngineRuntime().eventBus)
+                GetEngineRuntime().eventBus->Publish(
+                    Spark::WindowResizeEvent{static_cast<uint32_t>(w), static_cast<uint32_t>(h)});
         }
         break;
 
     case SDL_KEYDOWN:
     case SDL_KEYUP:
-        if (g_input)
+        if (GetEngineRuntime().input)
         {
             UINT msg = (event.type == SDL_KEYDOWN) ? WM_KEYDOWN : WM_KEYUP;
             int vk = TranslateSDLKeyToVK(event.key.keysym.sym);
             if (vk != 0)
-                g_input->HandleMessage(msg, static_cast<WPARAM>(vk), 0);
+                GetEngineRuntime().input->HandleMessage(msg, static_cast<WPARAM>(vk), 0);
         }
         break;
 
     case SDL_MOUSEMOTION:
-        if (g_input)
-            g_input->HandleMessage(WM_MOUSEMOVE, 0,
-                                   static_cast<LPARAM>((event.motion.y << 16) | (event.motion.x & 0xFFFF)));
+        if (GetEngineRuntime().input)
+            GetEngineRuntime().input->HandleMessage(
+                WM_MOUSEMOVE, 0, static_cast<LPARAM>((event.motion.y << 16) | (event.motion.x & 0xFFFF)));
         break;
 
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP:
-        if (g_input)
+        if (GetEngineRuntime().input)
         {
             UINT msg = 0;
             if (event.button.button == SDL_BUTTON_LEFT)
@@ -670,7 +670,7 @@ static bool HandleSDLEvent(const SDL_Event& event)
             else if (event.button.button == SDL_BUTTON_MIDDLE)
                 msg = (event.type == SDL_MOUSEBUTTONDOWN) ? WM_MBUTTONDOWN : WM_MBUTTONUP;
             if (msg)
-                g_input->HandleMessage(msg, 0, 0);
+                GetEngineRuntime().input->HandleMessage(msg, 0, 0);
         }
         break;
     }
@@ -691,17 +691,17 @@ static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandl
     auto& settings = EngineSettings::GetInstance();
 
     // Core engine objects
-    g_timer = std::make_unique<Timer>();
-    g_eventBus = std::make_unique<Spark::EventBus>();
-    g_input = std::make_unique<InputManager>();
-    g_input->Initialize(static_cast<HWND>(window));
-    g_graphics = std::make_unique<GraphicsEngine>();
+    GetEngineRuntime().timer = std::make_unique<Timer>();
+    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
+    GetEngineRuntime().input = std::make_unique<InputManager>();
+    GetEngineRuntime().input->Initialize(static_cast<HWND>(window));
+    GetEngineRuntime().graphics = std::make_unique<GraphicsEngine>();
 
     // On macOS+Metal the RHI needs an NSView/CAMetalLayer, not the SDL_Window.
     // nativeRenderHandle overrides the window when set; otherwise the window
     // itself is passed through (Vulkan/OpenGL/Linux paths).
     void* rhiHandle = nativeRenderHandle ? nativeRenderHandle : static_cast<void*>(window);
-    HRESULT hr = g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(rhiHandle));
+    HRESULT hr = GetEngineRuntime().graphics->Initialize(static_cast<Spark::NativeWindowHandle>(rhiHandle));
     auto& console = Spark::SimpleConsole::GetInstance();
     if (SUCCEEDED(hr))
         console.LogInfo("Graphics engine initialized (RHI backend).");
@@ -715,9 +715,9 @@ static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandl
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/true);
 
     // Update window title with primary module name
-    if (g_moduleManager)
+    if (GetEngineRuntime().moduleManager)
     {
-        auto* primary = g_moduleManager->GetPrimaryModule();
+        auto* primary = GetEngineRuntime().moduleManager->GetPrimaryModule();
         if (primary)
         {
             auto info = primary->GetModuleInfo();
@@ -780,7 +780,7 @@ static void RunSDL2MainLoop()
         if (!running)
             break;
 
-        float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+        float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : 0.016f;
         TickFrame(dt);
         ++frameCount;
     }
@@ -967,11 +967,11 @@ static int RunSDL2Windowed(int argc, char* argv[])
     // fell back to OpenGL (Vulkan loaded but couldn't create a usable
     // surface/device), recreate the window with OpenGL flags and create
     // a GL context so the fallback backend can actually render.
-    if (preferVulkan && g_graphics)
+    if (preferVulkan && GetEngineRuntime().graphics)
     {
-        auto* rhiDevice = g_graphics->GetRHIDevice();
+        auto* rhiDevice = GetEngineRuntime().graphics->GetRHIDevice();
         bool vulkanActive = rhiDevice && rhiDevice->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
-        auto* rhiBridge = g_graphics->GetRHIBridge();
+        auto* rhiBridge = GetEngineRuntime().graphics->GetRHIBridge();
         bool headless = rhiBridge && rhiBridge->IsHeadless();
         if (!vulkanActive && !headless)
         {
@@ -989,8 +989,8 @@ static int RunSDL2Windowed(int argc, char* argv[])
                     SDL_GL_MakeCurrent(window, glContext);
                     SDL_GL_SetSwapInterval(1);
                 }
-                g_graphics->Shutdown();
-                g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
+                GetEngineRuntime().graphics->Shutdown();
+                GetEngineRuntime().graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
             }
         }
     }
@@ -1027,12 +1027,12 @@ static int RunNoSDL2Fallback(int argc, char* argv[])
     noSdlConsole.LogWarning("SDL2 not available. Running without a window.");
     noSdlConsole.LogWarning("Install SDL2 and rebuild with -DENABLE_SDL2=ON for windowed mode.");
 
-    g_eventBus = std::make_unique<Spark::EventBus>();
-    g_timer = std::make_unique<Timer>();
-    g_input = std::make_unique<InputManager>();
-    g_graphics = std::make_unique<GraphicsEngine>();
+    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
+    GetEngineRuntime().timer = std::make_unique<Timer>();
+    GetEngineRuntime().input = std::make_unique<InputManager>();
+    GetEngineRuntime().graphics = std::make_unique<GraphicsEngine>();
 
-    HRESULT hr = g_graphics->Initialize(nullptr);
+    HRESULT hr = GetEngineRuntime().graphics->Initialize(nullptr);
     if (FAILED(hr))
         noSdlConsole.LogWarning("Graphics initialization failed (fallback mode).");
 
@@ -1047,7 +1047,7 @@ static int RunNoSDL2Fallback(int argc, char* argv[])
     // Minimal loop — process a few ticks to validate initialization, then exit
     for (int frame = 0; frame < 10 && !g_shutdownRequested; ++frame)
     {
-        float dt = g_timer ? g_timer->GetDeltaTime() : 0.016f;
+        float dt = GetEngineRuntime().timer ? GetEngineRuntime().timer->GetDeltaTime() : 0.016f;
         TickFrame(dt);
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
@@ -1127,20 +1127,20 @@ int main(int argc, char* argv[])
         // trigger a use-after-dlclose segfault during process teardown.
         // We intentionally clear/release these pointers and terminate without
         // running additional static destruction code.
-        if (g_eventBus)
+        if (GetEngineRuntime().eventBus)
         {
             try
             {
-                g_eventBus->ClearAll();
+                GetEngineRuntime().eventBus->ClearAll();
             }
             catch (...)
             {
                 // Best-effort only during final process teardown.
             }
         }
-        g_moduleHotReload.release();
-        g_moduleManager.release();
-        g_eventBus.release();
+        GetEngineRuntime().moduleHotReload.release();
+        GetEngineRuntime().moduleManager.release();
+        GetEngineRuntime().eventBus.release();
         std::_Exit(result);
 #endif
 
@@ -1164,11 +1164,11 @@ int main(int argc, char* argv[])
     // if modules are unloaded first, channel destructors will segfault.
     // Under resource exhaustion, module shutdown itself may throw (from
     // destructors calling thread join, etc.), so we leak rather than crash.
-    if (g_eventBus)
+    if (GetEngineRuntime().eventBus)
     {
         try
         {
-            g_eventBus->ClearAll();
+            GetEngineRuntime().eventBus->ClearAll();
         }
         catch (const std::exception& e)
         {
@@ -1179,8 +1179,8 @@ int main(int argc, char* argv[])
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Unknown exception during eventBus cleanup");
         }
     }
-    g_eventBus.release();
-    g_moduleManager.release();
+    GetEngineRuntime().eventBus.release();
+    GetEngineRuntime().moduleManager.release();
     return 1;
 }
 #endif // !SPARK_PLATFORM_WINDOWS

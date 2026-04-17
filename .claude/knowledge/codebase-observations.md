@@ -40,24 +40,26 @@ If code in a disabled system silently breaks, it won't show up in standard CI bu
 
 ### Details
 
-Legacy globals like `g_graphics`, `g_input`, `g_audio` are **deprecated** and may be removed. All engine subsystems should be accessed via the `EngineContext` service locator:
+Legacy free-floating globals (`g_graphics`, `g_input`, `g_timer`, `g_eventBus`, `g_audioEngine`, `g_audioBackend`, `g_moduleManager`, `g_moduleHotReload`, `g_physicsOwned`) have been **removed**. Subsystem ownership is now encapsulated in an `EngineRuntime` struct (see `SparkEngine/Source/Core/EngineRuntime.h`), accessed via `GetEngineRuntime()`, and is intended for Core/ entry-point and lifecycle files only.
+
+All other code should access engine subsystems via the `EngineContext` service locator:
 
 ```cpp
-// WRONG — deprecated globals:
+// WRONG — removed globals (no longer declared anywhere):
 g_graphics->RenderFrame();
 g_input->IsKeyDown(Key::Space);
 
 // CORRECT — EngineContext service locator:
-auto* graphics = EngineContext::Get<GraphicsEngine>();
-auto* input    = EngineContext::Get<InputSystem>();
+auto* graphics = EngineContext::Get()->GetGraphics();
+auto* input    = EngineContext::Get()->GetInput();
 ```
-
-If you see code using the old globals, it's legacy code — don't propagate the pattern.
 
 ### Notes
 
 - `EngineContext` is in `SparkEngine/Source/Core/EngineContext.h`
+- `EngineRuntime` (private ownership container) is in `SparkEngine/Source/Core/EngineRuntime.h`
 - If a subsystem you need isn't registered in EngineContext, check whether it needs to be added there
+- The `extern std::unique_ptr<X> g_X;` declarations are gone — Core/Windows and Core/Linux entry-point files now use `GetEngineRuntime().X` instead
 
 ---
 
