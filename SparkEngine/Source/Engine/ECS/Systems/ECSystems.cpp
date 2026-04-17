@@ -227,7 +227,7 @@ namespace Spark::ECS
             // Doppler frequency shift. We derive velocity from the position delta
             // rather than reading physics velocity, because non-physics entities
             // (e.g. scripted movers) also need accurate Doppler.
-            if (deltaTime > 0.0f)
+            if (deltaTime > 1e-6f)
             {
                 source->Velocity.x = (transform.position.x - audio.previousPosition.x) / deltaTime;
                 source->Velocity.y = (transform.position.y - audio.previousPosition.y) / deltaTime;

@@ -571,6 +571,8 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::UpdateProjectiles(float dt)
     {
+        if (!(dt >= 0.0f && std::isfinite(dt)))
+            return;
         for (auto it = m_projectiles.begin(); it != m_projectiles.end();)
         {
             auto& projectile = it->second;

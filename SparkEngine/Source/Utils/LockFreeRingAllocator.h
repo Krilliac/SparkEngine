@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <new>
 #include <string>
 
@@ -35,9 +36,9 @@ namespace Spark
         static constexpr size_t MASK = CAPACITY - 1;
         static constexpr size_t HEADER_SIZE = sizeof(uint32_t); // Size prefix
 
-        LockFreeRingAllocator() { m_buffer = new uint8_t[CAPACITY]; }
+        LockFreeRingAllocator() : m_buffer(std::make_unique<uint8_t[]>(CAPACITY)) {}
 
-        ~LockFreeRingAllocator() { delete[] m_buffer; }
+        ~LockFreeRingAllocator() = default;
 
         LockFreeRingAllocator(const LockFreeRingAllocator&) = delete;
         LockFreeRingAllocator& operator=(const LockFreeRingAllocator&) = delete;
@@ -69,21 +70,21 @@ namespace Spark
                 if (used + wastedSpace + aligned > CAPACITY)
                     return nullptr;
                 // Mark wasted space with zero-size header
-                auto* skipHeader = reinterpret_cast<uint32_t*>(m_buffer + offset);
+                auto* skipHeader = reinterpret_cast<uint32_t*>(m_buffer.get() + offset);
                 *skipHeader = 0;
                 writePos += wastedSpace;
                 offset = 0;
             }
 
             // Write size prefix
-            auto* header = reinterpret_cast<uint32_t*>(m_buffer + offset);
+            auto* header = reinterpret_cast<uint32_t*>(m_buffer.get() + offset);
             *header = static_cast<uint32_t>(size);
 
             m_writePos.store(writePos + aligned, std::memory_order_release);
             m_totalAllocations++;
             m_totalBytesAllocated += size;
 
-            return m_buffer + offset + HEADER_SIZE;
+            return m_buffer.get() + offset + HEADER_SIZE;
         }
 
         /**
@@ -96,7 +97,7 @@ namespace Spark
             size_t readPos = m_readPos.load(std::memory_order_relaxed);
             size_t offset = readPos & MASK;
 
-            auto* header = reinterpret_cast<const uint32_t*>(m_buffer + offset);
+            auto* header = reinterpret_cast<const uint32_t*>(m_buffer.get() + offset);
             uint32_t size = *header;
 
             if (size == 0)
@@ -105,7 +106,7 @@ namespace Spark
                 size_t wastedSpace = CAPACITY - offset;
                 readPos += wastedSpace;
                 offset = 0;
-                header = reinterpret_cast<const uint32_t*>(m_buffer + offset);
+                header = reinterpret_cast<const uint32_t*>(m_buffer.get() + offset);
                 size = *header;
             }
 
@@ -143,7 +144,7 @@ namespace Spark
         Metrics GetMetrics() const { return {m_totalAllocations, m_totalFrees, m_totalBytesAllocated, GetUsedBytes()}; }
 
       private:
-        uint8_t* m_buffer = nullptr;
+        std::unique_ptr<uint8_t[]> m_buffer;
         alignas(64) std::atomic<size_t> m_writePos{0};
         alignas(64) std::atomic<size_t> m_readPos{0};
         uint64_t m_totalAllocations = 0;

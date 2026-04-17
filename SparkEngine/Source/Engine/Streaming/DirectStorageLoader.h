@@ -16,12 +16,14 @@
 
 #include "../../Core/Platform.h"
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <queue>
+#include <thread>
 #include <vector>
 
 namespace Spark::Streaming
@@ -176,6 +178,7 @@ namespace Spark::Streaming
             LoadRequestHandle handle;
             LoadStatus status = LoadStatus::Pending;
             std::vector<uint8_t> cpuData;
+            std::atomic<bool> cancelled{false};
         };
 
         /// @brief Fallback: async file I/O via background thread
@@ -187,6 +190,8 @@ namespace Spark::Streaming
         DirectStorageStats m_stats;
         uint64_t m_nextHandleId = 1;
         bool m_initialized = false;
+        std::vector<std::thread> m_backgroundThreads;
+        std::mutex m_threadsMutex;
     };
 
 } // namespace Spark::Streaming

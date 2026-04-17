@@ -12,6 +12,7 @@
 
 #pragma once
 #include "ITransport.h"
+#include "../../Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
 
@@ -82,10 +83,16 @@ namespace Spark::Net
             // Enlarge OS socket buffers for game traffic
             int sendBufSize = 65536;
             int recvBufSize = 65536;
-            setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize),
-                       sizeof(sendBufSize));
-            setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize),
-                       sizeof(recvBufSize));
+            if (setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize),
+                           sizeof(sendBufSize)) == SOCKET_ERROR)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network, "UDPTransport: failed to set SO_SNDBUF");
+            }
+            if (setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize),
+                           sizeof(recvBufSize)) == SOCKET_ERROR)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network, "UDPTransport: failed to set SO_RCVBUF");
+            }
 
             // Bind to the requested port (0 = OS-assigned ephemeral port)
             sockaddr_in localAddr{};

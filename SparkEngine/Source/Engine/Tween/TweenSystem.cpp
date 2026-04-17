@@ -160,7 +160,8 @@ namespace Spark
         if (m_onUpdate)
             m_onUpdate(easedT);
 
-        if (rawT >= 1.0f)
+        bool reachedEnd = (m_playRate >= 0.0f) ? (rawT >= 1.0f) : (rawT <= 0.0f);
+        if (reachedEnd)
         {
             if (m_loopMode == LoopMode::None)
             {
@@ -179,9 +180,15 @@ namespace Spark
                 return true;
             }
 
-            m_elapsed = 0.0f;
             if (m_loopMode == LoopMode::PingPong)
+            {
                 m_playRate = -m_playRate;
+                m_elapsed = (m_playRate < 0.0f) ? m_duration : 0.0f;
+            }
+            else
+            {
+                m_elapsed = 0.0f;
+            }
         }
 
         return false;

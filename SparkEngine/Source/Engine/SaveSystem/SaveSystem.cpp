@@ -140,7 +140,11 @@ namespace Spark
         if (it == props.end())
             return "";
         if (it->second.size() > kMaxPropertyLen)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: truncated property '%s' from %zu to %zu bytes",
+                           key.c_str(), it->second.size(), kMaxPropertyLen);
             return it->second.substr(0, kMaxPropertyLen);
+        }
         return it->second;
     }
 

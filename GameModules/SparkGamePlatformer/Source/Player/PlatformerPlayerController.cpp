@@ -64,7 +64,7 @@ namespace Platformer
 
         HandleJump();
         HandleWallSlide(fixedDeltaTime);
-        HandleDash();
+        HandleDash(fixedDeltaTime);
         HandleGroundPound();
 
         ApplyGravity(fixedDeltaTime);
@@ -257,18 +257,15 @@ namespace Platformer
         }
     }
 
-    void PlatformerPlayerController::HandleDash()
+    void PlatformerPlayerController::HandleDash(float fixedDeltaTime)
     {
         if (!m_abilities.dash)
             return;
 
-        // Fixed timestep from FixedUpdate (avoid hardcoded 1/60)
-        constexpr float kFixedDt = 1.0f / 60.0f;
-
         // Active dash
         if (m_state == PlayerState::Dashing)
         {
-            m_dashTimer -= kFixedDt;
+            m_dashTimer -= fixedDeltaTime;
             if (m_dashTimer <= 0.0f)
             {
                 m_velocity.x = m_facingDirection * m_moveSpeed * 0.5f;
@@ -280,7 +277,7 @@ namespace Platformer
 
         // Dash cooldown
         if (m_dashCooldownTimer > 0.0f)
-            m_dashCooldownTimer -= kFixedDt;
+            m_dashCooldownTimer -= fixedDeltaTime;
     }
 
     void PlatformerPlayerController::HandleGroundPound()

@@ -93,10 +93,18 @@ namespace Spark
                 DescriptorAllocation alloc = {};
 
                 // Try free list first for single descriptors
-                if (count == 1 && !m_freeList.empty())
+                while (count == 1 && !m_freeList.empty())
                 {
                     uint32_t index = m_freeList.back();
                     m_freeList.pop_back();
+                    if (index >= m_capacity)
+                    {
+                        // Corrupt entry (e.g., index from a different heap) — drop and try next
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D12: Descriptor free list contained out-of-range index %u (capacity %u)",
+                                        index, m_capacity);
+                        continue;
+                    }
                     alloc.index = index;
                     alloc.count = 1;
                     alloc.cpuHandle.ptr = m_cpuStart.ptr + static_cast<SIZE_T>(index) * m_descriptorSize;
@@ -688,39 +696,51 @@ namespace Spark
                 if (desc.usage & RHITextureUsage::ShaderResource)
                 {
                     srvAlloc = m_cbvSrvUavHeap.Allocate(1);
-                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-                    srvDesc.Format = texDesc.Format;
-                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                    srvDesc.Texture2D.MipLevels = desc.mipLevels;
-                    m_device->CreateShaderResourceView(resource.Get(), &srvDesc, srvAlloc.cpuHandle);
+                    if (srvAlloc.IsValid())
+                    {
+                        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                        srvDesc.Format = texDesc.Format;
+                        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                        srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                        m_device->CreateShaderResourceView(resource.Get(), &srvDesc, srvAlloc.cpuHandle);
+                    }
                 }
 
                 if (desc.usage & RHITextureUsage::RenderTarget)
                 {
                     rtvAlloc = m_rtvHeap.Allocate(1);
-                    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-                    rtvDesc.Format = texDesc.Format;
-                    rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-                    m_device->CreateRenderTargetView(resource.Get(), &rtvDesc, rtvAlloc.cpuHandle);
+                    if (rtvAlloc.IsValid())
+                    {
+                        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+                        rtvDesc.Format = texDesc.Format;
+                        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+                        m_device->CreateRenderTargetView(resource.Get(), &rtvDesc, rtvAlloc.cpuHandle);
+                    }
                 }
 
                 if (desc.usage & RHITextureUsage::DepthStencil)
                 {
                     dsvAlloc = m_dsvHeap.Allocate(1);
-                    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-                    dsvDesc.Format = texDesc.Format;
-                    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-                    m_device->CreateDepthStencilView(resource.Get(), &dsvDesc, dsvAlloc.cpuHandle);
+                    if (dsvAlloc.IsValid())
+                    {
+                        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+                        dsvDesc.Format = texDesc.Format;
+                        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+                        m_device->CreateDepthStencilView(resource.Get(), &dsvDesc, dsvAlloc.cpuHandle);
+                    }
                 }
 
                 if (desc.usage & RHITextureUsage::UnorderedAccess)
                 {
                     uavAlloc = m_cbvSrvUavHeap.Allocate(1);
-                    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-                    uavDesc.Format = texDesc.Format;
-                    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-                    m_device->CreateUnorderedAccessView(resource.Get(), nullptr, &uavDesc, uavAlloc.cpuHandle);
+                    if (uavAlloc.IsValid())
+                    {
+                        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+                        uavDesc.Format = texDesc.Format;
+                        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                        m_device->CreateUnorderedAccessView(resource.Get(), nullptr, &uavDesc, uavAlloc.cpuHandle);
+                    }
                 }
 
                 return std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc,
@@ -734,7 +754,8 @@ namespace Spark
 
                 auto* nativeResource = static_cast<ID3D12Resource*>(nativeHandle);
                 ComPtr<ID3D12Resource> resource;
-                nativeResource->QueryInterface(IID_PPV_ARGS(&resource));
+                if (FAILED(nativeResource->QueryInterface(IID_PPV_ARGS(&resource))))
+                    return nullptr;
 
                 DescriptorAllocation srvAlloc, rtvAlloc, dsvAlloc, uavAlloc;
                 if (desc.usage & RHITextureUsage::ShaderResource)

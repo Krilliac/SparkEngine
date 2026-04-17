@@ -158,7 +158,7 @@ namespace Spark
 
     void LootSystem::SpawnPowerUp(PowerUpType type, const XMFLOAT3& position, float duration)
     {
-        if (static_cast<int>(m_worldDrops.size()) >= MAX_WORLD_DROPS)
+        if (m_worldDrops.size() >= static_cast<size_t>(MAX_WORLD_DROPS))
             return;
 
         WorldDrop drop;

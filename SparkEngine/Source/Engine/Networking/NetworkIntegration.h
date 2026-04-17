@@ -62,12 +62,6 @@ namespace Spark::Net
 
         /// Enable encryption
         bool enableEncryption = true;
-
-        /// Encryption key (should be negotiated via key exchange in production)
-        std::string encryptionKey = "SparkEngine_DefaultKey_ChangeMe!";
-
-        /// Connection token lifetime in seconds
-        uint32_t tokenLifetimeSeconds = 300;
     };
 
     /**
@@ -121,11 +115,10 @@ namespace Spark::Net
                 return false;
             }
 
-            // Initialize security layer
+            // Initialize security layer (NetworkSecurity auto-generates its own key)
             if (config.enableEncryption)
             {
                 m_security = std::make_unique<NetworkSecurity>();
-                m_security->SetEncryptionKey(config.encryptionKey);
             }
 
             m_initialized = true;
@@ -151,32 +144,27 @@ namespace Spark::Net
         }
 
         /**
-         * @brief Generate a connection token for a client.
+         * @brief Generate a connection token.
          */
-        ConnectionToken GenerateConnectionToken(uint64_t clientId) const
+        NetworkSecurity::Token GenerateConnectionToken()
         {
             if (m_security)
             {
-                return m_security->GenerateToken(clientId, m_config.tokenLifetimeSeconds);
+                return m_security->GenerateConnectionToken();
             }
-            // Without security, return a basic token
-            ConnectionToken token;
-            token.clientId = clientId;
-            token.timestamp = static_cast<uint64_t>(std::chrono::system_clock::now().time_since_epoch().count());
-            token.expiryTime = token.timestamp + m_config.tokenLifetimeSeconds;
-            return token;
+            return {};
         }
 
         /**
          * @brief Validate a connection token.
          */
-        bool ValidateToken(const ConnectionToken& token) const
+        bool ValidateToken(const NetworkSecurity::Token& token)
         {
             if (m_security)
             {
-                return m_security->ValidateToken(token);
+                return m_security->ValidateConnectionToken(token);
             }
-            return true; // No security = always valid
+            return true;
         }
 
         /**
@@ -186,7 +174,7 @@ namespace Spark::Net
         {
             if (m_security)
             {
-                return m_security->Encrypt(data);
+                return NetworkSecurity::Encrypt(data, m_security->GetEncryptionKey());
             }
             return data;
         }
@@ -198,7 +186,7 @@ namespace Spark::Net
         {
             if (m_security)
             {
-                return m_security->Decrypt(data);
+                return NetworkSecurity::Decrypt(data, m_security->GetEncryptionKey());
             }
             return data;
         }
@@ -232,7 +220,6 @@ namespace Spark::Net
             ss << "  Ready:          " << ((m_transport && m_transport->IsReady()) ? "YES" : "NO") << "\n";
             ss << "  Encryption:     " << (m_security ? "ENABLED" : "DISABLED") << "\n";
             ss << "  Server:         " << m_config.serverAddress << ":" << m_config.serverPort << "\n";
-            ss << "  Token Lifetime: " << m_config.tokenLifetimeSeconds << "s\n";
             return ss.str();
         }
 

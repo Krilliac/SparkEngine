@@ -236,7 +236,7 @@ namespace Spark::AI
                 float dx1 = v2.x - v0.x, dz1 = v2.z - v0.z;
                 float dxP = end.x - v0.x, dzP = end.z - v0.z;
                 float denom = dx0 * dz1 - dx1 * dz0;
-                if (std::abs(denom) > 1e-10f)
+                if (std::abs(denom) > 1e-6f)
                 {
                     float invD = 1.0f / denom;
                     float u = (dxP * dz1 - dx1 * dzP) * invD;

@@ -12,6 +12,7 @@
 #endif
 
 #include <cmath>
+#include <limits>
 #include <sstream>
 
 namespace RPG
@@ -240,7 +241,10 @@ namespace RPG
     uint32_t RPGCharacterSystem::CalculateXPForLevel(int level) const
     {
         // XP curve: 100 * level^1.5
-        return static_cast<uint32_t>(100.0f * std::pow(static_cast<float>(level), 1.5f));
+        uint64_t xp = static_cast<uint64_t>(100.0 * std::pow(static_cast<double>(level), 1.5));
+        if (xp > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()))
+            xp = std::numeric_limits<uint32_t>::max();
+        return static_cast<uint32_t>(xp);
     }
 
     void RPGCharacterSystem::AddXP(uint32_t characterId, uint32_t amount)
@@ -347,8 +351,8 @@ namespace RPG
         float conBonus = (character.baseStats.constitution - 10.0f) * 2.0f;
         float intBonus = (character.baseStats.intelligence - 10.0f) * 1.5f;
 
-        float healthRatio = character.currentHealth / character.maxHealth;
-        float manaRatio = character.currentMana / character.maxMana;
+        float healthRatio = (character.maxHealth > 0.0f) ? character.currentHealth / character.maxHealth : 1.0f;
+        float manaRatio = (character.maxMana > 0.0f) ? character.currentMana / character.maxMana : 1.0f;
 
         character.maxHealth = classDef->baseHealth + classDef->healthPerLevel * (character.level - 1) + conBonus;
         character.maxMana = classDef->baseMana + classDef->manaPerLevel * (character.level - 1) + intBonus;

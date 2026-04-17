@@ -252,7 +252,7 @@ namespace Spark::Scripting
     {
         for (const auto& ext : m_extensions)
         {
-            if (path.size() >= ext.size() && path.compare(path.size() - ext.size(), ext.size(), ext) == 0)
+            if (path.ends_with(ext))
             {
                 return true;
             }

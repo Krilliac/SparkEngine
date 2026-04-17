@@ -137,6 +137,8 @@ namespace Spark
         std::lock_guard lock(m_mutex);
         if (m_playbackState != PlaybackState::Playing)
             return;
+        if (deltaTime <= 0.0f)
+            return;
 
         m_playbackTime += deltaTime * m_playbackSpeed;
 

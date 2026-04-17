@@ -49,6 +49,9 @@ namespace Spark::Mobile
         // Update active touches
         if (event.type == TouchEventType::Began)
         {
+            m_activeTouches.erase(std::remove_if(m_activeTouches.begin(), m_activeTouches.end(),
+                                                 [&](const TouchEvent& t) { return t.touchId == event.touchId; }),
+                                  m_activeTouches.end());
             m_activeTouches.push_back(event);
         }
         else if (event.type == TouchEventType::Moved)

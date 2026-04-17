@@ -413,21 +413,20 @@ namespace MMO
     void MMOAccountSystem::CleanExpiredSessions()
     {
         uint64_t now = GetTimestamp();
-        for (auto it = m_sessions.begin(); it != m_sessions.end();)
-        {
-            float idleTime = static_cast<float>(now - it->second.lastActivity);
-            if (idleTime > SESSION_TIMEOUT)
-            {
-                auto acctIt = m_accounts.find(it->second.accountId);
-                if (acctIt != m_accounts.end())
-                    acctIt->second.totalPlayTimeHours += it->second.sessionDuration / 3600.0f;
-                it = m_sessions.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
-        }
+        std::erase_if(m_sessions,
+                      [&](const auto& entry)
+                      {
+                          const auto& session = entry.second;
+                          float idleTime = static_cast<float>(now - session.lastActivity);
+                          if (idleTime > SESSION_TIMEOUT)
+                          {
+                              auto acctIt = m_accounts.find(session.accountId);
+                              if (acctIt != m_accounts.end())
+                                  acctIt->second.totalPlayTimeHours += session.sessionDuration / 3600.0f;
+                              return true;
+                          }
+                          return false;
+                      });
     }
 
     void MMOAccountSystem::CleanExpiredBans()
