@@ -583,6 +583,11 @@ namespace Spark::Net
         int m_maxClients = 32;
 
         // Messages
+        // Upper bound protects against flood-induced memory exhaustion: a hostile or
+        // buggy peer that spams packets cannot grow these queues without limit.
+        static constexpr size_t kMaxQueuedMessages = 4096;
+        std::atomic<uint64_t> m_droppedIncomingMessages{0};
+        std::atomic<uint64_t> m_droppedOutgoingMessages{0};
         std::queue<NetworkMessage> m_outgoingQueue;
         std::queue<NetworkMessage> m_incomingQueue;
         std::unordered_map<uint16_t, MessageHandler> m_handlers;

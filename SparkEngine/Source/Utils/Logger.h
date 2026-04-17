@@ -566,6 +566,11 @@ namespace Spark
         std::condition_variable m_queueCV;
         std::atomic<bool> m_stopThread{false};
         std::thread m_writerThread;
+
+        // Backpressure: drop oldest Trace/Debug when queue exceeds this size.
+        // Chosen to bound memory (~100KB at 1KB/msg) while tolerating short bursts.
+        static constexpr size_t kAsyncQueueMaxSize = 100'000;
+        std::atomic<uint64_t> m_droppedMessages{0};
     };
 
     // ============================================================================

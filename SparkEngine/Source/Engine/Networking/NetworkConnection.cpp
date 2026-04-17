@@ -448,6 +448,11 @@ namespace Spark::Net
             queued.sequence = m_nextOutgoingSequence++;
         }
 
+        if (m_outgoingQueue.size() >= kMaxQueuedMessages)
+        {
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
         m_outgoingQueue.push(queued);
         m_stats.packetsSent++;
     }
@@ -479,6 +484,11 @@ namespace Spark::Net
 #else
         // Without networking, just enqueue for local testing
         std::lock_guard<std::mutex> lock(m_queueMutex);
+        if (m_outgoingQueue.size() >= kMaxQueuedMessages)
+        {
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
         m_outgoingQueue.push(copy);
         m_stats.packetsSent++;
 #endif // ENABLE_NETWORKING
@@ -832,7 +842,14 @@ namespace Spark::Net
             }
 
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            m_incomingQueue.push(msg);
+            if (m_incomingQueue.size() >= kMaxQueuedMessages)
+            {
+                m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+            }
+            else
+            {
+                m_incomingQueue.push(msg);
+            }
         }
 
         // Send full entity state to newly connected clients (deferred to

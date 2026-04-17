@@ -39,6 +39,9 @@
 #include <cstdint>
 #include <type_traits>
 #include <new>
+#include <exception>
+
+#include "LogMacros.h"
 
 namespace Spark
 {
@@ -239,7 +242,20 @@ namespace Spark
                     m_jobQueue.pop();
                 }
 
-                job();
+                // Tasks that throw must not kill the worker; packaged_task captures
+                // exceptions into the future, but fire-and-forget jobs need a catch.
+                try
+                {
+                    job();
+                }
+                catch (const std::exception& e)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "JobSystem worker caught exception: %s", e.what());
+                }
+                catch (...)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "JobSystem worker caught unknown exception");
+                }
             }
         }
 
