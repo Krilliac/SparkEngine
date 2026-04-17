@@ -150,4 +150,5 @@
 - [Macro Index](Macro-Index)
 - [File Tree](File-Tree)
 - [Class Hierarchy](Class-Hierarchy)
-- [API Docs (Doxygen)](../docs/README.md)
+- [Documentation Index](../docs/README.md)
+- [Doc Tooling & Doxygen](../docs/tooling/README.md)

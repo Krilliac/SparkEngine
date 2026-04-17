@@ -1,164 +1,262 @@
-# SparkEngine Documentation
+# SparkEngine Documentation Index
 
-## Wiki
+Master index for every SparkEngine documentation artifact, grouped by type. Each category lives in its own subfolder of `docs/`. The full user-facing guide set lives in [`wiki/`](../wiki/) and is cross-linked below.
 
-The primary documentation for SparkEngine lives in the [`wiki/`](../wiki/) directory at the repository root. It covers architecture, all engine subsystems, getting started guides, tutorials, tools, and contribution guidelines.
+> **Regenerate auto-produced artifacts:** `docs/update-all-docs.sh`.
+> **Generate full API reference:** `docs/generate-api-docs.sh generate` (writes to `docs/api/`, gitignored).
 
-See the [Wiki Home](../wiki/Home.md) for a full table of contents.
+---
 
-## Documentation Automation
+## Categories
 
-### Master Script (recommended)
+| Folder | Contents | Index |
+|--------|----------|-------|
+| [`architecture/`](architecture/) | Architectural decisions, dependency matrices, extension policies | [jump ↓](#architecture) |
+| [`specs/`](specs/) | Wire formats, asset formats, plugin ABI contracts | [jump ↓](#specifications) |
+| [`plans/`](plans/) | Roadmaps and milestone plans | [jump ↓](#plans--roadmaps) |
+| [`status/`](status/) | Current subsystem status snapshots | [jump ↓](#status-reports) |
+| [`guides/`](guides/) | User-facing guides (packaging, etc.) | [jump ↓](#guides) |
+| [`tooling/`](tooling/) | Documentation automation, Doxygen setup | [jump ↓](#tooling) |
+| [`api/`](api/) *(generated)* | Per-header API reference pages (regenerated locally) | [jump ↓](#api-reference) |
+| [`screenshots/`](screenshots/) | Editor and engine screenshots (images) | [jump ↓](#screenshots) |
+| [`wine-upstream/`](wine-upstream/) | Upstream Wine patches for gVisor/UMH compatibility | [jump ↓](#wine-upstream-patches) |
+| [`../wiki/`](../wiki/) | Primary user and developer wiki (137 pages) | [jump ↓](#wiki-user--developer-docs) |
 
-```bash
-docs/update-all-docs.sh              # Run all 6 doc scripts in order
-docs/update-all-docs.sh quick        # Skip slow steps (API docs, flowchart)
-docs/update-all-docs.sh check        # Dry-run: report what's stale
-```
+---
 
-### Individual Scripts
+## Architecture
 
-| Script | What it updates | Deps | Speed |
-|--------|----------------|------|-------|
-| `sync-wiki.sh sync` | Wiki AUTO: sections (components, systems, panels, tests) | None | ~2s |
-| `generate-api-docs.sh generate` | API reference (~250 headers → ~240 pages) | None | ~15s |
-| `generate-flowchart.sh generate` | Engine-Architecture-Flowchart.md | Python 3 | ~5s |
-| `update-codebase-stats.sh generate` | Codebase-Statistics.md (LOC, metrics, largest files) | None | ~5s |
-| `update-readme-badges.sh update` | README.md counts, badge JSON, AI prompt files | None | ~3s |
-| `update-context.sh update` | .claude/index.md and CLAUDE.md counts | None | ~2s |
+Architectural decisions and cross-subsystem policies.
 
-All scripts support a `check` mode that exits 1 if stale (for CI use).
+- [Dependency Matrix](architecture/dependency-matrix.md) — Subsystem-to-subsystem dependency rules and cycle checks.
+- [Gameplay Extension Policy](architecture/gameplay-extension-policy.md) — How to extend gameplay systems without breaking engine boundaries.
 
-## Validation Scripts
+## Specifications
 
-Code quality and architectural integrity checks (all in `tools/`):
+Wire formats, binary layouts, and stable ABI contracts.
 
-```bash
-tools/validate-all.sh              # Run all 6 checks
-tools/validate-all.sh --warn-only  # Report but don't fail
-```
+- [Asset Format](specs/asset-format.md) — SparkEngine native asset binary layout.
+- [Networking Wire Format](specs/networking-wire-format.md) — UDP packet structure and serialization rules.
+- [Plugin ABI Guide](specs/plugin-abi-guide.md) — Game-module DLL boundary, lifecycle, and version compatibility.
 
-| Script | What it checks | Deps |
-|--------|---------------|------|
-| `check-pragma-once.sh` | All headers use `#pragma once` | None |
-| `check-editor-panels.sh` | All panels registered in EditorPanelFactory.cpp | None |
-| `check-wiki-nav.sh` | Wiki pages match `_Sidebar.md` | None |
-| `check-wiring.sh` | Systems with Initialize() are actually called | None |
-| `check-bloat.sh` | File size thresholds (500-line .cpp, 300-line .h) | None |
-| `check-doxygen-coverage.sh` | Headers have @file/@brief docs (95% threshold) | None |
-| `check-wiki-quality.sh` | Wiki template + stale metric quality checks | None |
+## Plans & Roadmaps
 
-### Legacy Doxygen (optional, requires doxygen + graphviz)
+Forward-looking work plans — what's next, why, and when.
 
-This `docs/` directory also contains tooling for Doxygen-based API documentation.
+- [Feature Roadmap](plans/FEATURE_ROADMAP.md) — Tier 1/2/3 feature priorities.
+- [Hardware Acceleration Plan](plans/hardware-acceleration-plan.md) — GPU/CPU acceleration strategy.
+- [Tier 3 Polish & Maturity Milestone](plans/tier3-polish-maturity-milestone.md) — Milestone M1 epics, acceptance tests, perf budgets.
 
-### Covered Source Directories
+## Status Reports
 
-| Directory | Description |
-|-----------|-------------|
-| `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (59 panels) |
-| `SparkConsole/src/` | Standalone debug console application |
-| `SparkShaderCompiler/src/` | Offline shader compilation tool |
-| `GameModules/*/Source/` | 10 game modules (FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript) |
-| `SparkSDK/` | Public SDK headers |
+Snapshots of current subsystem maturity.
 
-### Quick Start (Legacy Doxygen)
+- [Project Status](status/PROJECT_STATUS.md) — Per-subsystem status (stable / experimental / framework / planned).
 
-```bash
-# Generate docs (requires doxygen and graphviz)
-cd docs
-./generate-docs.sh
+## Guides
 
-# Auto-regenerate on changes
-./auto-update.sh monitor   # Watch for changes, regenerate automatically
-./auto-update.sh check     # One-shot: regenerate if sources changed
-./auto-update.sh force     # Force full regeneration
-./auto-update.sh status    # Show last update time and file count
-```
+User-facing how-to guides that live outside the wiki.
 
-### What Gets Generated
+- [Packaging Guide](guides/packaging.md) — Package formats, install layout, components, and versioning policy.
 
-```
-docs/
-|-- Doxyfile.txt           # Doxygen configuration
-|-- generate-docs.sh       # Generation script
-|-- auto-update.sh         # Continuous monitoring script
-|-- output/
-|   |-- html/              # Full Doxygen HTML output
-|       |-- index.html     # Entry point — open in browser
-```
+## Tooling
 
-### Writing Documentation
+Documentation automation: every script that keeps docs, wikis, badges, and AI context in sync.
 
-Use Doxygen-style comments in header files:
+- [Tooling Index](tooling/README.md) — Master script, individual generators, validation scripts, legacy Doxygen setup.
 
-```cpp
-/**
- * @brief Main audio engine with XAudio2 backend
- *
- * Manages all audio operations including 2D/3D playback,
- * sound effect loading, and spatial audio positioning.
- *
- * @note Initialize() must be called before any audio operations
- */
-class AudioEngine
-{
-public:
-    /**
-     * @brief Initialize the audio engine
-     * @param maxSources Maximum simultaneous audio sources (typical: 32-64)
-     * @return HRESULT indicating success or failure
-     */
-    HRESULT Initialize(size_t maxSources);
-};
-```
+## API Reference
 
-Supported tags: `@file`, `@brief`, `@param`, `@return`, `@note`, `@warning`, `@see`, `@example`, `@todo`, `@bug`, `@deprecated`
+Auto-generated from `.h`/`.hpp`/`.cpp` by pure-shell scripts — no Doxygen required.
 
-### Configuration
+**Committed entry points (in the wiki):**
 
-**Doxygen (`Doxyfile.txt`)**
-- **Input**: All engine, editor, console, shader compiler, game, and SDK sources
-- **Output**: HTML with search, treeview navigation, source browser, timestamps
-- **Diagrams**: Class hierarchies, collaboration graphs, include dependencies, call/caller graphs (SVG, interactive)
-- **STL support**: Built-in STL type recognition enabled
+| Page | Contents |
+|------|----------|
+| [API Reference](../wiki/API-Reference.md) | Top-level hub that links to every index below. |
+| [Symbol Index](../wiki/Symbol-Index.md) | Every class, struct, enum, function, method, macro, and type alias. |
+| [Function Index](../wiki/Function-Index.md) | Every free function and out-of-line method definition. |
+| [Class & Struct Index](../wiki/Class-Index.md) | Every declared class and struct. |
+| [Enum Index](../wiki/Enum-Index.md) | Every enum with its source location. |
+| [Macro & Alias Index](../wiki/Macro-Index.md) | Every `#define` (excluding guards) plus `typedef`/`using` aliases. |
+| [File Tree](../wiki/File-Tree.md) | Hierarchical file listing with LOC, `@brief`, and Mermaid module graph. |
+| [Class Hierarchy](../wiki/Class-Hierarchy.md) | Mermaid `classDiagram` per top-level module. |
 
-**Auto-Update (`auto-update.sh`)**
-- Watches `.h` and `.hpp` files in engine and editor source directories
-- Checks every 30 seconds in monitor mode
-- Uses MD5 checksums for change detection
-- Lock file prevents concurrent regeneration
+**Generated (locally, gitignored):**
 
-### Dependencies
+Running `docs/generate-api-docs.sh generate` produces:
 
-- **Doxygen** 1.9+ — Documentation generator
-- **GraphViz** — Diagram rendering (required for class/call graphs)
+- `docs/api/README.md` — Per-module index of every generated page.
+- `docs/api/<module>/<subpath>/<header>.md` — One page per `.h`/`.hpp` with classes, enums, free functions, macros, and type aliases.
+- `docs/api/.symbols.tsv` — TSV with every symbol (kind, name, path, line, brief) for programmatic use.
+- `docs/api/ComponentIndex.md` — ECS component quick reference.
+- `docs/api/SystemIndex.md` — ECS system quick reference.
 
-```bash
-# Ubuntu/Debian
-sudo apt install doxygen graphviz
+See [Tooling Index](tooling/README.md) for the full generator pipeline.
 
-# macOS
-brew install doxygen graphviz
+## Screenshots
 
-# Windows (via Chocolatey)
-choco install doxygen.install graphviz
-```
+- [`screenshots/`](screenshots/) — Editor panels and engine captures referenced from the wiki.
 
-### CMake Integration
+## Wine Upstream Patches
 
-```cmake
-find_package(Doxygen)
-if(DOXYGEN_FOUND)
-    add_custom_target(docs
-        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/docs/generate-docs.sh
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/docs
-        COMMENT "Generating API documentation with Doxygen"
-        VERBATIM
-    )
-endif()
-```
+- [`wine-upstream/`](wine-upstream/) — Patches against Wine fixing gVisor/UMH incompatibilities; see the folder [README](wine-upstream/README.md).
+
+---
+
+## Wiki (User & Developer Docs)
+
+The primary user-facing docs are in [`wiki/`](../wiki/) — 137 pages. The authoritative navigation is [`wiki/_Sidebar.md`](../wiki/_Sidebar.md); [`wiki/Home.md`](../wiki/Home.md) is the landing page.
+
+Categories (mirrored from the sidebar):
+
+### Getting Started
+- [Home](../wiki/Home.md)
+- [FAQ](../wiki/FAQ.md)
+- [Getting Started](../wiki/Getting-Started.md)
+- [Quick-Start Tutorial](../wiki/Quick-Start-Tutorial.md)
+- [Making Your First Game](../wiki/Making-Your-First-Game.md)
+- [Making Your First Multiplayer Game](../wiki/Making-Your-First-Multiplayer-Game.md)
+- [Artist Workflow Guide](../wiki/Artist-Workflow-Guide.md)
+- [Editor Walkthrough](../wiki/Editor-Walkthrough.md)
+- [Migration Guide](../wiki/Migration-Guide.md)
+- [How SparkEngine Works](../wiki/How-SparkEngine-Works.md)
+- [Architecture Overview](../wiki/Architecture-Overview.md)
+- [Engine Architecture Flowchart](../wiki/Engine-Architecture-Flowchart.md)
+- [Creating a Game Module](../wiki/Creating-a-Game-Module.md)
+
+### Engine Subsystems
+- [Entity Component System](../wiki/Entity-Component-System.md)
+- [Rendering and Graphics](../wiki/Rendering-and-Graphics.md)
+- [Physics](../wiki/Physics.md)
+- [Cloth Simulation](../wiki/Cloth-Simulation.md)
+- [Audio](../wiki/Audio.md)
+- [Input System](../wiki/Input-System.md)
+- [Camera System](../wiki/Camera-System.md)
+- [Scripting with AngelScript](../wiki/Scripting-with-AngelScript.md)
+- [Visual Scripting](../wiki/Visual-Scripting.md)
+- [AI and Navigation](../wiki/AI-and-Navigation.md)
+- [Animation](../wiki/Animation.md)
+- [2D Systems](../wiki/2D-Systems.md)
+- [Networking](../wiki/Networking.md)
+- [Dedicated Server](../wiki/Dedicated-Server.md)
+- [Multiplayer Quick Start](../wiki/Multiplayer-Quick-Start.md)
+- [Area Server Architecture](../wiki/Area-Server-Architecture.md)
+- [Scene Management](../wiki/Scene-Management.md)
+- [Large World Support](../wiki/Large-World-Support.md)
+- [Collaborative Editing](../wiki/Collaborative-Editing.md)
+- [Coroutine System](../wiki/Coroutine-System.md)
+- [Event System](../wiki/Event-System.md)
+- [Job System](../wiki/Job-System.md)
+- [UI System](../wiki/UI-System.md)
+- [UI Layout Extensions](../wiki/UI-Layout-Extensions.md)
+- [Localization](../wiki/Localization.md)
+- [Dialogue System](../wiki/Dialogue-System.md)
+- [Destruction System](../wiki/Destruction-System.md)
+- [Replay System](../wiki/Replay-System.md)
+- [Achievement System](../wiki/Achievement-System.md)
+- [Loading System](../wiki/Loading-System.md)
+- [Mod System](../wiki/Mod-System.md)
+- [Content Delivery](../wiki/Content-Delivery.md)
+- [Tween System](../wiki/Tween-System.md)
+- [Memory Integrity](../wiki/Memory-Integrity.md)
+
+### Gameplay & Tools
+- [Gameplay Systems](../wiki/Gameplay-Systems.md)
+- [Terrain and Procedural Generation](../wiki/Terrain-and-Procedural-Generation.md)
+- [Save System](../wiki/Save-System.md)
+- [Persistence System](../wiki/Persistence-System.md)
+- [Day Night Cycle and Weather](../wiki/Day-Night-Cycle-and-Weather.md)
+- [Cinematic Sequencer](../wiki/Cinematic-Sequencer.md)
+- [Runtime Prefabs](../wiki/Runtime-Prefabs.md)
+- [SparkEditor](../wiki/SparkEditor.md)
+- [Editor Tutorials](../wiki/Editor-Tutorials.md)
+- [SparkConsole](../wiki/SparkConsole.md)
+- [SparkDaemon](../wiki/SparkDaemon.md)
+- [Shader Pipeline](../wiki/Shader-Pipeline.md)
+- [Asset Pipeline](../wiki/Asset-Pipeline.md)
+- [Asset Validation](../wiki/Asset-Validation.md)
+- [Asset Migration](../wiki/Asset-Migration.md)
+- [Game Packaging](../wiki/Game-Packaging.md)
+- [Online Services](../wiki/Online-Services.md)
+- [DataTable System](../wiki/DataTable-System.md)
+- [Loot and Crafting System](../wiki/Loot-And-Crafting-System.md)
+- [CSG System](../wiki/CSG-System.md)
+- [Font System](../wiki/Font-System.md)
+- [Timer Manager](../wiki/Timer-Manager.md)
+- [Movie Render Pipeline](../wiki/Movie-Render-Pipeline.md)
+- [HLOD and World Partition](../wiki/HLOD-And-World-Partition.md)
+- [Remote Debug System](../wiki/Remote-Debug-System.md)
+- [Selection Manager](../wiki/Selection-Manager.md)
+- [Asset Dependency Graph](../wiki/Asset-Dependency-Graph.md)
+- [Editor Automation](../wiki/Editor-Automation.md)
+- [File Watcher](../wiki/File-Watcher.md)
+- [Project Templates](../wiki/Project-Templates.md)
+
+### Platform Support
+- [VR Support](../wiki/VR-Support.md)
+- [Mobile Platform](../wiki/Mobile-Platform.md)
+- [Accessibility](../wiki/Accessibility.md)
+- [Platform Input](../wiki/Platform-Input.md)
+- [Cross-Compilation: Wine Testing](../wiki/Cross-Compilation-Wine-Testing.md)
+
+### Graphics
+- [RHI Abstraction Layer](../wiki/RHI-Abstraction-Layer.md)
+- [D3D12 Backend](../wiki/D3D12-Backend.md)
+- [DXR Raytracing](../wiki/DXR-Raytracing.md)
+- [Hybrid Ray Tracing](../wiki/Hybrid-Ray-Tracing.md)
+- [Upscaling (DLSS/FSR)](../wiki/Upscaling-System.md)
+- [Render Graph](../wiki/Render-Graph.md)
+- [Shader Graph](../wiki/Shader-Graph.md)
+- [GPU Particles](../wiki/GPU-Particles.md)
+- [GPU-Driven Rendering](../wiki/GPU-Driven-Rendering.md)
+- [Volumetric Fog](../wiki/Volumetric-Fog.md)
+- [Global Illumination](../wiki/Global-Illumination.md)
+- [Virtual Texturing](../wiki/Virtual-Texturing.md)
+- [Water Rendering](../wiki/Water-Rendering.md)
+- [Clustered Lighting](../wiki/Clustered-Lighting.md)
+- [Material System](../wiki/Material-System.md)
+- [Post-Processing](../wiki/Post-Processing.md)
+- [Shadow System](../wiki/Shadow-System.md)
+- [Particle System](../wiki/Particle-System.md)
+- [Decal System](../wiki/Decal-System.md)
+- [Sky and Atmosphere](../wiki/Sky-and-Atmosphere.md)
+- [Foliage System](../wiki/Foliage-System.md)
+- [Mesh Shaders](../wiki/Mesh-Shaders.md)
+- [Neural Rendering](../wiki/Neural-Rendering.md)
+
+### Advanced
+- [Configuration Reference](../wiki/Configuration-Reference.md)
+- [Performance Tips](../wiki/Performance-Tips.md)
+- [Benchmark Framework](../wiki/Benchmark-Framework.md)
+- [Threading Model](../wiki/Threading-Model.md)
+- [Memory Safety](../wiki/Memory-Safety.md)
+- [Memory Management Patterns](../wiki/Memory-Management-Patterns.md)
+- [Build System and CMake Modules](../wiki/Build-System-and-CMake-Modules.md)
+- [Profiler and Debugging](../wiki/Profiler-and-Debugging.md)
+- [Performance Profiling Guide](../wiki/Performance-Profiling-Guide.md)
+- [Telemetry System](../wiki/Telemetry-System.md)
+- [Golden Image Testing](../wiki/Golden-Image-Testing.md)
+- [Utilities](../wiki/Utilities.md)
+- [Testing](../wiki/Testing.md)
+- [Codebase Statistics](../wiki/Codebase-Statistics.md)
+- [Codebase Health](../wiki/Codebase-Health.md)
+- [Error Handling Patterns](../wiki/Error-Handling-Patterns.md)
+- [Hot Reload Overview](../wiki/Hot-Reload-Overview.md)
+- [Troubleshooting](../wiki/Troubleshooting.md)
+- [Contributing](../wiki/Contributing.md)
+
+### Reference
+- [API Reference](../wiki/API-Reference.md)
+- [Symbol Index](../wiki/Symbol-Index.md)
+- [Function Index](../wiki/Function-Index.md)
+- [Class Index](../wiki/Class-Index.md)
+- [Enum Index](../wiki/Enum-Index.md)
+- [Macro Index](../wiki/Macro-Index.md)
+- [File Tree](../wiki/File-Tree.md)
+- [Class Hierarchy](../wiki/Class-Hierarchy.md)
+
+---
 
 ## License
 

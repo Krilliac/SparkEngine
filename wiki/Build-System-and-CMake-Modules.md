@@ -435,7 +435,7 @@ docs/sync-wiki.sh check              # Dry-run: report what's stale
 cd docs && ./generate-docs.sh
 ```
 
-See [docs/README.md](../docs/README.md) for full documentation tooling details.
+See the [Documentation Index](../docs/README.md) and the [Doc Tooling page](../docs/tooling/README.md) for full documentation tooling details.
 
 ## CI/CD (GitHub Actions)
 

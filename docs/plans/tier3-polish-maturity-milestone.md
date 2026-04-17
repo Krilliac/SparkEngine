@@ -41,7 +41,7 @@ This milestone scopes the seven Tier-3 items from `.claude/knowledge/engine-reco
 
 ### Required Docs Updates
 
-- `docs/packaging.md` — add CPack invocation, artifact matrix, troubleshooting.
+- `docs/guides/packaging.md` — add CPack invocation, artifact matrix, troubleshooting.
 - `wiki/Build-System.md` — document packaging targets and install layout.
 - `wiki/Getting-Started.md` — add SDK consumer quickstart.
 

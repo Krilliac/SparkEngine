@@ -56,7 +56,8 @@ Pick the path that matches your role:
 `wiki/_Sidebar.md` is the canonical table of contents for all wiki pages and categories.
 
 - [Browse full wiki index](./_Sidebar.md)
-- [API Documentation](../docs/README.md)
+- [API Reference](API-Reference)
+- [Documentation Index](../docs/README.md)
 
 ## Code Quality
 
@@ -86,5 +87,5 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 | Test files | 473 |
 | Test cases | 5871+ |
 | Wiki pages | 136 |
-| *Last synced* | *2026-04-17 01:46* |
+| *Last synced* | *2026-04-17 03:26* |
 <!-- /AUTO:stats -->
