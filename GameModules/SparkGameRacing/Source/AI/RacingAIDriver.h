@@ -17,6 +17,7 @@
 #include "Enums/RacingEnums.h"
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Racing
@@ -115,6 +116,7 @@ namespace Racing
         std::string GetDriverListString() const;
 
       private:
+        void RebuildStateIndex();
         void UpdateDriver(AIDriverConfig& config, AIDriverState& state, float dt);
         void ComputeSteering(const AIDriverConfig& config, AIDriverState& state);
         void ComputeThrottle(const AIDriverConfig& config, AIDriverState& state);
@@ -125,6 +127,7 @@ namespace Racing
         Spark::IEngineContext* m_context{nullptr};
         std::vector<AIDriverConfig> m_drivers;
         std::vector<AIDriverState> m_states;
+        std::unordered_map<uint32_t, size_t> m_stateIndexByVehicleId;
         AIDifficulty m_globalDifficulty = AIDifficulty::Medium;
         bool m_initialized{false};
     };

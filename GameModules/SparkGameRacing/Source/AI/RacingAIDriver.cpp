@@ -16,6 +16,28 @@
 
 namespace Racing
 {
+    namespace
+    {
+        constexpr float kSyntheticTrackWaypointCount = 256.0f;
+        constexpr float kWaypointAdvancePerSecond = 14.0f;
+        constexpr float kMaxRubberBandBoost = 1.15f;
+        constexpr float kMaxRubberBandPenalty = 0.90f;
+
+        [[nodiscard]] float GetTrackPhase(const AIDriverState& state)
+        {
+            return (static_cast<float>(state.targetWaypoint % static_cast<uint32_t>(kSyntheticTrackWaypointCount)) /
+                    kSyntheticTrackWaypointCount) *
+                   (2.0f * 3.14159265359f);
+        }
+
+        [[nodiscard]] float NormalizeSigned(float value, float range)
+        {
+            if (range <= 0.0f)
+                return 0.0f;
+            return std::clamp(value / range, -1.0f, 1.0f);
+        }
+    } // namespace
+
 
     bool RacingAIDriver::Initialize(Spark::IEngineContext* context)
     {
@@ -47,6 +69,7 @@ namespace Racing
     {
         m_drivers.clear();
         m_states.clear();
+        m_stateIndexByVehicleId.clear();
         m_initialized = false;
     }
 
@@ -58,6 +81,7 @@ namespace Racing
         state.vehicleId = config.vehicleId;
         state.reactionDelay = config.reactionTime;
         m_states.push_back(state);
+        m_stateIndexByVehicleId[state.vehicleId] = m_states.size() - 1;
     }
 
     void RacingAIDriver::RemoveDriver(uint32_t vehicleId)
@@ -68,6 +92,7 @@ namespace Racing
             {
                 m_drivers.erase(m_drivers.begin() + static_cast<ptrdiff_t>(i));
                 m_states.erase(m_states.begin() + static_cast<ptrdiff_t>(i));
+                RebuildStateIndex();
                 return;
             }
         }
@@ -100,33 +125,59 @@ namespace Racing
         if (m_states.empty())
             return;
 
-        // Rubber-banding: AI behind the player gets a speed boost,
-        // AI ahead of the player gets a slight reduction.
-        float playerPos = playerDistance;
-        float totalSpread = leadDistance - lastDistance;
-        if (totalSpread < 1.0f)
-            totalSpread = 1.0f;
+        // Rubber-banding model with synthetic race positions:
+        // - m_states index 0 is considered race leader, last index is tail.
+        // - Distances are normalized to [lastDistance, leadDistance].
+        // - Drivers behind the player receive up to +15% throttle.
+        // - Drivers ahead of the player receive up to -10% throttle.
+        const float minDistance = std::min(lastDistance, leadDistance);
+        const float maxDistance = std::max(lastDistance, leadDistance);
+        const float spread = std::max(maxDistance - minDistance, 1.0f);
+        const float clampedPlayerDistance = std::clamp(playerDistance, minDistance, maxDistance);
 
-        for (auto& state : m_states)
+        for (size_t i = 0; i < m_states.size(); ++i)
         {
-            // Base factor: no adjustment
+            auto& state = m_states[i];
+            const float rankLerp =
+                (m_states.size() == 1) ? 0.0f : (static_cast<float>(i) / static_cast<float>(m_states.size() - 1));
+            const float aiDistance = maxDistance - (rankLerp * spread);
+            const float distanceDelta = clampedPlayerDistance - aiDistance;
+            const float normalizedDelta = NormalizeSigned(distanceDelta, spread);
+
             state.rubberBandFactor = 1.0f;
 
-            // Simple model: further behind = bigger boost, further ahead = small penalty
-            // (This would be computed per-vehicle with actual distance data in production)
-        }
+            if (normalizedDelta < 0.0f)
+            {
+                // AI is behind the player.
+                const float behindAmount = -normalizedDelta;
+                state.rubberBandFactor = 1.0f + (kMaxRubberBandBoost - 1.0f) * behindAmount;
+            }
+            else if (normalizedDelta > 0.0f)
+            {
+                // AI is ahead of the player.
+                const float aheadAmount = normalizedDelta;
+                state.rubberBandFactor = 1.0f - (1.0f - kMaxRubberBandPenalty) * aheadAmount;
+            }
 
-        (void)playerPos;
+            state.rubberBandFactor = std::clamp(state.rubberBandFactor, kMaxRubberBandPenalty, kMaxRubberBandBoost);
+        }
     }
 
     const AIDriverState* RacingAIDriver::GetDriverState(uint32_t vehicleId) const
     {
-        for (const auto& state : m_states)
-        {
-            if (state.vehicleId == vehicleId)
-                return &state;
-        }
-        return nullptr;
+        const auto it = m_stateIndexByVehicleId.find(vehicleId);
+        if (it == m_stateIndexByVehicleId.end())
+            return nullptr;
+        const size_t index = it->second;
+        return (index < m_states.size()) ? &m_states[index] : nullptr;
+    }
+
+    void RacingAIDriver::RebuildStateIndex()
+    {
+        m_stateIndexByVehicleId.clear();
+        m_stateIndexByVehicleId.reserve(m_states.size());
+        for (size_t i = 0; i < m_states.size(); ++i)
+            m_stateIndexByVehicleId[m_states[i].vehicleId] = i;
     }
 
     std::string RacingAIDriver::GetDriverListString() const
@@ -149,6 +200,11 @@ namespace Racing
 
     void RacingAIDriver::UpdateDriver(AIDriverConfig& config, AIDriverState& state, float dt)
     {
+        if (dt <= 0.0f)
+            return;
+
+        dt = std::min(dt, 0.1f);
+
         // Reaction delay simulation
         if (state.reactionDelay > 0.0f)
         {
@@ -165,20 +221,28 @@ namespace Racing
 
         // Nitro usage: AI uses nitro on straights when behind
         state.useNitro = (state.rubberBandFactor > 1.05f) && (std::abs(state.steer) < 0.2f);
+
+        // Advance synthetic waypoint target based on intended throttle.
+        const float waypointAdvance = dt * kWaypointAdvancePerSecond * std::max(0.15f, state.throttle);
+        state.targetWaypoint = (state.targetWaypoint + static_cast<uint32_t>(std::max(1.0f, waypointAdvance))) %
+                               static_cast<uint32_t>(kSyntheticTrackWaypointCount);
+
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing AI driver %u: throttle=%.2f steer=%.2f nitro=%s",
                         state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
     }
 
     void RacingAIDriver::ComputeSteering(const AIDriverConfig& config, AIDriverState& state)
     {
-        // Steer toward the target waypoint.
-        // In a real implementation this would query the track system for waypoint
-        // positions and compute the angle. Here we produce a placeholder oscillation
-        // that represents AI following a racing line.
-        float targetAngle = 0.0f; // Would come from track waypoint direction
+        // Synthetic racing line (sine-cosine blend) for deterministic behavior
+        // when no track-waypoint service is injected yet.
+        const float phase = GetTrackPhase(state);
+        const float upcomingPhase = phase + (state.lookAheadCount * 0.05f);
+        const float targetAngle = std::sin(phase) * 0.55f + std::sin(upcomingPhase * 0.7f) * 0.25f;
 
         // Line accuracy adds noise: lower accuracy = wider, less precise lines
-        float noise = (1.0f - config.lineAccuracy) * 0.3f;
+        const float deterministicSeed = static_cast<float>((state.vehicleId * 1103515245u + 12345u) & 0x3FFu) / 1023.0f;
+        const float bias = (deterministicSeed - 0.5f) * 2.0f; // [-1, 1]
+        const float noise = (1.0f - std::clamp(config.lineAccuracy, 0.0f, 1.0f)) * 0.2f * bias;
 
         state.steer = std::clamp(targetAngle + noise, -1.0f, 1.0f);
 
@@ -223,11 +287,32 @@ namespace Racing
             return;
         }
 
-        // Aggressive AI attempts overtakes more often
-        // In production, this would check proximity to vehicles ahead
-        // and choose inside/outside line based on upcoming corner direction.
-        (void)config;
-        (void)dt;
+        // Synthetic overtake trigger: only attempt on mild steering and when
+        // aggressiveness plus rubber-band pressure indicates catch-up intent.
+        if (std::abs(state.steer) > 0.35f)
+            return;
+
+        const float overtakeIntent = std::clamp(config.aggressiveness * state.rubberBandFactor, 0.0f, 1.5f);
+        if (overtakeIntent < 0.35f)
+            return;
+
+        const float phase = GetTrackPhase(state);
+        const float triggerWave = 0.5f + 0.5f * std::sin(phase * 4.0f + static_cast<float>(state.vehicleId) * 0.17f);
+        if (triggerWave > overtakeIntent)
+            return;
+
+        state.isOvertaking = true;
+        state.overtakeTimer = std::clamp(0.8f + (1.4f - overtakeIntent), 0.5f, 2.0f);
+        const float lateralDirection =
+            (std::sin(phase + static_cast<float>(state.vehicleId) * 0.13f) >= 0.0f) ? 1.0f : -1.0f;
+        state.overtakeOffset = lateralDirection * std::clamp(0.35f + config.aggressiveness * 0.45f, 0.25f, 0.85f);
+
+        // Advance virtual waypoint target slightly so overtake has visible intent
+        // on subsequent steering updates.
+        const float phaseAdvance =
+            std::max(dt, 0.016f) * kWaypointAdvancePerSecond * (1.0f + config.speedFactor * 0.25f);
+        state.targetWaypoint = (state.targetWaypoint + static_cast<uint32_t>(phaseAdvance * 2.0f)) %
+                               static_cast<uint32_t>(kSyntheticTrackWaypointCount);
     }
 
     AIDriverConfig RacingAIDriver::MakeConfigForDifficulty(AIDifficulty difficulty)
