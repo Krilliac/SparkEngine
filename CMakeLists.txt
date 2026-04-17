@@ -101,7 +101,7 @@ option(ENABLE_PROFILING "Enable profiling tools" ON)
 option(ENABLE_NETWORKING "Enable networking features (UDP sockets)" ON)
 option(ENABLE_VULKAN "Enable Vulkan graphics backend (experimental)" ON)
 option(ENABLE_OPENGL "Enable OpenGL graphics backend (experimental)" ON)
-option(ENABLE_METAL "Enable Metal graphics backend (macOS, experimental)" OFF)
+option(ENABLE_METAL "Enable Metal graphics backend (macOS, experimental)" ${APPLE})
 option(ENABLE_DXR "Enable DirectX Raytracing support (requires D3D12, runtime fallback to SDFGI)" ON)
 option(ENABLE_HYBRID_RT "Enable hybrid ray tracing (SDFGI software + optional hardware DXR/Vulkan RT)" ON)
 # SDL2 is auto-enabled on Linux for windowing + input; can be used on Windows too
@@ -959,6 +959,14 @@ file(GLOB_RECURSE SPARK_ENGINE_SOURCES
     "SparkEngine/Source/*.h"
     "SparkEngine/Source/*.hpp"
 )
+
+if(APPLE)
+    file(GLOB_RECURSE SPARK_ENGINE_OBJCXX_SOURCES
+        CONFIGURE_DEPENDS
+        "SparkEngine/Source/*.mm"
+    )
+    list(APPEND SPARK_ENGINE_SOURCES ${SPARK_ENGINE_OBJCXX_SOURCES})
+endif()
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*/[Tt]est[^a-z].*|.*/[Tt]ests/.*")
 list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 
