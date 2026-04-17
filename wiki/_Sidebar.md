@@ -14,6 +14,7 @@
 - [Architecture Overview](getting-started/Architecture-Overview.md)
 - [Engine Architecture Flowchart](getting-started/Engine-Architecture-Flowchart.md)
 - [Creating a Game Module](getting-started/Creating-a-Game-Module.md)
+- [Game Modules (catalog)](getting-started/Game-Modules.md)
 
 ### Engine Subsystems
 - [Entity Component System](subsystems/Entity-Component-System.md)
@@ -93,7 +94,11 @@
 
 ### Graphics
 - [RHI Abstraction Layer](graphics/RHI-Abstraction-Layer.md)
+- [D3D11 Backend](graphics/D3D11-Backend.md)
 - [D3D12 Backend](graphics/D3D12-Backend.md)
+- [Vulkan Backend](graphics/Vulkan-Backend.md)
+- [OpenGL Backend](graphics/OpenGL-Backend.md)
+- [Metal Backend](graphics/Metal-Backend.md)
 - [DXR Raytracing](graphics/DXR-Raytracing.md)
 - [Hybrid Ray Tracing](graphics/Hybrid-Ray-Tracing.md)
 - [Upscaling (DLSS/FSR)](graphics/Upscaling-System.md)

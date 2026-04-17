@@ -124,6 +124,7 @@ Categories (mirrored from the sidebar):
 - [Architecture Overview](../wiki/getting-started/Architecture-Overview.md)
 - [Engine Architecture Flowchart](../wiki/getting-started/Engine-Architecture-Flowchart.md)
 - [Creating a Game Module](../wiki/getting-started/Creating-a-Game-Module.md)
+- [Game Modules (catalog)](../wiki/getting-started/Game-Modules.md)
 
 ### Engine Subsystems
 - [Entity Component System](../wiki/subsystems/Entity-Component-System.md)
@@ -203,7 +204,11 @@ Categories (mirrored from the sidebar):
 
 ### Graphics
 - [RHI Abstraction Layer](../wiki/graphics/RHI-Abstraction-Layer.md)
+- [D3D11 Backend](../wiki/graphics/D3D11-Backend.md)
 - [D3D12 Backend](../wiki/graphics/D3D12-Backend.md)
+- [Vulkan Backend](../wiki/graphics/Vulkan-Backend.md)
+- [OpenGL Backend](../wiki/graphics/OpenGL-Backend.md)
+- [Metal Backend](../wiki/graphics/Metal-Backend.md)
 - [DXR Raytracing](../wiki/graphics/DXR-Raytracing.md)
 - [Hybrid Ray Tracing](../wiki/graphics/Hybrid-Ray-Tracing.md)
 - [Upscaling (DLSS/FSR)](../wiki/graphics/Upscaling-System.md)
