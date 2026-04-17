@@ -442,17 +442,22 @@ namespace Spark::Net
         NetworkMessage queued = msg;
         queued.timestamp = m_serverTime;
 
-        // Assign sequence number for reliable messages
+        // Back-pressure only on Unreliable. Dropping a ReliableOrdered message
+        // after sequence assignment would create a permanent gap the receiver
+        // cannot recover from (later sequences buffer forever waiting for it).
+        if (queued.channel == ChannelType::Unreliable && m_outgoingQueue.size() >= kMaxQueuedMessages)
+        {
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+
+        // Assign sequence number for reliable messages (after the drop check so we
+        // never burn a sequence number on a dropped packet).
         if (queued.channel != ChannelType::Unreliable)
         {
             queued.sequence = m_nextOutgoingSequence++;
         }
 
-        if (m_outgoingQueue.size() >= kMaxQueuedMessages)
-        {
-            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
-            return;
-        }
         m_outgoingQueue.push(queued);
         m_stats.packetsSent++;
     }
@@ -484,7 +489,8 @@ namespace Spark::Net
 #else
         // Without networking, just enqueue for local testing
         std::lock_guard<std::mutex> lock(m_queueMutex);
-        if (m_outgoingQueue.size() >= kMaxQueuedMessages)
+        // Only drop Unreliable messages to avoid reliable-sequence gaps.
+        if (copy.channel == ChannelType::Unreliable && m_outgoingQueue.size() >= kMaxQueuedMessages)
         {
             m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
             return;
@@ -842,7 +848,9 @@ namespace Spark::Net
             }
 
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            if (m_incomingQueue.size() >= kMaxQueuedMessages)
+            // Unreliable can be dropped under flood; reliable/ordered must be kept
+            // so the ack/resequence path stays consistent.
+            if (msg.channel == ChannelType::Unreliable && m_incomingQueue.size() >= kMaxQueuedMessages)
             {
                 m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
             }

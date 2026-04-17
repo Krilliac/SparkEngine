@@ -83,22 +83,22 @@ namespace Spark::Daemon
         m_shouldStop.store(true, std::memory_order_release);
     }
 
-    std::expected<void, std::string> DaemonServer::Run(const std::string& socketPath)
+    Expected<void, std::string> DaemonServer::Run(const std::string& socketPath)
     {
 #if defined(_WIN32)
         (void)socketPath;
-        return std::unexpected<std::string>("DaemonServer: Windows named-pipe transport not yet implemented");
+        return Unexpected<std::string>("DaemonServer: Windows named-pipe transport not yet implemented");
 #else
         if (socketPath.empty())
-            return std::unexpected<std::string>("DaemonServer: socket path is empty");
+            return Unexpected<std::string>("DaemonServer: socket path is empty");
         if (socketPath.size() >= sizeof(sockaddr_un{}.sun_path))
-            return std::unexpected<std::string>("DaemonServer: socket path exceeds sockaddr_un capacity");
+            return Unexpected<std::string>("DaemonServer: socket path exceeds sockaddr_un capacity");
 
         ::unlink(socketPath.c_str());
 
         int listenFd = ::socket(AF_UNIX, SOCK_STREAM, 0);
         if (listenFd < 0)
-            return std::unexpected<std::string>(std::string("DaemonServer: socket() failed: ") + std::strerror(errno));
+            return Unexpected<std::string>(std::string("DaemonServer: socket() failed: ") + std::strerror(errno));
 
         sockaddr_un addr{};
         addr.sun_family = AF_UNIX;
@@ -108,7 +108,7 @@ namespace Spark::Daemon
         {
             std::string err = std::strerror(errno);
             ::close(listenFd);
-            return std::unexpected<std::string>("DaemonServer: bind(" + socketPath + ") failed: " + err);
+            return Unexpected<std::string>("DaemonServer: bind(" + socketPath + ") failed: " + err);
         }
 
         // Owner-only permissions.
@@ -119,7 +119,7 @@ namespace Spark::Daemon
             std::string err = std::strerror(errno);
             ::close(listenFd);
             ::unlink(socketPath.c_str());
-            return std::unexpected<std::string>("DaemonServer: listen() failed: " + err);
+            return Unexpected<std::string>("DaemonServer: listen() failed: " + err);
         }
 
         // Non-blocking listen socket + poll() so Stop() can exit the loop within
@@ -208,7 +208,7 @@ namespace Spark::Daemon
         m_boundPath.clear();
 
         if (!fatalError.empty())
-            return std::unexpected<std::string>(std::move(fatalError));
+            return Unexpected<std::string>(std::move(fatalError));
         return {};
 #endif
     }

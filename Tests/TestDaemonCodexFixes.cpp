@@ -31,6 +31,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <thread>
+#include <unistd.h>
 
 namespace
 {

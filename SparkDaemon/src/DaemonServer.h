@@ -14,11 +14,11 @@
 
 #pragma once
 
+#include "../../SparkEngine/Source/Utils/Expected.h"
 #include "ServiceBase.h"
 
 #include <atomic>
 #include <chrono>
-#include <expected>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -67,7 +67,7 @@ namespace Spark::Daemon
          *                    the owning user can connect.
          * @return            Empty success, or an error string.
          */
-        std::expected<void, std::string> Run(const std::string& socketPath);
+        Expected<void, std::string> Run(const std::string& socketPath);
 
         /// Signal the accept loop to exit. Safe to call from another thread.
         void Stop();

@@ -18,7 +18,7 @@
 #include "DaemonClient.h"
 
 #include <cstdint>
-#include <expected>
+#include "Expected.h"
 #include <string>
 #include <vector>
 
@@ -37,7 +37,7 @@ namespace Spark::Daemon
          *         stored blob on hit. Transport failures surface as
          *         `unexpected()`.
          */
-        std::expected<GetAssetResponse, std::string> GetAsset(const std::string& path, uint8_t platform);
+        Expected<GetAssetResponse, std::string> GetAsset(const std::string& path, uint8_t platform);
 
         /**
          * @brief Store a compiled asset blob under the given path + platform.
@@ -46,8 +46,8 @@ namespace Spark::Daemon
          * bounded by `Spark::Daemon::kMaxPayloadSize` (16 MiB) minus the
          * path-length header.
          */
-        std::expected<void, std::string> PutAsset(const std::string& path, uint8_t platform,
-                                                  const std::vector<uint8_t>& blob);
+        Expected<void, std::string> PutAsset(const std::string& path, uint8_t platform,
+                                             const std::vector<uint8_t>& blob);
 
         /**
          * @brief Drop every platform variant for a given path.
@@ -58,14 +58,14 @@ namespace Spark::Daemon
          *
          * @return Number of platform variants removed.
          */
-        std::expected<uint32_t, std::string> InvalidateAsset(const std::string& path);
+        Expected<uint32_t, std::string> InvalidateAsset(const std::string& path);
 
         /// Fetch entry count, total bytes, hit and miss counters.
-        std::expected<AssetCacheStats, std::string> GetCacheStats();
+        Expected<AssetCacheStats, std::string> GetCacheStats();
 
         /// Drop every entry in the daemon's asset cache (and its on-disk files).
         /// Zeros hit/miss/eviction counters too.
-        std::expected<void, std::string> ClearCache();
+        Expected<void, std::string> ClearCache();
 
       private:
         DaemonClient& m_client;

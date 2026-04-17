@@ -971,7 +971,9 @@ static int RunSDL2Windowed(int argc, char* argv[])
     {
         auto* rhiDevice = g_graphics->GetRHIDevice();
         bool vulkanActive = rhiDevice && rhiDevice->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
-        if (!vulkanActive && !g_graphics->IsHeadless())
+        auto* rhiBridge = g_graphics->GetRHIBridge();
+        bool headless = rhiBridge && rhiBridge->IsHeadless();
+        if (!vulkanActive && !headless)
         {
             Spark::SimpleConsole::GetInstance().LogInfo(
                 "Vulkan backend unavailable — recreating window with OpenGL support");

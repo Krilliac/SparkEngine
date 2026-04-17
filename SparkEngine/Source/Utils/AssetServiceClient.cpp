@@ -10,13 +10,13 @@ namespace Spark::Daemon
 
     namespace
     {
-        std::unexpected<std::string> WrapError(std::string phase, const std::string& inner)
+        Unexpected<std::string> WrapError(std::string phase, const std::string& inner)
         {
-            return std::unexpected<std::string>("AssetServiceClient::" + phase + ": " + inner);
+            return Unexpected<std::string>("AssetServiceClient::" + phase + ": " + inner);
         }
     } // namespace
 
-    std::expected<GetAssetResponse, std::string> AssetServiceClient::GetAsset(const std::string& path, uint8_t platform)
+    Expected<GetAssetResponse, std::string> AssetServiceClient::GetAsset(const std::string& path, uint8_t platform)
     {
         GetAssetRequest req;
         req.key.path = path;
@@ -35,8 +35,8 @@ namespace Spark::Daemon
         return decoded;
     }
 
-    std::expected<void, std::string> AssetServiceClient::PutAsset(const std::string& path, uint8_t platform,
-                                                                  const std::vector<uint8_t>& blob)
+    Expected<void, std::string> AssetServiceClient::PutAsset(const std::string& path, uint8_t platform,
+                                                             const std::vector<uint8_t>& blob)
     {
         PutAssetRequest req;
         req.key.path = path;
@@ -52,7 +52,7 @@ namespace Spark::Daemon
         return {};
     }
 
-    std::expected<uint32_t, std::string> AssetServiceClient::InvalidateAsset(const std::string& path)
+    Expected<uint32_t, std::string> AssetServiceClient::InvalidateAsset(const std::string& path)
     {
         InvalidateAssetRequest req;
         req.path = path;
@@ -70,7 +70,7 @@ namespace Spark::Daemon
         return decoded.removedCount;
     }
 
-    std::expected<AssetCacheStats, std::string> AssetServiceClient::GetCacheStats()
+    Expected<AssetCacheStats, std::string> AssetServiceClient::GetCacheStats()
     {
         auto response = m_client.Request(ServiceId::Asset, static_cast<uint16_t>(AssetMessage::GetCacheStatsRequest),
                                          /*payload*/ {});
@@ -85,7 +85,7 @@ namespace Spark::Daemon
         return stats;
     }
 
-    std::expected<void, std::string> AssetServiceClient::ClearCache()
+    Expected<void, std::string> AssetServiceClient::ClearCache()
     {
         auto response = m_client.Request(ServiceId::Asset, static_cast<uint16_t>(AssetMessage::ClearCacheRequest),
                                          /*payload*/ {});
