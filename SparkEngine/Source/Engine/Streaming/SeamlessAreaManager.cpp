@@ -245,6 +245,51 @@ namespace Spark::Streaming
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    float SeamlessAreaManager::DirectionalEffectiveDistance(float rawDistance, const AreaDefinition& area) const
+    {
+        if (m_config.directionalBias <= 0.0f || rawDistance <= 0.0f)
+            return rawDistance;
+
+        XMFLOAT3 playerPos;
+        XMFLOAT3 dir;
+        {
+            std::lock_guard<std::mutex> lock(m_playerMutex);
+            playerPos = m_playerPosition;
+            const float speedSq = m_playerVelocity.x * m_playerVelocity.x + m_playerVelocity.y * m_playerVelocity.y +
+                                  m_playerVelocity.z * m_playerVelocity.z;
+            if (speedSq > 0.25f)
+            {
+                const float inv = 1.0f / std::sqrt(speedSq);
+                dir = {m_playerVelocity.x * inv, m_playerVelocity.y * inv, m_playerVelocity.z * inv};
+            }
+            else
+            {
+                dir = m_cameraDirection;
+            }
+        }
+
+        // Vector from player to area centre
+        const float cx = 0.5f * (area.boundsMin.x + area.boundsMax.x);
+        const float cy = 0.5f * (area.boundsMin.y + area.boundsMax.y);
+        const float cz = 0.5f * (area.boundsMin.z + area.boundsMax.z);
+        const float vx = cx - playerPos.x;
+        const float vy = cy - playerPos.y;
+        const float vz = cz - playerPos.z;
+        const float vlen = std::sqrt(vx * vx + vy * vy + vz * vz);
+        if (vlen < 1e-4f)
+            return rawDistance;
+
+        const float dot = (dir.x * vx + dir.y * vy + dir.z * vz) / vlen;
+        if (dot < m_config.directionalDotThreshold)
+            return rawDistance;
+
+        // Map dot in [threshold, 1] to bias in [0, directionalBias].
+        const float t =
+            (dot - m_config.directionalDotThreshold) / std::max(1e-4f, 1.0f - m_config.directionalDotThreshold);
+        const float reduction = std::clamp(m_config.directionalBias * t, 0.0f, 0.95f);
+        return rawDistance * (1.0f - reduction);
+    }
+
     AreaID SeamlessAreaManager::FindContainingArea(const XMFLOAT3& point) const
     {
         for (const auto& [id, area] : m_areas)
@@ -309,12 +354,14 @@ namespace Spark::Streaming
                 continue;
             }
 
-            // Check if within load radius from either current or predicted position
+            // Check if within load radius from either current or predicted position.
+            // Areas along the movement direction get a reduced effective distance
+            // so they preload even if slightly beyond the raw radius.
             float distCurrent = area.distanceToPlayer;
             float distPredicted = DistanceToArea(predicted, area.definition);
-            float effectiveDist = std::min(distCurrent, distPredicted);
+            float biased = DirectionalEffectiveDistance(std::min(distCurrent, distPredicted), area.definition);
 
-            if (effectiveDist <= m_config.loadRadius)
+            if (biased <= m_config.loadRadius)
             {
                 m_loadQueue.push_back(id);
             }
@@ -334,7 +381,9 @@ namespace Spark::Streaming
                       {
                           return areaA.definition.priority > areaB.definition.priority;
                       }
-                      return areaA.distanceToPlayer < areaB.distanceToPlayer;
+                      const float dA = DirectionalEffectiveDistance(areaA.distanceToPlayer, areaA.definition);
+                      const float dB = DirectionalEffectiveDistance(areaB.distanceToPlayer, areaB.definition);
+                      return dA < dB;
                   });
 
         // Start loading up to the concurrent limit

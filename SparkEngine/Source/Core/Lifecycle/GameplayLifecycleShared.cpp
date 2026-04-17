@@ -64,6 +64,7 @@
 #include "Graphics/MaterialLoader.h"
 #include "Engine/World/ProximityTriggerSystem.h"
 #include "Graphics/SkyAtmosphere.h"
+#include "Graphics/VolumetricClouds.h"
 #include "Graphics/WaterRenderer.h"
 #include "Graphics/OcclusionCulling.h"
 #include "Engine/SaveSystem/FreezeSystem.h"
@@ -453,6 +454,7 @@ namespace Spark::Core::Lifecycle
         Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Initialize(eventBus);
         Spark::World::ProximityTriggerSystem::GetInstance().Initialize();
         Spark::Graphics::SkyAtmosphereSystem::GetInstance().Initialize();
+        Spark::Graphics::VolumetricCloudSystem::GetInstance().Initialize();
         Spark::Graphics::WaterRenderer::GetInstance().Initialize();
         Spark::Graphics::OcclusionCullingSystem::GetInstance().Initialize();
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "AIAndWorldSystems", 0.0);
@@ -944,6 +946,8 @@ namespace Spark::Core::Lifecycle
 
         SPARK_GUARDED_UPDATE("SkyAtmosphere", "Core",
                              { Spark::Graphics::SkyAtmosphereSystem::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("VolumetricClouds", "Core",
+                             { Spark::Graphics::VolumetricCloudSystem::GetInstance().Update(dt); });
 
         SPARK_GUARDED_UPDATE("WaterRenderer", "Core", { Spark::Graphics::WaterRenderer::GetInstance().Update(dt); });
     }
@@ -1139,6 +1143,7 @@ namespace Spark::Core::Lifecycle
         Spark::Graphics::OcclusionCullingSystem::GetInstance().Shutdown();
         Spark::Graphics::WaterRenderer::GetInstance().Shutdown();
         Spark::Graphics::SkyAtmosphereSystem::GetInstance().Shutdown();
+        Spark::Graphics::VolumetricCloudSystem::GetInstance().Shutdown();
         Spark::World::ProximityTriggerSystem::GetInstance().Shutdown();
         Spark::Gameplay::WeatherGameplayIntegration::GetInstance().Shutdown();
         Spark::Graphics::MaterialLoader::GetInstance().Shutdown();

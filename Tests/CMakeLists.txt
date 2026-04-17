@@ -131,6 +131,9 @@ add_executable(SparkTests
     TestDynamicResponseSystem.cpp
     TestEntityArchetype.cpp
     TestSkyAtmosphere.cpp
+    TestVolumetricClouds.cpp
+    TestHRTFProcessor.cpp
+    TestDirectionalStreaming.cpp
     TestWaterRenderer.cpp
     TestOcclusionCulling.cpp
     TestPortalCulling.cpp
