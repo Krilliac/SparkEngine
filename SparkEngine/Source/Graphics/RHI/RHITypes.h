@@ -296,7 +296,8 @@ namespace Spark
             Software_SDFGI, ///< SDF sphere tracing via compute (DX11 CS 5.0+)
             Software_VCT,   ///< Voxel cone tracing (future)
             HardwareDXR,    ///< DXR 1.1 (D3D12 Ultimate, inline + pipeline)
-            HardwareVKRT    ///< VK_KHR_ray_tracing_pipeline + acceleration_structure
+            HardwareVKRT,   ///< VK_KHR_ray_tracing_pipeline + acceleration_structure
+            HardwareMetalRT ///< MPSRayIntersector / MTLAccelerationStructure (Apple Silicon)
         };
 
         /// @brief Quality tier for hybrid ray tracing

@@ -1,13 +1,16 @@
 /**
  * @file SparkEngineLinux.cpp
- * @brief Linux entry point (main) and SDL2 event loop
+ * @brief POSIX entry point (main) and SDL2 event loop (Linux + macOS).
  *
- * Contains the Linux/SDL2 initialization, signal handling, and main loop.
+ * Contains the SDL2 initialization, signal handling, and main loop shared
+ * between Linux and macOS. macOS-specific bits (Metal view, _NSGetExecutablePath)
+ * are isolated in SparkEngineMacOS.cpp behind the Spark::MacOS helper API.
  * Windows counterpart lives in SparkEngineWindows.cpp.
  * Shared globals and SetupCrashHandler stay in SparkEngine.cpp.
  */
 #include "SparkEngine.h"
 #include "Platform.h"
+#include "SparkEngineMacOS.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
@@ -72,9 +75,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <thread>
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
 
 // Shared globals and functions defined in SparkEngine.cpp
 extern std::unique_ptr<GraphicsEngine> g_graphics;
@@ -165,28 +165,16 @@ static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
 
 static std::filesystem::path GetExecutableDirectoryLinux()
 {
-#if defined(__APPLE__)
-    uint32_t size = 0;
-    _NSGetExecutablePath(nullptr, &size);
-    std::string exePath(size, '\0');
-    if (_NSGetExecutablePath(exePath.data(), &size) == 0)
-    {
-        std::error_code ec;
-        auto canonical = std::filesystem::weakly_canonical(std::filesystem::path(exePath.c_str()), ec);
-        if (!ec)
-        {
-            return canonical.parent_path();
-        }
-    }
-    return std::filesystem::current_path();
-#else
-    // /proc/self/exe is the canonical way on Linux
+    // On macOS the dedicated helper uses _NSGetExecutablePath; on other
+    // platforms it returns an empty path so we fall through to /proc/self/exe.
+    if (auto macDir = Spark::MacOS::GetExecutableDirectory(); !macDir.empty())
+        return macDir;
+
     std::error_code ec;
     auto exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
     if (!ec)
         return exePath.parent_path();
     return std::filesystem::current_path();
-#endif
 }
 
 static std::string FindGameModuleFromArgs(int argc, char* argv[])
@@ -698,7 +686,7 @@ static bool HandleSDLEvent(const SDL_Event& event)
  * @param argc Argument count from main().
  * @param argv Argument values from main().
  */
-static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
+static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandle, int argc, char* argv[])
 {
     auto& settings = EngineSettings::GetInstance();
 
@@ -709,7 +697,11 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     g_input->Initialize(static_cast<HWND>(window));
     g_graphics = std::make_unique<GraphicsEngine>();
 
-    HRESULT hr = g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
+    // On macOS+Metal the RHI needs an NSView/CAMetalLayer, not the SDL_Window.
+    // nativeRenderHandle overrides the window when set; otherwise the window
+    // itself is passed through (Vulkan/OpenGL/Linux paths).
+    void* rhiHandle = nativeRenderHandle ? nativeRenderHandle : static_cast<void*>(window);
+    HRESULT hr = g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(rhiHandle));
     auto& console = Spark::SimpleConsole::GetInstance();
     if (SUCCEEDED(hr))
         console.LogInfo("Graphics engine initialized (RHI backend).");
@@ -839,6 +831,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
     // ICD can set SPARK_DISABLE_VULKAN=1 and this branch will pick
     // OpenGL instead — matching what the RHIBridge will also choose.
     bool preferVulkan = false;
+    bool preferMetal = Spark::MacOS::ShouldPreferMetal();
     {
         const char* sdlDriver = SDL_GetCurrentVideoDriver();
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 video driver: %s", sdlDriver ? sdlDriver : "<null>");
@@ -856,7 +849,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
                           std::strcmp(sdlDriver, "cocoa") == 0 || std::strcmp(sdlDriver, "windows") == 0 ||
                           std::strcmp(sdlDriver, "KMSDRM") == 0);
 
-        if (recommended == Spark::RHI::GraphicsBackend::Vulkan && driverHasVulkan)
+        if (!preferMetal && recommended == Spark::RHI::GraphicsBackend::Vulkan && driverHasVulkan)
         {
             // Try to load libvulkan through SDL. If it isn't installed
             // on this host, fall straight back to OpenGL and tell the
@@ -884,7 +877,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
         }
     }
 
-    if (!preferVulkan)
+    if (!preferVulkan && !preferMetal)
     {
         // OpenGL path — set attributes before window creation (required
         // for Mesa llvmpipe and other software rasterizers).
@@ -900,7 +893,12 @@ static int RunSDL2Windowed(int argc, char* argv[])
     Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     if (settings.Graphics().fullscreen)
         windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    windowFlags |= preferVulkan ? SDL_WINDOW_VULKAN : SDL_WINDOW_OPENGL;
+    if (preferMetal)
+        windowFlags |= Spark::MacOS::GetMetalWindowFlag();
+    else if (preferVulkan)
+        windowFlags |= SDL_WINDOW_VULKAN;
+    else
+        windowFlags |= SDL_WINDOW_OPENGL;
 
     SDL_Window* window =
         SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
@@ -913,12 +911,30 @@ static int RunSDL2Windowed(int argc, char* argv[])
         return -1;
     }
 
+    // On macOS, extract a Metal-capable view so MetalDevice can attach a
+    // CAMetalLayer. The helper returns an NSView (opaque void*) whose layer
+    // is already a CAMetalLayer; we pass it through as the NativeWindowHandle
+    // so MetalSwapChain::ConfigureMetalLayer() reuses it. On non-macOS the
+    // call is a no-op that returns nullptr.
+    void* sdlMetalView = nullptr;
+    if (preferMetal)
+    {
+        sdlMetalView = Spark::MacOS::CreateMetalView(window);
+        if (!sdlMetalView)
+        {
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+            return -1;
+        }
+    }
+
     // OpenGL needs an SDL-owned GL context up front so the engine's
     // OpenGLDevice can detect it and skip its own EGL/GLX bootstrap.
     // Vulkan has no matching pre-init step — VulkanDevice pulls the
     // surface out of SDL_Vulkan_CreateSurface() inside CreateSwapChain().
+    // Metal has no pre-init step either — the Metal view was created above.
     SDL_GLContext glContext = nullptr;
-    if (!preferVulkan)
+    if (!preferVulkan && !preferMetal)
     {
         glContext = SDL_GL_CreateContext(window);
         if (!glContext)
@@ -977,12 +993,15 @@ static int RunSDL2Windowed(int argc, char* argv[])
         }
     }
 
-    InitializeSDL2Subsystems(window, argc, argv);
+    void* nativeRenderHandle = (preferMetal && sdlMetalView) ? sdlMetalView : nullptr;
+
+    InitializeSDL2Subsystems(window, nativeRenderHandle, argc, argv);
     RunSDL2MainLoop();
 
     ShutdownLinux();
     if (glContext)
         SDL_GL_DeleteContext(glContext);
+    Spark::MacOS::DestroyMetalView(sdlMetalView);
     SDL_DestroyWindow(window);
     if (preferVulkan)
         SDL_Vulkan_UnloadLibrary();

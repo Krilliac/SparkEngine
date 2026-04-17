@@ -116,8 +116,13 @@ namespace Spark
                 [m_encoder.Get() setSamplerState:sampler atIndex:index];
             }
 
-            MetalSwapChain::MetalSwapChain(id<MTLDevice> device, const RHISwapChainDesc& desc)
-                : m_desc(desc), m_device(device), m_metalLayer(nil), m_currentDrawable(nil)
+            MetalSwapChain::MetalSwapChain(id<MTLDevice> device, id<MTLCommandQueue> commandQueue,
+                                           const RHISwapChainDesc& desc)
+                : m_desc(desc),
+                  m_device(device),
+                  m_commandQueue(commandQueue),
+                  m_metalLayer(nil),
+                  m_currentDrawable(nil)
             {
                 ConfigureMetalLayer();
             }
@@ -135,20 +140,44 @@ namespace Spark
                     return false;
                 }
 
-                NSView* view = (__bridge NSView*)m_desc.windowHandle;
-                if (view == nil)
+                id rawHandle = (__bridge id)m_desc.windowHandle;
+                if (rawHandle == nil)
                 {
                     return false;
                 }
 
-                [view setWantsLayer:YES];
-                CAMetalLayer* layer = [CAMetalLayer layer];
+                // Window handle may be either a CAMetalLayer directly (e.g. from
+                // SDL_Metal_GetLayer) or an NSView (raw Cocoa / SDL_Metal_CreateView
+                // returns a view whose layer is already a CAMetalLayer).
+                CAMetalLayer* layer = nil;
+                if ([rawHandle isKindOfClass:[CAMetalLayer class]])
+                {
+                    layer = (CAMetalLayer*)rawHandle;
+                }
+                else if ([rawHandle isKindOfClass:[NSView class]])
+                {
+                    NSView* view = (NSView*)rawHandle;
+                    [view setWantsLayer:YES];
+                    if ([view.layer isKindOfClass:[CAMetalLayer class]])
+                    {
+                        layer = (CAMetalLayer*)view.layer;
+                    }
+                    else
+                    {
+                        layer = [CAMetalLayer layer];
+                        view.layer = layer;
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+
                 layer.device = m_device;
                 layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
                 layer.framebufferOnly = NO;
                 layer.drawableSize = CGSizeMake(static_cast<CGFloat>(m_desc.width), static_cast<CGFloat>(m_desc.height));
 
-                view.layer = layer;
                 m_metalLayer = layer;
                 return true;
             }
@@ -184,7 +213,23 @@ namespace Spark
 
             bool MetalSwapChain::Present(bool /*vsync*/)
             {
-                // Presentation is driven by the command buffer in ExecuteCommandList.
+                // Metal requires presentDrawable: on a command buffer to schedule
+                // the drawable for display. Submit a minimal command buffer that
+                // owns the present — rendering command buffers submitted earlier
+                // this frame finish their encoders and blit targets before this
+                // one, so the drawable texture is ready.
+                if (m_currentDrawable != nil && m_commandQueue != nil)
+                {
+                    id<MTLCommandBuffer> presentBuffer = [m_commandQueue commandBuffer];
+                    [presentBuffer presentDrawable:m_currentDrawable];
+                    [presentBuffer commit];
+                }
+
+                m_currentDrawable = nil;
+                if (m_backBuffer)
+                {
+                    m_backBuffer->SetMTLTexture(nil);
+                }
                 m_currentBufferIndex = (m_currentBufferIndex + 1u) % std::max(1u, m_desc.bufferCount);
                 return true;
             }
@@ -254,23 +299,52 @@ namespace Spark
                 m_currentRenderPassDesc = nil;
             }
 
-            void MetalCommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count, IRHITexture* /*depthStencil*/)
+            void MetalCommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count, IRHITexture* depthStencil)
             {
-                if (count == 0 || renderTargets == nullptr || renderTargets[0] == nullptr)
-                {
-                    return;
-                }
-
-                auto* rt = dynamic_cast<MetalTexture*>(renderTargets[0]);
-                if (rt == nullptr)
-                {
-                    return;
-                }
+                EndCurrentEncoder();
 
                 MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
-                passDesc.colorAttachments[0].texture = rt->GetMTLTexture();
-                passDesc.colorAttachments[0].loadAction = MTLLoadActionLoad;
-                passDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
+                bool anyAttachment = false;
+
+                if (renderTargets != nullptr)
+                {
+                    const uint32_t clamped = std::min<uint32_t>(count, 8u);
+                    for (uint32_t i = 0; i < clamped; ++i)
+                    {
+                        auto* rt = dynamic_cast<MetalTexture*>(renderTargets[i]);
+                        if (rt == nullptr)
+                        {
+                            continue;
+                        }
+                        passDesc.colorAttachments[i].texture = rt->GetMTLTexture();
+                        passDesc.colorAttachments[i].loadAction = MTLLoadActionLoad;
+                        passDesc.colorAttachments[i].storeAction = MTLStoreActionStore;
+                        anyAttachment = true;
+                    }
+                }
+
+                if (auto* depthTex = dynamic_cast<MetalTexture*>(depthStencil))
+                {
+                    id<MTLTexture> mtlDepth = depthTex->GetMTLTexture();
+                    passDesc.depthAttachment.texture = mtlDepth;
+                    passDesc.depthAttachment.loadAction = MTLLoadActionLoad;
+                    passDesc.depthAttachment.storeAction = MTLStoreActionStore;
+
+                    const MTLPixelFormat fmt = mtlDepth.pixelFormat;
+                    if (fmt == MTLPixelFormatDepth24Unorm_Stencil8 || fmt == MTLPixelFormatDepth32Float_Stencil8)
+                    {
+                        passDesc.stencilAttachment.texture = mtlDepth;
+                        passDesc.stencilAttachment.loadAction = MTLLoadActionLoad;
+                        passDesc.stencilAttachment.storeAction = MTLStoreActionStore;
+                    }
+                    anyAttachment = true;
+                }
+
+                if (!anyAttachment)
+                {
+                    m_currentRenderPassDesc = nil;
+                    return;
+                }
 
                 m_currentRenderPassDesc = passDesc;
                 m_renderEncoder.Reset(nil);
@@ -315,8 +389,34 @@ namespace Spark
                 [encoder endEncoding];
             }
 
-            void MetalCommandList::ClearDepthStencil(IRHITexture* /*target*/, float /*depth*/, uint8_t /*stencil*/)
+            void MetalCommandList::ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil)
             {
+                auto* depthTex = dynamic_cast<MetalTexture*>(target);
+                if (depthTex == nullptr || !m_commandBuffer)
+                {
+                    return;
+                }
+
+                EndCurrentEncoder();
+
+                id<MTLTexture> mtlDepth = depthTex->GetMTLTexture();
+                MTLRenderPassDescriptor* passDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+                passDesc.depthAttachment.texture = mtlDepth;
+                passDesc.depthAttachment.loadAction = MTLLoadActionClear;
+                passDesc.depthAttachment.storeAction = MTLStoreActionStore;
+                passDesc.depthAttachment.clearDepth = depth;
+
+                const MTLPixelFormat fmt = mtlDepth.pixelFormat;
+                if (fmt == MTLPixelFormatDepth24Unorm_Stencil8 || fmt == MTLPixelFormatDepth32Float_Stencil8)
+                {
+                    passDesc.stencilAttachment.texture = mtlDepth;
+                    passDesc.stencilAttachment.loadAction = MTLLoadActionClear;
+                    passDesc.stencilAttachment.storeAction = MTLStoreActionStore;
+                    passDesc.stencilAttachment.clearStencil = stencil;
+                }
+
+                id<MTLRenderCommandEncoder> encoder = [m_commandBuffer.Get() renderCommandEncoderWithDescriptor:passDesc];
+                [encoder endEncoding];
             }
 
             void MetalCommandList::SetViewport(const RHIViewport& viewport)
@@ -366,6 +466,33 @@ namespace Spark
                 if (state->GetMTLDepthStencilState() != nil)
                 {
                     [m_renderEncoder.Get() setDepthStencilState:state->GetMTLDepthStencilState()];
+                }
+
+                const auto& raster = state->GetDesc().rasterizer;
+
+                MTLCullMode cull = MTLCullModeNone;
+                switch (raster.cullMode)
+                {
+                case RHICullMode::Front: cull = MTLCullModeFront; break;
+                case RHICullMode::Back:  cull = MTLCullModeBack;  break;
+                case RHICullMode::None:
+                default:                 cull = MTLCullModeNone;  break;
+                }
+                [m_renderEncoder.Get() setCullMode:cull];
+
+                [m_renderEncoder.Get() setFrontFacingWinding:raster.frontCounterClockwise
+                                                                ? MTLWindingCounterClockwise
+                                                                : MTLWindingClockwise];
+
+                [m_renderEncoder.Get() setTriangleFillMode:raster.fillMode == RHIFillMode::Wireframe
+                                                               ? MTLTriangleFillModeLines
+                                                               : MTLTriangleFillModeFill];
+
+                if (raster.depthBias != 0 || raster.slopeScaledDepthBias != 0.0f)
+                {
+                    [m_renderEncoder.Get() setDepthBias:static_cast<float>(raster.depthBias)
+                                             slopeScale:raster.slopeScaledDepthBias
+                                                  clamp:raster.depthBiasClamp];
                 }
             }
 
@@ -555,16 +682,50 @@ namespace Spark
                 [m_computeEncoder.Get() dispatchThreads:grid threadsPerThreadgroup:group];
             }
 
-            void MetalCommandList::DrawInstancedIndirect(IRHIBuffer* /*argsBuffer*/, uint32_t /*argsOffset*/)
+            void MetalCommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
+                auto* mtlArgs = dynamic_cast<MetalBuffer*>(argsBuffer);
+                EnsureRenderEncoder();
+                if (!m_renderEncoder || mtlArgs == nullptr)
+                {
+                    return;
+                }
+
+                [m_renderEncoder.Get() drawPrimitives:m_currentTopology
+                                       indirectBuffer:mtlArgs->GetMTLBuffer()
+                                 indirectBufferOffset:argsOffset];
             }
 
-            void MetalCommandList::DrawIndexedInstancedIndirect(IRHIBuffer* /*argsBuffer*/, uint32_t /*argsOffset*/)
+            void MetalCommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
+                auto* mtlArgs = dynamic_cast<MetalBuffer*>(argsBuffer);
+                EnsureRenderEncoder();
+                if (!m_renderEncoder || mtlArgs == nullptr || !m_currentIndexBuffer)
+                {
+                    return;
+                }
+
+                [m_renderEncoder.Get() drawIndexedPrimitives:m_currentTopology
+                                                   indexType:MTLIndexTypeUInt32
+                                                 indexBuffer:m_currentIndexBuffer.Get()
+                                           indexBufferOffset:m_currentIndexBufferOffset
+                                              indirectBuffer:mtlArgs->GetMTLBuffer()
+                                        indirectBufferOffset:argsOffset];
             }
 
-            void MetalCommandList::DispatchIndirect(IRHIBuffer* /*argsBuffer*/, uint32_t /*argsOffset*/)
+            void MetalCommandList::DispatchIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
+                auto* mtlArgs = dynamic_cast<MetalBuffer*>(argsBuffer);
+                EnsureComputeEncoder();
+                if (!m_computeEncoder || mtlArgs == nullptr)
+                {
+                    return;
+                }
+
+                MTLSize group = MTLSizeMake(8, 8, 1);
+                [m_computeEncoder.Get() dispatchThreadgroupsWithIndirectBuffer:mtlArgs->GetMTLBuffer()
+                                                         indirectBufferOffset:argsOffset
+                                                        threadsPerThreadgroup:group];
             }
 
             void MetalCommandList::CopyTexture(IRHITexture* dst, IRHITexture* src)
@@ -690,7 +851,7 @@ namespace Spark
 
             std::unique_ptr<IRHISwapChain> MetalDevice::CreateSwapChain(const RHISwapChainDesc& desc)
             {
-                return std::make_unique<MetalSwapChain>(m_device.Get(), desc);
+                return std::make_unique<MetalSwapChain>(m_device.Get(), m_commandQueue.Get(), desc);
             }
 
             std::unique_ptr<IRHIBuffer> MetalDevice::CreateBuffer(const RHIBufferDesc& desc)
@@ -847,8 +1008,106 @@ namespace Spark
                 psoDesc.vertexFunction = metalVS->GetMTLFunction();
                 psoDesc.fragmentFunction = metalPS->GetMTLFunction();
                 psoDesc.sampleCount = desc.sampleCount;
-                psoDesc.colorAttachments[0].pixelFormat = ConvertFormat(desc.renderTargetFormats[0]);
+                psoDesc.alphaToCoverageEnabled = desc.blend.alphaToCoverageEnable ? YES : NO;
+
+                const uint32_t numRTs = std::max<uint32_t>(1u, std::min<uint32_t>(desc.numRenderTargets, 8u));
+                for (uint32_t i = 0; i < numRTs; ++i)
+                {
+                    const auto& rtBlend = desc.blend.independentBlendEnable ? desc.blend.renderTargets[i]
+                                                                            : desc.blend.renderTargets[0];
+                    auto* attachment = psoDesc.colorAttachments[i];
+                    attachment.pixelFormat = ConvertFormat(desc.renderTargetFormats[i]);
+                    attachment.blendingEnabled = rtBlend.blendEnable ? YES : NO;
+                    attachment.sourceRGBBlendFactor = ConvertBlendFactor(rtBlend.srcBlend);
+                    attachment.destinationRGBBlendFactor = ConvertBlendFactor(rtBlend.dstBlend);
+                    attachment.rgbBlendOperation = ConvertBlendOp(rtBlend.blendOp);
+                    attachment.sourceAlphaBlendFactor = ConvertBlendFactor(rtBlend.srcBlendAlpha);
+                    attachment.destinationAlphaBlendFactor = ConvertBlendFactor(rtBlend.dstBlendAlpha);
+                    attachment.alphaBlendOperation = ConvertBlendOp(rtBlend.blendOpAlpha);
+
+                    MTLColorWriteMask writeMask = MTLColorWriteMaskNone;
+                    if (rtBlend.writeMask & 0x1) writeMask |= MTLColorWriteMaskRed;
+                    if (rtBlend.writeMask & 0x2) writeMask |= MTLColorWriteMaskGreen;
+                    if (rtBlend.writeMask & 0x4) writeMask |= MTLColorWriteMaskBlue;
+                    if (rtBlend.writeMask & 0x8) writeMask |= MTLColorWriteMaskAlpha;
+                    attachment.writeMask = writeMask;
+                }
+
                 psoDesc.depthAttachmentPixelFormat = ConvertFormat(desc.depthStencilFormat);
+                if (desc.depthStencilFormat == PixelFormat::D24_UNORM_S8_UINT ||
+                    desc.depthStencilFormat == PixelFormat::D32_FLOAT_S8_UINT)
+                {
+                    psoDesc.stencilAttachmentPixelFormat = ConvertFormat(desc.depthStencilFormat);
+                }
+
+                // Input layout — Metal requires a vertex descriptor when the vertex
+                // shader pulls vertex data through stage_in. Build one from the
+                // RHI input layout, mapping each element into attribute[i] and
+                // inferring stride from the highest byte offset per slot.
+                if (!desc.inputLayout.elements.empty())
+                {
+                    MTLVertexDescriptor* vertexDesc = [[MTLVertexDescriptor alloc] init];
+                    uint32_t strides[8] = {};
+                    bool instanceStep[8] = {};
+
+                    for (size_t i = 0; i < desc.inputLayout.elements.size(); ++i)
+                    {
+                        const auto& element = desc.inputLayout.elements[i];
+                        vertexDesc.attributes[i].format = ConvertVertexFormat(element.format);
+                        vertexDesc.attributes[i].offset = element.byteOffset;
+                        vertexDesc.attributes[i].bufferIndex = element.inputSlot;
+
+                        uint32_t elementSize = 0;
+                        switch (element.format)
+                        {
+                        case RHIVertexFormat::Float1:
+                        case RHIVertexFormat::Int1:
+                        case RHIVertexFormat::UInt1:
+                            elementSize = 4; break;
+                        case RHIVertexFormat::Float2:
+                        case RHIVertexFormat::Int2:
+                        case RHIVertexFormat::UInt2:
+                            elementSize = 8; break;
+                        case RHIVertexFormat::Float3:
+                        case RHIVertexFormat::Int3:
+                        case RHIVertexFormat::UInt3:
+                            elementSize = 12; break;
+                        case RHIVertexFormat::Float4:
+                        case RHIVertexFormat::Int4:
+                        case RHIVertexFormat::UInt4:
+                            elementSize = 16; break;
+                        case RHIVertexFormat::UNorm8x4:
+                        case RHIVertexFormat::SNorm8x4:
+                            elementSize = 4; break;
+                        }
+
+                        const uint32_t slot = std::min<uint32_t>(element.inputSlot, 7u);
+                        const uint32_t end = element.byteOffset + elementSize;
+                        if (end > strides[slot])
+                        {
+                            strides[slot] = end;
+                        }
+                        instanceStep[slot] = instanceStep[slot] || element.perInstance;
+                    }
+
+                    for (uint32_t slot = 0; slot < 8; ++slot)
+                    {
+                        if (strides[slot] == 0)
+                        {
+                            continue;
+                        }
+                        vertexDesc.layouts[slot].stride = strides[slot];
+                        vertexDesc.layouts[slot].stepRate = 1;
+                        vertexDesc.layouts[slot].stepFunction = instanceStep[slot] ? MTLVertexStepFunctionPerInstance
+                                                                                   : MTLVertexStepFunctionPerVertex;
+                    }
+                    psoDesc.vertexDescriptor = vertexDesc;
+                }
+
+                if (!desc.debugName.empty())
+                {
+                    psoDesc.label = ToNSString(desc.debugName);
+                }
 
                 NSError* error = nil;
                 id<MTLRenderPipelineState> renderPipeline = [m_device.Get() newRenderPipelineStateWithDescriptor:psoDesc
@@ -861,8 +1120,32 @@ namespace Spark
                 }
 
                 MTLDepthStencilDescriptor* depthDesc = [[MTLDepthStencilDescriptor alloc] init];
-                depthDesc.depthCompareFunction = ConvertCompareOp(desc.depthStencil.depthFunc);
-                depthDesc.depthWriteEnabled = desc.depthStencil.depthWrite ? YES : NO;
+                depthDesc.depthCompareFunction = desc.depthStencil.depthEnable
+                                                     ? ConvertCompareOp(desc.depthStencil.depthFunc)
+                                                     : MTLCompareFunctionAlways;
+                depthDesc.depthWriteEnabled = (desc.depthStencil.depthEnable && desc.depthStencil.depthWrite) ? YES : NO;
+
+                if (desc.depthStencil.stencilEnable)
+                {
+                    MTLStencilDescriptor* frontFace = [[MTLStencilDescriptor alloc] init];
+                    frontFace.stencilCompareFunction = ConvertCompareOp(desc.depthStencil.frontFace.stencilFunc);
+                    frontFace.stencilFailureOperation = ConvertStencilOp(desc.depthStencil.frontFace.stencilFail);
+                    frontFace.depthFailureOperation = ConvertStencilOp(desc.depthStencil.frontFace.stencilDepthFail);
+                    frontFace.depthStencilPassOperation = ConvertStencilOp(desc.depthStencil.frontFace.stencilPass);
+                    frontFace.readMask = desc.depthStencil.stencilReadMask;
+                    frontFace.writeMask = desc.depthStencil.stencilWriteMask;
+                    depthDesc.frontFaceStencil = frontFace;
+
+                    MTLStencilDescriptor* backFace = [[MTLStencilDescriptor alloc] init];
+                    backFace.stencilCompareFunction = ConvertCompareOp(desc.depthStencil.backFace.stencilFunc);
+                    backFace.stencilFailureOperation = ConvertStencilOp(desc.depthStencil.backFace.stencilFail);
+                    backFace.depthFailureOperation = ConvertStencilOp(desc.depthStencil.backFace.stencilDepthFail);
+                    backFace.depthStencilPassOperation = ConvertStencilOp(desc.depthStencil.backFace.stencilPass);
+                    backFace.readMask = desc.depthStencil.stencilReadMask;
+                    backFace.writeMask = desc.depthStencil.stencilWriteMask;
+                    depthDesc.backFaceStencil = backFace;
+                }
+
                 id<MTLDepthStencilState> depthState = [m_device.Get() newDepthStencilStateWithDescriptor:depthDesc];
 
                 return std::make_unique<MetalPipelineState>(desc, renderPipeline, depthState, metalVS, metalPS);
@@ -1060,7 +1343,10 @@ namespace Spark
                 m_capabilities.meshShaderSupport = m_metalFeatures.meshShaders;
                 m_capabilities.bindlessResourceSupport = true;
                 m_capabilities.rayTracing.bestBackend =
-                    m_metalFeatures.rayTracing ? RayTracingBackend::HardwareVKRT : RayTracingBackend::Disabled;
+                    m_metalFeatures.rayTracing ? RayTracingBackend::HardwareMetalRT : RayTracingBackend::Disabled;
+                m_capabilities.rayTracing.supportsHardwareRT = m_metalFeatures.rayTracing;
+                m_capabilities.rayTracing.supportsInlineRT = m_metalFeatures.rayTracing;
+                m_capabilities.rayTracing.maxRecursionDepth = m_metalFeatures.rayTracing ? 31u : 0u;
                 FinalizeDeviceCapabilities(m_capabilities);
             }
 

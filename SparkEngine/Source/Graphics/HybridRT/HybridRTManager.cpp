@@ -238,7 +238,8 @@ namespace Spark::Graphics
         break;
 
         case RHI::RayTracingBackend::HardwareVKRT:
-            // Vulkan RT: falls through to SDFGI until Vulkan backend matures
+        case RHI::RayTracingBackend::HardwareMetalRT:
+            // Vulkan / Metal RT: fall back to SDFGI until those backends mature
             ExecuteSDFGI(cmd, params, gbufferNormals, gbufferDepth, gbufferAlbedo);
             break;
 
