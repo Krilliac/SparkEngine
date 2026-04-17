@@ -60,6 +60,9 @@
 #ifdef SPARK_SDL2_AVAILABLE
 #include <SDL.h>
 #include <SDL_vulkan.h>
+#ifdef __APPLE__
+#include <SDL_metal.h>
+#endif
 #endif
 #include <atomic>
 #include <memory>
@@ -698,7 +701,7 @@ static bool HandleSDLEvent(const SDL_Event& event)
  * @param argc Argument count from main().
  * @param argv Argument values from main().
  */
-static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
+static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandle, int argc, char* argv[])
 {
     auto& settings = EngineSettings::GetInstance();
 
@@ -709,7 +712,11 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     g_input->Initialize(static_cast<HWND>(window));
     g_graphics = std::make_unique<GraphicsEngine>();
 
-    HRESULT hr = g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
+    // On macOS+Metal the RHI needs an NSView/CAMetalLayer, not the SDL_Window.
+    // nativeRenderHandle overrides the window when set; otherwise the window
+    // itself is passed through (Vulkan/OpenGL/Linux paths).
+    void* rhiHandle = nativeRenderHandle ? nativeRenderHandle : static_cast<void*>(window);
+    HRESULT hr = g_graphics->Initialize(static_cast<Spark::NativeWindowHandle>(rhiHandle));
     auto& console = Spark::SimpleConsole::GetInstance();
     if (SUCCEEDED(hr))
         console.LogInfo("Graphics engine initialized (RHI backend).");
@@ -839,6 +846,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
     // ICD can set SPARK_DISABLE_VULKAN=1 and this branch will pick
     // OpenGL instead — matching what the RHIBridge will also choose.
     bool preferVulkan = false;
+    bool preferMetal = false;
     {
         const char* sdlDriver = SDL_GetCurrentVideoDriver();
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 video driver: %s", sdlDriver ? sdlDriver : "<null>");
@@ -846,6 +854,14 @@ static int RunSDL2Windowed(int argc, char* argv[])
         const auto recommended = Spark::RHI::RHIBridge::GetRecommendedBackend();
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "RunSDL2Windowed: recommended backend = %s",
                        Spark::RHI::GetBackendName(recommended));
+
+#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
+        if (recommended == Spark::RHI::GraphicsBackend::Metal)
+        {
+            preferMetal = true;
+            SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 on macOS — creating Metal-backed window");
+        }
+#endif
 
         // Drivers that don't support Vulkan at all (SDL_Vulkan_LoadLibrary
         // will always fail against them). Detect upfront so we don't even
@@ -856,7 +872,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
                           std::strcmp(sdlDriver, "cocoa") == 0 || std::strcmp(sdlDriver, "windows") == 0 ||
                           std::strcmp(sdlDriver, "KMSDRM") == 0);
 
-        if (recommended == Spark::RHI::GraphicsBackend::Vulkan && driverHasVulkan)
+        if (!preferMetal && recommended == Spark::RHI::GraphicsBackend::Vulkan && driverHasVulkan)
         {
             // Try to load libvulkan through SDL. If it isn't installed
             // on this host, fall straight back to OpenGL and tell the
@@ -884,7 +900,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
         }
     }
 
-    if (!preferVulkan)
+    if (!preferVulkan && !preferMetal)
     {
         // OpenGL path — set attributes before window creation (required
         // for Mesa llvmpipe and other software rasterizers).
@@ -900,7 +916,12 @@ static int RunSDL2Windowed(int argc, char* argv[])
     Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     if (settings.Graphics().fullscreen)
         windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-    windowFlags |= preferVulkan ? SDL_WINDOW_VULKAN : SDL_WINDOW_OPENGL;
+    if (preferMetal)
+        windowFlags |= SDL_WINDOW_METAL;
+    else if (preferVulkan)
+        windowFlags |= SDL_WINDOW_VULKAN;
+    else
+        windowFlags |= SDL_WINDOW_OPENGL;
 
     SDL_Window* window =
         SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
@@ -913,12 +934,32 @@ static int RunSDL2Windowed(int argc, char* argv[])
         return -1;
     }
 
+#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
+    // On macOS, extract a Metal-capable view so MetalDevice can attach a
+    // CAMetalLayer. SDL_Metal_CreateView returns an NSView (opaque void*)
+    // whose layer is already a CAMetalLayer; pass it through as the
+    // NativeWindowHandle so MetalSwapChain::ConfigureMetalLayer() reuses it.
+    SDL_MetalView sdlMetalView = nullptr;
+    if (preferMetal)
+    {
+        sdlMetalView = SDL_Metal_CreateView(window);
+        if (!sdlMetalView)
+        {
+            Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_Metal_CreateView failed: ") + SDL_GetError());
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+            return -1;
+        }
+    }
+#endif
+
     // OpenGL needs an SDL-owned GL context up front so the engine's
     // OpenGLDevice can detect it and skip its own EGL/GLX bootstrap.
     // Vulkan has no matching pre-init step — VulkanDevice pulls the
     // surface out of SDL_Vulkan_CreateSurface() inside CreateSwapChain().
+    // Metal has no pre-init step either — the Metal view was created above.
     SDL_GLContext glContext = nullptr;
-    if (!preferVulkan)
+    if (!preferVulkan && !preferMetal)
     {
         glContext = SDL_GL_CreateContext(window);
         if (!glContext)
@@ -977,12 +1018,24 @@ static int RunSDL2Windowed(int argc, char* argv[])
         }
     }
 
-    InitializeSDL2Subsystems(window, argc, argv);
+    void* nativeRenderHandle = nullptr;
+#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
+    if (preferMetal && sdlMetalView)
+    {
+        nativeRenderHandle = static_cast<void*>(sdlMetalView);
+    }
+#endif
+
+    InitializeSDL2Subsystems(window, nativeRenderHandle, argc, argv);
     RunSDL2MainLoop();
 
     ShutdownLinux();
     if (glContext)
         SDL_GL_DeleteContext(glContext);
+#if defined(__APPLE__) && defined(SPARK_METAL_SUPPORT)
+    if (sdlMetalView)
+        SDL_Metal_DestroyView(sdlMetalView);
+#endif
     SDL_DestroyWindow(window);
     if (preferVulkan)
         SDL_Vulkan_UnloadLibrary();

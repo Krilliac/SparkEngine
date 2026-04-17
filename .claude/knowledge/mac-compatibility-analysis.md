@@ -80,11 +80,69 @@ cleanly; OpenAL probe correctly logs "not found" and falls back without
 breaking the build.
 
 ### Key files
-- `SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h` — Metal interface (header only)
+- `SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h` — Metal interface
+- `SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.mm` — Metal implementation (~1450 lines)
 - `SparkEngine/Source/Graphics/RHI/RHIFactory.cpp` — Backend selection (Metal on `__APPLE__`)
 - `SparkEngine/Source/Core/Platform.h` — Platform/compiler detection
 - `SparkEngine/Source/Audio/OpenALAudioEngine.h` — Cross-platform audio
-- `SparkEngine/Source/Input/InputManager.cpp` — Win32-only (needs SDL2 variant)
+- `SparkEngine/Source/Input/InputManager.cpp` — Windows + Linux/macOS branches (SDL2 for capture)
+
+### 2026-04-17 session #2 — Metal backend wired end-to-end
+
+The Metal implementation was present but had several silent stubs and no
+window integration. Before this session `MetalSwapChain::Present` was a no-op
+(drawables never reached the screen), `ClearDepthStencil` / indirect draws
+were empty, pipeline state ignored blend/depth-stencil/rasterizer/input
+layout, `SetRenderTargets` only bound colorAttachments[0] (no MRT, no depth),
+and the SDL2 entry point on macOS always created an OpenGL window — so even
+with `ENABLE_METAL=ON`, the engine had no way to hand a Metal-capable view
+to `MetalSwapChain::ConfigureMetalLayer`.
+
+Fixes in this session:
+
+- **`MetalDevice.mm` / `MetalDevice.h`**:
+  - `MetalSwapChain` now owns an `id<MTLCommandQueue>` and `Present(vsync)`
+    submits a minimal command buffer that calls `[cmdBuffer
+    presentDrawable:]` — drawables actually display now.
+  - `ConfigureMetalLayer` accepts either an `NSView` (raw Cocoa or
+    `SDL_Metal_CreateView`) or a `CAMetalLayer` directly as the window
+    handle. Reuses an existing CAMetalLayer if the view already has one
+    (the SDL_Metal path) instead of replacing it.
+  - `SetRenderTargets` loops up to 8 color attachments and attaches depth
+    (plus stencil for combined formats) from the depthStencil argument.
+  - `ClearDepthStencil` creates a render pass with `MTLLoadActionClear` and
+    the requested depth/stencil clear values.
+  - `DrawInstancedIndirect` / `DrawIndexedInstancedIndirect` /
+    `DispatchIndirect` implemented via Metal's indirect-buffer draw/dispatch
+    API.
+  - `CreatePipelineState` now wires blend (per-RT blend enable, factors,
+    ops, write mask, alpha-to-coverage), depth/stencil (compare + write +
+    separate front/back stencil ops), input layout (vertex descriptor with
+    attribute format/offset/bufferIndex and per-slot stride + step
+    function), stencil attachment format for combined D24S8/D32S8, and
+    pipeline debug labels.
+  - `SetPipelineState` applies rasterizer state (cull mode, winding,
+    fill mode, depth bias) on the render encoder.
+  - `PopulateCapabilities` now reports `RayTracingBackend::HardwareMetalRT`
+    (new enum value) with correct `supportsHardwareRT`, `supportsInlineRT`,
+    and `maxRecursionDepth` when the Apple GPU supports ray tracing.
+- **`RHITypes.h`** — added `RayTracingBackend::HardwareMetalRT`.
+- **`HybridRTTypes.h`** / **`HybridRTManager.cpp`** — added the Metal RT
+  case (currently falls through to SDFGI until a real Metal RT path lands).
+- **`SparkEngineLinux.cpp`**:
+  - Includes `<SDL_metal.h>` under `__APPLE__`.
+  - Picks `SDL_WINDOW_METAL` when `GetRecommendedBackend()` returns Metal
+    on macOS and `SPARK_METAL_SUPPORT` is defined.
+  - Calls `SDL_Metal_CreateView(window)` to obtain the NSView-wrapped
+    Metal view and passes that (not `SDL_Window*`) to
+    `GraphicsEngine::Initialize` via the native window handle.
+  - `SDL_Metal_DestroyView` on shutdown.
+- **`CMakePresets.json`** — `macos-debug` and `macos-release` now default
+  to `ENABLE_METAL=ON` (the implementation exists and is wired end-to-end).
+
+Linux preset (`linux-gcc-release`) still builds `SparkEngine` cleanly;
+only the pre-existing NetworkSecurity test error is outstanding and is
+unrelated to this work.
 
 ## Notes
 

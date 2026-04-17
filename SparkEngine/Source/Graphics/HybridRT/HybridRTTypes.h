@@ -136,6 +136,8 @@ namespace Spark::Graphics
             return "Hardware (DXR 1.1)";
         case RHI::RayTracingBackend::HardwareVKRT:
             return "Hardware (Vulkan RT)";
+        case RHI::RayTracingBackend::HardwareMetalRT:
+            return "Hardware (Metal RT)";
         }
         return "Unknown";
     }

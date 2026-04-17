@@ -319,7 +319,8 @@ namespace Spark
             class MetalSwapChain : public IRHISwapChain
             {
             public:
-                MetalSwapChain(id<MTLDevice> device, const RHISwapChainDesc& desc);
+                MetalSwapChain(id<MTLDevice> device, id<MTLCommandQueue> commandQueue,
+                               const RHISwapChainDesc& desc);
                 ~MetalSwapChain() override;
 
                 bool Present(bool vsync) override;
@@ -339,6 +340,7 @@ namespace Spark
 
                 RHISwapChainDesc m_desc;
                 id<MTLDevice> m_device;
+                id<MTLCommandQueue> m_commandQueue;
                 CAMetalLayer* m_metalLayer;
                 id<CAMetalDrawable> m_currentDrawable;
                 std::unique_ptr<MetalTexture> m_backBuffer;
