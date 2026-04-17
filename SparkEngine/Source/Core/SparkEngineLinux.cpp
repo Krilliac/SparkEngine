@@ -72,6 +72,9 @@
 #include <algorithm>
 #include <filesystem>
 #include <thread>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 // Shared globals and functions defined in SparkEngine.cpp
 extern std::unique_ptr<GraphicsEngine> g_graphics;
@@ -162,12 +165,28 @@ static void ParseWindowSizeOverrideArgs(int argc, char* argv[])
 
 static std::filesystem::path GetExecutableDirectoryLinux()
 {
+#if defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string exePath(size, '\0');
+    if (_NSGetExecutablePath(exePath.data(), &size) == 0)
+    {
+        std::error_code ec;
+        auto canonical = std::filesystem::weakly_canonical(std::filesystem::path(exePath.c_str()), ec);
+        if (!ec)
+        {
+            return canonical.parent_path();
+        }
+    }
+    return std::filesystem::current_path();
+#else
     // /proc/self/exe is the canonical way on Linux
     std::error_code ec;
     auto exePath = std::filesystem::read_symlink("/proc/self/exe", ec);
     if (!ec)
         return exePath.parent_path();
     return std::filesystem::current_path();
+#endif
 }
 
 static std::string FindGameModuleFromArgs(int argc, char* argv[])
