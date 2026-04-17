@@ -69,7 +69,7 @@ The **original** visual scripting system (~7,300 lines) was removed in March 202
 
 ## See Also
 
-- [Event Response System](Event-Response-System) -- Data-driven "When/If/Then" rules (simpler alternative for common gameplay)
+- [Event Response System](Event-Response-System.md) -- Data-driven "When/If/Then" rules (simpler alternative for common gameplay)
 - [Scripting with AngelScript](Scripting-with-AngelScript.md) -- Text-based scripting (the compilation target)
 - [Entity-Component-System](Entity-Component-System.md) -- How scripts attach to entities
 

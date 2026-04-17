@@ -604,5 +604,5 @@ public:
 - [Save System](../gameplay-tools/Save-System.md) -- Persisting the player's language preference
 - [SparkEditor](../gameplay-tools/SparkEditor.md) -- Editor panels including localization tools
 - [Event System](Event-System.md) -- Language change events can integrate with the global event bus
-- [Console](Console) -- `loc_status` and `loc_keys` debug commands
+- [Console](../gameplay-tools/SparkConsole.md) -- `loc_status` and `loc_keys` debug commands
 - [Asset Pipeline](../gameplay-tools/Asset-Pipeline.md) -- How localization JSON files are packaged for distribution

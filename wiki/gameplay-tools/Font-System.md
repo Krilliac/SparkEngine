@@ -95,5 +95,5 @@ if (auto* atlas = fonts.GetAtlas(fontId); atlas && atlas->dirty)
 
 - [UI System](../subsystems/UI-System.md) -- uses FontSystem for in-game UI text rendering
 - [2D Rendering](../subsystems/2D-Systems.md) -- sprite batch can render text quads
-- [Localization System](Localization-System.md) -- provides localized strings for text layout
+- [Localization System](../subsystems/Localization.md) -- provides localized strings for text layout
 - [Dialogue System](../subsystems/Dialogue-System.md) -- renders dialogue text via FontSystem

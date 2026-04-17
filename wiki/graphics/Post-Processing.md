@@ -334,4 +334,4 @@ The **PostProcessingPanel** (`SparkEditor::PostProcessingPanel`) exposes bloom, 
 - [Render Graph](Render-Graph.md) -- Render graph pass scheduling system
 - [Shader Pipeline](../gameplay-tools/Shader-Pipeline.md) -- Shader compilation and management
 - [Camera System](../subsystems/Camera-System.md) -- Camera settings affecting depth of field
-- [Editor Panels](Editor-Panels) -- PostProcessingPanel and other editor UI
+- [Editor Panels](../gameplay-tools/SparkEditor.md) -- PostProcessingPanel and other editor UI

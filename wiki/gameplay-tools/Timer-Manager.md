@@ -106,5 +106,5 @@ void MainLoop(float deltaTime)
 
 - [Tween System](../subsystems/Tween-System.md) -- value interpolation over time (complementary to timers)
 - [Coroutine Scheduler](../subsystems/Coroutine-System.md) -- async frame-based scheduling
-- [ECS Systems](ECS-and-Components.md) -- gameplay systems can use TimerManager for periodic logic
+- [ECS Systems](../subsystems/Entity-Component-System.md) -- gameplay systems can use TimerManager for periodic logic
 - [Event System](../subsystems/Event-System.md) -- timers can fire events instead of direct callbacks

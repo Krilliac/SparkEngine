@@ -130,4 +130,4 @@ auto errors = table->Validate();
 ## Related Systems
 
 - [Loot and Crafting System](Loot-And-Crafting-System.md) -- Uses data tables for item definitions
-- [Localization System](Localization-System) -- String tables for translated text
+- [Localization System](../subsystems/Localization.md) -- String tables for translated text

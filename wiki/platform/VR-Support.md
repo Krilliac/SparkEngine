@@ -780,4 +780,4 @@ When `ENABLE_VR=OFF` (default), the VR source files are excluded from the build 
 - [UI System](../subsystems/UI-System.md) -- World-space UI rendering for VR menus
 - [Audio](../subsystems/Audio.md) -- Spatial audio is critical for VR immersion (3D sound positioning)
 - [SparkEditor](../gameplay-tools/SparkEditor.md) -- Editor VR preview mode
-- [Build System](Build-System) -- CMake toggles for VR support
+- [Build System](../advanced/Build-System-and-CMake-Modules.md) -- CMake toggles for VR support

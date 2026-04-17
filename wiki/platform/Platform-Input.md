@@ -440,5 +440,5 @@ editorActions.RegisterAction("ToggleGrid", PlatformKeyCode::G);
 
 - [Accessibility](Accessibility.md) -- One-handed mode and input remapping integration
 - [Telemetry-System](../advanced/Telemetry-System.md) -- Record input analytics events
-- [VR-System](VR-System.md) -- VR controller input mapping
+- [VR-System](VR-Support.md) -- VR controller input mapping
 - [Architecture-Overview](../getting-started/Architecture-Overview.md) -- System initialization order

@@ -151,6 +151,6 @@ csg.SetSphereTessellation(16, 32);
 
 ## Related Systems
 
-- [Physics System](Physics-System) -- CSG meshes can be used as collision geometry
+- [Physics System](../subsystems/Physics.md) -- CSG meshes can be used as collision geometry
 - [Render Graph](../graphics/Render-Graph.md) -- CSG output meshes feed into the rendering pipeline
-- [Editor Architecture](Editor-Architecture) -- CSGEditorPanel is one of the specialized editor panels
+- [Editor Architecture](SparkEditor.md) -- CSGEditorPanel is one of the specialized editor panels

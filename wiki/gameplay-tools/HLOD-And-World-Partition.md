@@ -140,6 +140,6 @@ for (const auto* cell : grid.GetLoadedCells())
 
 ## Related Systems
 
-- [Seamless Area Manager](Seamless-Area-Streaming) -- Higher-level area streaming that works alongside world partition
-- [World Origin System](World-Origin-System) -- Floating-point origin rebasing for large worlds
+- [Seamless Area Manager](../subsystems/Large-World-Support.md) -- Higher-level area streaming that works alongside world partition
+- [World Origin System](../subsystems/Large-World-Support.md) -- Floating-point origin rebasing for large worlds
 - [Render Graph](../graphics/Render-Graph.md) -- Manages render passes including HLOD proxy rendering

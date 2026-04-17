@@ -20,7 +20,7 @@ Master index for every SparkEngine documentation artifact, grouped by type. Each
 | [`api/`](api/) *(generated)* | Per-header API reference pages (regenerated locally) | [jump ↓](#api-reference) |
 | [`screenshots/`](screenshots/) | Editor and engine screenshots (images) | [jump ↓](#screenshots) |
 | [`wine-upstream/`](wine-upstream/) | Upstream Wine patches for gVisor/UMH compatibility | [jump ↓](#wine-upstream-patches) |
-| [`../wiki/`](../wiki/) | Primary user and developer wiki (137 pages) | [jump ↓](#wiki-user--developer-docs) |
+| [`../wiki/`](../wiki/) | Primary user and developer wiki (136 pages) | [jump ↓](#wiki-user--developer-docs) |
 
 ---
 
@@ -106,7 +106,7 @@ See [Tooling Index](tooling/README.md) for the full generator pipeline.
 
 ## Wiki (User & Developer Docs)
 
-The primary user-facing docs are in [`wiki/`](../wiki/) — 137 pages. The authoritative navigation is [`wiki/_Sidebar.md`](../wiki/_Sidebar.md); [`wiki/Home.md`](../wiki/Home.md) is the landing page.
+The primary user-facing docs are in [`wiki/`](../wiki/) — 136 pages. The authoritative navigation is [`wiki/_Sidebar.md`](../wiki/_Sidebar.md); [`wiki/Home.md`](../wiki/Home.md) is the landing page.
 
 Categories (mirrored from the sidebar):
 
@@ -147,6 +147,7 @@ Categories (mirrored from the sidebar):
 - [Collaborative Editing](../wiki/subsystems/Collaborative-Editing.md)
 - [Coroutine System](../wiki/subsystems/Coroutine-System.md)
 - [Event System](../wiki/subsystems/Event-System.md)
+- [Event Response System](../wiki/subsystems/Event-Response-System.md)
 - [Job System](../wiki/subsystems/Job-System.md)
 - [UI System](../wiki/subsystems/UI-System.md)
 - [UI Layout Extensions](../wiki/subsystems/UI-Layout-Extensions.md)

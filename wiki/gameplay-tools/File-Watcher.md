@@ -96,7 +96,7 @@ watcher.Unwatch(scriptWatch);
 
 ## Related Systems
 
-- [AngelScript Scripting](Scripting-System.md) -- script hot-reload is triggered by FileWatcher
+- [AngelScript Scripting](../subsystems/Scripting-with-AngelScript.md) -- script hot-reload is triggered by FileWatcher
 - [Asset Dependency Graph](Asset-Dependency-Graph.md) -- graph updates when assets change on disk
-- [Asset Browser](Asset-Browser.md) -- refreshes file listings on directory change events
+- [Asset Browser](SparkEditor.md) -- refreshes file listings on directory change events
 - [Editor Automation](Editor-Automation.md) -- automation scripts can register file watches

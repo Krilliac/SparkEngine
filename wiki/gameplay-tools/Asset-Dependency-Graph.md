@@ -88,7 +88,7 @@ auto audit   = graph.GenerateAudit();
 
 ## Related Systems
 
-- [Asset Browser](Asset-Browser.md) -- displays assets with reference counts from this graph
-- [Editor Panels](Editor-Panels.md) -- Reference Viewer and Asset Audit panels consume this data
+- [Asset Browser](SparkEditor.md) -- displays assets with reference counts from this graph
+- [Editor Panels](SparkEditor.md) -- Reference Viewer and Asset Audit panels consume this data
 - [File Watcher](File-Watcher.md) -- triggers graph updates when assets change on disk
 - [Selection Manager](Selection-Manager.md) -- selecting an asset in the browser can show its dependencies

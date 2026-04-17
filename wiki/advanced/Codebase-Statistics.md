@@ -26,7 +26,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
 | Test files (.cpp) | 474 |
-| Wiki pages (.md) | 136 |
+| Wiki pages (.md) | 137 |
 
 ### Code Density
 

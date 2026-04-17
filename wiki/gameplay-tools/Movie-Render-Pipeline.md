@@ -119,6 +119,6 @@ float progress = pipeline.GetProgress();  // 0.0 to 1.0
 
 ## Related Systems
 
-- [Cinematic System](Cinematic-System) -- Sequencer for driving camera and actors
-- [Graphics Engine](Graphics-Engine) -- RHI and rendering pipeline
-- [Screen Capture](Screen-Capture) -- Pixel readback for frame output
+- [Cinematic System](Cinematic-Sequencer.md) -- Sequencer for driving camera and actors
+- [Graphics Engine](../subsystems/Rendering-and-Graphics.md) -- RHI and rendering pipeline
+- [Screen Capture](Movie-Render-Pipeline.md) -- Pixel readback for frame output

@@ -113,5 +113,5 @@ lua["editor_exec"] = [](const std::string& cmd) -> bool {
 
 - [Selection Manager](Selection-Manager.md) -- automation commands frequently manipulate selection
 - [Asset Dependency Graph](Asset-Dependency-Graph.md) -- asset audit commands use the dependency graph
-- [AngelScript Scripting](Scripting-System.md) -- primary scripting language integration point
-- [Editor Panels](Editor-Panels.md) -- panels can expose operations as automation commands
+- [AngelScript Scripting](../subsystems/Scripting-with-AngelScript.md) -- primary scripting language integration point
+- [Editor Panels](SparkEditor.md) -- panels can expose operations as automation commands

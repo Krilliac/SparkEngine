@@ -333,5 +333,5 @@ The singleton instance (`GetInstance()`) uses a function-local static and is saf
 
 - [Asset-Validation](Asset-Validation.md) -- Validate assets before packaging
 - [Asset-Migration](Asset-Migration.md) -- Migrate asset formats between versions
-- [ECS-Architecture](ECS-Architecture.md) -- Entity Component System overview
-- [Build-System](Build-System.md) -- CMake presets and build configuration
+- [ECS-Architecture](../subsystems/Entity-Component-System.md) -- Entity Component System overview
+- [Build-System](../advanced/Build-System-and-CMake-Modules.md) -- CMake presets and build configuration

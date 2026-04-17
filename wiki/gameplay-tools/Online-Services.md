@@ -113,6 +113,6 @@ public:
 
 ## Related Systems
 
-- [Networking](Networking-System) -- UDP transport for gameplay networking
+- [Networking](../subsystems/Networking.md) -- UDP transport for gameplay networking
 - [Save System](Save-System.md) -- Local save/load persistence
 - [Gameplay Systems](Gameplay-Systems.md) -- Inventory, quests, achievements

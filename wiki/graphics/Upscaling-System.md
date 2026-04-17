@@ -348,5 +348,5 @@ EditorPanelRegistry::Register<UpscalingSettingsPanel>("Upscaling Settings",
 - [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md) -- Main rendering pipeline documentation
 - [Post-Processing](Post-Processing.md) -- Other post-processing effects (bloom, DOF, colour grading)
 - [Shader Pipeline](../gameplay-tools/Shader-Pipeline.md) -- How compute shaders are compiled and dispatched
-- [Quality Presets](Quality-Presets) -- Engine-wide quality preset system
+- [Quality Presets](../advanced/Configuration-Reference.md) -- Engine-wide quality preset system
 - [Entity-Component-System](../subsystems/Entity-Component-System.md) -- ECS architecture and component reference

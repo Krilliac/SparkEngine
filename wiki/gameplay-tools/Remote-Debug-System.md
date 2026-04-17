@@ -143,6 +143,6 @@ server->RegisterCommandHandler("spawn_entity",
 
 ## Related Systems
 
-- [Console System](Console-System) -- In-engine console for command execution
-- [Profiler](Profiler) -- Performance monitoring data source
-- [Editor](Editor-Architecture) -- Editor-side UI for remote debugging
+- [Console System](SparkConsole.md) -- In-engine console for command execution
+- [Profiler](../advanced/Profiler-and-Debugging.md) -- Performance monitoring data source
+- [Editor](SparkEditor.md) -- Editor-side UI for remote debugging

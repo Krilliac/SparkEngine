@@ -118,7 +118,7 @@ sel.RemoveCallback(cbId);
 
 ## Related Systems
 
-- [Editor Panels](Editor-Panels.md) -- all panels observe selection via callbacks
-- [Scene Hierarchy](Scene-Hierarchy.md) -- tree view drives and reflects selection
-- [Inspector Panel](Inspector-Panel.md) -- displays properties of selected entities
+- [Editor Panels](SparkEditor.md) -- all panels observe selection via callbacks
+- [Scene Hierarchy](SparkEditor.md) -- tree view drives and reflects selection
+- [Inspector Panel](SparkEditor.md) -- displays properties of selected entities
 - [Editor Automation](Editor-Automation.md) -- automation commands can manipulate selection
