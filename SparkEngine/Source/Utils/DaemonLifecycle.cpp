@@ -51,15 +51,23 @@ namespace
     Spark::CVar<std::string> cv_DaemonBinary("spark.daemon.binary_path", std::string{}, Spark::CVarFlags::Save,
                                              "Override the SparkDaemon executable path (empty = ./SparkDaemon).");
 
+    // When true, a successful connect runs `daemon.clear_cache all` immediately.
+    // Useful for local development where engine shader/asset sources have
+    // diverged from whatever the long-lived daemon still remembers.
+    Spark::CVar<bool> cv_DaemonClearOnStartup("spark.daemon.clear_on_startup", false, Spark::CVarFlags::Save,
+                                              "After connecting, drop all cached entries from the daemon.");
+
     std::mutex g_lifecycleMutex;
     std::unique_ptr<Spark::Daemon::ShaderServiceClient> g_shaderClient;
     std::unique_ptr<Spark::Daemon::AssetServiceClient> g_assetClient;
     bool g_active = false;
     bool g_statsCommandRegistered = false;
     bool g_clearCacheCommandRegistered = false;
+    bool g_invalidateCommandRegistered = false;
 
     constexpr const char* kStatsCommandName = "daemon.stats";
     constexpr const char* kClearCacheCommandName = "daemon.clear_cache";
+    constexpr const char* kInvalidateCommandName = "daemon.invalidate";
 
     /// Query the daemon and render its state via DaemonDiagnostics.
     /// Returns a user-facing multi-line string.
@@ -173,6 +181,26 @@ namespace
         return out;
     }
 
+    /// Drive the InvalidateAsset RPC for a single logical path.
+    /// Returns a user-facing summary line describing how many platform
+    /// variants were dropped.
+    std::string RunInvalidateCommand(const std::string& path)
+    {
+        auto& conn = Spark::Daemon::DaemonConnection::Instance();
+        auto* client = conn.GetClient();
+        if (!conn.IsConnected() || client == nullptr)
+            return "daemon: not connected";
+
+        Spark::Daemon::AssetServiceClient tmp(*client);
+        auto* c = g_assetClient ? g_assetClient.get() : &tmp;
+        auto r = c->InvalidateAsset(path);
+        if (!r)
+            return std::string("daemon.invalidate: ") + r.error();
+
+        return "daemon.invalidate: " + path + " (dropped " + std::to_string(*r) +
+               (*r == 1u ? " variant)" : " variants)");
+    }
+
     /// Idempotent registration of the `daemon.stats` console command.
     /// Registration is independent of whether a daemon is currently wired —
     /// the command itself handles the disconnected case. This way operators
@@ -222,6 +250,31 @@ namespace
             return;
         Spark::InGameConsole::GetInstance().UnregisterCommand(kClearCacheCommandName);
         g_clearCacheCommandRegistered = false;
+    }
+
+    void EnsureInvalidateCommandRegistered()
+    {
+        if (g_invalidateCommandRegistered)
+            return;
+        auto& console = Spark::InGameConsole::GetInstance();
+        console.RegisterCommand(
+            kInvalidateCommandName, "Ask the SparkDaemon to drop every platform variant of a single asset",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.size() != 1 || args[0].empty())
+                    return "usage: daemon.invalidate <path>";
+                return RunInvalidateCommand(args[0]);
+            },
+            "daemon.invalidate <path>");
+        g_invalidateCommandRegistered = true;
+    }
+
+    void UnregisterInvalidateCommand()
+    {
+        if (!g_invalidateCommandRegistered)
+            return;
+        Spark::InGameConsole::GetInstance().UnregisterCommand(kInvalidateCommandName);
+        g_invalidateCommandRegistered = false;
     }
 
     bool TrySpawnDaemon(const std::string& socketPath)
@@ -282,6 +335,7 @@ namespace Spark::Daemon
         // appropriate, so operators always have a way to query state.
         EnsureStatsCommandRegistered();
         EnsureClearCacheCommandRegistered();
+        EnsureInvalidateCommandRegistered();
 
         if (g_active)
             return;
@@ -321,6 +375,25 @@ namespace Spark::Daemon
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Daemon wired: shader cache sharing via %s",
                        conn.GetSocketPath().c_str());
+
+        // Optional: drop every cached entry right after connect. Operators
+        // opt in via `spark.daemon.clear_on_startup 1` when local sources
+        // have drifted from whatever the long-lived daemon still holds.
+        if (cv_DaemonClearOnStartup.Get())
+        {
+            const auto shaderResult = g_shaderClient->ClearCache();
+            const auto assetResult = g_assetClient->ClearCache();
+            if (shaderResult && assetResult)
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Core, "Daemon clear-on-startup: both caches dropped");
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Daemon clear-on-startup: shader=%s asset=%s",
+                               shaderResult ? "ok" : shaderResult.error().c_str(),
+                               assetResult ? "ok" : assetResult.error().c_str());
+            }
+        }
     }
 
     void ShutdownDaemonLifecycle()
@@ -329,6 +402,7 @@ namespace Spark::Daemon
 
         UnregisterStatsCommand();
         UnregisterClearCacheCommand();
+        UnregisterInvalidateCommand();
 
         if (!g_active)
             return;

@@ -14,10 +14,14 @@
 #if defined(__linux__) || defined(__APPLE__)
 
 #include "Graphics/ShaderDiskCache.h"
+#include "Utils/AssetServiceClient.h"
 #include "Utils/ConsoleVariable.h"
+#include "Utils/DaemonClient.h"
 #include "Utils/DaemonConnection.h"
 #include "Utils/DaemonLifecycle.h"
+#include "Utils/InGameConsole.h"
 
+#include "../SparkDaemon/src/AssetService.h"
 #include "../SparkDaemon/src/ControlService.h"
 #include "../SparkDaemon/src/DaemonServer.h"
 #include "../SparkDaemon/src/ShaderService.h"
@@ -103,6 +107,7 @@ namespace
             server = std::make_unique<Spark::Daemon::DaemonServer>();
             server->AddService(std::make_unique<Spark::Daemon::ControlService>(server->GetShouldStopFlag()));
             server->AddService(std::make_unique<Spark::Daemon::ShaderService>());
+            server->AddService(std::make_unique<Spark::Daemon::AssetService>());
             thread = std::thread([this] { (void)server->Run(sockPath); });
             EXPECT_TRUE(WaitForLifecycleSocket(sockPath, std::chrono::milliseconds(2000)));
         }
@@ -228,6 +233,154 @@ TEST(DaemonLifecycle_ShutdownIsIdempotent)
     Spark::Daemon::ShutdownDaemonLifecycle();
     Spark::Daemon::ShutdownDaemonLifecycle();
     EXPECT_FALSE(Spark::Daemon::DaemonConnection::Instance().IsConnected());
+}
+
+// =========================================================================
+// daemon.invalidate command
+// =========================================================================
+
+TEST(DaemonLifecycle_InvalidateCommandDropsCachedVariants)
+{
+    LifecycleDaemonFixture fx("invalidate");
+    DaemonCVarGuard cvars(/*enable*/ true, /*socketPath*/ fx.sockPath);
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+    Spark::Daemon::InitializeDaemonLifecycle();
+    EXPECT_TRUE(Spark::Daemon::DaemonConnection::Instance().IsConnected());
+
+    // Put two platform variants of the same asset through a fresh client,
+    // then ask `daemon.invalidate` to drop them.
+    Spark::Daemon::DaemonClient raw;
+    EXPECT_TRUE(raw.Connect(fx.sockPath).has_value());
+    Spark::Daemon::AssetServiceClient asset(raw);
+    EXPECT_TRUE(asset.PutAsset("meshes/hero.obj", 0, {0xAA}).has_value());
+    EXPECT_TRUE(asset.PutAsset("meshes/hero.obj", 1, {0xBB}).has_value());
+
+    const std::string result = Spark::InGameConsole::GetInstance().Execute("daemon.invalidate meshes/hero.obj");
+    EXPECT_TRUE(result.find("dropped 2 variants") != std::string::npos);
+
+    // Both variants are gone.
+    auto get0 = asset.GetAsset("meshes/hero.obj", 0);
+    auto get1 = asset.GetAsset("meshes/hero.obj", 1);
+    EXPECT_TRUE(get0 && !get0->found);
+    EXPECT_TRUE(get1 && !get1->found);
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+}
+
+TEST(DaemonLifecycle_InvalidateCommandRejectsBadArgs)
+{
+    // Command is registered unconditionally, so we can probe it with no
+    // daemon running — the arg-count check runs before any RPC.
+    DaemonCVarGuard cvars(/*enable*/ false, /*socketPath*/ "");
+    Spark::Daemon::InitializeDaemonLifecycle();
+
+    const std::string noArgs = Spark::InGameConsole::GetInstance().Execute("daemon.invalidate");
+    EXPECT_TRUE(noArgs.find("usage:") != std::string::npos);
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+}
+
+TEST(DaemonLifecycle_InvalidateCommandWhenDisconnected)
+{
+    DaemonCVarGuard cvars(/*enable*/ false, /*socketPath*/ "");
+    Spark::Daemon::ShutdownDaemonLifecycle();
+    Spark::Daemon::InitializeDaemonLifecycle();
+
+    const std::string result = Spark::InGameConsole::GetInstance().Execute("daemon.invalidate foo/bar.png");
+    EXPECT_EQ(result, "daemon: not connected");
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+}
+
+// =========================================================================
+// spark.daemon.clear_on_startup CVar
+// =========================================================================
+
+namespace
+{
+    /// RAII guard for a single bool CVar. Used so clear_on_startup tests
+    /// don't leak process-wide state.
+    struct BoolCVarGuard
+    {
+        const char* name;
+        bool prev = false;
+
+        BoolCVarGuard(const char* n, bool value) : name(n)
+        {
+            if (auto* c = Spark::CVarRegistry::Get().Find(name))
+            {
+                prev = c->GetValueString() == "true";
+                c->SetFromString(value ? "1" : "0");
+            }
+        }
+        ~BoolCVarGuard()
+        {
+            if (auto* c = Spark::CVarRegistry::Get().Find(name))
+                c->SetFromString(prev ? "1" : "0");
+        }
+    };
+} // namespace
+
+TEST(DaemonLifecycle_ClearOnStartupWipesDaemonCaches)
+{
+    LifecycleDaemonFixture fx("clear-startup");
+    DaemonCVarGuard cvars(/*enable*/ true, /*socketPath*/ fx.sockPath);
+    BoolCVarGuard clearGuard("spark.daemon.clear_on_startup", /*value*/ true);
+
+    // Pre-populate the daemon's asset cache before the engine connects.
+    {
+        Spark::Daemon::DaemonClient raw;
+        EXPECT_TRUE(raw.Connect(fx.sockPath).has_value());
+        Spark::Daemon::AssetServiceClient asset(raw);
+        EXPECT_TRUE(asset.PutAsset("pre/a.bin", 0, {0x01}).has_value());
+        EXPECT_TRUE(asset.PutAsset("pre/b.bin", 0, {0x02}).has_value());
+        auto s = asset.GetCacheStats();
+        EXPECT_TRUE(s && s->entryCount == 2u);
+    }
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+    Spark::Daemon::InitializeDaemonLifecycle();
+    EXPECT_TRUE(Spark::Daemon::DaemonConnection::Instance().IsConnected());
+
+    // Re-check stats via a separate client — the CVar hook should have
+    // just dropped both entries.
+    Spark::Daemon::DaemonClient raw;
+    EXPECT_TRUE(raw.Connect(fx.sockPath).has_value());
+    Spark::Daemon::AssetServiceClient asset(raw);
+    auto stats = asset.GetCacheStats();
+    EXPECT_TRUE(stats);
+    EXPECT_EQ(stats->entryCount, 0u);
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+}
+
+TEST(DaemonLifecycle_ClearOnStartupDisabledLeavesCachesAlone)
+{
+    LifecycleDaemonFixture fx("clear-startup-off");
+    DaemonCVarGuard cvars(/*enable*/ true, /*socketPath*/ fx.sockPath);
+    BoolCVarGuard clearGuard("spark.daemon.clear_on_startup", /*value*/ false);
+
+    // Seed the daemon.
+    {
+        Spark::Daemon::DaemonClient raw;
+        EXPECT_TRUE(raw.Connect(fx.sockPath).has_value());
+        Spark::Daemon::AssetServiceClient asset(raw);
+        EXPECT_TRUE(asset.PutAsset("keep/me.bin", 0, {0x42}).has_value());
+    }
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
+    Spark::Daemon::InitializeDaemonLifecycle();
+    EXPECT_TRUE(Spark::Daemon::DaemonConnection::Instance().IsConnected());
+
+    Spark::Daemon::DaemonClient raw;
+    EXPECT_TRUE(raw.Connect(fx.sockPath).has_value());
+    Spark::Daemon::AssetServiceClient asset(raw);
+    auto get = asset.GetAsset("keep/me.bin", 0);
+    EXPECT_TRUE(get && get->found);
+    EXPECT_EQ(get->blob.size(), 1u);
+
+    Spark::Daemon::ShutdownDaemonLifecycle();
 }
 
 #endif // POSIX
