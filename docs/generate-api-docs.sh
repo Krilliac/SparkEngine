@@ -9,17 +9,21 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$SCRIPT_DIR/api"
+SYMBOLS_TSV="$OUTPUT_DIR/.symbols.tsv"
 
-# Source directories to scan
+# Source directories to scan (auto-discovers every GameModules/*/Source)
 SOURCE_DIRS=(
     "$PROJECT_ROOT/SparkEngine/Source"
     "$PROJECT_ROOT/SparkEditor/Source"
     "$PROJECT_ROOT/SparkConsole/src"
     "$PROJECT_ROOT/SparkShaderCompiler/src"
-    "$PROJECT_ROOT/GameModules/SparkGame/Source"
-    "$PROJECT_ROOT/GameModules/SparkGameMMO/Source"
     "$PROJECT_ROOT/SparkSDK"
+    "$PROJECT_ROOT/Tests"
 )
+for _gm_src in "$PROJECT_ROOT"/GameModules/*/Source; do
+    [ -d "$_gm_src" ] && SOURCE_DIRS+=("$_gm_src")
+done
+unset _gm_src
 
 # Colors
 RED='\033[0;31m'
@@ -32,6 +36,34 @@ log_info()    { echo -e "${BLUE}[API-DOC]${NC} $1"; }
 log_success() { echo -e "${GREEN}[API-DOC]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[API-DOC]${NC} $1"; }
 log_error()   { echo -e "${RED}[API-DOC]${NC} $1"; }
+
+# ============================================================================
+# Compute "../" prefix from an output .md path back to PROJECT_ROOT.
+# E.g. docs/api/SparkEngine/Source/X/Y.md -> "../../../../../"
+# ============================================================================
+rel_prefix_for() {
+    local md_path="$1"
+    local rel="${md_path#$PROJECT_ROOT/}"
+    local depth
+    depth=$(awk -F/ '{print NF-1}' <<< "$rel")
+    local prefix=""
+    local i
+    for (( i=0; i<depth; i++ )); do
+        prefix+="../"
+    done
+    printf '%s' "$prefix"
+}
+
+# ============================================================================
+# Emit one row to the symbol index TSV.
+# Fields: kind  name  rel_path  line  brief
+# ============================================================================
+emit_symbol() {
+    local kind="$1" name="$2" rel_path="$3" line="$4" brief="$5"
+    # Sanitize tabs/newlines in brief
+    brief=$(printf '%s' "$brief" | tr '\t\n' '  ')
+    printf '%s\t%s\t%s\t%s\t%s\n' "$kind" "$name" "$rel_path" "$line" "$brief" >> "$SYMBOLS_TSV"
+}
 
 # ============================================================================
 # Parse a single header file and extract documentation
@@ -57,127 +89,222 @@ parse_header() {
     local functions=""
     functions=$(grep -nE '^\s*(static\s+|inline\s+|constexpr\s+)*(void|bool|int|float|double|size_t|uint32_t|std::string|auto|HRESULT|DirectX::\w+)\s+[A-Z][a-zA-Z0-9_]+\s*\(' "$file" 2>/dev/null | head -30 || true)
 
+    # Extract #define macros (exclude header guards that end in _H/_HPP/_GUARD/_INCLUDED)
+    local macros=""
+    macros=$(grep -nE '^\s*#\s*define\s+[A-Z][A-Z0-9_]+' "$file" 2>/dev/null | \
+        grep -vE '_(H|HPP|GUARD|INCLUDED)\s*$' || true)
+
+    # Extract typedef / using aliases
+    local aliases=""
+    aliases=$(grep -nE '^\s*(typedef\s+.+\s+[A-Za-z_][A-Za-z0-9_]*\s*;|using\s+[A-Za-z_][A-Za-z0-9_]*\s*=)' "$file" 2>/dev/null || true)
+
     # Skip files with nothing interesting
-    if [ -z "$classes" ] && [ -z "$enums" ] && [ -z "$functions" ]; then
+    if [ -z "$classes" ] && [ -z "$enums" ] && [ -z "$functions" ] && [ -z "$macros" ] && [ -z "$aliases" ]; then
         return
     fi
 
-    local outfile="$OUTPUT_DIR/${rel_path%.h}.md"
-    outfile="${outfile%.hpp}.md"
+    local stem="${rel_path%.h}"
+    stem="${stem%.hpp}"
+    local outfile="$OUTPUT_DIR/${stem}.md"
     mkdir -p "$(dirname "$outfile")"
 
-    {
-        echo "# \`$rel_path\`"
-        echo ""
-        if [ -n "$file_brief" ]; then
-            echo "> $file_brief"
-            echo ""
-        fi
-        echo "---"
-        echo ""
+    # Relative "../../.." prefix from this .md file back to project root, for clickable source links.
+    local rp
+    rp=$(rel_prefix_for "$outfile")
 
-        # --- Classes/Structs ---
-        if [ -n "$classes" ]; then
-            echo "## Classes & Structs"
-            echo ""
-            echo "$classes" | while IFS=: read -r line_num line_content; do
-                # Clean up the class/struct name
-                local name
-                name=$(echo "$line_content" | sed 's/.*\(class\|struct\)\s\+//' | sed 's/[:{; ].*//' | tr -d ' ')
-                [ -z "$name" ] && continue
+    # Single awk pass: walks the file once, buffers section content in arrays,
+    # and emits grouped Markdown + TSV at END. One awk fork per file — avoids
+    # the O(N·M) subshell explosion of the original per-class shell logic.
+    awk -v rel="$rel_path" -v rp="$rp" -v outfile="$outfile" -v tsv="$SYMBOLS_TSV" -v file_brief="$file_brief" '
+        BEGIN { last_brief = ""; nc = 0; ne = 0; nf = 0; nm = 0; na = 0 }
 
-                # Look for @brief above this line
-                local brief=""
-                if [ "$line_num" -gt 1 ]; then
-                    local start=$((line_num - 15))
-                    [ "$start" -lt 1 ] && start=1
-                    brief=$(sed -n "${start},${line_num}p" "$file" | sed -n '/@brief/{s/.*@brief \(.*\)/\1/;p;}' | tail -1)
-                fi
+        /@brief/ {
+            b = $0
+            sub(/.*@brief[[:space:]]+/, "", b)
+            sub(/[[:space:]]*\*\/[[:space:]]*$/, "", b)
+            sub(/^[[:space:]]+/, "", b)
+            sub(/[[:space:]]+$/, "", b)
+            last_brief = b
+        }
 
-                # Check for base class
-                local base=""
-                base=$(echo "$line_content" | grep -oP ':\s*public\s+\K[A-Za-z_:]+' || true)
+        /^[[:space:]]*(class|struct)[[:space:]]+[A-Z]/ && !/\/\// && !/forward/ {
+            line_content = $0
+            kind = (match(line_content, /^[[:space:]]*class/) ? "class" : "struct")
+            tmp = line_content
+            sub(/^[[:space:]]*(class|struct)[[:space:]]+/, "", tmp)
+            if (match(tmp, /[A-Za-z_][A-Za-z0-9_]*/)) {
+                name = substr(tmp, RSTART, RLENGTH)
+            } else { next }
+            base = ""
+            if (match(line_content, /:[[:space:]]*public[[:space:]]+[A-Za-z_:][A-Za-z0-9_:]*/)) {
+                base = substr(line_content, RSTART, RLENGTH)
+                sub(/:[[:space:]]*public[[:space:]]+/, "", base)
+            }
+            entry = "### `" name "` <sup>[source](" rp rel "#L" NR ")</sup>\n"
+            if (base != "") entry = entry "*Inherits from* `" base "`\n"
+            if (last_brief != "") entry = entry "\n" last_brief "\n"
+            classes_buf[++nc] = entry
+            print kind "\t" name "\t" rel "\t" NR "\t" last_brief >> tsv
+            last_brief = ""
+            next
+        }
 
-                echo "### \`$name\`"
-                [ -n "$base" ] && echo "*Inherits from* \`$base\`"
-                [ -n "$brief" ] && echo "" && echo "$brief"
-                echo ""
+        /^[[:space:]]*enum([[:space:]]+class)?[[:space:]]+[A-Z]/ {
+            tmp = $0
+            sub(/^[[:space:]]*enum([[:space:]]+class)?[[:space:]]+/, "", tmp)
+            if (match(tmp, /[A-Za-z_][A-Za-z0-9_]*/)) {
+                name = substr(tmp, RSTART, RLENGTH)
+            } else { next }
+            entry = "### `" name "` <sup>[source](" rp rel "#L" NR ")</sup>\n"
+            if (last_brief != "") entry = entry "\n" last_brief "\n"
+            enums_buf[++ne] = entry
+            print "enum\t" name "\t" rel "\t" NR "\t" last_brief >> tsv
+            last_brief = ""
+            next
+        }
 
-                # Extract public methods for this class (simplified: scan next ~200 lines)
-                local end_line=$((line_num + 200))
-                local total_lines
-                total_lines=$(wc -l < "$file")
-                [ "$end_line" -gt "$total_lines" ] && end_line=$total_lines
+        /^[[:space:]]*(static[[:space:]]+|inline[[:space:]]+|constexpr[[:space:]]+)*(void|bool|int|float|double|size_t|uint32_t|std::string|auto|HRESULT|DirectX::[A-Za-z_][A-Za-z0-9_]*)[[:space:]]+[A-Z][A-Za-z0-9_]*[[:space:]]*\(/ {
+            sig = $0
+            sub(/^[[:space:]]+/, "", sig)
+            sub(/[[:space:]]*\{.*$/, "", sig)
+            sub(/;[[:space:]]*$/, "", sig)
+            md_sig = sig; gsub(/\|/, "\\|", md_sig)
+            if (match(sig, /[A-Z][A-Za-z0-9_]*[[:space:]]*\(/)) {
+                name = substr(sig, RSTART, RLENGTH)
+                sub(/[[:space:]]*\($/, "", name)
+            } else { next }
+            funcs_buf[++nf] = "| `" name "` | [L" NR "](" rp rel "#L" NR ") | `" md_sig "` |"
+            print "function\t" name "\t" rel "\t" NR "\t" >> tsv
+            last_brief = ""
+        }
 
-                local methods
-                methods=$(sed -n "${line_num},${end_line}p" "$file" | \
-                    grep -nE '^\s*(virtual\s+|static\s+|inline\s+|constexpr\s+)*(void|bool|int|float|double|size_t|uint32_t|const\s|std::|DirectX::|auto|HRESULT|[A-Z][a-zA-Z0-9_]*\*?)\s+[A-Za-z_][A-Za-z0-9_]*\s*\(' | \
-                    grep -v '^\s*//' | head -25 || true)
+        /^[[:space:]]*#[[:space:]]*define[[:space:]]+[A-Z][A-Z0-9_]+/ {
+            if (match($0, /#[[:space:]]*define[[:space:]]+[A-Z][A-Z0-9_]+/)) {
+                tok = substr($0, RSTART, RLENGTH)
+                sub(/^#[[:space:]]*define[[:space:]]+/, "", tok)
+                if (tok ~ /_(H|HPP|GUARD|INCLUDED)$/) next
+                macros_buf[++nm] = "| `" tok "` | [L" NR "](" rp rel "#L" NR ") |"
+                print "macro\t" tok "\t" rel "\t" NR "\t" >> tsv
+            }
+        }
 
-                local members
-                members=$(sed -n "${line_num},${end_line}p" "$file" | \
-                    grep -E '^\s+(DirectX::|float|int|bool|uint32_t|std::|size_t|BlendMode|BodyType2D|ColliderShape2D)\s+m_[a-zA-Z]' | head -20 || true)
+        /^[[:space:]]*using[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/ {
+            if (match($0, /using[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/)) {
+                tok = substr($0, RSTART, RLENGTH)
+                sub(/^using[[:space:]]+/, "", tok)
+                aliases_buf[++na] = "| `" tok "` | [L" NR "](" rp rel "#L" NR ") |"
+                print "alias\t" tok "\t" rel "\t" NR "\t" >> tsv
+            }
+        }
 
-                if [ -n "$methods" ]; then
-                    echo "| Method | Signature |"
-                    echo "|--------|-----------|"
-                    echo "$methods" | while IFS=: read -r _ mline; do
-                        # Extract return type + name + params
-                        local sig
-                        sig=$(echo "$mline" | sed 's/^\s*//' | sed 's/{.*//' | sed 's/\s*$//' | sed 's/;$//')
-                        local mname
-                        mname=$(echo "$sig" | grep -oP '[A-Za-z_][A-Za-z0-9_]*\s*\(' | head -1 | sed 's/\s*($//')
-                        [ -z "$mname" ] && continue
-                        echo "| \`$mname\` | \`$sig\` |"
-                    done
-                    echo ""
-                fi
+        /^[[:space:]]*typedef[[:space:]].+[[:space:]][A-Za-z_][A-Za-z0-9_]*[[:space:]]*;/ {
+            tmp = $0
+            sub(/;[[:space:]]*$/, "", tmp)
+            if (match(tmp, /[A-Za-z_][A-Za-z0-9_]*[[:space:]]*$/)) {
+                tok = substr(tmp, RSTART, RLENGTH)
+                sub(/[[:space:]]+$/, "", tok)
+                aliases_buf[++na] = "| `" tok "` | [L" NR "](" rp rel "#L" NR ") |"
+                print "alias\t" tok "\t" rel "\t" NR "\t" >> tsv
+            }
+        }
 
-                if [ -n "$members" ]; then
-                    echo "<details><summary>Member Variables</summary>"
-                    echo ""
-                    echo "\`\`\`cpp"
-                    echo "$members" | sed 's/^\s*//'
-                    echo "\`\`\`"
-                    echo "</details>"
-                    echo ""
-                fi
-            done
-        fi
+        END {
+            # Header
+            print "# `" rel "`" > outfile
+            print ""               > outfile
+            if (file_brief != "") {
+                print "> " file_brief > outfile
+                print ""             > outfile
+            }
+            print "[View source](" rp rel ")" > outfile
+            print ""                           > outfile
+            print "---"                        > outfile
+            print ""                           > outfile
 
-        # --- Enums ---
-        if [ -n "$enums" ]; then
-            echo "## Enums"
-            echo ""
-            echo "$enums" | while IFS=: read -r line_num line_content; do
-                local ename
-                ename=$(echo "$line_content" | sed 's/.*enum\s\+\(class\s\+\)\?//' | sed 's/[:{; ].*//' | tr -d ' ')
-                [ -z "$ename" ] && continue
+            if (nc > 0) {
+                print "## Classes & Structs" > outfile
+                print ""                     > outfile
+                for (i = 1; i <= nc; i++) { print classes_buf[i] > outfile }
+            }
+            if (ne > 0) {
+                print "## Enums" > outfile
+                print ""         > outfile
+                for (i = 1; i <= ne; i++) { print enums_buf[i] > outfile }
+            }
+            if (nf > 0) {
+                print "## Free Functions"                 > outfile
+                print ""                                  > outfile
+                print "| Function | Source | Signature |" > outfile
+                print "|----------|--------|-----------|" > outfile
+                for (i = 1; i <= nf; i++) { print funcs_buf[i] > outfile }
+                print ""                                  > outfile
+            }
+            if (nm > 0) {
+                print "## Macros"            > outfile
+                print ""                     > outfile
+                print "| Macro | Source |"   > outfile
+                print "|-------|--------|"   > outfile
+                for (i = 1; i <= nm; i++) { print macros_buf[i] > outfile }
+                print ""                     > outfile
+            }
+            if (na > 0) {
+                print "## Type Aliases"      > outfile
+                print ""                     > outfile
+                print "| Alias | Source |"   > outfile
+                print "|-------|--------|"   > outfile
+                for (i = 1; i <= na; i++) { print aliases_buf[i] > outfile }
+                print ""                     > outfile
+            }
+        }
+    ' "$file"
+}
 
-                echo "### \`$ename\`"
-                echo ""
+# ============================================================================
+# Parse a .cpp implementation file for TSV records only (no markdown page).
+# Extracts free functions and out-of-line method definitions with source lines.
+#
+# Uses a single awk pass per file (much faster than piping grep into a shell
+# loop — one fork per file instead of per match).
+# ============================================================================
+parse_cpp() {
+    local file="$1"
+    local rel_path="${file#$PROJECT_ROOT/}"
 
-                # Extract enum values (scan next ~30 lines)
-                local end_line=$((line_num + 30))
-                local total_lines
-                total_lines=$(wc -l < "$file")
-                [ "$end_line" -gt "$total_lines" ] && end_line=$total_lines
+    awk -v rel="$rel_path" -v tsv="$SYMBOLS_TSV" '
+        # Skip comment-only and preprocessor lines
+        /^[[:space:]]*\/\// { next }
+        /^[[:space:]]*#/    { next }
 
-                local values
-                values=$(sed -n "${line_num},${end_line}p" "$file" | \
-                    grep -E '^\s+[A-Z][A-Za-z0-9_]*' | \
-                    sed 's/^\s*//' | sed 's/\/\/\/<\?\s*/— /' | head -20 || true)
+        # Out-of-line method definition: the line must START with an identifier
+        # (not whitespace) so we skip indented calls like "    Class::Method()".
+        # Pattern: ReturnType[<...>][*&]... Class::Method(
+        match($0, /^[A-Za-z_][A-Za-z0-9_:<>,\*\&[:space:]]*[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(/) {
+            # Extract the Class::Method portion (the identifier pair immediately before "(")
+            if (match($0, /[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(/)) {
+                qn = substr($0, RSTART, RLENGTH)
+                sub(/[[:space:]]*\($/, "", qn)
+                print "method\t" qn "\t" rel "\t" NR "\t" >> tsv
+            }
+            next
+        }
 
-                if [ -n "$values" ]; then
-                    echo "\`\`\`"
-                    echo "$values"
-                    echo "\`\`\`"
-                    echo ""
-                fi
-            done
-        fi
-
-    } > "$outfile"
+        # Free function at column 0: "Type[*&] Name(" — skip control-flow keywords.
+        match($0, /^(static[[:space:]]+|inline[[:space:]]+|constexpr[[:space:]]+)?[A-Za-z_][A-Za-z0-9_:<>,\*\&[:space:]]*[[:space:]][A-Za-z_][A-Za-z0-9_]+[[:space:]]*\(/) {
+            sig = substr($0, RSTART, RLENGTH)
+            if (match(sig, /[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\([[:space:]]*$/)) {
+                name = substr(sig, RSTART, RLENGTH)
+                sub(/[[:space:]]*\([[:space:]]*$/, "", name)
+                if (name == "if" || name == "for" || name == "while" || name == "switch" ||
+                    name == "return" || name == "sizeof" || name == "static_cast" ||
+                    name == "dynamic_cast" || name == "const_cast" || name == "reinterpret_cast" ||
+                    name == "decltype" || name == "typeid" || name == "noexcept" || name == "alignof") {
+                    next
+                }
+                if (index($0, "::") > 0) next
+                print "function\t" name "\t" rel "\t" NR "\t" >> tsv
+            }
+        }
+    ' "$file"
 }
 
 # ============================================================================
@@ -338,25 +465,37 @@ main() {
 
     case "$command" in
         generate|full)
-            log_info "Generating API documentation from headers..."
+            log_info "Generating API documentation from headers and sources..."
             rm -rf "$OUTPUT_DIR"
             mkdir -p "$OUTPUT_DIR"
+            : > "$SYMBOLS_TSV"
 
-            local tmplist
+            local tmplist cpplist
             tmplist=$(mktemp)
+            cpplist=$(mktemp)
             for dir in "${SOURCE_DIRS[@]}"; do
                 [ -d "$dir" ] || continue
                 find "$dir" -type f \( -name '*.h' -o -name '*.hpp' \) >> "$tmplist"
+                find "$dir" -type f -name '*.cpp' >> "$cpplist"
             done
+
             local count=0
             while IFS= read -r hfile; do
                 [ -z "$hfile" ] && continue
                 parse_header "$hfile"
                 count=$((count + 1))
             done < "$tmplist"
-            rm -f "$tmplist"
-
             log_info "Parsed $count header files"
+
+            local cpp_count=0
+            while IFS= read -r cppfile; do
+                [ -z "$cppfile" ] && continue
+                parse_cpp "$cppfile"
+                cpp_count=$((cpp_count + 1))
+            done < "$cpplist"
+            log_info "Scanned $cpp_count .cpp files for symbols"
+
+            rm -f "$tmplist" "$cpplist"
 
             generate_component_index
             log_success "Component index generated"
@@ -367,18 +506,19 @@ main() {
             generate_index
             log_success "API index generated"
 
-            local page_count
+            local page_count sym_count
             page_count=$(find "$OUTPUT_DIR" -name '*.md' | wc -l)
-            log_success "Generated $page_count markdown pages in docs/api/"
+            sym_count=$(wc -l < "$SYMBOLS_TSV" 2>/dev/null || echo 0)
+            log_success "Generated $page_count markdown pages and $sym_count symbol records in docs/api/"
             ;;
 
         check)
-            # Check if docs are stale (headers newer than generated docs)
+            # Check if docs are stale (sources newer than generated docs)
             local checksum_file="$SCRIPT_DIR/.api_checksums"
             local current=""
             for dir in "${SOURCE_DIRS[@]}"; do
                 [ -d "$dir" ] || continue
-                current="$current$(find "$dir" -type f \( -name '*.h' -o -name '*.hpp' \) -exec md5sum {} \; 2>/dev/null | sort)"
+                current="$current$(find "$dir" -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) -exec md5sum {} \; 2>/dev/null | sort)"
             done
 
             if [ -f "$checksum_file" ]; then
@@ -413,8 +553,9 @@ main() {
             echo ""
             echo "Usage: $0 [generate|check|status|help]"
             echo ""
-            echo "  generate  Parse all headers and generate markdown API reference (default)"
-            echo "  check     Regenerate only if source headers have changed"
+            echo "  generate  Parse all headers + .cpp files and generate markdown API reference (default)"
+            echo "            Writes per-header pages and docs/api/.symbols.tsv (symbol index)"
+            echo "  check     Regenerate only if any source file (.h/.hpp/.cpp) has changed"
             echo "  status    Show doc generation status"
             echo "  help      Show this message"
             ;;

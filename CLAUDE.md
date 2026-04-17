@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 5780 unit tests across 464 files, CTest
+Tests/                                   — 5867 unit tests across 474 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -246,7 +246,10 @@ tools/validate-all.sh --warn-only
 | `docs/update-all-docs.sh` | Runs all scripts below in order | ~30s |
 | `docs/update-all-docs.sh quick` | Skips API docs + flowchart | ~10s |
 | `docs/sync-wiki.sh sync` | Wiki AUTO: sections (components, systems, panels, tests) | ~2s |
-| `docs/generate-api-docs.sh check` | API reference pages (~240 pages) | ~15s |
+| `docs/generate-api-docs.sh check` | API reference pages + symbol TSV (`docs/api/.symbols.tsv`) | ~15s |
+| `docs/generate-symbol-index.sh generate` | SymbolIndex/FunctionIndex/ClassIndex/EnumIndex/MacroIndex (consumes the TSV) | ~2s |
+| `docs/generate-file-tree.sh generate` | `docs/api/FileTree.md` (every source file, LOC, Mermaid module graph) | ~10s |
+| `docs/generate-class-hierarchy.sh generate` | `docs/api/ClassHierarchy.md` (Mermaid classDiagram per module) | ~5s |
 | `docs/generate-flowchart.sh generate` | Engine-Architecture-Flowchart.md | ~5s |
 | `docs/update-codebase-stats.sh generate` | Codebase-Statistics.md (all metrics) | ~5s |
 | `docs/update-readme-badges.sh update` | README.md, badge JSON, AI prompts | ~3s |

@@ -5,12 +5,15 @@
 # Single command to bring all docs, wikis, badges, and context up to date.
 #
 # Scripts orchestrated (in order):
-#   1. sync-wiki.sh          — Update AUTO: sections in wiki pages
-#   2. generate-api-docs.sh  — Regenerate API reference if headers changed
-#   3. generate-flowchart.sh — Regenerate architecture flowchart
-#   4. update-codebase-stats.sh — Regenerate Codebase-Statistics.md
-#   5. update-readme-badges.sh  — Update README.md counts & badge JSON
-#   6. update-context.sh        — Update .claude/index.md & CLAUDE.md
+#   1. sync-wiki.sh               — Update AUTO: sections in wiki pages
+#   2. generate-api-docs.sh       — Regenerate API reference + symbol TSV
+#   3. generate-symbol-index.sh   — Symbol/Function/Class/Enum/Macro indexes
+#   4. generate-file-tree.sh      — Full file tree with LOC + dependency graph
+#   5. generate-class-hierarchy.sh — Inheritance Mermaid diagrams
+#   6. generate-flowchart.sh      — Regenerate architecture flowchart
+#   7. update-codebase-stats.sh   — Regenerate Codebase-Statistics.md
+#   8. update-readme-badges.sh    — Update README.md counts & badge JSON
+#   9. update-context.sh          — Update .claude/index.md & CLAUDE.md
 #
 # Usage:
 #   ./update-all-docs.sh              # Run all updates (default)
@@ -88,8 +91,17 @@ update_all() {
         if [ $? -ne 0 ] 2>/dev/null; then
             run_script "API Docs (generate)" "$SCRIPT_DIR/generate-api-docs.sh" "generate"
         fi
+
+        # 2a. Symbol indexes (fast — pure TSV consumer)
+        run_script "Symbol Indexes" "$SCRIPT_DIR/generate-symbol-index.sh" "generate"
+
+        # 2b. File tree (walks all sources once)
+        run_script "File Tree" "$SCRIPT_DIR/generate-file-tree.sh" "generate"
+
+        # 2c. Class hierarchy (Mermaid diagrams)
+        run_script "Class Hierarchy" "$SCRIPT_DIR/generate-class-hierarchy.sh" "generate"
     else
-        log_info "Skipping API docs (quick mode)"
+        log_info "Skipping API docs, symbol indexes, file tree, class hierarchy (quick mode)"
     fi
 
     # 3. Architecture flowchart
@@ -131,6 +143,9 @@ check_all() {
     for pair in \
         "Wiki Sync:sync-wiki.sh:check" \
         "API Docs:generate-api-docs.sh:check" \
+        "Symbol Indexes:generate-symbol-index.sh:check" \
+        "File Tree:generate-file-tree.sh:check" \
+        "Class Hierarchy:generate-class-hierarchy.sh:check" \
         "Flowchart:generate-flowchart.sh:check" \
         "Codebase Stats:update-codebase-stats.sh:check" \
         "README Badges:update-readme-badges.sh:check" \
@@ -191,12 +206,15 @@ case "${1:-update}" in
         echo "  help      Show this help"
         echo ""
         echo "Individual scripts:"
-        echo "  docs/sync-wiki.sh              Wiki AUTO: sections"
-        echo "  docs/generate-api-docs.sh      API reference (~240 pages)"
-        echo "  docs/generate-flowchart.sh     Architecture flowchart"
-        echo "  docs/update-codebase-stats.sh  Codebase-Statistics.md"
-        echo "  docs/update-readme-badges.sh   README badges & counts"
-        echo "  docs/update-context.sh         .claude/index.md & CLAUDE.md"
+        echo "  docs/sync-wiki.sh               Wiki AUTO: sections"
+        echo "  docs/generate-api-docs.sh       API reference + symbol TSV"
+        echo "  docs/generate-symbol-index.sh   Symbol/Function/Class/Enum/Macro indexes"
+        echo "  docs/generate-file-tree.sh      Full file tree (docs/api/FileTree.md)"
+        echo "  docs/generate-class-hierarchy.sh Inheritance Mermaid diagrams"
+        echo "  docs/generate-flowchart.sh      Architecture flowchart"
+        echo "  docs/update-codebase-stats.sh   Codebase-Statistics.md"
+        echo "  docs/update-readme-badges.sh    README badges & counts"
+        echo "  docs/update-context.sh          .claude/index.md & CLAUDE.md"
         ;;
     *)
         echo "Usage: $0 [update|quick|check|help]"
