@@ -330,8 +330,8 @@ docs/update-context.sh update           # .claude/index.md and CLAUDE.md counts
 **What gets auto-generated:**
 - `docs/api/` — per-header API pages, component/system indices
 - `wiki/` AUTO: sections — live component, system, panel, test inventories
-- `wiki/Engine-Architecture-Flowchart.md` — architecture ASCII diagrams
-- `wiki/Codebase-Statistics.md` — all code metrics
+- `wiki/getting-started/Engine-Architecture-Flowchart.md` — architecture ASCII diagrams
+- `wiki/advanced/Codebase-Statistics.md` — all code metrics
 - `.github/badges/*.json` — LOC and file count badges for README
 - README.md, CLAUDE.md, .claude/index.md — hardcoded counts
 

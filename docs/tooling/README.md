@@ -23,8 +23,8 @@ docs/update-all-docs.sh check        # Dry-run: report what's stale
 | `docs/generate-symbol-index.sh generate` | Symbol/Function/Class/Enum/Macro indexes | None | ~2s |
 | `docs/generate-file-tree.sh generate` | File tree (LOC + Mermaid module graph) | None | ~10s |
 | `docs/generate-class-hierarchy.sh generate` | Inheritance Mermaid classDiagrams | None | ~5s |
-| `docs/generate-flowchart.sh generate` | `wiki/Engine-Architecture-Flowchart.md` | Python 3 | ~5s |
-| `docs/update-codebase-stats.sh generate` | `wiki/Codebase-Statistics.md` (LOC, metrics, largest files) | None | ~5s |
+| `docs/generate-flowchart.sh generate` | `wiki/getting-started/Engine-Architecture-Flowchart.md` | Python 3 | ~5s |
+| `docs/update-codebase-stats.sh generate` | `wiki/advanced/Codebase-Statistics.md` (LOC, metrics, largest files) | None | ~5s |
 | `docs/update-readme-badges.sh update` | `README.md` counts, badge JSON, AI prompt files | None | ~3s |
 | `docs/update-context.sh update` | `.claude/index.md` and `CLAUDE.md` counts | None | ~2s |
 

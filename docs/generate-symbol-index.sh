@@ -50,7 +50,8 @@ group_of() {
 
 # Write one index file filtered on kind regex.
 # Args: outfile, title, description, kind_regex
-# Source links use "../<path>#L<line>" so they resolve correctly from wiki/*.md.
+# Source links use "../../<path>#L<line>" so they resolve correctly from
+# wiki/reference/*.md (one level deeper than the historical wiki root).
 write_filtered_index() {
     local outfile="$1" title="$2" description="$3" kind_regex="$4"
     local tmp
@@ -80,7 +81,7 @@ write_filtered_index() {
             name=$2; kind=$1; path=$3; line=$4; brief=$5;
             n=split(path,p,"/"); module=p[1];
             gsub(/\|/,"\\|",brief);
-            printf("| `%s` | %s | %s | [%s:L%s](../%s#L%s) | %s |\n", name, kind, module, p[n], line, path, line, brief);
+            printf("| `%s` | %s | %s | [%s:L%s](../../%s#L%s) | %s |\n", name, kind, module, p[n], line, path, line, brief);
         }' "$tmp"
         echo ""
     } > "$outfile"
@@ -90,35 +91,35 @@ write_filtered_index() {
 }
 
 generate_all() {
-    mkdir -p "$WIKI_DIR"
+    mkdir -p "$WIKI_DIR/reference"
     require_tsv
 
     write_filtered_index \
-        "$WIKI_DIR/Symbol-Index.md" \
+        "$WIKI_DIR/reference/Symbol-Index.md" \
         "Symbol Index" \
         "Every class, struct, enum, function, method, macro, and type alias across the entire SparkEngine codebase (including headers, .cpp, and Tests/)." \
         '.'
 
     write_filtered_index \
-        "$WIKI_DIR/Function-Index.md" \
+        "$WIKI_DIR/reference/Function-Index.md" \
         "Function Index" \
         "Every free function and out-of-line method definition across the codebase." \
         '^(function|method)$'
 
     write_filtered_index \
-        "$WIKI_DIR/Class-Index.md" \
+        "$WIKI_DIR/reference/Class-Index.md" \
         "Class & Struct Index" \
         "Every declared class and struct across the codebase." \
         '^(class|struct)$'
 
     write_filtered_index \
-        "$WIKI_DIR/Enum-Index.md" \
+        "$WIKI_DIR/reference/Enum-Index.md" \
         "Enum Index" \
         "Every enum declared across the codebase." \
         '^enum$'
 
     write_filtered_index \
-        "$WIKI_DIR/Macro-Index.md" \
+        "$WIKI_DIR/reference/Macro-Index.md" \
         "Macro & Alias Index" \
         "Every #define macro (excluding header guards) plus typedef/using aliases." \
         '^(macro|alias)$'
@@ -126,7 +127,7 @@ generate_all() {
 
 check_stale() {
     for f in Symbol-Index.md Function-Index.md Class-Index.md Enum-Index.md Macro-Index.md; do
-        local full="$WIKI_DIR/$f"
+        local full="$WIKI_DIR/reference/$f"
         if [ ! -f "$full" ]; then
             log_warning "$f missing"
             exit 1

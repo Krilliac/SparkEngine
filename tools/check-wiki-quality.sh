@@ -50,16 +50,17 @@ if [ ! -f "$WIKI_DIR/_Template.md" ]; then
     ISSUES=$((ISSUES + 1))
 fi
 
-if [ ! -f "$WIKI_DIR/Contributing.md" ]; then
-    log_warning "Missing wiki/Contributing.md"
+CONTRIBUTING_FILE="$WIKI_DIR/advanced/Contributing.md"
+if [ ! -f "$CONTRIBUTING_FILE" ]; then
+    log_warning "Missing $CONTRIBUTING_FILE"
     ISSUES=$((ISSUES + 1))
-elif ! rg -q "Wiki Authoring Standard" "$WIKI_DIR/Contributing.md"; then
+elif ! rg -q "Wiki Authoring Standard" "$CONTRIBUTING_FILE"; then
     log_warning "Contributing.md does not include 'Wiki Authoring Standard' section"
     ISSUES=$((ISSUES + 1))
 fi
 
 HOME_FILE="$WIKI_DIR/Home.md"
-TESTING_FILE="$WIKI_DIR/Testing.md"
+TESTING_FILE="$WIKI_DIR/advanced/Testing.md"
 
 if [ -f "$HOME_FILE" ]; then
     check_no_pattern "$HOME_FILE" "3,119|244 test files" "Stale hardcoded test metrics"

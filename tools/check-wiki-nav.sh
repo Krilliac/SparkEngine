@@ -33,12 +33,20 @@ fi
 
 log_info "Checking wiki navigation consistency..."
 
-# Extract page names from markdown links: [Text](Page-Name) → Page-Name
-# Only match the link target (after ]), skip external links (containing .., /, or .)
-sidebar_pages=$(grep -oP '\]\(([A-Za-z0-9_-]+)\)' "$SIDEBAR" | sed 's/\](//;s/)//' | sort -u)
+# Extract page names from markdown links in the sidebar. Links now point at
+# subfolder paths like `subsystems/Audio.md` — keep only the basename (slug)
+# so we can compare against file slugs regardless of which category folder a
+# page lives in. External links (http://, ../docs/...) are skipped.
+sidebar_pages=$(grep -oP '\]\([^)]+\)' "$SIDEBAR" \
+    | sed 's/\](//;s/)$//' \
+    | grep -vE '^(https?:|\.\./|#)' \
+    | sed -E 's|.*/||; s/\.md$//' \
+    | sort -u)
 
-# List actual wiki .md files, excluding internal helper docs prefixed with "_"
-actual_pages=$(find "$WIKI_DIR" -maxdepth 1 -name '*.md' ! -name '_*.md' -printf '%f\n' | sed 's/\.md$//' | sort -u)
+# List actual wiki .md files (recursive into category subfolders), excluding
+# internal helper docs prefixed with "_" at the wiki root.
+actual_pages=$(find "$WIKI_DIR" -name '*.md' ! -path "$WIKI_DIR/_*.md" -printf '%f\n' \
+    | sed 's/\.md$//' | sort -u)
 
 # Pages in wiki/ but not in sidebar
 orphaned=$(comm -23 <(echo "$actual_pages") <(echo "$sidebar_pages"))

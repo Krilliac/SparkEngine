@@ -165,7 +165,7 @@ collect_inventory() {
 # Sync: Entity-Component-System.md
 # ============================================================================
 sync_ecs_page() {
-    local page="$WIKI_DIR/Entity-Component-System.md"
+    local page="$WIKI_DIR/subsystems/Entity-Component-System.md"
     [ -f "$page" ] || return 0
 
     # Check if auto-markers exist; if not, append them
@@ -209,7 +209,7 @@ sync_ecs_page() {
 # Sync: Testing.md
 # ============================================================================
 sync_testing_page() {
-    local page="$WIKI_DIR/Testing.md"
+    local page="$WIKI_DIR/advanced/Testing.md"
     [ -f "$page" ] || return 0
 
     if ! grep -qF "<!-- AUTO:test_inventory -->" "$page"; then
@@ -243,7 +243,7 @@ sync_testing_page() {
 # Sync: SparkEditor.md
 # ============================================================================
 sync_editor_page() {
-    local page="$WIKI_DIR/SparkEditor.md"
+    local page="$WIKI_DIR/gameplay-tools/SparkEditor.md"
     [ -f "$page" ] || return 0
 
     if ! grep -qF "<!-- AUTO:panel_list -->" "$page"; then
@@ -391,10 +391,16 @@ main() {
             check_stale_references
             sync_sidebar
 
-            # Check if any auto-sections would change
+            # Check if any auto-sections would change. Snapshot the whole wiki
+            # tree (including category subfolders) into a temp dir so we can
+            # compare after sync_* functions run, then restore.
             local tmpdir
             tmpdir=$(mktemp -d)
-            cp -r "$WIKI_DIR"/*.md "$tmpdir/" 2>/dev/null || true
+            (cd "$WIKI_DIR" && find . -name '*.md' -print0 | \
+                while IFS= read -r -d '' rel; do
+                    mkdir -p "$tmpdir/$(dirname "$rel")"
+                    cp "$rel" "$tmpdir/$rel"
+                done)
 
             sync_ecs_page
             sync_testing_page
@@ -402,17 +408,19 @@ main() {
             sync_home_page
 
             local stale=0
-            for mdfile in "$WIKI_DIR"/*.md; do
-                local bname
-                bname=$(basename "$mdfile")
-                if [ -f "$tmpdir/$bname" ] && ! diff -q "$mdfile" "$tmpdir/$bname" > /dev/null 2>&1; then
-                    log_warning "  $bname is out of date"
+            while IFS= read -r -d '' mdfile; do
+                local rel="${mdfile#$WIKI_DIR/}"
+                if [ -f "$tmpdir/$rel" ] && ! diff -q "$mdfile" "$tmpdir/$rel" > /dev/null 2>&1; then
+                    log_warning "  $rel is out of date"
                     stale=$((stale + 1))
                 fi
-            done
+            done < <(find "$WIKI_DIR" -name '*.md' -print0)
 
             # Restore originals
-            cp "$tmpdir"/*.md "$WIKI_DIR/" 2>/dev/null || true
+            (cd "$tmpdir" && find . -name '*.md' -print0 | \
+                while IFS= read -r -d '' rel; do
+                    cp "$rel" "$WIKI_DIR/$rel"
+                done)
             rm -rf "$tmpdir"
 
             echo ""

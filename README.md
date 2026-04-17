@@ -592,7 +592,7 @@ Two GitHub Actions workflows run automatically:
 - **[Documentation Index](docs/README.md)** — Master index of every doc artifact, grouped by category
 - **[Feature Roadmap](docs/plans/FEATURE_ROADMAP.md)** — Planned features across 3 priority tiers
 - **[Project Status](docs/status/PROJECT_STATUS.md)** — Current system status and recent changes
-- **[API Reference (wiki)](wiki/API-Reference.md)** — Auto-generated symbol indexes, file tree, class hierarchy
+- **[API Reference (wiki)](wiki/reference/API-Reference.md)** — Auto-generated symbol indexes, file tree, class hierarchy
 - **[Packaging Guide](docs/guides/packaging.md)** — Package formats, install layout, components, and versioning policy
 - **[Doc Tooling & Doxygen](docs/tooling/README.md)** — Generator scripts, validation, legacy Doxygen setup
 - **[AI Prompt Library](.github/AI_README.md)** — Prompts for Copilot, GPT, Claude, and others

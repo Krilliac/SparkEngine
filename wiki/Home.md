@@ -18,15 +18,15 @@
 
 ## Feature Highlights
 
-- **Rendering** — Multi-backend RHI (DirectX 11/12, Vulkan 1.4, OpenGL 4.6, Metal, NullRHI) with forward, deferred, forward+, and clustered pipelines via a declarative RenderGraph. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting/fog, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, water rendering, sky atmosphere, and quality presets. [Global illumination](Global-Illumination) (DDGI + Adaptive Probe Volumes), [GPU-driven rendering](GPU-Driven-Rendering) (compute culling, HiZ occlusion), [mesh shaders](Mesh-Shaders) (meshlet pipeline), [virtual texturing](Virtual-Texturing), [DXR 1.1 ray tracing](DXR-Raytracing) (reflections, shadows, AO, GI), [Shader Graph](Shader-Graph) (35+ nodes, HLSL generation), and FSR upscaling.
+- **Rendering** — Multi-backend RHI (DirectX 11/12, Vulkan 1.4, OpenGL 4.6, Metal, NullRHI) with forward, deferred, forward+, and clustered pipelines via a declarative RenderGraph. PBR materials, cascaded shadow mapping, SSAO, SSR, volumetric lighting/fog, bloom, HDR tone mapping, TAA/FXAA/MSAA, IBL, GPU particles, decals, water rendering, sky atmosphere, and quality presets. [Global illumination](graphics/Global-Illumination.md) (DDGI + Adaptive Probe Volumes), [GPU-driven rendering](graphics/GPU-Driven-Rendering.md) (compute culling, HiZ occlusion), [mesh shaders](graphics/Mesh-Shaders.md) (meshlet pipeline), [virtual texturing](graphics/Virtual-Texturing.md), [DXR 1.1 ray tracing](graphics/DXR-Raytracing.md) (reflections, shadows, AO, GI), [Shader Graph](graphics/Shader-Graph.md) (35+ nodes, HLSL generation), and FSR upscaling.
 - **Physics** — Jolt Physics with rigid bodies, 15 collision shape types, 12 constraint types, raycasting, overlap queries, physics materials, character controller, vehicle physics (wheeled/tracked/motorcycle), ragdoll, soft body/cloth, destruction/fracture, deterministic mode, and debug draw.
 - **Audio** — XAudio2 3D spatial audio with Doppler effects, distance attenuation, volume channels, audio mixer, and object pooling. Miniaudio as cross-platform fallback.
-- **Gameplay** — ECS architecture (EnTT components and systems), FPS player controller, weapons, vehicles, inventory, quests, achievements, abilities/conditions, event response system, dialogue, destruction, replay, day/night cycle, weather, terrain with quadtree LOD, tween/coroutine systems, and [accessibility](Accessibility) (colorblind modes, subtitles, reduced motion).
+- **Gameplay** — ECS architecture (EnTT components and systems), FPS player controller, weapons, vehicles, inventory, quests, achievements, abilities/conditions, event response system, dialogue, destruction, replay, day/night cycle, weather, terrain with quadtree LOD, tween/coroutine systems, and [accessibility](platform/Accessibility.md) (colorblind modes, subtitles, reduced motion).
 - **AI** — Behavior trees, NavMesh A* pathfinding (Recast/Detour), perception system (vision/hearing/memory), steering behaviors (seek/flee/pursue/evade/flocking), tactical points (EQS-like), cover/formation system, AI budget limiter for 100+ agents, and AI director.
-- **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, retargeting, ragdoll blending, cloth simulation, [cinematic sequencer](Cinematic-Sequencer), FBX/glTF import.
-- **Scripting** — AngelScript with hot-reload, lifecycle callbacks, full engine API bindings, client/server separation. [Visual scripting](Visual-Scripting) with 60 node types that compiles to AngelScript. Lua also supported. [Mod system](Mod-System).
-- **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation (hitbox rewinding), delta snapshots. [HeroEngine-inspired MMO architecture](Area-Server-Architecture) with AreaServers, WorldServer, seamless entity migration, and dynamic load balancing.
-- **Editor** — ImGui-powered visual editor with 59 dockable panels: scene hierarchy, inspector, gizmos, [Shader Graph](Shader-Graph) material editor, [visual script editor](Visual-Scripting), cinematic sequencer, dialogue editor, AI debugger, command palette (Ctrl+P), collaborative multi-user editing, and 200+ debug console commands.
+- **Animation** — Skeletal animation, state machines, multi-layer blending, IK (two-bone, look-at, FABRIK), root motion, retargeting, ragdoll blending, cloth simulation, [cinematic sequencer](gameplay-tools/Cinematic-Sequencer.md), FBX/glTF import.
+- **Scripting** — AngelScript with hot-reload, lifecycle callbacks, full engine API bindings, client/server separation. [Visual scripting](subsystems/Visual-Scripting.md) with 60 node types that compiles to AngelScript. Lua also supported. [Mod system](subsystems/Mod-System.md).
+- **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation (hitbox rewinding), delta snapshots. [HeroEngine-inspired MMO architecture](subsystems/Area-Server-Architecture.md) with AreaServers, WorldServer, seamless entity migration, and dynamic load balancing.
+- **Editor** — ImGui-powered visual editor with 59 dockable panels: scene hierarchy, inspector, gizmos, [Shader Graph](graphics/Shader-Graph.md) material editor, [visual script editor](subsystems/Visual-Scripting.md), cinematic sequencer, dialogue editor, AI debugger, command palette (Ctrl+P), collaborative multi-user editing, and 200+ debug console commands.
 
 ## Downloads
 
@@ -43,20 +43,20 @@ Pick the path that matches your role:
 
 | Role | Recommended reading order |
 |------|---------------------------|
-| **New to SparkEngine** | [Getting Started](Getting-Started) → [Quick-Start Tutorial](Quick-Start-Tutorial) → [FAQ](FAQ) |
-| **Programmer** | [Getting Started](Getting-Started) → [Architecture Overview](Architecture-Overview) → [Creating a Game Module](Creating-a-Game-Module) → [Entity Component System](Entity-Component-System) |
-| **Artist / Designer** | [Getting Started](Getting-Started) → [Quick-Start Tutorial](Quick-Start-Tutorial) → [Editor Walkthrough](Editor-Walkthrough) → [Artist Workflow Guide](Artist-Workflow-Guide) |
-| **Gameplay Designer** | [Making Your First Game](Making-Your-First-Game) → [Gameplay Systems](Gameplay-Systems) → [Scripting with AngelScript](Scripting-with-AngelScript) |
-| **Multiplayer Developer** | [Multiplayer Quick Start](Multiplayer-Quick-Start) → [Networking](Networking) → [Dedicated Server](Dedicated-Server) |
-| **Optimizer / QA** | [Performance Tips](Performance-Tips) → [Configuration Reference](Configuration-Reference) → [Profiler and Debugging](Profiler-and-Debugging) |
-| **Upgrading** | [Migration Guide](Migration-Guide) → [Asset Migration](Asset-Migration) |
+| **New to SparkEngine** | [Getting Started](getting-started/Getting-Started.md) → [Quick-Start Tutorial](getting-started/Quick-Start-Tutorial.md) → [FAQ](getting-started/FAQ.md) |
+| **Programmer** | [Getting Started](getting-started/Getting-Started.md) → [Architecture Overview](getting-started/Architecture-Overview.md) → [Creating a Game Module](getting-started/Creating-a-Game-Module.md) → [Entity Component System](subsystems/Entity-Component-System.md) |
+| **Artist / Designer** | [Getting Started](getting-started/Getting-Started.md) → [Quick-Start Tutorial](getting-started/Quick-Start-Tutorial.md) → [Editor Walkthrough](getting-started/Editor-Walkthrough.md) → [Artist Workflow Guide](getting-started/Artist-Workflow-Guide.md) |
+| **Gameplay Designer** | [Making Your First Game](getting-started/Making-Your-First-Game.md) → [Gameplay Systems](gameplay-tools/Gameplay-Systems.md) → [Scripting with AngelScript](subsystems/Scripting-with-AngelScript.md) |
+| **Multiplayer Developer** | [Multiplayer Quick Start](subsystems/Multiplayer-Quick-Start.md) → [Networking](subsystems/Networking.md) → [Dedicated Server](subsystems/Dedicated-Server.md) |
+| **Optimizer / QA** | [Performance Tips](advanced/Performance-Tips.md) → [Configuration Reference](advanced/Configuration-Reference.md) → [Profiler and Debugging](advanced/Profiler-and-Debugging.md) |
+| **Upgrading** | [Migration Guide](getting-started/Migration-Guide.md) → [Asset Migration](gameplay-tools/Asset-Migration.md) |
 
 ## Wiki Navigation
 
 `wiki/_Sidebar.md` is the canonical table of contents for all wiki pages and categories.
 
 - [Browse full wiki index](./_Sidebar.md)
-- [API Reference](API-Reference)
+- [API Reference](reference/API-Reference.md)
 - [Documentation Index](../docs/README.md)
 
 ## Code Quality
@@ -69,7 +69,7 @@ SparkEngine enforces code quality automatically:
 - **5 sanitizers** — ASan, UBSan, LSan, TSan, MSan in CI
 - **Code coverage** — lcov reports generated per CI run
 
-See [Contributing](Contributing) for the full pre-commit checklist.
+See [Contributing](advanced/Contributing.md) for the full pre-commit checklist.
 
 ## License
 
@@ -87,5 +87,5 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 | Test files | 473 |
 | Test cases | 5871+ |
 | Wiki pages | 136 |
-| *Last synced* | *2026-04-17 03:26* |
+| *Last synced* | *2026-04-17 03:40* |
 <!-- /AUTO:stats -->
