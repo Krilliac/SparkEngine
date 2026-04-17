@@ -477,6 +477,8 @@ add_executable(SparkTests
     TestDaemonLRU.cpp
     # Codex PR #478 review fixes (thread reap, fatal error, strict filename parsing)
     TestDaemonCodexFixes.cpp
+    # Stats formatter used by the daemon.stats console command (Phase 6)
+    TestDaemonDiagnostics.cpp
     # Comprehensive subsystem coverage
     TestGraphicsSubsystems.cpp
     TestEditorSubsystems.cpp

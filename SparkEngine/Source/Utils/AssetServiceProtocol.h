@@ -40,6 +40,8 @@ namespace Spark::Daemon
         InvalidateAssetResponse = 0x0006,
         GetCacheStatsRequest = 0x0007,
         GetCacheStatsResponse = 0x0008,
+        ClearCacheRequest = 0x0009, ///< Drop every entry (all paths, all platforms). Also zeros stats.
+        ClearCacheResponse = 0x000A,
     };
 
     // =========================================================================
@@ -85,6 +87,10 @@ namespace Spark::Daemon
         uint64_t totalBytes = 0;
         uint64_t hitCount = 0;
         uint64_t missCount = 0;
+        /// Cumulative count of entries evicted by the LRU since service start
+        /// (or since the last ClearCache). Appended in Phase 5 follow-up —
+        /// decoders tolerate shorter payloads and leave this field zero.
+        uint64_t evictionCount = 0;
     };
 
     // =========================================================================
@@ -192,6 +198,7 @@ namespace Spark::Daemon
         w.Write<uint64_t>(stats.totalBytes);
         w.Write<uint64_t>(stats.hitCount);
         w.Write<uint64_t>(stats.missCount);
+        w.Write<uint64_t>(stats.evictionCount);
         return w.TakeBuffer();
     }
 
@@ -202,6 +209,12 @@ namespace Spark::Daemon
         out.totalBytes = r.Read<uint64_t>();
         out.hitCount = r.Read<uint64_t>();
         out.missCount = r.Read<uint64_t>();
+        if (r.HasError())
+            return false;
+        // evictionCount was appended in a follow-up — tolerate older daemons
+        // that sent a 32-byte payload without it.
+        if (r.Remaining() >= sizeof(uint64_t))
+            out.evictionCount = r.Read<uint64_t>();
         return !r.HasError();
     }
 

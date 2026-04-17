@@ -108,6 +108,7 @@ namespace Spark::Daemon
         ServiceResponse HandlePutAsset(const std::vector<uint8_t>& payload);
         ServiceResponse HandleInvalidateAsset(const std::vector<uint8_t>& payload);
         ServiceResponse HandleGetCacheStats();
+        ServiceResponse HandleClearCache();
 
         ServiceResponse MakeError(const std::string& message) const;
 
@@ -121,6 +122,7 @@ namespace Spark::Daemon
         bool WriteBlobFile(const Key& key, const std::vector<uint8_t>& blob);
         bool ReadBlobFile(const std::filesystem::path& file, Key& outKey, std::vector<uint8_t>& outBlob);
         void DeleteBlobFile(const Key& key);
+        void DeleteAllBlobFiles();
 
         mutable std::mutex m_mutex;
         EntryList m_lruList;
