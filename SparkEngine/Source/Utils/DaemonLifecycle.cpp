@@ -5,15 +5,19 @@
 
 #include "DaemonLifecycle.h"
 
+#include "AssetServiceClient.h"
 #include "ConsoleVariable.h"
 #include "DaemonConnection.h"
+#include "DaemonDiagnostics.h"
 #include "DaemonProtocol.h"
+#include "InGameConsole.h"
 #include "LogMacros.h"
 #include "Process.h"
 #include "ShaderServiceClient.h"
 
 #include "../Graphics/ShaderDiskCache.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <memory>
@@ -49,7 +53,96 @@ namespace
 
     std::mutex g_lifecycleMutex;
     std::unique_ptr<Spark::Daemon::ShaderServiceClient> g_shaderClient;
+    std::unique_ptr<Spark::Daemon::AssetServiceClient> g_assetClient;
     bool g_active = false;
+    bool g_statsCommandRegistered = false;
+
+    constexpr const char* kStatsCommandName = "daemon.stats";
+
+    /// Query the daemon and render its state via DaemonDiagnostics.
+    /// Returns a user-facing multi-line string.
+    std::string RunStatsCommand()
+    {
+        auto& conn = Spark::Daemon::DaemonConnection::Instance();
+        Spark::Daemon::DaemonStatsSnapshot snap;
+
+        auto* client = conn.GetClient();
+        if (!conn.IsConnected() || client == nullptr)
+            return Spark::Daemon::FormatDaemonStats(snap); // socketPath empty → "not connected"
+
+        snap.socketPath = conn.GetSocketPath();
+
+        auto statsResp = client->Request(Spark::Daemon::ServiceId::Control,
+                                         static_cast<uint16_t>(Spark::Daemon::ControlMessage::StatsRequest), {});
+        if (!statsResp)
+            return std::string("daemon.stats: ") + statsResp.error();
+        if (!Spark::Daemon::DecodeDaemonStats(statsResp->payload, snap.control))
+            return "daemon.stats: failed to decode Control StatsResponse";
+
+        const bool hasShader =
+            std::find(snap.control.registeredIds.begin(), snap.control.registeredIds.end(),
+                      static_cast<uint16_t>(Spark::Daemon::ServiceId::Shader)) != snap.control.registeredIds.end();
+        const bool hasAsset =
+            std::find(snap.control.registeredIds.begin(), snap.control.registeredIds.end(),
+                      static_cast<uint16_t>(Spark::Daemon::ServiceId::Asset)) != snap.control.registeredIds.end();
+
+        if (hasShader)
+        {
+            // Lazy-build a one-shot client if lifecycle-owned one isn't up yet
+            // (can happen if the CVar flipped without restart); otherwise use
+            // the shared one.
+            if (g_shaderClient)
+            {
+                if (auto s = g_shaderClient->GetCacheStats())
+                    snap.shader = *s;
+            }
+            else
+            {
+                Spark::Daemon::ShaderServiceClient tmp(*client);
+                if (auto s = tmp.GetCacheStats())
+                    snap.shader = *s;
+            }
+        }
+        if (hasAsset)
+        {
+            if (g_assetClient)
+            {
+                if (auto a = g_assetClient->GetCacheStats())
+                    snap.asset = *a;
+            }
+            else
+            {
+                Spark::Daemon::AssetServiceClient tmp(*client);
+                if (auto a = tmp.GetCacheStats())
+                    snap.asset = *a;
+            }
+        }
+
+        return Spark::Daemon::FormatDaemonStats(snap);
+    }
+
+    /// Idempotent registration of the `daemon.stats` console command.
+    /// Registration is independent of whether a daemon is currently wired —
+    /// the command itself handles the disconnected case. This way operators
+    /// can always type `daemon.stats` to find out what's happening.
+    void EnsureStatsCommandRegistered()
+    {
+        if (g_statsCommandRegistered)
+            return;
+        auto& console = Spark::InGameConsole::GetInstance();
+        console.RegisterCommand(
+            kStatsCommandName, "Query the SparkDaemon and print its summary + per-cache stats",
+            [](const std::vector<std::string>&) -> std::string { return RunStatsCommand(); }, kStatsCommandName);
+        g_statsCommandRegistered = true;
+    }
+
+    void UnregisterStatsCommand()
+    {
+        if (!g_statsCommandRegistered)
+            return;
+        Spark::InGameConsole::GetInstance().UnregisterCommand(kStatsCommandName);
+        g_statsCommandRegistered = false;
+    }
 
     bool TrySpawnDaemon(const std::string& socketPath)
     {
@@ -103,6 +196,12 @@ namespace Spark::Daemon
     void InitializeDaemonLifecycle()
     {
         std::lock_guard lock(g_lifecycleMutex);
+
+        // Register the diagnostic command regardless of whether the daemon
+        // is reachable — the handler itself renders "not connected" when
+        // appropriate, so operators always have a way to query state.
+        EnsureStatsCommandRegistered();
+
         if (g_active)
             return;
 
@@ -135,6 +234,7 @@ namespace Spark::Daemon
             return; // Lost race against another thread; treat as disconnected.
 
         g_shaderClient = std::make_unique<ShaderServiceClient>(*client);
+        g_assetClient = std::make_unique<AssetServiceClient>(*client);
         Spark::Graphics::GetShaderDiskCache().SetDaemonClient(g_shaderClient.get());
         g_active = true;
 
@@ -145,6 +245,9 @@ namespace Spark::Daemon
     void ShutdownDaemonLifecycle()
     {
         std::lock_guard lock(g_lifecycleMutex);
+
+        UnregisterStatsCommand();
+
         if (!g_active)
             return;
 
@@ -152,6 +255,7 @@ namespace Spark::Daemon
         // the cache must never hold a dangling pointer.
         Spark::Graphics::GetShaderDiskCache().SetDaemonClient(nullptr);
         g_shaderClient.reset();
+        g_assetClient.reset();
         DaemonConnection::Instance().Shutdown();
         g_active = false;
     }
