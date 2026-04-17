@@ -10,14 +10,14 @@ namespace Spark::Daemon
 
     namespace
     {
-        std::unexpected<std::string> WrapError(std::string phase, const std::string& inner)
+        Unexpected<std::string> WrapError(std::string phase, const std::string& inner)
         {
-            return std::unexpected<std::string>("ShaderServiceClient::" + phase + ": " + inner);
+            return Unexpected<std::string>("ShaderServiceClient::" + phase + ": " + inner);
         }
     } // namespace
 
-    std::expected<GetCacheEntryResponse, std::string> ShaderServiceClient::GetCacheEntry(uint64_t sourceHash,
-                                                                                         uint8_t target, uint8_t stage)
+    Expected<GetCacheEntryResponse, std::string> ShaderServiceClient::GetCacheEntry(uint64_t sourceHash, uint8_t target,
+                                                                                    uint8_t stage)
     {
         GetCacheEntryRequest req;
         req.key.sourceHash = sourceHash;
@@ -39,8 +39,8 @@ namespace Spark::Daemon
         return decoded;
     }
 
-    std::expected<void, std::string> ShaderServiceClient::PutCacheEntry(uint64_t sourceHash, uint8_t target,
-                                                                        uint8_t stage, const std::vector<uint8_t>& blob)
+    Expected<void, std::string> ShaderServiceClient::PutCacheEntry(uint64_t sourceHash, uint8_t target, uint8_t stage,
+                                                                   const std::vector<uint8_t>& blob)
     {
         PutCacheEntryRequest req;
         req.key.sourceHash = sourceHash;
@@ -57,7 +57,7 @@ namespace Spark::Daemon
         return {};
     }
 
-    std::expected<void, std::string> ShaderServiceClient::ClearCache()
+    Expected<void, std::string> ShaderServiceClient::ClearCache()
     {
         auto response = m_client.Request(ServiceId::Shader, static_cast<uint16_t>(ShaderMessage::ClearCacheRequest),
                                          /*payload*/ {});
@@ -68,7 +68,7 @@ namespace Spark::Daemon
         return {};
     }
 
-    std::expected<ShaderCacheStats, std::string> ShaderServiceClient::GetCacheStats()
+    Expected<ShaderCacheStats, std::string> ShaderServiceClient::GetCacheStats()
     {
         auto response = m_client.Request(ServiceId::Shader, static_cast<uint16_t>(ShaderMessage::GetCacheStatsRequest),
                                          /*payload*/ {});

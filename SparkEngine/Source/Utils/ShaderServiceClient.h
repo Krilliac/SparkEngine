@@ -27,7 +27,7 @@
 #include "ShaderServiceProtocol.h"
 
 #include <cstdint>
-#include <expected>
+#include "Expected.h"
 #include <string>
 #include <vector>
 
@@ -46,8 +46,7 @@ namespace Spark::Daemon
          *         `found=true` with the stored bytes. Transport failures are
          *         returned as `unexpected()`.
          */
-        std::expected<GetCacheEntryResponse, std::string> GetCacheEntry(uint64_t sourceHash, uint8_t target,
-                                                                        uint8_t stage);
+        Expected<GetCacheEntryResponse, std::string> GetCacheEntry(uint64_t sourceHash, uint8_t target, uint8_t stage);
 
         /**
          * @brief Store a compiled shader blob under the given key.
@@ -56,14 +55,14 @@ namespace Spark::Daemon
          * bounded by `Spark::Daemon::kMaxPayloadSize` (16 MiB) minus the
          * 14-byte key header.
          */
-        std::expected<void, std::string> PutCacheEntry(uint64_t sourceHash, uint8_t target, uint8_t stage,
-                                                       const std::vector<uint8_t>& blob);
+        Expected<void, std::string> PutCacheEntry(uint64_t sourceHash, uint8_t target, uint8_t stage,
+                                                  const std::vector<uint8_t>& blob);
 
         /// Drop every entry in the daemon's cache.
-        std::expected<void, std::string> ClearCache();
+        Expected<void, std::string> ClearCache();
 
         /// Fetch entry count, total bytes, hit and miss counters.
-        std::expected<ShaderCacheStats, std::string> GetCacheStats();
+        Expected<ShaderCacheStats, std::string> GetCacheStats();
 
       private:
         DaemonClient& m_client;

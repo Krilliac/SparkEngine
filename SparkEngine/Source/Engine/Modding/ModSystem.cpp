@@ -37,6 +37,15 @@ namespace Spark
             {
                 continue;
             }
+            // Reject symlinks so a crafted mods directory cannot redirect us outside
+            // the intended sandbox (e.g. into /etc or the player's home directory).
+            std::error_code symEc;
+            if (fs::is_symlink(entry.symlink_status(symEc)))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "ModSystem: skipping symlinked mod directory '%s'",
+                               entry.path().string().c_str());
+                continue;
+            }
 
             std::string modJsonPath = entry.path().string() + "/mod.json";
             if (!fs::exists(modJsonPath))

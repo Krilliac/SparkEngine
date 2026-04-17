@@ -28,7 +28,7 @@
 
 #include <atomic>
 #include <cstdint>
-#include <expected>
+#include "Expected.h"
 #include <mutex>
 #include <string>
 #include <vector>
@@ -67,7 +67,7 @@ namespace Spark::Daemon
          *
          * @return Empty success, or an error string.
          */
-        std::expected<void, std::string> Connect(const std::string& socketPath);
+        Expected<void, std::string> Connect(const std::string& socketPath);
 
         /// Close the connection if open. Safe to call repeatedly.
         void Disconnect();
@@ -87,8 +87,8 @@ namespace Spark::Daemon
          * @return              Response frame, or an error string on transport
          *                      failure / disconnect.
          */
-        std::expected<Response, std::string> Request(ServiceId service, uint16_t messageType,
-                                                     const std::vector<uint8_t>& payload);
+        Expected<Response, std::string> Request(ServiceId service, uint16_t messageType,
+                                                const std::vector<uint8_t>& payload);
 
         /**
          * @brief Send a framed message without waiting for a response.
@@ -96,11 +96,11 @@ namespace Spark::Daemon
          * Useful for fire-and-forget notifications or as the first half of a
          * custom multi-frame exchange. Most callers should prefer `Request()`.
          */
-        std::expected<void, std::string> SendOneWay(ServiceId service, uint16_t messageType,
-                                                    const std::vector<uint8_t>& payload);
+        Expected<void, std::string> SendOneWay(ServiceId service, uint16_t messageType,
+                                               const std::vector<uint8_t>& payload);
 
         /// Convenience: Control::Ping → expects Control::PingResponse("pong").
-        std::expected<void, std::string> Ping();
+        Expected<void, std::string> Ping();
 
       private:
         mutable std::mutex m_mutex;

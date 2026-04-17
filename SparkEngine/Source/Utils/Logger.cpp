@@ -329,10 +329,29 @@ namespace Spark
 
         if (m_asyncEnabled.load(std::memory_order_relaxed))
         {
-            // Enqueue for background writing
+            // Enqueue for background writing; drop oldest low-severity messages on overflow
+            // so a runaway producer cannot exhaust memory.
             {
                 std::lock_guard<std::mutex> lock(m_queueMutex);
-                m_messageQueue.push(std::move(msg));
+                if (m_messageQueue.size() >= kAsyncQueueMaxSize)
+                {
+                    if (level >= LogLevel::Warn)
+                    {
+                        // Drop the oldest message so the new Warn/Error/Fatal gets through.
+                        m_messageQueue.pop();
+                        m_droppedMessages.fetch_add(1, std::memory_order_relaxed);
+                        m_messageQueue.push(std::move(msg));
+                    }
+                    else
+                    {
+                        // Drop this Trace/Debug/Info message outright.
+                        m_droppedMessages.fetch_add(1, std::memory_order_relaxed);
+                    }
+                }
+                else
+                {
+                    m_messageQueue.push(std::move(msg));
+                }
             }
             m_queueCV.notify_one();
         }

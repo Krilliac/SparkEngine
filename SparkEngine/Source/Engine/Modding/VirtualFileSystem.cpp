@@ -32,12 +32,19 @@ namespace Spark
 
     std::string LocalFileProvider::ResolvePath(const std::string& virtualPath) const
     {
-        // Reject path traversal attempts
+        // Reject path traversal attempts — return empty so Exists/ReadFile fail cleanly
+        // instead of silently substituting the sandbox root (which used to mask attacker intent).
         if (virtualPath.find("..") != std::string::npos)
-            return m_rootPath;
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected path traversal attempt '%s'", virtualPath.c_str());
+            return {};
+        }
         // Reject absolute paths
         if (!virtualPath.empty() && (virtualPath[0] == '/' || virtualPath[0] == '\\'))
-            return m_rootPath;
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected absolute path '%s'", virtualPath.c_str());
+            return {};
+        }
         return m_rootPath + virtualPath;
     }
 

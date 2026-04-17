@@ -14,6 +14,7 @@
 #include <sstream>
 #include <filesystem>
 #include <algorithm>
+#include <limits>
 
 namespace fs = std::filesystem;
 
@@ -793,6 +794,53 @@ namespace Spark
     {
         try
         {
+            // Reject any string that would silently truncate to uint16_t on the wire.
+            // Silent truncation corrupts saves: the length prefix disagrees with the payload.
+            constexpr size_t kMaxStr16 = std::numeric_limits<uint16_t>::max();
+            auto rejectIfTooLong = [&](const std::string& s, const char* field)
+            {
+                if (s.size() > kMaxStr16)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                   "Save system: %s length %zu exceeds uint16 max (%zu); refusing to truncate", field,
+                                   s.size(), kMaxStr16);
+                    return true;
+                }
+                return false;
+            };
+            for (const auto& entity : data.entities)
+            {
+                if (rejectIfTooLong(entity.name, "entity.name"))
+                    return false;
+                if (entity.components.size() > kMaxStr16)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: component count %zu exceeds uint16 max",
+                                   entity.components.size());
+                    return false;
+                }
+                for (const auto& comp : entity.components)
+                {
+                    if (rejectIfTooLong(comp.typeName, "component.typeName"))
+                        return false;
+                    if (comp.properties.size() > kMaxStr16)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: property count %zu exceeds uint16 max",
+                                       comp.properties.size());
+                        return false;
+                    }
+                    for (const auto& [key, value] : comp.properties)
+                    {
+                        if (rejectIfTooLong(key, "property.key") || rejectIfTooLong(value, "property.value"))
+                            return false;
+                    }
+                }
+            }
+            for (const auto& [key, value] : data.customState)
+            {
+                if (rejectIfTooLong(key, "customState.key") || rejectIfTooLong(value, "customState.value"))
+                    return false;
+            }
+
             // Write to temp file first, then rename for atomic save (prevents corruption on crash)
             std::string tmpPath = filepath + ".tmp";
             std::ofstream file(tmpPath, std::ios::binary);

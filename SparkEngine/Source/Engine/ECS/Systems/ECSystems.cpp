@@ -368,8 +368,10 @@ namespace Spark::ECS
             // Tick behavior tree if one is assigned
             if (ai.behaviorTreeHandle)
             {
-                auto* bt = ai.behaviorTreeHandle.As<Spark::AI::BehaviorTree>();
-                bt->Tick(deltaTime);
+                if (auto* bt = ai.behaviorTreeHandle.As<Spark::AI::BehaviorTree>())
+                {
+                    bt->Tick(deltaTime);
+                }
             }
 
             // Update perception timers
