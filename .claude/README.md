@@ -86,7 +86,7 @@ When an entry directly relates to another, add a `**See also:**` line in the Not
 
 ```markdown
 ## Notes
-- **See also:** [topic description](filename.md)
+- **See also:** [topic description](other-entry-filename.md)
 ```
 
 Use this when one entry's context or solution depends on knowledge from another (e.g., an Optimization that references its related Issue, or an Observation that leads to a Pattern). This allows navigating between related entries without returning to the index.

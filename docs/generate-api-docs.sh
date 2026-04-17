@@ -209,6 +209,12 @@ parse_header() {
         }
 
         END {
+            # Count "../" hops from outfile back to docs/api (outfile is under docs/api/<subpath>/<stem>.md)
+            # rp already gives us the prefix from outfile back to project root.
+            # To reach docs/api/README.md from here, we need rp + "docs/api/README.md".
+            api_root = rp "docs/api/README.md"
+            docs_root = rp "docs/README.md"
+
             # Header
             print "# `" rel "`" > outfile
             print ""               > outfile
@@ -216,7 +222,7 @@ parse_header() {
                 print "> " file_brief > outfile
                 print ""             > outfile
             }
-            print "[View source](" rp rel ")" > outfile
+            print "[← API Reference](" api_root ") · [Documentation Index](" docs_root ") · [View source](" rp rel ")" > outfile
             print ""                           > outfile
             print "---"                        > outfile
             print ""                           > outfile
@@ -292,6 +298,7 @@ parse_cpp() {
         match($0, /^(static[[:space:]]+|inline[[:space:]]+|constexpr[[:space:]]+)?[A-Za-z_][A-Za-z0-9_:<>,\*\&[:space:]]*[[:space:]][A-Za-z_][A-Za-z0-9_]+[[:space:]]*\(/) {
             sig = substr($0, RSTART, RLENGTH)
             if (match(sig, /[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\([[:space:]]*$/)) {
+                name_start = RSTART
                 name = substr(sig, RSTART, RLENGTH)
                 sub(/[[:space:]]*\([[:space:]]*$/, "", name)
                 if (name == "if" || name == "for" || name == "while" || name == "switch" ||
@@ -300,7 +307,12 @@ parse_cpp() {
                     name == "decltype" || name == "typeid" || name == "noexcept" || name == "alignof") {
                     next
                 }
-                if (index($0, "::") > 0) next
+                # Skip out-of-line method definitions (Class::Method). Check only
+                # whether the matched name is preceded by "::" — not whether "::"
+                # appears anywhere on the line, which would reject valid free
+                # functions with namespace-qualified return types like
+                # `std::unique_ptr<X> MakeFoo(`.
+                if (name_start > 2 && substr(sig, name_start - 2, 2) == "::") next
                 print "function\t" name "\t" rel "\t" NR "\t" >> tsv
             }
         }
@@ -320,13 +332,31 @@ generate_index() {
         echo ">"
         echo "> **Generator:** \`docs/generate-api-docs.sh\` (no Doxygen required)"
         echo ""
+        echo "[← Back to Documentation Index](../README.md) · [ECS Components](ComponentIndex.md) · [ECS Systems](SystemIndex.md)"
+        echo ""
         echo "---"
         echo ""
+        echo "## Per-module pages"
+        echo ""
+        echo "Each entry is a per-header API page with clickable source-line anchors back into the codebase. Pages are grouped by the top-level module directory."
+        echo ""
 
-        # Group by top-level directory
+        # Group by top-level directory (files directly under docs/api/ without a
+        # subdirectory — like ComponentIndex.md, SystemIndex.md — are listed first
+        # under an "Overview" section instead of becoming their own group headers).
         local current_group=""
 
-        find "$OUTPUT_DIR" -name '*.md' ! -name 'README.md' | sort | while IFS= read -r mdfile; do
+        echo "## Overview"
+        echo ""
+        find "$OUTPUT_DIR" -maxdepth 1 -name '*.md' ! -name 'README.md' | sort | while IFS= read -r mdfile; do
+            local rel="${mdfile#$OUTPUT_DIR/}"
+            local title
+            title=$(head -1 "$mdfile" | sed 's/^# //')
+            echo "- [$title]($rel)"
+        done
+        echo ""
+
+        find "$OUTPUT_DIR" -mindepth 2 -name '*.md' | sort | while IFS= read -r mdfile; do
             local rel="${mdfile#$OUTPUT_DIR/}"
             local group
             group=$(echo "$rel" | cut -d'/' -f1)
@@ -381,6 +411,8 @@ generate_component_index() {
         echo ""
         echo "> All ECS components available in SparkEngine"
         echo ""
+        echo "[← API Reference](README.md) · [ECS Systems](SystemIndex.md) · [Documentation Index](../README.md)"
+        echo ""
         echo "---"
         echo ""
 
@@ -422,6 +454,8 @@ generate_system_index() {
         echo "# System Quick Reference"
         echo ""
         echo "> All ECS systems in SparkEngine"
+        echo ""
+        echo "[← API Reference](README.md) · [ECS Components](ComponentIndex.md) · [Documentation Index](../README.md)"
         echo ""
         echo "---"
         echo ""

@@ -14,7 +14,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 WIKI_DIR="$PROJECT_ROOT/wiki"
-OUTPUT="$WIKI_DIR/Codebase-Statistics.md"
+OUTPUT="$WIKI_DIR/advanced/Codebase-Statistics.md"
 
 SRC="$PROJECT_ROOT/SparkEngine/Source"
 EDITOR_SRC="$PROJECT_ROOT/SparkEditor/Source"

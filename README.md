@@ -133,7 +133,7 @@ Package components:
 - `templates` (starter project templates)
 - `samples` (sample content)
 
-Install layout and versioning policy are documented in [`docs/packaging.md`](docs/packaging.md).
+Install layout and versioning policy are documented in [`docs/guides/packaging.md`](docs/guides/packaging.md).
 
 ### CI Artifacts
 
@@ -432,7 +432,7 @@ SparkEngine/
 |   |-- SparkBuild.exe       # Pre-built SparkBuild binary
 |   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
 |-- docs/                    # Doxygen docs, wiki, API reference
-|-- wiki/                    # 136 wiki pages covering all subsystems
+|-- wiki/                    # 142 wiki pages covering all subsystems
 |-- cmake/                   # CMake utility modules
 |-- .github/
 |   |-- workflows/          # CI/CD (build + release)
@@ -589,10 +589,12 @@ Two GitHub Actions workflows run automatically:
 ## Documentation
 
 - **[Troubleshooting Guide](TROUBLESHOOTING.md)** — Startup issues, debug commands, common fixes
-- **[Feature Roadmap](docs/FEATURE_ROADMAP.md)** — Planned features across 3 priority tiers
-- **[Project Status](docs/PROJECT_STATUS.md)** — Current system status and recent changes
-- **[API Documentation](docs/README.md)** — Doxygen-based auto-generated API docs
-- **[Packaging Guide](docs/packaging.md)** — Package formats, install layout, components, and versioning policy
+- **[Documentation Index](docs/README.md)** — Master index of every doc artifact, grouped by category
+- **[Feature Roadmap](docs/plans/FEATURE_ROADMAP.md)** — Planned features across 3 priority tiers
+- **[Project Status](docs/status/PROJECT_STATUS.md)** — Current system status and recent changes
+- **[API Reference (wiki)](wiki/reference/API-Reference.md)** — Auto-generated symbol indexes, file tree, class hierarchy
+- **[Packaging Guide](docs/guides/packaging.md)** — Package formats, install layout, components, and versioning policy
+- **[Doc Tooling & Doxygen](docs/tooling/README.md)** — Generator scripts, validation, legacy Doxygen setup
 - **[AI Prompt Library](.github/AI_README.md)** — Prompts for Copilot, GPT, Claude, and others
 
 ### Generating API Docs

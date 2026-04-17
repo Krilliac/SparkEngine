@@ -18,7 +18,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 WIKI_DIR="$PROJECT_ROOT/wiki"
-OUTPUT_FILE="$WIKI_DIR/File-Tree.md"
+OUTPUT_FILE="$WIKI_DIR/reference/File-Tree.md"
 
 # Discover the same source set as generate-api-docs.sh
 SOURCE_DIRS=(
@@ -151,9 +151,9 @@ generate_tree() {
             fi
 
             if [ -n "$brief" ]; then
-                echo "- [\`$filepart\`](../$rel) — $loc LOC — $brief"
+                echo "- [\`$filepart\`](../../$rel) — $loc LOC — $brief"
             else
-                echo "- [\`$filepart\`](../$rel) — $loc LOC"
+                echo "- [\`$filepart\`](../../$rel) — $loc LOC"
             fi
         done < "$tmp_meta"
 
