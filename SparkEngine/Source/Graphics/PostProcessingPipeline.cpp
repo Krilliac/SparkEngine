@@ -226,7 +226,7 @@ namespace Spark::Graphics
     void PostProcessingPipeline::Render()
     {
 #ifdef SPARK_PLATFORM_WINDOWS
-        if (!m_initialized || !m_context || !m_fullscreenVS)
+        if (!m_initialized || !m_context || !m_fullscreenVS || !m_sharpenPS || !m_constantBuffer)
             return;
 
         int src = GetSourceTarget();

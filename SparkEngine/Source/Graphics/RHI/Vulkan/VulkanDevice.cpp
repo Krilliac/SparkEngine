@@ -1115,8 +1115,15 @@ namespace Spark
                     if (memProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
                     {
                         // Direct map for host-visible memory
-                        void* mapped;
-                        vkMapMemory(m_device, memory, 0, desc.size, 0, &mapped);
+                        void* mapped = nullptr;
+                        if (vkMapMemory(m_device, memory, 0, desc.size, 0, &mapped) != VK_SUCCESS || !mapped)
+                        {
+                            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                            "VulkanDevice::CreateBuffer: vkMapMemory failed for initial data upload");
+                            vkFreeMemory(m_device, memory, nullptr);
+                            vkDestroyBuffer(m_device, buffer, nullptr);
+                            return nullptr;
+                        }
                         memcpy(mapped, desc.initialData, desc.size);
                         vkUnmapMemory(m_device, memory);
                     }
@@ -1148,8 +1155,18 @@ namespace Spark
                             {
                                 vkBindBufferMemory(m_device, stagingBuffer, stagingMemory, 0);
 
-                                void* mapped;
-                                vkMapMemory(m_device, stagingMemory, 0, desc.size, 0, &mapped);
+                                void* mapped = nullptr;
+                                if (vkMapMemory(m_device, stagingMemory, 0, desc.size, 0, &mapped) != VK_SUCCESS ||
+                                    !mapped)
+                                {
+                                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                                    "VulkanDevice::CreateBuffer: vkMapMemory failed on staging buffer");
+                                    vkFreeMemory(m_device, stagingMemory, nullptr);
+                                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                                    vkFreeMemory(m_device, memory, nullptr);
+                                    vkDestroyBuffer(m_device, buffer, nullptr);
+                                    return nullptr;
+                                }
                                 memcpy(mapped, desc.initialData, desc.size);
                                 vkUnmapMemory(m_device, stagingMemory);
 
@@ -1160,8 +1177,18 @@ namespace Spark
                                 cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
                                 cmdAllocInfo.commandBufferCount = 1;
 
-                                VkCommandBuffer cmdBuffer;
-                                vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer);
+                                VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
+                                if (vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer) != VK_SUCCESS)
+                                {
+                                    SPARK_LOG_ERROR(
+                                        Spark::LogCategory::Graphics,
+                                        "VulkanDevice::CreateBuffer: vkAllocateCommandBuffers failed on upload path");
+                                    vkFreeMemory(m_device, stagingMemory, nullptr);
+                                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                                    vkFreeMemory(m_device, memory, nullptr);
+                                    vkDestroyBuffer(m_device, buffer, nullptr);
+                                    return nullptr;
+                                }
 
                                 VkCommandBufferBeginInfo beginInfo = {};
                                 beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1181,7 +1208,15 @@ namespace Spark
 
                                 vkResetFences(m_device, 1, &m_uploadFence);
                                 vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
-                                vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, UINT64_MAX);
+                                // Bounded wait (10s) — avoid indefinite block on a hung/lost GPU
+                                constexpr uint64_t kUploadTimeoutNs = 10ull * 1000ull * 1000ull * 1000ull;
+                                if (vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, kUploadTimeoutNs) !=
+                                    VK_SUCCESS)
+                                {
+                                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                                    "VulkanDevice::CreateBuffer: vkWaitForFences timed out (10s) "
+                                                    "during staging upload");
+                                }
 
                                 vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
                                 vkFreeMemory(m_device, stagingMemory, nullptr);
@@ -1534,8 +1569,13 @@ namespace Spark
             void* VulkanDevice::MapBuffer(IRHIBuffer* buffer)
             {
                 auto* vkBuf = static_cast<VulkanBuffer*>(buffer);
-                void* mapped;
-                vkMapMemory(m_device, vkBuf->GetVkMemory(), 0, vkBuf->GetSize(), 0, &mapped);
+                void* mapped = nullptr;
+                if (vkMapMemory(m_device, vkBuf->GetVkMemory(), 0, vkBuf->GetSize(), 0, &mapped) != VK_SUCCESS)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "VulkanDevice::MapBuffer: vkMapMemory failed");
+                    vkBuf->SetMappedPtr(nullptr);
+                    return nullptr;
+                }
                 vkBuf->SetMappedPtr(mapped);
                 return mapped;
             }
@@ -1566,13 +1606,16 @@ namespace Spark
                 uint32_t width = std::max(1u, vkTex->GetWidth() >> mipLevel);
                 uint32_t height = std::max(1u, vkTex->GetHeight() >> mipLevel);
 
-                // Calculate size based on format (simplified - assumes 4 bytes per pixel for common formats)
-                uint32_t bytesPerPixel = 4;
+                // Calculate size based on format (simplified - only common formats are supported here)
+                uint32_t bytesPerPixel = 0;
                 VkFormat fmt = ConvertFormat(vkTex->GetFormat());
                 if (fmt == VK_FORMAT_R8_UNORM)
                     bytesPerPixel = 1;
                 else if (fmt == VK_FORMAT_R8G8_UNORM)
                     bytesPerPixel = 2;
+                else if (fmt == VK_FORMAT_R8G8B8A8_UNORM || fmt == VK_FORMAT_R8G8B8A8_SRGB ||
+                         fmt == VK_FORMAT_B8G8R8A8_UNORM || fmt == VK_FORMAT_B8G8R8A8_SRGB)
+                    bytesPerPixel = 4;
                 else if (fmt == VK_FORMAT_R16G16B16A16_SFLOAT)
                     bytesPerPixel = 8;
                 else if (fmt == VK_FORMAT_R32G32B32A32_SFLOAT)
@@ -1581,6 +1624,14 @@ namespace Spark
                     bytesPerPixel = 4;
                 else if (fmt == VK_FORMAT_R16_SFLOAT)
                     bytesPerPixel = 2;
+                else
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::UpdateTexture: unsupported format (VkFormat=%d) — cannot compute "
+                                    "upload size safely",
+                                    static_cast<int>(fmt));
+                    return;
+                }
 
                 VkDeviceSize imageSize = static_cast<VkDeviceSize>(width) * height * bytesPerPixel;
 
@@ -1615,8 +1666,15 @@ namespace Spark
                 vkBindBufferMemory(m_device, stagingBuffer, stagingMemory, 0);
 
                 // Copy data to staging buffer
-                void* mapped;
-                vkMapMemory(m_device, stagingMemory, 0, imageSize, 0, &mapped);
+                void* mapped = nullptr;
+                if (vkMapMemory(m_device, stagingMemory, 0, imageSize, 0, &mapped) != VK_SUCCESS || !mapped)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::UpdateTexture: vkMapMemory failed on staging buffer");
+                    vkFreeMemory(m_device, stagingMemory, nullptr);
+                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                    return;
+                }
                 memcpy(mapped, data, static_cast<size_t>(imageSize));
                 vkUnmapMemory(m_device, stagingMemory);
 
@@ -1627,8 +1685,15 @@ namespace Spark
                 cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
                 cmdAllocInfo.commandBufferCount = 1;
 
-                VkCommandBuffer cmdBuffer;
-                vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer);
+                VkCommandBuffer cmdBuffer = VK_NULL_HANDLE;
+                if (vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &cmdBuffer) != VK_SUCCESS)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::UpdateTexture: vkAllocateCommandBuffers failed");
+                    vkFreeMemory(m_device, stagingMemory, nullptr);
+                    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+                    return;
+                }
 
                 VkCommandBufferBeginInfo beginInfo = {};
                 beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1688,7 +1753,13 @@ namespace Spark
 
                 vkResetFences(m_device, 1, &m_uploadFence);
                 vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_uploadFence);
-                vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, UINT64_MAX);
+                // Bounded wait (10s) — avoid indefinite block on a hung/lost GPU
+                constexpr uint64_t kUpdateTextureTimeoutNs = 10ull * 1000ull * 1000ull * 1000ull;
+                if (vkWaitForFences(m_device, 1, &m_uploadFence, VK_TRUE, kUpdateTextureTimeoutNs) != VK_SUCCESS)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "VulkanDevice::UpdateTexture: vkWaitForFences timed out (10s)");
+                }
 
                 vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmdBuffer);
                 vkDestroyBuffer(m_device, stagingBuffer, nullptr);

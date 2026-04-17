@@ -181,7 +181,7 @@ namespace Spark::Animation
             XMMatrixDecompose(&sB, &rB, &tB, mB);
 
             XMVECTOR s = XMVectorLerp(sA, sB, blendFactor);
-            XMVECTOR r = XMQuaternionSlerp(rA, rB, blendFactor);
+            XMVECTOR r = XMQuaternionNormalize(XMQuaternionSlerp(rA, rB, blendFactor));
             XMVECTOR t = XMVectorLerp(tA, tB, blendFactor);
 
             XMMATRIX result =

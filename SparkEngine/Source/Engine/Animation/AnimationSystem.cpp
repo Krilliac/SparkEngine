@@ -52,6 +52,13 @@ namespace Spark::Animation
             {
                 uint32_t version = 0;
                 file.read(reinterpret_cast<char*>(&version), sizeof(version));
+                if (!file.good())
+                {
+                    SPARK_LOG_WARN(LogCategory::Animation, "Skeleton file '%s' truncated before version field",
+                                   filepath.c_str());
+                    m_skeletons[filepath] = skeleton;
+                    return skeleton;
+                }
 
                 uint32_t boneCount = 0;
                 file.read(reinterpret_cast<char*>(&boneCount), sizeof(boneCount));

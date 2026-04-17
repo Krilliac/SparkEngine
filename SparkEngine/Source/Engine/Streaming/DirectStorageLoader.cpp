@@ -24,6 +24,13 @@ namespace Spark::Streaming
     DirectStorageLoader::~DirectStorageLoader()
     {
         Shutdown();
+        std::lock_guard lock(m_threadsMutex);
+        for (auto& t : m_backgroundThreads)
+        {
+            if (t.joinable())
+                t.join();
+        }
+        m_backgroundThreads.clear();
     }
 
     bool DirectStorageLoader::Initialize(void* graphicsDevice)
@@ -83,7 +90,10 @@ namespace Spark::Streaming
 
         auto internal = std::make_shared<InternalRequest>();
         internal->request = request;
-        internal->handle = {m_nextHandleId++};
+        uint64_t newId = m_nextHandleId++;
+        if (m_nextHandleId == 0)
+            m_nextHandleId = 1;
+        internal->handle = {newId};
         internal->status = LoadStatus::Pending;
 
         m_pendingQueue.push(internal);
@@ -125,11 +135,14 @@ namespace Spark::Streaming
             if (req->status == LoadStatus::Completed || req->status == LoadStatus::Failed)
             {
                 m_stats.pendingRequests--;
+                if (req->cancelled.load())
+                {
+                    req->status = LoadStatus::Failed;
+                }
                 if (req->status == LoadStatus::Failed)
                     m_stats.failedRequests++;
 
-                // Invoke callback
-                if (req->request.callback)
+                if (req->request.callback && !req->cancelled.load())
                 {
                     req->request.callback(req->handle, req->status);
                 }
@@ -148,10 +161,19 @@ namespace Spark::Streaming
 
         for (auto& req : m_activeRequests)
         {
-            if (req->handle.id == handle.id && req->status == LoadStatus::Pending)
+            if (req->handle.id == handle.id)
             {
-                req->status = LoadStatus::Failed;
-                return true;
+                if (req->status == LoadStatus::Pending)
+                {
+                    req->status = LoadStatus::Failed;
+                    req->cancelled.store(true);
+                    return true;
+                }
+                if (req->status == LoadStatus::InProgress)
+                {
+                    req->cancelled.store(true);
+                    return true;
+                }
             }
         }
         return false;
@@ -204,8 +226,7 @@ namespace Spark::Streaming
 
     void DirectStorageLoader::FallbackAsyncLoad(std::shared_ptr<InternalRequest> req)
     {
-        // Fire-and-forget background thread for async file I/O
-        std::thread(
+        std::thread worker(
             [this, req]()
             {
                 auto startTime = std::chrono::high_resolution_clock::now();
@@ -238,7 +259,7 @@ namespace Spark::Streaming
                 uint64_t readSize = req->request.loadSize;
 
                 // Validate offset is within file bounds
-                if (readOffset > fileSize)
+                if (readOffset >= fileSize)
                 {
                     req->status = LoadStatus::Failed;
                     return;
@@ -281,8 +302,9 @@ namespace Spark::Streaming
                 }
 
                 req->status = LoadStatus::Completed;
-            })
-            .detach();
+            });
+        std::lock_guard threadLock(m_threadsMutex);
+        m_backgroundThreads.push_back(std::move(worker));
     }
 
     std::string DirectStorageLoader::Console_GetStatus() const

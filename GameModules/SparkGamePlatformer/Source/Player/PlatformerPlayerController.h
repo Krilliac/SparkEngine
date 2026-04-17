@@ -106,7 +106,7 @@ namespace Platformer
         void CheckGrounded();
         void HandleJump();
         void HandleWallSlide(float fixedDeltaTime);
-        void HandleDash();
+        void HandleDash(float fixedDeltaTime);
         void HandleGroundPound();
         void UpdateCoyoteTime(float fixedDeltaTime);
         void UpdateJumpBuffer(float fixedDeltaTime);

@@ -313,7 +313,7 @@ namespace Spark::Net
         outMsg.timestamp = buf.ReadFloat();
         uint32_t payloadLen = buf.ReadUint32();
 
-        if (buf.GetReadPosition() + payloadLen > length)
+        if (payloadLen > length || buf.GetReadPosition() > length - payloadLen)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload length %u exceeds remaining packet data", payloadLen);
             return false;

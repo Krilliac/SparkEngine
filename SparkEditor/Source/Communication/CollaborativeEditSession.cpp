@@ -616,18 +616,7 @@ namespace SparkEditor
         // Release all locks held by the local editor
         {
             std::lock_guard<std::mutex> lock(m_lockMutex);
-            auto it = m_nodeLocks.begin();
-            while (it != m_nodeLocks.end())
-            {
-                if (it->second.ownerPeer == m_localPeerID)
-                {
-                    it = m_nodeLocks.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
-            }
+            std::erase_if(m_nodeLocks, [this](const auto& pair) { return pair.second.ownerPeer == m_localPeerID; });
         }
 
         // Shutdown sockets first to unblock any recv()/accept() calls in network threads,

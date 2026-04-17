@@ -386,6 +386,11 @@ namespace Spark
         }
         std::fseek(file, 0, SEEK_END);
         auto size = std::ftell(file);
+        if (size < 0)
+        {
+            std::fclose(file);
+            return {};
+        }
         std::fseek(file, 0, SEEK_SET);
         std::string content(static_cast<size_t>(size), '\0');
         auto bytesRead = std::fread(content.data(), 1, static_cast<size_t>(size), file);

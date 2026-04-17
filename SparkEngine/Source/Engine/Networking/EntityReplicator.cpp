@@ -203,17 +203,16 @@ namespace Spark::Net
                     SPARK_LOG_WARN(Spark::LogCategory::Network,
                                    "ProcessIncoming: buffer exhausted at field %u/%u for entity %u", i, fieldCount,
                                    entityID);
-                    return true; // Partial update — not fatal
+                    return false;
                 }
                 size_t bytesRead = entry.deserializer(i, buffer, offset);
                 if (bytesRead == 0)
                 {
-                    // Skip this field and continue processing remaining fields
                     SPARK_LOG_WARN(Spark::LogCategory::Network,
                                    "ProcessIncoming: deserializer returned 0 bytes for entity %u field %u — skipping "
                                    "remaining fields",
                                    entityID, i);
-                    return true; // Partial update applied — not fatal
+                    return false;
                 }
                 offset += bytesRead;
             }

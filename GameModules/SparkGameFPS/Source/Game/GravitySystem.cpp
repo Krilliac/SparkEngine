@@ -2,6 +2,7 @@
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <sstream>
 
 using namespace DirectX;
@@ -65,7 +66,7 @@ namespace Spark
             float dy = radialCenter.y - point.y;
             float dz = radialCenter.z - point.z;
             float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-            if (dist < 0.01f)
+            if (dist <= 0.001f)
                 return {0, 0, 0};
             float invDist = 1.0f / dist;
             float strength = std::abs(gravityStrength);
@@ -148,7 +149,7 @@ namespace Spark
     XMFLOAT3 GravitySystem::GetGravityAt(const XMFLOAT3& position) const
     {
         int bestZone = -1;
-        int bestPriority = -999999;
+        int bestPriority = std::numeric_limits<int>::lowest();
 
         for (int i = 0; i < (int)m_zones.size(); ++i)
         {
@@ -213,7 +214,7 @@ namespace Spark
     int GravitySystem::GetZoneAt(const XMFLOAT3& position) const
     {
         int bestZone = -1;
-        int bestPriority = -999999;
+        int bestPriority = std::numeric_limits<int>::lowest();
 
         for (int i = 0; i < (int)m_zones.size(); ++i)
         {

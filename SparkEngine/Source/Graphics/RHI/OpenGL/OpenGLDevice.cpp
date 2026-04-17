@@ -1054,6 +1054,8 @@ namespace Spark
                 if (!fbConfigs || fbCount == 0)
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "glXChooseFBConfig failed — no suitable config");
+                    if (fbConfigs)
+                        XFree(fbConfigs);
                     XCloseDisplay(bootstrapDpy);
                     return false;
                 }
@@ -1772,7 +1774,13 @@ namespace Spark
             void* GLDevice::MapBuffer(IRHIBuffer* buffer)
             {
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
-                return glMapNamedBuffer(glBuf->GetGLBuffer(), GL_WRITE_ONLY);
+                void* mapped = glMapNamedBuffer(glBuf->GetGLBuffer(), GL_WRITE_ONLY);
+                if (!mapped)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "GLDevice::MapBuffer: glMapNamedBuffer returned null");
+                }
+                return mapped;
             }
 
             void GLDevice::UnmapBuffer(IRHIBuffer* buffer)

@@ -34,17 +34,29 @@ namespace Spark::Graphics::Neural
         NNWHeader header;
         header.layerCount = static_cast<uint32_t>(network.desc.layers.size());
         header.totalParameters = totalParams;
-        std::fwrite(&header, sizeof(NNWHeader), 1, file);
+        if (std::fwrite(&header, sizeof(NNWHeader), 1, file) != 1)
+        {
+            std::fclose(file);
+            return false;
+        }
 
         // Write layer descriptors
         for (const auto& layer : network.desc.layers)
         {
             uint32_t layerData[3] = {layer.inputSize, layer.outputSize, static_cast<uint32_t>(layer.activation)};
-            std::fwrite(layerData, sizeof(uint32_t), 3, file);
+            if (std::fwrite(layerData, sizeof(uint32_t), 3, file) != 3)
+            {
+                std::fclose(file);
+                return false;
+            }
         }
 
         // Write weight data
-        std::fwrite(network.weights.data(), sizeof(float), totalParams, file);
+        if (std::fwrite(network.weights.data(), sizeof(float), totalParams, file) != totalParams)
+        {
+            std::fclose(file);
+            return false;
+        }
 
         std::fclose(file);
         return true;

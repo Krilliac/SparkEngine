@@ -7,6 +7,7 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -627,58 +628,77 @@ namespace Spark::Persistence
 
             auto& conn = m_connections[threadIndex];
             QueryResult result;
+            std::exception_ptr queryException;
 
-            if (item.isTransaction)
+            try
             {
-                // Execute transaction: BEGIN, run all queries, COMMIT (or ROLLBACK on failure)
-                bool ok = conn->BeginTransaction();
-                if (!ok)
+                if (item.isTransaction)
                 {
-                    result.success = false;
-                    result.errorMessage = "Failed to begin transaction";
-                }
-                else
-                {
-                    bool allSucceeded = true;
-                    for (const auto& [stmtId, params] : item.transaction.queries)
+                    bool ok = conn->BeginTransaction();
+                    if (!ok)
                     {
-                        QueryResult queryResult = conn->Execute(stmtId, params);
-                        if (!queryResult.success)
-                        {
-                            result = std::move(queryResult);
-                            allSucceeded = false;
-                            break;
-                        }
-                        result.affectedRows += queryResult.affectedRows;
-                    }
-
-                    if (allSucceeded)
-                    {
-                        conn->CommitTransaction();
-                        result.success = true;
+                        result.success = false;
+                        result.errorMessage = "Failed to begin transaction";
                     }
                     else
                     {
-                        conn->RollbackTransaction();
+                        bool allSucceeded = true;
+                        for (const auto& [stmtId, params] : item.transaction.queries)
+                        {
+                            QueryResult queryResult = conn->Execute(stmtId, params);
+                            if (!queryResult.success)
+                            {
+                                result = std::move(queryResult);
+                                allSucceeded = false;
+                                break;
+                            }
+                            result.affectedRows += queryResult.affectedRows;
+                        }
+
+                        if (allSucceeded)
+                        {
+                            conn->CommitTransaction();
+                            result.success = true;
+                        }
+                        else
+                        {
+                            conn->RollbackTransaction();
+                        }
                     }
                 }
+                else
+                {
+                    result = conn->Execute(item.stmtId, item.params);
+                }
             }
-            else
+            catch (...)
             {
-                result = conn->Execute(item.stmtId, item.params);
+                queryException = std::current_exception();
             }
 
             m_pendingCount.fetch_sub(1);
 
-            // Deliver result: either via promise or callback
             if (item.callback)
             {
+                if (queryException)
+                {
+                    result = QueryResult{};
+                    result.success = false;
+                    result.errorMessage = "Query threw exception";
+                }
                 std::lock_guard<std::mutex> lock(m_callbackMutex);
                 m_completedCallbacks.push_back({std::move(item.callback), std::move(result)});
             }
             else
             {
-                item.promise.set_value(std::move(result));
+                if (queryException)
+                {
+                    item.promise.set_exception(queryException);
+                }
+                else
+                {
+                    item.promise.set_value(std::move(result));
+                }
             }
         }
     }
