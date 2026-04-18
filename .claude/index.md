@@ -90,6 +90,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 | SparkDaemon Phase 6 follow-up — daemon.invalidate command + spark.daemon.clear_on_startup CVar (AssetServiceClient::InvalidateAsset surfaced via console; lifecycle hook drops both caches after connect when opted in; 5 new tests, 5588/5588) | [knowledge/daemon-phase-6-invalidate-and-clear-on-startup-2026-04-16.md](knowledge/daemon-phase-6-invalidate-and-clear-on-startup-2026-04-16.md) | Observation | Active | 2026-04-16 |
 | SparkDaemon Phase 3b engine-side wiring (ShaderDiskCache consults daemon first, falls through to local disk; DaemonConnection singleton; ShaderDaemonBridge blob codec; 8 new tests) | [knowledge/daemon-phase-3b-shader-disk-cache-wiring-2026-04-16.md](knowledge/daemon-phase-3b-shader-disk-cache-wiring-2026-04-16.md) | Observation | Active | 2026-04-16 |
 | Deep project optimizations (transparent string hashing, ProcessDrawList double-buffer swap, sprite animator size cache, string_view BindMesh/BindMaterial — zero allocations on steady-state draw path) | [knowledge/deep-optimizations-2026-04-17.md](knowledge/deep-optimizations-2026-04-17.md) | Optimization | Active | 2026-04-17 |
+| Engine gap-fill session (VolumetricCloudSystem + HRTFProcessor + directional predictive streaming — 3 missing features filled against Unreal/Unity/Decima parity, 23 new tests, 5614/5614) | [knowledge/engine-gap-fill-2026-04-17.md](knowledge/engine-gap-fill-2026-04-17.md) | Decision | Active | 2026-04-17 |
 ## Quick Reference
 
 ### Current Engine State (2026-04-17)

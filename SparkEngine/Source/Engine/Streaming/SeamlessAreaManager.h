@@ -119,6 +119,20 @@ namespace Spark::Streaming
         float lookaheadTime = 3.0f;      ///< Seconds to predict ahead using velocity
         float updateInterval = 0.25f;    ///< Seconds between prediction recalculations
         uint32_t maxConcurrentLoads = 2; ///< Maximum areas loading simultaneously
+
+        /**
+         * @brief Directional preload bias [0..1].
+         *
+         * Areas lying along the movement / camera direction receive an
+         * effective-distance reduction equal to `directionalBias * distance`
+         * for sorting and radius tests. 0 disables the bias (isotropic sort),
+         * 1 makes areas in front load as if they were zero distance away.
+         * Inspired by RAGE / Decima predictive streaming.
+         */
+        float directionalBias = 0.4f;
+
+        /** @brief Only areas with a forward dot product >= this threshold get the bias. */
+        float directionalDotThreshold = 0.25f;
     };
 
     // ========================================================================
@@ -235,6 +249,33 @@ namespace Spark::Streaming
         // Prediction and streaming logic
         XMFLOAT3 PredictFuturePosition() const;
         float DistanceToArea(const XMFLOAT3& point, const AreaDefinition& area) const;
+
+        /**
+         * @brief Snapshot of the player state used by directional bias calculations.
+         *
+         * Captured once per Update tick so the sort comparator and radius tests
+         * see a consistent value (SetPlayerState() may run on other threads,
+         * which would otherwise break std::sort's strict-weak-ordering).
+         */
+        struct DirectionalSnapshot
+        {
+            XMFLOAT3 position{0, 0, 0};
+            XMFLOAT3 direction{0, 0, 1};
+            bool valid = false;
+        };
+
+        /// @brief Build a snapshot under a single mutex lock.
+        DirectionalSnapshot SnapshotPlayerDirection() const;
+
+        /**
+         * @brief Compute a distance biased by alignment with the player's movement direction.
+         *
+         * @param rawDistance  The raw distance to the area
+         * @param area         The area definition
+         * @param snap         A pre-captured player direction snapshot
+         */
+        float DirectionalEffectiveDistance(float rawDistance, const AreaDefinition& area,
+                                           const DirectionalSnapshot& snap) const;
         void UpdateAreaDistances();
         void ProcessLoadQueue();
         void ProcessUnloadQueue();

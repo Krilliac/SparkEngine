@@ -716,6 +716,14 @@ jobs:
         # Remove stale PCH files — cached build dirs may have PCH built against
         # older system headers (e.g. unistd_64.h mtime changes after apt-get).
         find build -name '*.pch' -delete 2>/dev/null || true
+        # Purge cached static archives unconditionally. apt-get install of
+        # clang between cached runs can change the object-file ABI (LLVM
+        # major version bump, libc++ ABI bump). The on-disk .a archive
+        # looks valid to `ar t`, but ld rejects it with
+        #   libJolt.a: error adding symbols: file format not recognized
+        # Deleting the archive forces CMake to rebuild just the final lib
+        # (all the underlying .o files still come straight out of ccache).
+        find build -name 'lib*.a' -delete 2>/dev/null || true
         cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
@@ -928,6 +936,11 @@ jobs:
     - name: Build
       run: |
         set -o pipefail
+        # Purge cached static archives unconditionally — brew updates can bump
+        # Apple Clang / ld between runs, which then rejects cached archives
+        # with "ld: libJolt.a: error adding symbols: file format not recognized".
+        # CMake rebuilds just the .a from ccache-hot .o files.
+        find build -name 'lib*.a' -delete 2>/dev/null || true
         cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
