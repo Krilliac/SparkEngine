@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <limits>
 
 namespace Spark::Streaming
 {
