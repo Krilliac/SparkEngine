@@ -368,3 +368,38 @@ Linux `linux-gcc-release` builds clean; full suite green
 | **macOS** | macOS 11 Big Sur, x64/ARM64, Metal 2.3 *or* OpenGL 4.1 | macOS 12+, Apple Silicon M2+, Metal 3 with `supportsRaytracing` |
 
 Pinned by: `CMAKE_OSX_DEPLOYMENT_TARGET=11.0` (CMakeLists.txt), `cmake_minimum_required(3.25)`, CLAUDE.md Build section, `MetalRayTracing.mm` `@available(macOS 12.0, *)` gate for hardware RT.
+
+### 2026-04-18 session #4 — Metal RT phase 4 (MeshAsset overload + wiki page)
+
+- **`HybridRTManager::PushTriangleMesh(const MeshAsset&, const XMMATRIX&, bool)`**
+  — convenience overload that reads `MeshAssetData::vertices` /
+  `indices` out of a loaded asset, flattens the `XMMATRIX` to the
+  row-major 3x4 the Metal instance descriptor expects, and calls the
+  existing `PushTriangleMesh(TriangleMeshDesc)`. Scene code can now
+  walk an `entt::registry` of `MeshRenderer` components, resolve each
+  `meshPath` to a `MeshAsset*` via the asset manager, and push
+  without any platform branching — the base overload no-ops off
+  macOS and on macOS routes to `MetalRayTracingSystem::CreateBLAS`.
+- **Forward declaration quirk** — `MeshAsset` lives at global scope
+  (not in any namespace). The header forward-declares `class MeshAsset;`
+  at file scope and the overload signature is qualified `::MeshAsset`
+  for clarity.
+- **`wiki/platform/System-Requirements.md` (new)** — public-facing
+  platform support matrix covering Windows / Linux / macOS minimum +
+  recommended OS, CPU, GPU, compiler. Includes an "Apple Silicon vs
+  Metal" clarification, the runtime hardware footprint (CPU threads,
+  RAM pools, VRAM envelopes, editor overhead), and build toggles that
+  materially move the needle. Linked from
+  `wiki/_Sidebar.md`, `wiki/Home.md` platform-support section, and
+  `wiki/getting-started/Getting-Started.md` prerequisites.
+
+Linux `linux-gcc-release` builds clean; suite green (5621 passed,
+0 failed, 1 known-flaky warning).
+
+Remaining for phase 5:
+- Actual scene walker (iterate `MeshRenderer` components, resolve
+  meshes, push per frame or on scene change) — needs the asset
+  manager lookup wired in the graphics engine.
+- Per-instance material data for the RT kernels (albedo, emissive,
+  roughness) so hit-shading produces real colors instead of the 0.3
+  grey placeholder.

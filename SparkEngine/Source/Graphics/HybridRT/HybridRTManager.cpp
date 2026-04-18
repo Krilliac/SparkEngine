@@ -18,6 +18,7 @@
  */
 
 #include "HybridRTManager.h"
+#include "../AssetPipeline.h"
 #include "../RHI/RHIDevice.h"
 #include "../RHI/RHIResources.h"
 #include "../../Utils/Validate.h"
@@ -457,6 +458,37 @@ namespace Spark::Graphics
 #else
         (void)mesh;
 #endif
+    }
+
+    void HybridRTManager::PushTriangleMesh(const ::MeshAsset& asset, const DirectX::XMMATRIX& worldTransform,
+                                           bool allowDynamicUpdate)
+    {
+        const auto& data = asset.GetMeshData();
+        if (data.vertices.empty() || data.indices.size() < 3)
+            return;
+
+        // Flatten row-major 3x4 from an XMMATRIX's first 3 rows. `XMStoreFloat4x4`
+        // stores row-major so `m[row][col]` lays out exactly the way the Metal
+        // instance descriptor expects its 3x4 transform.
+        DirectX::XMFLOAT4X4 m;
+        DirectX::XMStoreFloat4x4(&m, worldTransform);
+
+        TriangleMeshDesc desc{};
+        desc.name = asset.GetPath();
+        desc.vertexData = data.vertices.data();
+        desc.vertexCount = static_cast<uint32_t>(data.vertices.size());
+        desc.vertexStride = sizeof(MeshAssetData::Vertex);
+        desc.indexData = data.indices.data();
+        desc.indexCount = static_cast<uint32_t>(data.indices.size());
+        for (int row = 0; row < 3; ++row)
+        {
+            for (int col = 0; col < 4; ++col)
+                desc.transform[row * 4 + col] = m.m[row][col];
+        }
+        desc.isOpaque = true;
+        desc.allowDynamicUpdate = allowDynamicUpdate;
+
+        PushTriangleMesh(desc);
     }
 
     void HybridRTManager::ClearTriangleMeshes()

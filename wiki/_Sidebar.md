@@ -86,6 +86,7 @@
 - [Project Templates](gameplay-tools/Project-Templates.md)
 
 ### Platform Support
+- [System Requirements](platform/System-Requirements.md)
 - [VR Support](platform/VR-Support.md)
 - [Mobile Platform](platform/Mobile-Platform.md)
 - [Accessibility](platform/Accessibility.md)

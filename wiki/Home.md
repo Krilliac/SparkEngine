@@ -14,7 +14,11 @@
 |----------|--------|----------|
 | Windows 10+ | Primary | MSVC v143 (VS 2022), v144 (VS 2026) |
 | Linux x64 | Experimental | GCC 13+, Clang 17+ |
-| macOS | Experimental | Apple Clang with C++23 |
+| macOS 11+ | Experimental | Apple Clang with C++23 |
+
+See [System Requirements](platform/System-Requirements.md) for minimum and
+recommended hardware per platform (CPU, RAM, GPU, VRAM), runtime resource
+footprint, and the build toggles that move the needle.
 
 ## Feature Highlights
 

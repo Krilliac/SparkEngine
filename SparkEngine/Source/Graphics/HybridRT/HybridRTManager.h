@@ -50,6 +50,10 @@ namespace Spark::RHI
     class IRHITexture;
 } // namespace Spark::RHI
 
+// MeshAsset lives at global scope (not in Spark::Graphics), so forward-declare
+// there to avoid pulling AssetPipeline.h into every consumer of this header.
+class MeshAsset;
+
 #ifdef SPARK_PLATFORM_MACOS
 namespace Spark::RHI::Metal
 {
@@ -125,6 +129,21 @@ namespace Spark::Graphics
          *        On other platforms today this is a no-op.
          */
         void PushTriangleMesh(const TriangleMeshDesc& mesh);
+
+        /**
+         * @brief Convenience overload for engine scene code — pushes the
+         *        vertex/index data out of a loaded `MeshAsset` with the
+         *        given world transform. Relies on
+         *        `MeshAssetData::Vertex` laying `XMFLOAT3 position` at
+         *        offset 0, so the Metal RT triangle-geometry descriptor
+         *        can read position directly at `vertexStride` steps.
+         *
+         *        Returns silently if the asset's data is empty or the
+         *        Metal RT path isn't active; scene walkers can call
+         *        this unconditionally for every visible MeshRenderer.
+         */
+        void PushTriangleMesh(const ::MeshAsset& asset, const DirectX::XMMATRIX& worldTransform,
+                              bool allowDynamicUpdate = false);
 
         /**
          * @brief Drop every pushed triangle mesh and invalidate the TLAS.
