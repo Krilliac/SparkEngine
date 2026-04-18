@@ -24,10 +24,13 @@
 
 #pragma once
 
+#include "../../Core/Platform.h"
+
 #include <cstdint>
 
 class World;
 class AssetPipeline;
+class MaterialSystem;
 
 namespace Spark::Graphics
 {
@@ -46,5 +49,26 @@ namespace Spark::Graphics
      *         populated with N meshes" at scene-transition boundaries.
      */
     uint32_t PopulateRTSceneFromECS(HybridRTManager& rt, World& world, AssetPipeline& assets);
+
+#ifdef SPARK_PLATFORM_MACOS
+    /**
+     * @brief Populate Metal RT per-instance materials alongside the
+     *        scene geometry. Walks the same `Transform + MeshRenderer`
+     *        view as `PopulateRTSceneFromECS`, resolves each
+     *        `materialPath` through `MaterialSystem`, runs
+     *        `MaterialParamsFromPBR` on the result, and uploads the
+     *        flat array via `HybridRTManager::SetMetalMaterials`.
+     *
+     *        Call this immediately after `PopulateRTSceneFromECS` —
+     *        the instance index in the material vector mirrors the
+     *        push order, so the RT kernel's `instance_id` indexes
+     *        into both arrays consistently.
+     *
+     *        Returns the number of materials uploaded. 0 off macOS
+     *        (header is `#ifdef`-gated — signature only exists on
+     *        macOS so Linux/Windows can't accidentally call it).
+     */
+    uint32_t PopulateRTMaterialsFromECS(HybridRTManager& rt, World& world, MaterialSystem& materials);
+#endif
 
 } // namespace Spark::Graphics

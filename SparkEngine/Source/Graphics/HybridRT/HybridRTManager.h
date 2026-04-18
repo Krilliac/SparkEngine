@@ -38,6 +38,10 @@
 #include <DirectXMath.h>
 #endif
 
+#ifdef SPARK_PLATFORM_MACOS
+#include "../RHI/Metal/MetalRayTracing.h" // MaterialParams declaration
+#endif
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -151,6 +155,24 @@ namespace Spark::Graphics
          *        populate a fresh AS.
          */
         void ClearTriangleMeshes();
+
+#ifdef SPARK_PLATFORM_MACOS
+        /**
+         * @brief Upload per-instance material params for the Metal RT
+         *        kernels. The vector index must match the push order
+         *        used with `PushTriangleMesh` — the RT kernels index
+         *        `materials[instance_id]` where `instance_id` is
+         *        assigned in push order. Passing an empty vector
+         *        clears the material buffer so kernels fall back to
+         *        the placeholder grey.
+         *
+         *        Off macOS this signature is hidden — the `MaterialParams`
+         *        type lives in the Metal RT headers. Call behind
+         *        `#ifdef SPARK_PLATFORM_MACOS` the same way the RT
+         *        system itself is gated.
+         */
+        void SetMetalMaterials(const std::vector<RHI::Metal::MaterialParams>& materials);
+#endif
 
         // ---- Settings ----
         void SetQuality(RHI::RayTracingQuality quality);

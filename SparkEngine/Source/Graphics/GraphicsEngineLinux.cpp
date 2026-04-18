@@ -583,8 +583,26 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     cmd->EndEvent();
 }
 
-// NOTE: SubmitMeshForRendering and ProcessDrawList are defined above in the
-// "ECS MESH DRAW SUBMISSION" section (single definition, spinlock-based).
+// SubmitMeshForRendering lives in the shared GraphicsEngineSubmit.cpp so
+// Linux/macOS builds can drive the draw list too. ProcessDrawList (D3D11-
+// specific) stays Windows-only; on Linux/macOS the draw list accumulates
+// but is consumed by the RHI bridge path or the Metal RT scene feeder
+// (`Graphics/HybridRT/RTSceneFeeder.h`).
+
+// ============================================================================
+// HybridRT GBuffer binding — Linux/macOS stub
+// ============================================================================
+// The RHI bridge on non-Windows does not yet expose the GBuffer/HDR
+// textures as IRHITexture handles. Returning an empty bindings struct
+// causes DispatchHybridRTPass to skip cleanly (HybridRTManager falls
+// through to SDFGI / software path). Once `RHIBridge::GetGBufferTexture()`
+// or equivalent lands, this stub fills in handles for normals/depth/
+// albedo/lighting so the shared dispatch helper does real work.
+
+Spark::Graphics::HybridRTBindings GraphicsEngine::AcquireHybridRTBindings()
+{
+    return {};
+}
 
 // ============================================================================
 // System Accessors

@@ -450,15 +450,75 @@ Linux `linux-gcc-release` builds clean; suite green (5621 passed,
 0 failed, 1 known-flaky warning). Metal CI row will register ~5628
 when it runs.
 
-**Remaining for phase 6:**
-- Hook `PopulateRTSceneFromECS` + `HybridRTManager::Execute` into
-  the macOS render frame (either patch `RenderDeferred` to call
-  both after lighting, or implement the non-Windows
-  `SubmitMeshForRendering` so the shared `RenderSystem` drives
-  meshes everywhere).
-- Wire `MaterialParams` population from `MaterialSystem` — today
-  engine code constructs them by hand; the asset loader should emit
-  them alongside mesh uploads.
-- Live MTLDevice tests on the macOS Metal CI row — Initialize with
-  a real device, push a BLAS, build a TLAS, dispatch a trace pass
-  against a small offscreen target.
+Remaining for phase 6 (done in session #6 below).
+
+### 2026-04-18 session #6 — Platform parity + call-site extraction
+
+Three refactors that unblock macOS/Linux parity with the Windows RT path:
+
+**1. `SubmitMeshForRendering` → platform-agnostic TU**
+- Moved from `GraphicsEngineWindows.cpp:1046` (inside
+  `#ifdef SPARK_PLATFORM_WINDOWS`) to a new
+  `Graphics/GraphicsEngineSubmit.cpp`. The function only uses
+  `XMMATRIX` + `SpinlockGuard` + `m_drawList` — all cross-platform
+  already. Linux library now has `T` (defined) instead of `U`
+  (undefined) for the symbol: `RenderSystem::Update` can drive
+  meshes on Linux/macOS without a linker surprise.
+- `ProcessDrawList` stays Windows-only (D3D11 constant buffers,
+  GPU-driven renderer, D3D11 asset-pipeline loaders) — pending
+  a broader RHI abstraction over mesh/material binding.
+
+**2. HybridRT post-lighting extraction → `DispatchHybridRTPass`**
+- New method on `GraphicsEngine`, shared TU
+  `Graphics/GraphicsEngineHybridRT.cpp`. Assembles camera/light
+  uniforms, calls `AcquireHybridRTBindings()` for GBuffer/HDR
+  handles, then dispatches `HybridRTManager::Execute`. Cleanly
+  skips if bindings aren't ready (HybridRT then falls through to
+  SDFGI / software path).
+- New struct `Spark::Graphics::HybridRTBindings` (normals, depth,
+  albedo, lighting — `unique_ptr<IRHITexture>` each) owns the
+  handles for the duration of the dispatch.
+- Per-platform texture acquisition:
+  - `GraphicsEngine::AcquireHybridRTBindings()` in
+    `GraphicsEngineWindows.cpp` wraps `ComPtr<ID3D11Texture2D>`
+    via `IRHIDevice::WrapNativeTexture` — identical logic to the
+    original inline block.
+  - `GraphicsEngineLinux.cpp` returns `{}` (stub). Fill in when
+    `RHIBridge::GetGBufferTexture()` or equivalent lands.
+- `GraphicsRenderPipelinesWindows.cpp::RenderDeferred` shrinks from
+  68 lines of inline setup (lines 150-217) to a 2-line call:
+  `DispatchHybridRTPass(cmd, view, proj)`.
+
+**3. `MaterialParams` conversion + scene-feeder material path**
+- New header `Graphics/HybridRT/RTMaterialAdapter.h`
+  (macOS-only — the target struct lives there). Inline function
+  `MaterialParamsFromPBR(const PBRProperties&)` bakes
+  `emissiveFactor` into `emissiveColor`, packs
+  `roughnessFactor + metallicFactor` into float4.
+- `HybridRTManager::SetMetalMaterials(vector<MaterialParams>)`
+  pass-through to the Metal RT system (macOS-gated). Also
+  cleared automatically by `ClearTriangleMeshes` so the two
+  arrays never drift.
+- New companion helper `PopulateRTMaterialsFromECS(rt, world,
+  materials)` in `RTSceneFeeder.{h,cpp}` (macOS-only signature).
+  Walks the same `Transform + MeshRenderer` view as the geometry
+  feeder — critical: identical traversal order so
+  `MaterialParams[]` index = `instance_id` in the TLAS. Calls
+  `MaterialSystem::GetMaterial(materialPath) → GetPBRProperties()`,
+  runs the adapter, and uploads via `SetMetalMaterials`. Missing
+  materials push a neutral default so the array stays aligned.
+
+Linux `linux-gcc-release` builds clean; suite green (5622 passed,
+0 failed). Only the Windows TU has the `AcquireHybridRTBindings`
+D3D11-wrapping body — rest is shared.
+
+**Remaining for phase 7:**
+- Make the macOS/Linux `RenderDeferred` actually call
+  `DispatchHybridRTPass` once the RHI bridge exposes GBuffer
+  textures. The plumbing is ready; only the bridge piece is missing.
+- Live MTLDevice tests on the macOS Metal CI row (Initialize with
+  a real device, push BLAS, build TLAS, dispatch against a small
+  offscreen target).
+- Non-Windows `ProcessDrawList` that consumes the draw list
+  through the RHI bridge (depends on bridge-level mesh/material
+  binding APIs).

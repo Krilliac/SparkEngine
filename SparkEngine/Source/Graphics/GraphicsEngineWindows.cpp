@@ -1040,27 +1040,73 @@ void GraphicsEngine::EndFrame()
 }
 
 // ============================================================================
+// HybridRT GBuffer binding — Windows wraps D3D11 textures as RHI handles
+// ============================================================================
+// The shared GraphicsEngine::DispatchHybridRTPass (in GraphicsEngineHybridRT.cpp)
+// calls this; Linux/macOS has its own stub implementation that returns empty
+// bindings (the RHI bridge does not yet expose GBuffer textures on those
+// platforms).
+
+Spark::Graphics::HybridRTBindings GraphicsEngine::AcquireHybridRTBindings()
+{
+    Spark::Graphics::HybridRTBindings bindings;
+    if (!m_rhiBridge)
+        return bindings;
+    auto* device = m_rhiBridge->GetDevice();
+    if (!device)
+        return bindings;
+
+    // GBuffer layout: [0]=Albedo, [1]=Normal, [2]=Material, [3]=Motion
+    if (m_gBufferTextures[1].Get())
+    {
+        Spark::RHI::RHITextureDesc desc;
+        desc.width = m_width;
+        desc.height = m_height;
+        desc.format = Spark::RHI::PixelFormat::R16G16B16A16_FLOAT;
+        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
+        desc.debugName = "GBuffer_Normals_Wrapped";
+        bindings.normals = device->WrapNativeTexture(m_gBufferTextures[1].Get(), desc);
+    }
+    if (m_depthStencilTexture.Get())
+    {
+        Spark::RHI::RHITextureDesc desc;
+        desc.width = m_width;
+        desc.height = m_height;
+        desc.format = Spark::RHI::PixelFormat::D24_UNORM_S8_UINT;
+        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
+        desc.debugName = "Depth_Wrapped";
+        bindings.depth = device->WrapNativeTexture(m_depthStencilTexture.Get(), desc);
+    }
+    if (m_gBufferTextures[0].Get())
+    {
+        Spark::RHI::RHITextureDesc desc;
+        desc.width = m_width;
+        desc.height = m_height;
+        desc.format = Spark::RHI::PixelFormat::R8G8B8A8_UNORM;
+        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
+        desc.debugName = "GBuffer_Albedo_Wrapped";
+        bindings.albedo = device->WrapNativeTexture(m_gBufferTextures[0].Get(), desc);
+    }
+    if (m_hdrTexture.Get())
+    {
+        Spark::RHI::RHITextureDesc desc;
+        desc.width = m_width;
+        desc.height = m_height;
+        desc.format = Spark::RHI::PixelFormat::R16G16B16A16_FLOAT;
+        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource | Spark::RHI::RHITextureUsage::UnorderedAccess;
+        desc.debugName = "HDR_Lighting_Wrapped";
+        bindings.lighting = device->WrapNativeTexture(m_hdrTexture.Get(), desc);
+    }
+    return bindings;
+}
+
+// ============================================================================
 // ECS MESH DRAW SUBMISSION
 // ============================================================================
-
-void GraphicsEngine::SubmitMeshForRendering(std::string_view meshPath, std::string_view materialPath,
-                                            const DirectX::XMMATRIX& worldMatrix, bool castShadows)
-{
-    SPARK_WARN_IF(Spark::LogCategory::Graphics, meshPath.empty(), "SubmitMeshForRendering: empty meshPath");
-    SPARK_WARN_IF(Spark::LogCategory::Graphics, materialPath.empty(), "SubmitMeshForRendering: empty materialPath");
-    MeshDrawCommand cmd;
-    cmd.meshPath = meshPath;
-    cmd.materialPath = materialPath;
-    XMStoreFloat4x4(&cmd.worldMatrix, worldMatrix);
-    cmd.castShadows = castShadows;
-
-    // Spinlock: lower overhead than std::mutex for short critical sections.
-    // Draw submission is called per-entity but holds the lock only for a push_back.
-    {
-        SpinlockGuard guard(m_drawListSpinlock);
-        m_drawList.push_back(cmd);
-    }
-}
+// NOTE: SubmitMeshForRendering lives in the shared GraphicsEngineSubmit.cpp
+// so Linux/macOS builds can drive the draw list too. ProcessDrawList below
+// stays Windows-only — it touches D3D11 constant buffers, the GPU-driven
+// renderer, and the asset pipeline's D3D11 loaders.
 
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix)
 {

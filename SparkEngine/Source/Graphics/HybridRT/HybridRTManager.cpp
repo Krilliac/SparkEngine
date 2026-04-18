@@ -500,11 +500,22 @@ namespace Spark::Graphics
                 m_metalRT->DestroyBLAS(m.blasIndex);
             // Rebuild an empty TLAS so the compute passes see no instances.
             m_metalRT->BuildTLAS({});
+            // Drop materials along with the geometry so the kernels
+            // don't dereference a stale buffer on the next frame.
+            m_metalRT->SetMaterials({});
         }
         m_metalRTMeshes.clear();
         m_metalRTTLASDirty = false;
 #endif
     }
+
+#ifdef SPARK_PLATFORM_MACOS
+    void HybridRTManager::SetMetalMaterials(const std::vector<RHI::Metal::MaterialParams>& materials)
+    {
+        if (m_metalRT)
+            m_metalRT->SetMaterials(materials);
+    }
+#endif
 
     void HybridRTManager::SetQuality(RHI::RayTracingQuality quality)
     {
