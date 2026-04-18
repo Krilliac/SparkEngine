@@ -309,7 +309,12 @@ namespace Spark
 
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "ReplaySystem::SaveToFile: cannot open '%s' for writing (errno=%d)", filePath.c_str(),
+                            errno);
             return false;
+        }
 
         // Header
         uint32_t magic = kReplayMagic;
@@ -364,13 +369,22 @@ namespace Spark
 
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "ReplaySystem::LoadFromFile: cannot open '%s' (errno=%d)",
+                            filePath.c_str(), errno);
             return false;
+        }
 
         // Header
         uint32_t magic = 0;
         file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
         if (!file || magic != kReplayMagic)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::LoadFromFile: '%s' has invalid magic (got 0x%08X, expected 0x%08X)",
+                           filePath.c_str(), magic, kReplayMagic);
             return false;
+        }
 
         file.read(reinterpret_cast<char*>(&m_data.version), sizeof(m_data.version));
         if (!file)

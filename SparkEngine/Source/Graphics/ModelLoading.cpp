@@ -38,12 +38,18 @@ void AssetPipeline::BindMesh(std::string_view meshPath)
     auto it = m_assets.find(meshPath);
     if (it == m_assets.end() || !it->second || !it->second->IsLoaded())
     {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                       "BindMesh: asset '%.*s' is missing or not yet loaded", static_cast<int>(meshPath.size()),
+                       meshPath.data());
         return;
     }
 
     auto* meshAsset = dynamic_cast<MeshAsset*>(it->second.get());
     if (!meshAsset)
     {
+        SPARK_LOG_ONCE(Spark::LogLevel::Error, Spark::LogCategory::Graphics,
+                       "BindMesh: asset '%.*s' is not a MeshAsset (wrong type for path)",
+                       static_cast<int>(meshPath.size()), meshPath.data());
         return;
     }
 
@@ -51,6 +57,9 @@ void AssetPipeline::BindMesh(std::string_view meshPath)
     ID3D11Buffer* indexBuffer = meshAsset->GetIndexBuffer();
     if (!vertexBuffer || !indexBuffer)
     {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                       "BindMesh: mesh '%.*s' has no GPU vertex/index buffers (CPU-only load?)",
+                       static_cast<int>(meshPath.size()), meshPath.data());
         return;
     }
 
@@ -124,12 +133,18 @@ void AssetPipeline::BindMaterial(std::string_view materialPath)
     auto it = m_assets.find(materialPath);
     if (it == m_assets.end() || !it->second || !it->second->IsLoaded())
     {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                       "BindMaterial: asset '%.*s' is missing or not yet loaded", static_cast<int>(materialPath.size()),
+                       materialPath.data());
         return;
     }
 
     auto* textureAsset = dynamic_cast<TextureAsset*>(it->second.get());
     if (!textureAsset)
     {
+        SPARK_LOG_ONCE(Spark::LogLevel::Error, Spark::LogCategory::Graphics,
+                       "BindMaterial: asset '%.*s' is not a TextureAsset (wrong type for path)",
+                       static_cast<int>(materialPath.size()), materialPath.data());
         return;
     }
 

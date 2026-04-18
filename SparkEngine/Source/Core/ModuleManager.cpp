@@ -285,6 +285,8 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
         std::ifstream file(manifestPath);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' (errno=%d)",
+                            manifestPath.c_str(), errno);
             console.LogWarning("Could not open module manifest: " + manifestPath);
             return false;
         }

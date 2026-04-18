@@ -560,7 +560,8 @@ namespace Spark::Audio
         std::ifstream file(filename, std::ios::binary);
         if (!file.is_open())
         {
-            fprintf(stderr, "[OpenAL] Failed to open file: %s\n", filename.c_str());
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "OpenAL: failed to open WAV file '%s' (errno=%d)",
+                            filename.c_str(), errno);
             return false;
         }
 
@@ -570,15 +571,15 @@ namespace Spark::Audio
         file.seekg(0, std::ios::beg);
         if (fileSize <= 0)
         {
-            fprintf(stderr, "[OpenAL] Empty or unreadable WAV file: %s\n", filename.c_str());
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "OpenAL: empty or unreadable WAV file '%s'", filename.c_str());
             return false;
         }
         // Reject absurdly large files up-front (256 MB cap) to avoid std::bad_alloc.
         constexpr std::streamoff kMaxWavBytes = 256ll * 1024ll * 1024ll;
         if (fileSize > kMaxWavBytes)
         {
-            fprintf(stderr, "[OpenAL] WAV file too large (%lld bytes): %s\n", static_cast<long long>(fileSize),
-                    filename.c_str());
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "OpenAL: WAV file too large (%lld bytes): '%s'",
+                            static_cast<long long>(fileSize), filename.c_str());
             return false;
         }
         std::vector<uint8_t> fileData(static_cast<size_t>(fileSize));
@@ -586,7 +587,12 @@ namespace Spark::Audio
         file.close();
 
         if (fileData.size() < sizeof(WAVHeader))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio,
+                            "OpenAL: WAV file '%s' too small for RIFF header (%zu bytes, need %zu)", filename.c_str(),
+                            fileData.size(), sizeof(WAVHeader));
             return false;
+        }
 
         // Parse RIFF header
         auto* header = reinterpret_cast<const WAVHeader*>(fileData.data());

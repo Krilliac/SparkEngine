@@ -851,7 +851,12 @@ namespace Spark
             std::string tmpPath = filepath + ".tmp";
             std::ofstream file(tmpPath, std::ios::binary);
             if (!file.is_open())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Save,
+                                "WriteToFile: cannot open temp file '%s' for writing (errno=%d)", tmpPath.c_str(),
+                                errno);
                 return false;
+            }
 
             // Write header
             const char magic[] = "SPRK";
