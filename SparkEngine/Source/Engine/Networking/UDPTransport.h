@@ -35,9 +35,50 @@ constexpr int SOCKET_ERROR = -1;
 
 #include <cstring>
 #include <array>
+#include <atomic>
+#include <memory>
 
 namespace Spark::Net
 {
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    /// @brief Reference-counted Winsock initializer.
+    ///
+    /// Windows requires `WSAStartup()` to be called before any socket API.
+    /// `NetworkManager::Initialize()` used to be the only call site, which
+    /// meant standalone transports (e.g. in unit tests that bypass
+    /// NetworkManager) would fail `::socket()` with WSANOTINITIALISED.
+    /// This RAII scope keeps a thread-safe counter so any call path that
+    /// needs sockets can safely bring Winsock up on demand.
+    class WinsockScope
+    {
+      public:
+        WinsockScope()
+        {
+            if (s_refCount.fetch_add(1, std::memory_order_acq_rel) == 0)
+            {
+                WSADATA data{};
+                const int rc = ::WSAStartup(MAKEWORD(2, 2), &data);
+                s_lastError.store(rc, std::memory_order_release);
+            }
+        }
+        ~WinsockScope()
+        {
+            if (s_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+            {
+                ::WSACleanup();
+            }
+        }
+        WinsockScope(const WinsockScope&) = delete;
+        WinsockScope& operator=(const WinsockScope&) = delete;
+
+        bool Ok() const { return s_lastError.load(std::memory_order_acquire) == 0; }
+
+      private:
+        inline static std::atomic<int> s_refCount{0};
+        inline static std::atomic<int> s_lastError{0};
+    };
+#endif
 
     /// @brief UDP socket-based transport (default transport for NetworkManager).
     ///
@@ -58,6 +99,20 @@ namespace Spark::Net
         {
             if (m_socket != INVALID_SOCKET)
                 return true; // Already initialised
+
+#ifdef SPARK_PLATFORM_WINDOWS
+            // Ensure Winsock is up before we touch any socket API. Standalone
+            // transports (created outside NetworkManager, e.g. unit tests
+            // that build a bare NetworkStack) would otherwise fail socket()
+            // with WSANOTINITIALISED.
+            if (!m_winsock)
+                m_winsock = std::make_unique<WinsockScope>();
+            if (!m_winsock->Ok())
+            {
+                m_winsock.reset();
+                return false;
+            }
+#endif
 
             m_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             if (m_socket == INVALID_SOCKET)
@@ -120,6 +175,10 @@ namespace Spark::Net
 #endif
                 m_socket = INVALID_SOCKET;
             }
+#ifdef SPARK_PLATFORM_WINDOWS
+            // Drop Winsock reference; if we were the last user WSACleanup runs.
+            m_winsock.reset();
+#endif
         }
 
         bool Send(const uint8_t* data, size_t size, const std::string& address, uint16_t port) override
@@ -169,6 +228,9 @@ namespace Spark::Net
 
       private:
         SOCKET m_socket = INVALID_SOCKET;
+#ifdef SPARK_PLATFORM_WINDOWS
+        std::unique_ptr<WinsockScope> m_winsock;
+#endif
     };
 
 } // namespace Spark::Net

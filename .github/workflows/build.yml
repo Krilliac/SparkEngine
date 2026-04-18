@@ -938,6 +938,16 @@ jobs:
     - name: Build
       run: |
         set -o pipefail
+        # Purge cached static archives that the current toolchain cannot
+        # read (e.g. Apple Clang / ld bumped between runs). Same pattern as
+        # build-linux-clang — without this, the job has been failing with
+        #   "ld: libJolt.a: error adding symbols: file format not recognized"
+        for lib in $(find build -name 'lib*.a' 2>/dev/null); do
+          if ! ar t "$lib" > /dev/null 2>&1; then
+            echo "::warning::Purging stale archive $lib (unrecognized format)"
+            rm -f "$lib"
+          fi
+        done
         cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
