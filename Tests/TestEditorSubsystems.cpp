@@ -7,18 +7,18 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEditor/Source/Core/EditorTheme.h"
-#include "../SparkEditor/Source/Core/TutorialSystem.h"
-#include "../SparkEditor/Source/Workflow/EditorWorkflow.h"
-#include "../SparkEditor/Source/Prototyping/PrototypingSystem.h"
-#include "../SparkEditor/Source/UIDesigner/UIDesignerSystem.h"
-#include "../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h"
-#include "../SparkEditor/Source/VersionControl/VersionControlTypes.h"
+#include "Core/EditorTheme.h"
+#include "Core/TutorialSystem.h"
+#include "Workflow/EditorWorkflow.h"
+#include "Prototyping/PrototypingSystem.h"
+#include "UIDesigner/UIDesignerSystem.h"
+#include "LevelStreaming/LevelStreamingTypes.h"
+#include "VersionControl/VersionControlTypes.h"
 // Note: CommandPalette excluded — its .cpp requires ImGui
-#include "../SparkEditor/Source/Core/EditorLogger.h"
-#include "../SparkEditor/Source/Core/EditorCrashHandler.h"
-#include "../SparkEditor/Source/Core/ProjectManager.h"
-#include "../SparkEditor/Source/Core/EditorPluginManager.h"
+#include "Core/EditorLogger.h"
+#include "Core/EditorCrashHandler.h"
+#include "Core/ProjectManager.h"
+#include "Core/EditorPluginManager.h"
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -796,7 +796,7 @@ TEST(PluginManager_GetPluginNull)
 
 #ifdef SPARK_TEST_HAS_IMGUI
 
-#include "../SparkEditor/Source/Search/CommandPalette.h"
+#include "Search/CommandPalette.h"
 
 // --- EditorTheme full method tests ---
 

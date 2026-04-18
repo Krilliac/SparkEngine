@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Animation/AnimationRetargeting.h"
+#include "Engine/Animation/AnimationRetargeting.h"
 
 using namespace Spark::Animation;
 

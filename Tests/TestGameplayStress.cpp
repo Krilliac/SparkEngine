@@ -3,7 +3,7 @@
 // TestWeaponSystem.cpp, TestAbilitySystem.cpp patterns. Includes real EventBus header.
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/EventBus.h"
+#include "Utils/EventBus.h"
 #include <limits>
 #include <string>
 #include <unordered_map>

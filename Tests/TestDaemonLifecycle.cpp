@@ -21,10 +21,10 @@
 #include "Utils/DaemonLifecycle.h"
 #include "Utils/InGameConsole.h"
 
-#include "../SparkDaemon/src/AssetService.h"
-#include "../SparkDaemon/src/ControlService.h"
-#include "../SparkDaemon/src/DaemonServer.h"
-#include "../SparkDaemon/src/ShaderService.h"
+#include "AssetService.h"
+#include "ControlService.h"
+#include "DaemonServer.h"
+#include "ShaderService.h"
 
 #include <chrono>
 #include <cstdio>

@@ -16,7 +16,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/GTAOEffect.h"
+#include "Graphics/GTAOEffect.h"
 
 #include <cmath>
 #include <vector>

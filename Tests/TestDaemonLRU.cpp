@@ -16,8 +16,8 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
-#include "../SparkDaemon/src/AssetService.h"
-#include "../SparkDaemon/src/ShaderService.h"
+#include "AssetService.h"
+#include "ShaderService.h"
 
 #include <cstdio>
 #include <filesystem>

@@ -1,7 +1,7 @@
 // TestLogger.cpp - Tests for the unified logging system
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/Logger.h"
+#include "Utils/Logger.h"
 #include <vector>
 
 // =============================================================================

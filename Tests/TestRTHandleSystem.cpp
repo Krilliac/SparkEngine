@@ -17,7 +17,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/RTHandleSystem.h"
+#include "Graphics/RTHandleSystem.h"
 
 using Spark::Graphics::BufferedRTHandle;
 using Spark::Graphics::RTHandle;

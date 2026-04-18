@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Graphics/ShadowAtlas.h"
+#include "Graphics/ShadowAtlas.h"
 
 // ============================================================================
 // Initialization

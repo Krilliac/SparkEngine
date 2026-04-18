@@ -45,7 +45,7 @@ namespace Spark::Graphics
     {
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loading material from file: %s", filePath.c_str());
         SPARK_DEBUG_HOOK_RESOURCE(ResourceLoadBegin, filePath, 0.0);
-        MaterialDefinition def;
+        SparkMatDefinition def;
         if (!ParseFile(filePath, def))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to parse material file: %s", filePath.c_str());
@@ -110,7 +110,7 @@ namespace Spark::Graphics
         return str.substr(start, end - start + 1);
     }
 
-    bool MaterialLoader::ParseFile(const std::string& filePath, MaterialDefinition& outDef) const
+    bool MaterialLoader::ParseFile(const std::string& filePath, SparkMatDefinition& outDef) const
     {
         std::ifstream file(filePath);
         if (!file.is_open())
@@ -189,7 +189,7 @@ namespace Spark::Graphics
         return BlendMode::Opaque;
     }
 
-    bool MaterialLoader::RegisterMaterial(const MaterialDefinition& def)
+    bool MaterialLoader::RegisterMaterial(const SparkMatDefinition& def)
     {
         // Access the global MaterialSystem to create the material.
         // MaterialSystem is expected to be initialized before loading materials.

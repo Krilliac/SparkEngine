@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Destruction/DestructionSystem.h"
+#include "Engine/Destruction/DestructionSystem.h"
 
 TEST(Destructible_ApplyDamage)
 {

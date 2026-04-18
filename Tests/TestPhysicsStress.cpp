@@ -2,7 +2,7 @@
 // Standalone implementations for CI testing (no Jolt/DirectXMath dependency)
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Destruction/DestructionSystem.h"
+#include "Engine/Destruction/DestructionSystem.h"
 #include <cmath>
 #include <limits>
 #include <vector>

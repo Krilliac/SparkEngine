@@ -1,7 +1,7 @@
 // TestJobSystem.cpp - Tests for the thread pool job system
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/JobSystem.h"
+#include "Utils/JobSystem.h"
 #include <atomic>
 #include <numeric>
 #include <vector>

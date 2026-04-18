@@ -11,8 +11,8 @@
 #endif
 #endif
 
-#include "../SparkEngine/Source/Engine/AI/RecastDetourBackend.h"
-#include "../SparkEngine/Source/Engine/AI/NavMesh.h"
+#include "Engine/AI/RecastDetourBackend.h"
+#include "Engine/AI/NavMesh.h"
 
 using namespace Spark::AI;
 

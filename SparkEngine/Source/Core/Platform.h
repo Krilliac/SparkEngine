@@ -124,7 +124,15 @@
 // C++ Feature Detection (library features gated behind __cpp_lib_* / __has_include)
 // These allow gradual adoption of C++23 library features and forward-compat
 // with C++26 features that some compilers already ship.
+//
+// <version> must be pulled in first so that all feature-test macros are
+// populated before we gate on them — otherwise the set of SPARK_HAS_* macros
+// (and therefore the visibility of polyfills like std::expected below) would
+// depend on which standard headers each TU happened to include earlier,
+// producing ODR violations across the program under LTO.
 // ============================================================================
+
+#include <version>
 
 // C++23 library features
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202211L

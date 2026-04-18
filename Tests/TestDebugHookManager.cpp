@@ -8,7 +8,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/DebugHookManager.h"
+#include "Utils/DebugHookManager.h"
 
 #include <algorithm>
 #include <string>

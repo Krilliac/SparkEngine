@@ -1,6 +1,6 @@
 /**
  * @file GameModule.h
- * @brief {{PROJECT_NAME}} — FPS game module
+ * @brief FPSStarter — FPS game module
  *
  * First-person shooter template with weapon system, AI enemies, health,
  * and a basic HUD. Extend this to build your own FPS game.
@@ -39,7 +39,7 @@ struct WeaponDef
 {
     std::string name;
     float damage = 25.0f;
-    float fireRate = 0.1f;         ///< Seconds between shots
+    float fireRate = 0.1f; ///< Seconds between shots
     float range = 100.0f;
     uint32_t magazineSize = 30;
     float reloadTime = 2.0f;
@@ -50,16 +50,16 @@ struct WeaponDef
 // FPS Game Module
 // ============================================================================
 
-class {{PROJECT_NAME}}Module : public Spark::IModule
+class FPSStarterModule : public Spark::IModule
 {
   public:
-    {{PROJECT_NAME}}Module() = default;
-    ~{{PROJECT_NAME}}Module() override = default;
+    FPSStarterModule() = default;
+    ~FPSStarterModule() override = default;
 
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
-        info.name = "{{PROJECT_NAME}}";
+        info.name = "FPSStarter";
         info.version = "0.1.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;

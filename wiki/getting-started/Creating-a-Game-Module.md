@@ -176,6 +176,7 @@ In exactly one `.cpp` file, use the `SPARK_IMPLEMENT_MODULE` macro to generate t
 ```cpp
 // GameModule.cpp
 #include "GameModule.h"
+#include <Spark/ModuleDllMain.h>  // Emits the canonical Windows DllMain
 
 SPARK_IMPLEMENT_MODULE(MyGameModule)
 ```

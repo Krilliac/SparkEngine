@@ -1,7 +1,7 @@
 // TestStackTrace.cpp - Tests for portable stack trace capture
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/StackTrace.h"
+#include "Utils/StackTrace.h"
 
 // =============================================================================
 // Basic Capture

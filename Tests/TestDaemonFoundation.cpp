@@ -18,8 +18,8 @@
 #include "Utils/DaemonProtocol.h"
 
 // SparkDaemon sources are pulled into SparkTests directly.
-#include "../SparkDaemon/src/ControlService.h"
-#include "../SparkDaemon/src/DaemonServer.h"
+#include "ControlService.h"
+#include "DaemonServer.h"
 
 #include <atomic>
 #include <chrono>

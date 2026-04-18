@@ -1,8 +1,9 @@
 /**
  * @file GameModule.cpp
- * @brief {{PROJECT_NAME}} module registration
+ * @brief FPSStarter module registration
  */
 
 #include "GameModule.h"
+#include <Spark/ModuleDllMain.h>
 
-SPARK_REGISTER_MODULE({{PROJECT_NAME}}Module)
+SPARK_IMPLEMENT_MODULE(FPSStarterModule)

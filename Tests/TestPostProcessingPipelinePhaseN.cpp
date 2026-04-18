@@ -22,7 +22,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/PostProcessingPipeline.h"
+#include "Graphics/PostProcessingPipeline.h"
 
 using Spark::Graphics::PostProcessingPipeline;
 

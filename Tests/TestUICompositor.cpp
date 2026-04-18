@@ -16,7 +16,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/UICompositor.h"
+#include "Graphics/UICompositor.h"
 
 using Spark::Graphics::CompositeOp;
 using Spark::Graphics::CompositeRequest;

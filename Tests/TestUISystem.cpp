@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/UI/UISystem.h"
+#include "Engine/UI/UISystem.h"
 
 TEST(UI_CreateCanvas)
 {

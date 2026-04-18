@@ -71,7 +71,7 @@ namespace Spark::AI
             auto index = static_cast<uint32_t>(m_perceivableEntities.size());
 
             PerceivableEntity pe;
-            pe.entityId = entity;
+            pe.entityId = static_cast<EntityID>(entity);
             pe.position = transform->position;
             m_perceivableEntities.push_back(pe);
 
@@ -126,7 +126,7 @@ namespace Spark::AI
             }
 
             AgentPerceptionJob job;
-            job.entityId = entity;
+            job.entityId = static_cast<EntityID>(entity);
             job.position = transform->position;
             job.forward = ComputeForwardFromRotation(transform->rotation);
             job.perception = *perception; // snapshot copy
@@ -326,7 +326,7 @@ namespace Spark::AI
     {
         for (const auto& job : m_agentJobs)
         {
-            auto* perception = world.GetComponent<PerceptionComponent>(job.entityId);
+            auto* perception = world.GetComponent<PerceptionComponent>(static_cast<entt::entity>(job.entityId));
             if (perception != nullptr)
             {
                 *perception = job.perception;

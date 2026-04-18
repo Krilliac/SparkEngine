@@ -1,6 +1,6 @@
 /**
  * @file GameModule.h
- * @brief {{PROJECT_NAME}} — Multiplayer arena game module
+ * @brief MultiplayerArena — Multiplayer arena game module
  *
  * Multiplayer arena template with networking, lobby system, team management,
  * scoreboard, and respawn. Uses SparkEngine's NetworkManager for replication.
@@ -22,7 +22,7 @@ struct NetPlayer
 {
     uint32_t playerId = 0;
     std::string name;
-    uint8_t team = 0;    ///< 0 = unassigned, 1 = red, 2 = blue
+    uint8_t team = 0; ///< 0 = unassigned, 1 = red, 2 = blue
     float health = 100.0f;
     uint32_t kills = 0;
     uint32_t deaths = 0;
@@ -50,7 +50,7 @@ struct MatchState
 {
     MatchPhase phase = MatchPhase::Lobby;
     float matchTimer = 0.0f;
-    float matchDuration = 300.0f;    ///< 5 minutes
+    float matchDuration = 300.0f; ///< 5 minutes
     float countdownTimer = 5.0f;
     uint32_t teamRedScore = 0;
     uint32_t teamBlueScore = 0;
@@ -62,16 +62,16 @@ struct MatchState
 // Multiplayer Arena Game Module
 // ============================================================================
 
-class {{PROJECT_NAME}}Module : public Spark::IModule
+class MultiplayerArenaModule : public Spark::IModule
 {
   public:
-    {{PROJECT_NAME}}Module() = default;
-    ~{{PROJECT_NAME}}Module() override = default;
+    MultiplayerArenaModule() = default;
+    ~MultiplayerArenaModule() override = default;
 
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
-        info.name = "{{PROJECT_NAME}}";
+        info.name = "MultiplayerArena";
         info.version = "0.1.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;

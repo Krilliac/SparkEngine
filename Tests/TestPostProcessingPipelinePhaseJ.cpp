@@ -26,7 +26,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/PostProcessingPipeline.h"
+#include "Graphics/PostProcessingPipeline.h"
 
 #include <algorithm>
 #include <string>

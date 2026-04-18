@@ -14,7 +14,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/DenoiserInterface.h"
+#include "Graphics/DenoiserInterface.h"
 
 #include <cmath>
 #include <cstdint>

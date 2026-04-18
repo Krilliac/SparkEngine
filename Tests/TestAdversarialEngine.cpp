@@ -16,9 +16,9 @@
 #endif
 #endif
 
-#include "../SparkEngine/Source/Utils/EventBus.h"
-#include "../SparkEngine/Source/Utils/ConsoleVariable.h"
-#include "../SparkEngine/Source/Engine/Events/EventSystem.h"
+#include "Utils/EventBus.h"
+#include "Utils/ConsoleVariable.h"
+#include "Engine/Events/EventSystem.h"
 
 #include <algorithm>
 #include <any>

@@ -17,12 +17,12 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Core/Platform.h"
+#include "Core/Platform.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
-#include "../SparkEngine/Source/Graphics/BVHAccelerator.h"
-#include "../SparkEngine/Source/Graphics/FrustumCulling.h"
+#include "Graphics/BVHAccelerator.h"
+#include "Graphics/FrustumCulling.h"
 
 #include <DirectXMath.h>
 

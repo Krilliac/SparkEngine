@@ -1,9 +1,9 @@
 {
-    "name": "{{PROJECT_NAME}}",
+    "name": "MultiplayerArena",
     "version": "0.1.0",
     "engineVersion": "1.0.0",
     "description": "A multiplayer arena built with SparkEngine",
-    "modules": ["{{PROJECT_NAME}}"],
+    "modules": ["MultiplayerArena"],
     "defaultScene": "Assets/Scenes/Lobby.scene",
     "genre": "Multiplayer"
 }

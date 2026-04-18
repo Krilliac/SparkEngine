@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Loading/LoadingScreen.h"
+#include "Engine/Loading/LoadingScreen.h"
 
 TEST(Loading_BasicExecution)
 {

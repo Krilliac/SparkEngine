@@ -14,7 +14,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/ShaderVariantSystem.h"
+#include "Graphics/ShaderVariantSystem.h"
 
 #include <unordered_set>
 

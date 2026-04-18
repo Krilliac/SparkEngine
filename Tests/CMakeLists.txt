@@ -496,6 +496,8 @@ add_executable(SparkTests
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
     TestGameModulePlatformerARPG.cpp
+    # Compile-time validation that shipped project templates are real C++
+    TestTemplatesCompile.cpp
     # FPS game module source needed by TestGameModeReal
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/GameMode.cpp"
     # Editor core sources (no ImGui dependency)

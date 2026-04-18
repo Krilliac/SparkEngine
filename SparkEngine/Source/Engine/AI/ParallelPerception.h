@@ -56,6 +56,13 @@ class World;
 namespace Spark::AI
 {
 
+    // AI uses a uint32_t EntityID alias (matches MovementSystem.h). Redeclared
+    // locally so that unqualified `EntityID` resolves deterministically inside
+    // this namespace regardless of whether ::EntityID (entt::entity, from
+    // CoreComponents.h) has also been pulled into the TU. Without this, the
+    // field type below silently differs between TUs → ODR violation under LTO.
+    using EntityID = uint32_t;
+
     /**
      * @brief Describes a perceivable entity in the world for spatial indexing.
      *

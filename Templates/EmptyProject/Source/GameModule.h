@@ -1,6 +1,6 @@
 /**
  * @file GameModule.h
- * @brief {{PROJECT_NAME}} game module
+ * @brief EmptyProject game module
  *
  * This is your game's main module. It implements Spark::IModule and serves
  * as the entry point for all game logic. The engine loads this module at
@@ -11,19 +11,19 @@
 
 #include <Spark/SparkSDK.h>
 
-class {{PROJECT_NAME}}Module : public Spark::IModule
+class EmptyProjectModule : public Spark::IModule
 {
-public:
-    {{PROJECT_NAME}}Module() = default;
-    ~{{PROJECT_NAME}}Module() override = default;
+  public:
+    EmptyProjectModule() = default;
+    ~EmptyProjectModule() override = default;
 
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
-        info.name       = "{{PROJECT_NAME}}";
-        info.version    = "0.1.0";
+        info.name = "EmptyProject";
+        info.version = "0.1.0";
         info.sdkVersion = SPARK_SDK_VERSION;
-        info.loadOrder  = 1000;
+        info.loadOrder = 1000;
         return info;
     }
 
@@ -51,6 +51,6 @@ public:
         // TODO: Render your game here
     }
 
-private:
+  private:
     Spark::IEngineContext* m_context = nullptr;
 };

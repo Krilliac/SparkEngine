@@ -36,7 +36,7 @@ namespace Spark::Graphics
      *
      * Intermediate representation before creating an actual Material object.
      */
-    struct MaterialDefinition
+    struct SparkMatDefinition
     {
         std::string name;
         std::string blendMode = "Opaque";
@@ -90,19 +90,19 @@ namespace Spark::Graphics
         MaterialLoader() = default;
 
         /**
-         * @brief Parse a .sparkmat file into a MaterialDefinition.
+         * @brief Parse a .sparkmat file into a SparkMatDefinition.
          * @param filePath Path to the file.
          * @param outDef   Parsed definition output.
          * @return true if the file was parsed successfully.
          */
-        bool ParseFile(const std::string& filePath, MaterialDefinition& outDef) const;
+        bool ParseFile(const std::string& filePath, SparkMatDefinition& outDef) const;
 
         /**
-         * @brief Register a parsed MaterialDefinition with the MaterialSystem.
+         * @brief Register a parsed SparkMatDefinition with the MaterialSystem.
          * @param def The parsed material definition.
          * @return true if the material was created successfully.
          */
-        bool RegisterMaterial(const MaterialDefinition& def);
+        bool RegisterMaterial(const SparkMatDefinition& def);
 
         std::vector<std::string> m_loadedNames;
     };

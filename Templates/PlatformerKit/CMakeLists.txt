@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project({{PROJECT_NAME}} LANGUAGES CXX)
+project(PlatformerKit LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,22 +16,22 @@ file(GLOB_RECURSE GAME_SOURCES
     "Source/*.hpp"
 )
 
-spark_add_game_module({{PROJECT_NAME}} ${GAME_SOURCES})
-target_include_directories({{PROJECT_NAME}} PRIVATE "Source")
+spark_add_game_module(PlatformerKit ${GAME_SOURCES})
+target_include_directories(PlatformerKit PRIVATE "Source")
 
-add_custom_command(TARGET {{PROJECT_NAME}} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:{{PROJECT_NAME}}>/Shaders"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:{{PROJECT_NAME}}>/Assets"
+add_custom_command(TARGET PlatformerKit POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PlatformerKit>/Shaders"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PlatformerKit>/Assets"
     COMMENT "Creating asset directories"
 )
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/Assets")
-    add_custom_command(TARGET {{PROJECT_NAME}} POST_BUILD
+    add_custom_command(TARGET PlatformerKit POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/Assets"
-            "$<TARGET_FILE_DIR:{{PROJECT_NAME}}>/Assets"
+            "$<TARGET_FILE_DIR:PlatformerKit>/Assets"
         COMMENT "Copying game assets"
     )
 endif()
 
-message(STATUS "{{PROJECT_NAME}} Platformer project configured")
+message(STATUS "PlatformerKit Platformer project configured")

@@ -1,8 +1,8 @@
 {
     "modules": [
         {
-            "name": "{{PROJECT_NAME}}",
-            "path": "{{PROJECT_NAME}}.dll",
+            "name": "MultiplayerArena",
+            "path": "MultiplayerArena.dll",
             "loadOrder": 1000
         }
     ]

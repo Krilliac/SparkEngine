@@ -21,8 +21,8 @@
 #endif
 #endif
 
-#include "../SparkEngine/Source/Engine/Networking/ConnectionScopeFilter.h"
-#include "../SparkEngine/Source/Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/ConnectionScopeFilter.h"
+#include "Engine/Networking/NetworkManager.h"
 
 using namespace Spark::Net;
 

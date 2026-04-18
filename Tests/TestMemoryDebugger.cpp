@@ -1,7 +1,7 @@
 // TestMemoryDebugger.cpp - Tests for memory leak detection, allocation tracking, and corruption detection
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/MemoryDebugger.h"
+#include "Utils/MemoryDebugger.h"
 
 // =============================================================================
 // Basic Allocation Tracking

@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/AI/EnvironmentQuery.h"
+#include "Engine/AI/EnvironmentQuery.h"
 
 using namespace Spark::AI;
 

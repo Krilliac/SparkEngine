@@ -326,13 +326,23 @@ namespace SparkEditor
             // Copy the entire template directory
             fs::copy(templatePath, destPath, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
 
-            // Text file extensions that should have placeholders replaced
+            // Text file extensions that should have their template name rewritten
             static const std::set<std::string> textExtensions = {".h",    ".hpp",   ".cpp", ".c", ".txt",
                                                                  ".json", ".cmake", ".md",  ".py"};
 
-            const std::string placeholder = "{{PROJECT_NAME}}";
+            // Templates are shipped as real, compilable game modules named after
+            // their directory (e.g. `Templates/FPSStarter` uses `FPSStarterModule`,
+            // project name `FPSStarter`, CMake target `FPSStarter`, etc.). When we
+            // materialize a user project from a template, rewrite every textual
+            // occurrence of the template's name to the user's chosen project name
+            // so they do not have to do it by hand.
+            const std::string templateName = fs::path(templatePath).filename().string();
+            if (templateName.empty() || templateName == projectName)
+            {
+                // Nothing to rewrite — the copy is the final artifact.
+                return true;
+            }
 
-            // Walk through all files and replace {{PROJECT_NAME}}
             for (auto& entry : fs::recursive_directory_iterator(destPath))
             {
                 if (!entry.is_regular_file())
@@ -342,7 +352,6 @@ namespace SparkEditor
                 if (!Spark::ContainerUtils::Contains(textExtensions, ext))
                     continue;
 
-                // Read file
                 std::ifstream inFile(entry.path());
                 if (!inFile.is_open())
                     continue;
@@ -350,18 +359,16 @@ namespace SparkEditor
                 std::string content((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
                 inFile.close();
 
-                // Replace placeholders
-                if (!content.contains(placeholder))
+                if (!content.contains(templateName))
                     continue;
 
                 size_t pos = 0;
-                while ((pos = content.find(placeholder, pos)) != std::string::npos)
+                while ((pos = content.find(templateName, pos)) != std::string::npos)
                 {
-                    content.replace(pos, placeholder.length(), projectName);
+                    content.replace(pos, templateName.length(), projectName);
                     pos += projectName.length();
                 }
 
-                // Write back
                 std::ofstream outFile(entry.path());
                 if (outFile.is_open())
                 {

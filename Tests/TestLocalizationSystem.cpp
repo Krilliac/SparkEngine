@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Localization/LocalizationSystem.h"
+#include "Engine/Localization/LocalizationSystem.h"
 
 // ============================================================================
 // StringTable Tests

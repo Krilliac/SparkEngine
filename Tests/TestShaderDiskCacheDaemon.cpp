@@ -22,9 +22,9 @@
 #include "Utils/DaemonConnection.h"
 #include "Utils/ShaderServiceClient.h"
 
-#include "../SparkDaemon/src/ControlService.h"
-#include "../SparkDaemon/src/DaemonServer.h"
-#include "../SparkDaemon/src/ShaderService.h"
+#include "ControlService.h"
+#include "DaemonServer.h"
+#include "ShaderService.h"
 
 #include <chrono>
 #include <cstdio>

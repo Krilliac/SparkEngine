@@ -7,8 +7,8 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEditor/Source/Communication/CollaborativeEditSession.h"
-#include "../SparkEditor/Source/Communication/LiveEditBridge.h"
+#include "Communication/CollaborativeEditSession.h"
+#include "Communication/LiveEditBridge.h"
 #include <cmath>
 #include <thread>
 #include <chrono>

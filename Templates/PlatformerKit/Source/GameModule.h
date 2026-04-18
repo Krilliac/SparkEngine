@@ -1,6 +1,6 @@
 /**
  * @file GameModule.h
- * @brief {{PROJECT_NAME}} — Platformer game module
+ * @brief PlatformerKit — Platformer game module
  *
  * Side-scrolling / 3D platformer template with character controller,
  * collectibles, checkpoints, and level timer.
@@ -49,16 +49,16 @@ struct Checkpoint
 // Platformer Game Module
 // ============================================================================
 
-class {{PROJECT_NAME}}Module : public Spark::IModule
+class PlatformerKitModule : public Spark::IModule
 {
   public:
-    {{PROJECT_NAME}}Module() = default;
-    ~{{PROJECT_NAME}}Module() override = default;
+    PlatformerKitModule() = default;
+    ~PlatformerKitModule() override = default;
 
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
-        info.name = "{{PROJECT_NAME}}";
+        info.name = "PlatformerKit";
         info.version = "0.1.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;

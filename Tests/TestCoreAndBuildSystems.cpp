@@ -8,12 +8,12 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Core/AssetHandle.h"
-#include "../SparkEngine/Source/Core/Reflection.h"
-#include "../SparkEngine/Source/Engine/Build/GamePackager.h"
-#include "../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h"
-#include "../SparkEngine/Source/Engine/Mobile/MobilePlatform.h"
-#include "../SparkEngine/Source/Utils/CrashHandler.h"
+#include "Core/AssetHandle.h"
+#include "Core/Reflection.h"
+#include "Engine/Build/GamePackager.h"
+#include "Engine/LevelDesign/CSGSystem.h"
+#include "Engine/Mobile/MobilePlatform.h"
+#include "Utils/CrashHandler.h"
 
 // ============================================================================
 // 1. AssetHandle

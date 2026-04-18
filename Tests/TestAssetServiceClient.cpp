@@ -14,9 +14,9 @@
 #include "Utils/AssetServiceClient.h"
 #include "Utils/DaemonClient.h"
 
-#include "../SparkDaemon/src/AssetService.h"
-#include "../SparkDaemon/src/ControlService.h"
-#include "../SparkDaemon/src/DaemonServer.h"
+#include "AssetService.h"
+#include "ControlService.h"
+#include "DaemonServer.h"
 
 #include <atomic>
 #include <chrono>

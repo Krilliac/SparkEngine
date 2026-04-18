@@ -46,23 +46,7 @@ SPARK_GAME_API Game* g_game = nullptr;
 // Global in-game console overlay used by Game::Render().
 Console g_console;
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <windows.h>
-
-// DLL entry point
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
-{
-    switch (reason)
-    {
-    case DLL_PROCESS_ATTACH:
-        DisableThreadLibraryCalls(hModule);
-        break;
-    case DLL_PROCESS_DETACH:
-        break;
-    }
-    return TRUE;
-}
-#endif
+#include <Spark/ModuleDllMain.h>
 
 // ===================================================================================
 // SparkGameModule implementation

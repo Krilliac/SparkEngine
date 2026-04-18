@@ -19,7 +19,7 @@
 #endif
 #endif
 
-#include "../SparkEngine/Source/Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/NetworkManager.h"
 
 #ifdef ENABLE_NETWORKING
 

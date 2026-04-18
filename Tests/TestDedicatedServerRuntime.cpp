@@ -1,6 +1,6 @@
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Engine/Networking/DedicatedServer.h"
+#include "Engine/Networking/DedicatedServer.h"
 
 #ifdef ENABLE_NETWORKING
 

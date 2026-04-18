@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Networking/ClientPrediction.h"
+#include "Engine/Networking/ClientPrediction.h"
 
 TEST(Prediction_RecordInput)
 {

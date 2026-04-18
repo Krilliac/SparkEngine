@@ -17,7 +17,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/PersistentMaterialCB.h"
+#include "Graphics/PersistentMaterialCB.h"
 
 #include <array>
 #include <cstdint>

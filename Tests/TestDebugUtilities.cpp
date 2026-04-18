@@ -7,10 +7,10 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/CpuDebugger.h"
-#include "../SparkEngine/Source/Utils/CacheDebugger.h"
-#include "../SparkEngine/Source/Utils/IODebugger.h"
-#include "../SparkEngine/Source/Utils/ThreadDebugger.h"
+#include "Utils/CpuDebugger.h"
+#include "Utils/CacheDebugger.h"
+#include "Utils/IODebugger.h"
+#include "Utils/ThreadDebugger.h"
 
 #include <chrono>
 #include <thread>
