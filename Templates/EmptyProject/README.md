@@ -16,7 +16,12 @@ This template requires a **built and installed** SparkEngine SDK. See the [Templ
    cd MyGame
    ```
 
-2. Replace all `{{PROJECT_NAME}}` placeholders with your project name in:
+2. Rename every occurrence of `EmptyProject` to your project name. The quickest way is a bulk rename plus the built-in editor scaffolder, which does this for you automatically when creating a project from a template:
+   ```bash
+   # Manual rename (from inside the copied directory)
+   grep -rl 'EmptyProject' . | xargs sed -i 's/EmptyProject/MyGame/g'
+   ```
+   Files touched:
    - `CMakeLists.txt`
    - `Source/GameModule.h`
    - `Source/GameModule.cpp`

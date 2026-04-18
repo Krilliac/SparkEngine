@@ -1,6 +1,6 @@
 /**
  * @file GameModule.h
- * @brief {{PROJECT_NAME}} — RPG game module
+ * @brief RPGStarter — RPG game module
  *
  * Role-playing game template with inventory, dialogue, quest tracking,
  * ability system, and save/load support. Extend this for your RPG.
@@ -54,16 +54,16 @@ struct QuestEntry
 // RPG Game Module
 // ============================================================================
 
-class {{PROJECT_NAME}}Module : public Spark::IModule
+class RPGStarterModule : public Spark::IModule
 {
   public:
-    {{PROJECT_NAME}}Module() = default;
-    ~{{PROJECT_NAME}}Module() override = default;
+    RPGStarterModule() = default;
+    ~RPGStarterModule() override = default;
 
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
-        info.name = "{{PROJECT_NAME}}";
+        info.name = "RPGStarter";
         info.version = "0.1.0";
         info.sdkVersion = SPARK_SDK_VERSION;
         info.loadOrder = 1000;

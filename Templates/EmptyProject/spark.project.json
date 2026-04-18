@@ -1,10 +1,10 @@
 {
-    "name": "{{PROJECT_NAME}}",
+    "name": "EmptyProject",
     "version": "0.1.0",
     "engineVersion": "1.0.0",
     "description": "A new SparkEngine game project",
     "modules": [
-        "{{PROJECT_NAME}}"
+        "EmptyProject"
     ],
     "defaultScene": "Assets/Scenes/Default.scene"
 }

@@ -98,29 +98,33 @@ def cmd_new(args):
     # Copy template
     shutil.copytree(template_path, project_path)
 
-    # Replace {{PROJECT_NAME}} placeholders in all text files
-    placeholder = "{{PROJECT_NAME}}"
+    # Templates are shipped as real, compilable game modules named after their
+    # directory (e.g. Templates/FPSStarter → class FPSStarterModule, target
+    # FPSStarter, etc.). Rewrite every textual occurrence of the template
+    # name to the user's chosen project name so they do not have to.
     text_extensions = {".h", ".hpp", ".cpp", ".c", ".txt", ".json", ".cmake", ".md", ".py"}
 
-    for root, dirs, files in os.walk(project_path):
-        for filename in files:
-            filepath = Path(root) / filename
-            if filepath.suffix.lower() in text_extensions:
-                try:
-                    content = filepath.read_text(encoding="utf-8")
-                    if placeholder in content:
-                        content = content.replace(placeholder, project_name)
-                        filepath.write_text(content, encoding="utf-8")
-                except (UnicodeDecodeError, PermissionError):
-                    pass
+    if template_name and template_name != project_name:
+        for root, dirs, files in os.walk(project_path):
+            for filename in files:
+                filepath = Path(root) / filename
+                if filepath.suffix.lower() in text_extensions:
+                    try:
+                        content = filepath.read_text(encoding="utf-8")
+                        if template_name in content:
+                            content = content.replace(template_name, project_name)
+                            filepath.write_text(content, encoding="utf-8")
+                    except (UnicodeDecodeError, PermissionError):
+                        pass
 
-    # Rename template files that contain the placeholder in their name
-    for root, dirs, files in os.walk(project_path, topdown=False):
-        for filename in files:
-            if placeholder in filename:
-                old_path = Path(root) / filename
-                new_path = Path(root) / filename.replace(placeholder, project_name)
-                old_path.rename(new_path)
+        # Rename any files whose name matches the template (rare, but keeps the
+        # "copy and rename" UX lossless).
+        for root, dirs, files in os.walk(project_path, topdown=False):
+            for filename in files:
+                if template_name in filename:
+                    old_path = Path(root) / filename
+                    new_path = Path(root) / filename.replace(template_name, project_name)
+                    old_path.rename(new_path)
 
     print()
     print(f"Project '{project_name}' created successfully!")

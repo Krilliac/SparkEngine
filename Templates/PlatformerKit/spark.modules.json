@@ -1,8 +1,8 @@
 {
     "modules": [
         {
-            "name": "{{PROJECT_NAME}}",
-            "path": "{{PROJECT_NAME}}.dll",
+            "name": "PlatformerKit",
+            "path": "PlatformerKit.dll",
             "loadOrder": 1000
         }
     ]

@@ -7,6 +7,10 @@ This directory contains project templates for building **game modules** that run
 | Name | Description |
 |------|-------------|
 | **EmptyProject** | Minimal scaffolding — a blank `IModule` implementation ready for your game logic |
+| **FPSStarter** | First-person shooter starter — weapon definitions, player state, HUD hook-up |
+| **MultiplayerArena** | Networked arena deathmatch — team assignment, round logic, respawn flow |
+| **PlatformerKit** | 2D/2.5D platformer foundation — checkpoints, collectibles, player controller |
+| **RPGStarter** | Single-player RPG — quest system, inventory, character progression |
 
 > For additional templates (physics, AI, networking, procedural generation, and more), see the **[SparkTemplates](https://github.com/Krilliac/SparkTemplates)** repository.
 
@@ -81,13 +85,17 @@ TemplateName/
 
 ## Creating a New Project from a Template
 
-1. Copy the `EmptyProject` directory and rename it:
+1. Copy the template directory of your choice and rename it:
    ```bash
-   cp -r Templates/EmptyProject MyGame
+   cp -r Templates/EmptyProject MyGame   # or FPSStarter, RPGStarter, etc.
    cd MyGame
    ```
 
-2. Replace all `{{PROJECT_NAME}}` placeholders with your project name in `CMakeLists.txt`, `Source/GameModule.h`, `Source/GameModule.cpp`, `spark.project.json`, and `spark.modules.json`.
+2. Rename every occurrence of the template's name (`EmptyProject`, `FPSStarter`, `MultiplayerArena`, `PlatformerKit`, or `RPGStarter`) to your project name. A one-liner from inside the copied directory:
+   ```bash
+   grep -rl 'EmptyProject' . | xargs sed -i 's/EmptyProject/MyGame/g'
+   ```
+   The editor's **File → New Project From Template** flow does this rename automatically via `ProjectManager::CreateProjectFromTemplate` — no manual substitution needed if you use the editor UI.
 
 3. Build and run:
    ```bash
