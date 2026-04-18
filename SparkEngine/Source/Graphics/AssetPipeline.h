@@ -31,6 +31,18 @@
 
 using Microsoft::WRL::ComPtr;
 
+// Forward declarations — MeshAsset (and the non-Windows BindMesh / ProcessDrawList
+// path) needs to hold RHI vertex/index buffers, and TextureAsset holds an
+// RHI texture, but pulling in the full RHIResources.h would drag the
+// transitive RHI headers into every TU that touches AssetPipeline. The .cpp
+// files that actually construct the resources include RHIResources.h /
+// RHI.h directly.
+namespace Spark::RHI
+{
+    class IRHIBuffer;
+    class IRHITexture;
+} // namespace Spark::RHI
+
 /**
  * @brief Asset types supported by the pipeline
  */
@@ -185,7 +197,13 @@ class Asset
 class MeshAsset : public Asset
 {
   public:
-    MeshAsset(const std::string& path) : Asset(path, AssetType::Mesh) {}
+    // Out-of-line ctor / dtor so the `std::unique_ptr<Spark::RHI::IRHIBuffer>`
+    // members can work with the forward-declared type above. Their
+    // definitions live in AssetTypes.cpp where `RHIResources.h` is
+    // included and `IRHIBuffer` is complete — the inline versions would
+    // require every TU including this header to see the full RHI headers.
+    explicit MeshAsset(const std::string& path);
+    ~MeshAsset() override;
 
     HRESULT Load(ID3D11Device* device) override;
     void Unload() override;
@@ -197,10 +215,30 @@ class MeshAsset : public Asset
     uint32_t GetVertexCount() const { return static_cast<uint32_t>(m_meshData.vertices.size()); }
     uint32_t GetIndexCount() const { return static_cast<uint32_t>(m_meshData.indices.size()); }
 
+    // ------------------------------------------------------------------------
+    // RHI buffer accessors — populated on Linux / macOS only. Windows keeps
+    // driving the D3D11 ComPtr buffers above and leaves these as nullptr.
+    // ------------------------------------------------------------------------
+    Spark::RHI::IRHIBuffer* GetRHIVertexBuffer() const { return m_rhiVertexBuffer.get(); }
+    Spark::RHI::IRHIBuffer* GetRHIIndexBuffer() const { return m_rhiIndexBuffer.get(); }
+
+    /// Transfer ownership of pre-built RHI vertex/index buffers. Used by the
+    /// non-Windows AssetPipeline::LoadMesh post-load hook that uploads the
+    /// CPU-side `m_meshData` into the bridge's device. Replaces any previous
+    /// buffers (safe across hot-reload).
+    void SetRHIBuffers(std::unique_ptr<Spark::RHI::IRHIBuffer> vb, std::unique_ptr<Spark::RHI::IRHIBuffer> ib);
+
   private:
     MeshAssetData m_meshData;
     ComPtr<ID3D11Buffer> m_vertexBuffer;
     ComPtr<ID3D11Buffer> m_indexBuffer;
+
+    // RHI-backed buffers for the non-Windows render path. Declared after the
+    // D3D11 ComPtrs so the destructor order teardown is: RHI bufs → ComPtrs →
+    // mesh data vectors (matches "last constructed, first destroyed" with no
+    // cross-member references either direction).
+    std::unique_ptr<Spark::RHI::IRHIBuffer> m_rhiVertexBuffer;
+    std::unique_ptr<Spark::RHI::IRHIBuffer> m_rhiIndexBuffer;
 };
 
 /**
@@ -209,7 +247,12 @@ class MeshAsset : public Asset
 class TextureAsset : public Asset
 {
   public:
-    TextureAsset(const std::string& path) : Asset(path, AssetType::Texture) {}
+    // Out-of-line ctor / dtor for the same reason as MeshAsset: the
+    // `std::unique_ptr<Spark::RHI::IRHITexture>` member needs the type
+    // complete at destruction time, and we want RHIResources.h confined
+    // to the .cpp. Definitions live in AssetTypes.cpp.
+    explicit TextureAsset(const std::string& path);
+    ~TextureAsset() override;
 
     HRESULT Load(ID3D11Device* device) override;
     void Unload() override;
@@ -219,11 +262,21 @@ class TextureAsset : public Asset
     uint32_t GetWidth() const { return m_width; }
     uint32_t GetHeight() const { return m_height; }
 
+    // RHI texture handle — populated on Linux/macOS after image load, nullptr
+    // on Windows (which uses the D3D11 ComPtrs above). Non-owning pointer
+    // accessor for the render path; ownership stays with the unique_ptr.
+    Spark::RHI::IRHITexture* GetRHITexture() const { return m_rhiTexture.get(); }
+    void SetRHITexture(std::unique_ptr<Spark::RHI::IRHITexture> tex);
+
   private:
     ComPtr<ID3D11Texture2D> m_texture;
     ComPtr<ID3D11ShaderResourceView> m_srv;
     uint32_t m_width = 0;
     uint32_t m_height = 0;
+
+    // RHI-backed texture for the non-Windows render path. Declared after
+    // the D3D11 ComPtrs so destruction order is predictable.
+    std::unique_ptr<Spark::RHI::IRHITexture> m_rhiTexture;
 };
 
 /**
@@ -365,6 +418,20 @@ class AssetPipeline
     void BindMaterial(std::string_view materialPath);
     void DrawBoundMesh();
 
+    // Non-Windows: uploads the freshly-loaded CPU-side mesh data
+    // (`mesh.GetMeshData()`) into RHI vertex/index buffers via the
+    // Linux/macOS RHI bridge singleton, and hands ownership to the MeshAsset
+    // via `SetRHIBuffers`. No-op when the bridge isn't initialized yet,
+    // when the mesh has no vertex data, or when buffer creation fails —
+    // the render path degrades cleanly in all cases (guarded on
+    // `GetRHIVertexBuffer() != nullptr`).
+    //
+    // Windows routes buffer uploads through `ID3D11Device` inside
+    // `MeshAsset::Load` directly, so this is a no-op there. Public so
+    // tests and late-loading code paths can call it explicitly; typical
+    // production usage is the post-load hook in `LoadMesh`.
+    void BuildRHIBuffersForMesh(MeshAsset& mesh);
+
     // Asset discovery
     std::vector<std::string> ScanDirectory(const std::string& directory, AssetType type = AssetType::Unknown);
     AssetType DetectAssetType(const std::string& path) const;
@@ -478,6 +545,15 @@ class AssetPipeline
     // Metrics
     mutable std::mutex m_metricsMutex;
     AssetMetrics m_metrics;
+
+    // Currently-bound mesh/texture for the non-Windows RHI draw path. Set by
+    // BindMesh / BindMaterial, read by DrawBoundMesh. Non-owning — the
+    // owning shared_ptr lives in `m_assets`. Windows BindMesh drives state
+    // directly on the D3D11 context and doesn't need these to survive past
+    // the call site (they still get written on Windows for symmetry but go
+    // unused).
+    MeshAsset* m_boundMeshAsset = nullptr;
+    TextureAsset* m_boundTextureAsset = nullptr;
 
     // Helper methods
     void LoadingThreadFunction();

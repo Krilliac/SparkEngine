@@ -12,6 +12,8 @@
 
 #include "AssetPipeline.h"
 #include "FBXImporter.h"
+#include "GraphicsEngineRHI.h"
+#include "RHI/RHIResources.h"
 #include "Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include <sstream>
@@ -396,6 +398,52 @@ HRESULT TextureAsset::Load(ID3D11Device* /*device*/)
     if (std::filesystem::exists(m_path))
     {
         m_metadata.fileSize = std::filesystem::file_size(m_path);
+
+#if SPARK_HAS_STB_IMAGE
+        // Decode the image into a CPU-side RGBA8 buffer, then hand that to
+        // the RHI bridge as a textured surface. stb_image converts any
+        // supported format (PNG, JPG, TGA, BMP, HDR...) to 4-channel 8-bit.
+        // Linux / macOS get the full texture pipeline this way without
+        // needing WIC (Windows) or a platform-specific image library.
+        int iw = 0;
+        int ih = 0;
+        int channels = 0;
+        stbi_uc* pixels = stbi_load(m_path.c_str(), &iw, &ih, &channels, STBI_rgb_alpha);
+        if (pixels && iw > 0 && ih > 0)
+        {
+            m_width = static_cast<uint32_t>(iw);
+            m_height = static_cast<uint32_t>(ih);
+
+            auto& rhi = Spark::Graphics::Detail::GetRHI();
+            if (rhi.initialized)
+            {
+                // CreateTexture2D takes RGBA8 pixel data directly. NullRHI
+                // stubs the upload but returns a valid handle so the bind
+                // path in ModelLoading.cpp still runs on headless builds.
+                auto tex = rhi.bridge.CreateTexture2D(m_width, m_height, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                                                      Spark::RHI::RHITextureUsage::ShaderResource, pixels);
+                if (tex)
+                {
+                    m_rhiTexture = std::move(tex);
+                }
+                else
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "TextureAsset::Load: RHI texture creation failed for '%s'", m_path.c_str());
+                }
+            }
+            // If the bridge isn't up yet (pre-graphics init, tests, etc.)
+            // the CPU dimensions above still get reported via GetWidth /
+            // GetHeight; a late RHI upload can re-read `m_path` later.
+
+            stbi_image_free(pixels);
+        }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "TextureAsset::Load: stbi_load failed for '%s' (%s)",
+                           m_path.c_str(), stbi_failure_reason() ? stbi_failure_reason() : "unknown");
+        }
+#endif // SPARK_HAS_STB_IMAGE
     }
     m_metadata.memorySize = GetMemoryUsage();
     m_loaded = true;
@@ -406,6 +454,7 @@ void TextureAsset::Unload()
 {
     m_width = 0;
     m_height = 0;
+    m_rhiTexture.reset();
     m_metadata.state = StreamingState::Unloaded;
     m_metadata.memorySize = 0;
     m_loaded = false;

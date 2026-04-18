@@ -31,6 +31,7 @@
 #import <Metal/Metal.h>
 
 #include "Graphics/RHI/Metal/MetalDevice.h"
+#include "Graphics/RHI/Metal/MetalGoldenImageCapture.h"
 #include "Graphics/RHI/Metal/MetalRayTracing.h"
 #include "Graphics/RHI/Metal/MetalTextureReadback.h"
 
@@ -275,6 +276,79 @@ TEST(MetalRT_Live_ReadbackRGBA8KnownValues)
         EXPECT_EQ(bytes[3], 255u);  // row 0 col 0 alpha
         EXPECT_EQ(bytes[60], 240u); // row 3 col 3 red = 240
     }
+}
+
+// ---------------------------------------------------------------------------
+// MetalGoldenImageCapture — thin IGoldenImageCapture wrapper over the
+// readback helper. Lets RT output textures flow into the existing
+// GoldenImageTestRunner pixel-diff path without the runner ever seeing
+// Objective-C types.
+// ---------------------------------------------------------------------------
+
+TEST(MetalRT_Live_GoldenCaptureEmptyWhenTextureNull)
+{
+    Spark::RHI::Metal::MetalGoldenImageCapture capture(nullptr);
+    auto bytes = capture.CaptureFramebuffer(16, 16);
+    EXPECT_TRUE(bytes.empty());
+    EXPECT_TRUE(capture.GetTexture() == nullptr);
+}
+
+TEST(MetalRT_Live_GoldenCaptureMatchesReadback)
+{
+    LiveMetalDevice d;
+    if (!d.initialized)
+    {
+        EXPECT_TRUE(true);
+        return;
+    }
+    id<MTLDevice> raw = d.device.GetMTLDevice();
+    if (!raw)
+    {
+        EXPECT_TRUE(true);
+        return;
+    }
+
+    // Same 4x4 red-gradient pattern the ReadbackRGBA8KnownValues test uses,
+    // but routed through the capture wrapper. The output must match the
+    // direct readback call byte-for-byte — the wrapper is a pure pass-through.
+    MTLTextureDescriptor* desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                                                                    width:4
+                                                                                   height:4
+                                                                                mipmapped:NO];
+    desc.storageMode = MTLStorageModeShared;
+    desc.usage = MTLTextureUsageShaderWrite | MTLTextureUsageShaderRead;
+    id<MTLTexture> tex = [raw newTextureWithDescriptor:desc];
+    EXPECT_TRUE(tex != nil);
+
+    uint8_t seed[4 * 4 * 4];
+    for (int i = 0; i < 16; ++i)
+    {
+        seed[i * 4 + 0] = static_cast<uint8_t>(i * 16);
+        seed[i * 4 + 1] = 0;
+        seed[i * 4 + 2] = 0;
+        seed[i * 4 + 3] = 255;
+    }
+    MTLRegion region = MTLRegionMake2D(0, 0, 4, 4);
+    [tex replaceRegion:region mipmapLevel:0 withBytes:seed bytesPerRow:16];
+
+    Spark::RHI::Metal::MetalGoldenImageCapture capture((__bridge void*)tex);
+    EXPECT_TRUE(capture.GetTexture() != nullptr);
+
+    // The width / height arguments are informational only; the texture's
+    // intrinsic size wins. Pass garbage to prove the wrapper ignores them.
+    auto bytes = capture.CaptureFramebuffer(9999, 9999);
+    EXPECT_EQ(bytes.size(), 64u);
+    if (bytes.size() == 64u)
+    {
+        EXPECT_EQ(bytes[0], 0u);
+        EXPECT_EQ(bytes[3], 255u);
+        EXPECT_EQ(bytes[60], 240u);
+    }
+
+    // SetTexture(nullptr) must cleanly turn off capture without leaking.
+    capture.SetTexture(nullptr);
+    auto empty = capture.CaptureFramebuffer(4, 4);
+    EXPECT_TRUE(empty.empty());
 }
 
 TEST(MetalRT_Live_RepeatedInitShutdownIsStable)

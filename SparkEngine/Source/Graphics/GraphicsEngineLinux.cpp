@@ -47,6 +47,15 @@ using Spark::Graphics::PostProcessingPipeline;
 
 using namespace Spark::Graphics::Detail;
 
+// Forward declarations for the file-local platform RT helpers — the
+// definitions sit below `AcquireHybridRTBindings` so the Initialize /
+// Shutdown / Resize call sites need these prototypes first.
+namespace
+{
+    void CreatePlatformRenderTargets(uint32_t width, uint32_t height);
+    void ReleasePlatformRenderTargets();
+} // namespace
+
 // ============================================================================
 // Construction / Destruction
 // ============================================================================
@@ -105,6 +114,16 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
     rhi.initialized = true;
     rhi.width = m_width;
     rhi.height = m_height;
+
+    // Create GBuffer + HDR + depth targets through the RHI bridge and register
+    // them under the shared slot enum so cross-platform code (HybridRT dispatch,
+    // golden-image capture, debug viewers) can pull them by name. Matches the
+    // Windows GBuffer layout one-for-one; on NullRHI the device returns valid
+    // stub textures and registration is harmless. Failures are tolerated — any
+    // slot that doesn't resolve stays nullptr and downstream `IsReady()`
+    // guards skip the dispatch cleanly (see HybridRTBindings in
+    // GraphicsEngine.h).
+    CreatePlatformRenderTargets(m_width, m_height);
 
     // Create subsystems
     m_textureSystem = std::make_unique<TextureSystem>();
@@ -344,6 +363,11 @@ void GraphicsEngine::Shutdown()
         m_vctSystem.reset();
     }
 
+    // Deregister + release GBuffer/HDR/depth textures before bridge shutdown —
+    // the bridge's registry stores non-owning pointers and must not be left
+    // dangling. Calling RegisterRenderTarget(slot, nullptr) clears the slot.
+    ReleasePlatformRenderTargets();
+
     rhi.bridge.Shutdown();
     rhi.initialized = false;
 
@@ -391,6 +415,13 @@ HRESULT GraphicsEngine::Resize(uint32_t width, uint32_t height)
     m_windowHeight = height;
     rhi.width = width;
     rhi.height = height;
+
+    // GBuffer/HDR/depth textures are tied to the swapchain dimensions — drop
+    // the old ones and create fresh at the new size. Registry pointers are
+    // non-owning, so the release helper clears the slots before the
+    // underlying textures are freed (contract: see RHIBridge.h comments).
+    ReleasePlatformRenderTargets();
+    CreatePlatformRenderTargets(m_width, m_height);
 
     // Propagate the new viewport to every subsystem that tracks resolution.
     // Without this, the subsystems keep their initial m_width/m_height and
@@ -601,16 +632,112 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
 Spark::Graphics::HybridRTBindings GraphicsEngine::AcquireHybridRTBindings()
 {
     Spark::Graphics::HybridRTBindings bindings;
-    if (!m_rhiBridge)
+
+    // The Linux/macOS RHI bridge lives in the LinuxRHIState singleton — the
+    // GraphicsEngine::m_rhiBridge member is never populated on this branch
+    // (it's a Windows-only alias). Source the bridge directly from GetRHI()
+    // so unregistered slots degrade to nullptr and DispatchHybridRTPass's
+    // `IsReady()` guard skips the pass cleanly.
+    auto& rhi = GetRHI();
+    if (!rhi.initialized)
         return bindings;
 
     using Slot = Spark::RHI::RHIBridge::RenderTargetSlot;
-    bindings.normals = m_rhiBridge->GetRenderTarget(Slot::GBufferNormals);
-    bindings.depth = m_rhiBridge->GetRenderTarget(Slot::DepthStencil);
-    bindings.albedo = m_rhiBridge->GetRenderTarget(Slot::GBufferAlbedo);
-    bindings.lighting = m_rhiBridge->GetRenderTarget(Slot::HDRLighting);
+    bindings.normals = rhi.bridge.GetRenderTarget(Slot::GBufferNormals);
+    bindings.depth = rhi.bridge.GetRenderTarget(Slot::DepthStencil);
+    bindings.albedo = rhi.bridge.GetRenderTarget(Slot::GBufferAlbedo);
+    bindings.lighting = rhi.bridge.GetRenderTarget(Slot::HDRLighting);
     return bindings;
 }
+
+// ============================================================================
+// Platform render target helpers (Linux/macOS) — file-local
+// ============================================================================
+// Create/destroy the GBuffer + HDR + Depth textures and keep the RHI bridge's
+// render-target registry in sync. On Windows this is the D3D11 ComPtr path in
+// `CreateAdvancedRenderTargets`; here it uses `RHIBridge::CreateTexture2D` /
+// `CreateDepthBuffer` so every backend (Vulkan, OpenGL, Metal, NullRHI) gets
+// the same slot layout.
+//
+// Static free functions (not `GraphicsEngine` members) so the header doesn't
+// need a new declaration — the Linux state they touch lives in `LinuxRHIState`
+// and they're only called from this TU.
+
+namespace
+{
+    void CreatePlatformRenderTargets(uint32_t width, uint32_t height)
+    {
+        auto& rhi = GetRHI();
+        if (!rhi.initialized)
+            return;
+
+        auto* device = rhi.bridge.GetDevice();
+        if (!device)
+            return;
+
+        using Slot = Spark::RHI::RHIBridge::RenderTargetSlot;
+        using Spark::RHI::PixelFormat;
+        using Spark::RHI::RHITextureUsage;
+
+        // GBuffer[0]: Albedo — RGBA8 color write + SRV read.
+        rhi.gBufferAlbedo = rhi.bridge.CreateRenderTarget(width, height, PixelFormat::R8G8B8A8_UNORM);
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferAlbedo, rhi.gBufferAlbedo.get());
+
+        // GBuffer[1]: Normals — R16G16B16A16F matches the Windows
+        // `WrapNativeTexture` format in GraphicsEngineWindows::AcquireHybridRTBindings
+        // so downstream shaders don't need a platform-specific variant.
+        rhi.gBufferNormals = rhi.bridge.CreateRenderTarget(width, height, PixelFormat::R16G16B16A16_FLOAT);
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferNormals, rhi.gBufferNormals.get());
+
+        // GBuffer[2]: Material (roughness / metallic / AO / reserved in RGBA8).
+        rhi.gBufferMaterial = rhi.bridge.CreateRenderTarget(width, height, PixelFormat::R8G8B8A8_UNORM);
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferMaterial, rhi.gBufferMaterial.get());
+
+        // GBuffer[3]: Motion vectors in RG16F. Unused by default on NullRHI
+        // but keeping the slot populated means TAA / temporal passes can look
+        // it up without extra null checks.
+        rhi.gBufferMotion = rhi.bridge.CreateRenderTarget(width, height, PixelFormat::R16G16_FLOAT);
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferMotion, rhi.gBufferMotion.get());
+
+        // Depth stencil — RHI-side convenience helper sets the DepthStencil
+        // usage flag for us. Must match the swapchain's depth format on real
+        // backends; NullRHI accepts anything.
+        rhi.depthStencil = rhi.bridge.CreateDepthBuffer(width, height, PixelFormat::D24_UNORM_S8_UINT);
+        rhi.bridge.RegisterRenderTarget(Slot::DepthStencil, rhi.depthStencil.get());
+
+        // HDR lighting — R16G16B16A16F with RenderTarget|ShaderResource|UnorderedAccess.
+        // The UAV flag is what lets the HybridRT compute pass write into it;
+        // the default `CreateRenderTarget` helper only asks for RT|SRV, so we
+        // go through `CreateTexture2D` with explicit usage flags.
+        rhi.hdrLighting = rhi.bridge.CreateTexture2D(width, height, PixelFormat::R16G16B16A16_FLOAT,
+                                                     RHITextureUsage::RenderTarget | RHITextureUsage::ShaderResource |
+                                                         RHITextureUsage::UnorderedAccess,
+                                                     nullptr);
+        rhi.bridge.RegisterRenderTarget(Slot::HDRLighting, rhi.hdrLighting.get());
+    }
+
+    void ReleasePlatformRenderTargets()
+    {
+        auto& rhi = GetRHI();
+        if (!rhi.initialized)
+            return;
+
+        using Slot = Spark::RHI::RHIBridge::RenderTargetSlot;
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferAlbedo, nullptr);
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferNormals, nullptr);
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferMaterial, nullptr);
+        rhi.bridge.RegisterRenderTarget(Slot::GBufferMotion, nullptr);
+        rhi.bridge.RegisterRenderTarget(Slot::DepthStencil, nullptr);
+        rhi.bridge.RegisterRenderTarget(Slot::HDRLighting, nullptr);
+
+        rhi.gBufferAlbedo.reset();
+        rhi.gBufferNormals.reset();
+        rhi.gBufferMaterial.reset();
+        rhi.gBufferMotion.reset();
+        rhi.depthStencil.reset();
+        rhi.hdrLighting.reset();
+    }
+} // namespace
 
 // ============================================================================
 // System Accessors

@@ -10,16 +10,35 @@
  * and macOS too; previously this was a linker-undefined on non-Windows
  * because the Windows-only TU held the only definition.
  *
- * `ProcessDrawList` stays Windows-only for now — that path touches D3D11
- * constant buffers, the GPU-driven renderer, and the asset pipeline's
- * D3D11 mesh/material loaders. Linux/macOS consumers should drive meshes
- * through the Metal RT scene feeder or the RHI bridge instead.
+ * `ProcessDrawList` lives here in two flavors:
+ *
+ *   - Windows (in GraphicsEngineWindows.cpp) — D3D11 path with GPU-driven
+ *     culling and CPU fallback, both routed through the AssetPipeline's
+ *     D3D11 loaders.
+ *   - Non-Windows (below) — routes the same MeshDrawCommand queue through
+ *     the RHI bridge's `IRHICommandList`. Each command resolves to an
+ *     `AssetPipeline::BindMesh / BindMaterial / DrawBoundMesh` trio, same
+ *     contract as the Windows CPU draw path. Material sort is preserved so
+ *     state changes stay minimal; per-object world matrix upload is
+ *     deferred to the shared pipeline state (a constant-buffer upload layer
+ *     is the AssetPipeline's job, not this file's).
+ *
+ * On NullRHI the RHI calls are no-ops but well-formed — the draw-call
+ * counter still ticks, which is what headless tooling and tests care
+ * about.
  */
 
 #include "../Core/Platform.h"
 #include "../Utils/SparkError.h"
 #include "../Utils/Validate.h"
 #include "GraphicsEngine.h"
+
+#ifndef SPARK_PLATFORM_WINDOWS
+#include "AssetPipeline.h"
+#include "GraphicsEngineRHI.h"
+#include "RHI/RHIResources.h"
+#include <algorithm>
+#endif
 
 using namespace DirectX;
 
@@ -44,38 +63,89 @@ void GraphicsEngine::SubmitMeshForRendering(std::string_view meshPath, std::stri
 }
 
 #ifndef SPARK_PLATFORM_WINDOWS
-// Non-Windows ProcessDrawList — drains the per-frame draw list so it
-// doesn't grow unbounded on Linux/macOS, and logs a one-shot warning.
+// Non-Windows ProcessDrawList — drives the per-frame draw list through the
+// RHI bridge's `IRHICommandList`. Mirrors the shape of the Windows CPU draw
+// path (sort by material to minimize state changes, bind mesh/material,
+// draw, update stats) without the D3D11-specific constant-buffer upload
+// (`UpdateBasicConstants`) and `SetBasicShaders` bits — those are
+// D3D11-only today. The RHI-bridge equivalents live in the pipeline state
+// layer, which the caller (RenderDeferred / RenderForward) is expected to
+// have bound before this function runs.
 //
-// The real D3D11 consumer in `GraphicsEngineWindows.cpp` resolves each
-// command through the AssetPipeline, binds mesh/material constant
-// buffers, and issues draw calls. Doing the same through the RHI bridge
-// requires a bridge-level mesh/material binding API that doesn't exist
-// yet — until it does, Linux/macOS rendering goes through the legacy
-// `std::vector<GameObject*>` path inside `RenderDeferred`/`RenderForward`.
-//
-// Clearing the queue here keeps the two paths from stepping on each
-// other: `RenderSystem::Update` submits per-entity, this function
-// drains, the next frame starts fresh. On macOS the RT scene feeder
-// bypasses this list entirely — it walks the ECS directly into
-// `HybridRTManager`.
+// On NullRHI every RHI call is a no-op, so the function reduces to draining
+// the queue and counting draws. On Vulkan / OpenGL / Metal with a live
+// pipeline state bound, this actually issues indexed draw calls — the RHI
+// buffers live on `MeshAsset` now (see `BuildRHIBuffersForMesh` in
+// AssetPipelineLinux.cpp).
 void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& /*viewMatrix*/, const DirectX::XMMATRIX& /*projMatrix*/)
 {
-    static std::atomic_flag s_warned = ATOMIC_FLAG_INIT;
-    std::size_t drained = 0;
+    // Swap under the spinlock so the next frame's submissions don't race
+    // with this drain. Preserves capacity on both vectors.
     {
         SpinlockGuard guard(m_drawListSpinlock);
-        drained = m_drawList.size();
-        m_drawList.clear();
+        std::swap(m_drawList, m_processingDrawList);
     }
 
-    if (drained > 0 && !s_warned.test_and_set(std::memory_order_acq_rel))
+    std::vector<MeshDrawCommand>& localDrawList = m_processingDrawList;
+    if (localDrawList.empty())
+        return;
+
+    auto& rhi = Spark::Graphics::Detail::GetRHI();
+    if (!rhi.initialized)
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                       "ProcessDrawList (non-Windows): drained %zu queued commands without rendering. "
-                       "Non-Windows pipelines render through RenderDeferred/RenderForward; this path "
-                       "is reserved for the future RHI-bridge consumer.",
-                       drained);
+        localDrawList.clear();
+        return;
     }
+
+    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
+    if (!cmd)
+    {
+        localDrawList.clear();
+        return;
+    }
+
+    if (!m_assetPipeline)
+    {
+        localDrawList.clear();
+        return;
+    }
+
+    // Sort by material path to minimize rebinds (same heuristic the Windows
+    // CPU path uses). Mesh path is the secondary key so the vertex/index
+    // buffer binds also cluster.
+    std::sort(localDrawList.begin(), localDrawList.end(),
+              [](const MeshDrawCommand& a, const MeshDrawCommand& b)
+              {
+                  if (a.materialPath != b.materialPath)
+                      return a.materialPath < b.materialPath;
+                  return a.meshPath < b.meshPath;
+              });
+
+    cmd->BeginEvent("ProcessDrawList (RHI)");
+
+    std::string_view lastMaterial;
+    std::string_view lastMesh;
+    for (const auto& draw : localDrawList)
+    {
+        // Material rebind only when it actually changes. BindMaterial on the
+        // non-Windows path records the bound texture; the actual SRV bind
+        // lands once TextureAsset grows an RHI texture handle.
+        if (draw.materialPath != lastMaterial)
+        {
+            m_assetPipeline->BindMaterial(draw.materialPath);
+            lastMaterial = draw.materialPath;
+        }
+        // Mesh rebind when the path changes — BindMesh sets VB/IB + topology.
+        if (draw.meshPath != lastMesh)
+        {
+            m_assetPipeline->BindMesh(draw.meshPath);
+            lastMesh = draw.meshPath;
+        }
+        m_assetPipeline->DrawBoundMesh();
+        m_statistics.drawCalls++;
+    }
+
+    cmd->EndEvent();
+    localDrawList.clear();
 }
 #endif

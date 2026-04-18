@@ -119,6 +119,7 @@ add_executable(SparkTests
     TestSceneManager.cpp
     TestPhysicsSystem.cpp
     TestGraphicsEngine.cpp
+    TestProcessDrawListLinux.cpp
     TestRenderGraph.cpp
     TestTerrainRenderer.cpp
     TestMaterialEffects.cpp
