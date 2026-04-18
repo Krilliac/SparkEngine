@@ -350,10 +350,10 @@ HEREDOC
 
 ## See Also
 
-- [Architecture Overview](Architecture-Overview) — Engine design and structure
-- [Codebase Health](Codebase-Health) — System maturity status and known gaps
-- [Testing](Testing) — Test suite details and CI integration
-- [Build System and CMake Modules](Build-System-and-CMake-Modules) — Build configuration
+- [Architecture Overview](../getting-started/Architecture-Overview.md) — Engine design and structure
+- [Codebase Health](Codebase-Health.md) — System maturity status and known gaps
+- [Testing](Testing.md) — Test suite details and CI integration
+- [Build System and CMake Modules](Build-System-and-CMake-Modules.md) — Build configuration
 HEREDOC
 }
 

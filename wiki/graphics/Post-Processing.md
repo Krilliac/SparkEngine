@@ -282,6 +282,57 @@ for (const auto& pm : metrics)
 }
 ```
 
+### Spatial post-process volumes (Phase K)
+
+`VolumeManager`, owned by the pipeline, lets level designers author
+global or local volumes that override a subset of the effect settings
+— only the fields whose `overrideState` was set ever touch the live
+settings, so hand-authored values survive volume-less frames. Push the
+camera position once per frame and `Process()` blends the stack:
+
+```cpp
+using namespace Spark::Graphics;
+
+auto& volumes = pipeline.GetVolumeManager();
+
+// Author a global fallback — always applies, lowest priority:
+if (Volume* global = volumes.CreateVolume("global_defaults"))
+{
+    global->isGlobal = true;
+    global->priority = 0;
+    if (auto* ex = global->AddComponent<ExposureVolumeComponent>())
+    {
+        ex->compensationEV.value = 0.0f;
+        ex->compensationEV.overrideState = true;
+    }
+}
+
+// Author a cave volume — overrides bloom + colour grading when the
+// camera is inside the AABB, fading in over `blendDistance` metres:
+if (Volume* cave = volumes.CreateVolume("cave"))
+{
+    cave->isGlobal      = false;
+    cave->boundsMin     = {-40.0f, -5.0f, -40.0f};
+    cave->boundsMax     = { 40.0f, 20.0f,  40.0f};
+    cave->blendDistance = 3.0f;
+    cave->priority      = 10;
+
+    auto* bloom = cave->AddComponent<BloomVolumeComponent>();
+    bloom->intensity.value = 0.2f;
+    bloom->intensity.overrideState = true;
+
+    auto* grade = cave->AddComponent<ColorGradingVolumeComponent>();
+    grade->temperature.value = -0.15f;
+    grade->temperature.overrideState = true;
+    grade->saturation.value = 0.8f;
+    grade->saturation.overrideState = true;
+}
+
+// Per frame:
+pipeline.SetCameraPosition(camera.worldPosition);
+pipeline.Process(deltaTime);   // runs VolumeManager::Update + ApplyVolumeStack
+```
+
 ## Console Commands
 
 Post-processing console commands are registered in `AdvancedConsoleCommands.cpp` (FPS game module):

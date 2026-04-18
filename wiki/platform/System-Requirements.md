@@ -221,7 +221,7 @@ These CMake toggles materially change the runtime footprint:
 | `BUILD_TESTS` | ON | Removes SparkTests from the build entirely |
 | `BUILD_GAME_MODULES` | ON | Build just the engine exe, no game DLLs |
 
-See [CLAUDE.md](../CLAUDE.md) Build section for the full list.
+See [CLAUDE.md](../../CLAUDE.md) Build section for the full list.
 
 ## Troubleshooting
 
@@ -246,5 +246,5 @@ See [CLAUDE.md](../CLAUDE.md) Build section for the full list.
   MinGW + Wine path
 - [Mobile Platform](Mobile-Platform.md) — mobile port notes
 - [VR Support](VR-Support.md) — VR-specific hardware
-- [Graphics RHI](../graphics/Graphics-RHI.md) — backend internals
+- [RHI Abstraction Layer](../graphics/RHI-Abstraction-Layer.md) — backend internals
 - [Codebase Statistics](../advanced/Codebase-Statistics.md) — size metrics

@@ -8,6 +8,7 @@ SparkEngine provides a comprehensive audio system built on **XAudio2** (Windows)
 - `SparkEngine/Source/Audio/SoundEffect.h` -- WAV loading and procedural sound generation
 - `SparkEngine/Source/Audio/AudioMixer.h` -- Mix buses, reverb zones, DSP effects, occlusion
 - `SparkEngine/Source/Audio/MusicManager.h` -- Music playback, playlists, dynamic music
+- `SparkEngine/Source/Audio/HRTFProcessor.h` -- Binaural HRTF approximation (ITD + ILD + head shadow) for headphone listeners
 
 ## Architecture
 
@@ -216,6 +217,48 @@ audio.Console_SetDopplerScale(1.5f);   // 0.0-2.0
 audio.Console_SetDistanceScale(2.0f);  // 0.1-10.0
 audio.Console_Set3DAudio(true);        // Enable/disable 3D processing
 ```
+
+### Binaural HRTF (headphone output)
+
+For headphone listeners the engine ships a dependency-free
+`Spark::Audio::HRTFProcessor` that approximates the three dominant
+head-related transfer function cues analytically:
+
+- **Interaural Time Difference (ITD)** — Woodworth formula
+  `headRadius / speedOfSound * (sinθ + θ)`, expressed in samples at the
+  current sample rate; the far ear is delayed with a per-sample fractional
+  ring buffer.
+- **Interaural Level Difference (ILD)** — a first-order one-pole low-pass
+  whose cutoff shrinks with azimuth, biased by `cos²(θ/2)` gain for the
+  shadowed ear.
+- **Elevation shelf** — mild pinna brightness cue that rises with source
+  elevation.
+
+The processor is SDK-free — no platform-specific HRIR database is
+shipped today, but the interface is designed so a measured HRIR set
+can be swapped in later without touching the call sites.
+
+```cpp
+#include "Audio/HRTFProcessor.h"
+
+Spark::Audio::HRTFProcessor hrtf;
+hrtf.Initialize(48000);                      // sample rate
+hrtf.SetListener({0, 0, 0}, {0, 0, 1},       // position, forward
+                 {0, 1, 0});                 // up
+hrtf.SetSource({5.0f, 0.0f, 2.0f});          // in world space
+
+// Per frame — mono in, interleaved stereo out:
+std::array<float, 1024> mono{};
+std::array<float, 2048> stereo{};
+hrtf.Process(mono.data(), stereo.data(), mono.size());
+```
+
+The processor exposes a small diagnostic snapshot (`GetLastSnapshot()`)
+with the resolved ITD samples, azimuth / elevation, and per-ear gain so
+automated tests can assert without having to read back audio buffers.
+
+**Source:** `SparkEngine/Source/Audio/HRTFProcessor.h` — see
+`Tests/TestHRTFProcessor.cpp` for the reference test suite.
 
 ## AudioEngine API Reference
 

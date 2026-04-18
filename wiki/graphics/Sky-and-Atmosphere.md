@@ -177,6 +177,7 @@ sky.Shutdown();
 
 - [Day Night Cycle and Weather](../gameplay-tools/Day-Night-Cycle-and-Weather.md) -- Time-of-day and weather systems that drive sun direction and turbidity
 - [Volumetric Fog](Volumetric-Fog.md) -- Fog system that samples horizon color for seamless sky-fog blending
+- [Volumetric Clouds](Volumetric-Clouds.md) -- Ray-marched cloud layer that composites over this sky model
 - [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md) -- Graphics engine and skybox rendering
 - [RHI Abstraction Layer](RHI-Abstraction-Layer.md) -- Backend-agnostic GPU resource creation
 - [Clustered Lighting](Clustered-Lighting.md) -- Lighting pipeline that uses sun intensity from the sky system

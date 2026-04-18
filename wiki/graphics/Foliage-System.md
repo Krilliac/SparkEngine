@@ -81,20 +81,23 @@ Each `FoliageSpecies` defines a vegetation type with mesh, material, and placeme
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| `name` | `std::string` | -- | Registry key — referenced by `FoliageVolumeDesc::speciesNames` |
 | `meshPath` | `std::string` | -- | Mesh asset path for this species |
 | `materialPath` | `std::string` | -- | Material asset path |
 | `density` | `float` | 1.0 | Instances per square meter |
 | `minScale` | `float` | 0.8 | Minimum random scale factor |
 | `maxScale` | `float` | 1.2 | Maximum random scale factor |
-| `minSlopeAngle` | `float` | 0.0 | Minimum terrain slope for placement (degrees) |
-| `maxSlopeAngle` | `float` | 45.0 | Maximum terrain slope for placement (degrees) |
+| `minSlopeAngleDeg` | `float` | 0.0 | Minimum terrain slope for placement (degrees) |
+| `maxSlopeAngleDeg` | `float` | 45.0 | Maximum terrain slope for placement (degrees) |
 | `minAltitude` | `float` | -1000.0 | Minimum placement altitude |
 | `maxAltitude` | `float` | 1000.0 | Maximum placement altitude |
 | `alignToSurface` | `bool` | true | Align instance up-vector to terrain normal |
-| `randomRotation` | `bool` | true | Apply random Y-axis rotation |
+| `randomYaw` | `bool` | true | Apply random Y-axis rotation |
 | `castShadows` | `bool` | true | Whether instances cast shadows |
 | `windInfluence` | `float` | 1.0 | Wind sway multiplier [0, 2]. 0 = no wind, 2 = exaggerated sway. |
 | `cullDistance` | `float` | 100.0 | Distance beyond which instances are culled |
+| `billboardHeight` | `float` | 2.0 | Impostor billboard vertical size in metres (Phase F) |
+| `billboardAspect` | `float` | 0.5 | Impostor billboard width/height ratio (Phase G) |
 
 **Slope and altitude constraints** allow species to be restricted to specific terrain regions. For example, grass might be limited to slopes under 30 degrees, while mossy rocks could be placed only on steep slopes above 40 degrees.
 
@@ -108,12 +111,17 @@ A `FoliageVolumeData` defines the spatial bounds and global parameters for a sca
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `halfExtents` | `XMFLOAT3` | (50, 50, 50) | Half-extents of the placement volume |
-| `seed` | `int` | 0 | Random seed for reproducible placement |
-| `globalDensityScale` | `float` | 1.0 | Multiplier applied to all species densities in this volume |
-| `enabled` | `bool` | true | Whether the volume generates instances |
+| `center` | `XMFLOAT3` | (0, 0, 0) | Volume center in world space |
+| `halfExtents` | `XMFLOAT3` | (50, 50, 50) | XZ drives area, Y is the altitude clamp |
+| `speciesNames` | `std::vector<std::string>` | `{}` | Species keys to scatter (must be pre-registered) |
+| `seed` | `uint32_t` | 0 | Random seed for reproducible placement |
+| `densityScale` | `float` | 1.0 | Multiplier applied to every species' density in this volume |
+| `minSlopeAngleDeg` / `maxSlopeAngleDeg` | `float` | 0 / 90 | Volume-level slope override (merged with species) |
+| `minAltitude` / `maxAltitude` | `float` | ±10000 | Volume-level altitude clamp (merged with species) |
+| `alignToTerrain` | `bool` | true | Sample terrain height for Y; leave false for flat tests |
+| `enabled` | `bool` | true | Inactive volumes generate no instances |
 
-Volumes are registered with `FoliageManager::AddVolume(center, halfExtents)`, which returns a volume ID for later removal via `RemoveVolume(volumeId)`.
+Volumes are registered with `FoliageManager::AddVolume(desc)`, which returns a non-zero volume ID on success (or `0` if no species were registered). The ID feeds `RemoveVolume`, `GetInstances`, and `GetVolumeDesc`.
 
 The placement algorithm:
 
@@ -145,50 +153,109 @@ For large volumes, the system can subdivide the volume into chunks and cull enti
 
 ## Code Example
 
+### Registering species and scattering a volume
+
+The manager is a singleton. Species are registered by name first; a
+volume then references one or more of them via `speciesNames`. Every
+`AddVolume` call immediately scatters instances against the active
+`ClipmapTerrain` (or a flat plane when no terrain is attached).
+
 ```cpp
+#include "Graphics/FoliageSystem.h"
+
 using namespace Spark::Graphics;
 
-// Initialize the foliage manager
 auto& foliage = FoliageManager::GetInstance();
 foliage.Initialize();
 
-// Define a species: grass
+// --- Species registry ---------------------------------------------------
 FoliageSpecies grass;
-grass.meshPath = "Assets/Meshes/Grass_Clump.mesh";
-grass.materialPath = "Assets/Materials/Grass.mat";
-grass.density = 8.0f;              // 8 clumps per square meter
-grass.minScale = 0.7f;
-grass.maxScale = 1.3f;
-grass.maxSlopeAngle = 30.0f;       // Only on gentle slopes
-grass.windInfluence = 1.5f;        // Sways heavily in wind
-grass.cullDistance = 50.0f;         // Cull beyond 50 meters
-grass.castShadows = false;         // Skip shadow pass for grass
+grass.name             = "grass";
+grass.meshPath         = "Assets/Meshes/Grass_Clump.mesh";
+grass.materialPath     = "Assets/Materials/Grass.mat";
+grass.density          = 8.0f;    // instances / m²
+grass.minScale         = 0.7f;
+grass.maxScale         = 1.3f;
+grass.minSlopeAngleDeg = 0.0f;
+grass.maxSlopeAngleDeg = 30.0f;   // gentle slopes only
+grass.windInfluence    = 1.5f;    // swayed heavily by wind
+grass.cullDistance     = 50.0f;
+grass.castShadows      = false;
+foliage.RegisterSpecies(grass);
 
-// Define a species: tree
-FoliageSpecies tree;
-tree.meshPath = "Assets/Meshes/Pine_Tree.mesh";
-tree.materialPath = "Assets/Materials/Pine.mat";
-tree.density = 0.05f;              // 1 tree per 20 square meters
-tree.minScale = 0.8f;
-tree.maxScale = 1.5f;
-tree.maxSlopeAngle = 25.0f;
-tree.windInfluence = 0.3f;         // Slight trunk sway
-tree.cullDistance = 200.0f;        // Visible at longer range
-tree.castShadows = true;
+FoliageSpecies pine;
+pine.name             = "pine";
+pine.meshPath         = "Assets/Meshes/Pine_Tree.mesh";
+pine.materialPath     = "Assets/Materials/Pine.mat";
+pine.density          = 0.05f;    // 1 tree per 20 m²
+pine.minScale         = 0.8f;
+pine.maxScale         = 1.5f;
+pine.maxSlopeAngleDeg = 25.0f;
+pine.windInfluence    = 0.3f;
+pine.cullDistance     = 200.0f;
+pine.castShadows      = true;
+foliage.RegisterSpecies(pine);
 
-// Add a volume
-XMFLOAT3 center = {0.0f, 0.0f, 0.0f};
-XMFLOAT3 halfExtents = {100.0f, 50.0f, 100.0f};
-uint32_t volumeId = foliage.AddVolume(center, halfExtents);
+// --- Volume -------------------------------------------------------------
+FoliageVolumeDesc desc;
+desc.center       = {0.0f, 0.0f, 0.0f};
+desc.halfExtents  = {100.0f, 50.0f, 100.0f}; // XZ drives area, Y clamps altitude
+desc.seed         = 1337;                    // deterministic scatter
+desc.densityScale = 1.0f;
+desc.speciesNames = {"grass", "pine"};
+desc.alignToTerrain = true;
 
-// Query state
-uint32_t count = foliage.GetVolumeCount(); // 1
+const uint32_t volumeId = foliage.AddVolume(desc);
+SPARK_ASSERT(volumeId != 0 && "no registered species or terrain missing");
+```
 
-// Remove when no longer needed
-foliage.RemoveVolume(volumeId);
+### Per-frame update + instance readback
 
-// Shutdown
-foliage.Shutdown();
+`Update(dt, cameraPos)` refreshes `distanceToCamera` on each instance
+and toggles the `visible` flag against the per-species `cullDistance`.
+`GetInstances(volumeId)` exposes the immutable instance list to any
+consumer (renderer, editor gizmo, physics probe):
+
+```cpp
+// Once per frame, after the camera has moved:
+foliage.Update(deltaTime, camera.GetPosition());
+
+// Readback — e.g. feed the render consumer:
+for (uint32_t id : foliage.GetVolumeIds())
+{
+    for (const FoliageInstance& inst : foliage.GetInstances(id))
+    {
+        if (!inst.visible)
+            continue;
+        renderer.EnqueueFoliage(inst.position, inst.normal,
+                                inst.yawRadians, inst.scale,
+                                inst.speciesIndex);
+    }
+}
+```
+
+### ECS-driven authoring
+
+Placing volumes as components on ECS entities is the recommended
+authoring path; `UpdateFromECS` processes every `FoliageVolumeComponent`
+each frame, so saving the scene restores the same scatter:
+
+```cpp
+auto entity = world.CreateEntity();
+auto& volume = world.AddComponent<FoliageVolumeComponent>(entity);
+volume.halfExtents = {100.0f, 50.0f, 100.0f};
+volume.seed        = 1337;
+volume.speciesNames = {"grass", "pine"};
+world.AddComponent<TransformComponent>(entity).position = {0, 0, 0};
+
+foliage.UpdateFromECS(world); // typically called once per frame from Systems
+```
+
+### Teardown
+
+```cpp
+foliage.RemoveVolume(volumeId);   // also drops the instances it scattered
+foliage.Shutdown();               // releases registry + all volumes
 ```
 
 ---

@@ -289,3 +289,4 @@ auto result = fog.QueryFog(screenU, screenV, pixelDepth);
 - [Clustered Lighting](Clustered-Lighting.md) — Light culling that shares data with fog scattering
 - [Day Night Cycle and Weather](../gameplay-tools/Day-Night-Cycle-and-Weather.md) — Weather system integration
 - [Global Illumination](Global-Illumination.md) — Probe-based lighting that complements fog
+- [Volumetric Clouds](Volumetric-Clouds.md) — Upper-atmosphere cloud layer that shares sun/weather inputs

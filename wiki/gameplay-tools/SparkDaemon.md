@@ -152,6 +152,15 @@ The engine-side bridge (`ShaderDaemonBridge`) serialises the full
 + reflection counters) into a single byte buffer so the daemon sees
 only opaque bytes.
 
+**LRU eviction (Phase 5):** pass `--shader-cache-max-mb <N>` to cap
+the in-memory working set. When a `PutCacheEntry` pushes total payload
+bytes over the limit, the service evicts oldest entries (tracked as a
+linked list in insertion order) until the budget is satisfied, deleting
+the corresponding `.blob` files in lockstep. The eviction counter is
+exposed on the wire (`ShaderCacheStats.evictionCount`, appended after
+the original four fields; older daemons that don't emit it are
+tolerated by the decoder).
+
 ### Asset
 
 Domain-agnostic blob cache keyed by `(path: std::string, platform: uint8)`.
@@ -161,12 +170,17 @@ Domain-agnostic blob cache keyed by `(path: std::string, platform: uint8)`.
 | `GetAsset` (0x0001) | `GetAssetResponse` | miss returns `found=false` |
 | `PutAsset` (0x0003) | `PutAssetResponse` | overwrites existing entry |
 | `InvalidateAsset` (0x0005) | `InvalidateAssetResponse` | drops every platform variant for a path; returns removed count |
-| `GetCacheStats` (0x0007) | `GetCacheStatsResponse` | entry count, total bytes, hits, misses |
+| `ClearCache` (0x0007) | `ClearCacheResponse` | drops all entries, resets stats |
+| `GetCacheStats` (0x0009) | `GetCacheStatsResponse` | entry count, total bytes, hits, misses, evictions |
 
 Optional persistence via `--asset-cache-dir <path>`. On disk each entry
 is a file `<pathHash16>_<platform3>.asset` containing a `[u32 pathLen]
 [pathBytes][blob]` layout so arbitrary-length paths round-trip through
 the 255-byte NAME_MAX limit (tested with 500+ char paths).
+
+LRU eviction is enabled with `--asset-cache-max-mb <N>` (same semantics
+as the shader service) and `AssetCacheStats.evictionCount` is tracked
+on the wire.
 
 ## Running the daemon
 
@@ -188,6 +202,8 @@ Options:
 | `--socket <path>` | `./.spark-daemon.sock` | AF_UNIX socket path (perm 0600) |
 | `--cache-dir <path>` | disabled | Shader cache directory — enables persistence |
 | `--asset-cache-dir <path>` | disabled | Asset cache directory — enables persistence |
+| `--shader-cache-max-mb <N>` | `0` (unbounded) | LRU eviction threshold for the shader service |
+| `--asset-cache-max-mb <N>` | `0` (unbounded) | LRU eviction threshold for the asset service |
 | `--help`, `-h` | — | Print usage |
 
 The daemon writes a single-line startup banner on stdout:
@@ -211,6 +227,7 @@ Two CVars control daemon use from the engine side:
 | `spark.daemon.socket_path` | empty | Override socket path (empty = `./.spark-daemon.sock`) |
 | `spark.daemon.auto_spawn` | false | If no daemon is running, launch one as a detached subprocess |
 | `spark.daemon.binary_path` | empty | Override path to the `SparkDaemon` executable (empty = `./SparkDaemon`) |
+| `spark.daemon.clear_on_startup` | false | After a successful connect, run `daemon.clear_cache all` — useful when reattaching a daemon that has stale cooked blobs from a previous source tree |
 
 Typical power-user run:
 
@@ -289,6 +306,21 @@ needs it. The CMake for `SparkDaemon` skips Windows targets entirely
 The engine client (`DaemonClient`) compiles cleanly on Windows — it
 just always reports "not supported" on `Connect`. Every engine code
 path degrades gracefully.
+
+## Console commands
+
+When the daemon is connected, three commands are registered on the
+engine-side `CommandRegistry` and usable from the in-game console:
+
+| Command | Purpose |
+|---------|---------|
+| `daemon.stats` | Formats the Control `StatsResponse` plus per-service `GetCacheStats` (shader + asset) into a single human-readable report — uptime, protocol version, registered service IDs, entry count / bytes / hit-rate / evictions for each cache. The formatter lives in `DaemonDiagnostics::FormatDaemonStats` and is unit-tested directly against a `DaemonStatsSnapshot` so the command shell has no test surface of its own. |
+| `daemon.clear_cache <shader\|asset\|all>` | Wipes one or both caches via RPC. The bitmask parser (`DaemonCacheScope`) accepts the three literals and rejects everything else with a usage string. |
+| `daemon.invalidate <path>` | Calls `AssetService::InvalidateAsset` for the supplied source path, dropping every platform variant in one RPC and reporting the removed count. |
+
+All three degrade gracefully if the daemon is not connected — they
+log a warning and do nothing, so scripts can fire them unconditionally
+at startup.
 
 ## Ops and debugging
 
@@ -373,15 +405,32 @@ Both unlink the socket file on exit.
   Shader service's `ClearCache` drops everything. File-watching
   auto-invalidation is a future phase.
 
+## Implemented phases (recap)
+
+Phase history is tracked in `.claude/knowledge/daemon-*-2026-04-16.md`
+but summarised here for convenience:
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 1 | Protocol + framing + `DaemonClient` + `DaemonServer` + `ControlService` + `SparkDaemon` executable | ✅ |
+| 2a | `ShaderService` (get / put / clear / stats) | ✅ |
+| 2b | `ShaderService` disk persistence (`--cache-dir`, atomic rename writes, reload-on-restart) | ✅ |
+| 3a | `AssetService` with `InvalidateAsset` | ✅ |
+| 3b | Engine-side wiring: `ShaderDiskCache` consults daemon, falls through to local disk | ✅ |
+| 3c | Engine lifecycle: `spark.daemon.enabled` CVar + `DaemonLifecycle::Initialize` called from `InitConsole` | ✅ |
+| 4   | `spark.daemon.auto_spawn`, `Control::StatsRequest`, concurrent-clients test | ✅ |
+| 5   | LRU eviction in both services + `--shader-cache-max-mb` / `--asset-cache-max-mb` CLI flags + `evictionCount` on the wire | ✅ |
+| 6   | `daemon.stats` / `daemon.clear_cache` / `daemon.invalidate` console commands + `spark.daemon.clear_on_startup` | ✅ |
+
 ## Future phases
 
-Tracked in `.claude/knowledge/daemon-services-architecture-2026-04-16.md`:
+Still tracked in `.claude/knowledge/daemon-services-architecture-2026-04-16.md`:
 
-- **Phase 4 — Collab broker.** Stateful sessions, lock arbitration,
-  operation history, presence tracking. Replaces the current P2P
+- **Collab broker.** Stateful sessions, lock arbitration, operation
+  history, presence tracking. Replaces the current P2P
   `CollaborativeEditSession` with a daemon-brokered client-server
   arrangement.
-- **Phase 5 — Build monitor.** Watches CMake + source files, reports
+- **Build monitor.** Watches CMake + source files, reports
   incremental rebuild events to editors.
 - **File watching + push notifications.** inotify/FSEvents/kqueue
   abstraction so the daemon can push `ShaderReloaded` / `AssetChanged`
@@ -391,7 +440,6 @@ Tracked in `.claude/knowledge/daemon-services-architecture-2026-04-16.md`:
   implemented" stub.
 - **AssetPipeline engine wiring.** Bridge between the engine's typed
   `shared_ptr<Asset>` and the daemon's raw-blob Asset service.
-- **LRU eviction.** Bound the on-disk cache sizes.
 - **Actual shader compilation inside the daemon.** Warm DXC /
   glslang / SPIRV-Cross workers, parallel variant compile, push
   notifications for completed batches.
