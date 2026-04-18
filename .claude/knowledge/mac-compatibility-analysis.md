@@ -690,3 +690,54 @@ Linux `linux-gcc-release` builds clean; suite green (5621 passed,
   `RHIBridge::RegisterRenderTarget` after GBuffer creation on
   Linux/macOS. Today the registry exists but is empty — a
   follow-up in the rendering code wires it up.
+
+### 2026-04-18 session #10 — GBuffer registry wired + Metal golden capture
+
+**1. Linux/macOS GBuffer + HDR registry population (closes session #9 #3)**
+- `LinuxRHIState` (GraphicsEngineRHI.h) now owns six
+  `std::unique_ptr<IRHITexture>` slots — 4 GBuffer channels, depth/stencil,
+  HDR lighting. Storage lives with the bridge singleton so every
+  GraphicsEngineLinux.cpp call site sees the same state.
+- Two file-local helpers in GraphicsEngineLinux.cpp:
+  `CreatePlatformRenderTargets(w, h)` builds the textures via
+  `RHIBridge::CreateRenderTarget` / `CreateDepthBuffer` /
+  `CreateTexture2D` (HDR needs explicit
+  `RT|SRV|UnorderedAccess`) and registers each under the matching
+  `RenderTargetSlot` enum. `ReleasePlatformRenderTargets` clears the
+  slots (non-owning contract) then drops the uniques.
+- Lifecycle hook-ins: `Initialize` creates right after
+  `rhi.initialized = true`, `Shutdown` releases before bridge shutdown,
+  `Resize` releases + recreates. Format layout mirrors Windows
+  (`AcquireHybridRTBindings` in GraphicsEngineWindows.cpp) so the
+  same shaders/slots work on both branches.
+
+**2. `AcquireHybridRTBindings` bridge-source bug (Linux)**
+- Previously guarded on `m_rhiBridge` (GraphicsEngine member, never
+  populated on Linux) so the early-return always hit and bindings
+  were uniformly empty regardless of registration state. Now reads
+  from `GetRHI().bridge` — same bridge that the rest of the Linux
+  path uses. Still returns empty when the bridge isn't initialized.
+
+**3. `MetalGoldenImageCapture` (closes session #9 #2)**
+- `Graphics/RHI/Metal/MetalGoldenImageCapture.{h,mm}` — thin
+  `IGoldenImageCapture` subclass that delegates to
+  `ReadbackTextureRGBA8`. Stores an opaque `void*` texture pointer
+  (non-owning — caller must keep the texture alive) so `.cpp`
+  translation units can construct without touching Objective-C.
+  `SetTexture`/`GetTexture` accessors for swapchain rotation.
+  `CaptureFramebuffer(w, h)` ignores its arguments — texture's
+  intrinsic dimensions win. Header off-`SPARK_PLATFORM_MACOS` is
+  an empty namespace so it's safe to include from cross-platform TU.
+- Tests (`TestMetalRayTracingLive.mm`):
+  `GoldenCaptureEmptyWhenTextureNull` — contract check, no
+  `MTLDevice` needed. `GoldenCaptureMatchesReadback` — builds a 4×4
+  red-gradient texture on a live MTLDevice, routes through the capture
+  wrapper, asserts byte-for-byte match against
+  `MetalRT_Live_ReadbackRGBA8KnownValues`. Also verifies
+  `SetTexture(nullptr)` gracefully returns empty.
+
+Linux `linux-gcc-release` builds clean; suite green
+(5621 passed, 0 failed, 1 warned). macOS Metal row will register
+two new tests (5623 → 5625). Remaining: non-Windows `ProcessDrawList`
+is still blocked on MeshAsset needing RHI vertex/index buffers —
+out of scope here, deferred to the AssetPipeline port session.
