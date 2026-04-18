@@ -268,18 +268,40 @@ namespace Spark
     // =============================================================================
 
     /**
+     * @brief Dispatch priority tier for queued events.
+     *
+     * Tiers determine two things: dispatch order (Critical → Normal → Low) and
+     * eviction order under queue pressure (Low evicted first, Critical only
+     * evicted as a last resort). Default tier is Normal, which matches the
+     * pre-tier-aware behavior.
+     */
+    enum class EventPriority : uint8_t
+    {
+        Critical = 0, ///< Dispatched first; never evicted before Normal/Low
+        Normal = 1,   ///< Default; dispatched after Critical
+        Low = 2,      ///< Dispatched last; first to be evicted under pressure
+        Count = 3
+    };
+
+    /**
      * @class QueuedEventBus
      * @brief Thread-safe event queue that batches events for deferred dispatch.
      *
      * QueuedEventBus allows worker threads to safely publish events without
-     * triggering callbacks immediately. Events are stored in a queue and
-     * dispatched in bulk on the main thread during a specific engine phase
-     * (e.g., between physics and rendering).
+     * triggering callbacks immediately. Events are stored in per-priority
+     * queues and dispatched in bulk on the main thread during a specific
+     * engine phase (e.g., between physics and rendering).
+     *
+     * ## Priority tiers
+     * Each queued event carries an EventPriority (default Normal). DispatchAll
+     * flushes Critical, then Normal, then Low. When the queue reaches
+     * MaxQueueSize the oldest Low-tier event is evicted first; then oldest
+     * Normal; Critical is only evicted if it alone fills the queue.
      *
      * ## Thread safety
      * QueueEvent() is safe to call from any thread. DispatchAll() should be
-     * called from the main thread; it acquires the lock, swaps the queue, then
-     * dispatches without holding the lock.
+     * called from the main thread; it acquires the lock, swaps the queues,
+     * then dispatches without holding the lock.
      */
     class QueuedEventBus
     {
@@ -293,55 +315,81 @@ namespace Spark
         QueuedEventBus& operator=(QueuedEventBus&&) = delete;
 
         /**
-         * @brief Queue an event for deferred dispatch. Thread-safe.
+         * @brief Queue an event for deferred dispatch at Normal priority. Thread-safe.
          * @tparam T     Event type.
          * @param event  Event data to queue.
          */
-        template <typename T> void QueueEvent(T event)
+        template <typename T> void QueueEvent(T event) { QueueEvent(std::move(event), EventPriority::Normal); }
+
+        /**
+         * @brief Queue an event for deferred dispatch at a specific priority. Thread-safe.
+         * @tparam T       Event type.
+         * @param event    Event data to queue.
+         * @param priority Tier controlling dispatch order and eviction policy.
+         */
+        template <typename T> void QueueEvent(T event, EventPriority priority)
         {
             std::lock_guard<std::mutex> lock(m_mutex);
 
-            if (m_pendingEvents.size() >= MaxQueueSize)
+            if (TotalPendingLocked() >= MaxQueueSize)
             {
-                // Drop oldest events to prevent unbounded memory growth
-                m_pendingEvents.erase(m_pendingEvents.begin());
-                ++m_droppedEventCount;
+                EvictOldestLocked();
             }
 
-            m_pendingEvents.push_back([evt = std::move(event)](EventBus& bus) { bus.Publish(evt); });
+            QueueFor(priority).push_back([evt = std::move(event)](EventBus& bus) { bus.Publish(evt); });
         }
 
         /**
          * @brief Dispatch all queued events through the given EventBus.
+         *
+         * Events dispatch in priority order: Critical first, then Normal, then
+         * Low. Queues are swapped out under the lock, so dispatch runs without
+         * holding it and subscribers may themselves enqueue new events safely.
+         *
          * @param bus  The EventBus to publish queued events through.
          */
         void DispatchAll(EventBus& bus)
         {
-            std::vector<std::function<void(EventBus&)>> events;
+            std::vector<std::function<void(EventBus&)>> critical;
+            std::vector<std::function<void(EventBus&)>> normal;
+            std::vector<std::function<void(EventBus&)>> low;
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                events.swap(m_pendingEvents);
+                critical.swap(m_critical);
+                normal.swap(m_normal);
+                low.swap(m_low);
                 m_droppedEventCount = 0;
             }
 
-            for (const auto& dispatch : events)
-            {
+            for (const auto& dispatch : critical)
                 dispatch(bus);
-            }
+            for (const auto& dispatch : normal)
+                dispatch(bus);
+            for (const auto& dispatch : low)
+                dispatch(bus);
         }
 
-        /** @brief Get the number of events currently waiting in the queue. */
+        /** @brief Total number of events currently waiting across all priority tiers. */
         size_t GetPendingCount() const
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            return m_pendingEvents.size();
+            return TotalPendingLocked();
+        }
+
+        /** @brief Number of events currently waiting in a specific priority tier. */
+        size_t GetPendingCount(EventPriority priority) const
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return QueueFor(priority).size();
         }
 
         /** @brief Discard all queued events without dispatching them. */
         void Clear()
         {
             std::lock_guard<std::mutex> lock(m_mutex);
-            m_pendingEvents.clear();
+            m_critical.clear();
+            m_normal.clear();
+            m_low.clear();
         }
 
         /** @brief Number of events dropped due to queue overflow since last DispatchAll. */
@@ -354,8 +402,66 @@ namespace Spark
       private:
         static constexpr size_t MaxQueueSize = 10000;
 
+        using QueueType = std::vector<std::function<void(EventBus&)>>;
+
+        QueueType& QueueFor(EventPriority priority)
+        {
+            switch (priority)
+            {
+            case EventPriority::Critical:
+                return m_critical;
+            case EventPriority::Low:
+                return m_low;
+            case EventPriority::Normal:
+            default:
+                return m_normal;
+            }
+        }
+
+        const QueueType& QueueFor(EventPriority priority) const
+        {
+            switch (priority)
+            {
+            case EventPriority::Critical:
+                return m_critical;
+            case EventPriority::Low:
+                return m_low;
+            case EventPriority::Normal:
+            default:
+                return m_normal;
+            }
+        }
+
+        size_t TotalPendingLocked() const { return m_critical.size() + m_normal.size() + m_low.size(); }
+
+        // Evict the oldest event from the lowest-priority non-empty queue.
+        // Critical is only touched when it alone fills the queue — which is
+        // effectively a safety valve against critical-event floods.
+        void EvictOldestLocked()
+        {
+            if (!m_low.empty())
+            {
+                m_low.erase(m_low.begin());
+            }
+            else if (!m_normal.empty())
+            {
+                m_normal.erase(m_normal.begin());
+            }
+            else if (!m_critical.empty())
+            {
+                m_critical.erase(m_critical.begin());
+            }
+            else
+            {
+                return; // nothing to evict — should not happen when total >= MaxQueueSize
+            }
+            ++m_droppedEventCount;
+        }
+
         mutable std::mutex m_mutex;
-        std::vector<std::function<void(EventBus&)>> m_pendingEvents;
+        QueueType m_critical;
+        QueueType m_normal;
+        QueueType m_low;
         size_t m_droppedEventCount = 0;
     };
 

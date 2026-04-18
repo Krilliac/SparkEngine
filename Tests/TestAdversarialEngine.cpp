@@ -965,6 +965,140 @@ TEST(Adversarial_QueuedBus_ConcurrentQueue_NoRace)
 }
 
 // ============================================================================
+// Priority-tier tests for QueuedEventBus (Technique #15)
+// ============================================================================
+
+TEST(Priority_QueuedBus_DefaultTierIsNormal)
+{
+    QueuedEventBus queue;
+    queue.QueueEvent(EntityDamagedEvent{1, 0.0f, ""});
+    queue.QueueEvent(EntityDamagedEvent{2, 0.0f, ""});
+
+    EXPECT_EQ(queue.GetPendingCount(), static_cast<size_t>(2));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Normal), static_cast<size_t>(2));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Critical), static_cast<size_t>(0));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Low), static_cast<size_t>(0));
+}
+
+TEST(Priority_QueuedBus_PerTierCounts)
+{
+    QueuedEventBus queue;
+    queue.QueueEvent(EntityDamagedEvent{1, 0.0f, ""}, EventPriority::Critical);
+    queue.QueueEvent(EntityDamagedEvent{2, 0.0f, ""}, EventPriority::Normal);
+    queue.QueueEvent(EntityDamagedEvent{3, 0.0f, ""}, EventPriority::Normal);
+    queue.QueueEvent(EntityDamagedEvent{4, 0.0f, ""}, EventPriority::Low);
+    queue.QueueEvent(EntityDamagedEvent{5, 0.0f, ""}, EventPriority::Low);
+    queue.QueueEvent(EntityDamagedEvent{6, 0.0f, ""}, EventPriority::Low);
+
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Critical), static_cast<size_t>(1));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Normal), static_cast<size_t>(2));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Low), static_cast<size_t>(3));
+    EXPECT_EQ(queue.GetPendingCount(), static_cast<size_t>(6));
+}
+
+TEST(Priority_QueuedBus_DispatchOrderCriticalFirst)
+{
+    QueuedEventBus queue;
+    EventBus bus;
+    std::vector<uint32_t> order;
+    auto handle = bus.Subscribe<EntityDamagedEvent>([&](const EntityDamagedEvent& e) { order.push_back(e.entityId); });
+
+    // Queue in reverse priority order to prove dispatch reorders by tier
+    queue.QueueEvent(EntityDamagedEvent{100, 0.0f, ""}, EventPriority::Low);
+    queue.QueueEvent(EntityDamagedEvent{101, 0.0f, ""}, EventPriority::Low);
+    queue.QueueEvent(EntityDamagedEvent{200, 0.0f, ""}, EventPriority::Normal);
+    queue.QueueEvent(EntityDamagedEvent{201, 0.0f, ""}, EventPriority::Normal);
+    queue.QueueEvent(EntityDamagedEvent{300, 0.0f, ""}, EventPriority::Critical);
+    queue.QueueEvent(EntityDamagedEvent{301, 0.0f, ""}, EventPriority::Critical);
+
+    queue.DispatchAll(bus);
+
+    EXPECT_EQ(order.size(), static_cast<size_t>(6));
+    if (order.size() != 6)
+        return;
+    // Critical batch first (in insertion order within tier)
+    EXPECT_EQ(order[0], 300u);
+    EXPECT_EQ(order[1], 301u);
+    // Then Normal
+    EXPECT_EQ(order[2], 200u);
+    EXPECT_EQ(order[3], 201u);
+    // Then Low
+    EXPECT_EQ(order[4], 100u);
+    EXPECT_EQ(order[5], 101u);
+}
+
+TEST(Priority_QueuedBus_LowEvictedBeforeNormalOrCritical)
+{
+    QueuedEventBus queue;
+
+    // Fill with Critical + Normal to just under capacity, then flood Low
+    // to force eviction only from the Low tier.
+    constexpr size_t kCritical = 100;
+    constexpr size_t kNormal = 100;
+    for (size_t i = 0; i < kCritical; ++i)
+        queue.QueueEvent(EntityDamagedEvent{static_cast<uint32_t>(i), 0.0f, ""}, EventPriority::Critical);
+    for (size_t i = 0; i < kNormal; ++i)
+        queue.QueueEvent(EntityDamagedEvent{static_cast<uint32_t>(i), 0.0f, ""}, EventPriority::Normal);
+
+    // 10000 capacity minus 200 already queued = 9800 low events fit cleanly,
+    // then 500 more forces eviction
+    for (size_t i = 0; i < 9800 + 500; ++i)
+        queue.QueueEvent(EntityDamagedEvent{static_cast<uint32_t>(i), 0.0f, ""}, EventPriority::Low);
+
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Critical), kCritical);
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Normal), kNormal);
+    EXPECT_LE(queue.GetPendingCount(EventPriority::Low), static_cast<size_t>(9800));
+    EXPECT_GE(queue.GetDroppedEventCount(), static_cast<size_t>(500));
+    EXPECT_LE(queue.GetPendingCount(), static_cast<size_t>(10000));
+}
+
+TEST(Priority_QueuedBus_CriticalSurvivesOverflow)
+{
+    QueuedEventBus queue;
+
+    // Queue Critical first, then flood Normal to force eviction
+    constexpr size_t kCritical = 50;
+    for (size_t i = 0; i < kCritical; ++i)
+        queue.QueueEvent(EntityDamagedEvent{static_cast<uint32_t>(i), 0.0f, ""}, EventPriority::Critical);
+
+    for (size_t i = 0; i < 11000; ++i)
+        queue.QueueEvent(EntityDamagedEvent{static_cast<uint32_t>(i), 0.0f, ""}, EventPriority::Normal);
+
+    // Every Critical event should still be there; Normal should have been evicted
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Critical), kCritical);
+    EXPECT_GT(queue.GetDroppedEventCount(), static_cast<size_t>(0));
+    EXPECT_LE(queue.GetPendingCount(), static_cast<size_t>(10000));
+}
+
+TEST(Priority_QueuedBus_CriticalFloodEvictsCriticalAsLastResort)
+{
+    QueuedEventBus queue;
+
+    // With only Critical events in play, overflow has no choice but to evict
+    // oldest Critical events — this is the safety-valve behavior.
+    for (size_t i = 0; i < 11000; ++i)
+        queue.QueueEvent(EntityDamagedEvent{static_cast<uint32_t>(i), 0.0f, ""}, EventPriority::Critical);
+
+    EXPECT_LE(queue.GetPendingCount(EventPriority::Critical), static_cast<size_t>(10000));
+    EXPECT_GE(queue.GetDroppedEventCount(), static_cast<size_t>(1000));
+}
+
+TEST(Priority_QueuedBus_ClearDropsAllTiers)
+{
+    QueuedEventBus queue;
+    queue.QueueEvent(EntityDamagedEvent{}, EventPriority::Critical);
+    queue.QueueEvent(EntityDamagedEvent{}, EventPriority::Normal);
+    queue.QueueEvent(EntityDamagedEvent{}, EventPriority::Low);
+    EXPECT_EQ(queue.GetPendingCount(), static_cast<size_t>(3));
+
+    queue.Clear();
+    EXPECT_EQ(queue.GetPendingCount(), static_cast<size_t>(0));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Critical), static_cast<size_t>(0));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Normal), static_cast<size_t>(0));
+    EXPECT_EQ(queue.GetPendingCount(EventPriority::Low), static_cast<size_t>(0));
+}
+
+// ============================================================================
 // Standalone ServiceLocator adversarial tests
 // ============================================================================
 
