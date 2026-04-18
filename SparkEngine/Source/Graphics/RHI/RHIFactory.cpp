@@ -296,21 +296,20 @@ namespace Spark
             ShaderLanguage source = options.sourceLanguage;
             if (source == ShaderLanguage::Auto)
             {
+                source = ShaderLanguage::HLSL; // Default
                 if (!options.sourceFile.empty())
                 {
-                    std::string ext = options.sourceFile.substr(options.sourceFile.find_last_of('.'));
-                    if (ext == ".hlsl" || ext == ".fx")
-                        source = ShaderLanguage::HLSL;
-                    else if (ext == ".glsl" || ext == ".vert" || ext == ".frag")
-                        source = ShaderLanguage::GLSL;
-                    else if (ext == ".spv")
-                        source = ShaderLanguage::SPIRV;
-                    else
-                        source = ShaderLanguage::HLSL; // Default to HLSL
-                }
-                else
-                {
-                    source = ShaderLanguage::HLSL;
+                    const size_t dotPos = options.sourceFile.find_last_of('.');
+                    if (dotPos != std::string::npos)
+                    {
+                        std::string ext = options.sourceFile.substr(dotPos);
+                        if (ext == ".hlsl" || ext == ".fx")
+                            source = ShaderLanguage::HLSL;
+                        else if (ext == ".glsl" || ext == ".vert" || ext == ".frag")
+                            source = ShaderLanguage::GLSL;
+                        else if (ext == ".spv")
+                            source = ShaderLanguage::SPIRV;
+                    }
                 }
             }
 
