@@ -61,12 +61,18 @@ class World;
 namespace Spark::AI
 {
 
+    // AI uses a uint32_t EntityID alias (matches MovementSystem.h). Redeclared
+    // locally so that unqualified `EntityID` resolves deterministically inside
+    // this namespace regardless of whether ::EntityID (entt::entity, from
+    // CoreComponents.h) has also been pulled into the TU. Without this, the
+    // field type below silently differs between TUs → ODR violation under LTO.
+    using EntityID = uint32_t;
+
     /**
      * @brief Tracking data for a single AI agent within the budget system.
      */
     struct AgentBudgetEntry
     {
-        // Spark::AI::EntityID is a uint32_t alias (see MovementSystem.h);
         // entt::null is an entt::entity, so use the unsigned-int sentinel.
         EntityID entityId = static_cast<EntityID>(-1);
 

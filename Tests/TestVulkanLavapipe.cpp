@@ -8,12 +8,12 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIBridge.h"
-#include "../SparkEngine/Source/Utils/GoldenImageTest.h"
+#include "Graphics/RHI/RHIFactory.h"
+#include "Graphics/RHI/RHIBridge.h"
+#include "Utils/GoldenImageTest.h"
 
 #ifdef SPARK_VULKAN_SUPPORT
-#include "../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h"
+#include "Graphics/RHI/Vulkan/VulkanDevice.h"
 #endif
 
 // ============================================================================

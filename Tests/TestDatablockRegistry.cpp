@@ -1,7 +1,7 @@
 // TestDatablockRegistry.cpp - Tests for immutable shared-data object registry
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Networking/DatablockRegistry.h"
+#include "Engine/Networking/DatablockRegistry.h"
 
 using namespace Spark::Net;
 

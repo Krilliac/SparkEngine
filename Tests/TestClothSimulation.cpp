@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Physics/ClothSimulation.h"
+#include "Physics/ClothSimulation.h"
 
 TEST(Cloth_CreateAndDestroy)
 {

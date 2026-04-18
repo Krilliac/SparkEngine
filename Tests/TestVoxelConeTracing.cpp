@@ -18,7 +18,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/VoxelConeTracing.h"
+#include "Graphics/VoxelConeTracing.h"
 
 #include <cmath>
 #include <cstdint>

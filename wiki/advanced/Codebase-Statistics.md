@@ -8,13 +8,13 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 281855 |
+| **SparkEngine/Source** | 281876 |
 | **SparkEditor/Source** | 88834 |
 | **GameModules** | 58618 |
-| **Tests** | 135083 |
+| **Tests** | 135089 |
 | **SparkConsole/src** | 1868 |
 | **SparkShaderCompiler/src** | 533 |
-| **Total C++ (excl. ThirdParty)** | **~566791** |
+| **Total C++ (excl. ThirdParty)** | **~566818** |
 
 ### File Counts
 
@@ -43,9 +43,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 112754 | 40.0% |
-| Engine (all subsystems) | 80900 | 28.7% |
+| Engine (all subsystems) | 80913 | 28.7% |
 | Utils | 39892 | 14.1% |
-| Core | 22764 | 8.0% |
+| Core | 22772 | 8.0% |
 | Physics | 10101 | 3.5% |
 | Audio | 6032 | 2.1% |
 | Input | 3895 | 1.3% |
@@ -58,7 +58,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-04-
 
 | Subsystem | Lines |
 |-----------|------:|
-| AI | 13225 |
+| AI | 13238 |
 | Networking | 12166 |
 | ECS | 8551 |
 | Gameplay | 7511 |

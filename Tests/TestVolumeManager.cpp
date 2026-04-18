@@ -12,7 +12,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/VolumeSystem.h"
+#include "Graphics/VolumeSystem.h"
 
 #include <cmath>
 

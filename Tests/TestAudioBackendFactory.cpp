@@ -11,9 +11,9 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Audio/AudioBackendFactory.h"
-#include "../SparkEngine/Source/Audio/IAudioBackend.h"
-#include "../SparkEngine/Source/Core/Platform.h"
+#include "Audio/AudioBackendFactory.h"
+#include "Audio/IAudioBackend.h"
+#include "Core/Platform.h"
 
 #include <cstring>
 

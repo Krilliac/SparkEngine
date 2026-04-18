@@ -14,7 +14,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Engine/UI/UISystem.h"
+#include "Engine/UI/UISystem.h"
 
 using Spark::Graphics::CompositeOp;
 using Spark::Graphics::CompositeRequest;

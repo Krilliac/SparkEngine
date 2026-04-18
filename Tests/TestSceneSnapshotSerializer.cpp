@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h"
+#include "Engine/Editor/SceneSnapshotSerializer.h"
 
 // ============================================================================
 // SnapshotWriter / SnapshotReader round-trip tests

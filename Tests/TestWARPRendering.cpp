@@ -8,13 +8,13 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIBridge.h"
+#include "Graphics/RHI/RHIFactory.h"
+#include "Graphics/RHI/RHIBridge.h"
 
 #ifdef _WIN32
-#include "../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h"
+#include "Graphics/RHI/D3D11/D3D11Device.h"
 #ifndef SPARK_NO_D3D12
-#include "../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h"
+#include "Graphics/RHI/D3D12/D3D12Device.h"
 #endif
 #endif
 

@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h"
+#include "Engine/Dialogue/DialogueSystem.h"
 
 TEST(Dialogue_CreateTree)
 {

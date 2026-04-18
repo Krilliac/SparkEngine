@@ -14,7 +14,13 @@
 #include <string_view>
 #include <vector>
 
-// Minimal World definition — ECSystemTypes.h forward-declares it
+// Minimal World definition — ECSystemTypes.h forward-declares it at global
+// scope, so the test provides an empty stub here. GCC's -Wodr will warn that
+// this differs from the engine's real `class World` under LTO; that's
+// expected: the test's stub is never instantiated or passed to code that
+// touches World's real members, so link-time behavior is unaffected. We
+// cannot pull in the real World here without dragging the full ECS runtime
+// (entt headers, components, managers) into a unit-test TU.
 class World
 {
 };

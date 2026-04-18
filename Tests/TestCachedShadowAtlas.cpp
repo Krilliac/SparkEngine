@@ -14,7 +14,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/CachedShadowAtlas.h"
+#include "Graphics/CachedShadowAtlas.h"
 
 using Spark::Graphics::CachedShadowAtlas;
 using Spark::Graphics::ShadowUpdateRequest;

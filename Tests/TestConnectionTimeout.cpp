@@ -12,8 +12,8 @@
 #endif
 #endif
 
-#include "../SparkEngine/Source/Engine/Networking/NetworkManager.h"
-#include "../SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.h"
+#include "Engine/Networking/NetworkManager.h"
+#include "Engine/ECS/Systems/TerrainSystem.h"
 
 using namespace Spark::Net;
 

@@ -18,7 +18,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/FastNoise2SIMD.h"
+#include "Graphics/FastNoise2SIMD.h"
 
 #include <algorithm>
 #include <cmath>

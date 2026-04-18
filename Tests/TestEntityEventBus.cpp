@@ -1,7 +1,7 @@
 // TestEntityEventBus.cpp - Tests for per-entity event dispatch
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/EntityEventBus.h"
+#include "Utils/EntityEventBus.h"
 
 using namespace Spark;
 

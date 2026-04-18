@@ -1,7 +1,7 @@
 // TestMaterialDefinition.cpp - Tests for the declarative material definition format
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Graphics/MaterialDefinition.h"
+#include "Graphics/MaterialDefinition.h"
 
 using namespace Spark::Graphics;
 

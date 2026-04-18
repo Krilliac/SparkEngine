@@ -1,8 +1,8 @@
 // TestMemoryMonitor.cpp - Tests for proactive runtime memory health monitoring
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/MemoryDebugger.h"
-#include "../SparkEngine/Source/Utils/MemoryMonitor.h"
+#include "Utils/MemoryDebugger.h"
+#include "Utils/MemoryMonitor.h"
 
 // =============================================================================
 // Lifecycle

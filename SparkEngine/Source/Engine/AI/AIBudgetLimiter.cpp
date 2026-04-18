@@ -43,7 +43,7 @@ namespace Spark::AI
             const auto* ai = world.GetComponent<AIComponent>(entity);
             if (ai != nullptr && ai->state != AIComponent::State::Dead)
             {
-                activeAgents.push_back(entity);
+                activeAgents.push_back(static_cast<EntityID>(entity));
             }
         }
 
@@ -61,7 +61,7 @@ namespace Spark::AI
             {
                 // Preserve stale counter, update position
                 AgentBudgetEntry entry = *it;
-                const auto* transform = world.GetComponent<Transform>(entityId);
+                const auto* transform = world.GetComponent<Transform>(static_cast<entt::entity>(entityId));
                 if (transform != nullptr)
                 {
                     entry.position = transform->position;
@@ -77,7 +77,7 @@ namespace Spark::AI
                 entry.framesSinceLastUpdate = 0;
                 entry.processedThisFrame = false;
 
-                const auto* transform = world.GetComponent<Transform>(entityId);
+                const auto* transform = world.GetComponent<Transform>(static_cast<entt::entity>(entityId));
                 if (transform != nullptr)
                 {
                     entry.position = transform->position;

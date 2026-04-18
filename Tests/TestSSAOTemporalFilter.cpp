@@ -11,7 +11,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/SSAOTemporal.h"
+#include "Graphics/SSAOTemporal.h"
 
 #include <cmath>
 #include <vector>

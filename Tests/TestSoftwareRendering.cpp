@@ -8,12 +8,12 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIBridge.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIPipelineTypes.h"
+#include "Graphics/RHI/RHIFactory.h"
+#include "Graphics/RHI/RHIBridge.h"
+#include "Graphics/RHI/RHIPipelineTypes.h"
 
 #ifdef SPARK_OPENGL_SUPPORT
-#include "../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h"
+#include "Graphics/RHI/OpenGL/OpenGLDevice.h"
 #endif
 
 #include <cstdlib>

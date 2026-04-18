@@ -24,7 +24,7 @@
 
 #include "TestFramework.h"
 #include "TestWarnings.h"
-#include "../SparkEngine/Source/Utils/Logger.h"
+#include "Utils/Logger.h"
 
 #include <algorithm>
 #include <chrono>

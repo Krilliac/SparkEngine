@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Input/InputBindings.h"
+#include "Input/InputBindings.h"
 
 TEST(InputBindings_SetAndGet)
 {

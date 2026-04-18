@@ -18,9 +18,9 @@
 #endif
 #endif
 
-#include "../SparkEngine/Source/Engine/Networking/NetworkManager.h"
-#include "../SparkEngine/Source/Engine/Networking/WorldServer.h"
-#include "../SparkEngine/Source/Engine/Networking/AreaServer.h"
+#include "Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/WorldServer.h"
+#include "Engine/Networking/AreaServer.h"
 
 #ifdef ENABLE_NETWORKING
 

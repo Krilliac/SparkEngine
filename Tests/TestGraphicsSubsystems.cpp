@@ -9,12 +9,12 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/RenderTarget.h"
-#include "../SparkEngine/Source/Graphics/MaterialSystem.h"
-#include "../SparkEngine/Source/Graphics/TextureCompressor.h"
-#include "../SparkEngine/Source/Graphics/VirtualTexture.h"
-#include "../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.h"
-#include "../SparkEngine/Source/Graphics/ClipmapTerrain.h"
+#include "Graphics/RenderTarget.h"
+#include "Graphics/MaterialSystem.h"
+#include "Graphics/TextureCompressor.h"
+#include "Graphics/VirtualTexture.h"
+#include "Graphics/AdaptiveProbeVolumes.h"
+#include "Graphics/ClipmapTerrain.h"
 
 #include <cstring>
 #include <functional>

@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Graphics/UpscalingSystem.h"
+#include "Graphics/UpscalingSystem.h"
 
 TEST(Upscaling_QualityRenderScale)
 {

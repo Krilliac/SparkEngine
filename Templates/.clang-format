@@ -1,0 +1,7 @@
+# Project templates contain {{PROJECT_NAME}} placeholders that are substituted
+# by the project scaffolding tool before the file becomes real C++. clang-format
+# cannot parse the placeholder syntax, so we disable formatting here. Real code
+# formatting rules live in the root .clang-format and are enforced on all
+# actual engine / editor / game-module source.
+DisableFormat: true
+SortIncludes: Never

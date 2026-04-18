@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Editor/PlayModeManager.h"
+#include "Engine/Editor/PlayModeManager.h"
 
 TEST(PlayMode_InitialState)
 {

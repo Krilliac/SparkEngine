@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/Result.h"
+#include "Utils/Result.h"
 
 // ============================================================================
 // Result<T> Tests

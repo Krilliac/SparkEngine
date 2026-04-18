@@ -18,7 +18,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/MeshOptimizer.h"
+#include "Graphics/MeshOptimizer.h"
 
 #include <algorithm>
 #include <cmath>

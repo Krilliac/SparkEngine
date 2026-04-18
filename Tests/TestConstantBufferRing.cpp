@@ -18,11 +18,11 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Core/Platform.h"
+#include "Core/Platform.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 
-#include "../SparkEngine/Source/Graphics/ConstantBufferRing.h"
+#include "Graphics/ConstantBufferRing.h"
 
 using Spark::Graphics::CBAllocation;
 using Spark::Graphics::ConstantBufferRing;

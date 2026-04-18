@@ -4,7 +4,7 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/FrameAllocator.h"
+#include "Utils/FrameAllocator.h"
 
 TEST(FrameAllocator_BasicAlloc)
 {

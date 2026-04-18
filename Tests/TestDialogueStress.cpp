@@ -2,7 +2,7 @@
 // Uses real DialogueSystem header for type-accurate testing
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h"
+#include "Engine/Dialogue/DialogueSystem.h"
 #include <string>
 #include <vector>
 

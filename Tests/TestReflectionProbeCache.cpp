@@ -13,7 +13,7 @@
 
 #include "TestFramework.h"
 
-#include "../SparkEngine/Source/Graphics/ReflectionProbeCache.h"
+#include "Graphics/ReflectionProbeCache.h"
 
 #include <algorithm>
 

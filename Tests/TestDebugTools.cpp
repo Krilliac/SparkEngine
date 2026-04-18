@@ -7,13 +7,13 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/MemoryDebugger.h"
-#include "../SparkEngine/Source/Utils/FrameInspector.h"
-#include "../SparkEngine/Source/Utils/DebugDraw.h"
-#include "../SparkEngine/Source/Utils/DebugOverlay.h"
-#include "../SparkEngine/Source/Utils/FileLogger.h"
-#include "../SparkEngine/Source/Utils/StackTrace.h"
-#include "../SparkEngine/Source/Utils/Logger.h"
+#include "Utils/MemoryDebugger.h"
+#include "Utils/FrameInspector.h"
+#include "Utils/DebugDraw.h"
+#include "Utils/DebugOverlay.h"
+#include "Utils/FileLogger.h"
+#include "Utils/StackTrace.h"
+#include "Utils/Logger.h"
 
 // ============================================================================
 // MemoryDebugger Tests

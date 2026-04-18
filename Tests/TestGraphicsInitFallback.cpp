@@ -4,9 +4,9 @@
  */
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Graphics/RHI/NullRHIDevice.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIFactory.h"
-#include "../SparkEngine/Source/Graphics/RHI/RHIBridge.h"
+#include "Graphics/RHI/NullRHIDevice.h"
+#include "Graphics/RHI/RHIFactory.h"
+#include "Graphics/RHI/RHIBridge.h"
 
 // ============================================================================
 // NullRHIDevice direct construction

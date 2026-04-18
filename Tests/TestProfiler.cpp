@@ -1,7 +1,7 @@
 // TestProfiler.cpp - Tests for the frame profiling system
 
 #include "TestFramework.h"
-#include "../SparkEngine/Source/Utils/Profiler.h"
+#include "Utils/Profiler.h"
 #include <thread>
 #include <chrono>
 
