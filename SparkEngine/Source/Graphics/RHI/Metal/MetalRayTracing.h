@@ -80,6 +80,26 @@ namespace Spark::RHI::Metal
     };
 
     /**
+     * @brief Per-instance material params consumed by the RT kernels on hit.
+     *        Matched to `MaterialParams` in the embedded shader source —
+     *        albedo RGB, emissive RGB (emission strength baked into RGB),
+     *        roughness + metallic packed into a single float4. The RT
+     *        kernels look up `materials[instance_id]` when a ray hits an
+     *        instance and return a shaded colour instead of the 0.3 grey
+     *        placeholder.
+     *
+     *        Layout is tight (8 floats) so the buffer scales linearly with
+     *        instance count. Alignment is 16-byte (float4) per row for
+     *        Metal constant-buffer compatibility.
+     */
+    struct MaterialParams
+    {
+        float albedo[4] = {0.8f, 0.8f, 0.8f, 1.0f};            ///< RGB + alpha
+        float emissive[4] = {0.0f, 0.0f, 0.0f, 0.0f};          ///< RGB + unused
+        float roughnessMetallic[4] = {0.5f, 0.0f, 0.0f, 0.0f}; ///< roughness, metallic, pad, pad
+    };
+
+    /**
      * @brief Which trace passes the HybridRT manager wants this frame.
      *        Mirrors the existing `RTEffect` flags in `RHITypes.h`.
      */
@@ -157,6 +177,15 @@ namespace Spark::RHI::Metal
          *        Called once per frame before the trace passes.
          */
         void BuildTLAS(const std::vector<TLASInstance>& instances);
+
+        /**
+         * @brief Upload per-instance material params. Index maps to the
+         *        corresponding `TLASInstance` in the most recent
+         *        `BuildTLAS` call. Passing an empty vector clears the
+         *        material buffer — kernels then fall back to the
+         *        placeholder 0.3 grey on hit.
+         */
+        void SetMaterials(const std::vector<MaterialParams>& materials);
 
         /// @brief Set per-frame camera/light uniforms consumed by all trace passes.
         void SetFrameParams(const FrameParams& params);

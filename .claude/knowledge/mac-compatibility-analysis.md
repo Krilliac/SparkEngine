@@ -396,10 +396,69 @@ Pinned by: `CMAKE_OSX_DEPLOYMENT_TARGET=11.0` (CMakeLists.txt), `cmake_minimum_r
 Linux `linux-gcc-release` builds clean; suite green (5621 passed,
 0 failed, 1 known-flaky warning).
 
-Remaining for phase 5:
-- Actual scene walker (iterate `MeshRenderer` components, resolve
-  meshes, push per frame or on scene change) — needs the asset
-  manager lookup wired in the graphics engine.
-- Per-instance material data for the RT kernels (albedo, emissive,
-  roughness) so hit-shading produces real colors instead of the 0.3
-  grey placeholder.
+Remaining for phase 5 (done in session #5 below).
+
+### 2026-04-18 session #5 — Metal RT phase 5 (scene feeder + materials + macOS tests)
+
+**RT scene feeder (`Graphics/HybridRT/RTSceneFeeder.{h,cpp}`)**
+- Free function `Spark::Graphics::PopulateRTSceneFromECS(rt, world, assets)`
+  walks `Transform + MeshRenderer` exactly like `RenderSystem::Update`
+  (ECSystems.cpp:51), resolves `meshPath` via `AssetPipeline::LoadMesh`,
+  and calls the new `HybridRTManager::PushTriangleMesh(MeshAsset&,
+  XMMATRIX&)` overload for each visible/active entity. Returns the
+  pushed count.
+- Uses `renderer.cachedWorldMatrix` when valid (populated by
+  `RenderSystem` upstream), else walks parent hierarchy via
+  `Transform::GetWorldMatrix(registry)`.
+- Not auto-hooked yet — the macOS render pipeline
+  (`GraphicsRenderPipelinesLinux.cpp::RenderDeferred`) does not call
+  `HybridRTManager::Execute` today. Phase 6 wires that.
+- Investigation note: `GraphicsEngine::SubmitMeshForRendering` is
+  Windows-only (guarded from `GraphicsEngineWindows.cpp:10` through
+  `1445`), so the ECS render path does not drive meshes on
+  Linux/macOS today. The scene feeder bypasses that by pushing
+  directly into `HybridRTManager`.
+
+**Per-instance material bindings (`MetalRayTracing.{h,mm}`)**
+- New struct `Spark::RHI::Metal::MaterialParams` (albedo float4,
+  emissive float4, roughness+metallic float4 — 48 bytes, 16-byte
+  aligned for Metal constant-buffer compat).
+- `SetMaterials(std::vector<MaterialParams>)` uploads an `MTLBuffer`
+  bound at slot 2 in every trace pass. Empty vector drops the buffer.
+- All four kernels now share a uniform binding layout:
+  buffer(0)=TLAS, buffer(1)=RTParams, buffer(2)=materials,
+  buffer(3)=materialCount, texture(0)=depth, texture(1)=normals,
+  texture(2)=output. Shadows + AO suppress `materials`/`materialCount`
+  with `(void)` casts.
+- New MSL helper `ShadeHit(mat, rayDir, params)` — simple Lambert +
+  emissive. Reflections kernel attenuates by distance; GI kernel
+  replaces the 0.3 grey placeholder with real material shading.
+- `EncodeTracePass` rewritten to bind all 7 slots unconditionally —
+  one dispatcher, all four passes.
+
+**macOS-only RT tests (`Tests/TestMetalRayTracing.cpp`)**
+- 7 smoke tests behind `#ifdef SPARK_PLATFORM_MACOS` (empty TU on
+  non-macOS). Exercises pre-init state only — no MTLDevice needed:
+  default-construct, Initialize(nullptr) fails cleanly, pre-init
+  trace methods return false, DispatchFrame returns None, Shutdown
+  is idempotent, SetMaterials(empty) is safe, GetStatusString
+  non-empty.
+- Registered unconditionally in `Tests/CMakeLists.txt`; Linux/Windows
+  link the empty TU.
+
+Linux `linux-gcc-release` builds clean; suite green (5621 passed,
+0 failed, 1 known-flaky warning). Metal CI row will register ~5628
+when it runs.
+
+**Remaining for phase 6:**
+- Hook `PopulateRTSceneFromECS` + `HybridRTManager::Execute` into
+  the macOS render frame (either patch `RenderDeferred` to call
+  both after lighting, or implement the non-Windows
+  `SubmitMeshForRendering` so the shared `RenderSystem` drives
+  meshes everywhere).
+- Wire `MaterialParams` population from `MaterialSystem` — today
+  engine code constructs them by hand; the asset loader should emit
+  them alongside mesh uploads.
+- Live MTLDevice tests on the macOS Metal CI row — Initialize with
+  a real device, push a BLAS, build a TLAS, dispatch a trace pass
+  against a small offscreen target.

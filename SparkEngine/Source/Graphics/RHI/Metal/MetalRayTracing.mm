@@ -84,6 +84,31 @@ namespace Spark::RHI::Metal
                 uint2    _pad;
             };
 
+            // Per-instance material, matches C++ MaterialParams. The kernels
+            // read materials[instance_id] on hit. When the binding is null
+            // (materialCount==0 at CPU side, empty buffer), the kernels fall
+            // back to a neutral grey.
+            struct MaterialParams
+            {
+                float4 albedo;
+                float4 emissive;
+                float4 roughnessMetallic;
+            };
+
+            // Shaded colour for a hit sample given the material and the
+            // incoming ray direction. Simple Lambert + emissive until
+            // real lighting bindings land. Light direction comes from
+            // RTParams for shadows/GI so we re-use it here.
+            static float3 ShadeHit(constant MaterialParams& mat,
+                                   float3 rayDir,
+                                   constant RTParams& params)
+            {
+                float3 n    = normalize(-rayDir);        // face normal stand-in
+                float  NdL  = max(0.0, dot(n, -normalize(params.lightDir.xyz)));
+                float3 base = mat.albedo.rgb * (0.25 + 0.75 * NdL);
+                return base + mat.emissive.rgb;
+            }
+
             // Common helper: reconstruct world position from screen-space
             // coordinate + depth buffer sample.
             static float3 ReconstructWorldPos(uint2 gid,
@@ -122,13 +147,26 @@ namespace Spark::RHI::Metal
                 return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1)));
             }
 
+            // All kernels use a uniform binding layout so a single dispatch
+            // helper can encode every pass:
+            //   buffer(0) = instance acceleration structure (TLAS)
+            //   buffer(1) = RTParams
+            //   buffer(2) = materials[]  (optional; unused by shadows/AO)
+            //   buffer(3) = materialCount
+            //   texture(0) = GBuffer depth
+            //   texture(1) = GBuffer normals (unused by shadows but still bound)
+            //   texture(2) = output render target
             kernel void RTShadows(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
+                constant MaterialParams*        materials [[buffer(2)]],
+                constant uint&                  materialCount [[buffer(3)]],
                 texture2d<float, access::read>  depthTex [[texture(0)]],
-                texture2d<float, access::write> outTex [[texture(1)]],
+                texture2d<float, access::read>  normalTex [[texture(1)]],
+                texture2d<float, access::write> outTex [[texture(2)]],
                 uint2 gid [[thread_position_in_grid]])
             {
+                (void)materials; (void)materialCount; (void)normalTex;
                 if (any(gid >= params.resolution)) return;
                 float depth = depthTex.read(gid).r;
                 if (depth >= 1.0) { outTex.write(float4(1.0), gid); return; }
@@ -153,6 +191,8 @@ namespace Spark::RHI::Metal
             kernel void RTReflections(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
+                constant MaterialParams*        materials [[buffer(2)]],
+                constant uint&                  materialCount [[buffer(3)]],
                 texture2d<float, access::read>  depthTex [[texture(0)]],
                 texture2d<float, access::read>  normalTex [[texture(1)]],
                 texture2d<float, access::write> outTex [[texture(2)]],
@@ -177,16 +217,26 @@ namespace Spark::RHI::Metal
                 auto result = it.intersect(r, accel);
                 if (result.type == intersection_type::none)
                 {
-                    // Sky gradient based on ray direction.
                     float t = saturate(reflDir.y * 0.5 + 0.5);
                     outTex.write(float4(mix(float3(0.4, 0.55, 0.7), float3(0.1, 0.15, 0.25), t), 1.0), gid);
+                    return;
+                }
+
+                // Shade the hit using the per-instance material when
+                // available. Attenuate by distance so far reflections
+                // fade out (matches DXR reflection compositor behaviour).
+                float dist = result.distance;
+                float fade = saturate(1.0 - dist / 200.0);
+                float3 colour;
+                if (materialCount > 0 && result.instance_id < materialCount)
+                {
+                    colour = ShadeHit(materials[result.instance_id], reflDir, params) * fade;
                 }
                 else
                 {
-                    float dist = result.distance;
-                    float fade = saturate(1.0 - dist / 200.0);
-                    outTex.write(float4(float3(fade * 0.8), 1.0), gid);
+                    colour = float3(fade * 0.8);
                 }
+                outTex.write(float4(colour, 1.0), gid);
             }
 
             // Ambient occlusion: 4 cosine-weighted hemisphere samples, short
@@ -195,11 +245,14 @@ namespace Spark::RHI::Metal
             kernel void RTAmbientOcclusion(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
+                constant MaterialParams*        materials [[buffer(2)]],
+                constant uint&                  materialCount [[buffer(3)]],
                 texture2d<float, access::read>  depthTex [[texture(0)]],
                 texture2d<float, access::read>  normalTex [[texture(1)]],
                 texture2d<float, access::write> outTex [[texture(2)]],
                 uint2 gid [[thread_position_in_grid]])
             {
+                (void)materials; (void)materialCount;
                 if (any(gid >= params.resolution)) return;
                 float depth = depthTex.read(gid).r;
                 if (depth >= 1.0) { outTex.write(float4(1.0), gid); return; }
@@ -234,6 +287,8 @@ namespace Spark::RHI::Metal
             kernel void RTGlobalIllumination(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
+                constant MaterialParams*        materials [[buffer(2)]],
+                constant uint&                  materialCount [[buffer(3)]],
                 texture2d<float, access::read>  depthTex [[texture(0)]],
                 texture2d<float, access::read>  normalTex [[texture(1)]],
                 texture2d<float, access::write> outTex [[texture(2)]],
@@ -263,9 +318,13 @@ namespace Spark::RHI::Metal
                     float t = saturate(dir.y * 0.5 + 0.5);
                     radiance = mix(float3(0.4, 0.55, 0.7), float3(0.1, 0.15, 0.25), t);
                 }
+                else if (materialCount > 0 && result.instance_id < materialCount)
+                {
+                    radiance = ShadeHit(materials[result.instance_id], dir, params);
+                }
                 else
                 {
-                    radiance = float3(0.3);  // Placeholder until material bindings land.
+                    radiance = float3(0.3); // Placeholder when material buffer is empty.
                 }
                 outTex.write(float4(radiance, 1.0), gid);
             }
@@ -294,6 +353,11 @@ namespace Spark::RHI::Metal
         id<MTLAccelerationStructure> tlas = nil;
         id<MTLBuffer> instanceBuffer = nil;
         uint32_t tlasInstanceCount = 0;
+
+        // Per-instance materials. Kernels sample `materials[instance_id]`
+        // on hit; nil buffer means "use the 0.3 grey placeholder".
+        id<MTLBuffer> materialBuffer = nil;
+        uint32_t materialCount = 0;
 
         // Per-pass compute pipelines.
         id<MTLLibrary> library = nil;
@@ -434,6 +498,8 @@ namespace Spark::RHI::Metal
         m_impl->tlas = nil;
         m_impl->instanceBuffer = nil;
         m_impl->tlasInstanceCount = 0;
+        m_impl->materialBuffer = nil;
+        m_impl->materialCount = 0;
         m_impl->psoShadows = nil;
         m_impl->psoReflections = nil;
         m_impl->psoAO = nil;
@@ -621,6 +687,20 @@ namespace Spark::RHI::Metal
         }
     }
 
+    void MetalRayTracingSystem::SetMaterials(const std::vector<MaterialParams>& materials)
+    {
+        m_impl->materialCount = static_cast<uint32_t>(materials.size());
+        if (materials.empty() || !m_impl->mtlDevice)
+        {
+            m_impl->materialBuffer = nil;
+            return;
+        }
+        const NSUInteger bytes = sizeof(MaterialParams) * materials.size();
+        m_impl->materialBuffer = [m_impl->mtlDevice newBufferWithBytes:materials.data()
+                                                                length:bytes
+                                                               options:MTLResourceStorageModeShared];
+    }
+
     void MetalRayTracingSystem::SetFrameParams(const FrameParams& params)
     {
         m_impl->frame = params;
@@ -643,13 +723,21 @@ namespace Spark::RHI::Metal
         m_impl->outGI = ToMTLTexture(gi);
     }
 
-    // Shared dispatch helper — binds TLAS, frame params, one input, and
-    // the output texture, then encodes a single compute dispatch sized to
-    // cover the output. Returns false (and logs once) if any prerequisite
-    // is missing, so the caller falls back to SDFGI cleanly.
+    // Shared dispatch helper — binds TLAS, frame params, optional
+    // per-instance materials, one input, and the output texture, then
+    // encodes a single compute dispatch sized to cover the output.
+    // Returns false (and logs once) if any prerequisite is missing, so
+    // the caller falls back to SDFGI cleanly.
+    //
+    // `materialBuffer` + `materialCount` are optional — when
+    // `materialCount == 0` the kernels still see buffer(2)/buffer(3)
+    // arguments (Metal requires declared bindings to be set), so we
+    // always provide a placeholder uint even when the real buffer is
+    // nil. Kernels branch on `materialCount > 0` before dereferencing.
     static bool EncodeTracePass(id<MTLCommandQueue> queue, id<MTLComputePipelineState> pso,
                                 id<MTLAccelerationStructure> tlas, const FrameParams& params,
-                                id<MTLTexture> inputTex, id<MTLTexture> outTex,
+                                id<MTLBuffer> materialBuffer, uint32_t materialCount, id<MTLTexture> depthTex,
+                                id<MTLTexture> normalTex, id<MTLTexture> outTex,
                                 std::atomic_flag& missingWarnFlag, const char* passName)
     {
         if (!queue || !pso || !tlas || !outTex)
@@ -664,9 +752,16 @@ namespace Spark::RHI::Metal
             [enc setComputePipelineState:pso];
             [enc setAccelerationStructure:tlas atBufferIndex:0];
             [enc setBytes:&params length:sizeof(FrameParams) atIndex:1];
-            if (inputTex)
-                [enc setTexture:inputTex atIndex:0];
-            [enc setTexture:outTex atIndex:1];
+            // Materials slot 2 is optional (nil allowed); count slot 3
+            // always present so the kernel can branch on it.
+            if (materialBuffer)
+                [enc setBuffer:materialBuffer offset:0 atIndex:2];
+            [enc setBytes:&materialCount length:sizeof(uint32_t) atIndex:3];
+            if (depthTex)
+                [enc setTexture:depthTex atIndex:0];
+            if (normalTex)
+                [enc setTexture:normalTex atIndex:1];
+            [enc setTexture:outTex atIndex:2];
 
             MTLSize tgroup = MTLSizeMake(8, 8, 1);
             MTLSize grid = MTLSizeMake((params.resolutionX + 7) / 8, (params.resolutionY + 7) / 8, 1);
@@ -686,8 +781,8 @@ namespace Spark::RHI::Metal
             return false;
         }
         return EncodeTracePass(m_impl->commandQueue, m_impl->psoReflections, m_impl->tlas, m_impl->frame,
-                               m_impl->depthTex, m_impl->outReflections, g_warnedReflections,
-                               "TraceReflections");
+                               m_impl->materialBuffer, m_impl->materialCount, m_impl->depthTex, m_impl->normalTex,
+                               m_impl->outReflections, g_warnedReflections, "TraceReflections");
     }
 
     bool MetalRayTracingSystem::TraceShadows()
@@ -698,7 +793,8 @@ namespace Spark::RHI::Metal
             return false;
         }
         return EncodeTracePass(m_impl->commandQueue, m_impl->psoShadows, m_impl->tlas, m_impl->frame,
-                               m_impl->depthTex, m_impl->outShadows, g_warnedShadows, "TraceShadows");
+                               m_impl->materialBuffer, m_impl->materialCount, m_impl->depthTex, m_impl->normalTex,
+                               m_impl->outShadows, g_warnedShadows, "TraceShadows");
     }
 
     bool MetalRayTracingSystem::TraceAmbientOcclusion()
@@ -709,7 +805,8 @@ namespace Spark::RHI::Metal
             return false;
         }
         return EncodeTracePass(m_impl->commandQueue, m_impl->psoAO, m_impl->tlas, m_impl->frame,
-                               m_impl->depthTex, m_impl->outAO, g_warnedAO, "TraceAmbientOcclusion");
+                               m_impl->materialBuffer, m_impl->materialCount, m_impl->depthTex, m_impl->normalTex,
+                               m_impl->outAO, g_warnedAO, "TraceAmbientOcclusion");
     }
 
     bool MetalRayTracingSystem::TraceGlobalIllumination()
@@ -720,7 +817,8 @@ namespace Spark::RHI::Metal
             return false;
         }
         return EncodeTracePass(m_impl->commandQueue, m_impl->psoGI, m_impl->tlas, m_impl->frame,
-                               m_impl->depthTex, m_impl->outGI, g_warnedGI, "TraceGlobalIllumination");
+                               m_impl->materialBuffer, m_impl->materialCount, m_impl->depthTex, m_impl->normalTex,
+                               m_impl->outGI, g_warnedGI, "TraceGlobalIllumination");
     }
 
     TracePass MetalRayTracingSystem::DispatchFrame(TracePass passes)
