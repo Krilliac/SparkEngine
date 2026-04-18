@@ -925,6 +925,7 @@ jobs:
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
+          -DENABLE_LTO=OFF \
           -DENABLE_SDL2=ON \
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=ON \

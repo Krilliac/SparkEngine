@@ -1133,8 +1133,12 @@ if(JOLT_FOUND)
     set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
     set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
     set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
-    # Enable Jolt's IPO in Release/Shipping so it participates in whole-program LTO
-    if(CMAKE_BUILD_TYPE MATCHES "Release|MinSizeRel|RelWithDebInfo")
+    # Gate Jolt's IPO on our top-level ENABLE_LTO. When ENABLE_LTO=OFF the
+    # engine is compiled as plain ELF/native objects; enabling IPO only on
+    # Jolt leaves libJolt.a full of LLVM bitcode (Clang) or gcc-lto sections
+    # (GCC without the linker plugin), which GNU ld then rejects with
+    # "libJolt.a: error adding symbols: file format not recognized".
+    if(ENABLE_LTO AND CMAKE_BUILD_TYPE MATCHES "Release|MinSizeRel|RelWithDebInfo")
         set(INTERPROCEDURAL_OPTIMIZATION ON CACHE BOOL "" FORCE)
     else()
         set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
