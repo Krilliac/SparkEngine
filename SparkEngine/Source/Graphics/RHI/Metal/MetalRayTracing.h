@@ -39,6 +39,11 @@
 #include <string>
 #include <vector>
 
+namespace Spark::RHI
+{
+    class IRHITexture;
+}
+
 namespace Spark::RHI::Metal
 {
     class MetalDevice;
@@ -85,6 +90,23 @@ namespace Spark::RHI::Metal
         Shadows = 1u << 1,
         AmbientOcclusion = 1u << 2,
         GlobalIllumination = 1u << 3,
+    };
+
+    /**
+     * @brief Per-frame uniforms consumed by the RT compute kernels.
+     *        Row-major 4x4 inverse view-projection; world-space camera
+     *        position; world-space light direction. `resolutionX/Y` drive
+     *        the dispatch thread count.
+     */
+    struct FrameParams
+    {
+        float invViewProj[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        float cameraPos[3] = {0, 0, 0};
+        float cameraPad = 0.0f;
+        float lightDir[3] = {0, -1, 0};
+        float lightPad = 0.0f;
+        uint32_t resolutionX = 0;
+        uint32_t resolutionY = 0;
     };
 
     /**
@@ -136,12 +158,22 @@ namespace Spark::RHI::Metal
          */
         void BuildTLAS(const std::vector<TLASInstance>& instances);
 
+        /// @brief Set per-frame camera/light uniforms consumed by all trace passes.
+        void SetFrameParams(const FrameParams& params);
+
+        /// @brief Set GBuffer inputs (depth + normals). Passed textures
+        ///        must stay live until the next SetInputTextures call.
+        void SetInputTextures(Spark::RHI::IRHITexture* depth, Spark::RHI::IRHITexture* normals);
+
+        /// @brief Set per-effect output render targets. Passing nullptr
+        ///        for a specific slot disables that trace pass this frame.
+        void SetOutputTextures(Spark::RHI::IRHITexture* shadows, Spark::RHI::IRHITexture* reflections,
+                               Spark::RHI::IRHITexture* ao, Spark::RHI::IRHITexture* gi);
+
         /**
          * @brief Run one of the trace passes. Returns true if the pass
          *        actually dispatched; false means the caller should run
          *        the SDFGI fallback for this pass.
-         *
-         *        Today every overload returns false (scaffold only).
          */
         bool TraceReflections();
         bool TraceShadows();

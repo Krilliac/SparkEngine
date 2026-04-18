@@ -32,6 +32,7 @@
 #endif
 
 #include <algorithm>
+#include <cstring>
 #include <sstream>
 
 namespace Spark::Graphics
@@ -273,11 +274,32 @@ namespace Spark::Graphics
 
         case RHI::RayTracingBackend::HardwareMetalRT:
 #ifdef SPARK_PLATFORM_MACOS
-            // Consult the Metal RT scaffold. DispatchFrame returns the set
-            // of passes that actually executed; anything it didn't run we
-            // back-fill with SDFGI so the compositor has data to blend.
+            // Consult the Metal RT system. Feed this frame's uniforms and
+            // GBuffer/output textures, then DispatchFrame. The returned mask
+            // tells us which passes actually ran; we back-fill the rest with
+            // SDFGI so the compositor always has data to blend.
             if (m_metalRT && m_metalRT->IsAvailable())
             {
+                Spark::RHI::Metal::FrameParams mrtp{};
+                DirectX::XMMATRIX viewProj = DirectX::XMMatrixMultiply(view, proj);
+                DirectX::XMVECTOR det = DirectX::XMMatrixDeterminant(viewProj);
+                DirectX::XMMATRIX invVP = DirectX::XMMatrixInverse(&det, viewProj);
+                DirectX::XMFLOAT4X4 invVPStore;
+                DirectX::XMStoreFloat4x4(&invVPStore, invVP);
+                std::memcpy(mrtp.invViewProj, &invVPStore, sizeof(mrtp.invViewProj));
+                mrtp.cameraPos[0] = cameraPos.x;
+                mrtp.cameraPos[1] = cameraPos.y;
+                mrtp.cameraPos[2] = cameraPos.z;
+                mrtp.lightDir[0] = lightDir.x;
+                mrtp.lightDir[1] = lightDir.y;
+                mrtp.lightDir[2] = lightDir.z;
+                mrtp.resolutionX = m_width;
+                mrtp.resolutionY = m_height;
+                m_metalRT->SetFrameParams(mrtp);
+                m_metalRT->SetInputTextures(gbufferDepth, gbufferNormals);
+                m_metalRT->SetOutputTextures(m_rtShadows.get(), m_rtReflections.get(),
+                                             /*ao*/ nullptr, m_rtGI.get());
+
                 auto allPasses = Spark::RHI::Metal::TracePass::Reflections | Spark::RHI::Metal::TracePass::Shadows |
                                  Spark::RHI::Metal::TracePass::AmbientOcclusion |
                                  Spark::RHI::Metal::TracePass::GlobalIllumination;
@@ -285,8 +307,9 @@ namespace Spark::Graphics
                 (void)executed;
             }
 #endif
-            // Scaffold always returns zero executed passes today — fall
-            // through to SDFGI so the frame still produces output.
+            // Any passes Metal RT didn't execute (or all of them if Metal
+            // RT isn't available) still need data — run SDFGI as a blanket
+            // fallback so the compositor has something to blend.
             ExecuteSDFGI(cmd, params, gbufferNormals, gbufferDepth, gbufferAlbedo);
             break;
 

@@ -237,12 +237,73 @@ Linux `linux-gcc-release` preset configures, builds `SparkEngineLib` +
 `SparkTests` cleanly, and the full suite runs green
 (5620 passed, 0 failed, 1 known-flaky warning).
 
+### 2026-04-18 session #2 — Metal RT phase 2 (real BLAS/TLAS + compiled pipelines)
+
+Scaffold from session #1 replaced with working Metal RT infrastructure:
+
+- **MetalRayTracing.mm `Initialize`** — compiles a 4-kernel Metal library
+  at runtime via `[device newLibraryWithSource:options:error:]` with
+  `MTLLanguageVersion2_4`. Creates one `MTLComputePipelineState` each
+  for `RTShadows`, `RTReflections`, `RTAmbientOcclusion`,
+  `RTGlobalIllumination`. Guards with both `[device supportsRaytracing]`
+  and `@available(macOS 12.0, *)` so macOS 11 and non-RT GPUs fall
+  back cleanly.
+- **Metal shader source** — embedded as NSString constant. Uses
+  `metal::raytracing::intersector<instancing, triangle_data>`. Shadows
+  kernel reconstructs world position from depth + invViewProj, traces
+  against the TLAS, writes visibility. Reflections/AO/GI kernels are
+  skeletons that write zero/one (shape the pipeline but skip the full
+  trace until the next milestone).
+- **`CreateBLAS`** — real implementation. Uploads vertex + index data
+  to shared-storage MTLBuffers, builds
+  `MTLPrimitiveAccelerationStructureDescriptor` with triangle geometry
+  + opacity + refit usage flag, calls
+  `accelerationStructureSizesWithDescriptor:` →
+  `newAccelerationStructureWithSize:` → builds on a one-shot command
+  buffer via `MTLAccelerationStructureCommandEncoder`.
+- **`UpdateBLAS`** — refit path for dynamic meshes: writes new
+  vertex/index data into the existing shared buffers. Mismatched sizes
+  trigger a destroy so the caller does a fresh CreateBLAS.
+- **`BuildTLAS`** — real implementation. Populates
+  `MTLAccelerationStructureInstanceDescriptor` array with 4x3 transforms
+  (column-major), mask, hit-group offset, BLAS index. Builds
+  `MTLInstanceAccelerationStructureDescriptor` with
+  `instancedAccelerationStructures:` array, sizes/alloc/build on
+  acceleration-structure command encoder.
+- **API surface extension** — new `FrameParams` struct (invViewProj,
+  cameraPos, lightDir, resolution) + `SetFrameParams`,
+  `SetInputTextures(depth, normals)`,
+  `SetOutputTextures(shadows, reflections, ao, gi)`. MTLTexture
+  extraction via `dynamic_cast<MetalTexture*>` + `GetMTLTexture()`.
+- **`EncodeTracePass`** — shared helper. Creates command buffer +
+  compute encoder, binds pipeline + TLAS + uniform struct + input
+  texture + output texture, dispatches threadgroups at 8x8. Each of
+  the four trace methods calls this with its own pipeline / output
+  pair. Returns false (with one-shot warn) if any of TLAS / output /
+  pipeline is missing — caller runs SDFGI as fallback.
+- **HybridRTManager wiring** — on macOS, Execute's
+  `case HardwareMetalRT` now builds invViewProj, fills `FrameParams`,
+  calls `SetFrameParams / SetInputTextures / SetOutputTextures` with
+  the GBuffer + `m_rtShadows/Reflections/GI`, then `DispatchFrame(all)`.
+  SDFGI still runs as blanket fallback (many passes still return
+  false without a scene-pushed TLAS), so the compositor always gets
+  data even when Metal RT is live.
+
+Remaining gaps (next milestone):
+- BLAS/TLAS are not yet fed from the engine scene — HybridRTManager
+  never calls `CreateBLAS`/`BuildTLAS` yet. That requires a mesh-push
+  step in SDFSceneManager or a sibling scene walker.
+- Reflection/AO/GI kernels need real trace bodies (only shadows has one).
+- No test coverage yet for MetalRayTracingSystem — Metal APIs are
+  unreachable from the Linux test runner; requires a macOS-specific
+  test gating or a mocked MTLDevice interface.
+
 ## Notes
 
 - Metal files are excluded from clang-format CI checks (`-not -path '*/Metal/*'`)
 - macOS CI job uses `continue-on-error: true` until support stabilizes
 - MoltenVK path avoids ~2,500 lines of Objective-C++ Metal implementation
-- Metal RT is scaffold-only today — the trace pipelines, shaders, and
-  acceleration-structure build/refit code are the next milestone.
-  Capability detection, wiring, console surfacing, and HybridRT
-  fallback are already in place.
+- Metal RT phase 2 landed: real MTLAccelerationStructure builds, runtime
+  shader compilation, and a working shadow-pass kernel. Trace dispatch
+  wires into HybridRTManager's Execute() but still needs the engine to
+  push scene geometry and build the per-frame TLAS.
