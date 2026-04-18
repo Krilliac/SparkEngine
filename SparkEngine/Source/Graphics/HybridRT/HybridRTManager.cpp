@@ -18,6 +18,7 @@
  */
 
 #include "HybridRTManager.h"
+#include "../AssetPipeline.h"
 #include "../RHI/RHIDevice.h"
 #include "../RHI/RHIResources.h"
 #include "../../Utils/Validate.h"
@@ -26,7 +27,13 @@
 #include "../RHI/DXRSupport.h"
 #endif
 
+#ifdef SPARK_PLATFORM_MACOS
+#include "../RHI/Metal/MetalRayTracing.h"
+#include "../RHI/Metal/MetalDevice.h"
+#endif
+
 #include <algorithm>
+#include <cstring>
 #include <sstream>
 
 namespace Spark::Graphics
@@ -113,6 +120,24 @@ namespace Spark::Graphics
         }
 
         m_pendingPrimitives.reserve(SDFSceneManager::kMaxPrimitives);
+
+#ifdef SPARK_PLATFORM_MACOS
+        // Spin up the Metal RT scaffold when the detected backend is Metal.
+        // Initialize() returns false today (no trace pipelines yet), which
+        // leaves `m_metalRT->IsAvailable()` false — the Execute() path then
+        // falls back to SDFGI. Keeping the object alive here means once the
+        // real pipelines land the wiring is already in place.
+        if (m_activeBackend == RHI::RayTracingBackend::HardwareMetalRT)
+        {
+            auto* metalDevice = dynamic_cast<Spark::RHI::Metal::MetalDevice*>(device);
+            if (metalDevice)
+            {
+                m_metalRT = std::make_unique<Spark::RHI::Metal::MetalRayTracingSystem>();
+                (void)m_metalRT->Initialize(metalDevice);
+            }
+        }
+#endif
+
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "HybridRTManager initialized (%ux%u)", width, height);
         return true;
@@ -131,6 +156,14 @@ namespace Spark::Graphics
         m_sdfScene.reset();
         m_compositor.reset();
         m_probes.reset();
+
+#ifdef SPARK_PLATFORM_MACOS
+        if (m_metalRT)
+            m_metalRT->Shutdown();
+        m_metalRT.reset();
+        m_metalRTMeshes.clear();
+        m_metalRTTLASDirty = false;
+#endif
 
         m_rtReflections.reset();
         m_rtGI.reset();
@@ -238,8 +271,64 @@ namespace Spark::Graphics
         break;
 
         case RHI::RayTracingBackend::HardwareVKRT:
+            // Vulkan RT: fall back to SDFGI until the backend matures.
+            ExecuteSDFGI(cmd, params, gbufferNormals, gbufferDepth, gbufferAlbedo);
+            break;
+
         case RHI::RayTracingBackend::HardwareMetalRT:
-            // Vulkan / Metal RT: fall back to SDFGI until those backends mature
+#ifdef SPARK_PLATFORM_MACOS
+            // Consult the Metal RT system. Feed this frame's uniforms and
+            // GBuffer/output textures, then DispatchFrame. The returned mask
+            // tells us which passes actually ran; we back-fill the rest with
+            // SDFGI so the compositor always has data to blend.
+            if (m_metalRT && m_metalRT->IsAvailable())
+            {
+                // Rebuild the TLAS when scene pushes invalidated it.
+                if (m_metalRTTLASDirty && !m_metalRTMeshes.empty())
+                {
+                    std::vector<Spark::RHI::Metal::TLASInstance> instances;
+                    instances.reserve(m_metalRTMeshes.size());
+                    for (const auto& m : m_metalRTMeshes)
+                    {
+                        Spark::RHI::Metal::TLASInstance inst{};
+                        inst.blasIndex = m.blasIndex;
+                        std::memcpy(inst.transform, m.transform, sizeof(inst.transform));
+                        inst.instanceMask = m.isOpaque ? 0xFF : 0x01;
+                        instances.push_back(inst);
+                    }
+                    m_metalRT->BuildTLAS(instances);
+                    m_metalRTTLASDirty = false;
+                }
+                Spark::RHI::Metal::FrameParams mrtp{};
+                DirectX::XMMATRIX viewProj = DirectX::XMMatrixMultiply(view, proj);
+                DirectX::XMVECTOR det = DirectX::XMMatrixDeterminant(viewProj);
+                DirectX::XMMATRIX invVP = DirectX::XMMatrixInverse(&det, viewProj);
+                DirectX::XMFLOAT4X4 invVPStore;
+                DirectX::XMStoreFloat4x4(&invVPStore, invVP);
+                std::memcpy(mrtp.invViewProj, &invVPStore, sizeof(mrtp.invViewProj));
+                mrtp.cameraPos[0] = cameraPos.x;
+                mrtp.cameraPos[1] = cameraPos.y;
+                mrtp.cameraPos[2] = cameraPos.z;
+                mrtp.lightDir[0] = lightDir.x;
+                mrtp.lightDir[1] = lightDir.y;
+                mrtp.lightDir[2] = lightDir.z;
+                mrtp.resolutionX = m_width;
+                mrtp.resolutionY = m_height;
+                m_metalRT->SetFrameParams(mrtp);
+                m_metalRT->SetInputTextures(gbufferDepth, gbufferNormals);
+                m_metalRT->SetOutputTextures(m_rtShadows.get(), m_rtReflections.get(),
+                                             /*ao*/ nullptr, m_rtGI.get());
+
+                auto allPasses = Spark::RHI::Metal::TracePass::Reflections | Spark::RHI::Metal::TracePass::Shadows |
+                                 Spark::RHI::Metal::TracePass::AmbientOcclusion |
+                                 Spark::RHI::Metal::TracePass::GlobalIllumination;
+                auto executed = m_metalRT->DispatchFrame(allPasses);
+                (void)executed;
+            }
+#endif
+            // Any passes Metal RT didn't execute (or all of them if Metal
+            // RT isn't available) still need data — run SDFGI as a blanket
+            // fallback so the compositor has something to blend.
             ExecuteSDFGI(cmd, params, gbufferNormals, gbufferDepth, gbufferAlbedo);
             break;
 
@@ -336,6 +425,98 @@ namespace Spark::Graphics
         }
     }
 
+    void HybridRTManager::PushTriangleMesh(const TriangleMeshDesc& mesh)
+    {
+#ifdef SPARK_PLATFORM_MACOS
+        if (!m_metalRT || !m_metalRT->IsAvailable())
+            return;
+
+        Spark::RHI::Metal::BLASGeometry geom{};
+        geom.name = mesh.name;
+        geom.vertexData = mesh.vertexData;
+        geom.vertexCount = mesh.vertexCount;
+        geom.vertexStride = mesh.vertexStride;
+        geom.indexData = mesh.indexData;
+        geom.indexCount = mesh.indexCount;
+        geom.isOpaque = mesh.isOpaque;
+        geom.allowUpdate = mesh.allowDynamicUpdate;
+
+        const uint32_t blasIndex = m_metalRT->CreateBLAS(geom);
+        if (blasIndex == UINT32_MAX)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "HybridRTManager: MetalRT BLAS creation failed for '" + mesh.name + "'");
+            return;
+        }
+
+        PushedMesh pushed{};
+        pushed.blasIndex = blasIndex;
+        std::memcpy(pushed.transform, mesh.transform, sizeof(pushed.transform));
+        pushed.isOpaque = mesh.isOpaque;
+        m_metalRTMeshes.push_back(pushed);
+        m_metalRTTLASDirty = true;
+#else
+        (void)mesh;
+#endif
+    }
+
+    void HybridRTManager::PushTriangleMesh(const ::MeshAsset& asset, const DirectX::XMMATRIX& worldTransform,
+                                           bool allowDynamicUpdate)
+    {
+        const auto& data = asset.GetMeshData();
+        if (data.vertices.empty() || data.indices.size() < 3)
+            return;
+
+        // Flatten row-major 3x4 from an XMMATRIX's first 3 rows. `XMStoreFloat4x4`
+        // stores row-major so `m[row][col]` lays out exactly the way the Metal
+        // instance descriptor expects its 3x4 transform.
+        DirectX::XMFLOAT4X4 m;
+        DirectX::XMStoreFloat4x4(&m, worldTransform);
+
+        TriangleMeshDesc desc{};
+        desc.name = asset.GetPath();
+        desc.vertexData = data.vertices.data();
+        desc.vertexCount = static_cast<uint32_t>(data.vertices.size());
+        desc.vertexStride = sizeof(MeshAssetData::Vertex);
+        desc.indexData = data.indices.data();
+        desc.indexCount = static_cast<uint32_t>(data.indices.size());
+        for (int row = 0; row < 3; ++row)
+        {
+            for (int col = 0; col < 4; ++col)
+                desc.transform[row * 4 + col] = m.m[row][col];
+        }
+        desc.isOpaque = true;
+        desc.allowDynamicUpdate = allowDynamicUpdate;
+
+        PushTriangleMesh(desc);
+    }
+
+    void HybridRTManager::ClearTriangleMeshes()
+    {
+#ifdef SPARK_PLATFORM_MACOS
+        if (m_metalRT)
+        {
+            for (auto& m : m_metalRTMeshes)
+                m_metalRT->DestroyBLAS(m.blasIndex);
+            // Rebuild an empty TLAS so the compute passes see no instances.
+            m_metalRT->BuildTLAS({});
+            // Drop materials along with the geometry so the kernels
+            // don't dereference a stale buffer on the next frame.
+            m_metalRT->SetMaterials({});
+        }
+        m_metalRTMeshes.clear();
+        m_metalRTTLASDirty = false;
+#endif
+    }
+
+#ifdef SPARK_PLATFORM_MACOS
+    void HybridRTManager::SetMetalMaterials(const std::vector<RHI::Metal::MaterialParams>& materials)
+    {
+        if (m_metalRT)
+            m_metalRT->SetMaterials(materials);
+    }
+#endif
+
     void HybridRTManager::SetQuality(RHI::RayTracingQuality quality)
     {
         if (quality == m_quality)
@@ -413,6 +594,15 @@ namespace Spark::Graphics
         if (RHI::HasEffect(m_enabledEffects, RHI::RTEffect::AmbientOcclusion))
             ss << "AO ";
         ss << "\n";
+
+#ifdef SPARK_PLATFORM_MACOS
+        if (m_metalRT)
+        {
+            ss << m_metalRT->GetStatusString() << "\n";
+            ss << "Pushed meshes: " << m_metalRTMeshes.size() << (m_metalRTTLASDirty ? " (TLAS rebuild pending)" : "")
+               << "\n";
+        }
+#endif
 
         return ss.str();
     }

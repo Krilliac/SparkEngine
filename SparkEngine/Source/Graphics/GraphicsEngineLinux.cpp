@@ -583,8 +583,34 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     cmd->EndEvent();
 }
 
-// NOTE: SubmitMeshForRendering and ProcessDrawList are defined above in the
-// "ECS MESH DRAW SUBMISSION" section (single definition, spinlock-based).
+// SubmitMeshForRendering lives in the shared GraphicsEngineSubmit.cpp so
+// Linux/macOS builds can drive the draw list too. ProcessDrawList (D3D11-
+// specific) stays Windows-only; on Linux/macOS the draw list accumulates
+// but is consumed by the RHI bridge path or the Metal RT scene feeder
+// (`Graphics/HybridRT/RTSceneFeeder.h`).
+
+// ============================================================================
+// HybridRT GBuffer binding — Linux/macOS
+// ============================================================================
+// Reads the GBuffer/HDR textures from the RHI bridge's render-target
+// registry. The rendering layer is expected to have registered them
+// after creation (matched slot numbers in RenderTargetSlot). Anything
+// still unregistered stays nullptr; DispatchHybridRTPass skips when
+// IsReady() returns false, so partial registration degrades cleanly.
+
+Spark::Graphics::HybridRTBindings GraphicsEngine::AcquireHybridRTBindings()
+{
+    Spark::Graphics::HybridRTBindings bindings;
+    if (!m_rhiBridge)
+        return bindings;
+
+    using Slot = Spark::RHI::RHIBridge::RenderTargetSlot;
+    bindings.normals = m_rhiBridge->GetRenderTarget(Slot::GBufferNormals);
+    bindings.depth = m_rhiBridge->GetRenderTarget(Slot::DepthStencil);
+    bindings.albedo = m_rhiBridge->GetRenderTarget(Slot::GBufferAlbedo);
+    bindings.lighting = m_rhiBridge->GetRenderTarget(Slot::HDRLighting);
+    return bindings;
+}
 
 // ============================================================================
 // System Accessors

@@ -38,6 +38,10 @@
 #include <DirectXMath.h>
 #endif
 
+#ifdef SPARK_PLATFORM_MACOS
+#include "../RHI/Metal/MetalRayTracing.h" // MaterialParams declaration
+#endif
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -49,6 +53,17 @@ namespace Spark::RHI
     class IRHIBuffer;
     class IRHITexture;
 } // namespace Spark::RHI
+
+// MeshAsset lives at global scope (not in Spark::Graphics), so forward-declare
+// there to avoid pulling AssetPipeline.h into every consumer of this header.
+class MeshAsset;
+
+#ifdef SPARK_PLATFORM_MACOS
+namespace Spark::RHI::Metal
+{
+    class MetalRayTracingSystem;
+}
+#endif
 
 namespace Spark::Graphics
 {
@@ -86,6 +101,79 @@ namespace Spark::Graphics
         void ClearScene();
         void FlushScene();
 
+        /**
+         * @brief Triangle-mesh descriptor for hardware-RT acceleration
+         *        structure population. Pointer memory must stay valid
+         *        until `PushTriangleMesh` returns — the implementation
+         *        uploads the data into device buffers synchronously.
+         *
+         *        Currently consumed only by the Metal RT path
+         *        (`m_metalRT->CreateBLAS`). DXR/VKRT paths ignore pushes
+         *        until their scene-feed code is wired.
+         */
+        struct TriangleMeshDesc
+        {
+            std::string name;
+            const void* vertexData = nullptr;
+            uint32_t vertexCount = 0;
+            uint32_t vertexStride = 0;
+            const uint32_t* indexData = nullptr;
+            uint32_t indexCount = 0;
+            // 3x4 row-major affine transform (rows are world-space basis
+            // vectors + translation in the last column). Default = identity.
+            float transform[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+            bool isOpaque = true;
+            bool allowDynamicUpdate = false;
+        };
+
+        /**
+         * @brief Push a triangle mesh into the hardware-RT scene. On macOS
+         *        this builds a BLAS via MetalRayTracingSystem::CreateBLAS
+         *        and records the transform for the next TLAS rebuild.
+         *        On other platforms today this is a no-op.
+         */
+        void PushTriangleMesh(const TriangleMeshDesc& mesh);
+
+        /**
+         * @brief Convenience overload for engine scene code — pushes the
+         *        vertex/index data out of a loaded `MeshAsset` with the
+         *        given world transform. Relies on
+         *        `MeshAssetData::Vertex` laying `XMFLOAT3 position` at
+         *        offset 0, so the Metal RT triangle-geometry descriptor
+         *        can read position directly at `vertexStride` steps.
+         *
+         *        Returns silently if the asset's data is empty or the
+         *        Metal RT path isn't active; scene walkers can call
+         *        this unconditionally for every visible MeshRenderer.
+         */
+        void PushTriangleMesh(const ::MeshAsset& asset, const DirectX::XMMATRIX& worldTransform,
+                              bool allowDynamicUpdate = false);
+
+        /**
+         * @brief Drop every pushed triangle mesh and invalidate the TLAS.
+         *        Call when the active scene changes; subsequent pushes
+         *        populate a fresh AS.
+         */
+        void ClearTriangleMeshes();
+
+#ifdef SPARK_PLATFORM_MACOS
+        /**
+         * @brief Upload per-instance material params for the Metal RT
+         *        kernels. The vector index must match the push order
+         *        used with `PushTriangleMesh` — the RT kernels index
+         *        `materials[instance_id]` where `instance_id` is
+         *        assigned in push order. Passing an empty vector
+         *        clears the material buffer so kernels fall back to
+         *        the placeholder grey.
+         *
+         *        Off macOS this signature is hidden — the `MaterialParams`
+         *        type lives in the Metal RT headers. Call behind
+         *        `#ifdef SPARK_PLATFORM_MACOS` the same way the RT
+         *        system itself is gated.
+         */
+        void SetMetalMaterials(const std::vector<RHI::Metal::MaterialParams>& materials);
+#endif
+
         // ---- Settings ----
         void SetQuality(RHI::RayTracingQuality quality);
         void SetBackendOverride(RHI::RayTracingBackend backend);
@@ -112,6 +200,26 @@ namespace Spark::Graphics
         std::unique_ptr<SDFSceneManager> m_sdfScene;
         std::unique_ptr<RTCompositor> m_compositor;
         std::unique_ptr<ProbeSystem> m_probes;
+
+#ifdef SPARK_PLATFORM_MACOS
+        // Metal hardware ray-tracing system. Instantiated only when the
+        // detected backend is `HardwareMetalRT`. Currently a scaffold — its
+        // DispatchFrame returns zero executed passes, so SDFGI runs as
+        // fallback on every frame until the real trace pipelines land.
+        std::unique_ptr<Spark::RHI::Metal::MetalRayTracingSystem> m_metalRT;
+
+        // Pushed triangle meshes awaiting BLAS/TLAS population. Each entry
+        // records the BLAS index (assigned on push) plus the transform for
+        // the TLAS instance. Cleared by ClearTriangleMeshes.
+        struct PushedMesh
+        {
+            uint32_t blasIndex = 0;
+            float transform[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+            bool isOpaque = true;
+        };
+        std::vector<PushedMesh> m_metalRTMeshes;
+        bool m_metalRTTLASDirty = false;
+#endif
 
         // Intermediate RT output textures (owned by this manager)
         std::unique_ptr<RHI::IRHITexture> m_rtReflections;

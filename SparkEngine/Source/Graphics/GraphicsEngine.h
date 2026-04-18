@@ -87,6 +87,54 @@ class PhysicsSystem;
 class GameObject;
 class Shader;
 
+namespace Spark::RHI
+{
+    class IRHITexture;
+    class IRHICommandList;
+} // namespace Spark::RHI
+
+namespace Spark::Graphics
+{
+    /**
+ * @brief GBuffer + HDR render target handles produced by the platform
+ *        pipeline and consumed by the shared HybridRT dispatch helper.
+ *
+ * On Windows the handles come from wrapping `ComPtr<ID3D11Texture2D>`
+ * objects via `IRHIDevice::WrapNativeTexture`. On Linux/macOS the RHI
+ * bridge is expected to hand out `IRHITexture*` directly; until that
+ * retrieval is implemented the bindings are left empty and the HybridRT
+ * Execute call is skipped (the pass becomes a no-op instead of crashing).
+ *
+ * The struct owns the handles — destruction releases the wrappers in
+ * LIFO order, matching D3D11 ComPtr teardown semantics.
+ */
+    struct HybridRTBindings
+    {
+        // Non-owning pointers consumed by HybridRTManager::Execute.
+        // Either come from the RHIBridge render-target registry (Linux/
+        // macOS — platform creates RHI textures once, registers them, the
+        // bindings just reference) or alias into `owned` below (Windows —
+        // wraps D3D11 ComPtr textures per-frame, needs to keep the
+        // wrappers alive for the duration of the dispatch).
+        Spark::RHI::IRHITexture* normals = nullptr;
+        Spark::RHI::IRHITexture* depth = nullptr;
+        Spark::RHI::IRHITexture* albedo = nullptr;
+        Spark::RHI::IRHITexture* lighting = nullptr;
+
+        /// Keeps wrapped textures alive for the lifetime of this
+        /// bindings object. Windows AcquireHybridRTBindings populates
+        /// this with the per-frame `WrapNativeTexture` results and
+        /// aliases the raw pointers above into these `unique_ptr`s.
+        /// Linux/macOS leaves it empty — the bridge registry owns the
+        /// textures long-term and the raw pointers reference directly.
+        std::vector<std::unique_ptr<Spark::RHI::IRHITexture>> owned;
+
+        /// True if at least the four primary inputs (normals, depth,
+        /// albedo, lighting) resolved — otherwise the dispatch is skipped.
+        bool IsReady() const { return normals && depth && albedo && lighting; }
+    };
+} // namespace Spark::Graphics
+
 /**
  * @brief Advanced DirectX 11 graphics engine with AAA features
  * 
@@ -232,6 +280,32 @@ class GraphicsEngine
      * @param projMatrix  Camera projection matrix for the current frame.
      */
     void ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix);
+
+    /**
+     * @brief Dispatch the HybridRT post-lighting pass (reflections + shadows + AO + GI).
+     *
+     * Shared across Windows/Linux/macOS. Computes camera/light uniforms,
+     * calls `AcquireHybridRTBindings()` to grab the GBuffer/HDR handles
+     * for the current platform, then issues `HybridRTManager::Execute`.
+     * Skips cleanly (no dispatch) when `m_hybridRT` is null or the
+     * bindings aren't ready yet — lets Linux/macOS fall through to
+     * SDFGI / the software path until the RHI bridge exposes GBuffer
+     * textures.
+     *
+     * Intended call site: after the lighting pass, before the
+     * transparent forward pass.
+     */
+    void DispatchHybridRTPass(Spark::RHI::IRHICommandList* cmd, const DirectX::XMMATRIX& viewMatrix,
+                              const DirectX::XMMATRIX& projMatrix);
+
+    /**
+     * @brief Acquire per-platform GBuffer/HDR texture handles for the
+     *        HybridRT pass. Windows wraps D3D11 `ComPtr<ID3D11Texture2D>`
+     *        via `IRHIDevice::WrapNativeTexture`; Linux/macOS returns
+     *        empty bindings for now (the RHI bridge does not yet expose
+     *        GBuffer textures — follow-up).
+     */
+    Spark::Graphics::HybridRTBindings AcquireHybridRTBindings();
 
     /**
      * @brief Return the per-frame draw list (read-only, cold path).

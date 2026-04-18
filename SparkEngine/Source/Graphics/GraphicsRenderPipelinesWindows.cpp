@@ -147,73 +147,12 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
     // Phase 2: Lighting pass
     LightingPass(viewMatrix, projMatrix);
 
-    // Phase 2.5: Hybrid ray tracing (SDFGI or DXR) — after lighting, before transparents
+    // Phase 2.5: Hybrid ray tracing (SDFGI or DXR) — after lighting, before
+    // transparents. Shared across Windows/Linux/macOS; per-platform texture
+    // wrapping lives in AcquireHybridRTBindings().
 #ifdef SPARK_HYBRID_RT
-    if (m_hybridRT && m_rhiBridge)
-    {
-        auto* cmd = m_rhiBridge->GetCommandList();
-        XMMATRIX invView = XMMatrixInverse(nullptr, viewMatrix);
-        DirectX::XMFLOAT3 camPos;
-        XMStoreFloat3(&camPos, invView.r[3]);
-        DirectX::XMFLOAT3 lightDir = {0.0f, -1.0f, 0.5f}; // Primary directional light
-        Spark::Graphics::SSRSettings ssrDefaults;         // Screen-space coordination
-
-        // Wrap D3D11 GBuffer textures as RHI handles for the hybrid RT system
-        auto* device = m_rhiBridge->GetDevice();
-        std::unique_ptr<Spark::RHI::IRHITexture> rhiNormals;
-        std::unique_ptr<Spark::RHI::IRHITexture> rhiDepth;
-        std::unique_ptr<Spark::RHI::IRHITexture> rhiAlbedo;
-        std::unique_ptr<Spark::RHI::IRHITexture> rhiLighting;
-
-        if (device)
-        {
-            // GBuffer layout: [0]=Albedo, [1]=Normal, [2]=Material, [3]=Motion
-            if (m_gBufferTextures[1].Get()) // Normal
-            {
-                Spark::RHI::RHITextureDesc normDesc;
-                normDesc.width = m_width;
-                normDesc.height = m_height;
-                normDesc.format = Spark::RHI::PixelFormat::R16G16B16A16_FLOAT;
-                normDesc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
-                normDesc.debugName = "GBuffer_Normals_Wrapped";
-                rhiNormals = device->WrapNativeTexture(m_gBufferTextures[1].Get(), normDesc);
-            }
-            if (m_depthStencilTexture.Get())
-            {
-                Spark::RHI::RHITextureDesc depthDesc;
-                depthDesc.width = m_width;
-                depthDesc.height = m_height;
-                depthDesc.format = Spark::RHI::PixelFormat::D24_UNORM_S8_UINT;
-                depthDesc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
-                depthDesc.debugName = "Depth_Wrapped";
-                rhiDepth = device->WrapNativeTexture(m_depthStencilTexture.Get(), depthDesc);
-            }
-            if (m_gBufferTextures[0].Get()) // Albedo
-            {
-                Spark::RHI::RHITextureDesc albedoDesc;
-                albedoDesc.width = m_width;
-                albedoDesc.height = m_height;
-                albedoDesc.format = Spark::RHI::PixelFormat::R8G8B8A8_UNORM;
-                albedoDesc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
-                albedoDesc.debugName = "GBuffer_Albedo_Wrapped";
-                rhiAlbedo = device->WrapNativeTexture(m_gBufferTextures[0].Get(), albedoDesc);
-            }
-            if (m_hdrTexture.Get()) // Lighting output (HDR buffer)
-            {
-                Spark::RHI::RHITextureDesc hdrDesc;
-                hdrDesc.width = m_width;
-                hdrDesc.height = m_height;
-                hdrDesc.format = Spark::RHI::PixelFormat::R16G16B16A16_FLOAT;
-                hdrDesc.usage =
-                    Spark::RHI::RHITextureUsage::ShaderResource | Spark::RHI::RHITextureUsage::UnorderedAccess;
-                hdrDesc.debugName = "HDR_Lighting_Wrapped";
-                rhiLighting = device->WrapNativeTexture(m_hdrTexture.Get(), hdrDesc);
-            }
-        }
-
-        m_hybridRT->Execute(cmd, viewMatrix, projMatrix, camPos, lightDir, rhiNormals.get(), rhiDepth.get(),
-                            rhiAlbedo.get(), nullptr, nullptr, rhiLighting.get(), ssrDefaults);
-    }
+    if (m_rhiBridge)
+        DispatchHybridRTPass(m_rhiBridge->GetCommandList(), viewMatrix, projMatrix);
 #endif
 
     // Phase 3: Forward rendering for transparent objects

@@ -510,6 +510,22 @@ namespace Spark
             return m_device->CreateTexture(desc);
         }
 
+        void RHIBridge::RegisterRenderTarget(RenderTargetSlot slot, IRHITexture* texture)
+        {
+            const auto idx = static_cast<uint32_t>(slot);
+            if (idx >= static_cast<uint32_t>(RenderTargetSlot::Count))
+                return;
+            m_renderTargets[idx] = texture;
+        }
+
+        IRHITexture* RHIBridge::GetRenderTarget(RenderTargetSlot slot) const
+        {
+            const auto idx = static_cast<uint32_t>(slot);
+            if (idx >= static_cast<uint32_t>(RenderTargetSlot::Count))
+                return nullptr;
+            return m_renderTargets[idx];
+        }
+
         std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerLinearWrap()
         {
             RHISamplerDesc desc;

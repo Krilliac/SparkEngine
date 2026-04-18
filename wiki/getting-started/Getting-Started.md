@@ -2,16 +2,20 @@
 
 This guide covers everything you need to clone, build, and run SparkEngine from source. It includes platform-specific setup instructions, troubleshooting for common build issues, and verification steps.
 
+For end-user hardware targets (CPU/RAM/VRAM minimums and recommended specs),
+see [System Requirements](../platform/System-Requirements.md).
+
 ## Prerequisites
 
 | Requirement | Details |
 |-------------|---------|
 | **C++ Compiler** | MSVC v143 (Visual Studio 2022 17.6+), GCC 13+, or Clang 17+ with C++23 support |
 | **CMake** | 3.25 or newer |
-| **Graphics** | DirectX 11 capable GPU (Windows). Vulkan SDK optional. OpenGL 4.5 optional. |
-| **Platform** | Windows 10+ (primary), Linux x64 (experimental) |
+| **Graphics** | DirectX 11 capable GPU (Windows). Vulkan SDK optional. OpenGL 4.5 optional. Metal 2.3+ on macOS. |
+| **Platform** | Windows 10+ (primary), Linux x64 (experimental), macOS 11+ (experimental) |
 | **Git** | For cloning with submodules |
 | **Linux packages** | `build-essential`, `ninja-build`, `cmake` |
+| **macOS packages** | `brew install cmake sdl2 openal-soft` (plus `molten-vk` for Vulkan) |
 
 ### Windows Prerequisites
 

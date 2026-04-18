@@ -1,6 +1,6 @@
 # Mac Compatibility Analysis
 
-**Last updated:** 2026-04-17
+**Last updated:** 2026-04-18
 **Type:** Observation
 **Status:** Active
 
@@ -178,8 +178,515 @@ would hurt cohesion more than it helps.
 Linux preset (`linux-gcc-release`) still configures and builds cleanly
 with the split in place.
 
+### 2026-04-18 session — CI matrix + min-macOS pin + smoke tests + Metal RT scaffold
+
+The 2026-04-17 work shipped the Metal backend and split macOS code into its
+own TU, but CI built with `ENABLE_METAL=OFF` so the Objective-C++ payload
+only got compiled locally. This session closes that gap and starts the
+Metal RT path.
+
+Changes:
+
+- **`.github/workflows/build.yml`** — `build-macos` job converted from a
+  flat `config: [Debug, Release]` matrix to an `include:` matrix with
+  three entries:
+  `(Debug, OpenGL, metal=OFF)`, `(Release, OpenGL, metal=OFF)`,
+  `(Release, Metal, metal=ON)`. Cache keys and artifact names include
+  `${{ matrix.backend }}` so the OpenGL and Metal builds don't clobber
+  each other. The Metal entry compiles `MetalDevice.mm` +
+  `MetalRayTracing.mm` end-to-end on every PR.
+- **`CMakeLists.txt`**:
+  - New block before `project()` pins
+    `CMAKE_OSX_DEPLOYMENT_TARGET=11.0` (Big Sur) when unset. That's the
+    first Apple Silicon release and the floor for Metal 3 on M-series.
+  - `.mm` glob gated on `SPARK_METAL_AVAILABLE` instead of raw `APPLE`,
+    so `ENABLE_METAL=OFF` on macOS doesn't drag OBJCXX sources into a
+    target where the language was never enabled (the new OpenGL-only
+    CI row would otherwise fail to configure).
+  - `SparkEngineMacOS.cpp` removed from `SPARK_ENGINE_ENTRY_POINTS` —
+    it's pure helper code (Metal view lifecycle + `_NSGetExecutablePath`),
+    so it now lives in `SparkEngineLib` and both the SparkEngine exe and
+    `SparkTests` see the symbols. The off-macOS stubs stay as no-ops.
+- **`Tests/TestMacOSPlatform.cpp`** (new, 5 tests, registered in
+  `Tests/CMakeLists.txt`) — smoke coverage for `Spark::MacOS::*`:
+  macro consistency, `GetMetalWindowFlag`, null-input `CreateMetalView`,
+  `ShouldPreferMetal` default, `GetExecutableDirectory`. All assertions
+  run on every platform: off-macOS they check the stub contract, on
+  macOS they check the real SDL_Metal / mach-o behavior. No
+  `#ifdef SPARK_PLATFORM_MACOS` gating at the CMake level — one TU,
+  one set of tests, both platforms covered.
+- **`SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.{h,mm}`**
+  (new) — scaffolding for the Metal 2.4+ hardware RT path. Declares
+  `MetalRayTracingSystem` with `Initialize / Shutdown / CreateBLAS /
+  UpdateBLAS / DestroyBLAS / BuildTLAS / TraceReflections / TraceShadows /
+  TraceAmbientOcclusion / TraceGlobalIllumination / DispatchFrame /
+  GetStatusString`. PIMPL hides Metal types from non-Obj-C++ callers.
+  Every trace method is a no-op today returning false with a one-shot
+  `SPARK_LOG_WARN` so the engine console shows exactly when Metal RT
+  was selected but not executed — SDFGI is still the frame's RT path.
+- **`SparkEngine/Source/Graphics/HybridRT/HybridRTManager.{h,cpp}`** —
+  wired in. On macOS only, `Initialize` constructs a
+  `MetalRayTracingSystem` when the detected backend is
+  `HardwareMetalRT`; `Execute`'s `case HardwareMetalRT` now calls
+  `m_metalRT->DispatchFrame(...)` before falling through to SDFGI;
+  `Shutdown` disposes the system; `Console_GetStatus` appends
+  `m_metalRT->GetStatusString()`. Off-macOS the member is
+  `#ifdef`'d out entirely — zero cross-platform impact.
+
+Linux `linux-gcc-release` preset configures, builds `SparkEngineLib` +
+`SparkTests` cleanly, and the full suite runs green
+(5620 passed, 0 failed, 1 known-flaky warning).
+
+### 2026-04-18 session #2 — Metal RT phase 2 (real BLAS/TLAS + compiled pipelines)
+
+Scaffold from session #1 replaced with working Metal RT infrastructure:
+
+- **MetalRayTracing.mm `Initialize`** — compiles a 4-kernel Metal library
+  at runtime via `[device newLibraryWithSource:options:error:]` with
+  `MTLLanguageVersion2_4`. Creates one `MTLComputePipelineState` each
+  for `RTShadows`, `RTReflections`, `RTAmbientOcclusion`,
+  `RTGlobalIllumination`. Guards with both `[device supportsRaytracing]`
+  and `@available(macOS 12.0, *)` so macOS 11 and non-RT GPUs fall
+  back cleanly.
+- **Metal shader source** — embedded as NSString constant. Uses
+  `metal::raytracing::intersector<instancing, triangle_data>`. Shadows
+  kernel reconstructs world position from depth + invViewProj, traces
+  against the TLAS, writes visibility. Reflections/AO/GI kernels are
+  skeletons that write zero/one (shape the pipeline but skip the full
+  trace until the next milestone).
+- **`CreateBLAS`** — real implementation. Uploads vertex + index data
+  to shared-storage MTLBuffers, builds
+  `MTLPrimitiveAccelerationStructureDescriptor` with triangle geometry
+  + opacity + refit usage flag, calls
+  `accelerationStructureSizesWithDescriptor:` →
+  `newAccelerationStructureWithSize:` → builds on a one-shot command
+  buffer via `MTLAccelerationStructureCommandEncoder`.
+- **`UpdateBLAS`** — refit path for dynamic meshes: writes new
+  vertex/index data into the existing shared buffers. Mismatched sizes
+  trigger a destroy so the caller does a fresh CreateBLAS.
+- **`BuildTLAS`** — real implementation. Populates
+  `MTLAccelerationStructureInstanceDescriptor` array with 4x3 transforms
+  (column-major), mask, hit-group offset, BLAS index. Builds
+  `MTLInstanceAccelerationStructureDescriptor` with
+  `instancedAccelerationStructures:` array, sizes/alloc/build on
+  acceleration-structure command encoder.
+- **API surface extension** — new `FrameParams` struct (invViewProj,
+  cameraPos, lightDir, resolution) + `SetFrameParams`,
+  `SetInputTextures(depth, normals)`,
+  `SetOutputTextures(shadows, reflections, ao, gi)`. MTLTexture
+  extraction via `dynamic_cast<MetalTexture*>` + `GetMTLTexture()`.
+- **`EncodeTracePass`** — shared helper. Creates command buffer +
+  compute encoder, binds pipeline + TLAS + uniform struct + input
+  texture + output texture, dispatches threadgroups at 8x8. Each of
+  the four trace methods calls this with its own pipeline / output
+  pair. Returns false (with one-shot warn) if any of TLAS / output /
+  pipeline is missing — caller runs SDFGI as fallback.
+- **HybridRTManager wiring** — on macOS, Execute's
+  `case HardwareMetalRT` now builds invViewProj, fills `FrameParams`,
+  calls `SetFrameParams / SetInputTextures / SetOutputTextures` with
+  the GBuffer + `m_rtShadows/Reflections/GI`, then `DispatchFrame(all)`.
+  SDFGI still runs as blanket fallback (many passes still return
+  false without a scene-pushed TLAS), so the compositor always gets
+  data even when Metal RT is live.
+
+Remaining gaps (next milestone):
+- BLAS/TLAS are not yet fed from the engine scene — HybridRTManager
+  never calls `CreateBLAS`/`BuildTLAS` yet. That requires a mesh-push
+  step in SDFSceneManager or a sibling scene walker.
+- Reflection/AO/GI kernels need real trace bodies (only shadows has one).
+- No test coverage yet for MetalRayTracingSystem — Metal APIs are
+  unreachable from the Linux test runner; requires a macOS-specific
+  test gating or a mocked MTLDevice interface.
+
+### 2026-04-18 session #3 — Metal RT phase 3 (full trace kernels + scene feeder)
+
+Phase 2 left three kernel skeletons and no way to feed scene geometry.
+Phase 3 closes both gaps:
+
+- **MetalRayTracing.mm reflections kernel** — reflects view direction off
+  GBuffer normal, casts one ray against the TLAS, on miss writes a
+  sky gradient based on ray direction, on hit writes a distance-faded
+  grey tint. Matches the existing SDFGI reflection shape so the
+  compositor blend weights stay consistent.
+- **Ambient-occlusion kernel** — 4 cosine-weighted hemisphere samples
+  using a hash-based PRNG, 3m max ray distance, visibility ratio
+  written to R channel. Relies on the compositor's temporal
+  accumulation for stability.
+- **Global-illumination kernel** — single-bounce diffuse: one cosine
+  hemisphere ray, sky gradient on miss, flat 0.3 grey on hit (until
+  material bindings land).
+- **Shared helpers** — `Hash12(uint2, uint)` deterministic PRNG and
+  `CosineHemisphere(n, u1, u2)` oriented sampler are now defined once
+  in the embedded Metal source for reuse across kernels.
+- **HybridRTManager mesh-push API**:
+  - New struct `HybridRTManager::TriangleMeshDesc` (name, vertex+index
+    pointers, 3x4 transform, opaque flag, dynamic-update flag).
+  - `PushTriangleMesh(mesh)` — on macOS routes to
+    `MetalRayTracingSystem::CreateBLAS`, records the resulting BLAS
+    index + transform in `m_metalRTMeshes`, marks `m_metalRTTLASDirty`.
+    On non-macOS the function is a guard-only no-op.
+  - `ClearTriangleMeshes()` — destroys every pushed BLAS, rebuilds
+    an empty TLAS, clears the list and dirty flag.
+  - Execute's `case HardwareMetalRT` rebuilds the TLAS from
+    `m_metalRTMeshes` when `m_metalRTTLASDirty` and the mesh list
+    is non-empty; clears the flag after build. Existing dispatch
+    path runs unchanged.
+  - Shutdown also wipes `m_metalRTMeshes` / `m_metalRTTLASDirty`.
+  - `Console_GetStatus()` now reports pushed-mesh count + dirty state.
+- **TestMacOSPlatform_HybridRTPushIsSafeWithoutInit** — exercises
+  Push + Clear on an uninitialized HybridRTManager, pinning the
+  no-crash contract for scene code that wants to push unconditionally.
+
+After phase 3, macOS consumers can:
+1. Construct `HybridRTManager`, Initialize with a `MetalDevice`.
+2. Call `PushTriangleMesh(...)` for each scene mesh.
+3. Call `Execute(...)` each frame — Metal RT builds the TLAS,
+   dispatches the four compute kernels, falls back to SDFGI for
+   anything that did not run.
+4. `ClearTriangleMeshes()` on scene change.
+
+Linux `linux-gcc-release` builds clean; full suite green
+(5620 passed, 0 failed, 2 known-flaky warnings; 5621 total tests now).
+
 ## Notes
 
 - Metal files are excluded from clang-format CI checks (`-not -path '*/Metal/*'`)
 - macOS CI job uses `continue-on-error: true` until support stabilizes
 - MoltenVK path avoids ~2,500 lines of Objective-C++ Metal implementation
+- Metal RT phase 3 landed: four real ray-query kernels, full scene
+  feeder API, console status. Next milestones: material binding
+  (per-instance BLAS → material id → texture table), per-pass quality
+  tuning (samples, max bounce), and macOS-only runtime tests once
+  the Metal CI runner boots a viable device.
+
+## Platform requirements summary (2026-04-18)
+
+| Platform | Minimum | Recommended |
+|----------|---------|-------------|
+| **Windows** | Win10 x64, MSVC 19.36+, D3D11 FL 10.0 | Win11, MSVC v143/v144, D3D11 FL 11.1, D3D12+DXR |
+| **Linux** | glibc 2.35+ x64, GCC 13+/Clang 17+, OpenGL 4.6 *or* Vulkan 1.3 | Ubuntu 24.04, GCC 14, Vulkan 1.3 |
+| **macOS** | macOS 11 Big Sur, x64/ARM64, Metal 2.3 *or* OpenGL 4.1 | macOS 12+, Apple Silicon M2+, Metal 3 with `supportsRaytracing` |
+
+Pinned by: `CMAKE_OSX_DEPLOYMENT_TARGET=11.0` (CMakeLists.txt), `cmake_minimum_required(3.25)`, CLAUDE.md Build section, `MetalRayTracing.mm` `@available(macOS 12.0, *)` gate for hardware RT.
+
+### 2026-04-18 session #4 — Metal RT phase 4 (MeshAsset overload + wiki page)
+
+- **`HybridRTManager::PushTriangleMesh(const MeshAsset&, const XMMATRIX&, bool)`**
+  — convenience overload that reads `MeshAssetData::vertices` /
+  `indices` out of a loaded asset, flattens the `XMMATRIX` to the
+  row-major 3x4 the Metal instance descriptor expects, and calls the
+  existing `PushTriangleMesh(TriangleMeshDesc)`. Scene code can now
+  walk an `entt::registry` of `MeshRenderer` components, resolve each
+  `meshPath` to a `MeshAsset*` via the asset manager, and push
+  without any platform branching — the base overload no-ops off
+  macOS and on macOS routes to `MetalRayTracingSystem::CreateBLAS`.
+- **Forward declaration quirk** — `MeshAsset` lives at global scope
+  (not in any namespace). The header forward-declares `class MeshAsset;`
+  at file scope and the overload signature is qualified `::MeshAsset`
+  for clarity.
+- **`wiki/platform/System-Requirements.md` (new)** — public-facing
+  platform support matrix covering Windows / Linux / macOS minimum +
+  recommended OS, CPU, GPU, compiler. Includes an "Apple Silicon vs
+  Metal" clarification, the runtime hardware footprint (CPU threads,
+  RAM pools, VRAM envelopes, editor overhead), and build toggles that
+  materially move the needle. Linked from
+  `wiki/_Sidebar.md`, `wiki/Home.md` platform-support section, and
+  `wiki/getting-started/Getting-Started.md` prerequisites.
+
+Linux `linux-gcc-release` builds clean; suite green (5621 passed,
+0 failed, 1 known-flaky warning).
+
+Remaining for phase 5 (done in session #5 below).
+
+### 2026-04-18 session #5 — Metal RT phase 5 (scene feeder + materials + macOS tests)
+
+**RT scene feeder (`Graphics/HybridRT/RTSceneFeeder.{h,cpp}`)**
+- Free function `Spark::Graphics::PopulateRTSceneFromECS(rt, world, assets)`
+  walks `Transform + MeshRenderer` exactly like `RenderSystem::Update`
+  (ECSystems.cpp:51), resolves `meshPath` via `AssetPipeline::LoadMesh`,
+  and calls the new `HybridRTManager::PushTriangleMesh(MeshAsset&,
+  XMMATRIX&)` overload for each visible/active entity. Returns the
+  pushed count.
+- Uses `renderer.cachedWorldMatrix` when valid (populated by
+  `RenderSystem` upstream), else walks parent hierarchy via
+  `Transform::GetWorldMatrix(registry)`.
+- Not auto-hooked yet — the macOS render pipeline
+  (`GraphicsRenderPipelinesLinux.cpp::RenderDeferred`) does not call
+  `HybridRTManager::Execute` today. Phase 6 wires that.
+- Investigation note: `GraphicsEngine::SubmitMeshForRendering` is
+  Windows-only (guarded from `GraphicsEngineWindows.cpp:10` through
+  `1445`), so the ECS render path does not drive meshes on
+  Linux/macOS today. The scene feeder bypasses that by pushing
+  directly into `HybridRTManager`.
+
+**Per-instance material bindings (`MetalRayTracing.{h,mm}`)**
+- New struct `Spark::RHI::Metal::MaterialParams` (albedo float4,
+  emissive float4, roughness+metallic float4 — 48 bytes, 16-byte
+  aligned for Metal constant-buffer compat).
+- `SetMaterials(std::vector<MaterialParams>)` uploads an `MTLBuffer`
+  bound at slot 2 in every trace pass. Empty vector drops the buffer.
+- All four kernels now share a uniform binding layout:
+  buffer(0)=TLAS, buffer(1)=RTParams, buffer(2)=materials,
+  buffer(3)=materialCount, texture(0)=depth, texture(1)=normals,
+  texture(2)=output. Shadows + AO suppress `materials`/`materialCount`
+  with `(void)` casts.
+- New MSL helper `ShadeHit(mat, rayDir, params)` — simple Lambert +
+  emissive. Reflections kernel attenuates by distance; GI kernel
+  replaces the 0.3 grey placeholder with real material shading.
+- `EncodeTracePass` rewritten to bind all 7 slots unconditionally —
+  one dispatcher, all four passes.
+
+**macOS-only RT tests (`Tests/TestMetalRayTracing.cpp`)**
+- 7 smoke tests behind `#ifdef SPARK_PLATFORM_MACOS` (empty TU on
+  non-macOS). Exercises pre-init state only — no MTLDevice needed:
+  default-construct, Initialize(nullptr) fails cleanly, pre-init
+  trace methods return false, DispatchFrame returns None, Shutdown
+  is idempotent, SetMaterials(empty) is safe, GetStatusString
+  non-empty.
+- Registered unconditionally in `Tests/CMakeLists.txt`; Linux/Windows
+  link the empty TU.
+
+Linux `linux-gcc-release` builds clean; suite green (5621 passed,
+0 failed, 1 known-flaky warning). Metal CI row will register ~5628
+when it runs.
+
+Remaining for phase 6 (done in session #6 below).
+
+### 2026-04-18 session #6 — Platform parity + call-site extraction
+
+Three refactors that unblock macOS/Linux parity with the Windows RT path:
+
+**1. `SubmitMeshForRendering` → platform-agnostic TU**
+- Moved from `GraphicsEngineWindows.cpp:1046` (inside
+  `#ifdef SPARK_PLATFORM_WINDOWS`) to a new
+  `Graphics/GraphicsEngineSubmit.cpp`. The function only uses
+  `XMMATRIX` + `SpinlockGuard` + `m_drawList` — all cross-platform
+  already. Linux library now has `T` (defined) instead of `U`
+  (undefined) for the symbol: `RenderSystem::Update` can drive
+  meshes on Linux/macOS without a linker surprise.
+- `ProcessDrawList` stays Windows-only (D3D11 constant buffers,
+  GPU-driven renderer, D3D11 asset-pipeline loaders) — pending
+  a broader RHI abstraction over mesh/material binding.
+
+**2. HybridRT post-lighting extraction → `DispatchHybridRTPass`**
+- New method on `GraphicsEngine`, shared TU
+  `Graphics/GraphicsEngineHybridRT.cpp`. Assembles camera/light
+  uniforms, calls `AcquireHybridRTBindings()` for GBuffer/HDR
+  handles, then dispatches `HybridRTManager::Execute`. Cleanly
+  skips if bindings aren't ready (HybridRT then falls through to
+  SDFGI / software path).
+- New struct `Spark::Graphics::HybridRTBindings` (normals, depth,
+  albedo, lighting — `unique_ptr<IRHITexture>` each) owns the
+  handles for the duration of the dispatch.
+- Per-platform texture acquisition:
+  - `GraphicsEngine::AcquireHybridRTBindings()` in
+    `GraphicsEngineWindows.cpp` wraps `ComPtr<ID3D11Texture2D>`
+    via `IRHIDevice::WrapNativeTexture` — identical logic to the
+    original inline block.
+  - `GraphicsEngineLinux.cpp` returns `{}` (stub). Fill in when
+    `RHIBridge::GetGBufferTexture()` or equivalent lands.
+- `GraphicsRenderPipelinesWindows.cpp::RenderDeferred` shrinks from
+  68 lines of inline setup (lines 150-217) to a 2-line call:
+  `DispatchHybridRTPass(cmd, view, proj)`.
+
+**3. `MaterialParams` conversion + scene-feeder material path**
+- New header `Graphics/HybridRT/RTMaterialAdapter.h`
+  (macOS-only — the target struct lives there). Inline function
+  `MaterialParamsFromPBR(const PBRProperties&)` bakes
+  `emissiveFactor` into `emissiveColor`, packs
+  `roughnessFactor + metallicFactor` into float4.
+- `HybridRTManager::SetMetalMaterials(vector<MaterialParams>)`
+  pass-through to the Metal RT system (macOS-gated). Also
+  cleared automatically by `ClearTriangleMeshes` so the two
+  arrays never drift.
+- New companion helper `PopulateRTMaterialsFromECS(rt, world,
+  materials)` in `RTSceneFeeder.{h,cpp}` (macOS-only signature).
+  Walks the same `Transform + MeshRenderer` view as the geometry
+  feeder — critical: identical traversal order so
+  `MaterialParams[]` index = `instance_id` in the TLAS. Calls
+  `MaterialSystem::GetMaterial(materialPath) → GetPBRProperties()`,
+  runs the adapter, and uploads via `SetMetalMaterials`. Missing
+  materials push a neutral default so the array stays aligned.
+
+Linux `linux-gcc-release` builds clean; suite green (5622 passed,
+0 failed). Only the Windows TU has the `AcquireHybridRTBindings`
+D3D11-wrapping body — rest is shared.
+
+Remaining for phase 7 (done in session #7 below).
+
+### 2026-04-18 session #7 — Phase 7 follow-through
+
+Three tractable items from phase 6's follow-up list:
+
+**1. Linux/macOS `RenderDeferred` calls `DispatchHybridRTPass`**
+- `GraphicsRenderPipelinesLinux.cpp::RenderDeferred` now invokes
+  `DispatchHybridRTPass(cmd, view, proj)` after the lighting pass,
+  matching the Windows pipeline shape exactly (one-line call
+  through the shared helper).
+- Today this is a no-op — `AcquireHybridRTBindings()` on Linux
+  still returns `{}`, and `DispatchHybridRTPass` skips when
+  bindings aren't ready. Critically, the call site is now wired,
+  so enabling hardware RT on macOS once the RHI bridge exposes
+  GBuffer textures is a single-file change (swap the Linux stub
+  implementation).
+
+**2. Non-Windows `ProcessDrawList` stub**
+- Previously only defined inside `#ifdef SPARK_PLATFORM_WINDOWS`,
+  so the symbol was `U` (undefined) on Linux/macOS — any caller
+  outside a Windows TU would link-error. Now defined in the
+  shared `GraphicsEngineSubmit.cpp` behind
+  `#ifndef SPARK_PLATFORM_WINDOWS`.
+- Stub drains the draw list (prevents unbounded growth) and logs
+  a one-shot warning the first time it's called with queued
+  commands. Real rendering on Linux/macOS still goes through
+  `RenderDeferred`/`RenderForward` with the legacy
+  `std::vector<GameObject*>` path; the RHI-bridge consumer for
+  the submitted commands is blocked on bridge-level mesh/material
+  binding APIs.
+- Linux `nm` now shows `T` (defined) for `ProcessDrawList`.
+
+**3. Expanded macOS-only RT test file**
+- `Tests/TestMetalRayTracing.cpp` grew from 7 pre-init smoke tests
+  to 15 — all CPU-only (no MTLDevice required), safe to run on any
+  macOS CI runner:
+  - 5 tests for `MaterialParamsFromPBR` (albedo verbatim, emissive
+    bakes factor, roughness/metallic pack, defaults neutral, 48-byte
+    size/alignment).
+  - 2 layout tests (`FrameParams` is 112 bytes to match MSL struct,
+    `TLASInstance` default is identity).
+  - 2 `TracePass` bitmask tests (`operator|` combines, `None` is falsy).
+- Live-MTLDevice tests (real BLAS/TLAS build, real trace dispatch)
+  still pending — they need the macOS Metal CI row to validate the
+  Metal toolchain first, then can drop in using the same file.
+
+Linux `linux-gcc-release` builds clean; suite green (5622 passed, 0
+failed). Metal CI row will register ~5636 tests when it runs (15
+new RT + 7 original from session #5, minus any gated on live
+device which doesn't land until later).
+
+### 2026-04-18 session #8 — Live-device Metal RT tests
+
+**Scoping outcome** (sub-agent investigation): of the three remaining
+parity items, only the live-device tests are tractable in one
+session. `RHIBridge::GetGBufferTexture` is blocked on the ownership
+question (does the bridge own GBuffer creation or does the platform
+layer register with it) — documented as architecture follow-up.
+RHI-bridge mesh/material binding is already complete at the RHI
+layer (`SetVertexBuffer`, `SetIndexBuffer`, `DrawIndexed` all live
+on `IRHICommandList`) — the blocker is the `AssetPipeline` CPU
+adapter, a separate concern from the RHI.
+
+**First `.mm` test file in the repo (`Tests/TestMetalRayTracingLive.mm`)**
+- 6 tests exercising a real `MTLDevice` via the engine's own
+  `MetalDevice::Initialize` path (which calls
+  `MTLCreateSystemDefaultDevice` internally — works headless, no
+  window/CAMetalLayer required).
+- RAII wrapper `LiveMetalDevice` stands the device up once per test,
+  records `supportsRaytracing`, and tears it down on destruction.
+  `SKIP_IF_NO_RT` macro converts "no RT-capable GPU" into a neutral
+  passing skip so the tests don't fail on a runner that happens to
+  lack hardware RT.
+- Tests: system default device available; Initialize succeeds on
+  RT-capable GPU; push BLAS + build empty-then-single-instance TLAS;
+  SetMaterials round-trip (3 → 0); DispatchFrame without render
+  targets returns None safely; repeated Init/Shutdown is stable
+  across 3 cycles.
+- Intentionally no pixel-level validation — that belongs in an
+  image-diff test with a stable reference image set, not here.
+
+**CMake wiring**
+- `TestMetalRayTracingLive.mm` added as an `.mm` source to
+  `Tests/CMakeLists.txt` inside an `if(APPLE AND SPARK_METAL_AVAILABLE)`
+  block that mirrors the engine's own pattern
+  (`CMakeLists.txt:972-982`). Off-macOS (or when the Metal backend is
+  disabled), the source is never added — `enable_language(OBJCXX)`
+  only runs behind the same gate, so an unconditional
+  `target_sources` would fail CMake configure on Linux.
+- `target_link_libraries` picks up `-framework Foundation -framework
+  Metal` inside the same block so the test TU links against the
+  MTLDevice protocols.
+- Linux still builds clean (the `.mm` TU is invisible to the
+  configure); `linux-gcc-release` suite green (5622 passed, 0 failed).
+  macOS CI runner will build `TestMetalRayTracingLive.mm` and add 6
+  more tests to its registered count.
+
+Remaining (deferred) items addressed in session #9 below.
+
+### 2026-04-18 session #9 — RHI render-target registry + image-diff infra
+
+**1. RHIBridge render-target registry (addresses phase 8 #1)**
+- Decision: registration-based, not bridge-owned creation. Rationale:
+  Windows keeps `ComPtr<ID3D11Texture2D>` ownership unchanged, bridge
+  stays a thin coordination layer, and future optimization of the
+  Windows wrapper-cache is incremental (not a rewrite).
+- New `enum class RHIBridge::RenderTargetSlot` (6 slots: 4 GBuffer
+  channels + DepthStencil + HDRLighting).
+- New `void RegisterRenderTarget(slot, IRHITexture*)` and
+  `IRHITexture* GetRenderTarget(slot) const` on `RHIBridge`. Storage
+  is a fixed-size `IRHITexture* m_renderTargets[Count]` array —
+  lookups are enum-bounded, no hash.
+- Ownership contract: non-owning. Registering code must deregister
+  (pass nullptr) before the underlying texture is destroyed. Typical
+  pattern: register in platform `Initialize*`, deregister in `Shutdown`.
+- `HybridRTBindings` restructured:
+  - Raw pointers for `normals`/`depth`/`albedo`/`lighting` (changed
+    from `unique_ptr`).
+  - New `std::vector<unique_ptr<IRHITexture>> owned` field keeps
+    Windows per-frame `WrapNativeTexture` wrappers alive — raw
+    pointers alias into this vector.
+  - Linux/macOS reads from bridge registry, leaves `owned` empty
+    (textures are long-lived on the bridge side).
+- `GraphicsEngineWindows.cpp::AcquireHybridRTBindings` refactored
+  into a small `wrap()` lambda — same behavior, less repetition
+  (68 lines → 14). Linux/macOS implementation in
+  `GraphicsEngineLinux.cpp` now reads all 4 slots from the bridge
+  via `GetRenderTarget`. No functional change on either platform
+  today (Linux slots aren't populated yet by the rendering layer),
+  but the plumbing is live.
+
+**2. Image-diff infrastructure (addresses phase 8 #3)**
+- `Tests/GoldenImages/README.md` — workflow documentation: file
+  format (raw RGBA with a 4-byte width + 4-byte height header, `.png`
+  extension for tooling convenience), tolerance knobs
+  (`perPixelThreshold`, `tolerancePercent`), baseline-update
+  procedure, and rationale for "not real PNG yet" (header-only
+  framework, zero-dep).
+- `Tests/GoldenImages/.gitkeep` — ensures empty directory commits.
+- New `Graphics/RHI/Metal/MetalTextureReadback.{h,mm}` — CPU readback
+  of an `MTLTexture` into an RGBA8 `std::vector<uint8_t>`. Uses a
+  shared-storage `MTLBuffer` staging copy, swaps red/blue for
+  `BGRA8Unorm` sources. 64 MB allocation cap (`kReadbackMaxBytes`)
+  guards against bad pointers. Header uses plain C++ (opaque
+  `void*` for the texture) so `.cpp` callers can include without
+  Objective-C.
+- CI artifact upload: new "Upload Golden Image Diffs" step in
+  `.github/workflows/build.yml` under the macOS Metal job, fires
+  on failure, uploads `Tests/Output/` + `build/Tests/Output/` as
+  `rt-goldens-macos-<config>-<run-id>`. `if-no-files-found: ignore`
+  so the step succeeds when there are no diffs.
+- 2 new tests in `TestMetalRayTracingLive.mm`:
+  `ReadbackReturnsEmptyForNullTexture` (contract check) and
+  `ReadbackRGBA8KnownValues` (4×4 MTLTexture with a red-gradient
+  pattern, verify byte-for-byte roundtrip).
+
+Existing `Utils/GoldenImageTest.h` (559-line header-only framework)
+already provides `GoldenImageTestRunner`, `IGoldenImageCapture`,
+`CompareWithGolden`, `GenerateDiffImage`, `SavePNG`/`LoadPNG`. The
+readback helper is the missing Metal-side piece for a capture
+implementation; a `MetalGoldenImageCapture` class can now be built
+as a thin wrapper (future session).
+
+Linux `linux-gcc-release` builds clean; suite green (5621 passed,
+0 failed, 1 warned, 5622 total).
+
+**Remaining multi-session architecture work:**
+- Non-Windows `ProcessDrawList` implementation — blocked on
+  `AssetPipeline` Linux/macOS port (RHI layer has the primitives).
+- Live RT golden-image capture class on top of the readback helper —
+  needs `MetalGoldenImageCapture : public IGoldenImageCapture` that
+  knows which texture to read (probably the HDR output from the
+  HybridRT pass).
+- Platform rendering layer should actually call
+  `RHIBridge::RegisterRenderTarget` after GBuffer creation on
+  Linux/macOS. Today the registry exists but is empty — a
+  follow-up in the rendering code wires it up.
