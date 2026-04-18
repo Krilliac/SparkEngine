@@ -286,11 +286,20 @@ int SceneManager::FindNode(const std::string& name) const
 bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
 {
     if (nodeIndex < 0 || nodeIndex >= static_cast<int>(m_sceneNodes.size()))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Scene, "SavePrefab: nodeIndex %d out of range [0, %zu)", nodeIndex,
+                       m_sceneNodes.size());
         return false;
+    }
 
-    std::ofstream file(WideToNarrow(filepath));
+    std::string narrowPath = WideToNarrow(filepath);
+    std::ofstream file(narrowPath);
     if (!file.is_open())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Scene, "SavePrefab: failed to open '%s' for writing (errno=%d)",
+                        narrowPath.c_str(), errno);
         return false;
+    }
 
     // Write prefab header
     file << "# SparkEngine Prefab v1.0\n";
@@ -324,9 +333,14 @@ bool SceneManager::SavePrefab(int nodeIndex, const std::wstring& filepath) const
 
 int SceneManager::LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOAT3& position)
 {
-    std::ifstream file(WideToNarrow(filepath));
+    std::string narrowPath = WideToNarrow(filepath);
+    std::ifstream file(narrowPath);
     if (!file.is_open())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Scene, "LoadPrefab: failed to open prefab '%s' (errno=%d)",
+                        narrowPath.c_str(), errno);
         return -1;
+    }
 
     std::string line;
     int rootIndex = -1;

@@ -42,7 +42,13 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
 #endif
     if (!file.is_open())
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: Failed to open WAV file");
+#if defined(SPARK_PLATFORM_WINDOWS) && defined(_MSC_VER)
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: Failed to open WAV file '%ls' (errno=%d)",
+                        filename.c_str(), errno);
+#else
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: Failed to open WAV file '%s' (errno=%d)",
+                        narrowFilename.c_str(), errno);
+#endif
         return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
     }
 
@@ -65,7 +71,11 @@ HRESULT SoundEffect::LoadFromFile(const std::wstring& filename)
 
     std::vector<BYTE> buffer(static_cast<size_t>(size));
     if (!file.read(reinterpret_cast<char*>(buffer.data()), size))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: WAV read incomplete (expected %lld bytes, got %lld)",
+                        static_cast<long long>(size), static_cast<long long>(file.gcount()));
         return E_FAIL;
+    }
 
     return ParseWAVFile(buffer.data(), static_cast<DWORD>(size));
 }
