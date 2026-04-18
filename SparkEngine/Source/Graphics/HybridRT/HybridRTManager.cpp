@@ -160,6 +160,8 @@ namespace Spark::Graphics
         if (m_metalRT)
             m_metalRT->Shutdown();
         m_metalRT.reset();
+        m_metalRTMeshes.clear();
+        m_metalRTTLASDirty = false;
 #endif
 
         m_rtReflections.reset();
@@ -280,6 +282,22 @@ namespace Spark::Graphics
             // SDFGI so the compositor always has data to blend.
             if (m_metalRT && m_metalRT->IsAvailable())
             {
+                // Rebuild the TLAS when scene pushes invalidated it.
+                if (m_metalRTTLASDirty && !m_metalRTMeshes.empty())
+                {
+                    std::vector<Spark::RHI::Metal::TLASInstance> instances;
+                    instances.reserve(m_metalRTMeshes.size());
+                    for (const auto& m : m_metalRTMeshes)
+                    {
+                        Spark::RHI::Metal::TLASInstance inst{};
+                        inst.blasIndex = m.blasIndex;
+                        std::memcpy(inst.transform, m.transform, sizeof(inst.transform));
+                        inst.instanceMask = m.isOpaque ? 0xFF : 0x01;
+                        instances.push_back(inst);
+                    }
+                    m_metalRT->BuildTLAS(instances);
+                    m_metalRTTLASDirty = false;
+                }
                 Spark::RHI::Metal::FrameParams mrtp{};
                 DirectX::XMMATRIX viewProj = DirectX::XMMatrixMultiply(view, proj);
                 DirectX::XMVECTOR det = DirectX::XMMatrixDeterminant(viewProj);
@@ -406,6 +424,56 @@ namespace Spark::Graphics
         }
     }
 
+    void HybridRTManager::PushTriangleMesh(const TriangleMeshDesc& mesh)
+    {
+#ifdef SPARK_PLATFORM_MACOS
+        if (!m_metalRT || !m_metalRT->IsAvailable())
+            return;
+
+        Spark::RHI::Metal::BLASGeometry geom{};
+        geom.name = mesh.name;
+        geom.vertexData = mesh.vertexData;
+        geom.vertexCount = mesh.vertexCount;
+        geom.vertexStride = mesh.vertexStride;
+        geom.indexData = mesh.indexData;
+        geom.indexCount = mesh.indexCount;
+        geom.isOpaque = mesh.isOpaque;
+        geom.allowUpdate = mesh.allowDynamicUpdate;
+
+        const uint32_t blasIndex = m_metalRT->CreateBLAS(geom);
+        if (blasIndex == UINT32_MAX)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "HybridRTManager: MetalRT BLAS creation failed for '" + mesh.name + "'");
+            return;
+        }
+
+        PushedMesh pushed{};
+        pushed.blasIndex = blasIndex;
+        std::memcpy(pushed.transform, mesh.transform, sizeof(pushed.transform));
+        pushed.isOpaque = mesh.isOpaque;
+        m_metalRTMeshes.push_back(pushed);
+        m_metalRTTLASDirty = true;
+#else
+        (void)mesh;
+#endif
+    }
+
+    void HybridRTManager::ClearTriangleMeshes()
+    {
+#ifdef SPARK_PLATFORM_MACOS
+        if (m_metalRT)
+        {
+            for (auto& m : m_metalRTMeshes)
+                m_metalRT->DestroyBLAS(m.blasIndex);
+            // Rebuild an empty TLAS so the compute passes see no instances.
+            m_metalRT->BuildTLAS({});
+        }
+        m_metalRTMeshes.clear();
+        m_metalRTTLASDirty = false;
+#endif
+    }
+
     void HybridRTManager::SetQuality(RHI::RayTracingQuality quality)
     {
         if (quality == m_quality)
@@ -486,7 +554,11 @@ namespace Spark::Graphics
 
 #ifdef SPARK_PLATFORM_MACOS
         if (m_metalRT)
+        {
             ss << m_metalRT->GetStatusString() << "\n";
+            ss << "Pushed meshes: " << m_metalRTMeshes.size() << (m_metalRTTLASDirty ? " (TLAS rebuild pending)" : "")
+               << "\n";
+        }
 #endif
 
         return ss.str();

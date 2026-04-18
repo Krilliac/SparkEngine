@@ -93,6 +93,46 @@ namespace Spark::Graphics
         void ClearScene();
         void FlushScene();
 
+        /**
+         * @brief Triangle-mesh descriptor for hardware-RT acceleration
+         *        structure population. Pointer memory must stay valid
+         *        until `PushTriangleMesh` returns — the implementation
+         *        uploads the data into device buffers synchronously.
+         *
+         *        Currently consumed only by the Metal RT path
+         *        (`m_metalRT->CreateBLAS`). DXR/VKRT paths ignore pushes
+         *        until their scene-feed code is wired.
+         */
+        struct TriangleMeshDesc
+        {
+            std::string name;
+            const void* vertexData = nullptr;
+            uint32_t vertexCount = 0;
+            uint32_t vertexStride = 0;
+            const uint32_t* indexData = nullptr;
+            uint32_t indexCount = 0;
+            // 3x4 row-major affine transform (rows are world-space basis
+            // vectors + translation in the last column). Default = identity.
+            float transform[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+            bool isOpaque = true;
+            bool allowDynamicUpdate = false;
+        };
+
+        /**
+         * @brief Push a triangle mesh into the hardware-RT scene. On macOS
+         *        this builds a BLAS via MetalRayTracingSystem::CreateBLAS
+         *        and records the transform for the next TLAS rebuild.
+         *        On other platforms today this is a no-op.
+         */
+        void PushTriangleMesh(const TriangleMeshDesc& mesh);
+
+        /**
+         * @brief Drop every pushed triangle mesh and invalidate the TLAS.
+         *        Call when the active scene changes; subsequent pushes
+         *        populate a fresh AS.
+         */
+        void ClearTriangleMeshes();
+
         // ---- Settings ----
         void SetQuality(RHI::RayTracingQuality quality);
         void SetBackendOverride(RHI::RayTracingBackend backend);
@@ -126,6 +166,18 @@ namespace Spark::Graphics
         // DispatchFrame returns zero executed passes, so SDFGI runs as
         // fallback on every frame until the real trace pipelines land.
         std::unique_ptr<Spark::RHI::Metal::MetalRayTracingSystem> m_metalRT;
+
+        // Pushed triangle meshes awaiting BLAS/TLAS population. Each entry
+        // records the BLAS index (assigned on push) plus the transform for
+        // the TLAS instance. Cleared by ClearTriangleMeshes.
+        struct PushedMesh
+        {
+            uint32_t blasIndex = 0;
+            float transform[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+            bool isOpaque = true;
+        };
+        std::vector<PushedMesh> m_metalRTMeshes;
+        bool m_metalRTTLASDirty = false;
 #endif
 
         // Intermediate RT output textures (owned by this manager)

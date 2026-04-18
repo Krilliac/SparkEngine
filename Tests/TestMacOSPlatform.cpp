@@ -109,3 +109,23 @@ TEST(MacOSPlatform_GetExecutableDirectory)
     EXPECT_TRUE(dir.empty());
 #endif
 }
+
+// ============================================================================
+// HybridRTManager scene-feeder API — PushTriangleMesh and ClearTriangleMeshes
+// must be safe to call on every platform even without an initialized backend.
+// Off-macOS they are no-ops; on macOS without Metal RT live they early-out
+// cleanly. This pins the no-crash contract so scene code can push
+// unconditionally.
+// ============================================================================
+#include "Graphics/HybridRT/HybridRTManager.h"
+
+TEST(MacOSPlatform_HybridRTPushIsSafeWithoutInit)
+{
+    Spark::Graphics::HybridRTManager rt;
+    Spark::Graphics::HybridRTManager::TriangleMeshDesc mesh{};
+    mesh.name = "dummy";
+    // Never initialized — Push and Clear must no-op, not crash.
+    rt.PushTriangleMesh(mesh);
+    rt.ClearTriangleMeshes();
+    EXPECT_TRUE(true);
+}

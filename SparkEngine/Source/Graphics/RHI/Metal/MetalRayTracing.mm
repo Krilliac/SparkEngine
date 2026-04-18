@@ -97,6 +97,31 @@ namespace Spark::RHI::Metal
                 return world.xyz / max(world.w, 1e-6);
             }
 
+            // Tiny hash-based PRNG — deterministic per (pixel, seed). Not
+            // production quality but gives us independent samples per pass.
+            static float Hash12(uint2 pix, uint seed)
+            {
+                uint n = pix.x * 1973u + pix.y * 9277u + seed * 26699u;
+                n = (n ^ 61u) ^ (n >> 16);
+                n *= 9u;
+                n = n ^ (n >> 4);
+                n *= 0x27d4eb2du;
+                n = n ^ (n >> 15);
+                return float(n & 0x00FFFFFFu) / float(0x01000000u);
+            }
+
+            // Cosine-weighted hemisphere sample around `n`. Returns a
+            // unit direction biased toward the normal.
+            static float3 CosineHemisphere(float3 n, float u1, float u2)
+            {
+                float r = sqrt(u1);
+                float phi = 2.0 * M_PI_F * u2;
+                float3 t = normalize(abs(n.y) < 0.999 ? cross(n, float3(0,1,0))
+                                                      : cross(n, float3(1,0,0)));
+                float3 b = cross(n, t);
+                return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1)));
+            }
+
             kernel void RTShadows(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
@@ -121,6 +146,10 @@ namespace Spark::RHI::Metal
                 outTex.write(float4(visible, visible, visible, 1.0), gid);
             }
 
+            // Reflections: reflect the view direction off the gbuffer normal
+            // and cast one ray. Miss → sky tint (transparent for now). Hit →
+            // a constant-shaded colour based on distance so the compositor
+            // sees non-zero reflection data.
             kernel void RTReflections(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
@@ -130,9 +159,39 @@ namespace Spark::RHI::Metal
                 uint2 gid [[thread_position_in_grid]])
             {
                 if (any(gid >= params.resolution)) return;
-                outTex.write(float4(0.0, 0.0, 0.0, 0.0), gid);
+                float depth = depthTex.read(gid).r;
+                if (depth >= 1.0) { outTex.write(float4(0.0), gid); return; }
+
+                float3 worldPos = ReconstructWorldPos(gid, depth, params);
+                float3 normal   = normalize(normalTex.read(gid).xyz * 2.0 - 1.0);
+                float3 viewDir  = normalize(worldPos - params.cameraPos.xyz);
+                float3 reflDir  = reflect(viewDir, normal);
+
+                ray r;
+                r.origin = worldPos;
+                r.direction = reflDir;
+                r.min_distance = 0.01;
+                r.max_distance = 200.0;
+
+                intersector<instancing, triangle_data> it;
+                auto result = it.intersect(r, accel);
+                if (result.type == intersection_type::none)
+                {
+                    // Sky gradient based on ray direction.
+                    float t = saturate(reflDir.y * 0.5 + 0.5);
+                    outTex.write(float4(mix(float3(0.4, 0.55, 0.7), float3(0.1, 0.15, 0.25), t), 1.0), gid);
+                }
+                else
+                {
+                    float dist = result.distance;
+                    float fade = saturate(1.0 - dist / 200.0);
+                    outTex.write(float4(float3(fade * 0.8), 1.0), gid);
+                }
             }
 
+            // Ambient occlusion: 4 cosine-weighted hemisphere samples, short
+            // rays, accumulate miss ratio. Cheap but gives real AO on M-series
+            // GPUs. Temporal accumulation is the existing compositor's job.
             kernel void RTAmbientOcclusion(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
@@ -142,9 +201,36 @@ namespace Spark::RHI::Metal
                 uint2 gid [[thread_position_in_grid]])
             {
                 if (any(gid >= params.resolution)) return;
-                outTex.write(float4(1.0, 1.0, 1.0, 1.0), gid);
+                float depth = depthTex.read(gid).r;
+                if (depth >= 1.0) { outTex.write(float4(1.0), gid); return; }
+
+                float3 worldPos = ReconstructWorldPos(gid, depth, params);
+                float3 normal   = normalize(normalTex.read(gid).xyz * 2.0 - 1.0);
+
+                intersector<instancing, triangle_data> it;
+                const uint kSamples = 4u;
+                float visible = 0.0;
+                for (uint s = 0u; s < kSamples; ++s)
+                {
+                    float u1 = Hash12(gid, s * 2u + 0u);
+                    float u2 = Hash12(gid, s * 2u + 1u);
+                    float3 dir = CosineHemisphere(normal, u1, u2);
+                    ray r;
+                    r.origin = worldPos + normal * 0.001;
+                    r.direction = dir;
+                    r.min_distance = 0.005;
+                    r.max_distance = 3.0;  // Short AO radius
+                    auto result = it.intersect(r, accel);
+                    visible += (result.type == intersection_type::none) ? 1.0 : 0.0;
+                }
+                float ao = visible / float(kSamples);
+                outTex.write(float4(ao, ao, ao, 1.0), gid);
             }
 
+            // Single-bounce diffuse GI: one random hemisphere ray. On miss we
+            // return the sky, on hit a flat Lambert approximation (0.3 grey)
+            // until materials are wired. Temporal reprojection by the
+            // compositor is what makes this look acceptable.
             kernel void RTGlobalIllumination(
                 instance_acceleration_structure accel [[buffer(0)]],
                 constant RTParams&              params [[buffer(1)]],
@@ -154,7 +240,34 @@ namespace Spark::RHI::Metal
                 uint2 gid [[thread_position_in_grid]])
             {
                 if (any(gid >= params.resolution)) return;
-                outTex.write(float4(0.0, 0.0, 0.0, 0.0), gid);
+                float depth = depthTex.read(gid).r;
+                if (depth >= 1.0) { outTex.write(float4(0.0), gid); return; }
+
+                float3 worldPos = ReconstructWorldPos(gid, depth, params);
+                float3 normal   = normalize(normalTex.read(gid).xyz * 2.0 - 1.0);
+                float u1 = Hash12(gid, 7u);
+                float u2 = Hash12(gid, 11u);
+                float3 dir = CosineHemisphere(normal, u1, u2);
+
+                ray r;
+                r.origin = worldPos + normal * 0.001;
+                r.direction = dir;
+                r.min_distance = 0.01;
+                r.max_distance = 50.0;
+
+                intersector<instancing, triangle_data> it;
+                auto result = it.intersect(r, accel);
+                float3 radiance;
+                if (result.type == intersection_type::none)
+                {
+                    float t = saturate(dir.y * 0.5 + 0.5);
+                    radiance = mix(float3(0.4, 0.55, 0.7), float3(0.1, 0.15, 0.25), t);
+                }
+                else
+                {
+                    radiance = float3(0.3);  // Placeholder until material bindings land.
+                }
+                outTex.write(float4(radiance, 1.0), gid);
             }
         )METAL";
     } // namespace

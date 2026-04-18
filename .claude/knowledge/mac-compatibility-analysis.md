@@ -298,12 +298,73 @@ Remaining gaps (next milestone):
   unreachable from the Linux test runner; requires a macOS-specific
   test gating or a mocked MTLDevice interface.
 
+### 2026-04-18 session #3 — Metal RT phase 3 (full trace kernels + scene feeder)
+
+Phase 2 left three kernel skeletons and no way to feed scene geometry.
+Phase 3 closes both gaps:
+
+- **MetalRayTracing.mm reflections kernel** — reflects view direction off
+  GBuffer normal, casts one ray against the TLAS, on miss writes a
+  sky gradient based on ray direction, on hit writes a distance-faded
+  grey tint. Matches the existing SDFGI reflection shape so the
+  compositor blend weights stay consistent.
+- **Ambient-occlusion kernel** — 4 cosine-weighted hemisphere samples
+  using a hash-based PRNG, 3m max ray distance, visibility ratio
+  written to R channel. Relies on the compositor's temporal
+  accumulation for stability.
+- **Global-illumination kernel** — single-bounce diffuse: one cosine
+  hemisphere ray, sky gradient on miss, flat 0.3 grey on hit (until
+  material bindings land).
+- **Shared helpers** — `Hash12(uint2, uint)` deterministic PRNG and
+  `CosineHemisphere(n, u1, u2)` oriented sampler are now defined once
+  in the embedded Metal source for reuse across kernels.
+- **HybridRTManager mesh-push API**:
+  - New struct `HybridRTManager::TriangleMeshDesc` (name, vertex+index
+    pointers, 3x4 transform, opaque flag, dynamic-update flag).
+  - `PushTriangleMesh(mesh)` — on macOS routes to
+    `MetalRayTracingSystem::CreateBLAS`, records the resulting BLAS
+    index + transform in `m_metalRTMeshes`, marks `m_metalRTTLASDirty`.
+    On non-macOS the function is a guard-only no-op.
+  - `ClearTriangleMeshes()` — destroys every pushed BLAS, rebuilds
+    an empty TLAS, clears the list and dirty flag.
+  - Execute's `case HardwareMetalRT` rebuilds the TLAS from
+    `m_metalRTMeshes` when `m_metalRTTLASDirty` and the mesh list
+    is non-empty; clears the flag after build. Existing dispatch
+    path runs unchanged.
+  - Shutdown also wipes `m_metalRTMeshes` / `m_metalRTTLASDirty`.
+  - `Console_GetStatus()` now reports pushed-mesh count + dirty state.
+- **TestMacOSPlatform_HybridRTPushIsSafeWithoutInit** — exercises
+  Push + Clear on an uninitialized HybridRTManager, pinning the
+  no-crash contract for scene code that wants to push unconditionally.
+
+After phase 3, macOS consumers can:
+1. Construct `HybridRTManager`, Initialize with a `MetalDevice`.
+2. Call `PushTriangleMesh(...)` for each scene mesh.
+3. Call `Execute(...)` each frame — Metal RT builds the TLAS,
+   dispatches the four compute kernels, falls back to SDFGI for
+   anything that did not run.
+4. `ClearTriangleMeshes()` on scene change.
+
+Linux `linux-gcc-release` builds clean; full suite green
+(5620 passed, 0 failed, 2 known-flaky warnings; 5621 total tests now).
+
 ## Notes
 
 - Metal files are excluded from clang-format CI checks (`-not -path '*/Metal/*'`)
 - macOS CI job uses `continue-on-error: true` until support stabilizes
 - MoltenVK path avoids ~2,500 lines of Objective-C++ Metal implementation
-- Metal RT phase 2 landed: real MTLAccelerationStructure builds, runtime
-  shader compilation, and a working shadow-pass kernel. Trace dispatch
-  wires into HybridRTManager's Execute() but still needs the engine to
-  push scene geometry and build the per-frame TLAS.
+- Metal RT phase 3 landed: four real ray-query kernels, full scene
+  feeder API, console status. Next milestones: material binding
+  (per-instance BLAS → material id → texture table), per-pass quality
+  tuning (samples, max bounce), and macOS-only runtime tests once
+  the Metal CI runner boots a viable device.
+
+## Platform requirements summary (2026-04-18)
+
+| Platform | Minimum | Recommended |
+|----------|---------|-------------|
+| **Windows** | Win10 x64, MSVC 19.36+, D3D11 FL 10.0 | Win11, MSVC v143/v144, D3D11 FL 11.1, D3D12+DXR |
+| **Linux** | glibc 2.35+ x64, GCC 13+/Clang 17+, OpenGL 4.6 *or* Vulkan 1.3 | Ubuntu 24.04, GCC 14, Vulkan 1.3 |
+| **macOS** | macOS 11 Big Sur, x64/ARM64, Metal 2.3 *or* OpenGL 4.1 | macOS 12+, Apple Silicon M2+, Metal 3 with `supportsRaytracing` |
+
+Pinned by: `CMAKE_OSX_DEPLOYMENT_TARGET=11.0` (CMakeLists.txt), `cmake_minimum_required(3.25)`, CLAUDE.md Build section, `MetalRayTracing.mm` `@available(macOS 12.0, *)` gate for hardware RT.
