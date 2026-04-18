@@ -4,14 +4,13 @@
  */
 
 #include "NeuralTextureCompressor.h"
+#include "CpuNeuralTraining.h"
 #include "NeuralInference.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <numeric>
-#include <random>
 
 namespace Spark::Graphics::Neural
 {
@@ -70,56 +69,35 @@ namespace Spark::Graphics::Neural
     std::vector<float> NeuralTextureCompressor::TrainBlock(const std::vector<uint8_t>& pixels, uint32_t blockSize,
                                                            const NetworkDesc& desc, const NTCOptions& options)
     {
-        uint32_t totalParams = desc.GetTotalParameters();
-        uint32_t inputSize = desc.GetInputSize();
-        uint32_t outputSize = desc.GetOutputSize();
-        uint32_t numPixels = blockSize * blockSize;
+        const uint32_t inputSize = desc.GetInputSize();
+        const uint32_t outputSize = desc.GetOutputSize();
+        const uint32_t numPixels = blockSize * blockSize;
 
-        // Initialize weights with Xavier initialization
-        std::mt19937 rng(42);
-        std::vector<float> weights(totalParams);
-        {
-            uint32_t offset = 0;
-            for (const auto& layer : desc.layers)
-            {
-                float stddev = std::sqrt(2.0f / static_cast<float>(layer.inputSize + layer.outputSize));
-                std::normal_distribution<float> dist(0.0f, stddev);
-                uint32_t numWeights = layer.inputSize * layer.outputSize;
-                for (uint32_t i = 0; i < numWeights; ++i)
-                {
-                    weights[offset++] = dist(rng);
-                }
-                // Initialize biases to zero
-                for (uint32_t i = 0; i < layer.outputSize; ++i)
-                {
-                    weights[offset++] = 0.0f;
-                }
-            }
-        }
+        std::vector<float> weights;
+        Trainer::InitializeWeightsXavier(desc, weights, 42u);
 
-        // Prepare training data: inputs (positional-encoded UVs) and targets (normalized RGBA)
-        std::vector<std::vector<float>> inputs(numPixels);
-        std::vector<std::vector<float>> targets(numPixels);
-
+        // Pack inputs (positional-encoded UV) + targets (normalised RGBA) into
+        // flat contiguous buffers so the training loop can iterate by stride.
+        std::vector<float> inputs(numPixels * inputSize);
+        std::vector<float> targets(numPixels * outputSize);
         for (uint32_t py = 0; py < blockSize; ++py)
         {
             for (uint32_t px = 0; px < blockSize; ++px)
             {
-                float u = (static_cast<float>(px) + 0.5f) / static_cast<float>(blockSize);
-                float v = (static_cast<float>(py) + 0.5f) / static_cast<float>(blockSize);
-                uint32_t idx = py * blockSize + px;
+                const float u = (static_cast<float>(px) + 0.5f) / static_cast<float>(blockSize);
+                const float v = (static_cast<float>(py) + 0.5f) / static_cast<float>(blockSize);
+                const uint32_t idx = py * blockSize + px;
 
-                inputs[idx] = EncodePosition(u, v, options.positionalFrequencies);
+                auto encoded = EncodePosition(u, v, options.positionalFrequencies);
+                std::copy(encoded.begin(), encoded.end(), inputs.begin() + idx * inputSize);
 
-                targets[idx].resize(outputSize);
                 for (uint32_t c = 0; c < outputSize; ++c)
                 {
-                    targets[idx][c] = static_cast<float>(pixels[idx * 4 + c]) / 255.0f;
+                    targets[idx * outputSize + c] = static_cast<float>(pixels[idx * 4 + c]) / 255.0f;
                 }
             }
         }
 
-        // Determine iteration count based on quality
         uint32_t iterations = options.trainingIterations;
         if (iterations == 0)
         {
@@ -140,143 +118,27 @@ namespace Spark::Graphics::Neural
             }
         }
 
-        float lr = options.learningRate;
+        // Adam converges faster and more robustly than the previous vanilla-SGD
+        // implementation at similar per-iteration cost, so we match or beat the
+        // old quality with the same iteration budget.
+        AdamConfig adam;
+        adam.learningRate = options.learningRate > 0.0f ? options.learningRate : 1e-2f;
 
-        // Simple full-batch SGD training
-        // Temporary buffers for forward/backward pass
-        std::vector<std::vector<float>> layerOutputs(desc.layers.size());
-        std::vector<std::vector<float>> layerInputs(desc.layers.size());
+        Trainer trainer;
+        trainer.Initialize(desc);
 
         for (uint32_t iter = 0; iter < iterations; ++iter)
         {
-            // Accumulate gradients
-            std::vector<float> gradients(totalParams, 0.0f);
-
+            // Mini-batch: accumulate gradient across all pixels in the block, then
+            // one Adam step averaged by the batch size. Matches the previous
+            // full-batch SGD semantics but with proper bias-corrected moments.
+            trainer.ZeroGradients();
             for (uint32_t pixel = 0; pixel < numPixels; ++pixel)
             {
-                // Forward pass (store intermediates for backprop)
-                const auto& input = inputs[pixel];
-
-                // Per-layer forward
-                const float* layerIn = input.data();
-                uint32_t weightOffset = 0;
-
-                for (uint32_t l = 0; l < desc.layers.size(); ++l)
-                {
-                    const auto& layer = desc.layers[l];
-                    layerInputs[l].assign(layerIn, layerIn + layer.inputSize);
-                    layerOutputs[l].resize(layer.outputSize);
-
-                    const float* w = weights.data() + weightOffset;
-                    const float* b = w + layer.inputSize * layer.outputSize;
-
-                    for (uint32_t j = 0; j < layer.outputSize; ++j)
-                    {
-                        float sum = 0.0f;
-                        for (uint32_t i = 0; i < layer.inputSize; ++i)
-                        {
-                            sum += w[j * layer.inputSize + i] * layerIn[i];
-                        }
-                        sum += b[j];
-
-                        // Apply activation
-                        switch (layer.activation)
-                        {
-                        case ActivationType::ReLU:
-                            sum = std::max(0.0f, sum);
-                            break;
-                        case ActivationType::Sigmoid:
-                            sum = 1.0f / (1.0f + std::exp(-sum));
-                            break;
-                        default:
-                            break;
-                        }
-
-                        layerOutputs[l][j] = sum;
-                    }
-
-                    layerIn = layerOutputs[l].data();
-                    weightOffset += layer.inputSize * layer.outputSize + layer.outputSize;
-                }
-
-                // Compute output error (MSE gradient: 2*(predicted - target))
-                const auto& predicted = layerOutputs.back();
-                const auto& target = targets[pixel];
-                std::vector<float> delta(outputSize);
-                for (uint32_t c = 0; c < outputSize; ++c)
-                {
-                    delta[c] = 2.0f * (predicted[c] - target[c]) / static_cast<float>(numPixels);
-                }
-
-                // Backward pass
-                for (int32_t l = static_cast<int32_t>(desc.layers.size()) - 1; l >= 0; --l)
-                {
-                    const auto& layer = desc.layers[static_cast<size_t>(l)];
-
-                    // Compute weight offset for this layer
-                    uint32_t wOff = 0;
-                    for (int32_t k = 0; k < l; ++k)
-                    {
-                        const auto& kl = desc.layers[static_cast<size_t>(k)];
-                        wOff += kl.inputSize * kl.outputSize + kl.outputSize;
-                    }
-
-                    // Apply activation derivative to delta
-                    for (uint32_t j = 0; j < layer.outputSize; ++j)
-                    {
-                        float out = layerOutputs[static_cast<size_t>(l)][j];
-                        switch (layer.activation)
-                        {
-                        case ActivationType::ReLU:
-                            delta[j] *= (out > 0.0f) ? 1.0f : 0.0f;
-                            break;
-                        case ActivationType::Sigmoid:
-                            delta[j] *= out * (1.0f - out);
-                            break;
-                        default:
-                            break;
-                        }
-                    }
-
-                    // Accumulate weight gradients
-                    const auto& lInput = layerInputs[static_cast<size_t>(l)];
-                    for (uint32_t j = 0; j < layer.outputSize; ++j)
-                    {
-                        for (uint32_t i = 0; i < layer.inputSize; ++i)
-                        {
-                            gradients[wOff + j * layer.inputSize + i] += delta[j] * lInput[i];
-                        }
-                        // Bias gradient
-                        gradients[wOff + layer.inputSize * layer.outputSize + j] += delta[j];
-                    }
-
-                    // Propagate delta to previous layer
-                    if (l > 0)
-                    {
-                        std::vector<float> prevDelta(layer.inputSize, 0.0f);
-                        for (uint32_t i = 0; i < layer.inputSize; ++i)
-                        {
-                            for (uint32_t j = 0; j < layer.outputSize; ++j)
-                            {
-                                prevDelta[i] += weights[wOff + j * layer.inputSize + i] * delta[j];
-                            }
-                        }
-                        delta = std::move(prevDelta);
-                    }
-                }
+                trainer.AccumulateGradient(weights.data(), desc, &inputs[pixel * inputSize],
+                                           &targets[pixel * outputSize], LossType::MSE);
             }
-
-            // Apply gradients (SGD)
-            for (uint32_t i = 0; i < totalParams; ++i)
-            {
-                weights[i] -= lr * gradients[i];
-            }
-
-            // Learning rate decay
-            if (iter > 0 && iter % 200 == 0)
-            {
-                lr *= 0.5f;
-            }
+            trainer.StepAdam(weights, adam, 1.0f / static_cast<float>(numPixels));
         }
 
         return weights;

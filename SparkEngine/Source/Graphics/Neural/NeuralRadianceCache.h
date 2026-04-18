@@ -32,10 +32,12 @@
 
 #pragma once
 
+#include "CpuNeuralTraining.h"
 #include "NeuralTypes.h"
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -173,6 +175,12 @@ namespace Spark::Graphics::Neural
         NetworkDesc m_mlpDesc;
         NetworkHandle m_mlpHandle;
         std::vector<float> m_mlpWeights;
+
+        // Persistent trainer: Adam moments survive across Update() calls so the
+        // cache continues to learn smoothly frame-to-frame. Held by unique_ptr
+        // to keep NeuralRadianceCache move-friendly if ever needed.
+        std::unique_ptr<Trainer> m_trainer;
+        AdamConfig m_adamConfig;
 
         // Statistics
         mutable RadianceCacheStats m_stats;
