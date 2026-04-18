@@ -23,22 +23,7 @@
 #include <algorithm>
 #include <array>
 
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <windows.h>
-
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
-{
-    switch (reason)
-    {
-    case DLL_PROCESS_ATTACH:
-        DisableThreadLibraryCalls(hModule);
-        break;
-    case DLL_PROCESS_DETACH:
-        break;
-    }
-    return TRUE;
-}
-#endif
+#include <Spark/ModuleDllMain.h>
 
 // =============================================================================
 // Module exports

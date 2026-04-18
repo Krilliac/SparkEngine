@@ -85,11 +85,12 @@ In one `.cpp` file (typically `Main.cpp`), use the `SPARK_IMPLEMENT_MODULE` macr
 
 ```cpp
 #include <Spark/ModuleRegistry.h>
+#include <Spark/ModuleDllMain.h>  // Emits the standard DllMain on Windows (no-op elsewhere)
 
 SPARK_IMPLEMENT_MODULE(MyGameModule)
 ```
 
-This generates the `CreateModule()` and `DestroyModule()` exports that the engine looks for.
+This generates the `CreateModule()` and `DestroyModule()` exports that the engine looks for. The `ModuleDllMain.h` header defines a canonical `DllMain` that calls `DisableThreadLibraryCalls` — include it in exactly one TU per DLL.
 
 ### 4. CMakeLists.txt
 

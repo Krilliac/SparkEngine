@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*474 test files, 5873+ test cases*
+*480 test files, 5929+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -656,6 +656,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestDialogueStress` | 10 |
 | `TestDialogueSystem` | 8 |
 | `TestDirectStorageLoader` | 11 |
+| `TestDirectionalStreaming` | 3 |
 | `TestDirtyRectTracker` | 9 |
 | `TestDirtyRectTrackerReal` | 12 |
 | `TestDirtyRegionGridPhaseDD` | 10 |
@@ -754,6 +755,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGroupAI` | 5 |
 | `TestHLODBuilderPhaseII` | 8 |
 | `TestHLODSystem` | 9 |
+| `TestHRTFProcessor` | 8 |
 | `TestHResultPlatform` | 24 |
 | `TestHash` | 18 |
 | `TestHashReal` | 9 |
@@ -783,6 +785,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLockFreeRingAllocatorReal` | 10 |
 | `TestLogger` | 18 |
 | `TestLootAndCrafting` | 11 |
+| `TestMacOSPlatform` | 6 |
 | `TestMaterialDefinition` | 10 |
 | `TestMaterialEffects` | 5 |
 | `TestMaterialSystemEdgeCases` | 10 |
@@ -797,6 +800,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMeshLOD` | 8 |
 | `TestMeshOptimizer` | 15 |
 | `TestMeshShaderPipeline` | 9 |
+| `TestMetalRayTracing` | 16 |
 | `TestModSystem` | 9 |
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 6 |
@@ -860,6 +864,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestPrefabManager` | 4 |
 | `TestProceduralGenerator` | 13 |
 | `TestProcess` | 15 |
+| `TestProcessDrawListLinux` | 9 |
 | `TestProfiler` | 19 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuestSystem` | 10 |
@@ -985,6 +990,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestVideoPlayer` | 12 |
 | `TestVisualScriptCompiler` | 12 |
 | `TestVolumeManager` | 11 |
+| `TestVolumetricClouds` | 14 |
 | `TestVoxelConeTracing` | 24 |
 | `TestVulkanLavapipe` | 8 |
 | `TestWARPRendering` | 4 |

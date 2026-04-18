@@ -42,10 +42,13 @@ extern "C" SPARK_MODULE_API void DestroyModule(Spark::IModule* mod);
   the module's allocator created it (see [Memory Ownership](#7-memory-ownership-rules)).
 
 Use the `SPARK_IMPLEMENT_MODULE` macro (from `Spark/ModuleRegistry.h`) to
-generate both exports:
+generate both exports, and include `Spark/ModuleDllMain.h` to emit the
+canonical Windows DllMain (it is a no-op on other platforms):
 
 ```cpp
 #include <Spark/ModuleRegistry.h>
+#include <Spark/ModuleDllMain.h>
+
 SPARK_IMPLEMENT_MODULE(MyGameModule)
 ```
 
@@ -531,20 +534,10 @@ private:
 ```cpp
 #include "MyGame.h"
 #include <Spark/ModuleRegistry.h>
+#include <Spark/ModuleDllMain.h>  // Canonical Windows DllMain; no-op elsewhere
 
 // Generates CreateModule() and DestroyModule() exports
 SPARK_IMPLEMENT_MODULE(MyGameModule)
-
-// Optional: Windows DllMain (keep minimal)
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <windows.h>
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
-{
-    if (reason == DLL_PROCESS_ATTACH)
-        DisableThreadLibraryCalls(hModule);
-    return TRUE;
-}
-#endif
 ```
 
 ### CMakeLists.txt
