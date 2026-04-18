@@ -108,6 +108,7 @@
 - [GPU Particles](graphics/GPU-Particles.md)
 - [GPU-Driven Rendering](graphics/GPU-Driven-Rendering.md)
 - [Volumetric Fog](graphics/Volumetric-Fog.md)
+- [Volumetric Clouds](graphics/Volumetric-Clouds.md)
 - [Global Illumination](graphics/Global-Illumination.md)
 - [Virtual Texturing](graphics/Virtual-Texturing.md)
 - [Water Rendering](graphics/Water-Rendering.md)
