@@ -9,6 +9,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include <cstring>
 #include <filesystem>
 #include <sstream>
 
@@ -620,6 +621,12 @@ SPARK_REFLECT_END(OLS)
 namespace
 {
 
+    // The field.size guards below are defence-in-depth for mis-registered reflection
+    // metadata. GCC still emits -Wstringop-overflow in the inlined caller for structs
+    // whose total size is smaller than Int/Float/String — e.g. DebugSettings is two
+    // bools, total size 2, and the Int arm never executes for its fields, but GCC
+    // can't prove that statically. The warning is a known false positive.
+
     template <typename T>
     void ReadReflectedConfig(T& settings, const Spark::ConfigParser& cfg, const std::string& section)
     {
@@ -636,18 +643,39 @@ namespace
             switch (field.type)
             {
             case Spark::FieldType::Int:
-                *reinterpret_cast<int*>(dst) = cfg.GetInt(section, key, *reinterpret_cast<const int*>(dst));
+                if (field.size >= sizeof(int))
+                {
+                    int current{};
+                    std::memcpy(&current, dst, sizeof(int));
+                    int value = cfg.GetInt(section, key, current);
+                    std::memcpy(dst, &value, sizeof(int));
+                }
                 break;
             case Spark::FieldType::Float:
-                *reinterpret_cast<float*>(dst) = cfg.GetFloat(section, key, *reinterpret_cast<const float*>(dst));
+                if (field.size >= sizeof(float))
+                {
+                    float current{};
+                    std::memcpy(&current, dst, sizeof(float));
+                    float value = cfg.GetFloat(section, key, current);
+                    std::memcpy(dst, &value, sizeof(float));
+                }
                 break;
             case Spark::FieldType::Bool:
-                *reinterpret_cast<bool*>(dst) = cfg.GetBool(section, key, *reinterpret_cast<const bool*>(dst));
+                if (field.size >= sizeof(bool))
+                {
+                    bool current{};
+                    std::memcpy(&current, dst, sizeof(bool));
+                    bool value = cfg.GetBool(section, key, current);
+                    std::memcpy(dst, &value, sizeof(bool));
+                }
                 break;
             case Spark::FieldType::String:
             {
-                auto* str = reinterpret_cast<std::string*>(dst);
-                *str = cfg.GetString(section, key, *str);
+                if (field.size >= sizeof(std::string))
+                {
+                    auto* str = reinterpret_cast<std::string*>(dst);
+                    *str = cfg.GetString(section, key, *str);
+                }
                 break;
             }
             default:
@@ -672,16 +700,32 @@ namespace
             switch (field.type)
             {
             case Spark::FieldType::Int:
-                cfg.SetInt(section, key, *reinterpret_cast<const int*>(src));
+                if (field.size >= sizeof(int))
+                {
+                    int value{};
+                    std::memcpy(&value, src, sizeof(int));
+                    cfg.SetInt(section, key, value);
+                }
                 break;
             case Spark::FieldType::Float:
-                cfg.SetFloat(section, key, *reinterpret_cast<const float*>(src));
+                if (field.size >= sizeof(float))
+                {
+                    float value{};
+                    std::memcpy(&value, src, sizeof(float));
+                    cfg.SetFloat(section, key, value);
+                }
                 break;
             case Spark::FieldType::Bool:
-                cfg.SetBool(section, key, *reinterpret_cast<const bool*>(src));
+                if (field.size >= sizeof(bool))
+                {
+                    bool value{};
+                    std::memcpy(&value, src, sizeof(bool));
+                    cfg.SetBool(section, key, value);
+                }
                 break;
             case Spark::FieldType::String:
-                cfg.SetString(section, key, *reinterpret_cast<const std::string*>(src));
+                if (field.size >= sizeof(std::string))
+                    cfg.SetString(section, key, *reinterpret_cast<const std::string*>(src));
                 break;
             default:
                 break;
