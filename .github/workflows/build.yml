@@ -716,6 +716,16 @@ jobs:
         # Remove stale PCH files — cached build dirs may have PCH built against
         # older system headers (e.g. unistd_64.h mtime changes after apt-get).
         find build -name '*.pch' -delete 2>/dev/null || true
+        # Validate cached static libraries. If apt-get upgraded clang or ld
+        # between runs, older .a archives may fail with
+        #   "libJolt.a: error adding symbols: file format not recognized"
+        # Purge any archive that can't be listed by the current llvm-ar / ar.
+        for lib in $(find build -name 'lib*.a' 2>/dev/null); do
+          if ! ar t "$lib" > /dev/null 2>&1; then
+            echo "::warning::Purging stale archive $lib (unrecognized format)"
+            rm -f "$lib"
+          fi
+        done
         cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
