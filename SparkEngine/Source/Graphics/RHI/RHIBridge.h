@@ -157,6 +157,43 @@ namespace Spark
             std::unique_ptr<IRHITexture> CreateRenderTarget(uint32_t width, uint32_t height,
                                                             PixelFormat format = PixelFormat::R8G8B8A8_UNORM);
 
+            // ========================================================================
+            // RENDER TARGET REGISTRY
+            // ========================================================================
+            // Non-owning registry of platform-created GBuffer/HDR textures. The
+            // platform rendering layer (GraphicsEngineWindows / -Linux) owns the
+            // textures and their native handles; it registers `IRHITexture*`
+            // views here after creation so cross-platform code (HybridRT
+            // dispatch, debug viewers, capture tools) can look them up by slot
+            // without reaching into platform-specific fields.
+            //
+            // Ownership stays with the registering code. Lifetime contract:
+            // deregister (or re-register with nullptr) before the underlying
+            // `IRHITexture` is destroyed. Typical pattern: register right
+            // after GBuffer creation in `GraphicsEngine::Initialize*`,
+            // deregister in the matching Shutdown.
+
+            enum class RenderTargetSlot : uint32_t
+            {
+                GBufferAlbedo = 0,
+                GBufferNormals = 1,
+                GBufferMaterial = 2,
+                GBufferMotion = 3,
+                DepthStencil = 4,
+                HDRLighting = 5,
+                Count = 6,
+            };
+
+            /// Register a platform-created RHI texture under a named slot.
+            /// Passing `nullptr` clears the slot. Overwrites any existing
+            /// registration — callers should guard against double-register
+            /// of the same slot by different subsystems.
+            void RegisterRenderTarget(RenderTargetSlot slot, IRHITexture* texture);
+
+            /// Return the texture registered for `slot`, or `nullptr` if the
+            /// slot was never registered (or was cleared).
+            IRHITexture* GetRenderTarget(RenderTargetSlot slot) const;
+
             /**
      * @brief Create a sampler state with common presets
      */
@@ -215,6 +252,12 @@ namespace Spark
             std::unique_ptr<IRHISwapChain> m_swapChain;
             std::unique_ptr<IRHITexture> m_depthBuffer;
             ShaderCache m_shaderCache;
+
+            // Non-owning render target registry — see the block of comments
+            // at RegisterRenderTarget() above for the lifetime contract.
+            // Indexed by `RenderTargetSlot`; size fixed at compile time so
+            // lookups are bounds-checked by the enum itself (no map hashing).
+            IRHITexture* m_renderTargets[static_cast<uint32_t>(RenderTargetSlot::Count)] = {};
 
             void* m_windowHandle = nullptr;
             uint32_t m_width = 0;

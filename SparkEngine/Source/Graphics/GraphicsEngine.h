@@ -110,10 +110,24 @@ namespace Spark::Graphics
  */
     struct HybridRTBindings
     {
-        std::unique_ptr<Spark::RHI::IRHITexture> normals;
-        std::unique_ptr<Spark::RHI::IRHITexture> depth;
-        std::unique_ptr<Spark::RHI::IRHITexture> albedo;
-        std::unique_ptr<Spark::RHI::IRHITexture> lighting;
+        // Non-owning pointers consumed by HybridRTManager::Execute.
+        // Either come from the RHIBridge render-target registry (Linux/
+        // macOS — platform creates RHI textures once, registers them, the
+        // bindings just reference) or alias into `owned` below (Windows —
+        // wraps D3D11 ComPtr textures per-frame, needs to keep the
+        // wrappers alive for the duration of the dispatch).
+        Spark::RHI::IRHITexture* normals = nullptr;
+        Spark::RHI::IRHITexture* depth = nullptr;
+        Spark::RHI::IRHITexture* albedo = nullptr;
+        Spark::RHI::IRHITexture* lighting = nullptr;
+
+        /// Keeps wrapped textures alive for the lifetime of this
+        /// bindings object. Windows AcquireHybridRTBindings populates
+        /// this with the per-frame `WrapNativeTexture` results and
+        /// aliases the raw pointers above into these `unique_ptr`s.
+        /// Linux/macOS leaves it empty — the bridge registry owns the
+        /// textures long-term and the raw pointers reference directly.
+        std::vector<std::unique_ptr<Spark::RHI::IRHITexture>> owned;
 
         /// True if at least the four primary inputs (normals, depth,
         /// albedo, lighting) resolved — otherwise the dispatch is skipped.

@@ -610,15 +610,83 @@ adapter, a separate concern from the RHI.
   macOS CI runner will build `TestMetalRayTracingLive.mm` and add 6
   more tests to its registered count.
 
-**Remaining (explicit multi-session architecture work):**
-- `RHIBridge::GetGBufferTexture()` — requires deciding whether the
-  bridge owns GBuffer creation or whether the platform layer
-  registers already-created textures with the bridge. Once decided,
-  the Linux `AcquireHybridRTBindings` stub becomes live and
-  `DispatchHybridRTPass` does real work.
-- Non-Windows `ProcessDrawList` implementation — RHI layer has the
-  primitives (`SetVertexBuffer`, `SetIndexBuffer`, `DrawIndexed`);
-  the AssetPipeline needs a Linux/macOS adapter for mesh/material
-  loading. That's a separate large port, not an RHI bridge issue.
-- Image-diff validation for the live RT tests — offline reference
-  set + per-PR comparison; infrastructure, not code.
+Remaining (deferred) items addressed in session #9 below.
+
+### 2026-04-18 session #9 — RHI render-target registry + image-diff infra
+
+**1. RHIBridge render-target registry (addresses phase 8 #1)**
+- Decision: registration-based, not bridge-owned creation. Rationale:
+  Windows keeps `ComPtr<ID3D11Texture2D>` ownership unchanged, bridge
+  stays a thin coordination layer, and future optimization of the
+  Windows wrapper-cache is incremental (not a rewrite).
+- New `enum class RHIBridge::RenderTargetSlot` (6 slots: 4 GBuffer
+  channels + DepthStencil + HDRLighting).
+- New `void RegisterRenderTarget(slot, IRHITexture*)` and
+  `IRHITexture* GetRenderTarget(slot) const` on `RHIBridge`. Storage
+  is a fixed-size `IRHITexture* m_renderTargets[Count]` array —
+  lookups are enum-bounded, no hash.
+- Ownership contract: non-owning. Registering code must deregister
+  (pass nullptr) before the underlying texture is destroyed. Typical
+  pattern: register in platform `Initialize*`, deregister in `Shutdown`.
+- `HybridRTBindings` restructured:
+  - Raw pointers for `normals`/`depth`/`albedo`/`lighting` (changed
+    from `unique_ptr`).
+  - New `std::vector<unique_ptr<IRHITexture>> owned` field keeps
+    Windows per-frame `WrapNativeTexture` wrappers alive — raw
+    pointers alias into this vector.
+  - Linux/macOS reads from bridge registry, leaves `owned` empty
+    (textures are long-lived on the bridge side).
+- `GraphicsEngineWindows.cpp::AcquireHybridRTBindings` refactored
+  into a small `wrap()` lambda — same behavior, less repetition
+  (68 lines → 14). Linux/macOS implementation in
+  `GraphicsEngineLinux.cpp` now reads all 4 slots from the bridge
+  via `GetRenderTarget`. No functional change on either platform
+  today (Linux slots aren't populated yet by the rendering layer),
+  but the plumbing is live.
+
+**2. Image-diff infrastructure (addresses phase 8 #3)**
+- `Tests/GoldenImages/README.md` — workflow documentation: file
+  format (raw RGBA with a 4-byte width + 4-byte height header, `.png`
+  extension for tooling convenience), tolerance knobs
+  (`perPixelThreshold`, `tolerancePercent`), baseline-update
+  procedure, and rationale for "not real PNG yet" (header-only
+  framework, zero-dep).
+- `Tests/GoldenImages/.gitkeep` — ensures empty directory commits.
+- New `Graphics/RHI/Metal/MetalTextureReadback.{h,mm}` — CPU readback
+  of an `MTLTexture` into an RGBA8 `std::vector<uint8_t>`. Uses a
+  shared-storage `MTLBuffer` staging copy, swaps red/blue for
+  `BGRA8Unorm` sources. 64 MB allocation cap (`kReadbackMaxBytes`)
+  guards against bad pointers. Header uses plain C++ (opaque
+  `void*` for the texture) so `.cpp` callers can include without
+  Objective-C.
+- CI artifact upload: new "Upload Golden Image Diffs" step in
+  `.github/workflows/build.yml` under the macOS Metal job, fires
+  on failure, uploads `Tests/Output/` + `build/Tests/Output/` as
+  `rt-goldens-macos-<config>-<run-id>`. `if-no-files-found: ignore`
+  so the step succeeds when there are no diffs.
+- 2 new tests in `TestMetalRayTracingLive.mm`:
+  `ReadbackReturnsEmptyForNullTexture` (contract check) and
+  `ReadbackRGBA8KnownValues` (4×4 MTLTexture with a red-gradient
+  pattern, verify byte-for-byte roundtrip).
+
+Existing `Utils/GoldenImageTest.h` (559-line header-only framework)
+already provides `GoldenImageTestRunner`, `IGoldenImageCapture`,
+`CompareWithGolden`, `GenerateDiffImage`, `SavePNG`/`LoadPNG`. The
+readback helper is the missing Metal-side piece for a capture
+implementation; a `MetalGoldenImageCapture` class can now be built
+as a thin wrapper (future session).
+
+Linux `linux-gcc-release` builds clean; suite green (5621 passed,
+0 failed, 1 warned, 5622 total).
+
+**Remaining multi-session architecture work:**
+- Non-Windows `ProcessDrawList` implementation — blocked on
+  `AssetPipeline` Linux/macOS port (RHI layer has the primitives).
+- Live RT golden-image capture class on top of the readback helper —
+  needs `MetalGoldenImageCapture : public IGoldenImageCapture` that
+  knows which texture to read (probably the HDR output from the
+  HybridRT pass).
+- Platform rendering layer should actually call
+  `RHIBridge::RegisterRenderTarget` after GBuffer creation on
+  Linux/macOS. Today the registry exists but is empty — a
+  follow-up in the rendering code wires it up.

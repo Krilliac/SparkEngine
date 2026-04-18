@@ -1056,47 +1056,37 @@ Spark::Graphics::HybridRTBindings GraphicsEngine::AcquireHybridRTBindings()
     if (!device)
         return bindings;
 
+    // Helper — wrap a D3D11 ComPtr texture into an RHI texture, stash the
+    // wrapper in `bindings.owned` to extend its lifetime past this call,
+    // and return the raw pointer for bindings.{normals,depth,albedo,lighting}.
+    auto wrap = [&](void* nativeHandle, Spark::RHI::PixelFormat format, Spark::RHI::RHITextureUsage usage,
+                    const char* name) -> Spark::RHI::IRHITexture*
+    {
+        if (!nativeHandle)
+            return nullptr;
+        Spark::RHI::RHITextureDesc desc;
+        desc.width = m_width;
+        desc.height = m_height;
+        desc.format = format;
+        desc.usage = usage;
+        desc.debugName = name;
+        auto wrapped = device->WrapNativeTexture(nativeHandle, desc);
+        auto* raw = wrapped.get();
+        if (wrapped)
+            bindings.owned.push_back(std::move(wrapped));
+        return raw;
+    };
+
     // GBuffer layout: [0]=Albedo, [1]=Normal, [2]=Material, [3]=Motion
-    if (m_gBufferTextures[1].Get())
-    {
-        Spark::RHI::RHITextureDesc desc;
-        desc.width = m_width;
-        desc.height = m_height;
-        desc.format = Spark::RHI::PixelFormat::R16G16B16A16_FLOAT;
-        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
-        desc.debugName = "GBuffer_Normals_Wrapped";
-        bindings.normals = device->WrapNativeTexture(m_gBufferTextures[1].Get(), desc);
-    }
-    if (m_depthStencilTexture.Get())
-    {
-        Spark::RHI::RHITextureDesc desc;
-        desc.width = m_width;
-        desc.height = m_height;
-        desc.format = Spark::RHI::PixelFormat::D24_UNORM_S8_UINT;
-        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
-        desc.debugName = "Depth_Wrapped";
-        bindings.depth = device->WrapNativeTexture(m_depthStencilTexture.Get(), desc);
-    }
-    if (m_gBufferTextures[0].Get())
-    {
-        Spark::RHI::RHITextureDesc desc;
-        desc.width = m_width;
-        desc.height = m_height;
-        desc.format = Spark::RHI::PixelFormat::R8G8B8A8_UNORM;
-        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource;
-        desc.debugName = "GBuffer_Albedo_Wrapped";
-        bindings.albedo = device->WrapNativeTexture(m_gBufferTextures[0].Get(), desc);
-    }
-    if (m_hdrTexture.Get())
-    {
-        Spark::RHI::RHITextureDesc desc;
-        desc.width = m_width;
-        desc.height = m_height;
-        desc.format = Spark::RHI::PixelFormat::R16G16B16A16_FLOAT;
-        desc.usage = Spark::RHI::RHITextureUsage::ShaderResource | Spark::RHI::RHITextureUsage::UnorderedAccess;
-        desc.debugName = "HDR_Lighting_Wrapped";
-        bindings.lighting = device->WrapNativeTexture(m_hdrTexture.Get(), desc);
-    }
+    bindings.normals = wrap(m_gBufferTextures[1].Get(), Spark::RHI::PixelFormat::R16G16B16A16_FLOAT,
+                            Spark::RHI::RHITextureUsage::ShaderResource, "GBuffer_Normals_Wrapped");
+    bindings.depth = wrap(m_depthStencilTexture.Get(), Spark::RHI::PixelFormat::D24_UNORM_S8_UINT,
+                          Spark::RHI::RHITextureUsage::ShaderResource, "Depth_Wrapped");
+    bindings.albedo = wrap(m_gBufferTextures[0].Get(), Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                           Spark::RHI::RHITextureUsage::ShaderResource, "GBuffer_Albedo_Wrapped");
+    bindings.lighting = wrap(m_hdrTexture.Get(), Spark::RHI::PixelFormat::R16G16B16A16_FLOAT,
+                             Spark::RHI::RHITextureUsage::ShaderResource | Spark::RHI::RHITextureUsage::UnorderedAccess,
+                             "HDR_Lighting_Wrapped");
     return bindings;
 }
 

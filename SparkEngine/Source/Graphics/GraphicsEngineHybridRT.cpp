@@ -51,8 +51,8 @@ void GraphicsEngine::DispatchHybridRTPass(Spark::RHI::IRHICommandList* cmd, cons
 
     Spark::Graphics::SSRSettings ssrDefaults;
 
-    m_hybridRT->Execute(cmd, viewMatrix, projMatrix, camPos, lightDir, bindings.normals.get(), bindings.depth.get(),
-                        bindings.albedo.get(), nullptr, nullptr, bindings.lighting.get(), ssrDefaults);
+    m_hybridRT->Execute(cmd, viewMatrix, projMatrix, camPos, lightDir, bindings.normals, bindings.depth,
+                        bindings.albedo, nullptr, nullptr, bindings.lighting, ssrDefaults);
 #else
     (void)cmd;
     (void)viewMatrix;

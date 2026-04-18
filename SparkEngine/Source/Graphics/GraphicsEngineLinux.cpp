@@ -590,18 +590,26 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
 // (`Graphics/HybridRT/RTSceneFeeder.h`).
 
 // ============================================================================
-// HybridRT GBuffer binding — Linux/macOS stub
+// HybridRT GBuffer binding — Linux/macOS
 // ============================================================================
-// The RHI bridge on non-Windows does not yet expose the GBuffer/HDR
-// textures as IRHITexture handles. Returning an empty bindings struct
-// causes DispatchHybridRTPass to skip cleanly (HybridRTManager falls
-// through to SDFGI / software path). Once `RHIBridge::GetGBufferTexture()`
-// or equivalent lands, this stub fills in handles for normals/depth/
-// albedo/lighting so the shared dispatch helper does real work.
+// Reads the GBuffer/HDR textures from the RHI bridge's render-target
+// registry. The rendering layer is expected to have registered them
+// after creation (matched slot numbers in RenderTargetSlot). Anything
+// still unregistered stays nullptr; DispatchHybridRTPass skips when
+// IsReady() returns false, so partial registration degrades cleanly.
 
 Spark::Graphics::HybridRTBindings GraphicsEngine::AcquireHybridRTBindings()
 {
-    return {};
+    Spark::Graphics::HybridRTBindings bindings;
+    if (!m_rhiBridge)
+        return bindings;
+
+    using Slot = Spark::RHI::RHIBridge::RenderTargetSlot;
+    bindings.normals = m_rhiBridge->GetRenderTarget(Slot::GBufferNormals);
+    bindings.depth = m_rhiBridge->GetRenderTarget(Slot::DepthStencil);
+    bindings.albedo = m_rhiBridge->GetRenderTarget(Slot::GBufferAlbedo);
+    bindings.lighting = m_rhiBridge->GetRenderTarget(Slot::HDRLighting);
+    return bindings;
 }
 
 // ============================================================================

@@ -981,6 +981,22 @@ jobs:
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
+    # Capture golden-image diffs produced by live Metal RT tests. The
+    # GoldenImageTestRunner writes actual-frame and diff visualizations
+    # into Tests/Output/ when a comparison fails; uploading the folder
+    # means a reviewer can download <scene>.png + <scene>_diff.png for
+    # each failure instead of rerunning the job locally.
+    - name: Upload Golden Image Diffs
+      if: failure() && matrix.backend == 'Metal'
+      uses: actions/upload-artifact@v7
+      with:
+        name: rt-goldens-macos-${{ matrix.config }}-${{ github.run_id }}
+        path: |
+          Tests/Output/
+          build/Tests/Output/
+        if-no-files-found: ignore
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v7
