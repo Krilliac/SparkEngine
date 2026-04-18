@@ -1,6 +1,6 @@
 # Mac Compatibility Analysis
 
-**Last updated:** 2026-04-17
+**Last updated:** 2026-04-18
 **Type:** Observation
 **Status:** Active
 
@@ -178,8 +178,71 @@ would hurt cohesion more than it helps.
 Linux preset (`linux-gcc-release`) still configures and builds cleanly
 with the split in place.
 
+### 2026-04-18 session — CI matrix + min-macOS pin + smoke tests + Metal RT scaffold
+
+The 2026-04-17 work shipped the Metal backend and split macOS code into its
+own TU, but CI built with `ENABLE_METAL=OFF` so the Objective-C++ payload
+only got compiled locally. This session closes that gap and starts the
+Metal RT path.
+
+Changes:
+
+- **`.github/workflows/build.yml`** — `build-macos` job converted from a
+  flat `config: [Debug, Release]` matrix to an `include:` matrix with
+  three entries:
+  `(Debug, OpenGL, metal=OFF)`, `(Release, OpenGL, metal=OFF)`,
+  `(Release, Metal, metal=ON)`. Cache keys and artifact names include
+  `${{ matrix.backend }}` so the OpenGL and Metal builds don't clobber
+  each other. The Metal entry compiles `MetalDevice.mm` +
+  `MetalRayTracing.mm` end-to-end on every PR.
+- **`CMakeLists.txt`**:
+  - New block before `project()` pins
+    `CMAKE_OSX_DEPLOYMENT_TARGET=11.0` (Big Sur) when unset. That's the
+    first Apple Silicon release and the floor for Metal 3 on M-series.
+  - `.mm` glob gated on `SPARK_METAL_AVAILABLE` instead of raw `APPLE`,
+    so `ENABLE_METAL=OFF` on macOS doesn't drag OBJCXX sources into a
+    target where the language was never enabled (the new OpenGL-only
+    CI row would otherwise fail to configure).
+  - `SparkEngineMacOS.cpp` removed from `SPARK_ENGINE_ENTRY_POINTS` —
+    it's pure helper code (Metal view lifecycle + `_NSGetExecutablePath`),
+    so it now lives in `SparkEngineLib` and both the SparkEngine exe and
+    `SparkTests` see the symbols. The off-macOS stubs stay as no-ops.
+- **`Tests/TestMacOSPlatform.cpp`** (new, 5 tests, registered in
+  `Tests/CMakeLists.txt`) — smoke coverage for `Spark::MacOS::*`:
+  macro consistency, `GetMetalWindowFlag`, null-input `CreateMetalView`,
+  `ShouldPreferMetal` default, `GetExecutableDirectory`. All assertions
+  run on every platform: off-macOS they check the stub contract, on
+  macOS they check the real SDL_Metal / mach-o behavior. No
+  `#ifdef SPARK_PLATFORM_MACOS` gating at the CMake level — one TU,
+  one set of tests, both platforms covered.
+- **`SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.{h,mm}`**
+  (new) — scaffolding for the Metal 2.4+ hardware RT path. Declares
+  `MetalRayTracingSystem` with `Initialize / Shutdown / CreateBLAS /
+  UpdateBLAS / DestroyBLAS / BuildTLAS / TraceReflections / TraceShadows /
+  TraceAmbientOcclusion / TraceGlobalIllumination / DispatchFrame /
+  GetStatusString`. PIMPL hides Metal types from non-Obj-C++ callers.
+  Every trace method is a no-op today returning false with a one-shot
+  `SPARK_LOG_WARN` so the engine console shows exactly when Metal RT
+  was selected but not executed — SDFGI is still the frame's RT path.
+- **`SparkEngine/Source/Graphics/HybridRT/HybridRTManager.{h,cpp}`** —
+  wired in. On macOS only, `Initialize` constructs a
+  `MetalRayTracingSystem` when the detected backend is
+  `HardwareMetalRT`; `Execute`'s `case HardwareMetalRT` now calls
+  `m_metalRT->DispatchFrame(...)` before falling through to SDFGI;
+  `Shutdown` disposes the system; `Console_GetStatus` appends
+  `m_metalRT->GetStatusString()`. Off-macOS the member is
+  `#ifdef`'d out entirely — zero cross-platform impact.
+
+Linux `linux-gcc-release` preset configures, builds `SparkEngineLib` +
+`SparkTests` cleanly, and the full suite runs green
+(5620 passed, 0 failed, 1 known-flaky warning).
+
 ## Notes
 
 - Metal files are excluded from clang-format CI checks (`-not -path '*/Metal/*'`)
 - macOS CI job uses `continue-on-error: true` until support stabilizes
 - MoltenVK path avoids ~2,500 lines of Objective-C++ Metal implementation
+- Metal RT is scaffold-only today — the trace pipelines, shaders, and
+  acceleration-structure build/refit code are the next milestone.
+  Capability detection, wiring, console surfacing, and HybridRT
+  fallback are already in place.

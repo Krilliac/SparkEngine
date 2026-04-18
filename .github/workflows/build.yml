@@ -880,8 +880,18 @@ jobs:
     runs-on: macos-latest
     continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
-        config: [Debug, Release]
+        include:
+          # OpenGL backend — safe baseline. Debug + Release both build; tests
+          # run on Release. Metal off so the .mm translation unit is excluded
+          # from the build (verifies the non-Metal code path still compiles).
+          - { config: Debug,   backend: OpenGL, enable_metal: 'OFF' }
+          - { config: Release, backend: OpenGL, enable_metal: 'OFF' }
+          # Metal backend — exercises MetalDevice.mm end-to-end. Release-only
+          # to keep CI cost reasonable; the .mm code is the long-term macOS
+          # rendering path so it gets a dedicated build + test pass.
+          - { config: Release, backend: Metal,  enable_metal: 'ON'  }
 
     steps:
     - name: Checkout repository
@@ -902,26 +912,27 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/Library/Caches/ccache
-        key: ccache-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        key: ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
         restore-keys: |
-          ccache-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
-          ccache-macos-${{ matrix.config }}-
+          ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-
 
     - name: Restore build directory
       uses: actions/cache@v5
       with:
         path: build
-        key: build-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        key: build-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
         restore-keys: |
-          build-macos-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
-          build-macos-${{ matrix.config }}-
+          build-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-macos-${{ matrix.config }}-${{ matrix.backend }}-
 
     - name: Configure CMake
       run: |
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
-        # macOS path: SDL2 + OpenGL + OpenAL. Metal/DXR off (no .mm impl yet),
-        # Vulkan off (MoltenVK covered by its own preset). ENABLE_SDL2=ON is
-        # required — macOS has no X11 fallback.
+        # macOS path: SDL2 + OpenGL + OpenAL. DXR/Vulkan always off here
+        # (MoltenVK path has its own preset). ENABLE_METAL is matrix-driven —
+        # the Metal entry compiles MetalDevice.mm and the Objective-C++ wiring.
+        # ENABLE_SDL2=ON is required — macOS has no X11 fallback.
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
@@ -929,7 +940,7 @@ jobs:
           -DENABLE_SDL2=ON \
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=ON \
-          -DENABLE_METAL=OFF \
+          -DENABLE_METAL=${{ matrix.enable_metal }} \
           -DENABLE_DXR=OFF \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
@@ -958,7 +969,7 @@ jobs:
       if: failure()
       run: |
         .github/scripts/extract-errors.sh \
-          "build-macos-${{ matrix.config }}" \
+          "build-macos-${{ matrix.config }}-${{ matrix.backend }}" \
           error-summary.json \
           cmake-configure.log cmake-build.log test-results.log
 
@@ -966,7 +977,7 @@ jobs:
       if: failure()
       uses: actions/upload-artifact@v7
       with:
-        name: ci-errors-macos-${{ matrix.config }}
+        name: ci-errors-macos-${{ matrix.config }}-${{ matrix.backend }}
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
@@ -974,7 +985,7 @@ jobs:
       if: matrix.config == 'Release'
       uses: actions/upload-artifact@v7
       with:
-        name: SparkEngine-macOS-${{ matrix.config }}
+        name: SparkEngine-macOS-${{ matrix.config }}-${{ matrix.backend }}
         path: build/bin/
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 

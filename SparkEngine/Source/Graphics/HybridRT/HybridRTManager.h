@@ -50,6 +50,13 @@ namespace Spark::RHI
     class IRHITexture;
 } // namespace Spark::RHI
 
+#ifdef SPARK_PLATFORM_MACOS
+namespace Spark::RHI::Metal
+{
+    class MetalRayTracingSystem;
+}
+#endif
+
 namespace Spark::Graphics
 {
     // Forward declare DXRManager for hardware path bridging
@@ -112,6 +119,14 @@ namespace Spark::Graphics
         std::unique_ptr<SDFSceneManager> m_sdfScene;
         std::unique_ptr<RTCompositor> m_compositor;
         std::unique_ptr<ProbeSystem> m_probes;
+
+#ifdef SPARK_PLATFORM_MACOS
+        // Metal hardware ray-tracing system. Instantiated only when the
+        // detected backend is `HardwareMetalRT`. Currently a scaffold — its
+        // DispatchFrame returns zero executed passes, so SDFGI runs as
+        // fallback on every frame until the real trace pipelines land.
+        std::unique_ptr<Spark::RHI::Metal::MetalRayTracingSystem> m_metalRT;
+#endif
 
         // Intermediate RT output textures (owned by this manager)
         std::unique_ptr<RHI::IRHITexture> m_rtReflections;

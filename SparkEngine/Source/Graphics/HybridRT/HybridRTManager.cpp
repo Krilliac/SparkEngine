@@ -26,6 +26,11 @@
 #include "../RHI/DXRSupport.h"
 #endif
 
+#ifdef SPARK_PLATFORM_MACOS
+#include "../RHI/Metal/MetalRayTracing.h"
+#include "../RHI/Metal/MetalDevice.h"
+#endif
+
 #include <algorithm>
 #include <sstream>
 
@@ -113,6 +118,24 @@ namespace Spark::Graphics
         }
 
         m_pendingPrimitives.reserve(SDFSceneManager::kMaxPrimitives);
+
+#ifdef SPARK_PLATFORM_MACOS
+        // Spin up the Metal RT scaffold when the detected backend is Metal.
+        // Initialize() returns false today (no trace pipelines yet), which
+        // leaves `m_metalRT->IsAvailable()` false — the Execute() path then
+        // falls back to SDFGI. Keeping the object alive here means once the
+        // real pipelines land the wiring is already in place.
+        if (m_activeBackend == RHI::RayTracingBackend::HardwareMetalRT)
+        {
+            auto* metalDevice = dynamic_cast<Spark::RHI::Metal::MetalDevice*>(device);
+            if (metalDevice)
+            {
+                m_metalRT = std::make_unique<Spark::RHI::Metal::MetalRayTracingSystem>();
+                (void)m_metalRT->Initialize(metalDevice);
+            }
+        }
+#endif
+
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "HybridRTManager initialized (%ux%u)", width, height);
         return true;
@@ -131,6 +154,12 @@ namespace Spark::Graphics
         m_sdfScene.reset();
         m_compositor.reset();
         m_probes.reset();
+
+#ifdef SPARK_PLATFORM_MACOS
+        if (m_metalRT)
+            m_metalRT->Shutdown();
+        m_metalRT.reset();
+#endif
 
         m_rtReflections.reset();
         m_rtGI.reset();
@@ -238,8 +267,26 @@ namespace Spark::Graphics
         break;
 
         case RHI::RayTracingBackend::HardwareVKRT:
+            // Vulkan RT: fall back to SDFGI until the backend matures.
+            ExecuteSDFGI(cmd, params, gbufferNormals, gbufferDepth, gbufferAlbedo);
+            break;
+
         case RHI::RayTracingBackend::HardwareMetalRT:
-            // Vulkan / Metal RT: fall back to SDFGI until those backends mature
+#ifdef SPARK_PLATFORM_MACOS
+            // Consult the Metal RT scaffold. DispatchFrame returns the set
+            // of passes that actually executed; anything it didn't run we
+            // back-fill with SDFGI so the compositor has data to blend.
+            if (m_metalRT && m_metalRT->IsAvailable())
+            {
+                auto allPasses = Spark::RHI::Metal::TracePass::Reflections | Spark::RHI::Metal::TracePass::Shadows |
+                                 Spark::RHI::Metal::TracePass::AmbientOcclusion |
+                                 Spark::RHI::Metal::TracePass::GlobalIllumination;
+                auto executed = m_metalRT->DispatchFrame(allPasses);
+                (void)executed;
+            }
+#endif
+            // Scaffold always returns zero executed passes today — fall
+            // through to SDFGI so the frame still produces output.
             ExecuteSDFGI(cmd, params, gbufferNormals, gbufferDepth, gbufferAlbedo);
             break;
 
@@ -413,6 +460,11 @@ namespace Spark::Graphics
         if (RHI::HasEffect(m_enabledEffects, RHI::RTEffect::AmbientOcclusion))
             ss << "AO ";
         ss << "\n";
+
+#ifdef SPARK_PLATFORM_MACOS
+        if (m_metalRT)
+            ss << m_metalRT->GetStatusString() << "\n";
+#endif
 
         return ss.str();
     }

@@ -45,6 +45,15 @@ if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
     set(CMAKE_GENERATOR_PLATFORM "x64")
 endif()
 
+# macOS deployment target — must be set before project() so the compiler is
+# invoked with the correct -mmacosx-version-min. 11.0 (Big Sur) is the floor:
+# first Apple Silicon release, first to ship with Metal 3 on M-series GPUs,
+# and the minimum SDL2 version shipped via Homebrew still supports it.
+# Override with -DCMAKE_OSX_DEPLOYMENT_TARGET=X.Y at configure time.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
+endif()
+
 set(SPARK_ENGINE_VERSION "1.0.0" CACHE STRING "SparkEngine semantic version used for package metadata")
 project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C)
 
@@ -960,7 +969,11 @@ file(GLOB_RECURSE SPARK_ENGINE_SOURCES
     "SparkEngine/Source/*.hpp"
 )
 
-if(APPLE)
+if(APPLE AND SPARK_METAL_AVAILABLE)
+    # .mm (Objective-C++) sources only compile when the Metal backend is
+    # enabled — OBJCXX is only registered as a language inside the
+    # `if(ENABLE_METAL AND APPLE)` block above. Globbing them in without
+    # the gate produces a configure error on the macOS OpenGL-only CI run.
     file(GLOB_RECURSE SPARK_ENGINE_OBJCXX_SOURCES
         CONFIGURE_DEPENDS
         "SparkEngine/Source/*.mm"
@@ -976,7 +989,10 @@ set(SPARK_ENGINE_ENTRY_POINTS
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux.cpp"
-    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineMacOS.cpp"
+    # NOTE: SparkEngineMacOS.cpp is intentionally NOT an entry point — it
+    # provides helpers (Metal view lifecycle, exe-path lookup) that are
+    # called from SparkEngineLinux.cpp and from tests. It lives in
+    # SparkEngineLib so every consumer (exe + SparkTests) sees the symbols.
 )
 set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
 foreach(_ep ${SPARK_ENGINE_ENTRY_POINTS})

@@ -458,6 +458,7 @@ add_executable(SparkTests
     TestGLSLPipelineIntegration.cpp
     TestHResultPlatform.cpp
     TestEngineBootPlatforms.cpp
+    TestMacOSPlatform.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
     # SparkDaemon foundation (Phase 1)
