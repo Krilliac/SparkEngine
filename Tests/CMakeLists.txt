@@ -52,6 +52,7 @@ add_executable(SparkTests
     TestLocalFileCache.cpp
     TestEngineContext.cpp
     TestNetBuffer.cpp
+    TestNetQuantize.cpp
     TestSprite2DComponents.cpp
     TestRandomEngine.cpp
     TestCooldown.cpp
