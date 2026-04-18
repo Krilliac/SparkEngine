@@ -563,3 +563,62 @@ Linux `linux-gcc-release` builds clean; suite green (5622 passed, 0
 failed). Metal CI row will register ~5636 tests when it runs (15
 new RT + 7 original from session #5, minus any gated on live
 device which doesn't land until later).
+
+### 2026-04-18 session #8 — Live-device Metal RT tests
+
+**Scoping outcome** (sub-agent investigation): of the three remaining
+parity items, only the live-device tests are tractable in one
+session. `RHIBridge::GetGBufferTexture` is blocked on the ownership
+question (does the bridge own GBuffer creation or does the platform
+layer register with it) — documented as architecture follow-up.
+RHI-bridge mesh/material binding is already complete at the RHI
+layer (`SetVertexBuffer`, `SetIndexBuffer`, `DrawIndexed` all live
+on `IRHICommandList`) — the blocker is the `AssetPipeline` CPU
+adapter, a separate concern from the RHI.
+
+**First `.mm` test file in the repo (`Tests/TestMetalRayTracingLive.mm`)**
+- 6 tests exercising a real `MTLDevice` via the engine's own
+  `MetalDevice::Initialize` path (which calls
+  `MTLCreateSystemDefaultDevice` internally — works headless, no
+  window/CAMetalLayer required).
+- RAII wrapper `LiveMetalDevice` stands the device up once per test,
+  records `supportsRaytracing`, and tears it down on destruction.
+  `SKIP_IF_NO_RT` macro converts "no RT-capable GPU" into a neutral
+  passing skip so the tests don't fail on a runner that happens to
+  lack hardware RT.
+- Tests: system default device available; Initialize succeeds on
+  RT-capable GPU; push BLAS + build empty-then-single-instance TLAS;
+  SetMaterials round-trip (3 → 0); DispatchFrame without render
+  targets returns None safely; repeated Init/Shutdown is stable
+  across 3 cycles.
+- Intentionally no pixel-level validation — that belongs in an
+  image-diff test with a stable reference image set, not here.
+
+**CMake wiring**
+- `TestMetalRayTracingLive.mm` added as an `.mm` source to
+  `Tests/CMakeLists.txt` inside an `if(APPLE AND SPARK_METAL_AVAILABLE)`
+  block that mirrors the engine's own pattern
+  (`CMakeLists.txt:972-982`). Off-macOS (or when the Metal backend is
+  disabled), the source is never added — `enable_language(OBJCXX)`
+  only runs behind the same gate, so an unconditional
+  `target_sources` would fail CMake configure on Linux.
+- `target_link_libraries` picks up `-framework Foundation -framework
+  Metal` inside the same block so the test TU links against the
+  MTLDevice protocols.
+- Linux still builds clean (the `.mm` TU is invisible to the
+  configure); `linux-gcc-release` suite green (5622 passed, 0 failed).
+  macOS CI runner will build `TestMetalRayTracingLive.mm` and add 6
+  more tests to its registered count.
+
+**Remaining (explicit multi-session architecture work):**
+- `RHIBridge::GetGBufferTexture()` — requires deciding whether the
+  bridge owns GBuffer creation or whether the platform layer
+  registers already-created textures with the bridge. Once decided,
+  the Linux `AcquireHybridRTBindings` stub becomes live and
+  `DispatchHybridRTPass` does real work.
+- Non-Windows `ProcessDrawList` implementation — RHI layer has the
+  primitives (`SetVertexBuffer`, `SetIndexBuffer`, `DrawIndexed`);
+  the AssetPipeline needs a Linux/macOS adapter for mesh/material
+  loading. That's a separate large port, not an RHI bridge issue.
+- Image-diff validation for the live RT tests — offline reference
+  set + per-PR comparison; infrastructure, not code.
