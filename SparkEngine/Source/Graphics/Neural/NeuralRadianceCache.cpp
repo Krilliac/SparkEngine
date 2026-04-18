@@ -4,12 +4,12 @@
  */
 
 #include "NeuralRadianceCache.h"
+#include "CpuNeuralTraining.h"
 #include "NeuralInference.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <random>
 
 namespace Spark::Graphics::Neural
 {
@@ -43,27 +43,8 @@ namespace Spark::Graphics::Neural
         }
         m_mlpDesc.layers.push_back({config.mlpHiddenSize, 3, ActivationType::Sigmoid});
 
-        // Initialize MLP weights (Xavier init)
         uint32_t totalParams = m_mlpDesc.GetTotalParameters();
-        m_mlpWeights.resize(totalParams);
-        {
-            std::mt19937 rng(12345);
-            uint32_t offset = 0;
-            for (const auto& layer : m_mlpDesc.layers)
-            {
-                float stddev = std::sqrt(2.0f / static_cast<float>(layer.inputSize + layer.outputSize));
-                std::normal_distribution<float> dist(0.0f, stddev);
-                uint32_t numWeights = layer.inputSize * layer.outputSize;
-                for (uint32_t i = 0; i < numWeights; ++i)
-                {
-                    m_mlpWeights[offset++] = dist(rng);
-                }
-                for (uint32_t i = 0; i < layer.outputSize; ++i)
-                {
-                    m_mlpWeights[offset++] = 0.0f;
-                }
-            }
-        }
+        Trainer::InitializeWeightsXavier(m_mlpDesc, m_mlpWeights, 12345u);
 
         // Register MLP with inference engine
         auto& engine = NeuralInferenceEngine::GetInstance();
@@ -72,6 +53,13 @@ namespace Spark::Graphics::Neural
         {
             engine.UploadWeights(m_mlpHandle, m_mlpWeights);
         }
+
+        // Build the persistent trainer. Adam's first/second moments are kept
+        // across frames so the loss curve stays smooth and the finite-diff
+        // approximation is retired.
+        m_trainer = std::make_unique<Trainer>();
+        m_trainer->Initialize(m_mlpDesc);
+        m_adamConfig.learningRate = config.learningRate;
 
         m_stats.memoryUsageBytes =
             kHashGridLevels * config.hashTableSize * kFeaturesPerEntry * sizeof(float) + totalParams * sizeof(float);
@@ -96,6 +84,7 @@ namespace Spark::Graphics::Neural
 
         m_hashGrid.clear();
         m_mlpWeights.clear();
+        m_trainer.reset();
         m_initialized = false;
     }
 
@@ -221,82 +210,58 @@ namespace Spark::Graphics::Neural
 
     void NeuralRadianceCache::Update(const RadianceSample* samples, uint32_t sampleCount, float /*deltaTime*/)
     {
-        if (!m_initialized || sampleCount == 0 || !samples)
+        if (!m_initialized || sampleCount == 0 || !samples || !m_trainer)
         {
             return;
         }
 
-        float lr = m_config.learningRate;
+        // Real-backprop update: accumulate exact analytical gradients for the
+        // MLP weights + biases, and exact analytical input-gradients for the
+        // hash-grid features (since they enter the MLP linearly in the input
+        // layer). Replaces the previous O(totalParams * samples) finite-diff
+        // path — ~100× faster for the default network size, and strictly more
+        // accurate than the per-weight perturbation heuristic.
+        const uint32_t mlpInputSize = m_mlpDesc.GetInputSize();
+        thread_local std::vector<float> mlpInput;
+        thread_local std::vector<float> inputGrad;
+        mlpInput.resize(mlpInputSize);
+        inputGrad.resize(mlpInputSize);
+
+        m_trainer->ZeroGradients();
         float totalLoss = 0.0f;
 
         for (uint32_t s = 0; s < sampleCount; ++s)
         {
             const auto& sample = samples[s];
-
-            // Forward pass: build input, evaluate MLP
-            std::vector<float> mlpInput;
             BuildMLPInput(sample.position, sample.direction, mlpInput);
 
-            float predicted[3];
-            auto& engine = NeuralInferenceEngine::GetInstance();
-            engine.EvaluateCPU(m_mlpHandle, mlpInput.data(), predicted, 1);
+            totalLoss += m_trainer->AccumulateGradient(m_mlpWeights.data(), m_mlpDesc, mlpInput.data(), sample.radiance,
+                                                       LossType::MSE, inputGrad.data());
 
-            // Compute loss (MSE per sample)
-            float error[3];
-            for (uint32_t c = 0; c < 3; ++c)
-            {
-                error[c] = predicted[c] - sample.radiance[c];
-                totalLoss += error[c] * error[c];
-            }
-
-            // Update hash grid entries (gradient descent on feature entries)
-            // Simplified: perturb features toward reducing error
+            // Write hash-grid gradients back. The first m_totalFeatureSize
+            // entries of inputGrad correspond to concatenated features from
+            // kHashGridLevels levels; the last 3 are direction gradients
+            // (ignored — direction is an external input, not a learned feature).
+            const float lrFeatures = m_adamConfig.learningRate;
             for (uint32_t level = 0; level < kHashGridLevels; ++level)
             {
-                uint32_t idx = HashPosition(sample.position, level);
-                uint32_t gridOffset = idx * kFeaturesPerEntry;
-
+                const uint32_t idx = HashPosition(sample.position, level);
+                const uint32_t gridOffset = idx * kFeaturesPerEntry;
+                const uint32_t featureOffset = level * kFeaturesPerEntry;
                 for (uint32_t f = 0; f < kFeaturesPerEntry; ++f)
                 {
-                    // Approximate gradient: error magnitude * learning rate
-                    float grad = (error[0] + error[1] + error[2]) / 3.0f;
-                    m_hashGrid[level][gridOffset + f] -= lr * grad * 0.1f;
+                    m_hashGrid[level][gridOffset + f] -= lrFeatures * inputGrad[featureOffset + f];
                 }
             }
-
-            // Simple MLP weight update via finite-difference approximation
-            // (Full backprop through hash grid is complex; this is a practical approximation)
-            constexpr float kEps = 0.001f;
-            uint32_t totalParams = m_mlpDesc.GetTotalParameters();
-
-            // Stochastic parameter update: only update a subset of weights per sample
-            uint32_t updateStride = std::max(1u, totalParams / 64);
-            for (uint32_t p = s % updateStride; p < totalParams; p += updateStride)
-            {
-                float origWeight = m_mlpWeights[p];
-
-                // Forward with perturbed weight
-                m_mlpWeights[p] = origWeight + kEps;
-                engine.UploadWeights(m_mlpHandle, m_mlpWeights);
-                float perturbedOut[3];
-                engine.EvaluateCPU(m_mlpHandle, mlpInput.data(), perturbedOut, 1);
-
-                float perturbedLoss = 0.0f;
-                float origLoss = 0.0f;
-                for (uint32_t c = 0; c < 3; ++c)
-                {
-                    float pe = perturbedOut[c] - sample.radiance[c];
-                    perturbedLoss += pe * pe;
-                    origLoss += error[c] * error[c];
-                }
-
-                float grad = (perturbedLoss - origLoss) / kEps;
-                m_mlpWeights[p] = origWeight - lr * grad;
-            }
-
-            // Re-upload corrected weights
-            engine.UploadWeights(m_mlpHandle, m_mlpWeights);
         }
+
+        // One batched Adam step on the MLP, scaled by 1/batch to keep LR
+        // semantics consistent with the reference literature.
+        m_trainer->StepAdam(m_mlpWeights, m_adamConfig, 1.0f / static_cast<float>(sampleCount));
+
+        // Re-upload once per batch instead of once per weight-perturbation.
+        auto& engine = NeuralInferenceEngine::GetInstance();
+        engine.UploadWeights(m_mlpHandle, m_mlpWeights);
 
         m_stats.totalSamplesProcessed += sampleCount;
         m_stats.framesUpdated++;
