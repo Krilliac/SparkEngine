@@ -179,40 +179,115 @@ All presets return a `ParticleEmitter*` that can be further customized.
 
 ## Code Example
 
-```cpp
-// Initialize the particle system
-ParticleSystem particles;
-particles.Initialize(device, context);
+### Lifecycle and a custom fire emitter
 
-// Create a custom fire emitter
+```cpp
+#include "Graphics/ParticleSystem.h"
+
+ParticleSystem particles;
+particles.Initialize(device, context);  // D3D11 device + immediate context
+
 ParticleEmitterDesc desc;
-desc.name = "campfire";
-desc.emissionRate = 50.0f;
-desc.maxParticles = 500;
-desc.shape = EmitterShape::Cone;
-desc.coneAngle = 15.0f;
-desc.lifetime = {0.5f, 1.5f};
-desc.startSpeed = {2.0f, 4.0f};
-desc.startSize = {0.05f, 0.2f};
-desc.blendMode = ParticleBlendMode::Additive;
-desc.space = ParticleSpace::World;
-desc.gravityMultiplier = -0.5f; // Slight upward drift
+desc.name              = "campfire";
+desc.emissionRate      = 50.0f;   // particles/sec
+desc.maxParticles      = 500;
+desc.shape             = EmitterShape::Cone;
+desc.coneAngle         = 15.0f;
+desc.shapeRadius       = 0.15f;
+desc.lifetime          = {0.5f, 1.5f};
+desc.startSpeed        = {2.0f, 4.0f};
+desc.startSize         = {0.05f, 0.2f};
+desc.blendMode         = ParticleBlendMode::Additive;
+desc.space             = ParticleSpace::World;
+desc.gravity           = {0.0f, 1.0f, 0.0f}; // rises
+desc.gravityMultiplier = 0.6f;
+desc.drag              = 0.4f;
 desc.colorOverLife = {
-    {0.0f, {1.0f, 0.8f, 0.2f, 1.0f}},  // Bright yellow
-    {0.5f, {1.0f, 0.3f, 0.0f, 0.8f}},   // Orange
-    {1.0f, {0.3f, 0.0f, 0.0f, 0.0f}}    // Fade to dark red
+    {0.0f, {1.0f, 0.8f, 0.2f, 1.0f}},  // bright yellow
+    {0.5f, {1.0f, 0.3f, 0.0f, 0.8f}},  // orange
+    {1.0f, {0.3f, 0.0f, 0.0f, 0.0f}}   // fade to dark red
 };
+desc.sizeOverLife = {{0.0f, 0.4f}, {0.3f, 1.0f}, {1.0f, 0.0f}};
 
 ParticleEmitter* fire = particles.CreateEmitter(desc);
 fire->SetPosition({10.0f, 0.0f, 5.0f});
 fire->Play();
+```
 
-// Spawn a quick explosion preset
-particles.SpawnExplosion({20.0f, 1.0f, 0.0f}, 5.0f);
+### One-shot bursts and sub-emitters
 
-// Per frame
+`Burst()` emits `burstCount` particles immediately without advancing the
+emission accumulator — useful for muzzle flashes, impacts, and anything
+triggered from gameplay code rather than a rate. `onDeathEmitter` chains
+emitters together so a dying particle spawns a follow-up effect:
+
+```cpp
+// Smoke trail that leaves a spark when each particle expires:
+ParticleEmitterDesc spark;
+spark.name           = "spark";
+spark.emissionRate   = 0.0f;           // burst-driven, no rate
+spark.burstCount     = 3;
+spark.maxParticles   = 64;
+spark.lifetime       = {0.1f, 0.3f};
+spark.startSpeed     = {0.5f, 1.5f};
+spark.blendMode      = ParticleBlendMode::Additive;
+particles.CreateEmitter(spark);
+
+ParticleEmitterDesc trail;
+trail.name            = "rocket_trail";
+trail.emissionRate    = 100.0f;
+trail.shape           = EmitterShape::Point;
+trail.lifetime        = {0.4f, 0.8f};
+trail.startSize       = {0.05f, 0.1f};
+trail.blendMode       = ParticleBlendMode::AlphaBlend;
+trail.onDeathEmitter  = "spark";       // chain
+particles.CreateEmitter(trail);
+
+if (auto* e = particles.GetEmitter("rocket_trail"))
+{
+    e->SetPosition(missile.position);
+    e->Play();
+}
+```
+
+### Preset helpers
+
+Convenience spawners create a pre-configured emitter, attach it to the
+manager, and return the handle so you can further customise it:
+
+```cpp
+// Instant FX at world coordinates:
+particles.SpawnExplosion({20, 1, 0}, /*radius=*/5.0f);
+particles.SpawnMuzzleFlash(gun.muzzleWorld, gun.forwardDir);
+particles.SpawnSparks(hit.point, hit.normal, /*count=*/30);
+if (auto* smoke = particles.SpawnSmoke({0, 0, 0}, /*duration=*/4.0f))
+    smoke->SetPosition(grenade.position);
+```
+
+### Per-frame update + render
+
+```cpp
+// Once per frame, after transforms have been committed:
 particles.Update(deltaTime);
 particles.Render(viewMatrix, projectionMatrix);
+```
+
+### Runtime queries and cleanup
+
+```cpp
+const int live    = particles.GetTotalActiveParticles();
+const int emitters = particles.GetEmitterCount();
+
+// Dump an at-a-glance inventory to the console:
+Logger::Info("{}", particles.Console_ListEmitters());
+
+// Stop or destroy:
+if (auto* e = particles.GetEmitter("campfire"))
+    e->Stop();
+
+particles.DestroyEmitter("rocket_trail");
+particles.DestroyAllEmitters();
+particles.Shutdown();
 ```
 
 ---

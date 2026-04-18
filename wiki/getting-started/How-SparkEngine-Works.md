@@ -84,6 +84,20 @@ This order avoids common dependency bugs (for example, animation reading stale p
 - Named getters (`GetGraphics()`, `GetPhysics()`, etc.) are convenience APIs.
 - Generic registry (`RegisterSystem<T>()` / `GetSystem<T>()`) supports extensibility.
 
+From anywhere in engine or game-module code, the service locator is:
+
+```cpp
+#include "Core/EngineContext.h"
+
+auto* ctx = Spark::EngineContext::Get();
+auto* physics = ctx->GetPhysics();     // non-owning, never delete
+auto* graphics = ctx->GetGraphics();
+
+// Extension: register a game-defined subsystem and retrieve it by type:
+ctx->RegisterSystem<MyCombatDirector>(std::make_unique<MyCombatDirector>());
+auto* combat = ctx->GetSystem<MyCombatDirector>();
+```
+
 **Why this matters:**
 - Keeps ownership clear (fewer leaks/double frees).
 - Allows game modules to access subsystems without singletons everywhere.
@@ -112,6 +126,35 @@ Typical lifecycle:
 4. Repeated `OnUpdate(deltaTime)` and optional `OnRender()`
 5. `OnUnload()`
 6. `DestroyModule()`
+
+A minimal module looks like this — `SPARK_IMPLEMENT_MODULE` emits the
+`CreateModule`/`GetModuleInfo`/`DestroyModule` exports, and
+`Spark/ModuleDllMain.h` emits the Windows `DllMain` that calls
+`DisableThreadLibraryCalls`:
+
+```cpp
+// MyGame/Source/MyGameModule.h
+#pragma once
+#include <Spark/IModule.h>
+
+class MyGameModule : public Spark::IModule
+{
+  public:
+    void OnLoad(Spark::IEngineContext* ctx) override;
+    void OnUpdate(float dt) override;
+    void OnUnload() override;
+};
+
+// MyGame/Source/MyGameModule.cpp
+#include "MyGameModule.h"
+#include <Spark/ModuleDllMain.h>   // emits DllMain on Windows, no-op elsewhere
+
+void MyGameModule::OnLoad(Spark::IEngineContext* ctx)   { /* subscribe, spawn */ }
+void MyGameModule::OnUpdate(float dt)                   { /* per-frame tick */ }
+void MyGameModule::OnUnload()                           { /* unsubscribe */ }
+
+SPARK_IMPLEMENT_MODULE(MyGameModule)   // CreateModule / GetModuleInfo / DestroyModule
+```
 
 **Why this matters:**
 - Engine and game logic are decoupled.
