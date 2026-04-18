@@ -7,6 +7,9 @@
 
 
 #include "AssetPipeline.h"
+#include "GraphicsEngineRHI.h"
+#include "RHI/RHIResources.h"
+#include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include <filesystem>
 #include <cstring>
@@ -167,6 +170,10 @@ std::shared_ptr<MeshAsset> AssetPipeline::LoadMesh(const std::string& path)
 {
     auto mesh = std::make_shared<MeshAsset>(path);
     mesh->Load(m_device);
+    // Linux/macOS render path consumes the RHI buffer handles, not the
+    // D3D11 ComPtr members. Populate them here so `BindMesh` / `DrawBoundMesh`
+    // (and `GraphicsEngine::ProcessDrawList`) can actually issue draws.
+    BuildRHIBuffersForMesh(*mesh);
     return mesh;
 }
 
@@ -454,6 +461,65 @@ void AssetPipeline::UpdateMetrics()
     }
     m_metrics.backgroundLoading = m_backgroundStreaming;
     m_metrics.streamingThreads = static_cast<uint32_t>(m_loadingThreads.size());
+}
+
+// ============================================================================
+// RHI BUFFER UPLOAD (Linux / macOS)
+// ============================================================================
+// Moves the freshly-loaded CPU-side vertex / index data from `MeshAsset` onto
+// the RHI device. This is what lets the non-Windows `ProcessDrawList` /
+// `BindMesh` / `DrawBoundMesh` path actually issue draws — the MeshAsset's
+// D3D11 ComPtr buffers are stubs on Linux, so without this step the render
+// path has nothing to bind.
+//
+// The bridge singleton is shared across all GraphicsEngine TUs
+// (`LinuxRHIState::bridge`); we reach for it directly instead of threading
+// a pointer through the async load queue, which would force AssetPipeline
+// to know about GraphicsEngine's internals.
+
+void AssetPipeline::BuildRHIBuffersForMesh(MeshAsset& mesh)
+{
+    auto& rhi = Spark::Graphics::Detail::GetRHI();
+    if (!rhi.initialized)
+    {
+        // Pre-graphics init (e.g. tests loading assets directly) — keep the
+        // mesh data on the CPU side and let a later `BuildRHIBuffersForMesh`
+        // retry fill the buffers when the bridge is up. Not a warning because
+        // headless tooling legitimately uses this path.
+        return;
+    }
+
+    const MeshAssetData& meshData = mesh.GetMeshData();
+    if (meshData.vertices.empty() || meshData.indices.empty())
+    {
+        // Nothing to upload — a format loader may have returned success on an
+        // empty stub asset. Leave the RHI buffers as nullptr; the render path
+        // guards on `GetRHIVertexBuffer() != nullptr` before dispatching.
+        return;
+    }
+
+    const uint64_t vbSize = static_cast<uint64_t>(meshData.vertices.size() * sizeof(MeshAssetData::Vertex));
+    const uint32_t vbStride = static_cast<uint32_t>(sizeof(MeshAssetData::Vertex));
+    auto vb = rhi.bridge.CreateVertexBuffer(meshData.vertices.data(), vbSize, vbStride);
+
+    const uint64_t ibSize = static_cast<uint64_t>(meshData.indices.size() * sizeof(uint32_t));
+    constexpr uint32_t ibStride = sizeof(uint32_t);
+    auto ib = rhi.bridge.CreateIndexBuffer(meshData.indices.data(), ibSize, ibStride);
+
+    if (!vb || !ib)
+    {
+        // CreateVertexBuffer / CreateIndexBuffer only return null on OOM or
+        // backend failure. Warn once per mesh so CI logs surface the issue
+        // but the asset stays usable (the draw path's null guard keeps the
+        // frame rendering, minus this mesh).
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "AssetPipeline::BuildRHIBuffersForMesh: RHI buffer creation failed for '%s' "
+                       "(vb=%p, ib=%p)",
+                       mesh.GetPath().c_str(), static_cast<void*>(vb.get()), static_cast<void*>(ib.get()));
+        return;
+    }
+
+    mesh.SetRHIBuffers(std::move(vb), std::move(ib));
 }
 
 

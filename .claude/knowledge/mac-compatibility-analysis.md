@@ -741,3 +741,101 @@ Linux `linux-gcc-release` builds clean; suite green
 two new tests (5623 → 5625). Remaining: non-Windows `ProcessDrawList`
 is still blocked on MeshAsset needing RHI vertex/index buffers —
 out of scope here, deferred to the AssetPipeline port session.
+
+### 2026-04-18 session #11 — Non-Windows ProcessDrawList ported end-to-end
+
+Closes the "blocked on AssetPipeline Linux/macOS port" item from session
+#9 / #10. Full RHI-bridge path for both mesh and texture assets, plus
+tests. No more "drain without rendering" stub on non-Windows — draw
+commands now route through `IRHICommandList::SetVertexBuffer /
+SetIndexBuffer / SetShaderResource / DrawIndexed` on the shared
+`LinuxRHIState::bridge` singleton.
+
+**1. `MeshAsset` grew RHI vertex/index buffers**
+- Added `std::unique_ptr<Spark::RHI::IRHIBuffer> m_rhiVertexBuffer /
+  m_rhiIndexBuffer` to `MeshAsset` (forward-declared in the header,
+  full type pulled in inside `AssetTypes.cpp`). Accessors
+  `GetRHIVertexBuffer / GetRHIIndexBuffer` are raw pointers for the
+  hot render path. Setter `SetRHIBuffers` takes move ownership —
+  safe across hot-reload.
+- Out-of-line ctor/dtor for MeshAsset + TextureAsset so the
+  unique_ptr members can work with forward-declared IRHI types.
+- New public `AssetPipeline::BuildRHIBuffersForMesh(MeshAsset&)`:
+  Linux implementation in `AssetPipelineLinux.cpp` uses
+  `rhi.bridge.CreateVertexBuffer / CreateIndexBuffer` to upload the
+  `MeshAssetData` vertex/index vectors into the RHI. Called
+  automatically from `LoadMesh` post-load. Windows stub is a no-op
+  (D3D11 still uploads through `MeshAsset::Load` directly).
+
+**2. `TextureAsset::Load` on Linux — stb_image + RHI texture upload**
+- Previously only read file metadata; image bytes were never decoded.
+  Now `stbi_load` decodes the file to RGBA8 and
+  `rhi.bridge.CreateTexture2D` uploads it. RHI handle stored on
+  `TextureAsset::m_rhiTexture`. Width/height get populated from
+  `stbi_load` even when the bridge isn't up yet. `Unload` clears
+  the RHI handle.
+- `TextureAsset::GetRHITexture` / `SetRHITexture` accessors match
+  the MeshAsset pattern.
+
+**3. `BindMesh / BindMaterial / DrawBoundMesh` — non-Windows path**
+- `ModelLoading.cpp` non-Windows branch no longer ignores its
+  argument. `BindMesh` looks up the asset, pulls its RHI buffers,
+  and issues `cmd->SetVertexBuffer + SetIndexBuffer +
+  SetPrimitiveTopology(TriangleList)`. Records `m_boundMeshAsset`
+  for `DrawBoundMesh`.
+- `BindMaterial` now calls `cmd->SetShaderResource(Pixel, slot=0,
+  rhiTex)` for the bound texture — slot 0 is the engine convention
+  for diffuse across all backends.
+- `DrawBoundMesh` uses the tracked `m_boundMeshAsset` pointer instead
+  of the legacy "first loaded mesh" scan. Windows path also benefits
+  — the pointer check comes before the fallback scan, so consistent
+  behavior across platforms.
+- Added `MeshAsset*`/`TextureAsset* m_boundMeshAsset / m_boundTextureAsset`
+  (non-owning) to `AssetPipeline`.
+
+**4. `ProcessDrawList` on non-Windows — full RHI path**
+- `GraphicsEngineSubmit.cpp` non-Windows branch now does the full
+  drain-sort-bind-draw pipeline: swap `m_drawList` with
+  `m_processingDrawList` under the spinlock, sort by
+  (material, mesh) to minimize rebinds, iterate each command
+  calling `BindMaterial / BindMesh / DrawBoundMesh` with last-path
+  memoization, tick `m_statistics.drawCalls`, issue
+  `BeginEvent("ProcessDrawList (RHI)")` / `EndEvent` for GPU
+  profiler annotation. No more one-shot "drained without rendering"
+  warning.
+
+**5. Tests — 9 new cases in `TestProcessDrawListLinux.cpp`**
+- `BuildRHIBuffersPopulatesHandles` — round-trip upload smoke test
+  on NullRHI.
+- `BuildRHIBuffersSkipsEmptyMesh` — empty CPU data → no buffers.
+- `BuildRHIBuffersNoBridgeIsNoOp` — cold bridge → no buffers, no crash.
+- `DrawBoundMeshNoOpWithoutBind` — draw with nothing bound is a clean
+  no-op.
+- `BindMeshUnknownPathIsNoOp` — missing asset clears the bound
+  pointer, DrawBoundMesh skips.
+- `TextureAssetLoadBuildsRHITextureForRealFile` — contract check
+  (missing file → width/height stay 0, no RHI texture, Load still
+  returns S_OK).
+- `TextureAssetUnloadClearsRHI` — Unload is crash-free, RHI texture
+  cleared.
+- `ProcessDrawListDrainsEmptyQueueCleanly` — end-to-end through
+  `GraphicsEngine::Initialize / SubmitMeshForRendering / ProcessDrawList`
+  on NullRHI.
+- `SubmitAndProcessDrainsQueue` — 3 unresolved submissions drained
+  cleanly; second drain is a no-op (verifies queue state).
+
+Linux `linux-gcc-release` builds clean; suite green
+(5630 passed, 0 failed, 1 warned, 5631 total — up from 5622).
+
+**What's still deferred (genuinely multi-session):**
+- Per-draw constant buffer upload (world/view/proj matrices) on the
+  RHI path — requires shader-constant layout refactor + backend-wise
+  slot coordination. Windows uses `UpdateBasicConstants` with D3D11
+  directly; the RHI equivalent is a separate port.
+- GPU particle system, FSR upscaling, denoiser GPU paths on non-Windows
+  — all require compute shader ports that live below the RHI
+  abstraction (per-backend Metal / Vulkan / OpenGL implementations).
+- Golden-image capture in a CI test harness — `MetalGoldenImageCapture`
+  class exists but no test actively routes RT output through it. That
+  needs a stable test scene + reference-image policy which is a
+  larger workflow discussion.

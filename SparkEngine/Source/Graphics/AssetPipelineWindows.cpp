@@ -169,6 +169,13 @@ std::shared_ptr<MeshAsset> AssetPipeline::LoadMesh(const std::string& path)
     return std::dynamic_pointer_cast<MeshAsset>(asset);
 }
 
+// Windows loads mesh GPU buffers through the D3D11 device inside
+// `MeshAsset::Load` directly (see AssetTypesWindows.cpp), so the RHI buffer
+// upload helper is a no-op here. Keeping the symbol defined on every
+// platform means ModelLoading / AssetPipelineLinux / etc. can call it
+// without conditional compilation at the call site.
+void AssetPipeline::BuildRHIBuffersForMesh(MeshAsset& /*mesh*/) {}
+
 std::shared_ptr<TextureAsset> AssetPipeline::LoadTexture(const std::string& path)
 {
     auto asset = LoadAsset(path, AssetType::Texture);
