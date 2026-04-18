@@ -69,6 +69,16 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
     // Lighting pass: resolve G-Buffer with lighting
     LightingPass(viewMatrix, projMatrix);
 
+    // Phase 2.5: Hybrid ray tracing — matches the Windows pipeline shape.
+    // On Linux/macOS, AcquireHybridRTBindings() currently returns empty
+    // bindings so DispatchHybridRTPass is a no-op; HybridRTManager falls
+    // through to SDFGI / software path. The call site is wired now so that
+    // once the RHI bridge exposes GBuffer textures (phase 7 follow-up),
+    // enabling hardware RT on macOS is a single-file change.
+#ifdef SPARK_HYBRID_RT
+    DispatchHybridRTPass(cmd, viewMatrix, projMatrix);
+#endif
+
     cmd->EndEvent();
 }
 

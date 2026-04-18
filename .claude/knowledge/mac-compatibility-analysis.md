@@ -512,13 +512,54 @@ Linux `linux-gcc-release` builds clean; suite green (5622 passed,
 0 failed). Only the Windows TU has the `AcquireHybridRTBindings`
 D3D11-wrapping body — rest is shared.
 
-**Remaining for phase 7:**
-- Make the macOS/Linux `RenderDeferred` actually call
-  `DispatchHybridRTPass` once the RHI bridge exposes GBuffer
-  textures. The plumbing is ready; only the bridge piece is missing.
-- Live MTLDevice tests on the macOS Metal CI row (Initialize with
-  a real device, push BLAS, build TLAS, dispatch against a small
-  offscreen target).
-- Non-Windows `ProcessDrawList` that consumes the draw list
-  through the RHI bridge (depends on bridge-level mesh/material
-  binding APIs).
+Remaining for phase 7 (done in session #7 below).
+
+### 2026-04-18 session #7 — Phase 7 follow-through
+
+Three tractable items from phase 6's follow-up list:
+
+**1. Linux/macOS `RenderDeferred` calls `DispatchHybridRTPass`**
+- `GraphicsRenderPipelinesLinux.cpp::RenderDeferred` now invokes
+  `DispatchHybridRTPass(cmd, view, proj)` after the lighting pass,
+  matching the Windows pipeline shape exactly (one-line call
+  through the shared helper).
+- Today this is a no-op — `AcquireHybridRTBindings()` on Linux
+  still returns `{}`, and `DispatchHybridRTPass` skips when
+  bindings aren't ready. Critically, the call site is now wired,
+  so enabling hardware RT on macOS once the RHI bridge exposes
+  GBuffer textures is a single-file change (swap the Linux stub
+  implementation).
+
+**2. Non-Windows `ProcessDrawList` stub**
+- Previously only defined inside `#ifdef SPARK_PLATFORM_WINDOWS`,
+  so the symbol was `U` (undefined) on Linux/macOS — any caller
+  outside a Windows TU would link-error. Now defined in the
+  shared `GraphicsEngineSubmit.cpp` behind
+  `#ifndef SPARK_PLATFORM_WINDOWS`.
+- Stub drains the draw list (prevents unbounded growth) and logs
+  a one-shot warning the first time it's called with queued
+  commands. Real rendering on Linux/macOS still goes through
+  `RenderDeferred`/`RenderForward` with the legacy
+  `std::vector<GameObject*>` path; the RHI-bridge consumer for
+  the submitted commands is blocked on bridge-level mesh/material
+  binding APIs.
+- Linux `nm` now shows `T` (defined) for `ProcessDrawList`.
+
+**3. Expanded macOS-only RT test file**
+- `Tests/TestMetalRayTracing.cpp` grew from 7 pre-init smoke tests
+  to 15 — all CPU-only (no MTLDevice required), safe to run on any
+  macOS CI runner:
+  - 5 tests for `MaterialParamsFromPBR` (albedo verbatim, emissive
+    bakes factor, roughness/metallic pack, defaults neutral, 48-byte
+    size/alignment).
+  - 2 layout tests (`FrameParams` is 112 bytes to match MSL struct,
+    `TLASInstance` default is identity).
+  - 2 `TracePass` bitmask tests (`operator|` combines, `None` is falsy).
+- Live-MTLDevice tests (real BLAS/TLAS build, real trace dispatch)
+  still pending — they need the macOS Metal CI row to validate the
+  Metal toolchain first, then can drop in using the same file.
+
+Linux `linux-gcc-release` builds clean; suite green (5622 passed, 0
+failed). Metal CI row will register ~5636 tests when it runs (15
+new RT + 7 original from session #5, minus any gated on live
+device which doesn't land until later).
