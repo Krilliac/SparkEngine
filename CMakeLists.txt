@@ -1050,6 +1050,41 @@ endif()
 add_library(SparkEngineLib STATIC ${SPARK_ENGINE_LIB_SOURCES})
 set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
 
+# 9a.5) SparkEngineInterface — header-only view of SparkEngineLib
+#
+# On Linux, game module .so files must NOT link SparkEngineLib's object
+# code, otherwise each .so gets its own copy of every singleton and the
+# class layout diverges when conditional members (#ifdef ENABLE_NETWORKING)
+# change member offsets.  Instead, game modules link this INTERFACE
+# target, which provides the same include directories and compile
+# definitions but zero object code.  Undefined symbols are resolved at
+# dlopen() time from the host executable (which has ENABLE_EXPORTS ON).
+#
+# macOS: ld64 rejects undefined symbols in .dylib by default. Pass
+# `-undefined dynamic_lookup` so resolution is deferred to dlopen, the
+# same way Linux's `ld` already permits unresolved symbols in shared
+# libraries. Without this, every game module fails to link with
+# "Undefined symbols for architecture arm64" against SparkEngineLib
+# symbols (SimpleConsole, Logger, AngelScriptEngine, etc.).
+#
+# IMPORTANT: this target must be defined BEFORE game modules are added
+# via add_subdirectory() in section 9.5, because each module's
+# CMakeLists checks `if(TARGET SparkEngineInterface)` at configure time.
+# The include-dirs / compile-defs generator expressions are evaluated at
+# generate time, so they still pick up properties added later (e.g. in
+# section 11.6 / 12 / 13).
+if(NOT WIN32)
+    add_library(SparkEngineInterface INTERFACE)
+    target_include_directories(SparkEngineInterface INTERFACE
+        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>)
+    target_compile_definitions(SparkEngineInterface INTERFACE
+        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>)
+    if(APPLE)
+        target_link_options(SparkEngineInterface INTERFACE
+            "LINKER:-undefined,dynamic_lookup")
+    endif()
+endif()
+
 # 9b) SparkEngine - Executable (entry point + module loader)
 if(WIN32)
     add_executable(SparkEngine WIN32 ${SPARK_ENGINE_ENTRY_POINTS})
@@ -1933,34 +1968,12 @@ if(FEATURE_DEFINITIONS)
 endif()
 
 # ---------------------------------------------------------------------
-# 14.5) SparkEngineInterface — header-only view of SparkEngineLib
+# 14.5) SparkEngineInterface — defined earlier (section 9a.5)
 #
-# On Linux, game module .so files must NOT link SparkEngineLib's object
-# code, otherwise each .so gets its own copy of every singleton and the
-# class layout diverges when conditional members (#ifdef ENABLE_NETWORKING)
-# change member offsets.  Instead, game modules link this INTERFACE
-# target, which provides the same include directories and compile
-# definitions but zero object code.  Undefined symbols are resolved at
-# dlopen() time from the host executable (which has ENABLE_EXPORTS ON).
-#
-# macOS: ld64 rejects undefined symbols in .dylib by default. Pass
-# `-undefined dynamic_lookup` so resolution is deferred to dlopen, the
-# same way Linux's `ld` already permits unresolved symbols in shared
-# libraries. Without this, every game module fails to link with
-# "Undefined symbols for architecture arm64" against SparkEngineLib
-# symbols (SimpleConsole, Logger, AngelScriptEngine, etc.).
+# Moved above the game-module add_subdirectory() calls so each module's
+# `if(TARGET SparkEngineInterface)` check evaluates true at configure
+# time. See the block right after `add_library(SparkEngineLib ...)`.
 # ---------------------------------------------------------------------
-if(NOT WIN32)
-    add_library(SparkEngineInterface INTERFACE)
-    target_include_directories(SparkEngineInterface INTERFACE
-        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>)
-    target_compile_definitions(SparkEngineInterface INTERFACE
-        $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>)
-    if(APPLE)
-        target_link_options(SparkEngineInterface INTERFACE
-            "LINKER:-undefined,dynamic_lookup")
-    endif()
-endif()
 
 # ---------------------------------------------------------------------
 # 15) Visual Studio settings
