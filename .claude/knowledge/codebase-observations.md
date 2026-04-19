@@ -126,7 +126,7 @@ There are **two** tool directories at the repo root that are easy to confuse:
 
 | Directory | Contents | Purpose |
 |-----------|----------|---------|
-| `tools/` (lowercase) | `SparkBuild-*` binaries, `validate-prompts.sh`, `update-sparkbuild.sh` | Build toolchain and CI scripts |
+| `tools/` (lowercase) | `validate-prompts.sh`, `check-*.sh`, asset generators, `wine-run.sh`, etc. | Validation and dev scripts |
 | `Tools/` (uppercase) | `spark-cli/spark_cli.py` | Developer CLI utility |
 
 `validate-prompts.sh` (referenced in CI's `validate-prompts` job) lives in `tools/` (lowercase).

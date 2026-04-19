@@ -133,6 +133,7 @@ option(SPARK_DOUBLE_PRECISION_PHYSICS "Enable double precision physics (JPH_DOUB
 # Editor available on Windows (Win32+DX11) and Linux (SDL2+OpenGL3)
 option(ENABLE_EDITOR "Enable editor features" ON)
 option(ENABLE_LAUNCHER "Build SparkLauncher (Unity-Hub-style project picker)" ON)
+option(ENABLE_SPARKBUILD "Build SparkBuild (terminal-UI CMake configurator)" ON)
 
 # Build profile options — controls what ships in the final binary
 option(ENABLE_CONSOLE_IN_SHIPPING "Include SparkConsole in Shipping builds" OFF)
@@ -1386,6 +1387,11 @@ if(ENABLE_LAUNCHER AND EXISTS "${CMAKE_SOURCE_DIR}/SparkLauncher/CMakeLists.txt"
     add_subdirectory(SparkLauncher)
 endif()
 
+if(ENABLE_SPARKBUILD AND EXISTS "${CMAKE_SOURCE_DIR}/SparkBuild/CMakeLists.txt")
+    message(STATUS "Adding SparkBuild to build...")
+    add_subdirectory(SparkBuild)
+endif()
+
 # ---------------------------------------------------------------------
 # 10) Asset Management - Copy shaders and assets to engine output
 # ---------------------------------------------------------------------
@@ -2149,6 +2155,7 @@ else()
 endif()
 message(STATUS "Editor: ${ENABLE_EDITOR}")
 message(STATUS "Launcher: ${ENABLE_LAUNCHER}")
+message(STATUS "SparkBuild: ${ENABLE_SPARKBUILD}")
 message(STATUS "Shader Compiler Tool: ENABLED")
 message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Networking: ${ENABLE_NETWORKING}")

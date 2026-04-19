@@ -56,7 +56,7 @@ jobs:
         # clang-format 18+ warns about missing Objective-C config and returns
         # exit code 1 even with zero violations.  Capture output and check for
         # actual violation markers instead of relying on the exit code.
-        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
+        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
           xargs clang-format --dry-run --Werror > check-format-output.log 2>&1 || true

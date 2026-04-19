@@ -344,18 +344,11 @@ All 71 test files (864+ test cases) should pass. See [Testing](../advanced/Testi
 
 ## SparkBuild Tool
 
-SparkEngine ships with [SparkBuild](https://github.com/Krilliac/SparkBuild), a standalone C++ build tool located at `tools/SparkBuild.exe`. The binary is pre-built and ready to use -- no compilation needed.
-
-The tool is kept current automatically via a weekly GitHub Action, but you can also update it manually:
-
-```powershell
-# Windows
-.\tools\update-sparkbuild.ps1
-```
+SparkEngine ships with **SparkBuild**, a cross-platform terminal-UI wrapper around CMake. The source lives in-tree under `SparkBuild/` and is built as part of the normal engine build (opt-out with `-DENABLE_SPARKBUILD=OFF`).
 
 ```bash
-# Linux / macOS
-./tools/update-sparkbuild.sh
+cmake --build build --target SparkBuild
+./build/bin/SparkBuild           # launches the interactive configurator
 ```
 
 See [Build System and CMake Modules -- SparkBuild](../advanced/Build-System-and-CMake-Modules.md#sparkbuild) for more details.

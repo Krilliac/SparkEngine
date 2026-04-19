@@ -295,27 +295,20 @@ build/
 
 ## SparkBuild
 
-[SparkBuild](https://github.com/Krilliac/SparkBuild) is the standalone C++ build tool for SparkEngine. A pre-built binary ships in `tools/SparkBuild.exe` so you can use it immediately without compiling it yourself.
+**SparkBuild** is an in-tree C++17 terminal-UI wrapper around CMake. The source lives at `SparkBuild/` (vendored from the now-archived `Krilliac/SparkBuild`; see `SparkBuild/UPSTREAM.md` for the pinned commit). It is built as part of the normal engine build under the `ENABLE_SPARKBUILD` option (ON by default).
 
-**Repository:** [Krilliac/SparkBuild](https://github.com/Krilliac/SparkBuild)
-**Current release:** v1.0.0
-
-### Updating SparkBuild
-
-The binary is kept up to date automatically via the [`update-sparkbuild`](../../.github/workflows/update-sparkbuild.yml) GitHub Action, which checks for new releases every Monday and opens a PR when a newer binary is available.
-
-You can also update manually:
-
-```powershell
-# Windows (PowerShell)
-.\tools\update-sparkbuild.ps1            # latest release
-.\tools\update-sparkbuild.ps1 v1.0.0     # specific version
-```
+**Output:** `build/bin/SparkBuild` (or `SparkBuild.exe` on Windows).
 
 ```bash
-# Linux / macOS
-./tools/update-sparkbuild.sh             # latest release
-./tools/update-sparkbuild.sh v1.0.0      # specific version
+cmake --preset linux-gcc-release
+cmake --build build --target SparkBuild
+./build/bin/SparkBuild
+```
+
+Because SparkBuild only shells out to `cmake`, it has no dependency on any SparkEngine header or library — so in-tree hosting introduces no circular build dependency. To skip it:
+
+```bash
+cmake -B build -DENABLE_SPARKBUILD=OFF ...
 ```
 
 ## CMake Helper Modules
@@ -502,13 +495,6 @@ Runs on every push to `master`/`main`:
 - Packages: Windows and Linux binaries (Debug + Release)
 - Formats: `.zip` (Windows), `.tar.gz` (Linux)
 - Includes exact commit hash and timestamp
-
-### update-sparkbuild.yml
-
-Runs weekly (every Monday at 06:00 UTC) or on manual dispatch:
-- Downloads the latest SparkBuild release binary
-- Compares SHA-256 checksums to detect changes
-- Opens a PR to update `tools/SparkBuild.exe` when a new version is available
 
 ## Compiler Support
 
