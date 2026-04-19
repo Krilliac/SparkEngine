@@ -143,6 +143,8 @@ int main(int argc, char* argv[])
     bool testMode = false;
     int testFrameLimit = 0; // 0 = run indefinitely
 
+    std::string projectPathArg;
+
     // Check command line arguments
     for (int i = 1; i < argc; i++)
     {
@@ -170,6 +172,10 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--test-frames") == 0 && i + 1 < argc)
         {
             testFrameLimit = std::atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--project") == 0 && i + 1 < argc)
+        {
+            projectPathArg = argv[++i];
         }
     }
 
@@ -239,7 +245,7 @@ int main(int argc, char* argv[])
 
         // Initialize with basic configuration
         SparkEditor::EditorConfig config;
-        config.projectPath = ".";
+        config.projectPath = projectPathArg.empty() ? "." : projectPathArg;
         config.enableLogging = true;
         config.startMaximized = false; // Don't start maximized in debug mode
         config.windowWidth = 1600;

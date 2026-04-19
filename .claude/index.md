@@ -46,7 +46,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 ## Quick Reference
 
-### Current Engine State (2026-04-18)
+### Current Engine State (2026-04-19)
 
 - **Physics**: Jolt Physics (migrated from Bullet3). Use `EngineContext::Get()->GetPhysics()`.
 - **Networking**: Enabled by default (`ENABLE_NETWORKING=ON`), UDP sockets, no external deps.
@@ -60,7 +60,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 - **Game modules**: 10 (SparkGame, FPS, MMO, RPG, ARPG, RTS, Racing, Platformer, OpenWorld, VisualScript).
 - **Infrastructure**: JobSystem wired, DeferredDeletionQueue in RHI, collision layer filtering, EntityEventBus cleanup, archetype spawn overrides.
 - **Gameplay**: TimeOfDaySystem, AI enemies in SparkGame (driven by `AIBudgetLimiter` distance-prioritised tick), WeatherSystem integration.
-- **Codebase**: ~566K lines of C++ across 1843 source files, 144 wiki pages.
+- **Codebase**: ~569K lines of C++ across 1855 source files, 144 wiki pages.
 
 ### Before Writing Code
 
