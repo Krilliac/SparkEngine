@@ -55,7 +55,16 @@ if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 
 set(SPARK_ENGINE_VERSION "1.0.0" CACHE STRING "SparkEngine semantic version used for package metadata")
-project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C)
+
+# Objective-C / Objective-C++ are required on macOS so SDL2's cocoa/.m sources
+# (SDL_cocoaevents.m, SDL_cocoametalview.m, SDL_rwopsbundlesupport.m, etc.) and
+# our own MetalDevice.mm can compile. Without them CMake silently skips .m/.mm
+# sources and the link fails with "no such file or directory" on the .m.o files.
+if(APPLE)
+    project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C OBJC OBJCXX)
+else()
+    project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C)
+endif()
 
 # Set consistent runtime library for all targets using modern CMake (CMP0091)
 # Must be after project() so that the MSVC variable is defined.
@@ -519,20 +528,56 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
     set(SDL_SHARED   ON  CACHE BOOL "" FORCE)
     set(SDL_STATIC   OFF CACHE BOOL "" FORCE)
     set(SDL_TEST     OFF CACHE BOOL "" FORCE)
-    set(SDL_WAYLAND  OFF CACHE BOOL "" FORCE)
-    set(SDL_KMSDRM   OFF CACHE BOOL "" FORCE)
-    set(SDL_DBUS     OFF CACHE BOOL "" FORCE)
-    set(SDL_IBUS     OFF CACHE BOOL "" FORCE)
-    set(SDL_PULSEAUDIO OFF CACHE BOOL "" FORCE)
-    set(SDL_ALSA     OFF CACHE BOOL "" FORCE)
-    set(SDL_PIPEWIRE OFF CACHE BOOL "" FORCE)
-    set(SDL_SNDIO    OFF CACHE BOOL "" FORCE)
-    set(SDL_JACK     OFF CACHE BOOL "" FORCE)
-    set(SDL_X11      ON  CACHE BOOL "" FORCE)
     set(SDL_OPENGL   ON  CACHE BOOL "" FORCE)
+
+    if(APPLE)
+        # macOS: Cocoa + CoreAudio. X11/Wayland/ALSA etc. are irrelevant.
+        set(SDL_X11      OFF CACHE BOOL "" FORCE)
+        set(SDL_WAYLAND  OFF CACHE BOOL "" FORCE)
+        set(SDL_KMSDRM   OFF CACHE BOOL "" FORCE)
+        set(SDL_DBUS     OFF CACHE BOOL "" FORCE)
+        set(SDL_IBUS     OFF CACHE BOOL "" FORCE)
+        set(SDL_PULSEAUDIO OFF CACHE BOOL "" FORCE)
+        set(SDL_ALSA     OFF CACHE BOOL "" FORCE)
+        set(SDL_PIPEWIRE OFF CACHE BOOL "" FORCE)
+        set(SDL_SNDIO    OFF CACHE BOOL "" FORCE)
+        set(SDL_JACK     OFF CACHE BOOL "" FORCE)
+    else()
+        # Linux: X11 + OpenGL, everything else off to keep the build lean.
+        set(SDL_X11      ON  CACHE BOOL "" FORCE)
+        set(SDL_WAYLAND  OFF CACHE BOOL "" FORCE)
+        set(SDL_KMSDRM   OFF CACHE BOOL "" FORCE)
+        set(SDL_DBUS     OFF CACHE BOOL "" FORCE)
+        set(SDL_IBUS     OFF CACHE BOOL "" FORCE)
+        set(SDL_PULSEAUDIO OFF CACHE BOOL "" FORCE)
+        set(SDL_ALSA     OFF CACHE BOOL "" FORCE)
+        set(SDL_PIPEWIRE OFF CACHE BOOL "" FORCE)
+        set(SDL_SNDIO    OFF CACHE BOOL "" FORCE)
+        set(SDL_JACK     OFF CACHE BOOL "" FORCE)
+    endif()
 
     add_subdirectory("${SDL2_SUBMODULE_DIR}" "${CMAKE_BINARY_DIR}/ThirdParty/SDL2" EXCLUDE_FROM_ALL)
     set(SDL2_FOUND TRUE)
+
+    # Eagerly copy SDL2's public headers to the build tree at configure time.
+    # SDL2 normally copies them via a build-time custom_target ("sdl_headers_copy"),
+    # but consumers that pick up SDL2's INTERFACE_INCLUDE_DIRECTORIES without a
+    # direct build-order dep on SDL2 (e.g. cached CI restores, tests using <SDL.h>
+    # through SparkEngineLib's PUBLIC include path) can race the copy and fail
+    # with "fatal error: SDL_main.h: No such file or directory" at
+    # build/ThirdParty/SDL2/include/SDL2/SDL.h. Copying at configure time makes
+    # the headers available before any compilation job runs.
+    file(GLOB _SDL2_PUBLIC_HEADERS "${SDL2_SUBMODULE_DIR}/include/*.h")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/ThirdParty/SDL2/include/SDL2")
+    foreach(_hdr IN LISTS _SDL2_PUBLIC_HEADERS)
+        if(NOT _hdr MATCHES ".*(SDL_config|SDL_revision).*")
+            get_filename_component(_name "${_hdr}" NAME)
+            configure_file("${_hdr}"
+                "${CMAKE_BINARY_DIR}/ThirdParty/SDL2/include/SDL2/${_name}"
+                COPYONLY)
+        endif()
+    endforeach()
+
     message(STATUS "SDL2 built from submodule (ThirdParty/SDL2)")
 endif()
 
