@@ -485,10 +485,9 @@ namespace SparkEditor
                 const ImVec2 itemMin = ImGui::GetItemRectMin();
                 const ImVec2 itemMax = ImGui::GetItemRectMax();
                 const ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_NavHighlight);
-                ImGui::GetWindowDrawList()->AddRectFilled(
-                    ImVec2(ImGui::GetWindowPos().x, itemMin.y),
-                    ImVec2(ImGui::GetWindowPos().x + 2.0f, itemMax.y),
-                    ImGui::GetColorU32(accent));
+                ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, itemMin.y),
+                                                          ImVec2(ImGui::GetWindowPos().x + 2.0f, itemMax.y),
+                                                          ImGui::GetColorU32(accent));
             }
 
             if (!object->active)
