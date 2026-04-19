@@ -47,20 +47,26 @@ namespace Spark::AI
             }
         }
 
-        // Reconcile: keep existing entries (preserving stale counters), add new ones, remove dead
+        // Reconcile: keep existing entries (preserving stale counters), add new ones, remove dead.
+        // Build a per-frame index of old entries to avoid O(n²) scans on large crowds.
+        std::unordered_map<EntityID, size_t> previousIndex;
+        previousIndex.reserve(m_agents.size());
+        for (size_t i = 0; i < m_agents.size(); ++i)
+        {
+            previousIndex[m_agents[i].entityId] = i;
+        }
+
         std::vector<AgentBudgetEntry> newAgents;
         newAgents.reserve(activeAgents.size());
 
         for (EntityID entityId : activeAgents)
         {
-            // Look for existing entry
-            auto it = std::find_if(m_agents.begin(), m_agents.end(),
-                                   [entityId](const AgentBudgetEntry& e) { return e.entityId == entityId; });
-
-            if (it != m_agents.end())
+            // Reuse existing entry if present
+            const auto oldIndex = previousIndex.find(entityId);
+            if (oldIndex != previousIndex.end())
             {
                 // Preserve stale counter, update position
-                AgentBudgetEntry entry = *it;
+                AgentBudgetEntry entry = m_agents[oldIndex->second];
                 const auto* transform = world.GetComponent<Transform>(static_cast<entt::entity>(entityId));
                 if (transform != nullptr)
                 {
@@ -91,6 +97,7 @@ namespace Spark::AI
         // Compute priorities and sort
         ComputePriorities(playerPosition);
         SortByPriority();
+        RebuildAgentIndex();
     }
 
     bool AIBudgetLimiter::HasBudgetRemaining() const
@@ -151,16 +158,16 @@ namespace Spark::AI
 
     void AIBudgetLimiter::MarkAgentProcessed(EntityID entityId)
     {
-        for (auto& agent : m_agents)
+        const auto it = m_agentIndex.find(entityId);
+        if (it == m_agentIndex.end())
         {
-            if (agent.entityId == entityId)
-            {
-                agent.processedThisFrame = true;
-                agent.framesSinceLastUpdate = 0;
-                ++m_currentFrameStats.agentsProcessed;
-                return;
-            }
+            return;
         }
+
+        auto& agent = m_agents[it->second];
+        agent.processedThisFrame = true;
+        agent.framesSinceLastUpdate = 0;
+        ++m_currentFrameStats.agentsProcessed;
     }
 
     void AIBudgetLimiter::EndFrame()
@@ -198,18 +205,17 @@ namespace Spark::AI
 
     bool AIBudgetLimiter::ShouldUpdateAgent(EntityID entityId) const
     {
-        for (const auto& agent : m_agents)
+        const auto it = m_agentIndex.find(entityId);
+        if (it != m_agentIndex.end())
         {
-            if (agent.entityId == entityId)
+            const auto& agent = m_agents[it->second];
+            // Force-update if starved
+            if (agent.framesSinceLastUpdate >= m_maxStaleFrames)
             {
-                // Force-update if starved
-                if (agent.framesSinceLastUpdate >= m_maxStaleFrames)
-                {
-                    return true;
-                }
-                // Otherwise only if budget remains
-                return HasBudgetRemaining();
+                return true;
             }
+            // Otherwise only if budget remains
+            return HasBudgetRemaining();
         }
         // Unknown agent -- default to updating if budget allows
         return HasBudgetRemaining();
@@ -247,6 +253,16 @@ namespace Spark::AI
     {
         std::sort(m_agents.begin(), m_agents.end(),
                   [](const AgentBudgetEntry& a, const AgentBudgetEntry& b) { return a.priority > b.priority; });
+    }
+
+    void AIBudgetLimiter::RebuildAgentIndex()
+    {
+        m_agentIndex.clear();
+        m_agentIndex.reserve(m_agents.size());
+        for (size_t i = 0; i < m_agents.size(); ++i)
+        {
+            m_agentIndex[m_agents[i].entityId] = i;
+        }
     }
 
     // =========================================================================
