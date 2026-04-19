@@ -679,22 +679,15 @@ static bool HandleSDLEvent(const SDL_Event& event)
 }
 
 /**
- * @brief Initialize SDL2 windowed-mode subsystems: window, graphics, input,
- *        engine context, modules, audio, and console commands.
+ * @brief Construct and initialize GraphicsEngine against the given window /
+ *        native render handle. Logs the outcome via SimpleConsole.
  *
- * @param window The SDL2 window (already created by the caller).
- * @param argc Argument count from main().
- * @param argv Argument values from main().
+ * Extracted so the caller (RunSDL2Windowed) can detect a backend fallback
+ * (e.g. Vulkan requested → OpenGL selected by RHIBridge) and recreate the
+ * window + graphics pair with the correct SDL window flag.
  */
-static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandle, int argc, char* argv[])
+static HRESULT InitializeGraphicsForWindow(SDL_Window* window, void* nativeRenderHandle)
 {
-    auto& settings = EngineSettings::GetInstance();
-
-    // Core engine objects
-    GetEngineRuntime().timer = std::make_unique<Timer>();
-    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
-    GetEngineRuntime().input = std::make_unique<InputManager>();
-    GetEngineRuntime().input->Initialize(static_cast<HWND>(window));
     GetEngineRuntime().graphics = std::make_unique<GraphicsEngine>();
 
     // On macOS+Metal the RHI needs an NSView/CAMetalLayer, not the SDL_Window.
@@ -707,6 +700,31 @@ static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandl
         console.LogInfo("Graphics engine initialized (RHI backend).");
     else
         console.LogWarning("Graphics engine initialization deferred (headless fallback).");
+    return hr;
+}
+
+/**
+ * @brief Initialize SDL2 windowed-mode subsystems: input, engine context,
+ *        modules, audio, and console commands.
+ *
+ * GraphicsEngine must already be constructed and initialized by the caller.
+ * The caller owns that step because a Vulkan→OpenGL fallback may require
+ * recreating the window before graphics init succeeds against the right
+ * surface type.
+ *
+ * @param window The SDL2 window (already created by the caller).
+ * @param argc Argument count from main().
+ * @param argv Argument values from main().
+ */
+static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
+{
+    auto& settings = EngineSettings::GetInstance();
+
+    // Core engine objects (graphics is already initialized by the caller)
+    GetEngineRuntime().timer = std::make_unique<Timer>();
+    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
+    GetEngineRuntime().input = std::make_unique<InputManager>();
+    GetEngineRuntime().input->Initialize(static_cast<HWND>(window));
 
     // Engine context, physics, core subsystems, gameplay subsystems
     InitLinuxCoreSubsystems(/*registerGameplay=*/true);
@@ -965,7 +983,75 @@ static int RunSDL2Windowed(int argc, char* argv[])
 
     void* nativeRenderHandle = (preferMetal && sdlMetalView) ? sdlMetalView : nullptr;
 
-    InitializeSDL2Subsystems(window, nativeRenderHandle, argc, argv);
+    // Initialize graphics here (not inside InitializeSDL2Subsystems) so we
+    // can detect the Vulkan→OpenGL fallback case below. SDL2 bakes the
+    // backend choice into the window flags at creation time, so if
+    // RHIBridge falls back from Vulkan to OpenGL we need to recreate the
+    // window with SDL_WINDOW_OPENGL and re-run graphics init.
+    InitializeGraphicsForWindow(window, nativeRenderHandle);
+
+    if (preferVulkan)
+    {
+        auto* rhiDev = GetEngineRuntime().graphics->GetRHIDevice();
+        auto* rhiBridge = GetEngineRuntime().graphics->GetRHIBridge();
+        const bool vulkanActive = rhiDev && rhiDev->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
+        const bool headless = rhiBridge && rhiBridge->IsHeadless();
+
+        if (!vulkanActive && !headless)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "Vulkan requested but RHI selected %s — recreating window with SDL_WINDOW_OPENGL",
+                           rhiDev ? Spark::RHI::GetBackendName(rhiDev->GetBackendType()) : "<null>");
+
+            // Tear down graphics + Vulkan window before rebuilding.
+            GetEngineRuntime().graphics->Shutdown();
+            GetEngineRuntime().graphics.reset();
+            SDL_DestroyWindow(window);
+            SDL_Vulkan_UnloadLibrary();
+            preferVulkan = false;
+
+            windowFlags &= ~static_cast<Uint32>(SDL_WINDOW_VULKAN);
+            windowFlags |= SDL_WINDOW_OPENGL;
+
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+            SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
+            window = SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH,
+                                      windowFlags);
+            if (!window)
+            {
+                Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_CreateWindow (GL fallback) failed: ") +
+                                                             SDL_GetError());
+                SDL_Quit();
+                return -1;
+            }
+
+            glContext = SDL_GL_CreateContext(window);
+            if (!glContext)
+            {
+                Spark::SimpleConsole::GetInstance().LogWarning(
+                    std::string("SDL_GL_CreateContext (GL fallback) failed: ") + SDL_GetError() +
+                    " — engine will try headless fallback");
+            }
+            else
+            {
+                SDL_GL_MakeCurrent(window, glContext);
+                SDL_GL_SetSwapInterval(1);
+                Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created after Vulkan fallback");
+            }
+
+            // Metal view is only valid for a preferMetal path — Vulkan fallback
+            // never creates one, so nativeRenderHandle stays null here.
+            InitializeGraphicsForWindow(window, /*nativeRenderHandle=*/nullptr);
+        }
+    }
+
+    InitializeSDL2Subsystems(window, argc, argv);
     RunSDL2MainLoop();
 
     ShutdownLinux();
