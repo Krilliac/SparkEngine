@@ -84,8 +84,10 @@ if(INSTALLER_GUI_AVAILABLE)
 endif()
 
 if(MSVC)
+    # Match imgui's CRT linkage (cmake/BuildImGui.cmake uses the DLL CRT).
+    # Mismatched /MT vs /MD causes LNK2019 on __imp_* symbols from imgui.lib.
     set_property(TARGET SparkInstaller PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     target_compile_definitions(SparkInstaller PRIVATE
         _CRT_SECURE_NO_WARNINGS
         NOMINMAX
