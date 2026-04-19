@@ -511,6 +511,7 @@ namespace Spark
         DiagFileCache(report);
         DiagVFS(report);
         DiagMemory(report);
+        DiagLogHealth(report);
 
         // Extended diagnostics
         DiagRHI(report);
