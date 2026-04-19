@@ -21,8 +21,8 @@ if [[ -z "$index_tests_line" || -z "$index_codebase_line" ]]; then
     exit 1
 fi
 
-index_tests_files="$(echo "$index_tests_line" | sed -nE 's/.*: ([0-9]+) test files, ([0-9]+) tests.*/\1/p')"
-index_tests_total="$(echo "$index_tests_line" | sed -nE 's/.*: ([0-9]+) test files, ([0-9]+) tests.*/\2/p')"
+index_tests_files="$(echo "$index_tests_line" | sed -nE 's/.*: ([0-9]+)\+? test files, ~?([0-9]+) tests.*/\1/p')"
+index_tests_total="$(echo "$index_tests_line" | sed -nE 's/.*: ([0-9]+)\+? test files, ~?([0-9]+) tests.*/\2/p')"
 index_loc_k="$(echo "$index_codebase_line" | sed -nE 's/.*: ~([0-9]+)K lines of C\+\+ across ([0-9]+) source files.*/\1/p')"
 index_source_files="$(echo "$index_codebase_line" | sed -nE 's/.*: ~([0-9]+)K lines of C\+\+ across ([0-9]+) source files.*/\2/p')"
 

@@ -63,10 +63,15 @@ if echo "$CHANGED_FILES" | grep -qE '^ThirdParty/'; then
     thirdparty_changed=true
 fi
 
-# Trigger 2: dependency wiring changed in build config
+# Trigger 2: dependency wiring changed in build config.
+# Tokens are intentionally specific to third-party references; broader
+# tokens like _DIR/_ROOT/version/commit used to live here but triggered
+# false positives on every routine CMAKE_SOURCE_DIR line. If you add a
+# new third-party dep without matching one of these patterns, bump the
+# manifest manually.
 wiring_changed=false
 if "${WIRING_DIFF_CMD[@]}" \
-    | grep -Eq '^[+-].*(ThirdParty/|https://|\.git|SPARK_HAS_|SPARK_RECAST_AVAILABLE|SPARK_JOLT_PHYSICS_AVAILABLE|_DIR|_ROOT|version|commit)'; then
+    | grep -Eq '^[+-].*(ThirdParty/|https://|\.git|SPARK_HAS_|SPARK_RECAST_AVAILABLE|SPARK_JOLT_PHYSICS_AVAILABLE)'; then
     wiring_changed=true
 fi
 

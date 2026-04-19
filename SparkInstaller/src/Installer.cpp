@@ -39,7 +39,17 @@ namespace SparkInstaller
             return 2;
         }
 
-        fs::path dest = fs::path(ctx.destination).lexically_normal();
+        // Resolve the destination to an absolute, normalised path up front.
+        // Everything downstream (cmake -S, InstallState, log messages) uses
+        // this absolute form — otherwise a relative --dest combined with a
+        // CWD-change during configure produces a "<dest>/<dest>" source path.
+        std::error_code absErr;
+        fs::path dest = fs::absolute(fs::path(ctx.destination), absErr).lexically_normal();
+        if (absErr)
+        {
+            Emit(ctx.log, "error: could not resolve destination to absolute path: " + absErr.message());
+            return 2;
+        }
         ctx.destination = dest.string();
 
         // --- Mode detection ------------------------------------------------
