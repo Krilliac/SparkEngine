@@ -51,6 +51,7 @@
 #include "../ECS/Components/CoreComponents.h"
 
 #include <vector>
+#include <unordered_map>
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -265,6 +266,11 @@ namespace Spark::AI
         void SortByPriority();
 
         /**
+         * @brief Rebuild the entity-to-index lookup table for O(1) agent lookups.
+         */
+        void RebuildAgentIndex();
+
+        /**
          * @brief Get elapsed time since BeginFrame() in milliseconds.
          */
         float GetElapsedMs() const;
@@ -283,6 +289,9 @@ namespace Spark::AI
 
         /// All tracked AI agents (persists across frames for stale tracking)
         std::vector<AgentBudgetEntry> m_agents;
+
+        /// Fast lookup from entity id -> index in m_agents
+        std::unordered_map<EntityID, size_t> m_agentIndex;
 
         /// Index into m_agents for the next agent to process this frame
         uint32_t m_nextAgentIndex = 0;
