@@ -479,6 +479,18 @@ namespace SparkEditor
                 nodeOpen = ImGui::TreeNodeEx("##node", flags, "%s %s", icon, object->name.c_str());
             }
 
+            // Hi-fi design accent: 2 px ember strip at the left edge of the selected row.
+            if (IsObjectSelected(object->id))
+            {
+                const ImVec2 itemMin = ImGui::GetItemRectMin();
+                const ImVec2 itemMax = ImGui::GetItemRectMax();
+                const ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_NavHighlight);
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    ImVec2(ImGui::GetWindowPos().x, itemMin.y),
+                    ImVec2(ImGui::GetWindowPos().x + 2.0f, itemMax.y),
+                    ImGui::GetColorU32(accent));
+            }
+
             if (!object->active)
             {
                 ImGui::PopStyleColor();

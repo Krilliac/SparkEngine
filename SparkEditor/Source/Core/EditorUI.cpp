@@ -119,8 +119,8 @@ namespace SparkEditor
                 }
             }
 
-            // Apply startup theme (CLI --theme override, else Spark Fusion default)
-            const std::string themeName = config.startupTheme.empty() ? "Spark Fusion" : config.startupTheme;
+            // Apply startup theme (CLI --theme override, else Spark Ember — matches hi-fi design)
+            const std::string themeName = config.startupTheme.empty() ? "Spark Ember" : config.startupTheme;
             console.LogInfo("Applying theme: " + themeName);
             ApplyTheme(themeName);
             console.LogSuccess("Theme applied");

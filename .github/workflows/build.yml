@@ -124,7 +124,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v5
@@ -216,7 +216,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v5
@@ -313,7 +313,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
 
     - name: Setup ccache
       uses: actions/cache@v5
@@ -570,7 +570,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v5
@@ -678,7 +678,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev mesa-vulkan-drivers
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
       uses: actions/cache@v5
@@ -1020,7 +1020,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 lcov ccache libgl-dev libsdl2-dev
+        run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 lcov ccache libgl-dev libsdl2-dev libfreetype-dev
       - name: Setup ccache
         uses: actions/cache@v5
         with:
@@ -1188,7 +1188,7 @@ jobs:
             echo "apt-get update failed on attempt $attempt; retrying in $((attempt * 5))s..."
             sleep $((attempt * 5))
           done
-          sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev
+          sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev libfreetype-dev
       - name: Setup ccache
         uses: actions/cache@v5
         with:

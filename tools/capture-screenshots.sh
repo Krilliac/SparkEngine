@@ -107,6 +107,7 @@ capture_collab_server() {
 declare -a THEMES=(
     "Spark Professional|spark-professional"
     "Spark Fusion|spark-fusion"
+    "Spark Ember|spark-ember"
     "Unity Pro|unity-pro"
     "Unreal Pro|unreal-pro"
     "VS Pro|vs-pro"
