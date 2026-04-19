@@ -305,7 +305,19 @@ bool GamepadInput::WasActionPressed(const std::string& action, int controllerInd
     const auto& binding = it->second;
     if (binding.type == ActionBinding::Type::Button)
         return WasButtonPressed(binding.button, controllerIndex);
-    return false; // Trigger "pressed" detection would need previous state comparison
+
+    if (!IsConnected(controllerIndex))
+        return false;
+
+    const auto& state = m_states[controllerIndex];
+    const BYTE currentRaw = (binding.trigger == GamepadTrigger::Left) ? state.xinputState.Gamepad.bLeftTrigger
+                                                                      : state.xinputState.Gamepad.bRightTrigger;
+    const BYTE previousRaw = (binding.trigger == GamepadTrigger::Left) ? state.prevXinputState.Gamepad.bLeftTrigger
+                                                                       : state.prevXinputState.Gamepad.bRightTrigger;
+
+    const float current = NormalizeTrigger(currentRaw);
+    const float previous = NormalizeTrigger(previousRaw);
+    return current >= binding.triggerThreshold && previous < binding.triggerThreshold;
 }
 
 // ============================================================================
