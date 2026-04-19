@@ -63,6 +63,7 @@ namespace Spark
     void DiagFileCache(DiagReport& report);
     void DiagVFS(DiagReport& report);
     void DiagMemory(DiagReport& report);
+    void DiagLogHealth(DiagReport& report);
 
     // --- Extended subsystem diagnostics (EngineDiagnosticsExtended.cpp) ---
     void DiagRHI(DiagReport& report);

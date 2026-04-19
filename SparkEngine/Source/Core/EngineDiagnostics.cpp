@@ -851,6 +851,50 @@ namespace Spark
     }
 
     // ========================================================================
+    // Runtime log health (warnings/errors)
+    // ========================================================================
+
+    void DiagLogHealth(DiagReport& report)
+    {
+        const std::string sub = "RuntimeLogs";
+
+        auto logs = SimpleConsole::GetInstance().GetLogHistory();
+        report.Add(sub, "Log history available", true, std::to_string(logs.size()) + " entries");
+
+        size_t warningCount = 0;
+        size_t errorCount = 0;
+        size_t criticalCount = 0;
+        for (const auto& entry : logs)
+        {
+            switch (entry.severity)
+            {
+            case ConsoleSeverity::Warning:
+                ++warningCount;
+                break;
+            case ConsoleSeverity::Error:
+                ++errorCount;
+                break;
+            case ConsoleSeverity::Critical:
+                ++criticalCount;
+                break;
+            default:
+                break;
+            }
+        }
+
+        report.Add(sub, "No critical logs", criticalCount == 0, std::format("{} critical", criticalCount));
+        report.Add(sub, "No error logs", errorCount == 0, std::format("{} errors", errorCount));
+        report.Add(sub, "Warning budget", warningCount <= 25, std::format("{} warnings (budget <= 25)", warningCount));
+
+        if (!logs.empty())
+        {
+            const auto& tail = logs.back();
+            report.Add(sub, "Latest log sequence monotonic", tail.sequenceNumber + 1 >= logs.size(),
+                       std::format("latest seq={} entries={}", tail.sequenceNumber, logs.size()));
+        }
+    }
+
+    // ========================================================================
     // Console command registration
     // ========================================================================
 
@@ -945,6 +989,10 @@ namespace Spark
             "diag_memory", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagMemory); },
             "Diagnose memory monitor (snapshot, anomalies)", "Diagnostics");
 
+        console.RegisterCommand(
+            "diag_logs", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagLogHealth); },
+            "Diagnose runtime warning/error/critical log health", "Diagnostics");
+
         // Extended subsystem commands
         console.RegisterCommand(
             "diag_rhi", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagRHI); },
@@ -1005,6 +1053,26 @@ namespace Spark
         console.RegisterCommand(
             "diag_watchdog", [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagWatchdog); },
             "Diagnose freeze detector watchdog (heartbeat, state)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_hitch",
+            [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagHitchDetector); },
+            "Diagnose hitch detector (frame hitch severity)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_assetstall",
+            [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagAssetStall); },
+            "Diagnose asset stall detector (active/stalled/failed loads)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_nethealth",
+            [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagNetworkHealth); },
+            "Diagnose network health monitor (state, disconnects)", "Diagnostics");
+
+        console.RegisterCommand(
+            "diag_gpuleaks",
+            [](const std::vector<std::string>&) -> std::string { return RunSingleDiag(DiagGPUResourceLeak); },
+            "Diagnose GPU resource leak detector (suspected leaks, memory)", "Diagnostics");
     }
 
 } // namespace Spark
