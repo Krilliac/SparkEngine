@@ -963,38 +963,6 @@ static int RunSDL2Windowed(int argc, char* argv[])
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     }
 
-    // If the engine was created with a Vulkan window but GraphicsEngine
-    // fell back to OpenGL (Vulkan loaded but couldn't create a usable
-    // surface/device), recreate the window with OpenGL flags and create
-    // a GL context so the fallback backend can actually render.
-    if (preferVulkan && GetEngineRuntime().graphics)
-    {
-        auto* rhiDevice = GetEngineRuntime().graphics->GetRHIDevice();
-        bool vulkanActive = rhiDevice && rhiDevice->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
-        auto* rhiBridge = GetEngineRuntime().graphics->GetRHIBridge();
-        bool headless = rhiBridge && rhiBridge->IsHeadless();
-        if (!vulkanActive && !headless)
-        {
-            Spark::SimpleConsole::GetInstance().LogInfo(
-                "Vulkan backend unavailable — recreating window with OpenGL support");
-            SDL_DestroyWindow(window);
-            windowFlags = (windowFlags & ~SDL_WINDOW_VULKAN) | SDL_WINDOW_OPENGL;
-            window = SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH,
-                                      windowFlags);
-            if (window)
-            {
-                glContext = SDL_GL_CreateContext(window);
-                if (glContext)
-                {
-                    SDL_GL_MakeCurrent(window, glContext);
-                    SDL_GL_SetSwapInterval(1);
-                }
-                GetEngineRuntime().graphics->Shutdown();
-                GetEngineRuntime().graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
-            }
-        }
-    }
-
     void* nativeRenderHandle = (preferMetal && sdlMetalView) ? sdlMetalView : nullptr;
 
     InitializeSDL2Subsystems(window, nativeRenderHandle, argc, argv);

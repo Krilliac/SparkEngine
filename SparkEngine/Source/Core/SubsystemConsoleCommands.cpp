@@ -408,8 +408,19 @@ namespace Spark
                 if (it == types.end())
                     return "Unknown weather type. Options: clear, cloudy, rain, snow, fog, storm";
 
-                float intensity = (args.size() > 1) ? std::stof(args[1]) : -1.0f;
-                float transition = (args.size() > 2) ? std::stof(args[2]) : 3.0f;
+                float intensity = -1.0f;
+                float transition = 3.0f;
+                try
+                {
+                    if (args.size() > 1)
+                        intensity = std::stof(args[1]);
+                    if (args.size() > 2)
+                        transition = std::stof(args[2]);
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid numeric argument. Usage: weather_set <type> [intensity] [transition_sec]";
+                }
                 weather->SetWeather(it->second, intensity, transition);
                 return "Weather set to " + args[0];
             },
@@ -427,7 +438,7 @@ namespace Spark
                 int typeIdx = static_cast<int>(state.type);
                 std::stringstream ss;
                 ss << "=== Weather State ===\n"
-                   << "  Type: " << (typeIdx < 6 ? typeNames[typeIdx] : "Unknown") << "\n"
+                   << "  Type: " << (typeIdx >= 0 && typeIdx < 6 ? typeNames[typeIdx] : "Unknown") << "\n"
                    << "  Intensity: " << state.intensity << "\n"
                    << "  Wind: speed=" << state.windSpeed << " dir=(" << state.windDirection.x << ", "
                    << state.windDirection.y << ", " << state.windDirection.z << ")\n"

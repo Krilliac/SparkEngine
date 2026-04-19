@@ -149,6 +149,11 @@ namespace Spark::Animation
                 if (boneIdx < 0)
                     continue;
             }
+            // A cached channel.boneIndex may outlive the skeleton that produced it
+            // (retargeting, runtime skeleton swap, corrupted clip data). Bounds-check
+            // against the current outLocalTransforms size before indexing.
+            if (static_cast<size_t>(boneIdx) >= outLocalTransforms.size())
+                continue;
 
             XMFLOAT3 pos = channel.InterpolatePosition(animTime);
             XMFLOAT4 rot = channel.InterpolateRotation(animTime);
