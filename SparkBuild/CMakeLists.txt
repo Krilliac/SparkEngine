@@ -6,9 +6,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # SparkBuild - Cross-platform CMake Build Tool for SparkEngine
 # Supports: Windows, Linux, macOS
+#
+# Split layout:
+#   SparkBuildCore  - reusable static library (Config, Downloader, ProcessRunner, Terminal)
+#                     linked by both the SparkBuild executable and SparkInstaller
+#   SparkBuild      - interactive TUI executable (main.cpp + SparkBuild.cpp on top of core)
 
-set(SPARKBUILD_SOURCES
-    src/main.cpp
+# ---------------------------------------------------------------------------
+# SparkBuildCore - reusable static library
+# ---------------------------------------------------------------------------
+set(SPARKBUILDCORE_SOURCES
     src/Platform.h
     src/Config.h
     src/Config.cpp
@@ -18,23 +25,16 @@ set(SPARKBUILD_SOURCES
     src/Downloader.cpp
     src/Terminal.h
     src/Terminal.cpp
-    src/SparkBuild.h
-    src/SparkBuild.cpp
 )
 
-# Console application (cross-platform TUI)
-add_executable(SparkBuild ${SPARKBUILD_SOURCES})
+add_library(SparkBuildCore STATIC ${SPARKBUILDCORE_SOURCES})
 
-# Resource file for Windows (version info, icon)
+target_include_directories(SparkBuildCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 if(WIN32)
-    target_sources(SparkBuild PRIVATE resources/SparkBuild.rc)
-endif()
-
-target_include_directories(SparkBuild PRIVATE src)
-
-# Platform-specific linking
-if(WIN32)
-    target_link_libraries(SparkBuild PRIVATE
+    target_link_libraries(SparkBuildCore PUBLIC
         winhttp       # HTTP downloads (WinHTTP API)
         shlwapi       # Shell lightweight utility functions
         shell32       # Shell API (folder dialogs, ZIP extraction)
@@ -42,8 +42,7 @@ if(WIN32)
         oleaut32      # OLE Automation
         uuid          # COM GUIDs
     )
-
-    target_compile_definitions(SparkBuild PRIVATE
+    target_compile_definitions(SparkBuildCore PUBLIC
         _CRT_SECURE_NO_WARNINGS
         NOMINMAX
         UNICODE
@@ -51,15 +50,39 @@ if(WIN32)
     )
 endif()
 
-# MSVC-specific settings
+if(MSVC)
+    set_property(TARGET SparkBuildCore PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_libraries(SparkBuildCore PUBLIC pthread)
+    target_compile_options(SparkBuildCore PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# ---------------------------------------------------------------------------
+# SparkBuild - interactive TUI executable
+# ---------------------------------------------------------------------------
+set(SPARKBUILD_SOURCES
+    src/main.cpp
+    src/SparkBuild.h
+    src/SparkBuild.cpp
+)
+
+add_executable(SparkBuild ${SPARKBUILD_SOURCES})
+
+if(WIN32)
+    target_sources(SparkBuild PRIVATE resources/SparkBuild.rc)
+endif()
+
+target_link_libraries(SparkBuild PRIVATE SparkBuildCore)
+
 if(MSVC)
     set_property(TARGET SparkBuild PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# GCC/Clang settings
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_link_libraries(SparkBuild PRIVATE pthread)
     target_compile_options(SparkBuild PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 

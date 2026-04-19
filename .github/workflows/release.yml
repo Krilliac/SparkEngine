@@ -173,10 +173,64 @@ jobs:
         retention-days: 7
 
   # ===========================================================================
+  # SparkInstaller — standalone bootstrap binary for the README "Install" buttons
+  # ===========================================================================
+  build-installer:
+    needs: [prepare]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact_name: SparkInstaller-Linux-x64
+            bin_name: SparkInstaller
+          - os: windows-latest
+            artifact_name: SparkInstaller-Windows-x64.exe
+            bin_name: SparkInstaller.exe
+          - os: macos-latest
+            artifact_name: SparkInstaller-macOS-arm64
+            bin_name: SparkInstaller
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure SparkBuild + SparkInstaller (standalone)
+        shell: bash
+        run: |
+          mkdir -p build-installer
+          cat > build-installer/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.16)
+          project(SparkInstallerCombo LANGUAGES CXX)
+          add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkBuild SparkBuild)
+          add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkInstaller SparkInstaller)
+          EOF
+          cmake -S build-installer -B build-installer/build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DSPARKINSTALLER_ENABLE_GUI=OFF
+
+      - name: Build SparkInstaller
+        shell: bash
+        run: cmake --build build-installer/build --config Release --target SparkInstaller -j
+
+      - name: Stage artifact with release-ready name
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp "build-installer/build/bin/${{ matrix.bin_name }}" "staging/${{ matrix.artifact_name }}"
+
+      - name: Upload installer binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: staging/${{ matrix.artifact_name }}
+          retention-days: 7
+
+  # ===========================================================================
   # Publish GitHub Release (versioned or rolling "latest")
   # ===========================================================================
   release:
-    needs: [prepare, build-windows, build-linux]
+    needs: [prepare, build-windows, build-linux, build-installer]
     runs-on: ubuntu-latest
 
     steps:
@@ -273,20 +327,23 @@ jobs:
     - name: Collect release assets
       id: assets
       run: |
-        # Flatten all package artifacts to current directory
+        # Flatten all package artifacts + standalone installer binaries to current directory.
         find release-assets -type f \
-          \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \) \
+          \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
+             -o -name "SparkInstaller-*" \) \
           -exec cp {} . \;
 
         FILES=""
         TABLE="| Asset | Notes |"$'\n'"|---|---|"
-        for artifact in *.zip *.tar.gz *.exe *.msi; do
+        for artifact in *.zip *.tar.gz *.exe *.msi SparkInstaller-*; do
           if [ ! -f "$artifact" ]; then
             continue
           fi
 
           note="CPack package"
-          if [[ "$artifact" == *"-Windows-"* ]]; then
+          if [[ "$artifact" == SparkInstaller-* ]]; then
+            note="Bootstrap installer (clone + build engine)"
+          elif [[ "$artifact" == *"-Windows-"* ]]; then
             note="Windows package"
           elif [[ "$artifact" == *"-Linux-"* ]]; then
             note="Linux package"

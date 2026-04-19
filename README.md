@@ -89,6 +89,23 @@
 
 </details>
 
+## Install & Build from Source (one click)
+
+Download the installer, run it, pick your options — it clones the repo (with
+submodules), configures CMake, and builds the engine on your machine. Same
+binary updates an existing install.
+
+[![Windows x64 Installer](https://img.shields.io/badge/⬇_Install_on-Windows_x64-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-Windows-x64.exe)
+
+[![Linux x64 Installer](https://img.shields.io/badge/⬇_Install_on-Linux_x64-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-Linux-x64)
+
+[![macOS arm64 Installer](https://img.shields.io/badge/⬇_Install_on-macOS_arm64-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-macOS-arm64)
+
+Each installer is a single ~1–3 MB binary. Run with `--gui` for the ImGui
+wizard, or with no arguments for the terminal UI. See
+[`SparkInstaller/README.md`](SparkInstaller/README.md) for full flag reference
+and update-mode behaviour.
+
 ## Downloads
 
 [![Lifetime Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)

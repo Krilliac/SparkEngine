@@ -134,6 +134,7 @@ option(SPARK_DOUBLE_PRECISION_PHYSICS "Enable double precision physics (JPH_DOUB
 option(ENABLE_EDITOR "Enable editor features" ON)
 option(ENABLE_LAUNCHER "Build SparkLauncher (Unity-Hub-style project picker)" ON)
 option(ENABLE_SPARKBUILD "Build SparkBuild (terminal-UI CMake configurator)" ON)
+option(ENABLE_INSTALLER "Build SparkInstaller (bootstrap installer/updater)" ON)
 
 # Build profile options — controls what ships in the final binary
 option(ENABLE_CONSOLE_IN_SHIPPING "Include SparkConsole in Shipping builds" OFF)
@@ -1390,6 +1391,17 @@ endif()
 if(ENABLE_SPARKBUILD AND EXISTS "${CMAKE_SOURCE_DIR}/SparkBuild/CMakeLists.txt")
     message(STATUS "Adding SparkBuild to build...")
     add_subdirectory(SparkBuild)
+endif()
+
+# SparkInstaller depends on SparkBuildCore (defined by SparkBuild/CMakeLists.txt), so
+# it must be added after SparkBuild.
+if(ENABLE_INSTALLER AND EXISTS "${CMAKE_SOURCE_DIR}/SparkInstaller/CMakeLists.txt")
+    if(TARGET SparkBuildCore)
+        message(STATUS "Adding SparkInstaller to build...")
+        add_subdirectory(SparkInstaller)
+    else()
+        message(STATUS "ENABLE_INSTALLER=ON but SparkBuildCore is not available — skipping SparkInstaller")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------

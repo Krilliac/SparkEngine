@@ -56,7 +56,7 @@ jobs:
         # clang-format 18+ warns about missing Objective-C config and returns
         # exit code 1 even with zero violations.  Capture output and check for
         # actual violation markers instead of relying on the exit code.
-        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src \
+        find SparkEngine/Source GameModules/SparkGame/Source GameModules/SparkGameMMO/Source SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src \
           -not -path '*/Metal/*' \
           \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) | \
           xargs clang-format --dry-run --Werror > check-format-output.log 2>&1 || true
@@ -1334,3 +1334,57 @@ jobs:
           path: todo-list.log
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: ignore
+
+  # ===========================================================================
+  # SparkInstaller — tiny standalone bootstrap binary (TUI only, per-OS)
+  # ===========================================================================
+  build-installer:
+    name: Installer (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact: SparkInstaller-Linux-x64
+            bin_name: SparkInstaller
+          - os: windows-latest
+            artifact: SparkInstaller-Windows-x64
+            bin_name: SparkInstaller.exe
+          - os: macos-latest
+            artifact: SparkInstaller-macOS-arm64
+            bin_name: SparkInstaller
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure SparkBuild + SparkInstaller (standalone, no engine)
+        shell: bash
+        run: |
+          mkdir -p build-installer
+          cat > build-installer/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.16)
+          project(SparkInstallerCombo LANGUAGES CXX)
+          add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkBuild SparkBuild)
+          add_subdirectory(${CMAKE_SOURCE_DIR}/../SparkInstaller SparkInstaller)
+          EOF
+          cmake -S build-installer -B build-installer/build \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DSPARKINSTALLER_ENABLE_GUI=OFF
+
+      - name: Build SparkInstaller
+        shell: bash
+        run: cmake --build build-installer/build --config Release --target SparkInstaller -j
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p staging
+          cp "build-installer/build/bin/${{ matrix.bin_name }}" "staging/${{ matrix.bin_name }}"
+
+      - name: Upload installer binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: staging/${{ matrix.bin_name }}
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
