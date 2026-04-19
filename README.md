@@ -267,12 +267,7 @@ chmod +x generate.sh
 
 ### SparkBuild
 
-[SparkBuild](https://github.com/Krilliac/SparkBuild) is a standalone C++ build tool for SparkEngine. A pre-built binary is included at `tools/SparkBuild.exe` and updated automatically every week via GitHub Actions. You can also update it manually:
-
-```bash
-# Windows:  .\tools\update-sparkbuild.ps1
-# Linux:    ./tools/update-sparkbuild.sh
-```
+SparkBuild is a cross-platform terminal-UI wrapper around CMake: a menu-driven configurator for the 35+ engine build options. The source lives in `SparkBuild/` and is built as part of the normal CMake build (toggle `ENABLE_SPARKBUILD`, ON by default). Output: `build/bin/SparkBuild` (`SparkBuild.exe` on Windows). Run it from a terminal to configure and compile the engine without memorising CMake invocations.
 
 ### SparkShaderCompiler
 
@@ -428,9 +423,8 @@ SparkEngine/
 |   |-- Scripts/            # AngelScript game scripts
 |-- Templates/               # Game module project templates
 |-- Tests/                   # 5962 unit tests across 484 files (CTest + 5 sanitizers)
-|-- tools/
-|   |-- SparkBuild.exe       # Pre-built SparkBuild binary
-|   |-- update-sparkbuild.*  # Manual update scripts (ps1/sh)
+|-- SparkBuild/              # Terminal-UI CMake configurator (source in-tree)
+|-- tools/                   # Build/validation/dev scripts
 |-- docs/                    # Doxygen docs, wiki, API reference
 |-- wiki/                    # 144 wiki pages covering all subsystems
 |-- cmake/                   # CMake utility modules
@@ -581,10 +575,6 @@ Two GitHub Actions workflows run automatically:
 - Runs install + CPack package generation and uploads package artifacts (ZIP/TGZ on Linux, ZIP/NSIS/WiX on Windows)
 - Validates package consumption from a clean external sample using `SparkEngineConfig.cmake`
 - Creates or updates GitHub Release assets with generated package files
-
-**`update-sparkbuild.yml`** — runs weekly (Monday 06:00 UTC) or on manual dispatch:
-- Downloads the latest [SparkBuild](https://github.com/Krilliac/SparkBuild) release binary
-- Opens a PR to update `tools/SparkBuild.exe` when a new version is detected
 
 ## Documentation
 

@@ -6,6 +6,7 @@ _Read this at every session start (after git sync). Each row links to a detailed
 
 | Topic | File | Type | Status | Last Updated |
 |-------|------|------|--------|--------------|
+| SparkBuild consolidation into SparkEngine repo | [knowledge/sparkbuild-in-tree-2026-04-19.md](knowledge/sparkbuild-in-tree-2026-04-19.md) | Decision | Active | 2026-04-19 |
 | Five-engine analysis (Cocos/Defold/Panda3D/S&box/Halley) | [knowledge/five-engine-analysis.md](knowledge/five-engine-analysis.md) | Decision | Active | 2026-03-19 |
 | 11-engine + 3-framework analysis (30 recommendations) | [knowledge/eleven-engine-analysis.md](knowledge/eleven-engine-analysis.md) | Decision | Active | 2026-03-20 |
 | ThorVG + Unity Graphics + 33 libraries analysis | [knowledge/thorvg-unity-graphics-analysis.md](knowledge/thorvg-unity-graphics-analysis.md) | Decision | Active | 2026-03-22 |

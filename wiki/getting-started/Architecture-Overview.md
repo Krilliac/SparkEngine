@@ -346,13 +346,14 @@ SparkEngine/
 │   └── SparkGameMMO/         # MMO game module (DLL)
 ├── SparkConsole/             # Standalone debug console
 ├── SparkShaderCompiler/      # Offline shader compilation tool
+├── SparkBuild/               # Terminal-UI CMake configurator (C++17, in-tree)
 ├── SparkSDK/                 # Public SDK headers for module development
 ├── Templates/                # Game module templates (EmptyProject)
 ├── ThirdParty/               # Git submodules (15 libraries)
 ├── Assets/                   # Models, Scenes, Scripts
 ├── Shaders/                  # HLSL, GLSL, Compiled bytecode
 ├── Tests/                    # 244 test files, 3,119 test cases
-├── Tools/                    # CLI tools (spark-cli, SparkBuild)
+├── Tools/                    # CLI tools (spark-cli)
 ├── docs/                     # API docs, gap analysis, roadmap
 ├── wiki/                     # Wiki documentation pages
 ├── cmake/                    # CMake helper modules
