@@ -131,7 +131,7 @@ jobs:
     # ------------------------------------------------------------------
     - name: Post CodeQL findings
       if: always()
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       env:
         SARIF_DIR: sarif-results
         CODEQL_LANGUAGE: ${{ matrix.language }}
