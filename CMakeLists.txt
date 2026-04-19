@@ -1942,6 +1942,13 @@ endif()
 # target, which provides the same include directories and compile
 # definitions but zero object code.  Undefined symbols are resolved at
 # dlopen() time from the host executable (which has ENABLE_EXPORTS ON).
+#
+# macOS: ld64 rejects undefined symbols in .dylib by default. Pass
+# `-undefined dynamic_lookup` so resolution is deferred to dlopen, the
+# same way Linux's `ld` already permits unresolved symbols in shared
+# libraries. Without this, every game module fails to link with
+# "Undefined symbols for architecture arm64" against SparkEngineLib
+# symbols (SimpleConsole, Logger, AngelScriptEngine, etc.).
 # ---------------------------------------------------------------------
 if(NOT WIN32)
     add_library(SparkEngineInterface INTERFACE)
@@ -1949,6 +1956,10 @@ if(NOT WIN32)
         $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>)
     target_compile_definitions(SparkEngineInterface INTERFACE
         $<TARGET_PROPERTY:SparkEngineLib,INTERFACE_COMPILE_DEFINITIONS>)
+    if(APPLE)
+        target_link_options(SparkEngineInterface INTERFACE
+            "LINKER:-undefined,dynamic_lookup")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------
