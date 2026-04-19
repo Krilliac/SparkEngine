@@ -144,6 +144,7 @@ int main(int argc, char* argv[])
     int testFrameLimit = 0; // 0 = run indefinitely
 
     std::string projectPathArg;
+    std::string startupTheme;
 
     // Check command line arguments
     for (int i = 1; i < argc; i++)
@@ -176,6 +177,10 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--project") == 0 && i + 1 < argc)
         {
             projectPathArg = argv[++i];
+        }
+        else if (strcmp(argv[i], "--theme") == 0 && i + 1 < argc)
+        {
+            startupTheme = argv[++i];
         }
     }
 
@@ -252,6 +257,7 @@ int main(int argc, char* argv[])
         config.windowHeight = 900;
         config.testMode = testMode;
         config.testFrameLimit = testFrameLimit;
+        config.startupTheme = startupTheme;
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Editor config: %dx%d testMode=%s testFrames=%d", config.windowWidth,
                        config.windowHeight, testMode ? "true" : "false", testFrameLimit);

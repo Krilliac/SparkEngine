@@ -47,6 +47,7 @@ namespace SparkEditor
         int windowHeight = 900;                  ///< Initial window height (pixels).
         bool testMode = false;                   ///< Skip project browser, auto-create test project.
         int testFrameLimit = 0;                  ///< If >0, exit after this many frames (test mode).
+        std::string startupTheme;                ///< Override default theme by name (empty = use default).
     };
 
     /**
