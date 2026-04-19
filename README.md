@@ -1,13 +1,30 @@
 # Spark Engine — Open-Source C++ Game Engine
 
+## Install & Build from Source (one click)
+
+[![Installer Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/installer-downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
+
+Download the installer, run it, pick your options — it clones the repo (with
+submodules), configures CMake, and builds the engine on your machine. Same
+binary updates an existing install.
+
+[![Windows x64 Installer](https://img.shields.io/badge/⬇_Install_on-Windows_x64-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-Windows-x64.exe)
+
+[![Linux x64 Installer](https://img.shields.io/badge/⬇_Install_on-Linux_x64-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-Linux-x64)
+
+[![macOS arm64 Installer](https://img.shields.io/badge/⬇_Install_on-macOS_arm64-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-macOS-arm64)
+
+Each installer is a single ~1–3 MB binary. Run with `--gui` for the ImGui
+wizard, or with no arguments for the terminal UI. See
+[`SparkInstaller/README.md`](SparkInstaller/README.md) for full flag reference
+and update-mode behaviour.
+
 [![SparkEngine DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Krilliac/SparkEngine)
 [![Build SparkEngine](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml?query=branch%3AWorking)
 [![Publish](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/release.yml?query=branch%3AWorking)
 [![License: Spark Open](https://img.shields.io/badge/License-Spark_Open-blue.svg)](LICENSE)
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![Lifetime Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/downloads.json)](https://github.com/Krilliac/SparkEngine/releases)
-[![Release Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/stable-downloads.json)](https://github.com/Krilliac/SparkEngine/releases/latest)
-[![Nightly Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/nightly-downloads.json)](https://github.com/Krilliac/SparkEngine/releases/tag/nightly)
 [![Last Commit](https://img.shields.io/github/last-commit/Krilliac/SparkEngine)](https://github.com/Krilliac/SparkEngine/commits/Working)
 [![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/loc.json)](https://github.com/Krilliac/SparkEngine)
 [![Source Files](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/files.json)](https://github.com/Krilliac/SparkEngine)
@@ -91,7 +108,12 @@
 
 ## Downloads
 
-[![Lifetime Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases)
+Most users should use the [installer at the top of this page](#install--build-from-source-one-click) — it clones the repo and builds the engine with your chosen options in one step.
+
+If you want a prebuilt engine archive instead (no cloning, no build), grab one below.
+
+<details>
+<summary><strong>Advanced: prebuilt engine binaries (nightly + stable)</strong></summary>
 
 ### Nightly
 
@@ -107,9 +129,9 @@ Built automatically on every commit to `Working`. Always the latest code — all
 
 > Nightly builds are from the [`nightly` release](https://github.com/Krilliac/SparkEngine/releases/tag/nightly). Each release includes the exact commit hash and build timestamp.
 
-### Stable (Recommended)
+### Stable
 
-Stable releases are published manually and thoroughly tested. Recommended for most users.
+Stable releases are published manually and thoroughly tested.
 
 [![Stable Downloads](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/stable-downloads.json&style=flat-square)](https://github.com/Krilliac/SparkEngine/releases/latest)
 
@@ -119,6 +141,8 @@ Stable releases are published manually and thoroughly tested. Recommended for mo
 | **Linux** (GCC · ubuntu-24.04 · x64) | [![Linux Release](https://img.shields.io/badge/⬇_Download-Release-E95420?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz) | [![Linux Debug](https://img.shields.io/badge/⬇_Download-Debug-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz) |
 
 > Download the latest stable release (v1.0.0). For bleeding-edge features, use the nightly build above.
+
+</details>
 
 ### Release Package Types (CPack)
 
