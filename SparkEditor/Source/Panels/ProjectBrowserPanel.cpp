@@ -7,6 +7,7 @@
 
 #include "ProjectBrowserPanel.h"
 #include "Utils/LogMacros.h"
+#include "../Utils/FolderDialog.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -15,12 +16,6 @@
 #include <chrono>
 #include <ctime>
 #include <cstring>
-#include <cstdio>
-
-#ifdef _WIN32
-#include <windows.h>
-#include <shlobj.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -494,58 +489,7 @@ namespace SparkEditor
 
     bool ProjectBrowserPanel::BrowseForFolder(std::string& outPath)
     {
-#ifdef _WIN32
-        BROWSEINFOA bi = {};
-        bi.lpszTitle = "Select Project Folder";
-        bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-
-        LPITEMIDLIST pidl = SHBrowseForFolderA(&bi);
-        if (pidl)
-        {
-            char path[MAX_PATH];
-            if (SHGetPathFromIDListA(pidl, path))
-            {
-                outPath = path;
-                CoTaskMemFree(pidl);
-                return true;
-            }
-            CoTaskMemFree(pidl);
-        }
-        return false;
-#else
-        // On Linux/macOS, try zenity or kdialog for a native folder chooser
-        FILE* pipe = popen("zenity --file-selection --directory --title=\"Select Project Folder\" 2>/dev/null", "r");
-        if (!pipe)
-        {
-            // Try kdialog as fallback
-            pipe = popen("kdialog --getexistingdirectory ~ 2>/dev/null", "r");
-        }
-        if (pipe)
-        {
-            char buf[1024];
-            std::string result;
-            while (fgets(buf, sizeof(buf), pipe) != nullptr)
-            {
-                result += buf;
-            }
-            int status = pclose(pipe);
-            // Remove trailing newline
-            while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
-            {
-                result.pop_back();
-            }
-            if (status == 0 && !result.empty())
-            {
-                // Validate that the returned path is an existing directory
-                if (std::filesystem::is_directory(result))
-                {
-                    outPath = result;
-                    return true;
-                }
-            }
-        }
-        return false;
-#endif
+        return SparkEditor::Utils::BrowseForFolder(outPath, "Select Project Folder");
     }
 
 } // namespace SparkEditor

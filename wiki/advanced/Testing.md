@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*481 test files, 5934+ test cases*
+*483 test files, 5966+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -536,7 +536,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAccessibility` | 15 |
 | `TestAchievementSystem` | 14 |
 | `TestAchievementSystemReal` | 10 |
-| `TestAdversarialEngine` | 89 |
+| `TestAdversarialEngine` | 96 |
 | `TestAlignedHeapArray` | 6 |
 | `TestAlignedHeapArrayReal` | 6 |
 | `TestAngelScriptEngine` | 14 |
@@ -622,6 +622,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCoverSystemReal` | 5 |
 | `TestCpuDebuggerPhaseGG` | 8 |
 | `TestCpuNeuralInference` | 14 |
+| `TestCpuNeuralTraining` | 13 |
 | `TestCrashReportUploader` | 8 |
 | `TestCrossSystemIntegration` | 4 |
 | `TestDXRSupport` | 13 |
@@ -813,6 +814,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNavMeshLink` | 5 |
 | `TestNavMeshObstacles` | 7 |
 | `TestNetBuffer` | 29 |
+| `TestNetQuantize` | 12 |
 | `TestNetworkDebugPanel` | 11 |
 | `TestNetworkEncryption` | 17 |
 | `TestNetworkHealthMonitor` | 0 |
