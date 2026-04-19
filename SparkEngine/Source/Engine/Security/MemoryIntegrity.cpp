@@ -505,7 +505,11 @@ namespace Spark::Security
         // Parse /proc/self/maps for executable regions
         std::ifstream maps("/proc/self/maps");
         if (!maps.is_open())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "MemoryIntegrity: cannot open /proc/self/maps — code page integrity scanning disabled");
             return;
+        }
 
         std::string line;
         uint32_t regionIndex = 0;

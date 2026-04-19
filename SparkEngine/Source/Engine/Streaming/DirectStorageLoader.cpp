@@ -261,6 +261,10 @@ namespace Spark::Streaming
                 // Validate offset is within file bounds
                 if (readOffset >= fileSize)
                 {
+                    SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                                   "DirectStorageLoader: offset %llu past end of '%s' (size=%llu)",
+                                   static_cast<unsigned long long>(readOffset), req->request.filePath.c_str(),
+                                   static_cast<unsigned long long>(fileSize));
                     req->status = LoadStatus::Failed;
                     return;
                 }
@@ -271,6 +275,12 @@ namespace Spark::Streaming
                 // Check for arithmetic overflow before bounds check
                 if (readSize > fileSize || readOffset > fileSize - readSize)
                 {
+                    SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                                   "DirectStorageLoader: read range out of bounds for '%s' "
+                                   "(offset=%llu, size=%llu, fileSize=%llu)",
+                                   req->request.filePath.c_str(), static_cast<unsigned long long>(readOffset),
+                                   static_cast<unsigned long long>(readSize),
+                                   static_cast<unsigned long long>(fileSize));
                     req->status = LoadStatus::Failed;
                     return;
                 }

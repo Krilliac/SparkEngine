@@ -76,6 +76,8 @@ namespace Spark
             }
             catch (...)
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse float from '%s'",
+                                value.c_str());
                 return false;
             }
         }
@@ -89,6 +91,8 @@ namespace Spark
             }
             catch (...)
             {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse double from '%s'",
+                                value.c_str());
                 return false;
             }
         }
@@ -110,6 +114,8 @@ namespace Spark
                 std::memcpy(dst + sizeof(float), &y, sizeof(float));
                 return true;
             }
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse Vector2 from '%s'",
+                            value.c_str());
             return false;
         }
         case FieldType::Vector3:
@@ -125,6 +131,8 @@ namespace Spark
                 std::memcpy(dst + 2 * sizeof(float), &z, sizeof(float));
                 return true;
             }
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse Vector3 from '%s'",
+                            value.c_str());
             return false;
         }
         case FieldType::Vector4:
@@ -141,6 +149,8 @@ namespace Spark
                 std::memcpy(dst + 3 * sizeof(float), &w, sizeof(float));
                 return true;
             }
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse Vector4 from '%s'",
+                            value.c_str());
             return false;
         }
         default:

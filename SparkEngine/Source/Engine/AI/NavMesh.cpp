@@ -794,21 +794,32 @@ namespace Spark::AI
         SPARK_VALIDATE_RET(Spark::LogCategory::AI, !filepath.empty(), false);
         std::ifstream file(filepath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::AI, "NavMeshManager::LoadNavMesh: cannot open '%s' (errno=%d)",
+                            filepath.c_str(), errno);
             return false;
+        }
 
         // Binary format: magic(4) + version(4) + settings + vertex count + vertices + triangle count + triangles + adjacency
         char magic[4];
         file.read(magic, 4);
         if (std::string(magic, 4) != "SNAV")
         {
-            // Not a SparkEngine navmesh file — return false
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "NavMeshManager::LoadNavMesh: '%s' is not a SparkEngine navmesh (bad magic)",
+                           filepath.c_str());
             return false;
         }
 
         uint32_t version;
         file.read(reinterpret_cast<char*>(&version), 4);
         if (version > 1)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "NavMeshManager::LoadNavMesh: '%s' has unsupported version %u (max supported: 1)",
+                           filepath.c_str(), version);
             return false;
+        }
 
         auto navMesh = std::make_unique<NavMeshData>();
 

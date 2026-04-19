@@ -79,7 +79,14 @@ namespace Spark::Graphics
         }
 
         file << dotContent;
-        return file.good();
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "RenderGraphExporter: write failure for '%s' (%zu bytes) — disk full or I/O error?",
+                            outputPath.c_str(), dotContent.size());
+            return false;
+        }
+        return true;
     }
 
 } // namespace Spark::Graphics

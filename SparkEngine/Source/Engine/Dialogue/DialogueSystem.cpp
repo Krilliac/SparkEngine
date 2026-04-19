@@ -88,6 +88,9 @@ namespace Spark
             const auto& jsonNode = nodes[i];
             if (!jsonNode["nodeId"].IsString())
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "DialogueTree: skipping node index %zu in '%s' — missing or non-string 'nodeId'", i,
+                               filePath.c_str());
                 continue;
             }
 
@@ -189,7 +192,14 @@ namespace Spark
             AddNode(node);
         }
 
-        return !m_nodes.empty();
+        if (m_nodes.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "DialogueTree: '%s' contained no valid nodes (parsed %zu JSON entries)", filePath.c_str(),
+                            nodes.Size());
+            return false;
+        }
+        return true;
     }
 
     // =============================================================================
@@ -229,6 +239,9 @@ namespace Spark
         auto it = m_trees.find(treeId);
         if (it == m_trees.end())
         {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "DialogueSystem::StartConversation: tree '%s' not registered (%zu loaded)", treeId.c_str(),
+                           m_trees.size());
             return false;
         }
 

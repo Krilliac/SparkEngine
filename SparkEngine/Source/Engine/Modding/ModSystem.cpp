@@ -340,6 +340,8 @@ namespace Spark
         std::ifstream file(path);
         if (!file.is_open())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: cannot open mod manifest '%s' (errno=%d)",
+                            path.c_str(), errno);
             return false;
         }
 
@@ -347,6 +349,8 @@ namespace Spark
         auto root = Json::Parse(content);
         if (!root.IsObject())
         {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: mod manifest '%s' is not a JSON object",
+                            path.c_str());
             return false;
         }
 

@@ -9,6 +9,8 @@
 #include "Utils/Validate.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -351,7 +353,12 @@ namespace Spark::Graphics
     {
         std::ofstream file(path, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::SaveCompressed failed to open '%s' for writing (errno=%d: %s)",
+                            path.c_str(), errno, std::strerror(errno));
             return false;
+        }
 
         // Magic + header
         const char magic[4] = {'S', 'T', 'E', 'X'};
@@ -376,7 +383,14 @@ namespace Spark::Graphics
             file.write(reinterpret_cast<const char*>(tex.mipData[m].data()), tex.mipData[m].size());
         }
 
-        return file.good();
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::SaveCompressed write failure for '%s' (%ux%u, %u mips)", path.c_str(),
+                            tex.width, tex.height, tex.mipLevels);
+            return false;
+        }
+        return true;
     }
 
     CompressedTexture TextureCompressor::LoadCompressed(const std::string& path)
@@ -385,29 +399,76 @@ namespace Spark::Graphics
 
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed failed to open '%s' (errno=%d: %s)", path.c_str(), errno,
+                            std::strerror(errno));
             return tex;
+        }
 
-        char magic[4];
-        uint32_t version;
+        char magic[4]{};
+        uint32_t version = 0;
         file.read(magic, 4);
-        if (magic[0] != 'S' || magic[1] != 'T' || magic[2] != 'E' || magic[3] != 'X')
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed truncated header (could not read 4-byte magic) in '%s'",
+                            path.c_str());
             return tex;
+        }
+        if (magic[0] != 'S' || magic[1] != 'T' || magic[2] != 'E' || magic[3] != 'X')
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed bad magic in '%s' — expected 'STEX', got "
+                            "'%c%c%c%c' (0x%02x%02x%02x%02x)",
+                            path.c_str(), std::isprint(static_cast<unsigned char>(magic[0])) ? magic[0] : '?',
+                            std::isprint(static_cast<unsigned char>(magic[1])) ? magic[1] : '?',
+                            std::isprint(static_cast<unsigned char>(magic[2])) ? magic[2] : '?',
+                            std::isprint(static_cast<unsigned char>(magic[3])) ? magic[3] : '?',
+                            static_cast<unsigned char>(magic[0]), static_cast<unsigned char>(magic[1]),
+                            static_cast<unsigned char>(magic[2]), static_cast<unsigned char>(magic[3]));
+            return tex;
+        }
 
         file.read(reinterpret_cast<char*>(&version), 4);
         file.read(reinterpret_cast<char*>(&tex.width), 4);
         file.read(reinterpret_cast<char*>(&tex.height), 4);
         file.read(reinterpret_cast<char*>(&tex.format), 1);
         file.read(reinterpret_cast<char*>(&tex.mipLevels), 4);
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed truncated header in '%s' (version=%u, %ux%u, mips=%u)",
+                            path.c_str(), version, tex.width, tex.height, tex.mipLevels);
+            tex = CompressedTexture{};
+            return tex;
+        }
 
         std::vector<uint32_t> mipSizes(tex.mipLevels);
         for (uint32_t m = 0; m < tex.mipLevels; ++m)
             file.read(reinterpret_cast<char*>(&mipSizes[m]), 4);
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "TextureCompressor::LoadCompressed truncated mip size table in '%s' (expected %u entries)",
+                            path.c_str(), tex.mipLevels);
+            tex = CompressedTexture{};
+            return tex;
+        }
 
         tex.compressedSize = 0;
         for (uint32_t m = 0; m < tex.mipLevels; ++m)
         {
             std::vector<uint8_t> data(mipSizes[m]);
             file.read(reinterpret_cast<char*>(data.data()), mipSizes[m]);
+            if (!file.good())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                "TextureCompressor::LoadCompressed truncated mip %u in '%s' (expected %u bytes)", m,
+                                path.c_str(), mipSizes[m]);
+                tex = CompressedTexture{};
+                return tex;
+            }
             tex.compressedSize += mipSizes[m];
             tex.mipData.push_back(std::move(data));
         }

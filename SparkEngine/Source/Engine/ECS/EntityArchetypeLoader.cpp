@@ -300,11 +300,21 @@ namespace Spark::ECS
 
         void* raw = factory.GetComponentRaw(entry.typeName, &world, entityId);
         if (!raw)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::ECS,
+                           "ApplyComponentViaReflection: GetComponentRaw returned null for '%s' on entity %u",
+                           entry.typeName.c_str(), entityId);
             return;
+        }
 
         const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(entry.typeName);
         if (!typeInfo)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::ECS,
+                           "ApplyComponentViaReflection: no reflection TypeInfo for '%s' (properties ignored)",
+                           entry.typeName.c_str());
             return;
+        }
 
         for (const auto& [propName, propValue] : entry.properties)
         {
@@ -312,6 +322,12 @@ namespace Spark::ECS
             if (field)
             {
                 Spark::SetFieldFromString(raw, *field, propValue);
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::ECS,
+                               "ApplyComponentViaReflection: field '%s' not found on type '%s' — ignored",
+                               propName.c_str(), entry.typeName.c_str());
             }
         }
     }
@@ -322,10 +338,13 @@ namespace Spark::ECS
 
     EntityID SpawnFromArchetype(const std::string& name, World& world)
     {
-        const auto* archetype = EntityArchetypeSystem::GetInstance().GetArchetype(name);
+        const auto& archetypeSystem = EntityArchetypeSystem::GetInstance();
+        const auto* archetype = archetypeSystem.GetArchetype(name);
         if (!archetype)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::ECS, "SpawnFromArchetype: archetype not found: %s", name.c_str());
+            SPARK_LOG_WARN(Spark::LogCategory::ECS,
+                           "SpawnFromArchetype: archetype '%s' not found (%zu archetype(s) registered)", name.c_str(),
+                           archetypeSystem.GetArchetypeCount());
             Spark::SimpleConsole::GetInstance().LogWarning("SpawnFromArchetype: archetype not found: " + name);
             return entt::null;
         }

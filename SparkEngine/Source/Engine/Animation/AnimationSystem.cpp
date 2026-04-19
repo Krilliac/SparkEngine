@@ -115,13 +115,21 @@ namespace Spark::Animation
         //     [sclKeyCount:4] then per key: [time:4][x:4][y:4][z:4]
         std::ifstream file(filepath, std::ios::binary);
         if (!file.is_open())
+        {
+            SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: cannot open '%s' (errno=%d)", filepath.c_str(),
+                           errno);
             return clips;
+        }
 
         char magic[4] = {};
         file.read(magic, 4);
 
         if (std::memcmp(magic, "ANIM", 4) != 0)
+        {
+            SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: '%s' is not a .sanim file (bad magic '%c%c%c%c')",
+                           filepath.c_str(), magic[0], magic[1], magic[2], magic[3]);
             return clips;
+        }
 
         uint32_t version = 0;
         file.read(reinterpret_cast<char*>(&version), sizeof(version));

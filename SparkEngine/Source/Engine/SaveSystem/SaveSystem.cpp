@@ -533,7 +533,13 @@ namespace Spark
                     f.AddComponent(capturedName, &world, entityId);
                     void* raw = f.GetComponentRaw(capturedName, &world, entityId);
                     if (!raw)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                       "Deserialize: GetComponentRaw returned null for '%s' on entity %u — skipping "
+                                       "property restore",
+                                       capturedName.c_str(), entityId);
                         return;
+                    }
                     for (const auto& field : capturedFields)
                     {
                         auto it = data.properties.find(field.fieldName);
@@ -845,7 +851,12 @@ namespace Spark
             std::string tmpPath = filepath + ".tmp";
             std::ofstream file(tmpPath, std::ios::binary);
             if (!file.is_open())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Save,
+                                "WriteToFile: cannot open temp file '%s' for writing (errno=%d)", tmpPath.c_str(),
+                                errno);
                 return false;
+            }
 
             // Write header
             const char magic[] = "SPRK";
@@ -994,12 +1005,21 @@ namespace Spark
             {
                 std::ifstream file(filepath, std::ios::binary);
                 if (!file.is_open())
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save, "ReadFromFile: failed to open save file '%s' (errno=%d)",
+                                   filepath.c_str(), errno);
                     return false;
+                }
 
                 file.seekg(0, std::ios::end);
                 auto size = file.tellg();
                 if (size < 0)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Save,
+                                   "ReadFromFile: tellg() returned negative for '%s' (file unreadable)",
+                                   filepath.c_str());
                     return false;
+                }
                 file.seekg(0, std::ios::beg);
 
                 // Sanity cap: reject unreasonably large save files (512 MB)
@@ -1022,7 +1042,12 @@ namespace Spark
             }
 
             if (fileData.size() < 8)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "ReadFromFile: save file '%s' too small (%zu bytes, need at least 8)", filepath.c_str(),
+                               fileData.size());
                 return false;
+            }
 
             // Parse from the byte buffer using an offset cursor
             size_t offset = 0;
@@ -1039,9 +1064,18 @@ namespace Spark
             // Read and verify header
             char magic[4];
             if (!readBytes(magic, 4))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save, "ReadFromFile: truncated magic header in '%s'",
+                               filepath.c_str());
                 return false;
+            }
             if (std::string(magic, 4) != "SPRK")
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Save,
+                               "ReadFromFile: invalid magic '%c%c%c%c' in '%s' (expected 'SPRK')", magic[0], magic[1],
+                               magic[2], magic[3], filepath.c_str());
                 return false;
+            }
 
             uint32_t version;
             if (!readBytes(&version, sizeof(version)))

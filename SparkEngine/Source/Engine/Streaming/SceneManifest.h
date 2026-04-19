@@ -24,6 +24,10 @@
 
 #pragma once
 
+#include "../../Utils/LogMacros.h"
+
+#include <cerrno>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -125,11 +129,22 @@ namespace Spark::Streaming
         {
             std::ifstream file(filePath);
             if (!file.is_open())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Scene, "SceneManifest: failed to open '%s' (errno=%d: %s)",
+                               filePath.c_str(), errno, std::strerror(errno));
                 return {};
+            }
 
             std::ostringstream ss;
             ss << file.rdbuf();
-            return ParseFromString(ss.str());
+            SceneManifest manifest = ParseFromString(ss.str());
+            if (manifest.TotalAssetCount() == 0)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Scene,
+                               "SceneManifest: '%s' parsed 0 assets — check file format (expected key=value lines)",
+                               filePath.c_str());
+            }
+            return manifest;
         }
     };
 
