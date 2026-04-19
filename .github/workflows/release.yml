@@ -307,12 +307,25 @@ jobs:
         printf '{\n    "schemaVersion": 1,\n    "label": "lifetime downloads",\n    "message": "%s",\n    "color": "brightgreen",\n    "namedLogo": "github",\n    "logoColor": "white"\n}\n' \
           "$FORMATTED" > "$LIFETIME_BADGE"
 
+        # Installer-only counter — live cross-release sum of SparkInstaller-* assets.
+        # Unlike the nightly/stable counters we do NOT snapshot-and-reset; we rewrite
+        # this badge to the current sum on every release run. The installer asset name
+        # is the same across releases, so this is a stable aggregate.
+        INSTALLER_BADGE=".github/badges/installer-downloads.json"
+        INSTALLER_TOTAL=$(gh api "repos/${{ github.repository }}/releases" --paginate \
+          --jq '[.[].assets[] | select(.name | startswith("SparkInstaller-")) | .download_count] | add // 0' \
+          2>/dev/null || echo 0)
+        echo "Installer total downloads: $INSTALLER_TOTAL"
+        INSTALLER_FORMATTED=$(printf "%'d" "$INSTALLER_TOTAL" 2>/dev/null || echo "$INSTALLER_TOTAL")
+        printf '{\n    "schemaVersion": 1,\n    "label": "installer downloads",\n    "message": "%s",\n    "color": "blueviolet",\n    "namedLogo": "github",\n    "logoColor": "white"\n}\n' \
+          "$INSTALLER_FORMATTED" > "$INSTALLER_BADGE"
+
         # Commit updated counters
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add .github/badges/
         git diff --cached --quiet && echo "No download count change" && exit 0
-        git commit -m "chore: update download counters (lifetime: $NEW_TOTAL) [skip ci]"
+        git commit -m "chore: update download counters (lifetime: $NEW_TOTAL, installer: $INSTALLER_TOTAL) [skip ci]"
         git push origin HEAD:${{ github.ref_name }}
 
     - name: Resolve short commit SHA
