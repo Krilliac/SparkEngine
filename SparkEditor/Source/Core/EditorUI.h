@@ -176,7 +176,7 @@ namespace SparkEditor
 
         // UI state
         bool m_isInitialized = false;
-        std::string m_currentTheme = "Spark Professional";
+        std::string m_currentTheme = "Spark Ember";
         bool m_showDemoWindow = false;
         bool m_firstFrame = true;
         bool m_showWelcomeScreen = true;

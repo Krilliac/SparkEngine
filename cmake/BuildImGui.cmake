@@ -18,12 +18,26 @@ if(IMGUI_INCLUDE_DIR)
     if(NOT TARGET imgui)
         message(STATUS "Found Dear ImGui at: ${IMGUI_INCLUDE_DIR}")
 
+        # Optional FreeType rasterizer — produces visibly smoother text than the
+        # default stb_truetype rasterizer (matches the SparkEditor hi-fi design).
+        # Linux: install libfreetype-dev. Windows/macOS: vcpkg or system freetype.
+        find_package(Freetype QUIET)
+        set(_IMGUI_FREETYPE_SOURCES "")
+        if(Freetype_FOUND)
+            list(APPEND _IMGUI_FREETYPE_SOURCES
+                "${IMGUI_INCLUDE_DIR}/misc/freetype/imgui_freetype.cpp")
+            message(STATUS "Dear ImGui: FreeType rasterizer ENABLED (smoother text)")
+        else()
+            message(STATUS "Dear ImGui: FreeType not found — falling back to stb_truetype rasterizer")
+        endif()
+
         set(_IMGUI_CORE_SOURCES
             "${IMGUI_INCLUDE_DIR}/imgui.cpp"
             "${IMGUI_INCLUDE_DIR}/imgui_demo.cpp"
             "${IMGUI_INCLUDE_DIR}/imgui_draw.cpp"
             "${IMGUI_INCLUDE_DIR}/imgui_tables.cpp"
             "${IMGUI_INCLUDE_DIR}/imgui_widgets.cpp"
+            ${_IMGUI_FREETYPE_SOURCES}
         )
 
         if(WIN32)
@@ -69,6 +83,11 @@ if(IMGUI_INCLUDE_DIR)
             "${IMGUI_INCLUDE_DIR}"
             "${IMGUI_INCLUDE_DIR}/backends"
         )
+
+        if(Freetype_FOUND)
+            target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_FREETYPE)
+            target_link_libraries(imgui PUBLIC Freetype::Freetype)
+        endif()
 
         if(MSVC)
             target_compile_options(imgui PRIVATE /W2)

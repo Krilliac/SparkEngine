@@ -119,9 +119,10 @@ namespace SparkEditor
                 }
             }
 
-            // Apply the Spark Fusion theme (default sleek professional look)
-            console.LogInfo("Applying Spark Fusion theme...");
-            ApplyTheme("Spark Fusion");
+            // Apply startup theme (CLI --theme override, else Spark Ember — matches hi-fi design)
+            const std::string themeName = config.startupTheme.empty() ? "Spark Ember" : config.startupTheme;
+            console.LogInfo("Applying theme: " + themeName);
+            ApplyTheme(themeName);
             console.LogSuccess("Theme applied");
 
             m_isInitialized = true;

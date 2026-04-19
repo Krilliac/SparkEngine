@@ -214,6 +214,14 @@ namespace SparkEditor
         style.ItemSpacing = ImVec2(theme.itemSpacingX, theme.itemSpacingY);
         style.ItemInnerSpacing = ImVec2(theme.itemInnerSpacingX, theme.itemInnerSpacingY);
 
+        // Smooth rendering — AA lines + fill, more tessellation on curves/circles.
+        // Matches the soft edges of the SparkEditor hi-fi design.
+        style.AntiAliasedLines = true;
+        style.AntiAliasedLinesUseTex = true;
+        style.AntiAliasedFill = true;
+        style.CurveTessellationTol = 1.0f;
+        style.CircleTessellationMaxError = 0.10f;
+
         // --- Color mapping ---
         ImVec4* c = style.Colors;
 
@@ -322,6 +330,7 @@ namespace SparkEditor
     // Forward declaration
     static EditorThemeData CreateSparkThemeImpl();
     static EditorThemeData CreateSparkFusionThemeImpl();
+    static EditorThemeData CreateSparkEmberThemeImpl();
 
     void EditorTheme::InitializeDefaultThemes()
     {
@@ -329,6 +338,7 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing default editor themes");
         RegisterTheme(CreateSparkThemeImpl());
         RegisterTheme(CreateSparkFusionThemeImpl());
+        RegisterTheme(CreateSparkEmberThemeImpl());
         RegisterTheme(CreateUnityProTheme());
         RegisterTheme(CreateUnrealProTheme());
         RegisterTheme(CreateVSProTheme());
@@ -566,6 +576,127 @@ namespace SparkEditor
         t.fontSize = 15.0f;
         t.fontScale = 1.0f;
         t.fontFamily = "Inter";
+
+        return t;
+    }
+
+    // -------------------------------------------------------------------
+    // SPARK EMBER — Warm charcoal IDE with ember/spark accent
+    // Matches the SparkEditor hi-fi design (IBM Plex Sans + JetBrains Mono,
+    // OKLCH neutrals at hue 60, ember accent at oklch(0.72 0.16 50)).
+    // -------------------------------------------------------------------
+    static EditorThemeData CreateSparkEmberThemeImpl()
+    {
+        EditorThemeData t;
+        t.name = "Spark Ember";
+        t.description = "Warm charcoal IDE with ember/spark accent — matches SparkEditor hi-fi design";
+        t.author = "Spark Engine Team";
+
+        // Warm neutral background stack (hue ≈ 60, very low chroma).
+        t.background = ThemeColor::FromHex("#1A1716");        // bg-1: panel
+        t.backgroundDark = ThemeColor::FromHex("#110E0D");    // bg-0: deepest
+        t.backgroundLight = ThemeColor::FromHex("#302D2A");   // bg-3: hover/input
+        t.backgroundAccent = ThemeColor::FromHex("#AF530D").WithAlpha(0.22f);
+        t.backgroundHeader = ThemeColor::FromHex("#23201E");  // bg-2: header row
+        t.backgroundActive = ThemeColor::FromHex("#F1823A").WithAlpha(0.20f);
+        t.backgroundHover = ThemeColor::FromHex("#302D2A");
+        t.backgroundSelected = ThemeColor::FromHex("#F1823A").WithAlpha(0.16f);
+
+        // Warm off-white foreground (hue ≈ 80).
+        t.text = ThemeColor::FromHex("#C5C3C1");              // fg-1
+        t.textDisabled = ThemeColor::FromHex("#64625F");      // fg-3
+        t.textSecondary = ThemeColor::FromHex("#8D8B88");     // fg-2
+        t.textAccent = ThemeColor::FromHex("#F1823A");        // ember
+        t.textWarning = ThemeColor::FromHex("#EDCF59");       // yellow
+        t.textError = ThemeColor::FromHex("#FA6862");         // red
+        t.textSuccess = ThemeColor::FromHex("#6ED086");       // green
+
+        // Buttons — slightly raised from panel.
+        t.button = ThemeColor::FromHex("#23201E");
+        t.buttonHovered = ThemeColor::FromHex("#302D2A");
+        t.buttonActive = ThemeColor::FromHex("#F1823A");
+        t.buttonDisabled = ThemeColor::FromHex("#1A1716");
+
+        // Frames (input fields) — recessed, darker than panel.
+        t.frame = ThemeColor::FromHex("#110E0D");
+        t.frameHovered = ThemeColor::FromHex("#23201E");
+        t.frameActive = ThemeColor::FromHex("#F1823A").WithAlpha(0.35f);
+
+        // Borders — barely visible on idle, ember on focus.
+        t.border = ThemeColor::FromHex("#35322F");            // line
+        t.borderLight = ThemeColor::FromHex("#403C38");       // bg-4
+        t.borderAccent = ThemeColor::FromHex("#F1823A");
+        t.borderSeparator = ThemeColor::FromHex("#282523");   // line-soft
+
+        // Title bar — deepest charcoal; active tab uses a dim ember wash.
+        t.titleBar = ThemeColor::FromHex("#110E0D");
+        t.titleBarActive = ThemeColor::FromHex("#AF530D");
+        t.titleBarText = ThemeColor::FromHex("#EFEEEB");
+
+        // Menu bar — seamless with panel background.
+        t.menuBar = ThemeColor::FromHex("#1A1716");
+        t.menuItem = ThemeColor(0, 0, 0, 0);
+        t.menuItemHovered = ThemeColor::FromHex("#F1823A").WithAlpha(0.30f);
+
+        // Scrollbars — thin, warm, ember-active.
+        t.scrollbar = ThemeColor::FromHex("#110E0D");
+        t.scrollbarGrab = ThemeColor::FromHex("#403C38");
+        t.scrollbarGrabHovered = ThemeColor::FromHex("#5A544E");
+        t.scrollbarGrabActive = ThemeColor::FromHex("#F1823A");
+
+        // Tabs — active tab rises to header tone.
+        t.tab = ThemeColor::FromHex("#1A1716");
+        t.tabHovered = ThemeColor::FromHex("#F1823A").WithAlpha(0.25f);
+        t.tabActive = ThemeColor::FromHex("#23201E");
+        t.tabUnfocused = ThemeColor::FromHex("#110E0D");
+
+        // Accents — ember primary, cyan secondary (matches design's dual accent).
+        t.accent = ThemeColor::FromHex("#F1823A");
+        t.accentSecondary = ThemeColor::FromHex("#5FCEEE");
+        t.focus = ThemeColor::FromHex("#F1823A");
+        t.selection = ThemeColor::FromHex("#F1823A").WithAlpha(0.28f);
+        t.drop = ThemeColor::FromHex("#F1823A").WithAlpha(0.75f);
+
+        // Graph palette — ember, cyan, green, red, blue (design's semantic set).
+        t.graph1 = ThemeColor::FromHex("#F1823A");
+        t.graph2 = ThemeColor::FromHex("#5FCEEE");
+        t.graph3 = ThemeColor::FromHex("#6ED086");
+        t.graph4 = ThemeColor::FromHex("#FA6862");
+        t.graph5 = ThemeColor::FromHex("#6AA7F4");
+
+        // Style tuning — tight, IDE-like radii matching the hi-fi design.
+        t.windowRounding = 3.0f;
+        t.childRounding = 3.0f;
+        t.frameRounding = 3.0f;
+        t.popupRounding = 5.0f;
+        t.scrollbarRounding = 5.0f;
+        t.grabRounding = 3.0f;
+        t.tabRounding = 4.0f;
+
+        t.windowBorderSize = 1.0f;
+        t.childBorderSize = 1.0f;
+        t.popupBorderSize = 1.0f;
+        // Design separates frames by color, not by stroke — disable per-frame border.
+        t.frameBorderSize = 0.0f;
+
+        t.windowPaddingX = 10.0f;
+        t.windowPaddingY = 10.0f;
+        t.framePaddingX = 9.0f;
+        t.framePaddingY = 5.0f;
+        t.itemSpacingX = 8.0f;
+        t.itemSpacingY = 5.0f;
+        t.itemInnerSpacingX = 6.0f;
+        t.itemInnerSpacingY = 5.0f;
+
+        t.indentSpacing = 18.0f;
+        t.scrollbarSize = 10.0f;
+        t.grabMinSize = 10.0f;
+
+        t.shadowOpacity = 0.45f;
+        t.shadowSize = 10.0f;
+        t.fontSize = 13.0f;
+        t.fontScale = 1.0f;
+        t.fontFamily = "IBM Plex Sans";
 
         return t;
     }
