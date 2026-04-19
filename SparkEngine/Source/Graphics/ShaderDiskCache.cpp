@@ -90,7 +90,14 @@ namespace Spark::Graphics
 
         std::ifstream ifs(path, std::ios::binary);
         if (!ifs)
+        {
+            // File existed at line 88 but we can't open it — likely a race
+            // (concurrent cache clear) or permission problem. Log rate-limited
+            // so a broken cache doesn't spam the log.
+            SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                           "ShaderDiskCache: cached blob existed but failed to open '%s'", path.string().c_str());
             return std::nullopt;
+        }
 
         auto fileSize = std::filesystem::file_size(path);
         CompiledShaderBlob blob;
@@ -98,7 +105,12 @@ namespace Spark::Graphics
         ifs.read(reinterpret_cast<char*>(blob.bytecode.data()), static_cast<std::streamsize>(fileSize));
 
         if (!ifs)
+        {
+            SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                           "ShaderDiskCache: short read on '%s' (expected %zu bytes) — treating as miss",
+                           path.string().c_str(), static_cast<size_t>(fileSize));
             return std::nullopt;
+        }
 
         blob.target = target;
         blob.stage = source.stage;
@@ -126,6 +138,19 @@ namespace Spark::Graphics
             {
                 ofs.write(reinterpret_cast<const char*>(blob.bytecode.data()),
                           static_cast<std::streamsize>(blob.bytecode.size()));
+                if (!ofs.good())
+                {
+                    SPARK_LOG_ONCE(
+                        Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                        "ShaderDiskCache: write failure for '%s' (%zu bytes) — cache entry may be incomplete",
+                        path.string().c_str(), blob.bytecode.size());
+                }
+            }
+            else
+            {
+                SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                               "ShaderDiskCache: failed to open '%s' for writing — disk full or read-only?",
+                               path.string().c_str());
             }
         }
 

@@ -39,10 +39,19 @@ namespace Spark
         auto begin = std::sregex_iterator(content.begin(), content.end(), kvRegex);
         auto end = std::sregex_iterator();
 
+        size_t before = m_entries.size();
         for (auto it = begin; it != end; ++it)
         {
             const std::smatch& match = *it;
             m_entries[match[1].str()] = match[2].str();
+        }
+
+        size_t added = m_entries.size() - before;
+        if (added == 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "StringTable: parsed 0 entries from '%s' (%zu content bytes) — bad JSON format?",
+                           filePath.c_str(), content.size());
         }
 
         return true;
@@ -118,6 +127,9 @@ namespace Spark
             std::lock_guard<std::mutex> lock(m_mutex);
             if (!Spark::ContainerUtils::Contains(m_languages, languageCode))
             {
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "LocalizationSystem: requested language '%s' not loaded (%zu available)",
+                               languageCode.c_str(), m_languages.size());
                 return false;
             }
             m_currentLanguage = languageCode;
