@@ -15,8 +15,16 @@
 #include "../Utils/Validate.h"
 
 #ifdef SPARK_OPENAL_AVAILABLE
+// On macOS the system OpenAL.framework lays headers out as <OpenAL/al.h>.
+// openal-soft (Homebrew, Linux) uses the <AL/al.h> form. Prefer the
+// framework style on Apple so the build works with either provider.
+#if defined(__APPLE__) && __has_include(<OpenAL/al.h>)
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
+#else
 #include <AL/al.h>
 #include <AL/alc.h>
+#endif
 #else
 // Stub typedefs when OpenAL is not available - all operations become no-ops
 typedef int ALuint;

@@ -8,6 +8,7 @@
 #include "MetalDevice.h"
 
 #include "../../../Utils/Logger.h"
+#include "../../../Utils/LogMacros.h"
 
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
@@ -1224,7 +1225,7 @@ namespace Spark
 
             void MetalDevice::BeginFrame()
             {
-                ++m_statistics.frameCount;
+                ResetStatistics();
             }
 
             void MetalDevice::EndFrame()

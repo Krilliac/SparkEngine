@@ -50,10 +50,10 @@ if(WIN32)
     )
 endif()
 
-if(MSVC)
-    set_property(TARGET SparkBuildCore PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
+# Inherit the top-level /MD[d] CRT (CMAKE_MSVC_RUNTIME_LIBRARY is set by the
+# engine's root CMakeLists). Forcing /MT[d] here causes SparkInstaller — which
+# also links imgui (built with /MD[d] via BuildImGui.cmake) — to pull in both
+# CRT variants and fail with LNK1169 / LNK2005 on duplicate symbols.
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_link_libraries(SparkBuildCore PUBLIC pthread)
@@ -77,10 +77,7 @@ endif()
 
 target_link_libraries(SparkBuild PRIVATE SparkBuildCore)
 
-if(MSVC)
-    set_property(TARGET SparkBuild PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
+# Inherit the top-level /MD[d] CRT — see comment above SparkBuildCore.
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(SparkBuild PRIVATE -Wall -Wextra -Wpedantic)
