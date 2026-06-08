@@ -468,11 +468,20 @@ namespace Spark
             {
                 if (args.empty())
                     return "FOV: " + EngineSettings::GetInstance().GetValue("Game", "FieldOfView");
+                float fovValue = 0.0f;
+                try
+                {
+                    fovValue = std::stof(args[0]);
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid FOV value. Expected a number.";
+                }
                 EngineSettings::GetInstance().SetValue("Game", "FieldOfView", args[0]);
                 // Also update the live camera
                 auto* cam = EngineContext::Get() ? EngineContext::Get()->GetCamera() : nullptr;
                 if (cam)
-                    cam->Console_SetFOV(std::stof(args[0]));
+                    cam->Console_SetFOV(fovValue);
                 return "FOV set to " + args[0];
             },
             "Get/set field of view", "Game");
@@ -532,9 +541,12 @@ namespace Spark
             {
                 auto& a = EngineSettings::GetInstance().Accessibility();
                 const char* cbNames[] = {"Off", "Protanopia", "Deuteranopia", "Tritanopia"};
+                const int cbCount = static_cast<int>(sizeof(cbNames) / sizeof(cbNames[0]));
                 std::stringstream ss;
                 ss << "Accessibility Settings:\n";
-                ss << "  Colorblind Mode: " << cbNames[a.colorblindMode] << "\n";
+                ss << "  Colorblind Mode: "
+                   << (a.colorblindMode >= 0 && a.colorblindMode < cbCount ? cbNames[a.colorblindMode] : "Unknown")
+                   << "\n";
                 ss << "  High Contrast: " << (a.highContrast ? "on" : "off") << "\n";
                 ss << "  Large Text: " << (a.largeText ? "on" : "off") << "\n";
                 ss << "  Reduce Motion: " << (a.reduceMotion ? "on" : "off") << "\n";
@@ -593,14 +605,21 @@ namespace Spark
                 auto& vr = EngineSettings::GetInstance().VR();
                 const char* trackNames[] = {"Seated", "Room Scale"};
                 const char* comfortNames[] = {"Off", "Vignette", "Snap Turn"};
+                const int trackCount = static_cast<int>(sizeof(trackNames) / sizeof(trackNames[0]));
+                const int comfortCount = static_cast<int>(sizeof(comfortNames) / sizeof(comfortNames[0]));
                 std::stringstream ss;
                 ss << "VR Settings:\n";
                 ss << "  Enabled: " << (vr.enabled ? "yes" : "no") << "\n";
                 ss << "  Render Target: " << vr.renderTargetWidth << "x" << vr.renderTargetHeight << "\n";
                 ss << "  Render Scale: " << vr.renderScale << "\n";
-                ss << "  Tracking: " << trackNames[vr.trackingSpace] << "\n";
+                ss << "  Tracking: "
+                   << (vr.trackingSpace >= 0 && vr.trackingSpace < trackCount ? trackNames[vr.trackingSpace]
+                                                                              : "Unknown")
+                   << "\n";
                 ss << "  IPD: " << vr.ipd << " m\n";
-                ss << "  Comfort Mode: " << comfortNames[vr.comfortMode] << "\n";
+                ss << "  Comfort Mode: "
+                   << (vr.comfortMode >= 0 && vr.comfortMode < comfortCount ? comfortNames[vr.comfortMode] : "Unknown")
+                   << "\n";
                 ss << "  Reprojection: " << (vr.reprojection ? "on" : "off") << "\n";
                 return ss.str();
             },
@@ -613,7 +632,14 @@ namespace Spark
                 auto& vr = EngineSettings::GetInstance().VR();
                 if (args.empty())
                     return "VR render scale: " + std::to_string(vr.renderScale);
-                vr.renderScale = std::clamp(std::stof(args[0]), 0.5f, 2.0f);
+                try
+                {
+                    vr.renderScale = std::clamp(std::stof(args[0]), 0.5f, 2.0f);
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid render scale value. Expected a number between 0.5 and 2.0.";
+                }
                 return "VR render scale set to " + std::to_string(vr.renderScale);
             },
             "Get/set VR supersampling scale (0.5-2.0)", "VR");
@@ -702,7 +728,14 @@ namespace Spark
                 auto& sv = EngineSettings::GetInstance().SaveSystem();
                 if (args.empty())
                     return "Auto-save interval: " + std::to_string(static_cast<int>(sv.autoSaveInterval)) + " s";
-                sv.autoSaveInterval = std::clamp(std::stof(args[0]), 0.0f, 3600.0f);
+                try
+                {
+                    sv.autoSaveInterval = std::clamp(std::stof(args[0]), 0.0f, 3600.0f);
+                }
+                catch (const std::exception&)
+                {
+                    return "Invalid interval. Expected a number of seconds (0-3600).";
+                }
                 return "Auto-save interval set to " + std::to_string(static_cast<int>(sv.autoSaveInterval)) + " s";
             },
             "Get/set auto-save interval (seconds, 0=disabled)", "SaveSystem");

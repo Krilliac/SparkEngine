@@ -467,6 +467,12 @@ namespace Spark::Graphics
     // GPU Resource Creation
     // =============================================================================
 
+// Windows D3D11 implementations of the six functions below (CreatePingPongTargets,
+// CreatePostProcessShaders, CompileEffectShaders, BeginPass, DrawFullscreen,
+// ProcessPass) live in PostProcessingPipelineWindows.cpp. Emitting them here on
+// Windows too would produce LNK4006 duplicate-definition warnings.
+#ifndef SPARK_PLATFORM_WINDOWS
+
     bool PostProcessingPipeline::CreatePingPongTargets()
     {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -1526,5 +1532,7 @@ namespace Spark::Graphics
         float ms = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count() / 1000.0f;
         m_passTimings[static_cast<int>(pass)] = ms;
     }
+
+#endif // !SPARK_PLATFORM_WINDOWS
 
 } // namespace Spark::Graphics

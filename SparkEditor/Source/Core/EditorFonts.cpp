@@ -53,11 +53,8 @@ namespace SparkEditor
 #endif
 
         const char* fontPaths[] = {
-            exeFontsPath.c_str(),   // next to binary (works regardless of CWD)
-            "EditorAssets/Fonts/",
-            "Fonts/",
-            "../SparkEditor/Fonts/",
-            "../Fonts/",
+            exeFontsPath.c_str(), // next to binary (works regardless of CWD)
+            "EditorAssets/Fonts/", "Fonts/", "../SparkEditor/Fonts/", "../Fonts/",
         };
 
         std::string fontDir;

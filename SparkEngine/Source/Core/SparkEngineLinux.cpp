@@ -679,22 +679,15 @@ static bool HandleSDLEvent(const SDL_Event& event)
 }
 
 /**
- * @brief Initialize SDL2 windowed-mode subsystems: window, graphics, input,
- *        engine context, modules, audio, and console commands.
+ * @brief Construct and initialize GraphicsEngine against the given window /
+ *        native render handle. Logs the outcome via SimpleConsole.
  *
- * @param window The SDL2 window (already created by the caller).
- * @param argc Argument count from main().
- * @param argv Argument values from main().
+ * Extracted so the caller (RunSDL2Windowed) can detect a backend fallback
+ * (e.g. Vulkan requested → OpenGL selected by RHIBridge) and recreate the
+ * window + graphics pair with the correct SDL window flag.
  */
-static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandle, int argc, char* argv[])
+static HRESULT InitializeGraphicsForWindow(SDL_Window* window, void* nativeRenderHandle)
 {
-    auto& settings = EngineSettings::GetInstance();
-
-    // Core engine objects
-    GetEngineRuntime().timer = std::make_unique<Timer>();
-    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
-    GetEngineRuntime().input = std::make_unique<InputManager>();
-    GetEngineRuntime().input->Initialize(static_cast<HWND>(window));
     GetEngineRuntime().graphics = std::make_unique<GraphicsEngine>();
 
     // On macOS+Metal the RHI needs an NSView/CAMetalLayer, not the SDL_Window.
@@ -707,6 +700,31 @@ static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandl
         console.LogInfo("Graphics engine initialized (RHI backend).");
     else
         console.LogWarning("Graphics engine initialization deferred (headless fallback).");
+    return hr;
+}
+
+/**
+ * @brief Initialize SDL2 windowed-mode subsystems: input, engine context,
+ *        modules, audio, and console commands.
+ *
+ * GraphicsEngine must already be constructed and initialized by the caller.
+ * The caller owns that step because a Vulkan→OpenGL fallback may require
+ * recreating the window before graphics init succeeds against the right
+ * surface type.
+ *
+ * @param window The SDL2 window (already created by the caller).
+ * @param argc Argument count from main().
+ * @param argv Argument values from main().
+ */
+static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
+{
+    auto& settings = EngineSettings::GetInstance();
+
+    // Core engine objects (graphics is already initialized by the caller)
+    GetEngineRuntime().timer = std::make_unique<Timer>();
+    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
+    GetEngineRuntime().input = std::make_unique<InputManager>();
+    GetEngineRuntime().input->Initialize(static_cast<HWND>(window));
 
     // Engine context, physics, core subsystems, gameplay subsystems
     InitLinuxCoreSubsystems(/*registerGameplay=*/true);
@@ -714,8 +732,9 @@ static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandl
     // Modules, audio, console commands
     InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/true);
 
-    // Update window title with primary module name
-    if (GetEngineRuntime().moduleManager)
+    // Update window title with primary module name (only if we have a window —
+    // the windowless NullRHIDevice fallback path sets window = nullptr).
+    if (window && GetEngineRuntime().moduleManager)
     {
         auto* primary = GetEngineRuntime().moduleManager->GetPrimaryModule();
         if (primary)
@@ -746,11 +765,16 @@ static void InitializeSDL2Subsystems(SDL_Window* window, void* nativeRenderHandl
  *
  * Processes SDL events via HandleSDLEvent(), then calls TickFrame() for
  * the engine update. Returns when the window is closed or SIGINT is received.
+ *
+ * @param pollSdlEvents When false (SDL_Init failed), skip event polling and
+ *        run a pure tick loop. The engine still ticks frames and respects
+ *        SIGINT / test-frame-limit, just without SDL event input.
  */
-static void RunSDL2MainLoop()
+static void RunSDL2MainLoop(bool pollSdlEvents)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("Starting main engine loop (SDL2)...");
+    console.LogInfo(pollSdlEvents ? "Starting main engine loop (SDL2)..."
+                                  : "Starting main engine loop (SDL2 uninitialized — tick only)...");
 
     if (g_testFrameLimit > 0)
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
@@ -765,15 +789,18 @@ static void RunSDL2MainLoop()
             break;
         }
 
-        SDL_Event event;
         bool running = true;
 
-        while (SDL_PollEvent(&event))
+        if (pollSdlEvents)
         {
-            if (!HandleSDLEvent(event))
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
             {
-                running = false;
-                break;
+                if (!HandleSDLEvent(event))
+                {
+                    running = false;
+                    break;
+                }
             }
         }
 
@@ -808,10 +835,16 @@ static int RunSDL2Windowed(int argc, char* argv[])
     SDL_SetHint("SDL_VIDEO_X11_FORCE_EGL", "1");
     SDL_SetHint(SDL_HINT_VIDEO_X11_FORCE_EGL, "1");
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
+    const bool sdlInitOk = (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) == 0);
+    if (!sdlInitOk)
     {
-        Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_Init failed: ") + SDL_GetError());
-        return -1;
+        // SDL_Init can fail on sandboxed hosts with no display server, no
+        // joystick subsystem, or when dbus/udev aren't reachable. Fall
+        // through to the windowless / NullRHIDevice path instead of
+        // aborting — the engine is still useful for running game logic,
+        // physics, scripting, and networking headlessly.
+        Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_Init failed: ") + SDL_GetError() +
+                                                       " — falling back to windowless / NullRHIDevice mode");
     }
 
     auto& settings = EngineSettings::GetInstance();
@@ -831,7 +864,8 @@ static int RunSDL2Windowed(int argc, char* argv[])
     // ICD can set SPARK_DISABLE_VULKAN=1 and this branch will pick
     // OpenGL instead — matching what the RHIBridge will also choose.
     bool preferVulkan = false;
-    bool preferMetal = Spark::MacOS::ShouldPreferMetal();
+    bool preferMetal = sdlInitOk && Spark::MacOS::ShouldPreferMetal();
+    if (sdlInitOk)
     {
         const char* sdlDriver = SDL_GetCurrentVideoDriver();
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "SDL2 video driver: %s", sdlDriver ? sdlDriver : "<null>");
@@ -877,7 +911,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
         }
     }
 
-    if (!preferVulkan && !preferMetal)
+    if (sdlInitOk && !preferVulkan && !preferMetal)
     {
         // OpenGL path — set attributes before window creation (required
         // for Mesa llvmpipe and other software rasterizers).
@@ -890,6 +924,22 @@ static int RunSDL2Windowed(int argc, char* argv[])
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     }
 
+    // If SDL itself failed to initialize, or RHIBridge already decided there
+    // is no usable GPU backend (e.g. under gVisor or on a host missing
+    // libEGL/libvulkan), skip SDL window creation entirely. SDL2's offscreen
+    // video driver dlopen()s libEGL during SDL_CreateWindow — if libEGL is
+    // missing the process exits with -1 without surfacing an error through
+    // SDL_GetError(). Running windowless in that case lets the engine come up
+    // on NullRHIDevice.
+    const bool noGpuBackend =
+        !sdlInitOk || ((!preferVulkan && !preferMetal) &&
+                       (Spark::RHI::RHIBridge::GetRecommendedBackend() == Spark::RHI::GraphicsBackend::None));
+    if (noGpuBackend)
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Graphics,
+                       "No GPU backend available — skipping SDL window creation, running on NullRHIDevice");
+    }
+
     Uint32 windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     if (settings.Graphics().fullscreen)
         windowFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
@@ -900,15 +950,25 @@ static int RunSDL2Windowed(int argc, char* argv[])
     else
         windowFlags |= SDL_WINDOW_OPENGL;
 
-    SDL_Window* window =
-        SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
-    if (!window)
+    SDL_Window* window = nullptr;
+    if (!noGpuBackend)
     {
-        Spark::SimpleConsole::GetInstance().LogError(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
-        if (preferVulkan)
-            SDL_Vulkan_UnloadLibrary();
-        SDL_Quit();
-        return -1;
+        window =
+            SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH, windowFlags);
+        if (!window)
+        {
+            // Treat window-creation failure as recoverable: the engine will
+            // initialize graphics against a null handle (NullRHIDevice) and
+            // run the main loop windowless. This matches the headless
+            // fallback the rest of the stack already handles.
+            Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_CreateWindow failed: ") + SDL_GetError() +
+                                                           " — falling back to windowless / NullRHIDevice mode");
+            if (preferVulkan)
+            {
+                SDL_Vulkan_UnloadLibrary();
+                preferVulkan = false;
+            }
+        }
     }
 
     // On macOS, extract a Metal-capable view so MetalDevice can attach a
@@ -917,14 +977,20 @@ static int RunSDL2Windowed(int argc, char* argv[])
     // so MetalSwapChain::ConfigureMetalLayer() reuses it. On non-macOS the
     // call is a no-op that returns nullptr.
     void* sdlMetalView = nullptr;
-    if (preferMetal)
+    if (preferMetal && window)
     {
         sdlMetalView = Spark::MacOS::CreateMetalView(window);
         if (!sdlMetalView)
         {
+            // Metal framework unavailable / sandbox restriction. Tear down
+            // the Metal window and continue windowless — RHIBridge will
+            // select NullRHIDevice and the engine will run headlessly rather
+            // than aborting.
+            Spark::SimpleConsole::GetInstance().LogWarning(
+                "Spark::MacOS::CreateMetalView returned null — running windowless on NullRHIDevice");
             SDL_DestroyWindow(window);
-            SDL_Quit();
-            return -1;
+            window = nullptr;
+            preferMetal = false;
         }
     }
 
@@ -934,7 +1000,7 @@ static int RunSDL2Windowed(int argc, char* argv[])
     // surface out of SDL_Vulkan_CreateSurface() inside CreateSwapChain().
     // Metal has no pre-init step either — the Metal view was created above.
     SDL_GLContext glContext = nullptr;
-    if (!preferVulkan && !preferMetal)
+    if (!preferVulkan && !preferMetal && window)
     {
         glContext = SDL_GL_CreateContext(window);
         if (!glContext)
@@ -963,51 +1029,95 @@ static int RunSDL2Windowed(int argc, char* argv[])
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     }
 
-    // If the engine was created with a Vulkan window but GraphicsEngine
-    // fell back to OpenGL (Vulkan loaded but couldn't create a usable
-    // surface/device), recreate the window with OpenGL flags and create
-    // a GL context so the fallback backend can actually render.
-    if (preferVulkan && GetEngineRuntime().graphics)
+    void* nativeRenderHandle = (preferMetal && sdlMetalView) ? sdlMetalView : nullptr;
+
+    // Initialize graphics here (not inside InitializeSDL2Subsystems) so we
+    // can detect the Vulkan→OpenGL fallback case below. SDL2 bakes the
+    // backend choice into the window flags at creation time, so if
+    // RHIBridge falls back from Vulkan to OpenGL we need to recreate the
+    // window with SDL_WINDOW_OPENGL and re-run graphics init.
+    InitializeGraphicsForWindow(window, nativeRenderHandle);
+
+    if (preferVulkan)
     {
-        auto* rhiDevice = GetEngineRuntime().graphics->GetRHIDevice();
-        bool vulkanActive = rhiDevice && rhiDevice->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
+        auto* rhiDev = GetEngineRuntime().graphics->GetRHIDevice();
         auto* rhiBridge = GetEngineRuntime().graphics->GetRHIBridge();
-        bool headless = rhiBridge && rhiBridge->IsHeadless();
+        const bool vulkanActive = rhiDev && rhiDev->GetBackendType() == Spark::RHI::GraphicsBackend::Vulkan;
+        const bool headless = rhiBridge && rhiBridge->IsHeadless();
+
         if (!vulkanActive && !headless)
         {
-            Spark::SimpleConsole::GetInstance().LogInfo(
-                "Vulkan backend unavailable — recreating window with OpenGL support");
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                           "Vulkan requested but RHI selected %s — recreating window with SDL_WINDOW_OPENGL",
+                           rhiDev ? Spark::RHI::GetBackendName(rhiDev->GetBackendType()) : "<null>");
+
+            // Tear down graphics + Vulkan window before rebuilding.
+            GetEngineRuntime().graphics->Shutdown();
+            GetEngineRuntime().graphics.reset();
             SDL_DestroyWindow(window);
-            windowFlags = (windowFlags & ~SDL_WINDOW_VULKAN) | SDL_WINDOW_OPENGL;
+            SDL_Vulkan_UnloadLibrary();
+            preferVulkan = false;
+
+            windowFlags &= ~static_cast<Uint32>(SDL_WINDOW_VULKAN);
+            windowFlags |= SDL_WINDOW_OPENGL;
+
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+            SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+            SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
             window = SDL_CreateWindow("Spark Engine", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, winW, winH,
                                       windowFlags);
-            if (window)
+            if (!window)
+            {
+                // Second-chance GL window creation also failed. Don't abort;
+                // initialize graphics against a null handle and run the engine
+                // on NullRHIDevice, matching the noGpuBackend path above.
+                Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_CreateWindow (GL fallback) failed: ") +
+                                                               SDL_GetError() +
+                                                               " — falling back to windowless / NullRHIDevice mode");
+            }
+            else
             {
                 glContext = SDL_GL_CreateContext(window);
-                if (glContext)
+                if (!glContext)
+                {
+                    Spark::SimpleConsole::GetInstance().LogWarning(
+                        std::string("SDL_GL_CreateContext (GL fallback) failed: ") + SDL_GetError() +
+                        " — engine will try headless fallback");
+                }
+                else
                 {
                     SDL_GL_MakeCurrent(window, glContext);
                     SDL_GL_SetSwapInterval(1);
+                    Spark::SimpleConsole::GetInstance().LogInfo("SDL2 OpenGL context created after Vulkan fallback");
                 }
-                GetEngineRuntime().graphics->Shutdown();
-                GetEngineRuntime().graphics->Initialize(static_cast<Spark::NativeWindowHandle>(window));
             }
+
+            // Metal view is only valid for a preferMetal path — Vulkan fallback
+            // never creates one, so nativeRenderHandle stays null here.
+            InitializeGraphicsForWindow(window, /*nativeRenderHandle=*/nullptr);
         }
     }
 
-    void* nativeRenderHandle = (preferMetal && sdlMetalView) ? sdlMetalView : nullptr;
-
-    InitializeSDL2Subsystems(window, nativeRenderHandle, argc, argv);
-    RunSDL2MainLoop();
+    InitializeSDL2Subsystems(window, argc, argv);
+    RunSDL2MainLoop(/*pollSdlEvents=*/sdlInitOk);
 
     ShutdownLinux();
     if (glContext)
         SDL_GL_DeleteContext(glContext);
     Spark::MacOS::DestroyMetalView(sdlMetalView);
-    SDL_DestroyWindow(window);
-    if (preferVulkan)
-        SDL_Vulkan_UnloadLibrary();
-    SDL_Quit();
+    if (window)
+        SDL_DestroyWindow(window);
+    if (sdlInitOk)
+    {
+        if (preferVulkan)
+            SDL_Vulkan_UnloadLibrary();
+        SDL_Quit();
+    }
     return 0;
 }
 #endif // SPARK_SDL2_AVAILABLE

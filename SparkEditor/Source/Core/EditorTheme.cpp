@@ -593,23 +593,23 @@ namespace SparkEditor
         t.author = "Spark Engine Team";
 
         // Warm neutral background stack (hue ≈ 60, very low chroma).
-        t.background = ThemeColor::FromHex("#1A1716");        // bg-1: panel
-        t.backgroundDark = ThemeColor::FromHex("#110E0D");    // bg-0: deepest
-        t.backgroundLight = ThemeColor::FromHex("#302D2A");   // bg-3: hover/input
+        t.background = ThemeColor::FromHex("#1A1716");      // bg-1: panel
+        t.backgroundDark = ThemeColor::FromHex("#110E0D");  // bg-0: deepest
+        t.backgroundLight = ThemeColor::FromHex("#302D2A"); // bg-3: hover/input
         t.backgroundAccent = ThemeColor::FromHex("#AF530D").WithAlpha(0.22f);
-        t.backgroundHeader = ThemeColor::FromHex("#23201E");  // bg-2: header row
+        t.backgroundHeader = ThemeColor::FromHex("#23201E"); // bg-2: header row
         t.backgroundActive = ThemeColor::FromHex("#F1823A").WithAlpha(0.20f);
         t.backgroundHover = ThemeColor::FromHex("#302D2A");
         t.backgroundSelected = ThemeColor::FromHex("#F1823A").WithAlpha(0.16f);
 
         // Warm off-white foreground (hue ≈ 80).
-        t.text = ThemeColor::FromHex("#C5C3C1");              // fg-1
-        t.textDisabled = ThemeColor::FromHex("#64625F");      // fg-3
-        t.textSecondary = ThemeColor::FromHex("#8D8B88");     // fg-2
-        t.textAccent = ThemeColor::FromHex("#F1823A");        // ember
-        t.textWarning = ThemeColor::FromHex("#EDCF59");       // yellow
-        t.textError = ThemeColor::FromHex("#FA6862");         // red
-        t.textSuccess = ThemeColor::FromHex("#6ED086");       // green
+        t.text = ThemeColor::FromHex("#C5C3C1");          // fg-1
+        t.textDisabled = ThemeColor::FromHex("#64625F");  // fg-3
+        t.textSecondary = ThemeColor::FromHex("#8D8B88"); // fg-2
+        t.textAccent = ThemeColor::FromHex("#F1823A");    // ember
+        t.textWarning = ThemeColor::FromHex("#EDCF59");   // yellow
+        t.textError = ThemeColor::FromHex("#FA6862");     // red
+        t.textSuccess = ThemeColor::FromHex("#6ED086");   // green
 
         // Buttons — slightly raised from panel.
         t.button = ThemeColor::FromHex("#23201E");
@@ -623,10 +623,10 @@ namespace SparkEditor
         t.frameActive = ThemeColor::FromHex("#F1823A").WithAlpha(0.35f);
 
         // Borders — barely visible on idle, ember on focus.
-        t.border = ThemeColor::FromHex("#35322F");            // line
-        t.borderLight = ThemeColor::FromHex("#403C38");       // bg-4
+        t.border = ThemeColor::FromHex("#35322F");      // line
+        t.borderLight = ThemeColor::FromHex("#403C38"); // bg-4
         t.borderAccent = ThemeColor::FromHex("#F1823A");
-        t.borderSeparator = ThemeColor::FromHex("#282523");   // line-soft
+        t.borderSeparator = ThemeColor::FromHex("#282523"); // line-soft
 
         // Title bar — deepest charcoal; active tab uses a dim ember wash.
         t.titleBar = ThemeColor::FromHex("#110E0D");

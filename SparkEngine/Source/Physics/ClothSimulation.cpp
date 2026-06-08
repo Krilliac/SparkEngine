@@ -241,6 +241,10 @@ namespace Spark::Physics
 
     void ClothSimulation::IntegratePositions(ClothInstance& cloth, float deltaTime)
     {
+        // Skip integration on zero-delta ticks; the divide at the end would produce NaN velocities
+        // (0 position delta / 0 dt) that persist to downstream consumers.
+        if (deltaTime <= 1e-8f)
+            return;
         float dt2 = deltaTime * deltaTime;
         float dampFactor = 1.0f - cloth.damping;
 
