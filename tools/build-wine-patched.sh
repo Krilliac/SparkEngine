@@ -5,9 +5,9 @@
 #
 # Use this on a host where the LD_PRELOAD `tools/gvisor-wine-shim.so` cannot
 # fully escape the gVisor + Wine race condition documented in
-# `.claude/knowledge/wine-gvisor-incompatibility.md`. The patched Wine fixes
+# `wiki/advanced/Wine-Role-and-Fallback-Tiers.md`. The patched Wine fixes
 # all three failure modes natively in Wine source — see
-# `.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md` for the full
+# `wiki/advanced/Wine-Role-and-Fallback-Tiers.md` for the full
 # diagnosis and `docs/wine-upstream/0001..0003-*.patch` for the patches.
 #
 # Requirements:

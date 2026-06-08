@@ -6,7 +6,7 @@
 
 ## Scope Source
 
-This milestone scopes the seven Tier-3 items from `.claude/knowledge/engine-recommendations-2026-04-04.md` (items 9-15), each represented as one epic.
+This milestone scopes the seven Tier-3 items from `wiki/research/Engine-Feature-Recommendations.md` (items 9-15), each represented as one epic.
 
 ## Global Completion Gates
 

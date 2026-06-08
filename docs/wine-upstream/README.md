@@ -3,7 +3,7 @@
 This directory contains two patches against Wine that fix bugs
 `SparkEngine` hit running MinGW-cross-compiled binaries under Wine
 inside a gVisor-backed sandbox. The root causes are documented in
-[`.claude/knowledge/wine-gvisor-incompatibility.md`](../../.claude/knowledge/wine-gvisor-incompatibility.md).
+[Wine Role and Fallback Tiers](../../wiki/advanced/Wine-Role-and-Fallback-Tiers.md).
 
 Both patches target **Wine 9.0** (tag `wine-9.0`, commit hash
 visible via `git describe` in the upstream tree). The line numbers
@@ -243,7 +243,7 @@ larger, more invasive change and is deliberately not attempted here.
  * Wine source browsed: `dlls/ntdll/unix/signal_x86_64.c` (segv_handler,
    trap_handler, get_signal_trap_code helper) and `dlls/ntdll/unix/virtual.c`
    (virtual_setup_exception, new refresh_stack_info_from_pthread helper).
- * Root-cause analysis: [`.claude/knowledge/wine-gvisor-incompatibility.md`](../../.claude/knowledge/wine-gvisor-incompatibility.md)
+ * Root-cause analysis: [Wine Role and Fallback Tiers](../../wiki/advanced/Wine-Role-and-Fallback-Tiers.md)
    (on the `claude/fix-bugs-stability-alRBr` branch / PR #470).
  * LD_PRELOAD proof-of-concept for bug 1: [`tools/gvisor-wine-shim.c`](../../tools/gvisor-wine-shim.c)
    (same PR).

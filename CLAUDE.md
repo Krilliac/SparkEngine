@@ -23,10 +23,10 @@ Sync your branch with the latest upstream `Working` branch. This is the **first 
 **Step 2 — Load persistent context:**
 
 ```bash
-cat .claude/index.md
+cat wiki/_Sidebar.md
 ```
 
-Scan the index for topics relevant to the current task. Read those knowledge files before proceeding.
+Project knowledge lives in the **wiki** (the `.claude/knowledge` base was retired 2026-06-08). Scan the sidebar — especially the **Development & Process**, **Research & Analysis**, and **Engineering Notes & Audits** sections — for pages relevant to the current task, and read those before proceeding.
 
 **Step 3 — Bloat check:**
 
@@ -167,9 +167,9 @@ cd build && ctest --output-on-failure
 
 CMake 3.25+, C++23 required. GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+). Key toggles: `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, `ENABLE_NETWORKING` (ON by default), `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL` (OFF), `ENABLE_DXR`, `ENABLE_HYBRID_RT`, `ENABLE_RECAST`, `ENABLE_SDL2` (auto-ON on Linux), `SPARK_HEADLESS_SUPPORT`, `SPARK_DOUBLE_PRECISION_PHYSICS` (OFF), `BUILD_TESTS`, `BUILD_GAME_MODULES` (ON by default — set OFF for engine-only builds).
 
-**Cross-compilation (MinGW + Wine):** Build Windows D3D11 code on Linux via MinGW, run under Wine + DXVK/Lavapipe. See `.claude/knowledge/mingw-wine-cross-compilation.md` for full setup. Presets: `linux-mingw-release`, `linux-mingw-debug`.
+**Cross-compilation (MinGW + Wine):** Build Windows D3D11 code on Linux via MinGW, run under Wine + DXVK/Lavapipe. See `wiki/development/MinGW-Wine-Cross-Compilation.md` for full setup. Presets: `linux-mingw-release`, `linux-mingw-debug`.
 
-**Software rendering:** Every RHI backend has a GPU-less fallback — WARP (D3D11/D3D12), Lavapipe (Vulkan), llvmpipe (OpenGL), or NullRHIDevice (headless). See `.claude/knowledge/codebase-observations.md` for details.
+**Software rendering:** Every RHI backend has a GPU-less fallback — WARP (D3D11/D3D12), Lavapipe (Vulkan), llvmpipe (OpenGL), or NullRHIDevice (headless). See `wiki/advanced/Codebase-Observations.md` for details.
 
 ## Git Sync Workflow
 
@@ -205,7 +205,7 @@ docs/generate-api-docs.sh check   # Regenerate API docs if headers changed
 docs/generate-flowchart.sh generate  # Regenerate architecture flowchart
 docs/update-codebase-stats.sh generate  # Regenerate Codebase-Statistics.md
 docs/update-readme-badges.sh update    # Update README counts & badge JSON
-docs/update-context.sh update          # Update .claude/index.md & CLAUDE.md
+docs/update-context.sh update          # Update CLAUDE.md counts
 ```
 
 ### Code changes (`.h`, `.hpp`, `.cpp`, `CMakeLists.txt`)
@@ -253,7 +253,7 @@ tools/validate-all.sh --warn-only
 | `docs/generate-flowchart.sh generate` | Engine-Architecture-Flowchart.md | ~5s |
 | `docs/update-codebase-stats.sh generate` | Codebase-Statistics.md (all metrics) | ~5s |
 | `docs/update-readme-badges.sh update` | README.md, badge JSON, AI prompts | ~3s |
-| `docs/update-context.sh update` | .claude/index.md, CLAUDE.md | ~2s |
+| `docs/update-context.sh update` | CLAUDE.md counts | ~2s |
 
 All scripts support `check` mode (dry-run, exit 1 if stale).
 
@@ -283,7 +283,7 @@ gh run view <RUN_ID> --log-failed
 # Fix locally, commit, push, re-poll
 ```
 
-To reproduce CI failures locally, see `.claude/knowledge/ci-reproducible-builds.md` for exact build commands for each job.
+To reproduce CI failures locally, see `wiki/development/CI-Reproducible-Builds.md` for exact build commands for each job.
 
 ### CI jobs summary
 
@@ -324,7 +324,7 @@ docs/generate-api-docs.sh generate   # API reference (~250 headers → ~240 page
 docs/generate-flowchart.sh generate  # Engine-Architecture-Flowchart.md
 docs/update-codebase-stats.sh generate  # Codebase-Statistics.md (LOC, file counts, largest files)
 docs/update-readme-badges.sh update     # README.md counts, badge JSON, AI prompt files
-docs/update-context.sh update           # .claude/index.md and CLAUDE.md counts
+docs/update-context.sh update           # CLAUDE.md counts
 ```
 
 **What gets auto-generated:**
@@ -333,7 +333,7 @@ docs/update-context.sh update           # .claude/index.md and CLAUDE.md counts
 - `wiki/getting-started/Engine-Architecture-Flowchart.md` — architecture ASCII diagrams
 - `wiki/advanced/Codebase-Statistics.md` — all code metrics
 - `.github/badges/*.json` — LOC and file count badges for README
-- README.md, CLAUDE.md, .claude/index.md — hardcoded counts
+- README.md, CLAUDE.md — hardcoded counts
 
 **Requirements:** Whenever code is added, modified, or deleted:
 1. Run `docs/update-all-docs.sh` (included in pre-commit checks step 6)
@@ -354,21 +354,25 @@ Wire systems in with minimal code — call the real function directly, don't wra
 
 **SparkConsole IPC:** ConsoleProcessManager launches the subprocess and owns the pipe. It must be initialized at engine startup and `ProcessCommands()` called each frame. SimpleConsole is the engine-side log sink only.
 
-## Persistence Context Database
+## Persistence Context (Wiki)
 
-The `.claude/` directory is persistent AI memory — a knowledge base that Claude reads and writes across sessions. It captures issue fixes, effective workflows, optimizations, codebase observations, and project decisions. See `.claude/README.md` for entry format, rules, and directory structure.
+Project knowledge lives in the **wiki**, the single source of truth for humans and AI sessions. The old `.claude/knowledge` store was retired on 2026-06-08 and its content migrated into the wiki (see `.claude/README.md`). Knowledge pages live under:
 
-### When to write a new entry
+- `wiki/development/` — dev workflows, build/CI, git, formatting, cross-compilation, live testing
+- `wiki/research/` — engine/library analyses, evaluations, recommendations, external research
+- `wiki/advanced/` — codebase audits/observations, system status, architecture notes/decisions
 
-| Trigger | Entry type |
-|---------|-----------|
-| A problem required multiple attempts to solve | **Issue** |
-| A workflow or approach proved consistently effective | **Pattern** |
-| A faster/better way to do something was discovered | **Optimization** |
-| A non-obvious codebase/tooling fact was discovered | **Observation** |
-| An architectural or style decision was made | **Decision** |
+### When to write or update a wiki page
 
-After writing, update `.claude/index.md` and commit both alongside code changes.
+| Trigger | Where |
+|---------|-------|
+| A problem required multiple attempts to solve | new/updated page under the relevant section |
+| A workflow or approach proved consistently effective | `wiki/development/` |
+| A faster/better way to do something was discovered | `wiki/development/` |
+| A non-obvious codebase/tooling fact was discovered | `wiki/advanced/` |
+| An architectural or style decision was made | `wiki/advanced/` |
+
+New pages use `wiki/_Template.md` (Audience / Thread Context / Platform-Backend Scope header + canonical sections, ending with a `## Source & Freshness` note). Add the page to `wiki/_Sidebar.md`, run `docs/sync-wiki.sh sync`, and commit alongside the change.
 
 ### At session end
 

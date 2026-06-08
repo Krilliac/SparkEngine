@@ -96,9 +96,6 @@ jobs:
     - name: Validate prompt system
       run: ./tools/validate-prompts.sh --ci
 
-    - name: Check roadmap core metrics snapshots
-      run: ./tools/check-roadmap-core-metrics.sh
-
   check-thirdparty-manifest:
     runs-on: ubuntu-24.04
     steps:

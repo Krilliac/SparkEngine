@@ -1,147 +1,46 @@
-# Persistence Context Database
+# `.claude/` — Project AI Configuration
 
-This directory is Claude's persistent memory for the SparkEngine project. It is **not** game-engine code — it is a structured knowledge store that Claude reads and writes across sessions to accumulate learning: solutions to problems, effective workflows, codebase observations, and project-specific decisions.
+> **The knowledge base that used to live here has been retired.** Project
+> knowledge now lives in the **wiki** (DuetOS-style), which is the single source
+> of truth for humans and AI sessions alike.
 
-## Why This Exists
+## What changed
 
-Claude starts each session without memory of prior sessions. Without a persistence mechanism, the same issues get diagnosed repeatedly, effective workflows are rediscovered from scratch, and non-obvious codebase facts have to be re-inferred. This directory is the remedy.
+Previously this directory held a parallel `index.md` + `knowledge/*.md` store of
+audits, engine analyses, patterns, and decisions. That duplicated the project
+wiki and drifted out of date. On 2026-06-08 every entry was migrated into the
+wiki, freshened against the current codebase, and the `.claude/knowledge/` store
+was removed.
 
-## How Claude Should Use This
+## Where knowledge lives now
 
-### At Session Start (mandatory)
+Read the wiki at session start (see `CLAUDE.md` → "Session start"). The migrated
+content lives under these sidebar sections (`wiki/_Sidebar.md`):
 
-After syncing with the upstream `Working` branch (per the "Session start" section in `CLAUDE.md`), Claude must:
+| Old `.claude/knowledge` content | New wiki location |
+|---------------------------------|-------------------|
+| Dev workflows, build/CI, git, clang-format, bloat pattern, cross-compilation, live-editor testing | `wiki/development/` (**Development & Process**) |
+| Engine analyses, library evaluations, viability/feature/project recommendations, mac compat, DuetOS catalog, external research | `wiki/research/` (**Research & Analysis**) |
+| Codebase audits/observations, system/module status, stub catalog, memory integrity/safety, GPU/physics/daemon/reflection notes, Wine tiers | `wiki/advanced/` (**Engineering Notes & Audits**) |
 
-1. Read `.claude/index.md` to load the table of contents.
-2. Identify any entries relevant to the current task or domain.
-3. Read those knowledge files before proceeding.
+## What this directory is for now
 
-This prevents re-discovering solutions, re-experiencing dead ends, and re-learning project conventions.
+`.claude/` is reserved for Claude Code **behavioral configuration** only — e.g.
+`agents/`, `skills/`, `hooks/`, and `settings*.json` if/when added (the model
+used by the sibling DuetOS project). It is **not** a knowledge store.
 
-### When to Write a New Entry
+## How to record new knowledge
 
-Write a new entry (or update an existing one) whenever Claude learns something worth preserving across sessions:
+When a session learns something worth preserving across sessions (an issue's
+root cause, an effective pattern, a non-obvious codebase fact, a decision):
 
-| Write when... | Entry type |
-|---------------|-----------|
-| A problem required multiple attempts to solve | **Issue** |
-| A workflow or approach proved consistently effective | **Pattern** |
-| A faster/better way to do something was discovered | **Optimization** |
-| A non-obvious fact about the codebase was discovered | **Observation** |
-| An architectural or stylistic decision was made for this project | **Decision** |
+1. Add or update the relevant **wiki page** (use `wiki/_Template.md` for new
+   pages: Audience / Thread Context / Platform-Backend Scope header + canonical
+   sections, ending with a `## Source & Freshness` note).
+2. Add the page to `wiki/_Sidebar.md` under the right section.
+3. Run `docs/sync-wiki.sh sync` (and `docs/update-all-docs.sh` for code changes)
+   and commit alongside the change.
 
-**Do not** write entries for trivial single-step tasks or things already clearly stated in CLAUDE.md.
-
-### When to Update an Existing Entry
-
-- A new method was tried and the status changed
-- A workaround was superseded by a proper fix
-- A codebase observation became outdated (e.g., a deprecated API was removed)
-- Additional edge cases or caveats were discovered
-
-## Entry Format
-
-All entries use this structure. Sections marked _(Issue only)_ are omitted for non-Issue types; _(non-Issue)_ sections replace them.
-
-```markdown
-# [Topic Name]
-
-**Last updated:** YYYY-MM-DD
-**Type:** Issue | Pattern | Optimization | Observation | Decision
-**Status:** Resolved | Active | Ongoing | Superseded
-
-## Description
-[What this entry is about. One paragraph.]
-
-## Context
-[When/where this applies — which tools, workflows, CI jobs, codebase areas]
-
-## Methods Tried  ← Issue only
-1. **[Approach]** → FAILED
-   Reason: [why]
-2. **[Approach]** → WORKED
-
-## Approach  ← Pattern / Optimization only
-[What to do. Actionable steps or commands.]
-
-## Details  ← Observation / Decision only
-[The fact, finding, or decision and its rationale.]
-
-## Solution / Summary
-[For Issues: exact working commands. For others: key takeaway in one paragraph.]
-
-## Notes
-- [Caveats, edge cases, related entries, links to CLAUDE.md sections]
-```
-
-**Status values:**
-- `Resolved` — Issue fixed; no longer a problem
-- `Active` — Pattern/Optimization/Observation currently in use
-- `Ongoing` — Issue or situation that recurs and is being managed
-- `Superseded` — Entry replaced by a better approach (keep for history)
-
-## Cross-References
-
-When an entry directly relates to another, add a `**See also:**` line in the Notes section:
-
-```markdown
-## Notes
-- **See also:** [topic description](other-entry-filename.md)
-```
-
-Use this when one entry's context or solution depends on knowledge from another (e.g., an Optimization that references its related Issue, or an Observation that leads to a Pattern). This allows navigating between related entries without returning to the index.
-
-## Rules
-
-1. **Claude owns these files** — written by Claude sessions; humans may correct factual errors.
-2. **Keep entries factual** — document what actually happened, not hypotheticals.
-3. **Commit changes** — context files are tracked in git so future sessions on any branch benefit.
-4. **Do not exclude from `.promptignore`** — this directory must remain visible to Claude.
-5. **Update the index** — whenever you add or update a knowledge file, update `index.md`.
-6. **Prefer updating over creating** — if an existing entry covers the topic, extend it.
-7. **Cross-reference related entries** — add `See also:` links when entries are meaningfully related.
-
-## Entry Types Reference
-
-| Type | Purpose | Mandatory sections |
-|------|---------|-------------------|
-| **Issue** | Problem + fix; records failed attempts | Description, Context, Methods Tried, Solution, Notes |
-| **Pattern** | Repeatable workflow that works well | Description, Context, Approach, Notes |
-| **Optimization** | Faster/better way to do something | Description, Context, Approach, Notes |
-| **Observation** | Non-obvious codebase/tooling fact | Description, Context, Details, Notes |
-| **Decision** | Project-specific architectural or style choice | Description, Context, Details, Notes |
-
-## Directory Structure
-
-```
-.claude/
-├── README.md                              # This file — system overview
-├── index.md                               # Master index — READ THIS AT SESSION START
-└── knowledge/
-    ├── ai-bloat-pattern.md                # [Observation] AI bloat causes and countermeasures
-    ├── build-optimizations.md             # [Optimization] Build and CI workflow speedups
-    ├── ci-reproducible-builds.md          # [Pattern] Local CI reproduction commands
-    ├── closed-engines-analysis.md         # [Decision] 13 closed/proprietary engine analysis
-    ├── code-quality-violations.md         # [Observation] Oversized functions, method violations
-    ├── codebase-bloat-audit-2026-03-15.md # [Observation] Comprehensive bloat audit
-    ├── codebase-observations.md           # [Observation] Non-obvious SparkEngine facts
-    ├── documentation-coverage-audit.md    # [Observation] Wiki and API doc coverage
-    ├── eleven-engine-analysis.md          # [Decision] 11 engines + 3 frameworks analyzed
-    ├── engine-next-steps-2026-03-22.md    # [Decision] 5-phase roadmap
-    ├── five-engine-analysis.md            # [Decision] 5-engine analysis (Cocos/Defold/etc.)
-    ├── gameplay-systems-status.md         # [Observation] 29+ working engine systems
-    ├── hardware-acceleration-systems.md   # [Decision] 8 GPU systems, 72 tests
-    ├── jolt-physics-integration.md        # [Observation] Jolt Physics migration status
-    ├── live-editor-testing.md             # [Pattern] Xvfb + Mesa llvmpipe testing
-    ├── load-test-baseline.md              # [Observation] Performance benchmarks
-    ├── mac-compatibility-analysis.md      # [Observation] macOS gaps and roadmap
-    ├── memory-error-handling-issues.md    # [Issue] Memory safety (mostly resolved)
-    ├── mingw-wine-cross-compilation.md    # [Pattern] MinGW + Wine D3D11 on Linux
-    ├── raii-codebase-analysis.md          # [Observation] RAII analysis (resolved)
-    ├── rendering-pipeline-status.md       # [Observation] Rendering feature status
-    ├── sparkgame-module-status.md         # [Observation] SparkGame module audit
-    ├── test-suite-audit.md                # [Observation] Test suite inventory
-    ├── thirdparty-dependencies-audit.md   # [Observation] ThirdParty dependency status
-    ├── thorvg-unity-graphics-analysis.md  # [Decision] ThorVG + Unity + 33 libraries
-    └── workflow-patterns.md               # [Pattern] Effective dev workflows
-```
+Per-developer, cross-session scratch memory (not project knowledge) still lives
+in the host-level Claude memory directory and `.remember/`, which are separate
+from this in-repo configuration.

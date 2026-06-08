@@ -21,7 +21,7 @@
 #   VKD3D_PATH            — Path to VKD3D-Proton installation (auto-detected)
 #   SPARK_WINE_LOG        — Set to 1 for verbose Wine debug output
 #
-# Fallback ladder controls (see .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md):
+# Fallback ladder controls (see wiki/advanced/Wine-Role-and-Fallback-Tiers.md):
 #   SPARK_WINE_BACKEND={dxvk|wined3d|null}
 #                         — Pin the D3D11 translator layer to a specific rung
 #                           of the fallback ladder:
@@ -150,7 +150,7 @@ error() {
 #   1. Env override: $WINE
 #   2. `/opt/wine-patched/bin/wine64` if `tools/build-wine-patched.sh` has
 #      installed a SparkEngine-patched Wine (gVisor-compat — see
-#      `.claude/knowledge/wine-gvisor-root-cause-found-2026-04-14.md`)
+#      `wiki/advanced/Wine-Role-and-Fallback-Tiers.md`)
 #   3. `wine64` on $PATH (cleanest, modern distros)
 #   4. `/usr/lib/wine/wine64` direct path (bypasses the wrapper)
 #   5. `wine` on $PATH as a last resort (may fail with 32-bit .exe)
@@ -262,8 +262,8 @@ probe_wine_environment() {
             echo "[wine-run]          SPARK_SKIP_WINE=1 tools/wine-run.sh <exe>" >&2
         fi
         echo "[wine-run]" >&2
-        echo "[wine-run]        See .claude/knowledge/wine-gvisor-incompatibility.md" >&2
-        echo "[wine-run]        and .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md" >&2
+        echo "[wine-run]        See wiki/advanced/Wine-Role-and-Fallback-Tiers.md" >&2
+        echo "[wine-run]        and wiki/advanced/Wine-Role-and-Fallback-Tiers.md" >&2
         rm -f "${probe_log}"
         return 2
     fi
@@ -570,7 +570,7 @@ fi
 # SPARK_SKIP_WINE — tier-4 short-circuit. Skip Wine entirely and run the
 # matching native Linux build of the target. The tier-4 entry in the
 # software-rendering ladder (see
-# .claude/knowledge/wine-role-and-fallback-tiers-2026-04-14.md) exists
+# wiki/advanced/Wine-Role-and-Fallback-Tiers.md) exists
 # precisely for hosts where Wine itself is broken — gVisor's runsc kernel
 # being the current motivating case. This is the only rung that doesn't
 # exercise the PE / Win32 code path, so it's a diagnostic fallback, not

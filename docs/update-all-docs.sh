@@ -13,7 +13,7 @@
 #   6. generate-flowchart.sh      — Regenerate architecture flowchart
 #   7. update-codebase-stats.sh   — Regenerate Codebase-Statistics.md
 #   8. update-readme-badges.sh    — Update README.md counts & badge JSON
-#   9. update-context.sh          — Update .claude/index.md & CLAUDE.md
+#   9. update-context.sh          — Update CLAUDE.md counts
 #
 # Usage:
 #   ./update-all-docs.sh              # Run all updates (default)
@@ -117,7 +117,7 @@ update_all() {
     # 5. README badges & counts
     run_script "README Badges" "$SCRIPT_DIR/update-readme-badges.sh" "update"
 
-    # 6. AI context (.claude/index.md, CLAUDE.md)
+    # 6. AI context (CLAUDE.md)
     run_script "AI Context" "$SCRIPT_DIR/update-context.sh" "update"
 
     # Summary
@@ -214,7 +214,7 @@ case "${1:-update}" in
         echo "  docs/generate-flowchart.sh      Architecture flowchart"
         echo "  docs/update-codebase-stats.sh   Codebase-Statistics.md"
         echo "  docs/update-readme-badges.sh    README badges & counts"
-        echo "  docs/update-context.sh          .claude/index.md & CLAUDE.md"
+        echo "  docs/update-context.sh          CLAUDE.md counts"
         ;;
     *)
         echo "Usage: $0 [update|quick|check|help]"
