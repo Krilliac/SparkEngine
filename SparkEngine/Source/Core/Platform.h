@@ -107,7 +107,12 @@
 #define SPARK_CPP26 1
 #define SPARK_CPP23 1
 #define SPARK_CPP20 1
-#elif _MSVC_LANG >= 202100L
+// MSVC reports _MSVC_LANG == 202004L (a "post-C++20" placeholder) for
+// /std:c++latest until VS 2022 17.12; older values do not reach the 202100L
+// threshold even though the compiler provides the C++23 features we use.
+// Per the supported-compiler contract (MSVC 19.36+ / VS 2022 17.6+), treat
+// latest-mode on a recent-enough _MSC_VER as C++23.
+#elif _MSVC_LANG >= 202100L || (_MSVC_LANG > 202002L && defined(_MSC_VER) && _MSC_VER >= 1936)
 #define SPARK_CPP23 1
 #define SPARK_CPP20 1
 #elif _MSVC_LANG >= 202002L && !defined(SPARK_CPP20)
