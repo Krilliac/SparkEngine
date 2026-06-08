@@ -124,7 +124,10 @@ using TypeId = const void*;
 
 template <typename T> TypeId GetTypeId()
 {
-    static const char id = 0;
+    // Non-const on purpose: a `static const char id = 0` is identical read-only
+    // data for every T, which MSVC's /OPT:ICF folds into one address in Release —
+    // collapsing all type ids. A writable static keeps a distinct address per T.
+    static char id;
     return &id;
 }
 ```

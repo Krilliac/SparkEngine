@@ -53,7 +53,13 @@ using TypeId = const void*;
 
 template <typename T> TypeId GetTypeId()
 {
-    static const char id = 0;
+    // IMPORTANT: this marker must be non-const. A `static const char id = 0` is an
+    // identical read-only COMDAT for every T, which MSVC's /OPT:ICF (enabled in
+    // Release, disabled in Debug) folds into a single address — collapsing every
+    // type id to the same value and making the service locator return the wrong
+    // subsystem in Release builds. Writable data is not ICF-folded, so each T
+    // keeps a distinct address. Do not add `const` back.
+    static char id;
     return &id;
 }
 #endif

@@ -23,7 +23,9 @@ namespace TestReflect
 
     template <typename T> TypeId GetTypeId()
     {
-        static const char id = 0;
+        // Non-const so MSVC /OPT:ICF (Release) cannot fold these per-type markers
+        // into one address. See EngineContext::GetTypeId for the full rationale.
+        static char id;
         return &id;
     }
 
