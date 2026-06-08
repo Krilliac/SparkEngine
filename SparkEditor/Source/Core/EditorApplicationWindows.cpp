@@ -273,6 +273,11 @@ namespace SparkEditor
         // Render editor plugin GUI
         m_pluginManager.RenderAll();
 
+        // Panels (e.g. Scene View) can rebind the immediate context's render
+        // target while building their ImGui content. Restore the backbuffer so
+        // ImGui always renders into the window rather than a stale/unbound target.
+        m_context->OMSetRenderTargets(1, m_rtv.GetAddressOf(), nullptr);
+
         // Render ImGui
         ImGui::Render();
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

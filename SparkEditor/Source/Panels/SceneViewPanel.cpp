@@ -300,6 +300,15 @@ namespace SparkEditor
         // Set up render target
         if (m_rtv)
         {
+            // RenderSceneContent runs inside ImGui's frame build on the editor's
+            // shared immediate context. Save the currently-bound render target so
+            // we can restore it — otherwise ImGui's RenderDrawData later in the
+            // frame draws into our texture (or no target at all) and the whole
+            // editor window renders as only the clear color (a blue screen).
+            ComPtr<ID3D11RenderTargetView> prevRTV;
+            ComPtr<ID3D11DepthStencilView> prevDSV;
+            m_context->OMGetRenderTargets(1, prevRTV.GetAddressOf(), prevDSV.GetAddressOf());
+
             ID3D11RenderTargetView* targets[] = {m_rtv.Get()};
             m_context->OMSetRenderTargets(1, targets, nullptr);
 
@@ -336,8 +345,8 @@ namespace SparkEditor
                 m_context->RSSetViewports(1, &viewport);
             }
 
-            // Restore main render target
-            m_context->OMSetRenderTargets(0, nullptr, nullptr);
+            // Restore the editor's render target so ImGui renders into the window.
+            m_context->OMSetRenderTargets(1, prevRTV.GetAddressOf(), prevDSV.Get());
         }
 #endif
     }
