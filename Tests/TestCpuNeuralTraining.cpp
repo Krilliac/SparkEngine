@@ -101,7 +101,15 @@ TEST(Training_GradientCheckHuber)
     float input[2] = {0.5f, -1.4f};
     float target[3] = {0.2f, 1.5f, -0.3f};
 
-    float relErr = Trainer::GradientCheck(desc, weights, input, target, LossType::Huber, 1e-3f);
+    // Use a 1e-2 perturbation for the central difference rather than 1e-3.
+    // The relative error here is dominated by floating-point cancellation when
+    // subtracting two nearly-equal loss values, not by truncation, so a larger
+    // step is the finite-difference sweet spot: relErr drops from ~0.004 (eps
+    // 1e-3, only ~2x margin and FP-mode-sensitive — it tipped over the 1e-2
+    // bound under CI's MSVC Release toolset) to ~0.0004 (eps 1e-2, ~24x margin),
+    // making the check stable across compilers. (Training_GradientCheckMSE keeps
+    // 1e-3 since its smoother gradients pass comfortably at that step.)
+    float relErr = Trainer::GradientCheck(desc, weights, input, target, LossType::Huber, 1e-2f);
     EXPECT_LT(relErr, 1e-2f);
 }
 
