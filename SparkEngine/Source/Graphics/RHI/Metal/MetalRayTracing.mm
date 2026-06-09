@@ -58,9 +58,10 @@ namespace Spark::RHI::Metal
         {
             if (!flag.test_and_set(std::memory_order_relaxed))
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                               std::string("MetalRayTracing: ") + pass +
-                                   " not yet dispatching — falling back to SDFGI");
+                SPARK_LOG_WARN(Spark::LogCategory::Graphics, "%s",
+                               (std::string("MetalRayTracing: ") + pass +
+                                " not yet dispatching — falling back to SDFGI")
+                                   .c_str());
             }
         }
 
@@ -448,8 +449,8 @@ namespace Spark::RHI::Metal
         if (!m_impl->library)
         {
             const char* msg = err ? [[err localizedDescription] UTF8String] : "unknown error";
-            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                            std::string("MetalRayTracing: shader library failed to compile: ") + msg);
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "%s",
+                            (std::string("MetalRayTracing: shader library failed to compile: ") + msg).c_str());
             m_available = false;
             return false;
         }
