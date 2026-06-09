@@ -35,6 +35,7 @@
 #include "MetalDevice.h"
 #include "../RHIResources.h"
 #include "../../../Utils/Logger.h"
+#include "../../../Utils/LogMacros.h"
 #include "../../../Utils/SparkConsole.h"
 
 #import <Metal/Metal.h>

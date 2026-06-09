@@ -22,7 +22,14 @@
 #endif
 
 // --- Basic Win32 types ---
+// Objective-C on Apple platforms (.mm translation units that import <objc/objc.h>
+// via Metal/Cocoa) already defines BOOL as `typedef bool BOOL`. Defining our own
+// `using BOOL = int` there is a hard "type alias redefinition (bool vs int)"
+// error, so defer to the platform's BOOL under __OBJC__. Plain C++ TUs (.cpp on
+// Linux/macOS) still get the Win32-compatible int alias.
+#ifndef __OBJC__
 using BOOL = int;
+#endif
 using BYTE = unsigned char;
 using WORD = unsigned short;
 using DWORD = unsigned long;
