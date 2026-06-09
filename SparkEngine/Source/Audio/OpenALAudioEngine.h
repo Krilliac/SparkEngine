@@ -26,9 +26,18 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declare OpenAL types to avoid header dependency in this header
+// Forward declare OpenAL types to avoid header dependency in this header.
+// The underlying struct tag differs by implementation: Apple's OpenAL.framework
+// uses `struct ALCdevice_struct`, while OpenAL Soft (Linux/Windows) uses
+// `struct ALCdevice`. The forward declaration must match the platform's real
+// header or it is a "typedef redefinition with different types" error.
+#ifdef __APPLE__
+typedef struct ALCdevice_struct ALCdevice;
+typedef struct ALCcontext_struct ALCcontext;
+#else
 typedef struct ALCdevice ALCdevice;
 typedef struct ALCcontext ALCcontext;
+#endif
 
 namespace Spark::Audio
 {

@@ -41,6 +41,7 @@
 #import <Metal/Metal.h>
 
 #include <atomic>
+#include <cstdio>
 #include <cstring>
 
 namespace Spark::RHI::Metal
