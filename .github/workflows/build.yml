@@ -124,7 +124,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.ccache
         key: ccache-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -133,7 +133,7 @@ jobs:
           ccache-linux-asan-
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -216,7 +216,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.ccache
         key: ccache-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -225,7 +225,7 @@ jobs:
           ccache-linux-tsan-
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -313,7 +313,7 @@ jobs:
         sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
 
     - name: Setup ccache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.ccache
         key: ccache-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -322,7 +322,7 @@ jobs:
           ccache-linux-msan-
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-linux-msan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -412,7 +412,7 @@ jobs:
       uses: mozilla-actions/sccache-action@v0.0.10
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-windows-vs2022-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -505,7 +505,7 @@ jobs:
       uses: mozilla-actions/sccache-action@v0.0.10
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -570,7 +570,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.ccache
         key: ccache-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -579,7 +579,7 @@ jobs:
           ccache-linux-gcc-${{ matrix.config }}-
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -678,7 +678,7 @@ jobs:
         sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.ccache
         key: ccache-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -687,7 +687,7 @@ jobs:
           ccache-linux-clang-${{ matrix.config }}-
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -788,7 +788,7 @@ jobs:
           mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/.ccache
         key: ccache-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -797,7 +797,7 @@ jobs:
           ccache-linux-mingw-
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -906,7 +906,7 @@ jobs:
         brew install molten-vk || echo "::warning::MoltenVK install failed — Vulkan path will be disabled"
 
     - name: Setup ccache
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: ~/Library/Caches/ccache
         key: ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -915,7 +915,7 @@ jobs:
           ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-
 
     - name: Restore build directory
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: build
         key: build-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1019,7 +1019,7 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 lcov ccache libgl-dev libsdl2-dev libfreetype-dev
       - name: Setup ccache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.ccache
           key: ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1027,7 +1027,7 @@ jobs:
             ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
             ccache-coverage-
       - name: Restore build directory
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: build
           key: build-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1187,7 +1187,7 @@ jobs:
           done
           sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev libfreetype-dev
       - name: Setup ccache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.ccache
           key: ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1195,7 +1195,7 @@ jobs:
             ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
             ccache-clang-tidy-
       - name: Restore build directory
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: build
           key: build-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
