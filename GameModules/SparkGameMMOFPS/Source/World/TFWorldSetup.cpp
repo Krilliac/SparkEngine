@@ -22,6 +22,7 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Mesh.h"
 #include "Game/PlaceholderMesh.h"
+#include "Game/TFComponents.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
@@ -454,10 +455,26 @@ void TFWorldSetup::RenderWorld()
 
                 const DirectX::XMMATRIX worldM = ecsView.get<Transform>(entity).GetWorldMatrix(registry);
                 const auto& submeshes = mesh->GetSubmeshes();
-                const DirectX::XMFLOAT4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
+
+                // Faction tint: multiply the model's own texture/color by a
+                // moderated faction hue so friend/foe read at a glance across
+                // the battlefield. lerp(white, factionColor, 0.55) keeps the
+                // colormap legible while clearly coloring the body.
+                DirectX::XMFLOAT4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+                if (const auto* fc = registry.try_get<TFFactionComp>(entity);
+                    fc && fc->faction != FactionId::None)
+                {
+                    float fcol[4];
+                    FactionColor(fc->faction, fcol);
+                    constexpr float k = 0.55f;
+                    tint.x = 1.0f + k * (fcol[0] - 1.0f);
+                    tint.y = 1.0f + k * (fcol[1] - 1.0f);
+                    tint.z = 1.0f + k * (fcol[2] - 1.0f);
+                }
+
                 if (submeshes.empty())
                 {
-                    gfx->UpdateBasicConstants(worldM, view, proj, kWhite, matTiling);
+                    gfx->UpdateBasicConstants(worldM, view, proj, tint, matTiling);
                     gfx->SetBasicTexture(matSrv);
                     mesh->Render(dc);
                 }
@@ -473,7 +490,9 @@ void TFWorldSetup::RenderWorld()
                             srv = matSrv;
                             tiling = matTiling;
                         }
-                        gfx->UpdateBasicConstants(worldM, view, proj, smesh.diffuseColor, tiling);
+                        const DirectX::XMFLOAT4 c{smesh.diffuseColor.x * tint.x, smesh.diffuseColor.y * tint.y,
+                                                  smesh.diffuseColor.z * tint.z, smesh.diffuseColor.w};
+                        gfx->UpdateBasicConstants(worldM, view, proj, c, tiling);
                         gfx->SetBasicTexture(srv);
                         mesh->RenderRange(dc, smesh.indexStart, smesh.indexCount);
                     }
