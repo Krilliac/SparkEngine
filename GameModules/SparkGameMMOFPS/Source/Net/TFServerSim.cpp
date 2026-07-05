@@ -6,6 +6,7 @@
 #include "Net/TFServerSim.h"
 
 #include "Data/TFDataTables.h"
+#include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponSystem.h"
@@ -644,7 +645,7 @@ void TFServerSim::SendWorldWelcome(PlayerId player)
         const size_t n = m_ctx->data->GetContinent().regions.size();
         w.regionCount = static_cast<uint8_t>(std::min<size_t>(n, 255));
     }
-    w.territoryHash = 0; // TF-W2: real hash from TFRegionSystem ownership state
+    w.territoryHash = m_ctx->regions ? m_ctx->regions->TerritoryHash() : 0;
     w.serverTimeMs = static_cast<uint32_t>(m_serverTime * 1000.0);
     SendToPlayer(player, static_cast<uint16_t>(TFMsg::WorldWelcome), &w, sizeof(w), true);
 }

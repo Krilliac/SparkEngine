@@ -17,6 +17,8 @@
 #include "Core/TFEvents.h"
 #include <memory>
 
+namespace Terrafront { class TFBotSystem; }
+
 class TerrafrontModule : public Spark::IModule
 {
   public:
@@ -63,6 +65,7 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFDeployableSystem>  m_deployables;
     std::unique_ptr<Terrafront::TFProgressionSystem> m_progression;
     std::unique_ptr<Terrafront::TFSquadSystem>       m_squads;
+    std::unique_ptr<Terrafront::TFBotSystem>         m_bots;
     std::unique_ptr<Terrafront::TFHUD>               m_hud;
     std::unique_ptr<Terrafront::TFMapScreen>         m_map;
     std::unique_ptr<Terrafront::TFSpawnScreen>       m_spawnUI;

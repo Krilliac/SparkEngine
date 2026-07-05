@@ -14,6 +14,8 @@
 #include "Game/TFWeaponSystem.h"
 #include "Net/TFReplication.h"
 #include "Net/TFServerSim.h"
+#include "UI/TFMapScreen.h"
+#include "UI/TFSpawnScreen.h"
 #include "World/TFWorldSetup.h"
 
 #include "Camera/SparkEngineCamera.h"
@@ -113,7 +115,11 @@ void TFClientNet::Update(float deltaTime)
     }
     m_wasAlive = alive;
 
-    PumpInput(deltaTime, alive);
+    // Fullscreen UIs (map / deploy screen) own the mouse: suspend fire +
+    // look input so a rally click doesn't discharge the weapon underneath.
+    const bool uiOpen = (m_ctx->map && m_ctx->map->IsOpen()) ||
+                        (m_ctx->spawnUI && m_ctx->spawnUI->IsOpen());
+    PumpInput(deltaTime, alive && !uiOpen);
 
     if (!m_ctx->IsAuthority())
     {

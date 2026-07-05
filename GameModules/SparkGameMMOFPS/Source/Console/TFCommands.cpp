@@ -19,6 +19,11 @@
 #include "Net/TFServerSim.h"
 #include "Net/TFNetProtocol.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFBotSystem.h"
+#include "Game/TFProgressionSystem.h"
+#include "World/TFRegionSystem.h"
+#include "UI/TFMapScreen.h"
+#include "UI/TFSpawnScreen.h"
 
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -358,17 +363,30 @@ void TerrafrontModule::RegisterConsoleCommands()
         {
             if (!m_ctx.data || !m_ctx.data->IsLoaded())
                 return "[TF] data tables not loaded";
+            if (!m_ctx.regions)
+                return "[TF] region system not ready";
             const ContinentDef& cont = m_ctx.data->GetContinent();
             std::ostringstream os;
-            os << "[TF] " << cont.name << " - " << cont.regions.size()
-               << " regions (W1: static ownership from regions.json)";
-            for (const RegionDef& r : cont.regions) {
-                FactionId owner = r.homeFaction;
-                if (owner == FactionId::None && r.id < cont.initialOwner.size())
-                    owner = cont.initialOwner[r.id];
-                os << "\n  [" << r.id << "] " << r.name << " (" << r.tier << ") - "
-                   << FactionTag(owner);
+            os << "[TF] " << cont.name << " - live territory:";
+            for (const RegionDef& r : cont.regions)
+            {
+                FactionId capturing = FactionId::None;
+                bool contested = false;
+                const float prog =
+                    m_ctx.regions->CaptureProgress(r.id, capturing, contested);
+                os << "\n  [" << static_cast<int>(r.id) << "] " << r.name << " (" << r.tier
+                   << ") owner=" << FactionTag(m_ctx.regions->OwnerOf(r.id));
+                if (prog > 0.0f)
+                    os << "  cap " << static_cast<int>(prog * 100.0f) << "% by "
+                       << FactionTag(capturing) << (contested ? " CONTESTED" : "");
             }
+            os << "\n  held: MRA " << m_ctx.regions->RegionsHeld(FactionId::MRA)
+               << " / AUC " << m_ctx.regions->RegionsHeld(FactionId::AUC)
+               << " / HLX " << m_ctx.regions->RegionsHeld(FactionId::HLX);
+            FactionId domF = FactionId::None; float domLeft = 0.0f;
+            if (m_ctx.regions->DominionActive(domF, domLeft))
+                os << "\n  DOMINION: " << FactionName(domF) << " ("
+                   << static_cast<int>(domLeft) << "s)";
             return os.str();
         },
         "List regions and ownership", cat, "tf_regions");
@@ -424,4 +442,107 @@ void TerrafrontModule::RegisterConsoleCommands()
             return std::string(buf);
         },
         "Teleport your pawn (authority only)", cat, "tf_tp <x> <z>");
+
+    // ------------------------------------------------------------------- W2
+    console.RegisterCommand(
+        "tf_bots",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (!m_bots)
+                return "[TF] bot system not ready";
+            if (args.empty())
+                return "[TF] bots active: " + std::to_string(m_bots->BotCount()) +
+                       "  (tf_bots <0-32> to set)";
+            const int n = std::atoi(args[0].c_str());
+            if (n < 0 || n > 32)
+                return "[TF] tf_bots: count must be 0-32";
+            m_bots->ServerSetBotCount(static_cast<uint32_t>(n));
+            return "[TF] bot count set to " + std::to_string(n);
+        },
+        "Spawn server-side bots (authority only)", cat, "tf_bots <n>");
+
+    console.RegisterCommand(
+        "tf_capture",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (!m_ctx.regions)
+                return "[TF] region system not ready";
+            if (args.size() < 2)
+                return "Usage: tf_capture <regionId> <mra|auc|hlx|none>";
+            const RegionId id = static_cast<RegionId>(std::atoi(args[0].c_str()));
+            FactionId f = FactionId::None;
+            if (Lower(args[1]) != "none" && !ParseFaction(args[1], f))
+                return "[TF] bad faction '" + args[1] + "'";
+            return m_ctx.regions->ServerForceOwner(id, f)
+                       ? "[TF] region " + args[0] + " -> " + FactionTag(f)
+                       : "[TF] capture refused (authority only / bad id / skyanchor)";
+        },
+        "Debug: force region ownership (authority only)", cat,
+        "tf_capture <regionId> <mra|auc|hlx|none>");
+
+    console.RegisterCommand(
+        "tf_map",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_map)
+                return "[TF] map not ready";
+            m_map->Toggle();
+            return m_map->IsOpen() ? "[TF] map opened" : "[TF] map closed";
+        },
+        "Toggle the continent map", cat, "tf_map");
+
+    console.RegisterCommand(
+        "tf_deploy",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_spawnUI)
+                return "[TF] spawn screen not ready";
+            m_spawnUI->Open();
+            return "[TF] deploy screen opened";
+        },
+        "Open the deploy/spawn screen", cat, "tf_deploy");
+
+    console.RegisterCommand(
+        "tf_flux",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_ctx.progression)
+                return "[TF] progression not ready";
+            const PlayerId me = m_ctx.localPlayer;
+            if (me == kInvalidPlayer)
+                return "[TF] no local player yet (tf_spawn first)";
+            std::ostringstream os;
+            os << "[TF] rank " << m_ctx.progression->RankOf(me)
+               << "  xp " << m_ctx.progression->XPOf(me)
+               << "  flux " << m_ctx.progression->FluxOf(me);
+            return os.str();
+        },
+        "Show your rank/XP/flux", cat, "tf_flux");
+
+    console.RegisterCommand(
+        "tf_save",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            bool terr = m_ctx.regions && m_ctx.regions->SaveNow();
+            bool prog = m_ctx.progression && m_ctx.progression->SaveNow();
+            std::ostringstream os;
+            os << "[TF] save: territory " << (terr ? "ok" : "skipped")
+               << ", progression " << (prog ? "ok" : "skipped");
+            return os.str();
+        },
+        "Force-save territory + progression (authority only)", cat, "tf_save");
+
+    console.RegisterCommand(
+        "tf_debug",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            const std::string what = args.empty() ? "" : Lower(args[0]);
+            if (what == "server" && m_serverSim)   { m_serverSim->ToggleDebugUI();   return "[TF] server debug toggled"; }
+            if (what == "regions" && m_ctx.regions){ m_ctx.regions->ToggleDebugUI(); return "[TF] regions debug toggled"; }
+            if (what == "bots" && m_bots)          { m_bots->ToggleDebugUI();        return "[TF] bots debug toggled"; }
+            if (what == "net" && m_clientNet)      { m_clientNet->ToggleDebugUI();   return "[TF] net debug toggled"; }
+            if (what == "progression" && m_ctx.progression) { m_ctx.progression->ToggleDebugUI(); return "[TF] progression debug toggled"; }
+            return "Usage: tf_debug <server|regions|bots|net|progression>";
+        },
+        "Toggle a TF debug panel", cat, "tf_debug <system>");
 }

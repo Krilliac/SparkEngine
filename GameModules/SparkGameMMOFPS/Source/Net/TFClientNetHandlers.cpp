@@ -16,6 +16,7 @@
 #include "Net/TFReplication.h"
 #include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
+#include "UI/TFScoreboard.h"
 
 #include "Camera/SparkEngineCamera.h"
 #include "Engine/ECS/Components.h"
@@ -416,6 +417,8 @@ void TFClientNet::OnKillEvent(const void* data, size_t size)
     PushKillfeedEntry(ke.killerPlayer, ke.victimPlayer, ke.weaponId,
                       static_cast<FactionId>(ke.killerFaction),
                       static_cast<FactionId>(ke.victimFaction));
+    if (m_ctx->scoreboard)
+        m_ctx->scoreboard->ClientNoteKill(ke);
 
     if (ke.victimPlayer == m_ctx->localPlayer && m_events)
         m_events->Fire(EvLocalPlayerDied{m_ctx->localPlayer, kTFRespawnDelaySec});

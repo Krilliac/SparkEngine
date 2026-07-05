@@ -23,6 +23,7 @@
 #include "Game/TFDeployableSystem.h"
 #include "Game/TFProgressionSystem.h"
 #include "Game/TFSquadSystem.h"
+#include "Game/TFBotSystem.h"
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
@@ -82,6 +83,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_deployables = std::make_unique<TFDeployableSystem>();
     m_progression = std::make_unique<TFProgressionSystem>();
     m_squads      = std::make_unique<TFSquadSystem>();
+    m_bots        = std::make_unique<TFBotSystem>();
     m_hud         = std::make_unique<TFHUD>();
     m_map         = std::make_unique<TFMapScreen>();
     m_spawnUI     = std::make_unique<TFSpawnScreen>();
@@ -124,6 +126,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         { "TFDeployableSystem",  m_deployables->Initialize(m_ctx, m_events) },
         { "TFProgressionSystem", m_progression->Initialize(m_ctx, m_events) },
         { "TFSquadSystem",       m_squads->Initialize(m_ctx, m_events) },
+        { "TFBotSystem",         m_bots->Initialize(m_ctx, m_events) },
         { "TFHUD",               m_hud->Initialize(m_ctx, m_events) },
         { "TFMapScreen",         m_map->Initialize(m_ctx, m_events) },
         { "TFSpawnScreen",       m_spawnUI->Initialize(m_ctx, m_events) },
@@ -158,6 +161,7 @@ void TerrafrontModule::OnUnload()
     m_spawnUI->Shutdown();
     m_map->Shutdown();
     m_hud->Shutdown();
+    m_bots->Shutdown();
     m_squads->Shutdown();
     m_progression->Shutdown();
     m_deployables->Shutdown();
@@ -196,6 +200,7 @@ void TerrafrontModule::OnUpdate(float dt)
     m_deployables->Update(dt);
     m_progression->Update(dt);
     m_squads->Update(dt);
+    m_bots->Update(dt);
     m_hud->Update(dt);
     m_map->Update(dt);
     m_spawnUI->Update(dt);
@@ -213,6 +218,7 @@ void TerrafrontModule::OnFixedUpdate(float fdt)
     m_weapons->FixedUpdate(fdt);
     m_vehicles->FixedUpdate(fdt);
     m_regions->FixedUpdate(fdt);
+    m_bots->FixedUpdate(fdt);
     m_replication->FixedUpdate(fdt);
 }
 
@@ -251,4 +257,5 @@ void TerrafrontModule::OnImGui()
     m_deployables->RenderDebugUI();
     m_progression->RenderDebugUI();
     m_squads->RenderDebugUI();
+    m_bots->RenderDebugUI();
 }
