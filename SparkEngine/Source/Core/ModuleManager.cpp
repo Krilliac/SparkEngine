@@ -144,6 +144,19 @@ bool ModuleManager::LoadModule(const std::string& path)
     }
 #endif
 
+#ifdef _WIN32
+    // Inject the host console BEFORE any module code runs: module DLLs
+    // statically link SparkEngineLib, so without this their console-command
+    // registrations land in a DLL-private SimpleConsole the engine never
+    // reads (module commands were silently dead on Windows).
+    using InjectConsoleFn = void (*)(void*);
+    if (auto inject = reinterpret_cast<InjectConsoleFn>(
+            GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectConsole")))
+    {
+        inject(&Spark::SimpleConsole::GetInstance());
+    }
+#endif
+
     // Try new API first: CreateModule / DestroyModule
     CreateModuleFn createFn = nullptr;
     DestroyModuleFn destroyFn = nullptr;
@@ -431,6 +444,19 @@ void ModuleManager::UpdateAll(float deltaTime)
         {
             std::string guardName = "Module:" + entry.name;
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnUpdate(deltaTime); });
+        }
+    }
+}
+
+void ModuleManager::FixedUpdateAll(float fixedDeltaTime)
+{
+    for (auto& entry : m_modules)
+    {
+        if (entry.initialized && entry.instance)
+        {
+            std::string guardName = "ModuleFixed:" + entry.name;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core",
+                                 { entry.instance->OnFixedUpdate(fixedDeltaTime); });
         }
     }
 }

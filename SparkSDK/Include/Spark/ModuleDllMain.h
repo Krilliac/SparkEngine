@@ -46,4 +46,27 @@ extern "C" BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
     return TRUE;
 }
 
+namespace Spark
+{
+    class SimpleConsole;
+}
+
+namespace Spark::Detail
+{
+    // Defined in SparkConsole.cpp (statically linked into this DLL).
+    void InjectConsoleInstance(SimpleConsole* instance);
+}
+
+/**
+ * @brief Host-console injection hook, called by ModuleManager after load.
+ *
+ * Windows module DLLs statically link SparkEngineLib and would otherwise
+ * register their console commands into a DLL-private SimpleConsole copy that
+ * the engine never reads (module commands were silently dead on Windows).
+ */
+extern "C" __declspec(dllexport) void SparkModuleInjectConsole(void* hostConsole)
+{
+    Spark::Detail::InjectConsoleInstance(static_cast<Spark::SimpleConsole*>(hostConsole));
+}
+
 #endif // _WIN32

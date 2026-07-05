@@ -106,6 +106,18 @@ namespace Spark
 
         static SimpleConsole& GetInstance();
 
+        /**
+         * @brief Cross-image singleton injection (Windows DLL modules).
+         *
+         * Game-module DLLs statically link SparkEngineLib, so without this
+         * every DLL gets its OWN SimpleConsole and commands registered by a
+         * module never reach the engine's console. ModuleManager injects the
+         * host instance into each loaded module via the module's exported
+         * SparkModuleInjectConsole(); after that, GetInstance() inside the
+         * DLL returns the host console.
+         */
+        static void SetGlobalInstance(SimpleConsole* instance);
+
         bool Initialize();
         void Shutdown();
         void Update();

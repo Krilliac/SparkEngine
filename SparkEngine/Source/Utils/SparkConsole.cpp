@@ -117,11 +117,29 @@ namespace Spark
     // Singleton
     // ============================================================================
 
+    // Host-injected instance (see SetGlobalInstance docs in the header).
+    static SimpleConsole* s_injectedConsole = nullptr;
+
     SimpleConsole& SimpleConsole::GetInstance()
     {
+        if (s_injectedConsole)
+            return *s_injectedConsole;
         static SimpleConsole instance;
         return instance;
     }
+
+    void SimpleConsole::SetGlobalInstance(SimpleConsole* instance)
+    {
+        s_injectedConsole = instance;
+    }
+
+    namespace Detail
+    {
+        void InjectConsoleInstance(SimpleConsole* instance)
+        {
+            SimpleConsole::SetGlobalInstance(instance);
+        }
+    } // namespace Detail
 
     // ============================================================================
     // Lifecycle

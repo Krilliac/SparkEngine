@@ -98,6 +98,12 @@ class ModuleManager
     /** @brief Call OnUpdate() on all modules in load order */
     void UpdateAll(float deltaTime);
 
+    /** @brief Call OnFixedUpdate() on all modules in load order.
+     *  Driven from the main loop via FixedTimestepAccumulator — before this
+     *  existed, IModule::OnFixedUpdate was declared but NEVER invoked, so any
+     *  module fixed-step simulation was silently dead. */
+    void FixedUpdateAll(float fixedDeltaTime);
+
     /** @brief Call OnRender() on all modules in load order */
     void RenderAll();
 

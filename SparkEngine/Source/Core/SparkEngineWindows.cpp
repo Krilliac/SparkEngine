@@ -325,7 +325,23 @@ static void RunDueScriptedCommands(int frameCount)
     {
         const std::string& c = g_execScript[g_execScriptNext].command;
         console.LogInfo(std::format("[exec] frame {}: {}", frameCount, c));
-        console.ExecuteCommand(c);
+        const bool ok = console.ExecuteCommand(c);
+        // Persist an audit trail for automated smoke runs: the engine has no
+        // stdout and the file logger doesn't carry console traffic.
+        std::ofstream results("exec_results.log", std::ios::app);
+        if (results)
+        {
+            results << "frame " << frameCount << " | " << (ok ? "ok " : "ERR") << " | " << c
+                    << '\n';
+            // append the command's console output (new entries since execution)
+            const auto& history = console.GetLogHistory();
+            // first scripted command dumps the whole boot history (module
+            // loading diagnostics); later ones append just their own output
+            const size_t window = (g_execScriptNext == 0) ? history.size() : 8;
+            const size_t start = history.size() > window ? history.size() - window : 0;
+            for (size_t i = start; i < history.size(); ++i)
+                results << "    > " << history[i].message << '\n';
+        }
         ++g_execScriptNext;
     }
 }
@@ -567,7 +583,13 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
             if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+            {
                 GetEngineRuntime().moduleManager->UpdateAll(dt);
+                auto& fixedAcc = Spark::FixedTimestepAccumulator::GetInstance();
+                const float fixedDt = fixedAcc.GetFixedTimestep();
+                for (uint32_t i = fixedAcc.GetFixedStepCount(); i > 0; --i)
+                    GetEngineRuntime().moduleManager->FixedUpdateAll(fixedDt);
+            }
         });
 
         if (GetEngineRuntime().moduleHotReload)
@@ -864,6 +886,10 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             {
                 SPARK_GUARDED_UPDATE("Modules", "Core", {
                     GetEngineRuntime().moduleManager->UpdateAll(dt);
+                    auto& fixedAcc = Spark::FixedTimestepAccumulator::GetInstance();
+                    const float fixedDt = fixedAcc.GetFixedTimestep();
+                    for (uint32_t i = fixedAcc.GetFixedStepCount(); i > 0; --i)
+                        GetEngineRuntime().moduleManager->FixedUpdateAll(fixedDt);
                     GetEngineRuntime().moduleManager->RenderAll();
                 });
             }

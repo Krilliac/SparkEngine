@@ -33,8 +33,9 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
-#ifdef SPARK_HAS_MINIZ
+#if defined(SPARK_MINIZ_AVAILABLE) && __has_include(<miniz.h>)
 #include <miniz.h>
+#define SPARK_SCREENCAP_PNG 1
 #endif
 #include <functional>
 #include <string>
@@ -279,7 +280,7 @@ namespace Spark::Graphics
                 }
             }
 
-#ifdef SPARK_HAS_MINIZ
+#ifdef SPARK_SCREENCAP_PNG
             // Real PNG via the vendored miniz encoder.
             {
                 size_t pngLen = 0;
@@ -304,7 +305,7 @@ namespace Spark::Graphics
                 }
                 // encoder failure: fall through to the TGA path below
             }
-#endif // SPARK_HAS_MINIZ
+#endif // SPARK_SCREENCAP_PNG
 
             // Use stb_image_write if available, otherwise store raw
             // In production this would call stbi_write_png(). For now we validate
