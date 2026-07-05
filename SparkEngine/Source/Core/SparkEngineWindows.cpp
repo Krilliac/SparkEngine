@@ -544,6 +544,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
 
     int frameCount = 0;
+    bool quitPosted = false;
 
     while (!g_shutdownRequested)
     {
@@ -597,6 +598,14 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
 
     // Shutdown
     GetEngineRuntime().moduleHotReload.reset();
+    // These globals hold graphics/ImGui-adjacent state: destroy them here,
+    // in reverse creation order, NOT at static teardown - the C runtime exit
+    // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
+    // inside the crash handler.
+    g_modSystem.reset();
+    g_dialogueSystem.reset();
+    g_uiSystem.reset();
+    g_weatherSystem.reset();
     console.LogInfo("Headless server shutting down...");
     g_fileCache.reset();
     ShutdownEngine();
@@ -800,18 +809,22 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
 
     int frameCount = 0;
+    bool quitPosted = false;
 
     // Win32 message pump: PeekMessage with PM_REMOVE gives us non-blocking
     // message processing — the engine ticks in the else branch whenever
     // there are no pending OS messages (resize, input, focus, etc.).
     while (msg.message != WM_QUIT)
     {
-        // Test frame limit: post WM_QUIT to exit cleanly
-        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        // Test frame limit: post WM_QUIT once, then KEEP pumping messages so
+        // the quit is actually consumed. The old `continue` skipped PeekMessage,
+        // spinning forever without SPARK_HEARTBEAT until the FreezeDetector
+        // killed the process (exit code 1) on every -test-frames run.
+        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit && !quitPosted)
         {
             console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
             PostQuitMessage(0);
-            continue;
+            quitPosted = true;
         }
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
@@ -886,6 +899,14 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
 
     // Shutdown
     GetEngineRuntime().moduleHotReload.reset();
+    // These globals hold graphics/ImGui-adjacent state: destroy them here,
+    // in reverse creation order, NOT at static teardown - the C runtime exit
+    // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
+    // inside the crash handler.
+    g_modSystem.reset();
+    g_dialogueSystem.reset();
+    g_uiSystem.reset();
+    g_weatherSystem.reset();
     console.LogInfo("Shutting down...");
     g_fileCache.reset();
     ShutdownEngine();
