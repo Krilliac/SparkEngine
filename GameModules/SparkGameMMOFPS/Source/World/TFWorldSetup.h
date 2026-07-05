@@ -161,6 +161,11 @@ class TFWorldSetup {
     std::unique_ptr<Mesh>  m_skyMesh;
     void DrawSkybox(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
 
+    // Procedural terrain relief: a heightfield mesh sampled from TerrainHeightAt
+    // over the whole map, drawn instead of the flat scene ground plane.
+    std::unique_ptr<Mesh>  m_terrainMesh;
+    void DrawTerrain(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
+
 #ifdef ENABLE_NETWORKING
     std::unique_ptr<Spark::Net::WorldServer> m_worldServer;
     std::unique_ptr<Spark::Net::AreaServer>  m_areaServer;

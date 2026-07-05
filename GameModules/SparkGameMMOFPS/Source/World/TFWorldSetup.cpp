@@ -408,6 +408,67 @@ void TFWorldSetup::DrawSkybox(const DirectX::XMMATRIX& view, const DirectX::XMMA
     gfx->SetBasicTexture(nullptr);
 }
 
+void TFWorldSetup::DrawTerrain(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj)
+{
+    using namespace DirectX;
+    if (!m_ctx || !m_ctx->engine)
+        return;
+    GraphicsEngine* gfx = m_ctx->engine->GetGraphics();
+    if (!gfx || !gfx->GetDevice() || !gfx->GetContext())
+        return;
+
+    if (!m_terrainMesh)
+    {
+        // Grid over the whole map; vertex Y sampled from TerrainHeightAt so the
+        // relief matches the gameplay heightfield (dunes / canyon / plateaus).
+        constexpr int N = 96;               // cells per side (97x97 verts)
+        const float size = m_ctx->data && m_ctx->data->IsLoaded()
+                               ? m_ctx->data->GetContinent().sizeM : 4096.0f;
+        const float step = size / N;
+        const float uvTiles = 96.0f;        // texture repeats across the map
+        const float e = step; // finite-difference epsilon for normals
+
+        std::vector<Vertex> verts;
+        std::vector<unsigned int> inds;
+        verts.reserve((N + 1) * (N + 1));
+        for (int j = 0; j <= N; ++j)
+        {
+            for (int i = 0; i <= N; ++i)
+            {
+                const float x = i * step, z = j * step;
+                const float h = TerrainHeightAt(x, z);
+                const float hx0 = TerrainHeightAt(x - e, z), hx1 = TerrainHeightAt(x + e, z);
+                const float hz0 = TerrainHeightAt(x, z - e), hz1 = TerrainHeightAt(x, z + e);
+                XMVECTOR n = XMVector3Normalize(XMVectorSet(hx0 - hx1, 2.0f * e, hz0 - hz1, 0.0f));
+                XMFLOAT3 nf; XMStoreFloat3(&nf, n);
+                verts.push_back(Vertex({x, h, z}, nf,
+                                       {i / (float)N * uvTiles, j / (float)N * uvTiles}));
+            }
+        }
+        const auto idx = [&](int i, int j) { return static_cast<unsigned>(j * (N + 1) + i); };
+        inds.reserve(N * N * 6);
+        for (int j = 0; j < N; ++j)
+            for (int i = 0; i < N; ++i)
+            {
+                inds.push_back(idx(i, j));     inds.push_back(idx(i, j + 1)); inds.push_back(idx(i + 1, j + 1));
+                inds.push_back(idx(i, j));     inds.push_back(idx(i + 1, j + 1)); inds.push_back(idx(i + 1, j));
+            }
+        m_terrainMesh = std::make_unique<Mesh>();
+        m_terrainMesh->Initialize(gfx->GetDevice(), gfx->GetContext());
+        m_terrainMesh->CreateFromVertices(verts, inds);
+    }
+    if (!m_terrainMesh || m_terrainMesh->GetIndexCount() < 6)
+        return;
+
+    ID3D11DeviceContext* dc = gfx->GetContext();
+    gfx->SetBasicShaders();
+    gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV("Assets/Textures/MMOFPS/terrain/sand_color.png"));
+    gfx->UpdateBasicConstants(XMMatrixIdentity(), view, proj,
+                              XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f));
+    m_terrainMesh->Render(dc);
+    gfx->SetBasicTexture(nullptr);
+}
+
 void TFWorldSetup::RenderWorld()
 {
     if (!m_initialized || !m_ctx || !m_ctx->engine)
@@ -437,6 +498,9 @@ void TFWorldSetup::RenderWorld()
         // 0) Skybox first, so the world's opaque geometry overdraws it.
         DrawSkybox(view, proj);
 
+        // 0b) Procedural terrain relief (replaces the flat scene ground plane).
+        DrawTerrain(view, proj);
+
         // 1) Scene geometry (terrain plane, mesas, buildings). Draws are
         //    issued here through GraphicsEngine/Mesh MEMBER functions:
         //    GameObject::Render() reads EngineContext::Get(), which is a
@@ -449,6 +513,10 @@ void TFWorldSetup::RenderWorld()
             for (const auto& obj : sm->GetObjects())
             {
                 if (!obj || !obj->IsActive() || !obj->IsVisible())
+                    continue;
+                // Skip the flat ground plane (Terrain_Rock material) — the
+                // procedural heightfield mesh drawn above replaces it.
+                if (obj->GetMaterialPath().find("Terrain_Rock") != std::string::npos)
                     continue;
                 Mesh* mesh = obj->GetMesh();
                 if (!mesh || mesh->GetVertexCount() == 0 || mesh->GetIndexCount() == 0)
