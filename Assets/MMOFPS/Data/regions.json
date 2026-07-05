@@ -1,0 +1,58 @@
+{
+  "$schema_note": "Cindral Wastes territory lattice. World is 4096x4096 m, origin at SW corner. hex = axial coords for the map screen. tier: skyanchor|outpost|fort|facility. Capture only allowed if region is conduit-linked (neighbors) to attacker-owned territory.",
+  "continent": {
+    "name": "Cindral Wastes",
+    "sizeM": 4096,
+    "scene": "Scenes/MMOFPS/cindral_wastes.scene",
+    "fluxTickSec": 60
+  },
+  "regions": [
+    { "id": 0,  "key": "sky_north",   "name": "Skyanchor Aurelia",   "tier": "skyanchor", "homeFaction": "MRA",
+      "hex": [0, -3], "center": [2048, 3600], "captureSec": 0, "fluxPerTick": 0,
+      "capturePoints": [], "spawns": [[2000, 3560], [2096, 3560], [2048, 3660]], "vehicleTerminal": [2048, 3520] },
+    { "id": 1,  "key": "sky_sw",      "name": "Skyanchor Cobalt Reach", "tier": "skyanchor", "homeFaction": "AUC",
+      "hex": [-3, 3], "center": [560, 620], "captureSec": 0, "fluxPerTick": 0,
+      "capturePoints": [], "spawns": [[520, 580], [600, 580], [560, 700]], "vehicleTerminal": [640, 620] },
+    { "id": 2,  "key": "sky_se",      "name": "Skyanchor Violet Gate", "tier": "skyanchor", "homeFaction": "HLX",
+      "hex": [3, 0],  "center": [3536, 620], "captureSec": 0, "fluxPerTick": 0,
+      "capturePoints": [], "spawns": [[3496, 580], [3576, 580], [3536, 700]], "vehicleTerminal": [3450, 620] },
+
+    { "id": 3,  "key": "dustline",    "name": "Dustline Relay",      "tier": "outpost", "hex": [-1, -2], "center": [1450, 3150],
+      "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[1450, 3150]], "spawns": [[1420, 3120]], "vehicleTerminal": null },
+    { "id": 4,  "key": "kiln",        "name": "Kiln Overlook",       "tier": "outpost", "hex": [1, -3],  "center": [2650, 3150],
+      "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[2650, 3150]], "spawns": [[2680, 3120]], "vehicleTerminal": null },
+    { "id": 5,  "key": "quarry",      "name": "Breaker Quarry",      "tier": "outpost", "hex": [-2, 0],  "center": [1050, 2050],
+      "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[1050, 2050]], "spawns": [[1020, 2020]], "vehicleTerminal": null },
+    { "id": 6,  "key": "sunder",      "name": "Sunder Pass",         "tier": "fort",    "hex": [-1, 1],  "center": [1350, 1350],
+      "captureSec": 120, "fluxPerTick": 2, "capturePoints": [[1300, 1350], [1400, 1350]], "spawns": [[1350, 1300]], "vehicleTerminal": [1350, 1420] },
+    { "id": 7,  "key": "glasswind",   "name": "Glasswind Flats",     "tier": "outpost", "hex": [2, -2],  "center": [3050, 2050],
+      "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[3050, 2050]], "spawns": [[3080, 2020]], "vehicleTerminal": null },
+    { "id": 8,  "key": "redoubt",     "name": "Cinder Redoubt",      "tier": "fort",    "hex": [1, -1],  "center": [2750, 1350],
+      "captureSec": 120, "fluxPerTick": 2, "capturePoints": [[2700, 1350], [2800, 1350]], "spawns": [[2750, 1300]], "vehicleTerminal": [2750, 1420] },
+    { "id": 9,  "key": "fluxwell",    "name": "Fluxwell Prime",      "tier": "facility", "hex": [0, -1], "center": [2048, 2048],
+      "captureSec": 240, "fluxPerTick": 5, "capturePoints": [[1980, 2048], [2048, 2110], [2116, 2048]], "spawns": [[2048, 1980]], "vehicleTerminal": [2048, 2180] },
+    { "id": 10, "key": "mirage",      "name": "Mirage Depot",        "tier": "outpost", "hex": [0, 1],   "center": [2048, 900],
+      "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[2048, 900]], "spawns": [[2018, 870]], "vehicleTerminal": null },
+    { "id": 11, "key": "saltcrown",   "name": "Saltcrown Ridge",     "tier": "outpost", "hex": [-2, 2],  "center": [1100, 950],
+      "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[1100, 950]], "spawns": [[1070, 920]], "vehicleTerminal": null },
+    { "id": 12, "key": "hollowmark",  "name": "Hollowmark Station",  "tier": "outpost", "hex": [2, -1],  "center": [3000, 950],
+      "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[3000, 950]], "spawns": [[3030, 920]], "vehicleTerminal": null }
+  ],
+  "conduits": [
+    [0, 3], [0, 4],
+    [3, 5], [3, 9], [4, 7], [4, 9],
+    [5, 6], [5, 1],
+    [6, 9], [6, 11],
+    [7, 8], [7, 2],
+    [8, 9], [8, 12],
+    [9, 10],
+    [10, 11], [10, 12],
+    [11, 1], [12, 2]
+  ],
+  "initialOwnership": {
+    "MRA": [0, 3, 4],
+    "AUC": [1, 5, 6, 11],
+    "HLX": [2, 7, 8, 12],
+    "neutral": [9, 10]
+  }
+}

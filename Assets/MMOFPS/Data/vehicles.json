@@ -1,0 +1,40 @@
+{
+  "$schema_note": "TERRAFRONT vehicles. Speeds m/s. Seats: index 0 = driver. weapon keys reference weapons.json.",
+  "vehicles": [
+    {
+      "id": "Drifter", "name": "Drifter", "role": "Fast quad",
+      "health": 1800, "fluxCost": 50, "topSpeed": 26, "accel": 9.5, "turnRate": 2.4,
+      "seats": [ { "role": "driver" }, { "role": "passenger" } ],
+      "model": "Models/MMOFPS/vehicles/quad.obj",
+      "audioEngine": "Audio/MMOFPS/vehicles/quad_loop.wav",
+      "explodeAudio": "Audio/MMOFPS/vehicles/explosion.wav"
+    },
+    {
+      "id": "Aegis", "name": "Aegis", "role": "Armored transport + deployable mobile spawn",
+      "health": 5200, "fluxCost": 200, "topSpeed": 14, "accel": 4.0, "turnRate": 1.2,
+      "seats": [ { "role": "driver" }, { "role": "gunner", "weapon": "veh_aegis_pdw" }, { "role": "gunner", "weapon": "veh_aegis_pdw" },
+                 { "role": "passenger" }, { "role": "passenger" }, { "role": "passenger" }, { "role": "passenger" }, { "role": "passenger" } ],
+      "deploySpawn": { "radiusM": 600, "respawnSec": 5, "undeployMoveLock": true },
+      "model": "Models/MMOFPS/vehicles/apc.obj",
+      "audioEngine": "Audio/MMOFPS/vehicles/apc_loop.wav",
+      "explodeAudio": "Audio/MMOFPS/vehicles/explosion.wav"
+    },
+    {
+      "id": "Ravager", "name": "Ravager", "role": "Light tank",
+      "health": 4000, "fluxCost": 350, "topSpeed": 18, "accel": 5.5, "turnRate": 1.5,
+      "seats": [ { "role": "driver", "weapon": "veh_ravager_90" }, { "role": "gunner", "weapon": "veh_aegis_pdw" } ],
+      "model": "Models/MMOFPS/vehicles/tank.obj",
+      "audioEngine": "Audio/MMOFPS/vehicles/tank_loop.wav",
+      "explodeAudio": "Audio/MMOFPS/vehicles/explosion.wav"
+    },
+    {
+      "id": "Vulture", "name": "Vulture", "role": "VTOL gunship (W4 stretch)",
+      "enabled": false,
+      "health": 3000, "fluxCost": 350, "topSpeed": 55, "accel": 14.0, "turnRate": 2.0,
+      "seats": [ { "role": "driver", "weapon": "veh_aegis_pdw" } ],
+      "model": "Models/MMOFPS/vehicles/vtol.obj",
+      "audioEngine": "Audio/MMOFPS/vehicles/vtol_loop.wav",
+      "explodeAudio": "Audio/MMOFPS/vehicles/explosion.wav"
+    }
+  ]
+}
