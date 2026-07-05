@@ -155,6 +155,12 @@ class TFWorldSetup {
     double                 m_fxClock{0.0};
     std::unique_ptr<Mesh>  m_fxCube; // unit cube reused for flash + tracer
 
+    // Skybox: an inward-facing textured box centered on the camera, drawn
+    // first so it sits behind the world. 6 face-quads in one mesh, each a
+    // contiguous index range textured with one space_*.png cubemap face.
+    std::unique_ptr<Mesh>  m_skyMesh;
+    void DrawSkybox(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
+
 #ifdef ENABLE_NETWORKING
     std::unique_ptr<Spark::Net::WorldServer> m_worldServer;
     std::unique_ptr<Spark::Net::AreaServer>  m_areaServer;

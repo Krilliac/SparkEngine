@@ -338,6 +338,76 @@ Mesh* TFWorldSetup::GetOrLoadEcsMesh(const std::string& meshPath)
     return raw;
 }
 
+void TFWorldSetup::DrawSkybox(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj)
+{
+    using namespace DirectX;
+    if (!m_ctx || !m_ctx->engine || !m_camera)
+        return;
+    GraphicsEngine* gfx = m_ctx->engine->GetGraphics();
+    if (!gfx || !gfx->GetDevice() || !gfx->GetContext())
+        return;
+
+    if (!m_skyMesh)
+    {
+        // Inward-facing unit cube: 6 faces, each 4 verts / 2 tris, wound so the
+        // inside is front-facing. Face order matches the texture array below:
+        // +X, -X, +Y, -Y, +Z, -Z.
+        struct Face { XMFLOAT3 a, b, c, d; XMFLOAT3 n; };
+        const Face faces[6] = {
+            {{ 1,-1,-1},{ 1, 1,-1},{ 1, 1, 1},{ 1,-1, 1},{-1, 0, 0}}, // +X
+            {{-1,-1, 1},{-1, 1, 1},{-1, 1,-1},{-1,-1,-1},{ 1, 0, 0}}, // -X
+            {{-1, 1,-1},{-1, 1, 1},{ 1, 1, 1},{ 1, 1,-1},{ 0,-1, 0}}, // +Y (up)
+            {{-1,-1, 1},{-1,-1,-1},{ 1,-1,-1},{ 1,-1, 1},{ 0, 1, 0}}, // -Y (down)
+            {{ 1,-1, 1},{ 1, 1, 1},{-1, 1, 1},{-1,-1, 1},{ 0, 0,-1}}, // +Z
+            {{-1,-1,-1},{-1, 1,-1},{ 1, 1,-1},{ 1,-1,-1},{ 0, 0, 1}}, // -Z
+        };
+        std::vector<Vertex> verts;
+        std::vector<unsigned int> inds;
+        verts.reserve(24);
+        inds.reserve(36);
+        for (const Face& f : faces)
+        {
+            const unsigned base = static_cast<unsigned>(verts.size());
+            verts.push_back(Vertex(f.a, f.n, {0.0f, 1.0f}));
+            verts.push_back(Vertex(f.b, f.n, {0.0f, 0.0f}));
+            verts.push_back(Vertex(f.c, f.n, {1.0f, 0.0f}));
+            verts.push_back(Vertex(f.d, f.n, {1.0f, 1.0f}));
+            // Reverse winding so the INSIDE of the box is front-facing (the
+            // camera sits at the center); otherwise back-face culling hides it.
+            inds.push_back(base + 0); inds.push_back(base + 2); inds.push_back(base + 1);
+            inds.push_back(base + 0); inds.push_back(base + 3); inds.push_back(base + 2);
+        }
+        m_skyMesh = std::make_unique<Mesh>();
+        m_skyMesh->Initialize(gfx->GetDevice(), gfx->GetContext());
+        m_skyMesh->CreateFromVertices(verts, inds);
+    }
+    if (!m_skyMesh || m_skyMesh->GetIndexCount() < 36)
+        return;
+
+    static const char* kFaceTex[6] = {
+        "Assets/Textures/MMOFPS/sky/space_px.png", "Assets/Textures/MMOFPS/sky/space_nx.png",
+        "Assets/Textures/MMOFPS/sky/space_py.png", "Assets/Textures/MMOFPS/sky/space_ny.png",
+        "Assets/Textures/MMOFPS/sky/space_pz.png", "Assets/Textures/MMOFPS/sky/space_nz.png",
+    };
+
+    // Centered on the camera, huge but inside the far plane (corner ~5000 < 6000).
+    const XMFLOAT3 cam = m_camera->GetPosition();
+    const XMMATRIX world = XMMatrixScaling(2900.0f, 2900.0f, 2900.0f) *
+                           XMMatrixTranslation(cam.x, cam.y, cam.z);
+
+    ID3D11DeviceContext* dc = gfx->GetContext();
+    gfx->SetBasicShaders();
+    // Over-1.0 so the shader's ambient+N.L keeps the sky near full-bright.
+    const XMFLOAT4 kSky{1.8f, 1.8f, 1.8f, 1.0f};
+    for (int i = 0; i < 6; ++i)
+    {
+        gfx->UpdateBasicConstants(world, view, proj, kSky, XMFLOAT2(1, 1));
+        gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV(kFaceTex[i]));
+        m_skyMesh->RenderRange(dc, static_cast<unsigned>(i * 6), 6);
+    }
+    gfx->SetBasicTexture(nullptr);
+}
+
 void TFWorldSetup::RenderWorld()
 {
     if (!m_initialized || !m_ctx || !m_ctx->engine)
@@ -363,6 +433,9 @@ void TFWorldSetup::RenderWorld()
             DirectX::XMStoreFloat3(&camPos, invView.r[3]);
             gfx->UpdateFrameConstants(view, proj, camPos);
         }
+
+        // 0) Skybox first, so the world's opaque geometry overdraws it.
+        DrawSkybox(view, proj);
 
         // 1) Scene geometry (terrain plane, mesas, buildings). Draws are
         //    issued here through GraphicsEngine/Mesh MEMBER functions:
