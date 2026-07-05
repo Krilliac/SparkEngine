@@ -8,6 +8,7 @@
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponMath.h"
 #include "Net/TFClientNet.h"
+#include "UI/TFHUD.h"
 #include "Utils/LogMacros.h"
 
 #include "Audio/AudioEngine.h"
@@ -58,10 +59,25 @@ void TFWeaponSystem::Update(float deltaTime)
 
     RefreshLocalLoadout();
     if (m_localPawn == kNoPawnEntity)
+    {
+        if (m_ctx->hud)
+            m_ctx->hud->SetWeaponStatus(nullptr, -1, -1, false); // dead / no pawn -> clear
         return;
+    }
 
     PollClientInput();
     UpdateReload();
+
+    // Feed the HUD the active weapon each frame (name/ammo/reload). Without
+    // this the HUD had no weapon source and always read "NO WEAPON / -- | --".
+    if (m_ctx->hud)
+    {
+        const SlotState& slot = m_slots[m_activeSlot];
+        if (slot.IsValid())
+            m_ctx->hud->SetWeaponStatus(slot.def.name.c_str(), slot.magAmmo, slot.reserveAmmo, m_reloading);
+        else
+            m_ctx->hud->SetWeaponStatus(nullptr, -1, -1, false);
+    }
 }
 
 void TFWeaponSystem::FixedUpdate(float fixedDeltaTime)
