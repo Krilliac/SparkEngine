@@ -25,7 +25,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -737,7 +737,7 @@ void TFDeployableSystem::OnDeployDestroy(const void* data, size_t size)
 
 void TFDeployableSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Deployables"))
         return;
     ImGui::Text("live: %zu  placed: %u  expired: %u  killed: %u",

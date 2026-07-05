@@ -166,6 +166,26 @@ if(MSVC)
     target_link_libraries(SparkGameMMOFPS PRIVATE legacy_stdio_definitions)
 endif()
 
+# ---------------------------------------------------------------------
+# Game-mode ImGui HUD (Windows): the DLL statically links its own copy of
+# the ImGui object code; the engine injects its context + allocators at
+# module load via the SparkModuleInjectImGui export (ModuleDllMain.h).
+# SPARK_HAS_IMGUI is the truthful guard for the module's UI code — the HUD
+# works in plain game mode, no ENABLE_EDITOR involved.
+# ---------------------------------------------------------------------
+if(WIN32)
+    if(SPARK_GAME_MMOFPS_STANDALONE)
+        include("${SPARK_ENGINE_DIR}/cmake/BuildImGui.cmake")
+    else()
+        include("${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
+    endif()
+    if(TARGET imgui)
+        target_link_libraries(SparkGameMMOFPS PRIVATE imgui)
+        target_compile_definitions(SparkGameMMOFPS PRIVATE SPARK_HAS_IMGUI=1)
+        message(STATUS "SparkGameMMOFPS: ImGui HUD ENABLED (game mode)")
+    endif()
+endif()
+
 # Link Jolt Physics if available
 # On Linux, static third-party libs resolve from the exe (ENABLE_EXPORTS)
 if(WIN32)

@@ -28,7 +28,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -447,7 +447,7 @@ void TFClientNet::OnXPEvent(const void* data, size_t size)
 
 void TFClientNet::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!m_showDebug)
         return;
     if (ImGui::Begin("TF Client Net", &m_showDebug))

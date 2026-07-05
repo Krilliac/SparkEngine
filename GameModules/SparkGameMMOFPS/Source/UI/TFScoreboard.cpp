@@ -15,7 +15,7 @@
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -171,7 +171,7 @@ FactionId TFScoreboard::ComputeDominion() const
 // Rendering
 // ---------------------------------------------------------------------------
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 
 namespace {
 
@@ -322,13 +322,13 @@ void TFScoreboard::RenderDebugUI()
     ImGui::Text("rows : %zu", m_rows.size());
 }
 
-#else // !ENABLE_EDITOR — headless / no ImGui: tallies only
+#else // !SPARK_HAS_IMGUI — headless / no ImGui: tallies only
 
 void TFScoreboard::RenderUI() {}
 void TFScoreboard::DrawHeader() {}
 void TFScoreboard::DrawFactionColumn(FactionId) {}
 void TFScoreboard::RenderDebugUI() {}
 
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 
 } // namespace Terrafront

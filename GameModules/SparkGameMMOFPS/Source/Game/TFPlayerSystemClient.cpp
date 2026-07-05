@@ -14,7 +14,7 @@
 #include "Engine/ECS/Components.h"
 #include "Spark/IEngineContext.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -254,7 +254,7 @@ void TFPlayerSystem::AttachPawnVisual(uint32_t localEntity, FactionId faction)
 
 void TFPlayerSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Players"))
         return;
     ImGui::Text("records: %zu  (pawn map %zu, pending local %u)",

@@ -31,7 +31,7 @@
 #include "Engine/Networking/IAreaSimulation.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -347,6 +347,7 @@ void TFWorldSetup::RenderWorld()
         {
             ID3D11DeviceContext* dc = gfx->GetContext();
             gfx->SetBasicShaders();
+            const DirectX::XMFLOAT4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
             for (const auto& obj : sm->GetObjects())
             {
                 if (!obj || !obj->IsActive() || !obj->IsVisible())
@@ -354,9 +355,49 @@ void TFWorldSetup::RenderWorld()
                 Mesh* mesh = obj->GetMesh();
                 if (!mesh || mesh->GetVertexCount() == 0 || mesh->GetIndexCount() == 0)
                     continue;
-                gfx->UpdateBasicConstants(obj->GetWorldMatrix(), view, proj);
-                mesh->Render(dc);
+
+                // Scene material (material= key): albedo texture + UV tiling.
+                const GraphicsEngine::BasicMaterial* sceneMat =
+                    obj->GetMaterialPath().empty() ? nullptr : gfx->GetOrLoadBasicMaterial(obj->GetMaterialPath());
+                ID3D11ShaderResourceView* sceneSrv = sceneMat ? sceneMat->srv.Get() : nullptr;
+                const DirectX::XMFLOAT2 sceneTiling = sceneMat ? sceneMat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
+
+                const DirectX::XMMATRIX world = obj->GetWorldMatrix();
+                const auto& submeshes = mesh->GetSubmeshes();
+                if (submeshes.empty())
+                {
+                    // Primitive (terrain plane, mesa cubes): scene material over whole mesh
+                    gfx->UpdateBasicConstants(world, view, proj, kWhite, sceneTiling);
+                    gfx->SetBasicTexture(sceneSrv);
+                    mesh->Render(dc);
+                }
+                else
+                {
+                    // OBJ model: draw each MTL material range. Ranges with
+                    // their own map_Kd (e.g. Kenney colormap, Quaternius trim
+                    // sheets) use it at 1:1 UVs; untextured ranges fall back
+                    // to the scene material texture tinted by the MTL Kd.
+                    for (const MeshSubmesh& smesh : submeshes)
+                    {
+                        ID3D11ShaderResourceView* srv = nullptr;
+                        DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
+                        if (!smesh.diffuseTexture.empty())
+                        {
+                            srv = gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                        }
+                        if (!srv)
+                        {
+                            srv = sceneSrv;
+                            tiling = sceneTiling;
+                        }
+                        gfx->UpdateBasicConstants(world, view, proj, smesh.diffuseColor, tiling);
+                        gfx->SetBasicTexture(srv);
+                        mesh->RenderRange(dc, smesh.indexStart, smesh.indexCount);
+                    }
+                }
             }
+            // Restore default texture binding for subsequent draw paths
+            gfx->SetBasicTexture(nullptr);
         }
 
         // 2) ECS visuals — pawns, vehicles and deployables all attach a
@@ -622,7 +663,7 @@ void TFWorldSetup::Shutdown()
 
 void TFWorldSetup::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF World"))
         return;
 

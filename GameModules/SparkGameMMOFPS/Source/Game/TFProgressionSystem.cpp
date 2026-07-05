@@ -27,7 +27,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -455,7 +455,7 @@ bool TFProgressionSystem::SaveNow()
 
 void TFProgressionSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Progression"))
         return;
     ImGui::Text("players : %zu  awards: %u  saves: %u%s",

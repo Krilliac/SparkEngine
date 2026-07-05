@@ -18,7 +18,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -617,7 +617,7 @@ void TFSquadSystem::ReleaseClientHandlers()
 
 void TFSquadSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Squads"))
         return;
 
@@ -691,7 +691,7 @@ void TFSquadSystem::RenderDebugUI()
                         squad.hasWaypoint ? "  wp" : "");
         }
     }
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 }
 
 } // namespace Terrafront

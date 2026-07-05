@@ -16,7 +16,7 @@
 #include "Net/TFNetProtocol.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -204,7 +204,7 @@ void TFHUD::GatherPawnView()
 // Rendering
 // ---------------------------------------------------------------------------
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 
 namespace {
 
@@ -473,7 +473,7 @@ void TFHUD::DrawRespawnOverlay()
     }
 }
 
-#else // !ENABLE_EDITOR — headless / no ImGui: HUD is state-only
+#else // !SPARK_HAS_IMGUI — headless / no ImGui: HUD is state-only
 
 void TFHUD::RenderUI() {}
 void TFHUD::DrawVitals() {}
@@ -484,6 +484,6 @@ void TFHUD::DrawDamageOctants() {}
 void TFHUD::DrawCaptureBar() {}
 void TFHUD::DrawRespawnOverlay() {}
 
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 
 } // namespace Terrafront

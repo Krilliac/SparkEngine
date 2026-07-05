@@ -13,7 +13,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -223,7 +223,7 @@ void TFReplication::OnRepMoveState(const void* data, size_t size)
 
 void TFReplication::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!m_showDebug)
         return;
     if (ImGui::Begin("TF Replication", &m_showDebug))
@@ -260,7 +260,7 @@ void TFReplication::RenderDebugUI()
         }
     }
     ImGui::End();
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 }
 
 } // namespace Terrafront

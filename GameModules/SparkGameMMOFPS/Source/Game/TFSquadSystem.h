@@ -143,7 +143,7 @@ class TFSquadSystem {
     Mirror m_mirror;
     bool   m_clientHandlers{false};
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     int m_uiTargetId{0};   // debug UI: invite/kick/promote target player id
 #endif
 };

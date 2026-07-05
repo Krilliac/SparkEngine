@@ -12,7 +12,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/JsonUtils.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -646,7 +646,7 @@ WeaponDef TFDataTables::ResolveWeapon(WeaponId id, FactionId f) const
 
 void TFDataTables::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Data Tables"))
         return;
     ImGui::Text("Loaded: %s", m_loaded ? "yes" : "NO");

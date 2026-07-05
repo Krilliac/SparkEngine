@@ -201,7 +201,7 @@ void TFSpawnScreen::SendSpawnRequest()
 // Rendering
 // ---------------------------------------------------------------------------
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 
 void TFSpawnScreen::RenderUI()
 {
@@ -459,12 +459,12 @@ void TFSpawnScreen::DrawDeployPanel(float panelX, float panelY, float panelW, fl
     ImGui::EndDisabled();
 }
 
-#else // !ENABLE_EDITOR — headless: screen is state-only
+#else // !SPARK_HAS_IMGUI — headless: screen is state-only
 
 void TFSpawnScreen::RenderUI() {}
 void TFSpawnScreen::DrawFactionSplash(float, float, float, float) {}
 void TFSpawnScreen::DrawDeployPanel(float, float, float, float) {}
 
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 
 } // namespace Terrafront

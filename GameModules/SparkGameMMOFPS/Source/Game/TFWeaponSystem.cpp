@@ -15,7 +15,7 @@
 #include "Input/InputManager.h"
 #include "Spark/IEngineContext.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -370,7 +370,7 @@ void TFWeaponSystem::PlayWeaponAudio(const std::string& assetPath)
 
 void TFWeaponSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Weapons"))
         return;
 

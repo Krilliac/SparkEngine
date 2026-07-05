@@ -5,14 +5,14 @@
  *        pointy-top axial hex math.
  *
  * OWNERSHIP: ui agent (same as TFMapScreen/TFSpawnScreen). Header-only; all
- * ImGui-dependent content is compiled only under ENABLE_EDITOR (the module's
+ * ImGui-dependent content is compiled only under SPARK_HAS_IMGUI (the module's
  * ImGui rule) — safe to include from any UI translation unit.
  */
 #pragma once
 
 #include "Core/TFTypes.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 
 #include <imgui.h>
 #include <cmath>
@@ -85,4 +85,4 @@ inline const char* TierTag(const std::string& tier)
 
 } // namespace Terrafront::TFUi
 
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI

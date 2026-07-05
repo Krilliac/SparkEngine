@@ -23,7 +23,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 #include <algorithm>
@@ -760,7 +760,7 @@ void TFServerSim::SendWorldWelcome(PlayerId player)
 
 void TFServerSim::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!m_showDebug)
         return;
     if (ImGui::Begin("TF Server Sim", &m_showDebug))
@@ -781,7 +781,7 @@ void TFServerSim::RenderDebugUI()
         }
     }
     ImGui::End();
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 }
 
 } // namespace Terrafront

@@ -13,7 +13,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -599,7 +599,7 @@ void TFRegionSystem::FeedLocalCaptureHUD()
 
 void TFRegionSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!m_showDebug)
         return;
     if (ImGui::Begin("TF Regions", &m_showDebug))

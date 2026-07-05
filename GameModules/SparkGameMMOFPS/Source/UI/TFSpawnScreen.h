@@ -57,7 +57,7 @@ class TFSpawnScreen {
     void SendSpawnRequest();
     void SendFactionSelect(FactionId f);
 
-    // ImGui internals (stubbed out when !ENABLE_EDITOR, TFHUD pattern).
+    // ImGui internals (stubbed out when !SPARK_HAS_IMGUI, TFHUD pattern).
     void DrawFactionSplash(float panelX, float panelY, float panelW, float panelH);
     void DrawDeployPanel(float panelX, float panelY, float panelW, float panelH);
 

@@ -23,7 +23,7 @@
 
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -652,7 +652,7 @@ std::string TFBotSystem::DebugSummary() const
 
 void TFBotSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!m_showDebug)
         return;
     if (ImGui::Begin("TF Bots", &m_showDebug))
@@ -674,7 +674,7 @@ void TFBotSystem::RenderDebugUI()
         }
     }
     ImGui::End();
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 }
 
 } // namespace Terrafront

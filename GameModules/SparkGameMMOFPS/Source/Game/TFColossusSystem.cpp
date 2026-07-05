@@ -32,7 +32,7 @@
 #include "World/TFRegionSystem.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -183,7 +183,7 @@ TFColossusResult TFColossusSystem::ServerPurchaseColossus(PlayerId player)
 
 void TFColossusSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Colossus"))
         return;
     ImGui::Text("purchases : %u   rejects: %u", m_purchases, m_rejects);

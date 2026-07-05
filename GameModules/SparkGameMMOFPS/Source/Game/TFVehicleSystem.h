@@ -44,7 +44,7 @@
  *   destroy/seats mirroring the pawn channel — 20 Hz dirty-checked updates,
  *   reliable creates to late joiners (GetClients() diff poll), client mirror
  *   store + interpolated OBJ visuals in this system (TFVehicleNet/Client.cpp).
- *  Client UX (RenderDebugUI hook, ENABLE_EDITOR): terminal purchase menu (E),
+ *  Client UX (RenderDebugUI hook, SPARK_HAS_IMGUI): terminal purchase menu (E),
  *   enter/exit prompts (E), Aegis deploy toggle (B), vehicle hp bar while
  *   seated. Pure-client caveat (documented): walking prediction keeps running
  *   while seated, so the first-person view reconciles toward the ride pose at
@@ -274,8 +274,8 @@ class TFVehicleSystem {
     void ClientRequestPurchase(VehicleId vehId);
     bool LocalPlayerPawn(float outPos[3], bool& outAlive) const;
     PlayerId LocalPlayerId() const;
-    void RenderPromptsAndMenus();        ///< ENABLE_EDITOR-only body
-    void RenderSeatedHud();              ///< ENABLE_EDITOR-only body
+    void RenderPromptsAndMenus();        ///< SPARK_HAS_IMGUI-only body
+    void RenderSeatedHud();              ///< SPARK_HAS_IMGUI-only body
     void SetShopOpen(bool open);
 
     // -------------------------------------------------------------------- state

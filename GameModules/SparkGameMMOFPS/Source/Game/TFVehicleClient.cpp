@@ -3,7 +3,7 @@
  * @brief W3 vehicles — client UX half of TFVehicleSystem: terminal purchase
  *        menu (E), vehicle enter/exit prompts (E), Aegis deploy toggle (B),
  *        seated vehicle hp bar, and the debug panel. All ImGui bodies compile
- *        only under ENABLE_EDITOR (module rule); requests route directly into
+ *        only under SPARK_HAS_IMGUI (module rule); requests route directly into
  *        the server methods on authority roles and over the wire otherwise.
  *
  *        Known W3 caveat (documented in the header): while the purchase menu
@@ -25,7 +25,7 @@
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include "UI/TFUiCommon.h"
 #include <imgui.h>
 #endif
@@ -279,10 +279,10 @@ void TFVehicleSystem::ClientUpdateUX(float dt)
 }
 
 // ---------------------------------------------------------------------------
-// Rendering (ENABLE_EDITOR only)
+// Rendering (SPARK_HAS_IMGUI only)
 // ---------------------------------------------------------------------------
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 
 void TFVehicleSystem::RenderPromptsAndMenus()
 {
@@ -474,12 +474,12 @@ void TFVehicleSystem::RenderDebugUI()
     ImGui::End();
 }
 
-#else // !ENABLE_EDITOR — headless builds keep the state machine, drop the pixels
+#else // !SPARK_HAS_IMGUI — headless builds keep the state machine, drop the pixels
 
 void TFVehicleSystem::RenderPromptsAndMenus() {}
 void TFVehicleSystem::RenderSeatedHud() {}
 void TFVehicleSystem::RenderDebugUI() {}
 
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 
 } // namespace Terrafront

@@ -13,7 +13,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -248,7 +248,7 @@ void TFDamageSystem::BroadcastKill(PlayerId killer, PlayerId victim, WeaponId we
 
 void TFDamageSystem::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("TF Damage"))
         return;
     ImGui::Text("tracked pawns : %zu", m_pools.size());

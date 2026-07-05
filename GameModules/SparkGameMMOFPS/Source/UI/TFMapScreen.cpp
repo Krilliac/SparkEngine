@@ -36,7 +36,7 @@ namespace {
 constexpr int kVkM      = 'M';
 constexpr int kVkEscape = 0x1B;
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 constexpr float kHexSizeMin = 26.0f;   // corner radius, px
 constexpr float kHexSizeMax = 52.0f;   // ~90 px hex width at the cap
 #endif
@@ -149,7 +149,7 @@ void TFMapScreen::SendRegionSpawnRequest(RegionId region)
 // Rendering
 // ---------------------------------------------------------------------------
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 
 void TFMapScreen::RenderUI()
 {
@@ -386,11 +386,11 @@ void TFMapScreen::DrawMapContents()
     }
 }
 
-#else // !ENABLE_EDITOR — headless: map is state-only
+#else // !SPARK_HAS_IMGUI — headless: map is state-only
 
 void TFMapScreen::RenderUI() {}
 void TFMapScreen::DrawMapContents() {}
 
-#endif // ENABLE_EDITOR
+#endif // SPARK_HAS_IMGUI
 
 } // namespace Terrafront
