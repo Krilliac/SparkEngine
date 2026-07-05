@@ -601,26 +601,14 @@ void TFWorldSetup::RenderWorld()
                     DirectX::XMMatrixTranslation(0.28f, -0.26f, 0.9f);
                 const DirectX::XMMATRIX vmWorld = local * invView;
 
-                const DirectX::XMFLOAT4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
-                const auto& subs = vm->GetSubmeshes();
-                if (subs.empty())
-                {
-                    gfx->UpdateBasicConstants(vmWorld, view, proj, kWhite, {1.0f, 1.0f});
-                    gfx->SetBasicTexture(nullptr);
-                    vm->Render(dc);
-                }
-                else
-                {
-                    for (const MeshSubmesh& sm : subs)
-                    {
-                        ID3D11ShaderResourceView* srv =
-                            sm.diffuseTexture.empty() ? nullptr : gfx->GetOrLoadTextureSRV(sm.diffuseTexture);
-                        gfx->UpdateBasicConstants(vmWorld, view, proj, sm.diffuseColor, {1.0f, 1.0f});
-                        gfx->SetBasicTexture(srv);
-                        vm->RenderRange(dc, sm.indexStart, sm.indexCount);
-                    }
-                }
+                // The weapon OBJ's own MTL texture is near-black, which made the
+                // gun a silhouette in first-person. Ignore it and draw the whole
+                // model as a single clean gunmetal (untextured, mid-grey, a touch
+                // over-1.0 so it reads as lit metal even on shadowed faces).
+                const DirectX::XMFLOAT4 kGunmetal{0.60f, 0.62f, 0.68f, 1.0f};
                 gfx->SetBasicTexture(nullptr);
+                gfx->UpdateBasicConstants(vmWorld, view, proj, kGunmetal, {1.0f, 1.0f});
+                vm->Render(dc);
             }
         }
 
