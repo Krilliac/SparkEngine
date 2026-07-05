@@ -98,6 +98,30 @@ bool TFDamageSystem::GetPools(EntityId pawn, float& outHealth, float& outShield)
     return true;
 }
 
+// --- W3 shared-edit additions (deployables/colossus agent) ------------------
+
+void TFDamageSystem::ServerHeal(EntityId pawn, float amount)
+{
+    if (!m_ctx || !m_ctx->IsAuthority() || amount <= 0.0f)
+        return;
+    auto it = m_pools.find(pawn);
+    if (it == m_pools.end() || it->second.health <= 0.0f)
+        return; // unknown or dead — healing never revives
+    HealthRec& rec = it->second;
+    if (rec.health >= rec.maxHealth)
+        return;
+    rec.health = std::min(rec.maxHealth, rec.health + amount);
+    if (m_ctx->players)
+        m_ctx->players->ServerSetPawnHealth(pawn, rec.health, rec.shield);
+}
+
+void TFDamageSystem::ServerForgetPawn(EntityId pawn)
+{
+    m_pools.erase(pawn);
+}
+
+// ----------------------------------------------------------------------------
+
 void TFDamageSystem::ServerApplyDamage(EntityId victim, EntityId attackerPawn,
                                        PlayerId attackerPlayer, float amount, uint8_t kind,
                                        WeaponId weapon, bool headshot)

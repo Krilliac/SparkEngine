@@ -8,7 +8,9 @@
 #include "Game/TFWeaponSystem.h"
 
 #include "Game/TFDamageSystem.h"
+#include "Game/TFDeployableSystem.h"   // W3 shared-edit: splash vs deployables
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFVehicleSystem.h"      // W3 shared-edit: vehicle hit tests + seat weapons
 #include "Game/TFWeaponMath.h"
 #include "Net/TFServerSim.h"
 #include "World/TFWorldSetup.h"
@@ -50,11 +52,28 @@ void TFWeaponSystem::ServerHandleFire(PlayerId shooter, const TF_FireEvent& ev)
     if (!m_ctx->players->GetPawnByPlayer(shooter, pawn) || !pawn.alive)
         return;
 
-    const WeaponDef* base = m_ctx->data->GetWeapon(ev.weaponId);
+    // W3 shared-edit (vehicles agent): a seated shooter fires the SEAT weapon
+    // through this exact validation path — the riding pawn is the shooter
+    // surrogate (its transform already sits on the vehicle, so the trusted
+    // origin, lag comp and hit confirms all work unchanged). Unarmed seats
+    // (passengers, drivers of unarmed vehicles) cannot fire at all.
+    WeaponId fireWeapon = ev.weaponId;
+    if (m_ctx->vehicles)
+    {
+        WeaponId seatWeapon = kInvalidWeapon;
+        if (m_ctx->vehicles->GetSeatWeapon(shooter, seatWeapon))
+        {
+            if (seatWeapon == kInvalidWeapon)
+                return; // seated in an unarmed seat
+            fireWeapon = seatWeapon;
+        }
+    }
+
+    const WeaponDef* base = m_ctx->data->GetWeapon(fireWeapon);
     if (!base || base->kind == "melee" || base->kind == "beam")
         return; // TF-W2: melee reach + tool beams take a different server path
 
-    const WeaponDef def = m_ctx->data->ResolveWeapon(ev.weaponId, pawn.faction);
+    const WeaponDef def = m_ctx->data->ResolveWeapon(fireWeapon, pawn.faction);
 
     ShooterState& st = m_shooters[shooter];
     const double now = ServerNow();
@@ -147,6 +166,30 @@ void TFWeaponSystem::FireHitscanRay(PlayerId shooter, const PawnInfo& pawn, cons
     float hitDist = 0.0f;
     const EntityId hit = m_ctx->serverSim->LagComp().RewindRaycast(
         rewindTime, origin, dir, maxDist, pawn.entity, hitPoint, &hitDist);
+
+    // W3 shared-edit (vehicles agent): the same ray also tests vehicle hulls;
+    // the NEAREST of pawn/vehicle wins. Vehicle hits take def.vsVehicleMult
+    // and route to TFVehicleSystem's hp pool instead of ctx.damage. (Vehicles
+    // move slowly relative to the lag-comp window, so present-time hulls are
+    // an acceptable W3 approximation vs. rewound pawn capsules.)
+    float vehPoint[3];
+    float vehDist = 0.0f;
+    const EntityId vehHit =
+        m_ctx->vehicles
+            ? m_ctx->vehicles->RaycastVehicles(origin, dir, maxDist, vehPoint, &vehDist)
+            : 0;
+
+    if (vehHit != 0 && (hit == 0 || vehDist < hitDist))
+    {
+        if (TerrainBlocked(origin, dir, vehDist))
+            return;
+        const float vdmg = WeaponMath::LinearFalloff(def.damage, def.minDamage,
+                                                     def.falloffStartM, def.falloffEndM,
+                                                     vehDist) * def.vsVehicleMult;
+        m_ctx->vehicles->ServerDamageVehicle(vehHit, vdmg, pawn.entity, shooter, def.id);
+        return;
+    }
+
     if (hit == 0)
         return;
 
@@ -259,6 +302,31 @@ void TFWeaponSystem::ServerStepProjectiles(float dt)
             float hitDist = 0.0f;
             const EntityId hit =
                 RaycastPawnsNow(prev, dir, segLen, p.shooterPawn, hitPoint, &hitDist);
+
+            // W3 shared-edit (vehicles agent): the projectile step also sweeps
+            // vehicle hulls; nearest of pawn/vehicle wins. Direct vehicle hits
+            // take the base weapon's vsVehicleMult, then the warhead splashes
+            // around the impact (vehicle excluded — no double dip).
+            float vehPoint[3];
+            float vehDist = 0.0f;
+            const EntityId vehHit =
+                m_ctx->vehicles
+                    ? m_ctx->vehicles->RaycastVehicles(prev, dir, segLen, vehPoint, &vehDist)
+                    : 0;
+            if (vehHit != 0 && (hit == 0 || vehDist < hitDist))
+            {
+                const WeaponDef* base = m_ctx->data ? m_ctx->data->GetWeapon(p.weapon) : nullptr;
+                const float vdmg = WeaponMath::LinearFalloff(p.damage, p.minDamage,
+                                                             p.falloffStartM, p.falloffEndM,
+                                                             p.traveledM) *
+                                   (base ? base->vsVehicleMult : 1.0f);
+                m_ctx->vehicles->ServerDamageVehicle(vehHit, vdmg, p.shooterPawn, p.shooter,
+                                                     p.weapon);
+                ExplodeAt(p, vehPoint, 0, vehHit);
+                it = m_projectiles.erase(it);
+                continue;
+            }
+
             if (hit != 0)
             {
                 PawnInfo victim;
@@ -294,7 +362,8 @@ void TFWeaponSystem::ServerStepProjectiles(float dt)
     }
 }
 
-void TFWeaponSystem::ExplodeAt(const ServerProjectile& p, const float at[3], EntityId excludeEntity)
+void TFWeaponSystem::ExplodeAt(const ServerProjectile& p, const float at[3], EntityId excludeEntity,
+                               EntityId excludeVehicle)
 {
     if (p.splashRadiusM <= 0.0f || p.splashDamage <= 0.0f || !m_ctx || !m_ctx->players ||
         !m_ctx->damage)
@@ -314,6 +383,25 @@ void TFWeaponSystem::ExplodeAt(const ServerProjectile& p, const float at[3], Ent
             m_ctx->damage->ServerApplyDamage(pawn.entity, p.shooterPawn, p.shooter, dmg,
                                              kDamageKindExplosive, p.weapon, false);
     });
+
+    // W3 shared-edit (deployables agent): explosive splash also damages
+    // Fabricator/Medtech deployables with the same linear falloff. Direct
+    // hitscan/projectile impact vs deployables stays TF-W4 (needs deployable
+    // capsules in the lag-comp raycast set).
+    if (m_ctx->deployables)
+        m_ctx->deployables->ServerSplashDamageDeployables(at, p.splashRadiusM,
+                                                          p.splashDamage, p.shooter);
+
+    // W3 shared-edit (vehicles agent): explosive splash also damages vehicle
+    // hulls (rockets near-missing a tank still hurt it). vsVehicleMult comes
+    // from the base weapon row; the direct-hit vehicle is excluded above.
+    if (m_ctx->vehicles)
+    {
+        const WeaponDef* base = m_ctx->data ? m_ctx->data->GetWeapon(p.weapon) : nullptr;
+        m_ctx->vehicles->ServerApplySplash(at, p.splashRadiusM, p.splashDamage,
+                                           base ? base->vsVehicleMult : 1.0f,
+                                           p.shooterPawn, p.shooter, p.weapon, excludeVehicle);
+    }
 }
 
 } // namespace Terrafront

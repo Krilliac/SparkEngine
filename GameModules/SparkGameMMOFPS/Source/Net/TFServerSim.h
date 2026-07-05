@@ -106,6 +106,10 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     void HandleSpawnRequest(PlayerId sender, const void* data, size_t size);
     void HandleFireEvent(PlayerId sender, const void* data, size_t size);
     void HandleFactionSelect(PlayerId sender, const void* data, size_t size);
+    // TF-W3 (vehicles agent): TFMsg::VehicleEnter/VehicleExit/AegisDeploy
+    // routing into TFVehicleSystem (was accepted-but-unrouted in W1/W2).
+    void HandleVehicleSeatOp(PlayerId sender, const void* data, size_t size, bool enter);
+    void HandleAegisDeploy(PlayerId sender, const void* data, size_t size);
     void SendSpawnReply(PlayerId player, const TF_SpawnReply& reply);
     void SendWorldWelcome(PlayerId player);
 #endif

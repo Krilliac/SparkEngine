@@ -18,6 +18,7 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFComponents.h"
+#include "Game/TFVehicleSystem.h"   // W3 shared-edit: Aegis mobile-spawn (spawnKind==2)
 #include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
 #include "World/TFWorldSetup.h"
@@ -265,22 +266,37 @@ void TFPlayerSystem::ServerHandleSpawnRequest(PlayerId player, const TF_SpawnReq
     {
         reply.reason = 4; // class-locked (Colossus is terminal-purchased)
     }
-    else if (req.spawnKind != 0)
+    // W3 shared-edit (vehicles agent): spawnKind==2 (deployed friendly Aegis)
+    // is now a first-class spawn point. Its respawn timer is shorter (DESIGN
+    // §4: 5 s at an Aegis vs the 8 s default, data-driven via
+    // vehicles.json deployRespawnSec).
+    else if (req.spawnKind != 0 && req.spawnKind != 2)
     {
-        reply.reason = 1; // TF-W2: region spawns; TF-W3: aegis/squad spawns
+        reply.reason = 1; // TF-W2: region spawns; TF-W3 (squad agent): squad spawns
+    }
+    else if (req.spawnKind == 2 && !m_ctx->vehicles)
+    {
+        reply.reason = 1; // vehicles system absent (headless unit tests)
     }
     else if (rec.alive)
     {
         reply.reason = 1; // already deployed
     }
-    else if (NowSec() < rec.nextRespawnAt)
+    else if (const double respawnAt =
+                 rec.nextRespawnAt -
+                 ((req.spawnKind == 2 && m_ctx->vehicles)
+                      ? std::max(0.0f, kTFRespawnDelaySec - m_ctx->vehicles->AegisRespawnDelaySec())
+                      : 0.0f);
+             NowSec() < respawnAt)
     {
         reply.reason = 2; // respawn timer
-        reply.respawnDelay = static_cast<float>(rec.nextRespawnAt - NowSec());
+        reply.respawnDelay = static_cast<float>(respawnAt - NowSec());
     }
-    else if (!FindSkyanchorSpawn(faction, pos, yaw))
+    else if (req.spawnKind == 2
+                 ? !m_ctx->vehicles->GetAegisSpawnPos(req.aegisEntity, faction, pos)
+                 : !FindSkyanchorSpawn(faction, pos, yaw))
     {
-        reply.reason = 1; // no skyanchor authored for this faction
+        reply.reason = req.spawnKind == 2 ? 3 : 1; // 3 = aegis gone/undeployed/contested
     }
     else
     {

@@ -9,6 +9,7 @@
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFVehicleSystem.h"   // TF-W3: seat routing + seated-pawn ride sync
 #include "Game/TFWeaponSystem.h"
 
 #include "Engine/ECS/Components.h"
@@ -182,6 +183,35 @@ void TFServerSim::TickMovement(float fdt)
 {
     for (auto& [player, ms] : m_move)
     {
+        // TF-W3 (vehicles agent): seated pawns don't walk. Their inputs drive
+        // the VEHICLE (driver throttle/steer; gunners aim/fire via the weapon
+        // path) and the pawn rides at the seat position — SyncSeatedPawn pulls
+        // that pose (or the one-shot exit placement) into MoveState so the
+        // Transform truth, replication, lag comp and TF_MoveState all stay
+        // coherent without touching the walking model.
+        if (m_ctx->vehicles && m_ctx->vehicles->IsSeated(player))
+        {
+            if (auto vit = m_inputs.find(player); vit != m_inputs.end())
+            {
+                auto& vq = vit->second;
+                int consumed = 0;
+                while (!vq.empty() && consumed < kMaxInputsPerTick)
+                {
+                    const TF_ClientInput in = vq.front();
+                    vq.pop_front();
+                    m_ctx->vehicles->ServerHandleSeatedInput(player, in, fdt);
+                    ms.lastSeq = in.seq;
+                    ms.yaw = QuantAim::WrapPi(in.viewYaw);
+                    ms.pitch = std::clamp(in.viewPitch, -kPitchLimitRad, kPitchLimitRad);
+                    ++consumed;
+                }
+            }
+            m_ctx->vehicles->SyncSeatedPawn(player, ms.pos, ms.vel);
+            ms.grounded = true;
+            WritePawnTransform(ms);
+            continue;
+        }
+
         auto qit = m_inputs.find(player);
         int applied = 0;
         if (qit != m_inputs.end())
@@ -403,12 +433,22 @@ void TFServerSim::RegisterNetHandlers()
         HandleFactionSelect(m.senderID, m.payload.data(), m.payload.size());
     });
 
-    // Accepted-but-unrouted W1 stubs (registered so NetworkManager does not
+    // TF-W3 (vehicles agent): the W1 accepted-but-unrouted vehicle stubs are
+    // now live routes into TFVehicleSystem.
+    route(TFMsg::VehicleEnter, [this](const NetworkMessage& m) {
+        HandleVehicleSeatOp(m.senderID, m.payload.data(), m.payload.size(), true);
+    });
+    route(TFMsg::VehicleExit, [this](const NetworkMessage& m) {
+        HandleVehicleSeatOp(m.senderID, m.payload.data(), m.payload.size(), false);
+    });
+    route(TFMsg::AegisDeploy, [this](const NetworkMessage& m) {
+        HandleAegisDeploy(m.senderID, m.payload.data(), m.payload.size());
+    });
+
+    // Accepted-but-unrouted stubs (registered so NetworkManager does not
     // warn "unknown message type" if an eager client sends them):
-    // TF-W2: LoadoutChange -> players/weapons, SquadMsg -> squads, ChatMsg -> chat relay
-    // TF-W3: VehicleEnter/VehicleExit -> vehicles, AegisDeploy -> vehicles
-    for (TFMsg id : {TFMsg::LoadoutChange, TFMsg::SquadMsg, TFMsg::ChatMsg,
-                     TFMsg::VehicleEnter, TFMsg::VehicleExit, TFMsg::AegisDeploy})
+    // TF-W4: LoadoutChange -> players/weapons, SquadMsg -> squads, ChatMsg -> chat relay
+    for (TFMsg id : {TFMsg::LoadoutChange, TFMsg::SquadMsg, TFMsg::ChatMsg})
     {
         route(id, [](const NetworkMessage&) {});
     }
@@ -524,6 +564,16 @@ void TFServerSim::HandleSpawnRequest(PlayerId sender, const void* data, size_t s
     TF_SpawnRequest req;
     std::memcpy(&req, data, sizeof(req));
 
+    // TF-W3 (vehicles agent): Aegis mobile-spawn requests (spawnKind==2) are
+    // validated end-to-end by TFPlayerSystem (owns respawn records + the
+    // GetAegisSpawnPos check) which also sends the TF_SpawnReply; the pawn it
+    // spawns re-enters this sim via EvPlayerSpawned exactly like any other.
+    if (req.spawnKind == 2 && m_ctx->players)
+    {
+        m_ctx->players->ServerHandleSpawnRequest(sender, req);
+        return;
+    }
+
     TF_SpawnReply rep{};
     rep.accepted = 0;
     rep.reason = 1; // bad-point until proven otherwise
@@ -609,6 +659,35 @@ void TFServerSim::HandleFireEvent(PlayerId sender, const void* data, size_t size
     TF_FireEvent ev;
     std::memcpy(&ev, data, sizeof(ev));
     m_ctx->weapons->ServerHandleFire(sender, ev);
+}
+
+// TF-W3 (vehicles agent): thin size-validated routes into TFVehicleSystem.
+void TFServerSim::HandleVehicleSeatOp(PlayerId sender, const void* data, size_t size, bool enter)
+{
+    if (size != sizeof(TF_VehicleSeatOp) || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    if (!m_ctx->vehicles)
+        return;
+    TF_VehicleSeatOp op;
+    std::memcpy(&op, data, sizeof(op));
+    m_ctx->vehicles->ServerHandleSeatOp(sender, op, enter);
+}
+
+void TFServerSim::HandleAegisDeploy(PlayerId sender, const void* data, size_t size)
+{
+    if (size != sizeof(TF_AegisDeploy) || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    if (!m_ctx->vehicles)
+        return;
+    TF_AegisDeploy msg;
+    std::memcpy(&msg, data, sizeof(msg));
+    m_ctx->vehicles->ServerHandleAegisDeploy(sender, msg);
 }
 
 void TFServerSim::HandleFactionSelect(PlayerId sender, const void* data, size_t size)

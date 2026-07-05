@@ -69,6 +69,7 @@ class TFProgressionSystem {
     void     ServerAwardXP(PlayerId player, uint16_t amount, uint8_t reasonCode);
     uint32_t FluxOf(PlayerId player) const;
     bool     ServerSpendFlux(PlayerId player, uint32_t amount);   ///< false if insufficient
+    void     ServerGrantFlux(PlayerId player, uint32_t amount);   ///< debug/test grant (tf_giveflux)
     uint16_t RankOf(PlayerId player) const;
 
     // --- W2 additions beyond the contract (documented in wave report) ------

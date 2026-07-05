@@ -18,6 +18,7 @@
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFUiCommon.h"
+#include "Game/TFVehicleSystem.h"   // W3 shared-edit: deployed-Aegis spawn entries
 #include "World/TFRegionSystem.h"
 
 #include "Utils/LogMacros.h"
@@ -191,6 +192,7 @@ void TFSpawnScreen::SendSpawnRequest()
     rq.classId   = static_cast<uint8_t>(m_selClass);
     rq.spawnKind = m_selKind;
     rq.regionId  = (m_selKind == 1) ? m_selRegion : 0;
+    rq.aegisEntity = (m_selKind == 2) ? m_selAegis : 0; // W3: deployed-Aegis spawns
     m_ctx->clientNet->SendMsg(TFMsg::SpawnRequest, &rq, sizeof(rq));
     m_debounce = kRequestDebounceSec;
 }
@@ -331,6 +333,18 @@ void TFSpawnScreen::DrawDeployPanel(float panelX, float panelY, float panelW, fl
         m_selKind = 0;
         m_selRegion = kInvalidRegion;
     }
+    // W3 shared-edit (vehicles agent): keep the Aegis selection valid against
+    // live vehicle state (undeployed / destroyed / captured mid-screen).
+    if (m_selKind == 2) {
+        TFVehicleInfo vi;
+        const bool ok = m_ctx->vehicles && m_selAegis != 0 &&
+                        m_ctx->vehicles->GetVehicleInfo(m_selAegis, vi) &&
+                        vi.deployed && vi.hp > 0.0f && vi.faction == myFaction;
+        if (!ok) {
+            m_selKind = 0;
+            m_selAegis = 0;
+        }
+    }
 
     auto distTo = [&](const RegionDef& rd) {
         const float dx = rd.centerX - m_deathPos[0];
@@ -371,13 +385,53 @@ void TFSpawnScreen::DrawDeployPanel(float panelX, float panelY, float panelW, fl
             m_selRegion = rd.id;
         }
     }
+
+    // W3 shared-edit (vehicles agent): deployed friendly Aegis mobile spawns
+    // (spawnKind=2). Range-gated to the Aegis deploy radius around the death
+    // spot (skipped on first deploy, when no death position exists yet); the
+    // server independently validates deployed/friendly/alive on request.
+    if (m_ctx->vehicles) {
+        float deployRadius = 600.0f;
+        if (const VehicleDef* aegisDef = m_ctx->data->GetVehicle(VehicleId::Aegis))
+            if (aegisDef->deployRadiusM > 0.0f)
+                deployRadius = aegisDef->deployRadiusM;
+        const bool haveDeathPos =
+            m_deathPos[0] != 0.0f || m_deathPos[1] != 0.0f || m_deathPos[2] != 0.0f;
+
+        m_ctx->vehicles->ForEachVehicle([&](const TFVehicleInfo& vi) {
+            if (vi.vehId != VehicleId::Aegis || !vi.deployed || vi.hp <= 0.0f ||
+                vi.faction != myFaction)
+                return;
+            const float dx = vi.pos[0] - m_deathPos[0];
+            const float dz = vi.pos[2] - m_deathPos[2];
+            const float dist = std::sqrt(dx * dx + dz * dz);
+            if (haveDeathPos && dist > deployRadius)
+                return;
+            std::snprintf(buf, sizeof(buf), "Aegis (mobile spawn)   -   VEH   %.0fm##ae%u",
+                          dist, vi.entity);
+            if (ImGui::Selectable(buf, m_selKind == 2 && m_selAegis == vi.entity)) {
+                m_selKind = 2;
+                m_selAegis = vi.entity;
+                m_selRegion = kInvalidRegion;
+            }
+        });
+    }
     ImGui::EndChild();
 
     // ---- footer: countdown + DEPLOY + map shortcut -----------------------------
+    // W3 shared-edit (vehicles agent): Aegis spawns run a SHORTER respawn
+    // timer (DESIGN §4: 5 s vs 8 s) — mirror the server's discount locally so
+    // the button unlocks when the server would actually accept.
+    float effRespawnLeft = m_respawnLeft;
+    if (m_selKind == 2 && m_ctx->vehicles)
+        effRespawnLeft = std::max(
+            0.0f, m_respawnLeft - std::max(0.0f, kTFRespawnDelaySec -
+                                                     m_ctx->vehicles->AegisRespawnDelaySec()));
+
     const float footY = panelY + panelH - 60.0f;
     ImGui::SetCursorScreenPos(ImVec2(panelX + pad, footY + 8.0f));
-    if (m_respawnLeft > 0.0f)
-        ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.35f, 1.0f), "Respawn in %.1fs", m_respawnLeft);
+    if (effRespawnLeft > 0.0f)
+        ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.35f, 1.0f), "Respawn in %.1fs", effRespawnLeft);
     else
         ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.55f, 1.0f), "Ready to deploy");
 
@@ -389,11 +443,11 @@ void TFSpawnScreen::DrawDeployPanel(float panelX, float panelY, float panelW, fl
         m_ctx->map->Open();
 
     ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 195.0f, footY));
-    const bool blocked = (m_respawnLeft > 0.0f) || (m_debounce > 0.0f) ||
+    const bool blocked = (effRespawnLeft > 0.0f) || (m_debounce > 0.0f) ||
                          !m_ctx->clientNet || !m_ctx->clientNet->IsConnected();
     ImGui::BeginDisabled(blocked);
-    if (m_respawnLeft > 0.0f)
-        std::snprintf(buf, sizeof(buf), "DEPLOY (%.1fs)", m_respawnLeft);
+    if (effRespawnLeft > 0.0f)
+        std::snprintf(buf, sizeof(buf), "DEPLOY (%.1fs)", effRespawnLeft);
     else
         std::snprintf(buf, sizeof(buf), "DEPLOY");
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.42f, 0.20f, 1.0f));

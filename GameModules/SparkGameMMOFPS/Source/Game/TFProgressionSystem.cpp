@@ -200,6 +200,16 @@ bool TFProgressionSystem::ServerSpendFlux(PlayerId player, uint32_t amount)
     return true;
 }
 
+void TFProgressionSystem::ServerGrantFlux(PlayerId player, uint32_t amount)
+{
+    if (!m_initialized || !m_ctx || !m_ctx->IsAuthority() || player == kInvalidPlayer)
+        return;
+    auto& rec = m_players[player];
+    rec.flux = std::min<uint32_t>(kFluxWalletCap, rec.flux + amount);
+    m_dirty = true;
+    SendXPEvent(player, 0, kXPReasonSync);
+}
+
 uint16_t TFProgressionSystem::RankOf(PlayerId player) const
 {
     auto it = m_players.find(player);

@@ -38,6 +38,19 @@ class TFDamageSystem {
     /// Current pools (server). Returns false if the pawn is untracked.
     bool GetPools(EntityId pawn, float& outHealth, float& outShield) const;
 
+    // --- W3 shared-edit additions (deployables/colossus agent; minimal &
+    //     additive per the wave-3 coordination grant) ------------------------
+
+    /// Server: heal a tracked pawn's HEALTH pool (shield untouched, never
+    /// revives, clamped to maxHealth). Used by Medtech beacons / Fabricator
+    /// packs. No-op for unknown or dead pawns.
+    void ServerHeal(EntityId pawn, float amount);
+
+    /// Server: drop bookkeeping for a pawn despawned WITHOUT dying (Colossus
+    /// purchase swap; the kill path already erases its own record). Prevents
+    /// stale HealthRec entries from accumulating across suit swaps.
+    void ServerForgetPawn(EntityId pawn);
+
   private:
     struct HealthRec {
         float  health = 500, maxHealth = 500;

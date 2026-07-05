@@ -108,7 +108,11 @@ class TFWeaponSystem {
     void SpawnServerProjectile(PlayerId shooter, const PawnInfo& pawn, const WeaponDef& def, const float origin[3],
                                const float dir[3]);
     void ServerStepProjectiles(float dt);
-    void ExplodeAt(const ServerProjectile& p, const float at[3], EntityId excludeEntity);
+    // W3 shared-edit (vehicles agent): excludeVehicle skips the direct-hit
+    // vehicle when the warhead splashes (no double dip); defaulted so the
+    // pre-W3 call sites are untouched.
+    void ExplodeAt(const ServerProjectile& p, const float at[3], EntityId excludeEntity,
+                   EntityId excludeVehicle = 0);
     bool TerrainBlocked(const float origin[3], const float dir[3], float dist) const;
     EntityId RaycastPawnsNow(const float origin[3], const float dir[3], float maxDist, EntityId ignore,
                              float outHitPoint[3], float* outDist) const;

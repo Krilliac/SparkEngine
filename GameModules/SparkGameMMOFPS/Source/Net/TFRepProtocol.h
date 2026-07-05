@@ -134,4 +134,111 @@ static_assert(sizeof(TF_MoveState) == 40, "wire layout frozen");
 
 #pragma pack(pop)
 
+// ===========================================================================
+// W3 ADDITIVE EXTENSIONS — existing layouts above stay frozen.
+//   0x54F8-0x54FB, 0x54FF : vehicle block (vehicles agent, below)
+//   0x54FC-0x54FE         : deployable replication block (deployables agent, below)
+// ===========================================================================
+
+// --- Vehicles (TFVehicleSystem, W3) -----------------------------------------
+// Channel map:
+//   0x54F8 VehCreate   S->C reliable    TF_RepVehicleCreate (purchase / late join)
+//   0x54F9 VehUpdate   S->C unreliable  TF_RepUpdateHeader + N TF_RepVehicleUpdate
+//   0x54FA VehDestroy  S->C reliable    TF_RepDestroy (layout reused)
+//   0x54FB VehSeats    S->C reliable    TF_RepVehicleSeats (on seat/deploy change)
+//   0x54FF VehPurchase C->S reliable    TF_VehPurchase (terminal buy request)
+constexpr uint16_t kTFRepMsg_VehCreate  = 0x54F8;
+constexpr uint16_t kTFRepMsg_VehUpdate  = 0x54F9;
+constexpr uint16_t kTFRepMsg_VehDestroy = 0x54FA;
+constexpr uint16_t kTFRepMsg_VehSeats   = 0x54FB;
+constexpr uint16_t kTFVehMsg_Purchase   = 0x54FF;
+
+#pragma pack(push, 1)
+
+/// Full vehicle state, sent reliably on purchase and to late joiners.
+struct TF_RepVehicleCreate {
+    uint32_t entityId;
+    uint8_t  vehId;          // VehicleId
+    uint8_t  faction;        // FactionId
+    uint8_t  deployed;       // 0/1 (Aegis)
+    uint8_t  _pad;
+    float    posX, posY, posZ;
+    float    yaw;            // radians
+    float    health, maxHealth;
+};
+static_assert(sizeof(TF_RepVehicleCreate) == 32, "wire layout frozen");
+
+/// One vehicle record inside a VehUpdate message (TF_RepUpdateHeader framing,
+/// exactly like the pawn channel). Dirty-checked server-side.
+struct TF_RepVehicleUpdate {
+    uint32_t entityId;
+    QuantPos pos;            // base position, cm
+    int16_t  yaw10k;         // radians * QuantAim::kScale
+    int16_t  pitch10k;       // visual terrain tilt
+    int16_t  roll10k;
+    uint16_t health;         // whole points (all vehicle pools < 65536)
+    uint8_t  deployed;       // 0/1
+    uint8_t  _pad;
+};
+static_assert(sizeof(TF_RepVehicleUpdate) == 26, "wire layout frozen");
+
+/// Seat occupancy, sent reliably whenever a seat or the deploy state changes
+/// (and to late joiners). Clients use it for enter/exit UX + own-seat lookup.
+struct TF_RepVehicleSeats {
+    uint32_t entityId;
+    uint32_t seats[8];       // PlayerId per seat; kInvalidPlayer == empty
+    uint8_t  seatCount;      // valid seats for this vehicle type
+    uint8_t  deployed;       // 0/1
+    uint8_t  _pad[2];
+};
+static_assert(sizeof(TF_RepVehicleSeats) == 40, "wire layout frozen");
+
+/// Client -> server: buy `vehId` at the nearest friendly vehicle terminal.
+struct TF_VehPurchase {
+    uint8_t  vehId;          // VehicleId
+    uint8_t  _pad[3];
+};
+static_assert(sizeof(TF_VehPurchase) == 4, "wire layout frozen");
+
+#pragma pack(pop)
+
+// --- Deployables (TFDeployableSystem, W3). All S->C. --------------------------
+constexpr uint16_t kTFRepMsg_DeployCreate  = 0x54FC;  // reliable   TF_RepDeployCreate
+constexpr uint16_t kTFRepMsg_DeployUpdate  = 0x54FD;  // unreliable TF_RepDeployUpdate
+constexpr uint16_t kTFRepMsg_DeployDestroy = 0x54FE;  // reliable   TF_RepDeployDestroy
+
+#pragma pack(push, 1)
+
+/// Full deployable state, sent reliably on placement and to late joiners.
+/// Deployables are static after placement: position/yaw never update, so
+/// only health/life flow through TF_RepDeployUpdate afterwards.
+struct TF_RepDeployCreate {
+    uint32_t entityId;       // server ECS id (network id, same convention as pawns)
+    uint32_t ownerPlayer;
+    uint8_t  kind;           // DeployableKind
+    uint8_t  faction;        // FactionId (tint + friend/foe UI)
+    uint16_t _pad;
+    float    posX, posY, posZ;
+    float    yaw;            // radians
+    float    health, maxHealth;
+    float    lifeSec;        // remaining lifetime at send
+};
+static_assert(sizeof(TF_RepDeployCreate) == 40, "wire layout frozen");
+
+/// Health/lifetime refresh (sent on damage + a slow keepalive; clients decay
+/// lifeSec locally between refreshes).
+struct TF_RepDeployUpdate {
+    uint32_t entityId;
+    float    health;
+    float    lifeSec;
+};
+static_assert(sizeof(TF_RepDeployUpdate) == 12, "wire layout frozen");
+
+struct TF_RepDeployDestroy {
+    uint32_t entityId;
+};
+static_assert(sizeof(TF_RepDeployDestroy) == 4, "wire layout frozen");
+
+#pragma pack(pop)
+
 } // namespace Terrafront

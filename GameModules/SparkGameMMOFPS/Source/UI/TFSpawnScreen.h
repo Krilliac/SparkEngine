@@ -72,8 +72,9 @@ class TFSpawnScreen {
 
     // Selection
     ClassId  m_selClass{ClassId::Striker};
-    uint8_t  m_selKind{0};        ///< TF_SpawnRequest.spawnKind: 0 skyanchor, 1 region
+    uint8_t  m_selKind{0};        ///< TF_SpawnRequest.spawnKind: 0 skyanchor, 1 region, 2 aegis
     RegionId m_selRegion{kInvalidRegion};
+    EntityId m_selAegis{0};       ///< W3 shared-edit (vehicles agent): deployed-Aegis entity
 
     // Death / respawn state (local mirror of the server timer)
     float m_deathPos[3]{0.0f, 0.0f, 0.0f};

@@ -20,6 +20,9 @@
 #include "Net/TFNetProtocol.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFBotSystem.h"
+#include "Game/TFVehicleSystem.h"
+#include "Game/TFColossusSystem.h"
+#include "Game/TFDeployableSystem.h"
 #include "Game/TFProgressionSystem.h"
 #include "World/TFRegionSystem.h"
 #include "UI/TFMapScreen.h"
@@ -545,4 +548,74 @@ void TerrafrontModule::RegisterConsoleCommands()
             return "Usage: tf_debug <server|regions|bots|net|progression>";
         },
         "Toggle a TF debug panel", cat, "tf_debug <system>");
+
+    // ------------------------------------------------------------------- W3
+    console.RegisterCommand(
+        "tf_vehicle",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (!m_ctx.vehicles)
+                return "[TF] vehicle system not ready";
+            if (args.empty())
+                return "Usage: tf_vehicle <drifter|aegis|ravager>";
+            const std::string v = Lower(args[0]);
+            VehicleId id = VehicleId::None;
+            if (v == "drifter") id = VehicleId::Drifter;
+            else if (v == "aegis") id = VehicleId::Aegis;
+            else if (v == "ravager") id = VehicleId::Ravager;
+            else if (v == "vulture") id = VehicleId::Vulture;
+            else return "[TF] unknown vehicle '" + args[0] + "'";
+            return m_ctx.vehicles->ServerPurchaseVehicle(m_ctx.localPlayer, id)
+                       ? "[TF] vehicle purchased - check the terminal pad"
+                       : "[TF] purchase refused (flux / terminal range / region ownership)";
+        },
+        "Buy a vehicle at a friendly terminal", cat, "tf_vehicle <kind>");
+
+    console.RegisterCommand(
+        "tf_colossus",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_ctx.colossus)
+                return "[TF] colossus system not ready";
+            const TFColossusResult r = m_ctx.colossus->ServerPurchaseColossus(m_ctx.localPlayer);
+            return r == TFColossusResult::Ok
+                       ? std::string("[TF] Colossus suit engaged")
+                       : std::string("[TF] refused: ") + TFColossusSystem::ResultText(r);
+        },
+        "Purchase a Colossus exosuit at a terminal", cat, "tf_colossus");
+
+    console.RegisterCommand(
+        "tf_place",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (!m_ctx.deployables)
+                return "[TF] deployable system not ready";
+            if (args.empty())
+                return "Usage: tf_place <turret|ammo|beacon>";
+            const std::string d = Lower(args[0]);
+            DeployableKind kind;
+            if (d == "turret") kind = DeployableKind::FabTurret;
+            else if (d == "ammo") kind = DeployableKind::FabAmmoPack;
+            else if (d == "beacon") kind = DeployableKind::MedBeacon;
+            else return "[TF] unknown deployable '" + args[0] + "'";
+            const TFDeployResult r =
+                m_ctx.deployables->ServerTryPlaceDeployable(m_ctx.localPlayer, kind);
+            return r == TFDeployResult::Ok
+                       ? std::string("[TF] deployable placed")
+                       : std::string("[TF] refused: ") + TFDeployableSystem::ResultText(r);
+        },
+        "Place a deployable (Fabricator/Medtech)", cat, "tf_place <kind>");
+
+    console.RegisterCommand(
+        "tf_giveflux",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (!m_ctx.progression)
+                return "[TF] progression not ready";
+            const uint32_t n = args.empty() ? 750u
+                : static_cast<uint32_t>(std::max(0, std::atoi(args[0].c_str())));
+            m_ctx.progression->ServerGrantFlux(m_ctx.localPlayer, n);
+            return "[TF] granted " + std::to_string(n) + " flux (debug)";
+        },
+        "Debug: grant yourself flux", cat, "tf_giveflux [n=750]");
 }
