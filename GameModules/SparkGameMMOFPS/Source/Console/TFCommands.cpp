@@ -5,32 +5,423 @@
  * OWNERSHIP: shared registration point — each wave appends its commands here.
  * Keep one registration function; do not create parallel registrars.
  *
- * W0 stub: registers status/help only. Planned surface (DESIGN.md):
- *   tf_status, tf_host [port], tf_connect <ip[:port]>, tf_disconnect,
- *   tf_faction <mra|auc|hlx>, tf_spawn [region], tf_class <name>,
- *   tf_give <weapon>, tf_flux <n>, tf_capture <region>, tf_regions,
- *   tf_vehicle <drifter|aegis|ravager>, tf_reload_data, tf_bots <n>
+ * W1 surface: tf_status, tf_host, tf_dedicated, tf_connect, tf_disconnect,
+ * tf_faction, tf_spawn, tf_class, tf_give, tf_reload_data, tf_regions,
+ * tf_pos, tf_tp. Handlers stay thin: parse args, call one system, return a
+ * string. W2+ adds: tf_flux, tf_capture, tf_vehicle, tf_bots.
  */
 
 #include "Core/SparkGameMMOFPS.h"
+
+#include "Data/TFDataTables.h"
+#include "World/TFWorldSetup.h"
+#include "Net/TFClientNet.h"
+#include "Net/TFServerSim.h"
+#include "Net/TFNetProtocol.h"
+#include "Game/TFPlayerSystem.h"
+
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
+#include "Spark/IEngineContext.h"
+#include "Engine/ECS/Components.h"
+
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/NetworkManager.h"
+#endif
+
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <sstream>
+#include <string>
 
 using namespace Terrafront;
+
+namespace {
+
+constexpr uint16_t kDefaultPort = 27020;
+
+// Client-side class selection shared by tf_class / tf_spawn / tf_give.
+// File-static because TerrafrontModule's header is frozen (no new members).
+ClassId g_selectedClass = ClassId::Striker;
+
+std::string Lower(std::string s)
+{
+    for (char& c : s)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+bool ParseFaction(const std::string& arg, FactionId& out)
+{
+    const std::string s = Lower(arg);
+    if (s == "mra") { out = FactionId::MRA; return true; }
+    if (s == "auc") { out = FactionId::AUC; return true; }
+    if (s == "hlx") { out = FactionId::HLX; return true; }
+    return false;
+}
+
+bool ParseClass(const std::string& arg, ClassId& out)
+{
+    const std::string s = Lower(arg);
+    if (s == "ghost")      { out = ClassId::Ghost;      return true; }
+    if (s == "striker")    { out = ClassId::Striker;    return true; }
+    if (s == "medtech")    { out = ClassId::Medtech;    return true; }
+    if (s == "fabricator") { out = ClassId::Fabricator; return true; }
+    if (s == "bulwark")    { out = ClassId::Bulwark;    return true; }
+    return false;   // Colossus is terminal-purchased, not console-selectable
+}
+
+const char* ClassName(ClassId c)
+{
+    switch (c) {
+        case ClassId::Ghost:      return "Ghost";
+        case ClassId::Striker:    return "Striker";
+        case ClassId::Medtech:    return "Medtech";
+        case ClassId::Fabricator: return "Fabricator";
+        case ClassId::Bulwark:    return "Bulwark";
+        case ClassId::Colossus:   return "Colossus";
+        default:                  return "Unknown";
+    }
+}
+
+bool ParsePort(const std::string& arg, uint16_t& out)
+{
+    char* end = nullptr;
+    const unsigned long v = std::strtoul(arg.c_str(), &end, 10);
+    if (end == arg.c_str() || *end != '\0' || v == 0 || v > 65535)
+        return false;
+    out = static_cast<uint16_t>(v);
+    return true;
+}
+
+// "ip" or "ip:port"
+bool ParseEndpoint(const std::string& arg, std::string& ip, uint16_t& port)
+{
+    port = kDefaultPort;
+    const size_t colon = arg.rfind(':');
+    if (colon == std::string::npos) {
+        ip = arg;
+        return !ip.empty();
+    }
+    ip = arg.substr(0, colon);
+    return !ip.empty() && ParsePort(arg.substr(colon + 1), port);
+}
+
+bool ParseFloat(const std::string& arg, float& out)
+{
+    char* end = nullptr;
+    out = std::strtof(arg.c_str(), &end);
+    return end != arg.c_str() && *end == '\0';
+}
+
+const char* RoleName(NetRole r)
+{
+    switch (r) {
+        case NetRole::Standalone:      return "standalone";
+        case NetRole::ListenHost:      return "listen-host";
+        case NetRole::DedicatedServer: return "dedicated";
+        case NetRole::Client:          return "client";
+        default:                       return "?";
+    }
+}
+
+bool ClientConnected(const TFGameContext& ctx)
+{
+    return ctx.clientNet != nullptr && ctx.clientNet->IsConnected();
+}
+
+} // namespace
 
 void TerrafrontModule::RegisterConsoleCommands()
 {
     auto& console = Spark::SimpleConsole::GetInstance();
+    const char* cat = "TERRAFRONT";
 
+    // ------------------------------------------------------------------ status
     console.RegisterCommand(
         "tf_status",
         [this](const std::vector<std::string>&) -> std::string
         {
-            const char* role =
-                m_ctx.role == NetRole::Standalone      ? "standalone" :
-                m_ctx.role == NetRole::ListenHost      ? "listen-host" :
-                m_ctx.role == NetRole::DedicatedServer ? "dedicated"   : "client";
-            return std::string("[TF] TERRAFRONT role=") + role +
-                   " faction=" + FactionTag(m_ctx.localFaction);
+            std::ostringstream os;
+            os << "[TF] TERRAFRONT  role=" << RoleName(m_ctx.role)
+               << "  faction=" << FactionTag(m_ctx.localFaction)
+               << "  player=" << (m_ctx.localPlayer == kInvalidPlayer
+                                      ? std::string("-")
+                                      : std::to_string(m_ctx.localPlayer));
+
+            if (m_ctx.data && m_ctx.data->IsLoaded())
+                os << "\n  data: " << m_ctx.data->AllWeapons().size() << " weapons, "
+                   << m_ctx.data->AllClasses().size() << " classes, "
+                   << m_ctx.data->GetContinent().regions.size() << " regions ("
+                   << m_ctx.data->GetContinent().name << ")";
+            else
+                os << "\n  data: NOT LOADED";
+
+            if (m_ctx.players) {
+                uint32_t alive = 0;
+                m_ctx.players->ForEachAlivePawn([&](const auto&) { ++alive; });
+                os << "\n  pawns alive: " << alive;
+            }
+
+            os << "\n  client: " << (ClientConnected(m_ctx) ? "connected" : "not connected");
+            if (m_ctx.IsAuthority() && m_ctx.serverSim && m_ctx.role != NetRole::Standalone) {
+                char t[32];
+                std::snprintf(t, sizeof(t), "%.1f", m_ctx.serverSim->ServerTime());
+                os << "\n  server time: " << t << "s";
+            }
+#ifdef ENABLE_NETWORKING
+            {
+                auto& nm = Spark::Net::NetworkManager::GetInstance();
+                if (nm.IsInitialized()) {
+                    const auto& st = nm.GetStats();
+                    char net[128];
+                    std::snprintf(net, sizeof(net),
+                                  "\n  net: ping %.0fms  loss %.1f%%  up %.1fKB/s  down %.1fKB/s",
+                                  st.ping, st.packetLoss * 100.0f, st.bandwidthUp, st.bandwidthDown);
+                    os << net;
+                }
+            }
+#endif
+            return os.str();
         },
-        "Show TERRAFRONT module status");
+        "Show TERRAFRONT module status", cat, "tf_status");
+
+    // ------------------------------------------------------------- net booting
+    console.RegisterCommand(
+        "tf_host",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            uint16_t port = kDefaultPort;
+            if (!args.empty() && !ParsePort(args[0], port))
+                return "[TF] tf_host: bad port '" + args[0] + "'";
+            if (!m_ctx.world)
+                return "[TF] world system not ready";
+            return m_ctx.world->StartHost(port)
+                       ? "[TF] listen host started on port " + std::to_string(port)
+                       : "[TF] failed to start listen host (see log)";
+        },
+        "Start a listen host (in-process server + local player)", cat, "tf_host [port=27020]");
+
+    console.RegisterCommand(
+        "tf_dedicated",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            uint16_t port = kDefaultPort;
+            if (!args.empty() && !ParsePort(args[0], port))
+                return "[TF] tf_dedicated: bad port '" + args[0] + "'";
+            if (!m_ctx.world)
+                return "[TF] world system not ready";
+            return m_ctx.world->StartDedicated(port)
+                       ? "[TF] dedicated server started on port " + std::to_string(port)
+                       : "[TF] failed to start dedicated server (see log)";
+        },
+        "Start a dedicated (headless) server", cat, "tf_dedicated [port=27020]");
+
+    console.RegisterCommand(
+        "tf_connect",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "[TF] usage: tf_connect <ip[:port]>";
+            std::string ip;
+            uint16_t port = kDefaultPort;
+            if (!ParseEndpoint(args[0], ip, port))
+                return "[TF] tf_connect: bad endpoint '" + args[0] + "'";
+            if (!m_ctx.world)
+                return "[TF] world system not ready";
+            return m_ctx.world->Connect(ip, port)
+                       ? "[TF] connecting to " + ip + ":" + std::to_string(port)
+                       : "[TF] connect failed (see log)";
+        },
+        "Connect to a TERRAFRONT server", cat, "tf_connect <ip[:port]>");
+
+    console.RegisterCommand(
+        "tf_disconnect",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+#ifdef ENABLE_NETWORKING
+            // TF-W2: route through a TFWorldSetup stop/teardown API so world
+            // state (role, servers, scene) resets cleanly alongside the socket.
+            auto& nm = Spark::Net::NetworkManager::GetInstance();
+            if (!nm.IsInitialized())
+                return "[TF] networking not initialized";
+            if (m_ctx.role == NetRole::Client)
+                nm.Disconnect();
+            else
+                nm.StopServer();
+            return "[TF] disconnected";
+#else
+            return "[TF] networking disabled in this build (define ENABLE_NETWORKING)";
+#endif
+        },
+        "Disconnect from server / stop hosting", cat, "tf_disconnect");
+
+    // ----------------------------------------------------------- player intent
+    console.RegisterCommand(
+        "tf_faction",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            FactionId f;
+            if (args.empty() || !ParseFaction(args[0], f))
+                return "[TF] usage: tf_faction <mra|auc|hlx>";
+            m_ctx.localFaction = f;   // immediate local feedback (HUD tinting)
+            if (ClientConnected(m_ctx)) {
+                TF_FactionSelect msg{};
+                msg.faction = static_cast<uint8_t>(f);
+                m_ctx.clientNet->SendMsg(TFMsg::FactionSelect, &msg, sizeof(msg));
+            }
+            return std::string("[TF] faction set: ") + FactionName(f) +
+                   (ClientConnected(m_ctx) ? " (sent to server)" : " (local only - not connected)");
+        },
+        "Choose your faction", cat, "tf_faction <mra|auc|hlx>");
+
+    console.RegisterCommand(
+        "tf_class",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            ClassId c;
+            if (args.empty() || !ParseClass(args[0], c))
+                return "[TF] usage: tf_class <ghost|striker|medtech|fabricator|bulwark>";
+            g_selectedClass = c;
+            if (ClientConnected(m_ctx)) {
+                // kInvalidWeapon in every slot == "class defaults" (server resolves).
+                TF_LoadoutChange msg{};
+                msg.classId   = static_cast<uint8_t>(c);
+                msg.primary   = kInvalidWeapon;
+                msg.secondary = kInvalidWeapon;
+                msg.tool      = kInvalidWeapon;
+                m_ctx.clientNet->SendMsg(TFMsg::LoadoutChange, &msg, sizeof(msg));
+            }
+            return std::string("[TF] class selected: ") + ClassName(c) +
+                   " (applies on next deploy)";
+        },
+        "Select the class used on next spawn", cat,
+        "tf_class <ghost|striker|medtech|fabricator|bulwark>");
+
+    console.RegisterCommand(
+        "tf_spawn",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (m_ctx.localFaction == FactionId::None)
+                return "[TF] pick a faction first: tf_faction <mra|auc|hlx>";
+            if (!ClientConnected(m_ctx))
+                return "[TF] not connected - use tf_host or tf_connect first";
+            TF_SpawnRequest rq{};
+            rq.classId   = static_cast<uint8_t>(g_selectedClass);
+            rq.spawnKind = 0;   // skyanchor
+            m_ctx.clientNet->SendMsg(TFMsg::SpawnRequest, &rq, sizeof(rq));
+            return std::string("[TF] deploy requested: ") + ClassName(g_selectedClass) +
+                   " @ skyanchor";
+        },
+        "Deploy at your faction skyanchor", cat, "tf_spawn");
+
+    console.RegisterCommand(
+        "tf_give",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.empty())
+                return "[TF] usage: tf_give <weaponKey>";
+            if (!m_ctx.data || !m_ctx.data->IsLoaded())
+                return "[TF] data tables not loaded";
+            const WeaponDef* def = m_ctx.data->GetWeaponByKey(args[0]);
+            if (!def)
+                return "[TF] unknown weapon key '" + args[0] + "' (see weapons.json)";
+            if (!ClientConnected(m_ctx))
+                return "[TF] not connected - weapon grants go through the server";
+            TF_LoadoutChange msg{};
+            msg.classId   = static_cast<uint8_t>(g_selectedClass);
+            msg.primary   = def->id;
+            msg.secondary = kInvalidWeapon;
+            msg.tool      = kInvalidWeapon;
+            m_ctx.clientNet->SendMsg(TFMsg::LoadoutChange, &msg, sizeof(msg));
+            return "[TF] requested primary: " + def->name + " (" + def->key + ")";
+        },
+        "Request a weapon as your primary", cat, "tf_give <weaponKey>");
+
+    // -------------------------------------------------------------- data/world
+    console.RegisterCommand(
+        "tf_reload_data",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_ctx.data)
+                return "[TF] data system not ready";
+            return m_ctx.data->ReloadAll()
+                       ? "[TF] data tables reloaded"
+                       : "[TF] data reload FAILED - previous tables kept (see log)";
+        },
+        "Hot-reload all JSON data tables", cat, "tf_reload_data");
+
+    console.RegisterCommand(
+        "tf_regions",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_ctx.data || !m_ctx.data->IsLoaded())
+                return "[TF] data tables not loaded";
+            const ContinentDef& cont = m_ctx.data->GetContinent();
+            std::ostringstream os;
+            os << "[TF] " << cont.name << " - " << cont.regions.size()
+               << " regions (W1: static ownership from regions.json)";
+            for (const RegionDef& r : cont.regions) {
+                FactionId owner = r.homeFaction;
+                if (owner == FactionId::None && r.id < cont.initialOwner.size())
+                    owner = cont.initialOwner[r.id];
+                os << "\n  [" << r.id << "] " << r.name << " (" << r.tier << ") - "
+                   << FactionTag(owner);
+            }
+            return os.str();
+        },
+        "List regions and ownership", cat, "tf_regions");
+
+    // -------------------------------------------------------------- debug/move
+    console.RegisterCommand(
+        "tf_pos",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_ctx.players || m_ctx.localPlayer == kInvalidPlayer)
+                return "[TF] no local player";
+            PawnInfo p{};
+            if (!m_ctx.players->GetPawnByPlayer(m_ctx.localPlayer, p))
+                return "[TF] no pawn (deploy with tf_spawn)";
+            char buf[128];
+            std::snprintf(buf, sizeof(buf),
+                          "[TF] pos (%.1f, %.1f, %.1f)  yaw %.2f  %s",
+                          p.pos[0], p.pos[1], p.pos[2], p.yaw,
+                          p.alive ? "alive" : "dead");
+            return std::string(buf);
+        },
+        "Print local pawn position", cat, "tf_pos");
+
+    console.RegisterCommand(
+        "tf_tp",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            float x, z;
+            if (args.size() < 2 || !ParseFloat(args[0], x) || !ParseFloat(args[1], z))
+                return "[TF] usage: tf_tp <x> <z>";
+            if (!m_ctx.IsAuthority())
+                return "[TF] tf_tp is server-side only (TF-W2: admin command routing)";
+            if (!m_ctx.players || !m_ctx.world || m_ctx.localPlayer == kInvalidPlayer)
+                return "[TF] no local player pawn to teleport";
+            PawnInfo p{};
+            if (!m_ctx.players->GetPawnByPlayer(m_ctx.localPlayer, p) || !p.alive)
+                return "[TF] no living pawn (deploy with tf_spawn)";
+
+            World* ecsWorld = m_ctx.engine ? m_ctx.engine->GetWorld() : nullptr;
+            if (!ecsWorld)
+                return "[TF] engine ECS world unavailable";
+            const EntityID e = static_cast<EntityID>(p.entity);
+            if (!ecsWorld->GetRegistry().valid(e))
+                return "[TF] pawn entity invalid";
+            Transform* t = ecsWorld->GetRegistry().try_get<Transform>(e);
+            if (!t)
+                return "[TF] pawn has no Transform component";
+
+            const float y = m_ctx.world->TerrainHeightAt(x, z) + 1.5f;
+            t->position = {x, y, z};
+            char buf[96];
+            std::snprintf(buf, sizeof(buf), "[TF] teleported to (%.1f, %.1f, %.1f)", x, y, z);
+            return std::string(buf);
+        },
+        "Teleport your pawn (authority only)", cat, "tf_tp <x> <z>");
 }

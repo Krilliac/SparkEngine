@@ -1,11 +1,80 @@
 /**
  * @file TFWorldSetup.cpp
- * @brief Scene/terrain load, WorldServer/AreaServer boot, origin-rebase driving. (W0 stub — implementation lands per DESIGN.md waves.)
+ * @brief Scene/terrain load, WorldServer/AreaServer boot, origin-rebase driving.
+ *
+ * Terrain model: procedural heightfield — dune base + a canyon separating the
+ * SW/SE quadrants + one flat plateau per region (from regions.json). Every
+ * object in cindral_wastes.scene is authored at its region's plateau height,
+ * so TerrainHeightAt() and the scene agree exactly at every build site.
  */
 #include "World/TFWorldSetup.h"
+
+#include "Data/TFDataTables.h"
+#include "Game/TFPlayerSystem.h"
+#include "Net/TFServerSim.h"
+
+#include "Spark/IEngineContext.h"
+#include "SceneManager/SceneManager.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/World/WorldOriginSystem.h"
 #include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
+
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/WorldServer.h"
+#include "Engine/Networking/AreaServer.h"
+#include "Engine/Networking/IAreaSimulation.h"
+#endif
+
+#ifdef ENABLE_EDITOR
+#include <imgui.h>
+#endif
+
+#include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <type_traits>
 
 namespace Terrafront {
+
+namespace {
+
+constexpr const char* kFallbackScenePath = "Assets/Scenes/MMOFPS/cindral_wastes.scene";
+constexpr float kOriginRebaseThreshold = 8192.0f; // > continent diagonal: mechanism wired but
+                                                  // inert on the 4km map. TF-W2: lower once
+                                                  // replication is origin-offset aware.
+
+float SmoothStep(float e0, float e1, float x)
+{
+    if (e1 <= e0)
+        return x < e0 ? 0.0f : 1.0f;
+    float t = std::clamp((x - e0) / (e1 - e0), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+#ifdef ENABLE_NETWORKING
+/// Attach TFServerSim to the AreaServer tick if (and only if) it implements
+/// Spark::Net::IAreaSimulation. Template so this file compiles even while the
+/// TFServerSim agent has not landed the interface yet; at final build time
+/// the true branch is taken (frozen contract, DESIGN.md §2).
+template <typename TSim>
+void AttachSimulation(Spark::Net::AreaServer& area, TSim* sim)
+{
+    if constexpr (std::is_base_of_v<Spark::Net::IAreaSimulation, TSim>) {
+        area.SetSimulation(sim);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFServerSim attached to AreaServer tick (%.0f Hz)",
+                       kServerTickHz);
+    } else {
+        (void)area;
+        (void)sim;
+        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                       "[TF] TFServerSim does not implement IAreaSimulation; area tick hook not attached");
+    }
+}
+#endif // ENABLE_NETWORKING
+
+} // namespace
 
 TFWorldSetup::TFWorldSetup() = default;
 TFWorldSetup::~TFWorldSetup() { if (m_initialized) Shutdown(); }
@@ -14,19 +83,381 @@ bool TFWorldSetup::Initialize(TFGameContext& ctx, TFEventBus& events)
 {
     m_ctx = &ctx;
     m_events = &events;
+
+    m_origin = std::make_unique<Spark::World::WorldOriginSystem>();
+    m_origin->SetRebasingThreshold(kOriginRebaseThreshold);
+    m_origin->SetEnabled(true);
+
+    LoadSceneAndTerrain();
+
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFWorldSetup initialized (stub)");
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFWorldSetup initialized (scene=%s, loaded=%s)",
+                   m_scenePath.c_str(), m_sceneLoaded ? "yes" : "no");
     return true;
 }
 
-void TFWorldSetup::Update(float deltaTime) { (void)deltaTime; }
-void TFWorldSetup::FixedUpdate(float fixedDeltaTime) { (void)fixedDeltaTime; }
+void TFWorldSetup::LoadSceneAndTerrain()
+{
+    if (m_ctx->data && m_ctx->data->IsLoaded() && !m_ctx->data->GetContinent().scene.empty())
+        m_scenePath = "Assets/" + m_ctx->data->GetContinent().scene;
+    else
+        m_scenePath = kFallbackScenePath;
+
+    // Heightfield params live in the scene's [Terrain] section (tf* keys) so
+    // authored geometry and the runtime height function share one source.
+    ParseTerrainParams(m_scenePath);
+
+    SceneManager* sm = m_ctx->engine ? m_ctx->engine->GetSceneManager() : nullptr;
+    if (sm) {
+        std::wstring wpath(m_scenePath.begin(), m_scenePath.end());
+        m_sceneLoaded = sm->LoadScene(wpath);
+        if (!m_sceneLoaded)
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] Scene load failed: %s (headless or missing file?)",
+                           m_scenePath.c_str());
+    } else {
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "[TF] No SceneManager (headless server) - skipping visual scene load");
+    }
+    // TF-W2: feed the heightfield into ClipmapTerrain/TerrainRenderer so the
+    // visual terrain matches TerrainHeightAt instead of the flat ground plane.
+}
+
+void TFWorldSetup::ParseTerrainParams(const std::string& scenePath)
+{
+    std::ifstream f(scenePath);
+    if (!f.is_open()) {
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] Cannot read %s for terrain params; using defaults",
+                       scenePath.c_str());
+        return;
+    }
+
+    std::string line;
+    bool inTerrain = false;
+    while (std::getline(f, line)) {
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+            line.pop_back();
+        if (line.empty() || line[0] == '#' || line[0] == ';')
+            continue;
+        if (line.front() == '[' && line.back() == ']') {
+            inTerrain = (line == "[Terrain]");
+            continue;
+        }
+        if (!inTerrain)
+            continue;
+        auto eq = line.find('=');
+        if (eq == std::string::npos || line.rfind("tf", 0) != 0)
+            continue;
+        const std::string key = line.substr(0, eq);
+        const float val = std::strtof(line.c_str() + eq + 1, nullptr);
+
+        if      (key == "tfBaseHeight")       m_terrain.baseHeight = val;
+        else if (key == "tfDuneAmp")          m_terrain.duneAmp = val;
+        else if (key == "tfDunePeriodX")      m_terrain.dunePeriodX = val;
+        else if (key == "tfDunePeriodZ")      m_terrain.dunePeriodZ = val;
+        else if (key == "tfRidgeAmp")         m_terrain.ridgeAmp = val;
+        else if (key == "tfCanyonX")          m_terrain.canyonX = val;
+        else if (key == "tfCanyonHalfWidth")  m_terrain.canyonHalfW = val;
+        else if (key == "tfCanyonZ0")         m_terrain.canyonZ0 = val;
+        else if (key == "tfCanyonZ1")         m_terrain.canyonZ1 = val;
+        else if (key == "tfCanyonDepth")      m_terrain.canyonDepth = val;
+        else if (key == "tfPlateauRadius")    m_terrain.plateauRadius = val;
+        else if (key == "tfPlateauSkirt")     m_terrain.plateauSkirt = val;
+        else if (key == "tfPlateauSkyanchor") m_terrain.plateauSky = val;
+        else if (key == "tfPlateauFort")      m_terrain.plateauFort = val;
+        else if (key == "tfPlateauFacility")  m_terrain.plateauFacility = val;
+        else if (key == "tfPlateauOutpost")   m_terrain.plateauOutpost = val;
+    }
+}
+
+float TFWorldSetup::PlateauHeight(const std::string& tier) const
+{
+    if (tier == "skyanchor") return m_terrain.plateauSky;
+    if (tier == "fort")      return m_terrain.plateauFort;
+    if (tier == "facility")  return m_terrain.plateauFacility;
+    return m_terrain.plateauOutpost;
+}
+
+float TFWorldSetup::TerrainHeightAt(float x, float z) const
+{
+    const TFTerrainParams& p = m_terrain;
+
+    // Dune base
+    float h = p.baseHeight
+            + p.duneAmp * std::sin(x * p.dunePeriodX) * std::cos(z * p.dunePeriodZ)
+            + p.ridgeAmp * std::sin(x * 0.013f + z * 0.011f);
+
+    // Canyon between SW (AUC) and SE (HLX) territory
+    const float nx = (x - p.canyonX) / p.canyonHalfW;
+    if (std::fabs(nx) < 1.0f) {
+        const float across = 1.0f - nx * nx;
+        const float along = SmoothStep(p.canyonZ0 - 300.0f, p.canyonZ0, z)
+                          * (1.0f - SmoothStep(p.canyonZ1, p.canyonZ1 + 300.0f, z));
+        h -= p.canyonDepth * across * along;
+    }
+
+    // Flat mesa plateau around each region center (scene objects sit at
+    // exactly these heights). Regions are far apart relative to the skirt,
+    // so sequential blending is order-independent in practice.
+    if (m_ctx && m_ctx->data && m_ctx->data->IsLoaded()) {
+        for (const RegionDef& r : m_ctx->data->GetContinent().regions) {
+            const float dx = x - r.centerX;
+            const float dz = z - r.centerZ;
+            const float distSq = dx * dx + dz * dz;
+            const float outer = p.plateauRadius + p.plateauSkirt;
+            if (distSq >= outer * outer)
+                continue;
+            const float w = 1.0f - SmoothStep(p.plateauRadius, outer, std::sqrt(distSq));
+            h += (PlateauHeight(r.tier) - h) * w;
+        }
+    }
+    return h;
+}
+
+// ---------------------------------------------------------------------------
+// Networking boot (frozen API)
+// ---------------------------------------------------------------------------
+
+bool TFWorldSetup::StartHost(uint16_t port)
+{
+#ifdef ENABLE_NETWORKING
+    return BootServer(port, NetRole::ListenHost);
+#else
+    (void)port;
+    SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] StartHost: built without ENABLE_NETWORKING");
+    return false;
+#endif
+}
+
+bool TFWorldSetup::StartDedicated(uint16_t port)
+{
+#ifdef ENABLE_NETWORKING
+    return BootServer(port, NetRole::DedicatedServer);
+#else
+    (void)port;
+    SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] StartDedicated: built without ENABLE_NETWORKING");
+    return false;
+#endif
+}
+
+bool TFWorldSetup::Connect(const std::string& ip, uint16_t port)
+{
+#ifdef ENABLE_NETWORKING
+    auto& nm = Spark::Net::NetworkManager::GetInstance();
+    if (!nm.IsInitialized() && !nm.Initialize()) {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] Connect: NetworkManager init failed");
+        return false;
+    }
+    if (!nm.Connect(ip, port, "TerrafrontPlayer")) {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] Connect to %s:%u failed", ip.c_str(), port);
+        return false;
+    }
+    m_netBooted = true;
+    m_ctx->role = NetRole::Client;
+    // TFClientNet observes the NetworkManager connection in its Update and
+    // runs the TF handshake (WorldWelcome / FactionSelect / SpawnRequest).
+    Spark::SimpleConsole::GetInstance().LogInfo("[TF] Connecting to " + ip + ":" + std::to_string(port));
+    return true;
+#else
+    (void)ip; (void)port;
+    SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] Connect: built without ENABLE_NETWORKING");
+    return false;
+#endif
+}
+
+#ifdef ENABLE_NETWORKING
+
+bool TFWorldSetup::BootServer(uint16_t port, NetRole role)
+{
+    auto& nm = Spark::Net::NetworkManager::GetInstance();
+    if (!nm.IsInitialized() && !nm.Initialize()) {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] BootServer: NetworkManager init failed");
+        return false;
+    }
+    if (!nm.StartServer(port, static_cast<int>(kMaxPlayers))) {
+        SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] BootServer: StartServer on port %u failed", port);
+        return false;
+    }
+
+    // WorldServer + ONE AreaServer covering the whole 4096m continent
+    // (DESIGN.md §2 topology; region hexes are game logic, not areas).
+    m_worldServer = std::make_unique<Spark::Net::WorldServer>();
+    Spark::Net::WorldServerConfig wc{};
+    wc.worldName = "TERRAFRONT " + std::string("Cindral Wastes");
+    wc.port = static_cast<uint16_t>(port + 1);
+    wc.interServerPort = static_cast<uint16_t>(port + 2);
+    wc.maxTotalClients = static_cast<int>(kMaxPlayers);
+    wc.tickRate = 10.0f;
+    wc.enableLoadBalancing = false; // single area, nothing to balance
+    if (!m_worldServer->Start(wc)) {
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] WorldServer failed to start (continuing: NetworkManager carries gameplay)");
+        m_worldServer.reset();
+    }
+
+    Spark::Net::AreaServerConfig ac{};
+    ac.areaId = 1;
+    ac.areaName = "CindralWastes";
+    ac.scenePath = m_scenePath;
+    ac.port = static_cast<uint16_t>(port + 3);
+    ac.interServerPort = static_cast<uint16_t>(port + 4);
+    ac.tickRate = kServerTickHz;
+    ac.maxClients = static_cast<int>(kMaxPlayers);
+    ac.enableAI = false;
+    ac.enablePhysics = true;
+    ac.enableScripting = false;
+    if (m_worldServer)
+        m_worldServer->RegisterAreaServer(ac);
+
+    m_areaServer = std::make_unique<Spark::Net::AreaServer>();
+    if (m_areaServer->Start(ac)) {
+        if (m_ctx->serverSim)
+            AttachSimulation(*m_areaServer, m_ctx->serverSim);
+    } else {
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] AreaServer failed to start");
+        m_areaServer.reset();
+    }
+
+    m_knownClients.clear();
+    m_netBooted = true;
+    m_ctx->role = role;
+
+    const char* roleName = (role == NetRole::DedicatedServer) ? "dedicated server" : "listen host";
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] Serving Cindral Wastes as %s on port %u", roleName, port);
+    Spark::SimpleConsole::GetInstance().LogInfo("[TF] " + std::string(roleName) + " up on port " +
+                                                std::to_string(port));
+    return true;
+}
+
+void TFWorldSetup::BridgeWorldServerSessions()
+{
+    if (!m_worldServer || !m_worldServer->IsRunning())
+        return;
+
+    auto& nm = Spark::Net::NetworkManager::GetInstance();
+    const auto& clients = nm.GetClients();
+
+    for (const auto& [clientId, info] : clients) {
+        if (m_knownClients.insert(clientId).second)
+            m_worldServer->HandlePlayerConnect(clientId, info.name, {0.0f, 0.0f, 0.0f});
+    }
+    for (auto it = m_knownClients.begin(); it != m_knownClients.end();) {
+        if (clients.find(*it) == clients.end()) {
+            m_worldServer->HandlePlayerDisconnect(*it);
+            it = m_knownClients.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void TFWorldSetup::StopNetworking()
+{
+    if (m_areaServer) {
+        m_areaServer->Stop();
+        m_areaServer.reset();
+    }
+    if (m_worldServer) {
+        m_worldServer->Stop();
+        m_worldServer.reset();
+    }
+    if (m_netBooted) {
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        if (nm.GetRole() == Spark::Net::NetworkRole::Server)
+            nm.StopServer();
+        else
+            nm.Disconnect();
+        nm.Shutdown();
+        m_netBooted = false;
+    }
+    m_knownClients.clear();
+    if (m_ctx)
+        m_ctx->role = NetRole::Standalone;
+}
+
+#endif // ENABLE_NETWORKING
+
+// ---------------------------------------------------------------------------
+// Frame driving
+// ---------------------------------------------------------------------------
+
+void TFWorldSetup::Update(float deltaTime)
+{
+    if (!m_initialized)
+        return;
+
+#ifdef ENABLE_NETWORKING
+    if (m_netBooted) {
+        // Single message pump for the module: TFWorldSetup booted the
+        // NetworkManager, so it owns the Update (mirrors MMOWorldSetup).
+        Spark::Net::NetworkManager::GetInstance().Update(deltaTime);
+        if (m_ctx->IsAuthority())
+            BridgeWorldServerSessions();
+    }
+#else
+    (void)deltaTime;
+#endif
+
+    if (m_ctx->role == NetRole::Client)
+        DriveOriginRebase();
+}
+
+void TFWorldSetup::DriveOriginRebase()
+{
+    if (!m_origin || !m_ctx->engine || !m_ctx->players)
+        return;
+    if (m_ctx->localPlayer == kInvalidPlayer)
+        return;
+
+    World* world = m_ctx->engine->GetWorld();
+    if (!world)
+        return;
+
+    PawnInfo pawn{};
+    if (!m_ctx->players->GetPawnByPlayer(m_ctx->localPlayer, pawn))
+        return;
+
+    m_origin->Update(world->GetRegistry(), DirectX::XMFLOAT3{pawn.pos[0], pawn.pos[1], pawn.pos[2]});
+}
+
+void TFWorldSetup::FixedUpdate(float fixedDeltaTime)
+{
+    (void)fixedDeltaTime; // authoritative sim runs in TFServerSim (AreaServer tick)
+}
 
 void TFWorldSetup::Shutdown()
 {
+    if (!m_initialized)
+        return;
+#ifdef ENABLE_NETWORKING
+    StopNetworking();
+#endif
+    m_origin.reset();
+    m_sceneLoaded = false;
     m_initialized = false;
 }
 
-void TFWorldSetup::RenderDebugUI() {}
+void TFWorldSetup::RenderDebugUI()
+{
+#ifdef ENABLE_EDITOR
+    if (!ImGui::CollapsingHeader("TF World"))
+        return;
+
+    static const char* roleNames[] = {"Standalone", "ListenHost", "DedicatedServer", "Client"};
+    ImGui::Text("Role: %s", roleNames[static_cast<int>(m_ctx->role)]);
+    ImGui::Text("Scene: %s (%s)", m_scenePath.c_str(), m_sceneLoaded ? "loaded" : "not loaded");
+    ImGui::Text("Height @ center (2048,2048): %.1f m", TerrainHeightAt(2048.0f, 2048.0f));
+
+#ifdef ENABLE_NETWORKING
+    ImGui::Text("Net booted: %s | WorldServer: %s | AreaServer: %s", m_netBooted ? "yes" : "no",
+                (m_worldServer && m_worldServer->IsRunning()) ? "up" : "down",
+                (m_areaServer && m_areaServer->IsRunning()) ? "up" : "down");
+    ImGui::Text("Sessions bridged: %zu", m_knownClients.size());
+#endif
+
+    if (m_origin) {
+        const auto& stats = m_origin->GetStats();
+        ImGui::Text("Origin rebases: %u (max dist %.0f m)", stats.totalRebases, stats.maxDistanceFromOrigin);
+    }
+#endif
+}
 
 } // namespace Terrafront
