@@ -103,6 +103,21 @@ struct TF_RepUpdateHeader {
 };
 static_assert(sizeof(TF_RepUpdateHeader) == 6, "wire layout frozen");
 
+/// One pawn state record inside a RepUpdate message. Wire layout of the
+/// message is TF_RepUpdateHeader followed by exactly entityCount of these.
+/// Only pawns whose quantized state changed since the last broadcast are
+/// included (server-side dirty check), so idle pawns cost zero bandwidth.
+struct TF_RepPawnUpdate {
+    uint32_t entityId;
+    QuantPos pos;            // feet position, cm
+    QuantAim aim;            // yaw/pitch, 1/10000 rad
+    uint16_t health;         // whole points, clamped to [0, 65535]
+    uint16_t shield;
+    uint8_t  alive;          // 0/1
+    uint8_t  _pad;
+};
+static_assert(sizeof(TF_RepPawnUpdate) == 26, "wire layout frozen");
+
 /// Authoritative movement state for the OWNING client only (20 Hz).
 /// This is the input-ack + prediction-reconcile channel:
 /// lastAckedSeq == TF_ClientInput.seq of the last input the server consumed.

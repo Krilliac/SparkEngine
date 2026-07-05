@@ -106,9 +106,16 @@ class TFPlayerSystem {
     void  SyncClientRecords();      ///< pure client: discover replicated pawns
     void  AttachPawnVisual(uint32_t localEntity, FactionId faction);
 
+    // W1 private helpers (ECS-backed implementation)
+    double   NowSec() const;        ///< serverSim time on authority, local clock otherwise
+    uint32_t CreatePawnEntity(PlayerId player, FactionId faction, ClassId cls,
+                              const float pos[3], float yaw); ///< 0 if no ECS world
+    void     UpdateAuthorityLifecycle();   ///< corpse despawn sweep (kTFDespawnDelaySec)
+
     TFGameContext* m_ctx{nullptr};
     TFEventBus*    m_events{nullptr};
     bool           m_initialized{false};
+    double         m_clock{0.0};    ///< fallback time base when serverSim is absent
 
     std::unordered_map<PlayerId, PlayerRec> m_players;
     std::unordered_map<EntityId, PlayerId>  m_pawnOwner;   ///< net entity -> player

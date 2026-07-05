@@ -12,6 +12,8 @@
 
 #include "Engine/ECS/Components.h"
 #include "Spark/IEngineContext.h"
+#include "Game/TFComponents.h"
+#include "Game/TFMovementModel.h"
 #include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
@@ -31,10 +33,6 @@ namespace {
 
 // Engine-side movement limits. Balance numbers (run/sprint speed) come from
 // classes.json via TFDataTables; these are simulation constants.
-constexpr float kGravity          = 20.0f;  // m/s^2 (arcade-FPS gravity)
-constexpr float kJumpSpeed        = 7.0f;   // m/s
-constexpr float kGroundAccelRate  = 12.0f;  // 1/s blend toward wish velocity
-constexpr float kAirAccelRate     = 2.5f;
 constexpr float kWorldMin         = 0.0f;
 constexpr float kWorldMax         = 4096.0f;
 constexpr float kPitchLimitRad    = 1.55f;
@@ -245,61 +243,39 @@ void TFServerSim::StepPlayer(MoveState& ms, const TF_ClientInput* in, float dt)
         buttons = in->buttons;
     }
 
-    // --- wish velocity in world space (y-up, yaw 0 == +Z) ---
-    const float sy = std::sin(ms.yaw), cy = std::cos(ms.yaw);
-    const float fwdX = sy, fwdZ = cy;
-    const float rightX = cy, rightZ = -sy;
+    // --- shared TF movement model v1 (Game/TFMovementModel.h) ---
+    // MUST stay byte-identical in behavior to the client's ClientPrediction
+    // simulator (TFClientNet::SimulateMove); both call the same TFMoveStep.
+    TFMoveState mstate;
+    mstate.pos[0] = ms.pos[0]; mstate.pos[1] = ms.pos[1]; mstate.pos[2] = ms.pos[2];
+    mstate.vel[0] = ms.vel[0]; mstate.vel[1] = ms.vel[1]; mstate.vel[2] = ms.vel[2];
+    mstate.grounded = ms.grounded;
 
-    const bool sprinting = (buttons & TFB_Sprint) != 0 && my > 0.0f;
-    const float cap = sprinting ? sprintSpeed : runSpeed;
-    const float wishX = (fwdX * my + rightX * mx) * cap;
-    const float wishZ = (fwdZ * my + rightZ * mx) * cap;
+    TFMoveInput minput;
+    minput.moveX  = mx;
+    minput.moveY  = my;
+    minput.yaw    = ms.yaw;
+    minput.jump   = (buttons & TFB_Jump) != 0;
+    minput.sprint = (buttons & TFB_Sprint) != 0 && my > 0.0f;
+    minput.crouch = (buttons & TFB_Crouch) != 0;
 
-    // --- horizontal accel/friction (exponential blend toward wish) ---
-    const float rate = ms.grounded ? kGroundAccelRate : kAirAccelRate;
-    const float blend = std::min(1.0f, rate * dt);
-    ms.vel[0] += (wishX - ms.vel[0]) * blend;
-    ms.vel[2] += (wishZ - ms.vel[2]) * blend;
+    TFMoveStep(mstate, minput, runSpeed, sprintSpeed, dt,
+               [this](float x, float z)
+               { return m_ctx->world ? m_ctx->world->TerrainHeightAt(x, z) : 0.0f; });
 
-    // --- jump + gravity ---
-    if (ms.grounded && (buttons & TFB_Jump) != 0)
-    {
-        ms.vel[1] = kJumpSpeed;
-        ms.grounded = false;
-    }
-    if (!ms.grounded)
-        ms.vel[1] -= kGravity * dt;
+    ms.pos[0] = mstate.pos[0]; ms.pos[1] = mstate.pos[1]; ms.pos[2] = mstate.pos[2];
+    ms.vel[0] = mstate.vel[0]; ms.vel[1] = mstate.vel[1]; ms.vel[2] = mstate.vel[2];
+    ms.grounded = mstate.grounded;
 
     // --- hard speed cap (server-side validation backstop) ---
     const float hSpeed = std::sqrt(ms.vel[0] * ms.vel[0] + ms.vel[2] * ms.vel[2]);
     const float hardCap = sprintSpeed * kSpeedTolerance;
     if (hSpeed > hardCap && hSpeed > 0.0f)
     {
-        const float s = hardCap / hSpeed;
-        ms.vel[0] *= s;
-        ms.vel[2] *= s;
+        const float scale = hardCap / hSpeed;
+        ms.vel[0] *= scale;
+        ms.vel[2] *= scale;
         ++m_speedClamps;
-    }
-
-    // --- integrate ---
-    ms.pos[0] += ms.vel[0] * dt;
-    ms.pos[1] += ms.vel[1] * dt;
-    ms.pos[2] += ms.vel[2] * dt;
-
-    // --- terrain clamp + grounding ---
-    float ground = 0.0f;
-    if (m_ctx->world)
-        ground = m_ctx->world->TerrainHeightAt(ms.pos[0], ms.pos[2]);
-    if (ms.pos[1] <= ground)
-    {
-        ms.pos[1] = ground;
-        if (ms.vel[1] < 0.0f)
-            ms.vel[1] = 0.0f;
-        ms.grounded = true;
-    }
-    else if (ms.pos[1] > ground + 0.05f)
-    {
-        ms.grounded = false;
     }
 
     // --- world bounds [0, 4096] ---
@@ -321,6 +297,15 @@ void TFServerSim::WritePawnTransform(const MoveState& ms)
     {
         t->position = {ms.pos[0], ms.pos[1], ms.pos[2]};
         t->rotation.y = ms.yaw * kRadToDeg;
+    }
+    if (TFPawnMoveComp* mv = world->GetComponent<TFPawnMoveComp>(e))
+    {
+        mv->vel[0] = ms.vel[0];
+        mv->vel[1] = ms.vel[1];
+        mv->vel[2] = ms.vel[2];
+        mv->yaw = ms.yaw;
+        mv->pitch = ms.pitch;
+        mv->grounded = ms.grounded;
     }
 }
 
