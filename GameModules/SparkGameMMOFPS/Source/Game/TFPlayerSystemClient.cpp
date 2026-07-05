@@ -239,15 +239,17 @@ void TFPlayerSystem::AttachPawnVisual(uint32_t localEntity, FactionId faction)
     if (!world || !world->GetRegistry().valid(e) || world->HasComponent<MeshRenderer>(e))
         return;
 
-    // W1 placeholder body: a person-scaled block in the faction's material
-    // (asset staging has no character OBJ yet; TF-W4 swaps the mesh only).
+    // Humanoid soldier proxy (Kenney mini character, CC0) — pre-scaled at
+    // import to ~1.6 m with feet at y=0, so it stands on the pawn's feet
+    // position at Transform scale 1. Faction is telegraphed by the material
+    // tint; the model's own colormap texture supplies the body detail.
     MeshRenderer& mr = world->AddComponent<MeshRenderer>(e);
-    mr.meshPath = "Assets/Models/MMOFPS/props/crate_a.obj";
+    mr.meshPath = "Assets/Models/MMOFPS/characters/soldier.obj";
     mr.materialPath = FactionPawnMaterial(faction);
     mr.castShadows = true;
 
     if (Transform* t = world->GetComponent<Transform>(e))
-        t->scale = {0.8f, 1.8f, 0.8f};
+        t->scale = {1.0f, 1.0f, 1.0f};
 }
 
 // ---------------------------------------------------------------- debug UI

@@ -21,6 +21,7 @@
 #include "Game/GameObject.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Mesh.h"
+#include "Game/PlaceholderMesh.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
@@ -313,6 +314,27 @@ void TFWorldSetup::ComputeViewProj(DirectX::XMMATRIX& outView, DirectX::XMMATRIX
     outProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, aspect, 0.5f, 6000.0f);
 }
 
+Mesh* TFWorldSetup::GetOrLoadEcsMesh(const std::string& meshPath)
+{
+    if (meshPath.empty() || !m_ctx || !m_ctx->engine)
+        return nullptr;
+    if (auto it = m_ecsMeshCache.find(meshPath); it != m_ecsMeshCache.end())
+        return it->second.get();
+
+    GraphicsEngine* gfx = m_ctx->engine->GetGraphics();
+    if (!gfx || !gfx->GetDevice() || !gfx->GetContext())
+        return nullptr;
+
+    auto mesh = std::make_unique<Mesh>();
+    // Same tinyobjloader path the scene geometry uses (device-direct); falls
+    // back to a unit cube if the OBJ is missing/unparseable.
+    LoadOrPlaceholderMesh(*mesh, gfx->GetDevice(), gfx->GetContext(),
+                          std::wstring(meshPath.begin(), meshPath.end()));
+    Mesh* raw = mesh.get();
+    m_ecsMeshCache.emplace(meshPath, std::move(mesh));
+    return raw;
+}
+
 void TFWorldSetup::RenderWorld()
 {
     if (!m_initialized || !m_ctx || !m_ctx->engine)
@@ -402,10 +424,14 @@ void TFWorldSetup::RenderWorld()
 
         // 2) ECS visuals — pawns, vehicles and deployables all attach a
         //    MeshRenderer (TFPlayerSystem::AttachPawnVisual & friends). The
-        //    engine's ECS RenderSystem is not driven in module mode, so
-        //    submit the draw commands and drain the list ourselves.
+        //    engine's SubmitMeshForRendering/ProcessDrawList path loads meshes
+        //    through the AssetPipeline (OBJ loader unreliable on Windows), so
+        //    pawns never drew. Draw them through the SAME device-direct mesh +
+        //    basic-shader path the scene geometry above uses.
         if (World* world = m_ctx->engine->GetWorld())
         {
+            ID3D11DeviceContext* dc = gfx->GetContext();
+            gfx->SetBasicShaders();
             const auto& registry = world->GetRegistry();
             auto ecsView = world->GetEntitiesWith<Transform, MeshRenderer>();
             for (auto entity : ecsView)
@@ -416,11 +442,44 @@ void TFWorldSetup::RenderWorld()
                 if (const auto* active = registry.try_get<ActiveComponent>(entity);
                     active && !active->active)
                     continue;
-                gfx->SubmitMeshForRendering(mr.meshPath, mr.materialPath,
-                                            ecsView.get<Transform>(entity).GetWorldMatrix(registry),
-                                            mr.castShadows);
+
+                Mesh* mesh = GetOrLoadEcsMesh(mr.meshPath);
+                if (!mesh || mesh->GetVertexCount() == 0 || mesh->GetIndexCount() == 0)
+                    continue;
+
+                const GraphicsEngine::BasicMaterial* mat =
+                    mr.materialPath.empty() ? nullptr : gfx->GetOrLoadBasicMaterial(mr.materialPath);
+                ID3D11ShaderResourceView* matSrv = mat ? mat->srv.Get() : nullptr;
+                const DirectX::XMFLOAT2 matTiling = mat ? mat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
+
+                const DirectX::XMMATRIX worldM = ecsView.get<Transform>(entity).GetWorldMatrix(registry);
+                const auto& submeshes = mesh->GetSubmeshes();
+                const DirectX::XMFLOAT4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
+                if (submeshes.empty())
+                {
+                    gfx->UpdateBasicConstants(worldM, view, proj, kWhite, matTiling);
+                    gfx->SetBasicTexture(matSrv);
+                    mesh->Render(dc);
+                }
+                else
+                {
+                    for (const MeshSubmesh& smesh : submeshes)
+                    {
+                        ID3D11ShaderResourceView* srv =
+                            smesh.diffuseTexture.empty() ? nullptr : gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                        DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
+                        if (!srv)
+                        {
+                            srv = matSrv;
+                            tiling = matTiling;
+                        }
+                        gfx->UpdateBasicConstants(worldM, view, proj, smesh.diffuseColor, tiling);
+                        gfx->SetBasicTexture(srv);
+                        mesh->RenderRange(dc, smesh.indexStart, smesh.indexCount);
+                    }
+                }
             }
-            gfx->ProcessDrawList(view, proj);
+            gfx->SetBasicTexture(nullptr);
         }
     }
     catch (const std::exception& e)

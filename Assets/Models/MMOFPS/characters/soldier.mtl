@@ -1,0 +1,4 @@
+# TERRAFRONT soldier proxy (Kenney mini character, CC0), scaled x2.4
+newmtl colormap
+Kd 1 1 1
+map_Kd colormap.png

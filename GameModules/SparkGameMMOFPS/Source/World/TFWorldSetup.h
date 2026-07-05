@@ -20,6 +20,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace Spark::World { class WorldOriginSystem; }
@@ -28,6 +29,7 @@ namespace Spark::Net { class WorldServer; class AreaServer; }
 #endif
 class SparkEngineCamera;
 class SceneManager;
+class Mesh;
 
 namespace Terrafront {
 
@@ -128,6 +130,14 @@ class TFWorldSetup {
     std::unique_ptr<SparkEngineCamera> m_camera;
     std::unique_ptr<SceneManager>      m_ownScene; // module-created when the engine has none
     SceneManager*                      m_scene{nullptr}; // whichever manager holds the scene
+
+    // Device-direct mesh cache for ECS visuals (pawns/vehicles/deployables).
+    // The engine's SubmitMeshForRendering/ProcessDrawList path loads meshes
+    // through the AssetPipeline, whose OBJ loader is unreliable on Windows, so
+    // pawns never drew. We load each unique mesh once via the same
+    // tinyobjloader path the scene uses and draw it manually in RenderWorld.
+    std::unordered_map<std::string, std::unique_ptr<Mesh>> m_ecsMeshCache;
+    Mesh* GetOrLoadEcsMesh(const std::string& meshPath);
 
 #ifdef ENABLE_NETWORKING
     std::unique_ptr<Spark::Net::WorldServer> m_worldServer;
