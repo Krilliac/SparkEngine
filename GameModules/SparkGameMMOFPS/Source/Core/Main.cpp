@@ -9,6 +9,10 @@
 
 #include "Core/SparkGameMMOFPS.h"
 
+#ifdef SPARK_HAS_IMGUI
+#include <imgui.h>
+#endif
+
 #include "Data/TFDataTables.h"
 #include "World/TFWorldSetup.h"
 #include "Net/TFReplication.h"
@@ -249,20 +253,35 @@ void TerrafrontModule::OnImGui()
         m_scoreboard->RenderUI();
     }
 
-    // Debug panels (toggled inside each system; hidden by default)
-    m_data->RenderDebugUI();
-    m_world->RenderDebugUI();
-    m_replication->RenderDebugUI();
-    m_serverSim->RenderDebugUI();
-    m_clientNet->RenderDebugUI();
-    m_regions->RenderDebugUI();
-    m_players->RenderDebugUI();
-    m_weapons->RenderDebugUI();
-    m_damage->RenderDebugUI();
-    m_vehicles->RenderDebugUI();
-    m_colossus->RenderDebugUI();
-    m_deployables->RenderDebugUI();
-    m_progression->RenderDebugUI();
-    m_squads->RenderDebugUI();
-    m_bots->RenderDebugUI();
+    // Aggregated debug window (tf_debug panels). Several system panels use a
+    // bare ImGui::CollapsingHeader with no window of their own, so without an
+    // explicit Begin() they leak into ImGui's implicit "Debug" window every
+    // frame. Wrap them in one titled window that only appears when the master
+    // toggle is on — the HUD stays unobstructed in normal play.
+    if (m_debugPanels)
+    {
+#ifdef SPARK_HAS_IMGUI
+        if (ImGui::Begin("TERRAFRONT Debug"))
+        {
+#endif
+            m_data->RenderDebugUI();
+            m_world->RenderDebugUI();
+            m_replication->RenderDebugUI();
+            m_serverSim->RenderDebugUI();
+            m_clientNet->RenderDebugUI();
+            m_regions->RenderDebugUI();
+            m_players->RenderDebugUI();
+            m_weapons->RenderDebugUI();
+            m_damage->RenderDebugUI();
+            m_vehicles->RenderDebugUI();
+            m_colossus->RenderDebugUI();
+            m_deployables->RenderDebugUI();
+            m_progression->RenderDebugUI();
+            m_squads->RenderDebugUI();
+            m_bots->RenderDebugUI();
+#ifdef SPARK_HAS_IMGUI
+        }
+        ImGui::End();
+#endif
+    }
 }

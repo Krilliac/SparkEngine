@@ -47,6 +47,14 @@ class TerrafrontModule : public Spark::IModule
     bool m_initialized{false};
     bool m_paused{false};
 
+  public:
+    /// Master toggle for the aggregated "TERRAFRONT Debug" ImGui window
+    /// (tf_debug panels). Off by default so the HUD is unobstructed in-game;
+    /// the bare-CollapsingHeader system panels only render when this is on.
+    bool m_debugPanels{false};
+
+  private:
+
     Terrafront::TFGameContext m_ctx;
     Terrafront::TFEventBus    m_events;
 

@@ -584,7 +584,12 @@ void TerrafrontModule::RegisterConsoleCommands()
             if (what == "bots" && m_bots)          { m_bots->ToggleDebugUI();        return "[TF] bots debug toggled"; }
             if (what == "net" && m_clientNet)      { m_clientNet->ToggleDebugUI();   return "[TF] net debug toggled"; }
             if (what == "progression" && m_ctx.progression) { m_ctx.progression->ToggleDebugUI(); return "[TF] progression debug toggled"; }
-            return "Usage: tf_debug <server|regions|bots|net|progression>";
+            if (what == "panels" || what == "all")
+            {
+                m_debugPanels = !m_debugPanels;
+                return m_debugPanels ? "[TF] debug panels shown" : "[TF] debug panels hidden";
+            }
+            return "Usage: tf_debug <panels|server|regions|bots|net|progression>";
         },
         "Toggle a TF debug panel", cat, "tf_debug <system>");
 
