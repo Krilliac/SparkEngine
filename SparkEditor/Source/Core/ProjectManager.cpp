@@ -943,6 +943,22 @@ namespace SparkEditor
             }
         }
 
+        // A recent-projects list is a handful of entries; anything huge is a
+        // corrupt/runaway file (a 3 GB one was found in the wild after
+        // repeated load/save cycles). Start fresh rather than parse it.
+        {
+            std::error_code sizeEc;
+            const auto sz = fs::file_size(filePath, sizeEc);
+            if (!sizeEc && sz > 1024 * 1024)
+            {
+                std::cerr << "RecentProjects.json is " << sz
+                          << " bytes - corrupt/runaway, resetting.\n";
+                std::error_code rmEc;
+                fs::remove(filePath, rmEc);
+                return;
+            }
+        }
+
         if (content.empty())
         {
             std::ifstream file(filePath);
@@ -978,6 +994,9 @@ namespace SparkEditor
             std::string engineVer = ExtractJsonString(entry, "engineVersion");
             uint64_t lastOpened = ExtractJsonUint64(entry, "lastOpened");
 
+            if (m_recentProjects.size() >= 15)
+                break; // hard cap - the UI never shows more
+
             if (!path.empty())
             {
                 RecentProject rp;
@@ -1009,7 +1028,8 @@ namespace SparkEditor
 
             file << "{\n";
             file << "  \"recentProjects\": [\n";
-            for (size_t i = 0; i < m_recentProjects.size(); ++i)
+            const size_t count = std::min<size_t>(m_recentProjects.size(), 15);
+            for (size_t i = 0; i < count; ++i)
             {
                 const auto& rp = m_recentProjects[i];
                 file << "    {\n";
@@ -1018,7 +1038,7 @@ namespace SparkEditor
                 file << "      \"engineVersion\": \"" << EscapeJsonString(rp.engineVersion) << "\",\n";
                 file << "      \"lastOpened\": " << rp.lastOpened << "\n";
                 file << "    }";
-                if (i + 1 < m_recentProjects.size())
+                if (i + 1 < count)
                     file << ",";
                 file << "\n";
             }
