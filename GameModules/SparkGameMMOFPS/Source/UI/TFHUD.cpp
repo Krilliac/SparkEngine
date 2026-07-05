@@ -12,6 +12,9 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
+#include "World/TFWorldSetup.h"
+#include "World/TFRegionSystem.h"
+#include "Camera/SparkEngineCamera.h"
 #include "Net/TFClientNet.h"
 #include "Net/TFNetProtocol.h"
 #include "Utils/LogMacros.h"
@@ -262,10 +265,104 @@ void TFHUD::RenderUI()
     DrawKillfeed();
     DrawDamageOctants();
     DrawCaptureBar();
+    if (!m_dead)
+    {
+        DrawCompass();
+        DrawMinimap();
+    }
     if (m_dead)
         DrawRespawnOverlay();
 
     ImGui::End();
+}
+
+void TFHUD::DrawCompass()
+{
+    SparkEngineCamera* cam = (m_ctx && m_ctx->world) ? m_ctx->world->GetCamera() : nullptr;
+    if (!cam)
+        return;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+
+    // Camera heading in degrees; yaw 0 faces +Z which we treat as North.
+    const float headingDeg = cam->GetRotation().y * 57.2957795f;
+    const float stripW = 460.0f, stripH = 26.0f;
+    const float cx = vp->Pos.x + vp->Size.x * 0.5f;
+    const float top = vp->Pos.y + 12.0f;
+    const float halfFov = 60.0f; // degrees mapped across half the strip
+
+    dl->AddRectFilled(ImVec2(cx - stripW * 0.5f, top), ImVec2(cx + stripW * 0.5f, top + stripH),
+                      IM_COL32(10, 12, 16, 130), 4.0f);
+
+    struct Tick { float deg; const char* label; };
+    static const Tick ticks[] = {
+        {0, "N"}, {45, "NE"}, {90, "E"}, {135, "SE"},
+        {180, "S"}, {225, "SW"}, {270, "W"}, {315, "NW"},
+    };
+    for (const Tick& t : ticks)
+    {
+        float d = t.deg - headingDeg;
+        while (d > 180.0f) d -= 360.0f;
+        while (d < -180.0f) d += 360.0f;
+        if (d < -halfFov || d > halfFov)
+            continue;
+        const float x = cx + (d / halfFov) * (stripW * 0.5f);
+        const bool cardinal = (t.deg == 0 || t.deg == 90 || t.deg == 180 || t.deg == 270);
+        const ImU32 col = cardinal ? IM_COL32(255, 235, 180, 240) : IM_COL32(190, 190, 200, 200);
+        dl->AddLine(ImVec2(x, top + 2.0f), ImVec2(x, top + 8.0f), col, 1.5f);
+        const ImVec2 sz = ImGui::CalcTextSize(t.label);
+        dl->AddText(ImVec2(x - sz.x * 0.5f, top + 9.0f), col, t.label);
+    }
+    // Center heading marker.
+    dl->AddTriangleFilled(ImVec2(cx - 5, top), ImVec2(cx + 5, top), ImVec2(cx, top + 6),
+                          IM_COL32(255, 255, 255, 230));
+}
+
+void TFHUD::DrawMinimap()
+{
+    if (!m_ctx || !m_ctx->data || !m_ctx->data->IsLoaded())
+        return;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+
+    const float mapSz = 168.0f, pad = 16.0f;
+    const ImVec2 tl(vp->Pos.x + vp->Size.x - mapSz - pad, vp->Pos.y + pad);
+    const ImVec2 br(tl.x + mapSz, tl.y + mapSz);
+    dl->AddRectFilled(tl, br, IM_COL32(8, 10, 14, 150), 6.0f);
+    dl->AddRect(tl, br, IM_COL32(90, 100, 110, 180), 6.0f);
+
+    const float worldSize = m_ctx->data->GetContinent().sizeM; // 4096
+    const auto toMap = [&](float wx, float wz) -> ImVec2 {
+        // World +Z (north) -> up on the map (invert Z).
+        const float u = worldSize > 0 ? wx / worldSize : 0.0f;
+        const float v = worldSize > 0 ? 1.0f - wz / worldSize : 0.0f;
+        return ImVec2(tl.x + u * mapSz, tl.y + v * mapSz);
+    };
+
+    for (const RegionDef& r : m_ctx->data->GetContinent().regions)
+    {
+        const FactionId owner = m_ctx->regions ? m_ctx->regions->OwnerOf(r.id) : r.homeFaction;
+        float fc[4];
+        FactionColor(owner, fc);
+        const ImU32 col = IM_COL32((int)(fc[0] * 255), (int)(fc[1] * 255), (int)(fc[2] * 255), 235);
+        const ImVec2 p = toMap(r.centerX, r.centerZ);
+        const float rad = (r.tier == "skyanchor") ? 5.0f : (r.tier == "facility" ? 4.5f : 3.0f);
+        dl->AddCircleFilled(p, rad, col);
+        dl->AddCircle(p, rad, IM_COL32(0, 0, 0, 150), 0, 1.0f);
+    }
+
+    // Local player marker + facing.
+    SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
+    if (cam)
+    {
+        const DirectX::XMFLOAT3 cp = cam->GetPosition();
+        const ImVec2 me = toMap(cp.x, cp.z);
+        const float yaw = cam->GetRotation().y;
+        // north(+Z)=up, so facing vector on map = (sin yaw, -cos yaw)
+        const ImVec2 tip(me.x + std::sin(yaw) * 9.0f, me.y - std::cos(yaw) * 9.0f);
+        dl->AddLine(me, tip, IM_COL32(255, 255, 255, 230), 2.0f);
+        dl->AddCircleFilled(me, 3.0f, IM_COL32(255, 255, 255, 240));
+    }
 }
 
 void TFHUD::DrawVitals()

@@ -76,6 +76,8 @@ class TFHUD {
     void DrawDamageOctants();
     void DrawCaptureBar();
     void DrawRespawnOverlay();
+    void DrawCompass();
+    void DrawMinimap();
 
     TFGameContext* m_ctx{nullptr};
     TFEventBus*    m_events{nullptr};
