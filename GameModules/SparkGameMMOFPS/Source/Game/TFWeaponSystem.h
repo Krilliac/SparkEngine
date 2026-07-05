@@ -49,6 +49,10 @@ class TFWeaponSystem {
     /// Call once per desired shot; the internal RoF timer paces full-auto.
     void ClientTriggerFire();
 
+    /// Client: OBJ model path of the active weapon (empty if none/dead) — the
+    /// first-person viewmodel drawn at the camera in TFWorldSetup::RenderWorld.
+    std::string ActiveWeaponModel() const;
+
   private:
     static constexpr EntityId kNoPawnEntity = 0xFFFFFFFFu;
 

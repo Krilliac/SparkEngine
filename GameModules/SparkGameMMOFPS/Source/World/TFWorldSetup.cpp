@@ -11,6 +11,7 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFWeaponSystem.h"
 #include "Net/TFServerSim.h"
 
 #include "Spark/IEngineContext.h"
@@ -499,6 +500,54 @@ void TFWorldSetup::RenderWorld()
                 }
             }
             gfx->SetBasicTexture(nullptr);
+        }
+
+        // 3) First-person weapon viewmodel — the equipped weapon drawn at a
+        //    fixed offset from the camera so the player sees their gun. Placed
+        //    in view space (right/down/forward) then transformed to world via
+        //    inverse(view); empty model (dead / no pawn) draws nothing.
+        if (m_ctx->HasLocalPlayer() && m_ctx->weapons)
+        {
+            const std::string vmPath = m_ctx->weapons->ActiveWeaponModel();
+            Mesh* vm = vmPath.empty() ? nullptr : GetOrLoadEcsMesh(vmPath);
+            if (vm && vm->GetVertexCount() > 0 && vm->GetIndexCount() > 0)
+            {
+                ID3D11DeviceContext* dc = gfx->GetContext();
+                gfx->SetBasicShaders();
+                const DirectX::XMMATRIX invView = DirectX::XMMatrixInverse(nullptr, view);
+                // Weapon OBJs are ~2.7 units long on their local X (barrel axis),
+                // centered near (0.89,0.10,0). Recenter, scale to ~0.7 m, rotate
+                // the barrel (local +X) to view forward (+Z), then place down-
+                // right and far enough forward to clear the 0.5 m near plane.
+                // view space: +x right, +y up, +z forward.
+                const DirectX::XMMATRIX local =
+                    DirectX::XMMatrixTranslation(-0.89f, -0.10f, 0.0f) *
+                    DirectX::XMMatrixScaling(0.26f, 0.26f, 0.26f) *
+                    DirectX::XMMatrixRotationY(-DirectX::XM_PIDIV2) *
+                    DirectX::XMMatrixTranslation(0.28f, -0.26f, 0.9f);
+                const DirectX::XMMATRIX vmWorld = local * invView;
+
+                const DirectX::XMFLOAT4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
+                const auto& subs = vm->GetSubmeshes();
+                if (subs.empty())
+                {
+                    gfx->UpdateBasicConstants(vmWorld, view, proj, kWhite, {1.0f, 1.0f});
+                    gfx->SetBasicTexture(nullptr);
+                    vm->Render(dc);
+                }
+                else
+                {
+                    for (const MeshSubmesh& sm : subs)
+                    {
+                        ID3D11ShaderResourceView* srv =
+                            sm.diffuseTexture.empty() ? nullptr : gfx->GetOrLoadTextureSRV(sm.diffuseTexture);
+                        gfx->UpdateBasicConstants(vmWorld, view, proj, sm.diffuseColor, {1.0f, 1.0f});
+                        gfx->SetBasicTexture(srv);
+                        vm->RenderRange(dc, sm.indexStart, sm.indexCount);
+                    }
+                }
+                gfx->SetBasicTexture(nullptr);
+            }
         }
     }
     catch (const std::exception& e)

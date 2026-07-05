@@ -96,6 +96,18 @@ void TFWeaponSystem::Shutdown()
     m_initialized = false;
 }
 
+std::string TFWeaponSystem::ActiveWeaponModel() const
+{
+    if (m_localPawn == kNoPawnEntity)
+        return {};
+    const SlotState& slot = m_slots[m_activeSlot];
+    if (!slot.IsValid() || slot.def.model.empty())
+        return {};
+    // weapons.json paths are Assets-relative (e.g. "Models/MMOFPS/weapons/...").
+    const std::string& m = slot.def.model;
+    return m.rfind("Assets/", 0) == 0 ? m : "Assets/" + m;
+}
+
 // ---------------------------------------------------------------------------
 // Frozen API: client fire
 // ---------------------------------------------------------------------------
