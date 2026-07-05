@@ -541,7 +541,7 @@ void TFWorldSetup::RenderWorld()
                 {
                     float fcol[4];
                     FactionColor(fc->faction, fcol);
-                    constexpr float k = 0.55f;
+                    constexpr float k = 0.40f; // moderate tint; keep the body bright/legible
                     tint.x = 1.0f + k * (fcol[0] - 1.0f);
                     tint.y = 1.0f + k * (fcol[1] - 1.0f);
                     tint.z = 1.0f + k * (fcol[2] - 1.0f);
