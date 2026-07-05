@@ -70,6 +70,34 @@ namespace Spark
                 return tmp;
             }
         };
+
+        // Process-global "kill on close" job object. Every child we launch is
+        // assigned to it; because the job carries
+        // JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE and this process holds the only
+        // handle, the OS terminates all assigned children the instant this
+        // process exits — INCLUDING a force-kill / crash where destructors and
+        // ConsoleProcessManager::Shutdown() never run. Without it, a
+        // force-killed engine orphaned its SparkConsole child every time
+        // (they accumulated across debugging/crash runs). Created lazily and
+        // intentionally never closed (owned for the process lifetime).
+        HANDLE GetChildKillJob()
+        {
+            static HANDLE s_job = []() -> HANDLE {
+                HANDLE job = CreateJobObjectW(nullptr, nullptr);
+                if (!job)
+                    return nullptr;
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info,
+                                             sizeof(info)))
+                {
+                    CloseHandle(job);
+                    return nullptr;
+                }
+                return job;
+            }();
+            return s_job;
+        }
     } // namespace
 
     // =========================================================================
@@ -267,7 +295,10 @@ namespace Spark
             si.hStdError = stderrWriteH.h ? stderrWriteH.h : GetStdHandle(STD_ERROR_HANDLE);
         }
 
-        DWORD flags = 0;
+        // CREATE_SUSPENDED so the child is assigned to the kill-on-close job
+        // BEFORE it runs — otherwise it could spawn its own children (which
+        // would escape the job) in the gap between create and assign.
+        DWORD flags = CREATE_SUSPENDED;
         if (m_detached)
             flags |= CREATE_NO_WINDOW | DETACHED_PROCESS;
 
@@ -275,6 +306,15 @@ namespace Spark
         BOOL ok = CreateProcessA(NULL, cmdLine.data(), NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
         if (!ok)
             return std::unexpected("CreateProcessA failed (error " + std::to_string(GetLastError()) + ")");
+
+        // Reap the child automatically if this process dies unexpectedly.
+        // Best-effort: on the rare platform where the job can't be created or
+        // assigned (e.g. an outer job that forbids nesting), fall through — the
+        // child simply loses the auto-reap guarantee, same as before.
+        if (HANDLE job = GetChildKillJob())
+            AssignProcessToJobObject(job, pi.hProcess);
+
+        ResumeThread(pi.hThread);
 
         // Close child-side handles
         CloseHandle(pi.hThread);
