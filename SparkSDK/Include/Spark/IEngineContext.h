@@ -174,8 +174,8 @@ namespace Spark
         virtual const IGameplayTagService* GetGameplayTagService() const { return nullptr; }
 
         /** @brief Get the ECS world for entity/component access */
-        virtual World* GetWorld() { return nullptr; }
-        virtual const World* GetWorld() const { return nullptr; }
+        virtual ::World* GetWorld() { return nullptr; }
+        virtual const ::World* GetWorld() const { return nullptr; }
 
         /** @brief Get the scene manager */
         virtual SceneManager* GetSceneManager() { return nullptr; }

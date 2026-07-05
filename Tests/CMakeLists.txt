@@ -96,6 +96,8 @@ add_executable(SparkTests
     TestHybridRT.cpp
     TestReliableChannel.cpp
     TestLagCompensationIntegration.cpp
+    TestLagCompensation.cpp
+    TestAreaSimulationHook.cpp
     TestModuleDependency.cpp
     TestModuleDiscovery.cpp
     TestReflection.cpp

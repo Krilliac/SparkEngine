@@ -7,6 +7,8 @@
 
 #ifdef ENABLE_NETWORKING
 
+#include "IAreaSimulation.h"
+
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/LogMacros.h"
@@ -469,6 +471,13 @@ namespace Spark::Net
                 std::lock_guard<std::mutex> slock(m_statsMutex);
                 m_stats.entityCount = static_cast<uint32_t>(m_trackedEntities.size());
             }
+        }
+
+        // Game-supplied authoritative simulation (runs on this tick thread —
+        // see SetSimulation() for the threading contract).
+        if (IAreaSimulation* simulation = m_simulation.load(std::memory_order_acquire))
+        {
+            simulation->OnAreaTick(deltaTime);
         }
 
         // Performance budget check

@@ -49,6 +49,8 @@
 namespace Spark::Net
 {
 
+    class IAreaSimulation;
+
     // ============================================================================
     // Area Server Configuration
     // ============================================================================
@@ -157,6 +159,30 @@ namespace Spark::Net
          */
         bool IsRunning() const { return m_running.load(std::memory_order_acquire); }
 
+        // -- Simulation Plug-in --
+
+        /**
+         * @brief Attach a game-supplied authoritative simulation to this area.
+         *
+         * The built-in UpdateSimulation() only performs placeholder velocity
+         * integration; game modules supply real per-area simulation by
+         * implementing IAreaSimulation and attaching it here. The simulation
+         * is invoked once per tick, after the built-in velocity integration.
+         *
+         * @param sim Non-owning pointer; pass nullptr to detach. The caller
+         *        must keep the simulation alive until it is detached or the
+         *        server is stopped.
+         *
+         * Threading contract: IAreaSimulation::OnAreaTick() is called on the
+         * AreaServer tick thread — the thread spawned by Start(), or whichever
+         * thread drives Tick() externally. SetSimulation() itself may be
+         * called from any thread (the pointer is published atomically), but
+         * after detaching, an OnAreaTick() already in flight on the tick
+         * thread may still complete — do not destroy the simulation object
+         * until the server is stopped or a subsequent tick has been observed.
+         */
+        void SetSimulation(IAreaSimulation* sim) { m_simulation.store(sim, std::memory_order_release); }
+
         // -- Entity Migration --
 
         /**
@@ -230,6 +256,9 @@ namespace Spark::Net
 
         AreaServerConfig m_config;
         AreaServerStats m_stats;
+
+        /// Game-supplied simulation hook (non-owning; see SetSimulation()).
+        std::atomic<IAreaSimulation*> m_simulation{nullptr};
         mutable std::mutex m_statsMutex; ///< Guards m_stats (written by tick thread, read elsewhere)
         std::atomic<bool> m_running{false};
         std::thread m_tickThread;

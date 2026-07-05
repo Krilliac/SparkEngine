@@ -184,8 +184,8 @@ class EngineContext : public Spark::IEngineContext
     {
         return GetSystem<Spark::IGameplayTagService>();
     }
-    World* GetWorld() override { return GetSystem<World>(); }
-    const World* GetWorld() const override { return GetSystem<World>(); }
+    ::World* GetWorld() override { return GetSystem<::World>(); }
+    const ::World* GetWorld() const override { return GetSystem<::World>(); }
     SceneManager* GetSceneManager() override { return GetSystem<SceneManager>(); }
     const SceneManager* GetSceneManager() const override { return GetSystem<SceneManager>(); }
     AngelScriptEngine* GetScriptEngine() override { return GetSystem<AngelScriptEngine>(); }
