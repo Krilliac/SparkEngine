@@ -70,6 +70,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <format>
+#include <fstream>
 #include <filesystem>
 #include <thread>
 
@@ -250,6 +252,82 @@ static std::filesystem::path GetExecutableDirectory()
     wchar_t exePath[MAX_PATH];
     GetModuleFileNameW(nullptr, exePath, MAX_PATH);
     return std::filesystem::path(exePath).parent_path();
+}
+
+/**
+ * @brief Scripted console playback: -exec <file>
+ *
+ * Each non-empty, non-# line is "<frame> <console command>"; the command runs
+ * once the main loop reaches that frame (frames count engine ticks in both the
+ * windowed and headless paths). Lines without a leading number run at frame 0.
+ * Drives automated smoke tests: spawn, move, fire, screenshot, tf_* commands.
+ */
+struct ScriptedCommand
+{
+    int frame = 0;
+    std::string command;
+};
+static std::vector<ScriptedCommand> g_execScript;
+static size_t g_execScriptNext = 0;
+
+static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
+{
+    std::wstring cmd(cmdLine);
+    size_t pos = cmd.find(L"-exec ");
+    if (pos == std::wstring::npos)
+        return;
+    size_t start = pos + 6;
+    size_t end = cmd.find(L' ', start);
+    std::wstring wpath = cmd.substr(start, end - start);
+    std::string path(wpath.begin(), wpath.end());
+
+    std::ifstream file(path);
+    if (!file)
+    {
+        Spark::SimpleConsole::GetInstance().LogError("[exec] cannot open script: " + path);
+        return;
+    }
+    std::string line;
+    while (std::getline(file, line))
+    {
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+            line.pop_back();
+        if (line.empty() || line[0] == '#')
+            continue;
+        ScriptedCommand sc;
+        size_t idx = 0;
+        // optional leading frame number
+        while (idx < line.size() && isdigit(static_cast<unsigned char>(line[idx])))
+            ++idx;
+        if (idx > 0 && idx < line.size() && line[idx] == ' ')
+        {
+            sc.frame = std::stoi(line.substr(0, idx));
+            sc.command = line.substr(idx + 1);
+        }
+        else
+        {
+            sc.command = line;
+        }
+        g_execScript.push_back(sc);
+    }
+    std::stable_sort(g_execScript.begin(), g_execScript.end(),
+                     [](const ScriptedCommand& a, const ScriptedCommand& b)
+                     { return a.frame < b.frame; });
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        std::format("[exec] loaded {} scripted commands from {}", g_execScript.size(), path));
+}
+
+static void RunDueScriptedCommands(int frameCount)
+{
+    auto& console = Spark::SimpleConsole::GetInstance();
+    while (g_execScriptNext < g_execScript.size() &&
+           g_execScript[g_execScriptNext].frame <= frameCount)
+    {
+        const std::string& c = g_execScript[g_execScriptNext].command;
+        console.LogInfo(std::format("[exec] frame {}: {}", frameCount, c));
+        console.ExecuteCommand(c);
+        ++g_execScriptNext;
+    }
 }
 
 /**
@@ -509,6 +587,7 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
             console.Update();
         });
 
+        RunDueScriptedCommands(frameCount);
         ++frameCount;
 
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
@@ -800,6 +879,7 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
                 console.Update();
             });
 
+            RunDueScriptedCommands(frameCount);
             ++frameCount;
         }
     }
@@ -862,6 +942,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
     g_noSubprocess = (std::wstring(lpCmdLine).find(L"-no-subprocess") != std::wstring::npos);
+    LoadExecScriptFromCmdLine(lpCmdLine);
     g_minimalInit = (std::wstring(lpCmdLine).find(L"-minimal-init") != std::wstring::npos);
     g_noJobSystem = (std::wstring(lpCmdLine).find(L"-no-jobsystem") != std::wstring::npos);
     ParseWindowSizeOverride(lpCmdLine);

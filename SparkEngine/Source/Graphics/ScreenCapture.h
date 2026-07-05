@@ -33,6 +33,9 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#ifdef SPARK_HAS_MINIZ
+#include <miniz.h>
+#endif
 #include <functional>
 #include <string>
 #include <vector>
@@ -122,6 +125,26 @@ namespace Spark::Graphics
                 ++m_screenshotCount;
 
             return result;
+        }
+
+        /// True after Initialize() (used by late callers to self-initialize).
+        bool IsInitialized() const { return m_initialized; }
+
+        /**
+         * @brief Write a PNG to an explicit path (caller owns naming; parent
+         *        directories are created). Used by the console screenshot op
+         *        when the user passes a filename.
+         */
+        CaptureResult WriteTo(const uint8_t* pixelData, uint32_t width, uint32_t height,
+                              const std::string& path)
+        {
+            CaptureResult result;
+            if (!pixelData || width == 0 || height == 0)
+            {
+                result.errorMessage = "Invalid pixel data or dimensions";
+                return result;
+            }
+            return WritePNG(pixelData, width, height, path);
         }
 
         /**
@@ -255,6 +278,33 @@ namespace Spark::Graphics
                     return result;
                 }
             }
+
+#ifdef SPARK_HAS_MINIZ
+            // Real PNG via the vendored miniz encoder.
+            {
+                size_t pngLen = 0;
+                void* png = tdefl_write_image_to_png_file_in_memory_ex(
+                    pixelData, static_cast<int>(width), static_cast<int>(height), 4, &pngLen,
+                    MZ_DEFAULT_LEVEL, MZ_FALSE);
+                if (png)
+                {
+                    std::ofstream file(path, std::ios::binary);
+                    if (file)
+                    {
+                        file.write(static_cast<const char*>(png), static_cast<std::streamsize>(pngLen));
+                        mz_free(png);
+                        result.success = file.good();
+                        if (!result.success)
+                            result.errorMessage = "PNG write failed: " + path;
+                        return result;
+                    }
+                    mz_free(png);
+                    result.errorMessage = "Failed to open for writing: " + path;
+                    return result;
+                }
+                // encoder failure: fall through to the TGA path below
+            }
+#endif // SPARK_HAS_MINIZ
 
             // Use stb_image_write if available, otherwise store raw
             // In production this would call stbi_write_png(). For now we validate

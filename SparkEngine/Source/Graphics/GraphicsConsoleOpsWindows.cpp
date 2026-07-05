@@ -20,12 +20,15 @@
 #include "AssetPipeline.h"
 #include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
+#include "ScreenCapture.h"
 
 #include <windows.h>
 #include <d3d11_1.h>
 #include <wrl.h>
 
 #include <string>
+#include <vector>
+#include <cstring>
 #include <sstream>
 #include <chrono>
 #include <thread>
@@ -181,20 +184,96 @@ void GraphicsEngine::Console_ReloadShaders()
 
 bool GraphicsEngine::Console_Screenshot(const std::string& filename)
 {
+    // Real backbuffer readback: swapchain -> staging copy -> map -> PNG via
+    // ScreenCapture (which owns naming/output dir when filename is empty).
     LOG_TO_CONSOLE_IMMEDIATE(L"Taking screenshot", L"INFO");
 
-    std::string actualFilename = filename;
-    if (actualFilename.empty())
+    if (!m_device || !m_context || !m_swapChain)
     {
-        auto now = std::chrono::system_clock::now();
-        auto time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss;
-        ss << "screenshot_" << time_t << ".png";
-        actualFilename = ss.str();
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: no D3D11 device/swapchain", L"ERROR");
+        return false;
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + std::wstring(actualFilename.begin(), actualFilename.end()),
-                             L"SUCCESS");
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> backBuffer;
+    if (FAILED(m_swapChain->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf()))))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: GetBuffer", L"ERROR");
+        return false;
+    }
+
+    D3D11_TEXTURE2D_DESC desc{};
+    backBuffer->GetDesc(&desc);
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0;
+    desc.SampleDesc = {1, 0};
+
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+    if (FAILED(m_device->CreateTexture2D(&desc, nullptr, staging.GetAddressOf())))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: staging texture", L"ERROR");
+        return false;
+    }
+    m_context->CopyResource(staging.Get(), backBuffer.Get());
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (FAILED(m_context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: map", L"ERROR");
+        return false;
+    }
+
+    const uint32_t w = desc.Width, h = desc.Height;
+    std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
+    const bool bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+                      desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    for (uint32_t y = 0; y < h; ++y)
+    {
+        const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) +
+                             static_cast<size_t>(y) * mapped.RowPitch;
+        uint8_t* dst = rgba.data() + static_cast<size_t>(y) * w * 4;
+        if (bgra)
+        {
+            for (uint32_t x = 0; x < w; ++x)
+            {
+                dst[x * 4 + 0] = src[x * 4 + 2];
+                dst[x * 4 + 1] = src[x * 4 + 1];
+                dst[x * 4 + 2] = src[x * 4 + 0];
+                dst[x * 4 + 3] = 0xFF;
+            }
+        }
+        else // RGBA-family formats copy straight through (alpha forced opaque)
+        {
+            std::memcpy(dst, src, static_cast<size_t>(w) * 4);
+            for (uint32_t x = 0; x < w; ++x)
+                dst[x * 4 + 3] = 0xFF;
+        }
+    }
+    m_context->Unmap(staging.Get(), 0);
+
+    auto& capture = Spark::Graphics::ScreenCapture::GetInstance();
+    if (!capture.IsInitialized())
+        capture.Initialize();
+
+    Spark::Graphics::CaptureResult result;
+    if (filename.empty())
+    {
+        result = capture.TakeScreenshot(rgba.data(), w, h);
+    }
+    else
+    {
+        result = capture.WriteTo(rgba.data(), w, h, filename);
+    }
+
+    if (!result.success)
+    {
+        const std::wstring werr(result.errorMessage.begin(), result.errorMessage.end());
+        LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot failed: " + werr, L"ERROR");
+        return false;
+    }
+    const std::wstring wpath(result.filePath.begin(), result.filePath.end());
+    LOG_TO_CONSOLE_IMMEDIATE(L"Screenshot saved as " + wpath, L"SUCCESS");
     return true;
 }
 
