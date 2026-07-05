@@ -1026,7 +1026,14 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
 
             float3 diffuse = DirectionalLightColor * DirectionalLightIntensity * NdotL;
             float3 ambient = AmbientColor * AmbientIntensity;
-            float3 lighting = diffuse + ambient;
+
+            // Soft camera-facing fill (headlight): surfaces turned toward the
+            // viewer get a little extra warm light so they read with detail
+            // instead of crushing to black when they face away from the sun.
+            float3 viewDir = normalize(CameraPosition - input.WorldPos);
+            float fill = 0.35f * max(0.0f, dot(normal, viewDir));
+
+            float3 lighting = diffuse + ambient + float3(fill, fill * 0.95f, fill * 0.88f);
 
             float4 finalColor = texColor * input.Color;
             finalColor.rgb *= lighting;
