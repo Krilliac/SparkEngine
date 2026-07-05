@@ -19,6 +19,8 @@
 #include "Data/TFDataTables.h"
 #include "Game/TFComponents.h"
 #include "Game/TFVehicleSystem.h"   // W3 shared-edit: Aegis mobile-spawn (spawnKind==2)
+#include "Game/TFSquadSystem.h"     // W4: squad-leader spawn (spawnKind==3)
+#include "World/TFRegionSystem.h"   // W4: region spawn (spawnKind==1)
 #include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
 #include "World/TFWorldSetup.h"
@@ -26,6 +28,7 @@
 #include "Engine/ECS/Components.h"
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -33,6 +36,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -184,6 +188,21 @@ EntityId TFPlayerSystem::ServerSpawnPawn(PlayerId player, FactionId faction, Cla
                    "[TF] pawn %u spawned for player %u (%s class %u) at (%.0f %.0f %.0f)",
                    rec.pawn, player, FactionTag(faction), static_cast<unsigned>(cls),
                    pos[0], pos[1], pos[2]);
+    {
+        // Console echo with immediate ECS read-back: catches silent
+        // write/read divergence (a real bug class here — see 2026-07-05
+        // smoke where every PawnInfo read collapsed to (0,0,0)).
+        PawnInfo probe{};
+        char msg[160];
+        if (FillPawnInfo(player, rec, probe))
+            std::snprintf(msg, sizeof(msg),
+                          "[TF] spawn: p%u %s at (%.0f %.0f %.0f) readback (%.1f %.1f %.1f) hp %.0f",
+                          player, FactionTag(faction), pos[0], pos[1], pos[2],
+                          probe.pos[0], probe.pos[1], probe.pos[2], probe.health);
+        else
+            std::snprintf(msg, sizeof(msg), "[TF] spawn: p%u readback FAILED", player);
+        Spark::SimpleConsole::GetInstance().LogInfo(msg);
+    }
 
     if (m_events)
         m_events->Fire(EvPlayerSpawned{player, rec.pawn, cls, faction});
@@ -206,6 +225,11 @@ void TFPlayerSystem::ServerKillPawn(EntityId victim, PlayerId killerPlayer,
     rec.despawnAt     = NowSec() + kTFDespawnDelaySec;
 
     ServerSetPawnHealth(victim, 0.0f, 0.0f);
+
+    // Console kill feed — the war's audit trail for exec_results.log.
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        "[TF] kill: p" + std::to_string(victimPlayer) + " (" + FactionTag(rec.faction) +
+        ") by p" + std::to_string(killerPlayer) + (headshot ? " HS" : ""));
 
     if (m_events)
     {
@@ -270,9 +294,17 @@ void TFPlayerSystem::ServerHandleSpawnRequest(PlayerId player, const TF_SpawnReq
     // is now a first-class spawn point. Its respawn timer is shorter (DESIGN
     // §4: 5 s at an Aegis vs the 8 s default, data-driven via
     // vehicles.json deployRespawnSec).
-    else if (req.spawnKind != 0 && req.spawnKind != 2)
+    else if (req.spawnKind > 3)
     {
-        reply.reason = 1; // TF-W2: region spawns; TF-W3 (squad agent): squad spawns
+        reply.reason = 1; // unknown spawn kind
+    }
+    else if (req.spawnKind == 1 && !m_ctx->regions)
+    {
+        reply.reason = 1; // region system absent (headless unit tests)
+    }
+    else if (req.spawnKind == 3 && !m_ctx->squads)
+    {
+        reply.reason = 1; // squad system absent
     }
     else if (req.spawnKind == 2 && !m_ctx->vehicles)
     {
@@ -292,11 +324,27 @@ void TFPlayerSystem::ServerHandleSpawnRequest(PlayerId player, const TF_SpawnReq
         reply.reason = 2; // respawn timer
         reply.respawnDelay = static_cast<float>(respawnAt - NowSec());
     }
-    else if (req.spawnKind == 2
-                 ? !m_ctx->vehicles->GetAegisSpawnPos(req.aegisEntity, faction, pos)
-                 : !FindSkyanchorSpawn(faction, pos, yaw))
+    else if (![&] {
+                 switch (req.spawnKind)
+                 {
+                     case 1:  return FindRegionSpawn(req.regionId, faction, pos, yaw);
+                     case 2:  return m_ctx->vehicles->GetAegisSpawnPos(req.aegisEntity,
+                                                                       faction, pos);
+                     case 3:  return m_ctx->squads->GetSquadLeaderSpawn(player, pos);
+                     default: return FindSkyanchorSpawn(faction, pos, yaw);
+                 }
+             }())
     {
         reply.reason = req.spawnKind == 2 ? 3 : 1; // 3 = aegis gone/undeployed/contested
+        if (req.spawnKind == 3)
+        {
+            const float cd = m_ctx->squads->SquadSpawnCooldownRemaining(player);
+            if (cd > 0.0f)
+            {
+                reply.reason = 2; // squad-spawn cooldown
+                reply.respawnDelay = cd;
+            }
+        }
     }
     else
     {
@@ -311,6 +359,10 @@ void TFPlayerSystem::ServerHandleSpawnRequest(PlayerId player, const TF_SpawnReq
             reply.posX = pos[0]; reply.posY = pos[1]; reply.posZ = pos[2];
         }
     }
+    if (!reply.accepted && reply.reason != 2) // reason 2 = respawn timer (normal, retried)
+        Spark::SimpleConsole::GetInstance().LogWarning(
+            "[TF] spawn DENIED p" + std::to_string(player) +
+            " reason " + std::to_string(reply.reason));
     SendSpawnReply(player, reply);
 }
 
@@ -383,6 +435,27 @@ WeaponId TFPlayerSystem::PickDefaultWeapon(FactionId faction, ClassId cls) const
             (w.faction == faction || w.faction == FactionId::None))
             return w.id;
     return kInvalidWeapon;
+}
+
+// W4 integration: spawn at an owned, lattice-connected region (map-screen
+// click deploys send spawnKind==1). Point comes from regions.json spawns.
+bool TFPlayerSystem::FindRegionSpawn(RegionId region, FactionId faction, float outPos[3],
+                                     float& outYaw) const
+{
+    if (!m_ctx || !m_ctx->data || !m_ctx->data->IsLoaded() || !m_ctx->regions)
+        return false;
+    if (!m_ctx->regions->CanSpawnAt(region, faction))
+        return false;
+    const RegionDef* r = m_ctx->data->GetRegion(region);
+    if (!r)
+        return false;
+    const float x = r->spawns.empty() ? r->centerX : r->spawns.front()[0];
+    const float z = r->spawns.empty() ? r->centerZ : r->spawns.front()[1];
+    outPos[0] = x;
+    outPos[1] = m_ctx->world ? m_ctx->world->TerrainHeightAt(x, z) + 0.1f : 0.1f;
+    outPos[2] = z;
+    outYaw = std::atan2(2048.0f - x, 2048.0f - z); // face map center
+    return true;
 }
 
 bool TFPlayerSystem::FindSkyanchorSpawn(FactionId faction, float outPos[3], float& outYaw) const

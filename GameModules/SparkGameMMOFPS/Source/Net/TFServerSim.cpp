@@ -16,6 +16,7 @@
 #include "Spark/IEngineContext.h"
 #include "Game/TFComponents.h"
 #include "Game/TFMovementModel.h"
+#include "Game/TFSquadSystem.h"
 #include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
@@ -155,6 +156,20 @@ void TFServerSim::SetPlayerFaction(PlayerId player, FactionId faction)
     m_factions[player] = faction;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] Player %u joined %s",
                    player, FactionName(faction));
+}
+
+void TFServerSim::TeleportPawn(PlayerId player, float x, float y, float z)
+{
+    auto it = m_move.find(player);
+    if (it == m_move.end())
+        return;
+    MoveState& ms = it->second;
+    ms.pos[0] = x;
+    ms.pos[1] = y;
+    ms.pos[2] = z;
+    ms.vel[0] = ms.vel[1] = ms.vel[2] = 0.0f;
+    ms.grounded = false; // settle onto the terrain on the next step
+    WritePawnTransform(ms);
 }
 
 // ---------------------------------------------------------------------------
@@ -445,10 +460,16 @@ void TFServerSim::RegisterNetHandlers()
         HandleAegisDeploy(m.senderID, m.payload.data(), m.payload.size());
     });
 
+    route(TFMsg::SquadMsg, [this](const NetworkMessage& m) {
+        if (m_ctx->squads)
+            m_ctx->squads->ServerHandleSquadMsgRaw(m.senderID, m.payload.data(),
+                                                   m.payload.size());
+    });
+
     // Accepted-but-unrouted stubs (registered so NetworkManager does not
     // warn "unknown message type" if an eager client sends them):
-    // TF-W4: LoadoutChange -> players/weapons, SquadMsg -> squads, ChatMsg -> chat relay
-    for (TFMsg id : {TFMsg::LoadoutChange, TFMsg::SquadMsg, TFMsg::ChatMsg})
+    // TF-W4: LoadoutChange -> players/weapons, ChatMsg -> chat relay
+    for (TFMsg id : {TFMsg::LoadoutChange, TFMsg::ChatMsg})
     {
         route(id, [](const NetworkMessage&) {});
     }
@@ -568,7 +589,9 @@ void TFServerSim::HandleSpawnRequest(PlayerId sender, const void* data, size_t s
     // validated end-to-end by TFPlayerSystem (owns respawn records + the
     // GetAegisSpawnPos check) which also sends the TF_SpawnReply; the pawn it
     // spawns re-enters this sim via EvPlayerSpawned exactly like any other.
-    if (req.spawnKind == 2 && m_ctx->players)
+    // Region (1), Aegis (2) and squad-leader (3) spawns are validated
+    // end-to-end by TFPlayerSystem (owns respawn records + point checks).
+    if ((req.spawnKind == 1 || req.spawnKind == 2 || req.spawnKind == 3) && m_ctx->players)
     {
         m_ctx->players->ServerHandleSpawnRequest(sender, req);
         return;

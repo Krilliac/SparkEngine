@@ -102,6 +102,8 @@ class TFPlayerSystem {
     void  SendSpawnReply(PlayerId player, const TF_SpawnReply& reply);
     WeaponId PickDefaultWeapon(FactionId faction, ClassId cls) const;
     bool  FindSkyanchorSpawn(FactionId faction, float outPos[3], float& outYaw) const;
+    bool  FindRegionSpawn(RegionId region, FactionId faction, float outPos[3],
+                          float& outYaw) const;
     void  DestroyPawn(PlayerRec& rec);
     void  SyncClientRecords();      ///< pure client: discover replicated pawns
     void  AttachPawnVisual(uint32_t localEntity, FactionId faction);

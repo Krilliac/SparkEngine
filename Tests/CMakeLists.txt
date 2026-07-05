@@ -500,6 +500,13 @@ add_executable(SparkTests
     TestGameModuleRPG.cpp
     TestGameModuleRacing.cpp
     TestGameModulePlatformerARPG.cpp
+    # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
+    # rule math, and validation of the real Assets/MMOFPS/Data tables.
+    # Module .cpp sources are NOT compiled into SparkTests by design.
+    TestTFNetProtocolLayout.cpp
+    TestTFDataTables.cpp
+    TestTFDamageModel.cpp
+    TestTFRegionLattice.cpp
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
     # FPS game module source needed by TestGameModeReal
@@ -543,6 +550,9 @@ target_include_directories(SparkTests PRIVATE
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRacing/Source"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGamePlatformer/Source"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameARPG/Source"
+    # TERRAFRONT wire-protocol headers (TestTFNetProtocolLayout includes
+    # "Net/TFNetProtocol.h" / "Net/TFRepProtocol.h"; header-only PODs)
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source"
 )
 
 # Link engine static library so tests can call .cpp-backed implementations

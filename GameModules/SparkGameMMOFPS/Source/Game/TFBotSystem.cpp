@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <concepts>
+#include <sstream>
 
 namespace Terrafront {
 
@@ -625,6 +626,28 @@ const char* TFBotSystem::StateName(BotState s)
         case BotState::Dead:      return "dead";
     }
     return "?";
+}
+
+std::string TFBotSystem::DebugSummary() const
+{
+    std::ostringstream os;
+    os << "[TF] bots " << m_bots.size() << "  spawnReqs " << m_spawnRequests
+       << "  shots " << m_shotsFired << "  now " << Now();
+    for (const Bot& b : m_bots)
+    {
+        PawnInfo p{};
+        const bool have = m_ctx && m_ctx->players && m_ctx->players->GetPawnByPlayer(b.id, p);
+        os << "\n  p" << b.id << " " << FactionTag(b.faction) << " " << StateName(b.state)
+           << " pawn=" << (have ? (p.alive ? "alive" : "dead") : "NONE");
+        if (have)
+            os << " pos(" << static_cast<int>(p.pos[0]) << "," << static_cast<int>(p.pos[1])
+               << "," << static_cast<int>(p.pos[2]) << ") hp=" << static_cast<int>(p.health);
+        os << " obj=r" << (b.objectiveRegion == kInvalidRegion
+                               ? -1 : static_cast<int>(b.objectiveRegion))
+           << " tgt=" << b.targetEntity
+           << " nextSpawnTry=" << b.nextSpawnTryAt;
+    }
+    return os.str();
 }
 
 void TFBotSystem::RenderDebugUI()

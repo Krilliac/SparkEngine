@@ -305,7 +305,9 @@ void TFClientNet::PumpInput(float dt, bool aliveLocalPawn)
         return;
 
     // --- mouse look (camera owns the angles; we read them back) -----------
-    SparkEngineCamera* cam = m_ctx->engine->GetCamera();
+    // Module-owned camera: the engine context camera slot is empty in module
+    // mode (see TFWorldSetup::GetCamera).
+    SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
     if (cam)
     {
         const auto [dx, dy] = input->GetMouseDelta();

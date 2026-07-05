@@ -32,6 +32,7 @@
 #include "Net/TFNetProtocol.h"
 
 #include <random>
+#include <string>
 #include <vector>
 
 namespace Terrafront {
@@ -62,6 +63,10 @@ class TFBotSystem {
 
     /// Debug panel toggle (hidden by default; for the tf_* console commands).
     void ToggleDebugUI() { m_showDebug = !m_showDebug; }
+
+    /// One-line-per-bot diagnostic dump for the tf_botinfo console command
+    /// (state, pawn liveness, position, objective, spawn/respawn scheduling).
+    std::string DebugSummary() const;
 
   private:
     enum class BotState : uint8_t { Deploying, Moving, Fighting, Dead };

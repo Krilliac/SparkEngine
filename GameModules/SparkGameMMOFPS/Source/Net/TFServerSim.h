@@ -63,6 +63,11 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     FactionId GetPlayerFaction(PlayerId player) const;
     void SetPlayerFaction(PlayerId player, FactionId faction);
 
+    /// Admin teleport (tf_tp): moves the authoritative MoveState and syncs
+    /// the pawn Transform. Writing only the Transform is NOT enough — the
+    /// movement tick overwrites it from MoveState one fixed step later.
+    void TeleportPawn(PlayerId player, float x, float y, float z);
+
     // --- engine area-simulation hook ----------------------------------------
     // W1: the module's OnFixedUpdate drives the authoritative tick; OnAreaTick
     // only counts invocations so AreaServer wiring can be observed.

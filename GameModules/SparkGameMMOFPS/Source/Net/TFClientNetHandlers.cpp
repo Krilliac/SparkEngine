@@ -17,6 +17,7 @@
 #include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
 #include "UI/TFScoreboard.h"
+#include "World/TFWorldSetup.h"
 
 #include "Camera/SparkEngineCamera.h"
 #include "Engine/ECS/Components.h"
@@ -133,7 +134,9 @@ void TFClientNet::DriveFirstPersonCamera(bool aliveLocalPawn, const float feetPo
 {
     if (!aliveLocalPawn)
         return;
-    SparkEngineCamera* cam = m_ctx->engine ? m_ctx->engine->GetCamera() : nullptr;
+    // Module-owned camera (TFWorldSetup) — the engine context camera slot is
+    // never populated in module mode.
+    SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
     if (!cam)
         return;
 

@@ -39,7 +39,12 @@
 namespace Terrafront {
 
 // Frozen movement constants (TF movement model v1)
-constexpr float kTFMoveAccel   = 40.0f;   // m/s^2
+// NOTE: steady-state ground speed under full throttle is accel/friction
+// (friction is applied even while accelerating), clamped by the class max.
+// accel MUST exceed friction * fastest sprintSpeed (8 * 7.8 = 62.4) or the
+// class speed caps are unreachable — at 40 every class walked at 5.0 m/s
+// and sprint did nothing (caught by the 2026-07-05 bot-war smoke).
+constexpr float kTFMoveAccel   = 80.0f;   // m/s^2
 constexpr float kTFFriction    = 8.0f;    // 1/s, ground only
 constexpr float kTFGravity     = 19.6f;   // m/s^2
 constexpr float kTFJumpSpeed   = 7.5f;    // m/s

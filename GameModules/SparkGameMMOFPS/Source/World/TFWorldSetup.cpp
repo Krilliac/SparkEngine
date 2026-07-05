@@ -17,6 +17,10 @@
 #include "SceneManager/SceneManager.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/World/WorldOriginSystem.h"
+#include "Camera/SparkEngineCamera.h"
+#include "Game/GameObject.h"
+#include "Graphics/GraphicsEngine.h"
+#include "Graphics/Mesh.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
@@ -89,6 +93,7 @@ bool TFWorldSetup::Initialize(TFGameContext& ctx, TFEventBus& events)
     m_origin->SetEnabled(true);
 
     LoadSceneAndTerrain();
+    CreateCamera();
 
     m_initialized = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFWorldSetup initialized (scene=%s, loaded=%s)",
@@ -107,10 +112,23 @@ void TFWorldSetup::LoadSceneAndTerrain()
     // authored geometry and the runtime height function share one source.
     ParseTerrainParams(m_scenePath);
 
+    // The engine registers NO SceneManager in module mode (the FPS module
+    // builds its own too — see SparkGameFPS Game::Initialize). Reuse the
+    // engine's if one ever appears; otherwise own one, exactly like the FPS
+    // module does. Requires graphics (skipped headless).
     SceneManager* sm = m_ctx->engine ? m_ctx->engine->GetSceneManager() : nullptr;
+    if (!sm && m_ctx->engine && m_ctx->engine->GetGraphics()) {
+        m_ownScene = std::make_unique<SceneManager>(m_ctx->engine->GetGraphics(),
+                                                    m_ctx->engine->GetInput());
+        sm = m_ownScene.get();
+    }
+    m_scene = sm;
     if (sm) {
         std::wstring wpath(m_scenePath.begin(), m_scenePath.end());
         m_sceneLoaded = sm->LoadScene(wpath);
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            std::string("[TF] scene ") + m_scenePath + (m_sceneLoaded ? " loaded (" : " FAILED (") +
+            std::to_string(sm->GetObjects().size()) + " objects)");
         if (!m_sceneLoaded)
             SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] Scene load failed: %s (headless or missing file?)",
                            m_scenePath.c_str());
@@ -211,6 +229,170 @@ float TFWorldSetup::TerrainHeightAt(float x, float z) const
         }
     }
     return h;
+}
+
+// ---------------------------------------------------------------------------
+// Rendering — the module owns the frame (TerrafrontModule::OnRender)
+// ---------------------------------------------------------------------------
+
+void TFWorldSetup::CreateCamera()
+{
+    GraphicsEngine* gfx = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetGraphics() : nullptr;
+    if (!gfx)
+        return; // headless / dedicated server: no camera, RenderWorld no-ops
+
+    const float w = static_cast<float>(gfx->GetWindowWidth());
+    const float h = static_cast<float>(gfx->GetWindowHeight());
+    m_camera = std::make_unique<SparkEngineCamera>();
+    m_camera->Initialize(h > 0.0f ? w / h : 16.0f / 9.0f);
+    // 4 km continent: the 1000 m default far plane clips most of the map.
+    m_camera->Console_SetClippingPlanes(0.3f, 6000.0f);
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] module camera created (%ux%u)",
+                   gfx->GetWindowWidth(), gfx->GetWindowHeight());
+}
+
+void TFWorldSetup::ComputeViewProj(DirectX::XMMATRIX& outView, DirectX::XMMATRIX& outProj) const
+{
+    using namespace DirectX;
+
+    // First person whenever the local pawn is alive: TFClientNet drives
+    // m_camera's position (eye height) and mouse-look owns its rotation.
+    // Matrices are built HERE from the camera pose so the module pins its
+    // own FOV and clip planes (0.3–6000 m: the default camera far plane of
+    // 1000 m clips most of the 4 km continent).
+    if (m_camera && m_ctx && m_ctx->players && m_ctx->HasLocalPlayer())
+    {
+        PawnInfo pawn{};
+        if (m_ctx->players->GetPawnByPlayer(m_ctx->localPlayer, pawn) && pawn.alive)
+        {
+            const XMFLOAT3 cp = m_camera->GetPosition();
+            const XMFLOAT3 cf = m_camera->GetForward();
+            const XMVECTOR eye = XMLoadFloat3(&cp);
+            const XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&cf));
+            outView = XMMatrixLookAtLH(eye, XMVectorAdd(eye, fwd),
+                                       XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+
+            float aspect = 16.0f / 9.0f;
+            if (GraphicsEngine* gfx = m_ctx->engine ? m_ctx->engine->GetGraphics() : nullptr)
+            {
+                const float h = static_cast<float>(gfx->GetWindowHeight());
+                if (h > 0.0f)
+                    aspect = static_cast<float>(gfx->GetWindowWidth()) / h;
+            }
+            outProj = XMMatrixPerspectiveFovLH(XM_PIDIV4 * 1.6f, aspect, 0.3f, 6000.0f);
+            return;
+        }
+    }
+
+    // No local pawn: fixed overview across the dunes toward the MRA
+    // skyanchor (region table when loaded; authored coordinates otherwise).
+    float tx = 2048.0f, tz = 3600.0f;
+    if (m_ctx && m_ctx->data && m_ctx->data->IsLoaded())
+    {
+        for (const RegionDef& r : m_ctx->data->GetContinent().regions)
+        {
+            if (r.tier == "skyanchor" && r.homeFaction == FactionId::MRA)
+            {
+                tx = r.centerX;
+                tz = r.centerZ;
+                break;
+            }
+        }
+    }
+    const XMVECTOR eye = XMVectorSet(2048.0f, 80.0f, 1900.0f, 1.0f);
+    const XMVECTOR at  = XMVectorSet(tx, m_terrain.plateauSky + 8.0f, tz, 1.0f);
+    outView = XMMatrixLookAtLH(eye, at, XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+
+    float aspect = 16.0f / 9.0f;
+    if (GraphicsEngine* gfx = m_ctx && m_ctx->engine ? m_ctx->engine->GetGraphics() : nullptr)
+    {
+        const float h = static_cast<float>(gfx->GetWindowHeight());
+        if (h > 0.0f)
+            aspect = static_cast<float>(gfx->GetWindowWidth()) / h;
+    }
+    outProj = XMMatrixPerspectiveFovLH(XM_PIDIV4, aspect, 0.5f, 6000.0f);
+}
+
+void TFWorldSetup::RenderWorld()
+{
+    if (!m_initialized || !m_ctx || !m_ctx->engine)
+        return;
+    GraphicsEngine* gfx = m_ctx->engine->GetGraphics();
+    if (!gfx)
+        return;
+
+    // Mirrors GameModules/SparkGameFPS Game::Render: the ONLY
+    // BeginFrame/EndFrame pair per frame while this module is loaded.
+    gfx->BeginFrame();
+    try
+    {
+        DirectX::XMMATRIX view, proj;
+        ComputeViewProj(view, proj);
+
+        // Per-frame constants (b1): the basic pixel shader reads the
+        // directional/ambient light from this buffer — without this call it
+        // stays unwritten and everything shades to black.
+        {
+            const DirectX::XMMATRIX invView = DirectX::XMMatrixInverse(nullptr, view);
+            DirectX::XMFLOAT3 camPos;
+            DirectX::XMStoreFloat3(&camPos, invView.r[3]);
+            gfx->UpdateFrameConstants(view, proj, camPos);
+        }
+
+        // 1) Scene geometry (terrain plane, mesas, buildings). Draws are
+        //    issued here through GraphicsEngine/Mesh MEMBER functions:
+        //    GameObject::Render() reads EngineContext::Get(), which is a
+        //    per-image global and unset inside this statically-linked DLL.
+        if (SceneManager* sm = m_scene)
+        {
+            ID3D11DeviceContext* dc = gfx->GetContext();
+            gfx->SetBasicShaders();
+            for (const auto& obj : sm->GetObjects())
+            {
+                if (!obj || !obj->IsActive() || !obj->IsVisible())
+                    continue;
+                Mesh* mesh = obj->GetMesh();
+                if (!mesh || mesh->GetVertexCount() == 0 || mesh->GetIndexCount() == 0)
+                    continue;
+                gfx->UpdateBasicConstants(obj->GetWorldMatrix(), view, proj);
+                mesh->Render(dc);
+            }
+        }
+
+        // 2) ECS visuals — pawns, vehicles and deployables all attach a
+        //    MeshRenderer (TFPlayerSystem::AttachPawnVisual & friends). The
+        //    engine's ECS RenderSystem is not driven in module mode, so
+        //    submit the draw commands and drain the list ourselves.
+        if (World* world = m_ctx->engine->GetWorld())
+        {
+            const auto& registry = world->GetRegistry();
+            auto ecsView = world->GetEntitiesWith<Transform, MeshRenderer>();
+            for (auto entity : ecsView)
+            {
+                const MeshRenderer& mr = ecsView.get<MeshRenderer>(entity);
+                if (!mr.visible)
+                    continue;
+                if (const auto* active = registry.try_get<ActiveComponent>(entity);
+                    active && !active->active)
+                    continue;
+                gfx->SubmitMeshForRendering(mr.meshPath, mr.materialPath,
+                                            ecsView.get<Transform>(entity).GetWorldMatrix(registry),
+                                            mr.castShadows);
+            }
+            gfx->ProcessDrawList(view, proj);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "TFRender", 5,
+                                "[TF] RenderWorld exception: %s", e.what());
+    }
+    catch (...)
+    {
+        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "TFRender", 5,
+                                "[TF] RenderWorld: unknown exception");
+    }
+    gfx->EndFrame();
 }
 
 // ---------------------------------------------------------------------------
@@ -430,6 +612,9 @@ void TFWorldSetup::Shutdown()
 #ifdef ENABLE_NETWORKING
     StopNetworking();
 #endif
+    m_camera.reset();
+    m_scene = nullptr;
+    m_ownScene.reset();
     m_origin.reset();
     m_sceneLoaded = false;
     m_initialized = false;

@@ -222,7 +222,14 @@ void TerrafrontModule::OnFixedUpdate(float fdt)
     m_replication->FixedUpdate(fdt);
 }
 
-void TerrafrontModule::OnRender() {}
+void TerrafrontModule::OnRender()
+{
+    // With a module loaded the module owns the frame (the engine-only path
+    // just clears). TFWorldSetup issues the full BeginFrame / scene + ECS
+    // draws / EndFrame; keep rendering while paused so the window presents.
+    if (m_initialized)
+        m_world->RenderWorld();
+}
 
 void TerrafrontModule::OnResize(int, int) {}
 

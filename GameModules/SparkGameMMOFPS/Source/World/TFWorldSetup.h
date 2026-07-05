@@ -16,6 +16,8 @@
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
 
+#include <DirectXMath.h>
+
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -24,6 +26,8 @@ namespace Spark::World { class WorldOriginSystem; }
 #ifdef ENABLE_NETWORKING
 namespace Spark::Net { class WorldServer; class AreaServer; }
 #endif
+class SparkEngineCamera;
+class SceneManager;
 
 namespace Terrafront {
 
@@ -79,11 +83,31 @@ class TFWorldSetup {
     /// from the AreaServer tick thread: reads only load-time-immutable state.
     float TerrainHeightAt(float x, float z) const;
 
+    /// Render the loaded scene + all ECS visuals (pawns, vehicles,
+    /// deployables) for this frame. Called from TerrafrontModule::OnRender —
+    /// with a module loaded the module owns the frame, so this is the only
+    /// BeginFrame/EndFrame in the process. No-op when headless (no graphics).
+    ///
+    /// Implementation note: all draw work goes through MEMBER functions of
+    /// engine objects reached via the virtual IEngineContext getters. The
+    /// module DLL statically links SparkEngineLib, so DLL-side globals like
+    /// EngineContext::Get() are unset copies — GameObject::Render() (which
+    /// reads that global) must NOT be called from module code.
+    void RenderWorld();
+
+    /// Module-owned first-person camera. The engine's EngineContext camera
+    /// slot is empty in module mode (and the service-locator type ids are
+    /// per-image, so a DLL-side registration would be invisible anyway);
+    /// TFClientNet drives this camera instead. Null when headless.
+    SparkEngineCamera* GetCamera() const { return m_camera.get(); }
+
   private:
     void LoadSceneAndTerrain();
     void ParseTerrainParams(const std::string& scenePath);
     float PlateauHeight(const std::string& tier) const;
     void DriveOriginRebase();
+    void CreateCamera();
+    void ComputeViewProj(DirectX::XMMATRIX& outView, DirectX::XMMATRIX& outProj) const;
 #ifdef ENABLE_NETWORKING
     bool BootServer(uint16_t port, NetRole role);
     void BridgeWorldServerSessions();
@@ -99,6 +123,11 @@ class TFWorldSetup {
     TFTerrainParams m_terrain;
 
     std::unique_ptr<Spark::World::WorldOriginSystem> m_origin;
+
+    // --- rendering (client-side only; null when headless) ---
+    std::unique_ptr<SparkEngineCamera> m_camera;
+    std::unique_ptr<SceneManager>      m_ownScene; // module-created when the engine has none
+    SceneManager*                      m_scene{nullptr}; // whichever manager holds the scene
 
 #ifdef ENABLE_NETWORKING
     std::unique_ptr<Spark::Net::WorldServer> m_worldServer;

@@ -11,6 +11,7 @@
 #include "Game/TFProgressionSystem.h"
 #include "UI/TFHUD.h"
 #include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -459,6 +460,11 @@ void TFRegionSystem::FlipOwner(size_t idx, FactionId newOwner, bool awardXp)
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] region %u '%s' captured: %s -> %s",
                    static_cast<unsigned>(idx), def ? def->name.c_str() : "?",
                    FactionTag(oldOwner), FactionTag(newOwner));
+    // Console echo: flips are the war's headline events and the automated
+    // smoke reads them from exec_results.log (SPARK_LOG goes to the file log).
+    Spark::SimpleConsole::GetInstance().LogInfo(
+        std::string("[TF] REGION FLIP: ") + (def ? def->name.c_str() : "?") + " " +
+        FactionTag(oldOwner) + " -> " + FactionTag(newOwner));
 
     if (m_events)
         m_events->Fire(EvRegionCaptured{static_cast<RegionId>(idx), newOwner, oldOwner});

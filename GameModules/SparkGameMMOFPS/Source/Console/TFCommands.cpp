@@ -28,6 +28,7 @@
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
 
+#include "Camera/SparkEngineCamera.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 #include "Spark/IEngineContext.h"
@@ -428,18 +429,12 @@ void TerrafrontModule::RegisterConsoleCommands()
             if (!m_ctx.players->GetPawnByPlayer(m_ctx.localPlayer, p) || !p.alive)
                 return "[TF] no living pawn (deploy with tf_spawn)";
 
-            World* ecsWorld = m_ctx.engine ? m_ctx.engine->GetWorld() : nullptr;
-            if (!ecsWorld)
-                return "[TF] engine ECS world unavailable";
-            const EntityID e = static_cast<EntityID>(p.entity);
-            if (!ecsWorld->GetRegistry().valid(e))
-                return "[TF] pawn entity invalid";
-            Transform* t = ecsWorld->GetRegistry().try_get<Transform>(e);
-            if (!t)
-                return "[TF] pawn has no Transform component";
-
+            if (!m_ctx.serverSim)
+                return "[TF] server sim unavailable";
             const float y = m_ctx.world->TerrainHeightAt(x, z) + 1.5f;
-            t->position = {x, y, z};
+            // Through the authoritative MoveState — writing the Transform
+            // directly was silently undone by the next movement tick.
+            m_ctx.serverSim->TeleportPawn(m_ctx.localPlayer, x, y, z);
             char buf[96];
             std::snprintf(buf, sizeof(buf), "[TF] teleported to (%.1f, %.1f, %.1f)", x, y, z);
             return std::string(buf);
@@ -482,6 +477,50 @@ void TerrafrontModule::RegisterConsoleCommands()
         },
         "Debug: force region ownership (authority only)", cat,
         "tf_capture <regionId> <mra|auc|hlx|none>");
+
+    console.RegisterCommand(
+        "tf_botinfo",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            return m_bots ? m_bots->DebugSummary() : "[TF] bot system not ready";
+        },
+        "Per-bot diagnostic dump (state, pawn, position, scheduling)", cat, "tf_botinfo");
+
+    console.RegisterCommand(
+        "tf_cam",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            // Module-owned camera (engine cam_* commands can't see it: the
+            // exe-side EngineContext registry never gets a camera in module
+            // mode). Used by the automated smoke to frame screenshots.
+            SparkEngineCamera* cam = m_ctx.world ? m_ctx.world->GetCamera() : nullptr;
+            if (!cam)
+                return "[TF] no camera (headless?)";
+            if (args.size() < 2)
+                return "[TF] usage: tf_cam <pitchDeg> <yawDeg> [x y z]";
+            try
+            {
+                cam->Console_SetRotation(std::stof(args[0]), std::stof(args[1]), 0.0f);
+                if (args.size() >= 5)
+                    cam->SetPosition({std::stof(args[2]), std::stof(args[3]), std::stof(args[4])});
+            }
+            catch (const std::exception&)
+            {
+                return "[TF] tf_cam: bad number";
+            }
+            // Echo the resulting pose — the smoke log uses this to verify the
+            // first-person camera is where the script thinks it is.
+            const auto cp = cam->GetPosition();
+            const auto cf = cam->GetForward();
+            const auto cr = cam->GetRotation();
+            char info[160];
+            std::snprintf(info, sizeof(info),
+                          "[TF] camera set: pos(%.1f %.1f %.1f) pitch %.1f yaw %.1f fwd(%.2f %.2f %.2f)",
+                          cp.x, cp.y, cp.z, cr.x * 57.2958f, cr.y * 57.2958f, cf.x, cf.y, cf.z);
+            return std::string(info);
+        },
+        "Set camera rotation (deg) and optional position", cat,
+        "tf_cam <pitchDeg> <yawDeg> [x y z]");
 
     console.RegisterCommand(
         "tf_map",
