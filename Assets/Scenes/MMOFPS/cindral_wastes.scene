@@ -63,21 +63,21 @@ name=core_sky_north
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=2000.0,40.0,3560.0
+position=2000.0,40.0,3566.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_north_0
 
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=2096.0,40.0,3560.0
+position=2096.0,40.0,3566.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_north_1
 
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=2048.0,40.0,3660.0
+position=2048.0,40.0,3666.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_north_2
 
@@ -169,21 +169,21 @@ name=core_sky_sw
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=520.0,40.0,580.0
+position=520.0,40.0,586.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_sw_0
 
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=600.0,40.0,580.0
+position=600.0,40.0,586.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_sw_1
 
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=560.0,40.0,700.0
+position=560.0,40.0,706.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_sw_2
 
@@ -275,21 +275,21 @@ name=core_sky_se
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=3496.0,40.0,580.0
+position=3496.0,40.0,586.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_se_0
 
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=3576.0,40.0,580.0
+position=3576.0,40.0,586.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_se_1
 
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=3536.0,40.0,700.0
+position=3536.0,40.0,706.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_sky_se_2
 
@@ -871,7 +871,7 @@ name=crate_fluxwell_2
 [Object]
 type=model
 model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
-position=2048.0,26.0,1980.0
+position=2048.0,26.0,1986.0
 material=Assets/Materials/MMOFPS/Structure_Metal.json
 name=shelter_fluxwell
 

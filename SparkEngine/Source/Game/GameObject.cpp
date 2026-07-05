@@ -26,12 +26,10 @@ GameObject::GameObject()
       m_worldMatrixDirty(true), m_active(true), m_visible(true), m_id(s_nextID++),
       m_name("GameObject_" + std::to_string(m_id))
 {
-    std::wcout << L"[INFO] GameObject constructed. ID=" << m_id << L" Name=" << m_name.c_str() << std::endl;
 }
 
 GameObject::~GameObject()
 {
-    std::wcout << L"[INFO] GameObject destructor called. ID=" << m_id << L" Name=" << m_name.c_str() << std::endl;
     Shutdown();
 }
 
@@ -78,13 +76,6 @@ void GameObject::Update(float dt)
     if (m_worldMatrixDirty)
         UpdateWorldMatrix();
 
-    // **ONLY log update statistics occasionally for debugging**
-    static int updateCallCount = 0;
-    if (++updateCallCount % 7200 == 0)
-    { // Every 2 minutes at 60fps
-        std::wcout << L"[DEBUG] GameObject updated " << updateCallCount << L" times. ID=" << m_id << L" Name="
-                   << m_name.c_str() << std::endl;
-    }
 }
 
 void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)
@@ -112,14 +103,6 @@ void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)
         // Set up basic shaders and constant buffers
         graphics->SetBasicShaders();
         graphics->UpdateBasicConstants(m_worldMatrix, view, projection);
-    }
-
-    // **ONLY log rendering statistics occasionally for debugging**
-    static int renderCallCount = 0;
-    if (++renderCallCount % 3600 == 0)
-    { // Every 60 seconds at 60fps
-        std::wcout << L"[DEBUG] GameObject rendered " << renderCallCount << L" times. ID=" << m_id << L" verts="
-                   << m_mesh->GetVertexCount() << L" inds=" << m_mesh->GetIndexCount() << std::endl;
     }
 
     m_mesh->Render(m_context);
@@ -262,7 +245,6 @@ void GameObject::CreateMesh()
     static int meshCreateCount = 0;
     if (++meshCreateCount % 10 == 0)
     { // Every 10th mesh creation
-        std::wcout << L"[DEBUG] Created " << meshCreateCount << L" GameObject meshes" << std::endl;
     }
 
     SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_name.empty(), "GameObject name unexpected empty");
