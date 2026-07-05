@@ -20,6 +20,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -103,6 +104,10 @@ class TFWorldSetup {
     /// TFClientNet drives this camera instead. Null when headless.
     SparkEngineCamera* GetCamera() const { return m_camera.get(); }
 
+    /// Spawn a short-lived muzzle flash + tracer from the fire origin along
+    /// dir (called by TFWeaponSystem::ClientTriggerFire). Drawn in RenderWorld.
+    void SpawnMuzzleFx(const float origin[3], const float dir[3]);
+
   private:
     void LoadSceneAndTerrain();
     void ParseTerrainParams(const std::string& scenePath);
@@ -138,6 +143,17 @@ class TFWorldSetup {
     // tinyobjloader path the scene uses and draw it manually in RenderWorld.
     std::unordered_map<std::string, std::unique_ptr<Mesh>> m_ecsMeshCache;
     Mesh* GetOrLoadEcsMesh(const std::string& meshPath);
+
+    // Short-lived shot effects (muzzle flash + tracer). Drawn as bright unlit
+    // stretched cubes; expire by age against m_fxClock (advanced in Update).
+    struct ShotFx {
+        double            t0;
+        DirectX::XMFLOAT3 origin;
+        DirectX::XMFLOAT3 dir;
+    };
+    std::vector<ShotFx>    m_shotFx;
+    double                 m_fxClock{0.0};
+    std::unique_ptr<Mesh>  m_fxCube; // unit cube reused for flash + tracer
 
 #ifdef ENABLE_NETWORKING
     std::unique_ptr<Spark::Net::WorldServer> m_worldServer;

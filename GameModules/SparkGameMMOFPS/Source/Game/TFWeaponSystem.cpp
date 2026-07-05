@@ -9,6 +9,7 @@
 #include "Game/TFWeaponMath.h"
 #include "Net/TFClientNet.h"
 #include "UI/TFHUD.h"
+#include "World/TFWorldSetup.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
@@ -171,7 +172,8 @@ void TFWeaponSystem::ClientTriggerFire()
     m_nextFireTime = m_clock + 60.0 / std::max(1.0f, slot.def.rofRpm);
 
     PlayWeaponAudio(slot.def.audioFire);
-    // TF-W4: muzzle flash + tracer particles (no cheap engine facility yet).
+    if (m_ctx->world)
+        m_ctx->world->SpawnMuzzleFx(origin, dir);
 }
 
 // ---------------------------------------------------------------------------

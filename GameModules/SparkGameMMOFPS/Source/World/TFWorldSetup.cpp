@@ -550,6 +550,66 @@ void TFWorldSetup::RenderWorld()
                 gfx->SetBasicTexture(nullptr);
             }
         }
+
+        // 4) Shot effects: bright unlit muzzle flash + tracer per recent shot.
+        //    Drawn as stretched unit cubes; the over-1.0 color clamps bright
+        //    even after the basic shader's lighting multiply.
+        if (!m_shotFx.empty())
+        {
+            if (!m_fxCube)
+            {
+                m_fxCube = std::make_unique<Mesh>();
+                m_fxCube->Initialize(gfx->GetDevice(), gfx->GetContext());
+                m_fxCube->CreateCube(1.0f);
+            }
+            if (m_fxCube && m_fxCube->GetIndexCount() > 0)
+            {
+                ID3D11DeviceContext* dc = gfx->GetContext();
+                gfx->SetBasicShaders();
+                gfx->SetBasicTexture(nullptr);
+                using namespace DirectX;
+                for (const ShotFx& fx : m_shotFx)
+                {
+                    const double age = m_fxClock - fx.t0;
+                    XMVECTOR o = XMLoadFloat3(&fx.origin);
+                    XMVECTOR f = XMVector3Normalize(XMLoadFloat3(&fx.dir));
+                    XMVECTOR upRef = (std::fabs(XMVectorGetY(f)) > 0.99f)
+                                         ? XMVectorSet(1, 0, 0, 0) : XMVectorSet(0, 1, 0, 0);
+                    XMVECTOR r = XMVector3Normalize(XMVector3Cross(upRef, f));
+                    XMVECTOR u = XMVector3Cross(f, r);
+                    XMMATRIX orient = XMMatrixIdentity();
+                    orient.r[0] = r; orient.r[1] = u; orient.r[2] = f;
+
+                    // Muzzle is at the gun tip (lower-right of view, ~1.2 m
+                    // forward) so effects clear the 0.5 m near plane and line up
+                    // with the first-person weapon instead of the eye.
+                    XMVECTOR muzzle = o + f * 1.2f + r * 0.30f - u * 0.22f;
+
+                    // Tracer: thin bright streak from the muzzle forward. Edge-on
+                    // from the shooter, but a clear streak from any side angle.
+                    if (age < 0.08)
+                    {
+                        constexpr float kLen = 60.0f, kThick = 0.05f;
+                        XMVECTOR mid = XMVectorAdd(muzzle, XMVectorScale(f, kLen * 0.5f));
+                        XMMATRIX w = XMMatrixScaling(kThick, kThick, kLen) * orient *
+                                     XMMatrixTranslationFromVector(mid);
+                        gfx->UpdateBasicConstants(w, view, proj, XMFLOAT4(6.0f, 5.0f, 2.0f, 1.0f),
+                                                  XMFLOAT2(1, 1));
+                        m_fxCube->Render(dc);
+                    }
+                    // Muzzle flash: bright puff at the gun tip (first ~50 ms).
+                    if (age < 0.05)
+                    {
+                        XMMATRIX w = XMMatrixScaling(0.22f, 0.22f, 0.30f) * orient *
+                                     XMMatrixTranslationFromVector(muzzle);
+                        gfx->UpdateBasicConstants(w, view, proj, XMFLOAT4(8.0f, 6.5f, 2.5f, 1.0f),
+                                                  XMFLOAT2(1, 1));
+                        m_fxCube->Render(dc);
+                    }
+                }
+                gfx->SetBasicTexture(nullptr);
+            }
+        }
     }
     catch (const std::exception& e)
     {
@@ -751,6 +811,26 @@ void TFWorldSetup::Update(float deltaTime)
         DriveOriginRebase();
 
     MaybeStartAmbientAudio();
+
+    m_fxClock += deltaTime;
+    // Reap expired shot effects (longest-lived component is the tracer).
+    constexpr double kFxMaxLife = 0.10;
+    m_shotFx.erase(std::remove_if(m_shotFx.begin(), m_shotFx.end(),
+                                  [&](const ShotFx& fx) { return m_fxClock - fx.t0 > kFxMaxLife; }),
+                   m_shotFx.end());
+}
+
+void TFWorldSetup::SpawnMuzzleFx(const float origin[3], const float dir[3])
+{
+    if (!m_ctx->HasLocalPlayer())
+        return;
+    if (m_shotFx.size() > 64) // safety cap
+        return;
+    ShotFx fx;
+    fx.t0 = m_fxClock;
+    fx.origin = {origin[0], origin[1], origin[2]};
+    fx.dir = {dir[0], dir[1], dir[2]};
+    m_shotFx.push_back(fx);
 }
 
 void TFWorldSetup::MaybeStartAmbientAudio()
