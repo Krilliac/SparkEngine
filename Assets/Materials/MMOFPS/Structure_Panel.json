@@ -1,0 +1,13 @@
+{
+    "name": "Structure_Panel",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/structures/panel_color.png",
+    "normal": "Textures/MMOFPS/structures/panel_normal.png",
+    "metallic": 0.9,
+    "roughness": "Textures/MMOFPS/structures/panel_roughness.png",
+    "ao": 1.0,
+    "tiling": [
+        4,
+        4
+    ]
+}

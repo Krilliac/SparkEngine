@@ -1,0 +1,1031 @@
+{
+  "name": "SparkGameMMOFPS (TERRAFRONT) Assets",
+  "version": "1.0.0",
+  "description": "Curated CC0 assets for the TERRAFRONT MMOFPS module. Selected from D:/SparkAssetsStaging (see Assets/MMOFPS/ATTRIBUTION.md).",
+  "license": "CC0-1.0 (all third-party content is CC0; attribution recorded as courtesy)",
+  "generator": "asset-import agent, wave W0, 2026-07-05",
+  "files": [
+    {
+      "path": "Audio/MMOFPS/ambient/combat_distant.wav",
+      "source_pack": "Pondering the Cosmos",
+      "author": "Ruskerdax",
+      "url": "https://opengameart.org/content/pondering-the-cosmos",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/ambient/wind_loop.wav",
+      "source_pack": "Space Graveyard - Ambient Track",
+      "author": "MegaJackie",
+      "url": "https://opengameart.org/content/space-graveyard-ambient-track",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/ui/capture_tick.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/ui/death.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/ui/hitmarker.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/ui/region_captured.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/ui/spawn.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/apc_loop.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/explosion.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/quad_loop.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/tank_loop.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/vehicles/vtol_loop.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/autocannon_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/carbine_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_fire.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_lmg_fire.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_pistol_fire.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/energy_sniper_fire.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/heal_loop.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/knife_swing.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/lmg_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/pistol_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/pistol_heavy_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_bolt.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_energy.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_heavy.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_mag.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/reload_shell.wav",
+      "source_pack": "Kenney Interface Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/interface-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/repair_loop.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/rifle_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/rifle_heavy_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/rocket_fire.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/shotgun_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/sniper_fire.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/tank_cannon_fire.wav",
+      "source_pack": "Kenney Sci-Fi Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/sci-fi-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Audio/MMOFPS/weapons/turret_fire.wav",
+      "source_pack": "Kenney Impact Sounds",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/impact-sounds",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_Concrete.json",
+      "source_pack": "Generated by asset-import agent (JSON, references CC0 textures)",
+      "author": "TERRAFRONT asset-import agent",
+      "url": "",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_Metal.json",
+      "source_pack": "Generated by asset-import agent (JSON, references CC0 textures)",
+      "author": "TERRAFRONT asset-import agent",
+      "url": "",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Materials/MMOFPS/Structure_Panel.json",
+      "source_pack": "Generated by asset-import agent (JSON, references CC0 textures)",
+      "author": "TERRAFRONT asset-import agent",
+      "url": "",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Grass.json",
+      "source_pack": "Generated by asset-import agent (JSON, references CC0 textures)",
+      "author": "TERRAFRONT asset-import agent",
+      "url": "",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Gravel.json",
+      "source_pack": "Generated by asset-import agent (JSON, references CC0 textures)",
+      "author": "TERRAFRONT asset-import agent",
+      "url": "",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Rock.json",
+      "source_pack": "Generated by asset-import agent (JSON, references CC0 textures)",
+      "author": "TERRAFRONT asset-import agent",
+      "url": "",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Materials/MMOFPS/Terrain_Sand.json",
+      "source_pack": "Generated by asset-import agent (JSON, references CC0 textures)",
+      "author": "TERRAFRONT asset-import agent",
+      "url": "",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Decals.png",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_01_BaseColor_Red.png",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_01_Normal.png",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_02_BaseColor_Red.png",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_03_BaseColor.png",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/T_Trim_03_Cables.png",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/facility_core.mtl",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/facility_core.obj",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/fort_wall.mtl",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/fort_wall.obj",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/outpost_tower.mtl",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/outpost_tower.obj",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/spawn_shelter.mtl",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/spawn_shelter.obj",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/vehicle_terminal.mtl",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/buildings/vehicle_terminal.obj",
+      "source_pack": "Quaternius Modular SciFi MegaKit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/modular-sci-fi-megakit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/props/antenna_a.mtl",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/props/antenna_a.obj",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/props/barrier_a.mtl",
+      "source_pack": "Kenney Space Station Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-station-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/props/barrier_a.obj",
+      "source_pack": "Kenney Space Station Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-station-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/props/colormap.png",
+      "source_pack": "Kenney Space Station Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-station-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/props/crate_a.mtl",
+      "source_pack": "Kenney Space Station Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-station-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/props/crate_a.obj",
+      "source_pack": "Kenney Space Station Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-station-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/apc.mtl",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/apc.obj",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/quad.mtl",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/quad.obj",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/tank.mtl",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/tank.obj",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/vtol.mtl",
+      "source_pack": "Quaternius Lowpoly Spaceships",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/lowpoly-spaceships",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/vehicles/vtol.obj",
+      "source_pack": "Quaternius Lowpoly Spaceships",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/lowpoly-spaceships",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/T_Props_Batch1_BaseColor.png",
+      "source_pack": "Quaternius Sci-Fi Essentials Kit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/sci-fi-essentials-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/T_Props_Batch1_Normal.png",
+      "source_pack": "Quaternius Sci-Fi Essentials Kit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/sci-fi-essentials-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/autocannon.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/autocannon.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_a.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_a.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_b.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_b.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_c.mtl",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/carbine_c.obj",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/colormap.png",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/knife.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/knife.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/launcher.mtl",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/launcher.obj",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_a.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_a.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_b.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_b.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_c.mtl",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/lmg_c.obj",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/med_tool.mtl",
+      "source_pack": "Quaternius Sci-Fi Essentials Kit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/sci-fi-essentials-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/med_tool.obj",
+      "source_pack": "Quaternius Sci-Fi Essentials Kit",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/sci-fi-essentials-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_a.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_a.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_b.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_b.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_c.mtl",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/pistol_c.obj",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/repair_tool.mtl",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/repair_tool.obj",
+      "source_pack": "Kenney Space Kit",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/space-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_a.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_a.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_b.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_b.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_c.mtl",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/rifle_c.obj",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/shotgun.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/shotgun.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_a.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_a.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_b.mtl",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_b.obj",
+      "source_pack": "Quaternius Ultimate Gun Pack",
+      "author": "Quaternius",
+      "url": "https://quaternius.itch.io/50-lowpoly-guns",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_c.mtl",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Models/MMOFPS/weapons/sniper_c.obj",
+      "source_pack": "Kenney Blaster Kit 2.1",
+      "author": "Kenney",
+      "url": "https://kenney.nl/assets/blaster-kit",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_nx.png",
+      "source_pack": "OGA Space Skyboxes",
+      "author": "StumpyStrust",
+      "url": "https://opengameart.org/content/space-skyboxes-0",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_ny.png",
+      "source_pack": "OGA Space Skyboxes",
+      "author": "StumpyStrust",
+      "url": "https://opengameart.org/content/space-skyboxes-0",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_nz.png",
+      "source_pack": "OGA Space Skyboxes",
+      "author": "StumpyStrust",
+      "url": "https://opengameart.org/content/space-skyboxes-0",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_px.png",
+      "source_pack": "OGA Space Skyboxes",
+      "author": "StumpyStrust",
+      "url": "https://opengameart.org/content/space-skyboxes-0",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_py.png",
+      "source_pack": "OGA Space Skyboxes",
+      "author": "StumpyStrust",
+      "url": "https://opengameart.org/content/space-skyboxes-0",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/sky/space_pz.png",
+      "source_pack": "OGA Space Skyboxes",
+      "author": "StumpyStrust",
+      "url": "https://opengameart.org/content/space-skyboxes-0",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/concrete_color.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/concrete_normal.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/concrete_roughness.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/metal_color.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/metal_normal.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/metal_roughness.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/panel_color.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/panel_normal.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/structures/panel_roughness.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/grass_color.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/grass_normal.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/grass_roughness.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/gravel_color.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/gravel_normal.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/gravel_roughness.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/rock_color.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/rock_normal.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/rock_roughness.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/sand_color.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/sand_normal.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    },
+    {
+      "path": "Textures/MMOFPS/terrain/sand_roughness.png",
+      "source_pack": "ambientCG PBR sets (1K PNG)",
+      "author": "Lennart Demes / ambientCG",
+      "url": "https://ambientcg.com/",
+      "license": "CC0-1.0"
+    }
+  ]
+}

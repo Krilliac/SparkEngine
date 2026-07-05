@@ -1,0 +1,13 @@
+{
+    "name": "Terrain_Gravel",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/terrain/gravel_color.png",
+    "normal": "Textures/MMOFPS/terrain/gravel_normal.png",
+    "metallic": 0.0,
+    "roughness": "Textures/MMOFPS/terrain/gravel_roughness.png",
+    "ao": 1.0,
+    "tiling": [
+        64,
+        64
+    ]
+}

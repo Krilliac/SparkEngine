@@ -1,0 +1,13 @@
+{
+    "name": "Structure_Metal",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/structures/metal_color.png",
+    "normal": "Textures/MMOFPS/structures/metal_normal.png",
+    "metallic": 0.9,
+    "roughness": "Textures/MMOFPS/structures/metal_roughness.png",
+    "ao": 1.0,
+    "tiling": [
+        4,
+        4
+    ]
+}

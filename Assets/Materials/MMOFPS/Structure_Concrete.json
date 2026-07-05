@@ -1,0 +1,13 @@
+{
+    "name": "Structure_Concrete",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/structures/concrete_color.png",
+    "normal": "Textures/MMOFPS/structures/concrete_normal.png",
+    "metallic": 0.0,
+    "roughness": "Textures/MMOFPS/structures/concrete_roughness.png",
+    "ao": 1.0,
+    "tiling": [
+        4,
+        4
+    ]
+}

@@ -1,0 +1,13 @@
+{
+    "name": "Terrain_Rock",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/terrain/rock_color.png",
+    "normal": "Textures/MMOFPS/terrain/rock_normal.png",
+    "metallic": 0.0,
+    "roughness": "Textures/MMOFPS/terrain/rock_roughness.png",
+    "ao": 1.0,
+    "tiling": [
+        64,
+        64
+    ]
+}
