@@ -1037,6 +1037,10 @@ set(SPARK_ENGINE_ENTRY_POINTS
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux.cpp"
+    # Game-mode ImGui overlay: exe-only (owns the ImGui context that is
+    # injected into module DLLs; must NOT live in SparkEngineLib which the
+    # module DLLs also link).
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/GameImGuiLayer.cpp"
     # NOTE: SparkEngineMacOS.cpp is intentionally NOT an entry point — it
     # provides helpers (Metal view lifecycle, exe-path lookup) that are
     # called from SparkEngineLinux.cpp and from tests. It lives in
@@ -1140,6 +1144,17 @@ target_link_libraries(SparkEngine PRIVATE SparkEngineLib)
 # MinGW: -municode enables wWinMain as the entry point (Unicode command line)
 if(MINGW)
     target_link_options(SparkEngine PRIVATE -municode)
+endif()
+
+# Game-mode ImGui overlay (module HUDs without the editor). Reuses the shared
+# `imgui` static library target (core + win32/dx11 backends on Windows).
+if(WIN32)
+    include("${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
+    if(TARGET imgui)
+        target_link_libraries(SparkEngine PRIVATE imgui)
+        target_compile_definitions(SparkEngine PRIVATE SPARK_HAS_IMGUI=1)
+        message(STATUS "SparkEngine: game-mode ImGui overlay ENABLED")
+    endif()
 endif()
 
 # On Linux/macOS, export the executable's symbols so that game module .so files

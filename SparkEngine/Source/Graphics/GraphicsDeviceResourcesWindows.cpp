@@ -25,6 +25,10 @@
 
 #include <string>
 #include <cstring>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <wincodec.h>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -621,6 +625,207 @@ void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& 
         memcpy(mappedResource.pData, &frameConstants, sizeof(PerFrameConstants));
         m_context->Unmap(m_basicFrameConstantBuffer.Get(), 0);
     }
+}
+
+void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX& view, const XMMATRIX& proj,
+                                          const XMFLOAT4& color, const XMFLOAT2& uvTiling)
+{
+    if (!m_basicConstantBuffer || !m_context)
+    {
+        return;
+    }
+
+    PerObjectConstants constants = {};
+    constants.WorldMatrix = XMMatrixTranspose(world);
+    constants.WorldViewProjectionMatrix = XMMatrixTranspose(world * view * proj);
+    constants.WorldInverseTransposeMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, world));
+    constants.ObjectColor = color;
+    constants.MaterialProperties = XMFLOAT4(0.0f, 0.5f, 0.0f, 1.0f);
+    constants.UVTiling = XMFLOAT4(uvTiling.x, uvTiling.y, 0.0f, 0.0f);
+
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = m_context->Map(m_basicConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr))
+    {
+        memcpy(mappedResource.pData, &constants, sizeof(PerObjectConstants));
+        m_context->Unmap(m_basicConstantBuffer.Get(), 0);
+    }
+}
+
+void GraphicsEngine::SetBasicTexture(ID3D11ShaderResourceView* srv)
+{
+    if (!m_context)
+        return;
+    ID3D11ShaderResourceView* bind = srv ? srv : m_defaultSRV.Get();
+    m_context->PSSetShaderResources(0, 1, &bind);
+}
+
+ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string& path)
+{
+    if (path.empty() || !m_device || !m_context)
+        return nullptr;
+
+    auto it = m_basicTextureCache.find(path);
+    if (it != m_basicTextureCache.end())
+        return it->second.Get();
+
+    // Insert negative-cache entry up front so repeated failures don't re-hit disk
+    ComPtr<ID3D11ShaderResourceView>& slot = m_basicTextureCache[path];
+
+    // WIC decode to RGBA8
+    ComPtr<IWICImagingFactory> factory;
+    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
+    if (FAILED(hr))
+        return nullptr;
+
+    std::wstring wpath(path.begin(), path.end());
+    ComPtr<IWICBitmapDecoder> decoder;
+    hr = factory->CreateDecoderFromFilename(wpath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad,
+                                            &decoder);
+    if (FAILED(hr))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: cannot open '%s' (HR=0x%08lX)",
+                       path.c_str(), static_cast<long>(hr));
+        return nullptr;
+    }
+
+    ComPtr<IWICBitmapFrameDecode> frame;
+    if (FAILED(decoder->GetFrame(0, &frame)))
+        return nullptr;
+
+    ComPtr<IWICFormatConverter> converter;
+    if (FAILED(factory->CreateFormatConverter(&converter)))
+        return nullptr;
+    if (FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr,
+                                     0.0f, WICBitmapPaletteTypeMedianCut)))
+        return nullptr;
+
+    UINT width = 0, height = 0;
+    frame->GetSize(&width, &height);
+    if (width == 0 || height == 0 || width > 16384 || height > 16384)
+        return nullptr;
+
+    std::vector<BYTE> pixels(static_cast<size_t>(width) * height * 4);
+    if (FAILED(converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(pixels.size()), pixels.data())))
+        return nullptr;
+
+    // Create with a full mip chain and auto-generate mips (the basic sampler
+    // is trilinear; without mips a 64x-tiled terrain shimmers badly).
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = width;
+    desc.Height = height;
+    desc.MipLevels = 0; // full chain
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+
+    ComPtr<ID3D11Texture2D> tex;
+    hr = m_device->CreateTexture2D(&desc, nullptr, &tex);
+    if (FAILED(hr))
+        return nullptr;
+
+    m_context->UpdateSubresource(tex.Get(), 0, nullptr, pixels.data(), width * 4, 0);
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = desc.Format;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = static_cast<UINT>(-1);
+
+    ComPtr<ID3D11ShaderResourceView> srv;
+    hr = m_device->CreateShaderResourceView(tex.Get(), &srvDesc, &srv);
+    if (FAILED(hr))
+        return nullptr;
+
+    m_context->GenerateMips(srv.Get());
+
+    slot = srv;
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: loaded '%s' (%ux%u)", path.c_str(), width,
+                   height);
+    return slot.Get();
+}
+
+// Minimal extraction of "albedo" (string) and "tiling" ([x, y]) from the small
+// material JSON files under Assets/Materials. Not a general JSON parser.
+const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& jsonPath)
+{
+    if (jsonPath.empty())
+        return nullptr;
+
+    auto it = m_basicMaterialCache.find(jsonPath);
+    if (it != m_basicMaterialCache.end())
+        return &it->second;
+
+    std::ifstream file(jsonPath);
+    if (!file.is_open())
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadBasicMaterial: cannot open '%s'", jsonPath.c_str());
+        return nullptr;
+    }
+    std::stringstream ss;
+    ss << file.rdbuf();
+    const std::string content = ss.str();
+
+    BasicMaterial mat{};
+
+    // "albedo" : "path"
+    auto findStringValue = [&content](const char* key) -> std::string
+    {
+        size_t kp = content.find(std::string("\"") + key + "\"");
+        if (kp == std::string::npos)
+            return {};
+        size_t colon = content.find(':', kp);
+        if (colon == std::string::npos)
+            return {};
+        size_t q1 = content.find('"', colon + 1);
+        if (q1 == std::string::npos)
+            return {};
+        size_t q2 = content.find('"', q1 + 1);
+        if (q2 == std::string::npos)
+            return {};
+        return content.substr(q1 + 1, q2 - q1 - 1);
+    };
+
+    std::string albedo = findStringValue("albedo");
+    if (!albedo.empty())
+    {
+        // Material texture paths are relative to Assets/ unless already prefixed
+        if (albedo.rfind("Assets/", 0) != 0 && albedo.rfind("Assets\\", 0) != 0)
+            albedo = "Assets/" + albedo;
+        mat.srv = GetOrLoadTextureSRV(albedo);
+    }
+
+    // "tiling" : [x, y]
+    size_t tp = content.find("\"tiling\"");
+    if (tp != std::string::npos)
+    {
+        size_t open = content.find('[', tp);
+        if (open != std::string::npos)
+        {
+            float tx = 1.0f, ty = 1.0f;
+            if (sscanf_s(content.c_str() + open, "[ %f , %f", &tx, &ty) == 2 ||
+                sscanf_s(content.c_str() + open, "[%f,%f", &tx, &ty) == 2)
+            {
+                mat.tiling = {tx, ty};
+            }
+            else
+            {
+                // Tolerate newlines/whitespace between numbers
+                std::string arr = content.substr(open + 1, content.find(']', open) - open - 1);
+                for (char& c : arr)
+                    if (c == ',')
+                        c = ' ';
+                std::istringstream as(arr);
+                if (as >> tx >> ty)
+                    mat.tiling = {tx, ty};
+            }
+        }
+    }
+
+    auto [ins, ok] = m_basicMaterialCache.emplace(jsonPath, std::move(mat));
+    return &ins->second;
 }
 
 HRESULT GraphicsEngine::CreateDefaultTexture()

@@ -107,6 +107,20 @@ class ModuleManager
     /** @brief Call OnRender() on all modules in load order */
     void RenderAll();
 
+    /** @brief Call OnImGui() on all modules in load order (between ImGui NewFrame/Render) */
+    void ImGuiAll();
+
+    /**
+     * @brief Provide the host ImGui context + allocators for module injection.
+     *
+     * Set by the engine executable (game-mode ImGui layer) BEFORE modules are
+     * loaded. On Windows each module DLL statically links its own ImGui object
+     * code with a DLL-private GImGui; LoadModule passes this payload to the
+     * module's exported SparkModuleInjectImGui() so all images share the one
+     * exe-owned context (same pattern as SparkModuleInjectConsole).
+     */
+    static void SetImGuiInjection(void* context, void* allocFn, void* freeFn, void* userData);
+
     /** @brief Call OnResize() on all modules */
     void ResizeAll(int width, int height);
 

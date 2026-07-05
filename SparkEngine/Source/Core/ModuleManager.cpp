@@ -31,6 +31,25 @@
 #endif
 
 // =============================================================================
+// ImGui cross-DLL injection payload (set by the engine exe before module load)
+// =============================================================================
+namespace
+{
+    void* s_imguiContext = nullptr;
+    void* s_imguiAllocFn = nullptr;
+    void* s_imguiFreeFn = nullptr;
+    void* s_imguiUserData = nullptr;
+} // namespace
+
+void ModuleManager::SetImGuiInjection(void* context, void* allocFn, void* freeFn, void* userData)
+{
+    s_imguiContext = context;
+    s_imguiAllocFn = allocFn;
+    s_imguiFreeFn = freeFn;
+    s_imguiUserData = userData;
+}
+
+// =============================================================================
 // Legacy IGameModule -> IModule adapter
 // =============================================================================
 
@@ -154,6 +173,19 @@ bool ModuleManager::LoadModule(const std::string& path)
             GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectConsole")))
     {
         inject(&Spark::SimpleConsole::GetInstance());
+    }
+
+    // Inject the host ImGui context/allocators the same way: the module's
+    // statically linked ImGui copy has a per-image GImGui that must point at
+    // the exe-owned context or every module ImGui call draws nothing/crashes.
+    if (s_imguiContext)
+    {
+        using InjectImGuiFn = void (*)(void*, void*, void*, void*);
+        if (auto injectImGui = reinterpret_cast<InjectImGuiFn>(
+                GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectImGui")))
+        {
+            injectImGui(s_imguiContext, s_imguiAllocFn, s_imguiFreeFn, s_imguiUserData);
+        }
     }
 #endif
 
@@ -475,6 +507,24 @@ void ModuleManager::RenderAll()
         {
             std::string guardName = "Module:" + entry.name;
             SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnRender(); });
+        }
+    }
+}
+
+void ModuleManager::ImGuiAll()
+{
+#ifdef SPARK_HEADLESS_SUPPORT
+    extern bool g_headlessMode;
+    if (g_headlessMode)
+        return;
+#endif
+
+    for (auto& entry : m_modules)
+    {
+        if (entry.initialized && entry.instance)
+        {
+            std::string guardName = "ModuleImGui:" + entry.name;
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnImGui(); });
         }
     }
 }

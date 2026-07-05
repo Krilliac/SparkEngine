@@ -607,9 +607,14 @@ void SceneManager::InstantiateNodes()
                     LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(),
                                           meshPath);
                 obj->SetPosition(node.position);
-                obj->SetRotation(node.rotation);
+                // SceneNode rotations are authored in degrees; GameObject
+                // stores radians (XMMatrixRotationRollPitchYaw input).
+                constexpr float kDegToRad = 3.14159265358979323846f / 180.0f;
+                obj->SetRotation({node.rotation.x * kDegToRad, node.rotation.y * kDegToRad,
+                                  node.rotation.z * kDegToRad});
                 obj->SetScale(node.scale);
                 obj->SetName(node.name);
+                obj->SetMaterialPath(node.materialPath);
                 m_objects.push_back(std::move(obj));
             }
             else

@@ -980,6 +980,17 @@ void GraphicsEngine::EndFrame()
         m_context->End(m_gpuTimingQuery.Get());
     }
 
+    // Exe-side overlay hook (game-mode ImGui): draws on top of the finished
+    // frame, immediately before Present. Plain function pointer so this call
+    // is safe even when EndFrame() executes from a module DLL's code copy.
+    if (m_prePresentHook)
+    {
+        // Re-bind the backbuffer (no depth) — post passes may have retargeted.
+        if (m_context && m_renderTargetView)
+            m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), nullptr);
+        m_prePresentHook(m_prePresentHookUser);
+    }
+
     UINT syncInterval = m_settings.vsync ? 1 : 0;
     HRESULT hr = m_swapChain->Present(syncInterval, 0);
 

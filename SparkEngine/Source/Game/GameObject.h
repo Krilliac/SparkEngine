@@ -241,6 +241,18 @@ class GameObject
     void SetName(const std::string& n) { m_name = n; }
 
     /**
+     * @brief Get the material asset path assigned by the scene (may be empty)
+     * @return Material JSON path, e.g. "Assets/Materials/MMOFPS/Terrain_Rock.json"
+     */
+    const std::string& GetMaterialPath() const { return m_materialPath; }
+
+    /**
+     * @brief Assign a material asset path (from the scene's material= key)
+     * @param p Material JSON path
+     */
+    void SetMaterialPath(const std::string& p) { m_materialPath = p; }
+
+    /**
      * @brief Get the mesh associated with this object
      * @return Pointer to the object's mesh, or nullptr if no mesh is set
      */
@@ -297,6 +309,7 @@ class GameObject
     static std::atomic<UINT> s_nextID; ///< Static counter for unique ID generation
     UINT m_id{0};                      ///< Unique identifier for this object
     std::string m_name;                ///< Human-readable name for debugging
+    std::string m_materialPath;        ///< Scene-assigned material JSON path (may be empty)
 
     /**
      * @brief Path to model file for mesh loading

@@ -27,6 +27,7 @@
 #include <fstream>
 #include <filesystem>
 #include <cmath>
+#include <map>
 #ifdef SPARK_PLATFORM_WINDOWS
 
 
@@ -55,6 +56,7 @@ void Mesh::Shutdown()
     m_vb.Reset();
     m_vertices.clear();
     m_indices.clear();
+    m_submeshes.clear();
     m_vertexCount = m_indexCount = 0;
     m_device = nullptr;
     m_context = nullptr;
@@ -95,46 +97,85 @@ bool Mesh::LoadFromFile(const std::wstring& path)
         SPARK_LOG_WARN(Spark::LogCategory::Graphics, "tinyobj warning: %s", reader.Warning().c_str());
     }
 
-    // Parse geometry
+    // Parse geometry, grouped by MTL material so each material becomes a
+    // contiguous index range (submesh) that can be drawn with its own
+    // diffuse color / texture. Faces with no material get bucket -1.
     const auto& attrib = reader.GetAttrib();
     const auto& shapes = reader.GetShapes();
+    const auto& materials = reader.GetMaterials();
+
+    auto makeVertex = [&](const tinyobj::index_t& idx)
+    {
+        Vertex v{};
+        v.Position = {attrib.vertices[3 * idx.vertex_index + 0], attrib.vertices[3 * idx.vertex_index + 1],
+                      attrib.vertices[3 * idx.vertex_index + 2]};
+        if (idx.normal_index >= 0)
+        {
+            v.Normal = {attrib.normals[3 * idx.normal_index + 0], attrib.normals[3 * idx.normal_index + 1],
+                        attrib.normals[3 * idx.normal_index + 2]};
+        }
+        else
+        {
+            v.Normal = {0, 1, 0};
+        }
+        if (idx.texcoord_index >= 0)
+        {
+            v.TexCoord = {attrib.texcoords[2 * idx.texcoord_index + 0],
+                          1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]};
+        }
+        else
+        {
+            v.TexCoord = {0, 0};
+        }
+        return v;
+    };
+
+    // Bucket triangles by material id (ObjReader triangulates by default).
+    std::map<int, std::vector<Vertex>> buckets;
+    for (const auto& shape : shapes)
+    {
+        const size_t faceCount = shape.mesh.indices.size() / 3;
+        for (size_t f = 0; f < faceCount; ++f)
+        {
+            int matId = -1;
+            if (f < shape.mesh.material_ids.size())
+                matId = shape.mesh.material_ids[f];
+            auto& bucket = buckets[matId];
+            bucket.push_back(makeVertex(shape.mesh.indices[3 * f + 0]));
+            bucket.push_back(makeVertex(shape.mesh.indices[3 * f + 1]));
+            bucket.push_back(makeVertex(shape.mesh.indices[3 * f + 2]));
+        }
+    }
 
     std::vector<Vertex> verts;
     std::vector<unsigned int> inds;
-    verts.reserve(attrib.vertices.size() / 3);
+    std::vector<MeshSubmesh> submeshes;
+    const std::filesystem::path objDir = std::filesystem::path(path).parent_path();
 
-    for (const auto& shape : shapes)
+    for (auto& [matId, bucket] : buckets)
     {
-        for (const auto& idx : shape.mesh.indices)
+        MeshSubmesh sm{};
+        sm.indexStart = static_cast<unsigned int>(inds.size());
+        sm.indexCount = static_cast<unsigned int>(bucket.size());
+        if (matId >= 0 && matId < static_cast<int>(materials.size()))
         {
-            Vertex v{};
-            // Position
-            v.Position = {attrib.vertices[3 * idx.vertex_index + 0], attrib.vertices[3 * idx.vertex_index + 1],
-                          attrib.vertices[3 * idx.vertex_index + 2]};
-            // Normal
-            if (idx.normal_index >= 0)
+            const auto& mat = materials[matId];
+            sm.diffuseColor = {mat.diffuse[0], mat.diffuse[1], mat.diffuse[2], 1.0f};
+            if (!mat.diffuse_texname.empty())
             {
-                v.Normal = {attrib.normals[3 * idx.normal_index + 0], attrib.normals[3 * idx.normal_index + 1],
-                            attrib.normals[3 * idx.normal_index + 2]};
+                // Resolve map_Kd relative to the OBJ's directory
+                std::filesystem::path texPath(mat.diffuse_texname);
+                if (texPath.is_relative())
+                    texPath = objDir / texPath;
+                sm.diffuseTexture = texPath.generic_string();
             }
-            else
-            {
-                v.Normal = {0, 1, 0};
-            }
-            // TexCoord
-            if (idx.texcoord_index >= 0)
-            {
-                v.TexCoord = {attrib.texcoords[2 * idx.texcoord_index + 0],
-                              1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]};
-            }
-            else
-            {
-                v.TexCoord = {0, 0};
-            }
-
+        }
+        for (const Vertex& v : bucket)
+        {
             verts.push_back(v);
             inds.push_back(static_cast<unsigned int>(inds.size()));
         }
+        submeshes.push_back(std::move(sm));
     }
 
     // Ensure we got geometry
@@ -142,6 +183,7 @@ bool Mesh::LoadFromFile(const std::wstring& path)
 
     m_vertices = std::move(verts);
     m_indices = std::move(inds);
+    m_submeshes = std::move(submeshes);
     m_vertexCount = static_cast<UINT>(m_vertices.size());
     m_indexCount = static_cast<UINT>(m_indices.size());
 
@@ -170,6 +212,7 @@ HRESULT Mesh::CreateFromVertices(const std::vector<Vertex>& verts, const std::ve
 
     m_vertices = verts;
     m_indices = inds;
+    m_submeshes.clear(); // procedural geometry has no per-material ranges
     m_vertexCount = static_cast<UINT>(verts.size());
     m_indexCount = static_cast<UINT>(inds.size());
 
@@ -185,6 +228,7 @@ HRESULT Mesh::CreateCube(float size)
     // Clear existing data
     m_vertices.clear();
     m_indices.clear();
+    m_submeshes.clear();
 
     float h = size * 0.5f;
 
@@ -291,12 +335,15 @@ HRESULT Mesh::CreatePlane(float width, float depth)
     MeshData md;
     float hw = width * 0.5f, hd = depth * 0.5f;
     XMFLOAT3 pts[4] = {{-hw, 0, -hd}, {+hw, 0, -hd}, {+hw, 0, +hd}, {-hw, 0, +hd}};
+    // Proper 0..1 UVs per corner — previously all four corners were (0,0),
+    // which collapsed any texture to a single texel (untextured-looking plane).
+    XMFLOAT2 uvs[4] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
     XMFLOAT3 n{0, 1, 0};
     unsigned int idxs[6] = {0, 1, 2, 0, 2, 3};
 
     for (int i = 0; i < 6; ++i)
     {
-        md.vertices.emplace_back(pts[idxs[i]], n, XMFLOAT2(0, 0));
+        md.vertices.emplace_back(pts[idxs[i]], n, uvs[idxs[i]]);
         md.indices.push_back(static_cast<unsigned int>(md.indices.size()));
     }
 
@@ -494,6 +541,23 @@ void Mesh::Render(ID3D11DeviceContext* ctx)
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     ctx->DrawIndexed(m_indexCount, 0, 0);
+}
+
+/// Binds buffers and draws a contiguous index range (one submesh).
+void Mesh::RenderRange(ID3D11DeviceContext* ctx, unsigned int indexStart, unsigned int indexCount)
+{
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, ctx && m_vb && m_ib && indexCount > 0,
+                      "Mesh::RenderRange — invalid render state");
+    if (indexStart + indexCount > m_indexCount)
+        return;
+
+    UINT stride = sizeof(Vertex), offset = 0;
+    ID3D11Buffer* vb = m_vb.Get();
+    ctx->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+    ctx->IASetIndexBuffer(m_ib.Get(), DXGI_FORMAT_R32_UINT, 0);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    ctx->DrawIndexed(indexCount, indexStart, 0);
 }
 
 

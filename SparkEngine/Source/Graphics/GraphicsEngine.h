@@ -676,6 +676,50 @@ class GraphicsEngine
                               const DirectX::XMMATRIX& proj);
 
     /**
+     * @brief Update basic constant buffer with per-object color and UV tiling
+     * @param world World transformation matrix
+     * @param view View transformation matrix
+     * @param proj Projection transformation matrix
+     * @param color Object color multiplier (multiplied with the bound texture)
+     * @param uvTiling UV tiling factors (x,y) for the bound texture
+     */
+    void UpdateBasicConstants(const DirectX::XMMATRIX& world, const DirectX::XMMATRIX& view,
+                              const DirectX::XMMATRIX& proj, const DirectX::XMFLOAT4& color,
+                              const DirectX::XMFLOAT2& uvTiling);
+
+    /**
+     * @brief Bind a texture to slot t0 for the basic pixel shader.
+     * @param srv Texture SRV; nullptr binds the default 1x1 white texture.
+     */
+    void SetBasicTexture(ID3D11ShaderResourceView* srv);
+
+    /**
+     * @brief Simple albedo material resolved from a material JSON for the basic shader path.
+     *
+     * Loaded lazily from Assets/Materials/... JSON files ("albedo" + "tiling"
+     * keys) and cached by path. Cross-DLL safe: pure member state.
+     */
+    struct BasicMaterial
+    {
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv; ///< Albedo texture (null = white)
+        DirectX::XMFLOAT2 tiling{1.0f, 1.0f};                 ///< UV tiling from the material
+    };
+
+    /**
+     * @brief Load (or fetch cached) texture SRV from an image file via WIC, with mips.
+     * @param path Path to the image file (png/jpg/bmp)
+     * @return SRV or nullptr on failure. Cached per path.
+     */
+    ID3D11ShaderResourceView* GetOrLoadTextureSRV(const std::string& path);
+
+    /**
+     * @brief Load (or fetch cached) a BasicMaterial from a material JSON file.
+     * @param jsonPath e.g. "Assets/Materials/MMOFPS/Terrain_Rock.json"
+     * @return Cached material (srv may be null if textures missing); nullptr on parse failure.
+     */
+    const BasicMaterial* GetOrLoadBasicMaterial(const std::string& jsonPath);
+
+    /**
      * @brief Update per-frame constants for lighting and camera
      * @param view View transformation matrix
      * @param proj Projection transformation matrix
@@ -891,6 +935,26 @@ class GraphicsEngine
     ComPtr<ID3D11SamplerState> m_basicSamplerState;
     ComPtr<ID3D11Texture2D> m_defaultTexture;      ///< 1x1 white texture used when no material is assigned
     ComPtr<ID3D11ShaderResourceView> m_defaultSRV; ///< SRV for the default white texture
+    std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>> m_basicTextureCache; ///< WIC-loaded textures by path
+    std::unordered_map<std::string, BasicMaterial> m_basicMaterialCache; ///< Parsed basic materials by JSON path
+
+    // Pre-present hook: invoked in EndFrame() immediately before Present().
+    // Plain function pointer (NOT std::function) so a module DLL calling
+    // EndFrame() safely invokes exe-side code — used for the game-mode ImGui
+    // overlay. Set from the engine executable only.
+    using PrePresentHook = void (*)(void* userData);
+    PrePresentHook m_prePresentHook = nullptr;
+    void* m_prePresentHookUser = nullptr;
+
+  public:
+    /// @brief Install a hook called right before SwapChain Present (exe-side overlay rendering).
+    void SetPrePresentHook(PrePresentHook hook, void* userData)
+    {
+        m_prePresentHook = hook;
+        m_prePresentHookUser = userData;
+    }
+
+  private:
 
     // ========================================================================
     // PRIVATE METHODS

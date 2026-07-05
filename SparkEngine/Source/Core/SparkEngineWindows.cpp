@@ -11,6 +11,7 @@
 #include "framework.h"
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
+#include "GameImGuiLayer.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
 #include "EngineConsoleCommands.h"
@@ -365,7 +366,9 @@ static void RunDueScriptedCommands(int frameCount)
         const bool ok = console.ExecuteCommand(c);
         // Persist an audit trail for automated smoke runs: the engine has no
         // stdout and the file logger doesn't carry console traffic.
-        std::ofstream results("exec_results.log", std::ios::app);
+        // exec_audit.log (renamed from exec_results.log: that file has a
+        // broken ACL from a force-killed run and can no longer be opened).
+        std::ofstream results("exec_audit.log", std::ios::app);
         if (results)
         {
             results << "frame " << frameCount << " t=" << std::format("{:.1f}", elapsed)
@@ -835,6 +838,30 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     GetEngineRuntime().audioBackend =
         Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto, GetEngineRuntime().audioEngine.get());
 
+    // Game-mode ImGui overlay: init BEFORE modules load so the exe context +
+    // allocators can be injected into each module DLL at load time, then hook
+    // the overlay render into GraphicsEngine's pre-present callback so module
+    // HUDs (IModule::OnImGui) draw every presented frame — no editor involved.
+    if (GetEngineRuntime().graphics)
+    {
+        auto* gfx = GetEngineRuntime().graphics.get();
+        HWND hWnd = FindWindowW(g_szClass, nullptr);
+        if (Spark::GameImGui::Init(hWnd, gfx->GetDevice(), gfx->GetContext()))
+        {
+            void *imguiCtx = nullptr, *allocFn = nullptr, *freeFn = nullptr, *userData = nullptr;
+            Spark::GameImGui::GetInjectionData(&imguiCtx, &allocFn, &freeFn, &userData);
+            ModuleManager::SetImGuiInjection(imguiCtx, allocFn, freeFn, userData);
+            gfx->SetPrePresentHook(
+                [](void*) { Spark::GameImGui::RenderOverlay(GetEngineRuntime().moduleManager.get()); }, nullptr);
+            Spark::SimpleConsole::GetInstance().LogSuccess("Game-mode ImGui overlay initialized");
+        }
+        else
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning(
+                std::string("Game-mode ImGui overlay init FAILED (hwnd=") + (hWnd ? "ok" : "null") + ")");
+        }
+    }
+
     LoadAndInitModules(lpCmdLine);
 
     if (GetEngineRuntime().graphics)
@@ -989,6 +1016,13 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
     g_weatherSystem.reset();
     console.LogInfo("Shutting down...");
     g_fileCache.reset();
+
+    // Tear down the game-mode ImGui overlay while the D3D device is still
+    // alive, and unhook it so no EndFrame during teardown re-enters ImGui.
+    if (GetEngineRuntime().graphics)
+        GetEngineRuntime().graphics->SetPrePresentHook(nullptr, nullptr);
+    Spark::GameImGui::Shutdown();
+
     ShutdownEngine();
 
     return static_cast<int>(msg.wParam);
@@ -1185,6 +1219,11 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
 // ===================================================================================
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    // Game-mode ImGui overlay gets first look at input so HUD menus
+    // (spawn screen, map) are clickable. Gameplay input still flows to
+    // InputManager below; ImGui only "captures" when hovering its widgets.
+    Spark::GameImGui::HandleWndProc(hWnd, msg, wParam, lParam);
+
     switch (msg)
     {
     case WM_KEYDOWN:

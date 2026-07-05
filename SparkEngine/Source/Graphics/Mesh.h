@@ -73,6 +73,21 @@ struct MeshData
 };
 
 /**
+ * @brief Per-material index range within a mesh loaded from an OBJ file.
+ *
+ * OBJ files reference MTL materials per face. LoadFromFile() groups faces by
+ * material into contiguous index ranges so a renderer can draw each range with
+ * its own diffuse color / texture. Empty for procedural primitives.
+ */
+struct MeshSubmesh
+{
+    unsigned int indexStart = 0;              ///< First index of this range
+    unsigned int indexCount = 0;              ///< Number of indices in this range
+    DirectX::XMFLOAT4 diffuseColor{1, 1, 1, 1}; ///< MTL Kd color (white if none)
+    std::string diffuseTexture;               ///< MTL map_Kd path resolved relative to the OBJ (empty if none)
+};
+
+/**
  * @brief 3D mesh management and rendering class
  * 
  * Handles creation, loading, and rendering of 3D meshes. Supports procedural
@@ -219,6 +234,20 @@ class Mesh
     void Render(ID3D11DeviceContext* ctx);
 
     /**
+     * @brief Render a contiguous index range of the mesh (one submesh)
+     * @param ctx DirectX 11 device context for rendering
+     * @param indexStart First index to draw
+     * @param indexCount Number of indices to draw
+     */
+    void RenderRange(ID3D11DeviceContext* ctx, unsigned int indexStart, unsigned int indexCount);
+
+    /**
+     * @brief Per-material submesh ranges (populated by LoadFromFile for OBJ meshes)
+     * @return Vector of submesh descriptors; empty for procedural primitives
+     */
+    const std::vector<MeshSubmesh>& GetSubmeshes() const { return m_submeshes; }
+
+    /**
      * @brief Get the number of vertices in the mesh
      * @return Number of vertices
      */
@@ -252,6 +281,7 @@ class Mesh
 
     std::vector<Vertex> m_vertices;      ///< CPU vertex data
     std::vector<unsigned int> m_indices; ///< CPU index data
+    std::vector<MeshSubmesh> m_submeshes; ///< Per-material index ranges (OBJ loads only)
     unsigned int m_vertexCount{0};       ///< Number of vertices
     unsigned int m_indexCount{0};        ///< Number of indices
     bool m_placeholder{false};           ///< Placeholder mesh flag

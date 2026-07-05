@@ -69,4 +69,37 @@ extern "C" __declspec(dllexport) void SparkModuleInjectConsole(void* hostConsole
     Spark::Detail::InjectConsoleInstance(static_cast<Spark::SimpleConsole*>(hostConsole));
 }
 
+#ifdef SPARK_HAS_IMGUI
+#include <imgui.h>
+#endif
+
+/**
+ * @brief Host-ImGui injection hook, called by ModuleManager after load.
+ *
+ * Windows module DLLs statically link their own copy of the ImGui object code,
+ * so GImGui (the current-context global) and the allocator function pointers
+ * are per-image. The engine executable owns the one real context (game-mode
+ * overlay, see GameImGuiLayer); this export points the DLL's ImGui at it so
+ * module OnImGui() calls record into the shared context. Allocators are
+ * injected too so ImGui memory is always allocated and freed by the same
+ * functions regardless of which image triggered the (de)allocation.
+ *
+ * Modules built without ImGui support keep the export as a no-op (the engine
+ * probes it via GetProcAddress either way).
+ */
+extern "C" __declspec(dllexport) void SparkModuleInjectImGui(void* context, void* allocFn, void* freeFn,
+                                                             void* userData)
+{
+#ifdef SPARK_HAS_IMGUI
+    ImGui::SetAllocatorFunctions(reinterpret_cast<ImGuiMemAllocFunc>(allocFn),
+                                 reinterpret_cast<ImGuiMemFreeFunc>(freeFn), userData);
+    ImGui::SetCurrentContext(static_cast<ImGuiContext*>(context));
+#else
+    (void)context;
+    (void)allocFn;
+    (void)freeFn;
+    (void)userData;
+#endif
+}
+
 #endif // _WIN32
