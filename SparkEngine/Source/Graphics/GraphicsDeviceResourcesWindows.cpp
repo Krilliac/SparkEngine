@@ -611,12 +611,16 @@ void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& 
     frameConstants.InvScreenResolution = XMFLOAT2((m_windowWidth > 0) ? (1.0f / m_windowWidth) : 0.0f,
                                                   (m_windowHeight > 0) ? (1.0f / m_windowHeight) : 0.0f);
 
-    // Set up basic directional lighting
-    frameConstants.DirectionalLightDir = XMFLOAT3(0.3f, -0.7f, 0.6f); // Pointing down and slightly forward
+    // Basic directional + ambient lighting. Ambient is deliberately strong so
+    // surfaces facing away from the sun (character fronts, building walls) stay
+    // readable instead of crushing to near-black — the basic PS is
+    // ambient + N.L*directional with no other fill, so a low ambient made every
+    // vertical face nearly black.
+    frameConstants.DirectionalLightDir = XMFLOAT3(0.35f, -0.8f, 0.45f); // sun: down + slightly forward/side
     frameConstants.DirectionalLightIntensity = 1.0f;
-    frameConstants.DirectionalLightColor = XMFLOAT3(1.0f, 1.0f, 0.9f); // Slightly warm white
-    frameConstants.AmbientIntensity = 0.3f;
-    frameConstants.AmbientColor = XMFLOAT3(0.2f, 0.3f, 0.4f); // Cool ambient
+    frameConstants.DirectionalLightColor = XMFLOAT3(1.0f, 0.97f, 0.9f); // warm daylight
+    frameConstants.AmbientIntensity = 0.6f;
+    frameConstants.AmbientColor = XMFLOAT3(0.52f, 0.5f, 0.46f); // warm sky/ground bounce
 
     D3D11_MAPPED_SUBRESOURCE mappedResource;
     HRESULT hr = m_context->Map(m_basicFrameConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
