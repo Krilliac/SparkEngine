@@ -15,6 +15,7 @@
 #include "Net/TFServerSim.h"
 
 #include "Spark/IEngineContext.h"
+#include "Audio/AudioEngine.h"
 #include "SceneManager/SceneManager.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/World/WorldOriginSystem.h"
@@ -748,6 +749,26 @@ void TFWorldSetup::Update(float deltaTime)
 
     if (m_ctx->role == NetRole::Client)
         DriveOriginRebase();
+
+    MaybeStartAmbientAudio();
+}
+
+void TFWorldSetup::MaybeStartAmbientAudio()
+{
+    if (m_ambientStarted || !m_ctx->HasLocalPlayer() || !m_ctx->engine)
+        return;
+    ::AudioEngine* audio = m_ctx->engine->GetAudio();
+    if (!audio)
+        return; // no audio system (headless / init failed) — try again next frame? no: mark done
+    m_ambientStarted = true;
+
+    const char* kWind = "Audio/MMOFPS/ambient/wind_loop.wav";
+    if (FAILED(audio->LoadSound(kWind, L"Assets/Audio/MMOFPS/ambient/wind_loop.wav")))
+    {
+        Spark::SimpleConsole::GetInstance().LogWarning("[TFAudio] ambient wind load FAIL");
+        return;
+    }
+    audio->PlaySound(kWind, 0.35f, 1.0f, /*loop*/ true);
 }
 
 void TFWorldSetup::DriveOriginRebase()

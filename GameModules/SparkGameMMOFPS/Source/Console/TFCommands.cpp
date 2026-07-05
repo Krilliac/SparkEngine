@@ -20,6 +20,7 @@
 #include "Net/TFNetProtocol.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFBotSystem.h"
+#include "Game/TFWeaponSystem.h"
 #include "Game/TFVehicleSystem.h"
 #include "Game/TFColossusSystem.h"
 #include "Game/TFDeployableSystem.h"
@@ -324,6 +325,17 @@ void TerrafrontModule::RegisterConsoleCommands()
                    " @ skyanchor";
         },
         "Deploy at your faction skyanchor", cat, "tf_spawn");
+
+    console.RegisterCommand(
+        "tf_fire",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            if (!m_ctx.weapons)
+                return "[TF] weapon system not ready";
+            m_ctx.weapons->ClientTriggerFire();
+            return "[TF] fired";
+        },
+        "Fire the active weapon once (debug/smoke)", cat, "tf_fire");
 
     console.RegisterCommand(
         "tf_give",

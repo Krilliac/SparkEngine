@@ -10,6 +10,7 @@
 #include "Net/TFClientNet.h"
 #include "UI/TFHUD.h"
 #include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 
 #include "Audio/AudioEngine.h"
 #include "Camera/SparkEngineCamera.h"
@@ -382,14 +383,24 @@ void TFWeaponSystem::PlayWeaponAudio(const std::string& assetPath)
         return;
     ::AudioEngine* audio = m_ctx->engine->GetAudio();
     if (!audio)
+    {
+        static bool s_warnedNoAudio = false;
+        if (!s_warnedNoAudio)
+        {
+            s_warnedNoAudio = true;
+            Spark::SimpleConsole::GetInstance().LogWarning("[TFAudio] no audio system (GetAudio null)");
+        }
         return;
+    }
 
     if (m_loadedSounds.insert(assetPath).second)
     {
         const std::string full = "Assets/" + assetPath; // weapons.json paths are Assets-relative
-        audio->LoadSound(assetPath, std::wstring(full.begin(), full.end()));
+        if (FAILED(audio->LoadSound(assetPath, std::wstring(full.begin(), full.end()))))
+            Spark::SimpleConsole::GetInstance().LogWarning("[TFAudio] load FAIL " + assetPath);
     }
-    audio->PlaySound(assetPath, 0.8f);
+    if (!audio->PlaySound(assetPath, 0.8f))
+        Spark::SimpleConsole::GetInstance().LogWarning("[TFAudio] play FAIL " + assetPath);
 }
 
 // ---------------------------------------------------------------------------
