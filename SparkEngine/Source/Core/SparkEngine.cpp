@@ -24,6 +24,7 @@
 // Common includes (shared between all platforms)
 // ============================================================================
 #include "EngineRuntime.h"
+#include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
 #include "ModuleManager.h"
 #include "EngineContext.h"
 #include "EngineSettings.h"
@@ -228,6 +229,15 @@ void ShutdownPhysics()
  * Shuts down gameplay/debug systems, console, modules, audio, physics,
  * and engine context in the correct order.
  */
+// Engine-owned ECS world service (see InitEngineContext in the platform
+// files). Defined here so ShutdownEngine can destroy it at the one safe
+// point: after module OnUnload (entities gone) but BEFORE the module DLL is
+// unmapped — game modules instantiate entt component pools inside this
+// registry, and those pools' vtables/deleters live in module code. Letting
+// a static World destruct at CRT exit (after FreeLibrary) called into
+// unmapped memory and hung the process in the crash handler on shutdown.
+std::unique_ptr<::World> g_engineEcsWorld;
+
 void ShutdownEngine()
 {
     // Stop the freeze detector first — we're intentionally tearing down,
@@ -262,6 +272,11 @@ void ShutdownEngine()
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
         if (rt.eventBus)
             rt.eventBus->ClearAll();
+
+        // Destroy the ECS world for the same reason: modules emplace
+        // components into this registry, so the entt pools carry vtables/
+        // deleters that live in module code. Must die before FreeLibrary.
+        g_engineEcsWorld.reset();
 
         const bool shouldSkipModuleUnload =
 #ifndef _WIN32

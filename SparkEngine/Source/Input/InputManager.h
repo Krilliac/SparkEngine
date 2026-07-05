@@ -61,6 +61,7 @@ class InputManager
 
     HWND m_hwnd;          ///< Window handle for mouse capture
     bool m_mouseCaptured; ///< Whether mouse is currently captured
+    bool m_captureHadFocus = false; ///< Captured-mouse focus tracking (re-seed on focus regain)
 
     // Console integration state
     float m_mouseSensitivity; ///< Mouse sensitivity multiplier

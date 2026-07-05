@@ -557,21 +557,29 @@ void SceneManager::InstantiateNodes()
             meshPath = std::wstring(node.modelPath.begin(), node.modelPath.end());
         }
 
+        // Primitives are built at UNIT size and scaled via the node's scale so
+        // non-uniform scales work; their constructor geometry is authoritative
+        // (no mesh file load). Previously the ctor took node.scale.x AND
+        // LoadOrPlaceholderMesh replaced the geometry with a 1 m placeholder
+        // cube whenever "Assets/Models/<type>.obj" did not exist — a 4096 m
+        // scene terrain plane silently rendered as a 1 m cube.
+        bool isPrimitive = true;
         if (node.type == "Cube" || node.type == "cube")
-            obj = std::make_unique<CubeObject>(node.scale.x);
+            obj = std::make_unique<CubeObject>(1.0f);
         else if (node.type == "Plane" || node.type == "plane")
-            obj = std::make_unique<PlaneObject>(node.scale.x, node.scale.z);
+            obj = std::make_unique<PlaneObject>(1.0f, 1.0f);
         else if (node.type == "Sphere" || node.type == "sphere")
-            obj = std::make_unique<SphereObject>(node.scale.x * 0.5f, 16, 16);
+            obj = std::make_unique<SphereObject>(0.5f, 16, 16);
         else if (node.type == "Pyramid" || node.type == "pyramid")
-            obj = std::make_unique<PyramidObject>(node.scale.x);
+            obj = std::make_unique<PyramidObject>(1.0f);
         else if (node.type == "Ramp" || node.type == "ramp")
-            obj = std::make_unique<RampObject>(node.scale.x, node.scale.y);
+            obj = std::make_unique<RampObject>(1.0f, 1.0f);
         else if (node.type == "Wall" || node.type == "wall")
-            obj = std::make_unique<WallObject>(node.scale.x, node.scale.y);
+            obj = std::make_unique<WallObject>(1.0f, 1.0f);
         else if (node.type == "model" || node.type == "Model")
         {
             // Model type: create a cube as placeholder geometry, then load the actual mesh
+            isPrimitive = false;
             obj = std::make_unique<CubeObject>(1.0f);
             if (meshPath.empty())
             {
@@ -595,16 +603,12 @@ void SceneManager::InstantiateNodes()
             HRESULT hr = obj->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
             if (SUCCEEDED(hr))
             {
-                if (meshPath.empty())
-                {
-                    // Construct default mesh path from type name (lowercase)
-                    std::string lowerType = node.type;
-                    std::transform(lowerType.begin(), lowerType.end(), lowerType.begin(), ::tolower);
-                    meshPath = L"Assets\\Models\\" + std::wstring(lowerType.begin(), lowerType.end()) + L".obj";
-                }
-                LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(), meshPath);
+                if (!isPrimitive)
+                    LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(),
+                                          meshPath);
                 obj->SetPosition(node.position);
                 obj->SetRotation(node.rotation);
+                obj->SetScale(node.scale);
                 obj->SetName(node.name);
                 m_objects.push_back(std::move(obj));
             }

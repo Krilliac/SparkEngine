@@ -29,6 +29,7 @@
 #include "AssetIntegration.h"
 #include "GameplaySystemLifecycle.h"
 #include "Graphics/WeatherSystem.h"
+#include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/UI/UISystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
@@ -257,18 +258,32 @@ static std::filesystem::path GetExecutableDirectory()
 /**
  * @brief Scripted console playback: -exec <file>
  *
- * Each non-empty, non-# line is "<frame> <console command>"; the command runs
- * once the main loop reaches that frame (frames count engine ticks in both the
- * windowed and headless paths). Lines without a leading number run at frame 0.
- * Drives automated smoke tests: spawn, move, fire, screenshot, tf_* commands.
+ * Each non-empty, non-# line is "<frame> <console command>" or
+ * "t<seconds> <console command>"; frame entries run once the main loop
+ * reaches that frame, t-entries run once that much wall-clock time has
+ * elapsed since the loop started. Time entries exist because frame rate
+ * varies wildly (vsync + window occlusion), while gameplay (bot travel,
+ * capture timers) runs on real dt — wall-clock scheduling keeps automated
+ * smokes deterministic. Lines without a prefix run at frame 0. When mixing
+ * both forms, ordering assumes 60 fps for the frame entries.
  */
 struct ScriptedCommand
 {
     int frame = 0;
+    double atSec = -1.0; ///< >= 0: wall-clock scheduled ("t<seconds>" prefix)
     std::string command;
 };
 static std::vector<ScriptedCommand> g_execScript;
 static size_t g_execScriptNext = 0;
+static double g_testSecondsLimit = 0.0; ///< -test-seconds N: exit after N wall seconds
+
+/// Wall-clock since the first due-check of the main loop (lazy start so boot
+/// time is excluded from both t-entries and -test-seconds).
+static double ExecElapsedSeconds()
+{
+    static const auto start = std::chrono::steady_clock::now();
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+}
 
 static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
 {
@@ -296,6 +311,22 @@ static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
             continue;
         ScriptedCommand sc;
         size_t idx = 0;
+        if (line[0] == 't' && line.size() > 1 && isdigit(static_cast<unsigned char>(line[1])))
+        {
+            // wall-clock entry: t<seconds> <command>
+            idx = 1;
+            while (idx < line.size() &&
+                   (isdigit(static_cast<unsigned char>(line[idx])) || line[idx] == '.'))
+                ++idx;
+            if (idx < line.size() && line[idx] == ' ')
+            {
+                sc.atSec = std::stod(line.substr(1, idx - 1));
+                sc.command = line.substr(idx + 1);
+                g_execScript.push_back(sc);
+                continue;
+            }
+            idx = 0; // not "t<num> cmd" after all — fall through as plain command
+        }
         // optional leading frame number
         while (idx < line.size() && isdigit(static_cast<unsigned char>(line[idx])))
             ++idx;
@@ -310,9 +341,13 @@ static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
         }
         g_execScript.push_back(sc);
     }
+    // Unified ordering: t-entries by their time, frame entries at a nominal
+    // 60 fps equivalence (scripts should stick to one form per phase anyway).
+    auto sortKey = [](const ScriptedCommand& c)
+    { return c.atSec >= 0.0 ? c.atSec : c.frame / 60.0; };
     std::stable_sort(g_execScript.begin(), g_execScript.end(),
-                     [](const ScriptedCommand& a, const ScriptedCommand& b)
-                     { return a.frame < b.frame; });
+                     [&sortKey](const ScriptedCommand& a, const ScriptedCommand& b)
+                     { return sortKey(a) < sortKey(b); });
     Spark::SimpleConsole::GetInstance().LogInfo(
         std::format("[exec] loaded {} scripted commands from {}", g_execScript.size(), path));
 }
@@ -320,19 +355,21 @@ static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
 static void RunDueScriptedCommands(int frameCount)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
-    while (g_execScriptNext < g_execScript.size() &&
-           g_execScript[g_execScriptNext].frame <= frameCount)
+    const double elapsed = ExecElapsedSeconds();
+    auto isDue = [&](const ScriptedCommand& sc)
+    { return sc.atSec >= 0.0 ? elapsed >= sc.atSec : sc.frame <= frameCount; };
+    while (g_execScriptNext < g_execScript.size() && isDue(g_execScript[g_execScriptNext]))
     {
         const std::string& c = g_execScript[g_execScriptNext].command;
-        console.LogInfo(std::format("[exec] frame {}: {}", frameCount, c));
+        console.LogInfo(std::format("[exec] frame {} (t={:.1f}s): {}", frameCount, elapsed, c));
         const bool ok = console.ExecuteCommand(c);
         // Persist an audit trail for automated smoke runs: the engine has no
         // stdout and the file logger doesn't carry console traffic.
         std::ofstream results("exec_results.log", std::ios::app);
         if (results)
         {
-            results << "frame " << frameCount << " | " << (ok ? "ok " : "ERR") << " | " << c
-                    << '\n';
+            results << "frame " << frameCount << " t=" << std::format("{:.1f}", elapsed)
+                    << "s | " << (ok ? "ok " : "ERR") << " | " << c << '\n';
             // append the command's console output (new entries since execution)
             const auto& history = console.GetLogHistory();
             // first scripted command dumps the whole boot history (module
@@ -568,9 +605,11 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
         // Matches the behaviour already present in SparkEngineLinux.cpp's
         // RunHeadlessLinux — without this parity the Windows headless loop
         // runs forever even on -test-frames and CI jobs time out.
-        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit)
+        if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
+            (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit))
         {
-            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.",
+                                        frameCount, ExecElapsedSeconds()));
             break;
         }
 
@@ -680,6 +719,18 @@ static void InitEngineContext()
 
     static Spark::AssetRegistry g_assetRegistry;
     ctx->SetAssetRegistry(&g_assetRegistry);
+
+    // ECS world service. Nothing else provides one in module mode, yet
+    // IEngineContext::GetWorld() is the documented way for game modules to
+    // reach the ECS — without this, ECS-driven modules (e.g. TERRAFRONT)
+    // silently got nullptr and fell back to degenerate non-ECS stubs.
+    // Owned by g_engineEcsWorld (SparkEngine.cpp): ShutdownEngine destroys it
+    // BEFORE module DLLs are unmapped — a static here destructed after
+    // FreeLibrary and called into unmapped module-instantiated entt pools,
+    // hanging shutdown inside the crash handler.
+    extern std::unique_ptr<::World> g_engineEcsWorld;
+    g_engineEcsWorld = std::make_unique<::World>();
+    ctx->SetWorld(g_engineEcsWorld.get());
 
     if (GetEngineRuntime().graphics && GetEngineRuntime().graphics->GetAssetPipeline())
     {
@@ -842,9 +893,12 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
         // the quit is actually consumed. The old `continue` skipped PeekMessage,
         // spinning forever without SPARK_HEARTBEAT until the FreezeDetector
         // killed the process (exit code 1) on every -test-frames run.
-        if (g_testFrameLimit > 0 && frameCount >= g_testFrameLimit && !quitPosted)
+        if (((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
+             (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit)) &&
+            !quitPosted)
         {
-            console.LogInfo(std::format("[TEST] Frame limit reached ({} frames). Exiting.", g_testFrameLimit));
+            console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.",
+                                        frameCount, ExecElapsedSeconds()));
             PostQuitMessage(0);
             quitPosted = true;
         }
@@ -987,6 +1041,25 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     SetupCrashHandler();
 
     g_testFrameLimit = ParseTestFrameLimit(lpCmdLine);
+    {
+        // -test-seconds N: wall-clock exit for smokes whose gameplay runs on
+        // real dt (frame counts are meaningless when fps varies with vsync).
+        std::wstring cmd(lpCmdLine);
+        if (auto pos = cmd.find(L"-test-seconds"); pos != std::wstring::npos)
+        {
+            pos += 13;
+            while (pos < cmd.size() && cmd[pos] == L' ')
+                ++pos;
+            try
+            {
+                if (pos < cmd.size())
+                    g_testSecondsLimit = std::max(0.0, std::stod(std::wstring(cmd.substr(pos))));
+            }
+            catch (const std::exception&)
+            {
+            }
+        }
+    }
     g_maxWorkerThreads = ParseThreadCount(lpCmdLine);
     g_noSubprocess = (std::wstring(lpCmdLine).find(L"-no-subprocess") != std::wstring::npos);
     LoadExecScriptFromCmdLine(lpCmdLine);

@@ -702,26 +702,58 @@ void InputManager::Update()
 
     if (m_mouseCaptured)
     {
-        POINT cursor;
-        GetCursorPos(&cursor);
-        ScreenToClient(m_hwnd, &cursor);
+        // Mouse-look capture only owns the cursor while OUR window is
+        // foreground. Recentering an unfocused window's cursor hijacks the
+        // user's pointer during automated/background runs, and the stale
+        // cursor position fabricates giant deltas. On focus (re)gain the
+        // cursor is re-seeded to center with a zero delta so alt-tab never
+        // injects a camera jump.
+        const bool focused = (GetForegroundWindow() == m_hwnd);
+        if (!focused || !m_captureHadFocus)
+        {
+            m_mouseDeltaX = 0;
+            m_mouseDeltaY = 0;
+            if (focused)
+            {
+                RECT rect;
+                GetClientRect(m_hwnd, &rect);
+                POINT center = {(rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2};
+                ClientToScreen(m_hwnd, &center);
+                SetCursorPos(center.x, center.y);
+                m_mouseX = center.x;
+                m_mouseY = center.y;
+            }
+            m_captureHadFocus = focused;
+        }
+        else
+        {
+            // NOTE: m_mouseX/m_prevMouseX hold SCREEN coordinates while
+            // captured (reset to the ClientToScreen'd center below), so the
+            // delta must be computed in screen space too. The previous code
+            // ScreenToClient'd the cursor first — client-vs-screen mixed
+            // spaces produced a huge constant fake delta every frame,
+            // spinning any mouse-look camera into its pitch clamp (blank
+            // sky/ground frames in the TERRAFRONT smoke).
+            POINT cursor;
+            GetCursorPos(&cursor);
 
-        m_mouseDeltaX = cursor.x - m_prevMouseX;
-        m_mouseDeltaY = cursor.y - m_prevMouseY;
+            m_mouseDeltaX = cursor.x - m_prevMouseX;
+            m_mouseDeltaY = cursor.y - m_prevMouseY;
 
-        ProcessMouseDelta(m_mouseDeltaX, m_mouseDeltaY);
+            ProcessMouseDelta(m_mouseDeltaX, m_mouseDeltaY);
 
-        RECT rect;
-        GetClientRect(m_hwnd, &rect);
-        POINT center = {(rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2};
-        ClientToScreen(m_hwnd, &center);
-        SetCursorPos(center.x, center.y);
+            RECT rect;
+            GetClientRect(m_hwnd, &rect);
+            POINT center = {(rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2};
+            ClientToScreen(m_hwnd, &center);
+            SetCursorPos(center.x, center.y);
 
-        m_mouseX = center.x;
-        m_mouseY = center.y;
+            m_mouseX = center.x;
+            m_mouseY = center.y;
 
-        float distance = sqrtf(static_cast<float>(m_mouseDeltaX * m_mouseDeltaX + m_mouseDeltaY * m_mouseDeltaY));
-        m_totalMouseDistance.fetch_add(distance, std::memory_order_relaxed);
+            float distance = sqrtf(static_cast<float>(m_mouseDeltaX * m_mouseDeltaX + m_mouseDeltaY * m_mouseDeltaY));
+            m_totalMouseDistance.fetch_add(distance, std::memory_order_relaxed);
+        }
     }
     else
     {

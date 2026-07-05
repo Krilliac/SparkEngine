@@ -704,6 +704,11 @@ HRESULT GraphicsEngine::CompileEmbeddedVertexShader(ID3DBlob** blobOut)
             matrix World;
             matrix WorldViewProjection;
             matrix WorldInverseTranspose;
+            // MUST mirror Shader.h PerObjectConstants exactly. This field was
+            // missing, shifting every following member by 64 bytes — the GPU
+            // read ObjectColor from a zeroed matrix region, so every basic-
+            // shader draw came out rgba(0,0,0,0): the black-screen bug.
+            matrix PreviousWorld;
             float3 ObjectPosition;
             float ObjectScale;
             float4 ObjectColor;

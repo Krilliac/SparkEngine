@@ -49,8 +49,13 @@ HRESULT LightingSystem::CreateConstantBuffers()
     if (FAILED(hr))
         return hr;
 
-    // Create environment buffer
-    bufferDesc.ByteWidth = sizeof(EnvironmentLighting);
+    // Create environment buffer.
+    // NOTE: sizeof(EnvironmentLighting) is 104 bytes (4 ComPtrs + floats + a
+    // bool) — NOT a multiple of 16, so CreateBuffer rejected it with
+    // E_INVALIDARG and the whole LightingSystem failed to initialize
+    // ("Failed to initialize LightingSystem" at boot). D3D11 constant
+    // buffers must be 16-byte aligned; round the size up.
+    bufferDesc.ByteWidth = (sizeof(EnvironmentLighting) + 15u) & ~15u;
     hr = m_device->CreateBuffer(&bufferDesc, nullptr, &m_environmentBuffer);
     if (FAILED(hr))
         return hr;
