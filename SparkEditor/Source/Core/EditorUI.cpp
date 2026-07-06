@@ -1435,6 +1435,7 @@ namespace SparkEditor
 
             m_currentScenePath = path;
             m_sceneModified = false;
+            Spark::Editor::CommandHistory::GetInstance().MarkSaved();
 
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogSuccess("Scene saved to: " + path);
@@ -1480,6 +1481,7 @@ namespace SparkEditor
         m_currentScenePath = path;
         m_currentSceneName = std::filesystem::path(path).stem().string();
         m_sceneModified = false;
+        Spark::Editor::CommandHistory::GetInstance().MarkSaved();
 
         console.LogSuccess("Scene opened from: " + path);
 

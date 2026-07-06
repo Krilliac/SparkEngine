@@ -26,6 +26,7 @@
 #include "EditorCrashHandler.h"
 #include "ProjectManager.h"
 #include "../UndoRedo/UndoRedoManager.h"
+#include "../CommandHistory.h"
 #include "../Prefabs/PrefabManager.h"
 #include "../Search/CommandPalette.h"
 #include "Engine/Editor/PlayModeManager.h"
@@ -173,7 +174,19 @@ namespace SparkEditor
         bool OpenScene(const std::string& path);
 
         const std::string& GetCurrentSceneName() const { return m_currentSceneName; }
-        bool IsSceneModified() const { return m_sceneModified; }
+        bool IsSceneModified() const
+        {
+            // m_sceneModified is only flipped true on one menu path (GameObject
+            // creation in EditorMenuBar.cpp) and is therefore unreliable on its
+            // own. Every edit path that actually mutates the document --
+            // hierarchy create/delete/duplicate/rename/reparent, Inspector
+            // property edits, gizmo drags -- routes through
+            // Spark::Editor::CommandHistory::Execute(), which maintains a
+            // precise saved-index-based dirty flag (IsModified()) independent
+            // of which UI surface triggered the command. OR the two together
+            // so no edit path can under-report unsaved changes.
+            return m_sceneModified || Spark::Editor::CommandHistory::GetInstance().IsModified();
+        }
 
         // Simple file operations
         bool ImportLayout(const std::string& filePath);

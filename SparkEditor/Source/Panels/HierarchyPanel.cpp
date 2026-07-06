@@ -987,28 +987,61 @@ namespace SparkEditor
         if (!obj)
             return;
 
+        // Recursively collect objectID plus every descendant so none of them
+        // are left behind with transform.parentID pointing at a deleted,
+        // no-longer-resolvable object (an orphan with a dead parent link).
+        std::vector<ObjectID> subtreeIDs;
+        std::function<void(ObjectID)> collectSubtree = [&](ObjectID id)
+        {
+            subtreeIDs.push_back(id);
+            SceneObject* current = m_scene->FindObject(id);
+            if (!current)
+                return;
+            for (ObjectID childID : current->transform.childIDs)
+            {
+                collectSubtree(childID);
+            }
+        };
+        collectSubtree(objectID);
+
         // Capture full object state for undo
         SceneObject savedObj = *obj;
         SceneFile* capturedScene = m_scene;
 
-        // Also capture associated components
+        std::vector<SceneObject> savedSubtree;
+        savedSubtree.reserve(subtreeIDs.size());
+        for (ObjectID id : subtreeIDs)
+        {
+            SceneObject* subtreeObj = m_scene->FindObject(id);
+            if (subtreeObj)
+            {
+                savedSubtree.push_back(*subtreeObj);
+            }
+        }
+
+        // Also capture associated components for the whole subtree
         std::vector<Component> savedComponents;
         for (auto& c : m_scene->components)
         {
-            if (c.objectID == objectID)
+            if (Spark::ContainerUtils::Contains(subtreeIDs, c.objectID))
             {
                 savedComponents.push_back(c);
             }
         }
 
-        // Remove from selection
-        m_selectedSet.erase(objectID);
-        m_selectedObjects.erase(std::remove(m_selectedObjects.begin(), m_selectedObjects.end(), objectID),
+        // Remove the whole subtree from selection, not just the root
+        for (ObjectID id : subtreeIDs)
+        {
+            m_selectedSet.erase(id);
+        }
+        m_selectedObjects.erase(std::remove_if(m_selectedObjects.begin(), m_selectedObjects.end(),
+                                               [&subtreeIDs](ObjectID id)
+                                               { return Spark::ContainerUtils::Contains(subtreeIDs, id); }),
                                 m_selectedObjects.end());
 
         auto& history = Spark::Editor::CommandHistory::GetInstance();
         history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-            [capturedScene, objectID]()
+            [capturedScene, objectID, subtreeIDs]()
             {
                 // Remove from parent child list
                 SceneObject* toDelete = capturedScene->FindObject(objectID);
@@ -1022,22 +1055,29 @@ namespace SparkEditor
                     }
                 }
 
-                // Remove components
+                // Remove components for the whole subtree
                 auto& comps = capturedScene->components;
                 comps.erase(std::remove_if(comps.begin(), comps.end(),
-                                           [objectID](const Component& c) { return c.objectID == objectID; }),
+                                           [&subtreeIDs](const Component& c)
+                                           { return Spark::ContainerUtils::Contains(subtreeIDs, c.objectID); }),
                             comps.end());
 
-                // Remove object
+                // Remove the whole subtree of objects
                 auto& objs = capturedScene->objects;
                 objs.erase(std::remove_if(objs.begin(), objs.end(),
-                                          [objectID](const SceneObject& o) { return o.id == objectID; }),
+                                          [&subtreeIDs](const SceneObject& o)
+                                          { return Spark::ContainerUtils::Contains(subtreeIDs, o.id); }),
                            objs.end());
             },
-            [capturedScene, savedObj, savedComponents]()
+            [capturedScene, savedObj, savedSubtree, savedComponents]()
             {
-                // Re-add the object
-                capturedScene->objects.push_back(savedObj);
+                // Re-add the whole subtree (each saved SceneObject already
+                // carries its own childIDs list, so descendant linkage is
+                // restored automatically)
+                for (const auto& subtreeObj : savedSubtree)
+                {
+                    capturedScene->objects.push_back(subtreeObj);
+                }
 
                 // Re-add components
                 for (const auto& c : savedComponents)
@@ -1045,7 +1085,7 @@ namespace SparkEditor
                     capturedScene->components.push_back(c);
                 }
 
-                // Re-add to parent child list
+                // Re-add the root to its original parent's child list
                 if (savedObj.transform.parentID != INVALID_OBJECT_ID)
                 {
                     SceneObject* parent = capturedScene->FindObject(savedObj.transform.parentID);
@@ -1255,6 +1295,14 @@ namespace SparkEditor
 
     void HierarchyPanel::ResetToDefault()
     {
+        // Every command on the undo/redo stack captured a raw SceneFile*
+        // into the scene we are about to discard below (see the
+        // LambdaCommand captures in DeleteObject/DuplicateObject/
+        // RenameObject/MoveObject). Clear the history *before* freeing
+        // m_ownedScene, otherwise a subsequent Ctrl+Z (Undo) re-executes a
+        // stale command against a freed SceneFile -- use-after-free.
+        Spark::Editor::CommandHistory::GetInstance().Clear();
+
         // Create an owned scene if none is set externally
         m_ownedScene = std::make_unique<SceneFile>();
         m_scene = m_ownedScene.get();
