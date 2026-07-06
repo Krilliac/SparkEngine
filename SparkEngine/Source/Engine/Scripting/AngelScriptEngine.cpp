@@ -681,11 +681,35 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
         return false;
     }
 
+    // The constructor runs script-authored code just like Start()/Update()/
+    // OnCollision() below — it must be wired to the same sandbox line
+    // callback, or a malicious/runaway ctor runs with zero instruction,
+    // time, or memory enforcement (Execute() previously ran with no
+    // callback installed here).
+    if (m_sandbox)
+    {
+        m_sandbox->BeginExecution(className + "::<ctor>");
+        ctx->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
+    }
+
     ctx->Prepare(factory);
     int execResult = ctx->Execute();
+
+    if (m_sandbox)
+    {
+        m_sandbox->EndExecution();
+    }
+
     if (execResult != asEXECUTION_FINISHED)
     {
-        SetLastError("Factory execution failed for class '" + className + "'.");
+        if (execResult == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
+        {
+            SetLastError("Constructor for class '" + className + "' terminated by sandbox.");
+        }
+        else
+        {
+            SetLastError("Factory execution failed for class '" + className + "'.");
+        }
         LogError(m_lastError);
         ctx->Release();
         return false;

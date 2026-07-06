@@ -9,6 +9,7 @@
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
+#include <cctype>
 #include <queue>
 #include <sstream>
 #include <unordered_set>
@@ -86,6 +87,74 @@ namespace Spark::Scripting
                 {ScriptNodeType::Comment, "Comment", "Functions", "Editor-only note box"}};
             return kPalette;
         }
+
+        /// Escape a raw string so it is safe to splice into a double-quoted
+        /// AngelScript string literal. Node properties (sound names, event
+        /// names, key names, etc.) are author/save-file controlled and must
+        /// never be able to break out of the literal and inject statements.
+        std::string EscapeAngelScriptString(const std::string& raw)
+        {
+            std::string out;
+            out.reserve(raw.size() + 8);
+            for (unsigned char c : raw)
+            {
+                switch (c)
+                {
+                case '\\':
+                    out += "\\\\";
+                    break;
+                case '"':
+                    out += "\\\"";
+                    break;
+                case '\n':
+                    out += "\\n";
+                    break;
+                case '\r':
+                    out += "\\r";
+                    break;
+                case '\t':
+                    out += "\\t";
+                    break;
+                default:
+                    if (c < 0x20)
+                    {
+                        // Strip other raw control characters rather than emit them.
+                    }
+                    else
+                    {
+                        out += static_cast<char>(c);
+                    }
+                    break;
+                }
+            }
+            return out;
+        }
+
+        /// Sanitize a raw string so it is safe to splice into generated
+        /// AngelScript as a bare identifier (variable/function/class/method
+        /// name). Any character outside [A-Za-z0-9_] becomes '_', and a
+        /// leading digit is prefixed with '_' — this makes it structurally
+        /// impossible for a property value to close a statement and inject
+        /// new AngelScript code via an "identifier" position.
+        std::string SanitizeIdentifier(const std::string& raw, const char* fallback)
+        {
+            if (raw.empty())
+                return fallback;
+
+            std::string out;
+            out.reserve(raw.size());
+            for (unsigned char c : raw)
+            {
+                if (std::isalnum(c) || c == '_')
+                    out += static_cast<char>(c);
+                else
+                    out += '_';
+            }
+            if (std::isdigit(static_cast<unsigned char>(out[0])))
+                out.insert(out.begin(), '_');
+
+            return out;
+        }
     } // namespace
 
     const std::vector<ScriptNodePaletteEntry>& VisualScriptCompiler::GetNodePalette()
@@ -158,7 +227,7 @@ namespace Spark::Scripting
         case PinKind::Float:
             return std::to_string(pin.defaultValue[0]) + "f";
         case PinKind::String:
-            return "\"" + pin.defaultString + "\"";
+            return "\"" + EscapeAngelScriptString(pin.defaultString) + "\"";
         case PinKind::Vector3:
             return "Vector3(" + std::to_string(pin.defaultValue[0]) + "f, " + std::to_string(pin.defaultValue[1]) +
                    "f, " + std::to_string(pin.defaultValue[2]) + "f)";
@@ -384,13 +453,13 @@ namespace Spark::Scripting
         case ScriptNodeType::GetKeyDown:
         {
             std::string key = !node.properties.empty() ? node.properties.begin()->second : "Space";
-            code += "    bool " + out(0) + " = getKeyDown(\"" + key + "\");\n";
+            code += "    bool " + out(0) + " = getKeyDown(\"" + EscapeAngelScriptString(key) + "\");\n";
             break;
         }
         case ScriptNodeType::GetKey:
         {
             std::string key = !node.properties.empty() ? node.properties.begin()->second : "Space";
-            code += "    bool " + out(0) + " = getKey(\"" + key + "\");\n";
+            code += "    bool " + out(0) + " = getKey(\"" + EscapeAngelScriptString(key) + "\");\n";
             break;
         }
         case ScriptNodeType::GetDeltaTime:
@@ -417,7 +486,7 @@ namespace Spark::Scripting
         {
             auto it = node.properties.find("name");
             std::string name = (it != node.properties.end()) ? it->second : "Entity";
-            code += "    uint " + out(0) + " = getEntityByName(\"" + name + "\");\n";
+            code += "    uint " + out(0) + " = getEntityByName(\"" + EscapeAngelScriptString(name) + "\");\n";
             break;
         }
 
@@ -443,7 +512,7 @@ namespace Spark::Scripting
             std::string sound = (it != node.properties.end()) ? it->second : "";
             if (sound.empty() && !node.properties.empty())
                 sound = node.properties.begin()->second;
-            code += "    playSound(selfEntity, \"" + sound + "\");\n";
+            code += "    playSound(selfEntity, \"" + EscapeAngelScriptString(sound) + "\");\n";
             break;
         }
         case ScriptNodeType::PlayAnimation:
@@ -452,7 +521,7 @@ namespace Spark::Scripting
             std::string anim = (it != node.properties.end()) ? it->second : "";
             if (anim.empty() && !node.properties.empty())
                 anim = node.properties.begin()->second;
-            code += "    playAnimation(selfEntity, \"" + anim + "\");\n";
+            code += "    playAnimation(selfEntity, \"" + EscapeAngelScriptString(anim) + "\");\n";
             break;
         }
         case ScriptNodeType::SpawnEntity:
@@ -461,7 +530,7 @@ namespace Spark::Scripting
             std::string name = (it != node.properties.end()) ? it->second : "Entity";
             if (name.empty() && !node.properties.empty())
                 name = node.properties.begin()->second;
-            code += "    uint " + out(0) + " = createEntity(\"" + name + "\");\n";
+            code += "    uint " + out(0) + " = createEntity(\"" + EscapeAngelScriptString(name) + "\");\n";
             break;
         }
         case ScriptNodeType::DestroyEntity:
@@ -473,7 +542,7 @@ namespace Spark::Scripting
             std::string evt = (it != node.properties.end()) ? it->second : "";
             if (evt.empty() && !node.properties.empty())
                 evt = node.properties.begin()->second;
-            code += "    fireEvent(\"" + evt + "\");\n";
+            code += "    fireEvent(\"" + EscapeAngelScriptString(evt) + "\");\n";
             break;
         }
 
@@ -527,7 +596,7 @@ namespace Spark::Scripting
         case ScriptNodeType::GetVariable:
         {
             auto it = node.properties.find("name");
-            std::string varName = (it != node.properties.end()) ? it->second : "var";
+            std::string varName = SanitizeIdentifier((it != node.properties.end()) ? it->second : "var", "var");
             // Output pin type determines the declared type
             std::string typeStr = "float";
             if (!node.outputs.empty())
@@ -538,7 +607,7 @@ namespace Spark::Scripting
         case ScriptNodeType::SetVariable:
         {
             auto it = node.properties.find("name");
-            std::string varName = (it != node.properties.end()) ? it->second : "var";
+            std::string varName = SanitizeIdentifier((it != node.properties.end()) ? it->second : "var", "var");
             code += "    " + varName + " = " + input(1) + ";\n"; // input[0] is Exec
             break;
         }
@@ -547,7 +616,8 @@ namespace Spark::Scripting
         case ScriptNodeType::CallFunction:
         {
             auto it = node.properties.find("function");
-            std::string funcName = (it != node.properties.end()) ? it->second : "myFunction";
+            std::string funcName =
+                SanitizeIdentifier((it != node.properties.end()) ? it->second : "myFunction", "myFunction");
             // Pass all data inputs as arguments
             std::string args;
             for (size_t i = 0; i < node.inputs.size(); i++)
@@ -634,14 +704,14 @@ namespace Spark::Scripting
 
         std::ostringstream source;
         source << "// Auto-generated by SparkEngine Visual Script Compiler\n";
-        source << "// Class: " << graph.className << "\n\n";
-        source << "class " << graph.className << "\n{\n";
+        source << "// Class: " << SanitizeIdentifier(graph.className, "MyScript") << "\n\n";
+        source << "class " << SanitizeIdentifier(graph.className, "MyScript") << "\n{\n";
         source << "    uint selfEntity = 0; // Entity this script is attached to\n";
 
         // Emit member variables
         for (const auto& var : graph.variables)
         {
-            source << "    " << PinTypeString(var.type) << " " << var.name;
+            source << "    " << PinTypeString(var.type) << " " << SanitizeIdentifier(var.name, "var");
             if (!var.defaultValue.empty())
             {
                 source << " = " << var.defaultValue;
@@ -708,7 +778,7 @@ namespace Spark::Scripting
             {
                 auto it = eventNode->properties.find("key");
                 std::string key = (it != eventNode->properties.end()) ? it->second : "Space";
-                source << "        if (getKeyDown(\"" << key << "\"))\n        {\n";
+                source << "        if (getKeyDown(\"" << EscapeAngelScriptString(key) << "\"))\n        {\n";
             }
 
             // Collect nodes that are emitted inside control flow blocks (Branch/ForLoop/Sequence)
@@ -847,10 +917,12 @@ namespace Spark::Scripting
             {
                 if (i > 0)
                     paramStr += ", ";
-                paramStr += PinTypeString(func.parameters[i].type) + " " + func.parameters[i].name;
+                paramStr += PinTypeString(func.parameters[i].type) + " " +
+                            SanitizeIdentifier(func.parameters[i].name, ("p" + std::to_string(i)).c_str());
             }
 
-            source << "    " << retTypeStr << " " << func.name << "(" << paramStr << ")\n    {\n";
+            source << "    " << retTypeStr << " " << SanitizeIdentifier(func.name, "MyFunction") << "(" << paramStr
+                   << ")\n    {\n";
 
             // Build a mini-graph for this function and emit its nodes
             VisualScriptGraph funcGraph;
@@ -881,9 +953,10 @@ namespace Spark::Scripting
             {
                 if (i > 0)
                     paramStr += ", ";
-                paramStr += PinTypeString(evt.parameters[i].type) + " " + evt.parameters[i].name;
+                paramStr += PinTypeString(evt.parameters[i].type) + " " +
+                            SanitizeIdentifier(evt.parameters[i].name, ("p" + std::to_string(i)).c_str());
             }
-            source << "    void On" << evt.name << "(" << paramStr << ")\n    {\n";
+            source << "    void On" << SanitizeIdentifier(evt.name, "CustomEvent") << "(" << paramStr << ")\n    {\n";
             source << "        // Custom event handler — connected nodes execute here\n";
             source << "    }\n\n";
         }

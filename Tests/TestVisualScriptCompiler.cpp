@@ -11,6 +11,14 @@
 #include <unordered_set>
 #include <vector>
 
+// Real engine compiler — used below for the code-injection regression tests
+// (VisualScriptCompiler_Security*) which must exercise the ACTUAL
+// EscapeAngelScriptString/SanitizeIdentifier fix, not the standalone mirror
+// implementation used by the rest of this file. VisualScriptCompiler.h/.cpp
+// has no AngelScript SDK dependency (pure string/struct compiler), so it's
+// safe to link directly like the rest of SparkEngineLib.
+#include "Engine/Scripting/VisualScriptCompiler.h"
+
 namespace TestVSC
 {
 
@@ -519,4 +527,165 @@ TEST(VisualScriptCompiler_VarNameFormat)
     using namespace TestVSC;
     EXPECT_EQ(VarName(5, 0), std::string("n5_out0"));
     EXPECT_EQ(VarName(100, 2), std::string("n100_out2"));
+}
+
+// ============================================================================
+// Security regression tests — exercise the REAL Spark::Scripting compiler
+// (not the standalone mirror above) to prove crafted node properties can no
+// longer inject AngelScript statements into generated source.
+// ============================================================================
+
+TEST(VisualScriptCompiler_Security_ConstStringEscapesQuotes)
+{
+    using namespace Spark::Scripting;
+    VisualScriptGraph graph;
+
+    ScriptNode start;
+    start.id = 1;
+    start.type = ScriptNodeType::OnStart;
+    graph.nodes.push_back(start);
+
+    ScriptNode constStr;
+    constStr.id = 2;
+    constStr.type = ScriptNodeType::ConstString;
+    ScriptPin out;
+    out.kind = PinKind::String;
+    out.defaultString = "\"); fireEvent(\"pwned"; // attempted quote-breakout
+    constStr.outputs.push_back(out);
+    graph.nodes.push_back(constStr);
+    graph.connections.push_back({1, 0, 2, 0});
+
+    auto result = VisualScriptCompiler::Compile(graph);
+    EXPECT_TRUE(result.success);
+    // Pre-fix vulnerable output closed the string literal early with an
+    // unescaped `"")` pair, letting `fireEvent(` follow as bare code — that
+    // exact unescaped byte sequence must be absent post-fix.
+    EXPECT_TRUE(result.angelScriptSource.find("\"\"); fireEvent(\"pwned") == std::string::npos);
+    // Post-fix, the embedded quotes must be backslash-escaped so the whole
+    // payload stays inside a single string literal.
+    EXPECT_TRUE(result.angelScriptSource.find("\"\\\"); fireEvent(\\\"pwned\"") != std::string::npos);
+}
+
+TEST(VisualScriptCompiler_Security_SpawnEntityEscapesQuotes)
+{
+    using namespace Spark::Scripting;
+    VisualScriptGraph graph;
+
+    ScriptNode start;
+    start.id = 1;
+    start.type = ScriptNodeType::OnStart;
+    graph.nodes.push_back(start);
+
+    ScriptNode spawn;
+    spawn.id = 2;
+    spawn.type = ScriptNodeType::SpawnEntity;
+    spawn.properties["name"] = "x\"); destroyEntity(0); //";
+    ScriptPin execIn;
+    execIn.kind = PinKind::Execution;
+    spawn.inputs.push_back(execIn);
+    ScriptPin uintOut;
+    uintOut.kind = PinKind::Entity;
+    spawn.outputs.push_back(uintOut);
+    graph.nodes.push_back(spawn);
+    graph.connections.push_back({1, 0, 2, 0});
+
+    auto result = VisualScriptCompiler::Compile(graph);
+    EXPECT_TRUE(result.success);
+
+    // Pre-fix vulnerable output closed the string literal early with an
+    // unescaped quote, letting `destroyEntity(0);` run as a real, second
+    // statement — that exact unescaped byte sequence must be absent.
+    EXPECT_TRUE(result.angelScriptSource.find("createEntity(\"x\"); destroyEntity(0);") == std::string::npos);
+    // Post-fix, the payload must be present only inside a single escaped
+    // string literal argument to createEntity().
+    EXPECT_TRUE(result.angelScriptSource.find("createEntity(\"x\\\"); destroyEntity(0); //\")") != std::string::npos);
+}
+
+TEST(VisualScriptCompiler_Security_VariableNameSanitizedToIdentifier)
+{
+    using namespace Spark::Scripting;
+    VisualScriptGraph graph;
+
+    ScriptNode start;
+    start.id = 1;
+    start.type = ScriptNodeType::OnStart;
+    graph.nodes.push_back(start);
+
+    ScriptNode setVar;
+    setVar.id = 2;
+    setVar.type = ScriptNodeType::SetVariable;
+    setVar.properties["name"] = "x; fireEvent(\"evil\"); //";
+    ScriptPin execIn;
+    execIn.kind = PinKind::Execution;
+    ScriptPin dataIn;
+    dataIn.kind = PinKind::Float;
+    setVar.inputs.push_back(execIn);
+    setVar.inputs.push_back(dataIn);
+    graph.nodes.push_back(setVar);
+    graph.connections.push_back({1, 0, 2, 0});
+
+    auto result = VisualScriptCompiler::Compile(graph);
+    EXPECT_TRUE(result.success);
+
+    // The injected call must never appear as real, callable syntax in the
+    // output — SanitizeIdentifier maps '(' to '_' too, so "fireEvent(" (with
+    // a real paren) cannot survive anywhere in the emitted identifier.
+    EXPECT_TRUE(result.angelScriptSource.find("fireEvent(\"evil\")") == std::string::npos);
+    // The sanitized identifier (alnum/underscore run) must still be present,
+    // proving the property was processed through SanitizeIdentifier rather
+    // than silently dropped.
+    EXPECT_TRUE(result.angelScriptSource.find("x__fireEvent__evil") != std::string::npos);
+}
+
+TEST(VisualScriptCompiler_Security_ClassNameSanitized)
+{
+    using namespace Spark::Scripting;
+    VisualScriptGraph graph;
+    graph.className = "Foo\nvoid Pwned(){ destroyEntity(0); }\nclass Bar";
+
+    ScriptNode start;
+    start.id = 1;
+    start.type = ScriptNodeType::OnStart;
+    graph.nodes.push_back(start);
+
+    auto result = VisualScriptCompiler::Compile(graph);
+    EXPECT_TRUE(result.success);
+
+    // No embedded newline may reach the emitted "class <Name>\n{\n" token,
+    // and the injected sibling method must not appear as real, callable code.
+    EXPECT_TRUE(result.angelScriptSource.find("void Pwned()") == std::string::npos);
+    EXPECT_TRUE(result.angelScriptSource.find("destroyEntity(0)") == std::string::npos);
+    // The sanitized class name is emitted as a single alnum/underscore token
+    // immediately after "class ".
+    EXPECT_TRUE(result.angelScriptSource.find("class Foo_") != std::string::npos);
+}
+
+TEST(VisualScriptCompiler_Security_CleanInputUnaffected)
+{
+    // Regression/no-behavior-change check: ordinary ASCII-identifier-safe
+    // input must compile exactly as before the fix (escaping/sanitizing are
+    // no-ops on clean input).
+    using namespace Spark::Scripting;
+    VisualScriptGraph graph;
+    graph.className = "PlayerHealth";
+
+    ScriptNode start;
+    start.id = 1;
+    start.type = ScriptNodeType::OnStart;
+    graph.nodes.push_back(start);
+
+    ScriptNode playSound;
+    playSound.id = 2;
+    playSound.type = ScriptNodeType::PlaySound;
+    playSound.properties["sound"] = "explosion.wav";
+    ScriptPin execIn;
+    execIn.kind = PinKind::Execution;
+    playSound.inputs.push_back(execIn);
+    graph.nodes.push_back(playSound);
+    graph.connections.push_back({1, 0, 2, 0});
+
+    auto result = VisualScriptCompiler::Compile(graph);
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(result.angelScriptSource.find("class PlayerHealth") != std::string::npos);
+    EXPECT_TRUE(result.angelScriptSource.find("playSound(selfEntity, \"explosion.wav\");") != std::string::npos);
 }
