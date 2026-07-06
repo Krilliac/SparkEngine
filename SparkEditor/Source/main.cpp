@@ -6,6 +6,7 @@
  */
 
 #include "Core/EditorApplication.h"
+#include "Core/EditorUI.h"
 #include "Communication/CollaborativeEditSession.h"
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
@@ -145,6 +146,7 @@ int main(int argc, char* argv[])
 
     std::string projectPathArg;
     std::string startupTheme;
+    std::string saveScenePath; // --save-scene <path>: save seeded World then exit (D2 acceptance)
 
     // Check command line arguments
     for (int i = 1; i < argc; i++)
@@ -181,6 +183,10 @@ int main(int argc, char* argv[])
         else if (strcmp(argv[i], "--theme") == 0 && i + 1 < argc)
         {
             startupTheme = argv[++i];
+        }
+        else if (strcmp(argv[i], "--save-scene") == 0 && i + 1 < argc)
+        {
+            saveScenePath = argv[++i];
         }
     }
 
@@ -283,6 +289,49 @@ int main(int argc, char* argv[])
         }
 
         console.LogSuccess("SparkEditor application initialized successfully");
+
+        // --save-scene acceptance path (D2): the seeded World already exists
+        // at this point (EditorUI::SetGraphicsDevice ran during Initialize(),
+        // before the project browser / main loop), so save it via the real
+        // EditorUI::SaveCurrentScene -> Spark::SaveWorld path and exit clean
+        // without ever entering the interactive main loop.
+        if (!saveScenePath.empty())
+        {
+            console.LogInfo("--save-scene requested: " + saveScenePath);
+            if (showDebugConsole)
+            {
+                std::cout << "Saving scene to " << saveScenePath << " and exiting (--save-scene)..." << std::endl;
+            }
+
+            bool saveOk = false;
+            SparkEditor::EditorUI* ui = app->GetUI();
+            if (ui)
+            {
+                saveOk = ui->SaveCurrentScene(saveScenePath);
+            }
+
+            if (saveOk)
+            {
+                console.LogSuccess("--save-scene: scene saved to " + saveScenePath);
+                if (showDebugConsole)
+                {
+                    std::cout << "Scene saved successfully to " << saveScenePath << std::endl;
+                }
+            }
+            else
+            {
+                console.LogError("--save-scene: failed to save scene to " + saveScenePath);
+                if (showDebugConsole)
+                {
+                    std::cerr << "Failed to save scene to " << saveScenePath << std::endl;
+                }
+            }
+
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down SparkEditor application (--save-scene)");
+            app->Shutdown();
+            console.Shutdown();
+            return saveOk ? 0 : -1;
+        }
 
         if (showDebugConsole)
         {

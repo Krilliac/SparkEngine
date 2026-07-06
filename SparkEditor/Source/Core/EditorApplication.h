@@ -82,6 +82,13 @@ namespace SparkEditor
         bool OnShutdownRequested();
         void SetWindowTitle(const std::string& title);
 
+        /// @brief Access the editor's UI/document layer (owns the live ECS
+        /// World). Valid only after a successful Initialize() call — used by
+        /// --save-scene (D2 round-trip acceptance) to save the seeded World
+        /// via the real EditorUI::SaveCurrentScene path without requiring a
+        /// full interactive main-loop pass.
+        EditorUI* GetUI() const { return m_ui.get(); }
+
 #ifdef _WIN32
         static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
