@@ -31,6 +31,8 @@
 #include "GameplaySystemLifecycle.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
+#include "SceneManager/ReflectedSceneSerializer.h" // -scene: Spark::LoadWorld
+#include "Graphics/WorldBasicRenderer.h"           // -scene: Spark::RenderWorldBasic
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/UI/UISystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
@@ -199,6 +201,29 @@ static void ParseWindowSizeOverride(LPWSTR cmdLine)
     }
 }
 
+/**
+ * @brief Parse -scene <path> from a wide command line string (Windows).
+ *
+ * When present and no game module ends up loaded, RunWindowedMainLoop
+ * renders this reflected-scene JSON via the shared WorldBasicRenderer —
+ * the automatable render path used by smoke tests and (later) the editor.
+ */
+static std::string ParseScenePathOverride(LPWSTR cmdLine)
+{
+    std::wstring cmd(cmdLine);
+    auto pos = cmd.find(L"-scene");
+    if (pos == std::wstring::npos)
+        return {};
+    pos += 6; // length of "-scene"
+    while (pos < cmd.size() && cmd[pos] == L' ')
+        ++pos;
+    if (pos >= cmd.size())
+        return {};
+    auto end = cmd.find(L' ', pos);
+    std::wstring wpath = cmd.substr(pos, end - pos);
+    return std::string(wpath.begin(), wpath.end());
+}
+
 // Windows-specific globals
 constexpr int MAX_LOADSTRING = 100;
 HINSTANCE g_hInst;
@@ -210,6 +235,7 @@ std::unique_ptr<Spark::UI::UISystem> g_uiSystem;
 std::unique_ptr<Spark::DialogueSystem> g_dialogueSystem;
 std::unique_ptr<Spark::ModSystem> g_modSystem;
 static Spark::DeltaSmoother g_deltaSmoother(10);
+static std::string g_scenePath; ///< -scene <path>: reflected-scene JSON rendered when no game module loads
 
 #ifdef SPARK_HEADLESS_SUPPORT
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
@@ -905,6 +931,26 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("Starting main engine loop...");
 
+    // -scene <path>: load a reflected-scene JSON and render it via the
+    // shared WorldBasicRenderer when no game module took over rendering.
+    // File-scope statics so they outlive this stack frame for every tick.
+    static World g_sceneWorld;
+    static Spark::WorldMeshCache g_sceneCache;
+    bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules();
+    if (!g_scenePath.empty() && !haveModules)
+    {
+        if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
+        {
+            console.LogSuccess(std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath,
+                                           g_sceneWorld.GetRegistry().storage<entt::entity>().size()));
+        }
+        else
+        {
+            console.LogError(std::format("[-scene] Failed to load '{}'", g_scenePath));
+            g_scenePath.clear();
+        }
+    }
+
     if (g_testFrameLimit > 0)
         console.LogInfo(std::format("Test mode: will exit after {} frames", g_testFrameLimit));
 
@@ -976,9 +1022,24 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
             }
             else if (GetEngineRuntime().graphics)
             {
-                // Engine-only mode: just clear and present
-                GetEngineRuntime().graphics->BeginFrame();
-                GetEngineRuntime().graphics->EndFrame();
+                // Engine-only mode: clear, optionally render a -scene, present.
+                auto* gfx = GetEngineRuntime().graphics.get();
+                gfx->BeginFrame();
+                if (!g_scenePath.empty())
+                {
+                    // Fixed framing camera looking at the scene origin.
+                    using namespace DirectX;
+                    XMVECTOR eye = XMVectorSet(2.0f, 1.7f, -3.5f, 1.0f);
+                    XMVECTOR at = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
+                    XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+                    XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
+                    int fbW = g_windowWidthOverride > 0 ? g_windowWidthOverride : 1280;
+                    int fbH = g_windowHeightOverride > 0 ? g_windowHeightOverride : 720;
+                    float aspect = static_cast<float>(fbW) / static_cast<float>(fbH);
+                    XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), aspect, 0.1f, 6000.0f);
+                    Spark::RenderWorldBasic(g_sceneWorld, *gfx, g_sceneCache, view, proj);
+                }
+                gfx->EndFrame();
             }
 
             if (GetEngineRuntime().moduleHotReload)
@@ -1100,6 +1161,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     g_minimalInit = (std::wstring(lpCmdLine).find(L"-minimal-init") != std::wstring::npos);
     g_noJobSystem = (std::wstring(lpCmdLine).find(L"-no-jobsystem") != std::wstring::npos);
     ParseWindowSizeOverride(lpCmdLine);
+    g_scenePath = ParseScenePathOverride(lpCmdLine);
 
 #ifdef SPARK_HEADLESS_SUPPORT
     g_headlessMode = ParseHeadlessFlag(lpCmdLine);
