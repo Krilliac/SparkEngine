@@ -1472,6 +1472,14 @@ namespace SparkEditor
             return false;
         }
 
+        // Every command on the undo/redo stack may have captured raw state
+        // tied to the World we are about to discard (e.g. LambdaCommands
+        // closing over entities/components of the old m_world). Clear the
+        // history *before* freeing the old World below, otherwise a
+        // subsequent Ctrl+Z (Undo) re-executes a stale command against a
+        // freed World -- use-after-free. Mirrors HierarchyPanel::ResetToDefault().
+        Spark::Editor::CommandHistory::GetInstance().Clear();
+
         m_world = std::move(fresh);
 
         // SceneView/Hierarchy cache a raw ::World*; re-point them now that
