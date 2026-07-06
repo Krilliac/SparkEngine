@@ -31,6 +31,16 @@ void RenderWorldBasic(World& world, GraphicsEngine& g, WorldMeshCache& cache, co
 {
     g.SetBasicShaders();
     g.ApplyBasicRenderStates();
+    // Set the per-frame lighting/camera constant buffer that the basic pixel
+    // shader reads (directional + ambient + camera-facing fill). Without this,
+    // callers that don't run GraphicsEngine's normal BeginFrame path (the -scene
+    // runtime and the editor viewport) leave the lighting cbuffer zeroed, so
+    // everything renders black. Camera position is the inverse-view translation.
+    XMVECTOR det;
+    const XMMATRIX invView = XMMatrixInverse(&det, view);
+    XMFLOAT3 camPos;
+    XMStoreFloat3(&camPos, invView.r[3]);
+    g.UpdateFrameConstants(view, proj, camPos);
     for (auto e : world.GetEntitiesWith<Transform, MeshRenderer>())
     {
         const MeshRenderer* mr = world.GetComponent<MeshRenderer>(e);
