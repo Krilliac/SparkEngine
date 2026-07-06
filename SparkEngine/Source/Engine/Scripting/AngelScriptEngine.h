@@ -66,6 +66,7 @@ struct asSMessageInfo;
 #include <unordered_map>
 #include <memory>
 #include <string>
+#include <vector>
 #include "../ECS/Components.h"
 #include "ScriptSandbox.h"
 
@@ -203,6 +204,32 @@ class AngelScriptEngine
     Spark::ScriptSandbox* GetSandbox() { return m_sandbox.get(); }
 
     /**
+     * @brief Configure the script sandbox's security level and function
+     *        allow/block lists.
+     *
+     * For the whitelist (Strict mode) or blacklist (Standard mode) to
+     * actually gate which native functions get bound to the AngelScript
+     * engine, this MUST be called before Initialize(): RegisterEngineAPI()
+     * consults the sandbox's IsFunctionAllowed() exactly once per function,
+     * at registration time (see RegisterGuardedFunction). A function that is
+     * not allowed is simply never registered, so a script referencing it
+     * fails at BuildModule() with an undefined-symbol compile error.
+     *
+     * Calling this AFTER Initialize() still updates the sandbox's settings
+     * (useful for runtime limits), but cannot retroactively un-register any
+     * function already bound to the AngelScript engine — AngelScript has no
+     * API to unregister a single global function. A warning is logged in
+     * that case.
+     *
+     * @param level            Security level to apply.
+     * @param allowedFunctions Script-visible function names to whitelist (consulted in Strict mode).
+     * @param blockedFunctions Script-visible function names to blacklist (consulted in Standard mode).
+     */
+    void ConfigureSandboxSecurity(Spark::ScriptSecurityLevel level,
+                                  const std::vector<std::string>& allowedFunctions = {},
+                                  const std::vector<std::string>& blockedFunctions = {});
+
+    /**
      * @brief Get the global singleton instance
      * @return Pointer to the AngelScriptEngine instance, or nullptr if not created
      */
@@ -255,6 +282,13 @@ class AngelScriptEngine
     std::string m_lastError;                                      ///< Last error message from AS engine
     std::unique_ptr<Spark::ScriptSandbox> m_sandbox;              ///< Script execution sandbox
 
+    // Sandbox security configuration staged via ConfigureSandboxSecurity()
+    // before Initialize() constructs m_sandbox and registers the engine API.
+    bool m_sandboxConfigPending = false;
+    Spark::ScriptSecurityLevel m_pendingSecurityLevel = Spark::ScriptSecurityLevel::Standard;
+    std::vector<std::string> m_pendingAllowedFunctions;
+    std::vector<std::string> m_pendingBlockedFunctions;
+
     // ========================================================================
     // Engine API Registration (called during Initialize)
     // ========================================================================
@@ -271,6 +305,31 @@ class AngelScriptEngine
     void RegisterGlobalFunctions();
     /** @brief Auto-register all reflected types from TypeRegistry as script-accessible types */
     void AutoRegisterReflectedTypes();
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+    /**
+     * @brief Register a global function with the AngelScript engine, gated by
+     *        the script sandbox's whitelist/blacklist.
+     *
+     * Every RegisterGlobalFunction call site in RegisterGlobalFunctions() and
+     * AutoRegisterReflectedTypes() should route through this helper instead
+     * of calling m_engine->RegisterGlobalFunction() directly. If m_sandbox is
+     * set and IsFunctionAllowed(scriptVisibleName) is false at the current
+     * security level, the function is simply not registered — a script
+     * referencing it fails at BuildModule() time with an undefined-symbol
+     * compile error. This gives Strict mode real whitelist enforcement with
+     * a single call site instead of a per-call runtime dispatcher.
+     *
+     * @param declaration       AngelScript function declaration string.
+     * @param scriptVisibleName The script-visible identifier used for sandbox
+     *                          whitelist/blacklist lookups (must match the
+     *                          function name as it appears in @p declaration).
+     * @param fn                Native function pointer (wrap with asFUNCTION(...)).
+     * @return true if registered, false if skipped by the sandbox or if
+     *         RegisterGlobalFunction itself failed.
+     */
+    bool RegisterGuardedFunction(const char* declaration, const char* scriptVisibleName, const asSFuncPtr& fn);
+#endif
 
     // ========================================================================
     // Internal Helpers

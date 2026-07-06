@@ -361,3 +361,80 @@ TEST(ScriptSandbox_UnrestrictedNoInstructionLimit)
 
     EXPECT_FALSE(sandbox.WasTerminated());
 }
+
+// ============================================================================
+// Registration-guard decision logic
+//
+// AngelScriptEngine::RegisterGuardedFunction (AngelScriptEngine.cpp) gates
+// every RegisterGlobalFunction call site: a native function is bound to the
+// AngelScript engine iff sandbox->IsFunctionAllowed(scriptVisibleName) is
+// true; otherwise it is silently skipped, so a script referencing it fails
+// at BuildModule() time with an undefined-symbol compile error. That is the
+// fix for the bug this test file covers: IsFunctionAllowed was fully
+// implemented but had zero call sites, so Strict mode provided no actual
+// whitelist enforcement.
+//
+// INTEGRATION GAP: TestAngelScriptEngine.cpp (this repo's convention for
+// this subsystem) already uses a standalone reimplementation rather than the
+// real AngelScriptEngine class, because SparkTests does not link the real
+// AngelScript SDK — the production SPARK_ANGELSCRIPT_SUPPORT macro is (as of
+// this change) not defined anywhere in CMakeLists.txt, so the real
+// RegisterGuardedFunction/Initialize() code path is not compiled into any
+// current build target, test or production. A true end-to-end test (compile
+// a script under Strict with a function excluded from the whitelist and
+// assert BuildModule() fails; assert it succeeds once whitelisted) requires
+// wiring the AngelScript SDK into the build first. Until then, this
+// exercises the exact decision rule RegisterGuardedFunction applies —
+// WouldRegisterFunction below is that rule, reproduced verbatim.
+// ============================================================================
+
+namespace TestSandbox
+{
+    // Mirrors AngelScriptEngine::RegisterGuardedFunction's gating decision:
+    // a function is registered with the AngelScript engine iff the sandbox
+    // allows it. Returns what the guard would decide, without needing an
+    // actual asIScriptEngine to register against.
+    bool WouldRegisterFunction(const ScriptSandbox& sandbox, const std::string& scriptVisibleName)
+    {
+        return sandbox.IsFunctionAllowed(scriptVisibleName);
+    }
+} // namespace TestSandbox
+
+TEST(ScriptSandbox_RegistrationGuard_PermissiveAllowsNormalFunction)
+{
+    // (a) No regression: under the default/permissive level (Standard, no
+    // blacklist), a normal engine function must still be registered so
+    // existing scripts and tests keep working unchanged.
+    TestSandbox::ScriptSandbox sandbox;
+    EXPECT_TRUE(sandbox.GetSecurityLevel() == TestSandbox::ScriptSecurityLevel::Standard);
+
+    EXPECT_TRUE(TestSandbox::WouldRegisterFunction(sandbox, "destroyEntity"));
+    EXPECT_TRUE(TestSandbox::WouldRegisterFunction(sandbox, "print"));
+    EXPECT_TRUE(TestSandbox::WouldRegisterFunction(sandbox, "getComponentField"));
+    EXPECT_TRUE(TestSandbox::WouldRegisterFunction(sandbox, "setComponentField"));
+}
+
+TEST(ScriptSandbox_RegistrationGuard_StrictBlocksNonWhitelisted)
+{
+    // (b) The gate works: Strict + a whitelist that excludes "destroyEntity"
+    // must refuse to register it — equivalent to a script that calls
+    // destroyEntity() failing BuildModule() with an undefined-symbol error.
+    TestSandbox::ScriptSandbox sandbox;
+    sandbox.SetSecurityLevel(TestSandbox::ScriptSecurityLevel::Strict);
+    sandbox.AddAllowedFunction("print");
+
+    EXPECT_TRUE(TestSandbox::WouldRegisterFunction(sandbox, "print"));
+    EXPECT_FALSE(TestSandbox::WouldRegisterFunction(sandbox, "destroyEntity"));
+    EXPECT_FALSE(TestSandbox::WouldRegisterFunction(sandbox, "setComponentField"));
+}
+
+TEST(ScriptSandbox_RegistrationGuard_StrictAllowsWhitelisted)
+{
+    // (c) Strict + the function whitelisted -> the guard registers it.
+    TestSandbox::ScriptSandbox sandbox;
+    sandbox.SetSecurityLevel(TestSandbox::ScriptSecurityLevel::Strict);
+    sandbox.AddAllowedFunction("destroyEntity");
+
+    EXPECT_TRUE(TestSandbox::WouldRegisterFunction(sandbox, "destroyEntity"));
+    EXPECT_FALSE(TestSandbox::WouldRegisterFunction(sandbox, "print"));
+}

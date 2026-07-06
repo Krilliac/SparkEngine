@@ -35,6 +35,14 @@ namespace Spark
                        level == ScriptSecurityLevel::Unrestricted ? "Unrestricted"
                        : level == ScriptSecurityLevel::Standard   ? "Standard"
                                                                   : "Strict");
+
+        if (level == ScriptSecurityLevel::Strict && m_allowedFunctions.empty())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Scripting,
+                           "Strict sandbox enabled with an empty function whitelist -- scripts will have no "
+                           "engine API until AddAllowedFunction()/ConfigureSandboxSecurity() adds one, and this "
+                           "must happen before AngelScriptEngine::Initialize() for it to take effect.");
+        }
     }
 
     void ScriptSandbox::SetInstructionLimit(uint32_t maxInstructions)

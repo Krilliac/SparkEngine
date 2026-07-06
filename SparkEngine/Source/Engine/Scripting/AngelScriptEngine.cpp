@@ -372,6 +372,40 @@ void ASSetDebugTraceCallback(DebugTraceCallback callback)
 }
 
 // ============================================================================
+// Sandbox security configuration (shared by both the real and stub builds —
+// stages the level/whitelist/blacklist so Initialize() can apply them before
+// RegisterEngineAPI() runs; see RegisterGuardedFunction).
+// ============================================================================
+
+void AngelScriptEngine::ConfigureSandboxSecurity(Spark::ScriptSecurityLevel level,
+                                                 const std::vector<std::string>& allowedFunctions,
+                                                 const std::vector<std::string>& blockedFunctions)
+{
+    m_pendingSecurityLevel = level;
+    m_pendingAllowedFunctions = allowedFunctions;
+    m_pendingBlockedFunctions = blockedFunctions;
+    m_sandboxConfigPending = true;
+
+    if (m_sandbox)
+    {
+        // Initialize() already ran and already registered the engine API
+        // through RegisterGuardedFunction under the PREVIOUS settings —
+        // AngelScript has no API to unregister a single global function, so
+        // this cannot retroactively tighten (or loosen) which functions a
+        // script can call. Only the sandbox's runtime checks (instruction
+        // limits, timeouts, memory) are actually affected at this point.
+        LogWarning("ConfigureSandboxSecurity called after Initialize(): the engine API was already "
+                   "registered under the previous security settings, so the whitelist/blacklist change "
+                   "has no effect on already-registered functions. Call this before Initialize() instead.");
+        m_sandbox->SetSecurityLevel(level);
+        for (const auto& name : allowedFunctions)
+            m_sandbox->AddAllowedFunction(name);
+        for (const auto& name : blockedFunctions)
+            m_sandbox->AddBlockedFunction(name);
+    }
+}
+
+// ============================================================================
 // SPARK_ANGELSCRIPT_SUPPORT — real implementation
 // ============================================================================
 
@@ -404,12 +438,36 @@ bool AngelScriptEngine::Initialize()
     m_engine->SetMessageCallback(asFUNCTION(MessageCallback), this, asCALL_CDECL);
 
     RegisterStandardLibrary();
+
+    // Construct + configure the sandbox BEFORE the engine API is registered.
+    // RegisterGlobalFunctions()/AutoRegisterReflectedTypes() (called from
+    // RegisterEngineAPI() below) route every native function through
+    // RegisterGuardedFunction, which consults m_sandbox->IsFunctionAllowed()
+    // at registration time — a non-whitelisted function is simply never
+    // bound to the AngelScript engine. That gate only works if m_sandbox
+    // (and any pending whitelist/blacklist from ConfigureSandboxSecurity)
+    // exists BEFORE registration runs; previously m_sandbox was constructed
+    // one call AFTER RegisterEngineAPI(), so it was null at registration
+    // time and Strict-mode whitelisting had no effect whatsoever.
+    m_sandbox = std::make_unique<Spark::ScriptSandbox>();
+    if (m_sandboxConfigPending)
+    {
+        m_sandbox->SetSecurityLevel(m_pendingSecurityLevel);
+        for (const auto& name : m_pendingAllowedFunctions)
+            m_sandbox->AddAllowedFunction(name);
+        for (const auto& name : m_pendingBlockedFunctions)
+            m_sandbox->AddBlockedFunction(name);
+    }
+    m_sandbox->RegisterConsoleCommands();
+
     RegisterEngineAPI();
 
-    // Initialize the script sandbox for execution limits and access control
-    m_sandbox = std::make_unique<Spark::ScriptSandbox>();
-    m_sandbox->RegisterConsoleCommands();
-    LogInfo("Script sandbox initialized (security level: Standard).");
+    const char* securityLevelStr = m_sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Unrestricted
+                                       ? "Unrestricted"
+                                   : m_sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Standard
+                                       ? "Standard"
+                                       : "Strict";
+    LogInfo(std::string("Script sandbox initialized (security level: ") + securityLevelStr + ").");
 
     s_instance = this;
     LogInfo("Initialized successfully.");
@@ -905,41 +963,57 @@ void AngelScriptEngine::RegisterComponentTypes()
     m_engine->RegisterTypedef("EntityID", "uint32");
 }
 
+bool AngelScriptEngine::RegisterGuardedFunction(const char* declaration, const char* scriptVisibleName,
+                                                const asSFuncPtr& fn)
+{
+    if (m_sandbox && !m_sandbox->IsFunctionAllowed(scriptVisibleName))
+    {
+        SPARK_LOG_DEBUG(Spark::LogCategory::Scripting,
+                        "Sandbox: excluding '%s' from script API (not permitted at the current security level).",
+                        scriptVisibleName);
+        return false;
+    }
+
+    int result = m_engine->RegisterGlobalFunction(declaration, fn, asCALL_CDECL);
+    if (result < 0)
+    {
+        LogWarning(std::string("RegisterGlobalFunction failed for '") + scriptVisibleName +
+                  "' (decl: " + declaration + "), AngelScript error code " + std::to_string(result));
+        return false;
+    }
+    return true;
+}
+
 void AngelScriptEngine::RegisterGlobalFunctions()
 {
-    m_engine->RegisterGlobalFunction("void print(const string &in)", asFUNCTION(ASPrint), asCALL_CDECL);
+    RegisterGuardedFunction("void print(const string &in)", "print", asFUNCTION(ASPrint));
 
-    m_engine->RegisterGlobalFunction("EntityID createEntity(const string &in)", asFUNCTION(ASCreateEntity),
-                                     asCALL_CDECL);
+    RegisterGuardedFunction("EntityID createEntity(const string &in)", "createEntity", asFUNCTION(ASCreateEntity));
 
-    m_engine->RegisterGlobalFunction("Transform@ getTransform(EntityID)", asFUNCTION(ASGetTransform), asCALL_CDECL);
+    RegisterGuardedFunction("Transform@ getTransform(EntityID)", "getTransform", asFUNCTION(ASGetTransform));
 
-    m_engine->RegisterGlobalFunction("bool getKeyDown(const string &in)", asFUNCTION(ASGetKeyDown), asCALL_CDECL);
+    RegisterGuardedFunction("bool getKeyDown(const string &in)", "getKeyDown", asFUNCTION(ASGetKeyDown));
 
-    m_engine->RegisterGlobalFunction("bool getKey(const string &in)", asFUNCTION(ASGetKey), asCALL_CDECL);
+    RegisterGuardedFunction("bool getKey(const string &in)", "getKey", asFUNCTION(ASGetKey));
 
     // Visual Script API — entity manipulation
-    m_engine->RegisterGlobalFunction("void destroyEntity(EntityID)", asFUNCTION(ASDestroyEntity), asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("Vector3 getPosition(EntityID)", asFUNCTION(ASGetPosition), asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void setPosition(EntityID, const Vector3 &in)", asFUNCTION(ASSetPosition),
-                                     asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("Vector3 getRotation(EntityID)", asFUNCTION(ASGetRotation), asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void setRotation(EntityID, const Vector3 &in)", asFUNCTION(ASSetRotation),
-                                     asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("float getHealth(EntityID)", asFUNCTION(ASGetHealth), asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void setHealth(EntityID, float)", asFUNCTION(ASSetHealth), asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("float getSpeed(EntityID)", asFUNCTION(ASGetSpeed), asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void applyForce(EntityID, const Vector3 &in)", asFUNCTION(ASApplyForce),
-                                     asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void playSound(EntityID, const string &in)", asFUNCTION(ASPlaySound),
-                                     asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void playAnimation(EntityID, const string &in)", asFUNCTION(ASPlayAnimation),
-                                     asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("EntityID getEntityByName(const string &in)", asFUNCTION(ASGetEntityByName),
-                                     asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void fireEvent(const string &in)", asFUNCTION(ASFireEvent), asCALL_CDECL);
-    m_engine->RegisterGlobalFunction("void debugTrace(uint, const string &in, const string &in)",
-                                     asFUNCTION(ASDebugTrace), asCALL_CDECL);
+    RegisterGuardedFunction("void destroyEntity(EntityID)", "destroyEntity", asFUNCTION(ASDestroyEntity));
+    RegisterGuardedFunction("Vector3 getPosition(EntityID)", "getPosition", asFUNCTION(ASGetPosition));
+    RegisterGuardedFunction("void setPosition(EntityID, const Vector3 &in)", "setPosition", asFUNCTION(ASSetPosition));
+    RegisterGuardedFunction("Vector3 getRotation(EntityID)", "getRotation", asFUNCTION(ASGetRotation));
+    RegisterGuardedFunction("void setRotation(EntityID, const Vector3 &in)", "setRotation", asFUNCTION(ASSetRotation));
+    RegisterGuardedFunction("float getHealth(EntityID)", "getHealth", asFUNCTION(ASGetHealth));
+    RegisterGuardedFunction("void setHealth(EntityID, float)", "setHealth", asFUNCTION(ASSetHealth));
+    RegisterGuardedFunction("float getSpeed(EntityID)", "getSpeed", asFUNCTION(ASGetSpeed));
+    RegisterGuardedFunction("void applyForce(EntityID, const Vector3 &in)", "applyForce", asFUNCTION(ASApplyForce));
+    RegisterGuardedFunction("void playSound(EntityID, const string &in)", "playSound", asFUNCTION(ASPlaySound));
+    RegisterGuardedFunction("void playAnimation(EntityID, const string &in)", "playAnimation",
+                           asFUNCTION(ASPlayAnimation));
+    RegisterGuardedFunction("EntityID getEntityByName(const string &in)", "getEntityByName",
+                           asFUNCTION(ASGetEntityByName));
+    RegisterGuardedFunction("void fireEvent(const string &in)", "fireEvent", asFUNCTION(ASFireEvent));
+    RegisterGuardedFunction("void debugTrace(uint, const string &in, const string &in)", "debugTrace",
+                           asFUNCTION(ASDebugTrace));
 }
 
 // -------------------------------------------------------------------------
@@ -1014,15 +1088,14 @@ void AngelScriptEngine::AutoRegisterReflectedTypes()
     //   string val = getComponentField(entity, "HealthComponent", "health");
     //   setComponentField(entity, "HealthComponent", "health", "50.0");
     //   bool has = hasComponent(entity, "Transform");
-    m_engine->RegisterGlobalFunction("string getComponentField(EntityID, const string &in, const string &in)",
-                                     asFUNCTION(ASGetComponentField), asCALL_CDECL);
+    RegisterGuardedFunction("string getComponentField(EntityID, const string &in, const string &in)",
+                           "getComponentField", asFUNCTION(ASGetComponentField));
 
-    m_engine->RegisterGlobalFunction(
-        "void setComponentField(EntityID, const string &in, const string &in, const string &in)",
-        asFUNCTION(ASSetComponentField), asCALL_CDECL);
+    RegisterGuardedFunction("void setComponentField(EntityID, const string &in, const string &in, const string &in)",
+                           "setComponentField", asFUNCTION(ASSetComponentField));
 
-    m_engine->RegisterGlobalFunction("bool hasComponent(EntityID, const string &in)", asFUNCTION(ASHasComponent),
-                                     asCALL_CDECL);
+    RegisterGuardedFunction("bool hasComponent(EntityID, const string &in)", "hasComponent",
+                           asFUNCTION(ASHasComponent));
 
     SPARK_LOG_INFO(
         Spark::LogCategory::Scripting,
