@@ -10,11 +10,22 @@
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
 #include "Core/Reflection.h"
+// Engine ECS World/EntityID (Unit C3) — needed here (not just the .cpp)
+// because RenderWorldBackedInspector()'s declaration is ::World* / ::EntityID.
+// EntityID is a type alias (entt::entity), not forward-declarable, so the
+// full header is required (mirrors EditorUI.h, which includes this for the
+// same reason).
+#include "Engine/ECS/Components.h"
 #include <string>
 #include <memory>
 
 namespace SparkEditor
 {
+    // EditorUI (Unit C3) — non-owning source of the live ECS World + selected
+    // entity for the World-backed inspector path. Forward-declared to avoid
+    // a header cycle (EditorUI.h forward-declares panels and owns the panel
+    // map; it doesn't need InspectorPanel's internals).
+    class EditorUI;
 
     /**
  * @brief Inspector panel
@@ -52,6 +63,19 @@ namespace SparkEditor
      * @param objectId ID of object to inspect
      */
         void SetInspectedObject(const std::string& objectId);
+
+        /**
+     * @brief Set the EditorUI to source the live ECS World + selected entity
+     * from (Unit C3).
+     *
+     * Non-owning. When EditorUI has a live World and a valid selected
+     * entity (published by HierarchyPanel, Unit C2), Render() takes a
+     * World-backed branch that lists/edits the entity's real engine
+     * components via reflection (Spark::ComponentFactory /
+     * Spark::TypeRegistry) instead of the legacy SceneFile-backed path.
+     * @param ui EditorUI instance to source the World + selection from.
+     */
+        void SetEditorUI(EditorUI* ui) { m_editorUI = ui; }
 
         /// Helper: draw a labeled XYZ drag-float control with colored reset buttons.
         /// Public so reflection-based component renderers (outside the panel
@@ -116,6 +140,31 @@ namespace SparkEditor
 
         void RenderAddComponentMenu();
 
+        /**
+         * @brief World-backed ECS inspector (Unit C3).
+         *
+         * Lists a collapsing header per real engine component the entity
+         * has (via Spark::ComponentFactory::HasComponent), rendering each
+         * one's fields generically through RenderReflectedFields (fed by
+         * Spark::TypeRegistry), plus an Add-Component button/popup.
+         *
+         * Undo/redo for these edits is DEFERRED — RenderReflectedFields
+         * writes directly to the live component memory, unlike the legacy
+         * SceneFile path which routes every mutation through
+         * CommandHistory. A follow-up unit should wrap ECS field edits in
+         * CommandHistory commands.
+         *
+         * @param world  The live ECS World (owned by EditorUI).
+         * @param entity The currently selected entity (already validated
+         *               non-null and registry-valid by the caller).
+         */
+        void RenderWorldBackedInspector(::World* world, ::EntityID entity);
+
+        /// Add-Component popup for the World-backed path (Unit C3): lists
+        /// Spark::ComponentFactory's registered type names and adds the
+        /// picked type to the entity via Spark::ComponentFactory::AddComponent.
+        void RenderWorldAddComponentMenu(::World* world, ::EntityID entity);
+
         /// Helper: check if the inspected object has a specific component type
         bool HasComponent(ComponentType type) const;
 
@@ -146,6 +195,13 @@ namespace SparkEditor
         std::string m_inspectedObject;                    ///< Legacy string-based object identifier.
         bool m_showAddComponentMenu = false;              ///< Whether the "Add Component" popup is open.
         uint32_t m_selectionMgrCallbackId = 0;            ///< SelectionManager subscription handle.
+
+        // World-backed ECS inspector (Unit C3). Non-owning; owned by
+        // EditorUI. When set and EditorUI reports a live World + valid
+        // selected entity, Render() takes the ECS branch instead of the
+        // legacy SceneFile path above.
+        EditorUI* m_editorUI = nullptr;
+        bool m_showWorldAddComponentMenu = false; ///< Whether the World-backed Add-Component popup is open.
     };
 
 } // namespace SparkEditor

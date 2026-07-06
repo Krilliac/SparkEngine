@@ -12,9 +12,11 @@
 #include "SelectionManager.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../Core/EditorUI.h"
 #include "../CommandHistory.h"
 #include "../../../SparkEngine/Source/Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Engine/ECS/Components.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
@@ -65,7 +67,17 @@ namespace SparkEditor
 
         if (BeginPanel())
         {
-            if (m_inspectedObjectID == INVALID_OBJECT_ID && m_inspectedObject.empty())
+            // Unit C3: World-backed ECS inspector branch — takes priority
+            // over the legacy SceneFile path below whenever EditorUI has a
+            // live World and a valid selected entity (published by
+            // HierarchyPanel, Unit C2).
+            ::World* ecsWorld = m_editorUI ? m_editorUI->GetWorld() : nullptr;
+            ::EntityID ecsSelected = m_editorUI ? m_editorUI->GetSelectedEntity() : entt::null;
+            if (ecsWorld && ecsSelected != entt::null && ecsWorld->GetRegistry().valid(ecsSelected))
+            {
+                RenderWorldBackedInspector(ecsWorld, ecsSelected);
+            }
+            else if (m_inspectedObjectID == INVALID_OBJECT_ID && m_inspectedObject.empty())
             {
                 float avail = ImGui::GetContentRegionAvail().y;
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + avail * 0.4f);
@@ -1282,6 +1294,107 @@ namespace SparkEditor
                 ImGui::EndMenu();
             }
             ImGui::EndPopup();
+        }
+    }
+
+    // ============================================================================
+    // World-backed ECS Inspector (Unit C3)
+    // ============================================================================
+
+    void InspectorPanel::RenderWorldBackedInspector(::World* world, ::EntityID entity)
+    {
+        const uint32_t rawEntity = static_cast<uint32_t>(entity);
+
+        // Entity header — name (from NameComponent, if present) + raw id,
+        // for context. Renaming ECS entities is out of scope for this unit.
+        const ::NameComponent* nc = world->GetComponent<::NameComponent>(entity);
+        const char* label = (nc && !nc->name.empty()) ? nc->name.c_str() : "Entity";
+        ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f), ICON_FA_CUBE " %s", label);
+        ImGui::TextDisabled("Entity #%u", rawEntity);
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        auto& factory = Spark::ComponentFactory::Get();
+        auto& typeRegistry = Spark::TypeRegistry::Get();
+
+        for (const std::string& type : factory.GetRegisteredNames())
+        {
+            if (!factory.HasComponent(type, world, rawEntity))
+                continue;
+
+            ImGui::PushID(type.c_str());
+            if (ImGui::CollapsingHeader(type.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                void* comp = factory.GetComponentRaw(type, world, rawEntity);
+                const Spark::TypeInfo* ti = typeRegistry.FindTypeByName(type);
+                if (comp && ti)
+                {
+                    ImGui::Indent(4);
+                    RenderReflectedFields(comp, ti->fields);
+                    ImGui::Unindent(4);
+                }
+                else
+                {
+                    ImGui::TextDisabled("(no reflection data registered for '%s')", type.c_str());
+                }
+            }
+            ImGui::PopID();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float btnWidth = ImGui::GetContentRegionAvail().x;
+        if (ImGui::Button(ICON_FA_PLUS " Add Component##World", ImVec2(btnWidth, 30)))
+        {
+            m_showWorldAddComponentMenu = true;
+        }
+
+        if (m_showWorldAddComponentMenu)
+        {
+            RenderWorldAddComponentMenu(world, entity);
+        }
+    }
+
+    void InspectorPanel::RenderWorldAddComponentMenu(::World* world, ::EntityID entity)
+    {
+        if (m_showWorldAddComponentMenu)
+        {
+            ImGui::OpenPopup("WorldAddComponentMenu");
+        }
+
+        if (ImGui::BeginPopup("WorldAddComponentMenu"))
+        {
+            ImGui::Text(ICON_FA_SEARCH " Add Component");
+            ImGui::Separator();
+
+            auto& factory = Spark::ComponentFactory::Get();
+            const uint32_t rawEntity = static_cast<uint32_t>(entity);
+
+            std::vector<std::string> names = factory.GetRegisteredNames();
+            std::sort(names.begin(), names.end());
+
+            for (const std::string& type : names)
+            {
+                bool has = factory.HasComponent(type, world, rawEntity);
+                if (ImGui::MenuItem(type.c_str(), nullptr, false, !has))
+                {
+                    factory.AddComponent(type, world, rawEntity);
+                    m_showWorldAddComponentMenu = false;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+
+            ImGui::EndPopup();
+        }
+        else
+        {
+            // Popup was dismissed by clicking elsewhere (ImGui closes it
+            // internally) — clear our flag so the next "Add Component"
+            // click reopens it instead of no-opping.
+            m_showWorldAddComponentMenu = false;
         }
     }
 

@@ -1508,6 +1508,21 @@ namespace SparkEditor
             }
         }
 
+        // Wire the Inspector panel to EditorUI (Unit C3) so it can read the
+        // live World + selected entity each frame and render/edit the
+        // entity's real engine components via reflection, instead of the
+        // legacy (dormant) SceneFile-backed inspector.
+        auto inspectorIt = m_panels.find("Inspector");
+        if (inspectorIt != m_panels.end())
+        {
+            auto* inspector = dynamic_cast<InspectorPanel*>(inspectorIt->second.get());
+            if (inspector)
+            {
+                inspector->SetEditorUI(this);
+                console.LogSuccess("EditorUI wired to Inspector panel (World-backed ECS inspector)");
+            }
+        }
+
         // Re-initialize gizmo system with the actual D3D11 device
         if (m_gizmoSystem)
         {
