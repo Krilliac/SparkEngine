@@ -401,6 +401,82 @@ TEST(TFData_Vehicles_ValidIdsSeatsAndWeaponRefs)
 // factions.json
 // ============================================================================
 
+// ============================================================================
+// presentation.json / deployables.json (sp4 de-hardcode)
+// ============================================================================
+
+TEST(TFData_Presentation_ParsesAndAssetsExist)
+{
+    const Value doc = LoadTable("presentation.json");
+    EXPECT_TRUE(doc["presentation"].IsObject());
+    EXPECT_TRUE(doc["presentation"]["skybox"]["faceTex"].IsArray());
+    EXPECT_EQ(doc["presentation"]["skybox"]["faceTex"].Size(), size_t{6});
+    for (size_t i = 0; i < doc["presentation"]["skybox"]["faceTex"].Size(); ++i)
+    {
+        const std::string texPath = doc["presentation"]["skybox"]["faceTex"][i].AsString(std::string{});
+        EXPECT_FALSE(texPath.empty());
+        EXPECT_TRUE(AssetExists(texPath));
+    }
+    EXPECT_TRUE(AssetExists(Str(doc["presentation"]["terrain"], "texture")));
+    EXPECT_TRUE(AssetExists(Str(doc["presentation"]["ambient"], "path")));
+    EXPECT_TRUE(AssetExists(Str(doc["presentation"], "pawnMesh")));
+    EXPECT_GT(Num(doc["presentation"]["skybox"], "scale"), 0.0);
+    EXPECT_GT(Num(doc["presentation"]["terrain"], "uvTiles"), 0.0);
+    EXPECT_GE(Num(doc["presentation"]["ambient"], "volume"), 0.0);
+    EXPECT_LE(Num(doc["presentation"]["ambient"], "volume"), 1.0);
+}
+
+TEST(TFData_Presentation_MuzzleFxSaneRanges)
+{
+    const Value doc = LoadTable("presentation.json");
+    const Value& muzzleFx = doc["presentation"]["muzzleFx"];
+    EXPECT_GT(Num(muzzleFx, "tracerLenM"), 0.0);
+    EXPECT_GT(Num(muzzleFx, "tracerThickM"), 0.0);
+    EXPECT_GT(Num(muzzleFx, "tracerLifeSec"), 0.0);
+    EXPECT_GT(Num(muzzleFx, "flashLifeSec"), 0.0);
+    EXPECT_EQ(muzzleFx["tracerColor"].Size(), size_t{4});
+    EXPECT_EQ(muzzleFx["flashColor"].Size(), size_t{4});
+}
+
+TEST(TFData_Deployables_ClosedVocabularyAndAssetsExist)
+{
+    const Value doc = LoadTable("deployables.json");
+    EXPECT_TRUE(doc["deployables"].IsArray());
+    std::set<std::string> expectedIds = {"FabTurret", "FabAmmoPack", "MedBeacon"};
+    for (size_t i = 0; i < doc["deployables"].Size(); ++i)
+    {
+        const Value& deployable = doc["deployables"][i];
+        const std::string id = Str(deployable, "id");
+        EXPECT_TRUE(InSet(id, expectedIds));
+        EXPECT_EQ(expectedIds.erase(id), size_t{1}); // also catches duplicates
+        EXPECT_FALSE(Str(deployable, "model").empty());
+        EXPECT_TRUE(AssetExists(Str(deployable, "model")));
+        EXPECT_EQ(deployable["scale"].Size(), size_t{3});
+    }
+    EXPECT_EQ(expectedIds.size(), size_t{0}); // all three kinds present
+}
+
+TEST(TFData_Factions_StructureMaterialAssetsExist)
+{
+    const Value doc = LoadTable("factions.json");
+    const Value& list = doc["factions"];
+    for (size_t i = 0; i < list.Size(); ++i)
+    {
+        // Unlike model/texture/audio paths (relative, AssetExists() prepends
+        // "Assets/"), structureMaterial is stored WITH the "Assets/" prefix
+        // baked in - it's used directly as MeshRenderer::materialPath at
+        // runtime (see Game/TFVisualUtils.h), matching every other faction
+        // tint-material literal already in this codebase. Check as-is.
+        const std::string structureMaterial = Str(list[i], "structureMaterial");
+        EXPECT_FALSE(structureMaterial.empty());
+        EXPECT_TRUE(fs::exists(RepoRoot() / structureMaterial));
+    }
+}
+
+// ============================================================================
+// factions.json
+// ============================================================================
+
 TEST(TFData_Factions_ThreePowers_CompleteTraits)
 {
     const Value doc = LoadTable("factions.json");
