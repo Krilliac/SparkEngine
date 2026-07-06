@@ -40,6 +40,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace Terrafront {
 
@@ -81,6 +82,18 @@ class TFClientNet {
     /// Debug panel toggle (hidden by default; wired from tf_* console commands).
     void ToggleDebugUI() { m_showDebug = !m_showDebug; }
 
+    // --- W5 onboarding (Task 4) reply stash --------------------------------
+    // TFLoginFlow (Task 5) does not exist yet; these getters expose the last
+    // server reply so console commands (tf_login/tf_char_list/...) and Task
+    // 5/6 can consume it. Once `m_ctx->loginFlow` is wired (Task 6), the
+    // On*Reply handlers below should forward to it directly instead.
+    bool     IsLoggedIn() const { return m_loggedIn; }
+    uint64_t AccountId() const { return m_accountId; }
+    uint8_t  LastAuthError() const { return m_lastAuthErr; }
+    const std::vector<TF_CharBrief>& CharacterList() const { return m_charList; }
+    uint8_t  LastCharOpError() const { return m_lastCharOpErr; }
+    uint64_t LastCharOpId() const { return m_lastCharOpId; }
+
   private:
     // Per-remote-entity interpolation buffers (100 ms render delay).
     struct InterpEntry {
@@ -119,6 +132,16 @@ class TFClientNet {
     void OnDamageEvent(const void* data, size_t size);
     void OnKillEvent(const void* data, size_t size);
     void OnXPEvent(const void* data, size_t size);
+
+    // W5 onboarding (Task 4). TFLoginFlow (Task 5) is not wired yet — these
+    // parse + stash the reply so Task 5/6 can read it via a getter, or replace
+    // this stash entirely once `m_ctx->loginFlow` exists (Task 6). Logged at
+    // INFO so the loopback flow is observable before the UI lands.
+    void OnLoginReply(const void* data, size_t size);
+    void OnRegisterReply(const void* data, size_t size);
+    void OnCharListReply(const void* data, size_t size);
+    void OnCharCreateReply(const void* data, size_t size);
+    void OnCharDeleteReply(const void* data, size_t size);
 #endif
 
     TFGameContext* m_ctx{nullptr};
@@ -153,6 +176,14 @@ class TFClientNet {
     uint16_t m_lastRank{1};
     uint32_t m_lastXPTotal{0};
     bool     m_showDebug{false};
+
+    // W5 onboarding (Task 4) reply stash (see the getters above).
+    bool     m_loggedIn{false};
+    uint64_t m_accountId{0};
+    uint8_t  m_lastAuthErr{0};
+    std::vector<TF_CharBrief> m_charList;
+    uint8_t  m_lastCharOpErr{0};
+    uint64_t m_lastCharOpId{0};
 };
 
 } // namespace Terrafront

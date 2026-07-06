@@ -76,6 +76,15 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     /// movement tick overwrites it from MoveState one fixed step later.
     void TeleportPawn(PlayerId player, float x, float y, float z);
 
+#ifdef ENABLE_NETWORKING
+    /// W5 onboarding (Task 4): dispatches one of the onboarding client->server
+    /// messages (Login/Register/CharList/CharCreate/CharDelete/EnterWorld) to
+    /// its handler. Shared by the socket route (RegisterNetHandlers) and the
+    /// listen-host/standalone loopback router (TFClientNet::RouteLoopback) so
+    /// both paths run the exact same authoritative logic (DESIGN.md W5).
+    void RouteClientMessage(PlayerId sender, TFMsg id, const void* data, size_t size);
+#endif
+
     // --- engine area-simulation hook ----------------------------------------
     // W1: the module's OnFixedUpdate drives the authoritative tick; OnAreaTick
     // only counts invocations so AreaServer wiring can be observed.
@@ -125,6 +134,20 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     void HandleAegisDeploy(PlayerId sender, const void* data, size_t size);
     void SendSpawnReply(PlayerId player, const TF_SpawnReply& reply);
     void SendWorldWelcome(PlayerId player);
+
+    // W5 onboarding (Task 4). Each guards `if (m_ctx->account)` /
+    // `if (m_ctx->characters)` since those context pointers are null until
+    // Task 6's boot wiring constructs and publishes the real systems — until
+    // then the messages are accepted (no "unknown message" warning) but
+    // answered with TFAuthErr::ServerError / TFCharErr::ServerError.
+    void HandleLogin(PlayerId sender, const void* data, size_t size);
+    void HandleRegister(PlayerId sender, const void* data, size_t size);
+    void HandleCharList(PlayerId sender, const void* data, size_t size);
+    void HandleCharCreate(PlayerId sender, const void* data, size_t size);
+    void HandleCharDelete(PlayerId sender, const void* data, size_t size);
+    // On success: binds the session's authoritative faction, marks the client
+    // entered-world, and ONLY THEN sends TF_WorldWelcome (the gate).
+    void HandleEnterWorld(PlayerId sender, const void* data, size_t size);
 #endif
 
     TFGameContext* m_ctx{nullptr};
@@ -145,6 +168,7 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
 
     bool m_handlersRegistered{false};
     std::unordered_set<PlayerId> m_knownClients;
+    std::unordered_set<PlayerId> m_enteredWorld;   // W5 onboarding: clients past the EnterWorld gate
 
     float m_moveStateAccum{0.0f};
 

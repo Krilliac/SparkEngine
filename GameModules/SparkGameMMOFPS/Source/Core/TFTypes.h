@@ -111,6 +111,16 @@ class TFHUD;
 class TFMapScreen;
 class TFSpawnScreen;
 class TFScoreboard;
+// W5 onboarding (Task 4): account/character systems live under Source/Account
+// and Source/Persistence; forward-declared here only as opaque pointer targets
+// so TFServerSim/TFClientNet can reach them through the context without this
+// FROZEN header depending on their headers. Full boot wiring (members,
+// construction, Main.cpp publish order) is Task 6 — these three pointers are
+// added now, additive-only, so Task 4's net handlers compile and call the
+// real Task 2/3 systems instead of stubs.
+class TFDatabase;
+class TFAccountSystem;
+class TFCharacterSystem;
 
 struct TFGameContext {
     Spark::IEngineContext* engine = nullptr;
@@ -136,6 +146,14 @@ struct TFGameContext {
     TFMapScreen*         map         = nullptr;
     TFSpawnScreen*       spawnUI     = nullptr;
     TFScoreboard*        scoreboard  = nullptr;
+
+    // W5 onboarding (Task 4, additive): null until Task 6 constructs + publishes
+    // them in Main.cpp boot order. Net handlers guard every use with `if
+    // (m_ctx->account)` / `if (m_ctx->characters)` so the module still builds
+    // and runs pre-Task-6 with onboarding messages accepted-but-inert.
+    TFDatabase*          db          = nullptr;
+    TFAccountSystem*     account     = nullptr;
+    TFCharacterSystem*   characters  = nullptr;
 
     bool IsAuthority() const {
         return role == NetRole::ListenHost || role == NetRole::DedicatedServer

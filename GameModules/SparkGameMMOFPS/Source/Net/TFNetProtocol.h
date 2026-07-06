@@ -37,6 +37,22 @@ enum class TFMsg : uint16_t {
     LoadoutChange = 0x540F,  // C->S  TF_LoadoutChange
     FactionSelect = 0x5410,  // C->S  TF_FactionSelect
     WorldWelcome  = 0x5411,  // S->C  TF_WorldWelcome (on join: your id, territory hash)
+
+    // --- W5 onboarding (Task 4): login -> char-select/create -> enter-world.
+    // TF_WorldWelcome above is now gated behind a successful EnterWorldReq —
+    // it is no longer sent immediately on connect (see TFServerSim.cpp
+    // PollClientJoinsLeaves / HandleEnterWorld).
+    LoginRequest    = 0x5412,  // C->S  TF_AuthRequest
+    LoginReply      = 0x5413,  // S->C  TF_AuthReply
+    RegisterRequest = 0x5414,  // C->S  TF_AuthRequest
+    RegisterReply   = 0x5415,  // S->C  TF_AuthReply
+    CharListRequest = 0x5416,  // C->S  (empty payload)
+    CharListReply   = 0x5417,  // S->C  TF_CharListReply
+    CharCreateReq   = 0x5418,  // C->S  TF_CharCreateRequest
+    CharCreateReply = 0x5419,  // S->C  TF_CharOpReply
+    CharDeleteReq   = 0x541A,  // C->S  TF_CharDeleteRequest
+    CharDeleteReply = 0x541B,  // S->C  TF_CharOpReply
+    EnterWorldReq   = 0x541C,  // C->S  TF_EnterWorldRequest (reply is the gated TF_WorldWelcome)
 };
 
 #pragma pack(push, 1)
@@ -207,6 +223,63 @@ struct TF_WorldWelcome {
     uint32_t serverTimeMs;
 };
 static_assert(sizeof(TF_WorldWelcome) == 16, "wire layout frozen");
+
+// --- W5 onboarding (Task 4) --------------------------------------------------
+
+struct TF_AuthRequest {
+    char user[32];           // null-terminated username
+    char pass[64];           // null-terminated plaintext password (login-time only; never stored)
+};
+static_assert(sizeof(TF_AuthRequest) == 96, "wire layout frozen");
+
+struct TF_AuthReply {
+    uint8_t  ok;             // 0/1
+    uint8_t  err;            // TFAuthErr
+    uint8_t  _pad[2];
+    uint64_t accountId;      // 0 if !ok
+};
+static_assert(sizeof(TF_AuthReply) == 12, "wire layout frozen");
+
+struct TF_CharBrief {
+    uint64_t id;
+    char     name[24];       // null-terminated, matches TFCharacterSystem's 23-char max name
+    uint8_t  faction;        // FactionId
+    uint16_t rank;
+    uint8_t  _pad;
+};
+static_assert(sizeof(TF_CharBrief) == 36, "wire layout frozen");
+
+struct TF_CharListReply {
+    uint8_t      count;      // number of valid entries in `chars` (0..5)
+    uint8_t      _pad[3];
+    TF_CharBrief chars[5];   // kTFMaxCharSlots (TFCharacterSystem.h)
+};
+static_assert(sizeof(TF_CharListReply) == 4 + 5 * 36, "wire layout frozen");
+
+struct TF_CharCreateRequest {
+    char    name[24];
+    uint8_t faction;         // FactionId
+    uint8_t _pad[3];
+};
+static_assert(sizeof(TF_CharCreateRequest) == 28, "wire layout frozen");
+
+struct TF_CharOpReply {
+    uint8_t  ok;             // 0/1
+    uint8_t  err;            // TFCharErr
+    uint8_t  _pad[2];
+    uint64_t charId;         // the affected character (0 if !ok and unknown)
+};
+static_assert(sizeof(TF_CharOpReply) == 12, "wire layout frozen");
+
+struct TF_CharDeleteRequest {
+    uint64_t charId;
+};
+static_assert(sizeof(TF_CharDeleteRequest) == 8, "wire layout frozen");
+
+struct TF_EnterWorldRequest {
+    uint64_t charId;
+};
+static_assert(sizeof(TF_EnterWorldRequest) == 8, "wire layout frozen");
 
 #pragma pack(pop)
 

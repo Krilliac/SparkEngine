@@ -5,6 +5,8 @@
  */
 #include "Net/TFServerSim.h"
 
+#include "Account/TFAccountSystem.h"     // W5 onboarding (Task 4)
+#include "Account/TFCharacterSystem.h"   // W5 onboarding (Task 4)
 #include "Data/TFDataTables.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
@@ -489,6 +491,17 @@ void TFServerSim::RegisterNetHandlers()
         route(id, [](const NetworkMessage&) {});
     }
 
+    // W5 onboarding (Task 4): login -> char-select/create/delete -> enter-world.
+    // Routed through RouteClientMessage so the socket path and the listen-host/
+    // standalone loopback path (TFClientNet::RouteLoopback) share one dispatch.
+    for (TFMsg id : {TFMsg::LoginRequest, TFMsg::RegisterRequest, TFMsg::CharListRequest,
+                     TFMsg::CharCreateReq, TFMsg::CharDeleteReq, TFMsg::EnterWorldReq})
+    {
+        route(id, [this, id](const NetworkMessage& m) {
+            RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size());
+        });
+    }
+
     m_handlersRegistered = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] server TFMsg handlers registered");
 }
@@ -502,7 +515,9 @@ void TFServerSim::UnregisterNetHandlers()
     for (TFMsg id : {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent,
                      TFMsg::FactionSelect, TFMsg::LoadoutChange, TFMsg::SquadMsg,
                      TFMsg::ChatMsg, TFMsg::VehicleEnter, TFMsg::VehicleExit,
-                     TFMsg::AegisDeploy})
+                     TFMsg::AegisDeploy, TFMsg::LoginRequest, TFMsg::RegisterRequest,
+                     TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq,
+                     TFMsg::EnterWorldReq})
     {
         nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                            [](const Spark::Net::NetworkMessage&) {});
@@ -519,9 +534,12 @@ void TFServerSim::PollClientJoinsLeaves()
     {
         if (info.state == Spark::Net::ConnectionState::Connected && !m_knownClients.contains(id))
         {
+            // W5 onboarding gate: TF_WorldWelcome is NO LONGER sent on connect.
+            // It is now sent only from HandleEnterWorld, after a successful
+            // login + character enter-world. See DESIGN.md W5.
             m_knownClients.insert(id);
-            SendWorldWelcome(id);
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] client %u joined — welcome sent", id);
+            SPARK_LOG_INFO(Spark::LogCategory::Game,
+                           "[TF] client %u joined — awaiting login/enter-world", id);
         }
     }
 
@@ -537,6 +555,9 @@ void TFServerSim::PollClientJoinsLeaves()
             m_inputs.erase(id);
             m_factions.erase(id);
             m_deathTime.erase(id);
+            m_enteredWorld.erase(id);
+            if (m_ctx->account)
+                m_ctx->account->ClearSession(id);
             it = m_knownClients.erase(it);
             SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] client %u left — pawn cleaned up", id);
         }
@@ -765,6 +786,216 @@ void TFServerSim::SendWorldWelcome(PlayerId player)
     w.territoryHash = m_ctx->regions ? m_ctx->regions->TerritoryHash() : 0;
     w.serverTimeMs = static_cast<uint32_t>(m_serverTime * 1000.0);
     SendToPlayer(player, static_cast<uint16_t>(TFMsg::WorldWelcome), &w, sizeof(w), true);
+}
+
+// ---------------------------------------------------------------------------
+// W5 onboarding (Task 4): login / register / char CRUD / enter-world.
+// ---------------------------------------------------------------------------
+
+void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data, size_t size)
+{
+    switch (id)
+    {
+        case TFMsg::LoginRequest:    HandleLogin(sender, data, size); break;
+        case TFMsg::RegisterRequest: HandleRegister(sender, data, size); break;
+        case TFMsg::CharListRequest: HandleCharList(sender, data, size); break;
+        case TFMsg::CharCreateReq:   HandleCharCreate(sender, data, size); break;
+        case TFMsg::CharDeleteReq:   HandleCharDelete(sender, data, size); break;
+        case TFMsg::EnterWorldReq:   HandleEnterWorld(sender, data, size); break;
+        default: break;
+    }
+}
+
+void TFServerSim::HandleLogin(PlayerId sender, const void* data, size_t size)
+{
+    if (size != sizeof(TF_AuthRequest) || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    TF_AuthRequest req;
+    std::memcpy(&req, data, sizeof(req));
+    const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
+    const std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
+
+    TF_AuthReply rep{};
+    if (!m_ctx->account)
+    {
+        rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
+    }
+    else
+    {
+        const TFAuthResult r = m_ctx->account->Login(user, pass);
+        rep.ok = r.ok ? 1 : 0;
+        rep.err = static_cast<uint8_t>(r.err);
+        rep.accountId = r.accountId;
+        if (r.ok)
+            m_ctx->account->BindSession(sender, r.accountId);
+    }
+    SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+}
+
+void TFServerSim::HandleRegister(PlayerId sender, const void* data, size_t size)
+{
+    if (size != sizeof(TF_AuthRequest) || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    TF_AuthRequest req;
+    std::memcpy(&req, data, sizeof(req));
+    const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
+    const std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
+
+    TF_AuthReply rep{};
+    if (!m_ctx->account)
+    {
+        rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
+    }
+    else
+    {
+        const TFAuthResult r = m_ctx->account->Register(user, pass);
+        rep.ok = r.ok ? 1 : 0;
+        rep.err = static_cast<uint8_t>(r.err);
+        rep.accountId = r.accountId;
+        // Registration does NOT auto-login; the client sends LoginRequest next
+        // (mirrors MMOAccountSystem's register-then-login flow).
+    }
+    SendToPlayer(sender, static_cast<uint16_t>(TFMsg::RegisterReply), &rep, sizeof(rep), true);
+}
+
+void TFServerSim::HandleCharList(PlayerId sender, const void* data, size_t size)
+{
+    (void)data;
+    if (size != 0 || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    TF_CharListReply rep{};
+    if (m_ctx->account && m_ctx->characters)
+    {
+        const uint64_t acctId = m_ctx->account->AccountForClient(sender);
+        if (acctId != 0)
+        {
+            const std::vector<TFCharacterRecord> list = m_ctx->characters->List(acctId);
+            const uint8_t n = static_cast<uint8_t>(std::min<size_t>(list.size(), 5));
+            rep.count = n;
+            for (uint8_t i = 0; i < n; ++i)
+            {
+                TF_CharBrief& b = rep.chars[i];
+                b.id = list[i].id;
+                std::strncpy(b.name, list[i].name.c_str(), sizeof(b.name) - 1);
+                b.name[sizeof(b.name) - 1] = '\0';
+                b.faction = static_cast<uint8_t>(list[i].faction);
+                b.rank = list[i].rank;
+            }
+        }
+    }
+    SendToPlayer(sender, static_cast<uint16_t>(TFMsg::CharListReply), &rep, sizeof(rep), true);
+}
+
+void TFServerSim::HandleCharCreate(PlayerId sender, const void* data, size_t size)
+{
+    if (size != sizeof(TF_CharCreateRequest) || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    TF_CharCreateRequest req;
+    std::memcpy(&req, data, sizeof(req));
+    const std::string name(req.name, strnlen(req.name, sizeof(req.name)));
+
+    TF_CharOpReply rep{};
+    if (!m_ctx->account || !m_ctx->characters)
+    {
+        rep.err = static_cast<uint8_t>(TFCharErr::ServerError);
+    }
+    else
+    {
+        const uint64_t acctId = m_ctx->account->AccountForClient(sender);
+        if (acctId == 0)
+        {
+            rep.err = static_cast<uint8_t>(TFCharErr::ServerError); // not logged in
+        }
+        else
+        {
+            const TFCharCreateResult r =
+                m_ctx->characters->Create(acctId, name, static_cast<FactionId>(req.faction));
+            rep.ok = r.ok ? 1 : 0;
+            rep.err = static_cast<uint8_t>(r.err);
+            rep.charId = r.charId;
+        }
+    }
+    SendToPlayer(sender, static_cast<uint16_t>(TFMsg::CharCreateReply), &rep, sizeof(rep), true);
+}
+
+void TFServerSim::HandleCharDelete(PlayerId sender, const void* data, size_t size)
+{
+    if (size != sizeof(TF_CharDeleteRequest) || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    TF_CharDeleteRequest req;
+    std::memcpy(&req, data, sizeof(req));
+
+    TF_CharOpReply rep{};
+    rep.charId = req.charId;
+    if (!m_ctx->account || !m_ctx->characters)
+    {
+        rep.err = static_cast<uint8_t>(TFCharErr::ServerError);
+    }
+    else
+    {
+        const uint64_t acctId = m_ctx->account->AccountForClient(sender);
+        if (acctId == 0)
+        {
+            rep.err = static_cast<uint8_t>(TFCharErr::ServerError); // not logged in
+        }
+        else
+        {
+            const TFCharErr err = m_ctx->characters->Delete(acctId, req.charId);
+            rep.ok = (err == TFCharErr::Ok) ? 1 : 0;
+            rep.err = static_cast<uint8_t>(err);
+        }
+    }
+    SendToPlayer(sender, static_cast<uint16_t>(TFMsg::CharDeleteReply), &rep, sizeof(rep), true);
+}
+
+void TFServerSim::HandleEnterWorld(PlayerId sender, const void* data, size_t size)
+{
+    if (size != sizeof(TF_EnterWorldRequest) || sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+    TF_EnterWorldRequest req;
+    std::memcpy(&req, data, sizeof(req));
+
+    // Server-authoritative gate: the client cannot self-report auth/enter-world
+    // state. Without a bound, logged-in session AND ownership-verified
+    // character, TF_WorldWelcome is never sent — the client stays parked on
+    // the login/char-select screen (fails silently; no reply message exists
+    // for a rejected EnterWorldReq by design, mirroring how an unauthenticated
+    // socket gets no gameplay traffic at all).
+    if (!m_ctx->account || !m_ctx->characters)
+        return; // T6 boot wiring not present yet — cannot authoritatively enter world
+
+    const uint64_t acctId = m_ctx->account->AccountForClient(sender);
+    if (acctId == 0)
+        return; // not logged in
+
+    TFCharacterRecord rec;
+    if (!m_ctx->characters->EnterWorld(acctId, req.charId, rec))
+        return; // unknown character or not owned by this account
+
+    SetPlayerFaction(sender, rec.faction);
+    m_enteredWorld.insert(sender);
+    SendWorldWelcome(sender);
+    SPARK_LOG_INFO(Spark::LogCategory::Game,
+                   "[TF] player %u entered world as character %llu (%s)", sender,
+                   static_cast<unsigned long long>(rec.id), FactionName(rec.faction));
 }
 
 #endif // ENABLE_NETWORKING

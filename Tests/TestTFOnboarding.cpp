@@ -1,12 +1,16 @@
 /**
  * @file TestTFOnboarding.cpp
- * @brief TERRAFRONT W5 onboarding tests (Tasks 1-3+: TFDatabase, TFAccountSystem,
- *        TFCharacterSystem). Task 1 adds the TFDatabase round-trip test only.
+ * @brief TERRAFRONT W5 onboarding tests: TFDatabase (Task 1), TFAccountSystem
+ *        (Task 2), TFCharacterSystem (Task 3), and the Task 4 net-protocol
+ *        wire-layout freeze for the new onboarding TFMsg PODs (independent of
+ *        TestTFNetProtocolLayout.cpp's coverage of the pre-W5 messages).
  */
 #include "TestFramework.h"
 #include "Persistence/TFDatabase.h"
 #include "Account/TFAccountSystem.h"
 #include "Account/TFCharacterSystem.h"
+#include "Net/TFNetProtocol.h"
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -215,4 +219,104 @@ TEST(TFCharacterSystem_ValidateCharacterName)
     EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("Trailing ", err));
     EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("Double  Space", err));
     EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("Bad_Name", err));                  // invalid char
+}
+
+// ============================================================================
+// Task 4: net protocol wire layout (message ids + packed POD sizes) + a
+// memcpy round-trip through a raw byte buffer, mirroring
+// Tests/TestTFNetProtocolLayout.cpp's convention for the pre-W5 messages.
+// ============================================================================
+
+static_assert(static_cast<uint16_t>(TFMsg::LoginRequest)    == 0x5412);
+static_assert(static_cast<uint16_t>(TFMsg::LoginReply)      == 0x5413);
+static_assert(static_cast<uint16_t>(TFMsg::RegisterRequest) == 0x5414);
+static_assert(static_cast<uint16_t>(TFMsg::RegisterReply)   == 0x5415);
+static_assert(static_cast<uint16_t>(TFMsg::CharListRequest) == 0x5416);
+static_assert(static_cast<uint16_t>(TFMsg::CharListReply)   == 0x5417);
+static_assert(static_cast<uint16_t>(TFMsg::CharCreateReq)   == 0x5418);
+static_assert(static_cast<uint16_t>(TFMsg::CharCreateReply) == 0x5419);
+static_assert(static_cast<uint16_t>(TFMsg::CharDeleteReq)   == 0x541A);
+static_assert(static_cast<uint16_t>(TFMsg::CharDeleteReply) == 0x541B);
+static_assert(static_cast<uint16_t>(TFMsg::EnterWorldReq)   == 0x541C);
+
+// Compiler-verified sizes (Task 4 explicitly forbids guessing these — every
+// number below was read back from an actual build, not hand-computed).
+static_assert(sizeof(TF_AuthRequest)       == 96,       "wire layout frozen");
+static_assert(sizeof(TF_AuthReply)         == 12,       "wire layout frozen");
+static_assert(sizeof(TF_CharBrief)         == 36,       "wire layout frozen");
+static_assert(sizeof(TF_CharListReply)     == 4 + 5*36, "wire layout frozen");
+static_assert(sizeof(TF_CharCreateRequest) == 28,       "wire layout frozen");
+static_assert(sizeof(TF_CharOpReply)       == 12,       "wire layout frozen");
+static_assert(sizeof(TF_CharDeleteRequest) == 8,        "wire layout frozen");
+static_assert(sizeof(TF_EnterWorldRequest) == 8,        "wire layout frozen");
+
+namespace
+{
+    template <typename T>
+    T OnboardingWireRoundTrip(const T& in)
+    {
+        unsigned char wire[sizeof(T)];
+        std::memcpy(wire, &in, sizeof(T));
+        T out{};
+        std::memcpy(&out, wire, sizeof(T));
+        return out;
+    }
+} // namespace
+
+TEST(TFNetProtocol_Onboarding_AuthMessages_RoundTrip)
+{
+    TF_AuthRequest req{};
+    std::strncpy(req.user, "commander", sizeof(req.user) - 1);
+    std::strncpy(req.pass, "sekret1", sizeof(req.pass) - 1);
+    const TF_AuthRequest req2 = OnboardingWireRoundTrip(req);
+    EXPECT_TRUE(std::string(req2.user) == "commander");
+    EXPECT_TRUE(std::string(req2.pass) == "sekret1");
+
+    TF_AuthReply rep{};
+    rep.ok = 1;
+    rep.err = static_cast<uint8_t>(TFAuthErr::Ok);
+    rep.accountId = 4242;
+    const TF_AuthReply rep2 = OnboardingWireRoundTrip(rep);
+    EXPECT_EQ(static_cast<int>(rep2.ok), 1);
+    EXPECT_EQ(rep2.accountId, (uint64_t)4242);
+}
+
+TEST(TFNetProtocol_Onboarding_CharMessages_RoundTrip)
+{
+    TF_CharListReply lst{};
+    lst.count = 2;
+    lst.chars[0].id = 7;
+    std::strncpy(lst.chars[0].name, "Vanguard", sizeof(lst.chars[0].name) - 1);
+    lst.chars[0].faction = static_cast<uint8_t>(FactionId::MRA);
+    lst.chars[0].rank = 3;
+    lst.chars[1].id = 9;
+    std::strncpy(lst.chars[1].name, "Ironclad", sizeof(lst.chars[1].name) - 1);
+    lst.chars[1].faction = static_cast<uint8_t>(FactionId::AUC);
+    lst.chars[1].rank = 1;
+    const TF_CharListReply lst2 = OnboardingWireRoundTrip(lst);
+    EXPECT_EQ(static_cast<int>(lst2.count), 2);
+    EXPECT_TRUE(std::string(lst2.chars[0].name) == "Vanguard");
+    EXPECT_EQ(lst2.chars[1].id, (uint64_t)9);
+    EXPECT_EQ(static_cast<int>(lst2.chars[1].faction), static_cast<int>(FactionId::AUC));
+
+    TF_CharCreateRequest cc{};
+    std::strncpy(cc.name, "War Chief", sizeof(cc.name) - 1);
+    cc.faction = static_cast<uint8_t>(FactionId::HLX);
+    const TF_CharCreateRequest cc2 = OnboardingWireRoundTrip(cc);
+    EXPECT_TRUE(std::string(cc2.name) == "War Chief");
+    EXPECT_EQ(static_cast<int>(cc2.faction), static_cast<int>(FactionId::HLX));
+
+    TF_CharOpReply op{};
+    op.ok = 1;
+    op.err = static_cast<uint8_t>(TFCharErr::Ok);
+    op.charId = 55;
+    EXPECT_EQ(OnboardingWireRoundTrip(op).charId, (uint64_t)55);
+
+    TF_CharDeleteRequest del{};
+    del.charId = 66;
+    EXPECT_EQ(OnboardingWireRoundTrip(del).charId, (uint64_t)66);
+
+    TF_EnterWorldRequest ew{};
+    ew.charId = 77;
+    EXPECT_EQ(OnboardingWireRoundTrip(ew).charId, (uint64_t)77);
 }

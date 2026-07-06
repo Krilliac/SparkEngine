@@ -214,6 +214,23 @@ void TFClientNet::RouteLoopback(TFMsg id, const void* payload, size_t size)
             }
             break;
 
+#ifdef ENABLE_NETWORKING
+        // W5 onboarding (Task 4): standalone/listen-host route straight into
+        // TFServerSim::RouteClientMessage — the SAME dispatcher the socket
+        // path uses (RegisterNetHandlers), so both paths run identical
+        // authoritative logic. RouteClientMessage only exists under
+        // ENABLE_NETWORKING (mirrors every other Handle* on TFServerSim).
+        case TFMsg::LoginRequest:
+        case TFMsg::RegisterRequest:
+        case TFMsg::CharListRequest:
+        case TFMsg::CharCreateReq:
+        case TFMsg::CharDeleteReq:
+        case TFMsg::EnterWorldReq:
+            if (m_ctx->serverSim)
+                m_ctx->serverSim->RouteClientMessage(me, id, payload, size);
+            break;
+#endif
+
         default:
             break; // LoadoutChange/Squad/Chat: TF-W2 server routing
     }
@@ -316,6 +333,24 @@ void TFClientNet::RegisterClientHandlers()
     for (TFMsg id : {TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg, TFMsg::SquadMsg})
         route(id, [](const NetworkMessage&) {});
 
+    // W5 onboarding (Task 4): login/register/char-CRUD replies. TF_WorldWelcome
+    // (already routed above) is the enter-world reply — no separate message id.
+    route(TFMsg::LoginReply, [this](const NetworkMessage& m) {
+        OnLoginReply(m.payload.data(), m.payload.size());
+    });
+    route(TFMsg::RegisterReply, [this](const NetworkMessage& m) {
+        OnRegisterReply(m.payload.data(), m.payload.size());
+    });
+    route(TFMsg::CharListReply, [this](const NetworkMessage& m) {
+        OnCharListReply(m.payload.data(), m.payload.size());
+    });
+    route(TFMsg::CharCreateReply, [this](const NetworkMessage& m) {
+        OnCharCreateReply(m.payload.data(), m.payload.size());
+    });
+    route(TFMsg::CharDeleteReply, [this](const NetworkMessage& m) {
+        OnCharDeleteReply(m.payload.data(), m.payload.size());
+    });
+
     m_handlersRegistered = true;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] client TFMsg handlers registered");
 }
@@ -328,7 +363,9 @@ void TFClientNet::ReleaseClientHandlers()
     auto& nm = Spark::Net::NetworkManager::GetInstance();
     for (TFMsg id : {TFMsg::WorldWelcome, TFMsg::SpawnReply, TFMsg::HitConfirm,
                      TFMsg::DamageEvent, TFMsg::KillEvent, TFMsg::XPEvent,
-                     TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg, TFMsg::SquadMsg})
+                     TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg, TFMsg::SquadMsg,
+                     TFMsg::LoginReply, TFMsg::RegisterReply, TFMsg::CharListReply,
+                     TFMsg::CharCreateReply, TFMsg::CharDeleteReply})
     {
         nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                            [](const Spark::Net::NetworkMessage&) {});
@@ -447,6 +484,75 @@ void TFClientNet::OnXPEvent(const void* data, size_t size)
     m_lastXPTotal = xp.newTotalXP; // TF-W2: progression screen consumes this
     if (m_ctx->hud)
         m_ctx->hud->SetRank(xp.newRank);
+}
+
+// --- W5 onboarding (Task 4) reply handlers ---------------------------------
+// TFLoginFlow (Task 5) does not exist yet, so these stash into member state
+// (see the getters in TFClientNet.h) instead of forwarding to `m_ctx->
+// loginFlow`. Task 5/6 should replace the stash-and-log body with a direct
+// forward once that pointer is wired.
+
+void TFClientNet::OnLoginReply(const void* data, size_t size)
+{
+    if (size != sizeof(TF_AuthReply))
+        return;
+    TF_AuthReply rep;
+    std::memcpy(&rep, data, sizeof(rep));
+    m_loggedIn = rep.ok != 0;
+    m_accountId = rep.accountId;
+    m_lastAuthErr = rep.err;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] login reply: ok=%d err=%u account=%llu",
+                   rep.ok, static_cast<unsigned>(rep.err),
+                   static_cast<unsigned long long>(rep.accountId));
+}
+
+void TFClientNet::OnRegisterReply(const void* data, size_t size)
+{
+    if (size != sizeof(TF_AuthReply))
+        return;
+    TF_AuthReply rep;
+    std::memcpy(&rep, data, sizeof(rep));
+    m_lastAuthErr = rep.err;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] register reply: ok=%d err=%u account=%llu",
+                   rep.ok, static_cast<unsigned>(rep.err),
+                   static_cast<unsigned long long>(rep.accountId));
+}
+
+void TFClientNet::OnCharListReply(const void* data, size_t size)
+{
+    if (size != sizeof(TF_CharListReply))
+        return;
+    TF_CharListReply rep;
+    std::memcpy(&rep, data, sizeof(rep));
+    m_charList.assign(rep.chars, rep.chars + std::min<uint8_t>(rep.count, 5));
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char list reply: %u character(s)",
+                   static_cast<unsigned>(rep.count));
+}
+
+void TFClientNet::OnCharCreateReply(const void* data, size_t size)
+{
+    if (size != sizeof(TF_CharOpReply))
+        return;
+    TF_CharOpReply rep;
+    std::memcpy(&rep, data, sizeof(rep));
+    m_lastCharOpErr = rep.err;
+    m_lastCharOpId = rep.charId;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char create reply: ok=%d err=%u charId=%llu",
+                   rep.ok, static_cast<unsigned>(rep.err),
+                   static_cast<unsigned long long>(rep.charId));
+}
+
+void TFClientNet::OnCharDeleteReply(const void* data, size_t size)
+{
+    if (size != sizeof(TF_CharOpReply))
+        return;
+    TF_CharOpReply rep;
+    std::memcpy(&rep, data, sizeof(rep));
+    m_lastCharOpErr = rep.err;
+    m_lastCharOpId = rep.charId;
+    SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char delete reply: ok=%d err=%u charId=%llu",
+                   rep.ok, static_cast<unsigned>(rep.err),
+                   static_cast<unsigned long long>(rep.charId));
 }
 
 #endif // ENABLE_NETWORKING
