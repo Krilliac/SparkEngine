@@ -17,6 +17,7 @@
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
 #include "Net/TFClientNet.h"
+#include "Net/TFServerSim.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
 #include "World/TFRegionSystem.h"
@@ -83,6 +84,18 @@ void TFVehicleSystem::ClientRequestSeatOp(EntityId vehicle, uint8_t seatIdx, boo
     op.seatIndex = seatIdx;
     if (m_ctx->IsAuthority())
     {
+        // final-review #3 follow-up (gate defense-in-depth): this authority-
+        // path call goes straight into the server handler, bypassing the
+        // RouteClientMessage enter-world gate networked VehicleEnter/
+        // VehicleExit traffic is held to. Mirror that gate here so an
+        // un-entered-world local host can't seat/exit either. The gate only
+        // exists under ENABLE_NETWORKING (RouteClientMessage/onboarding are
+        // both ifdef'd out otherwise, and m_enteredWorld would never be
+        // populated), so don't apply it to builds without networking.
+#ifdef ENABLE_NETWORKING
+        if (!m_ctx->serverSim || !m_ctx->serverSim->IsEnteredWorld(LocalPlayerId()))
+            return;
+#endif
         ServerHandleSeatOp(LocalPlayerId(), op, enter);
         return;
     }
@@ -98,6 +111,14 @@ void TFVehicleSystem::ClientRequestDeploy(EntityId vehicle, bool deploy)
     msg.deploy = deploy ? 1 : 0;
     if (m_ctx->IsAuthority())
     {
+        // final-review #3 follow-up (gate defense-in-depth): same authority-
+        // path gate as ClientRequestSeatOp above -- mirror the
+        // RouteClientMessage enter-world gate networked AegisDeploy traffic
+        // is held to (ENABLE_NETWORKING-only; see the comment above).
+#ifdef ENABLE_NETWORKING
+        if (!m_ctx->serverSim || !m_ctx->serverSim->IsEnteredWorld(LocalPlayerId()))
+            return;
+#endif
         ServerHandleAegisDeploy(LocalPlayerId(), msg);
         return;
     }

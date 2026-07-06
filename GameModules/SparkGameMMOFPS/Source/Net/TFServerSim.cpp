@@ -226,8 +226,26 @@ void TFServerSim::TickMovement(float fdt)
                     vq.pop_front();
                     m_ctx->vehicles->ServerHandleSeatedInput(player, in, fdt);
                     ms.lastSeq = in.seq;
-                    ms.yaw = QuantAim::WrapPi(in.viewYaw);
-                    ms.pitch = std::clamp(in.viewPitch, -kPitchLimitRad, kPitchLimitRad);
+                    // Sibling of StepPlayer's guard (a5f95e7d): reject non-finite
+                    // view angles before WrapPi/clamp here too -- WrapPi's
+                    // while-loop never terminates on +-Inf (subtracting a finite
+                    // step from infinity stays infinite), and a NaN survives
+                    // clamp unchanged, poisoning ms.yaw/ms.pitch for every future
+                    // tick and every TF_MoveState broadcast to all connected
+                    // clients. The seated/vehicle-occupant input path took client
+                    // view angles straight into WrapPi/clamp with no check.
+                    if (std::isfinite(in.viewYaw) && std::isfinite(in.viewPitch))
+                    {
+                        ms.yaw = QuantAim::WrapPi(in.viewYaw);
+                        ms.pitch = std::clamp(in.viewPitch, -kPitchLimitRad, kPitchLimitRad);
+                    }
+                    else if (m_serverTime - m_lastViolationLog > 5.0)
+                    {
+                        m_lastViolationLog = m_serverTime;
+                        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                       "[TF] movement validation: rejected non-finite view angle (seated, seq=%u)",
+                                       in.seq);
+                    }
                     ++consumed;
                 }
             }

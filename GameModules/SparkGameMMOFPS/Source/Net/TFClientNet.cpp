@@ -190,6 +190,12 @@ void TFClientNet::UpdateConnectionState()
         m_localPlayer = kInvalidPlayer;
         m_predActive = false;
         m_interp.clear();
+        // review follow-up (state hygiene): this is the automatic link-down
+        // detection for a real socket drop -- reset inWorld here too so
+        // InWorld() doesn't keep reporting true after the network session
+        // actually ended (see the matching reset in Disconnect()).
+        if (m_ctx)
+            m_ctx->inWorld = false;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] client link down");
     }
 #endif
@@ -243,6 +249,12 @@ void TFClientNet::Disconnect()
     m_localPlayer = kInvalidPlayer;
     m_predActive = false;
     m_interp.clear();
+    // review follow-up (state hygiene): inWorld is only ever set true (on
+    // WorldWelcome) and never reset -- InWorld() stayed true for the rest of
+    // the process after a disconnect, letting gated client UI/systems believe
+    // the session was still in-world. Client-side session end, so reset here.
+    if (m_ctx)
+        m_ctx->inWorld = false;
     if (m_ctx && m_ctx->role == NetRole::Client)
         m_ctx->role = NetRole::Standalone;
 }

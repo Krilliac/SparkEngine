@@ -562,7 +562,21 @@ void TFSquadSystem::SendOp(SquadOp op, PlayerId target, const float* wp)
     }
 
     if (m_ctx->IsAuthority())
+    {
+        // final-review #3 follow-up (gate defense-in-depth): this authority-
+        // path call goes straight into ServerHandleSquadMsg, bypassing the
+        // RouteClientMessage enter-world gate networked SquadMsg traffic is
+        // held to. Mirror that gate so an un-entered-world local host can't
+        // spam squad ops either. The gate only exists under ENABLE_NETWORKING
+        // (RouteClientMessage/onboarding are ifdef'd out otherwise, and
+        // m_enteredWorld would never be populated), so don't apply it to
+        // builds without networking.
+#ifdef ENABLE_NETWORKING
+        if (!m_ctx->serverSim || !m_ctx->serverSim->IsEnteredWorld(m_ctx->localPlayer))
+            return;
+#endif
         ServerHandleSquadMsg(m_ctx->localPlayer, m);    // listen host / standalone
+    }
     else if (m_ctx->clientNet)
         m_ctx->clientNet->SendMsg(TFMsg::SquadMsg, &m, sizeof(m));
 }

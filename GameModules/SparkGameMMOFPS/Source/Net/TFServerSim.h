@@ -76,6 +76,15 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     /// SetPlayerFaction directly.
     bool IsPlayerAlive(PlayerId player) const { return m_move.contains(player); }
 
+    /// True once `player` has passed the RouteClientMessage enter-world gate
+    /// (i.e. is in m_enteredWorld). Lets authority-path callers outside the
+    /// socket/loopback dispatch -- e.g. TFVehicleSystem::ClientRequestSeatOp/
+    /// ClientRequestDeploy and TFSquadSystem::SendOp, which call their server
+    /// handlers directly when IsAuthority() -- apply the same gate a
+    /// networked client is held to before RouteClientMessage would run the
+    /// handler (final-review defense-in-depth follow-up).
+    bool IsEnteredWorld(PlayerId player) const { return m_enteredWorld.contains(player); }
+
     /// Admin teleport (tf_tp): moves the authoritative MoveState and syncs
     /// the pawn Transform. Writing only the Transform is NOT enough — the
     /// movement tick overwrites it from MoveState one fixed step later.
