@@ -7,6 +7,7 @@
  */
 
 #include "EditorUI.h"
+#include "Engine/ECS/Components/CoreComponents.h"
 #include "EditorTheme.h"
 #include "EditorFonts.h"
 #include "EditorIcons.h"
@@ -1464,6 +1465,21 @@ namespace SparkEditor
             console.LogSuccess("EditorUI: GraphicsEngine attached to editor device");
         }
 
+        // Create the single live ECS World (the document being edited) and seed
+        // it with the demo entity, moved here from SceneViewPanel (Unit C1).
+        // This is the shared World that Hierarchy/Inspector/Save (C2/C3/C4)
+        // will operate on.
+        if (!m_world)
+        {
+            m_world = std::make_unique<::World>();
+            ::EntityID e = m_world->CreateEntity("Soldier");
+            m_world->AddComponent<::Transform>(e); // identity at origin
+            ::MeshRenderer& mr = m_world->AddComponent<::MeshRenderer>(e);
+            // Non-empty path required — WorldMeshCache::GetOrLoad early-returns on
+            // an empty path.
+            mr.meshPath = "Assets/Models/MMOFPS/characters/soldier.obj";
+        }
+
         auto it = m_panels.find("SceneView");
         if (it != m_panels.end())
         {
@@ -1472,6 +1488,7 @@ namespace SparkEditor
             {
                 sceneView->SetDevice(device, context);
                 sceneView->SetGraphics(m_graphics.get());
+                sceneView->SetWorld(m_world.get());
                 console.LogSuccess("Graphics device passed to Scene View panel");
             }
         }

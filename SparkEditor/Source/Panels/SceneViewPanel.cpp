@@ -333,10 +333,8 @@ namespace SparkEditor
             // editor has an attached GraphicsEngine. Falls back to a plain
             // dark-clear viewport (above) when the graphics device hasn't
             // been wired up yet.
-            if (m_graphics && m_renderTextureHeight > 0)
+            if (m_graphics && m_world && m_renderTextureHeight > 0)
             {
-                EnsureDemoWorld();
-
                 using namespace DirectX;
                 const XMVECTOR eye = XMVectorSet(0.0f, 3.0f, -6.0f, 1.0f);
                 const XMVECTOR at = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
@@ -346,7 +344,7 @@ namespace SparkEditor
                     static_cast<float>(m_renderTextureWidth) / static_cast<float>(m_renderTextureHeight);
                 const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), aspect, 0.1f, 6000.0f);
 
-                Spark::RenderWorldBasic(m_demoWorld, *m_graphics, m_meshCache, view, proj);
+                Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj);
             }
 
             // Restore the editor's render target so ImGui renders into the window.
@@ -356,24 +354,6 @@ namespace SparkEditor
         }
 #endif
     }
-
-#ifdef _WIN32
-    void SceneViewPanel::EnsureDemoWorld()
-    {
-        if (m_demoWorldPopulated)
-            return;
-        m_demoWorldPopulated = true;
-
-        EntityID e = m_demoWorld.CreateEntity("DemoSoldier");
-        m_demoWorld.AddComponent<Transform>(e); // identity at origin
-        MeshRenderer& mr = m_demoWorld.AddComponent<MeshRenderer>(e);
-        // Non-empty path required — WorldMeshCache::GetOrLoad early-returns on
-        // an empty path. If this asset isn't found under the editor's working
-        // directory, LoadOrPlaceholderMesh falls back to a procedural unit
-        // cube, which is still valid geometry proving the render path works.
-        mr.meshPath = "Assets/Models/MMOFPS/characters/soldier.obj";
-    }
-#endif
 
     void SceneViewPanel::CreateRenderTexture(int width, int height)
     {

@@ -13,8 +13,6 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 #include "Graphics/WorldBasicRenderer.h"
-#include "Engine/ECS/Components.h"
-#include "Engine/ECS/Components/CoreComponents.h"
 #else
 #include "Core/Platform.h"
 #endif
@@ -23,6 +21,7 @@
 using Microsoft::WRL::ComPtr;
 
 class GraphicsEngine;
+class World;
 
 namespace SparkEditor
 {
@@ -89,6 +88,11 @@ namespace SparkEditor
         void SetGraphics(GraphicsEngine* graphics) { m_graphics = graphics; }
 #endif
 
+        /// @brief Inject the shared ECS World to render (owned by EditorUI; the
+        /// panel holds a non-owning pointer). Unit C1: the panel no longer owns
+        /// its own demo World — EditorUI owns the single live document World.
+        void SetWorld(World* world) { m_world = world; }
+
         /// @brief Set collaborative session for peer visualization in viewport
         void SetCollabSession(CollaborativeEditSession* session) { m_collabSession = session; }
 
@@ -99,9 +103,6 @@ namespace SparkEditor
         void HandleInput();
         void UpdateCamera(float deltaTime);
         void CreateRenderTexture(int width, int height);
-#ifdef _WIN32
-        void EnsureDemoWorld();
-#endif
 
       private:
         // Rendering resources
@@ -118,11 +119,12 @@ namespace SparkEditor
         // EditorUI. Null until EditorUI::SetGraphicsDevice() has run.
         GraphicsEngine* m_graphics = nullptr;
 
-        // Demo ECS World rendered into the viewport (Unit C1 will replace this
-        // with EditorUI's real editable World).
-        World m_demoWorld;
+        // Non-owning: the single live ECS World (the document being edited),
+        // owned by EditorUI. Null until EditorUI::SetGraphicsDevice() has run
+        // and called SetWorld(). The mesh cache stays panel-side (a rendering
+        // concern) even though the World itself moved to EditorUI.
+        World* m_world = nullptr;
         Spark::WorldMeshCache m_meshCache;
-        bool m_demoWorldPopulated = false;
 #endif
 
         // Camera controls

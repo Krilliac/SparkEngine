@@ -32,6 +32,7 @@
 #include "../Gizmos/GizmoSystem.h"
 #include "../Communication/CollaborativeEditSession.h"
 #include "../Communication/LiveEditBridge.h"
+#include "Engine/ECS/Components.h"
 
 #ifdef _WIN32
 #include "Graphics/GraphicsEngine.h"
@@ -93,6 +94,11 @@ namespace SparkEditor
         GizmoSystem* GetGizmoSystem() { return m_gizmoSystem.get(); }
         CollaborativeEditSession* GetCollabSession() { return m_collabSession.get(); }
         LiveEditBridge* GetLiveEditBridge() { return m_liveEditBridge.get(); }
+
+        /// @brief The single live ECS World being edited (the document). Owned by
+        /// EditorUI; panels (SceneView, Hierarchy, Inspector) hold a non-owning
+        /// pointer to it via their own SetWorld().
+        World* GetWorld() { return m_world.get(); }
 
         /// @brief Set non-owning pointer to the plugin manager (owned by EditorApplication)
         void SetPluginManager(EditorPluginManager* pluginManager) { m_pluginManager = pluginManager; }
@@ -258,6 +264,11 @@ namespace SparkEditor
 
         // Gizmo system — 3D object manipulation overlays
         std::unique_ptr<GizmoSystem> m_gizmoSystem;
+
+        // The single live ECS World being edited (the document). Panels that
+        // display/manipulate scene content (SceneView, Hierarchy, Inspector)
+        // are wired to this via non-owning World* accessors.
+        std::unique_ptr<World> m_world;
 
 #ifdef _WIN32
         // GraphicsEngine attached to the editor's own D3D11 device (via
