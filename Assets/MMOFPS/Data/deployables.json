@@ -1,0 +1,20 @@
+{
+  "$schema_note": "TERRAFRONT deployable prop visuals (turret/ammo pack/med beacon). Model paths omit the 'Assets/' prefix (loader convention). Closed vocabulary: FabTurret/FabAmmoPack/MedBeacon (DeployableKind). Bespoke meshes + kStats (health/lifeSec) balance pass are TF-W4; kept out of scope here.",
+  "deployables": [
+    {
+      "id": "FabTurret",
+      "model": "Models/MMOFPS/props/antenna_a.obj",
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "FabAmmoPack",
+      "model": "Models/MMOFPS/props/crate_a.obj",
+      "scale": [0.7, 0.7, 0.7]
+    },
+    {
+      "id": "MedBeacon",
+      "model": "Models/MMOFPS/props/antenna_a.obj",
+      "scale": [0.5, 1.3, 0.5]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema_note": "TERRAFRONT world presentation constants (skybox/terrain/ambient/viewmodel/muzzle-FX/pawn mesh). Defaults mirror the pre-existing hardcoded TFWorldSetup.cpp constants field-for-field; see TFDataTables.h WorldPresentationDef. Paths omit the 'Assets/' prefix (loader convention, same as vehicles.json model paths).",
+  "presentation": {
+    "skybox": {
+      "faceTex": [
+        "Textures/MMOFPS/sky/space_px.png",
+        "Textures/MMOFPS/sky/space_nx.png",
+        "Textures/MMOFPS/sky/space_py.png",
+        "Textures/MMOFPS/sky/space_ny.png",
+        "Textures/MMOFPS/sky/space_pz.png",
+        "Textures/MMOFPS/sky/space_nz.png"
+      ],
+      "scale": 2900.0,
+      "tint": [1.8, 1.8, 1.8, 1.0]
+    },
+    "terrain": {
+      "texture": "Textures/MMOFPS/terrain/sand_color.png",
+      "uvTiles": 96.0
+    },
+    "ambient": {
+      "path": "Audio/MMOFPS/ambient/wind_loop.wav",
+      "volume": 0.35
+    },
+    "viewmodel": {
+      "recenter": [-0.89, -0.10, 0.0],
+      "scale": 0.26,
+      "rotationYRad": -1.57079633,
+      "place": [0.28, -0.26, 0.9],
+      "gunmetal": [0.60, 0.62, 0.68, 1.0]
+    },
+    "muzzleFx": {
+      "muzzleForwardM": 1.2,
+      "muzzleRightM": 0.30,
+      "muzzleUpM": -0.22,
+      "tracerLenM": 60.0,
+      "tracerThickM": 0.05,
+      "tracerLifeSec": 0.08,
+      "tracerColor": [6.0, 5.0, 2.0, 1.0],
+      "flashScale": [0.22, 0.22, 0.30],
+      "flashLifeSec": 0.05,
+      "flashColor": [8.0, 6.5, 2.5, 1.0]
+    },
+    "pawnMesh": "Models/MMOFPS/characters/soldier.obj"
+  }
+}

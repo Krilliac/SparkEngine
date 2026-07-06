@@ -152,6 +152,7 @@ bool ParseFactions(const Value& root, std::vector<FactionDef>& out, std::string&
         f.reloadMult          = GetNum(t, "reloadMult", 1.0f);
         f.projGravityMult     = GetNum(t, "projGravityMult", 1.0f);
         f.shieldRegenDelaySec = GetNum(t, "shieldRegenDelaySec", 6.0f);
+        f.structureMaterial   = GetStr(o, "structureMaterial", "Assets/Materials/MMOFPS/Structure_Concrete.json");
         out.push_back(std::move(f));
     }
     if (seen.size() != 3) { err = "factions.json: expected exactly 3 factions (MRA/AUC/HLX)"; return false; }
@@ -472,6 +473,119 @@ bool ParseRegions(const Value& root, ContinentDef& out, std::string& err)
     return true;
 }
 
+bool ParsePresentation(const Value& root, WorldPresentationDef& out, std::string& err)
+{
+    const Value& pres = root["presentation"];
+    if (!pres.IsObject()) { err = "presentation.json: missing 'presentation' object"; return false; }
+
+    const Value& sky = pres["skybox"];
+    if (!sky.IsObject() || !sky["faceTex"].IsArray() || sky["faceTex"].Size() != 6) {
+        err = "presentation.json: skybox.faceTex must have exactly 6 entries";
+        return false;
+    }
+    for (size_t i = 0; i < 6; ++i)
+        out.skybox.faceTex[i] = sky["faceTex"][i].AsString(out.skybox.faceTex[i]);
+    out.skybox.scale = GetNum(sky, "scale", out.skybox.scale);
+    if (sky["tint"].IsArray() && sky["tint"].Size() == 4) {
+        for (size_t i = 0; i < 4; ++i)
+            out.skybox.tint[i] = static_cast<float>(sky["tint"][i].AsNumber(out.skybox.tint[i]));
+    }
+
+    const Value& terr = pres["terrain"];
+    if (terr.IsObject()) {
+        out.terrain.texture = GetStr(terr, "texture", out.terrain.texture);
+        out.terrain.uvTiles = GetNum(terr, "uvTiles", out.terrain.uvTiles);
+    }
+
+    const Value& amb = pres["ambient"];
+    if (amb.IsObject()) {
+        out.ambient.path   = GetStr(amb, "path", out.ambient.path);
+        out.ambient.volume = GetNum(amb, "volume", out.ambient.volume);
+    }
+
+    const Value& vm = pres["viewmodel"];
+    if (vm.IsObject()) {
+        if (vm["recenter"].IsArray() && vm["recenter"].Size() == 3)
+            for (size_t i = 0; i < 3; ++i)
+                out.viewmodel.recenter[i] = static_cast<float>(vm["recenter"][i].AsNumber(out.viewmodel.recenter[i]));
+        out.viewmodel.scale        = GetNum(vm, "scale", out.viewmodel.scale);
+        out.viewmodel.rotationYRad = GetNum(vm, "rotationYRad", out.viewmodel.rotationYRad);
+        if (vm["place"].IsArray() && vm["place"].Size() == 3)
+            for (size_t i = 0; i < 3; ++i)
+                out.viewmodel.place[i] = static_cast<float>(vm["place"][i].AsNumber(out.viewmodel.place[i]));
+        if (vm["gunmetal"].IsArray() && vm["gunmetal"].Size() == 4)
+            for (size_t i = 0; i < 4; ++i)
+                out.viewmodel.gunmetal[i] = static_cast<float>(vm["gunmetal"][i].AsNumber(out.viewmodel.gunmetal[i]));
+    }
+
+    const Value& fx = pres["muzzleFx"];
+    if (fx.IsObject()) {
+        out.muzzleFx.muzzleForwardM = GetNum(fx, "muzzleForwardM", out.muzzleFx.muzzleForwardM);
+        out.muzzleFx.muzzleRightM   = GetNum(fx, "muzzleRightM",   out.muzzleFx.muzzleRightM);
+        out.muzzleFx.muzzleUpM      = GetNum(fx, "muzzleUpM",      out.muzzleFx.muzzleUpM);
+        out.muzzleFx.tracerLenM     = GetNum(fx, "tracerLenM",     out.muzzleFx.tracerLenM);
+        out.muzzleFx.tracerThickM   = GetNum(fx, "tracerThickM",   out.muzzleFx.tracerThickM);
+        out.muzzleFx.tracerLifeSec  = GetNum(fx, "tracerLifeSec",  out.muzzleFx.tracerLifeSec);
+        out.muzzleFx.flashLifeSec   = GetNum(fx, "flashLifeSec",   out.muzzleFx.flashLifeSec);
+        if (fx["tracerColor"].IsArray() && fx["tracerColor"].Size() == 4)
+            for (size_t i = 0; i < 4; ++i)
+                out.muzzleFx.tracerColor[i] = static_cast<float>(fx["tracerColor"][i].AsNumber(out.muzzleFx.tracerColor[i]));
+        if (fx["flashColor"].IsArray() && fx["flashColor"].Size() == 4)
+            for (size_t i = 0; i < 4; ++i)
+                out.muzzleFx.flashColor[i] = static_cast<float>(fx["flashColor"][i].AsNumber(out.muzzleFx.flashColor[i]));
+        if (fx["flashScale"].IsArray() && fx["flashScale"].Size() == 3)
+            for (size_t i = 0; i < 3; ++i)
+                out.muzzleFx.flashScale[i] = static_cast<float>(fx["flashScale"][i].AsNumber(out.muzzleFx.flashScale[i]));
+    }
+
+    out.pawnMesh = GetStr(pres, "pawnMesh", out.pawnMesh);
+    return true;
+}
+
+bool ParseDeployables(const Value& root, std::vector<DeployableVisualDef>& out, std::string& err)
+{
+    const Value& arr = root["deployables"];
+    if (!arr.IsArray() || arr.Size() == 0) { err = "deployables.json: missing 'deployables' array"; return false; }
+
+    auto parseKind = [](const std::string& s, DeployableKind& k) -> bool {
+        if (s == "FabTurret")        k = DeployableKind::FabTurret;
+        else if (s == "FabAmmoPack") k = DeployableKind::FabAmmoPack;
+        else if (s == "MedBeacon")   k = DeployableKind::MedBeacon;
+        else return false;
+        return true;
+    };
+
+    std::set<uint8_t> seen;
+    for (size_t i = 0; i < arr.Size(); ++i) {
+        const Value& o = arr[i];
+        DeployableVisualDef d;
+        const std::string idStr = GetStr(o, "id");
+        if (!parseKind(idStr, d.id)) {
+            err = "deployables.json: unknown deployable id '" + idStr + "'";
+            return false;
+        }
+        if (!seen.insert(static_cast<uint8_t>(d.id)).second) {
+            err = "deployables.json: duplicate deployable id '" + idStr + "'";
+            return false;
+        }
+        d.model = GetStr(o, "model");
+        if (d.model.empty()) {
+            err = "deployables.json: '" + idStr + "' missing model";
+            return false;
+        }
+        if (o["scale"].IsArray() && o["scale"].Size() == 3) {
+            for (size_t s = 0; s < 3; ++s)
+                d.scale[s] = static_cast<float>(o["scale"][s].AsNumber(1.0));
+        }
+        out.push_back(std::move(d));
+    }
+    if (seen.size() != 3) {
+        err = "deployables.json: expected all 3 deployable kinds (FabTurret/FabAmmoPack/MedBeacon)";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 // ===========================================================================
@@ -507,6 +621,8 @@ void TFDataTables::Shutdown()
     m_classes.clear();
     m_vehicles.clear();
     m_continent = {};
+    m_presentation = {};
+    m_deployableVisuals.clear();
     m_loaded = false;
     m_initialized = false;
 }
@@ -528,24 +644,30 @@ bool TFDataTables::LoadAllInternal(std::string& outError)
 {
     // Parse everything into locals first; commit only if ALL tables validate,
     // so a bad reload never leaves partially updated state.
-    Value jFactions, jWeapons, jClasses, jVehicles, jRegions;
-    if (!LoadJsonFile("factions.json", jFactions, outError)) return false;
-    if (!LoadJsonFile("weapons.json",  jWeapons,  outError)) return false;
-    if (!LoadJsonFile("classes.json",  jClasses,  outError)) return false;
-    if (!LoadJsonFile("vehicles.json", jVehicles, outError)) return false;
-    if (!LoadJsonFile("regions.json",  jRegions,  outError)) return false;
+    Value jFactions, jWeapons, jClasses, jVehicles, jRegions, jPresentation, jDeployables;
+    if (!LoadJsonFile("factions.json",     jFactions,     outError)) return false;
+    if (!LoadJsonFile("weapons.json",      jWeapons,      outError)) return false;
+    if (!LoadJsonFile("classes.json",      jClasses,      outError)) return false;
+    if (!LoadJsonFile("vehicles.json",     jVehicles,     outError)) return false;
+    if (!LoadJsonFile("regions.json",      jRegions,      outError)) return false;
+    if (!LoadJsonFile("presentation.json", jPresentation, outError)) return false;
+    if (!LoadJsonFile("deployables.json",  jDeployables,  outError)) return false;
 
     std::vector<FactionDef> factions;
     std::vector<WeaponDef>  weapons;
     std::vector<ClassDef>   classes;
     std::vector<VehicleDef> vehicles;
     ContinentDef            continent;
+    WorldPresentationDef    presentation;
+    std::vector<DeployableVisualDef> deployableVisuals;
 
-    if (!ParseFactions(jFactions, factions, outError)) return false;
-    if (!ParseWeapons(jWeapons, weapons, outError))    return false;
-    if (!ParseClasses(jClasses, classes, outError))    return false;
-    if (!ParseVehicles(jVehicles, vehicles, outError)) return false;
-    if (!ParseRegions(jRegions, continent, outError))  return false;
+    if (!ParseFactions(jFactions, factions, outError))         return false;
+    if (!ParseWeapons(jWeapons, weapons, outError))            return false;
+    if (!ParseClasses(jClasses, classes, outError))            return false;
+    if (!ParseVehicles(jVehicles, vehicles, outError))         return false;
+    if (!ParseRegions(jRegions, continent, outError))          return false;
+    if (!ParsePresentation(jPresentation, presentation, outError)) return false;
+    if (!ParseDeployables(jDeployables, deployableVisuals, outError)) return false;
 
     // Cross-table check: vehicle seat weapons must reference known weapon keys.
     for (const VehicleDef& v : vehicles) {
@@ -561,11 +683,13 @@ bool TFDataTables::LoadAllInternal(std::string& outError)
         }
     }
 
-    m_factions  = std::move(factions);
-    m_weapons   = std::move(weapons);
-    m_classes   = std::move(classes);
-    m_vehicles  = std::move(vehicles);
-    m_continent = std::move(continent);
+    m_factions   = std::move(factions);
+    m_weapons    = std::move(weapons);
+    m_classes    = std::move(classes);
+    m_vehicles   = std::move(vehicles);
+    m_continent  = std::move(continent);
+    m_presentation = std::move(presentation);
+    m_deployableVisuals = std::move(deployableVisuals);
     m_loaded = true;
     return true;
 }
@@ -617,6 +741,14 @@ const VehicleDef* TFDataTables::GetVehicle(VehicleId id) const
     for (const VehicleDef& v : m_vehicles)
         if (v.id == id)
             return &v;
+    return nullptr;
+}
+
+const DeployableVisualDef* TFDataTables::GetDeployableVisual(DeployableKind kind) const
+{
+    for (const DeployableVisualDef& d : m_deployableVisuals)
+        if (d.id == kind)
+            return &d;
     return nullptr;
 }
 
