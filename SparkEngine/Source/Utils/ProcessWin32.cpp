@@ -98,6 +98,59 @@ namespace Spark
             }();
             return s_job;
         }
+        // Appends `arg` to `cmdLine` using the quoting/escaping rules that
+        // CommandLineToArgvW (and therefore every well-behaved Win32 argv
+        // parser, including CRT startup code) uses to split a command line
+        // back into argv. This is the standard algorithm published by
+        // Microsoft ("Everyone quotes command line arguments the wrong
+        // way"): a literal `"` in the argument must be preceded by a
+        // backslash, and a run of backslashes must be doubled if it is
+        // immediately followed by a `"` (either an embedded one or the
+        // closing quote) so it isn't misinterpreted as escaping that quote.
+        // Without this, an argument containing `"` (or a trailing run of
+        // `\`) can break out of its quoted field and inject additional
+        // command-line tokens into the child process.
+        void AppendQuotedArg(std::string& cmdLine, const std::string& arg)
+        {
+            if (!arg.empty() && arg.find_first_of(" \t\n\v\"") == std::string::npos)
+            {
+                // No characters that require quoting.
+                cmdLine += arg;
+                return;
+            }
+
+            cmdLine += '"';
+            for (auto it = arg.begin();; ++it)
+            {
+                unsigned numBackslashes = 0;
+                while (it != arg.end() && *it == '\\')
+                {
+                    ++it;
+                    ++numBackslashes;
+                }
+
+                if (it == arg.end())
+                {
+                    // Escape all backslashes, since they immediately precede
+                    // the closing quote we're about to append.
+                    cmdLine.append(numBackslashes * 2, '\\');
+                    break;
+                }
+                else if (*it == '"')
+                {
+                    // Escape all backslashes and the following quote.
+                    cmdLine.append(numBackslashes * 2 + 1, '\\');
+                    cmdLine.push_back(*it);
+                }
+                else
+                {
+                    // A regular character; backslashes before it are literal.
+                    cmdLine.append(numBackslashes, '\\');
+                    cmdLine.push_back(*it);
+                }
+            }
+            cmdLine += '"';
+        }
     } // namespace
 
     // =========================================================================
@@ -276,13 +329,15 @@ namespace Spark
             SetHandleInformation(stderrReadH.h, HANDLE_FLAG_INHERIT, 0);
         }
 
-        // Build command line string (Windows-style: executable + space-separated args)
-        std::string cmdLine = "\"" + m_executable + "\"";
+        // Build command line string (Windows-style: executable + space-separated
+        // args), quoting/escaping each field so it round-trips correctly
+        // through CommandLineToArgvW-compatible argv parsing in the child.
+        std::string cmdLine;
+        AppendQuotedArg(cmdLine, m_executable);
         for (const auto& a : m_args)
         {
-            cmdLine += " \"";
-            cmdLine += a;
-            cmdLine += "\"";
+            cmdLine += ' ';
+            AppendQuotedArg(cmdLine, a);
         }
 
         STARTUPINFOA si{};
