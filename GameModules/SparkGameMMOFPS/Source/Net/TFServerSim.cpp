@@ -11,6 +11,7 @@
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFProgressionSystem.h"   // W5 onboarding (Task 6): disconnect progress flush
 #include "Game/TFVehicleSystem.h"   // TF-W3: seat routing + seated-pawn ride sync
 #include "Game/TFWeaponSystem.h"
 
@@ -158,6 +159,12 @@ void TFServerSim::SetPlayerFaction(PlayerId player, FactionId faction)
     m_factions[player] = faction;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] Player %u joined %s",
                    player, FactionName(faction));
+}
+
+uint64_t TFServerSim::ActiveCharacterOf(PlayerId player) const
+{
+    auto it = m_activeCharacter.find(player);
+    return it == m_activeCharacter.end() ? 0 : it->second;
 }
 
 void TFServerSim::TeleportPawn(PlayerId player, float x, float y, float z)
@@ -452,18 +459,19 @@ void TFServerSim::RegisterNetHandlers()
                            std::forward<decltype(fn)>(fn));
     };
 
-    route(TFMsg::ClientInput, [this](const NetworkMessage& m) {
-        HandleClientInput(m.senderID, m.payload.data(), m.payload.size());
-    });
-    route(TFMsg::SpawnRequest, [this](const NetworkMessage& m) {
-        HandleSpawnRequest(m.senderID, m.payload.data(), m.payload.size());
-    });
-    route(TFMsg::FireEvent, [this](const NetworkMessage& m) {
-        HandleFireEvent(m.senderID, m.payload.data(), m.payload.size());
-    });
-    route(TFMsg::FactionSelect, [this](const NetworkMessage& m) {
-        HandleFactionSelect(m.senderID, m.payload.data(), m.payload.size());
-    });
+    // W5 T6 (T4-review #1 security fix): gameplay ids are now routed through
+    // RouteClientMessage — the SAME single choke point the onboarding ids use
+    // below and the listen-host/standalone loopback path uses
+    // (TFClientNet::RouteLoopback) — so the enter-world gate added there
+    // applies uniformly to every client-originated gameplay message,
+    // regardless of transport.
+    for (TFMsg id : {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent,
+                     TFMsg::FactionSelect})
+    {
+        route(id, [this, id](const NetworkMessage& m) {
+            RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size());
+        });
+    }
 
     // TF-W3 (vehicles agent): the W1 accepted-but-unrouted vehicle stubs are
     // now live routes into TFVehicleSystem.
@@ -556,6 +564,20 @@ void TFServerSim::PollClientJoinsLeaves()
             m_factions.erase(id);
             m_deathTime.erase(id);
             m_enteredWorld.erase(id);
+            // W5 onboarding (Task 6): flush the active character's progress
+            // one last time before dropping the session (DESIGN.md W5 "Error
+            // handling": "On disconnect, flush the active character's
+            // progress") — the periodic TFProgressionSystem::SaveNow debounce
+            // could otherwise miss a few seconds of the final session.
+            if (auto cIt = m_activeCharacter.find(id); cIt != m_activeCharacter.end())
+            {
+                if (m_ctx->characters && m_ctx->progression)
+                    m_ctx->characters->PersistProgress(cIt->second,
+                                                       m_ctx->progression->XPOf(id),
+                                                       m_ctx->progression->RankOf(id),
+                                                       m_ctx->progression->FluxOf(id));
+                m_activeCharacter.erase(cIt);
+            }
             if (m_ctx->account)
                 m_ctx->account->ClearSession(id);
             it = m_knownClients.erase(it);
@@ -794,6 +816,44 @@ void TFServerSim::SendWorldWelcome(PlayerId player)
 
 void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data, size_t size)
 {
+    // W5 T6 (T4-review #1 security fix): CRITICAL security gate. Before this
+    // fix, the enter-world gate only withheld TF_WorldWelcome — the gameplay
+    // handlers themselves never verified the sender had actually logged in
+    // and entered the world, so a modified client could send SpawnRequest/
+    // ClientInput/FireEvent/FactionSelect directly and play as an
+    // unauthenticated "ghost". Every client-originated gameplay message now
+    // requires `sender` to already be in m_enteredWorld (set exactly once, by
+    // a successful HandleEnterWorld below) — this is the SAME dispatcher both
+    // the socket path (RegisterNetHandlers) and the listen-host/standalone
+    // loopback path (TFClientNet::RouteLoopback) call through, so local play
+    // is gated identically to networked play: the local host player
+    // (kTFLocalHostPlayer) must complete login -> character select/create ->
+    // enter-world via TFLoginFlow exactly like a networked client before it
+    // can move, spawn, fire, or switch factions. Bot-driven spawns/inputs
+    // (TFBotSystem) never call through here — they call
+    // TFPlayerSystem::ServerHandleSpawnRequest / EnqueueInput /
+    // TFWeaponSystem::ServerHandleFire directly — so bots are unaffected.
+    // Onboarding ids (login/char CRUD/enter-world itself) are never gated
+    // here: they are how a session GETS into m_enteredWorld in the first
+    // place.
+    switch (id)
+    {
+        case TFMsg::ClientInput:
+        case TFMsg::SpawnRequest:
+        case TFMsg::FireEvent:
+        case TFMsg::FactionSelect:
+            if (!m_enteredWorld.contains(sender))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] gameplay message 0x%04X from non-entered-world client %u rejected",
+                               static_cast<unsigned>(id), sender);
+                return;
+            }
+            break;
+        default:
+            break;
+    }
+
     switch (id)
     {
         case TFMsg::LoginRequest:    HandleLogin(sender, data, size); break;
@@ -802,6 +862,10 @@ void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data
         case TFMsg::CharCreateReq:   HandleCharCreate(sender, data, size); break;
         case TFMsg::CharDeleteReq:   HandleCharDelete(sender, data, size); break;
         case TFMsg::EnterWorldReq:   HandleEnterWorld(sender, data, size); break;
+        case TFMsg::ClientInput:     HandleClientInput(sender, data, size); break;
+        case TFMsg::SpawnRequest:    HandleSpawnRequest(sender, data, size); break;
+        case TFMsg::FireEvent:       HandleFireEvent(sender, data, size); break;
+        case TFMsg::FactionSelect:   HandleFactionSelect(sender, data, size); break;
         default: break;
     }
 }
@@ -1005,6 +1069,7 @@ void TFServerSim::HandleEnterWorld(PlayerId sender, const void* data, size_t siz
 
     SetPlayerFaction(sender, rec.faction);
     m_enteredWorld.insert(sender);
+    m_activeCharacter[sender] = rec.id;   // W5 onboarding (Task 6): progression re-key target
     SendWorldWelcome(sender);
     SPARK_LOG_INFO(Spark::LogCategory::Game,
                    "[TF] player %u entered world as character %llu (%s)", sender,

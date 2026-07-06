@@ -130,6 +130,12 @@ void TFSpawnScreen::Update(float deltaTime)
 {
     if (!m_initialized || !m_ctx || !m_ctx->HasLocalPlayer())
         return;
+    // W5 onboarding (Task 6): the deploy/spawn screen is gated behind having
+    // entered the world (TFLoginFlow owns the pre-world menu). Without this,
+    // the boot auto-open below would race TFLoginFlow's login/char-select
+    // screens the instant a fresh connection lands.
+    if (!m_ctx->InWorld())
+        return;
 
     m_respawnLeft = std::max(0.0f, m_respawnLeft - deltaTime);
     m_debounce    = std::max(0.0f, m_debounce - deltaTime);

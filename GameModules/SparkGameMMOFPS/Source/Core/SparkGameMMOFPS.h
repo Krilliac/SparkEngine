@@ -78,4 +78,14 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFMapScreen>         m_map;
     std::unique_ptr<Terrafront::TFSpawnScreen>       m_spawnUI;
     std::unique_ptr<Terrafront::TFScoreboard>        m_scoreboard;
+
+    // W5 onboarding (Task 6, additive): booted after every W1-W4 system above
+    // (db -> account -> characters -> loginFlow), per DESIGN.md "W5 —
+    // Onboarding". TFDatabase/TFAccountSystem/TFCharacterSystem are plain
+    // core-logic classes (no uniform Initialize(ctx,events) lifecycle — see
+    // Main.cpp); only TFLoginFlow follows the usual system lifecycle.
+    std::unique_ptr<Terrafront::TFDatabase>          m_db;
+    std::unique_ptr<Terrafront::TFAccountSystem>     m_account;
+    std::unique_ptr<Terrafront::TFCharacterSystem>   m_characters;
+    std::unique_ptr<Terrafront::TFLoginFlow>         m_loginFlow;
 };

@@ -14,6 +14,7 @@
 #include "Game/TFWeaponSystem.h"
 #include "Net/TFReplication.h"
 #include "Net/TFServerSim.h"
+#include "UI/TFLoginFlow.h"   // W5 onboarding (Task 6): loginFlow->IsOpen() input suppression
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
 #include "World/TFWorldSetup.h"
@@ -115,10 +116,12 @@ void TFClientNet::Update(float deltaTime)
     }
     m_wasAlive = alive;
 
-    // Fullscreen UIs (map / deploy screen) own the mouse: suspend fire +
-    // look input so a rally click doesn't discharge the weapon underneath.
+    // Fullscreen UIs (map / deploy screen / W5 login flow) own the mouse:
+    // suspend fire + look input so a rally click (or a login button) doesn't
+    // discharge the weapon underneath.
     const bool uiOpen = (m_ctx->map && m_ctx->map->IsOpen()) ||
-                        (m_ctx->spawnUI && m_ctx->spawnUI->IsOpen());
+                        (m_ctx->spawnUI && m_ctx->spawnUI->IsOpen()) ||
+                        (m_ctx->loginFlow && m_ctx->loginFlow->IsOpen());
     PumpInput(deltaTime, alive && !uiOpen);
 
     if (!m_ctx->IsAuthority())

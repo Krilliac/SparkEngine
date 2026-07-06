@@ -16,9 +16,11 @@
  */
 #include "Game/TFProgressionSystem.h"
 
+#include "Account/TFCharacterSystem.h"   // W5 onboarding (Task 6): re-key persistence
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
 #include "Net/TFNetProtocol.h"
+#include "Net/TFServerSim.h"             // W5 onboarding (Task 6): ActiveCharacterOf
 #include "World/TFRegionSystem.h"
 #include "Utils/JsonUtils.h"
 #include "Utils/LogMacros.h"
@@ -403,6 +405,20 @@ bool TFProgressionSystem::SaveNow()
         row["rank"] = Spark::Json::Value(static_cast<int>(rec.rank));
         row["flux"] = Spark::Json::Value(static_cast<double>(rec.flux));
         plist.PushBack(std::move(row));
+
+        // W5 onboarding (Task 6): re-key progression to the entered
+        // character. The in-session runtime state above stays PlayerId-keyed
+        // (unchanged, low risk); TFCharacterSystem/TFDatabase become the
+        // durable per-character store, keyed by the character bound at
+        // enter-world (TFServerSim::HandleEnterWorld). Players who never
+        // completed onboarding (ActiveCharacterOf==0, e.g. bots or a
+        // pre-Task-6 session) simply are not persisted here.
+        if (m_ctx->characters && m_ctx->serverSim)
+        {
+            const uint64_t charId = m_ctx->serverSim->ActiveCharacterOf(id);
+            if (charId != 0)
+                m_ctx->characters->PersistProgress(charId, rec.xp, rec.rank, rec.flux);
+        }
     }
     Spark::Json::Value prog = Spark::Json::Value::MakeObject();
     prog["note"]    = Spark::Json::Value("PlayerIds are session-scoped in W2");

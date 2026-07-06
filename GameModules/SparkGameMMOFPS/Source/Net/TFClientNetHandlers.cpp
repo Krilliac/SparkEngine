@@ -16,6 +16,7 @@
 #include "Net/TFReplication.h"
 #include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
+#include "UI/TFLoginFlow.h"   // W5 onboarding (Task 6): direct reply-sink forwarding
 #include "UI/TFScoreboard.h"
 #include "World/TFWorldSetup.h"
 
@@ -163,6 +164,34 @@ void TFClientNet::RouteLoopback(TFMsg id, const void* payload, size_t size)
 
     switch (id)
     {
+#ifdef ENABLE_NETWORKING
+        // W5 T6 (T4-review #1 security fix): every client-originated gameplay
+        // AND onboarding message now routes straight into
+        // TFServerSim::RouteClientMessage — the SAME dispatcher the socket
+        // path uses (RegisterNetHandlers) — so the enter-world gate added
+        // there (RouteClientMessage) applies identically to the listen-host/
+        // standalone loopback player and to real network clients: the local
+        // host (kTFLocalHostPlayer) must complete login -> character
+        // select/create -> enter-world via TFLoginFlow exactly like a
+        // networked client before it can move, spawn, fire, or switch
+        // factions. RouteClientMessage only exists under ENABLE_NETWORKING
+        // (mirrors every other Handle* on TFServerSim); the #else branch
+        // below preserves the pre-W5 direct-call behavior for builds without
+        // networking (no socket attack surface to close there).
+        case TFMsg::ClientInput:
+        case TFMsg::SpawnRequest:
+        case TFMsg::FireEvent:
+        case TFMsg::FactionSelect:
+        case TFMsg::LoginRequest:
+        case TFMsg::RegisterRequest:
+        case TFMsg::CharListRequest:
+        case TFMsg::CharCreateReq:
+        case TFMsg::CharDeleteReq:
+        case TFMsg::EnterWorldReq:
+            if (m_ctx->serverSim)
+                m_ctx->serverSim->RouteClientMessage(me, id, payload, size);
+            break;
+#else
         case TFMsg::ClientInput:
             if (size == sizeof(TF_ClientInput) && m_ctx->serverSim)
             {
@@ -212,22 +241,6 @@ void TFClientNet::RouteLoopback(TFMsg id, const void* payload, size_t size)
                     m_ctx->players->ServerHandleFactionSelect(me, f);
                 m_ctx->localFaction = f;
             }
-            break;
-
-#ifdef ENABLE_NETWORKING
-        // W5 onboarding (Task 4): standalone/listen-host route straight into
-        // TFServerSim::RouteClientMessage — the SAME dispatcher the socket
-        // path uses (RegisterNetHandlers), so both paths run identical
-        // authoritative logic. RouteClientMessage only exists under
-        // ENABLE_NETWORKING (mirrors every other Handle* on TFServerSim).
-        case TFMsg::LoginRequest:
-        case TFMsg::RegisterRequest:
-        case TFMsg::CharListRequest:
-        case TFMsg::CharCreateReq:
-        case TFMsg::CharDeleteReq:
-        case TFMsg::EnterWorldReq:
-            if (m_ctx->serverSim)
-                m_ctx->serverSim->RouteClientMessage(me, id, payload, size);
             break;
 #endif
 
@@ -397,6 +410,15 @@ void TFClientNet::OnWorldWelcome(const void* data, size_t size)
         sel.faction = static_cast<uint8_t>(m_ctx->localFaction);
         SendMsg(TFMsg::FactionSelect, &sel, sizeof(sel));
     }
+
+    // W5 onboarding (Task 6): TF_WorldWelcome is now gated (see DESIGN.md W5)
+    // to fire ONLY after a successful TFCharacterSystem::EnterWorld, so its
+    // receipt IS the "entered world" signal — flip the context flag every
+    // gameplay/UI system gates on and forward to TFLoginFlow's reply sink so
+    // it can leave its EnteringWorld splash for InWorld.
+    m_ctx->inWorld = true;
+    if (m_ctx->loginFlow)
+        m_ctx->loginFlow->OnEnteredWorld();
 }
 
 void TFClientNet::OnSpawnReply(const void* data, size_t size)
@@ -504,6 +526,8 @@ void TFClientNet::OnLoginReply(const void* data, size_t size)
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] login reply: ok=%d err=%u account=%llu",
                    rep.ok, static_cast<unsigned>(rep.err),
                    static_cast<unsigned long long>(rep.accountId));
+    if (m_ctx->loginFlow)
+        m_ctx->loginFlow->OnLoginReply(rep.ok != 0, rep.err, rep.accountId);
 }
 
 void TFClientNet::OnRegisterReply(const void* data, size_t size)
@@ -516,6 +540,8 @@ void TFClientNet::OnRegisterReply(const void* data, size_t size)
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] register reply: ok=%d err=%u account=%llu",
                    rep.ok, static_cast<unsigned>(rep.err),
                    static_cast<unsigned long long>(rep.accountId));
+    if (m_ctx->loginFlow)
+        m_ctx->loginFlow->OnRegisterReply(rep.ok != 0, rep.err);
 }
 
 void TFClientNet::OnCharListReply(const void* data, size_t size)
@@ -527,6 +553,8 @@ void TFClientNet::OnCharListReply(const void* data, size_t size)
     m_charList.assign(rep.chars, rep.chars + std::min<uint8_t>(rep.count, 5));
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char list reply: %u character(s)",
                    static_cast<unsigned>(rep.count));
+    if (m_ctx->loginFlow)
+        m_ctx->loginFlow->OnCharList(rep);
 }
 
 void TFClientNet::OnCharCreateReply(const void* data, size_t size)
@@ -540,6 +568,8 @@ void TFClientNet::OnCharCreateReply(const void* data, size_t size)
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char create reply: ok=%d err=%u charId=%llu",
                    rep.ok, static_cast<unsigned>(rep.err),
                    static_cast<unsigned long long>(rep.charId));
+    if (m_ctx->loginFlow)
+        m_ctx->loginFlow->OnCharOpReply(rep.ok != 0, rep.err, rep.charId);
 }
 
 void TFClientNet::OnCharDeleteReply(const void* data, size_t size)
@@ -553,6 +583,8 @@ void TFClientNet::OnCharDeleteReply(const void* data, size_t size)
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char delete reply: ok=%d err=%u charId=%llu",
                    rep.ok, static_cast<unsigned>(rep.err),
                    static_cast<unsigned long long>(rep.charId));
+    if (m_ctx->loginFlow)
+        m_ctx->loginFlow->OnCharOpReply(rep.ok != 0, rep.err, rep.charId);
 }
 
 #endif // ENABLE_NETWORKING

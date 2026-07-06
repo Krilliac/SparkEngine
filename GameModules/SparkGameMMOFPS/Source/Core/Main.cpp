@@ -33,6 +33,14 @@
 #include "UI/TFSpawnScreen.h"
 #include "UI/TFScoreboard.h"
 
+// W5 onboarding (Task 6, additive): persistence + account/character core
+// logic and the client login/char-select/enter-world UI. See DESIGN.md
+// "W5 — Onboarding".
+#include "Persistence/TFDatabase.h"
+#include "Account/TFAccountSystem.h"
+#include "Account/TFCharacterSystem.h"
+#include "UI/TFLoginFlow.h"
+
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -93,6 +101,13 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_spawnUI     = std::make_unique<TFSpawnScreen>();
     m_scoreboard  = std::make_unique<TFScoreboard>();
 
+    // W5 onboarding (Task 6, additive): db -> account -> characters ->
+    // loginFlow, after every system above (DESIGN.md "W5 — Onboarding").
+    m_db          = std::make_unique<TFDatabase>();
+    m_account     = std::make_unique<TFAccountSystem>();
+    m_characters  = std::make_unique<TFCharacterSystem>();
+    m_loginFlow   = std::make_unique<TFLoginFlow>();
+
     // ---- publish context pointers before any Initialize ----
     m_ctx.data        = m_data.get();
     m_ctx.world       = m_world.get();
@@ -112,6 +127,26 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_ctx.map         = m_map.get();
     m_ctx.spawnUI     = m_spawnUI.get();
     m_ctx.scoreboard  = m_scoreboard.get();
+
+    // W5 onboarding (Task 6, additive).
+    m_ctx.db          = m_db.get();
+    m_ctx.account     = m_account.get();
+    m_ctx.characters  = m_characters.get();
+    m_ctx.loginFlow   = m_loginFlow.get();
+
+    // W5 onboarding (Task 6): TFDatabase/TFAccountSystem/TFCharacterSystem are
+    // plain core-logic classes (unit-tested standalone against a bare
+    // TFDatabase*, see Tests/TestTFOnboarding.cpp) with no uniform
+    // Initialize(ctx,events) lifecycle, so they are wired directly here
+    // rather than through the Boot table below. TFDatabase::Open can fail
+    // (bad path/IO) so its result still gates the boot via the Boot table;
+    // SetDatabase is a plain pointer store and cannot fail.
+    const bool tfDbOk = m_db->Open("Saves/terrafront.db");
+    if (!tfDbOk)
+        console.LogWarning("[TF] TFDatabase failed to open Saves/terrafront.db "
+                            "- onboarding will report ServerError until fixed");
+    m_account->SetDatabase(m_db.get());
+    m_characters->SetDatabase(m_db.get());
 
     // ---- initialize in dependency order ----
     struct Boot { const char* name; bool ok; };
@@ -135,6 +170,9 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         { "TFMapScreen",         m_map->Initialize(m_ctx, m_events) },
         { "TFSpawnScreen",       m_spawnUI->Initialize(m_ctx, m_events) },
         { "TFScoreboard",        m_scoreboard->Initialize(m_ctx, m_events) },
+        // W5 onboarding (Task 6, additive).
+        { "TFDatabase",          tfDbOk },
+        { "TFLoginFlow",         m_loginFlow->Initialize(m_ctx, m_events) },
     };
     for (const Boot& b : boots)
     {
@@ -161,6 +199,12 @@ void TerrafrontModule::OnUnload()
     SPARK_LOG_INFO(Spark::LogCategory::Game, "Unloading TERRAFRONT module");
 
     // reverse boot order
+    // W5 onboarding (Task 6, additive): loginFlow/db were constructed last,
+    // so they shut down first. TFAccountSystem/TFCharacterSystem are plain
+    // core-logic classes with no Shutdown() of their own.
+    m_loginFlow->Shutdown();
+    m_db->Close();
+
     m_scoreboard->Shutdown();
     m_spawnUI->Shutdown();
     m_map->Shutdown();
@@ -209,6 +253,7 @@ void TerrafrontModule::OnUpdate(float dt)
     m_map->Update(dt);
     m_spawnUI->Update(dt);
     m_scoreboard->Update(dt);
+    m_loginFlow->Update(dt);   // W5 onboarding (Task 6, additive)
 }
 
 void TerrafrontModule::OnFixedUpdate(float fdt)
@@ -247,10 +292,19 @@ void TerrafrontModule::OnImGui()
 
     if (m_ctx.HasLocalPlayer())
     {
-        m_hud->RenderUI();
-        m_map->RenderUI();
-        m_spawnUI->RenderUI();
-        m_scoreboard->RenderUI();
+        // W5 onboarding (Task 6): TFLoginFlow owns the pre-world menu (login /
+        // register / character select / create / entering-world splash) and
+        // is a no-op once its internal state reaches InWorld. The rest of the
+        // gameplay UI now additionally gates on m_ctx.InWorld() so nothing
+        // renders before the player has logged in and entered the world.
+        m_loginFlow->RenderUI();
+        if (m_ctx.InWorld())
+        {
+            m_hud->RenderUI();
+            m_map->RenderUI();
+            m_spawnUI->RenderUI();
+            m_scoreboard->RenderUI();
+        }
     }
 
     // Aggregated debug window (tf_debug panels). Several system panels use a
@@ -279,6 +333,7 @@ void TerrafrontModule::OnImGui()
             m_progression->RenderDebugUI();
             m_squads->RenderDebugUI();
             m_bots->RenderDebugUI();
+            m_loginFlow->RenderDebugUI();   // W5 onboarding (Task 6, additive)
 #ifdef SPARK_HAS_IMGUI
         }
         ImGui::End();

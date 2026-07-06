@@ -87,71 +87,16 @@ void TFLoginFlow::Update(float deltaTime)
 
     if (m_state == TFFlowState::EnteringWorld)
         m_enterTimer += deltaTime;
-
-    PollNetReplies();
 }
 
 // ---------------------------------------------------------------------------
-// Getter-poll fallback (see TFLoginFlow.h file header comment)
-// ---------------------------------------------------------------------------
-
-void TFLoginFlow::PollNetReplies()
-{
-    if (m_pending == PendingOp::None || !m_ctx->clientNet)
-        return;
-
-    // Give the loopback/network round trip at least one Update() tick to
-    // land before reading TFClientNet's reply-stash getters — avoids reading
-    // stale/default state from before the request was sent.
-    if (!m_pendingTickElapsed)
-    {
-        m_pendingTickElapsed = true;
-        return;
-    }
-
-    TFClientNet* net = m_ctx->clientNet;
-    const PendingOp op = m_pending;
-    m_pending = PendingOp::None;
-
-    switch (op)
-    {
-        case PendingOp::Login:
-            OnLoginReply(net->IsLoggedIn(), net->LastAuthError(), net->AccountId());
-            break;
-
-        case PendingOp::Register:
-            OnRegisterReply(net->LastAuthError() == static_cast<uint8_t>(TFAuthErr::Ok),
-                            net->LastAuthError());
-            break;
-
-        case PendingOp::CharList:
-        {
-            TF_CharListReply rep{};
-            const std::vector<TF_CharBrief>& list = net->CharacterList();
-            rep.count = static_cast<uint8_t>(std::min<size_t>(list.size(), 5));
-            for (uint8_t i = 0; i < rep.count; ++i)
-                rep.chars[i] = list[i];
-            OnCharList(rep);
-            break;
-        }
-
-        case PendingOp::CharCreate:
-        case PendingOp::CharDelete:
-            OnCharOpReply(net->LastCharOpError() == static_cast<uint8_t>(TFCharErr::Ok),
-                          net->LastCharOpError(), net->LastCharOpId());
-            break;
-
-        default:
-            break;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Reply sinks
+// Reply sinks — called directly by TFClientNet's onboarding handlers
+// (TFClientNetHandlers.cpp) via m_ctx->loginFlow (Task 6).
 // ---------------------------------------------------------------------------
 
 void TFLoginFlow::OnLoginReply(bool ok, uint8_t err, uint64_t accountId)
 {
+    m_pending = PendingOp::None;
     if (ok)
     {
         m_accountId = accountId;
@@ -170,6 +115,7 @@ void TFLoginFlow::OnLoginReply(bool ok, uint8_t err, uint64_t accountId)
 
 void TFLoginFlow::OnRegisterReply(bool ok, uint8_t err)
 {
+    m_pending = PendingOp::None;
     if (ok)
     {
         m_error = "Account created - sign in below.";
@@ -183,6 +129,7 @@ void TFLoginFlow::OnRegisterReply(bool ok, uint8_t err)
 
 void TFLoginFlow::OnCharList(const TF_CharListReply& reply)
 {
+    m_pending = PendingOp::None;
     m_chars.assign(reply.chars, reply.chars + std::min<uint8_t>(reply.count, 5));
     if (m_selectedIdx >= static_cast<int>(m_chars.size()))
         m_selectedIdx = -1;
@@ -191,6 +138,7 @@ void TFLoginFlow::OnCharList(const TF_CharListReply& reply)
 void TFLoginFlow::OnCharOpReply(bool ok, uint8_t err, uint64_t charId)
 {
     (void)charId;
+    m_pending = PendingOp::None;
     if (ok)
     {
         m_error.clear();
@@ -205,9 +153,9 @@ void TFLoginFlow::OnCharOpReply(bool ok, uint8_t err, uint64_t charId)
 
 void TFLoginFlow::OnEnteredWorld()
 {
-    // Task 6 additionally sets `m_ctx->inWorld = true` here once TFGameContext
-    // gains that field (additive FROZEN-header change, Task 6 Step 1) and
-    // wires TFClientNet's gated WorldWelcome handler to call this method.
+    // m_ctx->inWorld is set by the caller (TFClientNet::OnWorldWelcome, the
+    // gated enter-world reply) right before/after this call — see
+    // TFClientNetHandlers.cpp and TFTypes.h TFGameContext::inWorld.
     m_state = TFFlowState::InWorld;
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] entered world");
 }
@@ -225,7 +173,6 @@ void TFLoginFlow::SendLogin()
     std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
     m_ctx->clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req));
     m_pending = PendingOp::Login;
-    m_pendingTickElapsed = false;
     m_error.clear();
 }
 
@@ -238,7 +185,6 @@ void TFLoginFlow::SendRegister()
     std::strncpy(req.pass, m_password, sizeof(req.pass) - 1);
     m_ctx->clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req));
     m_pending = PendingOp::Register;
-    m_pendingTickElapsed = false;
     m_error.clear();
 }
 
@@ -248,7 +194,6 @@ void TFLoginFlow::SendCharList()
         return;
     m_ctx->clientNet->SendMsg(TFMsg::CharListRequest, nullptr, 0);
     m_pending = PendingOp::CharList;
-    m_pendingTickElapsed = false;
 }
 
 void TFLoginFlow::SendCharCreate()
@@ -260,7 +205,6 @@ void TFLoginFlow::SendCharCreate()
     req.faction = static_cast<uint8_t>(m_createFaction);
     m_ctx->clientNet->SendMsg(TFMsg::CharCreateReq, &req, sizeof(req));
     m_pending = PendingOp::CharCreate;
-    m_pendingTickElapsed = false;
     m_error.clear();
 }
 
@@ -272,7 +216,6 @@ void TFLoginFlow::SendCharDelete(uint64_t charId)
     req.charId = charId;
     m_ctx->clientNet->SendMsg(TFMsg::CharDeleteReq, &req, sizeof(req));
     m_pending = PendingOp::CharDelete;
-    m_pendingTickElapsed = false;
     m_error.clear();
 }
 

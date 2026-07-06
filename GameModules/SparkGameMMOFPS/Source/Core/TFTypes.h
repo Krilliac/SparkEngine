@@ -121,6 +121,11 @@ class TFScoreboard;
 class TFDatabase;
 class TFAccountSystem;
 class TFCharacterSystem;
+// W5 onboarding (Task 6, additive): the client login/char-select/enter-world
+// ImGui state machine (Source/UI/TFLoginFlow.h). Forward-declared only, same
+// reasoning as the three pointers above — this FROZEN header never includes
+// TFLoginFlow.h. See DESIGN.md "W5 — Onboarding" for the full contract note.
+class TFLoginFlow;
 
 struct TFGameContext {
     Spark::IEngineContext* engine = nullptr;
@@ -155,12 +160,28 @@ struct TFGameContext {
     TFAccountSystem*     account     = nullptr;
     TFCharacterSystem*   characters  = nullptr;
 
+    // W5 onboarding (Task 6, additive): the client login/char-select/
+    // enter-world UI. Constructed + published in Main.cpp boot order (after
+    // clientNet); null on dedicated servers (no local player, no UI).
+    TFLoginFlow*         loginFlow   = nullptr;
+
+    // W5 onboarding (Task 6, additive): true once TF_WorldWelcome has been
+    // received for the local session (i.e. TFCharacterSystem::EnterWorld
+    // succeeded server-side and the gated WorldWelcome round-tripped back).
+    // Client-side systems (TFSpawnScreen, HUD/map/scoreboard in Main.cpp
+    // OnImGui) gate on InWorld() instead of just HasLocalPlayer() so the
+    // pre-onboarding UI never shows before login completes.
+    bool                 inWorld     = false;
+
     bool IsAuthority() const {
         return role == NetRole::ListenHost || role == NetRole::DedicatedServer
             || role == NetRole::Standalone;
     }
     bool HasLocalPlayer() const {
         return role != NetRole::DedicatedServer;
+    }
+    bool InWorld() const {
+        return inWorld;
     }
 };
 

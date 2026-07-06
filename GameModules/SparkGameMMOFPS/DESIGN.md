@@ -200,3 +200,156 @@ and a console-driven smoke script.
 
 Multiple continents; >64 players; AreaServer sharding (interface kept); rigged character
 animation; Steam transport; account security hardening; monetization/cosmetics; voice.
+
+## 7. W5 — Onboarding (Login / Character / World Entry)
+
+Replaces dropping straight into the war with a server-authoritative
+login -> character-select -> character-create -> entering-world -> in-world
+pipeline. Delivered as six units (Tasks 1-6 below); this section is the
+DESIGN.md record for Task 6's additive change to the two FROZEN contract
+files (`Core/TFTypes.h`, `Core/Main.cpp`).
+
+### Flow
+
+```
+Login/Register -> CharSelect -> CharCreate -> EnteringWorld -> InWorld
+(replaces: drop straight into the war at faction-select)
+```
+
+### Systems
+
+- **`TFDatabase`** (`Source/Persistence/TFDatabase.{h,cpp}`) — account +
+  character persistence. NOT `Spark::Persistence::AsyncDatabasePool` (its
+  `SQLiteConnection` fallback is JSON-key-value and does not execute SQL) —
+  pivoted to an atomic-JSON-file backing (tmp+rename, the same pattern as
+  `TFProgressionSystem.cpp`), storing `accounts[]`/`characters[]` in
+  `Saves/terrafront.db`, behind the exact CRUD interface Tasks 2-6 depend on.
+  Plain class, no `Initialize(ctx,events)` — see Boot note below.
+- **`TFAccountSystem`** (`Source/Account/TFAccountSystem.{h,cpp}`) —
+  register/login core logic over a `TFDatabase*` (unit-testable standalone,
+  no `TFGameContext` coupling); salted-hash auth ported from
+  `MMOAccountSystem` (demo-grade, not cryptographic — DESIGN §6 non-goal);
+  a `clientId -> accountId` session map (`BindSession`/`AccountForClient`/
+  `ClearSession`).
+- **`TFCharacterSystem`** (`Source/Account/TFCharacterSystem.{h,cpp}`) —
+  character CRUD (list/create/delete), 5-slot cap, name uniqueness/length
+  validation, and `EnterWorld(accountId, charId, out)` (ownership-checked,
+  returns the authoritative character record). `PersistProgress(charId, xp,
+  rank, flux)` routes to `TFDatabase::SaveCharacterProgress`.
+- **`TFLoginFlow`** (`Source/UI/TFLoginFlow.{h,cpp}`) — client ImGui state
+  machine (`enum class TFFlowState{Login,Register,CharSelect,CharCreate,
+  EnteringWorld,InWorld}`), styled like `TFSpawnScreen` (full-viewport
+  `NoDecoration|NoBackground` modal, dimmed backdrop, centered panel, `TFUi`
+  helpers). Sends requests via `m_ctx->clientNet->SendMsg(...)`; its reply
+  sinks (`OnLoginReply`/`OnRegisterReply`/`OnCharList`/`OnCharOpReply`/
+  `OnEnteredWorld`) are called directly by `TFClientNet`'s onboarding
+  handlers via `m_ctx->loginFlow` (Task 6 — an interim getter-poll fallback
+  from Task 5 was removed once this direct wiring landed).
+
+### Character model
+
+Faction (MRA/AUC/HLX) + name + persistent progression (xp/rank/flux),
+authoritative from the moment a character enters the world. Class stays
+per-spawn (unchanged, free switching at the deploy screen); no appearance
+customization (non-goal).
+
+### Net protocol + gating
+
+New `TFMsg` ids after `WorldWelcome = 0x5411`: `LoginRequest/LoginReply`,
+`RegisterRequest/RegisterReply`, `CharListRequest/CharListReply`,
+`CharCreateReq/CharCreateReply`, `CharDeleteReq/CharDeleteReply`,
+`EnterWorldReq` (reply is the now-gated `TF_WorldWelcome`). Packed PODs with
+frozen `static_assert` sizes in `Net/TFNetProtocol.h`
+(`TF_AuthRequest/TF_AuthReply/TF_CharBrief/TF_CharListReply/
+TF_CharCreateRequest/TF_CharOpReply/TF_CharDeleteRequest/
+TF_EnterWorldRequest`).
+
+`TF_WorldWelcome` no longer fires from `PollClientJoinsLeaves` on connect; it
+is sent ONLY from `TFServerSim::HandleEnterWorld` after
+`TFCharacterSystem::EnterWorld` succeeds, and only once per session
+(idempotent — a duplicate/late `EnterWorldReq` is ignored while
+`m_move.contains(sender) || m_enteredWorld.contains(sender)`).
+
+Every client-originated message — onboarding AND gameplay — is routed through
+one function, `TFServerSim::RouteClientMessage(sender, id, data, size)`, used
+by both the socket path (`RegisterNetHandlers`) and the listen-host/
+standalone loopback path (`TFClientNet::RouteLoopback`), so one dispatcher
+runs identical authoritative logic regardless of transport.
+
+### Contract change (additive to the FROZEN `TFGameContext` + `Main.cpp`)
+
+`TFGameContext` (`Core/TFTypes.h`) gains, additive-only (no reorder/removal
+of existing members): `TFDatabase* db`, `TFAccountSystem* account`,
+`TFCharacterSystem* characters` (added in Task 4, wired in Task 6),
+`TFLoginFlow* loginFlow`, `bool inWorld` + `bool InWorld() const` (Task 6).
+`Core/Main.cpp` constructs/publishes/boots `TFDatabase -> TFAccountSystem ->
+TFCharacterSystem -> TFLoginFlow` after every W1-W4 system, additive to the
+existing boot table. `TFDatabase`/`TFAccountSystem`/`TFCharacterSystem` are
+plain core-logic classes (unit-tested standalone against a bare
+`TFDatabase*`, `Tests/TestTFOnboarding.cpp`) with no uniform
+`Initialize(ctx,events)` lifecycle, so `TFDatabase::Open("Saves/
+terrafront.db")` + `SetDatabase(...)` are called directly in `Main.cpp`
+`OnLoad` rather than through the Boot table (`TFDatabase`'s `Open` result
+still gates module boot success, matching every other system). `OnImGui`
+renders `TFLoginFlow::RenderUI()` unconditionally (a no-op once
+`InWorld()`), and additionally gates HUD/map/spawn/scoreboard behind
+`InWorld()` (they already gated on `HasLocalPlayer()`). `TFSpawnScreen`'s
+boot auto-open is gated the same way (`UI/TFSpawnScreen.cpp Update`).
+
+### Security fix — server-verified enter-world gate (T4-review finding #1)
+
+Before this fix, the enter-world gate only withheld `TF_WorldWelcome`; the
+gameplay handlers (`HandleClientInput`/`HandleSpawnRequest`/
+`HandleFireEvent`/`HandleFactionSelect`) never verified the sender had
+logged in and entered the world, so a modified client could send those
+messages directly over the socket and play as an unauthenticated "ghost".
+Fix: `TFServerSim::RouteClientMessage` now rejects `ClientInput`/
+`SpawnRequest`/`FireEvent`/`FactionSelect` from any sender not in
+`m_enteredWorld` (populated exactly once, by a successful
+`HandleEnterWorld`). Because both the socket route and the loopback route
+call through `RouteClientMessage`, the gate applies identically to real
+network clients AND the listen-host/standalone local player
+(`kTFLocalHostPlayer`) — the local host must complete login -> character
+select/create -> enter-world via `TFLoginFlow` exactly like a networked
+client before it can move, spawn, fire, or switch factions. Bot-driven
+spawns/input (`TFBotSystem`) call `TFPlayerSystem::ServerHandleSpawnRequest`
+/ `TFServerSim::EnqueueInput` / `TFWeaponSystem::ServerHandleFire` directly
+(never through `RouteClientMessage`), so bots are unaffected by this gate.
+
+### Progression re-keying
+
+`TFProgressionSystem` keeps its existing in-session, `PlayerId`-keyed runtime
+state (unchanged — low risk). `TFServerSim` additionally tracks
+`PlayerId -> characterId` (`m_activeCharacter`, populated in
+`HandleEnterWorld`, exposed as `ActiveCharacterOf(player)`).
+`TFProgressionSystem::SaveNow()` — on its existing 2s-dirty-debounce /
+30s-safety-net cadence — additionally calls
+`TFCharacterSystem::PersistProgress(charId, xp, rank, flux)` for every player
+with an active character, making `TFCharacterSystem`/`TFDatabase` the durable
+per-character store on top of the session-scoped runtime state. On
+disconnect, `TFServerSim`'s client-leave cleanup flushes the departing
+session's active character one last time before erasing it, so the final
+few seconds of a session are never lost to the debounce window.
+
+### Error handling
+
+Reply `err` byte maps `TFAuthErr`/`TFCharErr` (`Ok, BadCredentials,
+UsernameTaken, UsernameTooShort, PasswordTooShort, NotLoggedIn` /
+`Ok, SlotsFull, NameTaken, NameInvalid, NoSuchCharacter, NotYourCharacter,
+NotLoggedIn, ServerError`) to a human message in `TFLoginFlow`. A rejected
+`EnterWorldReq` (unauthenticated, unowned character, or already-in-world) has
+no reply message by design — the client stays parked on its current screen,
+mirroring how an unauthenticated gameplay message now gets no response
+either (see Security fix above).
+
+### Testing
+
+Headless unit tests (`Tests/TestTFOnboarding.cpp`, added to `SparkTests`):
+`TFDatabase` account/character round-trip across a `Close()`/reopen; register
+-> login with correct/incorrect password; character CRUD + slot cap + name
+uniqueness + ownership-checked delete + enter-world. All drive
+`TFDatabase`/`TFAccountSystem`/`TFCharacterSystem` directly — `TFServerSim`
+(and therefore the security-gate change above) is exercised at the
+game-module level (console-driven loopback flow + screenshots), not by
+`SparkTests`, since `TFServerSim.cpp` is a full-module file with engine
+dependencies outside the minimal-dependency unit-test build.

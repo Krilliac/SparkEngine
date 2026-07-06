@@ -63,6 +63,11 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     FactionId GetPlayerFaction(PlayerId player) const;
     void SetPlayerFaction(PlayerId player, FactionId faction);
 
+    /// W5 onboarding (Task 6): the character bound to this player's session by
+    /// a successful HandleEnterWorld (0 if none/not entered). TFProgressionSystem
+    /// uses this to re-key its periodic save through TFCharacterSystem::PersistProgress.
+    uint64_t ActiveCharacterOf(PlayerId player) const;
+
     /// True once this player has an active authoritative MoveState (i.e. is
     /// spawned/alive). Mirrors the guard TFServerSim::HandleFactionSelect
     /// applies to networked FactionSelect packets (can't switch faction while
@@ -169,6 +174,7 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     bool m_handlersRegistered{false};
     std::unordered_set<PlayerId> m_knownClients;
     std::unordered_set<PlayerId> m_enteredWorld;   // W5 onboarding: clients past the EnterWorld gate
+    std::unordered_map<PlayerId, uint64_t> m_activeCharacter;   // W5 onboarding: player -> entered character id
 
     float m_moveStateAccum{0.0f};
 

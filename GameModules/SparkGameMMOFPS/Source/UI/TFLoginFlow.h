@@ -10,17 +10,18 @@
  * (Net/TFNetProtocol.h, Task 4) and TERRAFRONT factions (MRA/AUC/HLX).
  *
  * Client-side only. Drives the flow by SENDING login/register/char requests
- * via `m_ctx->clientNet->SendMsg(...)` and READING TFClientNet's onboarding
- * reply-stash getters (IsLoggedIn/AccountId/LastAuthError/CharacterList/
- * LastCharOpError/LastCharOpId) each Update() to detect replies pre-Task-6.
- * The four reply sinks below (OnLoginReply/OnCharList/OnCharOpReply/
- * OnEnteredWorld) are the SAME state-transition logic; Task 6 will wire
- * TFClientNet's onboarding handlers to call them directly once
- * `m_ctx->loginFlow` exists, superseding the getter-poll fallback.
+ * via `m_ctx->clientNet->SendMsg(...)`. Task 6 wired TFClientNet's onboarding
+ * handlers (TFClientNetHandlers.cpp OnLoginReply/OnRegisterReply/
+ * OnCharListReply/OnCharCreateReply/OnCharDeleteReply/OnWorldWelcome) to call
+ * the reply sinks below (OnLoginReply/OnRegisterReply/OnCharList/
+ * OnCharOpReply/OnEnteredWorld) directly via `m_ctx->loginFlow`, superseding
+ * the pre-Task-6 getter-poll fallback (removed — see git history for
+ * TFClientNet's IsLoggedIn/AccountId/LastAuthError/... getters, kept as a
+ * read-only status surface but no longer polled here).
  *
  * NOTE: context wiring (the loginFlow pointer in TFGameContext, gating the
  * spawn screen behind InWorld, boot construction in Main.cpp) is Task 6 —
- * this class is self-contained and does not touch TFTypes.h/Main.cpp.
+ * done; see DESIGN.md "W5 — Onboarding".
  */
 #pragma once
 
@@ -87,9 +88,6 @@ class TFLoginFlow {
     void SendCharDelete(uint64_t charId);
     void SendEnterWorld(uint64_t charId);
 
-    // Getter-poll fallback (see file header comment).
-    void PollNetReplies();
-
     TFGameContext* m_ctx{nullptr};
     TFEventBus*    m_events{nullptr};
     bool           m_initialized{false};
@@ -116,10 +114,11 @@ class TFLoginFlow {
     // Entering-world splash
     float m_enterTimer{0.0f};
 
-    // Pending-request tracking for the getter-poll fallback.
+    // Pending-request tracking: disables the relevant buttons while a reply
+    // is in flight. Cleared by the reply sinks themselves (Task 6 — TFClientNet
+    // forwards replies directly instead of the old getter-poll fallback).
     enum class PendingOp : uint8_t { None, Login, Register, CharList, CharCreate, CharDelete };
     PendingOp m_pending{PendingOp::None};
-    bool      m_pendingTickElapsed{false}; ///< let one Update() tick pass before reading getters
 };
 
 } // namespace Terrafront
