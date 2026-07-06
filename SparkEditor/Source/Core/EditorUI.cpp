@@ -8,6 +8,7 @@
 
 #include "EditorUI.h"
 #include "Engine/ECS/Components/CoreComponents.h"
+#include "SceneManager/ReflectedSceneSerializer.h" // Spark::SaveWorld/LoadWorld — full-fidelity scene round-trip (C4)
 #include "EditorTheme.h"
 #include "EditorFonts.h"
 #include "EditorIcons.h"
@@ -1367,9 +1368,50 @@ namespace SparkEditor
         }
     }
 
+    void EditorUI::RewirePanelsToWorld()
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+
+        // SceneView caches a raw ::World* — re-point it at the current
+        // m_world (used both for the initial seed wiring in
+        // SetGraphicsDevice() and for OpenScene(), which replaces m_world).
+        auto svIt = m_panels.find("SceneView");
+        if (svIt != m_panels.end())
+        {
+            auto* sceneView = dynamic_cast<SceneViewPanel*>(svIt->second.get());
+            if (sceneView)
+            {
+                sceneView->SetWorld(m_world.get());
+            }
+        }
+
+        // Hierarchy caches a raw ::World* too.
+        auto hierarchyIt = m_panels.find("Hierarchy");
+        if (hierarchyIt != m_panels.end())
+        {
+            auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierarchyIt->second.get());
+            if (hierarchy)
+            {
+                hierarchy->SetWorld(m_world.get());
+            }
+        }
+
+        // Inspector reads EditorUI::GetWorld()/GetSelectedEntity() live each
+        // frame — no re-wire needed.
+
+        // The previously-selected entity belongs to the old World; clear it
+        // so the Inspector doesn't try to reflect a stale/foreign handle.
+        m_selectedEntity = entt::null;
+
+        console.LogSuccess("Panels rewired to current World");
+    }
+
     bool EditorUI::SaveCurrentScene(const std::string& path)
     {
         if (path.empty())
+            return false;
+
+        if (!m_world)
             return false;
 
         try
@@ -1381,50 +1423,18 @@ namespace SparkEditor
                 std::filesystem::create_directories(parentPath);
             }
 
-            std::ofstream file(path);
-            if (!file.is_open())
+            // Full-fidelity save via the reflection-driven scene serializer
+            // (replaces the old lossy names-only JSON writer). The live ECS
+            // World is the single source of truth for scene content.
+            if (!Spark::SaveWorld(*m_world, path))
             {
+                auto& console = Spark::SimpleConsole::GetInstance();
+                console.LogError("Failed to save scene (Spark::SaveWorld): " + path);
                 return false;
             }
 
-            file << "{\n";
-            file << "  \"sceneVersion\": 1,\n";
-            file << "  \"name\": \"" << m_currentSceneName << "\",\n";
-            file << "  \"entities\": [\n";
-
-            // Serialize hierarchy objects
-            auto it = m_panels.find("Hierarchy");
-            if (it != m_panels.end())
-            {
-                auto* hierarchy = dynamic_cast<HierarchyPanel*>(it->second.get());
-                if (hierarchy)
-                {
-                    const auto& objects = hierarchy->GetSceneObjects();
-                    for (size_t i = 0; i < objects.size(); ++i)
-                    {
-                        file << "    {\n";
-                        file << "      \"name\": \"" << objects[i] << "\",\n";
-                        file << "      \"components\": [\n";
-                        file << "        {\n";
-                        file << "          \"type\": \"Transform\",\n";
-                        file << "          \"position\": [0, 0, 0],\n";
-                        file << "          \"rotation\": [0, 0, 0],\n";
-                        file << "          \"scale\": [1, 1, 1]\n";
-                        file << "        }\n";
-                        file << "      ]\n";
-                        file << "    }";
-                        if (i + 1 < objects.size())
-                        {
-                            file << ",";
-                        }
-                        file << "\n";
-                    }
-                }
-            }
-
-            file << "  ]\n";
-            file << "}\n";
-            file.close();
+            m_currentScenePath = path;
+            m_sceneModified = false;
 
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogSuccess("Scene saved to: " + path);
@@ -1443,6 +1453,42 @@ namespace SparkEditor
             console.LogError("Failed to save scene: " + std::string(e.what()));
             return false;
         }
+    }
+
+    bool EditorUI::OpenScene(const std::string& path)
+    {
+        auto& console = Spark::SimpleConsole::GetInstance();
+
+        if (path.empty())
+            return false;
+
+        // Load into a fresh World first so a failed/partial load never
+        // corrupts the World currently being edited.
+        auto fresh = std::make_unique<::World>();
+        if (!Spark::LoadWorld(*fresh, path))
+        {
+            console.LogError("Failed to open scene (Spark::LoadWorld): " + path);
+            return false;
+        }
+
+        m_world = std::move(fresh);
+
+        // SceneView/Hierarchy cache a raw ::World*; re-point them now that
+        // m_world has been replaced, or they'd dangle the freed old World.
+        RewirePanelsToWorld();
+
+        m_currentScenePath = path;
+        m_currentSceneName = std::filesystem::path(path).stem().string();
+        m_sceneModified = false;
+
+        console.LogSuccess("Scene opened from: " + path);
+
+        if (m_pluginManager)
+        {
+            m_pluginManager->NotifySceneLoad(path);
+        }
+
+        return true;
     }
 
 #ifdef _WIN32
@@ -1488,25 +1534,28 @@ namespace SparkEditor
             {
                 sceneView->SetDevice(device, context);
                 sceneView->SetGraphics(m_graphics.get());
-                sceneView->SetWorld(m_world.get());
                 console.LogSuccess("Graphics device passed to Scene View panel");
             }
         }
 
-        // Wire the Hierarchy panel to the same live World (Unit C2) so it can
-        // list/create/delete/select real ECS entities instead of the legacy
-        // (dormant) SceneFile tree.
+        // Wire the Hierarchy panel's selection sink (one-time; the panel
+        // object persists across future World swaps, so this doesn't need
+        // to be repeated by RewirePanelsToWorld()). List/create/delete/select
+        // real ECS entities instead of the legacy (dormant) SceneFile tree.
         auto hierarchyIt = m_panels.find("Hierarchy");
         if (hierarchyIt != m_panels.end())
         {
             auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierarchyIt->second.get());
             if (hierarchy)
             {
-                hierarchy->SetWorld(m_world.get());
                 hierarchy->SetSelectionSink(this);
-                console.LogSuccess("Live World passed to Hierarchy panel");
             }
         }
+
+        // Seed both panels' cached ::World* (this call also handles the
+        // SceneView/Hierarchy SetWorld() previously done inline here) and
+        // any subsequent OpenScene() reuses the same path.
+        RewirePanelsToWorld();
 
         // Wire the Inspector panel to EditorUI (Unit C3) so it can read the
         // live World + selected entity each frame and render/edit the

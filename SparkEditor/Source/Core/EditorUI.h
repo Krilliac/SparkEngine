@@ -164,6 +164,14 @@ namespace SparkEditor
 
         // Scene management helpers
         bool SaveCurrentScene(const std::string& path);
+
+        /// @brief Load a reflected scene JSON (as written by SaveCurrentScene)
+        /// into a fresh ::World, replace m_world with it, and re-wire the
+        /// caching panels (SceneView, Hierarchy) so they don't dangle a
+        /// pointer to the old World. Returns false (leaving the current
+        /// World untouched) if the load fails.
+        bool OpenScene(const std::string& path);
+
         const std::string& GetCurrentSceneName() const { return m_currentSceneName; }
         bool IsSceneModified() const { return m_sceneModified; }
 
@@ -305,6 +313,13 @@ namespace SparkEditor
         bool m_sceneModified = false;
 
         // Helper methods
+        /// @brief Re-point the panels that cache a raw ::World* (SceneView,
+        /// Hierarchy) at the current m_world and clear selection. Must be
+        /// called any time m_world is (re)assigned — both the initial seed
+        /// wiring in SetGraphicsDevice() and OpenScene() share this path so
+        /// the caching panels never dangle a pointer to a freed World.
+        /// InspectorPanel needs no re-wire — it reads GetWorld() live.
+        void RewirePanelsToWorld();
         void RenderMainMenuBar();
         void RenderFileMenu();
         void RenderFileSceneItems();
