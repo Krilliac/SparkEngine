@@ -12,12 +12,17 @@
 #ifdef _WIN32
 #include <d3d11.h>
 #include <wrl/client.h>
+#include "Graphics/WorldBasicRenderer.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/CoreComponents.h"
 #else
 #include "Core/Platform.h"
 #endif
 #include <memory>
 
 using Microsoft::WRL::ComPtr;
+
+class GraphicsEngine;
 
 namespace SparkEditor
 {
@@ -77,6 +82,13 @@ namespace SparkEditor
      */
         void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context);
 
+#ifdef _WIN32
+        /// @brief Give the panel access to the editor's attach-mode GraphicsEngine
+        /// (owned by EditorUI, non-owning here) so it can drive
+        /// Spark::RenderWorldBasic() to render an ECS World into the viewport.
+        void SetGraphics(GraphicsEngine* graphics) { m_graphics = graphics; }
+#endif
+
         /// @brief Set collaborative session for peer visualization in viewport
         void SetCollabSession(CollaborativeEditSession* session) { m_collabSession = session; }
 
@@ -87,6 +99,9 @@ namespace SparkEditor
         void HandleInput();
         void UpdateCamera(float deltaTime);
         void CreateRenderTexture(int width, int height);
+#ifdef _WIN32
+        void EnsureDemoWorld();
+#endif
 
       private:
         // Rendering resources
@@ -95,6 +110,20 @@ namespace SparkEditor
         ComPtr<ID3D11Texture2D> m_renderTarget;
         ComPtr<ID3D11RenderTargetView> m_rtv;
         ComPtr<ID3D11ShaderResourceView> m_srv;
+        ComPtr<ID3D11Texture2D> m_depthTexture;
+        ComPtr<ID3D11DepthStencilView> m_dsv;
+
+#ifdef _WIN32
+        // Non-owning: GraphicsEngine attached to the editor's device, owned by
+        // EditorUI. Null until EditorUI::SetGraphicsDevice() has run.
+        GraphicsEngine* m_graphics = nullptr;
+
+        // Demo ECS World rendered into the viewport (Unit C1 will replace this
+        // with EditorUI's real editable World).
+        World m_demoWorld;
+        Spark::WorldMeshCache m_meshCache;
+        bool m_demoWorldPopulated = false;
+#endif
 
         // Camera controls
         float m_cameraDistance = 10.0f;

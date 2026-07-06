@@ -30,6 +30,7 @@ void RenderWorldBasic(World& world, GraphicsEngine& g, WorldMeshCache& cache, co
                        const XMMATRIX& proj)
 {
     g.SetBasicShaders();
+    g.ApplyBasicRenderStates();
     for (auto e : world.GetEntitiesWith<Transform, MeshRenderer>())
     {
         const MeshRenderer* mr = world.GetComponent<MeshRenderer>(e);

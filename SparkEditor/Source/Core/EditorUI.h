@@ -34,6 +34,7 @@
 #include "../Communication/LiveEditBridge.h"
 
 #ifdef _WIN32
+#include "Graphics/GraphicsEngine.h"
 struct ID3D11Device;
 struct ID3D11DeviceContext;
 #endif
@@ -139,6 +140,12 @@ namespace SparkEditor
 #ifdef _WIN32
         // Pass graphics device to panels that need it (SceneView)
         void SetGraphicsDevice(ID3D11Device* device, ID3D11DeviceContext* context);
+
+        /// @brief Get the editor's GraphicsEngine, attached to the editor's own
+        /// D3D11 device via InitializeFromDevice() (no swapchain). Null until
+        /// SetGraphicsDevice() has been called. Lets panels (SceneView) drive
+        /// Spark::RenderWorldBasic() through the shared basic-shader path.
+        GraphicsEngine* GetGraphics() { return m_graphics.get(); }
 #endif
 
         // Scene management helpers
@@ -251,6 +258,13 @@ namespace SparkEditor
 
         // Gizmo system — 3D object manipulation overlays
         std::unique_ptr<GizmoSystem> m_gizmoSystem;
+
+#ifdef _WIN32
+        // GraphicsEngine attached to the editor's own D3D11 device (via
+        // InitializeFromDevice(), no swapchain) — lets SceneViewPanel drive
+        // Spark::RenderWorldBasic() through the shared basic-shader path.
+        std::unique_ptr<GraphicsEngine> m_graphics;
+#endif
 
         // Collaborative editing — multi-user session management
         std::unique_ptr<CollaborativeEditSession> m_collabSession;

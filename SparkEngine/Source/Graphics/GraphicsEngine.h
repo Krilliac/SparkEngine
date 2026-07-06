@@ -712,6 +712,20 @@ class GraphicsEngine
     void SetBasicTexture(ID3D11ShaderResourceView* srv);
 
     /**
+     * @brief Bind the default rasterizer/depth-stencil/blend states used by
+     *        the basic-shader draw path (RSSetState / OMSetDepthStencilState /
+     *        OMSetBlendState on the current context).
+     *
+     * Reuses the SAME state objects (m_solidRasterState, m_defaultDepthState,
+     * m_defaultBlendState) that BeginFrame()'s ApplyGraphicsState() binds for
+     * the windowed runtime path, so callers of Spark::RenderWorldBasic() (the
+     * headless test, the editor's attach-mode GraphicsEngine, or a future
+     * caller) don't need to set up pipeline state themselves. Safe to call in
+     * both windowed and device-attach mode — no-ops on any null state object.
+     */
+    void ApplyBasicRenderStates();
+
+    /**
      * @brief Simple albedo material resolved from a material JSON for the basic shader path.
      *
      * Loaded lazily from Assets/Materials/... JSON files ("albedo" + "tiling"

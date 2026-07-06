@@ -1447,6 +1447,23 @@ namespace SparkEditor
 #ifdef _WIN32
     void EditorUI::SetGraphicsDevice(ID3D11Device* device, ID3D11DeviceContext* context)
     {
+        auto& console = Spark::SimpleConsole::GetInstance();
+
+        // Attach a GraphicsEngine to the editor's own device (no swapchain —
+        // the editor drives its own render targets). This lets SceneViewPanel
+        // (and any future panel) render a Spark::World via the shared
+        // Spark::RenderWorldBasic() basic-shader path.
+        m_graphics = std::make_unique<GraphicsEngine>();
+        if (FAILED(m_graphics->InitializeFromDevice(device, context)))
+        {
+            console.LogError("EditorUI: GraphicsEngine::InitializeFromDevice failed — Scene View will not render geometry");
+            m_graphics.reset();
+        }
+        else
+        {
+            console.LogSuccess("EditorUI: GraphicsEngine attached to editor device");
+        }
+
         auto it = m_panels.find("SceneView");
         if (it != m_panels.end())
         {
@@ -1454,7 +1471,7 @@ namespace SparkEditor
             if (sceneView)
             {
                 sceneView->SetDevice(device, context);
-                auto& console = Spark::SimpleConsole::GetInstance();
+                sceneView->SetGraphics(m_graphics.get());
                 console.LogSuccess("Graphics device passed to Scene View panel");
             }
         }

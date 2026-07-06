@@ -215,29 +215,10 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
         return hr;
     }
 
-    // Create rasterizer states
-    D3D11_RASTERIZER_DESC rastDesc = {};
-    rastDesc.FillMode = D3D11_FILL_SOLID;
-    rastDesc.CullMode = D3D11_CULL_BACK;
-    rastDesc.FrontCounterClockwise = FALSE;
-    rastDesc.DepthBias = 0;
-    rastDesc.DepthBiasClamp = 0.0f;
-    rastDesc.SlopeScaledDepthBias = 0.0f;
-    rastDesc.DepthClipEnable = TRUE;
-    rastDesc.ScissorEnable = FALSE;
-    rastDesc.MultisampleEnable = FALSE;
-    rastDesc.AntialiasedLineEnable = FALSE;
-
-    hr = m_device->CreateRasterizerState(&rastDesc, &m_solidRasterState);
-    ASSERT_MSG(SUCCEEDED(hr), "CreateRasterizerState (solid) failed");
-    if (FAILED(hr))
-        return hr;
-
-    rastDesc.FillMode = D3D11_FILL_WIREFRAME;
-    hr = m_device->CreateRasterizerState(&rastDesc, &m_wireframeRasterState);
-    ASSERT_MSG(SUCCEEDED(hr), "CreateRasterizerState (wireframe) failed");
-    if (FAILED(hr))
-        return hr;
+    // Rasterizer (solid/wireframe), depth-stencil, and blend states are now
+    // created together in CreateRenderStates() (called below) so the same
+    // shared function also equips the device-attach InitializeFromDevice()
+    // path with real state objects.
 
     // Create GPU timing query if supported
     if (m_settings.enableGPUTiming)
@@ -582,6 +563,18 @@ HRESULT GraphicsEngine::InitializeFromDevice(ID3D11Device* device, ID3D11DeviceC
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"InitializeFromDevice: InitializeBasicShaders failed", L"ERROR");
         return hr;
+    }
+
+    // Create the same rasterizer/depth-stencil/blend state objects the
+    // windowed path creates, so ApplyBasicRenderStates() (called at the top
+    // of Spark::RenderWorldBasic()) has real states to bind in attach mode
+    // too — not just when a swapchain exists. Non-fatal on failure: the
+    // caller's own device-default state still lets basic-shader draws work,
+    // just without an explicit rasterizer/depth/blend guarantee.
+    hr = CreateRenderStates();
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"InitializeFromDevice: CreateRenderStates failed (non-fatal)", L"WARNING");
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::InitializeFromDevice complete - attach-mode rendering ready.",

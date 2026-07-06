@@ -308,13 +308,18 @@ namespace SparkEditor
             ComPtr<ID3D11RenderTargetView> prevRTV;
             ComPtr<ID3D11DepthStencilView> prevDSV;
             m_context->OMGetRenderTargets(1, prevRTV.GetAddressOf(), prevDSV.GetAddressOf());
+            UINT prevViewportCount = 1;
+            D3D11_VIEWPORT prevViewport{};
+            m_context->RSGetViewports(&prevViewportCount, prevViewportCount ? &prevViewport : nullptr);
 
             ID3D11RenderTargetView* targets[] = {m_rtv.Get()};
-            m_context->OMSetRenderTargets(1, targets, nullptr);
+            m_context->OMSetRenderTargets(1, targets, m_dsv.Get());
 
-            // Clear render target
-            float clearColor[4] = {0.2f, 0.2f, 0.2f, 1.0f};
-            m_context->ClearRenderTargetView(m_rtv.Get(), clearColor);
+            // Clear render target + depth
+            const float darkClear[4] = {0.12f, 0.13f, 0.15f, 1.0f};
+            m_context->ClearRenderTargetView(m_rtv.Get(), darkClear);
+            if (m_dsv)
+                m_context->ClearDepthStencilView(m_dsv.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
             // Set viewport
             D3D11_VIEWPORT viewport = {};
@@ -324,32 +329,51 @@ namespace SparkEditor
             viewport.MaxDepth = 1.0f;
             m_context->RSSetViewports(1, &viewport);
 
-            // Render sky gradient background and ground plane
+            // Render the ECS World via the shared basic-shader path, if the
+            // editor has an attached GraphicsEngine. Falls back to a plain
+            // dark-clear viewport (above) when the graphics device hasn't
+            // been wired up yet.
+            if (m_graphics && m_renderTextureHeight > 0)
             {
-                // Upper half — sky color
-                D3D11_VIEWPORT upperVP = viewport;
-                upperVP.Height = viewport.Height * 0.5f;
-                m_context->RSSetViewports(1, &upperVP);
-                float skyColor[4] = {0.4f, 0.6f, 0.9f, 1.0f};
-                m_context->ClearRenderTargetView(m_rtv.Get(), skyColor);
+                EnsureDemoWorld();
 
-                // Lower half — ground color
-                D3D11_VIEWPORT lowerVP = viewport;
-                lowerVP.TopLeftY = viewport.Height * 0.5f;
-                lowerVP.Height = viewport.Height * 0.5f;
-                m_context->RSSetViewports(1, &lowerVP);
-                float groundColor[4] = {0.25f, 0.28f, 0.22f, 1.0f};
-                m_context->ClearRenderTargetView(m_rtv.Get(), groundColor);
+                using namespace DirectX;
+                const XMVECTOR eye = XMVectorSet(0.0f, 3.0f, -6.0f, 1.0f);
+                const XMVECTOR at = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
+                const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+                const XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
+                const float aspect =
+                    static_cast<float>(m_renderTextureWidth) / static_cast<float>(m_renderTextureHeight);
+                const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), aspect, 0.1f, 6000.0f);
 
-                // Restore full viewport
-                m_context->RSSetViewports(1, &viewport);
+                Spark::RenderWorldBasic(m_demoWorld, *m_graphics, m_meshCache, view, proj);
             }
 
             // Restore the editor's render target so ImGui renders into the window.
             m_context->OMSetRenderTargets(1, prevRTV.GetAddressOf(), prevDSV.Get());
+            if (prevViewportCount)
+                m_context->RSSetViewports(1, &prevViewport);
         }
 #endif
     }
+
+#ifdef _WIN32
+    void SceneViewPanel::EnsureDemoWorld()
+    {
+        if (m_demoWorldPopulated)
+            return;
+        m_demoWorldPopulated = true;
+
+        EntityID e = m_demoWorld.CreateEntity("DemoSoldier");
+        m_demoWorld.AddComponent<Transform>(e); // identity at origin
+        MeshRenderer& mr = m_demoWorld.AddComponent<MeshRenderer>(e);
+        // Non-empty path required — WorldMeshCache::GetOrLoad early-returns on
+        // an empty path. If this asset isn't found under the editor's working
+        // directory, LoadOrPlaceholderMesh falls back to a procedural unit
+        // cube, which is still valid geometry proving the render path works.
+        mr.meshPath = "Assets/Models/MMOFPS/characters/soldier.obj";
+    }
+#endif
 
     void SceneViewPanel::CreateRenderTexture(int width, int height)
     {
@@ -361,6 +385,8 @@ namespace SparkEditor
         m_renderTarget.Reset();
         m_rtv.Reset();
         m_srv.Reset();
+        m_depthTexture.Reset();
+        m_dsv.Reset();
 
         // Create render texture
         D3D11_TEXTURE2D_DESC textureDesc = {};
@@ -398,6 +424,37 @@ namespace SparkEditor
         if (FAILED(hr))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SceneViewPanel: CreateShaderResourceView failed (HR=0x%08X)",
+                            static_cast<unsigned>(hr));
+            return;
+        }
+
+        // Depth buffer sized to match the color RT — needed for
+        // Spark::RenderWorldBasic() to depth-test the world geometry.
+        D3D11_TEXTURE2D_DESC depthDesc = {};
+        depthDesc.Width = width;
+        depthDesc.Height = height;
+        depthDesc.MipLevels = 1;
+        depthDesc.ArraySize = 1;
+        depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        depthDesc.SampleDesc.Count = 1;
+        depthDesc.SampleDesc.Quality = 0;
+        depthDesc.Usage = D3D11_USAGE_DEFAULT;
+        depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+        depthDesc.CPUAccessFlags = 0;
+        depthDesc.MiscFlags = 0;
+
+        hr = m_device->CreateTexture2D(&depthDesc, nullptr, &m_depthTexture);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SceneViewPanel: CreateTexture2D (depth) failed (HR=0x%08X)",
+                            static_cast<unsigned>(hr));
+            return;
+        }
+
+        hr = m_device->CreateDepthStencilView(m_depthTexture.Get(), nullptr, &m_dsv);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "SceneViewPanel: CreateDepthStencilView failed (HR=0x%08X)",
                             static_cast<unsigned>(hr));
             return;
         }

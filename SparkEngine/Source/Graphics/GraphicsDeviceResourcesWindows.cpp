@@ -336,6 +336,37 @@ HRESULT GraphicsEngine::CreateRenderStates()
 {
     LOG_TO_CONSOLE_IMMEDIATE(L"Creating advanced render states", L"INFO");
 
+    // Rasterizer states (solid + wireframe). Shared between the windowed
+    // Initialize(hWnd) path and the device-attach InitializeFromDevice() path
+    // so ApplyGraphicsState()/ApplyBasicRenderStates() have real state objects
+    // to bind in BOTH modes instead of only when a swapchain exists.
+    D3D11_RASTERIZER_DESC rastDesc = {};
+    rastDesc.FillMode = D3D11_FILL_SOLID;
+    rastDesc.CullMode = D3D11_CULL_BACK;
+    rastDesc.FrontCounterClockwise = FALSE;
+    rastDesc.DepthBias = 0;
+    rastDesc.DepthBiasClamp = 0.0f;
+    rastDesc.SlopeScaledDepthBias = 0.0f;
+    rastDesc.DepthClipEnable = TRUE;
+    rastDesc.ScissorEnable = FALSE;
+    rastDesc.MultisampleEnable = FALSE;
+    rastDesc.AntialiasedLineEnable = FALSE;
+
+    HRESULT hrRast = m_device->CreateRasterizerState(&rastDesc, &m_solidRasterState);
+    if (FAILED(hrRast))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create solid rasterizer state", L"ERROR");
+        return hrRast;
+    }
+
+    rastDesc.FillMode = D3D11_FILL_WIREFRAME;
+    hrRast = m_device->CreateRasterizerState(&rastDesc, &m_wireframeRasterState);
+    if (FAILED(hrRast))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create wireframe rasterizer state", L"ERROR");
+        return hrRast;
+    }
+
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
     depthStencilDesc.DepthEnable = TRUE;
     depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;

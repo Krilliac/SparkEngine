@@ -52,6 +52,24 @@ void GraphicsEngine::ApplyGraphicsState()
     }
 }
 
+void GraphicsEngine::ApplyBasicRenderStates()
+{
+    if (!m_context)
+        return;
+
+    if (m_solidRasterState)
+        m_context->RSSetState(m_solidRasterState.Get());
+
+    if (m_defaultDepthState)
+        m_context->OMSetDepthStencilState(m_defaultDepthState.Get(), 0);
+
+    if (m_defaultBlendState)
+    {
+        const float blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        m_context->OMSetBlendState(m_defaultBlendState.Get(), blendFactor, 0xFFFFFFFF);
+    }
+}
+
 void GraphicsEngine::UpdateMetrics()
 {
     static int frameCount = 0;

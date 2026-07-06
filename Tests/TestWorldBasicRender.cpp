@@ -63,44 +63,17 @@ TEST(WorldBasicRender_DrawsGeometryIntoOffscreenRTV)
     if (depth)
         dev->CreateDepthStencilView(depth.Get(), nullptr, &dsv);
 
-    // 3) Attach a GraphicsEngine to this device.
+    // 3) Attach a GraphicsEngine to this device. InitializeFromDevice() now
+    // also creates the same rasterizer/depth-stencil/blend state objects the
+    // windowed path uses, and Spark::RenderWorldBasic() binds them itself via
+    // GraphicsEngine::ApplyBasicRenderStates() — so the test no longer needs
+    // to create or bind ANY pipeline state before drawing. This is the
+    // self-sufficiency this test proves: RenderWorldBasic is safe to call
+    // with nothing but a bound render target + viewport.
     GraphicsEngine g;
     EXPECT_TRUE(SUCCEEDED(g.InitializeFromDevice(dev.Get(), ctx.Get())));
 
     // 4) Bind the RTV + viewport, clear to a known background, draw a World.
-    //
-    // In windowed mode GraphicsEngine::Initialize() binds explicit rasterizer/
-    // depth/blend states before drawing; in device-attach mode the caller
-    // (here, the test; later, the editor viewport) owns pipeline state. Bind
-    // sensible opaque defaults so geometry rasterizes. CullMode = NONE keeps
-    // the check winding-agnostic — the placeholder unit cube from
-    // LoadOrPlaceholderMesh is drawn regardless of face orientation, which is
-    // exactly what we want to prove: RenderWorldBasic emits real geometry.
-    D3D11_RASTERIZER_DESC rd{};
-    rd.FillMode = D3D11_FILL_SOLID;
-    rd.CullMode = D3D11_CULL_NONE;
-    rd.DepthClipEnable = TRUE;
-    ComPtr<ID3D11RasterizerState> rs;
-    EXPECT_TRUE(SUCCEEDED(dev->CreateRasterizerState(&rd, &rs)));
-    ctx->RSSetState(rs.Get());
-
-    D3D11_DEPTH_STENCIL_DESC dsd{};
-    dsd.DepthEnable = TRUE;
-    dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-    dsd.DepthFunc = D3D11_COMPARISON_LESS;
-    dsd.StencilEnable = FALSE;
-    ComPtr<ID3D11DepthStencilState> dss;
-    EXPECT_TRUE(SUCCEEDED(dev->CreateDepthStencilState(&dsd, &dss)));
-    ctx->OMSetDepthStencilState(dss.Get(), 0);
-
-    D3D11_BLEND_DESC bd{};
-    bd.RenderTarget[0].BlendEnable = FALSE;
-    bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-    ComPtr<ID3D11BlendState> bs;
-    EXPECT_TRUE(SUCCEEDED(dev->CreateBlendState(&bd, &bs)));
-    const float blendFactor[4] = {0, 0, 0, 0};
-    ctx->OMSetBlendState(bs.Get(), blendFactor, 0xFFFFFFFF);
-
     const float bg[4] = {0.10f, 0.12f, 0.15f, 1.0f};
     ID3D11RenderTargetView* rtvs[1] = {rtv.Get()};
     ctx->OMSetRenderTargets(1, rtvs, dsv.Get());
