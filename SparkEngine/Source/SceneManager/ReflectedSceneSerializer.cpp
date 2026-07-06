@@ -87,60 +87,63 @@ std::string SerializeWorld(const World& world)
 
 bool DeserializeInto(World& world, const std::string& jsonText)
 {
-    json root;
-    try { root = json::parse(jsonText); }
-    catch (const std::exception& ex) {
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "[ReflectedScene] parse error: %s", ex.what());
-        return false;
-    }
-    if (!root.contains("entities") || !root["entities"].is_array()) return false;
+    try {
+        json root;
+        root = json::parse(jsonText);
+        if (!root.contains("entities") || !root["entities"].is_array()) return false;
 
-    auto& factory = ComponentFactory::Get();
-    std::unordered_map<uint32_t, entt::entity> idMap; // serialized id -> live entity
-    struct PendingParent { entt::entity child; uint32_t parentId; };
-    std::vector<PendingParent> pending;
+        auto& factory = ComponentFactory::Get();
+        std::unordered_map<uint32_t, entt::entity> idMap; // serialized id -> live entity
+        struct PendingParent { entt::entity child; uint32_t parentId; };
+        std::vector<PendingParent> pending;
 
-    for (const json& ent : root["entities"]) {
-        const std::string name = ent.value("name", std::string());
-        entt::entity e = world.CreateEntity(name); // emplaces NameComponent when name non-empty
-        const uint32_t sid = ent.value("id", 0u);
-        idMap[sid] = e;
+        for (const json& ent : root["entities"]) {
+            const std::string name = ent.value("name", std::string());
+            entt::entity e = world.CreateEntity(name); // emplaces NameComponent when name non-empty
+            const uint32_t sid = ent.value("id", 0u);
+            idMap[sid] = e;
 
-        if (ent.contains("components") && ent["components"].is_array()) {
-            for (const json& c : ent["components"]) {
-                const std::string type = c.value("type", std::string());
-                if (type.empty() || !factory.IsRegistered(type)) {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core,
-                        "[ReflectedScene] unknown component type '%s' skipped", type.c_str());
-                    continue;
-                }
-                if (!factory.HasComponent(type, &world, (uint32_t)e))
-                    factory.AddComponent(type, &world, (uint32_t)e);
-                void* comp = factory.GetComponentRaw(type, &world, (uint32_t)e);
-                if (!comp) continue;
-                const TypeInfo* ti = TypeRegistry::Get().FindTypeByName(type);
-                if (!ti || !c.contains("fields")) continue;
-                for (const FieldInfo& f : ti->fields) {
-                    if (!c["fields"].contains(f.fieldName) || !c["fields"][f.fieldName].is_string()) continue;
-                    SetFieldFromString(comp, f, c["fields"][f.fieldName].get<std::string>());
+            if (ent.contains("components") && ent["components"].is_array()) {
+                for (const json& c : ent["components"]) {
+                    const std::string type = c.value("type", std::string());
+                    if (type.empty() || !factory.IsRegistered(type)) {
+                        SPARK_LOG_WARN(Spark::LogCategory::Core,
+                            "[ReflectedScene] unknown component type '%s' skipped", type.c_str());
+                        continue;
+                    }
+                    if (!factory.HasComponent(type, &world, (uint32_t)e))
+                        factory.AddComponent(type, &world, (uint32_t)e);
+                    void* comp = factory.GetComponentRaw(type, &world, (uint32_t)e);
+                    if (!comp) continue;
+                    const TypeInfo* ti = TypeRegistry::Get().FindTypeByName(type);
+                    if (!ti || !c.contains("fields")) continue;
+                    for (const FieldInfo& f : ti->fields) {
+                        if (!c["fields"].contains(f.fieldName)) continue;
+                        const auto& fv = c["fields"][f.fieldName];
+                        if (!fv.is_string()) continue;
+                        SetFieldFromString(comp, f, fv.get<std::string>());
+                    }
                 }
             }
+            const int parentId = ent.value("parent", -1);
+            if (parentId >= 0) pending.push_back({ e, (uint32_t)parentId });
         }
-        const int parentId = ent.value("parent", -1);
-        if (parentId >= 0) pending.push_back({ e, (uint32_t)parentId });
-    }
 
-    // Second pass: resolve parents now that all ids exist.
-    for (const PendingParent& p : pending) {
-        auto it = idMap.find(p.parentId);
-        if (it == idMap.end()) continue;
-        Transform* childT = world.GetComponent<Transform>(p.child);
-        if (!childT) childT = &world.AddComponent<Transform>(p.child);
-        childT->parent = it->second;
-        if (Transform* parentT = world.GetComponent<Transform>(it->second))
-            parentT->children.push_back(p.child);
+        // Second pass: resolve parents now that all ids exist.
+        for (const PendingParent& p : pending) {
+            auto it = idMap.find(p.parentId);
+            if (it == idMap.end()) continue;
+            Transform* childT = world.GetComponent<Transform>(p.child);
+            if (!childT) childT = &world.AddComponent<Transform>(p.child);
+            childT->parent = it->second;
+            if (Transform* parentT = world.GetComponent<Transform>(it->second))
+                parentT->children.push_back(p.child);
+        }
+        return true;
+    } catch (const std::exception& ex) {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "[ReflectedScene] deserialization error: %s", ex.what());
+        return false;
     }
-    return true;
 }
 
 bool SaveWorld(const World& world, const std::string& path)
