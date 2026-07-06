@@ -140,8 +140,11 @@ everything else is server-local.
 
 **Data tables (Assets/MMOFPS/Data/):** `weapons.json`, `vehicles.json`, `classes.json`,
 `regions.json` (hex map: id, name, tier, neighbors[], capturePoints[], spawnPos, flux/min),
-`factions.json`. Schemas defined in `TFDataTables.h`; validation on load; hot-reloadable
-via console `tf_reload_data`.
+`factions.json` (sp4: gained a per-faction `structureMaterial` tint-material path),
+`presentation.json` (sp4: skybox/terrain/ambient/viewmodel/muzzle-FX render constants +
+the shared pawn mesh path — see `WorldPresentationDef`), `deployables.json` (sp4: per-
+`DeployableKind` prop model + scale — see `DeployableVisualDef`). Schemas defined in
+`TFDataTables.h`; validation on load; hot-reloadable via console `tf_reload_data`.
 
 **Wire protocol (`TFNetProtocol.h`):** app messages ride `NetworkManager::RegisterHandler`.
 `TFMsg` ids start at 0x5400. POD structs, explicit little-endian, `static_assert` sizes:
