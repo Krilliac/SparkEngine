@@ -38,6 +38,35 @@ double TFWeaponSystem::ServerNow() const
     return (m_ctx && m_ctx->serverSim) ? m_ctx->serverSim->ServerTime() : m_serverClock;
 }
 
+// SECURITY: mirrors the client's RefreshLocalLoadout() slot resolution
+// (primary/secondary/tool/melee) but is evaluated server-side against the
+// server-trusted pawn.cls/pawn.faction, so a client cannot claim a weapon
+// outside what its class is actually issued. Checks every entry in
+// primarySlots (not just front()) so a future multi-primary class stays
+// correct without another server-side change.
+bool TFWeaponSystem::IsWeaponInLoadout(WeaponId fireWeapon, const PawnInfo& pawn) const
+{
+    if (!m_ctx || !m_ctx->data)
+        return false;
+
+    const ClassDef* cls = m_ctx->data->GetClass(pawn.cls);
+    if (!cls)
+        return false;
+
+    for (const std::string& slotKey : cls->primarySlots)
+    {
+        if (FindWeaponForSlotKey(slotKey, pawn.faction) == fireWeapon)
+            return true;
+    }
+    if (FindWeaponForSlotKey(cls->secondarySlot, pawn.faction) == fireWeapon)
+        return true;
+    if (FindToolWeapon(cls->toolKey) == fireWeapon)
+        return true;
+    if (FindWeaponForSlotKey("melee", pawn.faction) == fireWeapon)
+        return true;
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // Frozen API: server fire entry
 // ---------------------------------------------------------------------------
@@ -58,6 +87,7 @@ void TFWeaponSystem::ServerHandleFire(PlayerId shooter, const TF_FireEvent& ev)
     // origin, lag comp and hit confirms all work unchanged). Unarmed seats
     // (passengers, drivers of unarmed vehicles) cannot fire at all.
     WeaponId fireWeapon = ev.weaponId;
+    bool viaVehicleSeat = false;
     if (m_ctx->vehicles)
     {
         WeaponId seatWeapon = kInvalidWeapon;
@@ -66,8 +96,18 @@ void TFWeaponSystem::ServerHandleFire(PlayerId shooter, const TF_FireEvent& ev)
             if (seatWeapon == kInvalidWeapon)
                 return; // seated in an unarmed seat
             fireWeapon = seatWeapon;
+            viaVehicleSeat = true;
         }
     }
+
+    // SECURITY: an unseated shooter must be firing a weapon that's actually
+    // part of their class loadout. Without this, a modified client can put
+    // any WeaponId in TF_FireEvent (another class's weapon, a dev/OP-only
+    // weapon, an out-of-range id) and have the server fire it with full
+    // trust. Seated shooters are exempt: fireWeapon there is the
+    // server-resolved seat weapon (GetSeatWeapon), not client input.
+    if (!viaVehicleSeat && !IsWeaponInLoadout(fireWeapon, pawn))
+        return;
 
     const WeaponDef* base = m_ctx->data->GetWeapon(fireWeapon);
     if (!base || base->kind == "melee" || base->kind == "beam")
@@ -121,32 +161,40 @@ bool TFWeaponSystem::ValidateFire(const WeaponDef& def, ShooterState& st, double
 {
     const double perSec = std::max(1.0, static_cast<double>(def.rofRpm) / 60.0);
 
-    if (st.weapon != def.id)
+    // SECURITY: the RoF token bucket + approx mag live PER WEAPON ID here
+    // (try_emplace only seeds a fresh bucket the FIRST time this shooter is
+    // ever seen firing this weapon id). Previously this state was a single
+    // slot keyed off "last weapon fired", reset to a full 2.0 tokens every
+    // time the weapon id changed -- alternating between two weapon ids each
+    // shot refilled the bucket every shot for unlimited fire rate. Persisting
+    // per weapon id closes that: switching back to a weapon reuses its own
+    // gradually-refilled bucket, never a fresh one.
+    auto [it, inserted] = st.perWeapon.try_emplace(def.id);
+    WeaponFireState& ws = it->second;
+    if (inserted)
     {
-        st.weapon = def.id;
-        st.tokens = 2.0f;
-        st.lastRefill = now;
-        st.mag = def.magSize;
+        ws.lastRefill = now;
+        ws.mag = def.magSize;
     }
 
-    st.tokens = std::min(2.0f, st.tokens + static_cast<float>((now - st.lastRefill) * perSec));
-    st.lastRefill = now;
+    ws.tokens = std::min(2.0f, ws.tokens + static_cast<float>((now - ws.lastRefill) * perSec));
+    ws.lastRefill = now;
 
-    if (st.tokens < 1.0f)
+    if (ws.tokens < 1.0f)
         return false;
-    st.tokens -= 1.0f;
+    ws.tokens -= 1.0f;
 
     // Approximate server mag: refills after reloadSec of silence.
-    if (st.mag <= 0)
+    if (ws.mag <= 0)
     {
-        if (now - st.magEmptyTime < def.reloadSec)
+        if (now - ws.magEmptyTime < def.reloadSec)
             return false;
-        st.mag = def.magSize;
+        ws.mag = def.magSize;
     }
-    if (--st.mag <= 0)
-        st.magEmptyTime = now;
+    if (--ws.mag <= 0)
+        ws.magEmptyTime = now;
 
-    st.lastShotTime = now;
+    ws.lastShotTime = now;
     return true;
 }
 

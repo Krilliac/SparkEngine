@@ -67,14 +67,21 @@ class TFWeaponSystem {
         bool IsValid() const { return weapon != kInvalidWeapon; }
     };
 
-    // Server-side per-shooter fire validation state.
-    struct ShooterState {
-        WeaponId weapon = kInvalidWeapon;
+    // Server-side per-weapon fire validation state (RoF token bucket + approx
+    // mag). SECURITY: this is keyed per weapon id inside ShooterState (below)
+    // so alternating between weapon ids cannot refill/reset the rate limiter
+    // -- each weapon's bucket persists independently across weapon switches.
+    struct WeaponFireState {
         float    tokens = 2.0f;       // RoF token bucket (burst tolerance 2)
         double   lastRefill = 0.0;
         int      mag = 0;             // approximate server mag (TF-W2: explicit reload msg)
         double   magEmptyTime = -1.0e9;
         double   lastShotTime = -1.0e9;
+    };
+
+    // Server-side per-shooter fire validation state.
+    struct ShooterState {
+        std::unordered_map<WeaponId, WeaponFireState> perWeapon;
     };
 
     // Server-simulated projectile (rockets, energy bolts, sniper rounds).
@@ -106,6 +113,11 @@ class TFWeaponSystem {
 
     // --- server side (TFWeaponServer.cpp) ---
     double ServerNow() const;
+    // SECURITY: the fired weapon id must resolve to something the shooter's
+    // class loadout actually grants (primary/secondary/tool/melee) -- a
+    // client can put ANY WeaponId in TF_FireEvent, so this must be checked
+    // server-side before the id is trusted for damage/def lookups.
+    bool IsWeaponInLoadout(WeaponId fireWeapon, const PawnInfo& pawn) const;
     bool ValidateFire(const WeaponDef& def, ShooterState& st, double now);
     void FireHitscanRay(PlayerId shooter, const PawnInfo& pawn, const WeaponDef& def, const float origin[3],
                         const float dir[3], float maxDist, double rewindTime, uint8_t damageKind);
