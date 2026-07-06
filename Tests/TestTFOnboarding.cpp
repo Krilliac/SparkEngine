@@ -9,6 +9,7 @@
 #include "Persistence/TFDatabase.h"
 #include "Account/TFAccountSystem.h"
 #include "Account/TFCharacterSystem.h"
+#include "Account/TFCrypto.h"
 #include "Net/TFNetProtocol.h"
 #include <cstring>
 #include <filesystem>
@@ -90,6 +91,96 @@ TEST(TFAccountSystem_PasswordHardening)
     // Regression: login still round-trips correctly after the HashPassword change.
     EXPECT_TRUE(acct.Login("validuser", "longenough1").ok);
     EXPECT_FALSE(acct.Login("validuser", "wrongpassword").ok);
+
+    db.Close(); fs::remove(path);
+}
+
+// ============================================================================
+// PBKDF2-HMAC-SHA256 hardening (replaces the demo iterated-std::hash scheme):
+// known-answer tests against published/authoritative vectors, plus
+// self-consistency and account round-trip coverage.
+// ============================================================================
+
+TEST(TFCrypto_Sha256_KnownAnswer)
+{
+    // FIPS 180-4 standard test vector: SHA-256("abc").
+    auto digest = Terrafront::Crypto::Sha256(std::string("abc"));
+    EXPECT_TRUE(Terrafront::Crypto::ToHex(digest.data(), digest.size()) ==
+                "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+}
+
+TEST(TFCrypto_HmacSha256_KnownAnswer)
+{
+    // RFC 4231 Test Case 1: Key = 20 bytes of 0x0b, Data = "Hi There".
+    std::vector<uint8_t> key(20, 0x0b);
+    const std::string data = "Hi There";
+    auto mac = Terrafront::Crypto::HmacSha256(key.data(), key.size(),
+                                               reinterpret_cast<const uint8_t*>(data.data()), data.size());
+    EXPECT_TRUE(Terrafront::Crypto::ToHex(mac.data(), mac.size()) ==
+                "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7");
+}
+
+TEST(TFCrypto_Pbkdf2HmacSha256_KnownAnswer)
+{
+    // Published PBKDF2-HMAC-SHA256 vector: P="password" S="salt" c=1 dkLen=32.
+    // Cross-verified against golang.org/x/crypto/pbkdf2's SHA-256 test table
+    // (first 20 bytes) and independent PBKDF2-HMAC-SHA2 vector tables (full
+    // 32-byte output) before landing this test.
+    const std::vector<uint8_t> salt{'s', 'a', 'l', 't'};
+    auto dk = Terrafront::Crypto::Pbkdf2HmacSha256("password", salt, 1, 32);
+    EXPECT_TRUE(Terrafront::Crypto::ToHex(dk) ==
+                "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b");
+}
+
+TEST(TFCrypto_Pbkdf2_SelfConsistency)
+{
+    const std::vector<uint8_t> saltA{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+    const std::vector<uint8_t> saltB{16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
+
+    auto d1 = Terrafront::Crypto::Pbkdf2HmacSha256("hunter2", saltA, 1000, 32);
+    auto d2 = Terrafront::Crypto::Pbkdf2HmacSha256("hunter2", saltA, 1000, 32);
+    EXPECT_TRUE(d1 == d2);          // deterministic: same inputs -> same output
+
+    auto d3 = Terrafront::Crypto::Pbkdf2HmacSha256("hunter2", saltB, 1000, 32);
+    EXPECT_TRUE(!(d1 == d3));       // salt-sensitive: different salt -> different output
+}
+
+TEST(TFAccountSystem_PBKDF2Scheme_StoredHashAndVerify)
+{
+    namespace fs = std::filesystem;
+    const std::string path = "Saves/test_tfacct_pbkdf2.db";
+    fs::remove(path);
+    TFDatabase db; EXPECT_TRUE(db.Open(path));
+    TFAccountSystem acct; acct.SetDatabase(&db);
+
+    auto r = acct.Register("kdftest", "correcthorse1");
+    EXPECT_TRUE(r.ok);
+
+    TFAccountRecord rec;
+    EXPECT_TRUE(db.FindAccountByUsername("kdftest", rec));
+
+    // Stored hash uses the new self-describing scheme, not the old bare-hex
+    // std::hash output.
+    EXPECT_TRUE(rec.passwordHash.rfind("pbkdf2-sha256$", 0) == 0);
+    {
+        size_t p1 = rec.passwordHash.find('$');
+        size_t p2 = rec.passwordHash.find('$', p1 + 1);
+        EXPECT_TRUE(p1 != std::string::npos && p2 != std::string::npos);
+        int iters = std::stoi(rec.passwordHash.substr(p1 + 1, p2 - p1 - 1));
+        EXPECT_TRUE(iters >= 100000);   // hardening floor
+    }
+
+    // Direct KDF verification API: correct password accepts, wrong rejects.
+    EXPECT_TRUE(TFAccountSystem::VerifyPassword("correcthorse1", rec.passwordHash));
+    EXPECT_FALSE(TFAccountSystem::VerifyPassword("wrongpassword", rec.passwordHash));
+
+    // End-to-end Login still round-trips through the new scheme.
+    EXPECT_TRUE(acct.Login("kdftest", "correcthorse1").ok);
+    EXPECT_FALSE(acct.Login("kdftest", "wrongpassword").ok);
+
+    // A stored hash in the old (legacy) format is rejected, not crashed on.
+    EXPECT_FALSE(TFAccountSystem::VerifyPassword("anything", "deadbeefcafef00d"));
+    EXPECT_FALSE(TFAccountSystem::VerifyPassword("anything", ""));
 
     db.Close(); fs::remove(path);
 }

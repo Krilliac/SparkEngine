@@ -38,8 +38,9 @@ class TFAccountSystem
     uint64_t AccountForClient(uint32_t clientId) const;   // 0 if not logged in
     void     ClearSession(uint32_t clientId);
 
-    static std::string GenerateSalt();
-    static std::string HashPassword(const std::string& password, const std::string& salt);
+    static std::string GenerateSalt();                                                   // >=16 random bytes, hex-encoded
+    static std::string HashPassword(const std::string& password, const std::string& salt); // self-describing pbkdf2-sha256$iters$salt$dk string
+    static bool        VerifyPassword(const std::string& password, const std::string& storedHash);   // constant-time; false on legacy/unknown format
 
   private:
     TFDatabase* m_db = nullptr;
