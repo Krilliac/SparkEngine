@@ -6,6 +6,7 @@
 #include "TestFramework.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/CoreComponents.h"
+#include "Core/Reflection.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
 
 using namespace Spark;
@@ -57,4 +58,26 @@ TEST(ReflectedScene_RoundTrip_TransformAndMesh)
     }
     EXPECT_TRUE(foundGround);
     EXPECT_TRUE(foundChildParented);
+}
+
+TEST(ReflectedScene_FieldCoverage_ScalarsAndVectors)
+{
+    World w;
+    EntityID e = w.CreateEntity("Probe");
+    MeshRenderer& mr = w.AddComponent<MeshRenderer>(e);
+    mr.visible = false;               // Bool
+    mr.meshPath = "a/b/c.obj";        // String
+    Transform& t = w.AddComponent<Transform>(e);
+    t.rotation = {15.0f, 30.0f, 45.0f}; // Vector3
+
+    const std::string json = SerializeWorld(w);
+    World w2;
+    EXPECT_TRUE(DeserializeInto(w2, json));
+
+    EntityID e2 = *w2.GetEntitiesWith<MeshRenderer>().begin();
+    const MeshRenderer* mr2 = w2.GetComponent<MeshRenderer>(e2);
+    EXPECT_FALSE(mr2->visible);
+    EXPECT_STR_CONTAINS(mr2->meshPath, "c.obj");
+    const Transform* t2 = w2.GetComponent<Transform>(e2);
+    EXPECT_NEAR(t2->rotation.y, 30.0f, 0.001f);
 }
