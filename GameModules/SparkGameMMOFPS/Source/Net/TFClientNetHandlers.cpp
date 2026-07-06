@@ -196,6 +196,16 @@ void TFClientNet::RouteLoopback(TFMsg id, const void* payload, size_t size)
                 TF_FactionSelect sel;
                 std::memcpy(&sel, payload, sizeof(sel));
                 const auto f = static_cast<FactionId>(sel.faction);
+                // Mirror the alive-guard TFServerSim::HandleFactionSelect enforces for
+                // networked clients: no faction/team switch while this player has an
+                // active pawn. Without this, the listen-host/standalone loopback path
+                // could team-swap mid-life in a way real networked clients cannot.
+                if (m_ctx->serverSim && m_ctx->serverSim->IsPlayerAlive(me))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                   "[TF] player %u tried to switch faction while alive - ignored", me);
+                    break;
+                }
                 if (m_ctx->serverSim)
                     m_ctx->serverSim->SetPlayerFaction(me, f);
                 if (m_ctx->players)

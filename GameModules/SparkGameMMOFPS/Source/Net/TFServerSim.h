@@ -63,6 +63,14 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     FactionId GetPlayerFaction(PlayerId player) const;
     void SetPlayerFaction(PlayerId player, FactionId faction);
 
+    /// True once this player has an active authoritative MoveState (i.e. is
+    /// spawned/alive). Mirrors the guard TFServerSim::HandleFactionSelect
+    /// applies to networked FactionSelect packets (can't switch faction while
+    /// alive) so callers outside the socket path -- namely the listen-host /
+    /// standalone loopback router -- can enforce the same rule before calling
+    /// SetPlayerFaction directly.
+    bool IsPlayerAlive(PlayerId player) const { return m_move.contains(player); }
+
     /// Admin teleport (tf_tp): moves the authoritative MoveState and syncs
     /// the pawn Transform. Writing only the Transform is NOT enough — the
     /// movement tick overwrites it from MoveState one fixed step later.

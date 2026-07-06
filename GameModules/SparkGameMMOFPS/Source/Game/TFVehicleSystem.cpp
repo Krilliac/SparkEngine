@@ -867,11 +867,19 @@ void TFVehicleSystem::DestroyVehicle(VehicleRec& v, PlayerId destroyer)
         if (havePawn)
         {
             occupantPawns.push_back(pawn.entity);
-            // 50% of the standard 500+500 pool (DESIGN §4); survivable when
-            // healthy, harsh when already hurt — but never a guaranteed kill.
+            // 50% of THIS OCCUPANT'S max health+shield pool (DESIGN §4); survivable
+            // when healthy, harsh when already hurt -- but never a guaranteed kill.
+            // Must be scaled per-class: a flat 1000 assumes the standard 500/500
+            // infantry pool and massively under-punishes a Colossus (2200/0).
+            float maxPool = 1000.0f; // fallback: standard 500 health + 500 shield
+            if (m_ctx->data && m_ctx->data->IsLoaded())
+            {
+                if (const ClassDef* cd = m_ctx->data->GetClass(pawn.cls))
+                    maxPool = cd->health + cd->shield;
+            }
             if (m_ctx->damage)
                 m_ctx->damage->ServerApplyDamage(pawn.entity, entity, kInvalidPlayer,
-                                                 kTFVehEjectDamageFrac * 1000.0f,
+                                                 kTFVehEjectDamageFrac * maxPool,
                                                  kDamageKindExplosive, kInvalidWeapon, false);
         }
     }

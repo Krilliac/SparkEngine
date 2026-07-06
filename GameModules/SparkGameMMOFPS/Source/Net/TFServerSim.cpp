@@ -284,8 +284,23 @@ void TFServerSim::StepPlayer(MoveState& ms, const TF_ClientInput* in, float dt)
                                m_speedClamps);
             }
         }
-        ms.yaw = QuantAim::WrapPi(in->viewYaw);
-        ms.pitch = std::clamp(in->viewPitch, -kPitchLimitRad, kPitchLimitRad);
+        // Reject non-finite view angles before they reach WrapPi/clamp: WrapPi's
+        // while-loop never terminates on +-Inf (subtracting a finite step from
+        // infinity stays infinite), and a NaN survives clamp unchanged, poisoning
+        // ms.yaw/ms.pitch for every future tick and every TF_MoveState broadcast
+        // to all connected clients.
+        if (std::isfinite(in->viewYaw) && std::isfinite(in->viewPitch))
+        {
+            ms.yaw = QuantAim::WrapPi(in->viewYaw);
+            ms.pitch = std::clamp(in->viewPitch, -kPitchLimitRad, kPitchLimitRad);
+        }
+        else if (m_serverTime - m_lastViolationLog > 5.0)
+        {
+            m_lastViolationLog = m_serverTime;
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] movement validation: rejected non-finite view angle (seq=%u)",
+                           in->seq);
+        }
         buttons = in->buttons;
     }
 
