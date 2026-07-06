@@ -100,6 +100,14 @@ namespace SparkEditor
         /// pointer to it via their own SetWorld().
         World* GetWorld() { return m_world.get(); }
 
+        /// @brief The currently selected ECS entity (Unit C2) — the
+        /// document-level selection for World-backed panels (Hierarchy
+        /// publishes it, Inspector (C3) consumes it). Distinct from the
+        /// legacy SceneFile SelectionManager used by the dormant SceneFile
+        /// hierarchy path. entt::null when nothing is selected.
+        ::EntityID GetSelectedEntity() const { return m_selectedEntity; }
+        void SetSelectedEntity(::EntityID e) { m_selectedEntity = e; }
+
         /// @brief Set non-owning pointer to the plugin manager (owned by EditorApplication)
         void SetPluginManager(EditorPluginManager* pluginManager) { m_pluginManager = pluginManager; }
 
@@ -269,6 +277,11 @@ namespace SparkEditor
         // display/manipulate scene content (SceneView, Hierarchy, Inspector)
         // are wired to this via non-owning World* accessors.
         std::unique_ptr<World> m_world;
+
+        // The currently selected ECS entity (Unit C2). entt::null when
+        // nothing is selected. Published by HierarchyPanel, consumed by
+        // InspectorPanel (C3).
+        ::EntityID m_selectedEntity = entt::null;
 
 #ifdef _WIN32
         // GraphicsEngine attached to the editor's own D3D11 device (via

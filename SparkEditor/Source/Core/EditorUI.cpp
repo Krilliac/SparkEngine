@@ -1493,6 +1493,21 @@ namespace SparkEditor
             }
         }
 
+        // Wire the Hierarchy panel to the same live World (Unit C2) so it can
+        // list/create/delete/select real ECS entities instead of the legacy
+        // (dormant) SceneFile tree.
+        auto hierarchyIt = m_panels.find("Hierarchy");
+        if (hierarchyIt != m_panels.end())
+        {
+            auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierarchyIt->second.get());
+            if (hierarchy)
+            {
+                hierarchy->SetWorld(m_world.get());
+                hierarchy->SetSelectionSink(this);
+                console.LogSuccess("Live World passed to Hierarchy panel");
+            }
+        }
+
         // Re-initialize gizmo system with the actual D3D11 device
         if (m_gizmoSystem)
         {

@@ -19,8 +19,17 @@
 #include <unordered_set>
 #include <vector>
 
+// Engine ECS World (Unit C2). Forward-declared only — the panel holds a
+// non-owning pointer; full definition (entt registry, CreateEntity, etc.)
+// is only needed in HierarchyPanel.cpp.
+class World;
+
 namespace SparkEditor
 {
+    // EditorUI (Unit C2) — non-owning selection-publish sink. Forward
+    // declared to avoid a header cycle (EditorUI.h forward-declares
+    // HierarchyPanel and owns the panel map).
+    class EditorUI;
 
     /**
  * @brief Scene hierarchy panel
@@ -83,6 +92,29 @@ namespace SparkEditor
      * @param scene Scene data to display in hierarchy
      */
         void SetScene(SceneFile* scene);
+
+        /**
+     * @brief Set the live ECS World to display (Unit C2 — World-backed mode).
+     *
+     * Non-owning; owned by EditorUI. When set (non-null), Render() lists,
+     * creates, deletes, and selects real ECS entities from this World
+     * instead of the legacy SceneFile tree. The SceneFile path (m_scene)
+     * is left in place but dormant while a World is set.
+     * @param world Live World to display, or nullptr to fall back to the
+     * legacy SceneFile-backed hierarchy.
+     */
+        void SetWorld(::World* world);
+
+        /**
+     * @brief Set the EditorUI to publish ECS entity selection to (Unit C2).
+     *
+     * Non-owning. Used only in World-backed mode: clicking a row, creating,
+     * or deleting an entity calls sink->SetSelectedEntity(...) so the
+     * Inspector panel (C3) can read the live selection via
+     * EditorUI::GetSelectedEntity().
+     * @param sink EditorUI instance to publish selection to.
+     */
+        void SetSelectionSink(EditorUI* sink) { m_selectionSink = sink; }
 
         /** @brief Create a new object in the scene hierarchy. */
         ObjectID CreateObject(const std::string& name, ObjectID parentID = INVALID_OBJECT_ID);
@@ -196,6 +228,20 @@ namespace SparkEditor
         void RenderHierarchyTree();
 
         /**
+     * @brief Render the Create/Delete toolbar for World-backed mode (Unit C2).
+     */
+        void RenderWorldToolbar();
+
+        /**
+     * @brief Render the live ECS entity list for World-backed mode (Unit C2).
+     *
+     * Lists every entity in m_world by its NameComponent (or "Entity" if
+     * unnamed), highlighting the entity currently selected via
+     * m_selectionSink, and publishes selection on row click.
+     */
+        void RenderWorldHierarchy();
+
+        /**
      * @brief Render a single object in the tree
      * @param object Object to render
      * @param depth Current depth in hierarchy (for indentation)
@@ -297,6 +343,15 @@ namespace SparkEditor
         // Scene data
         std::unique_ptr<SceneFile> m_ownedScene; ///< Internally owned scene (used if no external scene set)
         SceneFile* m_scene = nullptr;            ///< Current scene being displayed
+
+        // World-backed mode (Unit C2): when m_world is non-null, Render()
+        // displays/mutates live ECS entities instead of the legacy SceneFile
+        // tree above. Both paths coexist; the SceneFile path stays dormant
+        // while a World is set. Undo/redo for these ECS ops is deferred —
+        // out of scope for C2 (unlike the SceneFile path, which routes every
+        // mutation through CommandHistory).
+        ::World* m_world = nullptr;          ///< Non-owning; owned by EditorUI.
+        EditorUI* m_selectionSink = nullptr; ///< Non-owning; receives entity selection publishes.
 
         // Selection state
         std::vector<ObjectID> m_selectedObjects;          ///< Currently selected objects

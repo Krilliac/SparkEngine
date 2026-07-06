@@ -18,7 +18,9 @@
 #include <imgui.h>
 
 #include "../Core/EditorIcons.h"
+#include "../Core/EditorUI.h"
 #include "../CommandHistory.h"
+#include "Engine/ECS/Components.h"
 #include "Engine/ECS/EntityPresetManager.h"
 #include "Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
@@ -80,11 +82,23 @@ namespace SparkEditor
 
         if (BeginPanel())
         {
-            RenderToolbar();
-            ImGui::Separator();
-            RenderSearchBar();
-            ImGui::Separator();
-            RenderHierarchyTree();
+            if (m_world)
+            {
+                // Unit C2: World-backed mode — list/create/delete/select real
+                // ECS entities. The legacy SceneFile tree below stays dormant
+                // while a World is set.
+                RenderWorldToolbar();
+                ImGui::Separator();
+                RenderWorldHierarchy();
+            }
+            else
+            {
+                RenderToolbar();
+                ImGui::Separator();
+                RenderSearchBar();
+                ImGui::Separator();
+                RenderHierarchyTree();
+            }
         }
         EndPanel();
     }
@@ -109,6 +123,11 @@ namespace SparkEditor
         m_scene = scene;
         ClearSelection();
         m_filterCacheDirty = true;
+    }
+
+    void HierarchyPanel::SetWorld(::World* world)
+    {
+        m_world = world;
     }
 
     void HierarchyPanel::SetSelectedObjects(const std::vector<ObjectID>& objectIDs)
@@ -405,6 +424,87 @@ namespace SparkEditor
             m_showEmptyContextMenu = false;
         }
         RenderEmptyContextMenu();
+
+        ImGui::EndChild();
+    }
+
+    // ============================================================================
+    // World-backed mode (Unit C2)
+    //
+    // Undo/redo for these ECS operations is deferred (out of scope for C2) —
+    // unlike the legacy SceneFile path above, these mutate m_world directly
+    // without going through CommandHistory. Rename is also deferred (skipped
+    // to keep C2 to create/delete/select).
+    // ============================================================================
+
+    void HierarchyPanel::RenderWorldToolbar()
+    {
+        if (!m_world)
+            return;
+
+        if (ImGui::Button(ICON_FA_PLUS " Create Entity"))
+        {
+            ::EntityID e = m_world->CreateEntity("Entity");
+            m_world->AddComponent<::Transform>(e);
+            if (m_selectionSink)
+            {
+                m_selectionSink->SetSelectedEntity(e);
+            }
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Created ECS entity %u", static_cast<uint32_t>(e));
+        }
+
+        ImGui::SameLine();
+
+        ::EntityID selected = m_selectionSink ? m_selectionSink->GetSelectedEntity() : entt::null;
+        bool hasValidSelection = selected != entt::null && m_world->GetRegistry().valid(selected);
+
+        if (!hasValidSelection)
+            ImGui::BeginDisabled();
+        if (ImGui::Button(ICON_FA_TRASH " Delete"))
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Destroying ECS entity %u", static_cast<uint32_t>(selected));
+            m_world->DestroyEntity(selected);
+            if (m_selectionSink)
+            {
+                m_selectionSink->SetSelectedEntity(entt::null);
+            }
+        }
+        if (!hasValidSelection)
+            ImGui::EndDisabled();
+    }
+
+    void HierarchyPanel::RenderWorldHierarchy()
+    {
+        ImGui::BeginChild("##WorldHierarchyTree");
+
+        if (!m_world)
+        {
+            ImGui::Text("No world loaded");
+            ImGui::EndChild();
+            return;
+        }
+
+        ::EntityID selected = m_selectionSink ? m_selectionSink->GetSelectedEntity() : entt::null;
+
+        entt::registry& registry = m_world->GetRegistry();
+        // Non-const overload of entt::registry::storage<Type>() returns a
+        // reference (the const overload used by ReflectedSceneSerializer
+        // returns a pointer) — use '.' here, not '->'.
+        for (auto&& [e] : registry.storage<entt::entity>().each())
+        {
+            const ::NameComponent* nc = m_world->GetComponent<::NameComponent>(e);
+            const char* label = (nc && !nc->name.empty()) ? nc->name.c_str() : "Entity";
+
+            ImGui::PushID(static_cast<int>(static_cast<uint32_t>(e)));
+            if (ImGui::Selectable(label, e == selected))
+            {
+                if (m_selectionSink)
+                {
+                    m_selectionSink->SetSelectedEntity(e);
+                }
+            }
+            ImGui::PopID();
+        }
 
         ImGui::EndChild();
     }
