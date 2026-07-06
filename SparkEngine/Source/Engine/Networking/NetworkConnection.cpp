@@ -786,7 +786,33 @@ namespace Spark::Net
             // allows malicious packets to reach game logic unvalidated
             SPARK_BRANCH_GUARD_BEGIN("network_packet_gateway")
             {
-                bool isAuthenticated = (msg.senderID != INVALID_CLIENT);
+                // NEVER derive auth from the wire-supplied senderID: the sender fully
+                // controls that field on packets it transmits, so trusting it lets a
+                // client stamp any non-zero value and bypass every requiresAuth schema
+                // server-side. It also collides with SendToClient's senderID=0 stamp
+                // (0 == INVALID_CLIENT) for server-sent messages, which made every
+                // server->client message read as unauthenticated on the client and
+                // silently dropped all requiresAuth replication traffic. Authenticate
+                // from OUR OWN trusted state instead: the address->client table on the
+                // server, live connection state on the client.
+                bool isAuthenticated;
+                if (m_role == NetworkRole::Server)
+                {
+                    isAuthenticated = false;
+                    for (const auto& [id, addr] : m_clientAddresses)
+                    {
+                        if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr &&
+                            addr.sin_port == senderAddr.sin_port)
+                        {
+                            isAuthenticated = true;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    isAuthenticated = (m_connectionState == ConnectionState::Connected);
+                }
                 bool isFromClient = (m_role == NetworkRole::Server);
                 auto validation = m_packetValidator.ValidatePacket(msg, isAuthenticated, isFromClient);
                 if (!validation.valid)
