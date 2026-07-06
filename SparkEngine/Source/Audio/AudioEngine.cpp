@@ -838,19 +838,44 @@ void AudioEngine::Apply3DAudioToSource(AudioSource* source)
         float leftGain = cosf(angle);
         float rightGain = sinf(angle);
 
-        // Apply stereo output matrix: [leftToLeft, rightToLeft, leftToRight, rightToRight]
-        // For mono source -> stereo output: [left, right]
-        float outputMatrix[2] = {leftGain, rightGain};
-
         XAUDIO2_VOICE_DETAILS voiceDetails;
         source->Voice->GetVoiceDetails(&voiceDetails);
 
         XAUDIO2_VOICE_DETAILS masterDetails;
         m_masterVoice->GetVoiceDetails(&masterDetails);
 
+        // SetOutputMatrix reads SourceChannels * DestChannels floats, so the
+        // matrix must be sized for the *actual* channel counts rather than
+        // assuming mono -> stereo. Assuming 2 unconditionally caused a stack
+        // out-of-bounds read (and uninitialized gains fed to the mixer) for
+        // any non-mono 3D sound, e.g. a stereo WAV played via PlaySound3D.
+        // Clamp defensively so a large/unexpected channel report can't blow
+        // the stack buffer either.
+        constexpr uint32_t kMaxPanChannels = 8;
+        const uint32_t srcChannels = std::min(voiceDetails.InputChannels, kMaxPanChannels);
+        const uint32_t dstChannels = std::min(masterDetails.InputChannels, kMaxPanChannels);
+
+        // Equal-power pan is applied per destination channel: channel 0 is
+        // treated as left and channel 1 (if present) as right, matching
+        // XAudio2's default mono/stereo speaker geometry. Any additional
+        // source channels receive the same per-destination gain, i.e. a
+        // uniform (if crude) downmix pan instead of an out-of-bounds read.
+        float outputMatrix[kMaxPanChannels * kMaxPanChannels];
+        for (uint32_t s = 0; s < srcChannels; ++s)
+        {
+            for (uint32_t d = 0; d < dstChannels; ++d)
+            {
+                float gain = 1.0f;
+                if (d == 0)
+                    gain = leftGain;
+                else if (d == 1)
+                    gain = rightGain;
+                outputMatrix[s * dstChannels + d] = gain;
+            }
+        }
+
         // SetOutputMatrix: srcChannels * dstChannels matrix
-        source->Voice->SetOutputMatrix(m_masterVoice, voiceDetails.InputChannels, masterDetails.InputChannels,
-                                       outputMatrix);
+        source->Voice->SetOutputMatrix(m_masterVoice, srcChannels, dstChannels, outputMatrix);
     }
 
     // Doppler effect using relative velocity between source and listener
