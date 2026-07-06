@@ -100,7 +100,11 @@ bool DeserializeInto(World& world, const std::string& jsonText)
         for (const json& ent : root["entities"]) {
             const std::string name = ent.value("name", std::string());
             entt::entity e = world.CreateEntity(name); // emplaces NameComponent when name non-empty
-            const uint32_t sid = ent.value("id", 0u);
+            // Note: use int64_t (not "0u"/unsigned int) — the bundled json stub
+            // (ThirdParty/Utils/json/nlohmann_json.h) only specializes get<T>() for
+            // a fixed set of types and unsigned int isn't one of them, which is a
+            // link error (LNK2001), not a compile error.
+            const uint32_t sid = static_cast<uint32_t>(ent.value<int64_t>("id", 0));
             idMap[sid] = e;
 
             if (ent.contains("components") && ent["components"].is_array()) {

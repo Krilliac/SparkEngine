@@ -12,6 +12,7 @@ add_executable(SparkTests
     TestMathUtils.cpp
     TestObjectPool.cpp
     TestECSWorld.cpp
+    TestReflectedScene.cpp
     TestGameMode.cpp
     TestNoiseGenerator.cpp
     TestSaveSystem.cpp
