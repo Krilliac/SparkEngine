@@ -10,6 +10,7 @@
 #include "Persistence/TFDatabase.h"
 
 #include "Utils/JsonUtils.h"
+#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <chrono>
@@ -65,7 +66,26 @@ bool TFDatabase::Open(const std::string& path)
     m_characters.clear();
     m_nextAccountId = 1;
     m_nextCharId = 1;
-    LoadFromDisk();   // ok if the file does not exist yet (fresh db)
+
+    std::error_code existsEc;
+    const bool dbFileExists = fs::exists(m_path, existsEc);
+    if (dbFileExists && !LoadFromDisk())
+    {
+        // The file is present but failed to parse (corrupt/truncated/foreign
+        // content). Do NOT fall through with an empty in-memory db: every
+        // mutator flushes eagerly via SaveToDisk(), which would silently
+        // overwrite (wipe) the unreadable file with a brand-new empty
+        // database on the very next write. Quarantine the bad file and
+        // refuse to open instead, so the caller can investigate/restore it.
+        std::error_code renameEc;
+        const std::string backupPath = m_path + ".corrupt-" + std::to_string(NowMs()) + ".bak";
+        fs::rename(m_path, backupPath, renameEc);
+        SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                        "[TF] db open refused: %s is unreadable/corrupt; backed up to %s (backup ok=%d)",
+                        m_path.c_str(), backupPath.c_str(), renameEc ? 0 : 1);
+        return false;
+    }
+    // dbFileExists == false: no prior db, LoadFromDisk() skipped -> fresh db.
 
     m_open = true;
     return true;
@@ -216,7 +236,10 @@ bool TFDatabase::CreateAccount(const std::string& username, const std::string& s
     rec.lastLoginMs  = 0;
     m_accounts.push_back(rec);
 
-    SaveToDisk();
+    if (!SaveToDisk())
+        SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                        "[TF] CreateAccount: account '%s' (id=%llu) created in memory but SaveToDisk failed for %s",
+                        rec.username.c_str(), static_cast<unsigned long long>(rec.id), m_path.c_str());
     out = rec;
     return true;
 }
@@ -238,7 +261,10 @@ void TFDatabase::TouchLogin(uint64_t accountId, int64_t nowMs)
     if (it == m_accounts.end())
         return;
     it->lastLoginMs = nowMs;
-    SaveToDisk();
+    if (!SaveToDisk())
+        SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                        "[TF] TouchLogin: SaveToDisk failed for account id=%llu (%s)",
+                        static_cast<unsigned long long>(accountId), m_path.c_str());
 }
 
 bool TFDatabase::CreateCharacter(uint64_t accountId, const std::string& name, FactionId faction,
@@ -260,7 +286,10 @@ bool TFDatabase::CreateCharacter(uint64_t accountId, const std::string& name, Fa
     rec.lastPlayedMs = 0;
     m_characters.push_back(rec);
 
-    SaveToDisk();
+    if (!SaveToDisk())
+        SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                        "[TF] CreateCharacter: character '%s' (id=%llu) created in memory but SaveToDisk failed for %s",
+                        rec.name.c_str(), static_cast<unsigned long long>(rec.id), m_path.c_str());
     out = rec;
     return true;
 }
@@ -301,7 +330,10 @@ bool TFDatabase::DeleteCharacter(uint64_t charId)
     if (it == m_characters.end())
         return false;
     m_characters.erase(it);
-    SaveToDisk();
+    if (!SaveToDisk())
+        SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                        "[TF] DeleteCharacter: character id=%llu removed in memory but SaveToDisk failed for %s",
+                        static_cast<unsigned long long>(charId), m_path.c_str());
     return true;
 }
 
@@ -316,7 +348,10 @@ void TFDatabase::SaveCharacterProgress(uint64_t charId, uint32_t xp, uint16_t ra
     it->rank = rank;
     it->flux = flux;
     it->lastPlayedMs = lastPlayedMs;
-    SaveToDisk();
+    if (!SaveToDisk())
+        SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                        "[TF] SaveCharacterProgress: SaveToDisk failed for character id=%llu (%s)",
+                        static_cast<unsigned long long>(charId), m_path.c_str());
 }
 
 } // namespace Terrafront

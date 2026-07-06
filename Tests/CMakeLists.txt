@@ -513,6 +513,7 @@ add_executable(SparkTests
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
     # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke
