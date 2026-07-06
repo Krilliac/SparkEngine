@@ -178,6 +178,37 @@ TEST(RHIBridge_CreateTexture2D_Headless_ReturnsNonNull)
     bridge.Shutdown();
 }
 
+TEST(RHIBridge_NullDeviceAccessorsDoNotCrash)
+{
+    // Never-initialized bridge: m_device is null. Every resource-creation
+    // accessor must fail safe (return nullptr) instead of dereferencing a
+    // null device, and the reference-returning capability accessors must
+    // fall back to a default-valued struct instead of crashing.
+    RHIBridge bridge;
+
+    EXPECT_TRUE(bridge.CreateVertexBuffer(nullptr, 0, 0) == nullptr);
+    EXPECT_TRUE(bridge.CreateIndexBuffer(nullptr, 0, 0) == nullptr);
+    EXPECT_TRUE(bridge.CreateConstantBuffer(0) == nullptr);
+    EXPECT_TRUE(bridge.CreateTexture2D(1, 1, PixelFormat::R8G8B8A8_UNORM, RHITextureUsage::ShaderResource, nullptr) == nullptr);
+    EXPECT_TRUE(bridge.CreateDepthBuffer(1, 1, PixelFormat::D24_UNORM_S8_UINT) == nullptr);
+    EXPECT_TRUE(bridge.CreateRenderTarget(1, 1, PixelFormat::R8G8B8A8_UNORM) == nullptr);
+    EXPECT_TRUE(bridge.CreateSamplerLinearWrap() == nullptr);
+    EXPECT_TRUE(bridge.CreateSamplerLinearClamp() == nullptr);
+    EXPECT_TRUE(bridge.CreateSamplerPointClamp() == nullptr);
+    EXPECT_TRUE(bridge.CreateSamplerAnisotropic(4) == nullptr);
+
+    EXPECT_EQ(bridge.GetCapabilities().maxTextureSize, 16384u);
+    EXPECT_TRUE(bridge.GetFrameStatistics().drawCalls == 0);
+
+    // Same accessors after Init()+Shutdown() (m_device reset to null again).
+    EXPECT_TRUE(bridge.Initialize(nullptr, 640, 480, GraphicsBackend::None, false));
+    bridge.Shutdown();
+
+    EXPECT_TRUE(bridge.CreateVertexBuffer(nullptr, 0, 0) == nullptr);
+    EXPECT_TRUE(bridge.CreateSamplerLinearWrap() == nullptr);
+    EXPECT_EQ(bridge.GetCapabilities().maxTextureSize, 16384u);
+}
+
 // ============================================================================
 // Capabilities & Info Tests
 // ============================================================================

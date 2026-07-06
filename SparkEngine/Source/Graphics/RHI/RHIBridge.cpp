@@ -447,6 +447,8 @@ namespace Spark
 
         std::unique_ptr<IRHIBuffer> RHIBridge::CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride)
         {
+            if (!m_device)
+                return nullptr;
             RHIBufferDesc desc;
             desc.size = size;
             desc.stride = stride;
@@ -458,6 +460,8 @@ namespace Spark
 
         std::unique_ptr<IRHIBuffer> RHIBridge::CreateIndexBuffer(const void* data, uint64_t size, uint32_t stride)
         {
+            if (!m_device)
+                return nullptr;
             RHIBufferDesc desc;
             desc.size = size;
             desc.stride = stride;
@@ -469,6 +473,8 @@ namespace Spark
 
         std::unique_ptr<IRHIBuffer> RHIBridge::CreateConstantBuffer(uint64_t size)
         {
+            if (!m_device)
+                return nullptr;
             RHIBufferDesc desc;
             desc.size = size;
             desc.usage = RHIBufferUsage::Constant;
@@ -479,6 +485,8 @@ namespace Spark
         std::unique_ptr<IRHITexture> RHIBridge::CreateTexture2D(uint32_t width, uint32_t height, PixelFormat format,
                                                                 RHITextureUsage usage, const void* data)
         {
+            if (!m_device)
+                return nullptr;
             RHITextureDesc desc;
             desc.width = width;
             desc.height = height;
@@ -490,6 +498,8 @@ namespace Spark
 
         std::unique_ptr<IRHITexture> RHIBridge::CreateDepthBuffer(uint32_t width, uint32_t height, PixelFormat format)
         {
+            if (!m_device)
+                return nullptr;
             RHITextureDesc desc;
             desc.width = width;
             desc.height = height;
@@ -501,6 +511,8 @@ namespace Spark
 
         std::unique_ptr<IRHITexture> RHIBridge::CreateRenderTarget(uint32_t width, uint32_t height, PixelFormat format)
         {
+            if (!m_device)
+                return nullptr;
             RHITextureDesc desc;
             desc.width = width;
             desc.height = height;
@@ -528,6 +540,8 @@ namespace Spark
 
         std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerLinearWrap()
         {
+            if (!m_device)
+                return nullptr;
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Linear;
             desc.magFilter = RHIFilterMode::Linear;
@@ -540,6 +554,8 @@ namespace Spark
 
         std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerLinearClamp()
         {
+            if (!m_device)
+                return nullptr;
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Linear;
             desc.magFilter = RHIFilterMode::Linear;
@@ -552,6 +568,8 @@ namespace Spark
 
         std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerPointClamp()
         {
+            if (!m_device)
+                return nullptr;
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Nearest;
             desc.magFilter = RHIFilterMode::Nearest;
@@ -564,6 +582,8 @@ namespace Spark
 
         std::unique_ptr<IRHISampler> RHIBridge::CreateSamplerAnisotropic(uint32_t maxAnisotropy)
         {
+            if (!m_device)
+                return nullptr;
             RHISamplerDesc desc;
             desc.minFilter = RHIFilterMode::Anisotropic;
             desc.magFilter = RHIFilterMode::Anisotropic;
@@ -603,12 +623,14 @@ namespace Spark
 
         const RHIDeviceCapabilities& RHIBridge::GetCapabilities() const
         {
-            return m_device->GetCapabilities();
+            static const RHIDeviceCapabilities kNoDeviceCapabilities{};
+            return m_device ? m_device->GetCapabilities() : kNoDeviceCapabilities;
         }
 
         const RHIStatistics& RHIBridge::GetFrameStatistics() const
         {
-            return m_device->GetStatistics();
+            static const RHIStatistics kNoDeviceStatistics{};
+            return m_device ? m_device->GetStatistics() : kNoDeviceStatistics;
         }
 
         std::string RHIBridge::GetDeviceInfo() const
