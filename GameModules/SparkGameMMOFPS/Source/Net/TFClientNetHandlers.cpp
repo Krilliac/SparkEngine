@@ -182,12 +182,18 @@ void TFClientNet::RouteLoopback(TFMsg id, const void* payload, size_t size)
         case TFMsg::SpawnRequest:
         case TFMsg::FireEvent:
         case TFMsg::FactionSelect:
+        case TFMsg::VehicleEnter:
+        case TFMsg::VehicleExit:
+        case TFMsg::AegisDeploy:
+        case TFMsg::SquadMsg:
         case TFMsg::LoginRequest:
         case TFMsg::RegisterRequest:
         case TFMsg::CharListRequest:
         case TFMsg::CharCreateReq:
         case TFMsg::CharDeleteReq:
         case TFMsg::EnterWorldReq:
+            // final-review #3: vehicle/squad verbs now share the same
+            // enter-world gate as the other gameplay ids on this path too.
             if (m_ctx->serverSim)
                 m_ctx->serverSim->RouteClientMessage(me, id, payload, size);
             break;

@@ -84,6 +84,24 @@ class TFProgressionSystem {
     /// Public so the orchestrator can wire a tf_save console command.
     bool SaveNow();
 
+    // --- W5 onboarding additions (final-review #1/#2: durable per-character
+    // persistence, since runtime progression here is keyed by the ephemeral
+    // PlayerId, not the durable character id) -------------------------------
+
+    /// Seed/overwrite this player's runtime progression from the durable
+    /// TFCharacterRecord resolved by TFServerSim::HandleEnterWorld, BEFORE
+    /// any spawn/save can run for the session. Without this, a returning
+    /// character's stored xp/rank/flux are never loaded, and the next
+    /// SaveNow overwrites the durable record back to the runtime default
+    /// (rank 1 / 0 xp / 0 flux) -- silent data loss for returning players.
+    void ServerLoadCharacter(PlayerId player, uint32_t xp, uint16_t rank, uint32_t flux);
+
+    /// Drop this player's runtime progression record (e.g. on disconnect,
+    /// AFTER the final flush to the character has been persisted). Without
+    /// this, a recycled PlayerId inherits the prior occupant's xp/flux and
+    /// leaks them onto a different account's character.
+    void ClearPlayer(PlayerId player);
+
     /// Debug panel toggle (hidden by default; wired from tf_* console commands).
     void ToggleDebugUI() { m_showDebug = !m_showDebug; }
 

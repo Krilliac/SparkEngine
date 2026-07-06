@@ -298,6 +298,65 @@ std::string RunOnboardingAcceptanceSelfTest(TFGameContext& ctx)
         check(hasPawn && pawn.alive, "the spawned pawn is alive and resolvable (can move/fire/spawn)");
     }
 
+    // ---- Part 3: final-review #1/#2 regression -- progression must SURVIVE a
+    // disconnect/reconnect for the same character, and must NOT leak into a
+    // stale runtime record after the disconnect flush.
+    os << "\n-- progression persistence: award -> disconnect -> re-login -> re-enter --";
+    if (!ctx.progression)
+    {
+        check(false, "progression system available for the disconnect/reconnect regression test");
+    }
+    else
+    {
+        const PlayerId me = ctx.clientNet->LocalPlayerId();
+        check(ctx.serverSim->ActiveCharacterOf(me) == charId,
+              "active character bound to this session matches the one entered above");
+
+        // Award progression through the real server API (the same entry
+        // points a kill/capture would use) so this is not a privileged
+        // test-only code path.
+        ctx.progression->ServerAwardXP(me, 500, kXPReasonCaptureOutpost);
+        ctx.progression->ServerGrantFlux(me, 250);
+        const uint32_t awardedXP   = ctx.progression->XPOf(me);
+        const uint16_t awardedRank = ctx.progression->RankOf(me);
+        const uint32_t awardedFlux = ctx.progression->FluxOf(me);
+        check(awardedXP > 0 && awardedFlux > 0,
+              "progression awarded xp/flux > 0 before the simulated disconnect");
+
+        ctx.progression->SaveNow();   // force the debounced session-scoped save too
+
+        // Simulate a real disconnect via the same cleanup path a real socket
+        // drop runs (final flush to the durable character record, THEN
+        // ClearPlayer) — see TFServerSim::CleanupPlayerSession /
+        // DebugSimulateDisconnect.
+        ctx.serverSim->DebugSimulateDisconnect(me);
+        check(ctx.progression->XPOf(me) == 0 && ctx.progression->FluxOf(me) == 0,
+              "runtime progression record cleared after simulated disconnect (final-review #2, no leak to the next session)");
+
+        // Re-login (a fresh account session) then re-enter the SAME character.
+        TF_AuthRequest relogin{};
+        std::strncpy(relogin.user, user.c_str(), sizeof(relogin.user) - 1);
+        std::strncpy(relogin.pass, pass.c_str(), sizeof(relogin.pass) - 1);
+        ctx.clientNet->SendMsg(TFMsg::LoginRequest, &relogin, sizeof(relogin));
+        check(ctx.clientNet->IsLoggedIn(), "re-login succeeded after the simulated disconnect");
+
+        TF_EnterWorldRequest rew{};
+        rew.charId = charId;
+        ctx.clientNet->SendMsg(TFMsg::EnterWorldReq, &rew, sizeof(rew));
+        check(ctx.serverSim->ActiveCharacterOf(me) == charId,
+              "re-entered the SAME character after reconnecting");
+
+        // THE regression proof: without final-review #1 (ServerLoadCharacter
+        // wired into HandleEnterWorld), these would read back as 0/1/0 --
+        // the runtime default -- instead of the values persisted above.
+        check(ctx.progression->XPOf(me) == awardedXP,
+              "xp PRESERVED across disconnect/reconnect (final-review #1 regression proof)");
+        check(ctx.progression->RankOf(me) == awardedRank,
+              "rank PRESERVED across disconnect/reconnect (final-review #1 regression proof)");
+        check(ctx.progression->FluxOf(me) == awardedFlux,
+              "flux PRESERVED across disconnect/reconnect (final-review #1 regression proof)");
+    }
+
     os << "\n[TF-ACCEPTANCE] RESULT: " << passCount << " passed, " << failCount << " failed";
     SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF-ACCEPTANCE] RESULT: %d passed, %d failed",
                    passCount, failCount);

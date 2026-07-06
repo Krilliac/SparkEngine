@@ -88,6 +88,14 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     /// listen-host/standalone loopback router (TFClientNet::RouteLoopback) so
     /// both paths run the exact same authoritative logic (DESIGN.md W5).
     void RouteClientMessage(PlayerId sender, TFMsg id, const void* data, size_t size);
+
+    /// Test-only entry point (final-review #1/#2 regression proof): runs the
+    /// exact same per-player disconnect cleanup PollClientJoinsLeaves runs for
+    /// a real socket drop (final progression flush to the character, then
+    /// ClearPlayer, then session teardown) without needing an actual
+    /// NetworkManager disconnect. Lets tf_selftest_onboarding prove a
+    /// disconnect -> re-login -> re-enter round-trip preserves xp/rank/flux.
+    void DebugSimulateDisconnect(PlayerId player);
 #endif
 
     // --- engine area-simulation hook ----------------------------------------
@@ -125,6 +133,10 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     void RegisterNetHandlers();
     void UnregisterNetHandlers();
     void PollClientJoinsLeaves();
+    /// Shared by PollClientJoinsLeaves (real socket drop) and
+    /// DebugSimulateDisconnect (test hook): pawn cleanup, final progression
+    /// flush to the active character, ClearPlayer, session teardown.
+    void CleanupPlayerSession(PlayerId id);
     void SendMoveStates();
     void SendToPlayer(PlayerId player, uint16_t msgId, const void* payload,
                       size_t size, bool reliable);

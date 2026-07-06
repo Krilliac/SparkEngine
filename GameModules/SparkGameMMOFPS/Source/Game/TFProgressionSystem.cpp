@@ -225,6 +225,35 @@ uint32_t TFProgressionSystem::XPOf(PlayerId player) const
 }
 
 // ---------------------------------------------------------------------------
+// W5 onboarding: durable per-character re-attach (final-review #1/#2)
+// ---------------------------------------------------------------------------
+
+void TFProgressionSystem::ServerLoadCharacter(PlayerId player, uint32_t xp, uint16_t rank,
+                                              uint32_t flux)
+{
+    if (!m_initialized || player == kInvalidPlayer)
+        return;
+
+    // Overwrites (not merges) any pre-existing runtime record for this
+    // PlayerId -- e.g. a stale roster entry from a recycled id, or the
+    // rank-1/0-xp default OnPlayerSpawned would otherwise create. Must run
+    // BEFORE spawn/save so no default record can round-trip to disk first.
+    Prog& rec = m_players[player];
+    rec.xp   = xp;
+    rec.rank = std::clamp<uint16_t>(rank, 1, kTFMaxRank);
+    rec.flux = std::min<uint32_t>(kFluxWalletCap, flux);
+
+    SPARK_LOG_INFO(Spark::LogCategory::Game,
+                   "[TF] progression seeded from character record for player %u: "
+                   "xp=%u rank=%u flux=%u", player, rec.xp, rec.rank, rec.flux);
+}
+
+void TFProgressionSystem::ClearPlayer(PlayerId player)
+{
+    m_players.erase(player);
+}
+
+// ---------------------------------------------------------------------------
 // XP sources
 // ---------------------------------------------------------------------------
 

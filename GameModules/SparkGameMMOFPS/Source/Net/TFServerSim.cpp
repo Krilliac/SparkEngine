@@ -466,31 +466,20 @@ void TFServerSim::RegisterNetHandlers()
     // (TFClientNet::RouteLoopback) — so the enter-world gate added there
     // applies uniformly to every client-originated gameplay message,
     // regardless of transport.
+    // final-review #3 (gate defense-in-depth): VehicleEnter/VehicleExit/
+    // AegisDeploy/SquadMsg used to be direct routes straight into their
+    // handlers below, bypassing the RouteClientMessage enter-world gate
+    // entirely -- an unauthenticated/pre-enter-world client could seat a
+    // vehicle, toggle Aegis, or spam squad ops. They now go through the same
+    // choke point as the other gameplay ids.
     for (TFMsg id : {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent,
-                     TFMsg::FactionSelect})
+                     TFMsg::FactionSelect, TFMsg::VehicleEnter, TFMsg::VehicleExit,
+                     TFMsg::AegisDeploy, TFMsg::SquadMsg})
     {
         route(id, [this, id](const NetworkMessage& m) {
             RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size());
         });
     }
-
-    // TF-W3 (vehicles agent): the W1 accepted-but-unrouted vehicle stubs are
-    // now live routes into TFVehicleSystem.
-    route(TFMsg::VehicleEnter, [this](const NetworkMessage& m) {
-        HandleVehicleSeatOp(m.senderID, m.payload.data(), m.payload.size(), true);
-    });
-    route(TFMsg::VehicleExit, [this](const NetworkMessage& m) {
-        HandleVehicleSeatOp(m.senderID, m.payload.data(), m.payload.size(), false);
-    });
-    route(TFMsg::AegisDeploy, [this](const NetworkMessage& m) {
-        HandleAegisDeploy(m.senderID, m.payload.data(), m.payload.size());
-    });
-
-    route(TFMsg::SquadMsg, [this](const NetworkMessage& m) {
-        if (m_ctx->squads)
-            m_ctx->squads->ServerHandleSquadMsgRaw(m.senderID, m.payload.data(),
-                                                   m.payload.size());
-    });
 
     // Accepted-but-unrouted stubs (registered so NetworkManager does not
     // warn "unknown message type" if an eager client sends them):
@@ -557,30 +546,7 @@ void TFServerSim::PollClientJoinsLeaves()
         const PlayerId id = *it;
         if (!clients.contains(id))
         {
-            auto mv = m_move.find(id);
-            if (mv != m_move.end() && m_ctx->players)
-                m_ctx->players->ServerKillPawn(mv->second.pawn, kInvalidPlayer, kInvalidWeapon, false);
-            m_move.erase(id);
-            m_inputs.erase(id);
-            m_factions.erase(id);
-            m_deathTime.erase(id);
-            m_enteredWorld.erase(id);
-            // W5 onboarding (Task 6): flush the active character's progress
-            // one last time before dropping the session (DESIGN.md W5 "Error
-            // handling": "On disconnect, flush the active character's
-            // progress") — the periodic TFProgressionSystem::SaveNow debounce
-            // could otherwise miss a few seconds of the final session.
-            if (auto cIt = m_activeCharacter.find(id); cIt != m_activeCharacter.end())
-            {
-                if (m_ctx->characters && m_ctx->progression)
-                    m_ctx->characters->PersistProgress(cIt->second,
-                                                       m_ctx->progression->XPOf(id),
-                                                       m_ctx->progression->RankOf(id),
-                                                       m_ctx->progression->FluxOf(id));
-                m_activeCharacter.erase(cIt);
-            }
-            if (m_ctx->account)
-                m_ctx->account->ClearSession(id);
+            CleanupPlayerSession(id);
             it = m_knownClients.erase(it);
             SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] client %u left — pawn cleaned up", id);
         }
@@ -589,6 +555,54 @@ void TFServerSim::PollClientJoinsLeaves()
             ++it;
         }
     }
+}
+
+void TFServerSim::CleanupPlayerSession(PlayerId id)
+{
+    auto mv = m_move.find(id);
+    if (mv != m_move.end() && m_ctx->players)
+        m_ctx->players->ServerKillPawn(mv->second.pawn, kInvalidPlayer, kInvalidWeapon, false);
+    m_move.erase(id);
+    m_inputs.erase(id);
+    m_factions.erase(id);
+    m_deathTime.erase(id);
+    m_enteredWorld.erase(id);
+    // W5 onboarding (Task 6): flush the active character's progress
+    // one last time before dropping the session (DESIGN.md W5 "Error
+    // handling": "On disconnect, flush the active character's
+    // progress") — the periodic TFProgressionSystem::SaveNow debounce
+    // could otherwise miss a few seconds of the final session.
+    if (auto cIt = m_activeCharacter.find(id); cIt != m_activeCharacter.end())
+    {
+        if (m_ctx->characters && m_ctx->progression)
+            m_ctx->characters->PersistProgress(cIt->second,
+                                               m_ctx->progression->XPOf(id),
+                                               m_ctx->progression->RankOf(id),
+                                               m_ctx->progression->FluxOf(id));
+        m_activeCharacter.erase(cIt);
+    }
+    // final-review #2 (leak): drop the runtime progression record for
+    // this PlayerId AFTER the final flush-to-character above. Without
+    // this, a recycled PlayerId (a new client reusing a freed slot)
+    // would inherit the prior occupant's xp/rank/flux and leak them
+    // onto a different account's character.
+    if (m_ctx->progression)
+        m_ctx->progression->ClearPlayer(id);
+    if (m_ctx->account)
+        m_ctx->account->ClearSession(id);
+}
+
+void TFServerSim::DebugSimulateDisconnect(PlayerId player)
+{
+    // Test-only hook (final-review #1/#2 regression proof): the listen-host/
+    // standalone loopback player never appears in m_knownClients (see
+    // SendToPlayer above), so PollClientJoinsLeaves's real-socket-drop
+    // detection never fires for it. Run the identical cleanup directly so
+    // tf_selftest_onboarding can prove a disconnect -> re-login -> re-enter
+    // round-trip without tearing down the whole NetworkManager/session.
+    CleanupPlayerSession(player);
+    SPARK_LOG_INFO(Spark::LogCategory::Game,
+                   "[TF] simulated disconnect cleanup for player %u (test hook)", player);
 }
 
 void TFServerSim::SendToPlayer(PlayerId player, uint16_t msgId, const void* payload,
@@ -862,6 +876,10 @@ void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data
         case TFMsg::SpawnRequest:
         case TFMsg::FireEvent:
         case TFMsg::FactionSelect:
+        case TFMsg::VehicleEnter:
+        case TFMsg::VehicleExit:
+        case TFMsg::AegisDeploy:
+        case TFMsg::SquadMsg:
             if (!m_enteredWorld.contains(sender))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -886,6 +904,15 @@ void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data
         case TFMsg::SpawnRequest:    HandleSpawnRequest(sender, data, size); break;
         case TFMsg::FireEvent:       HandleFireEvent(sender, data, size); break;
         case TFMsg::FactionSelect:   HandleFactionSelect(sender, data, size); break;
+        // final-review #3: vehicle/squad verbs, now gated the same as the
+        // other gameplay ids above.
+        case TFMsg::VehicleEnter:    HandleVehicleSeatOp(sender, data, size, true); break;
+        case TFMsg::VehicleExit:     HandleVehicleSeatOp(sender, data, size, false); break;
+        case TFMsg::AegisDeploy:     HandleAegisDeploy(sender, data, size); break;
+        case TFMsg::SquadMsg:
+            if (m_ctx->squads)
+                m_ctx->squads->ServerHandleSquadMsgRaw(sender, data, size);
+            break;
         default: break;
     }
 }
@@ -1090,6 +1117,13 @@ void TFServerSim::HandleEnterWorld(PlayerId sender, const void* data, size_t siz
     SetPlayerFaction(sender, rec.faction);
     m_enteredWorld.insert(sender);
     m_activeCharacter[sender] = rec.id;   // W5 onboarding (Task 6): progression re-key target
+    // final-review #1 (data loss): seed this session's runtime progression from
+    // the durable character record BEFORE any spawn/save can run. Without this,
+    // the runtime record starts at the OnPlayerSpawned default (rank 1/0 xp/0
+    // flux) and the next SaveNow/disconnect-flush overwrites the durable record
+    // back to that default -- silent data loss for a returning character.
+    if (m_ctx->progression)
+        m_ctx->progression->ServerLoadCharacter(sender, rec.xp, rec.rank, rec.flux);
     SendWorldWelcome(sender);
     SPARK_LOG_INFO(Spark::LogCategory::Game,
                    "[TF] player %u entered world as character %llu (%s)", sender,
