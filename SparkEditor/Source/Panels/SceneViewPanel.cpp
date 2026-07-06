@@ -336,8 +336,21 @@ namespace SparkEditor
             if (m_graphics && m_world && m_renderTextureHeight > 0)
             {
                 using namespace DirectX;
-                const XMVECTOR eye = XMVectorSet(0.0f, 3.0f, -6.0f, 1.0f);
-                const XMVECTOR at = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
+
+                // Spherical orbit camera: derive the eye from the same
+                // yaw/pitch forward-vector formula UpdateCamera() uses, so
+                // right-drag orbit (HandleInput), wheel zoom (HandleInput),
+                // and WASD/QE pan (UpdateCamera) all visibly move this view.
+                const float cosP = cosf(m_cameraPitch);
+                const float forwardX = cosP * sinf(m_cameraYaw);
+                const float forwardY = -sinf(m_cameraPitch);
+                const float forwardZ = cosP * cosf(m_cameraYaw);
+
+                const XMVECTOR at =
+                    XMVectorSet(m_cameraTarget.x, m_cameraTarget.y, m_cameraTarget.z, 1.0f);
+                const XMVECTOR eye = XMVectorSet(m_cameraTarget.x - forwardX * m_cameraDistance,
+                                                  m_cameraTarget.y - forwardY * m_cameraDistance,
+                                                  m_cameraTarget.z - forwardZ * m_cameraDistance, 1.0f);
                 const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
                 const XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
                 const float aspect =
@@ -546,14 +559,12 @@ namespace SparkEditor
             dy += moveSpeed;
         }
 
-        // Apply the accumulated delta to the camera distance (orbit-style proxy).
-        // A full camera position vector would be stored separately in a production
-        // implementation; here we adjust the orbit distance as an approximation.
-        m_cameraDistance -= (dx + dy + dz) * 0.1f;
-        if (m_cameraDistance < 1.0f)
-            m_cameraDistance = 1.0f;
-        if (m_cameraDistance > 50.0f)
-            m_cameraDistance = 50.0f;
+        // Pan the orbit focus point along the already-computed forward/right/up
+        // vectors, so WASD/QE actually fly the camera through the scene instead
+        // of collapsing into a single-axis zoom on m_cameraDistance.
+        m_cameraTarget.x += dx;
+        m_cameraTarget.y += dy;
+        m_cameraTarget.z += dz;
     }
 
 } // namespace SparkEditor

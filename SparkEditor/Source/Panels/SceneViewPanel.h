@@ -132,6 +132,10 @@ namespace SparkEditor
         float m_cameraYaw = 0.0f;
         float m_cameraPitch = 0.0f;
         float m_cameraSpeed = 5.0f;
+        // Orbit focus point: eye = m_cameraTarget - forward(yaw,pitch) * m_cameraDistance.
+        // WASD/QE (UpdateCamera) pans this point; right-drag/wheel (HandleInput)
+        // orbit/zoom around it (see RenderSceneContent()).
+        DirectX::XMFLOAT3 m_cameraTarget = {0.0f, 1.0f, 0.0f};
 
         // Scene state
         bool m_showGrid = true;

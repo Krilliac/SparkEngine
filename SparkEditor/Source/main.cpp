@@ -147,6 +147,7 @@ int main(int argc, char* argv[])
     std::string projectPathArg;
     std::string startupTheme;
     std::string saveScenePath; // --save-scene <path>: save seeded World then exit (D2 acceptance)
+    std::string openScenePath; // --open-scene <path>: boot directly into a scene, skipping the project browser
 
     // Check command line arguments
     for (int i = 1; i < argc; i++)
@@ -188,6 +189,19 @@ int main(int argc, char* argv[])
         {
             saveScenePath = argv[++i];
         }
+        else if (strcmp(argv[i], "--open-scene") == 0 && i + 1 < argc)
+        {
+            openScenePath = argv[++i];
+        }
+    }
+
+    // --open-scene forces test-mode's "skip the project browser, auto-create
+    // a test project" switch (EditorApplication.h / EditorUI.cpp) so the
+    // editor boots straight into the Scene View instead of the modal — the
+    // scene is then loaded over that seeded World right after Initialize().
+    if (!openScenePath.empty())
+    {
+        testMode = true;
     }
 
     // Headless collab server mode — no GUI, just networking
@@ -331,6 +345,41 @@ int main(int argc, char* argv[])
             app->Shutdown();
             console.Shutdown();
             return saveOk ? 0 : -1;
+        }
+
+        // --open-scene: boot directly into a given scene in the Scene View
+        // instead of the project-browser modal (testMode above already
+        // skipped the browser and seeded a test World). Load the requested
+        // scene over that World via the same EditorUI::OpenScene() path the
+        // "Open Scene" menu command uses, then fall through into the normal
+        // interactive main loop (unlike --save-scene, this does not exit).
+        if (!openScenePath.empty())
+        {
+            console.LogInfo("--open-scene requested: " + openScenePath);
+            if (showDebugConsole)
+            {
+                std::cout << "Opening scene " << openScenePath << " (--open-scene)..." << std::endl;
+            }
+
+            SparkEditor::EditorUI* ui = app->GetUI();
+            bool openOk = ui && ui->OpenScene(openScenePath);
+
+            if (openOk)
+            {
+                console.LogSuccess("--open-scene: scene opened from " + openScenePath);
+                if (showDebugConsole)
+                {
+                    std::cout << "Scene opened successfully from " << openScenePath << std::endl;
+                }
+            }
+            else
+            {
+                console.LogError("--open-scene: failed to open scene from " + openScenePath);
+                if (showDebugConsole)
+                {
+                    std::cerr << "Failed to open scene from " << openScenePath << std::endl;
+                }
+            }
         }
 
         if (showDebugConsole)
