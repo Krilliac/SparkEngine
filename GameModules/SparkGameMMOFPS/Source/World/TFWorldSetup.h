@@ -34,6 +34,8 @@ class Mesh;
 
 namespace Terrafront {
 
+struct WorldPresentationDef; // Data/TFDataTables.h (full def in the .cpp)
+
 /// Procedural heightfield parameters for the Cindral Wastes continent.
 /// Defaults MUST equal the tf* keys authored in cindral_wastes.scene
 /// [Terrain]; the scene values override these at load so the authored scene
@@ -112,6 +114,12 @@ class TFWorldSetup {
     void LoadSceneAndTerrain();
     void ParseTerrainParams(const std::string& scenePath);
     float PlateauHeight(const std::string& tier) const;
+    /// Data-driven presentation constants (skybox/terrain/ambient/viewmodel/
+    /// muzzle-FX/pawn mesh). Returns ctx->data->GetPresentation() when loaded,
+    /// else a static default-constructed WorldPresentationDef{} whose
+    /// in-class member-initializers equal today's former hardcoded magic
+    /// numbers — so behavior is byte-identical whether or not data is loaded.
+    const WorldPresentationDef& Pres() const;
     void DriveOriginRebase();
     void CreateCamera();
     void ComputeViewProj(DirectX::XMMATRIX& outView, DirectX::XMMATRIX& outProj) const;

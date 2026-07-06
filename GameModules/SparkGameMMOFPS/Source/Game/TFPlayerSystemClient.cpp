@@ -7,7 +7,9 @@
  */
 #include "Game/TFPlayerSystem.h"
 
+#include "Data/TFDataTables.h"
 #include "Game/TFComponents.h"
+#include "Game/TFVisualUtils.h"
 #include "Net/TFClientNet.h"
 #include "Net/TFReplication.h"
 
@@ -26,19 +28,6 @@ namespace Terrafront {
 namespace {
 
 constexpr float kRadToDeg = 57.2957795f;
-
-/// W1 pawn placeholder visual per faction (no rigged characters yet — see
-/// DESIGN.md §2: infantry = posed static mesh; faction telegraphed by material).
-const char* FactionPawnMaterial(FactionId f)
-{
-    switch (f)
-    {
-        case FactionId::MRA: return "Assets/Materials/MMOFPS/Structure_Metal.json";
-        case FactionId::AUC: return "Assets/Materials/MMOFPS/Structure_Panel.json";
-        case FactionId::HLX: return "Assets/Materials/MMOFPS/Structure_Concrete.json";
-        default:             return "Assets/Materials/MMOFPS/Structure_Concrete.json";
-    }
-}
 
 } // namespace
 
@@ -242,10 +231,15 @@ void TFPlayerSystem::AttachPawnVisual(uint32_t localEntity, FactionId faction)
     // Humanoid soldier proxy (Kenney mini character, CC0) — pre-scaled at
     // import to ~1.6 m with feet at y=0, so it stands on the pawn's feet
     // position at Transform scale 1. Faction is telegraphed by the material
-    // tint; the model's own colormap texture supplies the body detail.
+    // tint; the model's own colormap texture supplies the body detail. Mesh
+    // path is data-driven (Assets/MMOFPS/Data/presentation.json pawnMesh);
+    // the literal here is only the byte-identical fallback when no
+    // TFDataTables instance exists at all (e.g. some headless harnesses).
+    const std::string pawnMesh = m_ctx->data ? m_ctx->data->GetPresentation().pawnMesh
+                                              : "Models/MMOFPS/characters/soldier.obj";
     MeshRenderer& mr = world->AddComponent<MeshRenderer>(e);
-    mr.meshPath = "Assets/Models/MMOFPS/characters/soldier.obj";
-    mr.materialPath = FactionPawnMaterial(faction);
+    mr.meshPath = "Assets/" + pawnMesh;
+    mr.materialPath = FactionStructureMaterial(*m_ctx, faction);
     mr.castShadows = true;
 
     if (Transform* t = world->GetComponent<Transform>(e))

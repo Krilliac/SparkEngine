@@ -191,6 +191,12 @@ void TFWorldSetup::ParseTerrainParams(const std::string& scenePath)
     }
 }
 
+const WorldPresentationDef& TFWorldSetup::Pres() const
+{
+    static const WorldPresentationDef kDefault{};
+    return (m_ctx && m_ctx->data && m_ctx->data->IsLoaded()) ? m_ctx->data->GetPresentation() : kDefault;
+}
+
 float TFWorldSetup::PlateauHeight(const std::string& tier) const
 {
     if (tier == "skyanchor") return m_terrain.plateauSky;
@@ -384,25 +390,21 @@ void TFWorldSetup::DrawSkybox(const DirectX::XMMATRIX& view, const DirectX::XMMA
     if (!m_skyMesh || m_skyMesh->GetIndexCount() < 36)
         return;
 
-    static const char* kFaceTex[6] = {
-        "Assets/Textures/MMOFPS/sky/space_px.png", "Assets/Textures/MMOFPS/sky/space_nx.png",
-        "Assets/Textures/MMOFPS/sky/space_py.png", "Assets/Textures/MMOFPS/sky/space_ny.png",
-        "Assets/Textures/MMOFPS/sky/space_pz.png", "Assets/Textures/MMOFPS/sky/space_nz.png",
-    };
+    const SkyboxDef& sky = Pres().skybox;
 
     // Centered on the camera, huge but inside the far plane (corner ~5000 < 6000).
     const XMFLOAT3 cam = m_camera->GetPosition();
-    const XMMATRIX world = XMMatrixScaling(2900.0f, 2900.0f, 2900.0f) *
+    const XMMATRIX world = XMMatrixScaling(sky.scale, sky.scale, sky.scale) *
                            XMMatrixTranslation(cam.x, cam.y, cam.z);
 
     ID3D11DeviceContext* dc = gfx->GetContext();
     gfx->SetBasicShaders();
     // Over-1.0 so the shader's ambient+N.L keeps the sky near full-bright.
-    const XMFLOAT4 kSky{1.8f, 1.8f, 1.8f, 1.0f};
+    const XMFLOAT4 kSky{sky.tint[0], sky.tint[1], sky.tint[2], sky.tint[3]};
     for (int i = 0; i < 6; ++i)
     {
         gfx->UpdateBasicConstants(world, view, proj, kSky, XMFLOAT2(1, 1));
-        gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV(kFaceTex[i]));
+        gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV("Assets/" + sky.faceTex[i]));
         m_skyMesh->RenderRange(dc, static_cast<unsigned>(i * 6), 6);
     }
     gfx->SetBasicTexture(nullptr);
@@ -425,7 +427,7 @@ void TFWorldSetup::DrawTerrain(const DirectX::XMMATRIX& view, const DirectX::XMM
         const float size = m_ctx->data && m_ctx->data->IsLoaded()
                                ? m_ctx->data->GetContinent().sizeM : 4096.0f;
         const float step = size / N;
-        const float uvTiles = 96.0f;        // texture repeats across the map
+        const float uvTiles = Pres().terrain.uvTiles; // texture repeats across the map
         const float e = step; // finite-difference epsilon for normals
 
         std::vector<Vertex> verts;
@@ -462,7 +464,7 @@ void TFWorldSetup::DrawTerrain(const DirectX::XMMATRIX& view, const DirectX::XMM
 
     ID3D11DeviceContext* dc = gfx->GetContext();
     gfx->SetBasicShaders();
-    gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV("Assets/Textures/MMOFPS/terrain/sand_color.png"));
+    gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV("Assets/" + Pres().terrain.texture));
     gfx->UpdateBasicConstants(XMMatrixIdentity(), view, proj,
                               XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f));
     m_terrainMesh->Render(dc);
@@ -662,18 +664,19 @@ void TFWorldSetup::RenderWorld()
                 // the barrel (local +X) to view forward (+Z), then place down-
                 // right and far enough forward to clear the 0.5 m near plane.
                 // view space: +x right, +y up, +z forward.
+                const ViewmodelDef& vmDef = Pres().viewmodel;
                 const DirectX::XMMATRIX local =
-                    DirectX::XMMatrixTranslation(-0.89f, -0.10f, 0.0f) *
-                    DirectX::XMMatrixScaling(0.26f, 0.26f, 0.26f) *
-                    DirectX::XMMatrixRotationY(-DirectX::XM_PIDIV2) *
-                    DirectX::XMMatrixTranslation(0.28f, -0.26f, 0.9f);
+                    DirectX::XMMatrixTranslation(vmDef.recenter[0], vmDef.recenter[1], vmDef.recenter[2]) *
+                    DirectX::XMMatrixScaling(vmDef.scale, vmDef.scale, vmDef.scale) *
+                    DirectX::XMMatrixRotationY(vmDef.rotationYRad) *
+                    DirectX::XMMatrixTranslation(vmDef.place[0], vmDef.place[1], vmDef.place[2]);
                 const DirectX::XMMATRIX vmWorld = local * invView;
 
                 // The weapon OBJ's own MTL texture is near-black, which made the
                 // gun a silhouette in first-person. Ignore it and draw the whole
                 // model as a single clean gunmetal (untextured, mid-grey, a touch
                 // over-1.0 so it reads as lit metal even on shadowed faces).
-                const DirectX::XMFLOAT4 kGunmetal{0.60f, 0.62f, 0.68f, 1.0f};
+                const DirectX::XMFLOAT4 kGunmetal{vmDef.gunmetal[0], vmDef.gunmetal[1], vmDef.gunmetal[2], vmDef.gunmetal[3]};
                 gfx->SetBasicTexture(nullptr);
                 gfx->UpdateBasicConstants(vmWorld, view, proj, kGunmetal, {1.0f, 1.0f});
                 vm->Render(dc);
@@ -697,6 +700,7 @@ void TFWorldSetup::RenderWorld()
                 gfx->SetBasicShaders();
                 gfx->SetBasicTexture(nullptr);
                 using namespace DirectX;
+                const MuzzleFxDef& fxDef = Pres().muzzleFx;
                 for (const ShotFx& fx : m_shotFx)
                 {
                     const double age = m_fxClock - fx.t0;
@@ -712,26 +716,30 @@ void TFWorldSetup::RenderWorld()
                     // Muzzle is at the gun tip (lower-right of view, ~1.2 m
                     // forward) so effects clear the 0.5 m near plane and line up
                     // with the first-person weapon instead of the eye.
-                    XMVECTOR muzzle = o + f * 1.2f + r * 0.30f - u * 0.22f;
+                    XMVECTOR muzzle = o + f * fxDef.muzzleForwardM + r * fxDef.muzzleRightM + u * fxDef.muzzleUpM;
 
                     // Tracer: thin bright streak from the muzzle forward. Edge-on
                     // from the shooter, but a clear streak from any side angle.
-                    if (age < 0.08)
+                    if (age < fxDef.tracerLifeSec)
                     {
-                        constexpr float kLen = 60.0f, kThick = 0.05f;
+                        const float kLen = fxDef.tracerLenM, kThick = fxDef.tracerThickM;
                         XMVECTOR mid = XMVectorAdd(muzzle, XMVectorScale(f, kLen * 0.5f));
                         XMMATRIX w = XMMatrixScaling(kThick, kThick, kLen) * orient *
                                      XMMatrixTranslationFromVector(mid);
-                        gfx->UpdateBasicConstants(w, view, proj, XMFLOAT4(6.0f, 5.0f, 2.0f, 1.0f),
+                        gfx->UpdateBasicConstants(w, view, proj,
+                                                  XMFLOAT4(fxDef.tracerColor[0], fxDef.tracerColor[1],
+                                                           fxDef.tracerColor[2], fxDef.tracerColor[3]),
                                                   XMFLOAT2(1, 1));
                         m_fxCube->Render(dc);
                     }
                     // Muzzle flash: bright puff at the gun tip (first ~50 ms).
-                    if (age < 0.05)
+                    if (age < fxDef.flashLifeSec)
                     {
-                        XMMATRIX w = XMMatrixScaling(0.22f, 0.22f, 0.30f) * orient *
-                                     XMMatrixTranslationFromVector(muzzle);
-                        gfx->UpdateBasicConstants(w, view, proj, XMFLOAT4(8.0f, 6.5f, 2.5f, 1.0f),
+                        XMMATRIX w = XMMatrixScaling(fxDef.flashScale[0], fxDef.flashScale[1], fxDef.flashScale[2]) *
+                                     orient * XMMatrixTranslationFromVector(muzzle);
+                        gfx->UpdateBasicConstants(w, view, proj,
+                                                  XMFLOAT4(fxDef.flashColor[0], fxDef.flashColor[1],
+                                                           fxDef.flashColor[2], fxDef.flashColor[3]),
                                                   XMFLOAT2(1, 1));
                         m_fxCube->Render(dc);
                     }
@@ -971,13 +979,14 @@ void TFWorldSetup::MaybeStartAmbientAudio()
         return; // no audio system (headless / init failed) — try again next frame? no: mark done
     m_ambientStarted = true;
 
-    const char* kWind = "Audio/MMOFPS/ambient/wind_loop.wav";
-    if (FAILED(audio->LoadSound(kWind, L"Assets/Audio/MMOFPS/ambient/wind_loop.wav")))
+    const AmbientAudioDef& amb = Pres().ambient;
+    const std::string full = "Assets/" + amb.path;
+    if (FAILED(audio->LoadSound(amb.path, std::wstring(full.begin(), full.end()))))
     {
         Spark::SimpleConsole::GetInstance().LogWarning("[TFAudio] ambient wind load FAIL");
         return;
     }
-    audio->PlaySound(kWind, 0.35f, 1.0f, /*loop*/ true);
+    audio->PlaySound(amb.path, amb.volume, 1.0f, /*loop*/ true);
 }
 
 void TFWorldSetup::DriveOriginRebase()

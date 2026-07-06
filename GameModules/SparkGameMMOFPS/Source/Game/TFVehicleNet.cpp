@@ -10,6 +10,7 @@
 #include "Game/TFVehicleSystem.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFVisualUtils.h"
 #include "Net/TFServerSim.h"
 
 #include "Engine/ECS/Components.h"
@@ -448,12 +449,7 @@ void TFVehicleSystem::MirrorAttachVisual(MirrorRec& m)
     {
         MeshRenderer& mr = world->AddComponent<MeshRenderer>(e);
         mr.meshPath = "Assets/" + def->model;
-        switch (m.info.faction)
-        {
-            case FactionId::MRA: mr.materialPath = "Assets/Materials/MMOFPS/Structure_Metal.json"; break;
-            case FactionId::AUC: mr.materialPath = "Assets/Materials/MMOFPS/Structure_Panel.json"; break;
-            default:             mr.materialPath = "Assets/Materials/MMOFPS/Structure_Concrete.json"; break;
-        }
+        mr.materialPath = FactionStructureMaterial(*m_ctx, m.info.faction);
         mr.castShadows = true;
     }
     m.local = static_cast<uint32_t>(e);

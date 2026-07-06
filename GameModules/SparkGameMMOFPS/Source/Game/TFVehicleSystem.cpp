@@ -12,6 +12,7 @@
 #include "Game/TFDamageSystem.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
+#include "Game/TFVisualUtils.h"
 #include "Net/TFServerSim.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
@@ -284,12 +285,7 @@ uint32_t TFVehicleSystem::CreateVehicleEntity(const VehicleDef& def, FactionId f
     {
         MeshRenderer& mr = world->AddComponent<MeshRenderer>(e);
         mr.meshPath = "Assets/" + def.model;
-        switch (faction)
-        {
-            case FactionId::MRA: mr.materialPath = "Assets/Materials/MMOFPS/Structure_Metal.json"; break;
-            case FactionId::AUC: mr.materialPath = "Assets/Materials/MMOFPS/Structure_Panel.json"; break;
-            default:             mr.materialPath = "Assets/Materials/MMOFPS/Structure_Concrete.json"; break;
-        }
+        mr.materialPath = FactionStructureMaterial(*m_ctx, faction);
         mr.castShadows = true;
     }
     return static_cast<uint32_t>(e);

@@ -14,6 +14,7 @@
 #include "Game/TFComponents.h"
 #include "Game/TFDamageSystem.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFVisualUtils.h"
 #include "Net/TFRepProtocol.h"
 #include "World/TFWorldSetup.h"
 
@@ -74,18 +75,6 @@ float Dist2(const float a[3], const float b[3])
 {
     const float dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
     return dx * dx + dy * dy + dz * dz;
-}
-
-/// Faction tint via the W1 placeholder materials (same scheme as pawn visuals).
-const char* FactionDeployMaterial(FactionId f)
-{
-    switch (f)
-    {
-        case FactionId::MRA: return "Assets/Materials/MMOFPS/Structure_Metal.json";
-        case FactionId::AUC: return "Assets/Materials/MMOFPS/Structure_Panel.json";
-        case FactionId::HLX: return "Assets/Materials/MMOFPS/Structure_Concrete.json";
-        default:             return "Assets/Materials/MMOFPS/Structure_Concrete.json";
-    }
 }
 
 } // namespace
@@ -515,28 +504,22 @@ void TFDeployableSystem::AttachDeployableVisual(uint32_t local, DeployableKind k
         return;
 
     // Prop stand-ins (Assets/Models/MMOFPS/props, W1 asset staging): turret =
-    // antenna mast, ammo pack = crate, med beacon = slim antenna. Faction is
-    // telegraphed by material like pawn visuals; bespoke meshes are TF-W4.
+    // antenna mast, ammo pack = crate, med beacon = slim antenna (data-driven
+    // via Assets/MMOFPS/Data/deployables.json). Faction is telegraphed by
+    // material like pawn visuals; bespoke meshes are TF-W4.
+    const DeployableVisualDef* dv = (m_ctx->data && m_ctx->data->IsLoaded())
+                                         ? m_ctx->data->GetDeployableVisual(kind)
+                                         : nullptr;
+    if (!dv)
+        return; // no data table loaded (e.g. headless harness) - nothing to draw
+
     MeshRenderer& mr = world->AddComponent<MeshRenderer>(e);
-    mr.materialPath = FactionDeployMaterial(faction);
+    mr.meshPath = "Assets/" + dv->model;
+    mr.materialPath = FactionStructureMaterial(*m_ctx, faction);
     mr.castShadows = true;
 
-    Transform* t = world->GetComponent<Transform>(e);
-    switch (kind)
-    {
-        case DeployableKind::FabTurret:
-            mr.meshPath = "Assets/Models/MMOFPS/props/antenna_a.obj";
-            if (t) t->scale = {1.0f, 1.0f, 1.0f};
-            break;
-        case DeployableKind::FabAmmoPack:
-            mr.meshPath = "Assets/Models/MMOFPS/props/crate_a.obj";
-            if (t) t->scale = {0.7f, 0.7f, 0.7f};
-            break;
-        default: // MedBeacon
-            mr.meshPath = "Assets/Models/MMOFPS/props/antenna_a.obj";
-            if (t) t->scale = {0.5f, 1.3f, 0.5f};
-            break;
-    }
+    if (Transform* t = world->GetComponent<Transform>(e))
+        t->scale = {dv->scale[0], dv->scale[1], dv->scale[2]};
 }
 
 // ---------------------------------------------------------------------------
