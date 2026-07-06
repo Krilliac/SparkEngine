@@ -195,6 +195,24 @@ class GraphicsEngine
     HRESULT Initialize(Spark::NativeWindowHandle hWnd);
 
     /**
+     * @brief Initialize the basic-shader render path (shaders, constant buffers,
+     *        sampler, default white texture, texture/material caches) on an
+     *        EXISTING device/context. Does NOT create a device or swapchain.
+     *
+     * Lets a caller that owns its own D3D11 device (e.g. an editor) drive
+     * Spark::RenderWorldBasic() through this GraphicsEngine without going
+     * through the windowed Initialize(hWnd) path. BeginFrame()/EndFrame()/
+     * Present() are not used in this mode — the caller owns and binds its
+     * own render target(s) before calling into the basic-shader draw API
+     * (SetBasicShaders/UpdateBasicConstants/SetBasicTexture/etc.) directly.
+     *
+     * @param device  Existing D3D11 device (must support ID3D11Device1).
+     * @param context Existing immediate context (must support ID3D11DeviceContext1).
+     * @return S_OK on success.
+     */
+    HRESULT InitializeFromDevice(ID3D11Device* device, ID3D11DeviceContext* context);
+
+    /**
      * @brief Clean up all DirectX resources
      */
     void Shutdown();
@@ -788,6 +806,12 @@ class GraphicsEngine
     ComPtr<IDXGISwapChain1> m_swapChain;
     ComPtr<ID3D11RenderTargetView> m_renderTargetView;
     ComPtr<ID3D11DepthStencilView> m_depthStencilView;
+
+    /// True when this GraphicsEngine was set up via InitializeFromDevice()
+    /// (attached to a caller-owned device, no swapchain/backbuffer). Guards
+    /// swapchain-dependent entry points (BeginFrame/EndFrame/Resize) so they
+    /// safely no-op instead of dereferencing a null m_swapChain.
+    bool m_attachedMode = false;
 
     // Advanced render targets for deferred/forward+ rendering
     // G-buffer layout: [0]=Albedo (RGBA8), [1]=Normal (RGB10A2), [2]=Material (RGBA8: roughness/metallic/AO), [3]=Motion vectors (RG16F)

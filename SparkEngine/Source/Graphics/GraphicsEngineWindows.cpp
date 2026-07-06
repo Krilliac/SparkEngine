@@ -529,6 +529,67 @@ HRESULT GraphicsEngine::Initialize(Spark::NativeWindowHandle hWnd)
 }
 
 // ============================================================================
+// DEVICE-ATTACH INITIALIZATION (no window / no swapchain)
+// ============================================================================
+
+HRESULT GraphicsEngine::InitializeFromDevice(ID3D11Device* device, ID3D11DeviceContext* context)
+{
+    LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::InitializeFromDevice (attach mode) started.", L"INFO");
+
+    if (!device || !context)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Error: null device/context in GraphicsEngine::InitializeFromDevice", L"ERROR");
+        return E_INVALIDARG;
+    }
+
+    // Mark attach mode up front so any swapchain-dependent entry point
+    // (BeginFrame/EndFrame/Resize) that might run concurrently or be called
+    // by mistake sees the flag and safely no-ops instead of touching a
+    // nonexistent swapchain/backbuffer.
+    m_attachedMode = true;
+
+    // Adopt the caller-owned device/context. ComPtr's raw-pointer
+    // constructor AddRefs, mirroring the ownership CreateDeviceAndSwapChain()
+    // establishes for the windowed path (this GraphicsEngine does NOT take
+    // exclusive ownership of a device it didn't create, but it does keep a
+    // live reference for the duration it's in use).
+    ComPtr<ID3D11Device> baseDevice(device);
+    ComPtr<ID3D11DeviceContext> baseContext(context);
+
+    HRESULT hr = baseDevice.As(&m_device);
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"InitializeFromDevice: failed to query ID3D11Device1", L"ERROR");
+        return hr;
+    }
+
+    hr = baseContext.As(&m_context);
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"InitializeFromDevice: failed to query ID3D11DeviceContext1", L"ERROR");
+        return hr;
+    }
+
+    // No swapchain, backbuffer RTV, or depth buffer are created here — the
+    // caller owns and binds its own render target(s). The basic-shader draw
+    // path (SetBasicShaders/UpdateBasicConstants/SetBasicTexture/
+    // GetOrLoadTextureSRV/GetOrLoadBasicMaterial) only depends on m_device/
+    // m_context, so InitializeBasicShaders() alone is sufficient here — it's
+    // the exact same call the windowed Initialize(hWnd) path makes after
+    // device/swapchain/render-target setup.
+    hr = InitializeBasicShaders();
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"InitializeFromDevice: InitializeBasicShaders failed", L"ERROR");
+        return hr;
+    }
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"GraphicsEngine::InitializeFromDevice complete - attach-mode rendering ready.",
+                             L"SUCCESS");
+    return S_OK;
+}
+
+// ============================================================================
 // Phase Q: Denoiser accessor
 // ============================================================================
 
@@ -835,6 +896,13 @@ bool GraphicsEngine::RecoverFromDeviceLost()
 void GraphicsEngine::BeginFrame()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    if (m_attachedMode)
+    {
+        // Attached to a caller-owned device (no swapchain/backbuffer). The
+        // caller drives its own render target binding/clearing directly.
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "BeginFrame() called on an attach-mode GraphicsEngine — skipping");
+        return;
+    }
     bool expected = false;
     if (!m_frameInProgress.compare_exchange_strong(expected, true))
     {
@@ -903,6 +971,13 @@ void GraphicsEngine::EndFrame()
 // NOTE: Intentionally exceeds 50-line guideline — linear rendering pipeline dispatch
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
+    if (m_attachedMode)
+    {
+        // Attached to a caller-owned device (no swapchain to Present). The
+        // caller is responsible for its own present/flush.
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "EndFrame() called on an attach-mode GraphicsEngine — skipping");
+        return;
+    }
     bool expected = true;
     if (!m_frameInProgress.compare_exchange_strong(expected, false))
     {
@@ -1392,6 +1467,14 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
 
 HRESULT GraphicsEngine::Resize(uint32_t width, uint32_t height)
 {
+    if (m_attachedMode)
+    {
+        // No swapchain/backbuffer to resize in attach mode — the caller
+        // owns and manages its own render target sizing.
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Resize() called on an attach-mode GraphicsEngine — skipping");
+        return S_OK;
+    }
+
     if (width == 0 || height == 0)
         return E_INVALIDARG;
 

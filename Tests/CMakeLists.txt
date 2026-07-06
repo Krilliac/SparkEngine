@@ -510,6 +510,8 @@ add_executable(SparkTests
     TestTFRegionLattice.cpp
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
+    # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke
+    TestWorldBasicRender.cpp
     # FPS game module source needed by TestGameModeReal
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/GameMode.cpp"
     # Editor core sources (no ImGui dependency)
