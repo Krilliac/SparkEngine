@@ -111,6 +111,7 @@ add_executable(SparkTests
     TestSpatialGrid.cpp
     TestReplicationFields.cpp
     TestAsyncDatabase.cpp
+    TestAsyncDatabaseRegressions.cpp
     TestScriptHookManager.cpp
     TestModuleHotReload.cpp
     TestConsoleRBAC.cpp

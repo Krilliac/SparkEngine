@@ -253,10 +253,25 @@ namespace Spark::Persistence
                 },
                 params[i].value);
 
-            auto pos = sql.find(placeholder);
-            if (pos != std::string::npos)
+            // Find an exact placeholder match: skip any match that is merely a prefix of a
+            // longer placeholder (e.g. "?1" occurring inside "?10"/"?11" for statements with
+            // 10+ params), which would otherwise corrupt that longer placeholder's binding.
+            size_t searchFrom = 0;
+            for (;;)
             {
+                auto pos = sql.find(placeholder, searchFrom);
+                if (pos == std::string::npos)
+                {
+                    break;
+                }
+                size_t afterPos = pos + placeholder.size();
+                if (afterPos < sql.size() && std::isdigit(static_cast<unsigned char>(sql[afterPos])))
+                {
+                    searchFrom = pos + 1;
+                    continue;
+                }
                 sql.replace(pos, placeholder.size(), replacement);
+                break;
             }
         }
 
@@ -283,7 +298,13 @@ namespace Spark::Persistence
             std::string key;
             stream >> key;
             std::string value;
-            std::getline(stream, value);
+            {
+                // Read the remainder of the command verbatim (not just up to the first
+                // embedded '\n') so values containing embedded newlines are not truncated.
+                std::ostringstream valueStream;
+                valueStream << stream.rdbuf();
+                value = valueStream.str();
+            }
 
             // Trim leading whitespace from value
             if (!value.empty() && value[0] == ' ')
@@ -469,7 +490,18 @@ namespace Spark::Persistence
             m_connections.push_back(std::move(conn));
         }
 
-        // Also prepare a sync connection (index 0 is shared with worker 0, guarded by m_syncMutex)
+        // Dedicated sync connection: never touched by any worker thread, so SyncQuery
+        // cannot race with WorkerThread's unsynchronized access to m_connections[threadIndex].
+        m_syncConnection = std::make_unique<SQLiteConnection>();
+        if (!m_syncConnection->Open(connectionString))
+        {
+            return false;
+        }
+        for (const auto& [id, sql] : m_preparedSQL)
+        {
+            m_syncConnection->PrepareStatement(id, sql);
+        }
+
         m_open.store(true);
         m_stopping.store(false);
 
@@ -510,6 +542,12 @@ namespace Spark::Persistence
         }
         m_connections.clear();
 
+        if (m_syncConnection)
+        {
+            m_syncConnection->Close();
+            m_syncConnection.reset();
+        }
+
         m_open.store(false);
     }
 
@@ -521,6 +559,10 @@ namespace Spark::Persistence
         for (auto& conn : m_connections)
         {
             conn->PrepareStatement(id, sql);
+        }
+        if (m_syncConnection)
+        {
+            m_syncConnection->PrepareStatement(id, sql);
         }
     }
 
@@ -577,17 +619,17 @@ namespace Spark::Persistence
 
     QueryResult AsyncDatabasePool::SyncQuery(PreparedStatementID id, std::vector<PreparedStatementParam> params)
     {
-        // Use connection[0] with a dedicated sync mutex to avoid contention with worker 0.
-        // In a production setup, a dedicated sync connection would be preferable.
+        // Use the dedicated sync connection, which no worker thread ever touches, so this
+        // cannot race with WorkerThread's unsynchronized access to m_connections[threadIndex].
         std::lock_guard<std::mutex> lock(m_syncMutex);
-        if (!m_open.load() || m_connections.empty())
+        if (!m_open.load() || !m_syncConnection)
         {
             QueryResult result;
             result.success = false;
             result.errorMessage = "Database pool is not open";
             return result;
         }
-        return m_connections[0]->Execute(id, params);
+        return m_syncConnection->Execute(id, params);
     }
 
     void AsyncDatabasePool::ProcessCallbacks()
