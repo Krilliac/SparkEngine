@@ -916,7 +916,7 @@ void TFServerSim::HandleCharCreate(PlayerId sender, const void* data, size_t siz
         const uint64_t acctId = m_ctx->account->AccountForClient(sender);
         if (acctId == 0)
         {
-            rep.err = static_cast<uint8_t>(TFCharErr::ServerError); // not logged in
+            rep.err = static_cast<uint8_t>(TFCharErr::NotLoggedIn);
         }
         else
         {
@@ -951,7 +951,7 @@ void TFServerSim::HandleCharDelete(PlayerId sender, const void* data, size_t siz
         const uint64_t acctId = m_ctx->account->AccountForClient(sender);
         if (acctId == 0)
         {
-            rep.err = static_cast<uint8_t>(TFCharErr::ServerError); // not logged in
+            rep.err = static_cast<uint8_t>(TFCharErr::NotLoggedIn);
         }
         else
         {
@@ -972,6 +972,19 @@ void TFServerSim::HandleEnterWorld(PlayerId sender, const void* data, size_t siz
     }
     TF_EnterWorldRequest req;
     std::memcpy(&req, data, sizeof(req));
+
+    // Idempotency guard (mirrors HandleFactionSelect's alive-guard): a
+    // duplicate EnterWorldReq, or one sent while a second character is being
+    // entered mid-session, must NOT re-bind the session's faction out from
+    // under an already-alive/already-entered pawn (DESIGN.md W5 "Error
+    // handling": duplicate/already-in-world is idempotent, server ignores).
+    if (m_move.contains(sender) || m_enteredWorld.contains(sender))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                       "[TF] player %u sent duplicate/late EnterWorldReq while already in world — ignored",
+                       sender);
+        return;
+    }
 
     // Server-authoritative gate: the client cannot self-report auth/enter-world
     // state. Without a bound, logged-in session AND ownership-verified

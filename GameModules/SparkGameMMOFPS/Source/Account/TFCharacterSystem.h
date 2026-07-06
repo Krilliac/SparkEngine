@@ -19,7 +19,7 @@ namespace Terrafront {
 
 constexpr int kTFMaxCharSlots = 5;
 
-enum class TFCharErr : uint8_t { Ok = 0, SlotsFull, NameTaken, NameInvalid, NoSuchCharacter, NotYourCharacter, ServerError };
+enum class TFCharErr : uint8_t { Ok = 0, SlotsFull, NameTaken, NameInvalid, NoSuchCharacter, NotYourCharacter, ServerError, NotLoggedIn };
 
 struct TFCharCreateResult
 {
