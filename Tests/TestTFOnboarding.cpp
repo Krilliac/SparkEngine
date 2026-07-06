@@ -6,6 +6,7 @@
 #include "TestFramework.h"
 #include "Persistence/TFDatabase.h"
 #include "Account/TFAccountSystem.h"
+#include "Account/TFCharacterSystem.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -134,4 +135,84 @@ TEST(TFDatabase_CorruptFile_QuarantinedNotWiped)
     EXPECT_TRUE(backupContents == garbage);   // original bytes preserved verbatim
 
     fs::remove(path);
+}
+
+TEST(TFCharacterSystem_CRUD_SlotCap_EnterWorld)
+{
+    namespace fs = std::filesystem;
+    const std::string path = "Saves/test_tfchar.db";
+    fs::remove(path);
+
+    TFDatabase db; EXPECT_TRUE(db.Open(path));
+    TFAccountRecord a; EXPECT_TRUE(db.CreateAccount("cmd", "s", "h", a));
+    TFCharacterSystem cs; cs.SetDatabase(&db);
+
+    // Fill all 5 slots with unique names.
+    for (int i = 0; i < kTFMaxCharSlots; ++i)
+        EXPECT_TRUE(cs.Create(a.id, std::string("Char") + char('A' + i), FactionId::AUC).ok);
+
+    // 6th create (new name) hits the slot cap.
+    EXPECT_TRUE(cs.Create(a.id, "OneMore", FactionId::AUC).err == TFCharErr::SlotsFull);
+
+    auto list = cs.List(a.id);
+    EXPECT_EQ(list.size(), (size_t)kTFMaxCharSlots);
+
+    // Ownership is checked before the delete takes effect.
+    EXPECT_TRUE(cs.Delete(a.id + 999, list[0].id) == TFCharErr::NotYourCharacter);
+    EXPECT_EQ(cs.List(a.id).size(), (size_t)kTFMaxCharSlots);   // unchanged
+
+    // Delete own character frees a slot.
+    EXPECT_TRUE(cs.Delete(a.id, list[0].id) == TFCharErr::Ok);
+    EXPECT_EQ(cs.List(a.id).size(), (size_t)(kTFMaxCharSlots - 1));
+
+    // Deleting an already-deleted / unknown id.
+    EXPECT_TRUE(cs.Delete(a.id, list[0].id) == TFCharErr::NoSuchCharacter);
+
+    // With a slot free, a duplicate name (one of the survivors) is still rejected.
+    EXPECT_TRUE(cs.Create(a.id, list[1].name, FactionId::AUC).err == TFCharErr::NameTaken);
+
+    // Invalid name (too short).
+    EXPECT_TRUE(cs.Create(a.id, "AB", FactionId::AUC).err == TFCharErr::NameInvalid);
+
+    // Invalid faction.
+    EXPECT_TRUE(cs.Create(a.id, "ValidName", FactionId::None).err == TFCharErr::NameInvalid);
+
+    // Enter world with the right owner returns the record with its faction.
+    TFCharacterRecord ew;
+    EXPECT_TRUE(cs.EnterWorld(a.id, list[1].id, ew));
+    EXPECT_TRUE(ew.faction == FactionId::AUC);
+    EXPECT_TRUE(ew.name == list[1].name);
+
+    // Enter world with the wrong owner fails.
+    TFCharacterRecord ew2;
+    EXPECT_FALSE(cs.EnterWorld(a.id + 999, list[1].id, ew2));
+
+    // Progression persists and survives a reopen.
+    cs.PersistProgress(list[1].id, 999, 3, 42);
+    db.Close();
+    {
+        TFDatabase db2; EXPECT_TRUE(db2.Open(path));
+        TFCharacterSystem cs2; cs2.SetDatabase(&db2);
+        TFCharacterRecord reread;
+        EXPECT_TRUE(db2.FindCharacter(list[1].id, reread));
+        EXPECT_EQ((int)reread.xp, 999); EXPECT_EQ((int)reread.rank, 3); EXPECT_EQ((int)reread.flux, 42);
+        db2.Close();
+    }
+
+    fs::remove(path);
+}
+
+TEST(TFCharacterSystem_ValidateCharacterName)
+{
+    std::string err;
+    EXPECT_TRUE(TFCharacterSystem::ValidateCharacterName("Vanguard", err));
+    EXPECT_TRUE(TFCharacterSystem::ValidateCharacterName("War Chief", err));
+    EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("", err));
+    EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("AB", err));                       // too short
+    EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName(std::string(24, 'A'), err));        // too long (24 > 23)
+    EXPECT_TRUE(TFCharacterSystem::ValidateCharacterName(std::string(23, 'A'), err));         // exactly 23 ok
+    EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName(" Leading", err));
+    EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("Trailing ", err));
+    EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("Double  Space", err));
+    EXPECT_FALSE(TFCharacterSystem::ValidateCharacterName("Bad_Name", err));                  // invalid char
 }
