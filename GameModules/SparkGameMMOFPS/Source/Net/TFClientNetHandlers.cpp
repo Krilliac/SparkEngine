@@ -386,6 +386,33 @@ void TFClientNet::ReleaseClientHandlers()
     m_handlersRegistered = false;
 }
 
+void TFClientNet::DeliverLoopbackReply(TFMsg id, const void* data, size_t size)
+{
+    // W5 onboarding (Task 7 acceptance-harness fix): in-process mirror of
+    // RegisterClientHandlers' route table, invoked by TFServerSim::
+    // SendToPlayer for the listen-host/standalone local player instead of a
+    // socket delivery that would otherwise never arrive (see the header
+    // comment on this method). Every S->C id the local player can receive is
+    // covered here so the reply-driven onboarding state machine
+    // (TFClientNet's stash + TFLoginFlow) works identically for local and
+    // networked play.
+    switch (id)
+    {
+        case TFMsg::WorldWelcome:    OnWorldWelcome(data, size); break;
+        case TFMsg::SpawnReply:      OnSpawnReply(data, size); break;
+        case TFMsg::HitConfirm:      OnHitConfirm(data, size); break;
+        case TFMsg::DamageEvent:     OnDamageEvent(data, size); break;
+        case TFMsg::KillEvent:       OnKillEvent(data, size); break;
+        case TFMsg::XPEvent:         OnXPEvent(data, size); break;
+        case TFMsg::LoginReply:      OnLoginReply(data, size); break;
+        case TFMsg::RegisterReply:   OnRegisterReply(data, size); break;
+        case TFMsg::CharListReply:   OnCharListReply(data, size); break;
+        case TFMsg::CharCreateReply: OnCharCreateReply(data, size); break;
+        case TFMsg::CharDeleteReply: OnCharDeleteReply(data, size); break;
+        default: break;
+    }
+}
+
 void TFClientNet::OnWorldWelcome(const void* data, size_t size)
 {
     if (size != sizeof(TF_WorldWelcome))

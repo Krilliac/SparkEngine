@@ -7,6 +7,7 @@
 
 #include "Account/TFAccountSystem.h"     // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h"   // W5 onboarding (Task 4)
+#include "Net/TFClientNet.h"             // W5 onboarding (Task 7): local-player reply loopback
 #include "Data/TFDataTables.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
@@ -593,6 +594,25 @@ void TFServerSim::PollClientJoinsLeaves()
 void TFServerSim::SendToPlayer(PlayerId player, uint16_t msgId, const void* payload,
                                size_t size, bool reliable)
 {
+    // W5 T7 (acceptance-harness fix): the listen-host/standalone local player
+    // (m_ctx->localPlayer == kTFLocalHostPlayer) never establishes a real
+    // NetworkManager socket -- TFClientNet::RouteLoopback bypasses the socket
+    // entirely for the C->S direction, calling RouteClientMessage directly --
+    // so below, nm.SendToClient() would look this id up in m_clientAddresses,
+    // find nothing, and silently drop the reply (see NetworkConnection.cpp
+    // SendToClient). Every onboarding client-state transition (logged-in,
+    // character list, in-world) is driven purely by these S->C replies; there
+    // is no ECS ground truth for "logged in"/"in world" the local player
+    // could read directly the way movement/spawn state is (TFClientNet reads
+    // the authoritative Transform for those). That silent drop broke the
+    // whole login->world flow for local/standalone play. Mirror the reply
+    // straight into the in-process client for that one player instead.
+    if (player == m_ctx->localPlayer && m_ctx->clientNet && !m_knownClients.contains(player))
+    {
+        m_ctx->clientNet->DeliverLoopbackReply(static_cast<TFMsg>(msgId), payload, size);
+        return;
+    }
+
     auto& nm = Spark::Net::NetworkManager::GetInstance();
     Spark::Net::NetworkMessage msg;
     msg.type = static_cast<Spark::Net::MessageType>(msgId);

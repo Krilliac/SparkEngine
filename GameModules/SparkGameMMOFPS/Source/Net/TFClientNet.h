@@ -94,6 +94,23 @@ class TFClientNet {
     uint8_t  LastCharOpError() const { return m_lastCharOpErr; }
     uint64_t LastCharOpId() const { return m_lastCharOpId; }
 
+#ifdef ENABLE_NETWORKING
+    /// W5 onboarding (Task 7 acceptance-harness fix): the listen-host/
+    /// standalone local player (kTFLocalHostPlayer) never has a real
+    /// NetworkManager socket address (TFClientNet::RouteLoopback bypasses the
+    /// socket entirely for the C->S direction) so TFServerSim::SendToPlayer's
+    /// normal nm.SendToClient() path finds no address for it and silently
+    /// drops the reply. Every onboarding client-state transition (logged-in,
+    /// character list, in-world) is driven purely by these S->C replies --
+    /// unlike movement/spawn there is no ECS ground truth the local player
+    /// could read directly instead -- so that delivery gap silently broke the
+    /// whole login->world flow for local/standalone play. TFServerSim::
+    /// SendToPlayer calls this in-process for that one player instead of
+    /// going through the (nonexistent) socket, dispatching to the exact same
+    /// On*Reply handlers RegisterClientHandlers wires to NetworkManager.
+    void DeliverLoopbackReply(TFMsg id, const void* data, size_t size);
+#endif
+
   private:
     // Per-remote-entity interpolation buffers (100 ms render delay).
     struct InterpEntry {
