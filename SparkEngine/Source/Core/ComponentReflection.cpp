@@ -153,6 +153,25 @@ namespace Spark
                             value.c_str());
             return false;
         }
+        case FieldType::Enum:
+        {
+            // Plain `enum class` types deduced as Enum have no explicit underlying
+            // type, so MSVC stores them as `int`. Round-trip via the underlying int
+            // so scene reload preserves the selected value (previously fell through
+            // to `default:` and silently dropped the write).
+            try
+            {
+                int v = std::stoi(value);
+                std::memcpy(dst, &v, sizeof(int));
+                return true;
+            }
+            catch (...)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "SetFieldFromString: failed to parse enum int from '%s'",
+                                value.c_str());
+                return false;
+            }
+        }
         default:
             SPARK_LOG_WARN(Spark::LogCategory::Core, "SetFieldFromString: unsupported field type %d for '%s'",
                            static_cast<int>(field.type), field.name.c_str());
@@ -218,6 +237,14 @@ namespace Spark
             std::memcpy(&z, src + 2 * sizeof(float), sizeof(float));
             std::memcpy(&w, src + 3 * sizeof(float), sizeof(float));
             return std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) + "," + std::to_string(w);
+        }
+        case FieldType::Enum:
+        {
+            // See SetFieldFromString: MSVC stores a plain `enum class` (no explicit
+            // underlying type) as `int`, so read it back the same way.
+            int v;
+            std::memcpy(&v, src, sizeof(int));
+            return std::to_string(v);
         }
         default:
             return "";
@@ -306,6 +333,7 @@ SPARK_REFLECT_END(Script)
 // --- Physics ---
 
 SPARK_REFLECT_TYPE(RigidBodyComponent)
+SPARK_REFLECT_FIELD(RigidBodyComponent, type, "Type")
 SPARK_REFLECT_FIELD(RigidBodyComponent, mass, "Mass")
 SPARK_REFLECT_FIELD(RigidBodyComponent, friction, "Friction")
 SPARK_REFLECT_FIELD_RANGE(RigidBodyComponent, restitution, "Restitution", 0.0f, 1.0f)
@@ -313,9 +341,11 @@ SPARK_REFLECT_FIELD(RigidBodyComponent, linearDamping, "Linear Damping")
 SPARK_REFLECT_FIELD(RigidBodyComponent, angularDamping, "Angular Damping")
 SPARK_REFLECT_FIELD(RigidBodyComponent, gravityFactor, "Gravity Factor")
 SPARK_REFLECT_FIELD(RigidBodyComponent, isTrigger, "Is Trigger")
+SPARK_REFLECT_FIELD(RigidBodyComponent, motionQuality, "Motion Quality")
 SPARK_REFLECT_END(RigidBodyComponent)
 
 SPARK_REFLECT_TYPE(ColliderComponent)
+SPARK_REFLECT_FIELD(ColliderComponent, shape, "Shape")
 SPARK_REFLECT_FIELD_AS(ColliderComponent, halfExtents, "Half Extents", Spark::FieldType::Vector3)
 SPARK_REFLECT_FIELD(ColliderComponent, radius, "Radius")
 SPARK_REFLECT_FIELD(ColliderComponent, height, "Height")
@@ -926,14 +956,18 @@ SPARK_REFLECT_END(FoliageVolumeComponent)
 // --- Collision Mask ---
 
 SPARK_REFLECT_TYPE(CollisionMaskComponent)
+SPARK_REFLECT_FIELD(CollisionMaskComponent, fromMask, "From Mask")
+SPARK_REFLECT_FIELD(CollisionMaskComponent, intoMask, "Into Mask")
 SPARK_REFLECT_END(CollisionMaskComponent)
 
 // --- Visibility ---
 
 SPARK_REFLECT_TYPE(VisibilityMaskComponent)
+SPARK_REFLECT_FIELD(VisibilityMaskComponent, mask, "Mask")
 SPARK_REFLECT_END(VisibilityMaskComponent)
 
 SPARK_REFLECT_TYPE(CameraDrawMaskComponent)
+SPARK_REFLECT_FIELD(CameraDrawMaskComponent, drawMask, "Draw Mask")
 SPARK_REFLECT_END(CameraDrawMaskComponent)
 
 // ============================================================================

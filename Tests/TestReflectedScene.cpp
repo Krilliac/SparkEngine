@@ -6,6 +6,7 @@
 #include "TestFramework.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/CoreComponents.h"
+#include "Engine/ECS/Components/CollisionMaskComponents.h"
 #include "Core/Reflection.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
 
@@ -80,4 +81,50 @@ TEST(ReflectedScene_FieldCoverage_ScalarsAndVectors)
     EXPECT_STR_CONTAINS(mr2->meshPath, "c.obj");
     const Transform* t2 = w2.GetComponent<Transform>(e2);
     EXPECT_NEAR(t2->rotation.y, 30.0f, 0.001f);
+}
+
+// Regression test for the reflection-serial data-loss lane:
+//  - RigidBodyComponent::type/motionQuality are enum class fields that used to
+//    be unregistered (and even once registered, FieldType::Enum had no
+//    Set/GetFieldFromString implementation), so they silently reset to their
+//    default-member-initializer values on every scene round-trip.
+//  - CollisionMaskComponent registered zero fields at all, so fromMask/intoMask
+//    always came back as the 0xFFFFFFFF default regardless of what was set.
+TEST(ReflectedScene_RoundTrip_EnumAndMaskFieldsSurvive)
+{
+    World src;
+    EntityID e = src.CreateEntity("Crate");
+
+    RigidBodyComponent& rb = src.AddComponent<RigidBodyComponent>(e);
+    rb.type = RigidBodyComponent::Type::Kinematic;                    // non-default (was Dynamic)
+    rb.motionQuality = RigidBodyComponent::MotionQuality::LinearCast; // non-default (was Discrete)
+
+    CollisionMaskComponent& cm = src.AddComponent<CollisionMaskComponent>(e);
+    cm.fromMask = CollisionLayer::Enemy;                       // non-default (was All)
+    cm.intoMask = CollisionLayer::Player | CollisionLayer::Environment; // non-default (was All)
+
+    const std::string json = SerializeWorld(src);
+
+    World dst;
+    EXPECT_TRUE(DeserializeInto(dst, json));
+
+    bool found = false;
+    for (auto ent : dst.GetEntitiesWith<RigidBodyComponent>())
+    {
+        const NameComponent* nc = dst.GetComponent<NameComponent>(ent);
+        if (!nc || nc->name != "Crate")
+            continue;
+        found = true;
+
+        const RigidBodyComponent* rb2 = dst.GetComponent<RigidBodyComponent>(ent);
+        EXPECT_TRUE(rb2 != nullptr);
+        EXPECT_TRUE(rb2->type == RigidBodyComponent::Type::Kinematic);
+        EXPECT_TRUE(rb2->motionQuality == RigidBodyComponent::MotionQuality::LinearCast);
+
+        const CollisionMaskComponent* cm2 = dst.GetComponent<CollisionMaskComponent>(ent);
+        EXPECT_TRUE(cm2 != nullptr);
+        EXPECT_TRUE(cm2->fromMask == CollisionLayer::Enemy);
+        EXPECT_TRUE(cm2->intoMask == (CollisionLayer::Player | CollisionLayer::Environment));
+    }
+    EXPECT_TRUE(found);
 }

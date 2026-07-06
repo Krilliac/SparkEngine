@@ -293,7 +293,10 @@ namespace Spark::ECS
             return;
         }
 
-        factory.AddComponent(entry.typeName, &world, entityId);
+        if (!factory.HasComponent(entry.typeName, &world, entityId))
+        {
+            factory.AddComponent(entry.typeName, &world, entityId);
+        }
 
         if (entry.properties.empty())
             return;

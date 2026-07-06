@@ -27,6 +27,7 @@ json SerializeComponentFields(const std::string& typeName, const void* comp)
             case FieldType::Bool: case FieldType::Int: case FieldType::Float:
             case FieldType::Double: case FieldType::String:
             case FieldType::Vector2: case FieldType::Vector3: case FieldType::Vector4:
+            case FieldType::Enum:
                 fields[f.fieldName] = GetFieldAsString(comp, f);
                 break;
             default:
