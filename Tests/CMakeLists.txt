@@ -508,6 +508,10 @@ add_executable(SparkTests
     TestTFDataTables.cpp
     TestTFDamageModel.cpp
     TestTFRegionLattice.cpp
+    # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
+    # since SparkTests does not compile module sources by default.
+    TestTFOnboarding.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
     # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke
