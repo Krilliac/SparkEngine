@@ -67,7 +67,12 @@ class LegacyModuleAdapter : public Spark::IModule
     {
     }
 
-    ~LegacyModuleAdapter() override = default;
+    ~LegacyModuleAdapter() override
+    {
+        if (m_legacy && m_legacyDestroyFn)
+            m_legacyDestroyFn(m_legacy);
+        m_legacy = nullptr;
+    }
 
     Spark::ModuleInfo GetModuleInfo() const override
     {
@@ -853,7 +858,7 @@ std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& 
         if (!discovered.isLoaded)
         {
 #ifdef _WIN32
-            HMODULE hLib = LoadLibraryExA(discovered.path.c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
+            HMODULE hLib = LoadLibraryExA(discovered.path.c_str(), nullptr, 0);
             if (hLib)
             {
                 auto createFn = reinterpret_cast<CreateModuleFn>(GetProcAddress(hLib, "CreateModule"));
