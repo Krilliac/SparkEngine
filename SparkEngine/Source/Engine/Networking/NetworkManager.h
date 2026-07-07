@@ -54,6 +54,10 @@
 using SOCKET = int;
 constexpr SOCKET INVALID_SOCKET = -1;
 constexpr int SOCKET_ERROR = -1;
+#ifndef SPARK_HAS_CLOSESOCKET_SHIM
+#define SPARK_HAS_CLOSESOCKET_SHIM 1
+inline int closesocket(SOCKET s) { return ::close(s); } // Winsock name -> POSIX close
+#endif
 #endif // SPARK_PLATFORM_WINDOWS
 
 #endif // ENABLE_NETWORKING

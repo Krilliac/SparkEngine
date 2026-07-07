@@ -14,6 +14,7 @@
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
+#include "FaultIsolation.h" // SPARK_GUARDED_UPDATE / SubsystemFaultIsolator (mirrors SparkEngineWindows.cpp)
 #include "EngineSettings.h"
 #include "EngineConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
