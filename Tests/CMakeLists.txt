@@ -624,6 +624,8 @@ target_sources(SparkTests PRIVATE
     harden/Test_ecs_ai_pathfollow.cpp
     "${CMAKE_SOURCE_DIR}/SparkConsole/src/CommandParser.cpp"
 )
+# harden/ tests live one directory deeper; ensure they resolve the shared TestFramework.h
+target_include_directories(SparkTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # =============================================================================
 # Feature-gated test support
