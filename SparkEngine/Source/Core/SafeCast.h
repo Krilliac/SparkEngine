@@ -43,11 +43,18 @@ namespace Spark
     {
         auto result = static_cast<To>(value);
 #if defined(_DEBUG) || defined(DEBUG)
-        ASSERT_MSG(static_cast<From>(result) == value, "NarrowCast: value changed during conversion");
-        // For signed/unsigned mismatch, also check sign preservation
-        if constexpr (std::is_signed_v<To> != std::is_signed_v<From>)
+        // An exact round-trip is only meaningful for integer targets, where a changed
+        // value means truncation/overflow (a bug). Narrowing to a floating-point type
+        // (e.g. double->float) loses precision by design, so an equality check there
+        // would fire on legitimate conversions — skip it.
+        if constexpr (std::is_integral_v<To>)
         {
-            ASSERT_MSG((value >= From{}) == (result >= To{}), "NarrowCast: sign changed during conversion");
+            ASSERT_MSG(static_cast<From>(result) == value, "NarrowCast: value changed during conversion");
+            // For signed/unsigned mismatch, also check sign preservation
+            if constexpr (std::is_signed_v<To> != std::is_signed_v<From>)
+            {
+                ASSERT_MSG((value >= From{}) == (result >= To{}), "NarrowCast: sign changed during conversion");
+            }
         }
 #endif
         return result;

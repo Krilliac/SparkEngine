@@ -217,14 +217,8 @@ class Material
      */
     static bool ValidatePBRProperties(const PBRProperties& props)
     {
-        ASSERT_MSG(props.metallicFactor >= 0.0f && props.metallicFactor <= 1.0f, "Metallic factor must be in [0, 1]");
-        ASSERT_MSG(props.roughnessFactor >= 0.0f && props.roughnessFactor <= 1.0f,
-                   "Roughness factor must be in [0, 1]");
-        ASSERT_MSG(props.occlusionStrength >= 0.0f && props.occlusionStrength <= 1.0f,
-                   "Occlusion strength must be in [0, 1]");
-        ASSERT_MSG(props.alphaCutoff >= 0.0f && props.alphaCutoff <= 1.0f, "Alpha cutoff must be in [0, 1]");
-        ASSERT_MSG(props.indexOfRefraction > 0.0f, "Index of refraction must be positive");
-        ASSERT_MSG(props.emissiveFactor >= 0.0f, "Emissive factor must be non-negative");
+        // A validator must report invalid input by returning false — not abort.
+        // The range checks below are the actual result; no assertions here.
         return props.metallicFactor >= 0.0f && props.metallicFactor <= 1.0f && props.roughnessFactor >= 0.0f &&
                props.roughnessFactor <= 1.0f && props.occlusionStrength >= 0.0f && props.occlusionStrength <= 1.0f &&
                props.alphaCutoff >= 0.0f && props.alphaCutoff <= 1.0f && props.indexOfRefraction > 0.0f &&

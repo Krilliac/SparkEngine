@@ -104,8 +104,8 @@ namespace Spark::Graphics
      */
         bool Initialize(ID3D11Device* device, uint32_t capacityBytes = 2 * 1024 * 1024)
         {
-            SPARK_EXPECTS(device != nullptr);
-            SPARK_EXPECTS(capacityBytes > 0);
+            // Null device / zero capacity are recoverable inputs: return false
+            // gracefully (do NOT assert — callers and tests rely on the failure path).
             if (!device || capacityBytes == 0)
             {
                 return false;

@@ -17,6 +17,8 @@
 #include "../TestFramework.h"
 #include "Engine/Editor/SceneSnapshotSerializer.h"
 
+#include <entt/entt.hpp>
+
 #include <cstdint>
 #include <vector>
 
@@ -62,11 +64,16 @@ TEST(SnapshotCount_WritesRealCountAndRoundTrips)
     g_written = {11u, 22u, 33u, 44u};
     g_read.clear();
 
-    // The probe ignores the registry pointer, so nullptr is safe here.
-    auto data = Spark::Editor::SceneSnapshotSerializer::Serialize(nullptr, 0);
+    // Pass a real (empty) registry: SceneSnapshotSerializer runs EVERY globally
+    // registered serializer, and the real CoreComponentSerializers dereference the
+    // registry (registry.valid(...)) — a nullptr would crash them. An empty registry
+    // makes them emit nothing; only our probe writes records.
+    entt::registry reg;
+    auto data = Spark::Editor::SceneSnapshotSerializer::Serialize(&reg, 0);
     ASSERT_TRUE(data.size() >= 16);
 
-    bool ok = Spark::Editor::SceneSnapshotSerializer::Deserialize(data, nullptr);
+    entt::registry restoreReg;
+    bool ok = Spark::Editor::SceneSnapshotSerializer::Deserialize(data, &restoreReg);
     EXPECT_TRUE(ok);
 
     // With the correct count written, every record is restored in order. Under
@@ -82,8 +89,10 @@ TEST(SnapshotCount_EmptySetWritesZeroCount)
     g_written.clear();
     g_read = {999u}; // sentinel that must be overwritten (cleared) by deserialize
 
-    auto data = Spark::Editor::SceneSnapshotSerializer::Serialize(nullptr, 0);
-    bool ok = Spark::Editor::SceneSnapshotSerializer::Deserialize(data, nullptr);
+    entt::registry reg;
+    auto data = Spark::Editor::SceneSnapshotSerializer::Serialize(&reg, 0);
+    entt::registry restoreReg;
+    bool ok = Spark::Editor::SceneSnapshotSerializer::Deserialize(data, &restoreReg);
     EXPECT_TRUE(ok);
     EXPECT_EQ(g_read.size(), static_cast<size_t>(0));
 }
