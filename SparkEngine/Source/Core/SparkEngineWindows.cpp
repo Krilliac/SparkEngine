@@ -30,7 +30,7 @@
 #include "AssetIntegration.h"
 #include "GameplaySystemLifecycle.h"
 #include "Graphics/WeatherSystem.h"
-#include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
+#include "Engine/ECS/Components.h"                 // ::World — engine-owned ECS world service
 #include "SceneManager/ReflectedSceneSerializer.h" // -scene: Spark::LoadWorld
 #include "Graphics/WorldBasicRenderer.h"           // -scene: Spark::RenderWorldBasic
 #include "Engine/World/TimeOfDaySystem.h"
@@ -343,8 +343,7 @@ static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
         {
             // wall-clock entry: t<seconds> <command>
             idx = 1;
-            while (idx < line.size() &&
-                   (isdigit(static_cast<unsigned char>(line[idx])) || line[idx] == '.'))
+            while (idx < line.size() && (isdigit(static_cast<unsigned char>(line[idx])) || line[idx] == '.'))
                 ++idx;
             if (idx < line.size() && line[idx] == ' ')
             {
@@ -371,8 +370,7 @@ static void LoadExecScriptFromCmdLine(LPWSTR cmdLine)
     }
     // Unified ordering: t-entries by their time, frame entries at a nominal
     // 60 fps equivalence (scripts should stick to one form per phase anyway).
-    auto sortKey = [](const ScriptedCommand& c)
-    { return c.atSec >= 0.0 ? c.atSec : c.frame / 60.0; };
+    auto sortKey = [](const ScriptedCommand& c) { return c.atSec >= 0.0 ? c.atSec : c.frame / 60.0; };
     std::stable_sort(g_execScript.begin(), g_execScript.end(),
                      [&sortKey](const ScriptedCommand& a, const ScriptedCommand& b)
                      { return sortKey(a) < sortKey(b); });
@@ -398,8 +396,8 @@ static void RunDueScriptedCommands(int frameCount)
         std::ofstream results("exec_audit.log", std::ios::app);
         if (results)
         {
-            results << "frame " << frameCount << " t=" << std::format("{:.1f}", elapsed)
-                    << "s | " << (ok ? "ok " : "ERR") << " | " << c << '\n';
+            results << "frame " << frameCount << " t=" << std::format("{:.1f}", elapsed) << "s | "
+                    << (ok ? "ok " : "ERR") << " | " << c << '\n';
             // append the command's console output (new entries since execution)
             const auto& history = console.GetLogHistory();
             // first scripted command dumps the whole boot history (module
@@ -638,8 +636,8 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
         if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
             (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit))
         {
-            console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.",
-                                        frameCount, ExecElapsedSeconds()));
+            console.LogInfo(
+                std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount, ExecElapsedSeconds()));
             break;
         }
 
@@ -884,8 +882,8 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         }
         else
         {
-            Spark::SimpleConsole::GetInstance().LogWarning(
-                std::string("Game-mode ImGui overlay init FAILED (hwnd=") + (hWnd ? "ok" : "null") + ")");
+            Spark::SimpleConsole::GetInstance().LogWarning(std::string("Game-mode ImGui overlay init FAILED (hwnd=") +
+                                                           (hWnd ? "ok" : "null") + ")");
         }
     }
 
@@ -971,8 +969,8 @@ static int RunWindowedMainLoop(HINSTANCE hInstance)
              (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit)) &&
             !quitPosted)
         {
-            console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.",
-                                        frameCount, ExecElapsedSeconds()));
+            console.LogInfo(
+                std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount, ExecElapsedSeconds()));
             PostQuitMessage(0);
             quitPosted = true;
         }

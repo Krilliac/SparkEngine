@@ -1521,7 +1521,8 @@ namespace SparkEditor
         m_graphics = std::make_unique<GraphicsEngine>();
         if (FAILED(m_graphics->InitializeFromDevice(device, context)))
         {
-            console.LogError("EditorUI: GraphicsEngine::InitializeFromDevice failed — Scene View will not render geometry");
+            console.LogError(
+                "EditorUI: GraphicsEngine::InitializeFromDevice failed — Scene View will not render geometry");
             m_graphics.reset();
         }
         else

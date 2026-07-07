@@ -93,9 +93,8 @@ namespace Spark::Net
          * @param outDist     Optional (may be null): hit distance along dir
          * @return Hit entity id, or 0 for no hit.
          */
-        uint32_t RewindRaycast(double rewindTime, const float origin[3], const float dir[3],
-                               float maxDist, uint32_t ignoreEntity,
-                               float outHitPoint[3], float* outDist) const;
+        uint32_t RewindRaycast(double rewindTime, const float origin[3], const float dir[3], float maxDist,
+                               uint32_t ignoreEntity, float outHitPoint[3], float* outDist) const;
 
         /// Drop all recorded history (configuration is kept).
         void Clear();

@@ -75,7 +75,6 @@ void GameObject::Update(float dt)
     // **FIXED: Removed per-frame logging that was causing performance issues**
     if (m_worldMatrixDirty)
         UpdateWorldMatrix();
-
 }
 
 void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)

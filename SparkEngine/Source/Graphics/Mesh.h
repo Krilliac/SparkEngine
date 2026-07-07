@@ -81,10 +81,10 @@ struct MeshData
  */
 struct MeshSubmesh
 {
-    unsigned int indexStart = 0;              ///< First index of this range
-    unsigned int indexCount = 0;              ///< Number of indices in this range
+    unsigned int indexStart = 0;                ///< First index of this range
+    unsigned int indexCount = 0;                ///< Number of indices in this range
     DirectX::XMFLOAT4 diffuseColor{1, 1, 1, 1}; ///< MTL Kd color (white if none)
-    std::string diffuseTexture;               ///< MTL map_Kd path resolved relative to the OBJ (empty if none)
+    std::string diffuseTexture;                 ///< MTL map_Kd path resolved relative to the OBJ (empty if none)
 };
 
 /**
@@ -279,10 +279,10 @@ class Mesh
     ID3D11Device* m_device{nullptr};           ///< Non-owning; lifetime tied to GraphicsEngine
     ID3D11DeviceContext* m_context{nullptr};   ///< Non-owning; lifetime tied to GraphicsEngine
 
-    std::vector<Vertex> m_vertices;      ///< CPU vertex data
-    std::vector<unsigned int> m_indices; ///< CPU index data
+    std::vector<Vertex> m_vertices;       ///< CPU vertex data
+    std::vector<unsigned int> m_indices;  ///< CPU index data
     std::vector<MeshSubmesh> m_submeshes; ///< Per-material index ranges (OBJ loads only)
-    unsigned int m_vertexCount{0};       ///< Number of vertices
-    unsigned int m_indexCount{0};        ///< Number of indices
-    bool m_placeholder{false};           ///< Placeholder mesh flag
+    unsigned int m_vertexCount{0};        ///< Number of vertices
+    unsigned int m_indexCount{0};         ///< Number of indices
+    bool m_placeholder{false};            ///< Placeholder mesh flag
 };

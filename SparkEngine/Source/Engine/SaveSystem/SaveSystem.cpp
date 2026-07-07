@@ -1316,8 +1316,7 @@ namespace Spark
             metaStream >> outMetadata.playTime;
             metaStream >> outMetadata.playerHealth;
             metaStream >> outMetadata.playerArmor;
-            metaStream >> outMetadata.playerPosition.x >> outMetadata.playerPosition.y >>
-                outMetadata.playerPosition.z;
+            metaStream >> outMetadata.playerPosition.x >> outMetadata.playerPosition.y >> outMetadata.playerPosition.z;
             metaStream >> outMetadata.playerKills;
             metaStream >> outMetadata.playerDeaths;
             return true;

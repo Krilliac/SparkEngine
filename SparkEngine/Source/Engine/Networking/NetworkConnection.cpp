@@ -801,8 +801,7 @@ namespace Spark::Net
                     isAuthenticated = false;
                     for (const auto& [id, addr] : m_clientAddresses)
                     {
-                        if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr &&
-                            addr.sin_port == senderAddr.sin_port)
+                        if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr && addr.sin_port == senderAddr.sin_port)
                         {
                             isAuthenticated = true;
                             break;

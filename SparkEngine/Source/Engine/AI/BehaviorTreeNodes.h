@@ -373,10 +373,7 @@ namespace Spark::AI
 
         const char* GetName() const override { return m_name.c_str(); }
 
-        std::unique_ptr<BTNode> Clone() const override
-        {
-            return std::make_unique<ConditionNode>(m_name, m_condition);
-        }
+        std::unique_ptr<BTNode> Clone() const override { return std::make_unique<ConditionNode>(m_name, m_condition); }
 
       private:
         std::string m_name;

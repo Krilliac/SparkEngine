@@ -973,7 +973,8 @@ class GraphicsEngine
     ComPtr<ID3D11SamplerState> m_basicSamplerState;
     ComPtr<ID3D11Texture2D> m_defaultTexture;      ///< 1x1 white texture used when no material is assigned
     ComPtr<ID3D11ShaderResourceView> m_defaultSRV; ///< SRV for the default white texture
-    std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>> m_basicTextureCache; ///< WIC-loaded textures by path
+    std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>>
+        m_basicTextureCache;                                             ///< WIC-loaded textures by path
     std::unordered_map<std::string, BasicMaterial> m_basicMaterialCache; ///< Parsed basic materials by JSON path
 
     // Pre-present hook: invoked in EndFrame() immediately before Present().
@@ -993,7 +994,6 @@ class GraphicsEngine
     }
 
   private:
-
     // ========================================================================
     // PRIVATE METHODS
     // ========================================================================

@@ -232,8 +232,9 @@ namespace Spark::Animation
         const size_t boneCount = skeleton.bones.size();
         if (boneIdx < 0 || static_cast<size_t>(boneIdx) >= boneCount || localTransforms.size() < boneCount)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Animation, "LookAtIK: bone index %d out of range (bones=%zu, xforms=%zu)",
-                           boneIdx, boneCount, localTransforms.size());
+            SPARK_LOG_WARN(Spark::LogCategory::Animation,
+                           "LookAtIK: bone index %d out of range (bones=%zu, xforms=%zu)", boneIdx, boneCount,
+                           localTransforms.size());
             return;
         }
 

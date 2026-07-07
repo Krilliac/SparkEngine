@@ -16,7 +16,10 @@
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
 
+#include "Core/Platform.h" // DirectXMath on Windows / vector-math stubs on Linux
+#ifdef SPARK_PLATFORM_WINDOWS
 #include <DirectXMath.h>
+#endif
 
 #include <memory>
 #include <string>

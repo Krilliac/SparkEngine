@@ -346,11 +346,10 @@ namespace SparkEditor
                 const float forwardY = -sinf(m_cameraPitch);
                 const float forwardZ = cosP * cosf(m_cameraYaw);
 
-                const XMVECTOR at =
-                    XMVectorSet(m_cameraTarget.x, m_cameraTarget.y, m_cameraTarget.z, 1.0f);
+                const XMVECTOR at = XMVectorSet(m_cameraTarget.x, m_cameraTarget.y, m_cameraTarget.z, 1.0f);
                 const XMVECTOR eye = XMVectorSet(m_cameraTarget.x - forwardX * m_cameraDistance,
-                                                  m_cameraTarget.y - forwardY * m_cameraDistance,
-                                                  m_cameraTarget.z - forwardZ * m_cameraDistance, 1.0f);
+                                                 m_cameraTarget.y - forwardY * m_cameraDistance,
+                                                 m_cameraTarget.z - forwardZ * m_cameraDistance, 1.0f);
                 const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
                 const XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
                 const float aspect =

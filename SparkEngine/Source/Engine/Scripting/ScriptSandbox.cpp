@@ -276,8 +276,7 @@ namespace Spark
         auto& console = SimpleConsole::GetInstance();
 
         console.RegisterCommand(
-            "sandbox.status",
-            [this](const std::vector<std::string>&) -> std::string { return GetStatusString(); },
+            "sandbox.status", [this](const std::vector<std::string>&) -> std::string { return GetStatusString(); },
             "Show script sandbox status");
 
         console.RegisterCommand(

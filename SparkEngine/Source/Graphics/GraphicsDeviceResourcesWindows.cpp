@@ -719,8 +719,8 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
                                             &decoder);
     if (FAILED(hr))
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: cannot open '%s' (HR=0x%08lX)",
-                       path.c_str(), static_cast<long>(hr));
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "GetOrLoadTextureSRV: cannot open '%s' (HR=0x%08lX)", path.c_str(),
+                       static_cast<long>(hr));
         return nullptr;
     }
 
@@ -731,8 +731,8 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
     ComPtr<IWICFormatConverter> converter;
     if (FAILED(factory->CreateFormatConverter(&converter)))
         return nullptr;
-    if (FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr,
-                                     0.0f, WICBitmapPaletteTypeMedianCut)))
+    if (FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0f,
+                                     WICBitmapPaletteTypeMedianCut)))
         return nullptr;
 
     UINT width = 0, height = 0;

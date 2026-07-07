@@ -23,8 +23,7 @@ namespace
 #ifdef SPARK_PLATFORM_WINDOWS
         if (w.empty())
             return {};
-        int len =
-            ::WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), nullptr, 0, nullptr, nullptr);
+        int len = ::WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), nullptr, 0, nullptr, nullptr);
         if (len <= 0)
             return {};
         std::string out(static_cast<size_t>(len), '\0');
@@ -288,8 +287,9 @@ void SparkEngineCamera::Console_SetFOV(float fovDegrees)
             m_defaultFov = XMConvertToRadians(fovDegrees);
             UpdateProjectionMatrix();
             changed = true;
-            LOG_TO_CONSOLE_IMMEDIATE(
-                std::wstring(L"Camera FOV set to ") + std::to_wstring(fovDegrees) + L" degrees via console", L"SUCCESS");
+            LOG_TO_CONSOLE_IMMEDIATE(std::wstring(L"Camera FOV set to ") + std::to_wstring(fovDegrees) +
+                                         L" degrees via console",
+                                     L"SUCCESS");
         }
         else
         {
@@ -309,8 +309,9 @@ void SparkEngineCamera::Console_SetMouseSensitivity(float sensitivity)
         {
             m_mouseSensitivity = sensitivity;
             changed = true;
-            LOG_TO_CONSOLE_IMMEDIATE(
-                std::wstring(L"Mouse sensitivity set to ") + std::to_wstring(sensitivity) + L" via console", L"SUCCESS");
+            LOG_TO_CONSOLE_IMMEDIATE(std::wstring(L"Mouse sensitivity set to ") + std::to_wstring(sensitivity) +
+                                         L" via console",
+                                     L"SUCCESS");
         }
         else
         {

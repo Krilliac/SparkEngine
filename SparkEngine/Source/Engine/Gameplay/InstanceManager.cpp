@@ -437,8 +437,8 @@ namespace Spark::Gameplay
         if (instanceComplete)
         {
             instData->completed = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Core,
-                           "Instance %u fully completed — all required encounters done", instanceId);
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "Instance %u fully completed — all required encounters done",
+                           instanceId);
         }
     }
 

@@ -69,8 +69,8 @@ static bool LinuxIsStdinPipe()
 // ---------------------------------------------------------------------------
 namespace
 {
-constexpr const char* kConsoleVersion = "2.0.0";
-constexpr const wchar_t* kConsoleVersionW = L"2.0.0";
+    constexpr const char* kConsoleVersion = "2.0.0";
+    constexpr const wchar_t* kConsoleVersionW = L"2.0.0";
 } // namespace
 
 ConsoleApp::ConsoleApp()

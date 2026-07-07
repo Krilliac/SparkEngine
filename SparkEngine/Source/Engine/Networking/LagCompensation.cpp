@@ -19,8 +19,8 @@ namespace Spark::Net
         constexpr float kEpsilon = 1e-12f;
 
         /// Smallest non-negative t with |o + t*d - center| == radius, or false.
-        bool RaySphere(const float o[3], const float d[3], const float cx, const float cy, const float cz,
-                       float radius, float& outT)
+        bool RaySphere(const float o[3], const float d[3], const float cx, const float cy, const float cz, float radius,
+                       float& outT)
         {
             float ox = o[0] - cx, oy = o[1] - cy, oz = o[2] - cz;
             float b = 2.0f * (ox * d[0] + oy * d[1] + oz * d[2]);
@@ -178,9 +178,8 @@ namespace Spark::Net
     // Rewound raycast
     // ========================================================================
 
-    uint32_t LagCompensation::RewindRaycast(double rewindTime, const float origin[3], const float dir[3],
-                                            float maxDist, uint32_t ignoreEntity,
-                                            float outHitPoint[3], float* outDist) const
+    uint32_t LagCompensation::RewindRaycast(double rewindTime, const float origin[3], const float dir[3], float maxDist,
+                                            uint32_t ignoreEntity, float outHitPoint[3], float* outDist) const
     {
         if (m_count == 0 || maxDist <= 0.0f)
             return 0;
@@ -208,7 +207,8 @@ namespace Spark::Net
         uint32_t bestId = 0;
         float bestT = maxDist;
 
-        auto testPose = [&](const RewindPose& pose) {
+        auto testPose = [&](const RewindPose& pose)
+        {
             if (pose.entityId == 0 || pose.entityId == ignoreEntity)
                 return;
             float hitT = 0.0f;

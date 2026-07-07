@@ -59,8 +59,8 @@ class InputManager
     int m_prevMouseX, m_prevMouseY;   ///< Previous frame mouse position
     int m_mouseDeltaX, m_mouseDeltaY; ///< Mouse movement delta since last frame
 
-    HWND m_hwnd;          ///< Window handle for mouse capture
-    bool m_mouseCaptured; ///< Whether mouse is currently captured
+    HWND m_hwnd;                    ///< Window handle for mouse capture
+    bool m_mouseCaptured;           ///< Whether mouse is currently captured
     bool m_captureHadFocus = false; ///< Captured-mouse focus tracking (re-seed on focus regain)
 
     // Console integration state

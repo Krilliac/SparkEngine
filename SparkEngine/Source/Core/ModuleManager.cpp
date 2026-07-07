@@ -175,8 +175,8 @@ bool ModuleManager::LoadModule(const std::string& path)
     // registrations land in a DLL-private SimpleConsole the engine never
     // reads (module commands were silently dead on Windows).
     using InjectConsoleFn = void (*)(void*);
-    if (auto inject = reinterpret_cast<InjectConsoleFn>(
-            GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectConsole")))
+    if (auto inject =
+            reinterpret_cast<InjectConsoleFn>(GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectConsole")))
     {
         inject(&Spark::SimpleConsole::GetInstance());
     }
@@ -201,8 +201,8 @@ bool ModuleManager::LoadModule(const std::string& path)
     if (s_imguiContext)
     {
         using InjectImGuiFn = void (*)(void*, void*, void*, void*);
-        if (auto injectImGui = reinterpret_cast<InjectImGuiFn>(
-                GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectImGui")))
+        if (auto injectImGui =
+                reinterpret_cast<InjectImGuiFn>(GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectImGui")))
         {
             injectImGui(s_imguiContext, s_imguiAllocFn, s_imguiFreeFn, s_imguiUserData);
         }
@@ -528,8 +528,7 @@ void ModuleManager::FixedUpdateAll(float fixedDeltaTime)
         if (entry.initialized && entry.instance)
         {
             std::string guardName = "ModuleFixed:" + entry.name;
-            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core",
-                                 { entry.instance->OnFixedUpdate(fixedDeltaTime); });
+            SPARK_GUARDED_UPDATE(guardName.c_str(), "Core", { entry.instance->OnFixedUpdate(fixedDeltaTime); });
         }
     }
 }

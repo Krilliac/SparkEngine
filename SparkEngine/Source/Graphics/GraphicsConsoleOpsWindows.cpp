@@ -226,12 +226,10 @@ bool GraphicsEngine::Console_Screenshot(const std::string& filename)
 
     const uint32_t w = desc.Width, h = desc.Height;
     std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
-    const bool bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM ||
-                      desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    const bool bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM || desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     for (uint32_t y = 0; y < h; ++y)
     {
-        const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) +
-                             static_cast<size_t>(y) * mapped.RowPitch;
+        const uint8_t* src = static_cast<const uint8_t*>(mapped.pData) + static_cast<size_t>(y) * mapped.RowPitch;
         uint8_t* dst = rgba.data() + static_cast<size_t>(y) * w * 4;
         if (bgra)
         {

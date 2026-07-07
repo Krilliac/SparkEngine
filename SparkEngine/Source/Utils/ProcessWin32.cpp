@@ -82,14 +82,14 @@ namespace Spark
         // intentionally never closed (owned for the process lifetime).
         HANDLE GetChildKillJob()
         {
-            static HANDLE s_job = []() -> HANDLE {
+            static HANDLE s_job = []() -> HANDLE
+            {
                 HANDLE job = CreateJobObjectW(nullptr, nullptr);
                 if (!job)
                     return nullptr;
                 JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
                 info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-                if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info,
-                                             sizeof(info)))
+                if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info, sizeof(info)))
                 {
                     CloseHandle(job);
                     return nullptr;

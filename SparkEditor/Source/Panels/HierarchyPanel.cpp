@@ -1057,15 +1057,13 @@ namespace SparkEditor
 
                 // Remove components for the whole subtree
                 auto& comps = capturedScene->components;
-                comps.erase(std::remove_if(comps.begin(), comps.end(),
-                                           [&subtreeIDs](const Component& c)
+                comps.erase(std::remove_if(comps.begin(), comps.end(), [&subtreeIDs](const Component& c)
                                            { return Spark::ContainerUtils::Contains(subtreeIDs, c.objectID); }),
                             comps.end());
 
                 // Remove the whole subtree of objects
                 auto& objs = capturedScene->objects;
-                objs.erase(std::remove_if(objs.begin(), objs.end(),
-                                          [&subtreeIDs](const SceneObject& o)
+                objs.erase(std::remove_if(objs.begin(), objs.end(), [&subtreeIDs](const SceneObject& o)
                                           { return Spark::ContainerUtils::Contains(subtreeIDs, o.id); }),
                            objs.end());
             },

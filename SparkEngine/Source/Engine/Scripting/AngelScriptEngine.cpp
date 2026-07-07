@@ -488,9 +488,8 @@ bool AngelScriptEngine::Initialize()
 
     const char* securityLevelStr = m_sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Unrestricted
                                        ? "Unrestricted"
-                                   : m_sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Standard
-                                       ? "Standard"
-                                       : "Strict";
+                                   : m_sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Standard ? "Standard"
+                                                                                                           : "Strict";
     LogInfo(std::string("Script sandbox initialized (security level: ") + securityLevelStr + ").");
 
     s_instance = this;
@@ -633,8 +632,7 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
 
         if (!staged)
         {
-            SetLastError("Hot-reload aborted: recompilation of '" + filePath +
-                         "' failed; live scripts left intact.");
+            SetLastError("Hot-reload aborted: recompilation of '" + filePath + "' failed; live scripts left intact.");
             LogError(m_lastError);
             return false;
         }
@@ -1109,8 +1107,8 @@ bool AngelScriptEngine::RegisterGuardedFunction(const char* declaration, const c
     int result = m_engine->RegisterGlobalFunction(declaration, fn, asCALL_CDECL);
     if (result < 0)
     {
-        LogWarning(std::string("RegisterGlobalFunction failed for '") + scriptVisibleName +
-                  "' (decl: " + declaration + "), AngelScript error code " + std::to_string(result));
+        LogWarning(std::string("RegisterGlobalFunction failed for '") + scriptVisibleName + "' (decl: " + declaration +
+                   "), AngelScript error code " + std::to_string(result));
         return false;
     }
     return true;
@@ -1140,12 +1138,12 @@ void AngelScriptEngine::RegisterGlobalFunctions()
     RegisterGuardedFunction("void applyForce(EntityID, const Vector3 &in)", "applyForce", asFUNCTION(ASApplyForce));
     RegisterGuardedFunction("void playSound(EntityID, const string &in)", "playSound", asFUNCTION(ASPlaySound));
     RegisterGuardedFunction("void playAnimation(EntityID, const string &in)", "playAnimation",
-                           asFUNCTION(ASPlayAnimation));
+                            asFUNCTION(ASPlayAnimation));
     RegisterGuardedFunction("EntityID getEntityByName(const string &in)", "getEntityByName",
-                           asFUNCTION(ASGetEntityByName));
+                            asFUNCTION(ASGetEntityByName));
     RegisterGuardedFunction("void fireEvent(const string &in)", "fireEvent", asFUNCTION(ASFireEvent));
     RegisterGuardedFunction("void debugTrace(uint, const string &in, const string &in)", "debugTrace",
-                           asFUNCTION(ASDebugTrace));
+                            asFUNCTION(ASDebugTrace));
 }
 
 // -------------------------------------------------------------------------
@@ -1221,13 +1219,13 @@ void AngelScriptEngine::AutoRegisterReflectedTypes()
     //   setComponentField(entity, "HealthComponent", "health", "50.0");
     //   bool has = hasComponent(entity, "Transform");
     RegisterGuardedFunction("string getComponentField(EntityID, const string &in, const string &in)",
-                           "getComponentField", asFUNCTION(ASGetComponentField));
+                            "getComponentField", asFUNCTION(ASGetComponentField));
 
     RegisterGuardedFunction("void setComponentField(EntityID, const string &in, const string &in, const string &in)",
-                           "setComponentField", asFUNCTION(ASSetComponentField));
+                            "setComponentField", asFUNCTION(ASSetComponentField));
 
     RegisterGuardedFunction("bool hasComponent(EntityID, const string &in)", "hasComponent",
-                           asFUNCTION(ASHasComponent));
+                            asFUNCTION(ASHasComponent));
 
     SPARK_LOG_INFO(
         Spark::LogCategory::Scripting,

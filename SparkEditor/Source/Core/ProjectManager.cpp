@@ -951,8 +951,7 @@ namespace SparkEditor
             const auto sz = fs::file_size(filePath, sizeEc);
             if (!sizeEc && sz > 1024 * 1024)
             {
-                std::cerr << "RecentProjects.json is " << sz
-                          << " bytes - corrupt/runaway, resetting.\n";
+                std::cerr << "RecentProjects.json is " << sz << " bytes - corrupt/runaway, resetting.\n";
                 std::error_code rmEc;
                 fs::remove(filePath, rmEc);
                 return;

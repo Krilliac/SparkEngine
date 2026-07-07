@@ -136,8 +136,7 @@ namespace Spark::Graphics
          *        directories are created). Used by the console screenshot op
          *        when the user passes a filename.
          */
-        CaptureResult WriteTo(const uint8_t* pixelData, uint32_t width, uint32_t height,
-                              const std::string& path)
+        CaptureResult WriteTo(const uint8_t* pixelData, uint32_t width, uint32_t height, const std::string& path)
         {
             CaptureResult result;
             if (!pixelData || width == 0 || height == 0)
@@ -284,9 +283,9 @@ namespace Spark::Graphics
             // Real PNG via the vendored miniz encoder.
             {
                 size_t pngLen = 0;
-                void* png = tdefl_write_image_to_png_file_in_memory_ex(
-                    pixelData, static_cast<int>(width), static_cast<int>(height), 4, &pngLen,
-                    MZ_DEFAULT_LEVEL, MZ_FALSE);
+                void* png = tdefl_write_image_to_png_file_in_memory_ex(pixelData, static_cast<int>(width),
+                                                                       static_cast<int>(height), 4, &pngLen,
+                                                                       MZ_DEFAULT_LEVEL, MZ_FALSE);
                 if (png)
                 {
                     std::ofstream file(path, std::ios::binary);

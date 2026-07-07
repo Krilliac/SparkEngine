@@ -165,7 +165,8 @@ namespace Spark
 
         if (cycleDetected)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadEnabledMods: aborting — dependency cycle among enabled mods");
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "LoadEnabledMods: aborting — dependency cycle among enabled mods");
             return false;
         }
 
