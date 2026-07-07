@@ -40,6 +40,7 @@ HRESULT Profiler::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
     SPARK_WARN_IF_NULL(Spark::LogCategory::Core, device);
     SPARK_WARN_IF_NULL(Spark::LogCategory::Core, context);
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_device = device;
     m_context = context;
     m_enabled = true;
@@ -53,6 +54,7 @@ void Profiler::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Core);
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Profiler shutting down");
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_enabled = false;
     m_currentFrameSamples.clear();
     m_activeSections.clear();
@@ -77,8 +79,12 @@ void Profiler::BeginSection(std::string_view name, ProfileCategory category)
         return;
     }
 
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     auto now = std::chrono::high_resolution_clock::now();
-    m_activeSections[name] = now;
+    // Push onto the per-name stack so a nested BeginSection with the same name does
+    // not overwrite the outer scope's start time.
+    m_activeSections[name].push_back(now);
 
     ProfileSample sample;
     sample.name = name;
@@ -95,20 +101,29 @@ void Profiler::EndSection(std::string_view name)
         return;
     }
 
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     auto it = m_activeSections.find(name);
-    if (it == m_activeSections.end())
+    if (it == m_activeSections.end() || it->second.empty())
     {
         return;
     }
 
+    // Pop the innermost active start time for this name (LIFO).
+    auto start = it->second.back();
+    it->second.pop_back();
+    if (it->second.empty())
+    {
+        m_activeSections.erase(it);
+    }
+
     auto end = std::chrono::high_resolution_clock::now();
-    double durationMs = std::chrono::duration<double, std::milli>(end - it->second).count();
+    double durationMs = std::chrono::duration<double, std::milli>(end - start).count();
 
     m_sectionResults[name] = durationMs;
-    m_activeSections.erase(it);
 
     // Reverse-search samples: the most recent unfinished sample with this name
-    // is almost always at or near the end of the vector — O(1) amortized.
+    // is the innermost open scope — pairs correctly with LIFO nesting.
     for (auto rit = m_currentFrameSamples.rbegin(); rit != m_currentFrameSamples.rend(); ++rit)
     {
         if (rit->name == name && rit->durationMs == 0.0)
@@ -132,6 +147,8 @@ void Profiler::BeginFrame()
         return;
     }
 
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     m_frameStart = std::chrono::high_resolution_clock::now();
 
     // Clear but retain capacity — avoids per-frame heap allocations.
@@ -151,6 +168,8 @@ void Profiler::EndFrame()
         return;
     }
 
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     auto end = std::chrono::high_resolution_clock::now();
     float frameMs = std::chrono::duration<float, std::milli>(end - m_frameStart).count();
     m_frameHistory.Push(frameMs);
@@ -169,6 +188,8 @@ void Profiler::BeginGPUTimer(std::string_view name)
     {
         return;
     }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
 
     auto& timer = m_gpuTimers[std::string(name)];
 
@@ -205,6 +226,8 @@ void Profiler::EndGPUTimer(std::string_view name)
         return;
     }
 
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     auto it = m_gpuTimers.find(std::string(name));
     if (it == m_gpuTimers.end())
     {
@@ -221,6 +244,8 @@ void Profiler::ResolveGPUQueries()
     {
         return;
     }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
 
     for (auto& [name, timer] : m_gpuTimers)
     {
@@ -267,6 +292,7 @@ void Profiler::ResolveGPUQueries()
 
 void Profiler::RecordAllocation(std::string_view category, size_t bytes)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     auto& cat = m_memoryCategories[std::string(category)];
     cat.currentBytes += bytes;
     cat.totalAllocations++;
@@ -278,6 +304,7 @@ void Profiler::RecordAllocation(std::string_view category, size_t bytes)
 
 void Profiler::RecordDeallocation(std::string_view category, size_t bytes)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     auto& cat = m_memoryCategories[std::string(category)];
     if (bytes <= cat.currentBytes)
     {
@@ -295,6 +322,7 @@ void Profiler::RecordDeallocation(std::string_view category, size_t bytes)
 
 double Profiler::GetSectionTimeMs(std::string_view name) const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_sectionResults.find(name);
     if (it != m_sectionResults.end())
     {
@@ -307,6 +335,7 @@ double Profiler::GetSectionTimeMs(std::string_view name) const
 double Profiler::GetGPUTimeMs([[maybe_unused]] std::string_view name) const
 {
 #ifdef SPARK_PLATFORM_WINDOWS
+    std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_gpuTimers.find(std::string(name));
     if (it != m_gpuTimers.end())
     {
@@ -318,6 +347,7 @@ double Profiler::GetGPUTimeMs([[maybe_unused]] std::string_view name) const
 
 double Profiler::GetCategoryTimeMs(ProfileCategory category) const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     auto idx = static_cast<size_t>(category);
     if (idx < m_categoryTotals.size())
     {
@@ -332,6 +362,7 @@ double Profiler::GetCategoryTimeMs(ProfileCategory category) const
 
 std::string Profiler::Console_GetReport() const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     std::ostringstream ss;
     ss << "=== CPU Profiler Report ===\n";
     ss << std::fixed << std::setprecision(2);
@@ -360,6 +391,7 @@ std::string Profiler::Console_GetReport() const
 
 std::string Profiler::Console_GetGPUReport() const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     std::ostringstream ss;
     ss << "=== GPU Profiler Report ===\n";
     ss << std::fixed << std::setprecision(2);
@@ -378,6 +410,7 @@ std::string Profiler::Console_GetGPUReport() const
 
 std::string Profiler::Console_GetMemoryReport() const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     std::ostringstream ss;
     ss << "=== Memory Report ===\n";
     for (const auto& [name, cat] : m_memoryCategories)
@@ -395,6 +428,8 @@ void Profiler::Console_ExportCSV(const std::string& filepath) const
     {
         return;
     }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
 
     file << "Section,TimeMs\n";
     for (const auto& [name, timeMs] : m_sectionResults)

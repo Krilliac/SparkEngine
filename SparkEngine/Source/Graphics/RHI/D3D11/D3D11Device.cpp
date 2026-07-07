@@ -513,6 +513,12 @@ namespace Spark
                 case RHIShaderStage::Geometry:
                     m_context->GSSetSamplers(slot, 1, &ss);
                     break;
+                case RHIShaderStage::Hull:
+                    m_context->HSSetSamplers(slot, 1, &ss);
+                    break;
+                case RHIShaderStage::Domain:
+                    m_context->DSSetSamplers(slot, 1, &ss);
+                    break;
                 case RHIShaderStage::Compute:
                     m_context->CSSetSamplers(slot, 1, &ss);
                     break;
@@ -776,7 +782,6 @@ namespace Spark
                 // Phase Z Theme 3B: release the transient allocator's GPU
                 // buffers before the device itself goes away.
                 m_transientBuffers.Shutdown(this);
-                m_deletionQueue.FlushAll();
                 m_immediateCommandList.reset();
                 m_immediateContext.Reset();
                 m_dxgiFactory.Reset();
@@ -904,7 +909,9 @@ namespace Spark
 
                 auto* texture = static_cast<ID3D11Texture2D*>(nativeHandle);
                 ComPtr<ID3D11Resource> resource;
-                texture->QueryInterface(IID_PPV_ARGS(&resource));
+                HRESULT hr = texture->QueryInterface(IID_PPV_ARGS(&resource));
+                if (FAILED(hr) || !resource)
+                    return nullptr;
 
                 ComPtr<ID3D11ShaderResourceView> srv;
                 if (desc.usage & RHITextureUsage::ShaderResource)
@@ -960,7 +967,15 @@ namespace Spark
                                             nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, desc.entryPoint.c_str(), target,
                                             flags, 0, &bytecodeBlob, &errorBlob);
                     if (FAILED(hr))
+                    {
+                        if (errorBlob)
+                        {
+                            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed (%s): %s",
+                                            desc.debugName.c_str(),
+                                            static_cast<const char*>(errorBlob->GetBufferPointer()));
+                        }
                         return nullptr;
+                    }
                 }
                 else if (desc.bytecode && desc.bytecodeSize > 0)
                 {
@@ -1176,8 +1191,28 @@ namespace Spark
             void* D3D11Device::MapBuffer(IRHIBuffer* buffer)
             {
                 auto* d3dBuf = static_cast<D3D11Buffer*>(buffer);
+
+                // The map type must match how the buffer was created. A ReadBack/Staging
+                // buffer has CPU read access and D3D11 rejects a WRITE_DISCARD map on it.
+                D3D11_MAP mapType;
+                switch (d3dBuf->GetDesc().access)
+                {
+                case RHIBufferAccess::Dynamic:
+                    mapType = D3D11_MAP_WRITE_DISCARD;
+                    break;
+                case RHIBufferAccess::ReadBack:
+                    mapType = D3D11_MAP_READ;
+                    break;
+                case RHIBufferAccess::Staging:
+                    mapType = D3D11_MAP_READ_WRITE;
+                    break;
+                default:
+                    // Static/Default buffers are GPU-only and cannot be mapped.
+                    return nullptr;
+                }
+
                 D3D11_MAPPED_SUBRESOURCE mapped;
-                HRESULT hr = m_immediateContext->Map(d3dBuf->GetD3D11Buffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+                HRESULT hr = m_immediateContext->Map(d3dBuf->GetD3D11Buffer(), 0, mapType, 0, &mapped);
                 return SUCCEEDED(hr) ? mapped.pData : nullptr;
             }
 
@@ -1201,7 +1236,24 @@ namespace Spark
                 }
                 else
                 {
-                    m_immediateContext->UpdateSubresource(d3dBuf->GetD3D11Buffer(), 0, nullptr, data, 0, 0);
+                    // A null D3D11_BOX updates the whole resource and ignores size/offset.
+                    // For a partial update, describe the exact byte range to write.
+                    const uint64_t bufferSize = d3dBuf->GetSize();
+                    if (offset != 0 || size < bufferSize)
+                    {
+                        D3D11_BOX box = {};
+                        box.left = static_cast<UINT>(offset);
+                        box.right = static_cast<UINT>(offset + size);
+                        box.top = 0;
+                        box.bottom = 1;
+                        box.front = 0;
+                        box.back = 1;
+                        m_immediateContext->UpdateSubresource(d3dBuf->GetD3D11Buffer(), 0, &box, data, 0, 0);
+                    }
+                    else
+                    {
+                        m_immediateContext->UpdateSubresource(d3dBuf->GetD3D11Buffer(), 0, nullptr, data, 0, 0);
+                    }
                 }
             }
 
@@ -1210,7 +1262,18 @@ namespace Spark
             {
                 auto* d3dTex = static_cast<D3D11Texture*>(texture);
                 uint32_t subresource = D3D11CalcSubresource(mipLevel, arraySlice, d3dTex->GetMipLevels());
-                uint32_t rowPitch = d3dTex->GetWidth() * Spark::RHI::GetFormatSize(d3dTex->GetFormat());
+
+                // Row pitch must be computed for the target mip's dimensions, not the
+                // base mip. For block-compressed formats the pitch is measured in rows
+                // of 4x4 blocks, so use ceil(width/4) blocks * bytes-per-block.
+                const PixelFormat fmt = d3dTex->GetFormat();
+                const uint32_t mipWidth = std::max(1u, d3dTex->GetWidth() >> mipLevel);
+                uint32_t rowPitch;
+                if (Spark::RHI::IsCompressedFormat(fmt))
+                    rowPitch = ((mipWidth + 3) / 4) * Spark::RHI::GetFormatSize(fmt);
+                else
+                    rowPitch = mipWidth * Spark::RHI::GetFormatSize(fmt);
+
                 m_immediateContext->UpdateSubresource(d3dTex->GetD3D11Resource(), subresource, nullptr, data, rowPitch,
                                                       0);
             }
@@ -1234,7 +1297,6 @@ namespace Spark
             void D3D11Device::BeginFrame()
             {
                 ResetStatistics();
-                m_deletionQueue.ProcessQueue();
                 // Phase Z Theme 3B: pump the transient allocator each frame.
                 m_transientBuffers.BeginFrame(this);
             }

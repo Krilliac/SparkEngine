@@ -1368,6 +1368,23 @@ namespace SparkEditor
         }
     }
 
+    void EditorUI::SwapWorld(std::unique_ptr<::World> newWorld)
+    {
+        // Clear the command history BEFORE the outgoing World is freed. Commands
+        // may close over raw entities/components of the old m_world (e.g.
+        // LambdaCommands), so a later Undo/Redo would re-execute against a freed
+        // World -- use-after-free. Clearing first makes that impossible.
+        Spark::Editor::CommandHistory::GetInstance().Clear();
+
+        // Install the new document. The previous World is freed here, after the
+        // history that could reference it has already been cleared.
+        m_world = std::move(newWorld);
+
+        // SceneView/Hierarchy cache a raw ::World*; re-point them at the new
+        // World (also clears the now-foreign selection) so nothing dangles.
+        RewirePanelsToWorld();
+    }
+
     void EditorUI::RewirePanelsToWorld()
     {
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -1472,19 +1489,10 @@ namespace SparkEditor
             return false;
         }
 
-        // Every command on the undo/redo stack may have captured raw state
-        // tied to the World we are about to discard (e.g. LambdaCommands
-        // closing over entities/components of the old m_world). Clear the
-        // history *before* freeing the old World below, otherwise a
-        // subsequent Ctrl+Z (Undo) re-executes a stale command against a
-        // freed World -- use-after-free. Mirrors HierarchyPanel::ResetToDefault().
-        Spark::Editor::CommandHistory::GetInstance().Clear();
-
-        m_world = std::move(fresh);
-
-        // SceneView/Hierarchy cache a raw ::World*; re-point them now that
-        // m_world has been replaced, or they'd dangle the freed old World.
-        RewirePanelsToWorld();
+        // SwapWorld clears the undo/redo history, installs the new World, and
+        // rewires the caching panels in one step -- so no stale command can
+        // reference the freed old World (use-after-free).
+        SwapWorld(std::move(fresh));
 
         m_currentScenePath = path;
         m_currentSceneName = std::filesystem::path(path).stem().string();
@@ -1527,13 +1535,17 @@ namespace SparkEditor
         // will operate on.
         if (!m_world)
         {
-            m_world = std::make_unique<::World>();
-            ::EntityID e = m_world->CreateEntity("Soldier");
-            m_world->AddComponent<::Transform>(e); // identity at origin
-            ::MeshRenderer& mr = m_world->AddComponent<::MeshRenderer>(e);
+            // Build the seed document on a local World, then install it via
+            // SwapWorld so the initial world creation shares the same
+            // history-clear + panel-rewire path as OpenScene().
+            auto fresh = std::make_unique<::World>();
+            ::EntityID e = fresh->CreateEntity("Soldier");
+            fresh->AddComponent<::Transform>(e); // identity at origin
+            ::MeshRenderer& mr = fresh->AddComponent<::MeshRenderer>(e);
             // Non-empty path required — WorldMeshCache::GetOrLoad early-returns on
             // an empty path.
             mr.meshPath = "Assets/Models/MMOFPS/characters/soldier.obj";
+            SwapWorld(std::move(fresh));
         }
 
         auto it = m_panels.find("SceneView");

@@ -638,6 +638,12 @@ int main(int argc, char** argv)
         {
             test->func();
         }
+        catch (const TestAbort&)
+        {
+            // A fatal ASSERT_* aborted this test. The failure was already
+            // recorded and its reason printed by the macro; nothing more to
+            // do — the abort intentionally isolates the failure to this test.
+        }
         catch (const std::exception& e)
         {
             g_assertionsFailed++;
@@ -766,9 +772,18 @@ int main(int argc, char** argv)
                 int prevFailed = g_assertionsFailed;
                 int prevPassed = g_assertionsPassed;
 
+                // Attribute this attempt to the test being retried so the crash
+                // handler and any log output name the right test (retries assume
+                // the test is idempotent — it re-runs with no shared-state reset).
+                g_currentTest = testName;
+
                 try
                 {
                     matchedTest->func();
+                }
+                catch (const TestAbort&)
+                {
+                    // Fatal ASSERT_* already recorded the failure for this attempt.
                 }
                 catch (const std::exception&)
                 {

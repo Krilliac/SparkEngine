@@ -48,42 +48,45 @@ namespace MMO
     void MMOChatSystem::SetupNetworkHandlers()
     {
 #ifdef ENABLE_NETWORKING
-        auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+        // Resolve networking through the injected engine context, not the global
+        // singleton — the module is handed its NetworkManager via Initialize(context).
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (!netMgr)
+            return;
 
-        netMgr.RegisterHandler(Spark::Net::MessageType::ChatMessage,
-                               [this](const Spark::Net::NetworkMessage& netMsg)
-                               {
-                                   if (netMsg.payload.size() < 2)
-                                       return;
+        netMgr->RegisterHandler(Spark::Net::MessageType::ChatMessage,
+                                [this, netMgr](const Spark::Net::NetworkMessage& netMsg)
+                                {
+                                    if (netMsg.payload.size() < 2)
+                                        return;
 
-                                   // Server-side: broadcast chat to all other clients
-                                   auto& mgr = Spark::Net::NetworkManager::GetInstance();
-                                   if (mgr.GetRole() == Spark::Net::NetworkRole::Server)
-                                   {
-                                       mgr.SendToAllExcept(netMsg.senderID, netMsg);
-                                   }
+                                    // Server-side: broadcast chat to all other clients
+                                    if (netMgr->GetRole() == Spark::Net::NetworkRole::Server)
+                                    {
+                                        netMgr->SendToAllExcept(netMsg.senderID, netMsg);
+                                    }
 
-                                   Spark::Net::NetBuffer buf;
-                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                   auto channel = static_cast<ChatChannel>(buf.ReadUint8());
-                                   std::string senderName = buf.ReadString();
-                                   std::string text = buf.ReadString();
+                                    Spark::Net::NetBuffer buf;
+                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
+                                    auto channel = static_cast<ChatChannel>(buf.ReadUint8());
+                                    std::string senderName = buf.ReadString();
+                                    std::string text = buf.ReadString();
 
-                                   ChatMessage msg{};
-                                   msg.channel = channel;
-                                   msg.senderClientId = netMsg.senderID;
-                                   msg.senderName = senderName;
-                                   msg.text = text;
-                                   msg.timestamp = m_time;
+                                    ChatMessage msg{};
+                                    msg.channel = channel;
+                                    msg.senderClientId = netMsg.senderID;
+                                    msg.senderName = senderName;
+                                    msg.text = text;
+                                    msg.timestamp = m_time;
 
-                                   m_history.push_back(msg);
-                                   if (m_history.size() > MAX_HISTORY)
-                                       m_history.pop_front();
+                                    m_history.push_back(msg);
+                                    if (m_history.size() > MAX_HISTORY)
+                                        m_history.pop_front();
 
-                                   auto& console = Spark::SimpleConsole::GetInstance();
-                                   console.LogInfo("[" + std::string(ChannelToString(channel)) + "] " + senderName +
-                                                   ": " + text);
-                               });
+                                    auto& console = Spark::SimpleConsole::GetInstance();
+                                    console.LogInfo("[" + std::string(ChannelToString(channel)) + "] " + senderName +
+                                                    ": " + text);
+                                });
 #endif
     }
 
@@ -108,9 +111,10 @@ namespace MMO
             m_history.pop_front();
 
 #ifdef ENABLE_NETWORKING
-        // Send over the network on the reliable ordered channel
-        auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-        if (netMgr.GetRole() != Spark::Net::NetworkRole::None)
+        // Send over the network on the reliable ordered channel, using the
+        // NetworkManager provided by the injected engine context.
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (netMgr && netMgr->GetRole() != Spark::Net::NetworkRole::None)
         {
             Spark::Net::NetBuffer buf;
             buf.WriteUint8(static_cast<uint8_t>(channel));
@@ -124,11 +128,11 @@ namespace MMO
 
             if (channel == ChatChannel::Global)
             {
-                netMgr.BroadcastMessage(netMsg);
+                netMgr->BroadcastMessage(netMsg);
             }
             else
             {
-                netMgr.SendMessage(netMsg);
+                netMgr->SendMessage(netMsg);
             }
         }
 #endif

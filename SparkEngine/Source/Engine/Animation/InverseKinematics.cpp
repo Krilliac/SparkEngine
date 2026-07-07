@@ -228,31 +228,73 @@ namespace Spark::Animation
         if (!chain.enabled || chain.boneIndices.empty())
             return;
 
-        int32_t boneIdx = chain.boneIndices[0];
-        if (boneIdx < 0 || boneIdx >= static_cast<int32_t>(localTransforms.size()))
+        const int32_t boneIdx = chain.boneIndices[0];
+        const size_t boneCount = skeleton.bones.size();
+        if (boneIdx < 0 || static_cast<size_t>(boneIdx) >= boneCount || localTransforms.size() < boneCount)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Animation, "LookAtIK: bone index %d out of range (count=%zu)", boneIdx,
-                           localTransforms.size());
+            SPARK_LOG_WARN(Spark::LogCategory::Animation, "LookAtIK: bone index %d out of range (bones=%zu, xforms=%zu)",
+                           boneIdx, boneCount, localTransforms.size());
             return;
         }
 
-        XMMATRIX local = XMLoadFloat4x4(&localTransforms[boneIdx]);
-        XMVECTOR bonePos = local.r[3];
-        XMVECTOR target = XMLoadFloat3(&chain.targetPosition);
-        XMVECTOR toTarget = XMVector3Normalize(XMVectorSubtract(target, bonePos));
-        XMVECTOR forward = XMVectorSet(0, 0, 1, 0);
+        // Step 1: Build world (global) transforms so the aim is computed in world space.
+        // The previous implementation treated the bone's *local* translation as a world
+        // position and overwrote the bone's rotation/scale — wrong for any non-root bone.
+        std::vector<XMMATRIX> globalTransforms(boneCount);
+        for (size_t i = 0; i < boneCount; ++i)
+        {
+            XMMATRIX local = XMLoadFloat4x4(&localTransforms[i]);
+            int32_t parentIdx = skeleton.bones[i].parentIndex;
+            if (parentIdx >= 0 && static_cast<size_t>(parentIdx) < boneCount)
+            {
+                globalTransforms[i] = local * globalTransforms[parentIdx];
+            }
+            else
+            {
+                globalTransforms[i] = local;
+            }
+        }
 
-        XMVECTOR rotAxis = XMVector3Cross(forward, toTarget);
-        float dot = XMVectorGetX(XMVector3Dot(forward, toTarget));
+        // Step 2: Aim the bone's world forward (+Z) at the target in world space.
+        XMVECTOR worldPos = globalTransforms[boneIdx].r[3];
+        XMVECTOR target = XMLoadFloat3(&chain.targetPosition);
+        XMVECTOR toTarget = XMVectorSubtract(target, worldPos);
+        if (XMVectorGetX(XMVector3LengthSq(toTarget)) < 1e-12f)
+            return; // Target coincides with the bone; nothing to aim at.
+        toTarget = XMVector3Normalize(toTarget);
+
+        // The bone's world forward is the image of its local +Z axis under the global
+        // transform's rotation — i.e. the third basis row (row-vector convention).
+        XMVECTOR worldForward = XMVector3Normalize(globalTransforms[boneIdx].r[2]);
+
+        XMVECTOR rotAxis = XMVector3Cross(worldForward, toTarget);
+        float dot = XMVectorGetX(XMVector3Dot(worldForward, toTarget));
         dot = (std::max)(-1.0f, (std::min)(1.0f, dot));
 
-        if (XMVectorGetX(XMVector3LengthSq(rotAxis)) > 0.0001f)
+        if (XMVectorGetX(XMVector3LengthSq(rotAxis)) > 1e-8f)
         {
+            // Step 3: Build the world-space delta rotation, blended by chain.weight, and
+            // convert it back to local space while preserving the bone's original
+            // rotation, scale, and translation (only the orientation is nudged).
             float angle = std::acos(dot) * chain.weight;
-            XMMATRIX rotation = XMMatrixRotationAxis(XMVector3Normalize(rotAxis), angle);
-            XMMATRIX translation = XMMatrixTranslationFromVector(bonePos);
-            XMMATRIX newLocal = rotation * translation;
-            XMStoreFloat4x4(&localTransforms[boneIdx], newLocal);
+            XMMATRIX deltaRot = XMMatrixRotationAxis(XMVector3Normalize(rotAxis), angle);
+
+            XMMATRIX boneLocal = XMLoadFloat4x4(&localTransforms[boneIdx]);
+            int32_t parentIdx = skeleton.bones[boneIdx].parentIndex;
+            if (parentIdx >= 0 && static_cast<size_t>(parentIdx) < boneCount)
+            {
+                XMMATRIX parentWorldInv = XMMatrixInverse(nullptr, globalTransforms[parentIdx]);
+                XMMATRIX newGlobal = deltaRot * globalTransforms[boneIdx];
+                XMMATRIX newLocal = newGlobal * parentWorldInv;
+                newLocal.r[3] = boneLocal.r[3]; // preserve local translation
+                XMStoreFloat4x4(&localTransforms[boneIdx], newLocal);
+            }
+            else
+            {
+                XMMATRIX newLocal = deltaRot * boneLocal;
+                newLocal.r[3] = boneLocal.r[3];
+                XMStoreFloat4x4(&localTransforms[boneIdx], newLocal);
+            }
         }
     }
 

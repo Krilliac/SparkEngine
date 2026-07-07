@@ -26,7 +26,6 @@
 #pragma once
 
 #include "ECSystems.h"
-#include "ParallelSystemExecutor.h"
 #include <array>
 #include <memory>
 #include <string>
@@ -109,61 +108,34 @@ namespace Spark::ECS
         }
 
         /**
-         * @brief Enable or disable parallel execution within phases.
-         *
-         * When enabled, systems within the same phase that have compatible
-         * component access patterns (declared via the ParallelSystemExecutor)
-         * run concurrently on the JobSystem thread pool.
-         *
-         * @param enabled true to enable parallel execution
-         */
-        void SetParallelExecution(bool enabled) { m_parallelEnabled = enabled; }
-
-        /** @brief Check if parallel execution is enabled */
-        bool IsParallelExecutionEnabled() const { return m_parallelEnabled; }
-
-        /** @brief Access the parallel executor to declare component access patterns */
-        ParallelSystemExecutor& GetParallelExecutor() { return m_executor; }
-
-        /**
          * @brief Update all enabled systems: phased first (in phase order), then flat list.
          *
-         * When parallel execution is enabled, systems within each phase are dispatched
-         * through the ParallelSystemExecutor, which batches non-conflicting systems
-         * for concurrent execution. When disabled, falls back to serial execution.
+         * Systems execute serially in Phase enum order, then the unphased flat list in
+         * insertion order. This ordering is the manager's core guarantee.
+         *
+         * @note An earlier parallel-execution path was removed: it dispatched every
+         *       declaration through a single global ParallelSystemExecutor that batched
+         *       by component read/write sets across ALL phases, which silently discarded
+         *       the phase ordering it claimed to preserve (e.g. Render could run before
+         *       Physics). Correct per-phase parallelism would require one executor per
+         *       phase; until that exists the manager runs serially.
          */
         void UpdateAll(World& world, float deltaTime)
         {
-            if (m_parallelEnabled && m_executor.GetBatchCount() > 0)
+            // Execute in phase order.
+            for (size_t phase = 0; phase < static_cast<size_t>(Phase::_Count); ++phase)
             {
-                // Parallel mode: use the executor which respects phase ordering
-                // by running batches within each phase
-                m_executor.Execute(world, deltaTime);
-
-                // Also run flat (unphased) systems serially
-                for (auto& system : m_flatSystems)
+                for (auto& system : m_phasedSystems[phase])
                 {
                     if (system->IsEnabled())
                         system->Update(world, deltaTime);
                 }
             }
-            else
-            {
-                // Serial mode: execute in phase order
-                for (size_t phase = 0; phase < static_cast<size_t>(Phase::_Count); ++phase)
-                {
-                    for (auto& system : m_phasedSystems[phase])
-                    {
-                        if (system->IsEnabled())
-                            system->Update(world, deltaTime);
-                    }
-                }
 
-                for (auto& system : m_flatSystems)
-                {
-                    if (system->IsEnabled())
-                        system->Update(world, deltaTime);
-                }
+            for (auto& system : m_flatSystems)
+            {
+                if (system->IsEnabled())
+                    system->Update(world, deltaTime);
             }
         }
 
@@ -257,8 +229,6 @@ namespace Spark::ECS
       private:
         std::array<std::vector<std::unique_ptr<ISystem>>, static_cast<size_t>(Phase::_Count)> m_phasedSystems;
         std::vector<std::unique_ptr<ISystem>> m_flatSystems;
-        ParallelSystemExecutor m_executor;
-        bool m_parallelEnabled = false;
     };
 
 } // namespace Spark::ECS

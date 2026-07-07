@@ -164,6 +164,28 @@ namespace Spark::Net
         return true;
     }
 
+    MigratingEntity AreaServer::BuildMigration(uint32_t networkID, const MigratingEntity& tracked) const
+    {
+        MigratingEntity migration;
+        migration.networkID = networkID;
+        migration.ownerID = tracked.ownerID;
+        migration.entityType = tracked.entityType;
+        migration.position = tracked.position;
+        migration.velocity = tracked.velocity;
+        {
+            std::lock_guard<std::mutex> slock(m_statsMutex);
+            migration.timestamp = m_stats.uptimeSeconds;
+        }
+
+        // Serialize entity position/velocity/type data into serializedState
+        NetBuffer buffer;
+        buffer.WriteVector3(migration.position);
+        buffer.WriteVector3(migration.velocity);
+        buffer.WriteString(migration.entityType);
+        migration.serializedState = buffer.GetData();
+        return migration;
+    }
+
     bool AreaServer::MigrateEntityOut(uint32_t networkID, AreaID targetAreaId)
     {
         // Validate parameters
@@ -193,35 +215,35 @@ namespace Spark::Net
                            m_config.areaName.c_str(), networkID);
         }
 
-        MigratingEntity migration;
-        migration.networkID = networkID;
+        // Bound the pending-migration buffer: refuse new migrations once it is
+        // full so a never-drained queue cannot exhaust memory. The entity stays
+        // tracked and can migrate on a later attempt.
+        if (m_pendingMigrations.size() >= kMaxPendingMigrations)
         {
-            std::lock_guard<std::mutex> slock(m_statsMutex);
-            migration.timestamp = m_stats.uptimeSeconds;
+            SPARK_LOG_WARN("AreaServer",
+                           "Area '%s' pending-migration buffer full (%zu) — refusing migration for entity %u.",
+                           m_config.areaName.c_str(), m_pendingMigrations.size(), networkID);
+            return false;
         }
 
-        // Populate fields from tracked entity if available, otherwise use defaults
+        // Resolve the source entity data (tracked entry, or defaults if untracked).
+        MigratingEntity source;
         if (it != m_trackedEntities.end())
         {
-            migration.ownerID = it->second.ownerID;
-            migration.entityType = it->second.entityType;
-            migration.position = it->second.position;
-            migration.velocity = it->second.velocity;
+            source.ownerID = it->second.ownerID;
+            source.entityType = it->second.entityType;
+            source.position = it->second.position;
+            source.velocity = it->second.velocity;
         }
         else
         {
-            migration.ownerID = INVALID_CLIENT;
-            migration.entityType = "unknown";
-            migration.position = {0.0f, 0.0f, 0.0f};
-            migration.velocity = {0.0f, 0.0f, 0.0f};
+            source.ownerID = INVALID_CLIENT;
+            source.entityType = "unknown";
+            source.position = {0.0f, 0.0f, 0.0f};
+            source.velocity = {0.0f, 0.0f, 0.0f};
         }
 
-        // Serialize entity position/velocity/type data into serializedState
-        NetBuffer buffer;
-        buffer.WriteVector3(migration.position);
-        buffer.WriteVector3(migration.velocity);
-        buffer.WriteString(migration.entityType);
-        migration.serializedState = buffer.GetData();
+        MigratingEntity migration = BuildMigration(networkID, source);
 
         m_pendingMigrations.push_back(std::move(migration));
 
@@ -538,29 +560,25 @@ namespace Spark::Net
                 continue;
             }
 
+            // Bound the pending-migration buffer: if it is full, leave the entity
+            // tracked (do not enqueue or erase) so a never-drained queue cannot
+            // exhaust memory on the tick thread.
+            if (m_pendingMigrations.size() >= kMaxPendingMigrations)
+            {
+                SPARK_LOG_WARN("AreaServer",
+                               "Area '%s' pending-migration buffer full (%zu) — deferring boundary migration "
+                               "for entity %u.",
+                               m_config.areaName.c_str(), m_pendingMigrations.size(), entityID);
+                continue;
+            }
+
             // Determine target area based on which boundary was crossed
             // In a full implementation, this would query a spatial partitioning system
             // or SeamlessAreaManager to find the adjacent area. For now, use a
             // placeholder target area ID based on the area ID + 1.
             AreaID targetArea = m_config.areaId + 1;
 
-            MigratingEntity migration;
-            migration.networkID = entityID;
-            migration.ownerID = it->second.ownerID;
-            migration.entityType = it->second.entityType;
-            migration.position = it->second.position;
-            migration.velocity = it->second.velocity;
-            {
-                std::lock_guard<std::mutex> slock(m_statsMutex);
-                migration.timestamp = m_stats.uptimeSeconds;
-            }
-
-            // Serialize entity state
-            NetBuffer buffer;
-            buffer.WriteVector3(migration.position);
-            buffer.WriteVector3(migration.velocity);
-            buffer.WriteString(migration.entityType);
-            migration.serializedState = buffer.GetData();
+            MigratingEntity migration = BuildMigration(entityID, it->second);
 
             m_pendingMigrations.push_back(std::move(migration));
             m_trackedEntities.erase(it);

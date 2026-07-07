@@ -20,9 +20,13 @@
 
 #include <algorithm>
 #include <any>
+#include <atomic>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -122,6 +126,21 @@ class EngineContext : public Spark::IEngineContext
      * @return Pointer to the global EngineContext, or nullptr if not yet created
      */
     static EngineContext* Get();
+
+    /**
+     * @brief Install a non-owning EngineContext pointer for the current module image
+     *
+     * SparkEngineLib is a static library linked into every game-module DLL, so the
+     * owning @c g_engineContext global is per-image and is null inside modules. The
+     * host injects its live EngineContext across the DLL boundary via this setter so
+     * that @c Get() inside a module returns the engine's real context instead of a
+     * dead per-image instance. Passing a raw (non-owning) pointer here — never the
+     * owning unique_ptr — is deliberate: module teardown must not free the host's
+     * EngineContext. @c Get() prefers the injected pointer when one has been set.
+     *
+     * @param ctx Non-owning pointer to the host EngineContext (may be nullptr to clear)
+     */
+    static void SetInjected(EngineContext* ctx);
 
     /**
      * @brief Access the owning unique_ptr (read-only)
@@ -332,6 +351,7 @@ class EngineContext : public Spark::IEngineContext
     template <typename T> void RegisterSystem(T* system)
     {
         SPARK_EXPECTS(system != nullptr);
+        std::unique_lock<std::shared_mutex> lock(m_systemsMutex);
         m_systems[GetTypeId<T>()] = static_cast<void*>(system);
     }
 
@@ -342,6 +362,7 @@ class EngineContext : public Spark::IEngineContext
      */
     template <typename T> T* GetSystem() const
     {
+        std::shared_lock<std::shared_mutex> lock(m_systemsMutex);
         auto it = m_systems.find(GetTypeId<T>());
         if (it != m_systems.end())
         {
@@ -366,9 +387,16 @@ class EngineContext : public Spark::IEngineContext
         if (!system)
         {
             // Log through stderr since we can't depend on Logger being available
-            // (Logger itself might be the missing subsystem)
-            std::fprintf(stderr, "[EngineContext] WARNING: Subsystem not registered (requested by %s)\n",
-                         callerName ? callerName : "unknown");
+            // (Logger itself might be the missing subsystem). Warn only once per
+            // missing type T — callers that poll an optional subsystem every frame
+            // would otherwise flood stderr and mask real errors. The static is per
+            // template instantiation, so each distinct T logs exactly once.
+            static std::atomic<bool> warned{false};
+            if (!warned.exchange(true, std::memory_order_relaxed))
+            {
+                std::fprintf(stderr, "[EngineContext] WARNING: Subsystem not registered (requested by %s)\n",
+                             callerName ? callerName : "unknown");
+            }
         }
         return system;
     }
@@ -454,8 +482,12 @@ class EngineContext : public Spark::IEngineContext
      */
     bool TopologicalSort(std::vector<SubsystemEntry*>& sorted);
 
-    // Generic system registry (void* with TypeId key) — single source of truth
+    // Generic system registry (void* with TypeId key) — single source of truth.
+    // Guarded by m_systemsMutex: startup is single-threaded, but module hot-reload
+    // can RegisterSystem at runtime while game/render/network threads GetSystem, and
+    // a concurrent insert that rehashes during a reader's find() is UB.
     mutable std::unordered_map<TypeId, void*, TypeIdHash> m_systems;
+    mutable std::shared_mutex m_systemsMutex;
 
     // Dependency-aware subsystem entries (R1.2)
     std::vector<SubsystemEntry> m_subsystemEntries;

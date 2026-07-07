@@ -55,3 +55,45 @@ TEST(BitUtilsReal_PopCountCompileTime)
     constexpr int count = Spark::BitUtils::PopCount(static_cast<uint32_t>(0b1111u));
     EXPECT_EQ(count, 4);
 }
+
+TEST(BitUtilsReal_NextPowerOfTwo)
+{
+    // 0 is a special case that returns 1.
+    EXPECT_EQ(Spark::BitUtils::NextPowerOfTwo(0), static_cast<uint64_t>(1));
+    EXPECT_EQ(Spark::BitUtils::NextPowerOfTwo(1), static_cast<uint64_t>(1));
+    // Exact powers of two are returned unchanged.
+    EXPECT_EQ(Spark::BitUtils::NextPowerOfTwo(8), static_cast<uint64_t>(8));
+    // Non-powers round up to the next power of two.
+    EXPECT_EQ(Spark::BitUtils::NextPowerOfTwo(5), static_cast<uint64_t>(8));
+    EXPECT_EQ(Spark::BitUtils::NextPowerOfTwo(100), static_cast<uint64_t>(128));
+    // Large boundary near 2^63.
+    EXPECT_EQ(Spark::BitUtils::NextPowerOfTwo((1ULL << 62) + 1), (1ULL << 63));
+}
+
+TEST(BitUtilsReal_ForEachSetBit)
+{
+    // Empty mask: the callback is never invoked.
+    int counter = 0;
+    Spark::BitUtils::ForEachSetBit(static_cast<uint64_t>(0), [&counter](int) { ++counter; });
+    EXPECT_EQ(counter, 0);
+
+    // Single bit: exactly one invocation with the correct index.
+    std::vector<int> single;
+    Spark::BitUtils::ForEachSetBit(static_cast<uint64_t>(1) << 5, [&single](int bit) { single.push_back(bit); });
+    EXPECT_EQ(single.size(), static_cast<size_t>(1));
+    EXPECT_EQ(single[0], 5);
+
+    // All 64 bits set: 64 invocations.
+    counter = 0;
+    Spark::BitUtils::ForEachSetBit(0xFFFFFFFFFFFFFFFFULL, [&counter](int) { ++counter; });
+    EXPECT_EQ(counter, 64);
+
+    // LSB-first index order: 0b10101100 yields 2, 3, 5, 7 in ascending order.
+    std::vector<int> indices;
+    Spark::BitUtils::ForEachSetBit(static_cast<uint64_t>(0b10101100), [&indices](int bit) { indices.push_back(bit); });
+    EXPECT_EQ(indices.size(), static_cast<size_t>(4));
+    EXPECT_EQ(indices[0], 2);
+    EXPECT_EQ(indices[1], 3);
+    EXPECT_EQ(indices[2], 5);
+    EXPECT_EQ(indices[3], 7);
+}

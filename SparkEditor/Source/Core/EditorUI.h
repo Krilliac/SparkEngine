@@ -326,6 +326,14 @@ namespace SparkEditor
         bool m_sceneModified = false;
 
         // Helper methods
+        /// @brief Atomically replace the edited document World. Clears the
+        /// undo/redo command history FIRST (so no queued command can reference
+        /// the about-to-be-freed old World — prevents use-after-free on a later
+        /// Undo/Redo), then moves newWorld into m_world, then calls
+        /// RewirePanelsToWorld(). Both OpenScene() and the initial world
+        /// creation in SetGraphicsDevice() route through it.
+        void SwapWorld(std::unique_ptr<::World> newWorld);
+
         /// @brief Re-point the panels that cache a raw ::World* (SceneView,
         /// Hierarchy) at the current m_world and clear selection. Must be
         /// called any time m_world is (re)assigned — both the initial seed

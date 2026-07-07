@@ -16,7 +16,6 @@
 #include "../RHIDevice.h"
 #include "../RHIDeviceBase.h"
 #include "../RHIResources.h"
-#include "../DeferredDeletionQueue.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>
@@ -334,8 +333,6 @@ namespace Spark
 
                 bool m_debugEnabled = false;
                 bool m_isSoftwareDevice = false;
-
-                DeferredDeletionQueue m_deletionQueue;
             };
 
         } // namespace D3D11

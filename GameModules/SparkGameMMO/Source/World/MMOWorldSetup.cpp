@@ -235,39 +235,41 @@ namespace MMO
 
     bool MMOWorldSetup::StartNetworkServer(uint16_t port)
     {
-        auto& nm = Spark::Net::NetworkManager::GetInstance();
-        if (!nm.IsInitialized())
+        // Networking is resolved through the injected engine context, not the global singleton
+        auto* nm = m_context ? m_context->GetNetwork() : nullptr;
+        if (!nm)
+            return false;
+
+        if (!nm->IsInitialized())
         {
-            if (!nm.Initialize())
+            if (!nm->Initialize())
                 return false;
         }
 
-        if (!nm.StartServer(port, 128))
+        if (!nm->StartServer(port, 128))
             return false;
 
         // Register server-side chat broadcast handler
-        nm.RegisterHandler(Spark::Net::MessageType::ChatMessage,
-                           [](const Spark::Net::NetworkMessage& msg)
-                           {
-                               auto& mgr = Spark::Net::NetworkManager::GetInstance();
-                               if (mgr.GetRole() != Spark::Net::NetworkRole::Server)
-                                   return;
+        nm->RegisterHandler(Spark::Net::MessageType::ChatMessage,
+                            [nm](const Spark::Net::NetworkMessage& msg)
+                            {
+                                if (nm->GetRole() != Spark::Net::NetworkRole::Server)
+                                    return;
 
-                               // Broadcast to all other connected clients
-                               mgr.SendToAllExcept(msg.senderID, msg);
-                           });
+                                // Broadcast to all other connected clients
+                                nm->SendToAllExcept(msg.senderID, msg);
+                            });
 
         // Register server-side position relay handler
-        nm.RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
-                           [](const Spark::Net::NetworkMessage& msg)
-                           {
-                               auto& mgr = Spark::Net::NetworkManager::GetInstance();
-                               if (mgr.GetRole() != Spark::Net::NetworkRole::Server)
-                                   return;
+        nm->RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
+                            [nm](const Spark::Net::NetworkMessage& msg)
+                            {
+                                if (nm->GetRole() != Spark::Net::NetworkRole::Server)
+                                    return;
 
-                               // Relay position update to all other clients
-                               mgr.SendToAllExcept(msg.senderID, msg);
-                           });
+                                // Relay position update to all other clients
+                                nm->SendToAllExcept(msg.senderID, msg);
+                            });
 
         m_networkServerRunning = true;
         m_knownClients.clear();
@@ -282,13 +284,17 @@ namespace MMO
         if (!m_networkServerRunning)
             return;
 
-        auto& nm = Spark::Net::NetworkManager::GetInstance();
-        nm.Update(deltaTime);
+        // Networking is resolved through the injected engine context, not the global singleton
+        auto* nm = m_context ? m_context->GetNetwork() : nullptr;
+        if (!nm)
+            return;
+
+        nm->Update(deltaTime);
 
         // Detect new client connections and bridge to WorldServer
         if (m_worldServer && m_worldServer->IsRunning())
         {
-            const auto& clients = nm.GetClients();
+            const auto& clients = nm->GetClients();
 
             // Detect new connections
             for (const auto& [clientId, info] : clients)
@@ -324,9 +330,13 @@ namespace MMO
         if (!m_networkServerRunning)
             return;
 
-        auto& nm = Spark::Net::NetworkManager::GetInstance();
-        nm.StopServer();
-        nm.Shutdown();
+        // Networking is resolved through the injected engine context, not the global singleton
+        auto* nm = m_context ? m_context->GetNetwork() : nullptr;
+        if (nm)
+        {
+            nm->StopServer();
+            nm->Shutdown();
+        }
         m_knownClients.clear();
         m_networkServerRunning = false;
 

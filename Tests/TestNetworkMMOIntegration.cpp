@@ -537,7 +537,7 @@ TEST(MMOIntegration_EntityMigration)
     // Manually migrate an entity from area1 to area2
     EXPECT_TRUE(area1.MigrateEntityOut(42, 2));
 
-    auto& pending = area1.GetPendingMigrations();
+    auto pending = area1.GetPendingMigrations();
     EXPECT_EQ(static_cast<int>(pending.size()), 1);
 
     if (!pending.empty())

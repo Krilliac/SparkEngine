@@ -4,7 +4,13 @@
  */
 
 #include "TestFramework.h"
+#include "Engine/ECS/Components/CoreComponents.h"
+#include "Engine/Editor/CoreComponentSerializers.h"
 #include "Engine/Editor/SceneSnapshotSerializer.h"
+
+#include <entt/entt.hpp>
+
+#include <string>
 
 // ============================================================================
 // SnapshotWriter / SnapshotReader round-trip tests
@@ -258,4 +264,75 @@ TEST(SnapshotWriter_TakeData)
     auto data = writer.TakeData();
     EXPECT_EQ(data.size(), sizeBefore);
     EXPECT_EQ(writer.Size(), static_cast<size_t>(0)); // Should be empty after move
+}
+
+// ============================================================================
+// Full ECS component round-trip through the registered core serializers.
+// This is the coverage gap that hid the "serializer returns 0 / restores
+// nothing" P0: it builds a real registry, serializes it, deserializes into a
+// fresh registry, and asserts the component *values* survived.
+// ============================================================================
+
+TEST(SceneSnapshotSerializer_ComponentRoundTrip)
+{
+    Spark::Editor::RegisterCoreComponentSerializers();
+
+    struct Item
+    {
+        const char* name;
+        float x, y, z;
+    };
+    const Item items[] = {
+        {"Alpha", 1.0f, 2.0f, 3.0f},
+        {"Beta", -4.0f, 5.5f, 6.0f},
+        {"Gamma", 100.0f, 0.0f, -50.0f},
+    };
+
+    // Build the source scene: three entities, each with a name + transform.
+    entt::registry src;
+    for (const auto& it : items)
+    {
+        auto e = src.create();
+        src.emplace<NameComponent>(e).name = it.name;
+        auto& t = src.emplace<Transform>(e);
+        t.position = {it.x, it.y, it.z};
+    }
+
+    auto data = Spark::Editor::SceneSnapshotSerializer::Serialize(&src, 3);
+    EXPECT_TRUE(Spark::Editor::SceneSnapshotSerializer::Validate(data));
+
+    // Restore into a fresh registry.
+    entt::registry dst;
+    EXPECT_TRUE(Spark::Editor::SceneSnapshotSerializer::Deserialize(data, &dst));
+
+    // Every named entity must be restored with its transform intact.
+    uint32_t restored = 0;
+    auto view = dst.view<NameComponent>();
+    for (auto entity : view)
+    {
+        const std::string& name = view.get<NameComponent>(entity).name;
+        const Item* expected = nullptr;
+        for (const auto& it : items)
+        {
+            if (name == it.name)
+            {
+                expected = &it;
+                break;
+            }
+        }
+        EXPECT_TRUE(expected != nullptr);
+        if (!expected)
+            continue;
+
+        const Transform* t = dst.try_get<Transform>(entity);
+        EXPECT_TRUE(t != nullptr);
+        if (t)
+        {
+            EXPECT_NEAR(t->position.x, expected->x, 0.0001f);
+            EXPECT_NEAR(t->position.y, expected->y, 0.0001f);
+            EXPECT_NEAR(t->position.z, expected->z, 0.0001f);
+        }
+        ++restored;
+    }
+    EXPECT_EQ(restored, static_cast<uint32_t>(3));
 }

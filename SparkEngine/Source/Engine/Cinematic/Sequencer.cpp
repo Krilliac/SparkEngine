@@ -565,6 +565,14 @@ namespace Spark::Cinematic
                 for (const auto* cue : triggered)
                     m_eventCallback(cue->eventName, cue->parameters);
             }
+
+            if (track->GetType() == TrackType::AudioCue && m_audioCallback)
+            {
+                auto* audioTrack = Spark::CheckedCast<AudioCueTrack*>(track.get());
+                auto triggered = audioTrack->GetTriggeredCues(m_previousTime, m_currentTime);
+                for (const auto* cue : triggered)
+                    m_audioCallback(*cue);
+            }
         }
 
         // Update cached camera state
@@ -607,6 +615,11 @@ namespace Spark::Cinematic
     void Sequence::SetEventCallback(EventCallback callback)
     {
         m_eventCallback = std::move(callback);
+    }
+
+    void Sequence::SetAudioCallback(AudioCallback callback)
+    {
+        m_audioCallback = std::move(callback);
     }
 
     float Sequence::GetDuration() const

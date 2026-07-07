@@ -127,8 +127,16 @@ namespace Spark::Physics2D
                 m_spatialHash.Insert(static_cast<uint32_t>(i), m_bodies[i].aabb);
             }
 
-            // Narrowphase + resolve
+            // Narrowphase: detect contacts, apply positional correction once,
+            // and record a velocity constraint per non-trigger contact.
             m_contacts.clear();
+            struct VelocityConstraint2D
+            {
+                size_t a;
+                size_t b;
+                Vec2 normal;
+            };
+            std::vector<VelocityConstraint2D> constraints;
             for (size_t i = 0; i < m_bodies.size(); ++i)
             {
                 auto candidates = m_spatialHash.Query(m_bodies[i].aabb);
@@ -185,13 +193,27 @@ namespace Spark::Physics2D
 
                         if (!contact.isTrigger)
                         {
-                            ResolveCollision(m_bodies[i], m_bodies[j], normal, depth);
+                            // Positional correction runs once per contact; the
+                            // velocity impulse is iterated below for stability.
+                            ResolvePosition(m_bodies[i], m_bodies[j], normal, depth);
+                            constraints.push_back({i, j, normal});
                         }
 
                         // Fire callbacks
                         if (m_onCollision)
                             m_onCollision(contact);
                     }
+                }
+            }
+
+            // Velocity solver: iterate the impulse resolution so stacked and
+            // resting bodies settle instead of sinking under a single pass.
+            const int iterations = m_velocityIterations > 0 ? m_velocityIterations : 1;
+            for (int iter = 0; iter < iterations; ++iter)
+            {
+                for (const auto& c : constraints)
+                {
+                    ResolveVelocity(m_bodies[c.a], m_bodies[c.b], c.normal);
                 }
             }
 
@@ -344,9 +366,9 @@ namespace Spark::Physics2D
             }
         }
 
-        void ResolveCollision(PhysicsBody2D& a, PhysicsBody2D& b, const Vec2& normal, float depth)
+        // Positional correction (prevent sinking). Applied once per contact.
+        void ResolvePosition(PhysicsBody2D& a, PhysicsBody2D& b, const Vec2& normal, float depth)
         {
-            // Positional correction (prevent sinking)
             float totalInvMass = a.invMass + b.invMass;
             if (totalInvMass <= 0.0f)
                 return;
@@ -358,6 +380,15 @@ namespace Spark::Physics2D
 
             a.position -= correction * a.invMass;
             b.position += correction * b.invMass;
+        }
+
+        // Velocity impulse (with friction). Re-applied each solver iteration
+        // using the current velocities, so it must not touch positions.
+        void ResolveVelocity(PhysicsBody2D& a, PhysicsBody2D& b, const Vec2& normal)
+        {
+            float totalInvMass = a.invMass + b.invMass;
+            if (totalInvMass <= 0.0f)
+                return;
 
             // Impulse resolution
             Vec2 relVel = b.velocity - a.velocity;

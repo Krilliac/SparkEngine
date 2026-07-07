@@ -289,8 +289,9 @@ namespace Spark::Gameplay
         }
 
       private:
-        void ProcessWeapon(WeaponInventoryComponent& inv, float deltaTime);
-        void HandleFiring(WeaponInstance& weapon, const WeaponDefinition& def, WeaponInventoryComponent& inv);
+        void ProcessWeapon(uint32_t ownerEntity, WeaponInventoryComponent& inv, float deltaTime);
+        void HandleFiring(uint32_t ownerEntity, WeaponInstance& weapon, const WeaponDefinition& def,
+                          WeaponInventoryComponent& inv);
         void HandleReload(WeaponInstance& weapon, const WeaponDefinition& def, float deltaTime);
         void HandleSwitching(WeaponInventoryComponent& inv, float deltaTime);
         void UpdateRecoilRecovery(WeaponInstance& weapon, const WeaponDefinition& def, float deltaTime);

@@ -626,12 +626,15 @@ namespace SparkEditor
         if (m_networkThread.joinable())
             m_networkThread.join();
 
-        for (auto& t : m_clientThreads)
         {
-            if (t.joinable())
-                t.join();
+            std::lock_guard<std::mutex> lock(m_clientThreadsMutex);
+            for (auto& conn : m_clientThreads)
+            {
+                if (conn.thread.joinable())
+                    conn.thread.join();
+            }
+            m_clientThreads.clear();
         }
-        m_clientThreads.clear();
 
         CloseAllSockets();
 
@@ -744,8 +747,14 @@ namespace SparkEditor
                 m_peerSockets[newPeerId] = clientSock;
             }
 
-            // Spawn a thread to handle this client's messages
-            m_clientThreads.emplace_back(&CollaborativeEditSession::HandleClientSocket, this, clientSock, newPeerId);
+            // Spawn a thread to handle this client's messages. The shared flag lets the
+            // main thread reap this handler once it exits (see ReapFinishedClientThreads).
+            auto finished = std::make_shared<std::atomic<bool>>(false);
+            std::thread handler(&CollaborativeEditSession::HandleClientSocket, this, clientSock, newPeerId, finished);
+            {
+                std::lock_guard<std::mutex> lock(m_clientThreadsMutex);
+                m_clientThreads.push_back({std::move(handler), std::move(finished)});
+            }
 
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Accepted client connection (PeerID=%u).", newPeerId);
         }
@@ -753,7 +762,8 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Host accept thread stopped.");
     }
 
-    void CollaborativeEditSession::HandleClientSocket(int clientSocket, PeerID peerId)
+    void CollaborativeEditSession::HandleClientSocket(int clientSocket, PeerID peerId,
+                                                      std::shared_ptr<std::atomic<bool>> finished)
     {
         while (!m_shuttingDown.load(std::memory_order_acquire))
         {
@@ -783,13 +793,18 @@ namespace SparkEditor
                     msg.editMessage.sourceEditor = peerId;
             }
 
-            // Push to incoming queue for main thread processing
-            {
-                std::lock_guard<std::mutex> lock(m_messageMutex);
-                m_incomingMessages.push(msg);
-            }
+            // Push to incoming queue for main thread processing (bounded)
+            EnqueueMessage(m_incomingMessages, InternalMessage(msg), m_incomingOverflowWarned, "incoming");
+
+            // Lock arbitration is authoritative through the host: a LockRequest is
+            // answered below with LockGranted/LockDenied, and those replies are only
+            // ever originated by the host — so none of them are blind-relayed here.
+            const bool isLockArbitration = msg.type == InternalMessageType::LockRequest ||
+                                           msg.type == InternalMessageType::LockGranted ||
+                                           msg.type == InternalMessageType::LockDenied;
 
             // Relay to all other connected clients (host-mediated broadcast)
+            if (!isLockArbitration)
             {
                 std::lock_guard<std::mutex> lock(m_socketMutex);
                 auto relayData = SerializeMessage(msg);
@@ -818,12 +833,15 @@ namespace SparkEditor
         InternalMessage disc;
         disc.type = InternalMessageType::PeerDisconnect;
         disc.sourcePeer = peerId;
-        {
-            std::lock_guard<std::mutex> lock(m_messageMutex);
-            m_incomingMessages.push(disc);
-        }
+        EnqueueMessage(m_incomingMessages, std::move(disc), m_incomingOverflowWarned, "incoming");
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Client PeerID=%u disconnected.", peerId);
+
+        // Signal the main thread that this handler has exited so it can be reaped.
+        if (finished)
+        {
+            finished->store(true, std::memory_order_release);
+        }
     }
 
     void CollaborativeEditSession::NetworkThreadClient()
@@ -848,11 +866,8 @@ namespace SparkEditor
             if (!DeserializeMessage(data.data(), data.size(), msg))
                 continue;
 
-            // Push to incoming queue for main thread processing
-            {
-                std::lock_guard<std::mutex> lock(m_messageMutex);
-                m_incomingMessages.push(msg);
-            }
+            // Push to incoming queue for main thread processing (bounded)
+            EnqueueMessage(m_incomingMessages, std::move(msg), m_incomingOverflowWarned, "incoming");
         }
 
         // Host disconnected
@@ -941,6 +956,12 @@ namespace SparkEditor
 
         // Expire stale locks
         ExpireStaleNodes();
+
+        // Reap finished client handler threads (host only).
+        if (m_isHost)
+        {
+            ReapFinishedClientThreads();
+        }
     }
 
     // ============================================================================
@@ -990,10 +1011,7 @@ namespace SparkEditor
         msg.nodeId = nodeId;
         msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
 
-        {
-            std::lock_guard<std::mutex> lock(m_messageMutex);
-            m_outgoingMessages.push(std::move(msg));
-        }
+        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
     }
 
     void CollaborativeEditSession::SetLocalViewportCamera(const DirectX::XMFLOAT3& position,
@@ -1019,11 +1037,15 @@ namespace SparkEditor
         auto it = m_nodeLocks.find(nodeId);
         if (it != m_nodeLocks.end())
         {
-            if (it->second.ownerPeer == m_localPeerID)
-                return true;
-            return false;
+            // Already locked (possibly by an authoritative grant relayed from the host):
+            // succeed only if we already own it, otherwise the request is denied.
+            return it->second.ownerPeer == m_localPeerID;
         }
 
+        // Optimistically take the lock locally so the synchronous caller can proceed.
+        // The host is the single authority: a client asks it to arbitrate (LockRequest)
+        // and reconciles on the host's LockGranted/LockDenied reply; the host itself is
+        // the authority, so it announces the grant to every peer directly (LockGranted).
         NodeLock newLock;
         newLock.nodeId = nodeId;
         newLock.ownerPeer = m_localPeerID;
@@ -1034,16 +1056,12 @@ namespace SparkEditor
         if (m_onLockChanged)
             m_onLockChanged(nodeId, m_localPeerID);
 
-        // Broadcast lock acquisition to peers
         InternalMessage msg;
-        msg.type = InternalMessageType::LockRequest;
+        msg.type = m_isHost ? InternalMessageType::LockGranted : InternalMessageType::LockRequest;
         msg.sourcePeer = m_localPeerID;
         msg.nodeId = nodeId;
         msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
-        {
-            std::lock_guard<std::mutex> mlock(m_messageMutex);
-            m_outgoingMessages.push(std::move(msg));
-        }
+        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
 
         return true;
     }
@@ -1066,10 +1084,7 @@ namespace SparkEditor
             msg.sourcePeer = m_localPeerID;
             msg.nodeId = nodeId;
             msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
-            {
-                std::lock_guard<std::mutex> mlock(m_messageMutex);
-                m_outgoingMessages.push(std::move(msg));
-            }
+            EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
         }
     }
 
@@ -1137,10 +1152,7 @@ namespace SparkEditor
         msg.timestamp = outgoing.timestamp;
         msg.editMessage = outgoing;
 
-        {
-            std::lock_guard<std::mutex> lock(m_messageMutex);
-            m_outgoingMessages.push(std::move(msg));
-        }
+        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
 
         // Call local callback immediately
         if (m_onEditReceived)
@@ -1235,19 +1247,91 @@ namespace SparkEditor
 
             case InternalMessageType::LockRequest:
             {
-                std::lock_guard<std::mutex> lock(m_lockMutex);
-                auto it = m_nodeLocks.find(msg.nodeId);
-                if (it == m_nodeLocks.end())
-                {
-                    NodeLock newLock;
-                    newLock.nodeId = msg.nodeId;
-                    newLock.ownerPeer = msg.sourcePeer;
-                    newLock.lockTime = std::chrono::steady_clock::now();
-                    m_nodeLocks[msg.nodeId] = newLock;
+                // Only the host arbitrates locks. A client never receives a raw
+                // LockRequest (the host replies with LockGranted/LockDenied instead),
+                // but guard defensively.
+                if (!m_isHost)
+                    break;
 
-                    if (m_onLockChanged)
-                        m_onLockChanged(msg.nodeId, msg.sourcePeer);
+                bool granted = false;
+                {
+                    std::lock_guard<std::mutex> lock(m_lockMutex);
+                    auto it = m_nodeLocks.find(msg.nodeId);
+                    if (it == m_nodeLocks.end())
+                    {
+                        NodeLock newLock;
+                        newLock.nodeId = msg.nodeId;
+                        newLock.ownerPeer = msg.sourcePeer;
+                        newLock.lockTime = std::chrono::steady_clock::now();
+                        m_nodeLocks[msg.nodeId] = newLock;
+                        granted = true;
+                    }
+                    else
+                    {
+                        // Idempotent: re-granting to the current owner still succeeds.
+                        granted = (it->second.ownerPeer == msg.sourcePeer);
+                    }
                 }
+
+                if (granted && m_onLockChanged)
+                    m_onLockChanged(msg.nodeId, msg.sourcePeer);
+
+                // Reply authoritatively: a grant is announced to every peer so all
+                // views converge on the new owner; a denial goes only to the requester.
+                InternalMessage reply;
+                reply.type = granted ? InternalMessageType::LockGranted : InternalMessageType::LockDenied;
+                reply.sourcePeer = msg.sourcePeer;
+                reply.nodeId = msg.nodeId;
+                reply.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
+
+                if (granted)
+                    SendToAllPeers(reply);
+                else
+                    SendToPeer(msg.sourcePeer, reply);
+                break;
+            }
+
+            case InternalMessageType::LockGranted:
+            {
+                // Authoritative grant from the host: converge on the announced owner.
+                // Only clients apply this; the host is already the source of truth.
+                if (m_isHost)
+                    break;
+
+                {
+                    std::lock_guard<std::mutex> lock(m_lockMutex);
+                    NodeLock& nl = m_nodeLocks[msg.nodeId];
+                    nl.nodeId = msg.nodeId;
+                    nl.ownerPeer = msg.sourcePeer;
+                    nl.lockTime = std::chrono::steady_clock::now();
+                }
+
+                if (m_onLockChanged)
+                    m_onLockChanged(msg.nodeId, msg.sourcePeer);
+                break;
+            }
+
+            case InternalMessageType::LockDenied:
+            {
+                // Authoritative denial from the host: if we optimistically self-granted
+                // this node, roll it back so our view matches the host's.
+                if (m_isHost)
+                    break;
+
+                bool revoked = false;
+                {
+                    std::lock_guard<std::mutex> lock(m_lockMutex);
+                    auto it = m_nodeLocks.find(msg.nodeId);
+                    if (it != m_nodeLocks.end() && it->second.ownerPeer == m_localPeerID &&
+                        msg.sourcePeer == m_localPeerID)
+                    {
+                        m_nodeLocks.erase(it);
+                        revoked = true;
+                    }
+                }
+
+                if (revoked && m_onLockChanged)
+                    m_onLockChanged(msg.nodeId, INVALID_PEER);
                 break;
             }
 
@@ -1335,10 +1419,7 @@ namespace SparkEditor
         msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
         msg.peerInfo = localPeerSnapshot;
 
-        {
-            std::lock_guard<std::mutex> lock(m_messageMutex);
-            m_outgoingMessages.push(std::move(msg));
-        }
+        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
     }
 
     void CollaborativeEditSession::ExpireStaleNodes()
@@ -1368,6 +1449,49 @@ namespace SparkEditor
     PeerID CollaborativeEditSession::AllocatePeerID()
     {
         return m_nextPeerID++;
+    }
+
+    void CollaborativeEditSession::EnqueueMessage(std::queue<InternalMessage>& queue, InternalMessage&& msg,
+                                                  bool& overflowWarned, const char* queueName)
+    {
+        std::lock_guard<std::mutex> lock(m_messageMutex);
+        if (queue.size() >= kMaxQueuedMessages)
+        {
+            // Drop the oldest message to bound memory: a peer streaming faster than the
+            // main thread can drain must not be able to exhaust the heap. Warn once per
+            // sustained overflow so the log is not flooded.
+            queue.pop();
+            if (!overflowWarned)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                               "Collab %s message queue exceeded %zu entries; dropping oldest.", queueName,
+                               kMaxQueuedMessages);
+                overflowWarned = true;
+            }
+        }
+        else
+        {
+            overflowWarned = false;
+        }
+        queue.push(std::move(msg));
+    }
+
+    void CollaborativeEditSession::ReapFinishedClientThreads()
+    {
+        std::lock_guard<std::mutex> lock(m_clientThreadsMutex);
+        for (auto it = m_clientThreads.begin(); it != m_clientThreads.end();)
+        {
+            if (it->finished && it->finished->load(std::memory_order_acquire))
+            {
+                if (it->thread.joinable())
+                    it->thread.join();
+                it = m_clientThreads.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 
 } // namespace SparkEditor

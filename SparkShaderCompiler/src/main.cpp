@@ -33,6 +33,7 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 // Include the RHI shader compilation API
@@ -191,21 +192,50 @@ static std::string InferOutputPath(const std::string& inputFile, Spark::RHI::Gra
 
 static Spark::RHI::RHIShaderStage InferStageFromFilename(const std::string& filename)
 {
-    // Common naming conventions
-    std::string lower = filename;
-    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    // Reduce to the bare stem (no directory, no extension) so unrelated path
+    // characters cannot influence inference.
+    std::string stem = filename;
+    size_t slash = stem.find_last_of("/\\");
+    if (slash != std::string::npos)
+        stem = stem.substr(slash + 1);
+    size_t dot = stem.find_last_of('.');
+    if (dot != std::string::npos)
+        stem = stem.substr(0, dot);
 
-    if (lower.contains("vs") || lower.contains("vert"))
+    std::string lower = stem;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+    // Final underscore/dash-delimited token (for `blur_vs`-style names).
+    std::string lastToken = lower;
+    size_t sep = lower.find_last_of("_-");
+    if (sep != std::string::npos)
+        lastToken = lower.substr(sep + 1);
+
+    // Two-letter stage codes (vs/ps/gs/hs/ds/cs) collide with ordinary words
+    // as substrings ("Physics" contains "cs"). Accept them ONLY as an explicit
+    // suffix: an uppercase code in the original name (BasicPS) or a whole
+    // delimited token (blur_cs).
+    auto hasShortCode = [&](const char* lowerCode, const char* upperCode)
+    {
+        if (lastToken == lowerCode)
+            return true;
+        std::string upper = upperCode;
+        return stem.size() >= upper.size() && stem.compare(stem.size() - upper.size(), upper.size(), upper) == 0;
+    };
+
+    // Distinctive full words are safe to match anywhere in the stem.
+    if (lower.contains("vert") || hasShortCode("vs", "VS"))
         return Spark::RHI::RHIShaderStage::Vertex;
-    if (lower.contains("ps") || lower.contains("frag") || lower.contains("pixel"))
+    if (lower.contains("frag") || lower.contains("pixel") || hasShortCode("ps", "PS"))
         return Spark::RHI::RHIShaderStage::Pixel;
-    if (lower.contains("gs") || lower.contains("geom"))
+    if (lower.contains("geom") || hasShortCode("gs", "GS"))
         return Spark::RHI::RHIShaderStage::Geometry;
-    if (lower.contains("hs") || lower.contains("hull"))
+    if (lower.contains("hull") || hasShortCode("hs", "HS"))
         return Spark::RHI::RHIShaderStage::Hull;
-    if (lower.contains("ds") || lower.contains("domain"))
+    if (lower.contains("domain") || hasShortCode("ds", "DS"))
         return Spark::RHI::RHIShaderStage::Domain;
-    if (lower.contains("cs") || lower.contains("compute"))
+    if (lower.contains("compute") || hasShortCode("cs", "CS"))
         return Spark::RHI::RHIShaderStage::Compute;
     if (lower.contains("raygen") || lower.contains("rgen"))
         return Spark::RHI::RHIShaderStage::RayGeneration;
@@ -461,7 +491,8 @@ int main(int argc, char* argv[])
         auto isShaderFile = [&](const fs::path& path)
         {
             std::string ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
             return std::find(shaderExts.begin(), shaderExts.end(), ext) != shaderExts.end();
         };
 
@@ -481,6 +512,20 @@ int main(int argc, char* argv[])
         }
 
         std::cout << "Batch compiling " << shaderFiles.size() << " shader(s) from " << config.batchDir << "\n";
+
+        // In batch mode -o names an output directory; ensure it exists up front so
+        // per-file writes below don't all fail on a missing path.
+        if (!config.outputFile.empty())
+        {
+            std::error_code ec;
+            fs::create_directories(config.outputFile, ec);
+            if (ec)
+            {
+                std::cerr << "Error: Could not create output directory '" << config.outputFile << "': " << ec.message()
+                          << "\n";
+                return 1;
+            }
+        }
 
         auto batchStart = std::chrono::high_resolution_clock::now();
         int successCount = 0;

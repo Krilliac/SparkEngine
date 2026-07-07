@@ -162,6 +162,19 @@ namespace Spark::Streaming
             return;
         }
 
+        // Release any assets/DirectStorage state the loader still holds for this
+        // area, otherwise its load state (submitted handles + loaded CPU data)
+        // leaks until engine Shutdown. BeginAreaUnload cancels handles and frees
+        // data; the empty callback is safe (the loader null-checks it). The
+        // in-flight-load callback re-checks m_areas.find, so there is no double free.
+        if (it->second.state == AreaState::Loaded || it->second.state == AreaState::Loading)
+        {
+            m_assetLoader.BeginAreaUnload(areaId, {});
+        }
+        // Drop the manifest regardless of load state — a registered-but-unloaded
+        // area may still have one from RegisterArea(def, manifest).
+        m_assetLoader.RemoveManifest(areaId);
+
         // Remove from loaded list if present
         if (it->second.state == AreaState::Loaded)
         {

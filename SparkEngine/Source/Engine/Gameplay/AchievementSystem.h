@@ -47,13 +47,9 @@
 #include <utility>
 #include <vector>
 
-// Forward-declare BinaryWriter/BinaryReader to avoid hard include dependency.
-// Callers that use SaveToWriter/LoadFromReader must include Serializer.h themselves.
-namespace Spark
-{
-    class BinaryWriter;
-    class BinaryReader;
-} // namespace Spark
+// BinaryWriter / BinaryReader are used directly by the inline SaveToWriter /
+// LoadFromReader definitions below, so pull in the full serializer definition.
+#include "../../Utils/Serializer.h"
 
 namespace Spark::Gameplay
 {
@@ -370,11 +366,50 @@ namespace Spark::Gameplay
 
         /// @brief Serialize all progress data to a binary writer
         /// @param writer Target BinaryWriter (from Utils/Serializer.h)
-        void SaveToWriter(Spark::BinaryWriter& writer) const;
+        void SaveToWriter(Spark::BinaryWriter& writer) const
+        {
+            writer.Write<uint32_t>(static_cast<uint32_t>(m_progress.size()));
+            for (const auto& [id, prog] : m_progress)
+            {
+                writer.Write<uint32_t>(prog.achievementId);
+                writer.Write<float>(prog.currentValue);
+                writer.Write<uint8_t>(prog.unlocked ? static_cast<uint8_t>(1) : static_cast<uint8_t>(0));
+                writer.Write<uint64_t>(prog.unlockTimestamp);
+            }
+        }
 
         /// @brief Deserialize progress data from a binary reader
         /// @param reader Source BinaryReader (from Utils/Serializer.h)
-        void LoadFromReader(Spark::BinaryReader& reader);
+        ///
+        /// Only applies records to already-registered achievements; unknown ids are
+        /// skipped rather than inserted. A torn/truncated record aborts the load.
+        void LoadFromReader(Spark::BinaryReader& reader)
+        {
+            uint32_t count = reader.Read<uint32_t>();
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                uint32_t id = reader.Read<uint32_t>();
+                float currentValue = reader.Read<float>();
+                uint8_t unlocked = reader.Read<uint8_t>();
+                uint64_t unlockTimestamp = reader.Read<uint64_t>();
+
+                if (reader.HasError())
+                {
+                    break; // Truncated buffer — stop before applying a partial record.
+                }
+
+                // Only apply to achievements that are already registered.
+                auto it = m_progress.find(id);
+                if (it != m_progress.end())
+                {
+                    it->second.currentValue = currentValue;
+                    it->second.unlocked = (unlocked != 0);
+                    it->second.unlockTimestamp = unlockTimestamp;
+                    // Mark notified so loading a save does not re-fire unlock callbacks.
+                    it->second.notified = (unlocked != 0);
+                }
+            }
+        }
 
         // -----------------------------------------------------------------
         // Console

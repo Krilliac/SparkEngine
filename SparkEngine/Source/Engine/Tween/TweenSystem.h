@@ -139,6 +139,10 @@ namespace Spark
      *
      * Provides sequencing, parallel playback, and lifecycle control beyond
      * what the simpler TweenManager offers.
+     *
+     * @warning TweenFloat() captures the target float by raw pointer; the caller
+     *          owns its lifetime and must keep it alive until the tween finishes
+     *          (or cancel the handle first). See TweenFloat() for details.
      */
     class TweenSystem
     {
@@ -162,6 +166,23 @@ namespace Spark
 
         uint32_t GetActiveTweenCount() const;
 
+        /**
+         * @brief Tween the referenced float from @p from to @p to over @p duration seconds.
+         *
+         * @param target   The float to animate. Its address is captured by raw pointer.
+         * @param from     Starting value.
+         * @param to       Ending value.
+         * @param duration Duration in seconds.
+         * @param ease     Easing curve to apply (defaults to Linear).
+         * @return Handle identifying the created tween.
+         *
+         * @warning The caller MUST guarantee that @p target outlives the tween. The address
+         *          of @p target is captured into an update lambda that runs on future frames
+         *          until the tween completes. If @p target is destroyed, or its container
+         *          (e.g. a std::vector element or a reallocated buffer) moves it beforehand,
+         *          Update() writes through a dangling pointer (use-after-free). Cancel the
+         *          returned handle in the owner's destructor to be safe.
+         */
         TweenHandle TweenFloat(float& target, float from, float to, float duration, EaseType ease = EaseType::Linear);
         TweenHandle TweenDelay(float delay, TweenInstance::CompleteCallback onComplete);
 
@@ -176,6 +197,7 @@ namespace Spark
 
         TweenHandle m_nextHandle = 1;
         std::unordered_map<TweenHandle, TweenInstance> m_tweens;
+        bool m_iterating = false; ///< True while Update() walks m_tweens; defers reentrant CancelAll clears.
     };
 
 } // namespace Spark

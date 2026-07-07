@@ -41,6 +41,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -159,10 +160,12 @@ namespace SparkEditor
         Presence,         ///< Peer presence/heartbeat update
         SelectionChanged, ///< Peer selection changed
         EditBroadcast,    ///< Edit operation broadcast
-        LockRequest,      ///< Lock acquisition request
+        LockRequest,      ///< Lock acquisition request (client -> host)
         LockRelease,      ///< Lock release notification
         PeerConnect,      ///< New peer connected
-        PeerDisconnect    ///< Peer disconnected
+        PeerDisconnect,   ///< Peer disconnected
+        LockGranted,      ///< Authoritative grant from host (host -> peers)
+        LockDenied        ///< Authoritative denial from host (host -> requesting peer)
     };
 
     /**
@@ -305,13 +308,19 @@ namespace SparkEditor
         void ExpireStaleNodes();
         PeerID AllocatePeerID();
 
+        /// @brief Bounded enqueue onto a message queue; drops the oldest entry past
+        ///        kMaxQueuedMessages so a fast/malicious peer cannot exhaust memory.
+        void EnqueueMessage(std::queue<InternalMessage>& queue, InternalMessage&& msg, bool& overflowWarned,
+                            const char* queueName);
+
         // Network I/O
         void SendToAllPeers(const InternalMessage& msg);
         void SendToPeer(PeerID peerId, const InternalMessage& msg);
         void NetworkThreadHost();
         void NetworkThreadClient();
-        void HandleClientSocket(int clientSocket, PeerID peerId);
-        void ShutdownAllSockets(); ///< shutdown() all sockets to unblock recv()/accept()
+        void HandleClientSocket(int clientSocket, PeerID peerId, std::shared_ptr<std::atomic<bool>> finished);
+        void ReapFinishedClientThreads(); ///< Join+remove client handler threads that have exited
+        void ShutdownAllSockets();        ///< shutdown() all sockets to unblock recv()/accept()
         void CloseAllSockets();
 
         // State
@@ -347,10 +356,13 @@ namespace SparkEditor
         float m_presenceBroadcastInterval = 1.0f;
         float m_presenceBroadcastTimer = 0.0f;
 
-        // Message queues
+        // Message queues (bounded — see kMaxQueuedMessages / EnqueueMessage)
+        static constexpr size_t kMaxQueuedMessages = 8192;
         std::queue<InternalMessage> m_outgoingMessages;
         std::queue<InternalMessage> m_incomingMessages;
         mutable std::mutex m_messageMutex;
+        bool m_outgoingOverflowWarned = false;
+        bool m_incomingOverflowWarned = false;
 
         // Networking — TCP sockets and threads
         int m_listenSocket = -1;
@@ -358,7 +370,16 @@ namespace SparkEditor
         std::unordered_map<PeerID, int> m_peerSockets;
         mutable std::mutex m_socketMutex;
         std::thread m_networkThread;
-        std::vector<std::thread> m_clientThreads;
+
+        /// @brief A per-client handler thread plus a flag it sets when it exits,
+        ///        so finished threads can be joined and reaped from the main thread.
+        struct ClientConnection
+        {
+            std::thread thread;
+            std::shared_ptr<std::atomic<bool>> finished;
+        };
+        std::vector<ClientConnection> m_clientThreads;
+        mutable std::mutex m_clientThreadsMutex;
 
         // Peer color palette for viewport visualization
         static constexpr EditorPeer::Color kPeerColors[] = {

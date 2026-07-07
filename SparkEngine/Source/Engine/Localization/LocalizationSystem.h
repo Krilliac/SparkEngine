@@ -68,7 +68,7 @@ namespace Spark
      * @param key String key to look up.
      * @return Localized text, or the key itself if not found.
      */
-        const std::string& GetEntry(const std::string& key) const;
+        std::string GetEntry(const std::string& key) const;
 
         /**
      * @brief Check whether a key exists in this table.
@@ -134,7 +134,7 @@ namespace Spark
      * Falls back to the fallback language if the key is missing in the
      * current language.
      */
-        const std::string& GetString(const std::string& key) const;
+        std::string GetString(const std::string& key) const;
 
         /**
      * @brief Format a localized string with positional arguments.

@@ -104,6 +104,21 @@ namespace Spark
         }
     }
 
+    void InvalidStateDetector::RemoveRule(const std::string& name)
+    {
+        std::erase_if(m_rules, [&](const StateValidationRule& r) { return r.name == name; });
+    }
+
+    void InvalidStateDetector::RemoveRulesByCategory(const std::string& category)
+    {
+        std::erase_if(m_rules, [&](const StateValidationRule& r) { return r.category == category; });
+    }
+
+    void InvalidStateDetector::ClearRules()
+    {
+        m_rules.clear();
+    }
+
     // =========================================================================
     // Checks
     // =========================================================================

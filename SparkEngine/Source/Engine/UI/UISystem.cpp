@@ -197,10 +197,15 @@ namespace Spark::UI
             return;
         }
 
-        // Auto-layout children if layout direction is set
+        // Auto-layout children if layout direction is set. Positions are laid
+        // out in absolute (canvas) space by anchoring at the panel's own origin
+        // (m_x/m_y) plus padding — not panel-local space. HandleClick() forwards
+        // absolute cursor coordinates straight to children, so children (and
+        // nested panels) must carry absolute positions or clicks miss for any
+        // panel not at the origin.
         if (m_layout != LayoutDirection::None)
         {
-            float offset = m_padding;
+            float offset = (m_layout == LayoutDirection::Vertical) ? (m_y + m_padding) : (m_x + m_padding);
             for (auto& child : m_children)
             {
                 if (!child->IsVisible())
@@ -209,12 +214,12 @@ namespace Spark::UI
                 }
                 if (m_layout == LayoutDirection::Vertical)
                 {
-                    child->SetPosition(m_padding, offset);
+                    child->SetPosition(m_x + m_padding, offset);
                     offset += child->GetHeight() + m_spacing;
                 }
                 else
                 {
-                    child->SetPosition(offset, m_padding);
+                    child->SetPosition(offset, m_y + m_padding);
                     offset += child->GetWidth() + m_spacing;
                 }
             }

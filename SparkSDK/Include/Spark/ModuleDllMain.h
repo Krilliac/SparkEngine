@@ -69,6 +69,27 @@ extern "C" __declspec(dllexport) void SparkModuleInjectConsole(void* hostConsole
     Spark::Detail::InjectConsoleInstance(static_cast<Spark::SimpleConsole*>(hostConsole));
 }
 
+// EngineContext lives in the global namespace; this header declares its static
+// SetInjected() setter. Module translation units have the engine source tree on
+// their include path, so the quoted include resolves (mirrors the mid-file
+// <imgui.h> include below).
+#include "Core/EngineContext.h"
+
+/**
+ * @brief Host-EngineContext injection hook, called by ModuleManager after load.
+ *
+ * Windows module DLLs statically link SparkEngineLib, so the g_engineContext
+ * global that backs EngineContext::Get() is a per-image copy that is null inside
+ * the module — service-locator lookups there (e.g. NetworkManager) would otherwise
+ * fall back to dead per-module singletons. This export points the module's
+ * EngineContext::Get() at the host executable's live context. The pointer is stored
+ * non-owning, so module teardown / FreeLibrary never frees the host context.
+ */
+extern "C" __declspec(dllexport) void SparkModuleInjectEngineContext(void* ctx)
+{
+    EngineContext::SetInjected(static_cast<EngineContext*>(ctx));
+}
+
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif

@@ -226,91 +226,21 @@ namespace Spark
 // std::expected polyfill (for compilers where __cpp_lib_expected is absent)
 // ============================================================================
 
-#ifdef SPARK_HAS_EXPECTED
+// C++23 <expected> is mandatory (the C++23 language requirement is enforced above,
+// and every supported toolchain — GCC 13+, Clang 17+, MSVC 19.36+ — ships the
+// library feature). We therefore hard-require the standard header.
+//
+// A hand-rolled fallback previously defined `unexpected`/`expected` inside
+// namespace std. That was doubly unsound: adding templates to namespace std is
+// undefined behavior, and the primary template's error() read the error union
+// member even in the value state (another UB union access). Because
+// SPARK_HAS_EXPECTED gated it out on all supported configurations it was dead code
+// that only shipped latent UB, so it is removed outright.
 #include <expected>
-#else
-
-namespace std
-{
-    template <typename E> class unexpected
-    {
-      public:
-        explicit unexpected(E e) : m_error(static_cast<E&&>(e)) {}
-        const E& error() const& { return m_error; }
-        E& error() & { return m_error; }
-
-      private:
-        E m_error;
-    };
-
-    template <typename T, typename E> class expected
-    {
-      public:
-        expected(T val) : m_hasValue(true) { new (&m_val) T(static_cast<T&&>(val)); }                  // NOLINT
-        expected(unexpected<E> u) : m_hasValue(false) { new (&m_err) E(static_cast<E&&>(u.error())); } // NOLINT
-        ~expected()
-        {
-            if (m_hasValue)
-                m_val.~T();
-            else
-                m_err.~E();
-        }
-        expected(const expected& o) : m_hasValue(o.m_hasValue)
-        {
-            if (m_hasValue)
-                new (&m_val) T(o.m_val);
-            else
-                new (&m_err) E(o.m_err);
-        }
-        expected(expected&& o) noexcept : m_hasValue(o.m_hasValue)
-        {
-            if (m_hasValue)
-                new (&m_val) T(static_cast<T&&>(o.m_val));
-            else
-                new (&m_err) E(static_cast<E&&>(o.m_err));
-        }
-        expected& operator=(const expected&) = delete;
-        expected& operator=(expected&&) = delete;
-
-        explicit operator bool() const { return m_hasValue; }
-        bool has_value() const { return m_hasValue; }
-
-        T& value() { return m_val; }
-        const T& value() const { return m_val; }
-        T& operator*() { return m_val; }
-        const T& operator*() const { return m_val; }
-        T* operator->() { return &m_val; }
-        const T* operator->() const { return &m_val; }
-
-        const E& error() const { return m_err; }
-
-      private:
-        bool m_hasValue;
-        union
-        {
-            T m_val;
-            E m_err;
-        };
-    };
-
-    // Specialization for expected<void, E>
-    template <typename E> class expected<void, E>
-    {
-      public:
-        expected() : m_hasError(false) {}                                                   // success
-        expected(unexpected<E> u) : m_hasError(true), m_err(static_cast<E&&>(u.error())) {} // NOLINT
-
-        explicit operator bool() const { return !m_hasError; }
-        bool has_value() const { return !m_hasError; }
-        void value() const {}
-        const E& error() const { return m_err; }
-
-      private:
-        bool m_hasError;
-        E m_err{};
-    };
-} // namespace std
-#endif // SPARK_HAS_EXPECTED
+#ifndef SPARK_HAS_EXPECTED
+#error                                                                                                                 \
+    "SparkEngine requires a C++23 <expected> implementation (__cpp_lib_expected >= 202211L). Use GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+)."
+#endif
 
 // ============================================================================
 // Windows: Use native types

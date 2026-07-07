@@ -51,6 +51,7 @@
 #include "Utils/GPUResourceLeakDetector.h"
 #include "Utils/InvalidStateDetector.h"
 #include "FixedTimestepAccumulator.h"
+#include "FaultIsolation.h"
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/ConnectionScopeFilter.h"
 #ifdef ENABLE_NETWORKING

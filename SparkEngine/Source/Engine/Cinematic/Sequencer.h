@@ -246,6 +246,7 @@ namespace Spark::Cinematic
     // ============================================================================
 
     using EventCallback = std::function<void(const std::string& eventName, const std::string& params)>;
+    using AudioCallback = std::function<void(const AudioCue&)>;
 
     class Sequence
     {
@@ -273,8 +274,9 @@ namespace Spark::Cinematic
         // Per-frame update
         void Update(float deltaTime);
 
-        // Event callback
+        // Event and audio callbacks
         void SetEventCallback(EventCallback callback);
+        void SetAudioCallback(AudioCallback callback);
 
         // State queries
         const std::string& GetName() const { return m_name; }
@@ -296,6 +298,7 @@ namespace Spark::Cinematic
         std::string m_name;
         std::vector<std::unique_ptr<SequencerTrack>> m_tracks;
         EventCallback m_eventCallback;
+        AudioCallback m_audioCallback;
 
         SequencePlayState m_playState = SequencePlayState::Stopped;
         float m_currentTime = 0.0f;

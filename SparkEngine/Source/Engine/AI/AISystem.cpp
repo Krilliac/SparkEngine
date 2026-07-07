@@ -158,12 +158,13 @@ namespace Spark::AI
             liveAgents.push_back({entity});
         }
 
-        // Phase 2 (parallel): Perception, behavior tree tick, and movement are
-        // independent per agent so they can run in parallel via the JobSystem.
         const int agentCount = static_cast<int>(liveAgents.size());
         if (agentCount == 0)
             return;
 
+        // Phase 2a (parallel): Perception and behavior-tree evaluation are per-agent
+        // independent — each job reads only non-AI target entities and writes only its
+        // own AIComponent + private Blackboard, so they carry no cross-agent data race.
         auto& jobSystem = Spark::JobSystem::Get();
         jobSystem.ParallelFor(
             0, agentCount,
@@ -175,9 +176,22 @@ namespace Spark::AI
 
                 UpdatePerception(world, entity, ai, transform, deltaTime);
                 UpdateBehavior(ai, deltaTime);
-                UpdateMovement(world, entity, ai, transform, deltaTime);
             },
             4 /* minBatchSize: amortize job overhead */);
+
+        // Phase 2b (serial): Movement must run single-threaded. UpdateMovement's
+        // obstacle-avoidance scan reads *other* agents' Transform.position while each
+        // agent writes its own Transform / RigidBody — running it concurrently is an
+        // unsynchronized read/write data race (the build-linux-tsan CI job flags it) and
+        // produces nondeterministic pathing/avoidance. A serial pass keeps every read of
+        // peer positions consistent without needing a snapshot/staging buffer.
+        for (int i = 0; i < agentCount; ++i)
+        {
+            auto entity = liveAgents[i].entity;
+            auto& transform = view.get<Transform>(entity);
+            auto& ai = view.get<AIComponent>(entity);
+            UpdateMovement(world, entity, ai, transform, deltaTime);
+        }
     }
 
     void AISystem::RegisterBehavior(const std::string& name, std::unique_ptr<BehaviorTree> tree)
@@ -225,13 +239,11 @@ namespace Spark::AI
         instanceBB.Set("fleeDistance", templateBB.Get<float>("fleeDistance", 30.0f));
         instanceBB.Set("currentPatrolIndex", 0);
 
-        // If the template has a root, share it by setting it on the instance
-        // (Node trees are evaluated read-only with respect to tree structure)
+        // Deep-copy the template's node tree into the instance so the clone has a
+        // real, independently-owned root (BTNode::Clone recurses through children).
         if (it->second->GetRoot())
         {
-            // We cannot move the root; instead we reference the template's root.
-            // This works because all mutable state is in the Blackboard.
-            // For production, implement BehaviorTree::Clone() that deep-copies nodes.
+            instance->SetRoot(it->second->GetRoot()->Clone());
         }
 
         BehaviorTree* ptr = instance.get();
@@ -310,7 +322,6 @@ namespace Spark::AI
             // State transitions based on perception
             if (targetVisible)
             {
-                float targetDist = std::sqrt(closestThreatDistSq);
                 if (ai.state == AIComponent::State::Idle || ai.state == AIComponent::State::Patrolling)
                 {
                     ai.alertTimer = ai.config.reactionTime;

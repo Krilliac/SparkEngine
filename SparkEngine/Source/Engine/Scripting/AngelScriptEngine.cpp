@@ -406,6 +406,30 @@ void AngelScriptEngine::ConfigureSandboxSecurity(Spark::ScriptSecurityLevel leve
 }
 
 // ============================================================================
+// Client/server context enforcement (shared by both builds — pure lookup logic
+// with no AngelScript dependency; the metadata that populates m_classContexts
+// is recorded only in the real build, so under the stub every class is Shared).
+// ============================================================================
+
+AngelScriptEngine::ScriptContext AngelScriptEngine::GetClassContext(const std::string& moduleName,
+                                                                    const std::string& className) const
+{
+    auto it = m_classContexts.find(moduleName + "::" + className);
+    return it != m_classContexts.end() ? it->second : ScriptContext::Shared;
+}
+
+bool AngelScriptEngine::IsClassContextAllowed(ScriptContext classContext) const
+{
+    // Shared classes run everywhere. A tagged class only attaches when the
+    // engine's current context matches its tag.
+    if (classContext == ScriptContext::Shared)
+    {
+        return true;
+    }
+    return classContext == m_scriptContext;
+}
+
+// ============================================================================
 // SPARK_ANGELSCRIPT_SUPPORT — real implementation
 // ============================================================================
 
@@ -549,6 +573,7 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     }
 
     m_moduleFilePaths[moduleName] = scriptPath;
+    RecordModuleContexts(builder, moduleName);
 
     LogInfo("Compiled script file: " + scriptPath + " -> module '" + moduleName + "'.");
     return true;
@@ -586,13 +611,42 @@ bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
         }
     }
 
-    // 2. Detach all scripts from this module
+    // 2. Pre-validate: compile the new source into a throwaway staging module
+    //    BEFORE touching any live script instances. The common hot-reload case
+    //    is that the user just saved a file mid-edit and introduced a syntax
+    //    error; if we detached and recompiled first, that single typo would
+    //    wipe every running script of the module with no way back. By building
+    //    a staging module first, a failed compile leaves the existing module
+    //    and all its live instances completely untouched.
+    const std::string stagingModule = moduleName + "$hotreload_stage";
+    {
+        CScriptBuilder validator;
+        bool staged = validator.StartNewModule(m_engine, stagingModule.c_str()) >= 0 &&
+                      validator.AddSectionFromFile(filePath.c_str()) >= 0 && validator.BuildModule() >= 0;
+
+        // Discard the staging module either way — it was only a compile probe;
+        // the canonical recompile below rebuilds under the real module name.
+        if (asIScriptModule* stage = m_engine->GetModule(stagingModule.c_str()))
+        {
+            stage->Discard();
+        }
+
+        if (!staged)
+        {
+            SetLastError("Hot-reload aborted: recompilation of '" + filePath +
+                         "' failed; live scripts left intact.");
+            LogError(m_lastError);
+            return false;
+        }
+    }
+
+    // 3. The new source is known good. Detach the old instances and recompile
+    //    the module under its canonical name.
     for (const auto& binding : bindings)
     {
         DetachScript(binding.entity);
     }
 
-    // 3. Recompile the module from disk
     if (!CompileScriptFile(filePath))
     {
         LogError("Hot-reload failed: recompilation of '" + filePath + "' failed.");
@@ -675,8 +729,70 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
         m_modules[moduleName] = mod;
     }
 
+    RecordModuleContexts(builder, moduleName);
+
     LogInfo("Compiled inline script -> module '" + moduleName + "'.");
     return true;
+}
+
+// -------------------------------------------------------------------------
+// Client/server context metadata
+// -------------------------------------------------------------------------
+
+void AngelScriptEngine::RecordModuleContexts(CScriptBuilder& builder, const std::string& moduleName)
+{
+    asIScriptModule* mod = m_engine->GetModule(moduleName.c_str());
+    if (!mod)
+    {
+        return;
+    }
+
+    const asUINT typeCount = mod->GetObjectTypeCount();
+    for (asUINT i = 0; i < typeCount; ++i)
+    {
+        asITypeInfo* type = mod->GetObjectTypeByIndex(i);
+        if (!type)
+        {
+            continue;
+        }
+
+        ScriptContext ctx = ScriptContext::Shared;
+        for (const std::string& meta : builder.GetMetadataForType(type->GetTypeId()))
+        {
+            // Case-insensitive match against the recognised context tags.
+            std::string tag;
+            tag.reserve(meta.size());
+            for (char c : meta)
+            {
+                tag.push_back((c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c);
+            }
+
+            if (tag == "server")
+            {
+                ctx = ScriptContext::Server;
+            }
+            else if (tag == "client")
+            {
+                ctx = ScriptContext::Client;
+            }
+            else if (tag == "shared")
+            {
+                ctx = ScriptContext::Shared;
+            }
+        }
+
+        // Keyed by "module::class" so a recompile (hot-reload) refreshes the
+        // record; a class that dropped its tag reverts to the Shared default.
+        const std::string key = moduleName + "::" + type->GetName();
+        if (ctx == ScriptContext::Shared)
+        {
+            m_classContexts.erase(key);
+        }
+        else
+        {
+            m_classContexts[key] = ctx;
+        }
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -717,6 +833,22 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
     {
         SetLastError("Class '" + className + "' not found in module '" + moduleName + "'.");
         LogError(m_lastError);
+        return false;
+    }
+
+    // Enforce the client/server boundary: a class tagged [server]/[client]
+    // (recorded at compile time in m_classContexts) must not attach when it
+    // conflicts with the engine's current execution context. Shared/untagged
+    // classes always attach. This is the multiplayer authority separation the
+    // header advertises — without it, client-only logic could run on the
+    // dedicated server and vice-versa.
+    const ScriptContext classCtx = GetClassContext(moduleName, className);
+    if (!IsClassContextAllowed(classCtx))
+    {
+        const char* classCtxStr = classCtx == ScriptContext::Server ? "[server]" : "[client]";
+        SetLastError("Skipped attaching '" + className + "': its " + classCtxStr +
+                     " context conflicts with the current script execution context.");
+        LogInfo(m_lastError);
         return false;
     }
 

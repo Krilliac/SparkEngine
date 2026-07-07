@@ -128,6 +128,30 @@ namespace Spark
         // -- Rule management --
         void AddRule(StateValidationRule rule);
         void SetRuleEnabled(const std::string& name, bool enabled);
+
+        /**
+         * @brief Remove a single rule by its unique name.
+         * @param name The rule's @c StateValidationRule::name. No-op if not found.
+         */
+        void RemoveRule(const std::string& name);
+
+        /**
+         * @brief Remove every rule belonging to a category.
+         *
+         * Each rule carries an owning @c category ("RPG", "RTS", "Base", …). A game
+         * module MUST call this in its OnUnload for the categories it added, before
+         * its DLL is unloaded — otherwise the detector's next Update() invokes rule
+         * lambdas whose code lives in freed module memory.
+         *
+         * @param category The category to purge. No-op if no rule matches.
+         */
+        void RemoveRulesByCategory(const std::string& category);
+
+        /**
+         * @brief Remove all registered rules (including the engine defaults).
+         */
+        void ClearRules();
+
         [[nodiscard]] uint32_t GetRuleCount() const { return static_cast<uint32_t>(m_rules.size()); }
 
         // -- Query --

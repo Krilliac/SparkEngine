@@ -242,7 +242,13 @@ namespace Spark
                        static_cast<uint32_t>(m_tweens.size()));
         for (auto& [h, tween] : m_tweens)
             tween.Cancel();
-        m_tweens.clear();
+
+        // If a completion callback triggered CancelAll from inside Update(),
+        // defer the erase: clearing here would destroy the TweenInstance whose
+        // m_onComplete is still on the stack. Update() erases every completed
+        // tween after its walk, so the marked-Cancelled tweens are removed then.
+        if (!m_iterating)
+            m_tweens.clear();
     }
 
     void TweenSystem::Pause(TweenHandle handle)
@@ -261,19 +267,38 @@ namespace Spark
 
     void TweenSystem::Update(float deltaTime)
     {
-        auto it = m_tweens.begin();
-        while (it != m_tweens.end())
+        // Snapshot the handles before iterating. A tween's completion callback
+        // may reentrantly Create() (which can rehash m_tweens), Cancel(), or
+        // CancelAll() (which clears it). Holding a live map iterator across such
+        // a call is undefined behavior, so we look each handle up fresh, defer
+        // erasure until after the walk, and skip handles a callback removed.
+        // Node references in an unordered_map stay valid across a rehash, so
+        // calling Update() on a found element remains safe even if a callback
+        // inserts. m_iterating tells CancelAll() to defer its clear() so it
+        // never destroys the instance whose callback is currently running.
+        std::vector<TweenHandle> handles;
+        handles.reserve(m_tweens.size());
+        for (const auto& [handle, tween] : m_tweens)
+            handles.push_back(handle);
+
+        std::vector<TweenHandle> completed;
+        m_iterating = true;
+        for (TweenHandle handle : handles)
         {
+            auto it = m_tweens.find(handle);
+            if (it == m_tweens.end())
+                continue; // removed by a reentrant Cancel/CancelAll
+
             if (it->second.Update(deltaTime))
             {
-                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Tween completed: handle=%u", it->first);
-                it = m_tweens.erase(it);
-            }
-            else
-            {
-                ++it;
+                SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Tween completed: handle=%u", handle);
+                completed.push_back(handle);
             }
         }
+        m_iterating = false;
+
+        for (TweenHandle handle : completed)
+            m_tweens.erase(handle);
     }
 
     TweenHandle TweenSystem::TweenFloat(float& target, float from, float to, float duration, EaseType ease)

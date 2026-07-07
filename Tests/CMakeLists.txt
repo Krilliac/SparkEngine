@@ -592,6 +592,42 @@ if(NOT WIN32)
 endif()
 
 # =============================================================================
+# Hardening regression tests (claude/harden-fleet) — shared TestMain runner
+# =============================================================================
+target_sources(SparkTests PRIVATE
+    harden/Test_core_hardening.cpp
+    harden/Test_tests_inversekinematics.cpp
+    harden/Test_tests_ecsystemordering_real.cpp
+    harden/Test_tests_enginecontext_real.cpp
+    harden/Test_ui-2d_tween.cpp
+    harden/Test_ui-2d_ui.cpp
+    harden/Test_gameplay_inventory.cpp
+    harden/Test_gameplay_achievement.cpp
+    harden/Test_gameplay_instance.cpp
+    harden/Test_gameplay_dialogue.cpp
+    harden/Test_gameplay_response.cpp
+    harden/Test_scripting_hardening.cpp
+    harden/Test_tooling_CommandParser.cpp
+    harden/Test_ai-anim_navmesh.cpp
+    harden/Test_ai-anim_animation.cpp
+    harden/Test_graphics_rhi.cpp
+    harden/Test_persistence_AsyncDatabasePool.cpp
+    harden/Test_persistence_AsyncDatabaseParams.cpp
+    harden/Test_persistence_ReplaySystem.cpp
+    harden/Test_persistence_SaveSystem.cpp
+    harden/Test_persistence_ModSystem.cpp
+    harden/Test_engine-misc_SnapshotCount.cpp
+    harden/Test_engine-misc_Coroutine.cpp
+    harden/Test_engine-misc_MobileGestures.cpp
+    harden/Test_engine-misc_EventQueueEviction.cpp
+    harden/Test_ecs_audio_doppler.cpp
+    harden/Test_ecs_ai_pathfollow.cpp
+    "${CMAKE_SOURCE_DIR}/SparkConsole/src/CommandParser.cpp"
+)
+# harden/ tests live one directory deeper; ensure they resolve the shared TestFramework.h
+target_include_directories(SparkTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# =============================================================================
 # Feature-gated test support
 # When optional dependencies (ImGui, SDL2, Vulkan, etc.) are available, extra
 # tests activate automatically. Tests use #ifdef SPARK_TEST_HAS_* guards.
@@ -628,6 +664,13 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
+    )
+
+    # Hardening tests requiring ImGui/editor sources (claude/harden-fleet)
+    target_sources(SparkTests PRIVATE
+        harden/Test_gamemodules_mmochat_di.cpp
+        harden/Test_editor_collab_lock_protocol.cpp
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     )
 
     # RPG module sources
@@ -689,6 +732,7 @@ endif()
 # Propagate engine feature defines so tests can gate on them
 if(ENABLE_NETWORKING)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_NETWORKING)
+    target_sources(SparkTests PRIVATE harden/Test_net-world_migration.cpp)
 endif()
 if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)

@@ -77,6 +77,14 @@ extern int g_assertionsFailed;
 extern int g_testsWarned;
 extern std::string g_currentTest;
 
+// Thrown by the fatal ASSERT_* macros to abort the current test only. The test
+// runner in TestMain.cpp catches this per-test (around test->func()), so a
+// failed precondition fails one test in isolation instead of letting execution
+// fall through into an unsafe dereference and crash the whole process.
+struct TestAbort
+{
+};
+
 #define TEST(name)                                                                                                     \
     void test_##name();                                                                                                \
     static TestRegistrar registrar_##name(#name, __FILE__, __LINE__, test_##name);                                     \
@@ -92,9 +100,9 @@ extern std::string g_currentTest;
     static void testfn_fixture_##FixtureClass##_##testName()                                                           \
     {                                                                                                                  \
         TestFixture_##FixtureClass##_##testName fixture;                                                               \
-        fixture.SetUp();                                                                                               \
         try                                                                                                            \
         {                                                                                                              \
+            fixture.SetUp();                                                                                           \
             fixture.Run();                                                                                             \
         }                                                                                                              \
         catch (...)                                                                                                    \
@@ -155,6 +163,66 @@ extern std::string g_currentTest;
             g_assertionsFailed++;                                                                                      \
             std::cerr << "  FAIL: " << #a << " != " << #b << " (both " << _a << ") at " << __FILE__ << ":" << __LINE__ \
                       << "\n";                                                                                         \
+        }                                                                                                              \
+    } while (0)
+
+// ============================================================================
+// Fatal assertions — on failure they record the failure AND throw TestAbort,
+// which stops the current test immediately (the runner catches it per-test).
+// Use these instead of EXPECT_* wherever a false condition would make the very
+// next line unsafe (e.g. ASSERT_TRUE(p != nullptr) before dereferencing p).
+// ============================================================================
+
+#define ASSERT_TRUE(expr)                                                                                              \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (expr)                                                                                                      \
+        {                                                                                                              \
+            g_assertionsPassed++;                                                                                      \
+        }                                                                                                              \
+        else                                                                                                           \
+        {                                                                                                              \
+            g_assertionsFailed++;                                                                                      \
+            std::cerr << "  FATAL: " << #expr << " was false (" << __FILE__ << ":" << __LINE__ << ")\n";               \
+            throw TestAbort{};                                                                                         \
+        }                                                                                                              \
+    } while (0)
+
+#define ASSERT_FALSE(expr) ASSERT_TRUE(!(expr))
+
+#define ASSERT_EQ(a, b)                                                                                                \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        auto _a = (a);                                                                                                 \
+        auto _b = (b);                                                                                                 \
+        if (_a == _b)                                                                                                  \
+        {                                                                                                              \
+            g_assertionsPassed++;                                                                                      \
+        }                                                                                                              \
+        else                                                                                                           \
+        {                                                                                                              \
+            g_assertionsFailed++;                                                                                      \
+            std::cerr << "  FATAL: " << #a << " == " << #b << " (" << _a << " != " << _b << ") at " << __FILE__ << ":" \
+                      << __LINE__ << "\n";                                                                             \
+            throw TestAbort{};                                                                                         \
+        }                                                                                                              \
+    } while (0)
+
+#define ASSERT_NE(a, b)                                                                                                \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        auto _a = (a);                                                                                                 \
+        auto _b = (b);                                                                                                 \
+        if (_a != _b)                                                                                                  \
+        {                                                                                                              \
+            g_assertionsPassed++;                                                                                      \
+        }                                                                                                              \
+        else                                                                                                           \
+        {                                                                                                              \
+            g_assertionsFailed++;                                                                                      \
+            std::cerr << "  FATAL: " << #a << " != " << #b << " (both " << _a << ") at " << __FILE__ << ":"            \
+                      << __LINE__ << "\n";                                                                             \
+            throw TestAbort{};                                                                                         \
         }                                                                                                              \
     } while (0)
 
