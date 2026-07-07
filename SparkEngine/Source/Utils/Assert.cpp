@@ -95,10 +95,19 @@ namespace Assert
 
         if (shouldLog)
         {
-            // Timestamp
+            // Timestamp. std::localtime returns a pointer to a shared static std::tm,
+            // so it is a data race when the async logger thread formats timestamps
+            // concurrently. Fill a stack std::tm via the reentrant variant instead
+            // (mirrors CrashHandler.cpp).
             std::time_t t = std::time(nullptr);
+            std::tm tmBuf{};
+#ifdef _WIN32
+            localtime_s(&tmBuf, &t);
+#else
+            localtime_r(&t, &tmBuf);
+#endif
             char timeBuf[64];
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &tmBuf);
 
             // Format user message if provided
             char userMsg[512] = {};

@@ -348,7 +348,15 @@ namespace Spark::AI
 
     bool NavMeshQuery::IsPointOnNavMesh(const XMFLOAT3& point, float tolerance) const
     {
-        return FindContainingTriangle(point) != UINT32_MAX;
+        uint32_t triIndex = FindContainingTriangle(point);
+        if (triIndex == UINT32_MAX)
+            return false;
+
+        // FindContainingTriangle matches within a fixed 2 m vertical band; honor the
+        // caller's (typically tighter) tolerance by re-checking the vertical distance to
+        // the containing triangle's surface.
+        XMFLOAT3 projected = ProjectPointToTriangle(point, triIndex);
+        return std::abs(point.y - projected.y) <= tolerance;
     }
 
     XMFLOAT3 NavMeshQuery::GetRandomPoint() const
@@ -781,6 +789,64 @@ namespace Spark::AI
     // NavMeshManager
     // ============================================================================
 
+    /// Rebuild the fixed per-edge neighbor links (`neighborTriangles[3]`) from shared
+    /// vertex positions. Two triangles neighbor each other when they share >= 2 vertices
+    /// (a common edge). Mirrors the adjacency pass in NavMeshBuilder::Build. O(n^2) — only
+    /// invoked for modest triangle counts (see LoadNavMesh). All links are first reset to
+    /// UINT32_MAX so the result fails safe (no bogus "borders triangle 0") on stray data.
+    static void RebuildTriangleAdjacency(NavMeshData& navMesh)
+    {
+        for (auto& tri : navMesh.triangles)
+        {
+            tri.neighborTriangles[0] = UINT32_MAX;
+            tri.neighborTriangles[1] = UINT32_MAX;
+            tri.neighborTriangles[2] = UINT32_MAX;
+        }
+
+        const size_t vertexCount = navMesh.vertices.size();
+        for (size_t i = 0; i < navMesh.triangles.size(); ++i)
+        {
+            for (size_t j = i + 1; j < navMesh.triangles.size(); ++j)
+            {
+                int shared = 0;
+                for (int ei = 0; ei < 3; ++ei)
+                {
+                    for (int ej = 0; ej < 3; ++ej)
+                    {
+                        uint32_t viIdx = navMesh.triangles[i].indices[ei];
+                        uint32_t vjIdx = navMesh.triangles[j].indices[ej];
+                        if (viIdx >= vertexCount || vjIdx >= vertexCount)
+                            continue;
+                        const auto& vi = navMesh.vertices[viIdx].position;
+                        const auto& vj = navMesh.vertices[vjIdx].position;
+                        float dx = vi.x - vj.x, dy = vi.y - vj.y, dz = vi.z - vj.z;
+                        if (dx * dx + dy * dy + dz * dz < 0.001f)
+                            shared++;
+                    }
+                }
+                if (shared >= 2)
+                {
+                    for (int e = 0; e < 3; ++e)
+                    {
+                        if (navMesh.triangles[i].neighborTriangles[e] == UINT32_MAX)
+                        {
+                            navMesh.triangles[i].neighborTriangles[e] = static_cast<uint32_t>(j);
+                            break;
+                        }
+                    }
+                    for (int e = 0; e < 3; ++e)
+                    {
+                        if (navMesh.triangles[j].neighborTriangles[e] == UINT32_MAX)
+                        {
+                            navMesh.triangles[j].neighborTriangles[e] = static_cast<uint32_t>(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     NavMeshManager& NavMeshManager::GetInstance()
     {
         static NavMeshManager instance;
@@ -852,6 +918,16 @@ namespace Spark::AI
             file.read(reinterpret_cast<char*>(&navMesh->triangles[i].centroid), sizeof(XMFLOAT3));
             file.read(reinterpret_cast<char*>(&navMesh->triangles[i].normal), sizeof(XMFLOAT3));
             file.read(reinterpret_cast<char*>(&navMesh->triangles[i].area), sizeof(float));
+
+            // The .snav format persists the dynamic `adjacency` list but NOT the fixed
+            // neighborTriangles[3] edge links, and vector::resize value-initialises them
+            // to {0,0,0} — which A* would misread as "every triangle borders triangle 0".
+            // Initialise to UINT32_MAX (no neighbor) so the mesh fails safe; the real edge
+            // adjacency is reconstructed by RebuildTriangleAdjacency() after a full read.
+            navMesh->triangles[i].neighborTriangles[0] = UINT32_MAX;
+            navMesh->triangles[i].neighborTriangles[1] = UINT32_MAX;
+            navMesh->triangles[i].neighborTriangles[2] = UINT32_MAX;
+
             uint32_t adjCount;
             file.read(reinterpret_cast<char*>(&adjCount), 4);
             constexpr uint32_t kMaxAdjacency = 10'000; // Reasonable adjacency limit per triangle
@@ -866,6 +942,23 @@ namespace Spark::AI
 
         if (!file.good())
             return false;
+
+        // Reconstruct the fixed edge-adjacency the .snav format does not store. Without
+        // this every loaded triangle would have no usable A* adjacency (fail-safe links).
+        // Bounded to avoid the O(n^2) pass hanging on very large meshes — those keep the
+        // UINT32_MAX links and rely on the dynamic `adjacency` list read above.
+        constexpr uint32_t kMaxAdjacencyRebuild = 50'000;
+        if (triangleCount <= kMaxAdjacencyRebuild)
+        {
+            RebuildTriangleAdjacency(*navMesh);
+        }
+        else
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::AI,
+                           "NavMeshManager::LoadNavMesh: '%s' has %u triangles (> %u); skipping O(n^2) edge-adjacency "
+                           "rebuild — fixed neighbor links left empty, dynamic adjacency still active",
+                           filepath.c_str(), triangleCount, kMaxAdjacencyRebuild);
+        }
 
         m_navMeshes[name] = std::move(navMesh);
         return true;

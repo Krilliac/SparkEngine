@@ -201,14 +201,42 @@ namespace Spark::Net
         bool MigrateEntityOut(uint32_t networkID, AreaID targetAreaId);
 
         /**
-         * @brief Get entities pending migration
+         * @brief Get a snapshot copy of entities pending migration.
+         *
+         * Returns a copy taken under m_migrationMutex, so it is safe to call while
+         * the tick thread is producing migrations. For consume-and-hand-off, prefer
+         * DrainPendingMigrations() — peek-then-clear can lose migrations enqueued
+         * between the two calls.
          */
-        const std::vector<MigratingEntity>& GetPendingMigrations() const { return m_pendingMigrations; }
+        std::vector<MigratingEntity> GetPendingMigrations() const
+        {
+            std::lock_guard<std::mutex> lock(m_migrationMutex);
+            return m_pendingMigrations;
+        }
+
+        /**
+         * @brief Atomically remove and return all entities pending migration.
+         *
+         * Swaps the internal pending list out under m_migrationMutex and returns it
+         * by value, so a coordinator thread can process migrations without racing
+         * the tick thread that produces them (MigrateEntityOut / CheckEntityBoundaries).
+         */
+        std::vector<MigratingEntity> DrainPendingMigrations()
+        {
+            std::lock_guard<std::mutex> lock(m_migrationMutex);
+            std::vector<MigratingEntity> drained;
+            drained.swap(m_pendingMigrations);
+            return drained;
+        }
 
         /**
          * @brief Clear pending migrations after they've been processed
          */
-        void ClearPendingMigrations() { m_pendingMigrations.clear(); }
+        void ClearPendingMigrations()
+        {
+            std::lock_guard<std::mutex> lock(m_migrationMutex);
+            m_pendingMigrations.clear();
+        }
 
         // -- Cross-Area Communication --
 
@@ -254,6 +282,11 @@ namespace Spark::Net
         void UpdateSimulation(float deltaTime);
         void CheckEntityBoundaries();
 
+        /// Build a MigratingEntity snapshot from a tracked entity's data, stamping
+        /// the current server time and serializing position/velocity/type. Caller
+        /// must already hold m_migrationMutex.
+        MigratingEntity BuildMigration(uint32_t networkID, const MigratingEntity& tracked) const;
+
         AreaServerConfig m_config;
         AreaServerStats m_stats;
 
@@ -267,6 +300,10 @@ namespace Spark::Net
         // Entity migration
         std::vector<MigratingEntity> m_pendingMigrations;
         mutable std::mutex m_migrationMutex;
+        /// Upper bound on m_pendingMigrations: producers drop (rather than enqueue)
+        /// once this many migrations are already buffered, so a never-drained queue
+        /// cannot exhaust memory on the tick thread.
+        static constexpr size_t kMaxPendingMigrations = 4096;
 
         // Cross-area messaging
         std::unordered_map<uint16_t, CrossAreaHandler> m_crossAreaHandlers;

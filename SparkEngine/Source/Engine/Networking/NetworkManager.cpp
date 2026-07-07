@@ -444,21 +444,23 @@ namespace Spark::Net
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Network", 0.0);
 
+        // Advance server time exactly once per Update. Doing it up front (rather
+        // than after the auto-reconnect block) avoids double-counting deltaTime on
+        // the frame where a reconnect succeeds and control falls through below.
+        SPARK_WARN_IF(Spark::LogCategory::Network, deltaTime < 0.0f, "Negative deltaTime in NetworkManager::Update");
+        m_serverTime += deltaTime;
+
         // Auto-reconnect: when disconnected and auto-reconnect enabled, try to reconnect
         auto currentRole = GetRole(); // thread-safe read
         if (currentRole == NetworkRole::None || GetConnectionState() == ConnectionState::Disconnected)
         {
             if (m_autoReconnect.enabled && m_wasConnected)
             {
-                m_serverTime += deltaTime;
                 TryAutoReconnect(deltaTime);
             }
             if (GetRole() == NetworkRole::None)
                 return;
         }
-
-        SPARK_WARN_IF(Spark::LogCategory::Network, deltaTime < 0.0f, "Negative deltaTime in NetworkManager::Update");
-        m_serverTime += deltaTime;
 
         // Receive from socket and enqueue
         ProcessIncoming();
@@ -503,6 +505,20 @@ namespace Spark::Net
                 {
                     if (msg.sequence != m_expectedOrderedSequence)
                     {
+                        // Bound the reorder buffer so a peer that never sends the
+                        // expected sequence (always leaving a gap) cannot grow this
+                        // map without limit — a remote memory-exhaustion DoS.
+                        // Overwriting an already-buffered sequence is fine; only a
+                        // *new* out-of-order sequence past the cap is dropped.
+                        if (m_orderedBuffer.size() >= kMaxQueuedMessages && !m_orderedBuffer.contains(msg.sequence))
+                        {
+                            m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+                            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                                           "Ordered reorder buffer full (%zu) — dropping out-of-order sequence %u",
+                                           m_orderedBuffer.size(), static_cast<unsigned>(msg.sequence));
+                            toDispatch.pop();
+                            continue;
+                        }
                         // Buffer for later delivery
                         m_orderedBuffer[msg.sequence] = msg;
                         m_stats.packetsReceived++;

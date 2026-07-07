@@ -48,14 +48,23 @@ namespace Spark
     void LoadingScreen::Execute()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-        SPARK_WARN_IF(Spark::LogCategory::Core, m_tasks.empty(), "Execute called with no loading tasks");
-        m_state = LoadingState::Loading;
 
-        // Calculate total weight
+        // Publish the state transition and read the task list under the lock so
+        // it stays consistent with the concurrent readers (GetCurrentTaskName /
+        // Console_GetStatus) and with a Cancel() on another thread. The task
+        // callbacks themselves run OUTSIDE the lock — they may be slow or
+        // re-enter the loading screen.
         float totalWeight = 0.0f;
-        for (const auto& task : m_tasks)
+        size_t taskCount = 0;
         {
-            totalWeight += task.weight;
+            std::lock_guard<std::mutex> lock(m_mutex);
+            SPARK_WARN_IF(Spark::LogCategory::Core, m_tasks.empty(), "Execute called with no loading tasks");
+            m_state = LoadingState::Loading;
+            taskCount = m_tasks.size();
+            for (const auto& task : m_tasks)
+            {
+                totalWeight += task.weight;
+            }
         }
         if (totalWeight <= 0.0f)
         {
@@ -64,40 +73,60 @@ namespace Spark
 
         float completedWeight = 0.0f;
 
-        for (size_t i = 0; i < m_tasks.size(); ++i)
+        for (size_t i = 0; i < taskCount; ++i)
         {
-            if (m_cancelled)
+            std::function<bool()> exec;
+            std::string taskName;
+            float taskWeight = 0.0f;
             {
-                m_state = LoadingState::Cancelled;
-                return;
+                std::lock_guard<std::mutex> lock(m_mutex);
+                // Poll cancellation under the lock so a concurrent Cancel() is
+                // observed; a plain-bool read could be cached/hoisted otherwise.
+                if (m_cancelled)
+                {
+                    m_state = LoadingState::Cancelled;
+                    return;
+                }
+                m_currentTaskIndex = i;
+                exec = m_tasks[i].execute;
+                taskName = m_tasks[i].name;
+                taskWeight = m_tasks[i].weight;
             }
 
-            m_currentTaskIndex = i;
-            auto& task = m_tasks[i];
+            // Execute the task without holding the lock.
+            bool success = exec ? exec() : true;
 
-            // Execute the task
-            task.success = task.execute ? task.execute() : true;
-            task.completed = true;
-
-            if (!task.success)
             {
-                SPARK_LOG_ERROR(Spark::LogCategory::Core, "LoadingScreen task '%s' failed", task.name.c_str());
-                m_state = LoadingState::Failed;
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_tasks[i].success = success;
+                m_tasks[i].completed = true;
+            }
+
+            if (!success)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "LoadingScreen task '%s' failed", taskName.c_str());
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    m_state = LoadingState::Failed;
+                }
                 m_completeCallbacks.Broadcast(false);
                 return;
             }
 
-            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "LoadingScreen task '%s' completed", task.name.c_str());
+            SPARK_LOG_DEBUG(Spark::LogCategory::Core, "LoadingScreen task '%s' completed", taskName.c_str());
 
-            completedWeight += task.weight;
+            completedWeight += taskWeight;
             float progress = completedWeight / totalWeight;
             m_progress.store(progress);
 
             // Fire progress callbacks
-            m_progressCallbacks.Broadcast(progress, task.name);
+            m_progressCallbacks.Broadcast(progress, taskName);
         }
 
-        m_state = LoadingState::Completed;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_state = LoadingState::Completed;
+        }
         m_progress.store(1.0f);
 
         m_completeCallbacks.Broadcast(true);
@@ -107,6 +136,7 @@ namespace Spark
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core, "LoadingScreen::Cancel requested for session '%s'",
                        m_sessionName.c_str());
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_cancelled = true;
     }
 
@@ -144,6 +174,7 @@ namespace Spark
 
     std::string LoadingScreen::Console_GetStatus() const
     {
+        std::lock_guard<std::mutex> lock(m_mutex);
         std::ostringstream oss;
         oss << "=== Loading Screen ===\n";
         oss << "Session: " << m_sessionName << "\n";

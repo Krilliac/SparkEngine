@@ -103,6 +103,40 @@ namespace Spark::Gameplay
             maxSlots = maxIt->second;
         }
 
+        // Transactional pre-check: verify the FULL count can fit before mutating any
+        // slot. Without this, a partially-successful add that later hits the capacity
+        // guard would return false having already deposited items in the destination —
+        // and TransferItem would then leave the source stack intact too, duplicating
+        // items. Compute total available space (partial same-item stacks + empty slots +
+        // creatable new slots) up front and bail out with zero mutation if it is short.
+        {
+            uint64_t capacity = 0;
+            uint32_t emptySlots = 0;
+            for (const auto& slot : slots)
+            {
+                if (slot.IsEmpty())
+                {
+                    ++emptySlots;
+                }
+                else if (slot.itemId == itemId && slot.count < def->maxStackSize)
+                {
+                    capacity += (def->maxStackSize - slot.count);
+                }
+            }
+            uint32_t freeNewSlots = (maxSlots > static_cast<uint32_t>(slots.size()))
+                                        ? (maxSlots - static_cast<uint32_t>(slots.size()))
+                                        : 0u;
+            capacity += static_cast<uint64_t>(emptySlots + freeNewSlots) * def->maxStackSize;
+
+            if (capacity < count)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "InventorySystem: Entity %u cannot fit %u of item %u (capacity %llu) — no items added",
+                               entityId, count, itemId, static_cast<unsigned long long>(capacity));
+                return false;
+            }
+        }
+
         uint32_t remaining = count;
 
         // First pass: stack into existing slots with the same item

@@ -48,6 +48,12 @@ namespace Spark
         bool success = false;
     };
 
+    /// @brief Current on-disk save format version. Written into every save header and
+    /// checked on load: files with a higher version are rejected (their field semantics
+    /// may differ), files with a lower version go through the migration hook in
+    /// ReadFromFile. Bump this whenever the binary layout changes.
+    static constexpr uint32_t kCurrentSaveVersion = 1;
+
     // ============================================================================
     // ComponentSerializerRegistry
     // ============================================================================
@@ -673,10 +679,13 @@ namespace Spark
             {
                 if (entry.path().extension() == ".spark_save")
                 {
-                    SaveData data;
-                    if (ReadFromFile(entry.path().string(), data))
+                    // Metadata-only read: parse just the header + metadata block and stop
+                    // before the (potentially large) entity data. Enumerating N save slots
+                    // must not cost O(total bytes of all saves).
+                    SaveMetadata meta;
+                    if (ReadMetadataOnly(entry.path().string(), meta))
                     {
-                        slots.push_back(data.metadata);
+                        slots.push_back(meta);
                     }
                 }
             }
@@ -698,11 +707,8 @@ namespace Spark
 
     bool SaveSystem::GetSaveMetadata(const std::string& slotName, SaveMetadata& outMetadata) const
     {
-        SaveData data;
-        if (!ReadFromFile(GetSavePath(slotName), data))
-            return false;
-        outMetadata = data.metadata;
-        return true;
+        // Fast path: read only the metadata header, not the full entity payload.
+        return ReadMetadataOnly(GetSavePath(slotName), outMetadata);
     }
 
     bool SaveSystem::SaveExists(const std::string& slotName) const
@@ -814,6 +820,27 @@ namespace Spark
                 }
                 return false;
             };
+            // The metadata block is stored as newline-delimited text and parsed back with
+            // std::getline. An embedded '\n'/'\r' in any of the first three fields shifts
+            // every subsequent getline/>> read and corrupts the rest of the metadata on
+            // load, so reject such values instead of writing a corrupt save.
+            auto rejectIfHasNewline = [&](const std::string& s, const char* field)
+            {
+                if (s.find_first_of("\n\r") != std::string::npos)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Core,
+                                   "Save system: %s contains an embedded newline; refusing to write a corrupt save",
+                                   field);
+                    return true;
+                }
+                return false;
+            };
+            if (rejectIfHasNewline(data.metadata.saveName, "metadata.saveName") ||
+                rejectIfHasNewline(data.metadata.sceneName, "metadata.sceneName") ||
+                rejectIfHasNewline(data.metadata.playerClass, "metadata.playerClass"))
+            {
+                return false;
+            }
             for (const auto& entity : data.entities)
             {
                 if (rejectIfTooLong(entity.name, "entity.name"))
@@ -1082,6 +1109,25 @@ namespace Spark
                 return false;
             outData.metadata.version = version;
 
+            // Reject saves written by a newer, incompatible engine build: their field
+            // semantics may differ and deserializing them would silently corrupt the world.
+            if (version > kCurrentSaveVersion)
+            {
+                SPARK_LOG_WARN(
+                    Spark::LogCategory::Save,
+                    "ReadFromFile: save '%s' version %u is newer than supported version %u — refusing to load",
+                    filepath.c_str(), version, kCurrentSaveVersion);
+                return false;
+            }
+            // Migration hook for older formats. Each future layout bump adds a branch here
+            // that upgrades the parsed fields to the current version. Version 1 is the
+            // baseline, so there is nothing to migrate below it yet.
+            if (version < kCurrentSaveVersion)
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Save, "ReadFromFile: migrating save '%s' from version %u to %u",
+                               filepath.c_str(), version, kCurrentSaveVersion);
+            }
+
             // Read metadata
             uint32_t metaSize;
             if (!readBytes(&metaSize, sizeof(metaSize)))
@@ -1217,6 +1263,73 @@ namespace Spark
         catch (...)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in ReadFromFile");
+            return false;
+        }
+    }
+
+    bool SaveSystem::ReadMetadataOnly(const std::string& filepath, SaveMetadata& outMetadata) const
+    {
+        try
+        {
+            std::ifstream file(filepath, std::ios::binary);
+            if (!file.is_open())
+                return false;
+
+            // Header: 4-byte magic + uint32 version.
+            char magic[4];
+            file.read(magic, 4);
+            if (!file || std::string(magic, 4) != "SPRK")
+                return false;
+
+            uint32_t version = 0;
+            file.read(reinterpret_cast<char*>(&version), sizeof(version));
+            if (!file)
+                return false;
+            // Same version gate as ReadFromFile: never surface a newer-format save.
+            if (version > kCurrentSaveVersion)
+                return false;
+            outMetadata.version = version;
+
+            // Metadata is a length-prefixed text block immediately after the header.
+            uint32_t metaSize = 0;
+            file.read(reinterpret_cast<char*>(&metaSize), sizeof(metaSize));
+            if (!file)
+                return false;
+            // Guard against a corrupt/oversized length before allocating.
+            constexpr uint32_t kMaxMetaSize = 64 * 1024;
+            if (metaSize > kMaxMetaSize)
+                return false;
+
+            std::string metaStr(metaSize, '\0');
+            if (metaSize > 0)
+            {
+                file.read(metaStr.data(), metaSize);
+                if (!file)
+                    return false;
+            }
+
+            std::istringstream metaStream(metaStr);
+            std::getline(metaStream, outMetadata.saveName);
+            std::getline(metaStream, outMetadata.sceneName);
+            std::getline(metaStream, outMetadata.playerClass);
+            metaStream >> outMetadata.timestamp;
+            metaStream >> outMetadata.playTime;
+            metaStream >> outMetadata.playerHealth;
+            metaStream >> outMetadata.playerArmor;
+            metaStream >> outMetadata.playerPosition.x >> outMetadata.playerPosition.y >>
+                outMetadata.playerPosition.z;
+            metaStream >> outMetadata.playerKills;
+            metaStream >> outMetadata.playerDeaths;
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system error (ReadMetadataOnly): %s", e.what());
+            return false;
+        }
+        catch (...)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: unknown exception in ReadMetadataOnly");
             return false;
         }
     }

@@ -36,6 +36,7 @@
 #include "Utils/EventBus.h"
 
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -350,9 +351,9 @@ namespace Spark
          */
         void DispatchAll(EventBus& bus)
         {
-            std::vector<std::function<void(EventBus&)>> critical;
-            std::vector<std::function<void(EventBus&)>> normal;
-            std::vector<std::function<void(EventBus&)>> low;
+            QueueType critical;
+            QueueType normal;
+            QueueType low;
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
                 critical.swap(m_critical);
@@ -402,7 +403,11 @@ namespace Spark
       private:
         static constexpr size_t MaxQueueSize = 10000;
 
-        using QueueType = std::vector<std::function<void(EventBus&)>>;
+        // std::deque (not std::vector): EvictOldestLocked() pops from the front on
+        // every enqueue once the queue saturates. deque::pop_front is O(1), whereas
+        // vector::erase(begin()) is O(n) and becomes O(n^2) under sustained overflow
+        // while holding m_mutex. DispatchAll's swap-and-drain pattern is unaffected.
+        using QueueType = std::deque<std::function<void(EventBus&)>>;
 
         QueueType& QueueFor(EventPriority priority)
         {
@@ -441,15 +446,15 @@ namespace Spark
         {
             if (!m_low.empty())
             {
-                m_low.erase(m_low.begin());
+                m_low.pop_front();
             }
             else if (!m_normal.empty())
             {
-                m_normal.erase(m_normal.begin());
+                m_normal.pop_front();
             }
             else if (!m_critical.empty())
             {
-                m_critical.erase(m_critical.begin());
+                m_critical.pop_front();
             }
             else
             {

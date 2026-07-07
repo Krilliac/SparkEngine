@@ -355,36 +355,35 @@ namespace Spark::ECS
 
     /**
  * @class AnimationUpdateSystem
- * @brief Evaluates skeletal animation for all entities with AnimationController.
+ * @brief Advances animation playback time (bookkeeping only) — it does NOT evaluate skeletons.
  *
- * Each frame the AnimationUpdateSystem:
- * 1. Locates or creates an `AnimationInstance` for each entity with an
- *    `AnimationController` component.
- * 2. Advances the state machine and blend layer playback times.
- * 3. Calls `AnimationEvaluator::SampleClip()` and `BlendTransforms()` to
- *    produce local bone transforms.
- * 4. Calls `AnimationEvaluator::ComputeSkinningMatrices()` to produce the
- *    final GPU-ready bone matrices.
- * 5. Solves any enabled IK chains via the IK evaluators.
- * 6. Uploads the final bone matrix array to the per-entity GPU constant buffer.
+ * Each frame, for every entity with a `Transform` and an `AnimationController`:
+ * 1. Skips the entity when `AnimationController::playing` is false.
+ * 2. Advances playback time: `currentTime += deltaTime * playbackSpeed`.
+ * 3. Handles completion once `duration > 0` and `currentTime >= duration`: if
+ *    `loop` is set it wraps `currentTime` with `fmod`; otherwise it clamps
+ *    `currentTime` to `duration` and clears `playing` (the clip has finished).
+ * 4. Recomputes `normalizedTime = currentTime / duration` (progress in [0,1])
+ *    for blend weights and gameplay synchronization.
  *
  * ### Execution order
- * Should run BEFORE RenderSystem so that the GPU buffer is filled before the
- * render pass reads from it. May run AFTER PhysicsUpdateSystem if root motion
- * is used to feed position data back into physics.
+ * Runs in the Animation phase — after PhysicsUpdateSystem and before RenderSystem.
  *
- * @note AnimationUpdateSystem stores per-entity `AnimationInstance` objects
- *       internally (keyed by EntityID). These are lazily created on first
- *       encounter and destroyed when the entity or component is removed.
+ * @note This system performs ONLY lightweight playback-time bookkeeping. All real
+ *       skeletal work — clip sampling, layer blending, IK, and skinning-matrix
+ *       computation — lives in the animation subsystem under `Engine/Animation/`,
+ *       not here. Other systems and that subsystem read the timing values this
+ *       system maintains.
  */
     class AnimationUpdateSystem : public ISystem
     {
       public:
         /**
-     * @brief Advance animation playback for all animated entities.
+     * @brief Advance animation playback time for all playing animated entities.
      *
-     * Queries all entities with AnimationController, updates state machines,
-     * evaluates clips, blends layers, solves IK, and uploads bone matrices to GPU.
+     * Queries all entities with Transform + AnimationController and advances each
+     * controller's `currentTime`/`normalizedTime`, handling loop wrap and non-looping
+     * completion. Does not sample clips, blend layers, solve IK, or touch the GPU.
      *
      * @param world      The ECS World to query.
      * @param deltaTime  Frame time in seconds used to advance animation playback.
@@ -417,9 +416,13 @@ namespace Spark::ECS
  *    stores it in `AIComponent::currentPath`.
  *
  * 4. **Movement** – Advances the agent along `AIComponent::currentPath` by
- *    modifying its Transform at `AIComponent::config.moveSpeed` m/s.
- *    Integrates with the physics system for collision-aware movement when
- *    a RigidBodyComponent is also present.
+ *    modifying its Transform at `AIComponent::config.moveSpeed` m/s. This direct
+ *    Transform movement is applied only to agents that are NOT backed by a
+ *    Dynamic `RigidBodyComponent`. A Dynamic body is authority-owned by the
+ *    physics simulation (PhysicsUpdateSystem overwrites its Transform each frame),
+ *    so path-following such an agent by writing Transform would fight the solver;
+ *    those agents are skipped here and must be driven through physics forces.
+ *    Kinematic and bodyless agents move correctly via the Transform write.
  *
  * ### Execution order
  * Should run AFTER PhysicsUpdateSystem (so it sees up-to-date positions) and
@@ -452,47 +455,42 @@ namespace Spark::ECS
 
     /**
      * @class ParticleUpdateSystem
-     * @brief Updates particle emitters and advances particle simulation each frame.
+     * @brief Starts auto-play emitters and counts active emitters — it does NOT simulate particles.
      *
      * The ParticleUpdateSystem iterates all entities with a `ParticleEmitterComponent`
-     * and `Transform` and performs:
+     * and `Transform` and performs only lightweight emitter bookkeeping each frame:
      *
-     * 1. **Emission** – Spawns new particles based on `emissionRate` and burst events.
-     * 2. **Simulation** – Advances particle positions, velocities, sizes, colors,
-     *    and rotations based on the emitter configuration and delta time.
-     * 3. **Lifetime** – Removes dead particles whose age exceeds their lifetime.
-     * 4. **Transform sync** – Updates emitter world position from the entity's Transform
-     *    so particles spawn at the correct location.
+     * 1. **Auto-play** – When `autoPlay` is set and the emitter is not yet playing,
+     *    flips `isPlaying` to true so emission starts on the first frame.
+     * 2. **Gating** – Skips emitters that are not playing, and skips entities whose
+     *    `ActiveComponent::active` is false.
+     * 3. **Counting** – Tallies the number of playing, active emitters into
+     *    `GetActiveEmitterCount()` for profiling.
      *
      * ### Execution order
-     * Should run AFTER PhysicsUpdateSystem and AnimationUpdateSystem (so particles
-     * attached to animated meshes use up-to-date positions) and BEFORE RenderSystem
-     * (so the GPU particle buffer is ready for rendering).
+     * Should run AFTER PhysicsUpdateSystem and AnimationUpdateSystem (so emitters
+     * attached to animated meshes use up-to-date positions) and BEFORE RenderSystem.
      *
-     * @note Entities with `ParticleEmitterComponent::isPlaying == false` are skipped.
-     *       Use `autoPlay` to start emission automatically when the entity is created.
+     * @note This system does NOT spawn, advance, or cull particles. Actual particle
+     *       emission, simulation, and lifetime culling are owned by the underlying
+     *       `ParticleSystem` (see `Graphics/`), reached through the emitter's handle.
      */
     class ParticleUpdateSystem : public ISystem
     {
       public:
         /**
-         * @brief Advance all particle emitters for one simulation frame.
+         * @brief Advance emitter playback state and count active emitters for one frame.
          *
-         * Iterates entities with ParticleEmitterComponent + Transform,
-         * spawns new particles, advances simulation, and culls dead particles.
+         * Iterates entities with ParticleEmitterComponent + Transform, starts auto-play
+         * emitters, skips not-playing/inactive ones, and tallies the active emitter count.
+         * Actual particle simulation happens in the underlying particle system, not here.
          *
          * @param world      The ECS World to query.
-         * @param deltaTime  Frame time in seconds for particle simulation.
+         * @param deltaTime  Frame time in seconds (unused by the emitter bookkeeping).
          */
         void Update(World& world, float deltaTime) override;
 
         const char* GetName() const override { return "ParticleUpdateSystem"; }
-
-        /**
-         * @brief Get the total number of active particles across all emitters.
-         * @return Total alive particle count.
-         */
-        int GetActiveParticleCount() const { return m_activeParticleCount; }
 
         /**
          * @brief Get the number of active emitter entities.
@@ -501,7 +499,6 @@ namespace Spark::ECS
         int GetActiveEmitterCount() const { return m_activeEmitterCount; }
 
       private:
-        int m_activeParticleCount = 0;
         int m_activeEmitterCount = 0;
     };
 

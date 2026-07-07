@@ -7,6 +7,8 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -206,29 +208,26 @@ namespace Spark::Persistence
             return result;
         }
 
-        // Substitute parameters into the SQL template.
+        // Pre-compute the escaped replacement text for every bound parameter.
         // Params are referenced as ?0, ?1, ?2... in the prepared SQL string.
-        std::string sql = it->second;
+        std::vector<std::string> replacements(params.size());
         for (size_t i = 0; i < params.size(); ++i)
         {
-            std::string placeholder = "?" + std::to_string(i);
-            std::string replacement;
-
             std::visit(
-                [&replacement](auto&& arg)
+                [&](auto&& arg)
                 {
                     using T = std::decay_t<decltype(arg)>;
                     if constexpr (std::is_same_v<T, std::monostate>)
                     {
-                        replacement = "NULL";
+                        replacements[i] = "NULL";
                     }
                     else if constexpr (std::is_same_v<T, int64_t>)
                     {
-                        replacement = std::to_string(arg);
+                        replacements[i] = std::to_string(arg);
                     }
                     else if constexpr (std::is_same_v<T, double>)
                     {
-                        replacement = std::to_string(arg);
+                        replacements[i] = std::to_string(arg);
                     }
                     else if constexpr (std::is_same_v<T, std::string>)
                     {
@@ -244,34 +243,57 @@ namespace Spark::Persistence
                                 escaped += c;
                         }
                         escaped += '\'';
-                        replacement = escaped;
+                        replacements[i] = std::move(escaped);
                     }
                     else if constexpr (std::is_same_v<T, std::vector<uint8_t>>)
                     {
-                        replacement = "[blob:" + std::to_string(arg.size()) + "]";
+                        replacements[i] = "[blob:" + std::to_string(arg.size()) + "]";
                     }
                 },
                 params[i].value);
+        }
 
-            // Find an exact placeholder match: skip any match that is merely a prefix of a
-            // longer placeholder (e.g. "?1" occurring inside "?10"/"?11" for statements with
-            // 10+ params), which would otherwise corrupt that longer placeholder's binding.
-            size_t searchFrom = 0;
-            for (;;)
+        // Single left-to-right pass over the template, emitting into a fresh output
+        // string. Each "?<digits>" token is replaced by its bound parameter. Because the
+        // output is never re-scanned, a substituted value that itself contains "?N" can
+        // never be corrupted, and a placeholder appearing multiple times is replaced at
+        // every occurrence. A "?<digits>" with no matching bound parameter is emitted
+        // verbatim (matching the previous behavior for unbound placeholders).
+        const std::string& sqlTemplate = it->second;
+        std::string sql;
+        sql.reserve(sqlTemplate.size());
+        for (size_t pos = 0; pos < sqlTemplate.size();)
+        {
+            if (sqlTemplate[pos] == '?' && pos + 1 < sqlTemplate.size() &&
+                std::isdigit(static_cast<unsigned char>(sqlTemplate[pos + 1])))
             {
-                auto pos = sql.find(placeholder, searchFrom);
-                if (pos == std::string::npos)
+                size_t digitsBegin = pos + 1;
+                size_t digitsEnd = digitsBegin;
+                while (digitsEnd < sqlTemplate.size() &&
+                       std::isdigit(static_cast<unsigned char>(sqlTemplate[digitsEnd])))
                 {
-                    break;
+                    ++digitsEnd;
                 }
-                size_t afterPos = pos + placeholder.size();
-                if (afterPos < sql.size() && std::isdigit(static_cast<unsigned char>(sql[afterPos])))
+
+                size_t index = 0;
+                auto [ptr, ec] =
+                    std::from_chars(sqlTemplate.data() + digitsBegin, sqlTemplate.data() + digitsEnd, index);
+                (void)ptr;
+                if (ec == std::errc() && index < replacements.size())
                 {
-                    searchFrom = pos + 1;
-                    continue;
+                    sql += replacements[index];
                 }
-                sql.replace(pos, placeholder.size(), replacement);
-                break;
+                else
+                {
+                    // Unbound or out-of-range placeholder: keep it verbatim.
+                    sql.append(sqlTemplate, pos, digitsEnd - pos);
+                }
+                pos = digitsEnd;
+            }
+            else
+            {
+                sql += sqlTemplate[pos];
+                ++pos;
             }
         }
 
@@ -315,6 +337,14 @@ namespace Spark::Persistence
             m_kvStore[key] = value;
             result.success = true;
             result.affectedRows = 1;
+
+            // Persist non-transactional writes immediately so data survives a crash and
+            // is visible on the next reopen. Writes issued inside a transaction are
+            // deferred to CommitTransaction so RollbackTransaction can discard them.
+            if (!m_inTransaction)
+            {
+                FlushToDisk();
+            }
         }
         else if (upperCmd == "GET")
         {
@@ -338,6 +368,12 @@ namespace Spark::Persistence
             auto erased = m_kvStore.erase(key);
             result.success = true;
             result.affectedRows = static_cast<int>(erased);
+
+            // Persist the deletion immediately (see the SET branch for rationale).
+            if (!m_inTransaction && erased > 0)
+            {
+                FlushToDisk();
+            }
         }
         else if (upperCmd == "KEYS")
         {
@@ -472,26 +508,14 @@ namespace Spark::Persistence
         m_connectionString = connectionString;
         poolSize = std::max(poolSize, 1);
 
-        // Create one connection per worker thread
-        for (int i = 0; i < poolSize; ++i)
-        {
-            auto conn = std::make_unique<SQLiteConnection>();
-            if (!conn->Open(connectionString))
-            {
-                return false;
-            }
-
-            // Register all prepared statements on this connection
-            for (const auto& [id, sql] : m_preparedSQL)
-            {
-                conn->PrepareStatement(id, sql);
-            }
-
-            m_connections.push_back(std::move(conn));
-        }
-
-        // Dedicated sync connection: never touched by any worker thread, so SyncQuery
-        // cannot race with WorkerThread's unsynchronized access to m_connections[threadIndex].
+        // All queries — async (worker threads) and sync — execute through a single
+        // shared connection guarded by m_syncMutex (created just below). This is
+        // deliberate: the file-based fallback store holds its data in memory, so giving
+        // each worker its own connection would give each an independent copy of the same
+        // file, cross-connection writes would never be mutually visible, and the last
+        // FlushToDisk on shutdown would clobber every other connection's writes. One
+        // shared, serialized connection is the single source of truth. Worker threads are
+        // still launched below to service the async future/callback API.
         m_syncConnection = std::make_unique<SQLiteConnection>();
         if (!m_syncConnection->Open(connectionString))
         {
@@ -619,8 +643,9 @@ namespace Spark::Persistence
 
     QueryResult AsyncDatabasePool::SyncQuery(PreparedStatementID id, std::vector<PreparedStatementParam> params)
     {
-        // Use the dedicated sync connection, which no worker thread ever touches, so this
-        // cannot race with WorkerThread's unsynchronized access to m_connections[threadIndex].
+        // Execute on the single shared connection under m_syncMutex — the same connection
+        // and mutex the worker threads use — so sync and async queries are fully
+        // serialized against one consistent store rather than racing separate stores.
         std::lock_guard<std::mutex> lock(m_syncMutex);
         if (!m_open.load() || !m_syncConnection)
         {
@@ -651,6 +676,7 @@ namespace Spark::Persistence
 
     void AsyncDatabasePool::WorkerThread(int threadIndex)
     {
+        (void)threadIndex; // All workers share the single serialized m_syncConnection.
         while (true)
         {
             WorkItem item;
@@ -668,12 +694,16 @@ namespace Spark::Persistence
                 m_workQueue.pop();
             }
 
-            auto& conn = m_connections[threadIndex];
             QueryResult result;
             std::exception_ptr queryException;
 
             try
             {
+                // Serialize every database operation through the one shared connection so
+                // all workers and SyncQuery see a single consistent in-memory store and
+                // file. The lock spans the whole transaction to keep it atomic.
+                std::lock_guard<std::mutex> dbLock(m_syncMutex);
+                auto& conn = m_syncConnection;
                 if (item.isTransaction)
                 {
                     bool ok = conn->BeginTransaction();

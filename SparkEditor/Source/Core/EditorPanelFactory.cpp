@@ -88,88 +88,134 @@ namespace SparkEditor
     void EditorUI::CreateCorePanels(
         const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel)
     {
-        registerPanel("SceneView", std::make_shared<SceneViewPanel>());
-        registerPanel("Console", std::make_shared<ConsolePanel>());
-        registerPanel("Hierarchy", std::make_shared<HierarchyPanel>());
-        registerPanel("Inspector", std::make_shared<InspectorPanel>());
-        registerPanel("AssetBrowser", std::make_shared<AssetBrowserPanel>());
-        registerPanel("GameView", std::make_shared<GameViewPanel>());
-        registerPanel("Profiler", std::make_shared<PerformanceProfiler>());
+        // Construct each panel INSIDE the try so a throwing panel constructor is
+        // isolated and logged instead of propagating out of this helper and aborting
+        // creation of every remaining panel. registerPanel() only ever receives a
+        // fully-constructed panel.
+        auto tryRegister = [&](const std::string& name, auto&& factory)
+        {
+            try
+            {
+                registerPanel(name, factory());
+            }
+            catch (const std::exception& e)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to construct panel '%s': %s", name.c_str(),
+                                e.what());
+            }
+            catch (...)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to construct panel '%s': unknown exception",
+                                name.c_str());
+            }
+        };
 
-        registerPanel("WeaponEditor", std::make_shared<WeaponEditorPanel>());
-        registerPanel("FPSTools", std::make_shared<FPSToolsPanel>());
+        tryRegister("SceneView", [&] { return std::make_shared<SceneViewPanel>(); });
+        tryRegister("Console", [&] { return std::make_shared<ConsolePanel>(); });
+        tryRegister("Hierarchy", [&] { return std::make_shared<HierarchyPanel>(); });
+        tryRegister("Inspector", [&] { return std::make_shared<InspectorPanel>(); });
+        tryRegister("AssetBrowser", [&] { return std::make_shared<AssetBrowserPanel>(); });
+        tryRegister("GameView", [&] { return std::make_shared<GameViewPanel>(); });
+        tryRegister("Profiler", [&] { return std::make_shared<PerformanceProfiler>(); });
 
-        registerPanel("SpriteEditor", std::make_shared<SpriteEditorPanel>());
-        registerPanel("TilemapEditor", std::make_shared<TilemapEditorPanel>());
-        registerPanel("SpriteAnimEditor", std::make_shared<SpriteAnimationEditorPanel>());
-        registerPanel("Physics2D", std::make_shared<Physics2DPanel>());
-        registerPanel("Physics3D", std::make_shared<Physics3DPanel>());
+        tryRegister("WeaponEditor", [&] { return std::make_shared<WeaponEditorPanel>(); });
+        tryRegister("FPSTools", [&] { return std::make_shared<FPSToolsPanel>(); });
 
-        registerPanel("UndoHistory", std::make_shared<UndoHistoryPanel>(m_undoRedoManager.get()));
-        registerPanel("PrefabEditor", std::make_shared<PrefabEditorPanel>(m_prefabManager.get()));
+        tryRegister("SpriteEditor", [&] { return std::make_shared<SpriteEditorPanel>(); });
+        tryRegister("TilemapEditor", [&] { return std::make_shared<TilemapEditorPanel>(); });
+        tryRegister("SpriteAnimEditor", [&] { return std::make_shared<SpriteAnimationEditorPanel>(); });
+        tryRegister("Physics2D", [&] { return std::make_shared<Physics2DPanel>(); });
+        tryRegister("Physics3D", [&] { return std::make_shared<Physics3DPanel>(); });
+
+        tryRegister("UndoHistory", [&] { return std::make_shared<UndoHistoryPanel>(m_undoRedoManager.get()); });
+        tryRegister("PrefabEditor", [&] { return std::make_shared<PrefabEditorPanel>(m_prefabManager.get()); });
     }
 
     void EditorUI::CreateToolAndContentPanels(
         const std::function<void(const std::string&, std::shared_ptr<EditorPanel>)>& registerPanel)
     {
-        registerPanel("SceneStats", std::make_shared<SceneStatisticsPanel>());
-        registerPanel("Search", std::make_shared<SearchPanel>());
-        registerPanel("DedicatedServer", std::make_shared<DedicatedServerPanel>());
-        registerPanel("DebugVisualizer", std::make_shared<DebugVisualizerPanel>());
-        registerPanel("ObjectPlacement", std::make_shared<ObjectPlacementPanel>());
-        registerPanel("BuildCook", std::make_shared<BuildCookPanel>());
-        registerPanel("PlayModeToolbar", std::make_shared<PlayModeToolbarPanel>());
-        registerPanel("MaterialEditor", std::make_shared<MaterialEditorPanel>());
-        registerPanel("TerrainEditor", std::make_shared<TerrainEditor>());
+        // Construct each panel INSIDE the try (see CreateCorePanels) so one panel's
+        // throwing constructor cannot abort registration of the rest.
+        auto tryRegister = [&](const std::string& name, auto&& factory)
+        {
+            try
+            {
+                registerPanel(name, factory());
+            }
+            catch (const std::exception& e)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to construct panel '%s': %s", name.c_str(),
+                                e.what());
+            }
+            catch (...)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to construct panel '%s': unknown exception",
+                                name.c_str());
+            }
+        };
 
-        registerPanel("PostProcessing", std::make_shared<PostProcessingPanel>());
-        registerPanel("DialogueEditor", std::make_shared<DialogueEditorPanel>());
-        registerPanel("AIEditor", std::make_shared<AIEditorPanel>());
-        registerPanel("AIDebug", std::make_shared<AIDebugPanel>());
-        registerPanel("SplineEditor", std::make_shared<SplineEditorPanel>());
-        registerPanel("ParticleEditor", std::make_shared<ParticleEditorPanel>());
-        registerPanel("EventMonitor", std::make_shared<EventMonitorPanel>());
-        registerPanel("SaveSystem", std::make_shared<SaveSystemPanel>());
-        registerPanel("Localization", std::make_shared<LocalizationPanel>());
-        registerPanel("WeatherFog", std::make_shared<WeatherFogPanel>());
-        registerPanel("CinematicSequencer", std::make_shared<CinematicSequencerPanel>());
-        registerPanel("ProjectSettings", std::make_shared<ProjectSettingsPanel>());
+        tryRegister("SceneStats", [&] { return std::make_shared<SceneStatisticsPanel>(); });
+        tryRegister("Search", [&] { return std::make_shared<SearchPanel>(); });
+        tryRegister("DedicatedServer", [&] { return std::make_shared<DedicatedServerPanel>(); });
+        tryRegister("DebugVisualizer", [&] { return std::make_shared<DebugVisualizerPanel>(); });
+        tryRegister("ObjectPlacement", [&] { return std::make_shared<ObjectPlacementPanel>(); });
+        tryRegister("BuildCook", [&] { return std::make_shared<BuildCookPanel>(); });
+        tryRegister("PlayModeToolbar", [&] { return std::make_shared<PlayModeToolbarPanel>(); });
+        tryRegister("MaterialEditor", [&] { return std::make_shared<MaterialEditorPanel>(); });
+        tryRegister("TerrainEditor", [&] { return std::make_shared<TerrainEditor>(); });
 
-        registerPanel("AudioMixer", std::make_shared<AudioMixerPanel>());
-        registerPanel("ScriptEditor", std::make_shared<ScriptEditorPanel>());
-        registerPanel("DestructionEditor", std::make_shared<DestructionEditorPanel>());
-        registerPanel("Replay", std::make_shared<ReplayPanel>());
-        registerPanel("VRConfig", std::make_shared<VRConfigPanel>());
-        registerPanel("Streaming", std::make_shared<StreamingPanel>());
-        registerPanel("Modding", std::make_shared<ModdingPanel>());
-        registerPanel("CoroutineDebug", std::make_shared<CoroutineDebugPanel>());
-        registerPanel("GameModuleSelector", std::make_shared<GameModuleSelectorPanel>());
-        registerPanel("Collaboration", std::make_shared<CollaborationPanel>(m_collabSession.get()));
+        tryRegister("PostProcessing", [&] { return std::make_shared<PostProcessingPanel>(); });
+        tryRegister("DialogueEditor", [&] { return std::make_shared<DialogueEditorPanel>(); });
+        tryRegister("AIEditor", [&] { return std::make_shared<AIEditorPanel>(); });
+        tryRegister("AIDebug", [&] { return std::make_shared<AIDebugPanel>(); });
+        tryRegister("SplineEditor", [&] { return std::make_shared<SplineEditorPanel>(); });
+        tryRegister("ParticleEditor", [&] { return std::make_shared<ParticleEditorPanel>(); });
+        tryRegister("EventMonitor", [&] { return std::make_shared<EventMonitorPanel>(); });
+        tryRegister("SaveSystem", [&] { return std::make_shared<SaveSystemPanel>(); });
+        tryRegister("Localization", [&] { return std::make_shared<LocalizationPanel>(); });
+        tryRegister("WeatherFog", [&] { return std::make_shared<WeatherFogPanel>(); });
+        tryRegister("CinematicSequencer", [&] { return std::make_shared<CinematicSequencerPanel>(); });
+        tryRegister("ProjectSettings", [&] { return std::make_shared<ProjectSettingsPanel>(); });
 
-        registerPanel("TimeOfDay", std::make_shared<TimeOfDayPanel>());
-        registerPanel("AbilityEditor", std::make_shared<AbilityEditorPanel>());
-        registerPanel("TriggerEditor", std::make_shared<TriggerEditorPanel>());
-        registerPanel("ConditionEditor", std::make_shared<ConditionEditorPanel>());
-        registerPanel("DecalEditor", std::make_shared<DecalEditorPanel>());
-        registerPanel("EventResponses", std::make_shared<EventResponsePanel>());
-        registerPanel("VisualScript", std::make_shared<VisualScriptPanel>());
+        tryRegister("AudioMixer", [&] { return std::make_shared<AudioMixerPanel>(); });
+        tryRegister("ScriptEditor", [&] { return std::make_shared<ScriptEditorPanel>(); });
+        tryRegister("DestructionEditor", [&] { return std::make_shared<DestructionEditorPanel>(); });
+        tryRegister("Replay", [&] { return std::make_shared<ReplayPanel>(); });
+        tryRegister("VRConfig", [&] { return std::make_shared<VRConfigPanel>(); });
+        tryRegister("Streaming", [&] { return std::make_shared<StreamingPanel>(); });
+        tryRegister("Modding", [&] { return std::make_shared<ModdingPanel>(); });
+        tryRegister("CoroutineDebug", [&] { return std::make_shared<CoroutineDebugPanel>(); });
+        tryRegister("GameModuleSelector", [&] { return std::make_shared<GameModuleSelectorPanel>(); });
+        tryRegister("Collaboration", [&] { return std::make_shared<CollaborationPanel>(m_collabSession.get()); });
 
-        registerPanel("Prototyping", std::make_shared<PrototypingPanel>());
-        registerPanel("UIDesigner", std::make_shared<UIDesignerPanel>());
-        registerPanel("ScriptDebugger", std::make_shared<ScriptDebugPanel>());
+        tryRegister("TimeOfDay", [&] { return std::make_shared<TimeOfDayPanel>(); });
+        tryRegister("AbilityEditor", [&] { return std::make_shared<AbilityEditorPanel>(); });
+        tryRegister("TriggerEditor", [&] { return std::make_shared<TriggerEditorPanel>(); });
+        tryRegister("ConditionEditor", [&] { return std::make_shared<ConditionEditorPanel>(); });
+        tryRegister("DecalEditor", [&] { return std::make_shared<DecalEditorPanel>(); });
+        tryRegister("EventResponses", [&] { return std::make_shared<EventResponsePanel>(); });
+        tryRegister("VisualScript", [&] { return std::make_shared<VisualScriptPanel>(); });
 
-        registerPanel("CSGEditor", std::make_shared<CSGEditorPanel>());
-        registerPanel("NetworkDebug", std::make_shared<NetworkDebugPanel>());
+        tryRegister("Prototyping", [&] { return std::make_shared<PrototypingPanel>(); });
+        tryRegister("UIDesigner", [&] { return std::make_shared<UIDesignerPanel>(); });
+        tryRegister("ScriptDebugger", [&] { return std::make_shared<ScriptDebugPanel>(); });
+
+        tryRegister("CSGEditor", [&] { return std::make_shared<CSGEditorPanel>(); });
+        tryRegister("NetworkDebug", [&] { return std::make_shared<NetworkDebugPanel>(); });
 
         // Phase AA Theme 3C: register the two orphaned EditorPanel
         // subclasses that live outside Panels/ so they appear in the
         // Window menu alongside every other panel.
-        registerPanel("LevelStreaming", std::make_shared<LevelStreamingSystem>());
-        registerPanel("VersionControl", std::make_shared<VersionControlSystem>());
+        tryRegister("LevelStreaming", [&] { return std::make_shared<LevelStreamingSystem>(); });
+        tryRegister("VersionControl", [&] { return std::make_shared<VersionControlSystem>(); });
 
-        auto workflowPanel = std::make_shared<WorkflowPanel>();
-        workflowPanel->SetEditorUI(this);
-        registerPanel("Workflows", workflowPanel);
+        tryRegister("Workflows",
+                    [&]
+                    {
+                        auto workflowPanel = std::make_shared<WorkflowPanel>();
+                        workflowPanel->SetEditorUI(this);
+                        return workflowPanel;
+                    });
     }
 
     void EditorUI::InitializePanelIcons()

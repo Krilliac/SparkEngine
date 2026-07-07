@@ -225,33 +225,40 @@ namespace Spark
 
     void ReplaySystem::StartKillCam(float rewindSeconds, uint32_t focusEntity)
     {
-        // Seek to rewind point
+        // Take the lock once and touch every shared member under it. SeekTo() and
+        // StopPlayback() also lock m_mutex (which is non-recursive), so their bodies are
+        // inlined here rather than called, to avoid self-deadlock.
+        std::lock_guard lock(m_mutex);
+
+        // Seek to the rewind point.
         float seekTime = m_data.duration - rewindSeconds;
         if (seekTime < 0.0f)
             seekTime = 0.0f;
-
-        SeekTo(seekTime);
+        m_playbackTime = std::clamp(seekTime, 0.0f, m_data.duration);
+        m_currentFrameIndex = FindFrameIndex(m_playbackTime);
 
         m_killCamActive = true;
         m_playbackSpeed = 0.5f;
         m_camera = PlaybackCamera::KillCam;
         m_followEntity = focusEntity;
-
-        {
-            std::lock_guard lock(m_mutex);
-            m_playbackState = PlaybackState::Playing;
-        }
+        m_playbackState = PlaybackState::Playing;
     }
 
     void ReplaySystem::StopKillCam()
     {
+        // Inline StopPlayback()'s body under a single lock (StopPlayback() would relock
+        // the non-recursive m_mutex and deadlock).
+        std::lock_guard lock(m_mutex);
         m_killCamActive = false;
         m_playbackSpeed = 1.0f;
-        StopPlayback();
+        m_playbackState = PlaybackState::Stopped;
+        m_playbackTime = 0.0f;
+        m_currentFrameIndex = 0;
     }
 
     bool ReplaySystem::IsKillCamActive() const
     {
+        std::lock_guard lock(m_mutex);
         return m_killCamActive;
     }
 
@@ -261,16 +268,19 @@ namespace Spark
 
     void ReplaySystem::SetCamera(PlaybackCamera mode)
     {
+        std::lock_guard lock(m_mutex);
         m_camera = mode;
     }
 
     PlaybackCamera ReplaySystem::GetCamera() const
     {
+        std::lock_guard lock(m_mutex);
         return m_camera;
     }
 
     void ReplaySystem::SetFollowEntity(uint32_t entityId)
     {
+        std::lock_guard lock(m_mutex);
         m_followEntity = entityId;
     }
 

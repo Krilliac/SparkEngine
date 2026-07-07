@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <sstream>
 
 namespace Spark
@@ -96,17 +97,77 @@ namespace Spark
 
     bool ModSystem::LoadEnabledMods()
     {
-        // Sort by load order
-        std::vector<std::string> ordered;
+        // Collect enabled mods, then order them by loadOrder (id as tiebreaker) so the
+        // topological walk below is deterministic regardless of map iteration order.
+        std::vector<std::string> enabled;
         for (const auto& [id, info] : m_mods)
         {
             if (info.enabled)
             {
-                ordered.push_back(id);
+                enabled.push_back(id);
             }
         }
-        std::sort(ordered.begin(), ordered.end(), [this](const std::string& a, const std::string& b)
-                  { return m_mods[a].loadOrder < m_mods[b].loadOrder; });
+        std::sort(enabled.begin(), enabled.end(),
+                  [this](const std::string& a, const std::string& b)
+                  {
+                      const int orderA = m_mods[a].loadOrder;
+                      const int orderB = m_mods[b].loadOrder;
+                      if (orderA != orderB)
+                          return orderA < orderB;
+                      return a < b;
+                  });
+
+        // Topologically sort so each mod is loaded after the (enabled) dependencies it
+        // declares. DFS post-order with cycle detection; loadOrder acts only as a
+        // tiebreaker among mods with no ordering constraint between them.
+        std::vector<std::string> ordered;
+        ordered.reserve(enabled.size());
+        std::unordered_map<std::string, int> visitState; // 0=unvisited, 1=in-progress, 2=done
+        bool cycleDetected = false;
+
+        std::function<void(const std::string&)> visit = [&](const std::string& id)
+        {
+            int& state = visitState[id];
+            if (state == 2)
+            {
+                return;
+            }
+            if (state == 1)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "LoadEnabledMods: dependency cycle detected involving mod '%s'", id.c_str());
+                cycleDetected = true;
+                return;
+            }
+            state = 1;
+            auto it = m_mods.find(id);
+            if (it != m_mods.end())
+            {
+                for (const auto& dep : it->second.dependencies)
+                {
+                    // Only order against enabled dependencies; missing or disabled
+                    // dependencies are reported by LoadMod's dependency check.
+                    auto depIt = m_mods.find(dep);
+                    if (depIt != m_mods.end() && depIt->second.enabled)
+                    {
+                        visit(dep);
+                    }
+                }
+            }
+            state = 2;
+            ordered.push_back(id);
+        };
+
+        for (const auto& id : enabled)
+        {
+            visit(id);
+        }
+
+        if (cycleDetected)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadEnabledMods: aborting — dependency cycle among enabled mods");
+            return false;
+        }
 
         bool allSuccess = true;
         for (const auto& id : ordered)
@@ -146,6 +207,22 @@ namespace Spark
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadMod '%s' failed — unmet dependencies", modId.c_str());
             m_modStates[modId] = ModState::Error;
             return false;
+        }
+
+        // Every declared dependency must already be loaded, not merely enabled — otherwise
+        // this mod would half-initialize against a dependency that has not run yet.
+        // LoadEnabledMods loads in topological order so this holds; a direct out-of-order
+        // LoadMod call fails loudly here instead of silently loading against nothing.
+        for (const auto& dep : it->second.dependencies)
+        {
+            auto depIt = m_mods.find(dep);
+            if (depIt == m_mods.end() || !depIt->second.loaded)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadMod '%s' failed — dependency '%s' is not loaded yet",
+                                modId.c_str(), dep.c_str());
+                m_modStates[modId] = ModState::Error;
+                return false;
+            }
         }
 
         m_modStates[modId] = ModState::Loading;

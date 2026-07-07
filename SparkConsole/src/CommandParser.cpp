@@ -34,7 +34,7 @@ std::vector<std::string> CommandParser::Tokenize(const std::string& commandLine)
         {
             inQuotes = !inQuotes;
         }
-        else if (std::isspace(c) && !inQuotes)
+        else if (std::isspace(static_cast<unsigned char>(c)) && !inQuotes)
         {
             if (!current.empty())
             {

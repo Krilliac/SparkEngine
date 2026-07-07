@@ -235,17 +235,11 @@ namespace Spark::Physics
         virtual PhysVec3 GetLocalBoundsMax() const = 0;
         virtual float GetVolume() const = 0;
 
-        /// @brief Create a box shape
-        static std::unique_ptr<IPhysicsShape> CreateBox(const PhysVec3& halfExtents);
-        /// @brief Create a sphere shape
-        static std::unique_ptr<IPhysicsShape> CreateSphere(float radius);
-        /// @brief Create a capsule shape (Y-axis aligned)
-        static std::unique_ptr<IPhysicsShape> CreateCapsule(float halfHeight, float radius);
-        /// @brief Create a convex hull from a point cloud
-        static std::unique_ptr<IPhysicsShape> CreateConvexHull(const PhysVec3* points, uint32_t count);
-        /// @brief Create a triangle mesh shape (static only)
-        static std::unique_ptr<IPhysicsShape> CreateTriangleMesh(const PhysVec3* vertices, uint32_t vertexCount,
-                                                                 const uint32_t* indices, uint32_t indexCount);
+        // NOTE: Shape construction is the concrete backend's responsibility. A
+        // backend factory (see Source/Physics/PhysicsShapeFactory) creates shapes;
+        // this header stays a pure interface. (Previously declared but never-defined
+        // static CreateBox/Sphere/Capsule/ConvexHull/TriangleMesh entry points were
+        // removed — they were a link-error trap with no implementation or caller.)
     };
 
     // =========================================================================
@@ -374,8 +368,10 @@ namespace Spark::Physics
         // Contact listener
         virtual void SetContactListener(IContactListener* listener) = 0;
 
-        /// @brief Factory method: create a physics world with the appropriate backend
-        static std::unique_ptr<IPhysicsWorld> Create(const std::string& backend = "jolt");
+        // NOTE: World construction is the concrete backend's responsibility (see
+        // Source/Physics/PhysicsSystem). The previously declared but never-defined
+        // static Create(backend) factory was removed — it had no implementation or
+        // caller and would only produce a linker error if invoked.
     };
 
 } // namespace Spark::Physics

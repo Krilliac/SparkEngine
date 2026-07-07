@@ -6,8 +6,9 @@
  *
  * @details
  * SaveSystem provides complete, ECS-aware game state persistence. It serializes
- * the entire World (entities + components) to disk as compressed JSON, manages
- * multiple save slots, and supports quicksave, quickload, and rotating autosave.
+ * the entire World (entities + components) to disk in a compact, uncompressed
+ * binary format, manages multiple save slots, and supports quicksave, quickload,
+ * and rotating autosave.
  *
  * ## Architecture
  *
@@ -22,11 +23,17 @@
  *
  * ## Serialization format
  *
- * Save files are written as JSON compressed with the **miniz** (zlib) deflate
- * algorithm. The JSON root object contains:
- * - `"metadata"` – SaveMetadata fields
- * - `"entities"` – array of SerializedEntity objects
- * - `"customState"` – arbitrary string key-value pairs for game-specific data
+ * Save files use a custom, uncompressed binary layout (extension `.spark_save`):
+ * - A 4-byte `"SPRK"` magic followed by a `uint32` format version.
+ * - A length-prefixed newline-delimited **metadata** text block (SaveMetadata fields).
+ * - A `uint32` entity count, then each **entity** as a length-prefixed name plus its
+ *   components (each a length-prefixed type name and a set of length-prefixed
+ *   key/value property strings).
+ * - A trailing `uint32` **customState** count followed by length-prefixed key/value
+ *   pairs (arbitrary game-specific data).
+ *
+ * String fields use `uint16` length prefixes; the writer rejects (rather than
+ * truncates) any string that would overflow that prefix.
  *
  * ## Component registration
  *
@@ -270,13 +277,13 @@ namespace Spark
  * @brief Singleton façade that orchestrates all save and load operations.
  *
  * SaveSystem provides the primary API for persisting and restoring game state.
- * It coordinates the ComponentSerializerRegistry, JSON serialization via RapidJSON,
- * and deflate compression via miniz to produce compact, portable save files.
+ * It coordinates the ComponentSerializerRegistry and the custom binary (de)serializer
+ * (see "Serialization format" above) to produce compact, portable save files.
  *
  * ### Save file location
  * All files are written to the directory specified in Initialize() (default: `"Saves/"`
- * relative to the working directory). Each save slot produces a single `.sav` file
- * named after the slot (e.g. `"Saves/slot1.sav"`).
+ * relative to the working directory). Each save slot produces a single `.spark_save`
+ * file named after the slot (e.g. `"Saves/slot1.spark_save"`).
  *
  * ### Quicksave and autosave
  * - **QuickSave/QuickLoad**: single dedicated `"__quicksave"` slot; always overwrites.
@@ -346,7 +353,7 @@ namespace Spark
      * @brief Serialize and write the current world state to the specified save slot.
      *
      * Serializes all entities and components in `world`, attaches `metadata`,
-     * compresses the JSON, and writes the result to `<saveDirectory>/<slotName>.sav`.
+     * and writes the binary result to `<saveDirectory>/<slotName>.spark_save`.
      * If a file already exists for this slot it is overwritten atomically.
      *
      * @param slotName  Unique slot identifier (file-system-safe string, e.g. "slot1").
@@ -363,9 +370,10 @@ namespace Spark
         /**
      * @brief Load a previously saved game state from the specified slot.
      *
-     * Reads and decompresses the save file, reconstructs all entities and components
-     * in `world`, and applies any version migrations if the save format version
-     * differs from the current engine version.
+     * Reads and parses the binary save file, reconstructs all entities and components
+     * in `world`, and applies any version migrations if the save format version is
+     * older than the current engine version. Saves written by a newer format version
+     * are rejected (the load fails) rather than misinterpreted.
      *
      * @warning The provided `world` is **cleared** (all existing entities destroyed)
      *          before the saved entities are restored. Ensure no raw pointers to
@@ -374,7 +382,7 @@ namespace Spark
      * @param slotName  Save slot to load (must match a slot previously written by Save()).
      * @param world     The ECS World to restore into. Existing state is cleared.
      * @return          `true` if the world was fully restored; `false` on any error
-     *                  (file not found, JSON parse error, version mismatch, etc.).
+     *                  (file not found, corrupt/truncated data, version mismatch, etc.).
      */
         bool Load(const std::string& slotName, World& world);
 
@@ -418,7 +426,7 @@ namespace Spark
         /**
      * @brief Delete the save file for the specified slot.
      *
-     * Removes `<saveDirectory>/<slotName>.sav` from the file system. A no-op if the
+     * Removes `<saveDirectory>/<slotName>.spark_save` from the file system. A no-op if the
      * file does not exist (returns `true`). Returns `false` only if the file exists
      * but could not be deleted (e.g. permission denied).
      *
@@ -430,8 +438,8 @@ namespace Spark
         /**
      * @brief Return metadata for all save slots found in the save directory.
      *
-     * Scans the save directory for `*.sav` files, reads the metadata header from
-     * each (without fully decompressing the entity data), and returns the results
+     * Scans the save directory for `*.spark_save` files, reads only the metadata
+     * header from each (without parsing the entity data), and returns the results
      * sorted by `timestamp` descending (most recent first).
      *
      * Use this to populate the save-slot selection UI without the overhead of
@@ -461,7 +469,7 @@ namespace Spark
      * Performs a simple file-existence check without opening or parsing the file.
      *
      * @param slotName  Slot identifier to check.
-     * @return          `true` if `<saveDirectory>/<slotName>.sav` exists on disk.
+     * @return          `true` if `<saveDirectory>/<slotName>.spark_save` exists on disk.
      */
         bool SaveExists(const std::string& slotName) const;
 
@@ -555,10 +563,11 @@ namespace Spark
         SaveSystem() = default;
 
         /**
-     * @brief Compress a SaveData to JSON and write it to disk.
+     * @brief Serialize a SaveData to the binary save format and write it to disk.
      *
-     * Serializes `data` to JSON via RapidJSON, compresses with miniz deflate, and
-     * writes the binary blob to `filepath`. Returns false on any I/O or compression error.
+     * Writes `data` in the custom binary layout (see "Serialization format") to a
+     * temporary file, then atomically renames it over `filepath`. Returns false on
+     * any I/O error or if a string field would overflow its length prefix.
      *
      * @param filepath  Absolute or relative path of the output file.
      * @param data      SaveData to write.
@@ -567,11 +576,11 @@ namespace Spark
         bool WriteToFile(const std::string& filepath, const SaveData& data) const;
 
         /**
-     * @brief Read, decompress, and parse a save file from disk.
+     * @brief Read and parse a binary save file from disk.
      *
-     * Reads the binary file at `filepath`, decompresses with miniz, and parses
-     * the JSON into `outData`. Returns false if the file does not exist, cannot
-     * be decompressed, or fails JSON parsing.
+     * Reads the file at `filepath`, verifies the `"SPRK"` magic and format version,
+     * and parses the binary layout into `outData`. Returns false if the file does not
+     * exist, has a bad magic, has a newer-than-supported version, or is truncated.
      *
      * @param filepath  Absolute or relative path of the input file.
      * @param outData   Output parameter populated on success.
@@ -580,18 +589,31 @@ namespace Spark
         bool ReadFromFile(const std::string& filepath, SaveData& outData) const;
 
         /**
+     * @brief Read only the header + metadata block of a save file.
+     *
+     * Parses the magic, version, and metadata text block and then stops, skipping the
+     * (potentially large) entity payload. Used by GetSaveSlots()/GetSaveMetadata() so
+     * enumerating slots does not cost the size of every save's full entity data.
+     *
+     * @param filepath     Absolute or relative path of the input file.
+     * @param outMetadata  Output parameter populated on success.
+     * @return             `true` if the header + metadata were read successfully.
+     */
+        bool ReadMetadataOnly(const std::string& filepath, SaveMetadata& outMetadata) const;
+
+        /**
      * @brief Construct the full file path for a save slot.
      *
-     * Returns `m_saveDirectory + "/" + slotName + ".sav"`. Does not perform any
+     * Returns `m_saveDirectory + "/" + slotName + ".spark_save"`. Does not perform any
      * file-system operations.
      *
      * @param slotName  Slot identifier.
-     * @return          Full path to the corresponding `.sav` file.
+     * @return          Full path to the corresponding `.spark_save` file.
      */
         static bool IsValidSlotName(const std::string& slotName);
         std::string GetSavePath(const std::string& slotName) const;
 
-        /** @brief Directory where all `.sav` files are stored. Defaults to `"Saves"`. */
+        /** @brief Directory where all `.spark_save` files are stored. Defaults to `"Saves"`. */
         std::string m_saveDirectory = "Saves";
 
         /**

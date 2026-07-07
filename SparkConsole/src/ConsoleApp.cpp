@@ -1,4 +1,5 @@
 #include "ConsoleApp.h"
+#include "CommandParser.h"
 #include <iostream>
 #include <sstream>
 #include <filesystem>
@@ -61,8 +62,19 @@ static bool LinuxIsStdinPipe()
 }
 #endif // !SPARK_PLATFORM_WINDOWS
 
+// ---------------------------------------------------------------------------
+// Console version — single-sourced. The narrow and wide forms must stay in
+// sync; they exist only because the banner is emitted through std::wcout while
+// the command results are narrow std::string.
+// ---------------------------------------------------------------------------
+namespace
+{
+constexpr const char* kConsoleVersion = "2.0.0";
+constexpr const wchar_t* kConsoleVersionW = L"2.0.0";
+} // namespace
+
 ConsoleApp::ConsoleApp()
-    : m_historyIndex(0), m_running(true),
+    : m_running(true),
 #ifdef SPARK_PLATFORM_WINDOWS
       m_consoleOutput(GetStdHandle(STD_OUTPUT_HANDLE)), m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
 #else
@@ -91,8 +103,8 @@ void ConsoleApp::PrintBanner()
 #ifdef SPARK_PLATFORM_WINDOWS
     [[maybe_unused]] int rc_ = system("cls"); // Intentional: side-effect only
     std::wcout << L"========================================" << std::endl;
-    std::wcout << L"   Spark Engine Console v2.0.0" << std::endl;
-    std::wcout << L"   Tab: Autocomplete | Up/Down: History" << std::endl;
+    std::wcout << L"   Spark Engine Console v" << kConsoleVersionW << std::endl;
+    std::wcout << L"   Type 'help' for commands, 'history' to recall" << std::endl;
     std::wcout << L"========================================" << std::endl;
     std::wcout << std::endl;
 #else
@@ -102,8 +114,8 @@ void ConsoleApp::PrintBanner()
     // emit "Unknown command: ..." back to the user. Route human-facing text
     // through stderr so stdout is reserved for commands only.
     std::cerr << "========================================" << std::endl;
-    std::cerr << "   Spark Engine Console v2.0.0" << std::endl;
-    std::cerr << "   Tab: Autocomplete | Up/Down: History" << std::endl;
+    std::cerr << "   Spark Engine Console v" << kConsoleVersion << std::endl;
+    std::cerr << "   Type 'help' for commands, 'history' to recall" << std::endl;
     std::cerr << "========================================" << std::endl;
     std::cerr << std::endl;
 #endif
@@ -188,13 +200,14 @@ void ConsoleApp::PollStandaloneInput(std::string& input)
         if (!input.empty())
         {
             AddToHistory(input);
-            if (input == "exit" || input == "quit")
+            std::string resolved = ResolveAlias(input);
+            if (resolved == "exit" || resolved == "quit")
             {
                 PrintLog(L"Console shutting down...");
                 m_running = false;
                 return;
             }
-            ExecuteCommand(input);
+            ExecuteCommand(resolved);
         }
     }
     else
@@ -222,14 +235,15 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
                 if (!input.empty())
                 {
                     AddToHistory(input);
-                    if (input == "exit" || input == "quit")
+                    std::string resolved = ResolveAlias(input);
+                    if (resolved == "exit" || resolved == "quit")
                     {
                         PrintLog(L"Console shutting down...");
                         m_running = false;
                         keyboardThreadRunning = false;
                         break;
                     }
-                    std::cout << input << std::endl;
+                    std::cout << resolved << std::endl;
                     std::cout.flush();
                     input.clear();
                 }
@@ -324,6 +338,10 @@ void ConsoleApp::ProcessPipeMessages(const std::string& message)
         std::wstring wMessage(pipeLine.begin(), pipeLine.end());
         PrintEngineLog(wMessage);
 
+        // PrintEngineLog above takes m_outputMutex and releases it before returning,
+        // so a fresh guard is required here: the buffer is also mutated by PrintLog
+        // and read by the 'status'/'diag' command handlers on other threads.
+        std::lock_guard<std::mutex> lock(m_outputMutex);
         m_messageBuffer.push_back(wMessage);
         if (m_messageBuffer.size() > MAX_BUFFER_SIZE)
         {
@@ -477,89 +495,6 @@ void ConsoleApp::ReadEngineInput()
 #endif
 }
 
-void ConsoleApp::HandleArrowKey(std::string& input, char scanCode)
-{
-    switch (scanCode)
-    {
-    case 72:
-    { // Up arrow - previous command
-        std::string prev = GetPreviousCommand();
-        if (!prev.empty())
-        {
-            ClearInputLine();
-            input = prev;
-            UpdateInputLine(input);
-        }
-        break;
-    }
-    case 80:
-    { // Down arrow - next command
-        ClearInputLine();
-        std::string next = GetNextCommand();
-        input = next;
-        UpdateInputLine(input);
-        break;
-    }
-    default:
-        break;
-    }
-}
-
-#ifndef SPARK_PLATFORM_WINDOWS
-void ConsoleApp::HandleLinuxEscapeSequence(std::string& input)
-{
-    if (LinuxKbhit())
-    {
-        char seq = LinuxGetch();
-        if (seq == '[' && LinuxKbhit())
-        {
-            char arrow = LinuxGetch();
-            if (arrow == 'A')
-            { // Up arrow
-                std::string prev = GetPreviousCommand();
-                if (!prev.empty())
-                {
-                    ClearInputLine();
-                    input = prev;
-                    UpdateInputLine(input);
-                }
-            }
-            else if (arrow == 'B')
-            { // Down arrow
-                ClearInputLine();
-                std::string next = GetNextCommand();
-                input = next;
-                UpdateInputLine(input);
-            }
-        }
-    }
-    else
-    {
-        // Standalone Escape - clear line
-        ClearInputLine();
-        input.clear();
-    }
-}
-#endif
-
-void ConsoleApp::HandleEnterKey(std::string& input)
-{
-#ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
-#else
-    std::cout << std::endl;
-#endif
-
-    if (!input.empty())
-    {
-        AddToHistory(input);
-        std::string resolved = ResolveAlias(input);
-        ExecuteCommand(resolved);
-        input.clear();
-    }
-}
-
 void ConsoleApp::HandleBackspaceKey(std::string& input)
 {
     if (!input.empty())
@@ -584,193 +519,6 @@ void ConsoleApp::HandlePrintableChar(std::string& input, char ch)
 #else
     std::cout << ch << std::flush;
 #endif
-}
-
-void ConsoleApp::ReadUserInput()
-{
-    std::string input;
-
-    while (m_running)
-    {
-#ifdef SPARK_PLATFORM_WINDOWS
-        if (_kbhit())
-        {
-            char ch = _getch();
-#else
-        if (LinuxKbhit())
-        {
-            char ch = LinuxGetch();
-#endif
-
-            // Handle special keys (arrows etc.)
-            if (ch == 0 || ch == -32)
-            {
-#ifdef SPARK_PLATFORM_WINDOWS
-                char scanCode = _getch();
-#else
-                char scanCode = LinuxGetch();
-#endif
-                HandleArrowKey(input, scanCode);
-                continue;
-            }
-#ifndef SPARK_PLATFORM_WINDOWS
-            if (ch == 27)
-            {
-                HandleLinuxEscapeSequence(input);
-                continue;
-            }
-#endif
-
-            // Reset tab state on non-tab
-            if (ch != '\t')
-            {
-                m_tabIndex = -1;
-                m_tabCompletions.clear();
-            }
-
-            if (ch == '\r' || ch == '\n')
-            {
-                HandleEnterKey(input);
-            }
-            else if (ch == '\b' || ch == 127)
-            {
-                HandleBackspaceKey(input);
-            }
-            else if (ch == '\t')
-            {
-                HandleTabCompletion(input);
-            }
-            else if (ch == 27)
-            { // Escape - clear line (Windows path)
-                ClearInputLine();
-                input.clear();
-            }
-            else if (ch >= 32 && ch <= 126)
-            {
-                HandlePrintableChar(input, ch);
-            }
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-}
-
-std::vector<std::string> ConsoleApp::GetCompletions(const std::string& prefix)
-{
-    std::vector<std::string> completions;
-
-    // Match registered commands
-    auto commands = m_commandRegistry.GetAllCommands();
-    for (const auto& cmd : commands)
-    {
-        if (cmd.name.size() >= prefix.size() && cmd.name.substr(0, prefix.size()) == prefix)
-        {
-            completions.push_back(cmd.name);
-        }
-    }
-
-    // Match aliases
-    for (const auto& pair : m_aliases)
-    {
-        if (pair.first.size() >= prefix.size() && pair.first.substr(0, prefix.size()) == prefix)
-        {
-            completions.push_back(pair.first);
-        }
-    }
-
-    // Match known engine commands
-    static const std::vector<std::string> engineCmds = {"fps",           "info",          "memory_info",
-                                                        "graphics_info", "engine_status", "render_debug",
-                                                        "shader_debug",  "console_status"};
-    for (const auto& cmd : engineCmds)
-    {
-        if (cmd.size() >= prefix.size() && cmd.substr(0, prefix.size()) == prefix)
-        {
-            completions.push_back(cmd);
-        }
-    }
-
-    std::sort(completions.begin(), completions.end());
-    // Remove duplicates
-    completions.erase(std::unique(completions.begin(), completions.end()), completions.end());
-    return completions;
-}
-
-void ConsoleApp::DisplayCompletionCandidates()
-{
-#ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
-    SetConsoleColor(FOREGROUND_BLUE | FOREGROUND_GREEN);
-    for (const auto& comp : m_tabCompletions)
-    {
-        std::wstring wcomp(comp.begin(), comp.end());
-        wcomp += L"  ";
-        WriteConsoleW(hOut, wcomp.c_str(), static_cast<DWORD>(wcomp.length()), NULL, NULL);
-    }
-    WriteConsoleW(hOut, L"\n", 1, NULL, NULL);
-    SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-
-    // Re-display prompt
-    SetConsoleColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    WriteConsoleW(hOut, L"> ", 2, NULL, NULL);
-    SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-#else
-    std::cout << "\n" << ANSI_CYAN;
-    for (const auto& comp : m_tabCompletions)
-    {
-        std::cout << comp << "  ";
-    }
-    std::cout << ANSI_RESET << "\n";
-    std::cout << ANSI_GREEN_BOLD << "> " << ANSI_RESET;
-#endif
-}
-
-void ConsoleApp::ReplaceInputWithCompletion(std::string& input)
-{
-#ifdef SPARK_PLATFORM_WINDOWS
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    for (size_t i = 0; i < input.size(); ++i)
-    {
-        WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
-    }
-
-    input = m_tabCompletions[m_tabIndex];
-    std::wstring winput(input.begin(), input.end());
-    WriteConsoleW(hOut, winput.c_str(), static_cast<DWORD>(winput.length()), NULL, NULL);
-#else
-    for (size_t i = 0; i < input.size(); ++i)
-    {
-        std::cout << "\b \b";
-    }
-    input = m_tabCompletions[m_tabIndex];
-    std::cout << input << std::flush;
-#endif
-}
-
-void ConsoleApp::HandleTabCompletion(std::string& input)
-{
-    if (input.empty())
-        return;
-
-    if (m_tabIndex == -1)
-    {
-        m_tabPrefix = input;
-        m_tabCompletions = GetCompletions(m_tabPrefix);
-        if (m_tabCompletions.empty())
-            return;
-        m_tabIndex = 0;
-    }
-    else
-    {
-        m_tabIndex = (m_tabIndex + 1) % static_cast<int>(m_tabCompletions.size());
-    }
-
-    if (m_tabCompletions.size() > 1 && m_tabIndex == 0)
-    {
-        DisplayCompletionCandidates();
-    }
-
-    ReplaceInputWithCompletion(input);
 }
 
 std::string ConsoleApp::ResolveAlias(const std::string& input)
@@ -947,17 +695,12 @@ void ConsoleApp::ExecuteCommand(const std::string& cmdLine)
     if (cmdLine.empty())
         return;
 
-    // Parse command and arguments
-    std::istringstream iss(cmdLine);
+    // Parse command and arguments via the shared parser so quoted arguments
+    // (e.g. echo "a b") are preserved as a single token.
     std::string command;
-    iss >> command;
-
     std::vector<std::string> args;
-    std::string arg;
-    while (iss >> arg)
-    {
-        args.push_back(arg);
-    }
+    if (!CommandParser::ParseCommandLine(cmdLine, command, args))
+        return;
 
     // Check if this is an engine command first, then forward it
     if (ShouldForwardToEngine(command))
@@ -1054,7 +797,7 @@ void ConsoleApp::RegisterCoreCommands()
 #endif
 
                                           std::wcout << L"========================================" << std::endl;
-                                          std::wcout << L"   Spark Engine Console v1.0.0" << std::endl;
+                                          std::wcout << L"   Spark Engine Console v" << kConsoleVersionW << std::endl;
                                           std::wcout << L"   Console Refreshed" << std::endl;
                                           std::wcout << L"========================================" << std::endl;
                                           std::wcout << std::endl;
@@ -1095,8 +838,8 @@ void ConsoleApp::RegisterCoreCommands()
     m_commandRegistry.RegisterCommand("version", "Show console version", "version",
                                       [](const std::vector<std::string>& args) -> std::string
                                       {
-                                          return "Spark Engine Console v2.0.0\n"
-                                                 "Features: Tab completion, command aliases, history navigation\n"
+                                          return std::string("Spark Engine Console v") + kConsoleVersion +
+                                                 "\nFeatures: command aliases, command history\n"
                                                  "Build: Development";
                                       });
 }
@@ -1108,12 +851,16 @@ void ConsoleApp::RegisterDiagnosticCommands()
                                       {
                                           std::stringstream ss;
                                           ss << "Spark Engine Debug Console\n";
-                                          ss << "Version: 1.0.0\n";
+                                          ss << "Version: " << kConsoleVersion << "\n";
                                           ss << "Commands registered: " << m_commandRegistry.GetAllCommands().size()
                                              << "\n";
                                           ss << "History entries: " << m_commandHistory.size() << "\n";
-                                          ss << "Buffer size: " << m_messageBuffer.size() << "/" << MAX_BUFFER_SIZE
-                                             << "\n";
+                                          size_t bufferSize = 0;
+                                          {
+                                              std::lock_guard<std::mutex> lock(m_outputMutex);
+                                              bufferSize = m_messageBuffer.size();
+                                          }
+                                          ss << "Buffer size: " << bufferSize << "/" << MAX_BUFFER_SIZE << "\n";
                                           ss << "Connection status: " << (m_running ? "Active" : "Disconnected");
                                           return ss.str();
                                       });
@@ -1134,8 +881,13 @@ void ConsoleApp::RegisterDiagnosticCommands()
                                           ss << "  Console running: " << (m_running ? "Yes" : "No") << "\n";
                                           ss << "  Commands registered: " << m_commandRegistry.GetAllCommands().size()
                                              << "\n";
-                                          ss << "  Message buffer size: " << m_messageBuffer.size() << "/"
-                                             << MAX_BUFFER_SIZE << "\n";
+                                          size_t bufferSize = 0;
+                                          {
+                                              std::lock_guard<std::mutex> lock(m_outputMutex);
+                                              bufferSize = m_messageBuffer.size();
+                                          }
+                                          ss << "  Message buffer size: " << bufferSize << "/" << MAX_BUFFER_SIZE
+                                             << "\n";
 
 #ifdef SPARK_PLATFORM_WINDOWS
                                           HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
@@ -1337,71 +1089,4 @@ void ConsoleApp::AddToHistory(const std::string& cmd)
     {
         m_commandHistory.erase(m_commandHistory.begin());
     }
-
-    m_historyIndex = m_commandHistory.size();
-}
-
-std::string ConsoleApp::GetPreviousCommand()
-{
-    std::lock_guard<std::mutex> lock(m_historyMutex);
-
-    if (m_commandHistory.empty() || m_historyIndex == 0)
-    {
-        return "";
-    }
-
-    --m_historyIndex;
-    return m_commandHistory[m_historyIndex];
-}
-
-std::string ConsoleApp::GetNextCommand()
-{
-    std::lock_guard<std::mutex> lock(m_historyMutex);
-
-    if (m_commandHistory.empty() || m_historyIndex + 1 >= m_commandHistory.size())
-    {
-        m_historyIndex = m_commandHistory.size();
-        return "";
-    }
-
-    ++m_historyIndex;
-    return m_commandHistory[m_historyIndex];
-}
-
-void ConsoleApp::ClearInputLine()
-{
-#ifdef SPARK_PLATFORM_WINDOWS
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
-
-    if (GetConsoleScreenBufferInfo(hStdOut, &csbi))
-    {
-        COORD coord = {0, csbi.dwCursorPosition.Y};
-        SetConsoleCursorPosition(hStdOut, coord);
-
-        DWORD written;
-        std::string spaces(csbi.dwSize.X, ' ');
-        WriteConsoleA(hStdOut, spaces.c_str(), csbi.dwSize.X, &written, nullptr);
-
-        SetConsoleCursorPosition(hStdOut, coord);
-    }
-#else
-    // ANSI escape: move to column 0 and clear line
-    std::cout << "\r\033[K" << std::flush;
-#endif
-}
-
-void ConsoleApp::UpdateInputLine(const std::string& text)
-{
-    ClearInputLine();
-
-#ifdef SPARK_PLATFORM_WINDOWS
-    SetConsoleColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    std::wcout << L"SparkConsole> ";
-    SetConsoleColor(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
-#else
-    std::cout << ANSI_GREEN_BOLD << "SparkConsole> " << ANSI_RESET;
-#endif
-    std::cout << text;
-    std::cout.flush();
 }

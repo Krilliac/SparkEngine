@@ -27,8 +27,12 @@ namespace Spark::Mobile
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         (void)deltaTime;
-        RecognizeGestures();
+
+        // Consume the previous frame's gestures, recognize this frame's from the
+        // touch-end history, then clear the history now that it has been consumed.
         m_pendingGestures.clear();
+        RecognizeGestures();
+        m_endedTouches.clear();
 
         // Battery-aware scaling
         if (m_batteryAwareScaling && m_batteryLevel >= 0.0f && !m_isCharging)
@@ -69,6 +73,11 @@ namespace Spark::Mobile
         }
         else if (event.type == TouchEventType::Ended || event.type == TouchEventType::Cancelled)
         {
+            // A cleanly ended touch (not cancelled) is a gesture candidate — record
+            // it so RecognizeGestures() can classify it on the next Update().
+            if (event.type == TouchEventType::Ended)
+                m_endedTouches.push_back(event);
+
             m_activeTouches.erase(std::remove_if(m_activeTouches.begin(), m_activeTouches.end(),
                                                  [&](const TouchEvent& t) { return t.touchId == event.touchId; }),
                                   m_activeTouches.end());
@@ -104,16 +113,32 @@ namespace Spark::Mobile
 
     void MobilePlatform::RecognizeGestures()
     {
-        // Simple gesture recognition from active touches
-        // Full implementation would track touch history and timing
-        if (m_activeTouches.size() == 1)
+        // Emit a Tap gesture for each touch that ended cleanly since the last Update.
+        // A fuller implementation would also classify swipes/long-presses from press
+        // duration and travel distance; the tap is the baseline recognized gesture.
+        for (const auto& ended : m_endedTouches)
         {
             Gesture tap;
             tap.type = GestureType::Tap;
-            tap.x = m_activeTouches[0].x;
-            tap.y = m_activeTouches[0].y;
+            tap.x = ended.x;
+            tap.y = ended.y;
             tap.touchCount = 1;
-            // Only add if touch just ended (simplified)
+            DispatchGesture(tap);
+        }
+    }
+
+    void MobilePlatform::DispatchGesture(const Gesture& gesture)
+    {
+        m_pendingGestures.push_back(gesture);
+
+        auto it = m_gestureCallbacks.find(static_cast<int>(gesture.type));
+        if (it != m_gestureCallbacks.end())
+        {
+            for (const auto& callback : it->second)
+            {
+                if (callback)
+                    callback(gesture);
+            }
         }
     }
 

@@ -35,12 +35,18 @@
  *
  * ## AngelScript API available to scripts
  *
- * The following global functions are registered and callable from script code:
- * - `void print(const string& msg)` — output to the debug console
- * - `EntityID createEntity(const string& name)` — create a new ECS entity
- * - `Transform@ getTransform(EntityID id)` — get an entity's transform
- * - `bool getKeyDown(const string& key)` — check for key press (single frame)
- * - `bool getKey(const string& key)` — check if key is currently held
+ * A representative subset of the global functions callable from script code is
+ * grouped below. This list is NOT exhaustive and function signatures are
+ * omitted deliberately — the authoritative, always-current surface is whatever
+ * RegisterGlobalFunctions() and AutoRegisterReflectedTypes() register in
+ * AngelScriptEngine.cpp. Consult those two functions for exact declarations.
+ *
+ * - **Input:** print, getKeyDown, getKey
+ * - **Entity lifecycle:** createEntity, destroyEntity, getEntityByName
+ * - **Transform:** getTransform, getPosition/setPosition, getRotation/setRotation
+ * - **Gameplay:** getHealth/setHealth, getSpeed, applyForce, playSound, playAnimation
+ * - **Events/debug:** fireEvent, debugTrace
+ * - **Reflection-driven component access:** getComponentField, setComponentField, hasComponent
  *
  * @see Components.h (for EntityID and Transform), ECSWorld
  */
@@ -329,6 +335,20 @@ class AngelScriptEngine
      *         RegisterGlobalFunction itself failed.
      */
     bool RegisterGuardedFunction(const char* declaration, const char* scriptVisibleName, const asSFuncPtr& fn);
+
+    /**
+     * @brief Record each class's declared execution context from its metadata.
+     *
+     * After a module builds, walks its object types and reads the metadata
+     * annotation (`[server]` / `[client]` / `[shared]`) declared before each
+     * class via CScriptBuilder, storing the result in m_classContexts keyed by
+     * "module::class". Consulted by AttachScript to enforce the client/server
+     * boundary. Classes with no such tag are left Shared.
+     *
+     * @param builder    The builder that just compiled @p moduleName (holds the metadata).
+     * @param moduleName Name of the module whose classes were compiled.
+     */
+    void RecordModuleContexts(CScriptBuilder& builder, const std::string& moduleName);
 #endif
 
     // ========================================================================
@@ -342,12 +362,17 @@ class AngelScriptEngine
     /**
      * @brief Recompile a module and re-attach all entity scripts that reference it
      *
-     * Serializes script state via optional Serialize() callbacks, recompiles the
-     * module from disk, and re-attaches all entity scripts from the module.
-     * State is restored via Deserialize() if available.
+     * First validates that the new source compiles into a throwaway staging
+     * module; if compilation fails, nothing is changed and false is returned
+     * (all live scripts stay intact). On success, every entity script of the
+     * module is detached, the module is recompiled under its real name, and
+     * each script is re-attached by running its default constructor again.
+     *
+     * @note Per-instance script state is NOT preserved: constructors re-run and
+     *       all fields reset. There are no Serialize()/Deserialize() hooks.
      *
      * @param moduleName Name of the module to reload
-     * @return true if recompilation and re-attachment succeeded
+     * @return true only if recompilation and every re-attach succeeded
      */
     bool HotReloadModule(const std::string& moduleName);
 
@@ -369,6 +394,7 @@ class AngelScriptEngine
     // Script Execution Context (Client/Server)
     // ========================================================================
 
+  public:
     /**
      * @brief Script execution context for multiplayer separation
      */
@@ -382,8 +408,15 @@ class AngelScriptEngine
     /**
      * @brief Set the current execution context
      *
-     * When set to Server, scripts tagged [client] are skipped.
-     * When set to Client, scripts tagged [server] are skipped.
+     * Gates AttachScript by a script class's declared context. A class is
+     * tagged in AngelScript source with a metadata annotation immediately
+     * before its declaration, e.g. `[server] class SpawnController {...}` or
+     * `[client] class Hud {...}`; untagged classes are Shared and always
+     * attach. When the context is Server, attaching a class tagged [client]
+     * is refused (AttachScript returns false), and vice-versa. This is the
+     * server/client authority boundary: it prevents client-only logic from
+     * running on the dedicated server and server-only logic from running on
+     * clients.
      *
      * @param context The execution context
      */
@@ -399,6 +432,25 @@ class AngelScriptEngine
 
     /// Maps module name -> source file path for hot-reload
     std::unordered_map<std::string, std::string> m_moduleFilePaths;
+
+    /// Declared execution context per script class, keyed by "module::class".
+    /// Populated at compile time from class metadata tags ([server]/[client]);
+    /// classes with no recorded entry are treated as Shared.
+    std::unordered_map<std::string, ScriptContext> m_classContexts;
+
+    /**
+     * @brief Look up a script class's declared execution context.
+     * @param moduleName Module the class was compiled in.
+     * @param className  Script class name.
+     * @return The recorded ScriptContext, or ScriptContext::Shared if none.
+     */
+    ScriptContext GetClassContext(const std::string& moduleName, const std::string& className) const;
+
+    /**
+     * @brief True if a class with the given declared context may attach under
+     *        the current m_scriptContext (Shared classes always may).
+     */
+    bool IsClassContextAllowed(ScriptContext classContext) const;
 
     /**
      * @brief Look up a script instance by entity ID

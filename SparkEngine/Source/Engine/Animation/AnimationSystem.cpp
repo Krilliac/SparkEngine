@@ -63,6 +63,18 @@ namespace Spark::Animation
                 uint32_t boneCount = 0;
                 file.read(reinterpret_cast<char*>(&boneCount), sizeof(boneCount));
 
+                // Bound the count read from an untrusted file before reserving — a corrupt
+                // .skel with boneCount near 0xFFFFFFFF would otherwise trigger a multi-GB
+                // allocation (bad_alloc / DoS) before the file.good()-bounded loop runs.
+                constexpr uint32_t kMaxBones = 100'000;
+                if (!file.good() || boneCount > kMaxBones)
+                {
+                    SPARK_LOG_WARN(LogCategory::Animation, "Skeleton file '%s' has invalid bone count %u (max %u)",
+                                   filepath.c_str(), boneCount, kMaxBones);
+                    m_skeletons[filepath] = skeleton;
+                    return skeleton;
+                }
+
                 skeleton->bones.reserve(boneCount);
 
                 for (uint32_t i = 0; i < boneCount && file.good(); ++i)
@@ -136,6 +148,15 @@ namespace Spark::Animation
 
         uint32_t clipCount = 0;
         file.read(reinterpret_cast<char*>(&clipCount), sizeof(clipCount));
+        // Bound the count from an untrusted file before reserving (matches the per-channel
+        // and per-keyframe caps below) so a corrupt clipCount cannot force a huge alloc.
+        constexpr uint32_t kMaxClips = 100'000;
+        if (!file.good() || clipCount > kMaxClips)
+        {
+            SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: invalid clip count %u in '%s'", clipCount,
+                           filepath.c_str());
+            return clips;
+        }
 
         clips.reserve(clipCount);
 

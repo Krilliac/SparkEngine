@@ -456,6 +456,13 @@ namespace Spark::Gameplay
             else
                 return false;
 
+            // AbilityFlags is a 32-bit flag set; shifting 1u by >= 32 is undefined
+            // behaviour. A data-defined ability id out of range simply has no bit.
+            if (id >= 32u)
+            {
+                return false;
+            }
+
             auto* abilityComp = world.GetComponent<AbilityComponent>(entityId);
             if (abilityComp)
             {

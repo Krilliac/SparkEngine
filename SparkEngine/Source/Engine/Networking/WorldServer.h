@@ -283,7 +283,19 @@ namespace Spark::Net
         // -- Queries --
 
         const WorldServerConfig& GetConfig() const { return m_config; }
-        const WorldServerStats& GetStats() const { return m_stats; }
+
+        /**
+         * @brief Get a snapshot copy of the world server statistics.
+         *
+         * Returns by value under m_statsMutex rather than handing out a reference
+         * to m_stats, which the tick thread mutates (Tick / ProcessEntityMigrations)
+         * — a live reference would expose torn reads to console/other threads.
+         */
+        WorldServerStats GetStats() const
+        {
+            std::lock_guard<std::mutex> lock(m_statsMutex);
+            return m_stats;
+        }
 
         /// Console status string
         std::string Console_GetStatus() const;
@@ -300,6 +312,10 @@ namespace Spark::Net
 
         WorldServerConfig m_config;
         WorldServerStats m_stats;
+        /// Guards m_stats: written by the tick thread (Tick / ProcessEntityMigrations),
+        /// read via GetStats() from console/other threads. Writers in WorldServer.cpp
+        /// must lock this to fully close torn reads.
+        mutable std::mutex m_statsMutex;
         std::atomic<bool> m_running{false};
         std::thread m_tickThread;
         std::chrono::steady_clock::time_point m_startTime;

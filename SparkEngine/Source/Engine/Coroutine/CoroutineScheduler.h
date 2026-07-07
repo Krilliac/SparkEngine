@@ -161,9 +161,18 @@ namespace Spark
          */
         void Update(float deltaTime)
         {
+            // Iterate by index over a cached size rather than range-for: a ticking
+            // coroutine may call StartCoroutine()/Schedule(), which push_back onto
+            // these same vectors and can reallocate them. Caching the count means
+            // coroutines spawned mid-tick are deferred to the next frame (and the
+            // reallocation cannot invalidate a live range-for iterator). The pointed-to
+            // Coroutine objects live on the heap behind unique_ptr, so a reallocation
+            // moves the unique_ptr slots but never the object a tick is running inside.
+
             // Tick builder-pattern coroutines
-            for (auto& co : m_coroutines)
+            for (size_t i = 0, n = m_coroutines.size(); i < n; ++i)
             {
+                auto& co = m_coroutines[i];
                 if (co && !co->IsCancelled() && !co->IsFinished())
                 {
                     co->Update(deltaTime);
@@ -171,8 +180,9 @@ namespace Spark
             }
 
             // Tick C++20 native coroutines
-            for (auto& co : m_nativeCoroutines)
+            for (size_t i = 0, n = m_nativeCoroutines.size(); i < n; ++i)
             {
+                auto& co = m_nativeCoroutines[i];
                 if (co && !co->IsCancelled() && !co->IsFinished())
                 {
                     co->Update(deltaTime);

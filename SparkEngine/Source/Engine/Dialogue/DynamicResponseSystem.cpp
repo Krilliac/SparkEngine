@@ -81,6 +81,30 @@ namespace Spark::Dialogue
             return;
         }
 
+        // Guard against unbounded recursion. A SendSignal action re-enters SendSignal
+        // (see ExecuteAction), so a rule that emits a signal matching itself — or two
+        // rules that mutually trigger — would recurse until the stack overflows. The
+        // default 0s cooldown does not stop this (m_gameTime never advances during the
+        // synchronous recursion), so cap the depth here. Deferred (Wait) actions run via
+        // the scheduler on later frames and are unaffected. thread_local keeps the count
+        // correct if signals are dispatched from more than one thread.
+        static thread_local int s_signalDepth = 0;
+        static constexpr int kMaxSignalDepth = 32;
+        if (s_signalDepth >= kMaxSignalDepth)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "DynamicResponseSystem: signal '%s' exceeded max recursion depth (%d) — aborting to "
+                           "prevent stack overflow",
+                           signalName.c_str(), kMaxSignalDepth);
+            return;
+        }
+        ++s_signalDepth;
+        struct DepthGuard
+        {
+            int& depth;
+            ~DepthGuard() { --depth; }
+        } depthGuard{s_signalDepth};
+
         SPARK_LOG_DEBUG(Spark::LogCategory::Core, "DynamicResponseSystem: signal '%s' from entity %u",
                         signalName.c_str(), senderEntity);
 

@@ -101,3 +101,54 @@ TEST(InventorySystemReal_ConsoleStatusReturnsString)
     const auto status = inv.Console_GetStatus();
     EXPECT_TRUE(!status.empty());
 }
+
+// Regression: a failed AddItem (capacity exceeded) must be transactional — it
+// deposits nothing, so the inventory count is unchanged.
+TEST(InventorySystemReal_AddItemFailureLeavesInventoryUnchanged)
+{
+    ResetInventory();
+    auto& inv = Spark::Gameplay::InventorySystem::GetInstance();
+    inv.RegisterItem(MakeItem(4001, "Brick", /*maxStack*/ 10));
+    const uint32_t player = 200;
+
+    inv.SetMaxSlots(player, 1); // exactly one slot → at most 10 bricks fit
+    EXPECT_TRUE(inv.AddItem(player, 4001, 5));
+    EXPECT_EQ(inv.GetItemCount(player, 4001), static_cast<uint32_t>(5));
+
+    // 100 cannot fit (only 5 more would); must fail without mutating anything.
+    EXPECT_FALSE(inv.AddItem(player, 4001, 100));
+    EXPECT_EQ(inv.GetItemCount(player, 4001), static_cast<uint32_t>(5));
+}
+
+// Regression for the transfer-duplication path: transferring into a full
+// destination must fail and leave BOTH sides untouched (no dupe, no loss).
+TEST(InventorySystemReal_TransferIntoFullDestinationNoDuplication)
+{
+    ResetInventory();
+    auto& inv = Spark::Gameplay::InventorySystem::GetInstance();
+    inv.RegisterItem(MakeItem(5001, "Coin", /*maxStack*/ 10));
+    const uint32_t source = 1;
+    const uint32_t dest = 2;
+
+    EXPECT_TRUE(inv.AddItem(source, 5001, 8));
+    inv.SetMaxSlots(dest, 1);
+    EXPECT_TRUE(inv.AddItem(dest, 5001, 10)); // destination is now full (1 slot × 10)
+
+    EXPECT_FALSE(inv.TransferItem(source, dest, 5001, 5));
+    // Source keeps its 8 (not removed), destination keeps its 10 (not grown).
+    EXPECT_EQ(inv.GetItemCount(source, 5001), static_cast<uint32_t>(8));
+    EXPECT_EQ(inv.GetItemCount(dest, 5001), static_cast<uint32_t>(10));
+}
+
+// A successful add that spans multiple stacks deposits exactly the requested
+// count (10 + 10 + 5 across three slots).
+TEST(InventorySystemReal_AddAcrossStackBoundariesAddsExactCount)
+{
+    ResetInventory();
+    auto& inv = Spark::Gameplay::InventorySystem::GetInstance();
+    inv.RegisterItem(MakeItem(6001, "Arrow", /*maxStack*/ 10));
+    const uint32_t player = 3;
+
+    EXPECT_TRUE(inv.AddItem(player, 6001, 25));
+    EXPECT_EQ(inv.GetItemCount(player, 6001), static_cast<uint32_t>(25));
+}

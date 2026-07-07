@@ -30,27 +30,31 @@ namespace Spark
         /// @brief Reset to non-cancelled state
         void Reset() { m_cancelled->store(false, std::memory_order_release); }
 
-        /// @brief Create a linked token that cancels when either this or parent cancels
+        /// @brief Create a linked token that cancels when either this or any ancestor cancels.
+        ///
+        /// The parent is captured as a full token so the whole ancestor chain is
+        /// walkable; the shared cancellation flags mean cancelling any ancestor is
+        /// observed through the link.
         CancellationToken CreateLinked() const
         {
             CancellationToken linked;
-            linked.m_parent = m_cancelled;
+            linked.m_parent = std::make_shared<CancellationToken>(*this);
             return linked;
         }
 
-        /// @brief Check if cancelled (including parent chain)
+        /// @brief Check if cancelled, walking the full parent chain (not just one level).
         bool IsCancelledOrParent() const
         {
             if (m_cancelled->load(std::memory_order_acquire))
                 return true;
-            if (m_parent && m_parent->load(std::memory_order_acquire))
-                return true;
+            if (m_parent)
+                return m_parent->IsCancelledOrParent();
             return false;
         }
 
       private:
         std::shared_ptr<std::atomic<bool>> m_cancelled;
-        std::shared_ptr<std::atomic<bool>> m_parent; ///< Optional parent token
+        std::shared_ptr<CancellationToken> m_parent; ///< Optional parent token (full ancestor chain)
     };
 
     /// @brief ECS component that provides a cancellation token per entity

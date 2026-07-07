@@ -227,11 +227,35 @@ namespace Spark::ECS
             // Doppler frequency shift. We derive velocity from the position delta
             // rather than reading physics velocity, because non-physics entities
             // (e.g. scripted movers) also need accurate Doppler.
+            //
+            // Guard against spurious spikes: on the entity's first update the stored
+            // previousPosition is still its default {0,0,0}, so an entity spawned away
+            // from the origin would yield velocity = position/dt (e.g. 6250 m/s), and a
+            // teleport (AI/spline systems snapping the transform) produces the same
+            // artifact. Any derived speed beyond the speed of sound is physically
+            // implausible for a Doppler source and drives X3DAudio into degenerate
+            // pitch shifts, so we treat it as a discontinuity and leave Velocity zero.
             if (deltaTime > 1e-6f)
             {
-                source->Velocity.x = (transform.position.x - audio.previousPosition.x) / deltaTime;
-                source->Velocity.y = (transform.position.y - audio.previousPosition.y) / deltaTime;
-                source->Velocity.z = (transform.position.z - audio.previousPosition.z) / deltaTime;
+                const float vx = (transform.position.x - audio.previousPosition.x) / deltaTime;
+                const float vy = (transform.position.y - audio.previousPosition.y) / deltaTime;
+                const float vz = (transform.position.z - audio.previousPosition.z) / deltaTime;
+
+                // Speed of sound (~343 m/s at 20 C). Beyond this, X3DAudio Doppler is
+                // undefined, so a jump this large is a first-frame/teleport discontinuity.
+                constexpr float kMaxDopplerSpeed = 343.0f;
+                if (vx * vx + vy * vy + vz * vz <= kMaxDopplerSpeed * kMaxDopplerSpeed)
+                {
+                    source->Velocity.x = vx;
+                    source->Velocity.y = vy;
+                    source->Velocity.z = vz;
+                }
+                else
+                {
+                    source->Velocity.x = 0.0f;
+                    source->Velocity.y = 0.0f;
+                    source->Velocity.z = 0.0f;
+                }
             }
 
             // Update 3D position and store for next frame's velocity derivation
@@ -384,8 +408,17 @@ namespace Spark::ECS
                 ai.alertTimer += deltaTime;
             }
 
-            // Path following
-            if (!ai.currentPath.empty() && ai.currentPathIndex < ai.currentPath.size())
+            // Path following.
+            // Direct Transform writes are only valid for agents that are NOT backed by a
+            // Dynamic rigid body. A Dynamic body is authority-owned by the physics engine:
+            // PhysicsUpdateSystem overwrites its Transform from the simulation every frame,
+            // and Physics runs before AI in the frame order, so a Transform write here would
+            // be immediately stomped next frame and the two systems would fight (stutter / no
+            // movement). Kinematic and bodyless agents are safe — for a Kinematic body
+            // PhysicsUpdateSystem reads the Transform *into* the body, and AI runs after it.
+            const auto* pathRigidBody = world.GetRegistry().try_get<RigidBodyComponent>(entity);
+            const bool dynamicBody = pathRigidBody && pathRigidBody->type == RigidBodyComponent::Type::Dynamic;
+            if (!dynamicBody && !ai.currentPath.empty() && ai.currentPathIndex < ai.currentPath.size())
             {
                 const auto& target = ai.currentPath[ai.currentPathIndex];
                 float dx = target.x - transform.position.x;
@@ -521,7 +554,6 @@ namespace Spark::ECS
     void ParticleUpdateSystem::Update(World& world, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
-        m_activeParticleCount = 0;
         m_activeEmitterCount = 0;
 
         auto view = world.GetEntitiesWith<Transform, ParticleEmitterComponent>();

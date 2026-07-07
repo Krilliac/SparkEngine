@@ -34,24 +34,62 @@ namespace Spark
         // Handles: { "key": "value", "key2": "value2" }
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-        // Strip comments and find key-value pairs with regex
-        std::regex kvRegex(R"~~("([^"]+)"\s*:\s*"([^"]*)")~~");
+        // Match quoted key/value pairs. The (?:[^"\\]|\\.)* body allows escaped
+        // characters inside the strings (e.g. \" \\ \n), so a value such as
+        // "He said \"hi\"" is captured whole instead of being truncated at the
+        // first inner quote.
+        std::regex kvRegex(R"~~("((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)")~~");
         auto begin = std::sregex_iterator(content.begin(), content.end(), kvRegex);
         auto end = std::sregex_iterator();
 
-        size_t before = m_entries.size();
+        // Translate JSON backslash escapes in a captured string to their literal
+        // characters. Unknown escapes keep the escaped character verbatim.
+        auto unescape = [](const std::string& in)
+        {
+            std::string out;
+            out.reserve(in.size());
+            for (size_t i = 0; i < in.size(); ++i)
+            {
+                if (in[i] == '\\' && i + 1 < in.size())
+                {
+                    switch (const char next = in[++i])
+                    {
+                    case 'n':
+                        out.push_back('\n');
+                        break;
+                    case 't':
+                        out.push_back('\t');
+                        break;
+                    case 'r':
+                        out.push_back('\r');
+                        break;
+                    default:
+                        out.push_back(next);
+                        break;
+                    }
+                }
+                else
+                {
+                    out.push_back(in[i]);
+                }
+            }
+            return out;
+        };
+
+        size_t parsed = 0;
         for (auto it = begin; it != end; ++it)
         {
             const std::smatch& match = *it;
-            m_entries[match[1].str()] = match[2].str();
+            m_entries[unescape(match[1].str())] = unescape(match[2].str());
+            ++parsed;
         }
 
-        size_t added = m_entries.size() - before;
-        if (added == 0)
+        if (parsed == 0)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Core,
                            "StringTable: parsed 0 entries from '%s' (%zu content bytes) — bad JSON format?",
                            filePath.c_str(), content.size());
+            return false;
         }
 
         return true;

@@ -21,6 +21,7 @@
 #include <vector>
 #include <functional>
 #include <cstdint>
+#include <unordered_map>
 
 namespace Spark::Mobile
 {
@@ -226,9 +227,11 @@ namespace Spark::Mobile
 
       private:
         void RecognizeGestures();
+        void DispatchGesture(const Gesture& gesture);
         MobileQualitySettings GetSettingsForPreset(MobileQualityPreset preset) const;
 
         std::vector<TouchEvent> m_activeTouches;
+        std::vector<TouchEvent> m_endedTouches; ///< Touches ended since last Update; drives gesture recognition.
         std::vector<Gesture> m_pendingGestures;
         std::unordered_map<int, std::vector<std::function<void(const Gesture&)>>> m_gestureCallbacks;
 

@@ -347,23 +347,42 @@ namespace Spark::UI
 
     void UIDropdown::RemoveOption(const std::string& value)
     {
-        auto it = std::remove_if(m_options.begin(), m_options.end(), [&](const Option& o) { return o.value == value; });
-        if (it != m_options.end())
+        // Preserve the currently selected option's value so selection can be
+        // restored by identity after the erase — removing an option positioned
+        // before the selected one shifts every later index down by one.
+        std::string selectedValue;
+        if (m_selectedIndex < m_options.size())
         {
-            bool removedSelected = false;
-            for (auto check = it; check != m_options.end(); ++check)
+            selectedValue = m_options[m_selectedIndex].value;
+        }
+
+        auto it = std::remove_if(m_options.begin(), m_options.end(), [&](const Option& o) { return o.value == value; });
+        if (it == m_options.end())
+        {
+            return; // nothing matched — leave selection untouched
+        }
+        m_options.erase(it, m_options.end());
+
+        // Re-locate the previously selected value; its index may have shifted.
+        uint32_t newIndex = 0;
+        bool stillPresent = false;
+        for (uint32_t i = 0; i < m_options.size(); ++i)
+        {
+            if (m_options[i].value == selectedValue)
             {
-                auto idx = static_cast<uint32_t>(std::distance(m_options.begin(), check));
-                if (idx == m_selectedIndex)
-                {
-                    removedSelected = true;
-                }
+                newIndex = i;
+                stillPresent = true;
+                break;
             }
-            m_options.erase(it, m_options.end());
-            if (removedSelected || m_selectedIndex >= m_options.size())
-            {
-                m_selectedIndex = m_options.empty() ? 0 : 0;
-            }
+        }
+
+        m_selectedIndex = newIndex;
+
+        // The effective selection only changes when the option that was
+        // selected is the one that got removed. Notify listeners in that case.
+        if (!stillPresent && m_onSelectionChanged && !m_options.empty())
+        {
+            m_onSelectionChanged(m_selectedIndex, m_options[m_selectedIndex].value);
         }
     }
 

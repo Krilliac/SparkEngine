@@ -321,23 +321,11 @@ namespace Spark
         SPARK_LOG_INFO(Spark::LogCategory::Core, "DialogueSystem: choice %zu selected -> node '%s'", choiceIndex,
                        choice.nextNodeId.c_str());
 
-        // Mark the selected choice as visited in the actual tree node
-        auto treeIt = m_trees.find(m_state.treeId);
-        if (treeIt != m_trees.end())
-        {
-            DialogueNode* mutableNode = treeIt->second->GetMutableNode(m_state.currentNodeId);
-            if (mutableNode)
-            {
-                for (auto& treeChoice : mutableNode->choices)
-                {
-                    if (treeChoice.text == choice.text && treeChoice.nextNodeId == choice.nextNodeId)
-                    {
-                        treeChoice.visited = true;
-                        break;
-                    }
-                }
-            }
-        }
+        // NOTE: We deliberately do NOT write 'visited' back onto the shared DialogueTree
+        // node here. Trees are registered once and reused for every conversation, so
+        // mutating them leaks per-conversation state across separate playthroughs and
+        // players. Per-conversation "visited" tracking, if needed, belongs in
+        // ConversationState (cleared by StartConversation), not in the shared definition.
 
         m_state.currentNodeId = choice.nextNodeId;
         m_state.nodeTimer = 0.0f;
@@ -453,14 +441,24 @@ namespace Spark
 
     void DialogueSystem::ProcessNode(const DialogueNode& node)
     {
-        ++m_processDepth;
+        // RAII depth guard: increments on entry and decrements on EVERY exit path,
+        // including the cycle-abort path below. The previous code zeroed the counter on
+        // a cycle trip but let each still-unwinding recursive frame run its own
+        // decrement, driving m_processDepth deeply negative and defeating the guard for
+        // all subsequent conversations. With the guard the counter always returns to 0.
+        struct DepthGuard
+        {
+            int& depth;
+            explicit DepthGuard(int& d) : depth(d) { ++depth; }
+            ~DepthGuard() { --depth; }
+        } depthGuard(m_processDepth);
+
         if (m_processDepth > kMaxProcessDepth)
         {
             SPARK_LOG_WARN("Dialogue",
                            "ProcessNode exceeded max recursion depth (%d) - possible cycle at node '%s'. "
                            "Ending conversation.",
                            kMaxProcessDepth, node.id.c_str());
-            m_processDepth = 0;
             EndConversation();
             return;
         }
@@ -513,8 +511,6 @@ namespace Spark
             EndConversation();
             break;
         }
-
-        --m_processDepth;
     }
 
     bool DialogueSystem::EvaluateCondition(const std::string& condition) const

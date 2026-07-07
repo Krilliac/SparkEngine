@@ -399,11 +399,46 @@ namespace Spark::Gameplay
             scriptIt->second->OnBossDeath(0); // Boss entity ID would come from caller
         }
 
-        // Check if the entire instance is now complete
-        if (instData->AllEncountersDone())
+        // Check if the entire instance is now complete. encounterStates carries EVERY
+        // encounter (required and optional), so a plain "all states Done" test never
+        // completes an instance whose optional encounters were skipped. Cross-reference
+        // the template's optional flags: an encounter is satisfied if it is Done, or if
+        // it is optional and not currently Failed. Iterate the template so optionality
+        // is available.
+        const InstanceTemplate* tmpl = GetTemplate(instData->templateId);
+        bool instanceComplete = true;
+        if (tmpl)
+        {
+            for (const auto& encounter : tmpl->encounters)
+            {
+                auto encStateIt = instData->encounterStates.find(encounter.id);
+                EncounterState encState =
+                    (encStateIt != instData->encounterStates.end()) ? encStateIt->second : EncounterState::NotStarted;
+
+                if (encState == EncounterState::Done)
+                {
+                    continue;
+                }
+                if (encounter.optional && encState != EncounterState::Failed)
+                {
+                    continue; // Skipped/unstarted optional encounters do not block completion.
+                }
+                instanceComplete = false;
+                break;
+            }
+        }
+        else
+        {
+            // Template missing (should not happen for a live instance) — fall back to the
+            // strict "every encounter Done" rule.
+            instanceComplete = instData->AllEncountersDone();
+        }
+
+        if (instanceComplete)
         {
             instData->completed = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Core, "Instance %u fully completed — all encounters done", instanceId);
+            SPARK_LOG_INFO(Spark::LogCategory::Core,
+                           "Instance %u fully completed — all required encounters done", instanceId);
         }
     }
 

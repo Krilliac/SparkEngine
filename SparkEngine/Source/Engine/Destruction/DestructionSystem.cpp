@@ -116,7 +116,12 @@ namespace Spark
         event.impactDir = hitDir;
         event.impactForce = damage;
 
-        // Look up the fracture pattern for this entity
+        // Consult the entity's DestructibleComponent (if present) to decide whether
+        // this hit actually destroys the object. Previously any non-zero hit fractured
+        // instantly and could re-fracture on every subsequent hit; the health,
+        // damageThreshold and destructionProcessed fields were never honoured. Route the
+        // damage through the component's own health/threshold model and only fracture on
+        // the hit that destroys it, exactly once.
         std::string patternName;
         if (m_world)
         {
@@ -125,7 +130,25 @@ namespace Spark
             if (destComp)
             {
                 patternName = destComp->patternName;
+
+                // Already destroyed — ignore further damage (no re-fracture, no re-spawn).
+                if (destComp->isDestroyed || destComp->destructionProcessed)
+                {
+                    return;
+                }
+
+                // Apply damage per the health/threshold model. A sub-threshold hit or a
+                // hit that leaves the object alive returns false — no fracture yet.
+                if (!destComp->ApplyDamage(damage))
+                {
+                    return;
+                }
+
+                // This hit destroyed the object; mark it so it is never re-processed.
+                destComp->destructionProcessed = true;
             }
+            // Entities without a DestructibleComponent retain the legacy behaviour
+            // (the hit destroys them and spawns fallback debris).
         }
         event.patternName = patternName;
 
@@ -194,6 +217,19 @@ namespace Spark
 
     void DestructionSystem::ForceDestroy(uint32_t entityId, float force)
     {
+        // Force destruction regardless of remaining health: drive the component's
+        // health to zero and clear its threshold so the ApplyDamage health gate below
+        // always fractures the object on this call.
+        if (m_world)
+        {
+            auto entId = static_cast<entt::entity>(entityId);
+            if (auto* destComp = m_world->GetComponent<DestructibleComponent>(entId))
+            {
+                destComp->health = 0.0f;
+                destComp->damageThreshold = 0.0f;
+            }
+        }
+
         DirectX::XMFLOAT3 origin{0, 0, 0};
         DirectX::XMFLOAT3 upDir{0, 1, 0};
         ApplyDamage(entityId, force, origin, upDir);

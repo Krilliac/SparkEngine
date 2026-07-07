@@ -76,7 +76,7 @@ class SparkEngineCamera
     float m_farPlane{1000.0f};      ///< Far clipping plane distance
 
     // Smooth transition state
-    bool m_isTransitioning = false;      ///< Whether a smooth transition is active
+    bool m_isTransitioning = false;      ///< Whether a smooth transition is active (always accessed under m_stateMutex)
     XMFLOAT3 m_transitionStart{0, 0, 0}; ///< Starting position of smooth transition
     XMFLOAT3 m_transitionEnd{0, 0, 0};   ///< Target position of smooth transition
     float m_transitionDuration = 0.0f;   ///< Total transition duration in seconds
@@ -203,9 +203,13 @@ class SparkEngineCamera
      */
     void SetPosition(const XMFLOAT3& pos)
     {
-        std::lock_guard<std::mutex> lock(m_stateMutex);
-        m_position = pos;
-        UpdateViewMatrix();
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            m_position = pos;
+            UpdateViewMatrix();
+        }
+        // Fire the state callback outside the lock — the callback may re-enter the
+        // camera (e.g. Console_GetState) and m_stateMutex is non-recursive.
         NotifyStateChange();
     }
 

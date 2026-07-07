@@ -5,6 +5,7 @@
 
 #include "ModuleManager.h"
 #include "Contracts.h"
+#include "EngineContext.h"
 #include "FaultIsolation.h"
 #include "IGameModule.h"
 #include "Spark/Version.h"
@@ -178,6 +179,20 @@ bool ModuleManager::LoadModule(const std::string& path)
             GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectConsole")))
     {
         inject(&Spark::SimpleConsole::GetInstance());
+    }
+
+    // Inject the host EngineContext the same way. SparkEngineLib is a static lib
+    // linked into every module DLL, so the module's g_engineContext global is a
+    // per-image copy that is null inside the module — EngineContext::Get() there
+    // returns nullptr and service-locator lookups (e.g. NetworkManager) fall back to
+    // dead per-module singletons. Hand the module our live context through a
+    // NON-owning setter so module teardown/FreeLibrary never frees the host context.
+    // (No-op until the module exports the hook via SparkSDK ModuleDllMain.h.)
+    using InjectContextFn = void (*)(void*);
+    if (auto injectCtx = reinterpret_cast<InjectContextFn>(
+            GetProcAddress(static_cast<HMODULE>(handle), "SparkModuleInjectEngineContext")))
+    {
+        injectCtx(EngineContext::Get());
     }
 
     // Inject the host ImGui context/allocators the same way: the module's
@@ -429,6 +444,27 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
 
         if (isCandidate && !isSystem)
         {
+#ifdef _WIN32
+            // The filename substring is only a hint. Before a full LoadModule (which
+            // runs the DLL's DllMain), probe the image with DONT_RESOLVE_DLL_REFERENCES
+            // — this maps it WITHOUT calling DllMain or resolving imports — and only
+            // proceed if it actually exports a module entry point. This stops unrelated
+            // third-party DLLs that merely contain "Game"/"Module"/"Plugin" in their
+            // name (overlays, middleware) from being loaded and their DllMain executed.
+            HMODULE probe = LoadLibraryExA(filePath.string().c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
+            if (!probe)
+            {
+                continue;
+            }
+            bool hasEntry = GetProcAddress(probe, "CreateModule") != nullptr ||
+                            GetProcAddress(probe, "CreateGameModule") != nullptr;
+            FreeLibrary(probe);
+            if (!hasEntry)
+            {
+                console.LogInfo("Skipping non-module DLL (no CreateModule/CreateGameModule export): " + filename);
+                continue;
+            }
+#endif
             console.LogInfo("Found candidate module: " + filename);
             if (LoadModule(filePath.string()))
                 anyLoaded = true;

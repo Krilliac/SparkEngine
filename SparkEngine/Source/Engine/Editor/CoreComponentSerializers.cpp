@@ -62,8 +62,18 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<NameComponent>();
+
+        // Count matching instances first so the record count is written correctly.
+        // BinaryWriter is append-only (no seek/patch), so a placeholder cannot be
+        // back-patched; a stale 0 here would desync the whole snapshot on restore.
         uint32_t count = 0;
-        w.WriteU32(0); // placeholder count
+        for (auto entity : view)
+        {
+            if (registry.try_get<NameComponent>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* compPtr = registry.try_get<NameComponent>(entity);
@@ -72,7 +82,6 @@ namespace Spark::Editor
             const auto& comp = *compPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteString(comp.name);
-            ++count;
         }
         return count;
     }
@@ -98,8 +107,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<ActiveComponent>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<ActiveComponent>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* compPtr = registry.try_get<ActiveComponent>(entity);
@@ -108,7 +125,6 @@ namespace Spark::Editor
             const auto& comp = *compPtr;
             w.WriteU32(static_cast<uint32_t>(entity));
             w.WriteBool(comp.active);
-            ++count;
         }
         return count;
     }
@@ -133,8 +149,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<Transform>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<Transform>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* tPtr = registry.try_get<Transform>(entity);
@@ -149,7 +173,6 @@ namespace Spark::Editor
             w.WriteU32(static_cast<uint32_t>(t.children.size()));
             for (auto child : t.children)
                 w.WriteU32(static_cast<uint32_t>(child));
-            ++count;
         }
         return count;
     }
@@ -183,8 +206,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<LightComponent>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<LightComponent>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* lPtr = registry.try_get<LightComponent>(entity);
@@ -200,7 +231,6 @@ namespace Spark::Editor
             w.WriteFloat(l.spotInnerAngle);
             w.WriteBool(l.castShadows);
             w.WriteU32(static_cast<uint32_t>(l.shadowMapResolution));
-            ++count;
         }
         return count;
     }
@@ -234,8 +264,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<Camera>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<Camera>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* cPtr = registry.try_get<Camera>(entity);
@@ -247,7 +285,6 @@ namespace Spark::Editor
             w.WriteFloat(c.nearPlane);
             w.WriteFloat(c.farPlane);
             w.WriteBool(c.isMainCamera);
-            ++count;
         }
         return count;
     }
@@ -277,8 +314,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<MeshRenderer>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<MeshRenderer>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* mPtr = registry.try_get<MeshRenderer>(entity);
@@ -291,7 +336,6 @@ namespace Spark::Editor
             w.WriteBool(m.castShadows);
             w.WriteBool(m.receiveShadows);
             w.WriteBool(m.visible);
-            ++count;
         }
         return count;
     }
@@ -322,8 +366,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<AudioSourceComponent>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<AudioSourceComponent>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* aPtr = registry.try_get<AudioSourceComponent>(entity);
@@ -339,7 +391,6 @@ namespace Spark::Editor
             w.WriteBool(a.is3D);
             w.WriteBool(a.loop);
             w.WriteBool(a.playOnAwake);
-            ++count;
         }
         return count;
     }
@@ -373,8 +424,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<RigidBodyComponent>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<RigidBodyComponent>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* rbPtr = registry.try_get<RigidBodyComponent>(entity);
@@ -390,7 +449,6 @@ namespace Spark::Editor
             w.WriteFloat(rb.angularDamping);
             w.WriteFloat(rb.gravityFactor);
             w.WriteBool(rb.isTrigger);
-            ++count;
         }
         return count;
     }
@@ -424,8 +482,16 @@ namespace Spark::Editor
     {
         auto& registry = MutableReg(reg);
         auto view = registry.view<ColliderComponent>();
+
+        // Count first so the record count is written correctly (append-only writer).
         uint32_t count = 0;
-        w.WriteU32(0);
+        for (auto entity : view)
+        {
+            if (registry.try_get<ColliderComponent>(entity))
+                ++count;
+        }
+        w.WriteU32(count);
+
         for (auto entity : view)
         {
             const auto* colPtr = registry.try_get<ColliderComponent>(entity);
@@ -438,7 +504,6 @@ namespace Spark::Editor
             w.WriteFloat(col.radius);
             w.WriteFloat(col.height);
             w.WriteFloat3(col.offset.x, col.offset.y, col.offset.z);
-            ++count;
         }
         return count;
     }

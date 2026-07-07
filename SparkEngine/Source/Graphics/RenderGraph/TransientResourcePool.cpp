@@ -99,7 +99,10 @@ namespace Spark::Graphics
                           {
                               return false;
                           }
-                          return (m_currentFrame - resource.lastUsedFrame) > m_maxIdleFrames;
+                          // Guard against a decreased frame index (scene reset / replay seek):
+                          // unsigned subtraction would otherwise underflow and evict everything.
+                          return resource.lastUsedFrame <= m_currentFrame &&
+                                 (m_currentFrame - resource.lastUsedFrame) > m_maxIdleFrames;
                       });
     }
 

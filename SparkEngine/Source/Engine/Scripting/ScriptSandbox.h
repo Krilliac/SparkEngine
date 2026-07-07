@@ -2,9 +2,9 @@
  * @file ScriptSandbox.h
  * @brief Runtime sandboxing for AngelScript execution
  *
- * Enforces resource limits (instruction count, execution time, memory) and
- * API access control on AngelScript contexts. Prevents untrusted scripts
- * from freezing the engine, exhausting memory, or calling restricted functions.
+ * Enforces resource limits (instruction count, execution time) and API access
+ * control on AngelScript contexts. Prevents untrusted scripts from freezing the
+ * engine or calling restricted functions.
  *
  * Three security levels:
  * - Unrestricted: no limits (editor/dev mode)
@@ -46,7 +46,6 @@ namespace Spark
     {
         InstructionLimit, ///< Script exceeded max instruction count
         TimeoutLimit,     ///< Script exceeded max execution time
-        MemoryLimit,      ///< Script exceeded memory allocation budget
         BlockedFunction   ///< Script attempted to call a blocked function
     };
 
@@ -76,6 +75,11 @@ namespace Spark
       public:
         ScriptSandbox();
 
+        /// Unregisters any console commands this sandbox registered (see
+        /// RegisterConsoleCommands) so their [this]-capturing callbacks cannot
+        /// outlive the sandbox in SimpleConsole.
+        ~ScriptSandbox();
+
         // ====================================================================
         // Configuration
         // ====================================================================
@@ -91,9 +95,6 @@ namespace Spark
 
         /// Set maximum execution time per script call in seconds (0 = unlimited)
         void SetExecutionTimeout(float seconds);
-
-        /// Set maximum memory budget per script in bytes (0 = unlimited)
-        void SetMemoryLimit(size_t maxBytes);
 
         // ====================================================================
         // API Access Control
@@ -126,15 +127,6 @@ namespace Spark
 
         /// Check if execution was terminated by the sandbox
         [[nodiscard]] bool WasTerminated() const { return m_wasTerminated; }
-
-        /// Track a memory allocation from a script
-        void TrackAllocation(size_t bytes);
-
-        /// Track a memory deallocation from a script
-        void TrackDeallocation(size_t bytes);
-
-        /// Get current memory usage for the active script
-        [[nodiscard]] size_t GetCurrentMemoryUsage() const { return m_currentMemoryUsage; }
 
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
         /**
@@ -169,26 +161,42 @@ namespace Spark
         /// Register console commands (sandbox.status, sandbox.level, etc.)
         void RegisterConsoleCommands();
 
+        /// Unregister console commands previously added by RegisterConsoleCommands.
+        /// Called from the destructor; safe to call if nothing was registered.
+        void UnregisterConsoleCommands();
+
         /// Get a human-readable status string
         [[nodiscard]] std::string GetStatusString() const;
 
       private:
         static constexpr size_t MAX_VIOLATION_HISTORY = 64;
-        static constexpr uint32_t LINE_CALLBACK_INTERVAL = 1000; ///< Check every N instructions
+        /// Approximate per-line instruction budget charged on each line-callback
+        /// invocation. AngelScript's line callback fires per executed script line
+        /// (not per instruction), so m_instructionCount is really (lines fired) x
+        /// this weight — an approximate budget, not a true instruction count. The
+        /// execution timeout is the precise backstop for heavy per-line work.
+        static constexpr uint32_t LINE_CALLBACK_WEIGHT = 1000;
 
         ScriptSecurityLevel m_securityLevel = ScriptSecurityLevel::Standard;
 
         // Resource limits
         uint32_t m_maxInstructions = 1'000'000;
         float m_maxExecutionTimeSec = 0.1f;
-        size_t m_maxMemoryBytes = 16 * 1024 * 1024; // 16 MB
 
         // Per-execution state
         uint32_t m_instructionCount = 0;
         std::chrono::steady_clock::time_point m_executionStart;
         std::string m_currentScript;
         bool m_wasTerminated = false;
-        size_t m_currentMemoryUsage = 0;
+
+        // Re-entrancy depth: only the outermost BeginExecution resets the
+        // per-call counters, so a nested script Execute() shares (and cannot
+        // reset) the outer frame's instruction/time budget.
+        uint32_t m_executionDepth = 0;
+
+        // True once RegisterConsoleCommands has added its commands, so the
+        // destructor knows to remove them.
+        bool m_consoleCommandsRegistered = false;
 
         // API access control
         std::unordered_set<std::string> m_allowedFunctions; ///< Whitelist (strict mode)

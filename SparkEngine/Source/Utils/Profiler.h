@@ -21,6 +21,7 @@ using Microsoft::WRL::ComPtr;
 #include <string_view>
 #include <vector>
 #include <array>
+#include <mutex>
 #include <unordered_map>
 #include <chrono>
 
@@ -282,6 +283,12 @@ class Profiler
     Profiler(const Profiler&) = delete;
     Profiler& operator=(const Profiler&) = delete;
 
+    // Guards all mutable state below (the unordered_maps in particular). The
+    // singleton is reachable from multiple threads — memory-tracking hooks fire
+    // from worker/allocator threads while the main thread profiles sections — and
+    // concurrent insert/rehash on an unordered_map is undefined behavior.
+    mutable std::mutex m_mutex;
+
     bool m_enabled = false;
     bool m_overlayVisible = false;
 
@@ -289,7 +296,9 @@ class Profiler
     // string literals from PROFILE_SCOPE macros) to avoid per-frame heap allocations.
     // Samples are pre-reserved to avoid mid-frame reallocation.
     std::vector<ProfileSample> m_currentFrameSamples;
-    std::unordered_map<std::string_view, std::chrono::high_resolution_clock::time_point> m_activeSections;
+    // Per-name stack of start times so nested/recursive same-named sections resolve
+    // LIFO instead of the inner scope clobbering the outer scope's start time.
+    std::unordered_map<std::string_view, std::vector<std::chrono::high_resolution_clock::time_point>> m_activeSections;
     std::unordered_map<std::string_view, double> m_sectionResults;
     static constexpr size_t kExpectedSectionsPerFrame = 64; ///< Pre-reserve hint
 

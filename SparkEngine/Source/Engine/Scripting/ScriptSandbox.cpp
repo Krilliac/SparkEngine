@@ -23,6 +23,11 @@ namespace Spark
         ApplySecurityDefaults(ScriptSecurityLevel::Standard);
     }
 
+    ScriptSandbox::~ScriptSandbox()
+    {
+        UnregisterConsoleCommands();
+    }
+
     // ========================================================================
     // Configuration
     // ========================================================================
@@ -55,11 +60,6 @@ namespace Spark
         m_maxExecutionTimeSec = seconds;
     }
 
-    void ScriptSandbox::SetMemoryLimit(size_t maxBytes)
-    {
-        m_maxMemoryBytes = maxBytes;
-    }
-
     void ScriptSandbox::ApplySecurityDefaults(ScriptSecurityLevel level)
     {
         switch (level)
@@ -67,19 +67,16 @@ namespace Spark
         case ScriptSecurityLevel::Unrestricted:
             m_maxInstructions = 0;     // unlimited
             m_maxExecutionTimeSec = 0; // unlimited
-            m_maxMemoryBytes = 0;      // unlimited
             break;
 
         case ScriptSecurityLevel::Standard:
             m_maxInstructions = 1'000'000;
             m_maxExecutionTimeSec = 0.1f;
-            m_maxMemoryBytes = 16 * 1024 * 1024; // 16 MB
             break;
 
         case ScriptSecurityLevel::Strict:
             m_maxInstructions = 100'000;
             m_maxExecutionTimeSec = 0.05f;
-            m_maxMemoryBytes = 4 * 1024 * 1024; // 4 MB
             break;
 
         default:
@@ -87,7 +84,6 @@ namespace Spark
                            static_cast<int>(level));
             m_maxInstructions = 100'000;
             m_maxExecutionTimeSec = 0.05f;
-            m_maxMemoryBytes = 4 * 1024 * 1024;
             break;
         }
     }
@@ -141,6 +137,16 @@ namespace Spark
 
     void ScriptSandbox::BeginExecution(const std::string& scriptName)
     {
+        // Only the outermost frame resets the per-call counters. A nested
+        // script Execute() (e.g. a native callback that re-enters the VM) must
+        // not clear the outer frame's instruction budget, start time, or
+        // termination flag — otherwise the outer guard is defeated. The nested
+        // frame shares the outer budget, which is the safe conservative choice.
+        if (m_executionDepth++ > 0)
+        {
+            return;
+        }
+
         m_currentScript = scriptName;
         m_instructionCount = 0;
         m_wasTerminated = false;
@@ -149,30 +155,9 @@ namespace Spark
 
     void ScriptSandbox::EndExecution()
     {
-        m_currentScript.clear();
-    }
-
-    void ScriptSandbox::TrackAllocation(size_t bytes)
-    {
-        m_currentMemoryUsage += bytes;
-
-        if (m_maxMemoryBytes > 0 && m_currentMemoryUsage > m_maxMemoryBytes)
+        if (m_executionDepth > 0 && --m_executionDepth == 0)
         {
-            RecordViolation(
-                SandboxViolationType::MemoryLimit,
-                std::format("Memory limit exceeded: {} bytes (limit: {})", m_currentMemoryUsage, m_maxMemoryBytes));
-        }
-    }
-
-    void ScriptSandbox::TrackDeallocation(size_t bytes)
-    {
-        if (bytes <= m_currentMemoryUsage)
-        {
-            m_currentMemoryUsage -= bytes;
-        }
-        else
-        {
-            m_currentMemoryUsage = 0;
+            m_currentScript.clear();
         }
     }
 
@@ -181,7 +166,7 @@ namespace Spark
     {
         auto* sandbox = static_cast<ScriptSandbox*>(param);
 
-        sandbox->m_instructionCount += LINE_CALLBACK_INTERVAL;
+        sandbox->m_instructionCount += LINE_CALLBACK_WEIGHT;
 
         // Memory integrity: prove sandbox enforcement checks actually run.
         // Bypassing these allows scripts to run indefinitely, exhaust memory,
@@ -219,19 +204,6 @@ namespace Spark
             }
         }
         SPARK_BRANCH_GUARD_END("sandbox_timeout")
-
-        // Check memory limit
-        SPARK_BRANCH_GUARD_BEGIN("sandbox_memory_limit")
-        if (sandbox->m_maxMemoryBytes > 0 && sandbox->m_currentMemoryUsage > sandbox->m_maxMemoryBytes)
-        {
-            sandbox->m_wasTerminated = true;
-            sandbox->RecordViolation(SandboxViolationType::MemoryLimit,
-                                     std::format("Memory limit exceeded during execution: {} bytes (limit: {})",
-                                                 sandbox->m_currentMemoryUsage, sandbox->m_maxMemoryBytes));
-            ctx->Abort();
-            return;
-        }
-        SPARK_BRANCH_GUARD_END("sandbox_memory_limit")
 
         SPARK_VERIFY_CHECKPOINT("sandbox_enforcement");
     }
@@ -292,13 +264,11 @@ namespace Spark
 
         std::string instrLimit = m_maxInstructions > 0 ? std::to_string(m_maxInstructions) : "unlimited";
         std::string timeLimit = m_maxExecutionTimeSec > 0 ? std::format("{:.3f}s", m_maxExecutionTimeSec) : "unlimited";
-        std::string memLimit =
-            m_maxMemoryBytes > 0 ? std::format("{} MB", m_maxMemoryBytes / (1024 * 1024)) : "unlimited";
 
-        return std::format("Script Sandbox: {} | Instructions: {} | Timeout: {} | Memory: {}\n"
+        return std::format("Script Sandbox: {} | Instructions: {} | Timeout: {}\n"
                            "Allowed functions: {} | Blocked functions: {} | Total violations: {}",
-                           levelStr, instrLimit, timeLimit, memLimit, m_allowedFunctions.size(),
-                           m_blockedFunctions.size(), m_totalViolations);
+                           levelStr, instrLimit, timeLimit, m_allowedFunctions.size(), m_blockedFunctions.size(),
+                           m_totalViolations);
     }
 
     void ScriptSandbox::RegisterConsoleCommands()
@@ -307,12 +277,7 @@ namespace Spark
 
         console.RegisterCommand(
             "sandbox.status",
-            [](const std::vector<std::string>&) -> std::string
-            {
-                // ScriptSandbox is owned by AngelScriptEngine — this accesses
-                // a static helper that returns the status string.
-                return "Use sandbox.level to view/change security level";
-            },
+            [this](const std::vector<std::string>&) -> std::string { return GetStatusString(); },
             "Show script sandbox status");
 
         console.RegisterCommand(
@@ -364,6 +329,22 @@ namespace Spark
                 return result;
             },
             "Show recent sandbox violations");
+
+        m_consoleCommandsRegistered = true;
+    }
+
+    void ScriptSandbox::UnregisterConsoleCommands()
+    {
+        if (!m_consoleCommandsRegistered)
+        {
+            return;
+        }
+
+        auto& console = SimpleConsole::GetInstance();
+        console.UnregisterCommand("sandbox.status");
+        console.UnregisterCommand("sandbox.level");
+        console.UnregisterCommand("sandbox.violations");
+        m_consoleCommandsRegistered = false;
     }
 
 } // namespace Spark
