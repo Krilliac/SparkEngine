@@ -217,11 +217,11 @@ namespace Spark::Gameplay
         auto view = world->GetEntitiesWith<WeaponInventoryComponent>();
         for (auto [entity, inv] : view.each())
         {
-            ProcessWeapon(inv, deltaTime);
+            ProcessWeapon(static_cast<uint32_t>(entity), inv, deltaTime);
         }
     }
 
-    void WeaponSystem::ProcessWeapon(WeaponInventoryComponent& inv, float deltaTime)
+    void WeaponSystem::ProcessWeapon(uint32_t ownerEntity, WeaponInventoryComponent& inv, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         auto& weapon = inv.GetActiveWeapon();
@@ -296,7 +296,7 @@ namespace Spark::Gameplay
         {
             if (weapon.HasAmmo())
             {
-                HandleFiring(weapon, *def, inv);
+                HandleFiring(ownerEntity, weapon, *def, inv);
             }
             else
             {
@@ -318,7 +318,8 @@ namespace Spark::Gameplay
         UpdateADS(weapon, *def, deltaTime, inv.inputADS);
     }
 
-    void WeaponSystem::HandleFiring(WeaponInstance& weapon, const WeaponDefinition& def, WeaponInventoryComponent& inv)
+    void WeaponSystem::HandleFiring(uint32_t ownerEntity, WeaponInstance& weapon, const WeaponDefinition& def,
+                                    WeaponInventoryComponent& inv)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         // Semi-auto: prevent firing while trigger is held from previous shot
@@ -345,7 +346,7 @@ namespace Spark::Gameplay
 
         // Emit fire event
         WeaponFireEvent event;
-        event.ownerEntity = 0; // Set by ECS integration
+        event.ownerEntity = ownerEntity;
         event.weaponDefID = def.definitionID;
         event.damage = def.baseDamage;
         event.spreadAngle = spreadAngle;

@@ -36,6 +36,7 @@ namespace SparkEditor
         // Try to merge with the last command (e.g., continuous transform drags)
         if (!m_undoStack.empty() && m_undoStack.back()->MergeWith(command.get()))
         {
+            ++m_editSequence;
             NotifyStackChanged();
             return;
         }
@@ -48,6 +49,7 @@ namespace SparkEditor
 
         // Push onto undo stack
         m_undoStack.push_back(std::move(command));
+        ++m_editSequence;
 
         // Clear redo stack since we branched history
         m_redoStack.clear();
@@ -76,6 +78,7 @@ namespace SparkEditor
         --g_dispatchDepth;
 
         m_redoStack.push_back(std::move(command));
+        ++m_editSequence;
 
         NotifyStackChanged();
         return true;
@@ -98,6 +101,7 @@ namespace SparkEditor
         --g_dispatchDepth;
 
         m_undoStack.push_back(std::move(command));
+        ++m_editSequence;
 
         NotifyStackChanged();
         return true;
@@ -175,11 +179,12 @@ namespace SparkEditor
     void UndoRedoManager::MarkSaved()
     {
         m_savedIndex = m_undoStack.size();
+        m_savedSequence = m_editSequence;
     }
 
     bool UndoRedoManager::HasUnsavedChanges() const
     {
-        return m_undoStack.size() != m_savedIndex;
+        return m_editSequence != m_savedSequence;
     }
 
     void UndoRedoManager::SetOnStackChanged(std::function<void()> callback)

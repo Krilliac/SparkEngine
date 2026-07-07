@@ -73,6 +73,17 @@ namespace Spark::AI
 
         const char* GetName() const override { return m_name.c_str(); }
 
+        std::unique_ptr<BTNode> Clone() const override
+        {
+            auto cloned = std::make_unique<SequenceNode>(m_name);
+            for (const auto& child : m_children)
+            {
+                if (child)
+                    cloned->AddChild(child->Clone());
+            }
+            return cloned;
+        }
+
       private:
         std::string m_name;
         std::vector<std::unique_ptr<BTNode>> m_children;
@@ -121,6 +132,17 @@ namespace Spark::AI
         }
 
         const char* GetName() const override { return m_name.c_str(); }
+
+        std::unique_ptr<BTNode> Clone() const override
+        {
+            auto cloned = std::make_unique<SelectorNode>(m_name);
+            for (const auto& child : m_children)
+            {
+                if (child)
+                    cloned->AddChild(child->Clone());
+            }
+            return cloned;
+        }
 
       private:
         std::string m_name;
@@ -187,6 +209,17 @@ namespace Spark::AI
 
         const char* GetName() const override { return m_name.c_str(); }
 
+        std::unique_ptr<BTNode> Clone() const override
+        {
+            auto cloned = std::make_unique<ParallelNode>(m_successPolicy, m_name);
+            for (const auto& child : m_children)
+            {
+                if (child)
+                    cloned->AddChild(child->Clone());
+            }
+            return cloned;
+        }
+
       private:
         Policy m_successPolicy;
         std::string m_name;
@@ -220,6 +253,14 @@ namespace Spark::AI
         }
 
         const char* GetName() const override { return "Inverter"; }
+
+        std::unique_ptr<BTNode> Clone() const override
+        {
+            std::unique_ptr<BTNode> clonedChild = nullptr;
+            if (m_child)
+                clonedChild = m_child->Clone();
+            return std::make_unique<InverterNode>(std::move(clonedChild));
+        }
 
       private:
         std::unique_ptr<BTNode> m_child;
@@ -264,6 +305,14 @@ namespace Spark::AI
 
         const char* GetName() const override { return "Repeater"; }
 
+        std::unique_ptr<BTNode> Clone() const override
+        {
+            std::unique_ptr<BTNode> clonedChild = nullptr;
+            if (m_child)
+                clonedChild = m_child->Clone();
+            return std::make_unique<RepeaterNode>(std::move(clonedChild), m_repeatCount);
+        }
+
       private:
         std::unique_ptr<BTNode> m_child;
         int m_repeatCount;
@@ -294,6 +343,8 @@ namespace Spark::AI
 
         const char* GetName() const override { return m_name.c_str(); }
 
+        std::unique_ptr<BTNode> Clone() const override { return std::make_unique<ActionNode>(m_name, m_action); }
+
       private:
         std::string m_name;
         ActionFunc m_action;
@@ -321,6 +372,11 @@ namespace Spark::AI
         }
 
         const char* GetName() const override { return m_name.c_str(); }
+
+        std::unique_ptr<BTNode> Clone() const override
+        {
+            return std::make_unique<ConditionNode>(m_name, m_condition);
+        }
 
       private:
         std::string m_name;
@@ -353,6 +409,8 @@ namespace Spark::AI
             m_elapsed = 0.0f;
         }
         const char* GetName() const override { return "Wait"; }
+
+        std::unique_ptr<BTNode> Clone() const override { return std::make_unique<WaitNode>(m_duration); }
 
       private:
         float m_duration;

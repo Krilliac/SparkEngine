@@ -239,13 +239,11 @@ namespace Spark::AI
         instanceBB.Set("fleeDistance", templateBB.Get<float>("fleeDistance", 30.0f));
         instanceBB.Set("currentPatrolIndex", 0);
 
-        // If the template has a root, share it by setting it on the instance
-        // (Node trees are evaluated read-only with respect to tree structure)
+        // Deep-copy the template's node tree into the instance so the clone has a
+        // real, independently-owned root (BTNode::Clone recurses through children).
         if (it->second->GetRoot())
         {
-            // We cannot move the root; instead we reference the template's root.
-            // This works because all mutable state is in the Blackboard.
-            // For production, implement BehaviorTree::Clone() that deep-copies nodes.
+            instance->SetRoot(it->second->GetRoot()->Clone());
         }
 
         BehaviorTree* ptr = instance.get();

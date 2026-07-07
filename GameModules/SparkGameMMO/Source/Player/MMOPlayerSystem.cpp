@@ -44,79 +44,82 @@ namespace MMO
     void MMOPlayerSystem::SetupNetworkHandlers()
     {
 #ifdef ENABLE_NETWORKING
-        auto& netMgr = Spark::Net::NetworkManager::GetInstance();
+        // Resolve networking through the injected engine context, not the global
+        // singleton — the module is handed its NetworkManager via Initialize(context).
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (!netMgr)
+            return;
 
         // Handle player spawn messages from server
-        netMgr.RegisterHandler(Spark::Net::MessageType::EntitySpawn,
-                               [this](const Spark::Net::NetworkMessage& netMsg)
-                               {
-                                   if (netMsg.payload.size() < sizeof(uint32_t) * 3)
-                                       return;
+        netMgr->RegisterHandler(Spark::Net::MessageType::EntitySpawn,
+                                [this](const Spark::Net::NetworkMessage& netMsg)
+                                {
+                                    if (netMsg.payload.size() < sizeof(uint32_t) * 3)
+                                        return;
 
-                                   // Parse: networkId, clientId, areaId
-                                   Spark::Net::NetBuffer buf;
-                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                   uint32_t networkId = buf.ReadUint32();
-                                   uint32_t clientId = buf.ReadUint32();
-                                   uint32_t areaId = buf.ReadUint32();
+                                    // Parse: networkId, clientId, areaId
+                                    Spark::Net::NetBuffer buf;
+                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
+                                    uint32_t networkId = buf.ReadUint32();
+                                    uint32_t clientId = buf.ReadUint32();
+                                    uint32_t areaId = buf.ReadUint32();
 
-                                   if (!Spark::ContainerUtils::Contains(m_players, clientId))
-                                   {
-                                       MMOPlayer player{};
-                                       player.clientId = clientId;
-                                       player.networkId = networkId;
-                                       player.name = "Player_" + std::to_string(clientId);
-                                       player.currentAreaId = areaId;
-                                       player.isLocalPlayer = (clientId == m_localClientId);
-                                       m_players[clientId] = player;
+                                    if (!Spark::ContainerUtils::Contains(m_players, clientId))
+                                    {
+                                        MMOPlayer player{};
+                                        player.clientId = clientId;
+                                        player.networkId = networkId;
+                                        player.name = "Player_" + std::to_string(clientId);
+                                        player.currentAreaId = areaId;
+                                        player.isLocalPlayer = (clientId == m_localClientId);
+                                        m_players[clientId] = player;
 
-                                       auto& console = Spark::SimpleConsole::GetInstance();
-                                       console.LogInfo("[MMO Player] Spawned remote player: " + player.name);
-                                   }
-                               });
+                                        auto& console = Spark::SimpleConsole::GetInstance();
+                                        console.LogInfo("[MMO Player] Spawned remote player: " + player.name);
+                                    }
+                                });
 
         // Handle player disconnect
-        netMgr.RegisterHandler(Spark::Net::MessageType::EntityDestroy,
-                               [this](const Spark::Net::NetworkMessage& netMsg)
-                               {
-                                   if (netMsg.payload.size() < sizeof(uint32_t))
-                                       return;
+        netMgr->RegisterHandler(Spark::Net::MessageType::EntityDestroy,
+                                [this](const Spark::Net::NetworkMessage& netMsg)
+                                {
+                                    if (netMsg.payload.size() < sizeof(uint32_t))
+                                        return;
 
-                                   Spark::Net::NetBuffer buf;
-                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                   uint32_t clientId = buf.ReadUint32();
-                                   RemovePlayer(clientId);
-                               });
+                                    Spark::Net::NetBuffer buf;
+                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
+                                    uint32_t clientId = buf.ReadUint32();
+                                    RemovePlayer(clientId);
+                                });
 
         // Handle position updates — server relays to other clients, client applies locally
-        netMgr.RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
-                               [this](const Spark::Net::NetworkMessage& netMsg)
-                               {
-                                   if (netMsg.payload.size() < sizeof(uint32_t) + sizeof(float) * 3)
-                                       return;
+        netMgr->RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
+                                [this, netMgr](const Spark::Net::NetworkMessage& netMsg)
+                                {
+                                    if (netMsg.payload.size() < sizeof(uint32_t) + sizeof(float) * 3)
+                                        return;
 
-                                   // Server-side: relay position to all other clients
-                                   auto& mgr = Spark::Net::NetworkManager::GetInstance();
-                                   if (mgr.GetRole() == Spark::Net::NetworkRole::Server)
-                                   {
-                                       mgr.SendToAllExcept(netMsg.senderID, netMsg);
-                                   }
+                                    // Server-side: relay position to all other clients
+                                    if (netMgr->GetRole() == Spark::Net::NetworkRole::Server)
+                                    {
+                                        netMgr->SendToAllExcept(netMsg.senderID, netMsg);
+                                    }
 
-                                   Spark::Net::NetBuffer buf;
-                                   buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                   uint32_t clientId = buf.ReadUint32();
-                                   float x = buf.ReadFloat();
-                                   float y = buf.ReadFloat();
-                                   float z = buf.ReadFloat();
+                                    Spark::Net::NetBuffer buf;
+                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
+                                    uint32_t clientId = buf.ReadUint32();
+                                    float x = buf.ReadFloat();
+                                    float y = buf.ReadFloat();
+                                    float z = buf.ReadFloat();
 
-                                   auto it = m_players.find(clientId);
-                                   if (it != m_players.end() && !it->second.isLocalPlayer)
-                                   {
-                                       it->second.posX = x;
-                                       it->second.posY = y;
-                                       it->second.posZ = z;
-                                   }
-                               });
+                                    auto it = m_players.find(clientId);
+                                    if (it != m_players.end() && !it->second.isLocalPlayer)
+                                    {
+                                        it->second.posX = x;
+                                        it->second.posY = y;
+                                        it->second.posZ = z;
+                                    }
+                                });
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO Player] Network handlers registered");
@@ -159,14 +162,17 @@ namespace MMO
         m_players[m_localClientId] = player;
 
 #ifdef ENABLE_NETWORKING
-        // Register with NetworkManager for replication
-        auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-        Spark::Net::ReplicatedEntity repEntity;
-        repEntity.networkID = networkId;
-        repEntity.ownerID = m_localClientId;
-        repEntity.entityType = "MMOPlayer";
-        repEntity.position = {player.posX, player.posY, player.posZ};
-        netMgr.RegisterReplicatedEntity(repEntity);
+        // Register with NetworkManager for replication via the injected engine context
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (netMgr)
+        {
+            Spark::Net::ReplicatedEntity repEntity;
+            repEntity.networkID = networkId;
+            repEntity.ownerID = m_localClientId;
+            repEntity.entityType = "MMOPlayer";
+            repEntity.position = {player.posX, player.posY, player.posZ};
+            netMgr->RegisterReplicatedEntity(repEntity);
+        }
 #endif
 
         auto& console = Spark::SimpleConsole::GetInstance();

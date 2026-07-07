@@ -18,6 +18,7 @@
 #pragma once
 
 #include "EditorCommand.h"
+#include <cstdint>
 #include <vector>
 #include <memory>
 #include <functional>
@@ -167,6 +168,13 @@ namespace SparkEditor
 
         size_t m_maxStackDepth = 100;
         size_t m_savedIndex = 0;
+
+        // Monotonic dirty-tracking counter: m_editSequence increments on every
+        // mutating op (execute/merge/undo/redo); MarkSaved snapshots it into
+        // m_savedSequence; HasUnsavedChanges compares the two so any edit after
+        // a save — even undo-back-to-saved-then-branch — reports unsaved.
+        uint64_t m_editSequence = 0;
+        uint64_t m_savedSequence = 0;
 
         std::function<void()> m_onStackChanged;
 

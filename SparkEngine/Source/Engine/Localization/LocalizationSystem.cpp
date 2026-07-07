@@ -100,15 +100,14 @@ namespace Spark
         m_entries[key] = value;
     }
 
-    const std::string& StringTable::GetEntry(const std::string& key) const
+    std::string StringTable::GetEntry(const std::string& key) const
     {
         auto it = m_entries.find(key);
         if (it != m_entries.end())
         {
             return it->second;
         }
-        // Return the key parameter reference as fallback. Safe because callers
-        // always pass an lvalue (string stored in m_entries or a local).
+        // Return a copy of the key itself as the missing-entry fallback.
         return key;
     }
 
@@ -194,7 +193,7 @@ namespace Spark
         return languages;
     }
 
-    const std::string& LocalizationSystem::GetString(const std::string& key) const
+    std::string LocalizationSystem::GetString(const std::string& key) const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 

@@ -211,6 +211,19 @@ namespace Spark::AI
         virtual NodeStatus Tick(float deltaTime, Blackboard& blackboard) = 0;
 
         /**
+     * @brief Create a deep copy of this node and all of its descendants.
+     *
+     * Produces a structurally identical node subtree with reset runtime state.
+     * Composite nodes recursively clone their children; decorator nodes clone
+     * their single child; leaf nodes copy their configuration. The AISystem uses
+     * this to clone a shared behavior-tree template into an independent per-agent
+     * instance that owns a real root node (rather than aliasing the template).
+     *
+     * @return Owning pointer to the newly cloned node subtree.
+     */
+        virtual std::unique_ptr<BTNode> Clone() const = 0;
+
+        /**
      * @brief Reset the node to its initial state.
      *
      * Called by parent composite nodes when the tree is restarted or when a branch
