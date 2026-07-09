@@ -4,9 +4,20 @@
 #include <ctime>
 #include <filesystem>
 #include <format>
+#include <iomanip>
+#include <sstream>
 
 namespace Spark
 {
+    namespace
+    {
+        std::string FormatOneDecimal(double value)
+        {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(1) << value;
+            return oss.str();
+        }
+    } // namespace
 
     void MaterialTextureValidator::ValidateAsset(const std::filesystem::path& path, ValidationReport& report)
     {
@@ -70,9 +81,10 @@ namespace Spark
         }
         else if (fileSize > 100 * 1024 * 1024)
         {
-            report.results.push_back({ValidationSeverity::Warning, path.string(),
-                                      std::format("Scene file is very large ({:.1f} MB)", fileSize / (1024.0 * 1024.0)),
-                                      "Consider splitting into streaming sub-scenes", 2003});
+            report.results.push_back(
+                {ValidationSeverity::Warning, path.string(),
+                 "Scene file is very large (" + FormatOneDecimal(fileSize / (1024.0 * 1024.0)) + " MB)",
+                 "Consider splitting into streaming sub-scenes", 2003});
         }
     }
 
@@ -327,8 +339,8 @@ namespace Spark
 
         if (m_lastReport.totalAssets > 0)
         {
-            status += std::format("\n  Last run: {} asset(s) scanned in {:.1f} ms", m_lastReport.totalAssets,
-                                  m_lastReport.durationMs);
+            status += std::format("\n  Last run: {} asset(s) scanned in {} ms", m_lastReport.totalAssets,
+                                  FormatOneDecimal(m_lastReport.durationMs));
             status += std::format("\n  Pass: {}, Fail: {}, Warnings: {}", m_lastReport.passCount,
                                   m_lastReport.failCount, m_lastReport.warningCount);
         }
@@ -347,7 +359,7 @@ namespace Spark
         output +=
             std::format("Assets scanned: {}  |  Pass: {}  |  Fail: {}  |  Warnings: {}\n", m_lastReport.totalAssets,
                         m_lastReport.passCount, m_lastReport.failCount, m_lastReport.warningCount);
-        output += std::format("Duration: {:.1f} ms\n\n", m_lastReport.durationMs);
+        output += "Duration: " + FormatOneDecimal(m_lastReport.durationMs) + " ms\n\n";
 
         for (const auto& r : m_lastReport.results)
         {

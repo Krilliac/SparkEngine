@@ -36,7 +36,7 @@ namespace Spark::Graphics
             auto& mip = mips[mipCount];
             mip.width = mw;
             mip.height = mh;
-            mip.depths.resize(mw * mh);
+            mip.depths.resize(static_cast<size_t>(mw) * mh);
 
             if (mipCount == 0)
             {

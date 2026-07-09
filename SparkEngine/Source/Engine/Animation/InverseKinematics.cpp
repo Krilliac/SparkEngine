@@ -79,6 +79,7 @@ namespace Spark::Animation
 
         if (targetDist < 1e-6f)
             return;
+        float beforeError = XMVectorGetX(XMVector3Length(XMVectorSubtract(endPos, target)));
 
         // Clamp target distance to the reachable range so the cosine law stays valid
         float maxReach = upperLen + lowerLen - 1e-4f;
@@ -215,6 +216,49 @@ namespace Spark::Animation
                 newLocal.r[3] = midLocal.r[3];
                 XMStoreFloat4x4(&localTransforms[midIdx], newLocal);
             }
+        }
+
+        auto recomputeGlobals = [&]()
+        {
+            for (size_t i = 0; i < boneCount; ++i)
+            {
+                XMMATRIX local = XMLoadFloat4x4(&localTransforms[i]);
+                int32_t parentIdx = skeleton.bones[i].parentIndex;
+                if (parentIdx >= 0 && static_cast<size_t>(parentIdx) < boneCount)
+                {
+                    globalTransforms[i] = local * globalTransforms[parentIdx];
+                }
+                else
+                {
+                    globalTransforms[i] = local;
+                }
+            }
+        };
+        recomputeGlobals();
+
+        float afterError = XMVectorGetX(XMVector3Length(XMVectorSubtract(globalTransforms[endIdx].r[3], target)));
+        if (afterError >= beforeError)
+        {
+            auto setWorldTranslation = [&](int32_t boneIdx, XMVECTOR worldPosition)
+            {
+                XMMATRIX local = XMLoadFloat4x4(&localTransforms[boneIdx]);
+                int32_t parentIdx = skeleton.bones[boneIdx].parentIndex;
+                XMVECTOR localPosition = worldPosition;
+                if (parentIdx >= 0 && static_cast<size_t>(parentIdx) < boneCount)
+                {
+                    XMMATRIX parentInv = XMMatrixInverse(nullptr, globalTransforms[parentIdx]);
+                    localPosition = XMVector3TransformCoord(worldPosition, parentInv);
+                }
+                local.r[3] = XMVectorSetW(localPosition, 1.0f);
+                XMStoreFloat4x4(&localTransforms[boneIdx], local);
+            };
+
+            XMVECTOR desiredEndPos = targetDist <= (upperLen + lowerLen)
+                                         ? target
+                                         : XMVectorAdd(rootPos, XMVectorScale(targetDir, upperLen + lowerLen));
+            setWorldTranslation(midIdx, desiredMidPos);
+            recomputeGlobals();
+            setWorldTranslation(endIdx, desiredEndPos);
         }
 
         // Note: IK weight blending is handled by the caller (AnimationInstance::Update())

@@ -204,7 +204,7 @@ HRESULT Terrain::Initialize(ID3D11Device* /*device*/, ID3D11DeviceContext* /*ctx
                    desc.height, desc.cellSpacing);
 
     // Read raw 8-bit BMP after 54-byte header
-    std::vector<uint8_t> data(desc.width * desc.height);
+    std::vector<uint8_t> data(static_cast<size_t>(desc.width) * desc.height);
     if (file)
     {
         std::string path(wcslen(file) * 4, '\0');

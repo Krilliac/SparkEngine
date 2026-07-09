@@ -98,8 +98,8 @@ namespace SparkEditor
         /// Worker for cook-only (copies assets to output directory).
         void CookWorkerThread(std::string outputDir, std::string projectRoot);
 
-        /// Execute a shell command, read stdout/stderr line-by-line, feed to ParseLine.
-        int RunCommand(const std::string& command);
+        /// Execute a subprocess, read stdout/stderr line-by-line, feed to ParseLine.
+        int RunCommand(const std::string& executable, const std::vector<std::string>& arguments);
 
         /// Parse a single output line from CMake/compiler, updating progress and log.
         void ParseLine(const std::string& line);

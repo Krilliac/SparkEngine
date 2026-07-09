@@ -134,7 +134,7 @@ namespace TestSH
 
     static std::vector<BRDFLUTPixel> GenerateBRDFLUT(uint32_t size, uint32_t numSamples)
     {
-        std::vector<BRDFLUTPixel> lut(size * size);
+        std::vector<BRDFLUTPixel> lut(static_cast<size_t>(size) * size);
         for (uint32_t y = 0; y < size; ++y)
         {
             float roughness = std::max(static_cast<float>(y + 1) / static_cast<float>(size), 0.001f);

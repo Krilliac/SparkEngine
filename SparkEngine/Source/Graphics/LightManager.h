@@ -200,7 +200,7 @@ class LightManager
         m_tileSize = tileSize;
         m_tilesX = (width + tileSize - 1) / tileSize;
         m_tilesY = (height + tileSize - 1) / tileSize;
-        m_tileLightLists.resize(m_tilesX * m_tilesY);
+        m_tileLightLists.resize(static_cast<size_t>(m_tilesX) * m_tilesY);
         m_shadowAtlas.resize(MAX_SHADOW_SLOTS);
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "LightManager initialized (%ux%u, tileSize=%d, grid=%dx%d)", width,
@@ -370,7 +370,7 @@ class LightManager
         m_screenHeight = height;
         m_tilesX = (width + m_tileSize - 1) / m_tileSize;
         m_tilesY = (height + m_tileSize - 1) / m_tileSize;
-        m_tileLightLists.resize(m_tilesX * m_tilesY);
+        m_tileLightLists.resize(static_cast<size_t>(m_tilesX) * m_tilesY);
     }
 
     std::string Console_GetStatus() const

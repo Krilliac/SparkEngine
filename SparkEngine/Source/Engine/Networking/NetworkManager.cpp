@@ -444,23 +444,27 @@ namespace Spark::Net
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Network", 0.0);
 
-        // Advance server time exactly once per Update. Doing it up front (rather
-        // than after the auto-reconnect block) avoids double-counting deltaTime on
-        // the frame where a reconnect succeeds and control falls through below.
         SPARK_WARN_IF(Spark::LogCategory::Network, deltaTime < 0.0f, "Negative deltaTime in NetworkManager::Update");
-        m_serverTime += deltaTime;
 
         // Auto-reconnect: when disconnected and auto-reconnect enabled, try to reconnect
         auto currentRole = GetRole(); // thread-safe read
+        bool advancedForReconnect = false;
         if (currentRole == NetworkRole::None || GetConnectionState() == ConnectionState::Disconnected)
         {
             if (m_autoReconnect.enabled && m_wasConnected)
             {
+                m_serverTime += deltaTime;
+                advancedForReconnect = true;
                 TryAutoReconnect(deltaTime);
             }
             if (GetRole() == NetworkRole::None)
                 return;
         }
+
+        // Advance server time exactly once for active client/server updates. Idle
+        // initialized managers intentionally remain at their current time.
+        if (!advancedForReconnect)
+            m_serverTime += deltaTime;
 
         // Receive from socket and enqueue
         ProcessIncoming();

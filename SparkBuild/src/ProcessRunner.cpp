@@ -1,5 +1,7 @@
 #include "ProcessRunner.h"
+#include <cctype>
 #include <cstring>
+#include <vector>
 
 #ifdef SPARK_PLATFORM_UNIX
 #include <unistd.h>
@@ -11,6 +13,93 @@
 
 namespace SparkBuild
 {
+    namespace
+    {
+        std::vector<std::string> SplitCommandLine(const std::string& command)
+        {
+            std::vector<std::string> args;
+            std::string current;
+            bool inQuotes = false;
+
+            for (size_t i = 0; i < command.size(); ++i)
+            {
+                char c = command[i];
+                if (c == '\\')
+                {
+                    if (i + 1 < command.size() && (command[i + 1] == '"' || command[i + 1] == '\\'))
+                    {
+                        current.push_back(command[i + 1]);
+                        ++i;
+                    }
+                    else
+                    {
+                        current.push_back(c);
+                    }
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    inQuotes = !inQuotes;
+                    continue;
+                }
+
+                if (std::isspace(static_cast<unsigned char>(c)) && !inQuotes)
+                {
+                    if (!current.empty())
+                    {
+                        args.push_back(current);
+                        current.clear();
+                    }
+                    continue;
+                }
+
+                current.push_back(c);
+            }
+
+            if (!current.empty())
+                args.push_back(current);
+
+            return args;
+        }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        std::string QuoteWindowsArgument(const std::string& argument)
+        {
+            if (argument.empty())
+                return "\"\"";
+
+            const bool needsQuotes = argument.find_first_of(" \t\"") != std::string::npos;
+            if (!needsQuotes)
+                return argument;
+
+            std::string quoted = "\"";
+            size_t backslashes = 0;
+            for (char c : argument)
+            {
+                if (c == '\\')
+                {
+                    ++backslashes;
+                    continue;
+                }
+                if (c == '"')
+                {
+                    quoted.append(backslashes * 2 + 1, '\\');
+                    quoted.push_back(c);
+                }
+                else
+                {
+                    quoted.append(backslashes, '\\');
+                    quoted.push_back(c);
+                }
+                backslashes = 0;
+            }
+            quoted.append(backslashes * 2, '\\');
+            quoted.push_back('"');
+            return quoted;
+        }
+#endif
+    } // namespace
 
     ProcessRunner::ProcessRunner() {}
 
@@ -64,6 +153,10 @@ namespace SparkBuild
 
     int ProcessRunner::RunSync(const std::string& command, const std::string& workingDir, std::string& output)
     {
+        std::vector<std::string> args = SplitCommandLine(command);
+        if (args.empty())
+            return -1;
+
         SECURITY_ATTRIBUTES sa = {};
         sa.nLength = sizeof(sa);
         sa.bInheritHandle = TRUE;
@@ -81,7 +174,13 @@ namespace SparkBuild
         si.wShowWindow = SW_HIDE;
 
         PROCESS_INFORMATION pi = {};
-        std::string cmdLine = "cmd /c " + command;
+        std::string cmdLine;
+        for (size_t i = 0; i < args.size(); ++i)
+        {
+            if (i > 0)
+                cmdLine.push_back(' ');
+            cmdLine += QuoteWindowsArgument(args[i]);
+        }
         const char* dir = workingDir.empty() ? nullptr : workingDir.c_str();
 
         BOOL ok =
@@ -222,48 +321,57 @@ namespace SparkBuild
 
     int ProcessRunner::RunSync(const std::string& command, const std::string& workingDir, std::string& output)
     {
-        // Save current directory
-        std::string savedDir;
-        if (!workingDir.empty())
-        {
-            char cwd[4096];
-            if (getcwd(cwd, sizeof(cwd)))
-            {
-                savedDir = cwd;
-            }
-            if (chdir(workingDir.c_str()) != 0)
-            {
-                return -1;
-            }
-        }
+        std::vector<std::string> args = SplitCommandLine(command);
+        if (args.empty())
+            return -1;
 
-        // Use popen for simple synchronous execution
-        std::string shellCmd = command + " 2>&1";
-        FILE* pipe = popen(shellCmd.c_str(), "r");
-        if (!pipe)
+        int pipefd[2];
+        if (pipe(pipefd) != 0)
+            return -1;
+
+        pid_t pid = fork();
+        if (pid == -1)
         {
-            if (!savedDir.empty())
-            {
-                int r = chdir(savedDir.c_str());
-                (void)r;
-            }
+            close(pipefd[0]);
+            close(pipefd[1]);
             return -1;
         }
 
+        if (pid == 0)
+        {
+            close(pipefd[0]);
+            dup2(pipefd[1], STDOUT_FILENO);
+            dup2(pipefd[1], STDERR_FILENO);
+            close(pipefd[1]);
+
+            if (!workingDir.empty() && chdir(workingDir.c_str()) != 0)
+                _exit(127);
+
+            std::vector<char*> argv;
+            argv.reserve(args.size() + 1);
+            for (auto& arg : args)
+                argv.push_back(arg.data());
+            argv.push_back(nullptr);
+
+            execvp(args[0].c_str(), argv.data());
+            _exit(127);
+        }
+
+        close(pipefd[1]);
         output.clear();
         char buf[4096];
-        while (fgets(buf, sizeof(buf), pipe) != nullptr)
+        while (true)
         {
+            ssize_t n = read(pipefd[0], buf, sizeof(buf) - 1);
+            if (n <= 0)
+                break;
+            buf[n] = '\0';
             output += buf;
         }
+        close(pipefd[0]);
 
-        int status = pclose(pipe);
-
-        if (!savedDir.empty())
-        {
-            int r = chdir(savedDir.c_str());
-            (void)r;
-        }
+        int status = 0;
+        waitpid(pid, &status, 0);
 
         if (WIFEXITED(status))
         {

@@ -161,7 +161,7 @@ namespace Spark::Graphics
 
             uint32_t w = m_colorInput.width;
             uint32_t h = m_colorInput.height;
-            m_output.resize(w * h * 3);
+            m_output.resize(static_cast<size_t>(w) * h * 3);
 
             // Joint bilateral filter using color + optional guides
             constexpr int kRadius = 3;

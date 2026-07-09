@@ -2,6 +2,7 @@
 #include <fstream>
 #include <filesystem>
 #include <cstdlib>
+#include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #ifndef WIN32_LEAN_AND_MEAN
@@ -22,6 +23,7 @@
 #pragma comment(lib, "oleaut32.lib")
 #pragma comment(lib, "uuid.lib")
 #else
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -292,6 +294,34 @@ namespace SparkBuild
 // ============================================================================
 #else
 
+    namespace
+    {
+        bool RunProcess(const std::string& executable, const std::vector<std::string>& args)
+        {
+            std::vector<char*> argv;
+            argv.reserve(args.size() + 2);
+            argv.push_back(const_cast<char*>(executable.c_str()));
+            for (const auto& arg : args)
+                argv.push_back(const_cast<char*>(arg.c_str()));
+            argv.push_back(nullptr);
+
+            pid_t pid = fork();
+            if (pid < 0)
+                return false;
+
+            if (pid == 0)
+            {
+                execvp(executable.c_str(), argv.data());
+                _exit(127);
+            }
+
+            int status = 0;
+            if (waitpid(pid, &status, 0) < 0)
+                return false;
+            return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+        }
+    } // namespace
+
     bool Downloader::DownloadFile(const std::string& url, const std::string& outputPath,
                                   DownloadProgressCallback /*progress*/)
     {
@@ -302,34 +332,26 @@ namespace SparkBuild
             std::filesystem::create_directories(parent);
         }
 
-        // Use curl for downloading
-        std::string cmd = "curl -fSL --progress-bar -o \"" + outputPath + "\" \"" + url + "\" 2>&1";
-        int rc = system(cmd.c_str());
-        return (rc == 0);
+        return RunProcess("curl", {"-fSL", "--progress-bar", "-o", outputPath, url});
     }
 
     bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir)
     {
         std::filesystem::create_directories(destDir);
 
-        // Try unzip first, then python's zipfile module as fallback
-        std::string cmd = "unzip -o -q \"" + zipPath + "\" -d \"" + destDir + "\" 2>&1";
-        int rc = system(cmd.c_str());
-        if (rc == 0)
+        // Try unzip first, then python's zipfile module as fallback.
+        if (RunProcess("unzip", {"-o", "-q", zipPath, "-d", destDir}))
             return true;
 
         // Fallback: use tar if it's a .tar.gz
         if (zipPath.find(".tar.gz") != std::string::npos || zipPath.find(".tgz") != std::string::npos)
         {
-            cmd = "tar xzf \"" + zipPath + "\" -C \"" + destDir + "\" 2>&1";
-            rc = system(cmd.c_str());
-            return (rc == 0);
+            return RunProcess("tar", {"xzf", zipPath, "-C", destDir});
         }
 
         // Fallback: python3
-        cmd = "python3 -c \"import zipfile; zipfile.ZipFile('" + zipPath + "').extractall('" + destDir + "')\" 2>&1";
-        rc = system(cmd.c_str());
-        return (rc == 0);
+        return RunProcess("python3", {"-c", "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])",
+                                      zipPath, destDir});
     }
 
     std::string Downloader::GetTempDir()

@@ -198,7 +198,7 @@ namespace Spark::Graphics
     {
         uint32_t dstW = std::max(srcW / 2, 1u);
         uint32_t dstH = std::max(srcH / 2, 1u);
-        std::vector<uint8_t> dst(dstW * dstH * 4);
+        std::vector<uint8_t> dst(static_cast<size_t>(dstW) * dstH * 4);
 
         for (uint32_t y = 0; y < dstH; ++y)
         {
@@ -285,7 +285,7 @@ namespace Spark::Graphics
                 uint32_t blockSize = GetBlockSize(result.format);
                 uint32_t blocksX = (mipW + 3) / 4;
                 uint32_t blocksY = (mipH + 3) / 4;
-                std::vector<uint8_t> compressed(blocksX * blocksY * blockSize);
+                std::vector<uint8_t> compressed(static_cast<size_t>(blocksX) * blocksY * blockSize);
 
                 for (uint32_t by = 0; by < blocksY; ++by)
                 {
@@ -303,7 +303,7 @@ namespace Spark::Graphics
                             }
                         }
 
-                        uint8_t* dst = &compressed[(by * blocksX + bx) * blockSize];
+                        uint8_t* dst = &compressed[(static_cast<size_t>(by) * blocksX + bx) * blockSize];
                         if (result.format == TextureCompressionFormat::BC1)
                             CompressBlockBC1(block, dst);
                         else
@@ -345,7 +345,7 @@ namespace Spark::Graphics
         h = std::max(h, 1u);
 
         // Simple decompression: return gray pixels as placeholder
-        std::vector<uint8_t> rgba(w * h * 4, 128);
+        std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4, 128);
         return rgba;
     }
 

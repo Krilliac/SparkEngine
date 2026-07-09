@@ -176,12 +176,12 @@ namespace Spark::Graphics::Neural
         uint32_t mlpInputSize = m_mlpDesc.GetInputSize();
 
         // Build all MLP inputs into a single contiguous buffer
-        std::vector<float> batchInput(batchSize * mlpInputSize);
+        std::vector<float> batchInput(static_cast<size_t>(batchSize) * mlpInputSize);
 
         for (uint32_t i = 0; i < batchSize; ++i)
         {
             // Look up hash grid features for this position
-            float* dst = &batchInput[i * mlpInputSize];
+            float* dst = &batchInput[static_cast<size_t>(i) * mlpInputSize];
 
             for (uint32_t level = 0; level < kHashGridLevels; ++level)
             {

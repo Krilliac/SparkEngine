@@ -62,8 +62,8 @@ namespace Spark::Graphics
         {
             m_width = width;
             m_height = height;
-            m_historyBuffer.resize(width * height, 0.0f);
-            m_outputBuffer.resize(width * height, 0.0f);
+            m_historyBuffer.resize(static_cast<size_t>(width) * height, 0.0f);
+            m_outputBuffer.resize(static_cast<size_t>(width) * height, 0.0f);
             m_frameCount = 0;
             m_initialized = true;
         }
@@ -79,8 +79,8 @@ namespace Spark::Graphics
         {
             m_width = width;
             m_height = height;
-            m_historyBuffer.assign(width * height, 0.0f);
-            m_outputBuffer.assign(width * height, 0.0f);
+            m_historyBuffer.assign(static_cast<size_t>(width) * height, 0.0f);
+            m_outputBuffer.assign(static_cast<size_t>(width) * height, 0.0f);
             m_frameCount = 0;
         }
 

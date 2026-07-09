@@ -212,7 +212,7 @@ namespace Spark
             inline std::vector<SamplePoint> GenerateNoiseTexture(int size, uint32_t seed = 123)
             {
                 std::vector<SamplePoint> noise;
-                noise.reserve(size * size);
+                noise.reserve(static_cast<size_t>(size) * size);
                 std::mt19937 rng(seed);
                 std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
 

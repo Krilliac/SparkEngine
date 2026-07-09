@@ -4,12 +4,12 @@
  */
 
 #include "VersionControlSystem.h"
+#include "Utils/Process.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
-#include <cstdio>
-#include <cstring>
-#include <array>
+#include <cstdlib>
 #include <filesystem>
+#include <vector>
 
 #ifdef _WIN32
 #define popen _popen
@@ -19,27 +19,70 @@
 
 namespace SparkEditor
 {
-
-    // Forward declaration of shell safety helper (defined in VersionControlGitOps.cpp)
-    static bool ContainsShellMetachars(const std::string& str)
+    namespace
     {
-        for (char c : str)
+#ifndef _WIN32
+        bool RunFolderPicker(const std::string& executable, const std::vector<std::string>& arguments,
+                             std::string& selectedPath)
         {
-            switch (c)
-            {
-            case ';':
-            case '|':
-            case '&':
-            case '$':
-            case '`':
-            case '\n':
-            case '\r':
-                return true;
-            default:
-                break;
-            }
+            Spark::Process::Builder builder(executable);
+            for (const auto& argument : arguments)
+                builder.Arg(argument);
+            builder.CaptureStdout();
+
+            auto launched = builder.Launch();
+            if (!launched)
+                return false;
+
+            auto process = std::move(*launched);
+            selectedPath = process.ReadAllStdout();
+            const int status = process.WaitForExit();
+            while (!selectedPath.empty() && (selectedPath.back() == '\n' || selectedPath.back() == '\r'))
+                selectedPath.pop_back();
+            return status == 0 && !selectedPath.empty() && std::filesystem::is_directory(selectedPath);
         }
-        return false;
+#endif
+    } // namespace
+
+    static bool TokenizeGitCommand(const std::string& command, std::vector<std::string>& args)
+    {
+        args.clear();
+        std::string current;
+        bool inQuotes = false;
+
+        for (size_t i = 0; i < command.size(); ++i)
+        {
+            char c = command[i];
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if ((c == ' ' || c == '\t') && !inQuotes)
+            {
+                if (!current.empty())
+                {
+                    args.push_back(current);
+                    current.clear();
+                }
+                continue;
+            }
+
+            if (c == '\n' || c == '\r' || c == '\0')
+                return false;
+            current.push_back(c);
+        }
+
+        if (inQuotes)
+            return false;
+        if (!current.empty())
+            args.push_back(current);
+
+        if (args.empty() || args.front() != "git")
+            return false;
+        args.erase(args.begin());
+        return true;
     }
 
     // ============================================================================
@@ -71,19 +114,13 @@ namespace SparkEditor
                     CoTaskMemFree(pidl);
                 }
 #else
-                FILE* pipe =
-                    popen("zenity --file-selection --directory --title=\"Select Repository\" 2>/dev/null", "r");
-                if (!pipe)
-                    pipe = popen("kdialog --getexistingdirectory ~ 2>/dev/null", "r");
-                if (pipe)
+                selected = RunFolderPicker("zenity",
+                                           {"--file-selection", "--directory", "--title", "Select Repository"},
+                                           selectedPath);
+                if (!selected)
                 {
-                    char buf[1024];
-                    while (fgets(buf, sizeof(buf), pipe) != nullptr)
-                        selectedPath += buf;
-                    int status = pclose(pipe);
-                    while (!selectedPath.empty() && (selectedPath.back() == '\n' || selectedPath.back() == '\r'))
-                        selectedPath.pop_back();
-                    selected = (status == 0 && !selectedPath.empty() && std::filesystem::is_directory(selectedPath));
+                    const char* home = std::getenv("HOME");
+                    selected = RunFolderPicker("kdialog", {"--getexistingdirectory", home ? home : "."}, selectedPath);
                 }
 #endif
                 if (selected)
@@ -507,18 +544,8 @@ namespace SparkEditor
         VCSOperationResult result;
         auto startTime = std::chrono::steady_clock::now();
 
-        // Security: reject shell metacharacters in working directory to prevent injection
-        if (!workingDirectory.empty() && ContainsShellMetachars(workingDirectory))
-        {
-            result.success = false;
-            result.errorMessage = "Working directory contains unsafe characters";
-            result.exitCode = -1;
-            return result;
-        }
-
-        // Security: reject shell metacharacters in command arguments
-        // Only allow git commands (all callers use "git ..." commands)
-        if (command.substr(0, 4) != "git " && command.substr(0, 4) != "git\t" && command != "git --version")
+        std::vector<std::string> gitArgs;
+        if (!TokenizeGitCommand(command, gitArgs))
         {
             result.success = false;
             result.errorMessage = "Only git commands are allowed";
@@ -526,42 +553,31 @@ namespace SparkEditor
             return result;
         }
 
-        std::string fullCommand = command;
+        Spark::Process::Builder builder("git");
         if (!workingDirectory.empty())
         {
-            fullCommand = "cd \"" + workingDirectory + "\" && " + command;
+            builder.Arg("-C").Arg(workingDirectory);
         }
-        // Redirect stderr to stdout so we capture all output
-        fullCommand += " 2>&1";
+        for (const auto& arg : gitArgs)
+            builder.Arg(arg);
+        builder.CaptureStdout();
 
-        FILE* pipe = popen(fullCommand.c_str(), "r");
-        if (!pipe)
+        auto procResult = builder.Launch();
+        if (!procResult)
         {
             result.success = false;
-            result.errorMessage = "Failed to execute command: " + command;
+            result.errorMessage = "Failed to execute command: " + procResult.error();
             result.exitCode = -1;
             return result;
         }
 
-        std::array<char, 256> buffer;
-        std::string output;
-        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
-        {
-            output += buffer.data();
-        }
-
-        int status = pclose(pipe);
-#ifdef _WIN32
-        result.exitCode = status;
-#else
-        result.exitCode = WEXITSTATUS(status);
-#endif
-
-        result.output = output;
+        auto proc = std::move(*procResult);
+        result.output = proc.ReadAllStdout();
+        result.exitCode = proc.WaitForExit();
         result.success = (result.exitCode == 0);
         if (!result.success)
         {
-            result.errorMessage = output;
+            result.errorMessage = result.output;
         }
 
         auto endTime = std::chrono::steady_clock::now();

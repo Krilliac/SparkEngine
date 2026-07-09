@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include <cstdlib>
+#include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #ifndef WIN32_LEAN_AND_MEAN
@@ -14,10 +15,43 @@
 #endif
 #include <windows.h>
 #include <shellapi.h>
+#else
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 namespace SparkBuild
 {
+    namespace
+    {
+#ifndef SPARK_PLATFORM_WINDOWS
+        bool LaunchDetachedProcess(const std::string& executable, const std::vector<std::string>& arguments,
+                                   const std::string& workingDir = {})
+        {
+            pid_t pid = fork();
+            if (pid == -1)
+                return false;
+
+            if (pid == 0)
+            {
+                if (!workingDir.empty() && chdir(workingDir.c_str()) != 0)
+                    _exit(127);
+
+                std::vector<char*> argv;
+                argv.reserve(arguments.size() + 2);
+                argv.push_back(const_cast<char*>(executable.c_str()));
+                for (const auto& argument : arguments)
+                    argv.push_back(const_cast<char*>(argument.c_str()));
+                argv.push_back(nullptr);
+
+                execvp(executable.c_str(), argv.data());
+                _exit(127);
+            }
+
+            return true;
+        }
+#endif
+    } // namespace
 
     SparkBuildApp::SparkBuildApp()
     {
@@ -956,14 +990,12 @@ namespace SparkBuild
         }
 
 #ifdef SPARK_PLATFORM_WINDOWS
-        std::string cmd = "explorer \"" + buildDir + "\"";
+        ShellExecuteA(nullptr, "open", buildDir.c_str(), nullptr, nullptr, SW_SHOWDEFAULT);
 #elif defined(SPARK_PLATFORM_MACOS)
-        std::string cmd = "open \"" + buildDir + "\"";
+        (void)LaunchDetachedProcess("open", {buildDir});
 #else
-        std::string cmd = "xdg-open \"" + buildDir + "\" 2>/dev/null || echo 'No file manager found'";
+        (void)LaunchDetachedProcess("xdg-open", {buildDir});
 #endif
-        int r = system(cmd.c_str());
-        (void)r;
         std::cout << Term::Green("Opened: " + buildDir) << "\n";
     }
 
@@ -1022,9 +1054,7 @@ namespace SparkBuild
 #ifdef SPARK_PLATFORM_WINDOWS
         ShellExecuteA(nullptr, "open", exePath.c_str(), nullptr, runDir.c_str(), SW_SHOW);
 #else
-        std::string cmd = "cd \"" + runDir + "\" && \"" + exePath + "\" &";
-        int r = system(cmd.c_str());
-        (void)r;
+        (void)LaunchDetachedProcess(exePath, {}, runDir);
 #endif
     }
 

@@ -78,8 +78,8 @@ namespace Spark::Graphics::Neural
 
         // Pack inputs (positional-encoded UV) + targets (normalised RGBA) into
         // flat contiguous buffers so the training loop can iterate by stride.
-        std::vector<float> inputs(numPixels * inputSize);
-        std::vector<float> targets(numPixels * outputSize);
+        std::vector<float> inputs(static_cast<size_t>(numPixels) * inputSize);
+        std::vector<float> targets(static_cast<size_t>(numPixels) * outputSize);
         for (uint32_t py = 0; py < blockSize; ++py)
         {
             for (uint32_t px = 0; px < blockSize; ++px)
@@ -89,7 +89,7 @@ namespace Spark::Graphics::Neural
                 const uint32_t idx = py * blockSize + px;
 
                 auto encoded = EncodePosition(u, v, options.positionalFrequencies);
-                std::copy(encoded.begin(), encoded.end(), inputs.begin() + idx * inputSize);
+                std::copy(encoded.begin(), encoded.end(), inputs.begin() + static_cast<size_t>(idx) * inputSize);
 
                 for (uint32_t c = 0; c < outputSize; ++c)
                 {
@@ -135,8 +135,8 @@ namespace Spark::Graphics::Neural
             trainer.ZeroGradients();
             for (uint32_t pixel = 0; pixel < numPixels; ++pixel)
             {
-                trainer.AccumulateGradient(weights.data(), desc, &inputs[pixel * inputSize],
-                                           &targets[pixel * outputSize], LossType::MSE);
+                trainer.AccumulateGradient(weights.data(), desc, &inputs[static_cast<size_t>(pixel) * inputSize],
+                                           &targets[static_cast<size_t>(pixel) * outputSize], LossType::MSE);
             }
             trainer.StepAdam(weights, adam, 1.0f / static_cast<float>(numPixels));
         }
@@ -164,7 +164,7 @@ namespace Spark::Graphics::Neural
         uint32_t outputSize = desc.GetOutputSize();
 
         // Build input batch (positional-encoded UVs for all pixels)
-        std::vector<float> inputBatch(numPixels * inputSize);
+        std::vector<float> inputBatch(static_cast<size_t>(numPixels) * inputSize);
         for (uint32_t py = 0; py < blockSize; ++py)
         {
             for (uint32_t px = 0; px < blockSize; ++px)
@@ -174,12 +174,12 @@ namespace Spark::Graphics::Neural
                 auto encoded = EncodePosition(u, v, numFrequencies);
 
                 uint32_t idx = py * blockSize + px;
-                std::copy(encoded.begin(), encoded.end(), inputBatch.begin() + idx * inputSize);
+                std::copy(encoded.begin(), encoded.end(), inputBatch.begin() + static_cast<size_t>(idx) * inputSize);
             }
         }
 
         // Evaluate
-        std::vector<float> outputBatch(numPixels * outputSize);
+        std::vector<float> outputBatch(static_cast<size_t>(numPixels) * outputSize);
         engine.EvaluateCPU(handle, inputBatch.data(), outputBatch.data(), numPixels);
 
         engine.DestroyNetwork(handle);
@@ -239,7 +239,7 @@ namespace Spark::Graphics::Neural
             for (uint32_t bx = 0; bx < blocksX; ++bx)
             {
                 // Extract block pixels (with clamping at edges)
-                std::vector<uint8_t> blockPixels(blockSize * blockSize * 4);
+                std::vector<uint8_t> blockPixels(static_cast<size_t>(blockSize) * blockSize * 4);
                 for (uint32_t py = 0; py < blockSize; ++py)
                 {
                     for (uint32_t px = 0; px < blockSize; ++px)
@@ -273,7 +273,7 @@ namespace Spark::Graphics::Neural
             return {};
         }
 
-        std::vector<uint8_t> result(hdr.width * hdr.height * 4, 0);
+        std::vector<uint8_t> result(static_cast<size_t>(hdr.width) * hdr.height * 4, 0);
 
         NetworkDesc desc = BuildBlockNetwork(NTCOptions{hdr.blockSize, hdr.hiddenLayers, hdr.neuronsPerLayer,
                                                         hdr.positionalFrequencies, hdr.qualityLevel, 0, 0.0f});

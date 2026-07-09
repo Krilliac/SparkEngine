@@ -6,12 +6,89 @@
 #include "BuiltinWorkflows.h"
 #include "EditorWorkflow.h"
 #include "../Core/EditorUI.h"
+#include "Utils/Process.h"
 
-#include <cstdlib>
 #include <filesystem>
+#include <sstream>
+#include <vector>
 
 namespace SparkEditor
 {
+    namespace
+    {
+        std::string LastLines(const std::string& output, size_t maxLines)
+        {
+            std::vector<std::string> lines;
+            std::istringstream stream(output);
+            std::string line;
+            while (std::getline(stream, line))
+            {
+                if (!line.empty() && line.back() == '\r')
+                    line.pop_back();
+                lines.push_back(line);
+            }
+
+            const size_t first = lines.size() > maxLines ? lines.size() - maxLines : 0;
+            std::string result;
+            for (size_t i = first; i < lines.size(); ++i)
+            {
+                result += lines[i];
+                result.push_back('\n');
+            }
+            return result;
+        }
+
+        int RunWorkflowProcess(WorkflowContext& ctx, const std::string& executable,
+                               const std::vector<std::string>& arguments, size_t logLines = 10)
+        {
+            Spark::Process::Builder builder(executable);
+            for (const auto& argument : arguments)
+                builder.Arg(argument);
+            builder.CaptureStdout().CaptureStderr();
+
+            auto launched = builder.Launch();
+            if (!launched)
+            {
+                ctx.Log("Failed to launch " + executable + ": " + launched.error());
+                return -1;
+            }
+
+            auto process = std::move(*launched);
+            const std::string stdoutText = process.ReadAllStdout();
+            const std::string stderrText = process.ReadAllStderr();
+            const int exitCode = process.WaitForExit();
+
+            const std::string output = LastLines(stdoutText + stderrText, logLines);
+            if (!output.empty())
+                ctx.Log(output);
+            return exitCode;
+        }
+
+        std::vector<std::string> CollectFormatCheckFiles()
+        {
+            std::vector<std::string> files;
+            const std::vector<std::filesystem::path> roots = {"SparkEngine/Source", "SparkEditor/Source"};
+            for (const auto& root : roots)
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(root, ec))
+                    continue;
+
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(root, ec))
+                {
+                    if (ec || files.size() >= 50)
+                        break;
+                    if (!entry.is_regular_file())
+                        continue;
+
+                    const auto ext = entry.path().extension().string();
+                    if (ext == ".h" || ext == ".cpp")
+                        files.push_back(entry.path().generic_string());
+                }
+            }
+            return files;
+        }
+    } // namespace
 
     void RegisterBuiltinWorkflows()
     {
@@ -38,14 +115,15 @@ namespace SparkEditor
 
             wf.AddStep({"Configure", "Run CMake configure with default preset", [](WorkflowContext& ctx)
                         {
-                            int rc = std::system("cmake --preset linux-gcc-release 2>&1 | tail -5");
+                            int rc = RunWorkflowProcess(ctx, "cmake", {"--preset", "linux-gcc-release"}, 5);
                             ctx.Log("CMake configure exit: " + std::to_string(rc));
                             return rc == 0;
                         }});
 
             wf.AddStep({"Build", "Compile the project", [](WorkflowContext& ctx)
                         {
-                            int rc = std::system("cmake --build build --config Release -j 2>&1 | tail -10");
+                            int rc = RunWorkflowProcess(
+                                ctx, "cmake", {"--build", "build", "--config", "Release", "--parallel", "2"}, 10);
                             ctx.Log("Build exit: " + std::to_string(rc));
                             return rc == 0;
                         }});
@@ -75,14 +153,15 @@ namespace SparkEditor
 
             wf.AddStep({"Configure", "Run CMake configure", [](WorkflowContext& ctx)
                         {
-                            int rc = std::system("cmake --preset linux-gcc-release 2>&1 | tail -5");
+                            int rc = RunWorkflowProcess(ctx, "cmake", {"--preset", "linux-gcc-release"}, 5);
                             ctx.Log("CMake configure exit: " + std::to_string(rc));
                             return rc == 0;
                         }});
 
             wf.AddStep({"Build", "Full rebuild", [](WorkflowContext& ctx)
                         {
-                            int rc = std::system("cmake --build build --config Release -j 2>&1 | tail -10");
+                            int rc = RunWorkflowProcess(
+                                ctx, "cmake", {"--build", "build", "--config", "Release", "--parallel", "2"}, 10);
                             ctx.Log("Build exit: " + std::to_string(rc));
                             return rc == 0;
                         }});
@@ -153,23 +232,32 @@ namespace SparkEditor
 
             wf.AddStep({"Format Check", "Run clang-format dry-run", [](WorkflowContext& ctx)
                         {
-                            int rc =
-                                std::system("find SparkEngine/Source SparkEditor/Source -name '*.h' -o -name '*.cpp' "
-                                            "| head -50 | xargs clang-format --dry-run --Werror 2>&1 | tail -5");
+                            auto files = CollectFormatCheckFiles();
+                            if (files.empty())
+                            {
+                                ctx.Log("No source files found for format check");
+                                return true;
+                            }
+
+                            std::vector<std::string> args = {"--dry-run", "--Werror"};
+                            args.insert(args.end(), files.begin(), files.end());
+                            int rc = RunWorkflowProcess(ctx, "clang-format", args, 5);
                             ctx.Log("Format check exit: " + std::to_string(rc));
                             return rc == 0;
                         }});
 
             wf.AddStep({"Build", "Compile the project", [](WorkflowContext& ctx)
                         {
-                            int rc = std::system("cmake --build build --config Release -j 2>&1 | tail -10");
+                            int rc = RunWorkflowProcess(
+                                ctx, "cmake", {"--build", "build", "--config", "Release", "--parallel", "2"}, 10);
                             ctx.Log("Build exit: " + std::to_string(rc));
                             return rc == 0;
                         }});
 
             wf.AddStep({"Run Tests", "Execute CTest test suite", [](WorkflowContext& ctx)
                         {
-                            int rc = std::system("cd build && ctest --output-on-failure 2>&1 | tail -15");
+                            int rc = RunWorkflowProcess(ctx, "ctest", {"--test-dir", "build", "--output-on-failure"},
+                                                        15);
                             ctx.Log("Test exit: " + std::to_string(rc));
                             return rc == 0;
                         }});

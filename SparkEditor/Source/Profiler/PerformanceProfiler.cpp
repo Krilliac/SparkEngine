@@ -782,7 +782,7 @@ namespace SparkEditor
             secondHalfAvg += values[i];
         if (mid > 0)
             firstHalfAvg /= static_cast<float>(mid);
-        if (values.size() - mid > 0)
+        if (values.size() > mid)
             secondHalfAvg /= static_cast<float>(values.size() - mid);
 
         float changePercent = (firstHalfAvg != 0.0f) ? ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100.0f : 0.0f;

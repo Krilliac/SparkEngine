@@ -118,7 +118,7 @@ namespace Spark
             {
                 m_rects.clear();
                 m_rects.push_back({0, 0, textureWidth, textureHeight});
-                m_totalDirtyArea = textureWidth * textureHeight;
+                m_totalDirtyArea = static_cast<size_t>(textureWidth) * textureHeight;
             }
 
             /**

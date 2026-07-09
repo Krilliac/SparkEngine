@@ -53,6 +53,30 @@ namespace Spark::Editor
         registry.emplace<std::remove_cvref_t<T>>(entity, std::forward<T>(comp));
     }
 
+    static entt::entity EnsureEntity(entt::registry& registry, entt::entity entity)
+    {
+        if (registry.valid(entity))
+            return entity;
+
+        if constexpr (requires(entt::registry& r, entt::entity e) { r.create(e); })
+        {
+            registry.create(entity);
+            return entity;
+        }
+        else
+        {
+            constexpr uint32_t kMaxEntityRestoreGap = 1'000'000;
+            const uint32_t target = static_cast<uint32_t>(entity);
+            for (uint32_t i = 0; i <= kMaxEntityRestoreGap && !registry.valid(entity); ++i)
+            {
+                entt::entity created = registry.create();
+                if (created == entity || static_cast<uint32_t>(created) >= target)
+                    break;
+            }
+            return registry.valid(entity) ? entity : registry.create();
+        }
+    }
+
     // ========================================================================
     // Per-component serializer helpers
     // ========================================================================
@@ -95,8 +119,7 @@ namespace Spark::Editor
             auto rawId = r.ReadU32();
             std::string name = r.ReadString();
             auto entity = static_cast<entt::entity>(rawId);
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, NameComponent{std::move(name)});
         }
         return r.IsValid();
@@ -137,8 +160,7 @@ namespace Spark::Editor
         {
             auto entity = static_cast<entt::entity>(r.ReadU32());
             bool active = r.ReadBool();
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, ActiveComponent{active});
         }
         return r.IsValid();
@@ -194,8 +216,7 @@ namespace Spark::Editor
             for (uint32_t c = 0; c < childCount; ++c)
                 t.children[c] = static_cast<entt::entity>(r.ReadU32());
 
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, std::move(t));
         }
         return r.IsValid();
@@ -252,8 +273,7 @@ namespace Spark::Editor
             l.castShadows = r.ReadBool();
             l.shadowMapResolution = static_cast<int>(r.ReadU32());
 
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, l);
         }
         return r.IsValid();
@@ -302,8 +322,7 @@ namespace Spark::Editor
             c.farPlane = r.ReadFloat();
             c.isMainCamera = r.ReadBool();
 
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, c);
         }
         return r.IsValid();
@@ -354,8 +373,7 @@ namespace Spark::Editor
             m.receiveShadows = r.ReadBool();
             m.visible = r.ReadBool();
 
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, std::move(m));
         }
         return r.IsValid();
@@ -412,8 +430,7 @@ namespace Spark::Editor
             a.loop = r.ReadBool();
             a.playOnAwake = r.ReadBool();
 
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, std::move(a));
         }
         return r.IsValid();
@@ -470,8 +487,7 @@ namespace Spark::Editor
             rb.gravityFactor = r.ReadFloat();
             rb.isTrigger = r.ReadBool();
 
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, rb);
         }
         return r.IsValid();
@@ -522,8 +538,7 @@ namespace Spark::Editor
             col.height = r.ReadFloat();
             r.ReadFloat3(col.offset.x, col.offset.y, col.offset.z);
 
-            if (!registry.valid(entity))
-                entity = registry.create();
+            entity = EnsureEntity(registry, entity);
             EmplaceOrReplace(registry, entity, col);
         }
         return r.IsValid();

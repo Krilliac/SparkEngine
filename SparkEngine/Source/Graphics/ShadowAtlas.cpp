@@ -45,7 +45,7 @@ namespace Spark::Graphics
 
         // Pre-subdivide atlas into a grid of minimum-size tiles
         uint32_t gridSize = atlasSize / minTileSize;
-        m_gridCells.resize(gridSize * gridSize, false);
+        m_gridCells.resize(static_cast<size_t>(gridSize) * gridSize, false);
         m_gridSize = gridSize;
 
         m_initialized = true;

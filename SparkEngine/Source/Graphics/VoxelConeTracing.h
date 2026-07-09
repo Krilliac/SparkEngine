@@ -164,7 +164,9 @@ namespace Spark::Graphics
                                         uint32_t sx = std::min(x * 2 + dx, srcRes - 1);
                                         uint32_t sy = std::min(y * 2 + dy, srcRes - 1);
                                         uint32_t sz = std::min(z * 2 + dz, srcRes - 1);
-                                        size_t si = (static_cast<size_t>(sz) * srcRes * srcRes + sy * srcRes + sx) * 4;
+                                        size_t si = (static_cast<size_t>(sz) * srcRes * srcRes +
+                                                     static_cast<size_t>(sy) * srcRes + sx) *
+                                                    4;
                                         sumR += src.data[si + 0];
                                         sumG += src.data[si + 1];
                                         sumB += src.data[si + 2];
@@ -172,7 +174,8 @@ namespace Spark::Graphics
                                     }
                                 }
                             }
-                            size_t di = (static_cast<size_t>(z) * dstRes * dstRes + y * dstRes + x) * 4;
+                            size_t di =
+                                (static_cast<size_t>(z) * dstRes * dstRes + static_cast<size_t>(y) * dstRes + x) * 4;
                             dst.data[di + 0] = static_cast<uint8_t>(sumR / 8.0f);
                             dst.data[di + 1] = static_cast<uint8_t>(sumG / 8.0f);
                             dst.data[di + 2] = static_cast<uint8_t>(sumB / 8.0f);
@@ -260,7 +263,7 @@ namespace Spark::Graphics
 
         size_t VoxelIndex(int x, int y, int z) const
         {
-            return static_cast<size_t>(z) * m_resolution * m_resolution + y * m_resolution + x;
+            return static_cast<size_t>(z) * m_resolution * m_resolution + static_cast<size_t>(y) * m_resolution + x;
         }
 
         void SampleMip(int mip, float wx, float wy, float wz, float& r, float& g, float& b, float& a) const
@@ -278,7 +281,9 @@ namespace Spark::Graphics
             int vy = std::clamp(static_cast<int>(normY * ml.resolution), 0, static_cast<int>(ml.resolution - 1));
             int vz = std::clamp(static_cast<int>(normZ * ml.resolution), 0, static_cast<int>(ml.resolution - 1));
 
-            size_t idx = (static_cast<size_t>(vz) * ml.resolution * ml.resolution + vy * ml.resolution + vx) * 4;
+            size_t idx = (static_cast<size_t>(vz) * ml.resolution * ml.resolution +
+                          static_cast<size_t>(vy) * ml.resolution + vx) *
+                         4;
             r = ml.data[idx + 0] / 255.0f;
             g = ml.data[idx + 1] / 255.0f;
             b = ml.data[idx + 2] / 255.0f;

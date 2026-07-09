@@ -108,7 +108,7 @@ namespace Spark::Graphics
         {
             return nullptr;
         }
-        return &m_clusterLightIndices[clusterIndex * m_config.maxLightsPerCluster];
+        return &m_clusterLightIndices[static_cast<size_t>(clusterIndex) * m_config.maxLightsPerCluster];
     }
 
     std::string ClusteredLightCulling::Console_GetStatus() const

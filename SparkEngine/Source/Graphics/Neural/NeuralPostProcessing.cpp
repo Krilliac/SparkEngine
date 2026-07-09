@@ -111,7 +111,7 @@ namespace Spark::Graphics::Neural
             for (uint32_t px = 0; px < kDenoisePatchSize; ++px)
             {
                 uint32_t pixelIdx = py * kDenoisePatchSize + px;
-                float* dst = &batchInput[pixelIdx * inputSize];
+                float* dst = &batchInput[static_cast<size_t>(pixelIdx) * inputSize];
                 uint32_t offset = 0;
 
                 // Patch position
@@ -154,12 +154,12 @@ namespace Spark::Graphics::Neural
 
         uint32_t w = m_colorInput.width;
         uint32_t h = m_colorInput.height;
-        m_output.resize(w * h * 3);
+        m_output.resize(static_cast<size_t>(w) * h * 3);
 
         // If no neural weights, fall back to pass-through
         if (!m_mlpHandle.IsValid())
         {
-            std::memcpy(m_output.data(), m_colorInput.data, w * h * 3 * sizeof(float));
+            std::memcpy(m_output.data(), m_colorInput.data, static_cast<size_t>(w) * h * 3 * sizeof(float));
             return true;
         }
 
@@ -317,7 +317,7 @@ namespace Spark::Graphics::Neural
             for (uint32_t ox = 0; ox < kSROutputPatchSize; ++ox)
             {
                 uint32_t pixelIdx = oy * kSROutputPatchSize + ox;
-                float* dst = &batchInput[pixelIdx * inputSize];
+                float* dst = &batchInput[static_cast<size_t>(pixelIdx) * inputSize];
                 uint32_t offset = 0;
 
                 // Map output pixel to input coordinate
@@ -383,7 +383,7 @@ namespace Spark::Graphics::Neural
 
         uint32_t outW = width * kSRScaleFactor;
         uint32_t outH = height * kSRScaleFactor;
-        std::vector<float> result(outW * outH * 3, 0.0f);
+        std::vector<float> result(static_cast<size_t>(outW) * outH * 3, 0.0f);
 
         uint32_t patchesX = (width + kSRInputPatchSize - 1) / kSRInputPatchSize;
         uint32_t patchesY = (height + kSRInputPatchSize - 1) / kSRInputPatchSize;
