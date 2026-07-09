@@ -27,7 +27,7 @@
 #include "../../Utils/Logger.h"
 #include "../AssetPipeline.h"
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
 #include "../MaterialSystem.h"
 #include "RTMaterialAdapter.h"
 #endif
@@ -81,7 +81,7 @@ namespace Spark::Graphics
         return pushedCount;
     }
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
     uint32_t PopulateRTMaterialsFromECS(HybridRTManager& rt, World& world, MaterialSystem& materials)
     {
         // Mirror the traversal in PopulateRTSceneFromECS exactly — the

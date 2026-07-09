@@ -300,8 +300,7 @@ namespace Spark::Graphics
                 }
                 Spark::RHI::Metal::FrameParams mrtp{};
                 DirectX::XMMATRIX viewProj = DirectX::XMMatrixMultiply(view, proj);
-                DirectX::XMVECTOR det = DirectX::XMMatrixDeterminant(viewProj);
-                DirectX::XMMATRIX invVP = DirectX::XMMatrixInverse(&det, viewProj);
+                DirectX::XMMATRIX invVP = DirectX::XMMatrixInverse(nullptr, viewProj);
                 DirectX::XMFLOAT4X4 invVPStore;
                 DirectX::XMStoreFloat4x4(&invVPStore, invVP);
                 std::memcpy(mrtp.invViewProj, &invVPStore, sizeof(mrtp.invViewProj));
@@ -443,8 +442,8 @@ namespace Spark::Graphics
         const uint32_t blasIndex = m_metalRT->CreateBLAS(geom);
         if (blasIndex == UINT32_MAX)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                           "HybridRTManager: MetalRT BLAS creation failed for '" + mesh.name + "'");
+            SPARK_LOG_WARN(Spark::LogCategory::Graphics, "HybridRTManager: MetalRT BLAS creation failed for '%s'",
+                           mesh.name.c_str());
             return;
         }
 

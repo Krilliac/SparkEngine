@@ -2,12 +2,12 @@
  * @file RTSceneFeeder.h
  * @brief Utility that walks an ECS world and pushes every visible
  *        triangle mesh into a `HybridRTManager`, used to populate the
- *        hardware RT scene on macOS (Metal RT).
+ *        hardware RT scene on Metal-enabled macOS builds.
  *
  * This is a *helper*, not an auto-hooked system. Engine code (or a game
  * module) calls `PopulateRTSceneFromECS` once per scene change — or
  * every frame if transforms animate — to keep the BLAS/TLAS in sync
- * with the current world state. On non-macOS builds the underlying
+ * with the current world state. On non-Metal builds the underlying
  * `HybridRTManager::PushTriangleMesh` no-ops, so this is safe to call
  * unconditionally.
  *
@@ -43,14 +43,14 @@ namespace Spark::Graphics
      *
      * @return Number of meshes actually pushed.
      *
-     *         Off macOS (or when the RT backend is not
+     *         Off Metal-enabled macOS (or when the RT backend is not
      *         `HardwareMetalRT`) this is a no-op and returns 0.
      *         Callers can use the return value to log "RT scene
      *         populated with N meshes" at scene-transition boundaries.
      */
     uint32_t PopulateRTSceneFromECS(HybridRTManager& rt, World& world, AssetPipeline& assets);
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
     /**
      * @brief Populate Metal RT per-instance materials alongside the
      *        scene geometry. Walks the same `Transform + MeshRenderer`
@@ -64,9 +64,9 @@ namespace Spark::Graphics
      *        push order, so the RT kernel's `instance_id` indexes
      *        into both arrays consistently.
      *
-     *        Returns the number of materials uploaded. 0 off macOS
+     *        Returns the number of materials uploaded. 0 off Metal-enabled macOS
      *        (header is `#ifdef`-gated — signature only exists on
-     *        macOS so Linux/Windows can't accidentally call it).
+     *        Metal builds so other builds can't accidentally call it).
      */
     uint32_t PopulateRTMaterialsFromECS(HybridRTManager& rt, World& world, MaterialSystem& materials);
 #endif
