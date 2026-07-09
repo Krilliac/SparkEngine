@@ -13,6 +13,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -24,6 +25,15 @@ namespace fs = std::filesystem;
 
 namespace SparkEditor
 {
+    namespace
+    {
+        std::chrono::system_clock::time_point ToSystemClock(fs::file_time_type fileTime)
+        {
+            const auto fileNow = fs::file_time_type::clock::now();
+            const auto systemNow = std::chrono::system_clock::now();
+            return std::chrono::time_point_cast<std::chrono::system_clock::duration>(fileTime - fileNow + systemNow);
+        }
+    } // namespace
 
     // =========================================================================
     // AdvancedAssetPipeline
@@ -362,7 +372,7 @@ namespace SparkEditor
         auto& metadata = m_assetMetadata[assetPath];
         metadata.sourceFilePath = assetPath;
         metadata.sourceFileSize = fs::file_size(path);
-        metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(path));
+        metadata.sourceModifiedTime = ToSystemClock(fs::last_write_time(path));
         metadata.checksum = CalculateChecksum(assetPath);
 
         return true;
@@ -399,7 +409,7 @@ namespace SparkEditor
             auto& metadata = m_assetMetadata[filePath];
             metadata.sourceFilePath = filePath;
             metadata.sourceFileSize = entry.file_size();
-            metadata.sourceModifiedTime = std::chrono::clock_cast<std::chrono::system_clock>(entry.last_write_time());
+            metadata.sourceModifiedTime = ToSystemClock(entry.last_write_time());
             metadata.type = processor->GetAssetType();
             metadata.processorName = processor->GetName();
 

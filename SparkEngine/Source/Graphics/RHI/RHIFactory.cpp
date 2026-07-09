@@ -32,7 +32,7 @@
 #endif
 
 #ifdef SPARK_METAL_SUPPORT
-#include "Metal/MetalDevice.h"
+#include "Metal/MetalInterop.h"
 #endif
 
 #include "NullRHIDevice.h"
@@ -239,7 +239,7 @@ namespace Spark
 
 #ifdef SPARK_METAL_SUPPORT
             case GraphicsBackend::Metal:
-                device = std::make_unique<Metal::MetalDevice>();
+                device = Metal::CreateDevice();
                 break;
 #endif
 

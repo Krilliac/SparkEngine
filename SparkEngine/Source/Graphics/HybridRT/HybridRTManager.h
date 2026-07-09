@@ -38,7 +38,7 @@
 #include <DirectXMath.h>
 #endif
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
 #include "../RHI/Metal/MetalRayTracing.h" // MaterialParams declaration
 #endif
 
@@ -58,7 +58,7 @@ namespace Spark::RHI
 // there to avoid pulling AssetPipeline.h into every consumer of this header.
 class MeshAsset;
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
 namespace Spark::RHI::Metal
 {
     class MetalRayTracingSystem;
@@ -156,7 +156,7 @@ namespace Spark::Graphics
          */
         void ClearTriangleMeshes();
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
         /**
          * @brief Upload per-instance material params for the Metal RT
          *        kernels. The vector index must match the push order
@@ -166,9 +166,9 @@ namespace Spark::Graphics
          *        clears the material buffer so kernels fall back to
          *        the placeholder grey.
          *
-         *        Off macOS this signature is hidden — the `MaterialParams`
+         *        Off Metal-enabled macOS this signature is hidden — the `MaterialParams`
          *        type lives in the Metal RT headers. Call behind
-         *        `#ifdef SPARK_PLATFORM_MACOS` the same way the RT
+         *        `#ifdef SPARK_METAL_SUPPORT` the same way the RT
          *        system itself is gated.
          */
         void SetMetalMaterials(const std::vector<RHI::Metal::MaterialParams>& materials);
@@ -201,7 +201,7 @@ namespace Spark::Graphics
         std::unique_ptr<RTCompositor> m_compositor;
         std::unique_ptr<ProbeSystem> m_probes;
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
         // Metal hardware ray-tracing system. Instantiated only when the
         // detected backend is `HardwareMetalRT`. Currently a scaffold — its
         // DispatchFrame returns zero executed passes, so SDFGI runs as

@@ -27,9 +27,9 @@
 #include "../RHI/DXRSupport.h"
 #endif
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
+#include "../RHI/Metal/MetalInterop.h"
 #include "../RHI/Metal/MetalRayTracing.h"
-#include "../RHI/Metal/MetalDevice.h"
 #endif
 
 #include <algorithm>
@@ -121,7 +121,7 @@ namespace Spark::Graphics
 
         m_pendingPrimitives.reserve(SDFSceneManager::kMaxPrimitives);
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
         // Spin up the Metal RT scaffold when the detected backend is Metal.
         // Initialize() returns false today (no trace pipelines yet), which
         // leaves `m_metalRT->IsAvailable()` false — the Execute() path then
@@ -129,11 +129,10 @@ namespace Spark::Graphics
         // real pipelines land the wiring is already in place.
         if (m_activeBackend == RHI::RayTracingBackend::HardwareMetalRT)
         {
-            auto* metalDevice = dynamic_cast<Spark::RHI::Metal::MetalDevice*>(device);
-            if (metalDevice)
+            m_metalRT = std::make_unique<Spark::RHI::Metal::MetalRayTracingSystem>();
+            if (!Spark::RHI::Metal::InitializeRayTracing(*m_metalRT, *device))
             {
-                m_metalRT = std::make_unique<Spark::RHI::Metal::MetalRayTracingSystem>();
-                (void)m_metalRT->Initialize(metalDevice);
+                m_metalRT.reset();
             }
         }
 #endif
@@ -157,7 +156,7 @@ namespace Spark::Graphics
         m_compositor.reset();
         m_probes.reset();
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
         if (m_metalRT)
             m_metalRT->Shutdown();
         m_metalRT.reset();
@@ -276,7 +275,7 @@ namespace Spark::Graphics
             break;
 
         case RHI::RayTracingBackend::HardwareMetalRT:
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
             // Consult the Metal RT system. Feed this frame's uniforms and
             // GBuffer/output textures, then DispatchFrame. The returned mask
             // tells us which passes actually ran; we back-fill the rest with
@@ -427,7 +426,7 @@ namespace Spark::Graphics
 
     void HybridRTManager::PushTriangleMesh(const TriangleMeshDesc& mesh)
     {
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
         if (!m_metalRT || !m_metalRT->IsAvailable())
             return;
 
@@ -493,7 +492,7 @@ namespace Spark::Graphics
 
     void HybridRTManager::ClearTriangleMeshes()
     {
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
         if (m_metalRT)
         {
             for (auto& m : m_metalRTMeshes)
@@ -509,7 +508,7 @@ namespace Spark::Graphics
 #endif
     }
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
     void HybridRTManager::SetMetalMaterials(const std::vector<RHI::Metal::MaterialParams>& materials)
     {
         if (m_metalRT)
@@ -595,7 +594,7 @@ namespace Spark::Graphics
             ss << "AO ";
         ss << "\n";
 
-#ifdef SPARK_PLATFORM_MACOS
+#ifdef SPARK_METAL_SUPPORT
         if (m_metalRT)
         {
             ss << m_metalRT->GetStatusString() << "\n";

@@ -17,6 +17,7 @@
 #include "Utils/SparkConsole.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "Graphics/RHI/RHITypes.h"
+#include "Utils/LogMacros.h"
 #include "Utils/Logger.h"
 
 #include <mach-o/dyld.h>

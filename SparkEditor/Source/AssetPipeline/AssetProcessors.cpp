@@ -11,6 +11,7 @@
 #include "Utils/LogMacros.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -57,6 +58,13 @@ namespace SparkEditor
                 return "Ultra";
             }
             return "High";
+        }
+
+        std::chrono::system_clock::time_point ToSystemClock(fs::file_time_type fileTime)
+        {
+            const auto fileNow = fs::file_time_type::clock::now();
+            const auto systemNow = std::chrono::system_clock::now();
+            return std::chrono::time_point_cast<std::chrono::system_clock::duration>(fileTime - fileNow + systemNow);
         }
 
         LODProfileDefinition GetLODProfile(LODTargetPlatform platform, LODQualityTier quality)
@@ -318,8 +326,7 @@ namespace SparkEditor
         metadata.processedFileSize = fs::file_size(outputPath);
         metadata.checksum = ComputeFileChecksum(outputPath.string());
         metadata.processedTime = std::chrono::system_clock::now();
-        metadata.sourceModifiedTime =
-            std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(sourcePath));
+        metadata.sourceModifiedTime = ToSystemClock(fs::last_write_time(sourcePath));
         metadata.status = ProcessingStatus::COMPLETED;
         metadata.processorName = GetName();
         metadata.type = AssetType::TEXTURE;
@@ -490,8 +497,7 @@ namespace SparkEditor
         metadata.sourceFileSize = fs::file_size(sourcePath);
         metadata.processedFileSize = fs::file_size(outputPath);
         metadata.processedTime = std::chrono::system_clock::now();
-        metadata.sourceModifiedTime =
-            std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(sourcePath));
+        metadata.sourceModifiedTime = ToSystemClock(fs::last_write_time(sourcePath));
         metadata.status = ProcessingStatus::COMPLETED;
         metadata.processorName = GetName();
         metadata.type = AssetType::MESH;
@@ -680,8 +686,7 @@ namespace SparkEditor
         metadata.sourceFileSize = fs::file_size(sourcePath);
         metadata.processedFileSize = fs::file_size(outputPath);
         metadata.processedTime = std::chrono::system_clock::now();
-        metadata.sourceModifiedTime =
-            std::chrono::clock_cast<std::chrono::system_clock>(fs::last_write_time(sourcePath));
+        metadata.sourceModifiedTime = ToSystemClock(fs::last_write_time(sourcePath));
         metadata.status = ProcessingStatus::COMPLETED;
         metadata.processorName = GetName();
         metadata.type = AssetType::AUDIO;
