@@ -99,9 +99,9 @@ namespace SparkEditor::Utils
         return false;
 #else
         std::string result;
-        bool ok = RunFolderPicker("zenity",
-                                  {"--file-selection", "--directory", "--title", title ? title : "Select Folder"},
-                                  result);
+        std::vector<std::string> zenityArgs = {"--file-selection", "--directory", "--title",
+                                               title ? title : "Select Folder"};
+        bool ok = RunFolderPicker("zenity", zenityArgs, result);
         if (!ok || result.empty())
         {
             const char* home = std::getenv("HOME");

@@ -33,7 +33,10 @@ constexpr SOCKET INVALID_SOCKET = -1;
 constexpr int SOCKET_ERROR = -1;
 #ifndef SPARK_HAS_CLOSESOCKET_SHIM
 #define SPARK_HAS_CLOSESOCKET_SHIM 1
-inline int closesocket(SOCKET s) { return ::close(s); } // Winsock name -> POSIX close
+inline int closesocket(SOCKET s)
+{
+    return ::close(s);
+} // Winsock name -> POSIX close
 #endif
 #endif // SPARK_PLATFORM_WINDOWS
 
@@ -122,7 +125,7 @@ namespace Spark::Net
             if (m_socket == INVALID_SOCKET)
                 return false;
 
-                // Set non-blocking mode
+            // Set non-blocking mode
 #ifdef SPARK_PLATFORM_WINDOWS
             u_long nonBlocking = 1;
             if (ioctlsocket(m_socket, FIONBIO, &nonBlocking) == SOCKET_ERROR)

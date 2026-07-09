@@ -256,8 +256,8 @@ namespace SparkEditor
 
             wf.AddStep({"Run Tests", "Execute CTest test suite", [](WorkflowContext& ctx)
                         {
-                            int rc = RunWorkflowProcess(ctx, "ctest", {"--test-dir", "build", "--output-on-failure"},
-                                                        15);
+                            std::vector<std::string> args = {"--test-dir", "build", "--output-on-failure"};
+                            int rc = RunWorkflowProcess(ctx, "ctest", args, 15);
                             ctx.Log("Test exit: " + std::to_string(rc));
                             return rc == 0;
                         }});

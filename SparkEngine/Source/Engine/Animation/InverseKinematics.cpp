@@ -249,7 +249,8 @@ namespace Spark::Animation
                     XMMATRIX parentInv = XMMatrixInverse(nullptr, globalTransforms[parentIdx]);
                     localPosition = XMVector3TransformCoord(worldPosition, parentInv);
                 }
-                local.r[3] = XMVectorSetW(localPosition, 1.0f);
+                local.r[3] = XMVectorSet(XMVectorGetX(localPosition), XMVectorGetY(localPosition),
+                                         XMVectorGetZ(localPosition), 1.0f);
                 XMStoreFloat4x4(&localTransforms[boneIdx], local);
             };
 

@@ -114,9 +114,9 @@ namespace SparkEditor
                     CoTaskMemFree(pidl);
                 }
 #else
-                selected = RunFolderPicker("zenity",
-                                           {"--file-selection", "--directory", "--title", "Select Repository"},
-                                           selectedPath);
+                std::vector<std::string> zenityArgs = {"--file-selection", "--directory", "--title",
+                                                       "Select Repository"};
+                selected = RunFolderPicker("zenity", zenityArgs, selectedPath);
                 if (!selected)
                 {
                     const char* home = std::getenv("HOME");

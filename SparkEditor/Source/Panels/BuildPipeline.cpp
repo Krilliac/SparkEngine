@@ -372,8 +372,8 @@ namespace SparkEditor
             commandLine += QuoteWindowsArgument(argument);
         }
 
-        BOOL ok = CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr,
-                                 &startup, &process);
+        BOOL ok = CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
+                                 nullptr, &startup, &process);
         CloseHandle(writePipe);
         if (!ok)
         {

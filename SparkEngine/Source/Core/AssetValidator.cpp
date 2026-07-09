@@ -3,7 +3,6 @@
 #include <chrono>
 #include <ctime>
 #include <filesystem>
-#include <format>
 #include <iomanip>
 #include <sstream>
 
@@ -152,9 +151,10 @@ namespace Spark
         std::string filename = path.filename().string();
         if (filename.size() > 200)
         {
-            report.results.push_back({ValidationSeverity::Warning, path.string(),
-                                      std::format("Filename is {} characters (max recommended: 200)", filename.size()),
-                                      "Shorten the filename for cross-platform compatibility", 4002});
+            report.results.push_back(
+                {ValidationSeverity::Warning, path.string(),
+                 "Filename is " + std::to_string(filename.size()) + " characters (max recommended: 200)",
+                 "Shorten the filename for cross-platform compatibility", 4002});
         }
 
         std::string fullPath = path.string();
@@ -163,7 +163,7 @@ namespace Spark
             if (c == '#' || c == '%' || c == '&' || c == '{' || c == '}')
             {
                 report.results.push_back({ValidationSeverity::Warning, path.string(),
-                                          std::format("Path contains problematic character '{}'", c),
+                                          std::string("Path contains problematic character '") + c + "'",
                                           "Rename to use only alphanumeric, dash, underscore, and dot", 4003});
                 break;
             }
@@ -335,17 +335,18 @@ namespace Spark
             return "AssetValidator: not initialized";
         }
 
-        std::string status = std::format("AssetValidator: initialized, {} rule(s) registered", m_rules.size());
+        std::ostringstream status;
+        status << "AssetValidator: initialized, " << m_rules.size() << " rule(s) registered";
 
         if (m_lastReport.totalAssets > 0)
         {
-            status += std::format("\n  Last run: {} asset(s) scanned in {} ms", m_lastReport.totalAssets,
-                                  FormatOneDecimal(m_lastReport.durationMs));
-            status += std::format("\n  Pass: {}, Fail: {}, Warnings: {}", m_lastReport.passCount,
-                                  m_lastReport.failCount, m_lastReport.warningCount);
+            status << "\n  Last run: " << m_lastReport.totalAssets << " asset(s) scanned in "
+                   << FormatOneDecimal(m_lastReport.durationMs) << " ms";
+            status << "\n  Pass: " << m_lastReport.passCount << ", Fail: " << m_lastReport.failCount
+                   << ", Warnings: " << m_lastReport.warningCount;
         }
 
-        return status;
+        return status.str();
     }
 
     std::string AssetValidator::Console_GetLastReport() const
@@ -355,11 +356,11 @@ namespace Spark
             return "No validation report available (run ValidateAll first)";
         }
 
-        std::string output = std::format("=== Validation Report ({}) ===\n", m_lastReport.timestamp);
-        output +=
-            std::format("Assets scanned: {}  |  Pass: {}  |  Fail: {}  |  Warnings: {}\n", m_lastReport.totalAssets,
-                        m_lastReport.passCount, m_lastReport.failCount, m_lastReport.warningCount);
-        output += "Duration: " + FormatOneDecimal(m_lastReport.durationMs) + " ms\n\n";
+        std::ostringstream output;
+        output << "=== Validation Report (" << m_lastReport.timestamp << ") ===\n";
+        output << "Assets scanned: " << m_lastReport.totalAssets << "  |  Pass: " << m_lastReport.passCount
+               << "  |  Fail: " << m_lastReport.failCount << "  |  Warnings: " << m_lastReport.warningCount << "\n";
+        output << "Duration: " << FormatOneDecimal(m_lastReport.durationMs) << " ms\n\n";
 
         for (const auto& r : m_lastReport.results)
         {
@@ -380,14 +381,14 @@ namespace Spark
                 break;
             }
 
-            output += std::format("[{}] {} (E{})\n  {}\n", severityStr, r.assetPath, r.errorCode, r.message);
+            output << "[" << severityStr << "] " << r.assetPath << " (E" << r.errorCode << ")\n  " << r.message << "\n";
             if (!r.suggestion.empty())
             {
-                output += std::format("  Suggestion: {}\n", r.suggestion);
+                output << "  Suggestion: " << r.suggestion << "\n";
             }
         }
 
-        return output;
+        return output.str();
     }
 
     std::string AssetValidator::GetTimestamp()
