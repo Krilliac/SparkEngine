@@ -9,6 +9,20 @@
 #include <iomanip>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <conio.h>
+
+namespace
+{
+    bool IsConnectedPipe(HANDLE handle)
+    {
+        if (handle == nullptr || handle == INVALID_HANDLE_VALUE || GetFileType(handle) != FILE_TYPE_PIPE)
+        {
+            return false;
+        }
+
+        DWORD bytesAvailable = 0;
+        return PeekNamedPipe(handle, nullptr, 0, nullptr, &bytesAvailable, nullptr) != FALSE;
+    }
+} // namespace
 #else
 #include <unistd.h>
 #include <sys/select.h>
@@ -73,8 +87,8 @@ namespace
     constexpr const wchar_t* kConsoleVersionW = L"2.0.0";
 } // namespace
 
-ConsoleApp::ConsoleApp()
-    : m_running(true),
+ConsoleApp::ConsoleApp(bool enginePipeRequested)
+    : m_running(true), m_enginePipeRequested(enginePipeRequested),
 #ifdef SPARK_PLATFORM_WINDOWS
       m_consoleOutput(GetStdHandle(STD_OUTPUT_HANDLE)), m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
 #else
@@ -83,8 +97,11 @@ ConsoleApp::ConsoleApp()
 {
     RegisterDefaultCommands();
 
-    // Start engine input reading thread (joined in destructor)
-    m_engineInputThread = std::thread(&ConsoleApp::ReadEngineInput, this);
+    if (m_enginePipeRequested)
+    {
+        // Start engine input reading thread (joined in destructor).
+        m_engineInputThread = std::thread(&ConsoleApp::ReadEngineInput, this);
+    }
 
     PrintLog(L"Console initialized with engine communication support.");
 }
@@ -126,10 +143,9 @@ bool ConsoleApp::DetectPipeMode()
 {
 #ifdef SPARK_PLATFORM_WINDOWS
     HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-    DWORD fileType = GetFileType(hStdin);
-    bool pipeMode = (fileType == FILE_TYPE_PIPE);
+    bool pipeMode = m_enginePipeRequested && IsConnectedPipe(hStdin);
 #else
-    bool pipeMode = LinuxIsStdinPipe();
+    bool pipeMode = m_enginePipeRequested && LinuxIsStdinPipe();
 #endif
     if (pipeMode)
     {
@@ -166,8 +182,7 @@ void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool
     { // Check connection every 10 seconds
 #ifdef SPARK_PLATFORM_WINDOWS
         HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
-        DWORD newFileType = GetFileType(hStdin);
-        if (newFileType != FILE_TYPE_PIPE)
+        if (!IsConnectedPipe(hStdin))
         {
             PrintLog(L"Engine connection lost. Switching to standalone mode.");
             pipeMode = false;
@@ -361,7 +376,7 @@ bool ConsoleApp::PollWindowsPipeData(HANDLE hStdin)
     if (!pipeResult)
     {
         DWORD error = GetLastError();
-        if (error == ERROR_BROKEN_PIPE || error == ERROR_INVALID_HANDLE)
+        if (error == ERROR_BROKEN_PIPE || error == ERROR_NO_DATA || error == ERROR_INVALID_HANDLE)
         {
             PrintLog(L"Engine pipe connection lost.");
             OutputDebugStringA("ReadEngineInput: Pipe connection lost\n");
@@ -393,7 +408,7 @@ bool ConsoleApp::PollWindowsPipeData(HANDLE hStdin)
         {
             DWORD error = GetLastError();
             OutputDebugStringA(("ReadEngineInput: ReadFile failed with error " + std::to_string(error) + "\n").c_str());
-            if (error == ERROR_BROKEN_PIPE)
+            if (error == ERROR_BROKEN_PIPE || error == ERROR_NO_DATA)
             {
                 PrintLog(L"Engine connection lost.");
                 return false;
@@ -410,11 +425,7 @@ void ConsoleApp::ReadEngineInputWindows()
 
     OutputDebugStringA("ReadEngineInput: Starting engine input reader thread\n");
 
-    DWORD fileType = GetFileType(hStdin);
-    DWORD bytesAvailable = 0;
-    BOOL isPipeConnected = PeekNamedPipe(hStdin, NULL, 0, NULL, &bytesAvailable, NULL);
-
-    if (isPipeConnected || fileType == FILE_TYPE_PIPE)
+    if (IsConnectedPipe(hStdin))
     {
         PrintLog(L"Connected to engine via pipe communication.");
         OutputDebugStringA("ReadEngineInput: Pipe connection confirmed\n");

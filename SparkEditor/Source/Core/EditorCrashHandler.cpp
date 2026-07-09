@@ -14,6 +14,7 @@
 #include <optional>
 #include <thread>
 #include <chrono>
+#include <cstdint>
 #include <ctime>
 #include <cstdio>
 #include <sstream>
@@ -28,7 +29,12 @@
 #include <csignal>
 #include <unistd.h>
 #include <sys/types.h>
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#include <sys/utsname.h>
+#else
 #include <sys/sysinfo.h>
+#endif
 #include <cstring>
 #include <execinfo.h>
 #include <pthread.h>
@@ -36,6 +42,20 @@
 
 namespace SparkEditor
 {
+#ifndef _WIN32
+    namespace
+    {
+        uint64_t GetCurrentPosixThreadId()
+        {
+#if defined(__APPLE__)
+            uint64_t threadId = 0;
+            return pthread_threadid_np(nullptr, &threadId) == 0 ? threadId : 0;
+#else
+            return static_cast<uint64_t>(pthread_self());
+#endif
+        }
+    } // namespace
+#endif
 
     // Static instance for singleton (Meyer's — no leak, thread-safe since C++11)
     EditorCrashHandler* EditorCrashHandler::s_instance = nullptr;
@@ -746,7 +766,7 @@ namespace SparkEditor
         info.signalNumber = signal;
         info.timestamp = std::chrono::system_clock::now();
         info.processId = static_cast<uint32_t>(getpid());
-        info.threadId = static_cast<uint32_t>(pthread_self());
+        info.threadId = static_cast<uint32_t>(GetCurrentPosixThreadId());
         info.editorState = m_currentEditorState;
 
         switch (signal)
@@ -860,7 +880,18 @@ namespace SparkEditor
     {
         std::string result = "=== System Info ===\n";
 
-        // OS info
+#if defined(__APPLE__)
+        struct utsname osInfo{};
+        if (uname(&osInfo) == 0)
+        {
+            result += "OS: macOS " + std::string(osInfo.release) + " (" + osInfo.machine + ")\n";
+        }
+        else
+        {
+            result += "OS: macOS\n";
+        }
+#else
+        // Linux distribution info
         std::ifstream osRelease("/etc/os-release");
         if (osRelease.is_open())
         {
@@ -884,6 +915,7 @@ namespace SparkEditor
         {
             result += "OS: Linux\n";
         }
+#endif
 
         long cores = sysconf(_SC_NPROCESSORS_ONLN);
         if (cores > 0)
@@ -891,15 +923,28 @@ namespace SparkEditor
             result += "CPU Cores: " + std::to_string(cores) + "\n";
         }
 
-        struct sysinfo si;
+#if defined(__APPLE__)
+        uint64_t totalMemoryBytes = 0;
+        size_t totalMemorySize = sizeof(totalMemoryBytes);
+        if (sysctlbyname("hw.memsize", &totalMemoryBytes, &totalMemorySize, nullptr, 0) == 0)
+        {
+            result += "RAM Total: " + std::to_string(totalMemoryBytes / (1024ULL * 1024ULL)) + " MiB\n";
+        }
+#else
+        struct sysinfo si{};
         if (sysinfo(&si) == 0)
         {
-            result += "RAM Total: " + std::to_string(si.totalram * si.mem_unit / (1024 * 1024)) + " MiB\n";
-            result += "RAM Available: " + std::to_string(si.freeram * si.mem_unit / (1024 * 1024)) + " MiB\n";
-            unsigned long used = si.totalram - si.freeram;
-            int loadPercent = static_cast<int>((used * 100) / si.totalram);
-            result += "Memory Load: " + std::to_string(loadPercent) + "%\n";
+            const uint64_t totalBytes = static_cast<uint64_t>(si.totalram) * si.mem_unit;
+            const uint64_t availableBytes = static_cast<uint64_t>(si.freeram) * si.mem_unit;
+            result += "RAM Total: " + std::to_string(totalBytes / (1024ULL * 1024ULL)) + " MiB\n";
+            result += "RAM Available: " + std::to_string(availableBytes / (1024ULL * 1024ULL)) + " MiB\n";
+            if (totalBytes > 0)
+            {
+                const int loadPercent = static_cast<int>(((totalBytes - availableBytes) * 100ULL) / totalBytes);
+                result += "Memory Load: " + std::to_string(loadPercent) + "%\n";
+            }
         }
+#endif
 
         return result;
     }
@@ -907,7 +952,7 @@ namespace SparkEditor
     std::string EditorCrashHandler::GetThreadInfo()
     {
         std::string result = "=== Thread Info ===\n";
-        result += "Current Thread ID: " + std::to_string(static_cast<unsigned long>(pthread_self())) + "\n";
+        result += "Current Thread ID: " + std::to_string(GetCurrentPosixThreadId()) + "\n";
         result += "Process ID: " + std::to_string(getpid()) + "\n";
         return result;
     }

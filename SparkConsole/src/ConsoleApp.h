@@ -37,7 +37,7 @@
 class ConsoleApp
 {
   public:
-    ConsoleApp();
+    explicit ConsoleApp(bool enginePipeRequested = false);
     ~ConsoleApp();
 
     /** @brief Enter the main event loop; blocks until exit is requested. */
@@ -96,6 +96,7 @@ class ConsoleApp
 
     // --- State ---
     std::atomic<bool> m_running;     ///< False signals all threads to exit.
+    bool m_enginePipeRequested;      ///< True only when launched by an engine/editor IPC parent.
     std::thread m_engineInputThread; ///< Background thread reading engine pipe input.
     std::mutex m_outputMutex;        ///< Serializes console output from multiple threads.
     std::mutex m_historyMutex;       ///< Guards m_commandHistory.

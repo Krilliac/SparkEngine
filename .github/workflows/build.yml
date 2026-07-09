@@ -1211,6 +1211,7 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
       - name: Run clang-tidy
         id: clang-tidy-run
@@ -1220,9 +1221,10 @@ jobs:
           # comment, while also printing a tail to the job log for
           # live-viewing in the Actions UI.
           set +e
-          find SparkEngine/Source -name '*.cpp' | head -30 | \
-            xargs clang-tidy -p build --warnings-as-errors="" 2>&1 | tee clang-tidy-output.log
-          ct_exit=${PIPESTATUS[1]}
+          find SparkEngine/Source -name '*.cpp' -print0 | sort -z | head -z -n 30 > clang-tidy-files.list
+          xargs -0 -r clang-tidy -p build --warnings-as-errors="" \
+            < clang-tidy-files.list 2>&1 | tee clang-tidy-output.log
+          ct_exit=${PIPESTATUS[0]}
           echo ""
           echo "=== Last 50 lines of clang-tidy output ==="
           tail -50 clang-tidy-output.log
@@ -1231,9 +1233,8 @@ jobs:
           warn_count=$(grep -cE ':\s*(warning|error):' clang-tidy-output.log || true)
           echo "clang-tidy issues detected: $warn_count"
           echo "warn_count=$warn_count" >> "$GITHUB_OUTPUT"
-          # Never fail the step — clang-tidy runs as advisory only.
-          exit 0
-        continue-on-error: true
+          # Warnings remain advisory; compiler/configuration failures are fatal.
+          exit "$ct_exit"
       - name: Extract clang-tidy error summary
         if: always()
         run: |

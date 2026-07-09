@@ -569,7 +569,7 @@ namespace SparkEditor
 
             PROCESS_INFORMATION pi = {};
 
-            std::string commandLine = "\"" + consolePath + "\"";
+            std::string commandLine = "\"" + consolePath + "\" --engine-pipe";
             DWORD creationFlags = CREATE_NEW_CONSOLE;
 
             std::cout << "Creating console process: " << commandLine << "\n";
@@ -670,7 +670,7 @@ namespace SparkEditor
                 close(stdinPipe[0]);
                 close(stdoutPipe[1]);
 
-                execl(consolePath.c_str(), consolePath.c_str(), nullptr);
+                execl(consolePath.c_str(), consolePath.c_str(), "--engine-pipe", nullptr);
                 _exit(127);
             }
 

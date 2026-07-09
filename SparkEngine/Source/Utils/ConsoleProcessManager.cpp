@@ -296,7 +296,7 @@ namespace Spark
 
     bool ConsoleProcessManager::LaunchConsoleProcess(const std::string& path)
     {
-        auto result = Process::Builder(path).CaptureStdin().CaptureStdout().Launch();
+        auto result = Process::Builder(path).Arg("--engine-pipe").CaptureStdin().CaptureStdout().Launch();
 
         if (!result)
         {

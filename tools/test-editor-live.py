@@ -124,11 +124,11 @@ def count_unique_colors(image_path: str) -> int:
 
 # ── xdotool helpers ────────────────────────────────────────────────────
 
-def xdo(cmd: str, timeout: float = 2.0) -> str:
+def xdo(*args: object, timeout: float = 2.0) -> str:
     """Run an xdotool command."""
     try:
         result = subprocess.run(
-            f"xdotool {cmd}", shell=True, capture_output=True,
+            ["xdotool", *(str(arg) for arg in args)], capture_output=True,
             text=True, timeout=timeout, env=os.environ
         )
         return result.stdout.strip()
@@ -138,15 +138,15 @@ def xdo(cmd: str, timeout: float = 2.0) -> str:
 
 def click(x: int, y: int, button: int = 1):
     """Click at absolute screen coordinates."""
-    xdo(f"mousemove {x} {y}")
+    xdo("mousemove", x, y)
     time.sleep(0.15)
-    xdo(f"click {button}")
+    xdo("click", button)
     time.sleep(0.3)
 
 
 def key(keyname: str):
     """Send a key press."""
-    xdo(f"key {keyname}")
+    xdo("key", keyname)
     time.sleep(0.2)
 
 
@@ -261,12 +261,12 @@ def main():
 
     # ── 3. Test menu bar interaction ──
     print("\n[3/7] Testing menu bar...")
-    win_info = xdo("search --name 'Spark Engine Editor'")
+    win_info = xdo("search", "--name", "Spark Engine Editor")
     win_id = win_info.split('\n')[0] if win_info else ""
     test("Window found by xdotool", bool(win_id), f"WID={win_id}")
 
     # Get window geometry
-    geo = xdo(f"getwindowgeometry {win_id}") if win_id else ""
+    geo = xdo("getwindowgeometry", win_id) if win_id else ""
     # Parse "Position: X,Y" and "Geometry: WxH"
     win_x, win_y = 160, 90  # defaults
     if "Position:" in geo:
@@ -342,7 +342,7 @@ def main():
     print("\n[5/7] Testing keyboard navigation...")
 
     # Focus the window
-    xdo(f"windowfocus {win_id}")
+    xdo("windowfocus", win_id)
     time.sleep(0.3)
 
     # Ctrl+Z (Undo - should do nothing but not crash)
