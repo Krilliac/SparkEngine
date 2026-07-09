@@ -41,6 +41,7 @@
 
 #include <atomic>
 #include <future>
+#include <iomanip>
 #include <numeric>
 #include <sstream>
 #include <vector>
@@ -402,9 +403,9 @@ namespace Spark
         {
             report.Add(sub, "State is Normal", status.state == FreezeState::Normal);
             report.Add(sub, "Heartbeats received", status.totalHeartbeats > 0,
-                       std::format("{} heartbeats", status.totalHeartbeats));
+                       std::to_string(status.totalHeartbeats) + " heartbeats");
             report.Add(sub, "No unrecovered freezes", status.totalFreezes == 0,
-                       std::format("{} freezes", status.totalFreezes));
+                       std::to_string(status.totalFreezes) + " freezes");
         }
         else
         {
@@ -424,10 +425,11 @@ namespace Spark
         report.Add(sub, "Singleton accessible", true);
 
         auto status = hd.GetStatus();
-        report.Add(sub, "Frames analyzed", status.framesAnalyzed > 0, std::format("{} frames", status.framesAnalyzed));
-        report.Add(
-            sub, "No severe hitches", status.severeCount == 0,
-            std::format("{} severe, {} moderate, {} mild", status.severeCount, status.moderateCount, status.mildCount));
+        report.Add(sub, "Frames analyzed", status.framesAnalyzed > 0,
+                   std::to_string(status.framesAnalyzed) + " frames");
+        report.Add(sub, "No severe hitches", status.severeCount == 0,
+                   std::to_string(status.severeCount) + " severe, " + std::to_string(status.moderateCount) +
+                       " moderate, " + std::to_string(status.mildCount) + " mild");
     }
 
     void DiagAssetStall(DiagReport& report)
@@ -438,9 +440,10 @@ namespace Spark
 
         auto status = ad.GetStatus();
         report.Add(sub, "No stalled loads", status.stalledLoads == 0,
-                   std::format("{} active, {} stalled", status.activeLoads, status.stalledLoads));
+                   std::to_string(status.activeLoads) + " active, " + std::to_string(status.stalledLoads) + " stalled");
         report.Add(sub, "No failed loads", status.failedLoads == 0,
-                   std::format("{} completed, {} failed", status.completedLoads, status.failedLoads));
+                   std::to_string(status.completedLoads) + " completed, " + std::to_string(status.failedLoads) +
+                       " failed");
     }
 
     void DiagNetworkHealth(DiagReport& report)
@@ -471,7 +474,7 @@ namespace Spark
         }
         report.Add(sub, "Health state", true, stateStr);
         report.Add(sub, "No disconnects", status.disconnectCount == 0,
-                   std::format("{} disconnects", status.disconnectCount));
+                   std::to_string(status.disconnectCount) + " disconnects");
     }
 
     void DiagGPUResourceLeak(DiagReport& report)
@@ -482,9 +485,11 @@ namespace Spark
 
         auto status = gld.GetStatus();
         report.Add(sub, "No suspected leaks", status.suspectedLeaks == 0,
-                   std::format("{} suspected leaks", status.suspectedLeaks));
-        report.Add(sub, "Memory within budget", true,
-                   std::format("{:.1f} MB current, {:.1f} MB peak", status.estimatedMemoryMB, status.peakMemoryMB));
+                   std::to_string(status.suspectedLeaks) + " suspected leaks");
+        std::ostringstream memoryDetail;
+        memoryDetail << std::fixed << std::setprecision(1) << status.estimatedMemoryMB << " MB current, "
+                     << status.peakMemoryMB << " MB peak";
+        report.Add(sub, "Memory within budget", true, memoryDetail.str());
     }
 
     // ========================================================================

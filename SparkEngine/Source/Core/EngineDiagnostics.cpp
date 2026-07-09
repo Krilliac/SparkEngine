@@ -882,15 +882,16 @@ namespace Spark
             }
         }
 
-        report.Add(sub, "No critical logs", criticalCount == 0, std::format("{} critical", criticalCount));
-        report.Add(sub, "No error logs", errorCount == 0, std::format("{} errors", errorCount));
-        report.Add(sub, "Warning budget", warningCount <= 25, std::format("{} warnings (budget <= 25)", warningCount));
+        report.Add(sub, "No critical logs", criticalCount == 0, std::to_string(criticalCount) + " critical");
+        report.Add(sub, "No error logs", errorCount == 0, std::to_string(errorCount) + " errors");
+        report.Add(sub, "Warning budget", warningCount <= 25,
+                   std::to_string(warningCount) + " warnings (budget <= 25)");
 
         if (!logs.empty())
         {
             const auto& tail = logs.back();
             report.Add(sub, "Latest log sequence monotonic", tail.sequenceNumber + 1 >= logs.size(),
-                       std::format("latest seq={} entries={}", tail.sequenceNumber, logs.size()));
+                       "latest seq=" + std::to_string(tail.sequenceNumber) + " entries=" + std::to_string(logs.size()));
         }
     }
 

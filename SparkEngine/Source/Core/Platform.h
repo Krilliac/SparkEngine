@@ -140,7 +140,7 @@
 #include <version>
 
 // C++23 library features
-#if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202211L
+#if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
 #define SPARK_HAS_EXPECTED 1
 #endif
 
@@ -239,7 +239,7 @@ namespace Spark
 #include <expected>
 #ifndef SPARK_HAS_EXPECTED
 #error                                                                                                                 \
-    "SparkEngine requires a C++23 <expected> implementation (__cpp_lib_expected >= 202211L). Use GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+)."
+    "SparkEngine requires a C++23 <expected> implementation (__cpp_lib_expected >= 202202L). Use GCC 13+, Clang 17+, or MSVC 19.36+ (VS 2022 17.6+)."
 #endif
 
 // ============================================================================

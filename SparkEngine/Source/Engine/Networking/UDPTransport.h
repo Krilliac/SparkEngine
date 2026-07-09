@@ -123,7 +123,9 @@ namespace Spark::Net
 
             m_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             if (m_socket == INVALID_SOCKET)
+            {
                 return false;
+            }
 
             // Set non-blocking mode
 #ifdef SPARK_PLATFORM_WINDOWS
