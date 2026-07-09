@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 /**
  * @brief Log warnings about missing optional modules (Bullet, miniz, SDL2)
  */

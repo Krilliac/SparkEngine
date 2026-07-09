@@ -1189,7 +1189,7 @@ jobs:
             echo "apt-get update failed on attempt $attempt; retrying in $((attempt * 5))s..."
             sleep $((attempt * 5))
           done
-          sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev libfreetype-dev
+          sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev libfreetype-dev libc++-dev libc++abi-dev
       - name: Setup ccache
         uses: actions/cache@v6
         with:
@@ -1211,6 +1211,9 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
             -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
       - name: Run clang-tidy
