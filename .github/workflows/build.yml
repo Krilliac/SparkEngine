@@ -1222,7 +1222,7 @@ jobs:
           # live-viewing in the Actions UI.
           set +e
           find SparkEngine/Source -name '*.cpp' -print0 | sort -z | head -z -n 30 > clang-tidy-files.list
-          xargs -0 -r clang-tidy -p build --warnings-as-errors="" \
+          xargs -0 -r -n 1 -P 2 clang-tidy -p build --warnings-as-errors="" \
             < clang-tidy-files.list 2>&1 | tee clang-tidy-output.log
           ct_exit=${PIPESTATUS[0]}
           echo ""
