@@ -394,7 +394,7 @@ jobs:
   # Windows Build (MSVC VS 2022, v143 toolset + DirectX 11)
   # ===========================================================================
   build-windows-vs2022:
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       matrix:
         config: [Debug, Release]

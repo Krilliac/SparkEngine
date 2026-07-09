@@ -118,12 +118,15 @@ namespace SparkEditor
         // Non-owning: GraphicsEngine attached to the editor's device, owned by
         // EditorUI. Null until EditorUI::SetGraphicsDevice() has run.
         GraphicsEngine* m_graphics = nullptr;
+#endif
 
         // Non-owning: the single live ECS World (the document being edited),
         // owned by EditorUI. Null until EditorUI::SetGraphicsDevice() has run
         // and called SetWorld(). The mesh cache stays panel-side (a rendering
         // concern) even though the World itself moved to EditorUI.
         World* m_world = nullptr;
+
+#ifdef _WIN32
         Spark::WorldMeshCache m_meshCache;
 #endif
 

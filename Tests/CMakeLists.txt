@@ -518,8 +518,8 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp"
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
-    # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke
-    TestWorldBasicRender.cpp
+    # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke is
+    # Windows-only and is added below.
     # FPS game module source needed by TestGameModeReal
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source/Game/GameMode.cpp"
     # Editor core sources (no ImGui dependency)
@@ -589,6 +589,10 @@ if(NOT WIN32)
 
     # Export symbols so backtrace_symbols() can resolve function names in stack traces
     set_target_properties(SparkTests PROPERTIES ENABLE_EXPORTS ON)
+endif()
+
+if(WIN32)
+    target_sources(SparkTests PRIVATE TestWorldBasicRender.cpp)
 endif()
 
 # =============================================================================
