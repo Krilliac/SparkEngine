@@ -675,7 +675,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
 
     - name: Setup ccache
       uses: actions/cache@v6
@@ -705,7 +705,10 @@ jobs:
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" 2>&1 | tee cmake-configure.log
 
     - name: Build all targets
       run: |
@@ -939,6 +942,7 @@ jobs:
           -DENABLE_OPENGL=ON \
           -DENABLE_METAL=${{ matrix.enable_metal }} \
           -DENABLE_DXR=OFF \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
