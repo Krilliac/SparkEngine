@@ -881,7 +881,7 @@ namespace SparkEditor
         std::string result = "=== System Info ===\n";
 
 #if defined(__APPLE__)
-        struct utsname osInfo{};
+        struct utsname osInfo {};
         if (uname(&osInfo) == 0)
         {
             result += "OS: macOS " + std::string(osInfo.release) + " (" + osInfo.machine + ")\n";
@@ -931,7 +931,7 @@ namespace SparkEditor
             result += "RAM Total: " + std::to_string(totalMemoryBytes / (1024ULL * 1024ULL)) + " MiB\n";
         }
 #else
-        struct sysinfo si{};
+        struct sysinfo si {};
         if (sysinfo(&si) == 0)
         {
             const uint64_t totalBytes = static_cast<uint64_t>(si.totalram) * si.mem_unit;
