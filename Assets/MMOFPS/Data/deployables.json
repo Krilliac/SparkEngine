@@ -3,33 +3,57 @@
   "deployables": [
     {
       "id": "FabTurret",
-      "model": "Models/MMOFPS/props/antenna_a.obj",
-      "scale": [1.0, 1.0, 1.0]
+      "model": "Models/MMOFPS/props/dep_fabturret.obj",
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     },
     {
       "id": "FabAmmoPack",
-      "model": "Models/MMOFPS/props/crate_a.obj",
-      "scale": [0.7, 0.7, 0.7]
+      "model": "Models/MMOFPS/props/dep_ammopack.obj",
+      "scale": [
+        0.7,
+        0.7,
+        0.7
+      ]
     },
     {
       "id": "MedBeacon",
-      "model": "Models/MMOFPS/props/antenna_a.obj",
-      "scale": [0.5, 1.3, 0.5]
+      "model": "Models/MMOFPS/props/dep_medbeacon.obj",
+      "scale": [
+        0.5,
+        1.3,
+        0.5
+      ]
     },
     {
       "id": "ResupplyStation",
-      "model": "Models/MMOFPS/props/crate_a.obj",
-      "scale": [1.8, 1.4, 1.8]
+      "model": "Models/MMOFPS/props/dep_resupply.obj",
+      "scale": [
+        1.8,
+        1.4,
+        1.8
+      ]
     },
     {
       "id": "AVTurret",
-      "model": "Models/MMOFPS/props/antenna_a.obj",
-      "scale": [1.3, 1.6, 1.3]
+      "model": "Models/MMOFPS/props/dep_avturret_base.obj",
+      "scale": [
+        1.3,
+        1.6,
+        1.3
+      ]
     },
     {
       "id": "ShieldWall",
-      "model": "Models/MMOFPS/props/crate_a.obj",
-      "scale": [3.0, 2.0, 0.45]
+      "model": "Models/MMOFPS/props/dep_shieldwall.obj",
+      "scale": [
+        3.0,
+        2.0,
+        0.45
+      ]
     }
   ]
 }

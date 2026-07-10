@@ -1,0 +1,13 @@
+{
+    "name": "Structure_TrimColonial",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/structures/trim_colonial_color.png",
+    "normal": "Textures/MMOFPS/structures/trim_colonial_normal.png",
+    "metallic": 0.5,
+    "roughness": "Textures/MMOFPS/structures/trim_colonial_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}

@@ -1,0 +1,13 @@
+{
+    "name": "Vehicle_AUC",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/vehicles/vehicles_auc_color.png",
+    "normal": "Textures/MMOFPS/vehicles/vehicles_auc_normal.png",
+    "metallic": 0.45,
+    "roughness": "Textures/MMOFPS/vehicles/vehicles_auc_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}

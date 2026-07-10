@@ -1,0 +1,13 @@
+{
+    "name": "Terrain_Salt",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/terrain/salt_color.png",
+    "normal": "Textures/MMOFPS/terrain/salt_normal.png",
+    "metallic": 0,
+    "roughness": "Textures/MMOFPS/terrain/salt_roughness.png",
+    "ao": 1,
+    "tiling": [
+        64,
+        64
+    ]
+}

@@ -1,0 +1,13 @@
+{
+    "name": "Weapon_Common",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/weapons/weapons_common_color.png",
+    "normal": "Textures/MMOFPS/weapons/weapons_common_normal.png",
+    "metallic": 0.35,
+    "roughness": "Textures/MMOFPS/weapons/weapons_common_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}

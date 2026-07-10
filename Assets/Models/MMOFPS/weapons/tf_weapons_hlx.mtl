@@ -1,0 +1,9 @@
+# TERRAFRONT weapon atlas material — map_Kd resolved relative to this file's dir
+newmtl TF_Weapons_HLX
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.200 0.200 0.200
+Ns 64.0
+d 1.0
+illum 2
+map_Kd ../../../Textures/MMOFPS/weapons/weapons_hlx_color.png

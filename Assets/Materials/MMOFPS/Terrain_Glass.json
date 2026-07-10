@@ -1,0 +1,13 @@
+{
+    "name": "Terrain_Glass",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/terrain/glass_color.png",
+    "normal": "Textures/MMOFPS/terrain/glass_normal.png",
+    "metallic": 0,
+    "roughness": "Textures/MMOFPS/terrain/glass_roughness.png",
+    "ao": 1,
+    "tiling": [
+        64,
+        64
+    ]
+}

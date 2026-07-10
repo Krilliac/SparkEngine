@@ -1,0 +1,13 @@
+{
+    "name": "Structure_Sanctuary",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/structures/sanctuary_color.png",
+    "normal": "Textures/MMOFPS/structures/sanctuary_normal.png",
+    "metallic": 0.3,
+    "roughness": "Textures/MMOFPS/structures/sanctuary_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}

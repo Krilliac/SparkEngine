@@ -1,0 +1,13 @@
+{
+    "name": "Weapon_Mounted",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/weapons/weapons_mounted_color.png",
+    "normal": "Textures/MMOFPS/weapons/weapons_mounted_normal.png",
+    "metallic": 0.5,
+    "roughness": "Textures/MMOFPS/weapons/weapons_mounted_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}

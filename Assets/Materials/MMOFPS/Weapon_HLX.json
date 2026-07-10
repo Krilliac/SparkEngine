@@ -1,0 +1,13 @@
+{
+    "name": "Weapon_HLX",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/weapons/weapons_hlx_color.png",
+    "normal": "Textures/MMOFPS/weapons/weapons_hlx_normal.png",
+    "metallic": 0.25,
+    "roughness": "Textures/MMOFPS/weapons/weapons_hlx_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}

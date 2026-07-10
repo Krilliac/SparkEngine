@@ -1,0 +1,13 @@
+{
+    "name": "Structure_AlloyWorn",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/structures/alloy_worn_color.png",
+    "normal": "Textures/MMOFPS/structures/alloy_worn_normal.png",
+    "metallic": 0.6,
+    "roughness": "Textures/MMOFPS/structures/alloy_worn_roughness.png",
+    "ao": 1,
+    "tiling": [
+        8,
+        8
+    ]
+}

@@ -1,0 +1,13 @@
+{
+    "name": "Weapon_MRA",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/weapons/weapons_mra_color.png",
+    "normal": "Textures/MMOFPS/weapons/weapons_mra_normal.png",
+    "metallic": 0.4,
+    "roughness": "Textures/MMOFPS/weapons/weapons_mra_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}

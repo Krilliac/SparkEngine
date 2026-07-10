@@ -1,0 +1,13 @@
+{
+    "name": "Structure_AlloyDark",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/structures/alloy_dark_color.png",
+    "normal": "Textures/MMOFPS/structures/alloy_dark_normal.png",
+    "metallic": 0.7,
+    "roughness": "Textures/MMOFPS/structures/alloy_dark_roughness.png",
+    "ao": 1,
+    "tiling": [
+        8,
+        8
+    ]
+}

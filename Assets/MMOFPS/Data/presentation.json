@@ -11,7 +11,12 @@
         "Textures/MMOFPS/sky/space_nz.png"
       ],
       "scale": 2900.0,
-      "tint": [1.8, 1.8, 1.8, 1.0]
+      "tint": [
+        1.8,
+        1.8,
+        1.8,
+        1.0
+      ]
     },
     "terrain": {
       "texture": "Textures/MMOFPS/terrain/sand_color.png",
@@ -22,24 +27,68 @@
       "volume": 0.35
     },
     "viewmodel": {
-      "recenter": [-0.89, -0.10, 0.0],
+      "recenter": [
+        -0.89,
+        -0.1,
+        0.0
+      ],
       "scale": 0.26,
       "rotationYRad": -1.57079633,
-      "place": [0.28, -0.26, 0.9],
-      "gunmetal": [0.60, 0.62, 0.68, 1.0]
+      "place": [
+        0.28,
+        -0.26,
+        0.9
+      ],
+      "gunmetal": [
+        0.6,
+        0.62,
+        0.68,
+        1.0
+      ]
     },
     "muzzleFx": {
       "muzzleForwardM": 1.2,
-      "muzzleRightM": 0.30,
+      "muzzleRightM": 0.3,
       "muzzleUpM": -0.22,
       "tracerLenM": 60.0,
       "tracerThickM": 0.05,
       "tracerLifeSec": 0.08,
-      "tracerColor": [6.0, 5.0, 2.0, 1.0],
-      "flashScale": [0.22, 0.22, 0.30],
+      "tracerColor": [
+        6.0,
+        5.0,
+        2.0,
+        1.0
+      ],
+      "flashScale": [
+        0.22,
+        0.22,
+        0.3
+      ],
       "flashLifeSec": 0.05,
-      "flashColor": [8.0, 6.5, 2.5, 1.0]
+      "flashColor": [
+        8.0,
+        6.5,
+        2.5,
+        1.0
+      ]
     },
     "pawnMesh": "Models/MMOFPS/characters/soldier.obj"
+  },
+  "skybox": {
+    "faceTex": [
+      "Textures/MMOFPS/sky/veyra_px.png",
+      "Textures/MMOFPS/sky/veyra_nx.png",
+      "Textures/MMOFPS/sky/veyra_py.png",
+      "Textures/MMOFPS/sky/veyra_ny.png",
+      "Textures/MMOFPS/sky/veyra_pz.png",
+      "Textures/MMOFPS/sky/veyra_nz.png"
+    ],
+    "scale": 2900.0,
+    "tint": [
+      1.15,
+      1.12,
+      1.08,
+      1.0
+    ]
   }
 }

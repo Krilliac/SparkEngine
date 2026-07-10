@@ -1,0 +1,13 @@
+{
+    "name": "Weapon_AUC",
+    "shader": "PBR",
+    "albedo": "Textures/MMOFPS/weapons/weapons_auc_color.png",
+    "normal": "Textures/MMOFPS/weapons/weapons_auc_normal.png",
+    "metallic": 0.3,
+    "roughness": "Textures/MMOFPS/weapons/weapons_auc_roughness.png",
+    "ao": 1,
+    "tiling": [
+        1,
+        1
+    ]
+}
