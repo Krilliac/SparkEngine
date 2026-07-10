@@ -625,6 +625,12 @@ uint32_t PhysicsSystem::StepFixed(uint32_t stepCount, float interpolationAlpha)
     return steps;
 }
 
+void PhysicsSystem::OptimizeBroadPhase()
+{
+    if (m_joltSystem)
+        m_joltSystem->OptimizeBroadPhase();
+}
+
 void PhysicsSystem::UpdateMetrics()
 {
     if (!m_joltSystem)

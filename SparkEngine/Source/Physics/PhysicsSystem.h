@@ -166,6 +166,9 @@ class PhysicsSystem
      */
     uint32_t StepFixed(uint32_t stepCount, float interpolationAlpha = 1.0f);
 
+    /** @brief Optimize the Jolt broadphase after bulk static-body creation (level load). No-op without Jolt. */
+    void OptimizeBroadPhase();
+
     // =========================================================================
     // World settings
     // =========================================================================

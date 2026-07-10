@@ -3,6 +3,10 @@
 # Heightfield: procedural, params below (tf* keys) are parsed by
 # TFWorldSetup and MUST match TFTerrainParams defaults. Every object Y
 # equals its region plateau height so nothing floats or sinks.
+# EXCEPTION - mesa_* cliff cubes are sunk 1.0 m (top face = plateau - 1.0):
+# a top face exactly AT plateau height is coplanar with the procedural
+# terrain mesh (TFWorldSetup::DrawTerrain) and z-fights ("textures phase
+# in and out of the ground"). Keep the 1.0 m offset if editing mesa Y.
 
 [Scene]
 name=Cindral Wastes
@@ -48,7 +52,7 @@ tfPlateauOutpost=20.0
 
 [Object]
 type=cube
-position=2048.0,-110.0,3600.0
+position=2048.0,-111.0,3600.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_sky_north
@@ -164,7 +168,7 @@ name=spawn_sky_north_2
 
 [Object]
 type=cube
-position=560.0,-110.0,620.0
+position=560.0,-111.0,620.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_sky_sw
@@ -280,7 +284,7 @@ name=spawn_sky_sw_2
 
 [Object]
 type=cube
-position=3536.0,-110.0,620.0
+position=3536.0,-111.0,620.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_sky_se
@@ -396,7 +400,7 @@ name=spawn_sky_se_2
 
 [Object]
 type=cube
-position=1450.0,-130.0,3150.0
+position=1450.0,-131.0,3150.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_dustline
@@ -447,7 +451,7 @@ name=spawn_dustline_0
 
 [Object]
 type=cube
-position=2650.0,-130.0,3150.0
+position=2650.0,-131.0,3150.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_kiln
@@ -498,7 +502,7 @@ name=spawn_kiln_0
 
 [Object]
 type=cube
-position=1050.0,-130.0,2050.0
+position=1050.0,-131.0,2050.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_quarry
@@ -549,7 +553,7 @@ name=spawn_quarry_0
 
 [Object]
 type=cube
-position=1350.0,-120.0,1350.0
+position=1350.0,-121.0,1350.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_sunder
@@ -670,7 +674,7 @@ name=spawn_sunder_0
 
 [Object]
 type=cube
-position=3050.0,-130.0,2050.0
+position=3050.0,-131.0,2050.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_glasswind
@@ -721,7 +725,7 @@ name=spawn_glasswind_0
 
 [Object]
 type=cube
-position=2750.0,-120.0,1350.0
+position=2750.0,-121.0,1350.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_redoubt
@@ -842,7 +846,7 @@ name=spawn_redoubt_0
 
 [Object]
 type=cube
-position=2048.0,-124.0,2048.0
+position=2048.0,-125.0,2048.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_fluxwell
@@ -979,7 +983,7 @@ name=spawn_fluxwell_0
 
 [Object]
 type=cube
-position=2048.0,-130.0,900.0
+position=2048.0,-131.0,900.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_mirage
@@ -1030,7 +1034,7 @@ name=spawn_mirage_0
 
 [Object]
 type=cube
-position=1100.0,-130.0,950.0
+position=1100.0,-131.0,950.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_saltcrown
@@ -1081,7 +1085,7 @@ name=spawn_saltcrown_0
 
 [Object]
 type=cube
-position=3000.0,-130.0,950.0
+position=3000.0,-131.0,950.0
 scale=300.0,300.0,300.0
 material=Assets/Materials/MMOFPS/Structure_Concrete.json
 name=mesa_hollowmark

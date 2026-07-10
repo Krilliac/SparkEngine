@@ -382,6 +382,16 @@ namespace Terrafront
         TFMoveStep(mstate, minput, runSpeed, sprintSpeed, dt,
                    [this](float x, float z) { return m_ctx->world ? m_ctx->world->TerrainHeightAt(x, z) : 0.0f; });
 
+        // 2026-07-10 collision wave: block/slide against the static scene
+        // bodies + terrain re-clamp at the resolved column. MUST stay the
+        // exact mirror of TFClientNet::SimulateMove (same shared resolver,
+        // TFWorldSetup::ResolveMoveCollision) or prediction rubber-bands.
+        if (m_ctx->world)
+        {
+            const float prevPos[3] = {ms.pos[0], ms.pos[1], ms.pos[2]};
+            m_ctx->world->ResolveMoveCollision(prevPos, mstate.pos, mstate.vel);
+        }
+
         ms.pos[0] = mstate.pos[0];
         ms.pos[1] = mstate.pos[1];
         ms.pos[2] = mstate.pos[2];
