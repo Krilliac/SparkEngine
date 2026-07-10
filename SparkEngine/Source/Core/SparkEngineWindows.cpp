@@ -835,7 +835,9 @@ static void LoadAndInitModules(LPWSTR lpCmdLine)
 static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
 {
     InitEngineContext();
+    SPARK_HEARTBEAT();
     InitGameplaySubsystems();
+    SPARK_HEARTBEAT();
 
     auto& console = Spark::SimpleConsole::GetInstance();
 
@@ -887,7 +889,9 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
         }
     }
 
+    SPARK_HEARTBEAT();
     LoadAndInitModules(lpCmdLine);
+    SPARK_HEARTBEAT();
 
     if (GetEngineRuntime().graphics)
         Spark::Graphics::RegisterGraphicsConsoleCommands(*GetEngineRuntime().graphics);
@@ -895,7 +899,13 @@ static void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
                                          GetEngineRuntime().moduleHotReload.get());
     Spark::SubsystemFaultIsolator::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+    // Init is done — switch the startup watchdog (started in wWinMain with
+    // lenient thresholds) over to the tighter runtime config and clear any
+    // recovery flag a slow init stage may have raised.
+    Spark::FreezeDetector::GetInstance().Stop();
+    Spark::FreezeDetector::GetInstance().Configure(Spark::FreezeDetectorConfig{});
     Spark::FreezeDetector::GetInstance().Start();
+    Spark::FreezeDetector::GetInstance().AcknowledgeRecovery();
     Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
     Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
@@ -1181,9 +1191,26 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
         return -1;
     }
 
+    // Start the freeze watchdog BEFORE window/graphics init so a wedge during
+    // device creation or module load produces a log/dump instead of a silent
+    // "frozen" window. Thresholds are lenient here — slow driver init is
+    // normal — and terminateOnFreeze is off so a slow-but-alive init is never
+    // killed. Reconfigured to runtime thresholds at the end of
+    // InitializeWindowedSubsystems.
+    {
+        Spark::FreezeDetectorConfig startupCfg;
+        startupCfg.warningThresholdSec = 10.0f;
+        startupCfg.recoveryThresholdSec = 30.0f;
+        startupCfg.crashThresholdSec = 120.0f;
+        startupCfg.terminateOnFreeze = false;
+        Spark::FreezeDetector::GetInstance().Configure(startupCfg);
+        Spark::FreezeDetector::GetInstance().Start();
+    }
+
     // Create window and init graphics/input/timer
     if (!InitInstance(hInstance, nCmdShow))
         return -1;
+    SPARK_HEARTBEAT();
 
     // Initialize all engine subsystems, load modules, register commands
     InitializeWindowedSubsystems(hInstance, lpCmdLine);
@@ -1289,13 +1316,31 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_KEYDOWN:
     case WM_KEYUP:
+        if (GetEngineRuntime().input)
+        {
+            // While gameplay owns the mouse (FPS look mode) it keeps the
+            // keyboard too; otherwise a focused ImGui text field eats keys.
+            if (GetEngineRuntime().input->IsMouseCaptured() || !Spark::GameImGui::WantsKeyboard())
+                GetEngineRuntime().input->HandleMessage(msg, wParam, lParam);
+        }
+        break;
+
     case WM_MOUSEMOVE:
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP:
     case WM_RBUTTONDOWN:
     case WM_RBUTTONUP:
         if (GetEngineRuntime().input)
-            GetEngineRuntime().input->HandleMessage(msg, wParam, lParam);
+        {
+            // Clicks on HUD widgets must not fall through into gameplay
+            // capture — but once gameplay has captured the mouse it keeps
+            // receiving input even if ImGui windows sit under the hidden
+            // cursor. Button-up always flows so gameplay never sees a
+            // stuck-down button when ImGui grabs capture mid-press.
+            const bool buttonUp = (msg == WM_LBUTTONUP || msg == WM_RBUTTONUP);
+            if (GetEngineRuntime().input->IsMouseCaptured() || buttonUp || !Spark::GameImGui::WantsMouse())
+                GetEngineRuntime().input->HandleMessage(msg, wParam, lParam);
+        }
         break;
 
     case WM_SIZE:

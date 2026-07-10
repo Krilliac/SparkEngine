@@ -95,7 +95,7 @@ ICF-folded. Adding `const` back is a silent Release-only correctness bug.
 **How to add a subsystem correctly:**
 1. Add the owning `std::unique_ptr<T>` field to `EngineRuntime` (or, for
    optional/feature-gated systems, guard it like `physics` is behind
-   `SPARK_BULLET_PHYSICS_AVAILABLE`).
+   `SPARK_JOLT_PHYSICS_AVAILABLE`).
 2. Create it during startup (`SparkEngine.cpp` /
    `SparkEngine{Windows,Linux}.cpp`) and register the raw pointer:
    `ctx.RegisterSystem<T>(ptr)` or a named `SetX()`.

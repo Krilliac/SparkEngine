@@ -100,7 +100,20 @@ class Console
     {
         visible = !visible;
 #ifdef SPARK_PLATFORM_WINDOWS
-        ShowCursor(visible);
+        // ShowCursor is a display counter, not a boolean — drive it to the
+        // target state instead of trusting a single increment/decrement.
+        if (visible)
+        {
+            while (ShowCursor(TRUE) < 0)
+            {
+            }
+        }
+        else
+        {
+            while (ShowCursor(FALSE) >= 0)
+            {
+            }
+        }
 #endif
     }
 

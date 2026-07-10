@@ -831,7 +831,12 @@ void InputManager::CaptureMouse(bool capture)
         if (!m_mouseCaptured)
         {
             SetCapture(m_hwnd);
-            ShowCursor(FALSE);
+            // ShowCursor is a display counter, not a boolean — drive it all
+            // the way to the hidden state (count < 0) regardless of how many
+            // times other code has shown/hidden the cursor.
+            while (ShowCursor(FALSE) >= 0)
+            {
+            }
             m_mouseCaptured = true;
             Spark::SimpleConsole::GetInstance().Log("Mouse captured.", "INFO");
         }
@@ -841,7 +846,10 @@ void InputManager::CaptureMouse(bool capture)
         if (m_mouseCaptured)
         {
             ReleaseCapture();
-            ShowCursor(TRUE);
+            // Drive the display counter back to visible (count >= 0).
+            while (ShowCursor(TRUE) < 0)
+            {
+            }
             m_mouseCaptured = false;
             Spark::SimpleConsole::GetInstance().Log("Mouse capture released.", "INFO");
         }

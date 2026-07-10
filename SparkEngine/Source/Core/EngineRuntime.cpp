@@ -17,7 +17,7 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "Utils/Timer.h"
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
 

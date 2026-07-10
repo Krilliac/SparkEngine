@@ -54,7 +54,7 @@ struct EngineRuntime
     std::unique_ptr<AudioEngine> audioEngine;
     std::unique_ptr<Spark::Audio::IAudioBackend> audioBackend;
     std::unique_ptr<Spark::ModuleHotReloadManager> moduleHotReload;
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
     std::unique_ptr<PhysicsSystem> physics;
 #endif
 };

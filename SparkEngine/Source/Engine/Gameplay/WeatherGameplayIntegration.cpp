@@ -6,7 +6,7 @@
 #include "WeatherGameplayIntegration.h"
 #include "../../Utils/LogMacros.h"
 
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
 #include "../../Physics/PhysicsSystem.h"
 #endif
 
@@ -91,7 +91,7 @@ namespace Spark::Gameplay
 
     void WeatherGameplayIntegration::UpdateWindForces(const WeatherSystem* weather, PhysicsSystem* physics)
     {
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
         if (!physics)
             return;
 

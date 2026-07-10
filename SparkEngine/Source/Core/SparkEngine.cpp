@@ -70,7 +70,7 @@
 #include "Engine/Networking/WorldServer.h"
 #include "Engine/Networking/DedicatedServer.h"
 #endif
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
 
@@ -131,7 +131,7 @@ extern bool g_minimalInit;
 
 void InitPhysics()
 {
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
     ASSERT_NOT_NULL(EngineContext::Get());
     auto& rt = GetEngineRuntime();
     rt.physics = std::make_unique<PhysicsSystem>();
@@ -213,7 +213,7 @@ void InitConsole()
 
 void ShutdownPhysics()
 {
-#ifdef SPARK_BULLET_PHYSICS_AVAILABLE
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
     auto& rt = GetEngineRuntime();
     if (rt.physics)
     {

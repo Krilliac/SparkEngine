@@ -240,8 +240,8 @@ namespace Spark::Core::Lifecycle
         auto& console = Spark::SimpleConsole::GetInstance();
         int missingCount = 0;
 
-#ifndef SPARK_BULLET_PHYSICS_AVAILABLE
-        console.LogWarning("[MISSING MODULE] Bullet Physics — rigid body simulation, collision detection, and "
+#ifndef SPARK_JOLT_PHYSICS_AVAILABLE
+        console.LogWarning("[MISSING MODULE] Jolt Physics — rigid body simulation, collision detection, and "
                            "raycasting are DISABLED.");
         console.LogWarning(
             "                 Physics-dependent features (gravity, projectiles, triggers) will not function.");

@@ -135,6 +135,16 @@ namespace Spark::GameImGui
         return ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam) != 0;
     }
 
+    bool WantsMouse()
+    {
+        return g_initialized && ImGui::GetIO().WantCaptureMouse;
+    }
+
+    bool WantsKeyboard()
+    {
+        return g_initialized && ImGui::GetIO().WantCaptureKeyboard;
+    }
+
 #else // !SPARK_HAS_IMGUI — stubs so the exe links when ImGui is absent
 
     bool Init(HWND, ID3D11Device*, ID3D11DeviceContext*)
@@ -155,6 +165,14 @@ namespace Spark::GameImGui
         *outUserData = nullptr;
     }
     bool HandleWndProc(HWND, UINT, WPARAM, LPARAM)
+    {
+        return false;
+    }
+    bool WantsMouse()
+    {
+        return false;
+    }
+    bool WantsKeyboard()
     {
         return false;
     }

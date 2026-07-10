@@ -57,6 +57,13 @@ namespace Spark::GameImGui
     /// Forward a window message to the ImGui Win32 backend.
     /// Returns true if ImGui consumed the message.
     bool HandleWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+    /// True when ImGui wants exclusive mouse input (hovering/interacting with
+    /// a widget) — gameplay should not react to mouse messages this frame.
+    bool WantsMouse();
+
+    /// True when ImGui wants exclusive keyboard input (text field focused).
+    bool WantsKeyboard();
 } // namespace Spark::GameImGui
 
 #endif // SPARK_PLATFORM_WINDOWS
