@@ -176,10 +176,12 @@ namespace SparkEditor
         m_projectBrowserPanel = std::make_shared<ProjectBrowserPanel>(m_projectManager.get());
         m_projectBrowserPanel->Initialize();
 
-        // Undo/redo
-        console.LogInfo("Initializing undo/redo manager...");
-        m_undoRedoManager = std::make_unique<UndoRedoManager>();
-        console.LogSuccess("Undo/redo manager initialized");
+        // Undo/redo — the editor uses the single process-wide
+        // UndoRedoManager::GetInstance() (wrapped by CommandHistory), which is
+        // the history SwapWorld() clears before freeing the old World. No
+        // per-EditorUI instance: a second history would silently miss that
+        // clear and its commands could dangle into a freed World.
+        console.LogInfo("Undo/redo: using process-wide CommandHistory singleton");
 
         // Prefab manager
         console.LogInfo("Initializing prefab manager...");
@@ -774,8 +776,16 @@ namespace SparkEditor
             console.LogSuccess("Layout manager shutdown complete");
         }
 
-        // Reset other systems
-        m_undoRedoManager.reset();
+        // Retire the document World through the same SwapWorld() funnel as
+        // OpenScene()/init: the process-lifetime CommandHistory singleton
+        // outlives this EditorUI, so its commands (which may close over raw
+        // entities of m_world) must be cleared BEFORE the World is freed —
+        // otherwise a later editor re-init could Undo into freed memory.
+        // m_panels is already empty here, so the rewire step is a no-op.
+        SwapWorld(nullptr);
+
+        // Reset other systems (the undo/redo history is the process-lifetime
+        // singleton, already cleared via SwapWorld(nullptr) above)
         m_commandPalette.reset();
 
         // Note: Don't shutdown crash handler here as it's managed elsewhere
@@ -1612,24 +1622,36 @@ namespace SparkEditor
             return;
         }
 
-        // Ctrl+Z: Undo
-        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && !io.KeyShift)
+        // Undo/redo shortcuts operate on the process-wide CommandHistory —
+        // the same history every edit surface (Inspector, Hierarchy, Gizmo)
+        // executes into and the one SwapWorld() clears on scene replacement.
+        // Skipped while a text field is capturing input so typing Ctrl+Z in
+        // an ImGui InputText doesn't also undo scene edits.
+        if (!io.WantTextInput)
         {
-            if (m_undoRedoManager && m_undoRedoManager->CanUndo())
-            {
-                m_undoRedoManager->Undo();
-                ShowNotification("Undo: " + m_undoRedoManager->GetRedoDescription(), "info", 1.5f);
-            }
-        }
+            auto& history = Spark::Editor::CommandHistory::GetInstance();
 
-        // Ctrl+Y or Ctrl+Shift+Z: Redo
-        if ((io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) ||
-            (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z)))
-        {
-            if (m_undoRedoManager && m_undoRedoManager->CanRedo())
+            // Ctrl+Z: Undo
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && !io.KeyShift)
             {
-                m_undoRedoManager->Redo();
-                ShowNotification("Redo: " + m_undoRedoManager->GetUndoDescription(), "info", 1.5f);
+                if (history.CanUndo())
+                {
+                    history.Undo();
+                    // The just-undone command is now the top of the redo stack.
+                    ShowNotification("Undo: " + history.GetRedoDescription(), "info", 1.5f);
+                }
+            }
+
+            // Ctrl+Y or Ctrl+Shift+Z: Redo
+            if ((io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) ||
+                (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z)))
+            {
+                if (history.CanRedo())
+                {
+                    history.Redo();
+                    // The just-redone command is now the top of the undo stack.
+                    ShowNotification("Redo: " + history.GetUndoDescription(), "info", 1.5f);
+                }
             }
         }
 

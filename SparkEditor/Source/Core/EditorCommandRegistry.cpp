@@ -82,25 +82,29 @@ namespace SparkEditor
 
     void EditorUI::RegisterEditCommands()
     {
-        // Undo / redo
+        // Undo / redo — route through the process-wide CommandHistory, the
+        // same history every edit surface executes into and the one
+        // SwapWorld() clears on scene replacement.
         m_commandPalette->RegisterAction(
             "Undo", "Command",
-            [this]()
+            []()
             {
-                if (m_undoRedoManager && m_undoRedoManager->CanUndo())
+                auto& history = Spark::Editor::CommandHistory::GetInstance();
+                if (history.CanUndo())
                 {
-                    m_undoRedoManager->Undo();
+                    history.Undo();
                 }
             },
             "Ctrl+Z");
 
         m_commandPalette->RegisterAction(
             "Redo", "Command",
-            [this]()
+            []()
             {
-                if (m_undoRedoManager && m_undoRedoManager->CanRedo())
+                auto& history = Spark::Editor::CommandHistory::GetInstance();
+                if (history.CanRedo())
                 {
-                    m_undoRedoManager->Redo();
+                    history.Redo();
                 }
             },
             "Ctrl+Y");

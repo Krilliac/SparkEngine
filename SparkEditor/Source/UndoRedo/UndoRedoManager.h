@@ -167,7 +167,6 @@ namespace SparkEditor
         std::vector<std::unique_ptr<EditorCommand>> m_redoStack;
 
         size_t m_maxStackDepth = 100;
-        size_t m_savedIndex = 0;
 
         // Monotonic dirty-tracking counter: m_editSequence increments on every
         // mutating op (execute/merge/undo/redo); MarkSaved snapshots it into

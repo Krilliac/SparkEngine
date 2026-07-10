@@ -187,30 +187,35 @@ namespace SparkEditor
         if (!ImGui::BeginMenu("Edit"))
             return;
 
-        bool canUndo = m_undoRedoManager && m_undoRedoManager->CanUndo();
-        bool canRedo = m_undoRedoManager && m_undoRedoManager->CanRedo();
+        // Operates on the process-wide CommandHistory — the same history the
+        // edit surfaces execute into and the one SwapWorld() clears.
+        auto& history = Spark::Editor::CommandHistory::GetInstance();
+        const bool canUndo = history.CanUndo();
+        const bool canRedo = history.CanRedo();
+        const std::string undoDesc = history.GetUndoDescription();
+        const std::string redoDesc = history.GetRedoDescription();
         std::string undoLabel = "Undo";
         std::string redoLabel = "Redo";
         if (canUndo)
         {
-            undoLabel += " (" + m_undoRedoManager->GetUndoDescription() + ")";
+            undoLabel += " (" + undoDesc + ")";
         }
         if (canRedo)
         {
-            redoLabel += " (" + m_undoRedoManager->GetRedoDescription() + ")";
+            redoLabel += " (" + redoDesc + ")";
         }
 
         if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, canUndo))
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Undo: %s", m_undoRedoManager->GetUndoDescription().c_str());
-            m_undoRedoManager->Undo();
-            ShowNotification("Undo: " + m_undoRedoManager->GetUndoDescription(), "info");
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Undo: %s", undoDesc.c_str());
+            history.Undo();
+            ShowNotification("Undo: " + undoDesc, "info");
         }
         if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, canRedo))
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Redo: %s", m_undoRedoManager->GetRedoDescription().c_str());
-            m_undoRedoManager->Redo();
-            ShowNotification("Redo: " + m_undoRedoManager->GetRedoDescription(), "info");
+            SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Redo: %s", redoDesc.c_str());
+            history.Redo();
+            ShowNotification("Redo: " + redoDesc, "info");
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Cut", "Ctrl+X"))

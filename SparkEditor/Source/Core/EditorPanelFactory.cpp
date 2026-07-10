@@ -127,7 +127,10 @@ namespace SparkEditor
         tryRegister("Physics2D", [&] { return std::make_shared<Physics2DPanel>(); });
         tryRegister("Physics3D", [&] { return std::make_shared<Physics3DPanel>(); });
 
-        tryRegister("UndoHistory", [&] { return std::make_shared<UndoHistoryPanel>(m_undoRedoManager.get()); });
+        // Display the process-wide undo/redo history (the singleton wrapped by
+        // CommandHistory) — the panel would show a permanently empty stack if
+        // it were pointed at any other UndoRedoManager instance.
+        tryRegister("UndoHistory", [&] { return std::make_shared<UndoHistoryPanel>(&UndoRedoManager::GetInstance()); });
         tryRegister("PrefabEditor", [&] { return std::make_shared<PrefabEditorPanel>(m_prefabManager.get()); });
     }
 

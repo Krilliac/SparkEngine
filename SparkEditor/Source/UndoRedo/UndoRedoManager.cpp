@@ -172,13 +172,14 @@ namespace SparkEditor
     {
         m_undoStack.clear();
         m_redoStack.clear();
-        m_savedIndex = 0;
+        // Note: m_editSequence/m_savedSequence are deliberately untouched —
+        // clearing the history does not revert document edits, so the
+        // unsaved-changes state must survive a history clear.
         NotifyStackChanged();
     }
 
     void UndoRedoManager::MarkSaved()
     {
-        m_savedIndex = m_undoStack.size();
         m_savedSequence = m_editSequence;
     }
 
@@ -205,10 +206,6 @@ namespace SparkEditor
         while (m_undoStack.size() > m_maxStackDepth)
         {
             m_undoStack.erase(m_undoStack.begin());
-            if (m_savedIndex > 0)
-            {
-                --m_savedIndex;
-            }
         }
     }
 

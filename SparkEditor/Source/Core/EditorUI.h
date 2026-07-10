@@ -89,7 +89,14 @@ namespace SparkEditor
         EditorLogger* GetLogger() const { return m_logger.get(); }
         EditorCrashHandler* GetCrashHandler() const { return m_crashHandler; }
         ProjectManager* GetProjectManager() { return m_projectManager.get(); }
-        UndoRedoManager* GetUndoRedoManager() { return m_undoRedoManager.get(); }
+        /// @brief The single process-wide undo/redo history — the same
+        /// UndoRedoManager singleton that Spark::Editor::CommandHistory wraps
+        /// and that SwapWorld() clears before freeing the old World. All undo
+        /// surfaces (Ctrl+Z, Edit menu, command palette, UndoHistory panel)
+        /// MUST operate on this instance; a second private instance would be
+        /// invisible to SwapWorld()'s history-clear and re-open the
+        /// use-after-free window on scene replacement.
+        UndoRedoManager* GetUndoRedoManager() { return &UndoRedoManager::GetInstance(); }
         PrefabManager* GetPrefabManager() { return m_prefabManager.get(); }
         CommandPalette* GetCommandPalette() { return m_commandPalette.get(); }
         GizmoSystem* GetGizmoSystem() { return m_gizmoSystem.get(); }
@@ -182,7 +189,7 @@ namespace SparkEditor
             // hierarchy create/delete/duplicate/rename/reparent, Inspector
             // property edits, gizmo drags -- routes through
             // Spark::Editor::CommandHistory::Execute(), which maintains a
-            // precise saved-index-based dirty flag (IsModified()) independent
+            // precise monotonic-sequence dirty flag (IsModified()) independent
             // of which UI surface triggered the command. OR the two together
             // so no edit path can under-report unsaved changes.
             return m_sceneModified || Spark::Editor::CommandHistory::GetInstance().IsModified();
@@ -203,7 +210,6 @@ namespace SparkEditor
         EditorCrashHandler* m_crashHandler = nullptr;
         std::unique_ptr<ProjectManager> m_projectManager;
         std::shared_ptr<ProjectBrowserPanel> m_projectBrowserPanel;
-        std::unique_ptr<UndoRedoManager> m_undoRedoManager;
         std::unique_ptr<PrefabManager> m_prefabManager;
         std::unique_ptr<CommandPalette> m_commandPalette;
 
