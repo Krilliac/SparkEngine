@@ -70,6 +70,12 @@ namespace Terrafront
         bool IsActive() const { return m_physics != nullptr && !m_bodies.empty(); }
         size_t BodyCount() const { return m_bodies.size(); }
 
+        /// Number of ResolveMove calls that hit a static body (blocked or slid)
+        /// since Build(). Monotonic; game-thread only. The chaos-validation
+        /// harness (tf_validate) diffs this across a run to prove bot movement
+        /// actually interacts with the collision world.
+        uint64_t BlockedMoveCount() const { return m_blockedMoves; }
+
         /// Post-TFMoveStep collision resolve — THE shared client/server hook.
         /// Sweeps the pawn capsule (Movement mask) along the horizontal part of
         /// prevPos -> pos and slides along blocking geometry; pos/vel are
@@ -94,6 +100,11 @@ namespace Terrafront
 
         ::PhysicsSystem* m_physics{nullptr}; // engine-owned; reached via IEngineContext
         std::vector<std::shared_ptr<::PhysicsBody>> m_bodies;
+
+        /// ResolveMove is const (shared client/server hook) — the diagnostic
+        /// counter is mutable bookkeeping, not simulation state, so mutating it
+        /// there cannot affect determinism.
+        mutable uint64_t m_blockedMoves{0};
     };
 
 } // namespace Terrafront

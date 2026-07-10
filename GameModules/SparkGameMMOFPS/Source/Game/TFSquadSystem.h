@@ -76,6 +76,45 @@ namespace Terrafront
         /// For TF_SpawnReply{reason=timer, respawnDelay}.
         float SquadSpawnCooldownRemaining(PlayerId requester) const;
 
+        // --- chat-social lane additions (additive; server stays authoritative) --
+
+        /// Read-only copy of the LOCAL player's squad mirror for external UI
+        /// (TFSocialPanel squad tab). Valid on every role: on the authority the
+        /// local player's mirror is fed directly by SendEchoTo.
+        struct LocalSquadView
+        {
+            SquadId squad = kInvalidSquad;
+            PlayerId leader = kInvalidPlayer;
+            std::vector<PlayerId> members;
+            bool hasWaypoint = false;
+            float wp[3]{};
+            SquadId inviteSquad = kInvalidSquad; // pending invite (if any)
+            PlayerId inviteFrom = kInvalidPlayer;
+        };
+
+        LocalSquadView GetLocalSquadView() const
+        {
+            LocalSquadView v;
+            v.squad = m_mirror.squad;
+            v.leader = m_mirror.leader;
+            v.members = m_mirror.members;
+            v.hasWaypoint = m_mirror.hasWaypoint;
+            v.wp[0] = m_mirror.wp[0];
+            v.wp[1] = m_mirror.wp[1];
+            v.wp[2] = m_mirror.wp[2];
+            v.inviteSquad = m_mirror.inviteSquad;
+            v.inviteFrom = m_mirror.inviteFrom;
+            return v;
+        }
+
+        /// External-UI entry to the existing (private) SendOp routing — direct
+        /// server call on listen host / standalone, TFClientNet::SendMsg on pure
+        /// clients. Same validation path as the debug-panel buttons.
+        void UiSendOp(SquadOp op, PlayerId target = kInvalidPlayer, const float* wp = nullptr)
+        {
+            SendOp(op, target, wp);
+        }
+
       private:
         // --- server registry ---
         struct Squad

@@ -18,6 +18,9 @@
 #include "Game/TFDirectiveSystem.h"   // W6 directives: disconnect progress sweep
 #include "Game/TFVehicleSystem.h"     // TF-W3: seat routing + seated-pawn ride sync
 #include "Game/TFWeaponSystem.h"
+#include "Game/TFOutfitSystem.h"  // Outfits lane: OutfitRequest routing + session hooks
+#include "Game/TFRedeployRules.h" // W7 ui-map-keys: redeploy validation
+#include "Net/TFRedeployProtocol.h"
 
 #include "Engine/ECS/Components.h"
 #include "Spark/IEngineContext.h"
@@ -534,8 +537,9 @@ namespace Terrafront
         // entirely -- an unauthenticated/pre-enter-world client could seat a
         // vehicle, toggle Aegis, or spam squad ops. They now go through the same
         // choke point as the other gameplay ids.
-        for (TFMsg id : {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent, TFMsg::FactionSelect,
-                         TFMsg::VehicleEnter, TFMsg::VehicleExit, TFMsg::AegisDeploy, TFMsg::SquadMsg})
+        for (TFMsg id :
+             {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent, TFMsg::FactionSelect, TFMsg::VehicleEnter,
+              TFMsg::VehicleExit, TFMsg::AegisDeploy, TFMsg::SquadMsg, TFMsg::RedeployRequest})
         {
             route(id, [this, id](const NetworkMessage& m)
                   { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
@@ -548,6 +552,10 @@ namespace Terrafront
             route(id, [this, id](const NetworkMessage& m)
                   { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
         }
+
+        // Outfits lane: enter-world-gated like the other gameplay ids.
+        route(TFMsg::OutfitRequest, [this](const NetworkMessage& m)
+              { RouteClientMessage(m.senderID, TFMsg::OutfitRequest, m.payload.data(), m.payload.size()); });
 
         route(TFMsg::ChatMsg, [this](const NetworkMessage& m)
               { RouteClientMessage(m.senderID, TFMsg::ChatMsg, m.payload.data(), m.payload.size()); });
@@ -572,11 +580,11 @@ namespace Terrafront
         // so no dangling `this` survives module shutdown.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (TFMsg id :
-             {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent, TFMsg::FactionSelect, TFMsg::LoadoutChange,
-              TFMsg::UnlockRequest, TFMsg::SquadMsg, TFMsg::ChatMsg, TFMsg::VehicleEnter, TFMsg::VehicleExit,
-              TFMsg::AegisDeploy, TFMsg::LoginRequest, TFMsg::RegisterRequest, TFMsg::CharListRequest,
-              TFMsg::CharCreateReq, TFMsg::CharDeleteReq, TFMsg::EnterWorldReq})
+        for (TFMsg id : {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent, TFMsg::FactionSelect,
+                         TFMsg::LoadoutChange, TFMsg::UnlockRequest, TFMsg::SquadMsg, TFMsg::ChatMsg,
+                         TFMsg::VehicleEnter, TFMsg::VehicleExit, TFMsg::AegisDeploy, TFMsg::LoginRequest,
+                         TFMsg::RegisterRequest, TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq,
+                         TFMsg::EnterWorldReq, TFMsg::RedeployRequest, TFMsg::OutfitRequest})
         {
             nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                [](const Spark::Net::NetworkMessage&) {});
@@ -629,6 +637,7 @@ namespace Terrafront
         m_deathTime.erase(id);
         m_enteredWorld.erase(id);
         m_chatNextAt.erase(id);
+        m_redeployNextAt.erase(id); // W7 ui-map-keys
         // W5 onboarding (Task 6): flush the active character's progress
         // one last time before dropping the session (DESIGN.md W5 "Error
         // handling": "On disconnect, flush the active character's
@@ -651,6 +660,9 @@ namespace Terrafront
         // W6 directives: same recycled-PlayerId hygiene for directive progress.
         if (m_ctx->directives)
             m_ctx->directives->ClearPlayer(id);
+        // Outfits lane: drop the player->charId binding + roster/tag interest.
+        if (m_ctx->outfits)
+            m_ctx->outfits->ServerOnPlayerLeft(id);
         if (m_ctx->account)
             m_ctx->account->ClearSession(id);
     }
@@ -892,6 +904,53 @@ namespace Terrafront
         SetPlayerFaction(sender, static_cast<FactionId>(sel.faction));
     }
 
+    // W7 ui-map-keys: alive-pawn redeploy — server-authoritative teleport to a
+    // friendly, non-contested, lattice-linked region's spawn point. Countdown
+    // is client UX only; the anti-abuse control here is the per-player interval.
+    void TFServerSim::HandleRedeployRequest(PlayerId sender, const void* data, size_t size)
+    {
+        if (size != sizeof(TF_RedeployRequest) || sender == Spark::Net::INVALID_CLIENT)
+        {
+            ++m_badPackets;
+            return;
+        }
+        TF_RedeployRequest rq;
+        std::memcpy(&rq, data, sizeof(rq));
+
+        TF_RedeployReply rep{};
+        rep.regionId = rq.regionId;
+
+        const FactionId faction = GetPlayerFaction(sender);
+        rep.reason = TFRedeployRules::CanRedeploy(*m_ctx, sender, faction, rq.regionId);
+
+        if (rep.reason == kTFRedeployOk)
+        {
+            if (auto it = m_redeployNextAt.find(sender); it != m_redeployNextAt.end() && m_serverTime < it->second)
+            {
+                rep.reason = kTFRedeployCooldown;
+                rep.cooldownSec = static_cast<float>(it->second - m_serverTime);
+            }
+        }
+
+        float pos[3]{};
+        float yaw = 0.0f;
+        if (rep.reason == kTFRedeployOk && !TFRedeployRules::ResolveSpawnPos(*m_ctx, rq.regionId, faction, pos, yaw))
+            rep.reason = kTFRedeployBadRegion;
+
+        if (rep.reason == kTFRedeployOk)
+        {
+            TeleportPawn(sender, pos[0], pos[1], pos[2]);
+            m_redeployNextAt[sender] = m_serverTime + TFRedeployRules::kTFRedeployIntervalSec;
+            rep.accepted = 1;
+            rep.posX = pos[0];
+            rep.posY = pos[1];
+            rep.posZ = pos[2];
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] redeploy: p%u -> region %u", sender,
+                           static_cast<unsigned>(rq.regionId));
+        }
+        SendToPlayer(sender, static_cast<uint16_t>(TFMsg::RedeployReply), &rep, sizeof(rep), true);
+    }
+
     void TFServerSim::SendSpawnReply(PlayerId player, const TF_SpawnReply& reply)
     {
         SendToPlayer(player, static_cast<uint16_t>(TFMsg::SpawnReply), &reply, sizeof(reply), true);
@@ -951,6 +1010,8 @@ namespace Terrafront
         case TFMsg::ChatMsg:
         case TFMsg::LoadoutChange:
         case TFMsg::UnlockRequest:
+        case TFMsg::RedeployRequest: // W7 ui-map-keys: MUST be gated
+        case TFMsg::OutfitRequest:   // Outfits lane: gated like the other gameplay ids
             if (!m_enteredWorld.contains(sender))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -994,6 +1055,15 @@ namespace Terrafront
             break;
         case TFMsg::FactionSelect:
             HandleFactionSelect(sender, data, size);
+            break;
+        // W7 ui-map-keys: server-validated map redeploy.
+        case TFMsg::RedeployRequest:
+            HandleRedeployRequest(sender, data, size);
+            break;
+        // Outfits lane: TFOutfitSystem size-validates, applies rank policy and replies.
+        case TFMsg::OutfitRequest:
+            if (m_ctx->outfits)
+                m_ctx->outfits->ServerHandleOutfitMsgRaw(sender, data, size);
             break;
         // final-review #3: vehicle/squad verbs, now gated the same as the
         // other gameplay ids above.
@@ -1371,6 +1441,10 @@ namespace Terrafront
         // back to that default -- silent data loss for a returning character.
         if (m_ctx->progression)
             m_ctx->progression->ServerLoadCharacter(sender, rec.xp, rec.rank, rec.flux);
+        // Outfits lane: bind player->character so tag/roster delivery happens at
+        // enter-world instead of waiting for the first-spawn fallback.
+        if (m_ctx->outfits)
+            m_ctx->outfits->ServerOnCharacterEntered(sender, rec.id, rec.name);
         SendWorldWelcome(sender);
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] player %u entered world as character %llu (%s)", sender,
                        static_cast<unsigned long long>(rec.id), FactionName(rec.faction));

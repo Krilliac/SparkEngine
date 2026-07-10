@@ -15,7 +15,9 @@
 #include "Game/TFWeaponSystem.h"
 #include "Net/TFReplication.h"
 #include "Net/TFServerSim.h"
-#include "UI/TFLoginFlow.h" // W5 onboarding (Task 6): loginFlow->IsOpen() input suppression
+#include "UI/TFLoginFlow.h"   // W5 onboarding (Task 6): loginFlow->IsOpen() input suppression
+#include "UI/TFChatWindow.h"  // chat-social lane: chat window input suppression
+#include "UI/TFSocialPanel.h" // chat-social lane: social panel input suppression
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
@@ -130,7 +132,8 @@ namespace Terrafront
         // discharge the weapon underneath.
         const bool uiOpen = (m_ctx->map && m_ctx->map->IsOpen()) || (m_ctx->spawnUI && m_ctx->spawnUI->IsOpen()) ||
                             (m_ctx->loginFlow && m_ctx->loginFlow->IsOpen()) ||
-                            (m_ctx->hud && m_ctx->hud->IsChatOpen());
+                            (m_ctx->hud && m_ctx->hud->IsChatOpen()) || (m_chatUI && m_chatUI->IsOpen()) ||
+                            (m_socialUI && m_socialUI->IsOpen());
         PumpInput(deltaTime, alive && !uiOpen);
 
         if (!m_ctx->IsAuthority())

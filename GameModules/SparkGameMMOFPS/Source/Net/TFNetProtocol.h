@@ -59,6 +59,27 @@ namespace Terrafront
         // W6 progression: unlock-tree purchases (Persistence/TFUnlockTree.h).
         UnlockRequest = 0x541D, // C->S  TF_UnlockRequest (buy a TFUnlockTree node)
         UnlockReply = 0x541E,   // S->C  TF_UnlockReply
+
+        // W7 ui-map-keys (reserved block 0x5430-0x5437, shared with continents:
+        // 0x5434-0x5437 travel — ids + structs in World/TFTravelSystem.h): map
+        // redeploy. Packed structs + frozen-layout static_asserts live in
+        // Net/TFRedeployProtocol.h (its kTFMsg_* constants name the same wire
+        // values so the UI lane compiles standalone).
+        RedeployRequest = 0x5430, // C->S  TF_RedeployRequest
+        RedeployReply = 0x5431,   // S->C  TF_RedeployReply
+
+        // Outfits lane (reserved block 0x5438-0x543F; 0x543D-0x543F free).
+        // Packed wire structs + static_assert layout guards live in
+        // Game/TFOutfitSystem.h (its kTFMsgOutfit* constants name the same
+        // wire values so the lane compiles standalone).
+        OutfitRequest = 0x5438,   // C->S  TF_OutfitRequest (create/invite/accept/decline/leave/kick/setrank/disband)
+        OutfitReply = 0x5439,     // S->C  TF_OutfitReply (result of your own op)
+        OutfitRoster = 0x543A,    // S->C  TF_OutfitRoster (own-outfit roster snapshot, chunked)
+        OutfitTagUpdate = 0x543B, // S->C  TF_OutfitTagUpdate (broadcast player->tag for nameplates/killfeed)
+        OutfitInvite = 0x543C,    // S->C  TF_OutfitInvite (invite notice to the invitee)
+
+        // 0x5440-0x5447: chat-social block — ids + structs in
+        // Net/TFSocialProtocol.h (TFRepProtocol precedent; not enumerators).
     };
 
 #pragma pack(push, 1)

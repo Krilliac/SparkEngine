@@ -19,6 +19,7 @@
 #include "Net/TFServerSim.h"
 #include "Net/TFClientNet.h"
 #include "World/TFRegionSystem.h"
+#include "World/TFTravelSystem.h" // continents lane: sanctuary/warpgate travel
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponSystem.h"
 #include "Game/TFDamageSystem.h"
@@ -34,6 +35,10 @@
 #include "UI/TFSpawnScreen.h"
 #include "UI/TFScoreboard.h"
 
+// Outfits lane: PS2-style clans (server-authoritative system + ImGui panel).
+#include "Game/TFOutfitSystem.h"
+#include "UI/TFOutfitPanel.h"
+
 // W5 onboarding (Task 6, additive): persistence + account/character core
 // logic and the client login/char-select/enter-world UI. See DESIGN.md
 // "W5 — Onboarding".
@@ -41,6 +46,11 @@
 #include "Account/TFAccountSystem.h"
 #include "Account/TFCharacterSystem.h"
 #include "UI/TFLoginFlow.h"
+
+// chat-social lane (additive): social core + chat window + social panel.
+#include "Game/TFSocialSystem.h"
+#include "UI/TFChatWindow.h"
+#include "UI/TFSocialPanel.h"
 
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -102,6 +112,9 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_map = std::make_unique<TFMapScreen>();
     m_spawnUI = std::make_unique<TFSpawnScreen>();
     m_scoreboard = std::make_unique<TFScoreboard>();
+    m_travel = std::make_unique<TFTravelSystem>();  // continents lane
+    m_outfits = std::make_unique<TFOutfitSystem>(); // outfits lane
+    m_outfitPanel = std::make_unique<TFOutfitPanel>();
 
     // W5 onboarding (Task 6, additive): db -> account -> characters ->
     // loginFlow, after every system above (DESIGN.md "W5 — Onboarding").
@@ -109,6 +122,11 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_account = std::make_unique<TFAccountSystem>();
     m_characters = std::make_unique<TFCharacterSystem>();
     m_loginFlow = std::make_unique<TFLoginFlow>();
+
+    // chat-social lane (additive): social core before its two UI consumers.
+    m_social = std::make_unique<TFSocialSystem>();
+    m_chatWindow = std::make_unique<TFChatWindow>();
+    m_socialPanel = std::make_unique<TFSocialPanel>();
 
     // ---- publish context pointers before any Initialize ----
     m_ctx.data = m_data.get();
@@ -126,16 +144,25 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_ctx.progression = m_progression.get();
     m_ctx.directives = m_directives.get();
     m_ctx.squads = m_squads.get();
+    m_ctx.outfits = m_outfits.get(); // outfits lane
     m_ctx.hud = m_hud.get();
     m_ctx.map = m_map.get();
     m_ctx.spawnUI = m_spawnUI.get();
     m_ctx.scoreboard = m_scoreboard.get();
+    m_ctx.travel = m_travel.get(); // continents lane
 
     // W5 onboarding (Task 6, additive).
     m_ctx.db = m_db.get();
     m_ctx.account = m_account.get();
     m_ctx.characters = m_characters.get();
     m_ctx.loginFlow = m_loginFlow.get();
+
+    // chat-social lane (additive).
+    m_ctx.social = m_social.get();
+    m_ctx.chatWindow = m_chatWindow.get();
+    m_ctx.socialPanel = m_socialPanel.get();
+    m_chatWindow->SetSocial(m_social.get());
+    m_socialPanel->SetSocial(m_social.get());
 
     // Persistence is authority-owned. A pure client must never load a stale
     // snapshot and flush it over the dedicated server's account database at
@@ -168,13 +195,24 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         // W6 directives: must init AFTER progression (payouts route through it).
         {"TFDirectiveSystem", m_directives->Initialize(m_ctx, m_events)},
         {"TFSquadSystem", m_squads->Initialize(m_ctx, m_events)},
+        // Outfits lane: after squads (uses the same session surface).
+        {"TFOutfitSystem", m_outfits->Initialize(m_ctx, m_events)},
         {"TFBotSystem", m_bots->Initialize(m_ctx, m_events)},
         {"TFHUD", m_hud->Initialize(m_ctx, m_events)},
         {"TFMapScreen", m_map->Initialize(m_ctx, m_events)},
         {"TFSpawnScreen", m_spawnUI->Initialize(m_ctx, m_events)},
         {"TFScoreboard", m_scoreboard->Initialize(m_ctx, m_events)},
+        // continents lane: must run AFTER world/serverSim/regions/players.
+        {"TFTravelSystem", m_travel->Initialize(m_ctx, m_events)},
         // W5 onboarding (Task 6, additive).
         {"TFLoginFlow", m_loginFlow->Initialize(m_ctx, m_events)},
+        // chat-social lane: social core before its two UI consumers.
+        {"TFSocialSystem", m_social->Initialize(m_ctx, m_events)},
+        {"TFChatWindow", m_chatWindow->Initialize(m_ctx, m_events)},
+        {"TFSocialPanel", m_socialPanel->Initialize(m_ctx, m_events)},
+        // Outfits lane: panel takes the system by reference (3-arg Initialize)
+        // so it does not depend on ctx.outfits publish order.
+        {"TFOutfitPanel", m_outfitPanel->Initialize(m_ctx, m_events, *m_outfits)},
     };
     for (const Boot& b : boots)
     {
@@ -204,14 +242,22 @@ void TerrafrontModule::OnUnload()
     // W5 onboarding (Task 6, additive): loginFlow/db were constructed last,
     // so they shut down first. TFAccountSystem/TFCharacterSystem are plain
     // core-logic classes with no Shutdown() of their own.
+    // chat-social + outfits lanes (reverse boot order; outfit panel booted last).
+    m_outfitPanel->Shutdown();
+    m_socialPanel->Shutdown();
+    m_chatWindow->Shutdown();
+    m_social->Shutdown();
+
     m_loginFlow->Shutdown();
     m_db->Close();
 
+    m_travel->Shutdown(); // continents lane
     m_scoreboard->Shutdown();
     m_spawnUI->Shutdown();
     m_map->Shutdown();
     m_hud->Shutdown();
     m_bots->Shutdown();
+    m_outfits->Shutdown(); // outfits lane: flushes Saves/outfits.json
     m_squads->Shutdown();
     m_directives->Shutdown(); // W6: before progression (reverse of init order)
     m_progression->Shutdown();
@@ -252,12 +298,19 @@ void TerrafrontModule::OnUpdate(float dt)
     m_progression->Update(dt);
     m_directives->Update(dt);
     m_squads->Update(dt);
+    m_outfits->Update(dt); // outfits lane: persistence debounce + sweeps
     m_bots->Update(dt);
     m_hud->Update(dt);
     m_map->Update(dt);
     m_spawnUI->Update(dt);
     m_scoreboard->Update(dt);
+    m_travel->Update(dt);    // continents lane
     m_loginFlow->Update(dt); // W5 onboarding (Task 6, additive)
+    // chat-social lane + outfits panel.
+    m_social->Update(dt);
+    m_chatWindow->Update(dt);
+    m_socialPanel->Update(dt);
+    m_outfitPanel->Update(dt);
 }
 
 void TerrafrontModule::OnFixedUpdate(float fdt)
@@ -271,6 +324,7 @@ void TerrafrontModule::OnFixedUpdate(float fdt)
     m_weapons->FixedUpdate(fdt);
     m_vehicles->FixedUpdate(fdt);
     m_regions->FixedUpdate(fdt);
+    m_travel->FixedUpdate(fdt); // continents lane: applies queued sanctuary placements
     m_bots->FixedUpdate(fdt);
     m_replication->FixedUpdate(fdt);
 }
@@ -314,6 +368,14 @@ void TerrafrontModule::OnImGui()
             m_map->RenderUI();
             m_spawnUI->RenderUI();
             m_scoreboard->RenderUI();
+            // chat-social lane.
+            m_chatWindow->RenderUI();
+            m_socialPanel->RenderUI();
+            // Outfits lane: standalone 'tf_outfit' window.
+            m_outfitPanel->RenderUI();
+            // continents lane: terminal prompt + continent-select menu
+            // (player-facing; NOT debug-gated).
+            m_travel->RenderUI();
         }
     }
 
@@ -334,6 +396,7 @@ void TerrafrontModule::OnImGui()
             m_serverSim->RenderDebugUI();
             m_clientNet->RenderDebugUI();
             m_regions->RenderDebugUI();
+            m_travel->RenderDebugUI(); // continents lane
             m_players->RenderDebugUI();
             m_weapons->RenderDebugUI();
             m_damage->RenderDebugUI();
@@ -343,8 +406,10 @@ void TerrafrontModule::OnImGui()
             m_progression->RenderDebugUI();
             m_directives->RenderDebugUI();
             m_squads->RenderDebugUI();
+            m_outfits->RenderDebugUI(); // outfits lane
             m_bots->RenderDebugUI();
             m_loginFlow->RenderDebugUI(); // W5 onboarding (Task 6, additive)
+            m_social->RenderDebugUI();    // chat-social lane
 #ifdef SPARK_HAS_IMGUI
         }
         ImGui::End();

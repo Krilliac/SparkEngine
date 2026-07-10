@@ -336,6 +336,7 @@ namespace Terrafront
 
         float curX = prevPos[0];
         float curZ = prevPos[2];
+        bool anyHit = false;
 
         for (int iter = 0; iter < kTFSlideIters; ++iter)
         {
@@ -353,6 +354,7 @@ namespace Terrafront
                 curZ += remZ;
                 break;
             }
+            anyHit = true;
 
             const float dirX = remX / len;
             const float dirZ = remZ / len;
@@ -390,6 +392,9 @@ namespace Terrafront
                 vel[2] -= vInto * nZ;
             }
         }
+
+        if (anyHit)
+            ++m_blockedMoves; // diagnostic only (tf_validate); see header note
 
         pos[0] = curX;
         pos[2] = curZ;

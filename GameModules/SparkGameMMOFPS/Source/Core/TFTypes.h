@@ -105,6 +105,7 @@ namespace Terrafront
     class TFDataTables;
     class TFWorldSetup;
     class TFRegionSystem;
+    class TFTravelSystem; // continents lane (additive): World/TFTravelSystem.h
     class TFReplication;
     class TFServerSim;
     class TFClientNet;
@@ -117,6 +118,7 @@ namespace Terrafront
     class TFProgressionSystem;
     class TFDirectiveSystem;
     class TFSquadSystem;
+    class TFOutfitSystem; // outfits lane (additive): Game/TFOutfitSystem.h
     class TFHUD;
     class TFMapScreen;
     class TFSpawnScreen;
@@ -136,6 +138,10 @@ namespace Terrafront
     // reasoning as the three pointers above — this FROZEN header never includes
     // TFLoginFlow.h. See DESIGN.md "W5 — Onboarding" for the full contract note.
     class TFLoginFlow;
+    // chat-social lane (additive): forward decls for the context pointers below.
+    class TFSocialSystem;
+    class TFChatWindow;
+    class TFSocialPanel;
 
     struct TFGameContext
     {
@@ -159,10 +165,15 @@ namespace Terrafront
         TFProgressionSystem* progression = nullptr;
         TFDirectiveSystem* directives = nullptr;
         TFSquadSystem* squads = nullptr;
+        TFOutfitSystem* outfits = nullptr; // outfits lane (Game/TFOutfitSystem.h)
         TFHUD* hud = nullptr;
         TFMapScreen* map = nullptr;
         TFSpawnScreen* spawnUI = nullptr;
         TFScoreboard* scoreboard = nullptr;
+        // continents lane (additive): sanctuary/warpgate travel. Published for
+        // OTHER lanes (e.g. redeploy/sanctuary queries); TFTravelSystem itself
+        // deliberately never reads this pointer.
+        TFTravelSystem* travel = nullptr;
 
         // W5 onboarding (Task 4, additive): null until Task 6 constructs + publishes
         // them in Main.cpp boot order. Net handlers guard every use with `if
@@ -176,6 +187,12 @@ namespace Terrafront
         // enter-world UI. Constructed + published in Main.cpp boot order (after
         // clientNet); null on dedicated servers (no local player, no UI).
         TFLoginFlow* loginFlow = nullptr;
+
+        // chat-social lane (additive): null until Main.cpp constructs them.
+        // `chatWindow` is load-bearing — TFHUD yields its built-in chat when set.
+        TFSocialSystem* social = nullptr;
+        TFChatWindow* chatWindow = nullptr;
+        TFSocialPanel* socialPanel = nullptr;
 
         // W5 onboarding (Task 6, additive): true once TF_WorldWelcome has been
         // received for the local session (i.e. TFCharacterSystem::EnterWorld

@@ -23,6 +23,8 @@
 #include "Net/TFClientNet.h"
 #include "Net/TFChatRules.h"
 #include "Net/TFNetProtocol.h"
+#include "UI/TFKeybinds.h"
+#include "UI/TFMapScreen.h"
 #include "Input/InputManager.h"
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
@@ -329,8 +331,14 @@ namespace Terrafront
 
         GatherPawnView();
 
-        if (!m_chatOpen && m_ctx->InWorld() && !ImGui::GetIO().WantTextInput && !ImGui::GetIO().WantCaptureKeyboard &&
-            ImGui::IsKeyPressed(ImGuiKey_Enter, false))
+        // W7 ui-map-keys: the chat-focus key comes from the shared keybind table
+        // (Action::FocusChat, default Enter) — the chat lane rebinds via
+        // TFKeys::BindKey without touching HUD code. ImGui gating preserved.
+        const ImGuiKey chatKey = TFKeys::ImGuiKeyFor(TFKeys::Action::FocusChat);
+        // chat-social lane: when TFChatWindow is wired it owns chat entirely —
+        // the HUD's built-in chat never opens and never renders (gate below).
+        if (!m_ctx->chatWindow && !m_chatOpen && m_ctx->InWorld() && !ImGui::GetIO().WantTextInput &&
+            !ImGui::GetIO().WantCaptureKeyboard && chatKey != ImGuiKey_None && ImGui::IsKeyPressed(chatKey, false))
         {
             m_chatOpen = true;
             m_focusChatInput = true;
@@ -368,13 +376,33 @@ namespace Terrafront
             }
             if (m_dead)
                 DrawRespawnOverlay();
+
+            // W7 ui-map-keys: redeploy countdown readout while the map is closed
+            // (the map draws its own; this keeps the timer visible after Esc).
+            if (!m_dead && m_ctx->map && m_ctx->map->RedeployPending() && !m_ctx->map->IsOpen())
+            {
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                ImGuiViewport* vp2 = ImGui::GetMainViewport();
+                const char* regionName = "?";
+                if (m_ctx->data && m_ctx->data->IsLoaded())
+                {
+                    if (const RegionDef* rd = m_ctx->data->GetRegion(m_ctx->map->RedeployTarget()))
+                        regionName = rd->name.c_str();
+                }
+                char line[96];
+                std::snprintf(line, sizeof(line), "REDEPLOYING TO %s IN %.1f s", regionName,
+                              std::max(0.0f, m_ctx->map->RedeployCountdown()));
+                AddTextCentered(dl, 20.0f, ImVec2(vp2->Pos.x + vp2->Size.x * 0.5f, vp2->Pos.y + vp2->Size.y * 0.22f),
+                                IM_COL32(255, 200, 60, 230), line);
+            }
         }
         ImGui::End();
 
         // Input-receiving windows (own Begin/End; the overlay above is NoInputs).
         if (m_dead)
             DrawDeathActions();
-        DrawChat();
+        if (!m_ctx->chatWindow) // chat-social lane: TFChatWindow supersedes DrawChat
+            DrawChat();
     }
 
     void TFHUD::DrawChat()

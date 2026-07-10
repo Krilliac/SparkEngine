@@ -25,6 +25,7 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFDeployableSystem.h"
+#include "Game/TFOutfitSystem.h" // Outfits lane: death-panel killer tag
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFSquadSystem.h"
 #include "Game/TFVehicleSystem.h"
@@ -211,7 +212,11 @@ namespace Terrafront
 
         char name[16];
         HudPlayerLabel(killer, local, name);
-        m_death.killerName = name;
+        // Outfits lane: prepend the killer's outfit tag when known.
+        char tagged[26];
+        OutfitTaggedLabel(m_ctx && m_ctx->outfits ? m_ctx->outfits->GetOutfitTag(killer) : "", name, tagged,
+                          sizeof(tagged));
+        m_death.killerName = tagged;
 
         m_death.weaponName = "-";
         if (m_ctx && m_ctx->data && m_ctx->data->IsLoaded())

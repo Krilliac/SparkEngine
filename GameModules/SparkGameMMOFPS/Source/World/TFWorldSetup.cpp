@@ -9,6 +9,7 @@
  */
 #include "World/TFWorldSetup.h"
 
+#include "World/TFSanctuaryZone.h"
 #include "World/TFWorldCollision.h"
 
 #include "Data/TFDataTables.h"
@@ -54,6 +55,8 @@ namespace Terrafront
     {
 
         constexpr const char* kFallbackScenePath = "Assets/Scenes/MMOFPS/cindral_wastes.scene";
+        // Continents lane: the additive sanctuary zone (see TFSanctuaryZone.h).
+        constexpr const char* kSanctuaryScenePath = "Assets/Scenes/MMOFPS/sanctuary_haven.scene";
         constexpr float kOriginRebaseThreshold = 8192.0f; // > continent diagonal: mechanism wired but
                                                           // inert on the 4km map. TF-W2: lower once
                                                           // replication is origin-offset aware.
@@ -108,6 +111,7 @@ namespace Terrafront
         m_origin->SetEnabled(true);
 
         LoadSceneAndTerrain();
+        LoadSanctuaryScene();
         CreateCamera();
 
         // Static Jolt collision from the authored scene — built on BOTH server and
@@ -116,6 +120,13 @@ namespace Terrafront
         // stays analytic (TerrainHeightAt); see TFWorldCollision.h for the split.
         m_collision = std::make_unique<TFWorldCollision>();
         m_collision->Build(ctx, m_scenePath);
+
+        // Sanctuary Haven static bodies (continents lane): a second, independent
+        // TFWorldCollision over the additive zone scene. Same determinism
+        // contract (parsed from the same file on both roles); inactive when the
+        // file is missing or Jolt is absent.
+        m_sanctuaryCollision = std::make_unique<TFWorldCollision>();
+        m_sanctuaryCollision->Build(ctx, kSanctuaryScenePath);
 
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFWorldSetup initialized (scene=%s, loaded=%s)",
@@ -163,6 +174,29 @@ namespace Terrafront
         }
         // TF-W2: feed the heightfield into ClipmapTerrain/TerrainRenderer so the
         // visual terrain matches TerrainHeightAt instead of the flat ground plane.
+    }
+
+    void TFWorldSetup::LoadSanctuaryScene()
+    {
+        // Continents lane: sanctuary_haven.scene is an ADDITIVE zone of the same
+        // world. SceneManager::LoadScene clears its node set, so the zone gets
+        // its OWN manager; RenderWorld draws both through DrawSceneObjects.
+        // Requires graphics (dedicated servers skip visuals; their collision
+        // comes from m_sanctuaryCollision, parsed straight from the file).
+        GraphicsEngine* gfx = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetGraphics() : nullptr;
+        if (!gfx)
+            return;
+        m_sanctuaryScene = std::make_unique<SceneManager>(gfx, m_ctx->engine->GetInput());
+        const std::string path = kSanctuaryScenePath;
+        m_sanctuaryLoaded = m_sanctuaryScene->LoadScene(std::wstring(path.begin(), path.end()));
+        Spark::SimpleConsole::GetInstance().LogInfo(
+            std::string("[TF] scene ") + path + (m_sanctuaryLoaded ? " loaded (" : " FAILED (") +
+            std::to_string(m_sanctuaryScene->GetObjects().size()) + " objects)");
+        if (!m_sanctuaryLoaded)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] Sanctuary scene load failed: %s", path.c_str());
+            m_sanctuaryScene.reset();
+        }
     }
 
     void TFWorldSetup::ParseTerrainParams(const std::string& scenePath)
@@ -283,15 +317,36 @@ namespace Terrafront
                 h += (PlateauHeight(r.tier) - h) * w;
             }
         }
+
+        // Sanctuary Haven pad (continents lane): a flat plateau at the reserved
+        // NW-corner zone, blended exactly like the region plateaus above. The
+        // constants are compile-time (TFSanctuaryZone.h) so this term is
+        // identical on every role regardless of data-load state — the same
+        // determinism contract as the rest of this function.
+        {
+            const float dx = x - kTFSanctuaryCenterX;
+            const float dz = z - kTFSanctuaryCenterZ;
+            const float distSq = dx * dx + dz * dz;
+            const float outer = kTFSanctuaryPlateauRadius + kTFSanctuaryPlateauSkirt;
+            if (distSq < outer * outer)
+            {
+                const float w = 1.0f - SmoothStep(kTFSanctuaryPlateauRadius, outer, std::sqrt(distSq));
+                h += (kTFSanctuaryPadY - h) * w;
+            }
+        }
         return h;
     }
 
     void TFWorldSetup::ResolveMoveCollision(const float prevPos[3], float pos[3], float vel[3]) const
     {
         // 1) Capsule-sweep + slide against the static scene bodies (no-op when
-        //    Jolt is absent or the scene produced no bodies).
+        //    Jolt is absent or the scene produced no bodies). The sanctuary zone
+        //    bodies are a second independent set (continents lane) — the sets are
+        //    ~1.7 km apart, so resolving them sequentially never double-slides.
         if (m_collision)
             m_collision->ResolveMove(prevPos, pos, vel);
+        if (m_sanctuaryCollision)
+            m_sanctuaryCollision->ResolveMove(prevPos, pos, vel);
 
         // 2) Terrain backstop at the RESOLVED column: the slide can change the
         //    final XZ after TFMoveStep's own step-7 clamp ran, and this also keeps
@@ -556,6 +611,76 @@ namespace Terrafront
         gfx->SetBasicTexture(nullptr);
     }
 
+    void TFWorldSetup::DrawSceneObjects(SceneManager* sm, const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj)
+    {
+        // Extracted from RenderWorld (continents lane) so the continent scene and
+        // the additive sanctuary scene share ONE draw path — behavior for the
+        // continent scene is byte-identical to the previous inline loop.
+        if (!sm || !m_ctx || !m_ctx->engine)
+            return;
+        GraphicsEngine* gfx = m_ctx->engine->GetGraphics();
+        if (!gfx || !gfx->GetDevice() || !gfx->GetContext())
+            return;
+
+        ID3D11DeviceContext* dc = gfx->GetContext();
+        gfx->SetBasicShaders();
+        const DirectX::XMFLOAT4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
+        for (const auto& obj : sm->GetObjects())
+        {
+            if (!obj || !obj->IsActive() || !obj->IsVisible())
+                continue;
+            // Skip the flat ground plane (Terrain_Rock material) — the
+            // procedural heightfield mesh replaces it.
+            if (obj->GetMaterialPath().find("Terrain_Rock") != std::string::npos)
+                continue;
+            Mesh* mesh = obj->GetMesh();
+            if (!mesh || mesh->GetVertexCount() == 0 || mesh->GetIndexCount() == 0)
+                continue;
+
+            // Scene material (material= key): albedo texture + UV tiling.
+            const GraphicsEngine::BasicMaterial* sceneMat =
+                obj->GetMaterialPath().empty() ? nullptr : gfx->GetOrLoadBasicMaterial(obj->GetMaterialPath());
+            ID3D11ShaderResourceView* sceneSrv = sceneMat ? sceneMat->srv.Get() : nullptr;
+            const DirectX::XMFLOAT2 sceneTiling = sceneMat ? sceneMat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
+
+            const DirectX::XMMATRIX world = obj->GetWorldMatrix();
+            const auto& submeshes = mesh->GetSubmeshes();
+            if (submeshes.empty())
+            {
+                // Primitive (terrain plane, mesa cubes): scene material over whole mesh
+                gfx->UpdateBasicConstants(world, view, proj, kWhite, sceneTiling);
+                gfx->SetBasicTexture(sceneSrv);
+                mesh->Render(dc);
+            }
+            else
+            {
+                // OBJ model: draw each MTL material range. Ranges with
+                // their own map_Kd (e.g. Kenney colormap, Quaternius trim
+                // sheets) use it at 1:1 UVs; untextured ranges fall back
+                // to the scene material texture tinted by the MTL Kd.
+                for (const MeshSubmesh& smesh : submeshes)
+                {
+                    ID3D11ShaderResourceView* srv = nullptr;
+                    DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
+                    if (!smesh.diffuseTexture.empty())
+                    {
+                        srv = gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                    }
+                    if (!srv)
+                    {
+                        srv = sceneSrv;
+                        tiling = sceneTiling;
+                    }
+                    gfx->UpdateBasicConstants(world, view, proj, smesh.diffuseColor, tiling);
+                    gfx->SetBasicTexture(srv);
+                    mesh->RenderRange(dc, smesh.indexStart, smesh.indexCount);
+                }
+            }
+        }
+        // Restore default texture binding for subsequent draw paths
+        gfx->SetBasicTexture(nullptr);
+    }
+
     void TFWorldSetup::RenderWorld()
     {
         if (!m_initialized || !m_ctx || !m_ctx->engine)
@@ -588,70 +713,13 @@ namespace Terrafront
             // 0b) Procedural terrain relief (replaces the flat scene ground plane).
             DrawTerrain(view, proj);
 
-            // 1) Scene geometry (terrain plane, mesas, buildings). Draws are
-            //    issued here through GraphicsEngine/Mesh MEMBER functions:
+            // 1) Scene geometry (terrain plane, mesas, buildings) — the continent
+            //    scene plus the additive Sanctuary Haven zone (continents lane).
+            //    Draws are issued through GraphicsEngine/Mesh MEMBER functions:
             //    GameObject::Render() reads EngineContext::Get(), which is a
             //    per-image global and unset inside this statically-linked DLL.
-            if (SceneManager* sm = m_scene)
-            {
-                ID3D11DeviceContext* dc = gfx->GetContext();
-                gfx->SetBasicShaders();
-                const DirectX::XMFLOAT4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
-                for (const auto& obj : sm->GetObjects())
-                {
-                    if (!obj || !obj->IsActive() || !obj->IsVisible())
-                        continue;
-                    // Skip the flat ground plane (Terrain_Rock material) — the
-                    // procedural heightfield mesh drawn above replaces it.
-                    if (obj->GetMaterialPath().find("Terrain_Rock") != std::string::npos)
-                        continue;
-                    Mesh* mesh = obj->GetMesh();
-                    if (!mesh || mesh->GetVertexCount() == 0 || mesh->GetIndexCount() == 0)
-                        continue;
-
-                    // Scene material (material= key): albedo texture + UV tiling.
-                    const GraphicsEngine::BasicMaterial* sceneMat =
-                        obj->GetMaterialPath().empty() ? nullptr : gfx->GetOrLoadBasicMaterial(obj->GetMaterialPath());
-                    ID3D11ShaderResourceView* sceneSrv = sceneMat ? sceneMat->srv.Get() : nullptr;
-                    const DirectX::XMFLOAT2 sceneTiling = sceneMat ? sceneMat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
-
-                    const DirectX::XMMATRIX world = obj->GetWorldMatrix();
-                    const auto& submeshes = mesh->GetSubmeshes();
-                    if (submeshes.empty())
-                    {
-                        // Primitive (terrain plane, mesa cubes): scene material over whole mesh
-                        gfx->UpdateBasicConstants(world, view, proj, kWhite, sceneTiling);
-                        gfx->SetBasicTexture(sceneSrv);
-                        mesh->Render(dc);
-                    }
-                    else
-                    {
-                        // OBJ model: draw each MTL material range. Ranges with
-                        // their own map_Kd (e.g. Kenney colormap, Quaternius trim
-                        // sheets) use it at 1:1 UVs; untextured ranges fall back
-                        // to the scene material texture tinted by the MTL Kd.
-                        for (const MeshSubmesh& smesh : submeshes)
-                        {
-                            ID3D11ShaderResourceView* srv = nullptr;
-                            DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
-                            if (!smesh.diffuseTexture.empty())
-                            {
-                                srv = gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
-                            }
-                            if (!srv)
-                            {
-                                srv = sceneSrv;
-                                tiling = sceneTiling;
-                            }
-                            gfx->UpdateBasicConstants(world, view, proj, smesh.diffuseColor, tiling);
-                            gfx->SetBasicTexture(srv);
-                            mesh->RenderRange(dc, smesh.indexStart, smesh.indexCount);
-                        }
-                    }
-                }
-                // Restore default texture binding for subsequent draw paths
-                gfx->SetBasicTexture(nullptr);
-            }
+            DrawSceneObjects(m_scene, view, proj);
+            DrawSceneObjects(m_sanctuaryScene.get(), view, proj);
 
             // 2) ECS visuals — pawns, vehicles and deployables all attach a
             //    MeshRenderer (TFPlayerSystem::AttachPawnVisual & friends). The
@@ -1091,10 +1159,13 @@ namespace Terrafront
 #ifdef ENABLE_NETWORKING
         StopNetworking();
 #endif
-        m_collision.reset(); // removes its static bodies from the engine PhysicsSystem
+        m_sanctuaryCollision.reset(); // removes its static bodies from the engine PhysicsSystem
+        m_collision.reset();          // removes its static bodies from the engine PhysicsSystem
         m_camera.reset();
         m_scene = nullptr;
         m_ownScene.reset();
+        m_sanctuaryScene.reset();
+        m_sanctuaryLoaded = false;
         m_origin.reset();
         m_sceneLoaded = false;
         m_initialized = false;
@@ -1113,6 +1184,11 @@ namespace Terrafront
         ImGui::Text("World collision: %s (%zu static bodies)",
                     (m_collision && m_collision->IsActive()) ? "Jolt live" : "inactive",
                     m_collision ? m_collision->BodyCount() : size_t{0});
+        ImGui::Text("Sanctuary: scene %s | collision %s (%zu bodies) | pad height %.1f m",
+                    m_sanctuaryLoaded ? "loaded" : "not loaded",
+                    (m_sanctuaryCollision && m_sanctuaryCollision->IsActive()) ? "Jolt live" : "inactive",
+                    m_sanctuaryCollision ? m_sanctuaryCollision->BodyCount() : size_t{0},
+                    TerrainHeightAt(kTFSanctuaryCenterX, kTFSanctuaryCenterZ));
 
 #ifdef ENABLE_NETWORKING
         ImGui::Text("Net booted: %s | WorldServer: %s | AreaServer: %s", m_netBooted ? "yes" : "no",

@@ -14,9 +14,12 @@
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponMath.h"
 #include "Game/TFWeaponSystem.h"
+#include "Game/TFOutfitSystem.h"    // Outfits lane: killfeed name tags
+#include "Net/TFRedeployProtocol.h" // W7 ui-map-keys: redeploy reply -> map screen
 #include "Net/TFReplication.h"
 #include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
+#include "UI/TFMapScreen.h" // W7 ui-map-keys: OnRedeployReply sink
 #include "UI/TFLoginFlow.h" // W5 onboarding (Task 6): direct reply-sink forwarding
 #include "UI/TFScoreboard.h"
 #include "World/TFWorldSetup.h"
@@ -198,6 +201,7 @@ namespace Terrafront
         case TFMsg::CharCreateReq:
         case TFMsg::CharDeleteReq:
         case TFMsg::EnterWorldReq:
+        case TFMsg::RedeployRequest: // W7 ui-map-keys: listen-host/standalone redeploy
             // final-review #3: vehicle/squad verbs now share the same
             // enter-world gate as the other gameplay ids on this path too.
             if (m_ctx->serverSim)
@@ -273,6 +277,12 @@ namespace Terrafront
         char killerName[16], victimName[16];
         PlayerLabel(killer, killerName);
         PlayerLabel(victim, victimName);
+        // Outfits lane: prepend "[TAG] " when the player is in an outfit.
+        char killerTagged[26], victimTagged[26];
+        OutfitTaggedLabel(m_ctx->outfits ? m_ctx->outfits->GetOutfitTag(killer) : "", killerName, killerTagged,
+                          sizeof(killerTagged));
+        OutfitTaggedLabel(m_ctx->outfits ? m_ctx->outfits->GetOutfitTag(victim) : "", victimName, victimTagged,
+                          sizeof(victimTagged));
 
         const char* weaponName = "-";
         if (m_ctx->data && m_ctx->data->IsLoaded())
@@ -282,7 +292,7 @@ namespace Terrafront
         }
         // W6 combat HUD: extended overload — headshot marker + player ids for the
         // local-row highlight and the pure-client death panel.
-        m_ctx->hud->PushKillfeed(killerName, weaponName, victimName, killerF, victimF, headshot, killer, victim);
+        m_ctx->hud->PushKillfeed(killerTagged, weaponName, victimTagged, killerF, victimF, headshot, killer, victim);
     }
 
     void TFClientNet::OnBusPlayerKilled(const EvPlayerKilled& ev)
@@ -344,6 +354,18 @@ namespace Terrafront
         route(TFMsg::XPEvent, [this](const NetworkMessage& m) { OnXPEvent(m.payload.data(), m.payload.size()); });
         route(TFMsg::ChatMsg, [this](const NetworkMessage& m) { OnChatMsg(m.payload.data(), m.payload.size()); });
 
+        // W7 ui-map-keys: server-validated redeploy reply -> map screen.
+        route(TFMsg::RedeployReply,
+              [this](const NetworkMessage& m)
+              {
+                  if (m.payload.size() == sizeof(TF_RedeployReply) && m_ctx->map)
+                  {
+                      TF_RedeployReply rep;
+                      std::memcpy(&rep, m.payload.data(), sizeof(rep));
+                      m_ctx->map->OnRedeployReply(rep);
+                  }
+              });
+
         // Accepted-but-unrouted W2 broadcasts (no "unknown message" warnings):
         for (TFMsg id : {TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::SquadMsg})
             route(id, [](const NetworkMessage&) {});
@@ -373,7 +395,7 @@ namespace Terrafront
         for (TFMsg id : {TFMsg::WorldWelcome, TFMsg::SpawnReply, TFMsg::HitConfirm, TFMsg::DamageEvent,
                          TFMsg::KillEvent, TFMsg::XPEvent, TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg,
                          TFMsg::SquadMsg, TFMsg::LoginReply, TFMsg::RegisterReply, TFMsg::CharListReply,
-                         TFMsg::CharCreateReply, TFMsg::CharDeleteReply})
+                         TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
         {
             nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                [](const Spark::Net::NetworkMessage&) {});
@@ -428,6 +450,14 @@ namespace Terrafront
             break;
         case TFMsg::CharDeleteReply:
             OnCharDeleteReply(data, size);
+            break;
+        case TFMsg::RedeployReply: // W7 ui-map-keys
+            if (size == sizeof(TF_RedeployReply) && m_ctx->map)
+            {
+                TF_RedeployReply rep;
+                std::memcpy(&rep, data, sizeof(rep));
+                m_ctx->map->OnRedeployReply(rep);
+            }
             break;
         default:
             break;

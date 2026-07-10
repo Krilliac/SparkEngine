@@ -10,6 +10,12 @@
  * Cindral Wastes heightfield (TerrainHeightAt), boots NetworkManager +
  * WorldServer + the single continent AreaServer per NetRole, and drives
  * WorldOriginSystem::Update from the local pawn position on clients.
+ *
+ * Continents lane (2026-07-10): additionally loads sanctuary_haven.scene as an
+ * ADDITIVE zone of the same sim world (second SceneManager for visuals, second
+ * TFWorldCollision for its static bodies) and blends the sanctuary pad plateau
+ * into TerrainHeightAt from the TFSanctuaryZone.h constexpr constants. See
+ * World/TFSanctuaryZone.h for the position-isolation architecture note.
  */
 #pragma once
 
@@ -142,6 +148,7 @@ namespace Terrafront
 
       private:
         void LoadSceneAndTerrain();
+        void LoadSanctuaryScene(); ///< additive sanctuary_haven.scene visuals (continents lane)
         void ParseTerrainParams(const std::string& scenePath);
         float PlateauHeight(const std::string& tier) const;
         /// Data-driven presentation constants (skybox/terrain/ambient/viewmodel/
@@ -170,6 +177,10 @@ namespace Terrafront
         // Static Jolt collision for the authored scene (built on BOTH roles right
         // after scene load; terrain itself stays analytic — see TFWorldCollision.h).
         std::unique_ptr<TFWorldCollision> m_collision;
+        // Sanctuary Haven static bodies (continents lane): a SECOND collision set
+        // parsed from sanctuary_haven.scene — same determinism contract, both
+        // roles. Resolved right after m_collision in ResolveMoveCollision.
+        std::unique_ptr<TFWorldCollision> m_sanctuaryCollision;
 
         std::unique_ptr<Spark::World::WorldOriginSystem> m_origin;
 
@@ -177,6 +188,11 @@ namespace Terrafront
         std::unique_ptr<SparkEngineCamera> m_camera;
         std::unique_ptr<SceneManager> m_ownScene; // module-created when the engine has none
         SceneManager* m_scene{nullptr};           // whichever manager holds the scene
+        // Sanctuary Haven visuals (continents lane): SceneManager::LoadScene
+        // clears its node set, so the additive zone lives in its OWN manager and
+        // RenderWorld draws both through the same device-direct path.
+        std::unique_ptr<SceneManager> m_sanctuaryScene;
+        bool m_sanctuaryLoaded{false};
 
         // Device-direct mesh cache for ECS visuals (pawns/vehicles/deployables).
         // The engine's SubmitMeshForRendering/ProcessDrawList path loads meshes
@@ -208,6 +224,10 @@ namespace Terrafront
         // over the whole map, drawn instead of the flat scene ground plane.
         std::unique_ptr<Mesh> m_terrainMesh;
         void DrawTerrain(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
+
+        // One scene manager's objects through the device-direct basic-shader
+        // path (shared by the continent scene and the sanctuary scene).
+        void DrawSceneObjects(SceneManager* sm, const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
 
 #ifdef ENABLE_NETWORKING
         std::unique_ptr<Spark::Net::WorldServer> m_worldServer;

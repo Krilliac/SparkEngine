@@ -46,6 +46,9 @@
 namespace Terrafront
 {
 
+    class TFChatWindow;  // UI/TFChatWindow.h (chat-social lane)
+    class TFSocialPanel; // UI/TFSocialPanel.h (chat-social lane)
+
     /// PlayerId used for the in-process local player on authority roles
     /// (listen host / standalone). Deliberately far above NetworkManager's
     /// incrementing client ids and distinct from kInvalidPlayer.
@@ -93,6 +96,15 @@ namespace Terrafront
 
         /// Debug panel toggle (hidden by default; wired from tf_* console commands).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
+
+        // --- chat-social lane (additive): UI self-registration ------------------
+        // TFChatWindow/TFSocialPanel call these from their Initialize so the
+        // uiOpen input-suppression check in Update covers them (a chat line or
+        // friend click must not fire the weapon underneath). Deliberately NOT
+        // routed through TFGameContext so this lane's files compile before the
+        // integrator wires Main.cpp.
+        void SetChatUI(TFChatWindow* chat) { m_chatUI = chat; }
+        void SetSocialPanel(TFSocialPanel* panel) { m_socialUI = panel; }
 
         // --- W5 onboarding (Task 4) reply stash --------------------------------
         // TFLoginFlow (Task 5) does not exist yet; these getters expose the last
@@ -177,6 +189,8 @@ namespace Terrafront
 
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
+        TFChatWindow* m_chatUI{nullptr};    // chat-social lane (self-registered)
+        TFSocialPanel* m_socialUI{nullptr}; // chat-social lane (self-registered)
         bool m_initialized{false};
         bool m_connected{false};
         PlayerId m_localPlayer{kInvalidPlayer};

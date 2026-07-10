@@ -20,7 +20,9 @@
 namespace Terrafront
 {
     class TFBotSystem;
-}
+    class TFOutfitPanel;  // outfits lane (TFOutfitSystem fwd-decl comes from TFTypes.h)
+    class TFTravelSystem; // continents lane
+} // namespace Terrafront
 
 class TerrafrontModule : public Spark::IModule
 {
@@ -81,6 +83,12 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFMapScreen> m_map;
     std::unique_ptr<Terrafront::TFSpawnScreen> m_spawnUI;
     std::unique_ptr<Terrafront::TFScoreboard> m_scoreboard;
+    // continents lane: sanctuary/warpgate travel (booted after scoreboard).
+    std::unique_ptr<Terrafront::TFTravelSystem> m_travel;
+    // Outfits lane: system after squads (boot order, see Main.cpp), panel
+    // after the other UI screens.
+    std::unique_ptr<Terrafront::TFOutfitSystem> m_outfits;
+    std::unique_ptr<Terrafront::TFOutfitPanel> m_outfitPanel;
 
     // W5 onboarding (Task 6, additive): booted after every W1-W4 system above
     // (db -> account -> characters -> loginFlow), per DESIGN.md "W5 —
@@ -91,4 +99,9 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFAccountSystem> m_account;
     std::unique_ptr<Terrafront::TFCharacterSystem> m_characters;
     std::unique_ptr<Terrafront::TFLoginFlow> m_loginFlow;
+
+    // chat-social lane (additive): booted after loginFlow (see Main.cpp).
+    std::unique_ptr<Terrafront::TFSocialSystem> m_social;
+    std::unique_ptr<Terrafront::TFChatWindow> m_chatWindow;
+    std::unique_ptr<Terrafront::TFSocialPanel> m_socialPanel;
 };
