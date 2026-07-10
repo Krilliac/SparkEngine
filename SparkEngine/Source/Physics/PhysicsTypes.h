@@ -376,6 +376,55 @@ struct CollisionGroupDesc
 };
 
 /**
+ * @brief Named collision layer bits for `PhysicsBodyDesc::collisionGroup` / `collisionMask`.
+ *
+ * These are the engine-wide gameplay layer assignments used by the group/mask
+ * bitmask filter (see PhysicsSystem::ShouldCollide()) and by the filtered
+ * spatial queries (RaycastFiltered(), SphereCastFiltered(), ...). They are
+ * **not** Jolt ObjectLayers — Jolt's broadphase layers stay internal
+ * (NON_MOVING / MOVING / TRIGGER); this scheme filters on top of them.
+ *
+ * Usage:
+ * @code
+ *   PhysicsBodyDesc desc;
+ *   desc.collisionGroup = CollisionLayers::Projectile;                       // what I AM
+ *   desc.collisionMask  = CollisionLayers::WorldStatic | CollisionLayers::Player
+ *                       | CollisionLayers::Vehicle | CollisionLayers::Deployable; // what I HIT
+ *
+ *   // Hitscan weapon trace that ignores triggers/debris and the shooter:
+ *   auto hit = physics->RaycastFiltered(muzzle, dir, 1000.0f,
+ *                                       CollisionLayers::HitscanMask, shooterBody);
+ * @endcode
+ *
+ * @note `PhysicsBodyDesc::collisionGroup` defaults to 1, so bodies created
+ *       without an explicit layer land in `WorldStatic`. Tag every dynamic
+ *       gameplay body explicitly.
+ */
+namespace CollisionLayers
+{
+    inline constexpr uint16_t None = 0;             ///< Collides with nothing (mask) / no layer (group)
+    inline constexpr uint16_t WorldStatic = 1 << 0; ///< Static level geometry, terrain (engine default group)
+    inline constexpr uint16_t Player = 1 << 1;      ///< Player and NPC character bodies
+    inline constexpr uint16_t Vehicle = 1 << 2;     ///< Ground/air vehicle hulls
+    inline constexpr uint16_t Projectile = 1 << 3;  ///< Simulated projectiles (rockets, grenades)
+    inline constexpr uint16_t Deployable = 1 << 4;  ///< Player-placed structures (turrets, shields, spawn beacons)
+    inline constexpr uint16_t Trigger = 1 << 5;     ///< Trigger/sensor volumes (capture zones, damage areas)
+    inline constexpr uint16_t Debris = 1 << 6;      ///< Cosmetic debris/gibs — never blocks gameplay queries
+    inline constexpr uint16_t All = 0xFFFF;         ///< Every layer (default mask)
+
+    // --- Common mask presets -------------------------------------------------
+
+    /// Weapon hitscan traces: hits solids, skips triggers/debris/other projectiles.
+    inline constexpr uint16_t HitscanMask = WorldStatic | Player | Vehicle | Deployable;
+
+    /// Character movement blockers: what a player capsule collides with.
+    inline constexpr uint16_t MovementMask = WorldStatic | Vehicle | Deployable;
+
+    /// Deployable placement validation: surfaces + obstructions to check before placing.
+    inline constexpr uint16_t PlacementMask = WorldStatic | Vehicle | Deployable | Player;
+} // namespace CollisionLayers
+
+/**
  * @brief Descriptor for a sub-shape within a MutableCompoundShape.
  */
 struct MutableSubShapeDesc

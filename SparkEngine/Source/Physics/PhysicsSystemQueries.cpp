@@ -620,6 +620,12 @@ std::shared_ptr<PhysicsBody> PhysicsSystem::CreateMutableCompoundBody(const Phys
 
     auto body = std::make_shared<PhysicsBody>(desc, bodyID.GetIndexAndSequenceNumber());
 
+    // Mirror CreateBody(): seed the wrapper's layer bits and register the wrapper as
+    // Jolt user data so filtered queries and collision callbacks can classify this body.
+    body->SetCollisionGroup(desc.collisionGroup);
+    body->SetCollisionMask(desc.collisionMask);
+    bodyInterface.SetUserData(bodyID, reinterpret_cast<uint64_t>(body.get()));
+
     m_bodies.push_back(body);
     m_bodyIDMap[bodyID.GetIndexAndSequenceNumber()] = body.get();
     if (!desc.name.empty())

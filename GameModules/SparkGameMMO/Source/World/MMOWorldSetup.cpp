@@ -132,7 +132,17 @@ namespace MMO
 
     void MMOWorldSetup::RegisterAreasWithStreaming()
     {
-        auto& streamingMgr = Spark::Streaming::SeamlessAreaManager::GetInstance();
+        // Resolve streaming through the injected engine context when available.
+        // Module DLLs statically link the engine, so the per-image GetInstance()
+        // static here is a DIFFERENT object from the host exe's manager — areas
+        // registered into it would never be streamed by the host's update loop.
+        // Fall back to the local singleton only when the host has not registered
+        // a manager with the context (standalone/test runs).
+        auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
+        if (!streamingMgr)
+        {
+            streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
 
         for (const auto& area : m_areas)
         {
@@ -148,7 +158,7 @@ namespace MMO
             def.scenePath = "Assets/Scenes/" + area.name + ".scene";
             def.priority = area.isInstanced ? 0 : 1;
 
-            streamingMgr.RegisterArea(def);
+            streamingMgr->RegisterArea(def);
         }
 
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -226,9 +236,15 @@ namespace MMO
 
         m_worldTime += deltaTime;
 
-        // Update seamless area streaming based on player position
-        auto& streamingMgr = Spark::Streaming::SeamlessAreaManager::GetInstance();
-        streamingMgr.Update(deltaTime);
+        // Update seamless area streaming based on player position.
+        // When the host has registered its SeamlessAreaManager with the engine
+        // context, the host lifecycle already steps it every frame — stepping it
+        // here as well would double-advance streaming. Only step the per-image
+        // fallback instance (standalone runs with no context-registered manager).
+        if (!m_context || !m_context->GetAreaStreaming())
+        {
+            Spark::Streaming::SeamlessAreaManager::GetInstance().Update(deltaTime);
+        }
     }
 
 #ifdef ENABLE_NETWORKING

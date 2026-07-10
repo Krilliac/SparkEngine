@@ -559,6 +559,72 @@ void PhysicsSystem::Update(float deltaTime)
     UpdateMetrics();
 }
 
+uint32_t PhysicsSystem::StepFixed(uint32_t stepCount, float interpolationAlpha)
+{
+    SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
+
+    if (m_paused || !m_joltSystem)
+    {
+        return 0;
+    }
+
+    // Refresh the render interpolation alpha even on zero-tick frames so
+    // interpolated transforms keep advancing between fixed ticks.
+    m_interpolationAlpha = std::clamp(interpolationAlpha, 0.0f, 1.0f);
+
+    if (stepCount == 0)
+    {
+        return 0;
+    }
+
+    // Safety clamp mirroring the caller-side accumulator cap (spiral-of-death guard).
+    uint32_t steps = stepCount;
+    if (m_maxSubsteps > 0 && steps > static_cast<uint32_t>(m_maxSubsteps))
+    {
+        steps = static_cast<uint32_t>(m_maxSubsteps);
+    }
+
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Physics", 0.0);
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    for (uint32_t i = 0; i < steps; ++i)
+    {
+        // Snapshot current state as previous before stepping (for interpolation)
+        for (auto& body : m_bodies)
+        {
+            if (body)
+            {
+                body->StoreCurrentState();
+            }
+        }
+
+        m_joltSystem->Update(m_timeStep, 1, m_tempAllocator.get(), m_jobSystem.get());
+
+        for (auto& body : m_bodies)
+        {
+            if (body)
+            {
+                body->UpdateCurrentState();
+            }
+        }
+    }
+
+    ProcessCollisions();
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        m_metrics.simulationTime = static_cast<float>(duration.count()) / 1000.0f;
+        m_metrics.substeps = steps;
+    }
+
+    SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", static_cast<double>(duration.count()) / 1000.0);
+    UpdateMetrics();
+    return steps;
+}
+
 void PhysicsSystem::UpdateMetrics()
 {
     if (!m_joltSystem)

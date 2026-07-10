@@ -364,6 +364,18 @@ void PhysicsSystem::Shutdown()
 
 void PhysicsSystem::Update(float /*deltaTime*/) {}
 
+uint32_t PhysicsSystem::StepFixed(uint32_t /*stepCount*/, float interpolationAlpha)
+{
+    // Mirror the real implementation: refresh the interpolation alpha even with no
+    // simulation so interpolated transform reads stay well-defined without Jolt.
+    if (interpolationAlpha < 0.0f)
+        interpolationAlpha = 0.0f;
+    else if (interpolationAlpha > 1.0f)
+        interpolationAlpha = 1.0f;
+    m_interpolationAlpha = interpolationAlpha;
+    return 0;
+}
+
 void PhysicsSystem::SetGravity(const XMFLOAT3& /*gravity*/) {}
 
 XMFLOAT3 PhysicsSystem::GetGravity() const
@@ -374,6 +386,8 @@ XMFLOAT3 PhysicsSystem::GetGravity() const
 std::shared_ptr<PhysicsBody> PhysicsSystem::CreateBody(const PhysicsBodyDesc& desc)
 {
     auto body = std::make_shared<PhysicsBody>(desc, 0);
+    body->SetCollisionGroup(desc.collisionGroup);
+    body->SetCollisionMask(desc.collisionMask);
     m_bodies.push_back(body);
     if (!desc.name.empty())
     {
@@ -491,6 +505,56 @@ RaycastHit PhysicsSystem::CapsuleCast(float /*radius*/, float /*height*/, const 
                                       const XMFLOAT3& /*to*/)
 {
     return RaycastHit{};
+}
+
+// Filtered spatial query stubs
+RaycastHit PhysicsSystem::RaycastFiltered(const XMFLOAT3& /*origin*/, const XMFLOAT3& /*direction*/,
+                                          float /*maxDistance*/, uint16_t /*layerMask*/,
+                                          const PhysicsBody* /*ignoreBody*/)
+{
+    return RaycastHit{};
+}
+
+std::vector<RaycastHit> PhysicsSystem::RaycastAllFiltered(const XMFLOAT3& /*origin*/, const XMFLOAT3& /*direction*/,
+                                                          float /*maxDistance*/, uint16_t /*layerMask*/,
+                                                          const PhysicsBody* /*ignoreBody*/)
+{
+    return {};
+}
+
+RaycastHit PhysicsSystem::SphereCastFiltered(float /*radius*/, const XMFLOAT3& /*from*/, const XMFLOAT3& /*to*/,
+                                             uint16_t /*layerMask*/, const PhysicsBody* /*ignoreBody*/)
+{
+    return RaycastHit{};
+}
+
+RaycastHit PhysicsSystem::BoxCastFiltered(const XMFLOAT3& /*halfExtents*/, const XMFLOAT3& /*from*/,
+                                          const XMFLOAT3& /*to*/, uint16_t /*layerMask*/,
+                                          const PhysicsBody* /*ignoreBody*/)
+{
+    return RaycastHit{};
+}
+
+RaycastHit PhysicsSystem::CapsuleCastFiltered(float /*radius*/, float /*height*/, const XMFLOAT3& /*from*/,
+                                              const XMFLOAT3& /*to*/, uint16_t /*layerMask*/,
+                                              const PhysicsBody* /*ignoreBody*/)
+{
+    return RaycastHit{};
+}
+
+bool PhysicsSystem::SphereOverlapFiltered(const XMFLOAT3& /*center*/, float /*radius*/, uint16_t /*layerMask*/,
+                                          std::vector<PhysicsBody*>& results, const PhysicsBody* /*ignoreBody*/)
+{
+    results.clear();
+    return false;
+}
+
+bool PhysicsSystem::BoxOverlapFiltered(const XMFLOAT3& /*center*/, const XMFLOAT3& /*halfExtents*/,
+                                       uint16_t /*layerMask*/, std::vector<PhysicsBody*>& results,
+                                       const PhysicsBody* /*ignoreBody*/)
+{
+    results.clear();
+    return false;
 }
 
 // New constraint stubs

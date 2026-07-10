@@ -78,6 +78,22 @@ class PhysicsDebugRenderer;
  * ### Gravity
  * Default gravity is `{0, -9.81, 0}` m/s² (Earth). Change it via `SetGravity()`.
  * A zero-gravity world is useful for space or underwater environments.
+ *
+ * ### Stepping contract (module-driven)
+ * Physics stepping is **module-driven**: the engine core never advances the
+ * simulation on its own. Exactly ONE owner (one game module, or the exe) may
+ * advance the world per frame, by calling either `Update(deltaTime)` OR
+ * `StepFixed(stepCount, alpha)` — never both, and never from two modules in
+ * the same process. Double-stepping runs the simulation at 2x speed and breaks
+ * determinism. As of 2026-07, the sole caller is SparkGameFPS
+ * (`Game.cpp` -> `physics->Update(dt)`); a module that wants deterministic
+ * fixed ticks instead should be the sole owner and drive `StepFixed()` from
+ * `Spark::FixedTimestepAccumulator` (Core/FixedTimestepAccumulator.h):
+ * @code
+ *   auto& acc = Spark::FixedTimestepAccumulator::GetInstance();
+ *   acc.Advance(frameDt); // once per frame, by the frame owner
+ *   physics->StepFixed(acc.GetFixedStepCount(), acc.GetInterpolationAlpha());
+ * @endcode
  */
 // Thread safety: Main thread only. All physics simulation, raycasting,
 // and collision shape operations must be called from the main thread.
@@ -118,9 +134,37 @@ class PhysicsSystem
 
     /**
      * @brief Advance the physics simulation by `deltaTime` seconds.
+     *
+     * Variable-rate entry point: internally accumulates `deltaTime` into fixed
+     * ticks of `GetTimeStep()` when interpolation is enabled. See the class-level
+     * "Stepping contract" — only ONE owner per process may call Update()/StepFixed()
+     * per frame; a second caller double-steps the world.
+     *
      * @param deltaTime  Time elapsed since the last frame in seconds.
      */
     void Update(float deltaTime);
+
+    /**
+     * @brief Advance the simulation by an exact number of fixed ticks (deterministic).
+     *
+     * Runs `stepCount` ticks of `GetTimeStep()` seconds each — no internal
+     * accumulator, so identical tick sequences produce identical results
+     * (combine with SetDeterministicSimulation(true) for lockstep networking).
+     * Intended to be driven from `Spark::FixedTimestepAccumulator`:
+     * @code
+     *   physics->StepFixed(acc.GetFixedStepCount(), acc.GetInterpolationAlpha());
+     * @endcode
+     *
+     * Mutually exclusive with Update(): the single stepping owner calls one or
+     * the other each frame, never both (see class-level "Stepping contract").
+     * Calling with `stepCount == 0` is valid — it only refreshes the
+     * interpolation alpha, so call it every frame even on frames with no tick.
+     *
+     * @param stepCount           Fixed ticks to run this frame (clamped to GetMaxSubsteps()).
+     * @param interpolationAlpha  Render interpolation alpha in [0, 1] (accumulator remainder / timestep).
+     * @return Number of ticks actually simulated (0 when paused or Jolt is unavailable).
+     */
+    uint32_t StepFixed(uint32_t stepCount, float interpolationAlpha = 1.0f);
 
     // =========================================================================
     // World settings
@@ -298,6 +342,17 @@ class PhysicsSystem
     // =========================================================================
     // Spatial queries
     // =========================================================================
+    //
+    // Hit-result contract (all Raycast*/SphereCast/BoxCast/CapsuleCast variants):
+    //   - `RaycastHit::point`    = contact point ON the hit surface (world space)
+    //   - `RaycastHit::normal`   = outward unit surface normal at the contact
+    //   - `RaycastHit::distance` = swept distance from `origin`/`from` (for shape
+    //     casts this is how far the shape's CENTER travelled, not point-to-point)
+    //   - `RaycastHit::body`     = PhysicsBody wrapper, or nullptr for raw Jolt bodies
+    // Shape casts sweep the shape's center along `from`->`to`. Prefer the
+    // *Filtered overloads below for gameplay traces so triggers/debris don't
+    // block hits. All queries are main-thread only (see class-level note).
+    // =========================================================================
 
     RaycastHit Raycast(const XMFLOAT3& origin, const XMFLOAT3& direction, float maxDistance = 1000.0f);
     std::vector<RaycastHit> RaycastAll(const XMFLOAT3& origin, const XMFLOAT3& direction, float maxDistance = 1000.0f);
@@ -306,6 +361,46 @@ class PhysicsSystem
     RaycastHit SphereCast(float radius, const XMFLOAT3& from, const XMFLOAT3& to);
     RaycastHit BoxCast(const XMFLOAT3& halfExtents, const XMFLOAT3& from, const XMFLOAT3& to);
     RaycastHit CapsuleCast(float radius, float height, const XMFLOAT3& from, const XMFLOAT3& to);
+
+    // -------------------------------------------------------------------------
+    // Filtered spatial queries (gameplay-facing)
+    //
+    // `layerMask` is tested against each candidate body's collision group
+    // (`(body->GetCollisionGroup() & layerMask) != 0`) — use the named bits and
+    // presets in CollisionLayers (PhysicsTypes.h), e.g. CollisionLayers::HitscanMask.
+    // `ignoreBody` excludes one body (typically the query instigator: the
+    // shooter's own hull, the sweeping vehicle itself). Bodies that have no
+    // PhysicsBody wrapper (raw Jolt-internal bodies) always pass the layer
+    // filter, so world geometry is never silently skipped.
+    // -------------------------------------------------------------------------
+
+    /** @brief Closest-hit raycast restricted to `layerMask`, optionally ignoring one body. */
+    RaycastHit RaycastFiltered(const XMFLOAT3& origin, const XMFLOAT3& direction, float maxDistance, uint16_t layerMask,
+                               const PhysicsBody* ignoreBody = nullptr);
+
+    /** @brief All-hits raycast (sorted near-to-far) restricted to `layerMask`. */
+    std::vector<RaycastHit> RaycastAllFiltered(const XMFLOAT3& origin, const XMFLOAT3& direction, float maxDistance,
+                                               uint16_t layerMask, const PhysicsBody* ignoreBody = nullptr);
+
+    /** @brief Sphere sweep from `from` to `to` restricted to `layerMask`. */
+    RaycastHit SphereCastFiltered(float radius, const XMFLOAT3& from, const XMFLOAT3& to, uint16_t layerMask,
+                                  const PhysicsBody* ignoreBody = nullptr);
+
+    /** @brief Box sweep from `from` to `to` restricted to `layerMask`. */
+    RaycastHit BoxCastFiltered(const XMFLOAT3& halfExtents, const XMFLOAT3& from, const XMFLOAT3& to,
+                               uint16_t layerMask, const PhysicsBody* ignoreBody = nullptr);
+
+    /** @brief Capsule sweep from `from` to `to` restricted to `layerMask`. */
+    RaycastHit CapsuleCastFiltered(float radius, float height, const XMFLOAT3& from, const XMFLOAT3& to,
+                                   uint16_t layerMask, const PhysicsBody* ignoreBody = nullptr);
+
+    /** @brief Sphere overlap restricted to `layerMask`. Returns true if any body matched. */
+    bool SphereOverlapFiltered(const XMFLOAT3& center, float radius, uint16_t layerMask,
+                               std::vector<PhysicsBody*>& results, const PhysicsBody* ignoreBody = nullptr);
+
+    /** @brief Box overlap restricted to `layerMask`. Returns true if any body matched. */
+    bool BoxOverlapFiltered(const XMFLOAT3& center, const XMFLOAT3& halfExtents, uint16_t layerMask,
+                            std::vector<PhysicsBody*>& results, const PhysicsBody* ignoreBody = nullptr);
 
     // =========================================================================
     // Collision callbacks
