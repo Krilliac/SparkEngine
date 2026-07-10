@@ -7,6 +7,7 @@
 
 #include "Account/TFAccountSystem.h"     // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h"   // W5 onboarding (Task 4)
+#include "Persistence/TFDatabase.h"
 #include "Net/TFClientNet.h"             // W5 onboarding (Task 7): local-player reply loopback
 #include "Net/TFChatRules.h"
 #include "Data/TFDataTables.h"
@@ -1064,7 +1065,7 @@ void TFServerSim::HandleLogin(PlayerId sender, const void* data, size_t size)
     const std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
 
     TF_AuthReply rep{};
-    if (!m_ctx->account)
+    if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
     {
         rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
     }
@@ -1093,7 +1094,7 @@ void TFServerSim::HandleRegister(PlayerId sender, const void* data, size_t size)
     const std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
 
     TF_AuthReply rep{};
-    if (!m_ctx->account)
+    if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
     {
         rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
     }
@@ -1107,6 +1108,23 @@ void TFServerSim::HandleRegister(PlayerId sender, const void* data, size_t size)
         // (mirrors MMOAccountSystem's register-then-login flow).
     }
     SendToPlayer(sender, static_cast<uint16_t>(TFMsg::RegisterReply), &rep, sizeof(rep), true);
+}
+
+bool TFServerSim::EnsureAuthorityDatabaseOpen()
+{
+    if (!m_ctx || !m_ctx->IsAuthority() || !m_ctx->db)
+        return false;
+    if (m_ctx->db->IsOpen())
+        return true;
+    if (m_ctx->db->Open("Saves/terrafront.db"))
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "[TF] authority opened account database");
+        return true;
+    }
+    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                    "[TF] authority failed to open Saves/terrafront.db");
+    return false;
 }
 
 void TFServerSim::HandleCharList(PlayerId sender, const void* data, size_t size)

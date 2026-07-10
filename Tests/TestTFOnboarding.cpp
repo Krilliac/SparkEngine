@@ -25,7 +25,7 @@ TEST(TFDatabase_AccountCharacter_RoundTrip)
     fs::remove(path);
     uint64_t acctId=0, charId=0;
     {
-        TFDatabase db; EXPECT_TRUE(db.Open(path));
+        TFDatabase db; EXPECT_FALSE(db.IsOpen()); EXPECT_TRUE(db.Open(path)); EXPECT_TRUE(db.IsOpen());
         TFAccountRecord a;
         EXPECT_TRUE(db.CreateAccount("commander", "abc123", "hashed", a));
         acctId = a.id; EXPECT_TRUE(acctId != 0);
@@ -34,7 +34,7 @@ TEST(TFDatabase_AccountCharacter_RoundTrip)
         EXPECT_TRUE(db.CreateCharacter(acctId, "Vanguard", FactionId::MRA, c));
         charId = c.id; EXPECT_TRUE(charId != 0);
         db.SaveCharacterProgress(charId, 4200, 7, 150, 111);
-        db.Close();
+        db.Close(); EXPECT_FALSE(db.IsOpen());
     }
     { // reopen a fresh instance -> data survived
         TFDatabase db; EXPECT_TRUE(db.Open(path));

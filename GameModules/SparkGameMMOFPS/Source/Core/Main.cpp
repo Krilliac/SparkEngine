@@ -134,17 +134,11 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_ctx.characters  = m_characters.get();
     m_ctx.loginFlow   = m_loginFlow.get();
 
-    // W5 onboarding (Task 6): TFDatabase/TFAccountSystem/TFCharacterSystem are
-    // plain core-logic classes (unit-tested standalone against a bare
-    // TFDatabase*, see Tests/TestTFOnboarding.cpp) with no uniform
-    // Initialize(ctx,events) lifecycle, so they are wired directly here
-    // rather than through the Boot table below. TFDatabase::Open can fail
-    // (bad path/IO) so its result still gates the boot via the Boot table;
-    // SetDatabase is a plain pointer store and cannot fail.
-    const bool tfDbOk = m_db->Open("Saves/terrafront.db");
-    if (!tfDbOk)
-        console.LogWarning("[TF] TFDatabase failed to open Saves/terrafront.db "
-                            "- onboarding will report ServerError until fixed");
+    // Persistence is authority-owned. A pure client must never load a stale
+    // snapshot and flush it over the dedicated server's account database at
+    // shutdown. TFServerSim opens the database lazily on the first login or
+    // registration request; clients keep these interfaces wired only for the
+    // shared onboarding types and reply flow.
     m_account->SetDatabase(m_db.get());
     m_characters->SetDatabase(m_db.get());
 
@@ -171,7 +165,6 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         { "TFSpawnScreen",       m_spawnUI->Initialize(m_ctx, m_events) },
         { "TFScoreboard",        m_scoreboard->Initialize(m_ctx, m_events) },
         // W5 onboarding (Task 6, additive).
-        { "TFDatabase",          tfDbOk },
         { "TFLoginFlow",         m_loginFlow->Initialize(m_ctx, m_events) },
     };
     for (const Boot& b : boots)

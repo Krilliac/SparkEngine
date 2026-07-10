@@ -54,6 +54,7 @@ class TFDatabase
 
     bool Open(const std::string& path);   // e.g. "Saves/terrafront.db"; false on failure
     void Close();
+    bool IsOpen() const { return m_open; }
 
     // Accounts
     bool CreateAccount(const std::string& username, const std::string& salt, const std::string& hash,

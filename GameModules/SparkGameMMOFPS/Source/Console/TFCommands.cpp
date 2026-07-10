@@ -412,6 +412,8 @@ void TerrafrontModule::RegisterConsoleCommands()
             }
 
             os << "\n  client: " << (ClientConnected(m_ctx) ? "connected" : "not connected");
+            if (m_ctx.role != NetRole::DedicatedServer)
+                os << "\n  session: " << (m_ctx.InWorld() ? "in-world" : "onboarding");
             if (m_ctx.IsAuthority() && m_ctx.serverSim && m_ctx.role != NetRole::Standalone) {
                 char t[32];
                 std::snprintf(t, sizeof(t), "%.1f", m_ctx.serverSim->ServerTime());
@@ -959,6 +961,8 @@ void TerrafrontModule::RegisterConsoleCommands()
             std::strncpy(req.user, args[0].c_str(), sizeof(req.user) - 1);
             std::strncpy(req.pass, args[1].c_str(), sizeof(req.pass) - 1);
             m_ctx.clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req));
+            if (!m_ctx.IsAuthority())
+                return "[TF] registration request sent - awaiting server reply";
             const auto err = static_cast<TFAuthErr>(m_ctx.clientNet->LastAuthError());
             return err == TFAuthErr::Ok
                        ? "[TF] register '" + args[0] + "': ok"
@@ -981,6 +985,8 @@ void TerrafrontModule::RegisterConsoleCommands()
             std::strncpy(req.user, args[0].c_str(), sizeof(req.user) - 1);
             std::strncpy(req.pass, args[1].c_str(), sizeof(req.pass) - 1);
             m_ctx.clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req));
+            if (!m_ctx.IsAuthority())
+                return "[TF] login request sent - awaiting server reply";
             return m_ctx.clientNet->IsLoggedIn()
                        ? "[TF] login ok: account " + std::to_string(m_ctx.clientNet->AccountId())
                        : "[TF] login failed: err=" +
@@ -1005,6 +1011,8 @@ void TerrafrontModule::RegisterConsoleCommands()
             std::strncpy(req.name, args[0].c_str(), sizeof(req.name) - 1);
             req.faction = static_cast<uint8_t>(f);
             m_ctx.clientNet->SendMsg(TFMsg::CharCreateReq, &req, sizeof(req));
+            if (!m_ctx.IsAuthority())
+                return "[TF] character creation request sent - awaiting server reply";
             const auto err = static_cast<TFCharErr>(m_ctx.clientNet->LastCharOpError());
             return err == TFCharErr::Ok
                        ? "[TF] character '" + args[0] + "' created: id " +

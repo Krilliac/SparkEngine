@@ -170,6 +170,7 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     // answered with TFAuthErr::ServerError / TFCharErr::ServerError.
     void HandleLogin(PlayerId sender, const void* data, size_t size);
     void HandleRegister(PlayerId sender, const void* data, size_t size);
+    bool EnsureAuthorityDatabaseOpen();
     void HandleCharList(PlayerId sender, const void* data, size_t size);
     void HandleCharCreate(PlayerId sender, const void* data, size_t size);
     void HandleCharDelete(PlayerId sender, const void* data, size_t size);

@@ -39,6 +39,17 @@ Core numbers (all data-driven, see [Data tables](#data-tables)): 500 HP +
 
 ## Quickstart
 
+For a local dedicated server and graphical client, build the Release target and
+run the launcher from the repository root:
+
+```powershell
+.\Tools\Launch-Terrafront.ps1
+```
+
+The client connects to `127.0.0.1:27020` automatically. Use the login screen to
+create an account, sign in, create a character, and enter the world. The server
+owns account and character persistence; clients never open or write its database.
+
 Build the engine as usual (module DLLs under `GameModules/` build automatically):
 
 ```powershell
