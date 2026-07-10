@@ -586,7 +586,11 @@ endif()
 if(NOT WIN32)
     find_package(Threads REQUIRED)
     target_link_libraries(SparkTests PRIVATE Threads::Threads)
-    target_compile_definitions(SparkTests PRIVATE SPARK_PLATFORM_LINUX)
+    if(APPLE)
+        target_compile_definitions(SparkTests PRIVATE SPARK_PLATFORM_MACOS)
+    else()
+        target_compile_definitions(SparkTests PRIVATE SPARK_PLATFORM_LINUX)
+    endif()
 
     # Export symbols so backtrace_symbols() can resolve function names in stack traces
     set_target_properties(SparkTests PROPERTIES ENABLE_EXPORTS ON)

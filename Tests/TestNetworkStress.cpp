@@ -47,7 +47,7 @@ class RawUDPSender
         if (m_socket == INVALID_SOCKET)
             return false;
 
-            // Non-blocking
+        // Non-blocking
 #ifdef SPARK_PLATFORM_WINDOWS
         u_long nonBlocking = 1;
         ioctlsocket(m_socket, FIONBIO, &nonBlocking);
@@ -571,7 +571,10 @@ TEST(NetworkStress_SequenceManipulation)
                    auto connectPkt = BuildConnectPacket("SeqTest");
                    sender.SendTo(connectPkt.data(), connectPkt.size(), port);
                    for (int f = 0; f < 3; ++f)
+                   {
                        nm.Update(0.016f);
+                       std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                   }
 
                    // Now send packets with extreme sequence numbers
                    uint32_t badSeqs[] = {0, 0xFFFFFFFF, 0x80000000, 1, 0xFFFFFFFE};
@@ -767,7 +770,10 @@ TEST(NetworkStress_ReplayAttack)
                    }
 
                    for (int f = 0; f < 10; ++f)
+                   {
                        nm.Update(0.016f);
+                       std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                   }
 
                    // Replayed connects from the same address are now detected
                    // and ignored — only one client should exist

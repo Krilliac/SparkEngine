@@ -337,7 +337,13 @@ namespace Spark
             return m_impl->exitStatus;
 
         int status = 0;
-        waitpid(m_impl->childPid, &status, 0);
+        pid_t result;
+        do
+        {
+            result = waitpid(m_impl->childPid, &status, 0);
+        } while (result == -1 && errno == EINTR);
+        if (result != m_impl->childPid)
+            return -1;
         m_impl->exited = true;
         m_impl->exitStatus = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
         return m_impl->exitStatus;

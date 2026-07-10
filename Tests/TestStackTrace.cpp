@@ -118,11 +118,19 @@ TEST(StackTrace_ToCompactStringTopN)
     std::string compact1 = trace.ToCompactString(1);
     std::string compact5 = trace.ToCompactString(5);
 
-    // More frames requested should produce longer or equal string
+    // More frames requested should expose at least as many frame separators.
+    // The one-frame form's "N more" suffix can be longer than resolved symbols.
     EXPECT_FALSE(compact1.empty());
     if (trace.GetFrameCount() > 1)
     {
-        EXPECT_GE(compact5.size(), compact1.size());
+        auto countSeparators = [](const std::string& value)
+        {
+            size_t count = 0;
+            for (size_t pos = 0; (pos = value.find(" <- ", pos)) != std::string::npos; pos += 4)
+                ++count;
+            return count;
+        };
+        EXPECT_GE(countSeparators(compact5), countSeparators(compact1));
     }
 }
 

@@ -65,13 +65,13 @@ namespace Spark::Graphics::Neural
 
     static void EvaluateLayer_Scalar(const float* __restrict input, float* __restrict output,
                                      const float* __restrict weights, const float* __restrict biases,
-                                     uint32_t inputSize, uint32_t /*paddedInputSize*/, uint32_t outputSize,
+                                     uint32_t inputSize, uint32_t paddedInputSize, uint32_t outputSize,
                                      ActivationType activation)
     {
         for (uint32_t j = 0; j < outputSize; ++j)
         {
             float sum = biases[j];
-            const float* row = weights + j * inputSize;
+            const float* row = weights + j * paddedInputSize;
             for (uint32_t i = 0; i < inputSize; ++i)
             {
                 sum += row[i] * input[i];

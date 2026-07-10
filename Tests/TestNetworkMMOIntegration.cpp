@@ -174,6 +174,7 @@ static void RunServerFrames(NetworkManager& nm, int frames, float dt = 0.016f)
     for (int i = 0; i < frames; ++i)
     {
         nm.Update(dt);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 

@@ -127,6 +127,7 @@ namespace Spark::RHI::Metal
         float lightPad = 0.0f;
         uint32_t resolutionX = 0;
         uint32_t resolutionY = 0;
+        uint32_t resolutionPad[2] = {0, 0};
     };
 
     /**
