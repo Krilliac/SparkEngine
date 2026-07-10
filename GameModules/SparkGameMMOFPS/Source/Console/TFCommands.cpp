@@ -42,6 +42,7 @@
 #endif
 
 #include <cctype>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -83,6 +84,16 @@ bool ParseClass(const std::string& arg, ClassId& out)
     if (s == "fabricator") { out = ClassId::Fabricator; return true; }
     if (s == "bulwark")    { out = ClassId::Bulwark;    return true; }
     return false;   // Colossus is terminal-purchased, not console-selectable
+}
+
+bool ParseChatChannel(const std::string& arg, ChatChannel& out)
+{
+    const std::string s = Lower(arg);
+    if (s == "region" || s == "re") { out = ChatChannel::Region; return true; }
+    if (s == "faction" || s == "f") { out = ChatChannel::Faction; return true; }
+    if (s == "squad" || s == "s") { out = ChatChannel::Squad; return true; }
+    if (s == "yell" || s == "y") { out = ChatChannel::Yell; return true; }
+    return false;
 }
 
 const char* ClassName(ClassId c)
@@ -227,9 +238,12 @@ std::string RunOnboardingAcceptanceSelfTest(TFGameContext& ctx)
 
     // ---- Part 2: the happy path -- register -> login -> create -> enter -> play.
     os << "\n-- happy path: register -> login -> char-create -> enter-world -> spawn --";
-    const std::string user = "tf_accept_user";
+    const uint64_t runId = static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count()) & 0xFFFFFFu;
+    const std::string suffix = std::to_string(runId);
+    const std::string user = "tf_accept_" + suffix;
     const std::string pass = "tf_accept_pw1";
-    const std::string charName = "AcceptanceVanguard";
+    const std::string charName = "Acceptance" + suffix;
 
     {
         TF_AuthRequest reg{};
@@ -237,8 +251,8 @@ std::string RunOnboardingAcceptanceSelfTest(TFGameContext& ctx)
         std::strncpy(reg.pass, pass.c_str(), sizeof(reg.pass) - 1);
         ctx.clientNet->SendMsg(TFMsg::RegisterRequest, &reg, sizeof(reg));
         const auto regErr = static_cast<TFAuthErr>(ctx.clientNet->LastAuthError());
-        check(regErr == TFAuthErr::Ok || regErr == TFAuthErr::UsernameTaken,
-              "register accepted (or already registered by a prior run of this self-test)");
+        check(regErr == TFAuthErr::Ok,
+              "unique per-run acceptance account registered");
     }
     {
         TF_AuthRequest login{};
@@ -897,6 +911,29 @@ void TerrafrontModule::RegisterConsoleCommands()
             return "[TF] granted " + std::to_string(n) + " flux (debug)";
         },
         "Debug: grant yourself flux", cat, "tf_giveflux [n=750]");
+
+    console.RegisterCommand(
+        "tf_chat",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 2)
+                return "[TF] usage: tf_chat <region|faction|squad|yell> <message>";
+            ChatChannel channel;
+            if (!ParseChatChannel(args[0], channel))
+                return "[TF] tf_chat: bad channel '" + args[0] + "'";
+            std::ostringstream message;
+            for (size_t i = 1; i < args.size(); ++i)
+            {
+                if (i != 1)
+                    message << ' ';
+                message << args[i];
+            }
+            if (!m_ctx.clientNet || !m_ctx.clientNet->SendChat(channel, message.str()))
+                return "[TF] chat rejected - enter the world and provide non-empty text";
+            return "[TF] chat sent";
+        },
+        "Send a TERRAFRONT chat message", cat,
+        "tf_chat <region|faction|squad|yell> <message>");
 
     // ------------------------------------------------------------------- W5
     // Onboarding (T7): drive login/character-select/create/enter-world from

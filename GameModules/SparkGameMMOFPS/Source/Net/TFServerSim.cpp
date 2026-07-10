@@ -8,6 +8,7 @@
 #include "Account/TFAccountSystem.h"     // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h"   // W5 onboarding (Task 4)
 #include "Net/TFClientNet.h"             // W5 onboarding (Task 7): local-player reply loopback
+#include "Net/TFChatRules.h"
 #include "Data/TFDataTables.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
@@ -33,6 +34,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 namespace Terrafront {
 
@@ -124,6 +126,9 @@ void TFServerSim::Shutdown()
     m_factions.clear();
     m_deathTime.clear();
     m_knownClients.clear();
+    m_enteredWorld.clear();
+    m_activeCharacter.clear();
+    m_chatNextAt.clear();
     m_lagComp.Clear();
     m_initialized = false;
 }
@@ -499,13 +504,17 @@ void TFServerSim::RegisterNetHandlers()
         });
     }
 
-    // Accepted-but-unrouted stubs (registered so NetworkManager does not
-    // warn "unknown message type" if an eager client sends them):
-    // TF-W4: LoadoutChange -> players/weapons, ChatMsg -> chat relay
-    for (TFMsg id : {TFMsg::LoadoutChange, TFMsg::ChatMsg})
+    // Accepted-but-unrouted stub (registered so NetworkManager does not
+    // warn "unknown message type" if an eager client sends it):
+    for (TFMsg id : {TFMsg::LoadoutChange})
     {
         route(id, [](const NetworkMessage&) {});
     }
+
+    route(TFMsg::ChatMsg, [this](const NetworkMessage& m) {
+        RouteClientMessage(m.senderID, TFMsg::ChatMsg,
+                           m.payload.data(), m.payload.size());
+    });
 
     // W5 onboarding (Task 4): login -> char-select/create/delete -> enter-world.
     // Routed through RouteClientMessage so the socket path and the listen-host/
@@ -562,7 +571,9 @@ void TFServerSim::PollClientJoinsLeaves()
     for (auto it = m_knownClients.begin(); it != m_knownClients.end();)
     {
         const PlayerId id = *it;
-        if (!clients.contains(id))
+        const auto clientIt = clients.find(id);
+        if (clientIt == clients.end() ||
+            clientIt->second.state != Spark::Net::ConnectionState::Connected)
         {
             CleanupPlayerSession(id);
             it = m_knownClients.erase(it);
@@ -585,6 +596,7 @@ void TFServerSim::CleanupPlayerSession(PlayerId id)
     m_factions.erase(id);
     m_deathTime.erase(id);
     m_enteredWorld.erase(id);
+    m_chatNextAt.erase(id);
     // W5 onboarding (Task 6): flush the active character's progress
     // one last time before dropping the session (DESIGN.md W5 "Error
     // handling": "On disconnect, flush the active character's
@@ -898,6 +910,7 @@ void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data
         case TFMsg::VehicleExit:
         case TFMsg::AegisDeploy:
         case TFMsg::SquadMsg:
+        case TFMsg::ChatMsg:
             if (!m_enteredWorld.contains(sender))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -931,8 +944,111 @@ void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data
             if (m_ctx->squads)
                 m_ctx->squads->ServerHandleSquadMsgRaw(sender, data, size);
             break;
+        case TFMsg::ChatMsg:       HandleChatMsg(sender, data, size); break;
         default: break;
     }
+}
+
+RegionId TFServerSim::RegionOfPlayer(PlayerId player) const
+{
+    if (!m_ctx || !m_ctx->players || !m_ctx->data || !m_ctx->data->IsLoaded())
+        return kInvalidRegion;
+    PawnInfo pawn{};
+    if (!m_ctx->players->GetPawnByPlayer(player, pawn))
+        return kInvalidRegion;
+
+    RegionId nearest = kInvalidRegion;
+    float bestSq = std::numeric_limits<float>::max();
+    for (const RegionDef& region : m_ctx->data->GetContinent().regions)
+    {
+        const float dx = pawn.pos[0] - region.centerX;
+        const float dz = pawn.pos[2] - region.centerZ;
+        const float d2 = dx * dx + dz * dz;
+        if (d2 < bestSq)
+        {
+            bestSq = d2;
+            nearest = region.id;
+        }
+    }
+    return nearest;
+}
+
+void TFServerSim::HandleChatMsg(PlayerId sender, const void* data, size_t size)
+{
+    if (data == nullptr || size != sizeof(TF_ChatMsg) ||
+        sender == Spark::Net::INVALID_CLIENT)
+    {
+        ++m_badPackets;
+        return;
+    }
+
+    TF_ChatMsg incoming{};
+    std::memcpy(&incoming, data, sizeof(incoming));
+    if (!IsValidChatChannel(incoming.channel))
+    {
+        ++m_badPackets;
+        return;
+    }
+
+    const double nextAllowed = m_chatNextAt[sender];
+    if (m_serverTime < nextAllowed)
+        return;
+    // Consume the cooldown before text normalization so empty/control-only
+    // packets cannot bypass the limiter and hammer the server parser.
+    m_chatNextAt[sender] = m_serverTime + 0.5;
+
+    TF_ChatMsg outgoing{};
+    outgoing.fromPlayer = sender;
+    outgoing.channel = incoming.channel;
+    if (!NormalizeChatText(incoming.text, sizeof(incoming.text),
+                           outgoing.text, sizeof(outgoing.text)))
+        return;
+
+    const auto channel = static_cast<ChatChannel>(outgoing.channel);
+    const FactionId senderFaction = GetPlayerFaction(sender);
+    const SquadId senderSquad = m_ctx->squads ? m_ctx->squads->SquadOf(sender) : kInvalidSquad;
+    const RegionId senderRegion = RegionOfPlayer(sender);
+    PawnInfo senderPawn{};
+    const bool senderHasPawn = m_ctx->players &&
+                               m_ctx->players->GetPawnByPlayer(sender, senderPawn);
+
+    size_t recipients = 0;
+    for (const PlayerId recipient : m_enteredWorld)
+    {
+        PawnInfo recipientPawn{};
+        const bool recipientHasPawn = m_ctx->players &&
+            m_ctx->players->GetPawnByPlayer(recipient, recipientPawn);
+        float distanceSq = 0.0f;
+        if (senderHasPawn && recipientHasPawn)
+        {
+            const float dx = senderPawn.pos[0] - recipientPawn.pos[0];
+            const float dy = senderPawn.pos[1] - recipientPawn.pos[1];
+            const float dz = senderPawn.pos[2] - recipientPawn.pos[2];
+            distanceSq = dx * dx + dy * dy + dz * dz;
+        }
+
+        const FactionId recipientFaction = GetPlayerFaction(recipient);
+        const SquadId recipientSquad = m_ctx->squads
+            ? m_ctx->squads->SquadOf(recipient) : kInvalidSquad;
+        const RegionId recipientRegion = RegionOfPlayer(recipient);
+        const TFChatRouteView view{
+            recipient == sender,
+            senderRegion != kInvalidRegion && recipientRegion == senderRegion,
+            senderFaction != FactionId::None && recipientFaction == senderFaction,
+            senderSquad != kInvalidSquad && recipientSquad == senderSquad,
+            senderHasPawn && recipientHasPawn,
+            distanceSq,
+        };
+        if (!ShouldReceiveChat(channel, view))
+            continue;
+        SendToPlayer(recipient, static_cast<uint16_t>(TFMsg::ChatMsg),
+                     &outgoing, sizeof(outgoing), true);
+        ++recipients;
+    }
+
+    SPARK_LOG_TRACE(Spark::LogCategory::Game,
+                    "[TF] chat %s from p%u routed to %zu player(s)",
+                    ChatChannelName(channel), sender, recipients);
 }
 
 void TFServerSim::HandleLogin(PlayerId sender, const void* data, size_t size)

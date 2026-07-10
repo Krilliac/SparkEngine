@@ -17,6 +17,7 @@
 
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
+#include "Net/TFNetProtocol.h"
 
 #include <cstdint>
 #include <deque>
@@ -47,6 +48,7 @@ class TFHUD {
     void ShowDamageFrom(uint8_t dirOctant);
     void SetWeaponStatus(const char* name, int mag, int reserve, bool reloading);
     void SetRank(uint16_t rank);
+    bool IsChatOpen() const { return m_chatOpen; }
 
   private:
     struct PawnView {
@@ -78,6 +80,8 @@ class TFHUD {
     void DrawRespawnOverlay();
     void DrawCompass();
     void DrawMinimap();
+    void DrawChat();
+    void CloseChat();
 
     TFGameContext* m_ctx{nullptr};
     TFEventBus*    m_events{nullptr};
@@ -113,6 +117,12 @@ class TFHUD {
     int         m_weapMag{-1};
     int         m_weapReserve{-1};
     bool        m_weapReloading{false};
+
+    bool        m_chatOpen{false};
+    bool        m_focusChatInput{false};
+    bool        m_chatReleasedMouse{false};
+    ChatChannel m_chatChannel{ChatChannel::Region};
+    char        m_chatInput[122]{};
 };
 
 } // namespace Terrafront

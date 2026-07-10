@@ -38,6 +38,7 @@
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/InterpolationBuffer.h"
 
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -51,6 +52,13 @@ constexpr PlayerId kTFLocalHostPlayer = 0xFFFFFF01u;
 
 class TFClientNet {
   public:
+    struct ChatLine {
+        PlayerId from{kInvalidPlayer};
+        ChatChannel channel{ChatChannel::Region};
+        std::string text;
+        float visibleFor{0.0f};
+    };
+
     TFClientNet();
     ~TFClientNet();
 
@@ -65,6 +73,8 @@ class TFClientNet {
     PlayerId LocalPlayerId() const;
     void     SendInput(const TF_ClientInput& input);
     void     SendMsg(TFMsg id, const void* payload, size_t size);
+    bool     SendChat(ChatChannel channel, const std::string& text);
+    const std::deque<ChatLine>& ChatHistory() const { return m_chatHistory; }
 
     /// Connect to a remote host (called via TFWorldSetup::Connect).
     bool Connect(const std::string& ip, uint16_t port);
@@ -149,6 +159,7 @@ class TFClientNet {
     void OnDamageEvent(const void* data, size_t size);
     void OnKillEvent(const void* data, size_t size);
     void OnXPEvent(const void* data, size_t size);
+    void OnChatMsg(const void* data, size_t size);
 
     // W5 onboarding (Task 4). TFLoginFlow (Task 5) is not wired yet — these
     // parse + stash the reply so Task 5/6 can read it via a getter, or replace
@@ -172,6 +183,7 @@ class TFClientNet {
     float  m_inputAccum{0.0f};             ///< 60 Hz input pacing accumulator
     bool   m_handlersRegistered{false};
     bool   m_wasAlive{false};
+    std::deque<ChatLine> m_chatHistory;
 
     // View angles (camera convention, radians; see TFMovementModel.h basis).
     float m_viewYaw{0.0f};

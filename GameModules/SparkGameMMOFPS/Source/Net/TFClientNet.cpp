@@ -7,6 +7,7 @@
  *        TFClientNetHandlers.cpp (same class, split per repo file-size rules).
  */
 #include "Net/TFClientNet.h"
+#include "Net/TFChatRules.h"
 
 #include "Data/TFDataTables.h"
 #include "Game/TFMovementModel.h"
@@ -15,6 +16,7 @@
 #include "Net/TFReplication.h"
 #include "Net/TFServerSim.h"
 #include "UI/TFLoginFlow.h"   // W5 onboarding (Task 6): loginFlow->IsOpen() input suppression
+#include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
 #include "World/TFWorldSetup.h"
@@ -91,6 +93,8 @@ void TFClientNet::Update(float deltaTime)
         return;
 
     m_clock += deltaTime;
+    for (ChatLine& line : m_chatHistory)
+        line.visibleFor = std::max(0.0f, line.visibleFor - deltaTime);
     UpdateConnectionState();
 
     if (!m_ctx->HasLocalPlayer())
@@ -121,7 +125,8 @@ void TFClientNet::Update(float deltaTime)
     // discharge the weapon underneath.
     const bool uiOpen = (m_ctx->map && m_ctx->map->IsOpen()) ||
                         (m_ctx->spawnUI && m_ctx->spawnUI->IsOpen()) ||
-                        (m_ctx->loginFlow && m_ctx->loginFlow->IsOpen());
+                        (m_ctx->loginFlow && m_ctx->loginFlow->IsOpen()) ||
+                        (m_ctx->hud && m_ctx->hud->IsChatOpen());
     PumpInput(deltaTime, alive && !uiOpen);
 
     if (!m_ctx->IsAuthority())
@@ -249,6 +254,7 @@ void TFClientNet::Disconnect()
     m_localPlayer = kInvalidPlayer;
     m_predActive = false;
     m_interp.clear();
+    m_chatHistory.clear();
     // review follow-up (state hygiene): inWorld is only ever set true (on
     // WorldWelcome) and never reset -- InWorld() stayed true for the rest of
     // the process after a disconnect, letting gated client UI/systems believe
@@ -266,6 +272,20 @@ void TFClientNet::Disconnect()
 void TFClientNet::SendInput(const TF_ClientInput& input)
 {
     SendMsg(TFMsg::ClientInput, &input, sizeof(input));
+}
+
+bool TFClientNet::SendChat(ChatChannel channel, const std::string& text)
+{
+    if (!IsValidChatChannel(static_cast<uint8_t>(channel)) || !IsConnected() ||
+        !m_ctx || !m_ctx->InWorld())
+        return false;
+
+    TF_ChatMsg msg{};
+    msg.channel = static_cast<uint8_t>(channel);
+    if (!NormalizeChatText(text.data(), text.size(), msg.text, sizeof(msg.text)))
+        return false;
+    SendMsg(TFMsg::ChatMsg, &msg, sizeof(msg));
+    return true;
 }
 
 void TFClientNet::SendMsg(TFMsg id, const void* payload, size_t size)

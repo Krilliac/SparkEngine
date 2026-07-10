@@ -55,6 +55,9 @@ specific module DLL, use the `-game` flag:
 
 Then drive everything from the console (`~`). A first session:
 
+Press **Enter** in-world to open HUD chat; choose region, faction, squad, or
+yell scope before sending.
+
 ```
 tf_host                    # start an in-process listen server (port 27020)
 tf_faction hlx             # join the Helix Covenant
@@ -82,6 +85,7 @@ Default port is 27020/UDP. Territory and progression persist across restarts
 | Command | What it does |
 |---|---|
 | `tf_status` | Module, role, session and system status |
+| `tf_chat <region\|faction\|squad\|yell> <message>` | Send chat to the selected scope |
 | `tf_host [port]` / `tf_dedicated [port]` | Start listen host / headless server |
 | `tf_connect <ip[:port]>` / `tf_disconnect` | Join / leave a server |
 | `tf_faction <mra\|auc\|hlx>` | Choose your side |
@@ -183,6 +187,7 @@ are included directly):
 - `TestTFDataTables.cpp` — parses the real JSON tables; ids, vocabularies, conduit symmetry, ownership coverage, asset paths exist on disk
 - `TestTFDamageModel.cpp` — shield-first absorb, FF 50%, regen timing, TTK contract examples
 - `TestTFRegionLattice.cpp` — BFS spawn connectivity + capturability over the real map topology
+- `TestTFChatRules.cpp` — text normalization/bounds, channel validation, scope routing, yell range
 
 ```powershell
 # run just the TERRAFRONT suites (name filter via env var)

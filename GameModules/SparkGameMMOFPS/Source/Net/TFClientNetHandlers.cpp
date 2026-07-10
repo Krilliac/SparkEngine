@@ -8,6 +8,7 @@
  *        mirrors the TFWeaponSystem/TFWeaponServer split).
  */
 #include "Net/TFClientNet.h"
+#include "Net/TFChatRules.h"
 
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
@@ -186,6 +187,7 @@ void TFClientNet::RouteLoopback(TFMsg id, const void* payload, size_t size)
         case TFMsg::VehicleExit:
         case TFMsg::AegisDeploy:
         case TFMsg::SquadMsg:
+        case TFMsg::ChatMsg:
         case TFMsg::LoginRequest:
         case TFMsg::RegisterRequest:
         case TFMsg::CharListRequest:
@@ -347,9 +349,12 @@ void TFClientNet::RegisterClientHandlers()
     route(TFMsg::XPEvent, [this](const NetworkMessage& m) {
         OnXPEvent(m.payload.data(), m.payload.size());
     });
+    route(TFMsg::ChatMsg, [this](const NetworkMessage& m) {
+        OnChatMsg(m.payload.data(), m.payload.size());
+    });
 
     // Accepted-but-unrouted W2 broadcasts (no "unknown message" warnings):
-    for (TFMsg id : {TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg, TFMsg::SquadMsg})
+    for (TFMsg id : {TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::SquadMsg})
         route(id, [](const NetworkMessage&) {});
 
     // W5 onboarding (Task 4): login/register/char-CRUD replies. TF_WorldWelcome
@@ -410,6 +415,7 @@ void TFClientNet::DeliverLoopbackReply(TFMsg id, const void* data, size_t size)
         case TFMsg::DamageEvent:     OnDamageEvent(data, size); break;
         case TFMsg::KillEvent:       OnKillEvent(data, size); break;
         case TFMsg::XPEvent:         OnXPEvent(data, size); break;
+        case TFMsg::ChatMsg:         OnChatMsg(data, size); break;
         case TFMsg::LoginReply:      OnLoginReply(data, size); break;
         case TFMsg::RegisterReply:   OnRegisterReply(data, size); break;
         case TFMsg::CharListReply:   OnCharListReply(data, size); break;
@@ -417,6 +423,28 @@ void TFClientNet::DeliverLoopbackReply(TFMsg id, const void* data, size_t size)
         case TFMsg::CharDeleteReply: OnCharDeleteReply(data, size); break;
         default: break;
     }
+}
+
+void TFClientNet::OnChatMsg(const void* data, size_t size)
+{
+    if (size != sizeof(TF_ChatMsg))
+        return;
+    TF_ChatMsg msg{};
+    std::memcpy(&msg, data, sizeof(msg));
+    if (!IsValidChatChannel(msg.channel))
+        return;
+
+    char normalized[sizeof(msg.text)]{};
+    if (!NormalizeChatText(msg.text, sizeof(msg.text), normalized, sizeof(normalized)))
+        return;
+    m_chatHistory.push_back(ChatLine{
+        msg.fromPlayer,
+        static_cast<ChatChannel>(msg.channel),
+        normalized,
+        kTFChatVisibleSec,
+    });
+    while (m_chatHistory.size() > kTFChatHistoryMax)
+        m_chatHistory.pop_front();
 }
 
 void TFClientNet::OnWorldWelcome(const void* data, size_t size)

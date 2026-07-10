@@ -158,6 +158,8 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     // routing into TFVehicleSystem (was accepted-but-unrouted in W1/W2).
     void HandleVehicleSeatOp(PlayerId sender, const void* data, size_t size, bool enter);
     void HandleAegisDeploy(PlayerId sender, const void* data, size_t size);
+    void HandleChatMsg(PlayerId sender, const void* data, size_t size);
+    RegionId RegionOfPlayer(PlayerId player) const;
     void SendSpawnReply(PlayerId player, const TF_SpawnReply& reply);
     void SendWorldWelcome(PlayerId player);
 
@@ -196,6 +198,7 @@ class TFServerSim final : public Spark::Net::IAreaSimulation {
     std::unordered_set<PlayerId> m_knownClients;
     std::unordered_set<PlayerId> m_enteredWorld;   // W5 onboarding: clients past the EnterWorld gate
     std::unordered_map<PlayerId, uint64_t> m_activeCharacter;   // W5 onboarding: player -> entered character id
+    std::unordered_map<PlayerId, double> m_chatNextAt;
 
     float m_moveStateAccum{0.0f};
 

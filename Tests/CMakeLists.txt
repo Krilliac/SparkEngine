@@ -508,6 +508,7 @@ add_executable(SparkTests
     TestTFDataTables.cpp
     TestTFDamageModel.cpp
     TestTFRegionLattice.cpp
+    TestTFChatRules.cpp
     # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
