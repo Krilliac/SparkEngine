@@ -189,6 +189,7 @@ namespace Terrafront
                         wmr.meshPath = gate;
                         wmr.materialPath = FactionStructureMaterial(*m_ctx, r.homeFaction);
                         wmr.castShadows = true;
+                        wmr.emissive = 0.45f; // warpgate reads as a lit faction beacon
                     }
                     continue;
                 }
@@ -208,6 +209,7 @@ namespace Terrafront
                 bmr.meshPath = "Assets/Models/MMOFPS/buildings/cap_banner_ring.obj";
                 bmr.materialPath = FactionStructureMaterial(*m_ctx, FactionId::None);
                 bmr.castShadows = false;
+                bmr.emissive = 0.55f; // owner-colored banner glows so it reads at range
                 m_capBannerEnt[i] = static_cast<uint32_t>(banner);
             }
             m_capVisualsSpawned = true;

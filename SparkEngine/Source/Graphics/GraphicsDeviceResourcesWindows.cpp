@@ -687,6 +687,74 @@ void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX&
     }
 }
 
+void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX& view, const XMMATRIX& proj,
+                                          const XMFLOAT4& color, const XMFLOAT2& uvTiling, float emissive, float alpha,
+                                          const XMFLOAT2& uvOffset)
+{
+    if (!m_basicConstantBuffer || !m_context)
+        return;
+
+    PerObjectConstants constants = {};
+    constants.WorldMatrix = XMMatrixTranspose(world);
+    constants.WorldViewProjectionMatrix = XMMatrixTranspose(world * view * proj);
+    constants.WorldInverseTransposeMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, world));
+    constants.ObjectColor = color;
+    // z: emissive glow, w: alpha — read by the basic PS (both default to no-op).
+    constants.MaterialProperties = XMFLOAT4(0.0f, 0.5f, emissive, alpha);
+    constants.UVTiling = XMFLOAT4(uvTiling.x, uvTiling.y, uvOffset.x, uvOffset.y);
+
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = m_context->Map(m_basicConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr))
+    {
+        memcpy(mappedResource.pData, &constants, sizeof(PerObjectConstants));
+        m_context->Unmap(m_basicConstantBuffer.Get(), 0);
+    }
+}
+
+void GraphicsEngine::SetBasicBlendMode(BasicBlendMode mode)
+{
+    if (!m_context || !m_device)
+        return;
+
+    // Lazily create the three blend states on first use.
+    auto ensure = [this](ComPtr<ID3D11BlendState>& state, bool enable, D3D11_BLEND src, D3D11_BLEND dst)
+    {
+        if (state)
+            return;
+        D3D11_BLEND_DESC desc = {};
+        desc.RenderTarget[0].BlendEnable = enable;
+        desc.RenderTarget[0].SrcBlend = src;
+        desc.RenderTarget[0].DestBlend = dst;
+        desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+        desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        m_device->CreateBlendState(&desc, &state);
+    };
+
+    ID3D11BlendState* bound = nullptr;
+    switch (mode)
+    {
+    case BasicBlendMode::Alpha:
+        ensure(m_blendAlpha, true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_INV_SRC_ALPHA);
+        bound = m_blendAlpha.Get();
+        break;
+    case BasicBlendMode::Additive:
+        ensure(m_blendAdditive, true, D3D11_BLEND_SRC_ALPHA, D3D11_BLEND_ONE);
+        bound = m_blendAdditive.Get();
+        break;
+    case BasicBlendMode::Opaque:
+    default:
+        ensure(m_blendOpaque, false, D3D11_BLEND_ONE, D3D11_BLEND_ZERO);
+        bound = m_blendOpaque.Get();
+        break;
+    }
+    const float factor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    m_context->OMSetBlendState(bound, factor, 0xffffffff);
+}
+
 void GraphicsEngine::SetBasicTexture(ID3D11ShaderResourceView* srv)
 {
     if (!m_context)
@@ -1035,6 +1103,23 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
             float _padding1;
         };
 
+        // Per-object slot b0 (bound to the PS in SetBasicShaders). Mirrors the
+        // vertex shader's layout; the PS only needs MaterialProperties
+        // (z: emissive, w: alpha), but the whole cbuffer must be declared so the
+        // field offsets line up with the constant buffer.
+        cbuffer PerObjectConstants : register(b0)
+        {
+            matrix World;
+            matrix WorldViewProjection;
+            matrix WorldInverseTranspose;
+            matrix PreviousWorld;
+            float3 ObjectPosition;
+            float  ObjectScale;
+            float4 ObjectColor;
+            float4 MaterialProperties; // x: metallic, y: roughness, z: emissive, w: alpha
+            float4 UVTiling;
+        };
+
         Texture2D MainTexture : register(t0);
         SamplerState MainSampler : register(s0);
 
@@ -1068,7 +1153,15 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
 
             float4 finalColor = texColor * input.Color;
             finalColor.rgb *= lighting;
-            finalColor.a = texColor.a * input.Color.a;
+
+            // Emissive term (MaterialProperties.z, default 0 == no change): adds
+            // the surface color back UNLIT so glow strips / holo panels / muzzle
+            // flashes read as light sources even in shadow. Backward-compatible.
+            finalColor.rgb += texColor.rgb * input.Color.rgb * MaterialProperties.z;
+
+            // Alpha (MaterialProperties.w, default 1): lets materials fade when a
+            // blend state is active; opaque draws keep w==1 so this is a no-op.
+            finalColor.a = texColor.a * input.Color.a * MaterialProperties.w;
 
             return finalColor;
         }

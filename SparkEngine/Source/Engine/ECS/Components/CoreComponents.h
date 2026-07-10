@@ -98,6 +98,7 @@ struct MeshRenderer
     bool castShadows = true;                 ///< Include this mesh in the shadow map pass.
     bool receiveShadows = true;              ///< Apply shadow maps when shading this mesh.
     bool visible = true;                     ///< Runtime visibility toggle (false = skip rendering entirely).
+    float emissive = 0.0f;                   ///< Unlit self-illumination (0 = off); glow strips, holo, warpgates.
     DirectX::XMFLOAT4X4 cachedWorldMatrix{}; ///< Last computed world matrix, updated by RenderSystem.
     bool worldMatrixDirty = true; ///< Cleared by RenderSystem after caching; other systems can set to force recompute.
 };

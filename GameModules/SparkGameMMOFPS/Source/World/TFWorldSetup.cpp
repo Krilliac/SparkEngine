@@ -771,9 +771,10 @@ namespace Terrafront
                         tint.z = 1.0f + k * (fcol[2] - 1.0f);
                     }
 
+                    const float emissive = mr.emissive; // 0 == unchanged (plain path)
                     if (submeshes.empty())
                     {
-                        gfx->UpdateBasicConstants(worldM, view, proj, tint, matTiling);
+                        gfx->UpdateBasicConstants(worldM, view, proj, tint, matTiling, emissive);
                         gfx->SetBasicTexture(matSrv);
                         mesh->Render(dc);
                     }
@@ -791,7 +792,7 @@ namespace Terrafront
                             }
                             const DirectX::XMFLOAT4 c{smesh.diffuseColor.x * tint.x, smesh.diffuseColor.y * tint.y,
                                                       smesh.diffuseColor.z * tint.z, smesh.diffuseColor.w};
-                            gfx->UpdateBasicConstants(worldM, view, proj, c, tiling);
+                            gfx->UpdateBasicConstants(worldM, view, proj, c, tiling, emissive);
                             gfx->SetBasicTexture(srv);
                             mesh->RenderRange(dc, smesh.indexStart, smesh.indexCount);
                         }

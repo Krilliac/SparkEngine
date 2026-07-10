@@ -706,6 +706,34 @@ class GraphicsEngine
                               const DirectX::XMFLOAT2& uvTiling);
 
     /**
+     * @brief Basic constants with emissive glow, per-frame alpha, and a UV offset.
+     * @param emissive  MaterialProperties.z — surface color added UNLIT (0 = off).
+     * @param alpha     MaterialProperties.w — output alpha scale (needs a blend state).
+     * @param uvOffset  UVTiling.zw — added after tiling (flipbook frame selection).
+     * Emissive/alpha default to off/opaque so this matches the plain overload.
+     */
+    void UpdateBasicConstants(const DirectX::XMMATRIX& world, const DirectX::XMMATRIX& view,
+                              const DirectX::XMMATRIX& proj, const DirectX::XMFLOAT4& color,
+                              const DirectX::XMFLOAT2& uvTiling, float emissive, float alpha = 1.0f,
+                              const DirectX::XMFLOAT2& uvOffset = DirectX::XMFLOAT2(0.0f, 0.0f));
+
+    /**
+     * @brief Blend modes for the basic draw path.
+     */
+    enum class BasicBlendMode
+    {
+        Opaque,   ///< default: no blending, depth write on
+        Alpha,    ///< src-alpha / inv-src-alpha (holo panels, shields)
+        Additive  ///< src + dst (muzzle flashes, energy FX)
+    };
+
+    /**
+     * @brief Set the output-merger blend state for subsequent basic draws.
+     * Remember to restore Opaque after a transparent/additive batch.
+     */
+    void SetBasicBlendMode(BasicBlendMode mode);
+
+    /**
      * @brief Bind a texture to slot t0 for the basic pixel shader.
      * @param srv Texture SRV; nullptr binds the default 1x1 white texture.
      */
@@ -973,6 +1001,10 @@ class GraphicsEngine
     ComPtr<ID3D11SamplerState> m_basicSamplerState;
     ComPtr<ID3D11Texture2D> m_defaultTexture;      ///< 1x1 white texture used when no material is assigned
     ComPtr<ID3D11ShaderResourceView> m_defaultSRV; ///< SRV for the default white texture
+    // Basic-path blend states (lazily created by SetBasicBlendMode).
+    ComPtr<ID3D11BlendState> m_blendOpaque;
+    ComPtr<ID3D11BlendState> m_blendAlpha;
+    ComPtr<ID3D11BlendState> m_blendAdditive;
     std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>>
         m_basicTextureCache;                                             ///< WIC-loaded textures by path
     std::unordered_map<std::string, BasicMaterial> m_basicMaterialCache; ///< Parsed basic materials by JSON path

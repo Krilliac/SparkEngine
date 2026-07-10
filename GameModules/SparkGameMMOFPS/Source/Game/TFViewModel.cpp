@@ -659,10 +659,14 @@ namespace Terrafront
             const XMMATRIX flashWorld = XMMatrixScaling(kFlashScaleM[0], kFlashScaleM[1], kFlashScaleM[2]) *
                                         XMMatrixTranslation(0.0f, 0.02f, pose.muzzleForwardM) * gripFrame;
             const MuzzleFxDef& fx = pres.muzzleFx;
+            // Additive + fully emissive so the flash reads as a burst of light
+            // that adds to the scene rather than an opaque colored box.
+            gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Additive);
             gfx->UpdateBasicConstants(flashWorld, view, proj,
                                       XMFLOAT4(fx.flashColor[0], fx.flashColor[1], fx.flashColor[2], fx.flashColor[3]),
-                                      {1.0f, 1.0f});
+                                      {1.0f, 1.0f}, /*emissive*/ 1.0f);
             m_cube->Render(dc);
+            gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Opaque);
         }
 
         gfx->SetBasicTexture(nullptr);
