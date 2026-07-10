@@ -24,6 +24,7 @@
 #include <shellapi.h>
 #else
 #include <cstdlib>
+#include <unistd.h>
 #endif
 
 namespace SparkEditor
@@ -652,7 +653,11 @@ namespace SparkEditor
             pid_t pid = fork();
             if (pid == 0)
             {
+#ifdef __APPLE__
+                execlp("open", "open", "docs/", nullptr);
+#else
                 execlp("xdg-open", "xdg-open", "docs/", nullptr);
+#endif
                 _exit(1);
             }
 #endif
