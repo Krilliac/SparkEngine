@@ -181,7 +181,12 @@ namespace Terrafront
             --slot.magAmmo;
         m_nextFireTime = m_clock + 60.0 / std::max(1.0f, slot.def.rofRpm);
 
-        PlayWeaponAudio(slot.def.audioFire);
+        // Round-robin fire one-shots so sustained fire does not machine-gun one
+        // identical clip; falls back to audioFire via the parser-populated list.
+        if (!slot.def.audioFireVariants.empty())
+            PlayWeaponAudio(slot.def.audioFireVariants[m_fireAudioSeq++ % slot.def.audioFireVariants.size()]);
+        else
+            PlayWeaponAudio(slot.def.audioFire);
         if (m_ctx->world)
             m_ctx->world->SpawnMuzzleFx(origin, dir);
         TFViewModel::Get().NotifyLocalFire(slot.def.recoilVert, slot.def.recoilHoriz);

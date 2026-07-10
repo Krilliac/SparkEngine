@@ -53,6 +53,9 @@ struct WeaponDef {
     float splashRadiusM = 0, splashDamage = 0, vsVehicleMult = 1.0f;
     bool  healsInfantry = false, healsVehicles = false, canRevive = false;
     std::string model, audioFire, audioReload;
+    // Round-robin fire one-shots (weapons.json audioFireVariants[]); falls back
+    // to [audioFire] when absent so single-clip weapons keep working.
+    std::vector<std::string> audioFireVariants;
 };
 
 struct ClassAbilityDef {

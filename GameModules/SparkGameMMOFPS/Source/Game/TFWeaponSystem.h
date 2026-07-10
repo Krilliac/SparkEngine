@@ -175,6 +175,7 @@ namespace Terrafront
         std::unordered_map<PlayerId, ShooterState> m_shooters;
         std::vector<ServerProjectile> m_projectiles;
         double m_serverClock = 0.0; // fallback time when ctx.serverSim is null
+        uint32_t m_fireAudioSeq = 0; // round-robin index into WeaponDef.audioFireVariants
         uint32_t m_shotsValidated = 0;
         uint32_t m_shotsRejected = 0;
 

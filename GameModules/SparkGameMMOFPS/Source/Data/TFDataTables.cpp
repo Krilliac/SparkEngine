@@ -286,6 +286,18 @@ namespace Terrafront
                 w.model = GetStr(o, "model");
                 w.audioFire = GetStr(o, "audioFire");
                 w.audioReload = GetStr(o, "audioReload");
+                if (o.HasKey("audioFireVariants") && o["audioFireVariants"].IsArray())
+                {
+                    const Value& av = o["audioFireVariants"];
+                    for (size_t i = 0; i < av.Size(); ++i)
+                    {
+                        std::string p = av[i].AsString("");
+                        if (!p.empty())
+                            w.audioFireVariants.push_back(std::move(p));
+                    }
+                }
+                if (w.audioFireVariants.empty() && !w.audioFire.empty())
+                    w.audioFireVariants.push_back(w.audioFire);
                 if (w.pellets < 1)
                 {
                     err = "weapons.json: '" + w.key + "': pellets must be >= 1";
