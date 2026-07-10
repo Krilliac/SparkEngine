@@ -142,7 +142,7 @@ namespace Spark::World
             {
                 if (!Spark::ContainerUtils::Contains(currentOccupants, entityID))
                 {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Trigger %u: entity %u entered", triggerID, entityID);
+                    SPARK_LOG_TRACE(Spark::LogCategory::Scene, "Trigger %u: entity %u entered", triggerID, entityID);
                     if (trigger.onEnter)
                     {
                         trigger.onEnter(triggerID, entityID);
@@ -155,7 +155,7 @@ namespace Spark::World
             {
                 if (!Spark::ContainerUtils::Contains(nowInside, entityID))
                 {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Scene, "Trigger %u: entity %u exited", triggerID, entityID);
+                    SPARK_LOG_TRACE(Spark::LogCategory::Scene, "Trigger %u: entity %u exited", triggerID, entityID);
                     if (trigger.onExit)
                     {
                         trigger.onExit(triggerID, entityID);
