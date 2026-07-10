@@ -13,6 +13,8 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
+#include "Spark/IEngineContext.h" // tf_capture_debug: GetWorld() null-probe (headless ECS gap)
+
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
@@ -679,6 +681,14 @@ namespace Terrafront
 
         std::ostringstream os;
         os << "[TF] capture debug (" << (m_ctx->IsAuthority() ? "authority truth" : "client mirror") << "):";
+
+        // 2026-07-10 root-cause tripwire: on an authority with no engine ECS
+        // World every pawn position reads (0,0,0), so occupancy is impossible
+        // and capture silently never ticks (the headless boot once registered
+        // no World service). Say so instead of printing all-zero occupancy.
+        if (m_ctx->IsAuthority() && (!m_ctx->engine || m_ctx->engine->GetWorld() == nullptr))
+            os << "\n  !! NO ENGINE ECS WORLD: pawn positions are frozen at the origin — occupancy/capture "
+                  "CANNOT work (headless boot missing SetWorld?)";
         char buf[96];
         for (size_t i = 0; i < n; ++i)
         {

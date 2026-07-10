@@ -36,7 +36,13 @@
  *    faction-less/owned/unlinked points showed a forever-frozen bar).
  *  - Diagnosis: tf_capture_debug (registered by Initialize) dumps per-region
  *    occupants by faction, capturing/progress/contested and, on clients, the
- *    age of the last replicated progress packet.
+ *    age of the last replicated progress packet. On authorities it also trips
+ *    a loud "NO ENGINE ECS WORLD" banner when IEngineContext::GetWorld() is
+ *    null — the 2026-07-10 "capturing isn't working" root cause: the headless
+ *    (dedicated-server) engine boot registered no World service, so every
+ *    pawn's position read collapsed to (0,0,0) and no point ever saw an
+ *    occupant. Capture logic itself was verified correct (windowed control
+ *    run: occupancy -> progress -> flip on the same build).
  */
 #pragma once
 
