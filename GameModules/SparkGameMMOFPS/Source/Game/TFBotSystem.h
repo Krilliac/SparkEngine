@@ -43,6 +43,7 @@
 #include "Core/TFTypes.h"
 #include "Net/TFNetProtocol.h"
 
+#include <memory>
 #include <random>
 #include <string>
 #include <vector>
@@ -50,7 +51,8 @@
 namespace Terrafront
 {
 
-    struct PawnInfo; // defined in Game/TFPlayerSystem.h (frozen W1 contract)
+    struct PawnInfo;      // defined in Game/TFPlayerSystem.h (frozen W1 contract)
+    class TFChaosHarness; // Game/TFChaosHarness.h (bots-chaos lane validation)
 
     /// Bot player ids live in their own range, distinct from real network client
     /// ids (small integers from NetworkManager) and kTFLocalHostPlayer (0xFFFFFF01).
@@ -77,6 +79,24 @@ namespace Terrafront
 
         /// Debug panel toggle (hidden by default; for the tf_* console commands).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
+
+        // --- chaos exercise mode (bots-chaos lane, 2026-07-10) -------------------
+        /// tf_chaos entry point: spawn `botCount` bots (round-robin factions) and
+        /// switch them into deliberately chaotic exercise mode for `seconds`
+        /// (0 = until tf_chaos 0 / bot despawn): teleport-scatter onto capture
+        /// points for coverage (even slots into one shared multi-faction "arena"
+        /// region so kills + contests are guaranteed; odd slots onto a random
+        /// lattice-capturable region so capture progress is guaranteed),
+        /// randomized objective re-rolls, wide strafe weaving through the
+        /// collision world, periodic deployable placements (class-gated) and
+        /// vehicle-purchase attempts (server-validated; refusals are free
+        /// exercise). Authority only. `botCount` 0 stops chaos and despawns.
+        void ServerStartChaos(uint32_t botCount, float seconds);
+        bool ChaosActive() const { return m_chaosActive; }
+
+        /// Validation report for the tf_validate console command (delegates to
+        /// the harness; also mirrored into the engine log line by line).
+        std::string ValidationReport();
 
         /// One-line-per-bot diagnostic dump for the tf_botinfo console command
         /// (state, pawn liveness, position, objective, spawn/respawn scheduling).
@@ -136,6 +156,11 @@ namespace Terrafront
             double stuckSince = 0.0;
             bool jumping = false;
             float strafePhase = 0.0f;
+
+            // chaos exercise mode (bots-chaos lane)
+            bool chaosScatterPending = false; ///< teleport-scatter on next alive think
+            double chaosRerollAt = 0.0;       ///< next randomized objective re-roll
+            double chaosUtilityAt = 0.0;      ///< next deployable/vehicle-purchase attempt
         };
 
         double Now() const;
@@ -159,6 +184,21 @@ namespace Terrafront
         float HealthFrac(const Bot& bot, const PawnInfo& self) const;
         bool HasLineOfSight(const float eye[3], const float target[3]) const;
 
+        // chaos exercise mode (bots-chaos lane)
+        /// Teleport-scatter `bot` for coverage: even slots to the shared arena
+        /// region (multi-faction brawl), odd slots to a random region capturable
+        /// by the bot's faction; drop point = a capture point + random offset.
+        void ChaosScatter(Bot& bot, double now);
+        /// Randomized objective override: ~50% keep the scored objective, else a
+        /// random non-skyanchor region (coverage over optimality) every 6-16 s.
+        void ChaosMaybeReroll(Bot& bot, double now);
+        /// Periodic deployable placement (class-gated) + vehicle-purchase
+        /// attempts through the real validated server entry points.
+        void ChaosTryUtility(Bot& bot, double now);
+        /// Region index for the shared brawl arena (first "facility", else the
+        /// first non-skyanchor region); kInvalidRegion when data is not loaded.
+        RegionId ChaosArenaRegion() const;
+
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
         bool m_initialized{false};
@@ -166,6 +206,14 @@ namespace Terrafront
         std::vector<Bot> m_bots;       ///< flat, capped at kTFMaxBots
         double m_clock{0.0};           ///< fallback time base (no serverSim)
         std::mt19937 m_rng{0xB07B07u}; ///< deterministic bot randomness
+
+        // chaos exercise mode (bots-chaos lane)
+        std::unique_ptr<TFChaosHarness> m_chaos; ///< validation counters + report
+        bool m_chaosActive{false};
+        double m_chaosEndsAt{0.0}; ///< 0 = open-ended
+        bool m_chaosCmds{false};   ///< tf_chaos/tf_validate registered by this instance
+        uint32_t m_chaosDeployTries{0};
+        uint32_t m_chaosVehicleTries{0};
 
         // debug counters
         uint32_t m_shotsFired{0};

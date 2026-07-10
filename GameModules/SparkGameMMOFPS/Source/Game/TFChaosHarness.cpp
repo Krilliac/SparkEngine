@@ -1,0 +1,163 @@
+/**
+ * @file TFChaosHarness.cpp
+ * @brief Chaos-run validation: counters + the machine-greppable tf_validate
+ *        report. See TFChaosHarness.h for the check catalog.
+ */
+#include "Game/TFChaosHarness.h"
+
+#include "Game/TFPlayerSystem.h"
+#include "World/TFRegionSystem.h"
+#include "World/TFWorldCollision.h"
+#include "World/TFWorldSetup.h"
+
+#include "Physics/PhysicsSystem.h"
+#include "Spark/IEngineContext.h"
+#include "Utils/LogMacros.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <sstream>
+
+namespace Terrafront
+{
+
+    namespace
+    {
+        constexpr double kSampleIntervalSec = 1.0;
+        /// Feet more than this far under TerrainHeightAt counts as "below
+        /// terrain" (small slack for slope sampling / float noise; the movement
+        /// tick clamps feet to the terrain exactly, so real violations are big).
+        constexpr float kBelowTolM = 0.30f;
+    } // namespace
+
+    bool TFChaosHarness::Initialize(TFGameContext& ctx, TFEventBus& events)
+    {
+        m_ctx = &ctx;
+        events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled&) { ++m_kills; });
+        events.Subscribe<EvRegionCaptured>([this](const EvRegionCaptured&) { ++m_regionFlips; });
+        return true;
+    }
+
+    void TFChaosHarness::OnChaosStart(uint32_t botCount, float seconds)
+    {
+        m_armed = true;
+        m_kills = 0;
+        m_regionFlips = 0;
+        m_maxCaptureProgress = 0.0f;
+        m_belowTerrainEver = 0;
+        m_worstBelowM = 0.0f;
+        m_samples = 0;
+        m_nextSampleAt = 0.0;
+        m_blockedBaseline = BlockedMovesNow();
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "[TF] chaos harness armed: bots=%u seconds=%.0f blockedMoveBaseline=%llu", botCount,
+                       static_cast<double>(seconds), static_cast<unsigned long long>(m_blockedBaseline));
+    }
+
+    uint64_t TFChaosHarness::BlockedMovesNow() const
+    {
+        if (!m_ctx || !m_ctx->world)
+            return 0;
+        const TFWorldCollision* col = m_ctx->world->Collision();
+        return col ? col->BlockedMoveCount() : 0;
+    }
+
+    void TFChaosHarness::CountBelowTerrain(uint32_t& outCount, float& outWorstDepthM) const
+    {
+        outCount = 0;
+        outWorstDepthM = 0.0f;
+        if (!m_ctx || !m_ctx->players || !m_ctx->world)
+            return;
+        const TFWorldSetup* world = m_ctx->world;
+        m_ctx->players->ForEachAlivePawn(
+            [&](const PawnInfo& p)
+            {
+                const float depth = world->TerrainHeightAt(p.pos[0], p.pos[2]) - p.pos[1];
+                if (depth > kBelowTolM)
+                {
+                    ++outCount;
+                    outWorstDepthM = std::max(outWorstDepthM, depth);
+                }
+            });
+    }
+
+    void TFChaosHarness::Sample(double now)
+    {
+        if (!m_armed || !m_ctx || now < m_nextSampleAt)
+            return;
+        m_nextSampleAt = now + kSampleIntervalSec;
+        ++m_samples;
+
+        // Capture progress high-water mark across all regions.
+        if (m_ctx->regions)
+        {
+            const uint32_t count = m_ctx->regions->RegionCount();
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                FactionId capturing = FactionId::None;
+                bool contested = false;
+                const float p = m_ctx->regions->CaptureProgress(static_cast<RegionId>(i), capturing, contested);
+                m_maxCaptureProgress = std::max(m_maxCaptureProgress, p);
+            }
+        }
+
+        // Below-terrain sweep (worst-ever tracking; a single bad tick fails).
+        uint32_t below = 0;
+        float worst = 0.0f;
+        CountBelowTerrain(below, worst);
+        m_belowTerrainEver += below;
+        m_worstBelowM = std::max(m_worstBelowM, worst);
+    }
+
+    std::string TFChaosHarness::BuildReport()
+    {
+        // Fresh below-terrain sample at report time (covers "chaos never ran").
+        uint32_t belowNow = 0;
+        float worstNow = 0.0f;
+        CountBelowTerrain(belowNow, worstNow);
+        const float worstEver = std::max(m_worstBelowM, worstNow);
+
+        ::PhysicsSystem* physics = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetPhysics() : nullptr;
+        const bool joltLive = physics != nullptr && physics->GetJoltSystem() != nullptr;
+
+        const TFWorldCollision* col = (m_ctx && m_ctx->world) ? m_ctx->world->Collision() : nullptr;
+        const uint64_t bodies = col ? static_cast<uint64_t>(col->BodyCount()) : 0;
+        const uint64_t blockedNow = BlockedMovesNow();
+        const uint64_t blockedRun = blockedNow >= m_blockedBaseline ? blockedNow - m_blockedBaseline : blockedNow;
+
+        const bool passPhysics = joltLive;
+        const bool passCollision = bodies > 0 && blockedRun > 0;
+        const bool passCapture = m_maxCaptureProgress > 0.0f || m_regionFlips > 0;
+        const bool passKills = m_kills >= 1;
+        const bool passTerrain = worstEver <= kBelowTolM && m_belowTerrainEver == 0 && belowNow == 0;
+
+        std::ostringstream os;
+        uint32_t passed = 0, failed = 0;
+        char buf[256];
+        auto line = [&](bool pass, const char* fmt, auto... args)
+        {
+            std::snprintf(buf, sizeof(buf), fmt, (pass ? "PASS" : "FAIL"), args...);
+            const std::string s = std::string("[TF-VALIDATE] ") + buf;
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", s.c_str());
+            os << s << "\n";
+            (pass ? passed : failed) += 1;
+        };
+
+        line(passPhysics, "physics: %s joltLive=%d", joltLive ? 1 : 0);
+        line(passCollision, "collision: %s bodies=%llu blockedOrSlidMoves=%llu",
+             static_cast<unsigned long long>(bodies), static_cast<unsigned long long>(blockedRun));
+        line(passCapture, "capture: %s maxProgress=%.3f regionFlips=%u", static_cast<double>(m_maxCaptureProgress),
+             m_regionFlips);
+        line(passKills, "kills: %s kills=%u", m_kills);
+        line(passTerrain, "terrain: %s pawnsBelowEver=%u belowNow=%u worstDepthM=%.2f", m_belowTerrainEver, belowNow,
+             static_cast<double>(worstEver));
+
+        std::snprintf(buf, sizeof(buf), "RESULT: %s passed=%u failed=%u (armed=%d samples=%u)",
+                      failed == 0 ? "PASS" : "FAIL", passed, failed, m_armed ? 1 : 0, m_samples);
+        const std::string res = std::string("[TF-VALIDATE] ") + buf;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", res.c_str());
+        os << res;
+        return os.str();
+    }
+
+} // namespace Terrafront

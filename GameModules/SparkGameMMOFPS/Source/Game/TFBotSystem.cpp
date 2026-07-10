@@ -27,6 +27,8 @@
 #include "Game/TFBotSystem.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFChaosHarness.h"
+#include "Game/TFDeployableSystem.h"
 #include "Game/TFMovementModel.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFVehicleSystem.h"
@@ -37,6 +39,7 @@
 #include "World/TFWorldSetup.h"
 
 #include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
@@ -45,6 +48,7 @@
 #include <algorithm>
 #include <cmath>
 #include <concepts>
+#include <cstdlib>
 #include <numbers>
 #include <sstream>
 
@@ -191,6 +195,55 @@ namespace Terrafront
             });
 
         m_initialized = true;
+
+        // Chaos validation harness (bots-chaos lane): kill/flip observers live
+        // for the module lifetime, counters reset per chaos run.
+        m_chaos = std::make_unique<TFChaosHarness>();
+        m_chaos->Initialize(ctx, events);
+
+        // Console wiring inside the owning system (the TFRegionSystem
+        // tf_capture_debug pattern) — TFCommands.cpp is a contended file.
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (!console.HasCommand("tf_chaos"))
+        {
+            console.RegisterCommand(
+                "tf_chaos",
+                [this](const std::vector<std::string>& args) -> std::string
+                {
+                    if (!m_initialized || !m_ctx)
+                        return "[TF] bot system not ready";
+                    if (!m_ctx->IsAuthority())
+                        return "[TF] tf_chaos: authority only (tf_dedicated / tf_host first)";
+                    if (args.empty())
+                        return std::string("[TF] chaos ") + (m_chaosActive ? "ACTIVE" : "idle") +
+                               "  bots=" + std::to_string(BotCount()) + "  (tf_chaos <0-32> [seconds])";
+                    const int n = std::atoi(args[0].c_str());
+                    if (n < 0 || n > static_cast<int>(kTFMaxBots))
+                        return "[TF] tf_chaos: count must be 0-32";
+                    float seconds = 300.0f;
+                    if (args.size() > 1)
+                        seconds = static_cast<float>(std::atof(args[1].c_str()));
+                    ServerStartChaos(static_cast<uint32_t>(n), seconds);
+                    if (n == 0)
+                        return "[TF] chaos stopped, bots despawned";
+                    return "[TF] chaos started: " + std::to_string(n) + " bots, " +
+                           std::to_string(static_cast<int>(seconds)) + " s (tf_validate for the report)";
+                },
+                "Chaos exercise mode: spawn N bots across all factions that scatter onto capture "
+                "points, fight, capture, place deployables and try vehicles to stress-test the server",
+                "TERRAFRONT", "tf_chaos <botcount 0-32> [seconds=300]");
+            m_chaosCmds = true;
+        }
+        if (!console.HasCommand("tf_validate"))
+        {
+            console.RegisterCommand(
+                "tf_validate", [this](const std::vector<std::string>&) -> std::string { return ValidationReport(); },
+                "Print machine-greppable [TF-VALIDATE] PASS/FAIL lines for the last/current chaos "
+                "run: physics, collision, capture, kills, terrain",
+                "TERRAFRONT", "tf_validate");
+            m_chaosCmds = true;
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFBotSystem initialized");
         return true;
     }
@@ -199,6 +252,14 @@ namespace Terrafront
     {
         if (!m_initialized)
             return;
+        m_chaosActive = false;
+        if (m_chaosCmds)
+        {
+            auto& console = Spark::SimpleConsole::GetInstance();
+            console.UnregisterCommand("tf_chaos");
+            console.UnregisterCommand("tf_validate");
+            m_chaosCmds = false;
+        }
         for (Bot& b : m_bots)
             DespawnBot(b);
         m_bots.clear();
@@ -236,6 +297,19 @@ namespace Terrafront
             {
                 b.nextThinkAt = now + kThinkIntervalSec;
                 Think(b, now);
+            }
+        }
+
+        // Chaos run bookkeeping: expire the timer and feed the validation
+        // sampler (1 Hz region-progress + below-terrain sweeps).
+        if (m_chaosActive)
+        {
+            if (m_chaos)
+                m_chaos->Sample(now);
+            if (m_chaosEndsAt > 0.0 && now >= m_chaosEndsAt)
+            {
+                m_chaosActive = false;
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] chaos run complete — run tf_validate for the report");
             }
         }
     }
@@ -433,6 +507,8 @@ namespace Terrafront
             bot.vehicleEntity = 0;
             bot.enterTries = 0;
             bot.lowHealth = false;
+            if (m_chaosActive)
+                bot.chaosScatterPending = true; // re-scatter every chaos life for coverage
             bot.stuckRefPos[0] = self.pos[0];
             bot.stuckRefPos[1] = self.pos[1];
             bot.stuckRefPos[2] = self.pos[2];
@@ -452,6 +528,19 @@ namespace Terrafront
             ThinkDriving(bot, self, now);
             return;
         }
+
+        // --- chaos: teleport-scatter for coverage (start of run + every life) ---
+        if (m_chaosActive && bot.chaosScatterPending)
+        {
+            bot.chaosScatterPending = false;
+            ChaosScatter(bot, now);
+            bot.wantMove = false; // rebuild input from the new position next think
+            return;
+        }
+
+        // --- chaos: periodic deployable / vehicle-purchase exercise ---
+        if (m_chaosActive)
+            ChaosTryUtility(bot, now);
 
         // --- stuck detection: pos unchanged > 2 s -> hold jump ---
         const float dsx = self.pos[0] - bot.stuckRefPos[0];
@@ -504,9 +593,14 @@ namespace Terrafront
             // --- objective (region march, contested-biased) ---
             PickObjective(bot, self.pos);
 
+            // --- chaos: randomized objective override (coverage over optimality);
+            //     fireteam cohesion is skipped in chaos to maximize scatter ---
+            if (m_chaosActive)
+                ChaosMaybeReroll(bot, now);
+
             // --- fireteam cohesion: followers adopt the leader's objective and
             //     regroup on the leader when strung out ---
-            if (const Bot* leader = FireteamLeader(bot); leader && leader != &bot)
+            if (const Bot* leader = FireteamLeader(bot); !m_chaosActive && leader && leader != &bot)
             {
                 PawnInfo lp;
                 if (m_ctx->players->GetPawnByPlayer(leader->id, lp) && lp.alive)
@@ -540,6 +634,10 @@ namespace Terrafront
                 in.viewPitch = 0.0f;
                 in.moveY = 127;
                 in.moveX = 0;
+                // Chaos: weave while marching so bots hit obstacles at oblique
+                // angles and exercise the slide path, not just head-on stops.
+                if (m_chaosActive)
+                    in.moveX = static_cast<int8_t>(std::sin(now * 1.7 + bot.strafePhase) * 70.0);
                 if (dist > kSprintBeyondM)
                     in.buttons |= TFB_Sprint;
             }
@@ -724,6 +822,210 @@ namespace Terrafront
         bot.vehicleEntity = 0;
         bot.vehicleRetryAt = now + kVehRetrySec;
         bot.wantMove = false; // fresh walking input next think
+    }
+
+    // ---------------------------------------------------------------------------
+    // Chaos exercise mode (bots-chaos lane, 2026-07-10)
+    // ---------------------------------------------------------------------------
+
+    void TFBotSystem::ServerStartChaos(uint32_t botCount, float seconds)
+    {
+        if (!m_initialized || !m_ctx)
+            return;
+        if (!m_ctx->IsAuthority())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] ServerStartChaos ignored — not the authority");
+            return;
+        }
+
+        if (botCount == 0)
+        {
+            m_chaosActive = false;
+            m_chaosEndsAt = 0.0;
+            ServerSetBotCount(0);
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] chaos stopped, bots despawned");
+            return;
+        }
+
+        ServerSetBotCount(std::min(botCount, kTFMaxBots));
+        const double now = Now();
+        m_chaosActive = true;
+        m_chaosEndsAt = seconds > 0.0f ? now + static_cast<double>(seconds) : 0.0;
+        m_chaosDeployTries = 0;
+        m_chaosVehicleTries = 0;
+        for (Bot& b : m_bots)
+        {
+            b.chaosScatterPending = true; // scatter on the first alive think
+            // Hold the first drop point a while (fight/capture there) before
+            // the randomized re-rolls kick in; stagger per slot.
+            b.chaosRerollAt = now + 15.0 + static_cast<double>(b.id - kTFBotIdBase) * 0.7;
+            b.chaosUtilityAt = now + 5.0 + static_cast<double>(m_rng() % 60) * 0.1;
+        }
+        if (m_chaos)
+            m_chaos->OnChaosStart(BotCount(), seconds);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] CHAOS: %u bots for %.0f s (0 = open-ended)", BotCount(),
+                       static_cast<double>(seconds));
+    }
+
+    std::string TFBotSystem::ValidationReport()
+    {
+        if (!m_chaos)
+            return "[TF-VALIDATE] RESULT: FAIL harness=missing";
+        return m_chaos->BuildReport();
+    }
+
+    RegionId TFBotSystem::ChaosArenaRegion() const
+    {
+        if (!m_ctx || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return kInvalidRegion;
+        const ContinentDef& cont = m_ctx->data->GetContinent();
+        const RegionDef* first = nullptr;
+        for (const RegionDef& r : cont.regions)
+        {
+            if (r.tier == "skyanchor")
+                continue;
+            if (!first)
+                first = &r;
+            if (r.tier == "facility")
+                return r.id; // biggest brawl space wins
+        }
+        return first ? first->id : kInvalidRegion;
+    }
+
+    void TFBotSystem::ChaosScatter(Bot& bot, double now)
+    {
+        if (!m_ctx->serverSim || !m_ctx->world || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return;
+        const ContinentDef& cont = m_ctx->data->GetContinent();
+        if (cont.regions.empty())
+            return;
+
+        // Even slots -> the shared multi-faction arena (guaranteed contact and
+        // contested points). Odd slots -> a random region this bot's faction can
+        // actually capture (guaranteed single-attacker progress somewhere).
+        const uint32_t slot = bot.id - kTFBotIdBase;
+        const RegionDef* dest = nullptr;
+        if ((slot % 2u) == 0u)
+        {
+            const RegionId arena = ChaosArenaRegion();
+            for (const RegionDef& r : cont.regions)
+            {
+                if (r.id == arena)
+                {
+                    dest = &r;
+                    break;
+                }
+            }
+        }
+        if (!dest)
+        {
+            std::vector<const RegionDef*> candidates;
+            candidates.reserve(cont.regions.size());
+            for (const RegionDef& r : cont.regions)
+            {
+                if (r.tier == "skyanchor")
+                    continue;
+                if (QueryRegionCapturable(m_ctx->regions, r.id, bot.faction, /*fallback*/ true))
+                    candidates.push_back(&r);
+            }
+            if (!candidates.empty())
+                dest = candidates[m_rng() % candidates.size()];
+        }
+        if (!dest)
+            return;
+
+        // Drop near a capture point (region center as fallback), on a 4-18 m
+        // ring so stacked bots spread out and have to walk THROUGH the plateau
+        // structures (collision exercise) to converge on the point.
+        float cpX = dest->centerX, cpZ = dest->centerZ;
+        if (!dest->capturePoints.empty())
+        {
+            const auto& cp = dest->capturePoints[m_rng() % dest->capturePoints.size()];
+            cpX = cp[0];
+            cpZ = cp[1];
+        }
+        const float ang = static_cast<float>(m_rng() % 6283u) * 0.001f;
+        const float rad = 4.0f + static_cast<float>(m_rng() % 140u) * 0.1f;
+        const float x = cpX + std::sin(ang) * rad;
+        const float z = cpZ + std::cos(ang) * rad;
+        const float y = m_ctx->world->TerrainHeightAt(x, z) + 0.5f;
+        m_ctx->serverSim->TeleportPawn(bot.id, x, y, z);
+
+        bot.objectiveRegion = dest->id;
+        bot.objectiveX = cpX; // converge on the point itself, not the ring drop
+        bot.objectiveZ = cpZ;
+        bot.stuckRefPos[0] = x;
+        bot.stuckRefPos[1] = y;
+        bot.stuckRefPos[2] = z;
+        bot.stuckSince = now;
+        bot.jumping = false;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] chaos scatter: bot 0x%08X %s -> region %u (%.0f, %.0f)", bot.id,
+                       FactionTag(bot.faction), static_cast<unsigned>(dest->id), x, z);
+    }
+
+    void TFBotSystem::ChaosMaybeReroll(Bot& bot, double now)
+    {
+        if (now < bot.chaosRerollAt)
+            return;
+        bot.chaosRerollAt = now + 6.0 + static_cast<double>(m_rng() % 100u) * 0.1; // 6-16 s
+        if ((m_rng() & 1u) != 0u)
+            return; // keep the lattice-scored objective half the time
+        if (!m_ctx->data || !m_ctx->data->IsLoaded())
+            return;
+        const ContinentDef& cont = m_ctx->data->GetContinent();
+        std::vector<const RegionDef*> pool;
+        pool.reserve(cont.regions.size());
+        for (const RegionDef& r : cont.regions)
+        {
+            if (r.tier != "skyanchor")
+                pool.push_back(&r);
+        }
+        if (pool.empty())
+            return;
+        const RegionDef& r = *pool[m_rng() % pool.size()];
+        bot.objectiveRegion = r.id;
+        bot.objectiveX = r.centerX;
+        bot.objectiveZ = r.centerZ;
+        if (!r.capturePoints.empty())
+        {
+            const auto& cp = r.capturePoints[m_rng() % r.capturePoints.size()];
+            bot.objectiveX = cp[0];
+            bot.objectiveZ = cp[1];
+        }
+    }
+
+    void TFBotSystem::ChaosTryUtility(Bot& bot, double now)
+    {
+        if (now < bot.chaosUtilityAt)
+            return;
+        bot.chaosUtilityAt = now + 8.0 + static_cast<double>(m_rng() % 80u) * 0.1; // 8-16 s
+
+        // Deployables through the real validated entry point (class-gated;
+        // refusals — slope/spacing/hostile-region/limit — are free exercise).
+        if (m_ctx->deployables)
+        {
+            if (bot.cls == ClassId::Fabricator)
+            {
+                const DeployableKind kind =
+                    (m_rng() & 1u) != 0u ? DeployableKind::FabTurret : DeployableKind::FabAmmoPack;
+                m_ctx->deployables->ServerTryPlaceDeployable(bot.id, kind);
+                ++m_chaosDeployTries;
+            }
+            else if (bot.cls == ClassId::Medtech)
+            {
+                m_ctx->deployables->ServerTryPlaceDeployable(bot.id, DeployableKind::MedBeacon);
+                ++m_chaosDeployTries;
+            }
+        }
+
+        // Vehicle purchase through the real validated terminal path (needs a
+        // friendly terminal in reach + unlock + flux; usually refused — that IS
+        // the exercise; success hands nearby bots wheels for TryUseVehicle).
+        if (m_ctx->vehicles && (m_rng() % 3u) == 0u)
+        {
+            m_ctx->vehicles->ServerPurchaseVehicle(bot.id, static_cast<VehicleId>(1u + (m_rng() % 3u)));
+            ++m_chaosVehicleTries;
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -1004,7 +1306,8 @@ namespace Terrafront
     {
         std::ostringstream os;
         os << "[TF] bots " << m_bots.size() << "  spawnReqs " << m_spawnRequests << "  shots " << m_shotsFired
-           << "  now " << Now();
+           << "  chaos " << (m_chaosActive ? "ON" : "off") << " (deployTries " << m_chaosDeployTries << ", vehTries "
+           << m_chaosVehicleTries << ")  now " << Now();
         for (const Bot& b : m_bots)
         {
             PawnInfo p{};
