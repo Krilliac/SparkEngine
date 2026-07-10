@@ -26,6 +26,7 @@
 #include "Game/TFColossusSystem.h"
 #include "Game/TFDeployableSystem.h"
 #include "Game/TFProgressionSystem.h"
+#include "Game/TFDirectiveSystem.h"
 #include "Game/TFSquadSystem.h"
 #include "Game/TFBotSystem.h"
 #include "UI/TFHUD.h"
@@ -81,58 +82,60 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     console.LogInfo("[TF] TERRAFRONT loading - Veyra awaits.");
 
     // ---- construct all systems (order == member declaration order) ----
-    m_data        = std::make_unique<TFDataTables>();
-    m_world       = std::make_unique<TFWorldSetup>();
+    m_data = std::make_unique<TFDataTables>();
+    m_world = std::make_unique<TFWorldSetup>();
     m_replication = std::make_unique<TFReplication>();
-    m_serverSim   = std::make_unique<TFServerSim>();
-    m_clientNet   = std::make_unique<TFClientNet>();
-    m_regions     = std::make_unique<TFRegionSystem>();
-    m_players     = std::make_unique<TFPlayerSystem>();
-    m_weapons     = std::make_unique<TFWeaponSystem>();
-    m_damage      = std::make_unique<TFDamageSystem>();
-    m_vehicles    = std::make_unique<TFVehicleSystem>();
-    m_colossus    = std::make_unique<TFColossusSystem>();
+    m_serverSim = std::make_unique<TFServerSim>();
+    m_clientNet = std::make_unique<TFClientNet>();
+    m_regions = std::make_unique<TFRegionSystem>();
+    m_players = std::make_unique<TFPlayerSystem>();
+    m_weapons = std::make_unique<TFWeaponSystem>();
+    m_damage = std::make_unique<TFDamageSystem>();
+    m_vehicles = std::make_unique<TFVehicleSystem>();
+    m_colossus = std::make_unique<TFColossusSystem>();
     m_deployables = std::make_unique<TFDeployableSystem>();
     m_progression = std::make_unique<TFProgressionSystem>();
-    m_squads      = std::make_unique<TFSquadSystem>();
-    m_bots        = std::make_unique<TFBotSystem>();
-    m_hud         = std::make_unique<TFHUD>();
-    m_map         = std::make_unique<TFMapScreen>();
-    m_spawnUI     = std::make_unique<TFSpawnScreen>();
-    m_scoreboard  = std::make_unique<TFScoreboard>();
+    m_directives = std::make_unique<TFDirectiveSystem>();
+    m_squads = std::make_unique<TFSquadSystem>();
+    m_bots = std::make_unique<TFBotSystem>();
+    m_hud = std::make_unique<TFHUD>();
+    m_map = std::make_unique<TFMapScreen>();
+    m_spawnUI = std::make_unique<TFSpawnScreen>();
+    m_scoreboard = std::make_unique<TFScoreboard>();
 
     // W5 onboarding (Task 6, additive): db -> account -> characters ->
     // loginFlow, after every system above (DESIGN.md "W5 — Onboarding").
-    m_db          = std::make_unique<TFDatabase>();
-    m_account     = std::make_unique<TFAccountSystem>();
-    m_characters  = std::make_unique<TFCharacterSystem>();
-    m_loginFlow   = std::make_unique<TFLoginFlow>();
+    m_db = std::make_unique<TFDatabase>();
+    m_account = std::make_unique<TFAccountSystem>();
+    m_characters = std::make_unique<TFCharacterSystem>();
+    m_loginFlow = std::make_unique<TFLoginFlow>();
 
     // ---- publish context pointers before any Initialize ----
-    m_ctx.data        = m_data.get();
-    m_ctx.world       = m_world.get();
+    m_ctx.data = m_data.get();
+    m_ctx.world = m_world.get();
     m_ctx.replication = m_replication.get();
-    m_ctx.serverSim   = m_serverSim.get();
-    m_ctx.clientNet   = m_clientNet.get();
-    m_ctx.regions     = m_regions.get();
-    m_ctx.players     = m_players.get();
-    m_ctx.weapons     = m_weapons.get();
-    m_ctx.damage      = m_damage.get();
-    m_ctx.vehicles    = m_vehicles.get();
-    m_ctx.colossus    = m_colossus.get();
+    m_ctx.serverSim = m_serverSim.get();
+    m_ctx.clientNet = m_clientNet.get();
+    m_ctx.regions = m_regions.get();
+    m_ctx.players = m_players.get();
+    m_ctx.weapons = m_weapons.get();
+    m_ctx.damage = m_damage.get();
+    m_ctx.vehicles = m_vehicles.get();
+    m_ctx.colossus = m_colossus.get();
     m_ctx.deployables = m_deployables.get();
     m_ctx.progression = m_progression.get();
-    m_ctx.squads      = m_squads.get();
-    m_ctx.hud         = m_hud.get();
-    m_ctx.map         = m_map.get();
-    m_ctx.spawnUI     = m_spawnUI.get();
-    m_ctx.scoreboard  = m_scoreboard.get();
+    m_ctx.directives = m_directives.get();
+    m_ctx.squads = m_squads.get();
+    m_ctx.hud = m_hud.get();
+    m_ctx.map = m_map.get();
+    m_ctx.spawnUI = m_spawnUI.get();
+    m_ctx.scoreboard = m_scoreboard.get();
 
     // W5 onboarding (Task 6, additive).
-    m_ctx.db          = m_db.get();
-    m_ctx.account     = m_account.get();
-    m_ctx.characters  = m_characters.get();
-    m_ctx.loginFlow   = m_loginFlow.get();
+    m_ctx.db = m_db.get();
+    m_ctx.account = m_account.get();
+    m_ctx.characters = m_characters.get();
+    m_ctx.loginFlow = m_loginFlow.get();
 
     // Persistence is authority-owned. A pure client must never load a stale
     // snapshot and flush it over the dedicated server's account database at
@@ -143,29 +146,35 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_characters->SetDatabase(m_db.get());
 
     // ---- initialize in dependency order ----
-    struct Boot { const char* name; bool ok; };
+    struct Boot
+    {
+        const char* name;
+        bool ok;
+    };
     const Boot boots[] = {
-        { "TFDataTables",        m_data->Initialize(m_ctx, m_events) },
-        { "TFWorldSetup",        m_world->Initialize(m_ctx, m_events) },
-        { "TFReplication",       m_replication->Initialize(m_ctx, m_events) },
-        { "TFServerSim",         m_serverSim->Initialize(m_ctx, m_events) },
-        { "TFClientNet",         m_clientNet->Initialize(m_ctx, m_events) },
-        { "TFRegionSystem",      m_regions->Initialize(m_ctx, m_events) },
-        { "TFPlayerSystem",      m_players->Initialize(m_ctx, m_events) },
-        { "TFWeaponSystem",      m_weapons->Initialize(m_ctx, m_events) },
-        { "TFDamageSystem",      m_damage->Initialize(m_ctx, m_events) },
-        { "TFVehicleSystem",     m_vehicles->Initialize(m_ctx, m_events) },
-        { "TFColossusSystem",    m_colossus->Initialize(m_ctx, m_events) },
-        { "TFDeployableSystem",  m_deployables->Initialize(m_ctx, m_events) },
-        { "TFProgressionSystem", m_progression->Initialize(m_ctx, m_events) },
-        { "TFSquadSystem",       m_squads->Initialize(m_ctx, m_events) },
-        { "TFBotSystem",         m_bots->Initialize(m_ctx, m_events) },
-        { "TFHUD",               m_hud->Initialize(m_ctx, m_events) },
-        { "TFMapScreen",         m_map->Initialize(m_ctx, m_events) },
-        { "TFSpawnScreen",       m_spawnUI->Initialize(m_ctx, m_events) },
-        { "TFScoreboard",        m_scoreboard->Initialize(m_ctx, m_events) },
+        {"TFDataTables", m_data->Initialize(m_ctx, m_events)},
+        {"TFWorldSetup", m_world->Initialize(m_ctx, m_events)},
+        {"TFReplication", m_replication->Initialize(m_ctx, m_events)},
+        {"TFServerSim", m_serverSim->Initialize(m_ctx, m_events)},
+        {"TFClientNet", m_clientNet->Initialize(m_ctx, m_events)},
+        {"TFRegionSystem", m_regions->Initialize(m_ctx, m_events)},
+        {"TFPlayerSystem", m_players->Initialize(m_ctx, m_events)},
+        {"TFWeaponSystem", m_weapons->Initialize(m_ctx, m_events)},
+        {"TFDamageSystem", m_damage->Initialize(m_ctx, m_events)},
+        {"TFVehicleSystem", m_vehicles->Initialize(m_ctx, m_events)},
+        {"TFColossusSystem", m_colossus->Initialize(m_ctx, m_events)},
+        {"TFDeployableSystem", m_deployables->Initialize(m_ctx, m_events)},
+        {"TFProgressionSystem", m_progression->Initialize(m_ctx, m_events)},
+        // W6 directives: must init AFTER progression (payouts route through it).
+        {"TFDirectiveSystem", m_directives->Initialize(m_ctx, m_events)},
+        {"TFSquadSystem", m_squads->Initialize(m_ctx, m_events)},
+        {"TFBotSystem", m_bots->Initialize(m_ctx, m_events)},
+        {"TFHUD", m_hud->Initialize(m_ctx, m_events)},
+        {"TFMapScreen", m_map->Initialize(m_ctx, m_events)},
+        {"TFSpawnScreen", m_spawnUI->Initialize(m_ctx, m_events)},
+        {"TFScoreboard", m_scoreboard->Initialize(m_ctx, m_events)},
         // W5 onboarding (Task 6, additive).
-        { "TFLoginFlow",         m_loginFlow->Initialize(m_ctx, m_events) },
+        {"TFLoginFlow", m_loginFlow->Initialize(m_ctx, m_events)},
     };
     for (const Boot& b : boots)
     {
@@ -204,6 +213,7 @@ void TerrafrontModule::OnUnload()
     m_hud->Shutdown();
     m_bots->Shutdown();
     m_squads->Shutdown();
+    m_directives->Shutdown(); // W6: before progression (reverse of init order)
     m_progression->Shutdown();
     m_deployables->Shutdown();
     m_colossus->Shutdown();
@@ -240,13 +250,14 @@ void TerrafrontModule::OnUpdate(float dt)
     m_colossus->Update(dt);
     m_deployables->Update(dt);
     m_progression->Update(dt);
+    m_directives->Update(dt);
     m_squads->Update(dt);
     m_bots->Update(dt);
     m_hud->Update(dt);
     m_map->Update(dt);
     m_spawnUI->Update(dt);
     m_scoreboard->Update(dt);
-    m_loginFlow->Update(dt);   // W5 onboarding (Task 6, additive)
+    m_loginFlow->Update(dt); // W5 onboarding (Task 6, additive)
 }
 
 void TerrafrontModule::OnFixedUpdate(float fdt)
@@ -275,8 +286,14 @@ void TerrafrontModule::OnRender()
 
 void TerrafrontModule::OnResize(int, int) {}
 
-void TerrafrontModule::OnPause()  { m_paused = true; }
-void TerrafrontModule::OnResume() { m_paused = false; }
+void TerrafrontModule::OnPause()
+{
+    m_paused = true;
+}
+void TerrafrontModule::OnResume()
+{
+    m_paused = false;
+}
 
 void TerrafrontModule::OnImGui()
 {
@@ -324,9 +341,10 @@ void TerrafrontModule::OnImGui()
             m_colossus->RenderDebugUI();
             m_deployables->RenderDebugUI();
             m_progression->RenderDebugUI();
+            m_directives->RenderDebugUI();
             m_squads->RenderDebugUI();
             m_bots->RenderDebugUI();
-            m_loginFlow->RenderDebugUI();   // W5 onboarding (Task 6, additive)
+            m_loginFlow->RenderDebugUI(); // W5 onboarding (Task 6, additive)
 #ifdef SPARK_HAS_IMGUI
         }
         ImGui::End();
