@@ -599,6 +599,19 @@ static int RunHeadlessWindows(LPWSTR lpCmdLine)
         LoadHeadlessModules(lpCmdLine);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: detector singletons");
         Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+        // Server-role watchdog: a dedicated/headless server must RECOVER from
+        // stalls (RAM paging on a loaded host froze the loop 5-9s in practice),
+        // never self-terminate — killing the process mid-match punishes every
+        // connected client. Looser thresholds than the interactive client and
+        // terminate OFF; one dump is still taken for post-mortem.
+        {
+            Spark::FreezeDetectorConfig serverCfg;
+            serverCfg.warningThresholdSec = 10.0f;
+            serverCfg.recoveryThresholdSec = 20.0f;
+            serverCfg.crashThresholdSec = 60.0f;
+            serverCfg.terminateOnFreeze = false;
+            Spark::FreezeDetector::GetInstance().Configure(serverCfg);
+        }
         Spark::FreezeDetector::GetInstance().Start();
         Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
         Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
