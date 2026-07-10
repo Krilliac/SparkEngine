@@ -17,7 +17,14 @@
 // Platform-specific command helpers
 // ============================================================================
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__APPLE__)
+static constexpr const char* kEchoCmd = "/bin/echo";
+static constexpr const char* kShellCmd = "/bin/sh";
+static constexpr const char* kCatCmd = "/bin/cat";
+static constexpr const char* kTrueCmd = "/usr/bin/true";
+static constexpr const char* kFalseCmd = "/usr/bin/false";
+static constexpr const char* kSleepCmd = "/bin/sleep";
+#elif defined(__linux__)
 static constexpr const char* kEchoCmd = "/bin/echo";
 static constexpr const char* kShellCmd = "/bin/sh";
 static constexpr const char* kCatCmd = "/bin/cat";

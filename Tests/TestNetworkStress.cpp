@@ -758,10 +758,14 @@ TEST(NetworkStress_ReplayAttack)
                    auto connectPkt = BuildConnectPacket("ReplayVictim");
                    sender.SendTo(connectPkt.data(), connectPkt.size(), port);
 
-                   for (int f = 0; f < 3; ++f)
+                   for (int f = 0; f < 100 && nm.GetClients().empty(); ++f)
+                   {
                        nm.Update(0.016f);
+                       std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                   }
 
                    auto clientsBefore = nm.GetClients().size();
+                   EXPECT_EQ(static_cast<int>(clientsBefore), 1);
 
                    // Replay the exact same packet many times
                    for (int i = 0; i < 50; ++i)
