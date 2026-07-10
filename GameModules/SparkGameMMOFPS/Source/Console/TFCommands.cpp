@@ -457,8 +457,13 @@ void TerrafrontModule::RegisterConsoleCommands()
         [this](const std::vector<std::string>&) -> std::string
         {
             std::ostringstream os;
-            os << "[TF] TERRAFRONT  role=" << RoleName(m_ctx.role) << "  faction=" << FactionTag(m_ctx.localFaction)
-               << "  player="
+            os << "[TF] TERRAFRONT  role=" << RoleName(m_ctx.role) << "  faction=" << FactionTag(m_ctx.localFaction);
+            // localFaction is only meaningful where a local player exists; on a
+            // dedicated server factions are per-player (this read misled a
+            // play-test into "faction=---" panic).
+            if (m_ctx.role == NetRole::DedicatedServer)
+                os << " (n/a on dedicated server)";
+            os << "  player="
                << (m_ctx.localPlayer == kInvalidPlayer ? std::string("-") : std::to_string(m_ctx.localPlayer));
 
             if (m_ctx.data && m_ctx.data->IsLoaded())
