@@ -712,7 +712,7 @@ namespace Spark
             void GLCommandList::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
             {
                 GLenum indexType = (m_indexStride == 4) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
-                size_t offset = startIndex * m_indexStride;
+                size_t offset = static_cast<size_t>(startIndex) * m_indexStride;
                 glDrawElementsBaseVertex(m_currentTopology, indexCount, indexType, reinterpret_cast<void*>(offset),
                                          baseVertex);
                 if (m_statistics)
@@ -746,7 +746,7 @@ namespace Spark
                                                      int32_t baseVertex, uint32_t startInstance)
             {
                 GLenum indexType = (m_indexStride == 4) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
-                size_t offset = startIndex * m_indexStride;
+                size_t offset = static_cast<size_t>(startIndex) * m_indexStride;
                 glDrawElementsInstancedBaseVertexBaseInstance(m_currentTopology, indexCount, indexType,
                                                               reinterpret_cast<void*>(offset), instanceCount,
                                                               baseVertex, startInstance);
