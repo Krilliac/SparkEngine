@@ -1,0 +1,23 @@
+{
+  "$schema_note": "TERRAFRONT continent/map registry (continents lane, 2026-07-10). DISPLAY METADATA ONLY: the geometry/zone constants (sanctuary rectangle, pad plateau, terminal, spawn pads) are compile-time constexpr in Source/World/TFSanctuaryZone.h so terrain and damage determinism never depend on a data-file load. Loaded by TFTravelSystem::LoadContinentMeta; unknown keys ignored; file optional (built-in names as fallback). mapId 0 = sanctuary, 1 = the live continent. Additive only - other lanes append new continents with new mapIds, never renumber.",
+  "continents": [
+    {
+      "mapId": 0,
+      "key": "sanctuary_haven",
+      "name": "Sanctuary Haven",
+      "scene": "Scenes/MMOFPS/sanctuary_haven.scene",
+      "kind": "sanctuary",
+      "blurb": "Neutral orbital staging ground. No combat, no capture - pick a front at the travel terminal.",
+      "rules": { "damage": false, "capture": false, "redeploy": false }
+    },
+    {
+      "mapId": 1,
+      "key": "cindral_wastes",
+      "name": "Cindral Wastes",
+      "scene": "Scenes/MMOFPS/cindral_wastes.scene",
+      "kind": "continent",
+      "blurb": "The contested desert continent - 13 regions, three fronts, one lattice.",
+      "rules": { "damage": true, "capture": true, "redeploy": true }
+    }
+  ]
+}

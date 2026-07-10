@@ -1,0 +1,198 @@
+# TERRAFRONT - Sanctuary Haven (mapId 0, starting zone)
+# Loaded ADDITIVELY next to cindral_wastes.scene by TFWorldSetup (second
+# SceneManager + second TFWorldCollision instance) - it is a reserved
+# coordinate zone of the SAME 4096m sim world, NOT a separate sim map.
+# See Source/World/TFSanctuaryZone.h - every position here MUST match its
+# constexpr constants (pad plateau Y=24.0, center 320/3776, terminal 320/3720,
+# spawn pads (296|344, 3744|3808)). The pad plateau is blended into
+# TFWorldSetup::TerrainHeightAt from those constants, so all object Y values
+# sit at 24.0 exactly like the regions.json plateaus.
+# EXCEPTION - mesa_sanctuary is sunk 1.0 m (top face = 23.0): a top face AT
+# plateau height z-fights the procedural terrain mesh (cindral rule).
+# No [Terrain] section on purpose: the analytic heightfield IS the ground.
+
+[Scene]
+name=Sanctuary Haven
+author=TERRAFRONT
+version=1.0
+
+# ------------------------------------------------------------
+# Platform mesa (cliff walls below the pad; top face at 23.0)
+# ------------------------------------------------------------
+
+[Object]
+type=cube
+position=320.0,-127.0,3776.0
+scale=400.0,300.0,400.0
+material=Assets/Materials/MMOFPS/Structure_Concrete.json
+name=mesa_sanctuary
+
+# ------------------------------------------------------------
+# Central haven core
+# ------------------------------------------------------------
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/buildings/facility_core.obj
+position=320.0,24.0,3776.0
+scale=20.0,20.0,20.0
+material=Assets/Materials/MMOFPS/Structure_Panel.json
+name=core_sanctuary
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/antenna_a.obj
+position=272.0,24.0,3776.0
+scale=6.0,6.0,6.0
+material=Assets/Materials/MMOFPS/Structure_Metal.json
+name=antenna_sanctuary_w
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/antenna_a.obj
+position=368.0,24.0,3776.0
+scale=6.0,6.0,6.0
+material=Assets/Materials/MMOFPS/Structure_Metal.json
+name=antenna_sanctuary_e
+
+# ------------------------------------------------------------
+# Spawn shelters (offset from the teleport pads so arrivals never
+# materialize inside geometry; pads are at (296|344, 3744|3808))
+# ------------------------------------------------------------
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
+position=272.0,24.0,3808.0
+scale=2.5,3.5,2.5
+material=Assets/Materials/MMOFPS/Structure_Metal.json
+name=shelter_sanctuary_0
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
+position=368.0,24.0,3808.0
+scale=2.5,3.5,2.5
+material=Assets/Materials/MMOFPS/Structure_Metal.json
+name=shelter_sanctuary_1
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
+position=272.0,24.0,3744.0
+scale=2.5,3.5,2.5
+material=Assets/Materials/MMOFPS/Structure_Metal.json
+name=shelter_sanctuary_2
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/buildings/spawn_shelter.obj
+position=368.0,24.0,3744.0
+scale=2.5,3.5,2.5
+material=Assets/Materials/MMOFPS/Structure_Metal.json
+name=shelter_sanctuary_3
+
+# ------------------------------------------------------------
+# Travel terminal (kTFSanctuaryTerminalX/Z = 320/3720; walk up, press E)
+# vehicle_terminal.obj sits 2.77 below plateau like the cindral vterms
+# ------------------------------------------------------------
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/buildings/vehicle_terminal.obj
+position=320.0,21.23,3720.0
+scale=2.5,2.5,2.5
+material=Assets/Materials/MMOFPS/Structure_Metal.json
+name=term_sanctuary
+
+# ------------------------------------------------------------
+# Perimeter barriers (gapped ring; ambience, not a seal - the zone
+# rules in TFSanctuaryZone.h are positional, not wall-enforced)
+# ------------------------------------------------------------
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/barrier_a.obj
+position=256.0,24.0,3712.0
+scale=2.0,2.0,2.0
+rotation=0.0,0.0,0.0
+material=Assets/Materials/MMOFPS/Structure_Concrete.json
+name=barrier_sanctuary_0
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/barrier_a.obj
+position=384.0,24.0,3712.0
+scale=2.0,2.0,2.0
+rotation=0.0,0.0,0.0
+material=Assets/Materials/MMOFPS/Structure_Concrete.json
+name=barrier_sanctuary_1
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/barrier_a.obj
+position=256.0,24.0,3840.0
+scale=2.0,2.0,2.0
+rotation=0.0,0.0,0.0
+material=Assets/Materials/MMOFPS/Structure_Concrete.json
+name=barrier_sanctuary_2
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/barrier_a.obj
+position=384.0,24.0,3840.0
+scale=2.0,2.0,2.0
+rotation=0.0,0.0,0.0
+material=Assets/Materials/MMOFPS/Structure_Concrete.json
+name=barrier_sanctuary_3
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/barrier_a.obj
+position=240.0,24.0,3776.0
+scale=2.0,2.0,2.0
+rotation=0.0,90.0,0.0
+material=Assets/Materials/MMOFPS/Structure_Concrete.json
+name=barrier_sanctuary_4
+
+[Object]
+type=model
+model=Assets/Models/MMOFPS/props/barrier_a.obj
+position=400.0,24.0,3776.0
+scale=2.0,2.0,2.0
+rotation=0.0,90.0,0.0
+material=Assets/Materials/MMOFPS/Structure_Concrete.json
+name=barrier_sanctuary_5
+
+# ------------------------------------------------------------
+# Arrival pads (TFTravelSystem teleports here; tags for future use -
+# the teleport targets are the TFSanctuaryZone.h constants)
+# ------------------------------------------------------------
+
+[SpawnPoint]
+type=spawnpoint
+position=296.0,25.0,3808.0
+tag=sanctuary
+priority=2
+name=spawn_sanctuary_0
+
+[SpawnPoint]
+type=spawnpoint
+position=344.0,25.0,3808.0
+tag=sanctuary
+priority=2
+name=spawn_sanctuary_1
+
+[SpawnPoint]
+type=spawnpoint
+position=296.0,25.0,3744.0
+tag=sanctuary
+priority=2
+name=spawn_sanctuary_2
+
+[SpawnPoint]
+type=spawnpoint
+position=344.0,25.0,3744.0
+tag=sanctuary
+priority=2
+name=spawn_sanctuary_3
