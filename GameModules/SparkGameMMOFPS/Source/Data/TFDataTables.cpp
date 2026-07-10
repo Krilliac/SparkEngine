@@ -419,6 +419,14 @@ namespace Terrafront
                 v.model = GetStr(o, "model");
                 v.audioEngine = GetStr(o, "audioEngine");
                 v.explodeAudio = GetStr(o, "explodeAudio");
+                v.turretMesh = GetStr(o, "turretMesh", "");
+                if (o.HasKey("turretPivot") && o["turretPivot"].IsArray() && o["turretPivot"].Size() >= 3)
+                {
+                    const Value& tp = o["turretPivot"];
+                    v.turretPivot[0] = static_cast<float>(tp[0].AsNumber(0.0));
+                    v.turretPivot[1] = static_cast<float>(tp[1].AsNumber(0.0));
+                    v.turretPivot[2] = static_cast<float>(tp[2].AsNumber(0.0));
+                }
                 out.push_back(std::move(v));
             }
             return true;

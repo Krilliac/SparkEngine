@@ -93,6 +93,10 @@ struct VehicleDef {
     bool  hasDeploySpawn = false;
     float deployRadiusM = 0, deployRespawnSec = 0;
     std::string model, audioEngine, explodeAudio;
+    // Optional separate turret mesh rendered as a hull-parented child at
+    // turretPivot (hull-local meters). Empty == no turret child.
+    std::string turretMesh;
+    float turretPivot[3] = {0.0f, 0.0f, 0.0f};
 };
 
 struct RegionDef {

@@ -317,6 +317,23 @@ namespace Terrafront
             mr.materialPath = FactionStructureMaterial(*m_ctx, faction);
             mr.castShadows = true;
         }
+
+        // Separate turret mesh: a hull-parented child at the pivot. The ECS
+        // render pass uses the hierarchical GetWorldMatrix, so the turret
+        // follows the hull's pose automatically (yaws with the hull today;
+        // seat-driven independent aim needs a replicated gunner-aim field —
+        // tracked as a follow-up). Destroyed with the hull in DestroyVehicle.
+        if (!def.turretMesh.empty())
+        {
+            const auto turret = world->CreateEntity("TF_VehTurret");
+            Transform& tt = world->AddComponent<Transform>(turret);
+            tt.parent = e;
+            tt.position = {def.turretPivot[0], def.turretPivot[1], def.turretPivot[2]};
+            MeshRenderer& tmr = world->AddComponent<MeshRenderer>(turret);
+            tmr.meshPath = "Assets/" + def.turretMesh;
+            tmr.materialPath = FactionStructureMaterial(*m_ctx, faction);
+            tmr.castShadows = true;
+        }
         return static_cast<uint32_t>(e);
     }
 
@@ -1013,7 +1030,18 @@ namespace Terrafront
         if (world && v.local != 0)
         {
             const auto e = static_cast<EntityID>(v.local);
-            if (world->GetRegistry().valid(e))
+            // Destroy any hull-parented children (turret) first so the render
+            // pass never walks a dangling parent chain after the hull is gone.
+            auto& registry = world->GetRegistry();
+            std::vector<EntityID> children;
+            for (auto child : world->GetEntitiesWith<Transform>())
+            {
+                if (registry.get<Transform>(child).parent == e)
+                    children.push_back(child);
+            }
+            for (auto child : children)
+                world->DestroyEntity(child);
+            if (registry.valid(e))
                 world->DestroyEntity(e);
         }
         m_lastSent.erase(entity);
