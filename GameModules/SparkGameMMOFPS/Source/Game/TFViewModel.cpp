@@ -526,14 +526,13 @@ namespace Terrafront
 
         ID3D11DeviceContext* dc = gfx->GetContext();
         gfx->SetBasicShaders();
-        gfx->SetBasicTexture(nullptr); // everything below is untextured solid color
+        gfx->SetBasicTexture(nullptr); // arms/charm/muzzle below are solid color
 
         // ------------------------------------------------------------ weapon
         if (Mesh* vm = GetOrLoadWeaponMesh(gfx, vmPath); vm && vm->GetVertexCount() > 0 && vm->GetIndexCount() > 0)
         {
             // Recenter/scale/orient exactly as the old pass-3 draw, then follow the
-            // animated grip frame. Whole model in flat gunmetal: the weapon OBJs'
-            // own MTL textures are near-black and read as silhouettes.
+            // animated grip frame.
             // Barrel flex: a brief extra muzzle-up bend about the grip on recoil,
             // applied to the weapon mesh ONLY (the arms hold steady, so the gun
             // visibly flexes in the hands instead of the whole rig rotating).
@@ -542,8 +541,31 @@ namespace Terrafront
                                          XMMatrixRotationY(vmDef.rotationYRad) * XMMatrixRotationX(-m_barrelFlex.pos) *
                                          gripFrame;
             const XMFLOAT4 gunmetal{vmDef.gunmetal[0], vmDef.gunmetal[1], vmDef.gunmetal[2], vmDef.gunmetal[3]};
-            gfx->UpdateBasicConstants(weaponWorld, view, proj, gunmetal, {1.0f, 1.0f});
-            vm->Render(dc);
+
+            // Draw each MTL material range with its own map_Kd (the P0 weapon
+            // atlas) at 1:1 UVs, exactly like TFWorldSetup's scene path; ranges
+            // with no texture fall back to flat gunmetal so untextured weapons
+            // still read as silhouettes.
+            const auto& submeshes = vm->GetSubmeshes();
+            if (submeshes.empty())
+            {
+                gfx->UpdateBasicConstants(weaponWorld, view, proj, gunmetal, {1.0f, 1.0f});
+                gfx->SetBasicTexture(nullptr);
+                vm->Render(dc);
+            }
+            else
+            {
+                for (const MeshSubmesh& smesh : submeshes)
+                {
+                    ID3D11ShaderResourceView* srv =
+                        smesh.diffuseTexture.empty() ? nullptr : gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                    const XMFLOAT4 tint = srv ? XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f} : gunmetal;
+                    gfx->UpdateBasicConstants(weaponWorld, view, proj, tint, {1.0f, 1.0f});
+                    gfx->SetBasicTexture(srv);
+                    vm->RenderRange(dc, smesh.indexStart, smesh.indexCount);
+                }
+                gfx->SetBasicTexture(nullptr);
+            }
         }
 
         // ------------------------------------------------------------ arms
