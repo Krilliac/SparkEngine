@@ -130,6 +130,15 @@ namespace Terrafront
         // local-player HUD feed (TFRegionSystem.cpp)
         void FeedLocalCaptureHUD();
 
+        // Client-side capture-point landmarks: a cap tower + a slowly rotating
+        // banner ring per non-skyanchor region, tinted by the current owner.
+        // Spawned once, then rotated/retinted each frame. Viewer-only (gated on
+        // HasLocalPlayer) so the dedicated server never builds decor.
+        void UpdateCaptureVisuals(float dt);
+        bool m_capVisualsSpawned = false;
+        std::vector<uint32_t> m_capBannerEnt; ///< region-indexed banner entity (0 = none)
+        std::vector<int> m_capBannerOwner;    ///< last-applied owner tint per banner
+
         // tf_capture_debug payload (TFRegionSystem.cpp)
         std::string DebugCaptureReport() const;
 

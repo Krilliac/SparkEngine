@@ -9,6 +9,9 @@
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
+#include "Game/TFVisualUtils.h" // FactionStructureMaterial for capture-point banners
+#include "World/TFWorldSetup.h" // TerrainHeightAt for landmark placement
+#include "Engine/ECS/Components.h" // Transform, MeshRenderer for capture landmarks
 #include "UI/TFHUD.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
@@ -117,7 +120,6 @@ namespace Terrafront
 
     void TFRegionSystem::Update(float deltaTime)
     {
-        (void)deltaTime;
         if (!m_initialized || !m_ctx)
             return;
 
@@ -137,7 +139,76 @@ namespace Terrafront
 #endif
 
         if (m_ctx->HasLocalPlayer())
+        {
             FeedLocalCaptureHUD();
+            UpdateCaptureVisuals(deltaTime);
+        }
+    }
+
+    void TFRegionSystem::UpdateCaptureVisuals(float dt)
+    {
+        // Viewer-only decorative landmarks; needs the ECS world, terrain, and data.
+        World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
+        if (!world || !m_ctx->world || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return;
+        const auto& regions = m_ctx->data->GetContinent().regions;
+        if (regions.empty())
+            return;
+
+        constexpr float kBannerHeightM = 11.5f;   // just under the 12.7m cap tower top
+        constexpr float kBannerSpinDegPerSec = 24.0f;
+
+        if (!m_capVisualsSpawned)
+        {
+            m_capBannerEnt.assign(regions.size(), 0u);
+            m_capBannerOwner.assign(regions.size(), -2);
+            for (size_t i = 0; i < regions.size(); ++i)
+            {
+                const RegionDef& r = regions[i];
+                if (r.tier == "skyanchor") // faction warpgates use their own big structure
+                    continue;
+                const float x = r.centerX, z = r.centerZ;
+                const float y = m_ctx->world->TerrainHeightAt(x, z);
+
+                const auto tower = world->CreateEntity("TF_CapTower");
+                Transform& tt = world->AddComponent<Transform>(tower);
+                tt.position = {x, y, z};
+                MeshRenderer& tmr = world->AddComponent<MeshRenderer>(tower);
+                tmr.meshPath = "Assets/Models/MMOFPS/buildings/cap_tower.obj";
+                tmr.materialPath = FactionStructureMaterial(*m_ctx, FactionId::None);
+                tmr.castShadows = true;
+
+                const auto banner = world->CreateEntity("TF_CapBanner");
+                Transform& bt = world->AddComponent<Transform>(banner);
+                bt.position = {x, y + kBannerHeightM, z};
+                MeshRenderer& bmr = world->AddComponent<MeshRenderer>(banner);
+                bmr.meshPath = "Assets/Models/MMOFPS/buildings/cap_banner_ring.obj";
+                bmr.materialPath = FactionStructureMaterial(*m_ctx, FactionId::None);
+                bmr.castShadows = false;
+                m_capBannerEnt[i] = static_cast<uint32_t>(banner);
+            }
+            m_capVisualsSpawned = true;
+        }
+
+        // Per-frame: spin each banner and retint it when its region owner changes.
+        auto& registry = world->GetRegistry();
+        for (size_t i = 0; i < m_capBannerEnt.size() && i < m_state.size(); ++i)
+        {
+            if (m_capBannerEnt[i] == 0u)
+                continue;
+            const auto e = static_cast<EntityID>(m_capBannerEnt[i]);
+            if (!registry.valid(e))
+                continue;
+            if (Transform* t = registry.try_get<Transform>(e))
+                t->rotation.y += kBannerSpinDegPerSec * dt;
+            const int owner = static_cast<int>(m_state[i].owner);
+            if (owner != m_capBannerOwner[i])
+            {
+                m_capBannerOwner[i] = owner;
+                if (MeshRenderer* mr = registry.try_get<MeshRenderer>(e))
+                    mr->materialPath = FactionStructureMaterial(*m_ctx, m_state[i].owner);
+            }
+        }
     }
 
     void TFRegionSystem::FixedUpdate(float fixedDeltaTime)
