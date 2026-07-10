@@ -517,10 +517,13 @@ namespace Terrafront
         if (!m_skyMesh || m_skyMesh->GetIndexCount() < 36)
             return;
 
-        const SkyboxDef& sky = Pres().skybox;
-
         // Centered on the camera, huge but inside the far plane (corner ~5000 < 6000).
         const XMFLOAT3 cam = m_camera->GetPosition();
+
+        // Per-zone sky: the sanctuary shows its own (orbital) sky; the continent
+        // shows Veyra's. Selected by the camera's world position.
+        const SkyboxDef& sky =
+            TFTravel_IsInSanctuary(cam.x, cam.z) ? Pres().sanctuarySkybox : Pres().skybox;
         const XMMATRIX world =
             XMMatrixScaling(sky.scale, sky.scale, sky.scale) * XMMatrixTranslation(cam.x, cam.y, cam.z);
 

@@ -670,6 +670,24 @@ namespace Terrafront
                     out.skybox.tint[i] = static_cast<float>(sky["tint"][i].AsNumber(out.skybox.tint[i]));
             }
 
+            // Sanctuary sky: defaults to the continent sky, overridden by an
+            // optional "sanctuarySkybox" object (same shape). Faces are only
+            // replaced when a full 6-face array is present.
+            out.sanctuarySkybox = out.skybox;
+            if (pres.HasKey("sanctuarySkybox") && pres["sanctuarySkybox"].IsObject())
+            {
+                const Value& ssky = pres["sanctuarySkybox"];
+                if (ssky["faceTex"].IsArray() && ssky["faceTex"].Size() == 6)
+                    for (size_t i = 0; i < 6; ++i)
+                        out.sanctuarySkybox.faceTex[i] =
+                            ssky["faceTex"][i].AsString(out.sanctuarySkybox.faceTex[i]);
+                out.sanctuarySkybox.scale = GetNum(ssky, "scale", out.sanctuarySkybox.scale);
+                if (ssky["tint"].IsArray() && ssky["tint"].Size() == 4)
+                    for (size_t i = 0; i < 4; ++i)
+                        out.sanctuarySkybox.tint[i] =
+                            static_cast<float>(ssky["tint"][i].AsNumber(out.sanctuarySkybox.tint[i]));
+            }
+
             const Value& terr = pres["terrain"];
             if (terr.IsObject())
             {

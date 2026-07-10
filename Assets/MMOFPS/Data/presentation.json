@@ -90,5 +90,22 @@
       1.08,
       1.0
     ]
+  },
+  "sanctuarySkybox": {
+    "faceTex": [
+      "Textures/MMOFPS/sky/sanctuary_px.png",
+      "Textures/MMOFPS/sky/sanctuary_nx.png",
+      "Textures/MMOFPS/sky/sanctuary_py.png",
+      "Textures/MMOFPS/sky/sanctuary_ny.png",
+      "Textures/MMOFPS/sky/sanctuary_pz.png",
+      "Textures/MMOFPS/sky/sanctuary_nz.png"
+    ],
+    "scale": 2900.0,
+    "tint": [
+      1.05,
+      1.08,
+      1.15,
+      1.0
+    ]
   }
 }

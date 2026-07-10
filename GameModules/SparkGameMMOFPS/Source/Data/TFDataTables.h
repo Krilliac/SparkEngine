@@ -187,7 +187,8 @@ struct MuzzleFxDef {
 };
 
 struct WorldPresentationDef {
-    SkyboxDef        skybox;
+    SkyboxDef        skybox;          // continent sky (Cindral Wastes)
+    SkyboxDef        sanctuarySkybox; // sky shown while inside the sanctuary zone
     TerrainVisualDef terrain;
     AmbientAudioDef  ambient;
     ViewmodelDef     viewmodel;
