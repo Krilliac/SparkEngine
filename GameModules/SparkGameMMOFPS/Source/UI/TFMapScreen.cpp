@@ -6,6 +6,9 @@
  *        click-to-deploy (dead) / deploy-hint (alive) interaction.
  *        W6: friendly-presence badges per region (replicated pawn data,
  *        own faction only) and a you-are-here marker on the local region.
+ *        W7 (ui-map-keys): shared keybind table, squad-member badges,
+ *        click-to-inspect side panel, and the server-validated redeploy flow
+ *        (TFRedeployRules + TF_RedeployRequest/Reply, reserved 0x5430 block).
  *
  * Consumes the W2 TFRegionSystem contract (OwnerOf / IsCapturable /
  * CaptureProgress / RegionsHeld / CanSpawnAt) — identical accessors on server
@@ -15,8 +18,13 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFRedeployRules.h"
+#include "Game/TFSquadSystem.h"
+#include "Game/TFVehicleSystem.h"
 #include "Net/TFClientNet.h"
 #include "Net/TFNetProtocol.h"
+#include "UI/TFHUD.h"
+#include "UI/TFKeybinds.h"
 #include "UI/TFSpawnScreen.h"
 #include "UI/TFUiCommon.h"
 #include "World/TFRegionSystem.h"
@@ -24,10 +32,14 @@
 #include "Input/InputManager.h"
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
+#include "Utils/SparkConsole.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 #include <unordered_map>
 
 namespace Terrafront
@@ -36,15 +48,12 @@ namespace Terrafront
     namespace
     {
 
-        // Windows virtual-key codes (numeric so no <windows.h> dependency here —
-        // TFClientNet.cpp convention).
-        constexpr int kVkM = 'M';
-        constexpr int kVkEscape = 0x1B;
-
 #ifdef SPARK_HAS_IMGUI
         constexpr float kHexSizeMin = 26.0f; // corner radius, px
         constexpr float kHexSizeMax = 52.0f; // ~90 px hex width at the cap
 #endif
+
+        constexpr float kStatusTTLSec = 4.0f; // redeploy status line lifetime
 
     } // namespace
 
@@ -60,6 +69,32 @@ namespace Terrafront
         m_ctx = &ctx;
         m_events = &events;
         m_initialized = true;
+
+        // W7: exec-harness/headless entry into the same redeploy state machine
+        // the inspect-panel button drives (SimpleConsole pattern, TFRegionSystem).
+        auto& console = Spark::SimpleConsole::GetInstance();
+        if (m_ctx->HasLocalPlayer() && !console.HasCommand("tf_redeploy"))
+        {
+            console.RegisterCommand(
+                "tf_redeploy",
+                [this](const std::vector<std::string>& args) -> std::string
+                {
+                    if (!m_initialized || !m_ctx)
+                        return "[TF] map screen not ready";
+                    if (args.empty())
+                        return "[TF] usage: tf_redeploy <regionId>";
+                    const RegionId region = static_cast<RegionId>(std::strtoul(args[0].c_str(), nullptr, 10));
+                    const uint8_t reason = CanRedeployTo(region);
+                    if (reason != kTFRedeployOk)
+                        return std::string("[TF] redeploy refused: ") + TFRedeployRules::ReasonText(reason);
+                    StartRedeploy(region);
+                    return "[TF] redeploy countdown started -> region " + std::string(args[0]);
+                },
+                "Redeploy to a friendly non-contested region (server validated)", "TERRAFRONT",
+                "tf_redeploy <regionId>");
+            m_redeployCmd = true;
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFMapScreen initialized");
         return true;
     }
@@ -71,7 +106,13 @@ namespace Terrafront
 
     void TFMapScreen::Shutdown()
     {
+        if (m_redeployCmd)
+        {
+            Spark::SimpleConsole::GetInstance().UnregisterCommand("tf_redeploy");
+            m_redeployCmd = false;
+        }
         m_open = false;
+        m_redeployPending = false;
         m_initialized = false;
     }
 
@@ -137,13 +178,154 @@ namespace Terrafront
         if (!m_initialized || !m_ctx || !m_ctx->HasLocalPlayer())
             return;
 
+        TickRedeploy(deltaTime);
+
+        if (!m_ctx->InWorld())
+            return; // pre-onboarding (login/char-select): no map hotkeys
+
         InputManager* in = m_ctx->engine ? m_ctx->engine->GetInput() : nullptr;
         if (!in)
             return;
-        if (in->WasKeyPressed(kVkM))
+        // Chat owns the keyboard while its input line is focused — typing an
+        // 'm' must not toggle the map (TFKeybinds Action route reads raw VKs).
+        const bool chatOpen = m_ctx->hud && m_ctx->hud->IsChatOpen();
+        if (!chatOpen && TFKeys::WasActionPressed(*in, TFKeys::Action::OpenMap))
             Toggle();
-        if (m_open && in->WasKeyPressed(kVkEscape))
+        // Esc closes the chat first (TFHUD handles that); only an unfocused map
+        // consumes CloseOverlay here.
+        if (m_open && !chatOpen && TFKeys::WasActionPressed(*in, TFKeys::Action::CloseOverlay))
             Close();
+    }
+
+    // ---------------------------------------------------------------------------
+    // W7 redeploy state machine (state-only — works headless; ImGui only draws it)
+    // ---------------------------------------------------------------------------
+
+    bool TFMapScreen::LocalSeated() const
+    {
+        if (!m_ctx || !m_ctx->vehicles)
+            return false;
+        PlayerId pid = m_ctx->localPlayer;
+        if (pid == kInvalidPlayer && m_ctx->clientNet)
+            pid = m_ctx->clientNet->LocalPlayerId();
+        return pid != kInvalidPlayer && m_ctx->vehicles->IsSeated(pid);
+    }
+
+    uint8_t TFMapScreen::CanRedeployTo(RegionId region) const
+    {
+        if (!m_ctx)
+            return kTFRedeployBadRegion;
+        if (m_cooldownLeft > 0.0f)
+            return kTFRedeployCooldown;
+        PlayerId pid = m_ctx->localPlayer;
+        if (pid == kInvalidPlayer && m_ctx->clientNet)
+            pid = m_ctx->clientNet->LocalPlayerId();
+        return TFRedeployRules::CanRedeploy(*m_ctx, pid, m_ctx->localFaction, region);
+    }
+
+    void TFMapScreen::SetStatus(const char* text, bool error)
+    {
+        std::snprintf(m_status, sizeof(m_status), "%s", text ? text : "");
+        m_statusTTL = kStatusTTLSec;
+        m_statusIsError = error;
+    }
+
+    void TFMapScreen::StartRedeploy(RegionId region)
+    {
+        m_redeployPending = true;
+        m_redeployTarget = region;
+        m_redeployCountdown = TFRedeployRules::kTFRedeployCountdownSec;
+        const RegionDef* rd = (m_ctx && m_ctx->data) ? m_ctx->data->GetRegion(region) : nullptr;
+        char line[96];
+        std::snprintf(line, sizeof(line), "Redeploying to %s...", rd ? rd->name.c_str() : "?");
+        SetStatus(line, false);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] redeploy countdown started -> region %u",
+                       static_cast<unsigned>(region));
+    }
+
+    void TFMapScreen::CancelRedeploy(const char* why)
+    {
+        if (!m_redeployPending)
+            return;
+        m_redeployPending = false;
+        m_redeployTarget = kInvalidRegion;
+        m_redeployCountdown = 0.0f;
+        char line[96];
+        std::snprintf(line, sizeof(line), "Redeploy cancelled: %s", why ? why : "");
+        SetStatus(line, true);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] redeploy cancelled (%s)", why ? why : "");
+    }
+
+    void TFMapScreen::SendRedeployRequest(RegionId region)
+    {
+        if (!m_ctx || !m_ctx->clientNet || !m_ctx->clientNet->IsConnected())
+        {
+            SetStatus("Redeploy failed: not connected", true);
+            return;
+        }
+        TF_RedeployRequest rq{};
+        rq.regionId = region;
+        m_ctx->clientNet->SendMsg(static_cast<TFMsg>(kTFMsg_RedeployRequest), &rq, sizeof(rq));
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] redeploy request -> region %u", static_cast<unsigned>(region));
+    }
+
+    void TFMapScreen::TickRedeploy(float dt)
+    {
+        m_cooldownLeft = std::max(0.0f, m_cooldownLeft - dt);
+        m_statusTTL = std::max(0.0f, m_statusTTL - dt);
+
+        if (!m_redeployPending)
+            return;
+
+        // Death routes through the spawn screen instead; a vehicle seat makes
+        // the teleport unsound (the pawn is driven by the vehicle transform).
+        if (!LocalPawnAlive())
+        {
+            CancelRedeploy("you went down");
+            return;
+        }
+        if (LocalSeated())
+        {
+            CancelRedeploy("entered a vehicle");
+            return;
+        }
+
+        m_redeployCountdown -= dt;
+        if (m_redeployCountdown > 0.0f)
+            return;
+
+        const RegionId target = m_redeployTarget;
+        m_redeployPending = false;
+        m_redeployTarget = kInvalidRegion;
+        m_redeployCountdown = 0.0f;
+
+        // Re-check eligibility at send time (ownership can flip mid-countdown).
+        const uint8_t reason = CanRedeployTo(target);
+        if (reason != kTFRedeployOk)
+        {
+            SetStatus(TFRedeployRules::ReasonText(reason), true);
+            return;
+        }
+        SendRedeployRequest(target);
+    }
+
+    void TFMapScreen::OnRedeployReply(const TF_RedeployReply& rep)
+    {
+        if (rep.accepted)
+        {
+            m_cooldownLeft = TFRedeployRules::kTFRedeployIntervalSec; // local mirror of the server interval
+            const RegionDef* rd = (m_ctx && m_ctx->data) ? m_ctx->data->GetRegion(rep.regionId) : nullptr;
+            char line[96];
+            std::snprintf(line, sizeof(line), "Redeployed to %s", rd ? rd->name.c_str() : "region");
+            SetStatus(line, false);
+            m_deployHint = kInvalidRegion; // rally hint served
+            Close();                       // you are there now — back to the gun
+            return;
+        }
+        if (rep.reason == kTFRedeployCooldown)
+            m_cooldownLeft = std::max(m_cooldownLeft, rep.cooldownSec);
+        SetStatus(TFRedeployRules::ReasonText(rep.reason), true);
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] redeploy denied: reason %u", static_cast<unsigned>(rep.reason));
     }
 
     void TFMapScreen::SendRegionSpawnRequest(RegionId region)
@@ -189,6 +371,10 @@ namespace Terrafront
         }
         DrawMapContents();
         ImGui::End();
+
+        // W7: input-receiving side panel for the selected region (own window,
+        // TFHUD::DrawDeathActions pattern — buttons need a non-NoInputs window).
+        DrawInspectPanel();
     }
 
     void TFMapScreen::DrawMapContents()
@@ -280,6 +466,7 @@ namespace Terrafront
         // client records mirror the RemotePawn store), so this is real
         // client-visible data — friendly counts only, no enemy intel.
         std::unordered_map<RegionId, uint32_t> friendlyCount;
+        std::unordered_map<RegionId, uint32_t> squadCount; // W7: squadmate markers
         RegionId myRegion = kInvalidRegion;
         if (m_ctx->players && myFaction != FactionId::None && !regions.empty())
         {
@@ -314,6 +501,8 @@ namespace Terrafront
                     ++friendlyCount[r];
                     if (p.owner == local)
                         myRegion = r;
+                    else if (m_ctx->squads && m_ctx->squads->IsLocalSquadMember(p.owner))
+                        ++squadCount[r]; // W7: squadmates (self excluded — YOU marker covers it)
                 });
         }
 
@@ -335,12 +524,17 @@ namespace Terrafront
                 fillA = 0.40f + 0.20f * std::sin(m_time * 6.0f); // contested pulse
             dl->AddConvexPolyFilled(corners, 6, FactionCol(owner, fillA));
 
-            // Outline: hovered bright; deploy hint gold; default faint.
+            // Outline: hovered bright; selected cyan; deploy hint gold; default faint.
             ImU32 outline = IM_COL32(210, 214, 220, 70);
             float thick = 1.5f;
             if (rd.id == m_deployHint)
             {
                 outline = IM_COL32(255, 200, 60, 220);
+                thick = 3.0f;
+            }
+            if (rd.id == m_selected)
+            {
+                outline = IM_COL32(90, 220, 255, 230); // W7 inspect selection
                 thick = 3.0f;
             }
             if (rd.id == m_hovered)
@@ -349,6 +543,14 @@ namespace Terrafront
                 thick = 3.0f;
             }
             dl->AddPolyline(corners, 6, outline, ImDrawFlags_Closed, thick);
+
+            // W7: pending-redeploy target gets a gold spinner ring.
+            if (m_redeployPending && rd.id == m_redeployTarget)
+            {
+                const float a0 = m_time * 3.0f;
+                dl->PathArcTo(c, m_hexSize * 0.78f, a0, a0 + kPi * 1.4f, 24);
+                dl->PathStroke(IM_COL32(255, 200, 60, 230), 0, 3.5f);
+            }
 
             // Capture progress ring in the capturing faction's color.
             if (progress > 0.001f && capturing != FactionId::None)
@@ -382,6 +584,20 @@ namespace Terrafront
                 dl->AddCircle(bp, 8.0f, IM_COL32(15, 17, 22, 200), 0, 1.5f);
                 AddTextCentered(dl, 12.0f, bp, IM_COL32(250, 250, 250, 240), cnt);
             }
+            // W7: squad-member badge (top-right, green diamond) — replicated
+            // pawn data filtered through TFSquadSystem::IsLocalSquadMember.
+            if (auto it = squadCount.find(rd.id); it != squadCount.end())
+            {
+                char cnt[16];
+                std::snprintf(cnt, sizeof(cnt), "%u", it->second);
+                const ImVec2 bp(c.x + m_hexSize * 0.52f, c.y - m_hexSize * 0.52f);
+                const float s = 9.0f;
+                dl->AddQuadFilled(ImVec2(bp.x, bp.y - s), ImVec2(bp.x + s, bp.y), ImVec2(bp.x, bp.y + s),
+                                  ImVec2(bp.x - s, bp.y), IM_COL32(96, 220, 140, 220));
+                dl->AddQuad(ImVec2(bp.x, bp.y - s), ImVec2(bp.x + s, bp.y), ImVec2(bp.x, bp.y + s),
+                            ImVec2(bp.x - s, bp.y), IM_COL32(15, 17, 22, 200), 1.5f);
+                AddTextCentered(dl, 12.0f, bp, IM_COL32(12, 24, 16, 255), cnt);
+            }
             if (rd.id == myRegion)
             {
                 dl->AddCircle(c, m_hexSize * 0.30f, IM_COL32(255, 255, 255, 220), 0, 2.5f);
@@ -405,7 +621,30 @@ namespace Terrafront
         AddTextCentered(dl, 14.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + 60.0f),
                         IM_COL32(170, 174, 180, 200),
                         dead ? "Click a highlighted region to deploy  |  M / Esc closes"
-                             : "Click a region to set a rally hint  |  M / Esc closes");
+                             : "Click a region to inspect / redeploy  |  M / Esc closes");
+
+        // W7: redeploy countdown + status line (center-bottom).
+        if (m_redeployPending)
+        {
+            const RegionDef* td = m_ctx->data->GetRegion(m_redeployTarget);
+            char line[96];
+            std::snprintf(line, sizeof(line), "REDEPLOYING TO %s IN %.1f s", td ? td->name.c_str() : "?",
+                          std::max(0.0f, m_redeployCountdown));
+            AddTextCentered(dl, 22.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
+                            IM_COL32(255, 200, 60, 235), line);
+        }
+        else if (m_statusTTL > 0.0f && m_status[0] != '\0')
+        {
+            AddTextCentered(dl, 16.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
+                            m_statusIsError ? IM_COL32(255, 120, 110, 230) : IM_COL32(140, 235, 160, 230), m_status);
+        }
+        else if (m_cooldownLeft > 0.0f && !dead)
+        {
+            char line[64];
+            std::snprintf(line, sizeof(line), "Redeploy ready in %.0f s", std::ceil(m_cooldownLeft));
+            AddTextCentered(dl, 14.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
+                            IM_COL32(180, 184, 190, 200), line);
+        }
 
         {
             const ImVec2 base(vp->Pos.x + 28.0f, vp->Pos.y + vp->Size.y - 118.0f);
@@ -453,6 +692,8 @@ namespace Terrafront
             {
                 if (dead && rs->CanSpawnAt(rd.id, myFaction))
                     ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.55f, 1.0f), "DEPLOY AVAILABLE - click");
+                else if (!dead && CanRedeployTo(rd.id) == kTFRedeployOk)
+                    ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.55f, 1.0f), "REDEPLOY AVAILABLE - click to inspect");
                 else if (rs->IsCapturable(rd.id, myFaction))
                     ImGui::TextColored(ImVec4(0.95f, 0.85f, 0.45f, 1.0f), "Conduit-linked: capturable");
             }
@@ -472,15 +713,169 @@ namespace Terrafront
             }
             else
             {
-                m_deployHint = hoveredDef->id; // W3 redeploy hint
+                // W7: alive click selects for the inspect panel AND doubles as
+                // the W3 rally hint (previous behavior preserved).
+                m_selected = (m_selected == hoveredDef->id) ? kInvalidRegion : hoveredDef->id;
+                m_deployHint = hoveredDef->id;
             }
         }
+    }
+
+    // ---------------------------------------------------------------------------
+    // W7: selected-region inspect panel (owner / occupants / progress / redeploy)
+    // ---------------------------------------------------------------------------
+
+    void TFMapScreen::DrawInspectPanel()
+    {
+        using namespace TFUi;
+
+        if (!m_open || m_selected == kInvalidRegion || !m_ctx || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return;
+        const RegionDef* rd = m_ctx->data->GetRegion(m_selected);
+        if (!rd)
+        {
+            m_selected = kInvalidRegion;
+            return;
+        }
+
+        TFRegionSystem* rs = m_ctx->regions;
+        const FactionId myFaction = m_ctx->localFaction;
+        const FactionId owner = rs ? rs->OwnerOf(rd->id) : rd->homeFaction;
+        FactionId capturing = FactionId::None;
+        bool contested = false;
+        const float progress = rs ? rs->CaptureProgress(rd->id, capturing, contested) : 0.0f;
+
+        // Occupants (own-faction intel only — same replicated source as the badges).
+        uint32_t friendlies = 0, squadmates = 0;
+        if (m_ctx->players && myFaction != FactionId::None)
+        {
+            const RegionDef* self = rd;
+            const auto& regions = m_ctx->data->GetContinent().regions;
+            m_ctx->players->ForEachAlivePawn(
+                [&](const PawnInfo& p)
+                {
+                    if (p.faction != myFaction)
+                        return;
+                    // Nearest-region test against the selected hex only: cheaper
+                    // than a full map and identical for "is he here?".
+                    float bestD2 = 1e18f;
+                    RegionId best = kInvalidRegion;
+                    for (const RegionDef& other : regions)
+                    {
+                        const float dx = other.centerX - p.pos[0];
+                        const float dz = other.centerZ - p.pos[2];
+                        const float d2 = dx * dx + dz * dz;
+                        if (d2 < bestD2)
+                        {
+                            bestD2 = d2;
+                            best = other.id;
+                        }
+                    }
+                    if (best != self->id)
+                        return;
+                    ++friendlies;
+                    if (m_ctx->squads && m_ctx->squads->IsLocalSquadMember(p.owner))
+                        ++squadmates;
+                });
+        }
+
+        ImGuiViewport* vp = ImGui::GetMainViewport();
+        const float panelW = 300.0f;
+        ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x - panelW - 24.0f, vp->Pos.y + vp->Size.y * 0.24f));
+        ImGui::SetNextWindowSize(ImVec2(panelW, 0.0f));
+        ImGui::SetNextWindowBgAlpha(0.92f);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                       ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+        if (!ImGui::Begin("##TFMapInspect", nullptr, flags))
+        {
+            ImGui::End();
+            return;
+        }
+
+        ImGui::TextUnformatted(rd->name.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("(%s)", TierTag(rd->tier));
+        ImGui::Separator();
+
+        float oc[4];
+        FactionColor(owner, oc);
+        ImGui::Text("Owner:");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(oc[0], oc[1], oc[2], 1.0f), "%s", FactionName(owner));
+        ImGui::Text("Flux: %d / tick", rd->fluxPerTick);
+        ImGui::Text("Friendlies here: %u", friendlies);
+        if (squadmates > 0)
+            ImGui::TextColored(ImVec4(0.42f, 0.88f, 0.56f, 1.0f), "Squadmates here: %u", squadmates);
+
+        if (progress > 0.001f && capturing != FactionId::None)
+        {
+            float cc[4];
+            FactionColor(capturing, cc);
+            ImGui::TextColored(ImVec4(cc[0], cc[1], cc[2], 1.0f), "Capturing: %s %d%%%s", FactionTag(capturing),
+                               static_cast<int>(progress * 100.0f), contested ? "  (CONTESTED)" : "");
+            ImGui::ProgressBar(progress, ImVec2(-1.0f, 6.0f), "");
+        }
+        else if (contested)
+        {
+            ImGui::TextColored(ImVec4(0.95f, 0.6f, 0.3f, 1.0f), "CONTESTED");
+        }
+
+        ImGui::Separator();
+
+        const bool dead = !LocalPawnAlive();
+        if (dead)
+        {
+            if (rs && myFaction != FactionId::None && rs->CanSpawnAt(rd->id, myFaction))
+            {
+                if (ImGui::Button("DEPLOY HERE", ImVec2(-1.0f, 32.0f)))
+                {
+                    SendRegionSpawnRequest(rd->id);
+                    Close();
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("Not a spawn option");
+            }
+        }
+        else if (m_redeployPending && m_redeployTarget == rd->id)
+        {
+            char label[48];
+            std::snprintf(label, sizeof(label), "REDEPLOYING IN %.1f s", std::max(0.0f, m_redeployCountdown));
+            ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.24f, 1.0f), "%s", label);
+            if (ImGui::Button("CANCEL", ImVec2(-1.0f, 28.0f)))
+                CancelRedeploy("by request");
+        }
+        else
+        {
+            const uint8_t reason = CanRedeployTo(rd->id);
+            if (reason == kTFRedeployOk)
+            {
+                char label[48];
+                std::snprintf(label, sizeof(label), "REDEPLOY (%.0f s)", TFRedeployRules::kTFRedeployCountdownSec);
+                if (ImGui::Button(label, ImVec2(-1.0f, 32.0f)))
+                    StartRedeploy(rd->id);
+            }
+            else
+            {
+                ImGui::BeginDisabled();
+                ImGui::Button("REDEPLOY", ImVec2(-1.0f, 32.0f));
+                ImGui::EndDisabled();
+                if (reason == kTFRedeployCooldown)
+                    ImGui::TextDisabled("Ready in %.0f s", std::ceil(m_cooldownLeft));
+                else
+                    ImGui::TextDisabled("%s", TFRedeployRules::ReasonText(reason));
+            }
+        }
+
+        ImGui::End();
     }
 
 #else // !SPARK_HAS_IMGUI — headless: map is state-only
 
     void TFMapScreen::RenderUI() {}
     void TFMapScreen::DrawMapContents() {}
+    void TFMapScreen::DrawInspectPanel() {}
 
 #endif // SPARK_HAS_IMGUI
 
