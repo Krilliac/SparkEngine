@@ -165,10 +165,33 @@ namespace Terrafront
             for (size_t i = 0; i < regions.size(); ++i)
             {
                 const RegionDef& r = regions[i];
-                if (r.tier == "skyanchor") // faction warpgates use their own big structure
-                    continue;
                 const float x = r.centerX, z = r.centerZ;
                 const float y = m_ctx->world->TerrainHeightAt(x, z);
+
+                // Skyanchors are the faction warpgates: place the big faction
+                // gate structure and no capture tower/banner (they never flip).
+                if (r.tier == "skyanchor")
+                {
+                    const char* gate = nullptr;
+                    switch (r.homeFaction)
+                    {
+                    case FactionId::MRA: gate = "Assets/Models/MMOFPS/buildings/warpgate_mra.obj"; break;
+                    case FactionId::AUC: gate = "Assets/Models/MMOFPS/buildings/warpgate_auc.obj"; break;
+                    case FactionId::HLX: gate = "Assets/Models/MMOFPS/buildings/warpgate_hlx.obj"; break;
+                    default: break;
+                    }
+                    if (gate)
+                    {
+                        const auto wg = world->CreateEntity("TF_Warpgate");
+                        Transform& wt = world->AddComponent<Transform>(wg);
+                        wt.position = {x, y, z};
+                        MeshRenderer& wmr = world->AddComponent<MeshRenderer>(wg);
+                        wmr.meshPath = gate;
+                        wmr.materialPath = FactionStructureMaterial(*m_ctx, r.homeFaction);
+                        wmr.castShadows = true;
+                    }
+                    continue;
+                }
 
                 const auto tower = world->CreateEntity("TF_CapTower");
                 Transform& tt = world->AddComponent<Transform>(tower);
