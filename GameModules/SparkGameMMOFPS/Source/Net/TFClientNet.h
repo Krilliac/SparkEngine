@@ -43,176 +43,179 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Terrafront {
+namespace Terrafront
+{
 
-/// PlayerId used for the in-process local player on authority roles
-/// (listen host / standalone). Deliberately far above NetworkManager's
-/// incrementing client ids and distinct from kInvalidPlayer.
-constexpr PlayerId kTFLocalHostPlayer = 0xFFFFFF01u;
+    /// PlayerId used for the in-process local player on authority roles
+    /// (listen host / standalone). Deliberately far above NetworkManager's
+    /// incrementing client ids and distinct from kInvalidPlayer.
+    constexpr PlayerId kTFLocalHostPlayer = 0xFFFFFF01u;
 
-class TFClientNet {
-  public:
-    struct ChatLine {
-        PlayerId from{kInvalidPlayer};
-        ChatChannel channel{ChatChannel::Region};
-        std::string text;
-        float visibleFor{0.0f};
-    };
+    class TFClientNet
+    {
+      public:
+        struct ChatLine
+        {
+            PlayerId from{kInvalidPlayer};
+            ChatChannel channel{ChatChannel::Region};
+            std::string text;
+            float visibleFor{0.0f};
+        };
 
-    TFClientNet();
-    ~TFClientNet();
+        TFClientNet();
+        ~TFClientNet();
 
-    bool Initialize(TFGameContext& ctx, TFEventBus& events);
-    void Update(float deltaTime);
-    void FixedUpdate(float fixedDeltaTime);
-    void Shutdown();
-    void RenderDebugUI();
+        bool Initialize(TFGameContext& ctx, TFEventBus& events);
+        void Update(float deltaTime);
+        void FixedUpdate(float fixedDeltaTime);
+        void Shutdown();
+        void RenderDebugUI();
 
-    // --- FROZEN cross-system API (W1) ---
-    bool     IsConnected() const;
-    PlayerId LocalPlayerId() const;
-    void     SendInput(const TF_ClientInput& input);
-    void     SendMsg(TFMsg id, const void* payload, size_t size);
-    bool     SendChat(ChatChannel channel, const std::string& text);
-    const std::deque<ChatLine>& ChatHistory() const { return m_chatHistory; }
+        // --- FROZEN cross-system API (W1) ---
+        bool IsConnected() const;
+        PlayerId LocalPlayerId() const;
+        void SendInput(const TF_ClientInput& input);
+        void SendMsg(TFMsg id, const void* payload, size_t size);
+        bool SendChat(ChatChannel channel, const std::string& text);
+        const std::deque<ChatLine>& ChatHistory() const { return m_chatHistory; }
 
-    /// Connect to a remote host (called via TFWorldSetup::Connect).
-    bool Connect(const std::string& ip, uint16_t port);
-    void Disconnect();
+        /// Connect to a remote host (called via TFWorldSetup::Connect).
+        bool Connect(const std::string& ip, uint16_t port);
+        void Disconnect();
 
-    // --- W1 additions beyond the frozen surface (documented in wave report) ---
+        // --- W1 additions beyond the frozen surface (documented in wave report) ---
 
-    /// Pure client: the locally-predicted state of the OWN pawn (feet position,
-    /// velocity, view angles). Returns false on authority roles / when no
-    /// predicted pawn exists; TFPlayerSystem uses it to serve PawnInfo for the
-    /// local player without waiting a replication round-trip.
-    bool GetPredictedLocalState(float outPos[3], float outVel[3],
-                                float& outYaw, float& outPitch) const;
+        /// Pure client: the locally-predicted state of the OWN pawn (feet position,
+        /// velocity, view angles). Returns false on authority roles / when no
+        /// predicted pawn exists; TFPlayerSystem uses it to serve PawnInfo for the
+        /// local player without waiting a replication round-trip.
+        bool GetPredictedLocalState(float outPos[3], float outVel[3], float& outYaw, float& outPitch) const;
 
-    /// Debug panel toggle (hidden by default; wired from tf_* console commands).
-    void ToggleDebugUI() { m_showDebug = !m_showDebug; }
+        /// Debug panel toggle (hidden by default; wired from tf_* console commands).
+        void ToggleDebugUI() { m_showDebug = !m_showDebug; }
 
-    // --- W5 onboarding (Task 4) reply stash --------------------------------
-    // TFLoginFlow (Task 5) does not exist yet; these getters expose the last
-    // server reply so console commands (tf_login/tf_char_list/...) and Task
-    // 5/6 can consume it. Once `m_ctx->loginFlow` is wired (Task 6), the
-    // On*Reply handlers below should forward to it directly instead.
-    bool     IsLoggedIn() const { return m_loggedIn; }
-    uint64_t AccountId() const { return m_accountId; }
-    uint8_t  LastAuthError() const { return m_lastAuthErr; }
-    const std::vector<TF_CharBrief>& CharacterList() const { return m_charList; }
-    uint8_t  LastCharOpError() const { return m_lastCharOpErr; }
-    uint64_t LastCharOpId() const { return m_lastCharOpId; }
-
-#ifdef ENABLE_NETWORKING
-    /// W5 onboarding (Task 7 acceptance-harness fix): the listen-host/
-    /// standalone local player (kTFLocalHostPlayer) never has a real
-    /// NetworkManager socket address (TFClientNet::RouteLoopback bypasses the
-    /// socket entirely for the C->S direction) so TFServerSim::SendToPlayer's
-    /// normal nm.SendToClient() path finds no address for it and silently
-    /// drops the reply. Every onboarding client-state transition (logged-in,
-    /// character list, in-world) is driven purely by these S->C replies --
-    /// unlike movement/spawn there is no ECS ground truth the local player
-    /// could read directly instead -- so that delivery gap silently broke the
-    /// whole login->world flow for local/standalone play. TFServerSim::
-    /// SendToPlayer calls this in-process for that one player instead of
-    /// going through the (nonexistent) socket, dispatching to the exact same
-    /// On*Reply handlers RegisterClientHandlers wires to NetworkManager.
-    void DeliverLoopbackReply(TFMsg id, const void* data, size_t size);
-#endif
-
-  private:
-    // Per-remote-entity interpolation buffers (100 ms render delay).
-    struct InterpEntry {
-        Spark::Net::InterpolationBuffer<DirectX::XMFLOAT3> pos;
-        Spark::Net::InterpolationBuffer<float>             yaw;
-        float  lastYaw{0.0f};      ///< unwrapped yaw of the newest sample
-        double lastRecvTime{-1.0}; ///< RemotePawn.recvTime of the newest sample
-        bool   has{false};
-    };
-
-    bool LocalLoopback() const;    ///< authority role with a local player
-    void EnsureLocalHostIdentity();
-    void UpdateConnectionState();
-    void RouteLoopback(TFMsg id, const void* payload, size_t size);
-
-    void PumpInput(float dt, bool aliveLocalPawn);
-    void SendOneInput(float moveX, float moveY, uint16_t buttons);
-    void ReconcileFromServer();
-    void UpdateRemotePawns();
-    void DriveFirstPersonCamera(bool aliveLocalPawn, const float feetPos[3]);
-    void SeedPredictionAt(const float pos[3]);
-    void SimulateMove(Spark::PredictedState& s, const Spark::PredictedInput& in, float dt) const;
-    void RefreshClassSpeeds(ClassId cls);
-
-    void OnBusPlayerKilled(const EvPlayerKilled& ev);
-    void OnBusPlayerDamaged(const EvPlayerDamaged& ev);
-    void PushKillfeedEntry(PlayerId killer, PlayerId victim, WeaponId weapon,
-                           FactionId killerF, FactionId victimF);
+        // --- W5 onboarding (Task 4) reply stash --------------------------------
+        // TFLoginFlow (Task 5) does not exist yet; these getters expose the last
+        // server reply so console commands (tf_login/tf_char_list/...) and Task
+        // 5/6 can consume it. Once `m_ctx->loginFlow` is wired (Task 6), the
+        // On*Reply handlers below should forward to it directly instead.
+        bool IsLoggedIn() const { return m_loggedIn; }
+        uint64_t AccountId() const { return m_accountId; }
+        uint8_t LastAuthError() const { return m_lastAuthErr; }
+        const std::vector<TF_CharBrief>& CharacterList() const { return m_charList; }
+        uint8_t LastCharOpError() const { return m_lastCharOpErr; }
+        uint64_t LastCharOpId() const { return m_lastCharOpId; }
 
 #ifdef ENABLE_NETWORKING
-    void RegisterClientHandlers();
-    void ReleaseClientHandlers();
-    void OnWorldWelcome(const void* data, size_t size);
-    void OnSpawnReply(const void* data, size_t size);
-    void OnHitConfirm(const void* data, size_t size);
-    void OnDamageEvent(const void* data, size_t size);
-    void OnKillEvent(const void* data, size_t size);
-    void OnXPEvent(const void* data, size_t size);
-    void OnChatMsg(const void* data, size_t size);
-
-    // W5 onboarding (Task 4). TFLoginFlow (Task 5) is not wired yet — these
-    // parse + stash the reply so Task 5/6 can read it via a getter, or replace
-    // this stash entirely once `m_ctx->loginFlow` exists (Task 6). Logged at
-    // INFO so the loopback flow is observable before the UI lands.
-    void OnLoginReply(const void* data, size_t size);
-    void OnRegisterReply(const void* data, size_t size);
-    void OnCharListReply(const void* data, size_t size);
-    void OnCharCreateReply(const void* data, size_t size);
-    void OnCharDeleteReply(const void* data, size_t size);
+        /// W5 onboarding (Task 7 acceptance-harness fix): the listen-host/
+        /// standalone local player (kTFLocalHostPlayer) never has a real
+        /// NetworkManager socket address (TFClientNet::RouteLoopback bypasses the
+        /// socket entirely for the C->S direction) so TFServerSim::SendToPlayer's
+        /// normal nm.SendToClient() path finds no address for it and silently
+        /// drops the reply. Every onboarding client-state transition (logged-in,
+        /// character list, in-world) is driven purely by these S->C replies --
+        /// unlike movement/spawn there is no ECS ground truth the local player
+        /// could read directly instead -- so that delivery gap silently broke the
+        /// whole login->world flow for local/standalone play. TFServerSim::
+        /// SendToPlayer calls this in-process for that one player instead of
+        /// going through the (nonexistent) socket, dispatching to the exact same
+        /// On*Reply handlers RegisterClientHandlers wires to NetworkManager.
+        void DeliverLoopbackReply(TFMsg id, const void* data, size_t size);
 #endif
 
-    TFGameContext* m_ctx{nullptr};
-    TFEventBus*    m_events{nullptr};
-    bool           m_initialized{false};
-    bool           m_connected{false};
-    PlayerId       m_localPlayer{kInvalidPlayer};
-    uint32_t       m_inputSeq{0};          ///< loopback-only sequence counter
+      private:
+        // Per-remote-entity interpolation buffers (100 ms render delay).
+        struct InterpEntry
+        {
+            Spark::Net::InterpolationBuffer<DirectX::XMFLOAT3> pos;
+            Spark::Net::InterpolationBuffer<float> yaw;
+            float lastYaw{0.0f};       ///< unwrapped yaw of the newest sample
+            double lastRecvTime{-1.0}; ///< RemotePawn.recvTime of the newest sample
+            bool has{false};
+        };
 
-    double m_clock{0.0};                   ///< monotonic client clock (Update)
-    float  m_inputAccum{0.0f};             ///< 60 Hz input pacing accumulator
-    bool   m_handlersRegistered{false};
-    bool   m_wasAlive{false};
-    std::deque<ChatLine> m_chatHistory;
+        bool LocalLoopback() const; ///< authority role with a local player
+        void EnsureLocalHostIdentity();
+        void UpdateConnectionState();
+        void RouteLoopback(TFMsg id, const void* payload, size_t size);
 
-    // View angles (camera convention, radians; see TFMovementModel.h basis).
-    float m_viewYaw{0.0f};
-    float m_viewPitch{0.0f};
+        void PumpInput(float dt, bool aliveLocalPawn);
+        void SendOneInput(float moveX, float moveY, uint16_t buttons);
+        void ReconcileFromServer();
+        void UpdateRemotePawns();
+        void DriveFirstPersonCamera(bool aliveLocalPawn, const float feetPos[3]);
+        void SeedPredictionAt(const float pos[3]);
+        void SimulateMove(Spark::PredictedState& s, const Spark::PredictedInput& in, float dt) const;
+        void RefreshClassSpeeds(ClassId cls);
 
-    // Prediction (pure client only)
-    Spark::ClientPrediction m_prediction;
-    Spark::PredictedState   m_predState{};
-    bool                    m_predActive{false};
-    float m_runSpeed{5.2f};
-    float m_sprintSpeed{7.2f};
+        void OnBusPlayerKilled(const EvPlayerKilled& ev);
+        void OnBusPlayerDamaged(const EvPlayerDamaged& ev);
+        void PushKillfeedEntry(PlayerId killer, PlayerId victim, WeaponId weapon, FactionId killerF, FactionId victimF,
+                               bool headshot);
 
-    // Remote pawn interpolation
-    std::unordered_map<EntityId, InterpEntry> m_interp;
+#ifdef ENABLE_NETWORKING
+        void RegisterClientHandlers();
+        void ReleaseClientHandlers();
+        void OnWorldWelcome(const void* data, size_t size);
+        void OnSpawnReply(const void* data, size_t size);
+        void OnHitConfirm(const void* data, size_t size);
+        void OnDamageEvent(const void* data, size_t size);
+        void OnKillEvent(const void* data, size_t size);
+        void OnXPEvent(const void* data, size_t size);
+        void OnChatMsg(const void* data, size_t size);
 
-    // Stats / debug
-    uint32_t m_inputsSent{0};
-    uint32_t m_reconciles{0};
-    uint16_t m_lastRank{1};
-    uint32_t m_lastXPTotal{0};
-    bool     m_showDebug{false};
+        // W5 onboarding (Task 4). TFLoginFlow (Task 5) is not wired yet — these
+        // parse + stash the reply so Task 5/6 can read it via a getter, or replace
+        // this stash entirely once `m_ctx->loginFlow` exists (Task 6). Logged at
+        // INFO so the loopback flow is observable before the UI lands.
+        void OnLoginReply(const void* data, size_t size);
+        void OnRegisterReply(const void* data, size_t size);
+        void OnCharListReply(const void* data, size_t size);
+        void OnCharCreateReply(const void* data, size_t size);
+        void OnCharDeleteReply(const void* data, size_t size);
+#endif
 
-    // W5 onboarding (Task 4) reply stash (see the getters above).
-    bool     m_loggedIn{false};
-    uint64_t m_accountId{0};
-    uint8_t  m_lastAuthErr{0};
-    std::vector<TF_CharBrief> m_charList;
-    uint8_t  m_lastCharOpErr{0};
-    uint64_t m_lastCharOpId{0};
-};
+        TFGameContext* m_ctx{nullptr};
+        TFEventBus* m_events{nullptr};
+        bool m_initialized{false};
+        bool m_connected{false};
+        PlayerId m_localPlayer{kInvalidPlayer};
+        uint32_t m_inputSeq{0}; ///< loopback-only sequence counter
+
+        double m_clock{0.0};      ///< monotonic client clock (Update)
+        float m_inputAccum{0.0f}; ///< 60 Hz input pacing accumulator
+        bool m_handlersRegistered{false};
+        bool m_wasAlive{false};
+        std::deque<ChatLine> m_chatHistory;
+
+        // View angles (camera convention, radians; see TFMovementModel.h basis).
+        float m_viewYaw{0.0f};
+        float m_viewPitch{0.0f};
+
+        // Prediction (pure client only)
+        Spark::ClientPrediction m_prediction;
+        Spark::PredictedState m_predState{};
+        bool m_predActive{false};
+        float m_runSpeed{5.2f};
+        float m_sprintSpeed{7.2f};
+
+        // Remote pawn interpolation
+        std::unordered_map<EntityId, InterpEntry> m_interp;
+
+        // Stats / debug
+        uint32_t m_inputsSent{0};
+        uint32_t m_reconciles{0};
+        uint16_t m_lastRank{1};
+        uint32_t m_lastXPTotal{0};
+        bool m_showDebug{false};
+
+        // W5 onboarding (Task 4) reply stash (see the getters above).
+        bool m_loggedIn{false};
+        uint64_t m_accountId{0};
+        uint8_t m_lastAuthErr{0};
+        std::vector<TF_CharBrief> m_charList;
+        uint8_t m_lastCharOpErr{0};
+        uint64_t m_lastCharOpId{0};
+    };
 
 } // namespace Terrafront
