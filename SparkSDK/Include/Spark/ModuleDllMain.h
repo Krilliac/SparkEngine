@@ -55,7 +55,7 @@ namespace Spark::Detail
 {
     // Defined in SparkConsole.cpp (statically linked into this DLL).
     void InjectConsoleInstance(SimpleConsole* instance);
-}
+} // namespace Spark::Detail
 
 /**
  * @brief Host-console injection hook, called by ModuleManager after load.
@@ -85,9 +85,16 @@ extern "C" __declspec(dllexport) void SparkModuleInjectConsole(void* hostConsole
  * EngineContext::Get() at the host executable's live context. The pointer is stored
  * non-owning, so module teardown / FreeLibrary never frees the host context.
  */
+#include "Physics/PhysicsSystem.h"
+
 extern "C" __declspec(dllexport) void SparkModuleInjectEngineContext(void* ctx)
 {
     EngineContext::SetInjected(static_cast<EngineContext*>(ctx));
+    // Jolt keeps per-image globals (allocator fn pointers, Factory::sInstance,
+    // RegisterTypes dispatch tables). This module image must register ITS
+    // copies before any module-side shape creation or collision query — the
+    // exe's registration does not reach this DLL. Idempotent, ~free.
+    PhysicsSystem::EnsureImageRuntime();
 }
 
 #ifdef SPARK_HAS_IMGUI
@@ -108,8 +115,7 @@ extern "C" __declspec(dllexport) void SparkModuleInjectEngineContext(void* ctx)
  * Modules built without ImGui support keep the export as a no-op (the engine
  * probes it via GetProcAddress either way).
  */
-extern "C" __declspec(dllexport) void SparkModuleInjectImGui(void* context, void* allocFn, void* freeFn,
-                                                             void* userData)
+extern "C" __declspec(dllexport) void SparkModuleInjectImGui(void* context, void* allocFn, void* freeFn, void* userData)
 {
 #ifdef SPARK_HAS_IMGUI
     ImGui::SetAllocatorFunctions(reinterpret_cast<ImGuiMemAllocFunc>(allocFn),

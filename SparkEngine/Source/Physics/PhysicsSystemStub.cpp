@@ -377,6 +377,7 @@ uint32_t PhysicsSystem::StepFixed(uint32_t /*stepCount*/, float interpolationAlp
 }
 
 void PhysicsSystem::OptimizeBroadPhase() {}
+void PhysicsSystem::EnsureImageRuntime() {}
 
 void PhysicsSystem::SetGravity(const XMFLOAT3& /*gravity*/) {}
 

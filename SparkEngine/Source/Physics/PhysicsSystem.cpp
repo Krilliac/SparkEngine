@@ -327,6 +327,28 @@ PhysicsSystem::~PhysicsSystem()
     Shutdown();
 }
 
+void PhysicsSystem::EnsureImageRuntime()
+{
+    // Module DLLs statically link SparkEngineLib, so every DLL carries its OWN
+    // copy of Jolt's per-image globals: the Allocate/Free function pointers,
+    // Factory::sInstance, and the CollisionDispatch function tables filled in
+    // by RegisterTypes(). The exe registers ITS copies in Initialize(), but a
+    // non-virtual PhysicsSystem method called from module code executes the
+    // MODULE image's copy of that method — which reads the module's
+    // uninitialized globals (first symptom: null-call AV inside
+    // JPH::...::operator new during TFWorldCollision::Build). Idempotent:
+    // call from any image before that image creates shapes or runs queries.
+    // Virtual dispatch on exe-created Jolt objects is unaffected (their
+    // vtables point into the exe image); only per-image statics need this.
+    if (JPH::Factory::sInstance == nullptr)
+    {
+        JPH::RegisterDefaultAllocator();
+        auto factory = std::make_unique<JPH::Factory>();
+        JPH::Factory::sInstance = factory.release(); // per-image; freed at process exit
+        JPH::RegisterTypes();
+    }
+}
+
 HRESULT PhysicsSystem::Initialize()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
@@ -344,15 +366,13 @@ HRESULT PhysicsSystem::Initialize()
     // Initialize metrics
     m_metrics = {};
 
-    // Register Jolt types and install callbacks
-    JPH::RegisterDefaultAllocator();
+    // Register Jolt types and install callbacks (per-image guard — see
+    // EnsureImageRuntime below for why this must also run inside module DLLs)
+    EnsureImageRuntime();
     JPH::Trace = JoltTraceImpl;
 #ifdef JPH_ENABLE_ASSERTS
     JPH::AssertFailed = JoltAssertFailed;
 #endif
-    auto factory = std::make_unique<JPH::Factory>();
-    JPH::Factory::sInstance = factory.release(); // Jolt owns via global; cleaned up in Shutdown()
-    JPH::RegisterTypes();
 
     // Create temp allocator (16 MB — enough for complex scenes with many contacts)
     m_tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(16 * 1024 * 1024);

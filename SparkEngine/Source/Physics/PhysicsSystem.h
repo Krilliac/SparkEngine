@@ -169,6 +169,17 @@ class PhysicsSystem
     /** @brief Optimize the Jolt broadphase after bulk static-body creation (level load). No-op without Jolt. */
     void OptimizeBroadPhase();
 
+    /**
+     * @brief Register Jolt's per-image runtime (allocator, Factory, dispatch tables).
+     *
+     * Every module DLL statically links its own Jolt copy with its own globals.
+     * Called automatically for the calling image by the SparkModuleInjectEngineContext
+     * hook (SDK ModuleDllMain.h) and by Initialize(); idempotent and cheap.
+     * Without it, the first module-side shape creation or collision query
+     * null-calls through the module image's unregistered allocator/dispatch tables.
+     */
+    static void EnsureImageRuntime();
+
     // =========================================================================
     // World settings
     // =========================================================================

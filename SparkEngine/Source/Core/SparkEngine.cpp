@@ -69,6 +69,7 @@
 #include "Engine/Networking/AreaServer.h"
 #include "Engine/Networking/WorldServer.h"
 #include "Engine/Networking/DedicatedServer.h"
+#include "Engine/Networking/NetworkManager.h"
 #endif
 #ifdef SPARK_JOLT_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
@@ -135,6 +136,18 @@ void InitPhysics()
     ASSERT_NOT_NULL(EngineContext::Get());
     auto& rt = GetEngineRuntime();
     rt.physics = std::make_unique<PhysicsSystem>();
+    // Construction only wires the object — Initialize() is what creates the
+    // Jolt world. Without this call GetJoltSystem() stays null and every
+    // consumer silently falls back to its no-physics path (world collision
+    // builds 0 bodies, vehicles stay on math) while the build looks healthy.
+    if (FAILED(rt.physics->Initialize()))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                        "InitPhysics: PhysicsSystem::Initialize failed — physics DISABLED this run");
+        rt.physics.reset();
+        return;
+    }
+    SPARK_LOG_INFO(Spark::LogCategory::Core, "InitPhysics: Jolt world created");
     EngineContext::Get()->SetPhysics(rt.physics.get());
     if (rt.graphics)
         rt.graphics->SetPhysicsSystem(rt.physics.get());
@@ -273,10 +286,27 @@ void ShutdownEngine()
         if (rt.eventBus)
             rt.eventBus->ClearAll();
 
+#ifdef ENABLE_NETWORKING
+        // Net message handlers are std::functions whose lambdas live in module
+        // DLL code (TFServerSim/TFClientNet register them). They must be
+        // destroyed BEFORE FreeLibrary — otherwise the CRT-exit destructor of
+        // GetInstance()'s static fallback frees them after unload and the
+        // process dies (and wedges) inside the crash handler at teardown.
+        Spark::Net::NetworkManager::GetInstance().ClearHandlers();
+#endif
+
         // Destroy the ECS world for the same reason: modules emplace
         // components into this registry, so the entt pools carry vtables/
         // deleters that live in module code. Must die before FreeLibrary.
         g_engineEcsWorld.reset();
+
+        // Physics too: module code creates Jolt bodies/shapes (world collision,
+        // vehicles) whose vtables and allocator bookkeeping live in the module
+        // image, and the shape cache keeps RefConst<Shape> references alive
+        // even after bodies die. Releasing them after FreeLibrary calls
+        // destructors in unmapped code — tear physics down while module code
+        // is still resident.
+        ShutdownPhysics();
 
         const bool shouldSkipModuleUnload =
 #ifndef _WIN32
@@ -305,7 +335,7 @@ void ShutdownEngine()
     }
 
     rt.audioEngine.reset();
-    ShutdownPhysics();
+    ShutdownPhysics(); // no-op when the module branch above already ran it
 
     // Shut down the job system after all subsystems that submit jobs
     Spark::JobSystem::Get().Shutdown();
