@@ -66,6 +66,37 @@ namespace Terrafront
         constexpr float kSprintLowerPitchRad = 0.30f;
         constexpr float kLowerSpringK = 55.0f;
 
+        // Secondary motion: dangling charm + sling-strap hint (TFSecondaryMotion
+        // world-space chains anchored through the animated grip frame) plus a
+        // transient barrel flex. Amplitudes deliberately small — jewelry, not rope.
+        constexpr float kBarrelFlexPerVert = 0.010f; ///< rad extra muzzle flex per recoilVert
+        constexpr float kBarrelFlexCapRad = 0.035f;
+        constexpr float kBarrelFlexSpringK = 700.0f; ///< snappier than the recoil spring
+        constexpr float kCharmGravityMps2 = 6.5f;    ///< sub-g: lazier, more readable swing
+        constexpr float kCharmDampingPerSec = 2.8f;
+        constexpr float kStrapLinkLenM = 0.05f;
+        constexpr int kStrapLinks = 3;
+        constexpr float kStrapDampingPerSec = 4.5f;                 ///< webbing swings heavier than chain
+        constexpr float kStrapAnchor[3] = {-0.01f, -0.06f, -0.03f}; ///< grip space, under stock
+        constexpr float kCharmFireBackMps = 0.55f;                  ///< charm impulse per recoilVert (camera-back)
+        constexpr float kCharmFireUpMps = 0.30f;                    ///< ... and camera-up
+        constexpr float kCharmFireKickCap = 3.0f;                   ///< accumulated recoilVert cap per frame
+        constexpr float kStrapImpulseScale = 0.5f;                  ///< strap reacts softer than the charm
+        constexpr float kJumpVelDeltaMps = 3.0f;                    ///< +vel step that reads as a jump
+        constexpr float kJumpMinUpMps = 1.5f;
+        constexpr float kLandMinFallMps = 3.0f;   ///< must fall faster than this to "land"
+        constexpr float kLandRefFallMps = 9.0f;   ///< fall speed mapping to full land kick
+        constexpr float kLandSwayDipMps = 0.055f; ///< m/s kick into the vertical sway spring
+        constexpr float kJumpSwayRiseMps = 0.030f;
+        constexpr float kCharmJumpKickMps = 0.35f; ///< world-down charm impulse on jump
+        constexpr float kCharmLandKickMps = 0.80f; ///< world-down charm impulse, full impact
+        constexpr float kCharmLinkThickM = 0.006f;
+        constexpr float kStrapLinkThickM = 0.013f;
+        constexpr float kCharmLinkColor[4] = {0.36f, 0.37f, 0.41f, 1.0f}; ///< chain metal
+        constexpr float kStrapColor[4] = {0.11f, 0.11f, 0.13f, 1.0f};     ///< dark webbing
+        constexpr float kCharmFobBase[3] = {0.45f, 0.45f, 0.48f};
+        constexpr float kCharmFobTintK = 0.75f; ///< faction color strength on the fob
+
         // Muzzle flash quad (first-person; the world-space flash/tracer from
         // TFWorldSetup::SpawnMuzzleFx stays the source of truth for other players).
         constexpr float kFlashLifeSec = 0.045f;
@@ -137,6 +168,60 @@ namespace Terrafront
             return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
         }
 
+        /// Per-slot charm dressing: where the trinket hangs off the weapon (grip
+        /// space, right side so it stays clear of the support hand), chain length,
+        /// and fob proportions. Weapon slot picks the silhouette, faction picks
+        /// the fob color — both from existing defs, no new data files.
+        struct CharmStyle
+        {
+            float anchor[3];
+            int links;
+            float linkLenM;
+            float fobScale[3];
+        };
+
+        CharmStyle CharmStyleForSlot(const std::string& slot)
+        {
+            // default (rifle/carbine/lmg/shotgun): dogtag on a 3-link chain
+            CharmStyle s{{0.035f, -0.045f, 0.16f}, 3, 0.026f, {0.020f, 0.030f, 0.006f}};
+            if (slot == "pistol")
+            {
+                s = CharmStyle{{0.022f, -0.035f, 0.05f}, 2, 0.022f, {0.016f, 0.016f, 0.016f}}; // compact cube fob
+            }
+            else if (slot == "sniper")
+            {
+                s = CharmStyle{{0.030f, -0.045f, 0.24f}, 3, 0.032f, {0.012f, 0.038f, 0.012f}}; // long scope tassel
+            }
+            else if (slot == "launcher")
+            {
+                s = CharmStyle{{0.035f, -0.060f, 0.12f}, 2, 0.030f, {0.026f, 0.020f, 0.014f}}; // stubby tag
+            }
+            else if (slot == "melee" || slot == "tool")
+            {
+                s = CharmStyle{{0.0f, -0.040f, 0.06f}, 2, 0.020f, {0.014f, 0.020f, 0.005f}}; // small lanyard
+            }
+            return s;
+        }
+
+        TFPendulumParams CharmParams(const CharmStyle& style)
+        {
+            TFPendulumParams p;
+            p.linkCount = style.links;
+            p.linkLengthM = style.linkLenM;
+            p.gravityMps2 = kCharmGravityMps2;
+            p.dampingPerSec = kCharmDampingPerSec;
+            return p;
+        }
+
+        TFPendulumParams StrapParams()
+        {
+            TFPendulumParams p;
+            p.linkCount = kStrapLinks;
+            p.linkLengthM = kStrapLinkLenM;
+            p.dampingPerSec = kStrapDampingPerSec;
+            return p;
+        }
+
     } // namespace
 
     // ---------------------------------------------------------------------------
@@ -156,6 +241,11 @@ namespace Terrafront
         m_recoilYaw.pos =
             std::clamp(m_recoilYaw.pos + sign * recoilHoriz * kRecoilYawPerHoriz, -kRecoilYawCapRad, kRecoilYawCapRad);
         m_flashUntil = m_clock + kFlashLifeSec;
+
+        // Secondary motion: transient barrel flex (weapon mesh only) + a queued
+        // charm/strap impulse consumed by Render (needs the camera basis there).
+        m_barrelFlex.pos = std::min(m_barrelFlex.pos + vert * kBarrelFlexPerVert, kBarrelFlexCapRad);
+        m_pendingFireKick = std::min(m_pendingFireKick + vert, kCharmFireKickCap);
     }
 
     void TFViewModel::NotifyDryFire()
@@ -174,6 +264,18 @@ namespace Terrafront
         m_bobPhase = 0.0f;
         m_hasPrevView = false;
         m_flashUntil = -1.0;
+
+        // Secondary motion: drop the chains (rebuilt + snapped on next Render)
+        // and clear the transient springs/impulses.
+        TFSecondaryMotion& motion = TFSecondaryMotion::Get();
+        motion.Detach(m_charmChain);
+        motion.Detach(m_strapChain);
+        m_charmChain = 0;
+        m_strapChain = 0;
+        m_chainSlot = "\n"; // impossible slot => rebuild on next Render
+        m_barrelFlex = SpringVal{};
+        m_pendingFireKick = 0.0f;
+        m_hasPrevVel = false;
     }
 
     Mesh* TFViewModel::GetOrLoadWeaponMesh(GraphicsEngine* gfx, const std::string& assetPath)
@@ -319,10 +421,35 @@ namespace Terrafront
         const bool sprinting = speed > 0.5f * (runSpeed + sprintSpeed);
         SpringTo(m_lower.pos, m_lower.vel, sprinting ? 1.0f : 0.0f, kLowerSpringK, dt);
 
+        // Jump / land detection from predicted vertical velocity: kick the
+        // vertical sway spring (the whole viewmodel dips/rises) and queue a
+        // world-space impulse for the charm/strap chains below.
+        float verticalKickMps = 0.0f;
+        {
+            const float velY = pawn.vel[1];
+            if (m_hasPrevVel && dt > 1.0e-4f)
+            {
+                if (m_prevVelY < -kLandMinFallMps && velY > m_prevVelY + kJumpVelDeltaMps)
+                {
+                    const float impact = std::min(-m_prevVelY / kLandRefFallMps, 1.5f);
+                    m_swayY.vel -= kLandSwayDipMps * impact;
+                    verticalKickMps = -kCharmLandKickMps * impact; // chains keep falling
+                }
+                else if (velY > m_prevVelY + kJumpVelDeltaMps && velY > kJumpMinUpMps)
+                {
+                    m_swayY.vel += kJumpSwayRiseMps;
+                    verticalKickMps = -kCharmJumpKickMps; // chains lag the rising weapon
+                }
+            }
+            m_prevVelY = velY;
+            m_hasPrevVel = true;
+        }
+
         // Recoil recovery.
         SpringTo(m_recoilPitch.pos, m_recoilPitch.vel, 0.0f, kRecoilPitchSpringK, dt);
         SpringTo(m_recoilYaw.pos, m_recoilYaw.vel, 0.0f, kRecoilPitchSpringK, dt);
         SpringTo(m_recoilBack.pos, m_recoilBack.vel, 0.0f, kRecoilBackSpringK, dt);
+        SpringTo(m_barrelFlex.pos, m_barrelFlex.vel, 0.0f, kBarrelFlexSpringK, dt);
 
         const float idleX = std::sin(static_cast<float>(m_clock) * kTwoPi * kIdleHz) * kIdleAmpM;
         const float idleY = std::sin(static_cast<float>(m_clock) * kTwoPi * kIdleHz * 0.5f) * kIdleAmpM;
@@ -351,6 +478,52 @@ namespace Terrafront
             XMMatrixRotationY(m_recoilYaw.pos) *
             XMMatrixTranslation(vmDef.place[0] + offX, vmDef.place[1] + offY, vmDef.place[2] + offZ) * invView;
 
+        // ---------------------------------------------------- secondary motion
+        // Charm + strap chains simulate in WORLD space, anchored through the
+        // grip frame — so turn sway, bob, sprint lower, recoil kick, jumping,
+        // and camera translation all drive them with no extra plumbing.
+        TFSecondaryMotion& motion = TFSecondaryMotion::Get();
+        const CharmStyle charmStyle = CharmStyleForSlot(slot);
+        if (m_chainSlot != slot)
+        {
+            motion.Detach(m_charmChain);
+            motion.Detach(m_strapChain);
+            m_charmChain = motion.AttachPendulum(CharmParams(charmStyle));
+            m_strapChain = motion.AttachPendulum(StrapParams());
+            m_chainSlot = slot;
+        }
+        TFPendulumChain* charm = motion.Find(m_charmChain);
+        TFPendulumChain* strap = motion.Find(m_strapChain);
+
+        // Punch impulses: fire recoil along the camera basis (inv(view) rows:
+        // r[1] = up, r[2] = forward), jump/land straight down in world space.
+        if (m_pendingFireKick > 0.0f || verticalKickMps != 0.0f)
+        {
+            XMVECTOR imp = XMVectorSet(0.0f, verticalKickMps, 0.0f, 0.0f);
+            if (m_pendingFireKick > 0.0f)
+            {
+                imp = XMVectorAdd(imp, XMVectorScale(invView.r[2], -m_pendingFireKick * kCharmFireBackMps));
+                imp = XMVectorAdd(imp, XMVectorScale(invView.r[1], m_pendingFireKick * kCharmFireUpMps));
+                m_pendingFireKick = 0.0f;
+            }
+            const XMFLOAT3 impulse{XMVectorGetX(imp), XMVectorGetY(imp), XMVectorGetZ(imp)};
+            if (charm)
+                charm->AddImpulse(impulse);
+            if (strap)
+                strap->AddImpulse(XMFLOAT3{impulse.x * kStrapImpulseScale, impulse.y * kStrapImpulseScale,
+                                           impulse.z * kStrapImpulseScale});
+        }
+
+        const auto gripToWorld = [&](const float local[3])
+        {
+            const XMVECTOR w = XMVector3TransformCoord(XMVectorSet(local[0], local[1], local[2], 1.0f), gripFrame);
+            return XMFLOAT3{XMVectorGetX(w), XMVectorGetY(w), XMVectorGetZ(w)};
+        };
+        if (charm)
+            charm->Update(gripToWorld(charmStyle.anchor), dt);
+        if (strap)
+            strap->Update(gripToWorld(kStrapAnchor), dt);
+
         ID3D11DeviceContext* dc = gfx->GetContext();
         gfx->SetBasicShaders();
         gfx->SetBasicTexture(nullptr); // everything below is untextured solid color
@@ -361,9 +534,13 @@ namespace Terrafront
             // Recenter/scale/orient exactly as the old pass-3 draw, then follow the
             // animated grip frame. Whole model in flat gunmetal: the weapon OBJs'
             // own MTL textures are near-black and read as silhouettes.
+            // Barrel flex: a brief extra muzzle-up bend about the grip on recoil,
+            // applied to the weapon mesh ONLY (the arms hold steady, so the gun
+            // visibly flexes in the hands instead of the whole rig rotating).
             const XMMATRIX weaponWorld = XMMatrixTranslation(vmDef.recenter[0], vmDef.recenter[1], vmDef.recenter[2]) *
                                          XMMatrixScaling(vmDef.scale, vmDef.scale, vmDef.scale) *
-                                         XMMatrixRotationY(vmDef.rotationYRad) * gripFrame;
+                                         XMMatrixRotationY(vmDef.rotationYRad) * XMMatrixRotationX(-m_barrelFlex.pos) *
+                                         gripFrame;
             const XMFLOAT4 gunmetal{vmDef.gunmetal[0], vmDef.gunmetal[1], vmDef.gunmetal[2], vmDef.gunmetal[3]};
             gfx->UpdateBasicConstants(weaponWorld, view, proj, gunmetal, {1.0f, 1.0f});
             vm->Render(dc);
@@ -408,6 +585,47 @@ namespace Terrafront
                 drawBox(BoxBetween(kLeftShoulder, kLeftElbow, kUpperArmThickM), sleeve);
                 drawBox(BoxBetween(kLeftElbow, pose.leftGrip, kForearmThickM), sleeve);
                 drawHand(pose.leftGrip);
+            }
+
+            // Charm + sling strap: the chains return WORLD matrices (their sim
+            // already composed every viewmodel motion source via the anchors).
+            const auto drawWorldBox = [&](const XMMATRIX& world, const XMFLOAT4& color)
+            {
+                gfx->UpdateBasicConstants(world, view, proj, color, {1.0f, 1.0f});
+                m_cube->Render(dc);
+            };
+            if (charm && charm->Ready())
+            {
+                const XMFLOAT4 linkColor{kCharmLinkColor[0], kCharmLinkColor[1], kCharmLinkColor[2],
+                                         kCharmLinkColor[3]};
+                for (int i = 0; i < charm->LinkCount(); ++i)
+                    drawWorldBox(charm->LinkWorld(i, kCharmLinkThickM), linkColor);
+
+                // Fob tinted by faction — FactionDef secondary color when tables
+                // are loaded (reads as unit insignia), FactionColor fallback.
+                float base[4];
+                FactionColor(pawn.faction, base);
+                if (ctx.data && ctx.data->IsLoaded())
+                {
+                    if (const FactionDef* fd = ctx.data->GetFaction(pawn.faction))
+                    {
+                        base[0] = fd->colorSec[0];
+                        base[1] = fd->colorSec[1];
+                        base[2] = fd->colorSec[2];
+                    }
+                }
+                const XMFLOAT4 fobColor{kCharmFobBase[0] + kCharmFobTintK * (base[0] - kCharmFobBase[0]),
+                                        kCharmFobBase[1] + kCharmFobTintK * (base[1] - kCharmFobBase[1]),
+                                        kCharmFobBase[2] + kCharmFobTintK * (base[2] - kCharmFobBase[2]), 1.0f};
+                drawWorldBox(
+                    charm->TipWorld(XMFLOAT3{charmStyle.fobScale[0], charmStyle.fobScale[1], charmStyle.fobScale[2]}),
+                    fobColor);
+            }
+            if (strap && strap->Ready())
+            {
+                const XMFLOAT4 strapColor{kStrapColor[0], kStrapColor[1], kStrapColor[2], kStrapColor[3]};
+                for (int i = 0; i < strap->LinkCount(); ++i)
+                    drawWorldBox(strap->LinkWorld(i, kStrapLinkThickM), strapColor);
             }
         }
 

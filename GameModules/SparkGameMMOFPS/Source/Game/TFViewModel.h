@@ -2,7 +2,10 @@
  * @file TFViewModel.h
  * @brief First-person viewmodel: stylized arms + the equipped weapon, drawn at
  *        the camera with idle sway, walk bob, sprint lower, and a spring-damped
- *        recoil kick + muzzle flash when the local player fires.
+ *        recoil kick + muzzle flash when the local player fires. Secondary
+ *        motion (TFSecondaryMotion chains): a faction-tinted charm and a
+ *        sling-strap hint dangle from the weapon and react to look/move/jump/
+ *        land/fire, plus a transient barrel flex on recoil.
  *
  * OWNERSHIP: this header + TFViewModel.cpp belong to ONE implementation agent
  * (viewmodel lane). Pure client-side presentation — no net or server state.
@@ -23,6 +26,7 @@
 #pragma once
 
 #include "Core/TFTypes.h"
+#include "Game/TFSecondaryMotion.h" // charm / sling-strap pendulum chains
 
 #include "Core/Platform.h" // DirectXMath on Windows / vector-math stubs on Linux
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -108,6 +112,16 @@ namespace Terrafront
         bool m_hasPrevView = false;
         double m_flashUntil = -1.0;      ///< render-clock time the muzzle flash ends
         std::minstd_rand m_rng{0x7EA5u}; ///< horizontal recoil sign/jitter
+
+        // secondary motion (TFSecondaryMotion world-space chains + local springs)
+        TFPendulumHandle m_charmChain = 0; ///< dangling weapon charm/trinket
+        TFPendulumHandle m_strapChain = 0; ///< sling-strap hint under the stock
+        std::string m_chainSlot = "\n";    ///< slot the chains were built for
+                                           ///< (impossible sentinel forces first build)
+        SpringVal m_barrelFlex;            ///< rad, transient muzzle flex on recoil
+        float m_pendingFireKick = 0.0f;    ///< recoilVert queued for a charm impulse
+        float m_prevVelY = 0.0f;           ///< pawn vertical velocity last frame
+        bool m_hasPrevVel = false;         ///< m_prevVelY valid (jump/land detection)
 
         // GPU resources (lazy; client render thread only)
         std::unique_ptr<Mesh> m_cube; ///< unit cube reused for every arm segment + flash
