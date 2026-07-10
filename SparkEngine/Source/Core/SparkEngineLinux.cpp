@@ -31,6 +31,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "EngineSetup.h"
+#include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
 #include "AssetIntegration.h"
 #include "GameplaySystemLifecycle.h"
 #include "Graphics/WeatherSystem.h"
@@ -347,6 +348,16 @@ static void InitLinuxCoreSubsystems(bool registerGameplay)
     }
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+
+    // ECS world service — parity with InitEngineContext/InitHeadlessEngineContext
+    // on Windows: modules reach the ECS only through IEngineContext::GetWorld().
+    // Without it, headless/dedicated servers hand modules a null World and every
+    // pawn-position read collapses to (0,0,0) (breaks TERRAFRONT region capture).
+    // Owned by g_engineEcsWorld (SparkEngine.cpp); ShutdownEngine destroys it
+    // after module ShutdownAll but before the module DLLs are unmapped.
+    extern std::unique_ptr<::World> g_engineEcsWorld;
+    g_engineEcsWorld = std::make_unique<::World>();
+    ctx->SetWorld(g_engineEcsWorld.get());
 
     // AssetPipeline (owned by GraphicsEngine, exposed via EngineContext for SDK access)
     if (GetEngineRuntime().graphics && GetEngineRuntime().graphics->GetAssetPipeline())

@@ -84,10 +84,28 @@ class ModuleManager
      * Looks for DLLs matching common naming patterns (*Module*.dll, *Game*.dll).
      * This is the fallback when no manifest file is found.
      *
+     * NOTE: the single-game-module policy still applies — the second Game-kind
+     * module in the directory fails to load (loudly). Prefer the project
+     * selector / -game / manifest paths; this bulk loader suits addon packs.
+     *
      * @param directory Directory to scan
      * @return true if at least one module was loaded
      */
     bool LoadModulesFromDirectory(const std::string& directory);
+
+    /**
+     * @brief Enumerate module-DLL candidates in a directory WITHOUT loading them
+     *
+     * Same filter as LoadModulesFromDirectory (name hint + system-DLL exclusion
+     * + export probe via DONT_RESOLVE_DLL_REFERENCES) but never runs DllMain.
+     * Used by the bare-launch project selector.
+     *
+     * @return Absolute paths of probable module DLLs, sorted by filename.
+     */
+    static std::vector<std::string> DiscoverModuleCandidates(const std::string& directory);
+
+    /** @brief Name of the loaded Game-kind module, or empty when none. */
+    std::string GetGameModuleName() const;
 
     /**
      * @brief Initialize all loaded modules (sorted by loadOrder)
@@ -188,7 +206,8 @@ class ModuleManager
         DestroyModuleFn destroyFn = nullptr;
         int loadOrder = 1000;
         bool initialized = false;
-        bool isLegacyAdapter = false; ///< True if wrapping IGameModule
+        bool isLegacyAdapter = false;                     ///< True if wrapping IGameModule
+        Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class (one Game per process)
     };
 
     /** @brief Sort modules by loadOrder */

@@ -64,6 +64,12 @@ namespace Spark::GameImGui
 
     /// True when ImGui wants exclusive keyboard input (text field focused).
     bool WantsKeyboard();
+
+    /// Exe-side auxiliary panel drawn inside the overlay frame (after module
+    /// UI). Used by the bare-launch project selector. Pass nullptr to clear.
+    /// The callback runs on the main thread during RenderOverlay — it must
+    /// only issue ImGui calls (defer heavy work like module loading).
+    void SetAuxPanel(void (*panelFn)());
 } // namespace Spark::GameImGui
 
 #endif // SPARK_PLATFORM_WINDOWS

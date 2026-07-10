@@ -252,6 +252,28 @@ bool ModuleManager::LoadModule(const std::string& path)
             return false;
         }
 
+        // Single-game-module policy: game modules own the simulation (physics
+        // stepping, world, net sim) — two of them double-step physics and
+        // corrupt each other. Addon-kind modules coexist freely.
+        if (info.kind == Spark::ModuleKind::Game)
+        {
+            const std::string existing = GetGameModuleName();
+            if (!existing.empty())
+            {
+                console.LogError(std::format("REFUSED to load game module '{}': game module '{}' is already loaded. "
+                                             "One game module per process; mark libraries/extensions with "
+                                             "ModuleKind::Addon in their ModuleInfo.",
+                                             info.name, existing));
+                destroyFn(instance);
+#ifdef _WIN32
+                FreeLibrary(static_cast<HMODULE>(handle));
+#else
+                dlclose(handle);
+#endif
+                return false;
+            }
+        }
+
         LoadedModule entry{};
         entry.name = info.name;
         entry.path = path;
@@ -261,6 +283,7 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.destroyFn = destroyFn;
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = false;
+        entry.kind = info.kind;
 
         console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
@@ -302,6 +325,24 @@ bool ModuleManager::LoadModule(const std::string& path)
         // For legacy modules, we use adapter's destroy which handles cleanup
         auto info = adapterOwner->GetModuleInfo();
 
+        // Legacy CreateGameModule exports are game modules by definition —
+        // the single-game-module policy applies to them too.
+        {
+            const std::string existing = GetGameModuleName();
+            if (!existing.empty())
+            {
+                console.LogError(std::format("REFUSED to load legacy game module '{}': game module '{}' is already "
+                                             "loaded (one game module per process).",
+                                             info.name, existing));
+#ifdef _WIN32
+                FreeLibrary(static_cast<HMODULE>(handle));
+#else
+                dlclose(handle);
+#endif
+                return false;
+            }
+        }
+
         LoadedModule entry{};
         entry.name = info.name;
         entry.path = path;
@@ -310,6 +351,7 @@ bool ModuleManager::LoadModule(const std::string& path)
         entry.destroyFn = [](Spark::IModule* mod) { delete mod; };
         entry.loadOrder = info.loadOrder;
         entry.isLegacyAdapter = true;
+        entry.kind = Spark::ModuleKind::Game;
 
         // Transfer ownership last to avoid leak if any prior line throws
         entry.instance = adapterOwner.release();
@@ -413,7 +455,24 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
         return false;
     }
 
-    // Determine platform-specific DLL extension
+    for (const auto& candidate : DiscoverModuleCandidates(directory))
+    {
+        console.LogInfo("Found candidate module: " + std::filesystem::path(candidate).filename().string());
+        if (LoadModule(candidate))
+            anyLoaded = true;
+    }
+
+    return anyLoaded;
+}
+
+std::vector<std::string> ModuleManager::DiscoverModuleCandidates(const std::string& directory)
+{
+    std::vector<std::string> candidates;
+
+    std::error_code ec;
+    if (!std::filesystem::exists(directory, ec) || ec)
+        return candidates;
+
 #ifdef _WIN32
     const std::string ext = ".dll";
 #elif defined(__APPLE__)
@@ -422,7 +481,7 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
     const std::string ext = ".so";
 #endif
 
-    for (auto& entry : std::filesystem::directory_iterator(directory))
+    for (auto& entry : std::filesystem::directory_iterator(directory, ec))
     {
         if (!entry.is_regular_file())
             continue;
@@ -433,8 +492,7 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
 
         auto filename = filePath.filename().string();
 
-        // Skip the engine executable's own DLLs that aren't modules
-        // Look for common module naming patterns
+        // Common module naming patterns only — everything else is skipped.
         bool isCandidate = (filename.contains("Game") || filename.contains("Module") || filename.contains("Plugin"));
 
         // Skip system/runtime DLLs
@@ -442,36 +500,40 @@ bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
             (filename.find("d3d") == 0 || filename.find("vcruntime") == 0 || filename.find("msvcp") == 0 ||
              filename.find("ucrtbase") == 0 || filename.contains("SparkConsole") || filename.contains("SparkEngine"));
 
-        if (isCandidate && !isSystem)
-        {
+        if (!isCandidate || isSystem)
+            continue;
+
 #ifdef _WIN32
-            // The filename substring is only a hint. Before a full LoadModule (which
-            // runs the DLL's DllMain), probe the image with DONT_RESOLVE_DLL_REFERENCES
-            // — this maps it WITHOUT calling DllMain or resolving imports — and only
-            // proceed if it actually exports a module entry point. This stops unrelated
-            // third-party DLLs that merely contain "Game"/"Module"/"Plugin" in their
-            // name (overlays, middleware) from being loaded and their DllMain executed.
-            HMODULE probe = LoadLibraryExA(filePath.string().c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
-            if (!probe)
-            {
-                continue;
-            }
-            bool hasEntry = GetProcAddress(probe, "CreateModule") != nullptr ||
-                            GetProcAddress(probe, "CreateGameModule") != nullptr;
-            FreeLibrary(probe);
-            if (!hasEntry)
-            {
-                console.LogInfo("Skipping non-module DLL (no CreateModule/CreateGameModule export): " + filename);
-                continue;
-            }
+        // The filename substring is only a hint. Probe the image with
+        // DONT_RESOLVE_DLL_REFERENCES — maps it WITHOUT calling DllMain or
+        // resolving imports — and only accept it if it actually exports a
+        // module entry point. Stops unrelated third-party DLLs that merely
+        // contain "Game"/"Module"/"Plugin" in their name from being loaded.
+        HMODULE probe = LoadLibraryExA(filePath.string().c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
+        if (!probe)
+            continue;
+        bool hasEntry =
+            GetProcAddress(probe, "CreateModule") != nullptr || GetProcAddress(probe, "CreateGameModule") != nullptr;
+        FreeLibrary(probe);
+        if (!hasEntry)
+            continue;
 #endif
-            console.LogInfo("Found candidate module: " + filename);
-            if (LoadModule(filePath.string()))
-                anyLoaded = true;
-        }
+        candidates.push_back(filePath.string());
     }
 
-    return anyLoaded;
+    std::sort(candidates.begin(), candidates.end(), [](const std::string& a, const std::string& b)
+              { return std::filesystem::path(a).filename() < std::filesystem::path(b).filename(); });
+    return candidates;
+}
+
+std::string ModuleManager::GetGameModuleName() const
+{
+    for (const auto& m : m_modules)
+    {
+        if (m.kind == Spark::ModuleKind::Game)
+            return m.name;
+    }
+    return {};
 }
 
 void ModuleManager::InitializeAll(Spark::IEngineContext* context)

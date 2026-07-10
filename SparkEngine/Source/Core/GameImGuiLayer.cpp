@@ -27,6 +27,7 @@ namespace Spark::GameImGui
     {
         bool g_initialized = false;
         bool g_inOverlay = false;
+        void (*g_auxPanel)() = nullptr;
     } // namespace
 
     bool Init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* context)
@@ -90,6 +91,9 @@ namespace Spark::GameImGui
         if (modules)
             modules->ImGuiAll();
 
+        if (g_auxPanel)
+            g_auxPanel();
+
         ImGui::Render();
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
@@ -145,6 +149,11 @@ namespace Spark::GameImGui
         return g_initialized && ImGui::GetIO().WantCaptureKeyboard;
     }
 
+    void SetAuxPanel(void (*panelFn)())
+    {
+        g_auxPanel = panelFn;
+    }
+
 #else // !SPARK_HAS_IMGUI — stubs so the exe links when ImGui is absent
 
     bool Init(HWND, ID3D11Device*, ID3D11DeviceContext*)
@@ -176,6 +185,7 @@ namespace Spark::GameImGui
     {
         return false;
     }
+    void SetAuxPanel(void (*)()) {}
 
 #endif // SPARK_HAS_IMGUI
 

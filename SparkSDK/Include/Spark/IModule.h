@@ -30,6 +30,24 @@ namespace Spark
 {
 
     /**
+     * @brief What a module IS, for the engine's load policy.
+     *
+     * Exactly ONE Game module may be loaded per process: game modules own the
+     * simulation (physics stepping, world/scene, net sim, gameplay update
+     * order), and two of them double-step physics and fight over every
+     * shared engine service. The engine hard-fails a second Game module.
+     *
+     * Addon modules (tooling, shared libraries, separation-of-concerns
+     * extensions that plug into a game) are exempt and may coexist freely
+     * with each other and with the one game module.
+     */
+    enum class ModuleKind : uint8_t
+    {
+        Game = 0, ///< A playable game (default — every pre-kind module is one)
+        Addon = 1 ///< Library/extension: no simulation ownership, any number may load
+    };
+
+    /**
      * @brief Metadata describing a loaded module
      *
      * All const char* fields must point to storage owned by the module.
@@ -47,6 +65,11 @@ namespace Spark
         /// Populated automatically by SPARK_MODULE_DEPENDENCY() or manually.
         const char* const* dependencies = nullptr;
         int dependencyCount = 0;
+
+        /// Load-policy classification (see ModuleKind). Defaults to Game so
+        /// every existing module keeps its meaning without edits; addons must
+        /// opt in explicitly with ModuleKind::Addon.
+        ModuleKind kind = ModuleKind::Game;
     };
 
     /**
