@@ -2,46 +2,148 @@
   "$schema_note": "TERRAFRONT infantry classes. speeds in m/s; ability cooldowns in sec.",
   "classes": [
     {
-      "id": "Ghost", "name": "Ghost", "role": "Recon / sniper",
-      "health": 400, "shield": 400, "sprintSpeed": 7.6, "runSpeed": 5.4,
-      "ability": { "key": "veil", "name": "Signal Veil", "desc": "Suppress your minimap signature and dampen footsteps for 8s.", "durationSec": 8, "cooldownSec": 18 },
-      "primaries": ["sniper", "carbine"], "secondary": "pistol", "tool": "recon_dart",
-      "grenades": 1
+      "id": "Ghost",
+      "name": "Ghost",
+      "role": "Recon / sniper",
+      "health": 400,
+      "shield": 400,
+      "sprintSpeed": 7.6,
+      "runSpeed": 5.4,
+      "ability": {
+        "key": "veil",
+        "name": "Signal Veil",
+        "desc": "Suppress your minimap signature and dampen footsteps for 8s.",
+        "durationSec": 8,
+        "cooldownSec": 18
+      },
+      "primaries": [
+        "sniper",
+        "carbine"
+      ],
+      "secondary": "pistol",
+      "tool": "recon_dart",
+      "grenades": 1,
+      "mesh": "Models/MMOFPS/characters/char_ghost.obj"
     },
     {
-      "id": "Striker", "name": "Striker", "role": "Jump-jet light assault",
-      "health": 450, "shield": 450, "sprintSpeed": 7.8, "runSpeed": 5.6,
-      "ability": { "key": "jets", "name": "Skirmish Jets", "desc": "Vertical jump-jets. 6s of thrust, regenerates.", "durationSec": 6, "cooldownSec": 0, "regenPerSec": 0.18 },
-      "primaries": ["carbine", "shotgun"], "secondary": "pistol", "tool": "none",
-      "grenades": 2
+      "id": "Striker",
+      "name": "Striker",
+      "role": "Jump-jet light assault",
+      "health": 450,
+      "shield": 450,
+      "sprintSpeed": 7.8,
+      "runSpeed": 5.6,
+      "ability": {
+        "key": "jets",
+        "name": "Skirmish Jets",
+        "desc": "Vertical jump-jets. 6s of thrust, regenerates.",
+        "durationSec": 6,
+        "cooldownSec": 0,
+        "regenPerSec": 0.18
+      },
+      "primaries": [
+        "carbine",
+        "shotgun"
+      ],
+      "secondary": "pistol",
+      "tool": "none",
+      "grenades": 2,
+      "mesh": "Models/MMOFPS/characters/char_striker.obj"
     },
     {
-      "id": "Medtech", "name": "Medtech", "role": "Heal / revive",
-      "health": 500, "shield": 500, "sprintSpeed": 7.2, "runSpeed": 5.2,
-      "ability": { "key": "surge", "name": "Triage Surge", "desc": "AoE heal pulse around you (150 HP over 5s, 8m).", "durationSec": 5, "cooldownSec": 25 },
-      "primaries": ["rifle"], "secondary": "pistol", "tool": "med_applicator",
-      "grenades": 1
+      "id": "Medtech",
+      "name": "Medtech",
+      "role": "Heal / revive",
+      "health": 500,
+      "shield": 500,
+      "sprintSpeed": 7.2,
+      "runSpeed": 5.2,
+      "ability": {
+        "key": "surge",
+        "name": "Triage Surge",
+        "desc": "AoE heal pulse around you (150 HP over 5s, 8m).",
+        "durationSec": 5,
+        "cooldownSec": 25
+      },
+      "primaries": [
+        "rifle"
+      ],
+      "secondary": "pistol",
+      "tool": "med_applicator",
+      "grenades": 1,
+      "mesh": "Models/MMOFPS/characters/char_medtech.obj"
     },
     {
-      "id": "Fabricator", "name": "Fabricator", "role": "Repair / ammo / turret",
-      "health": 500, "shield": 500, "sprintSpeed": 7.2, "runSpeed": 5.2,
-      "ability": { "key": "forge", "name": "Field Forge", "desc": "Place deployable: auto-turret or ammo cache (tf data: deployables).", "cooldownSec": 30 },
-      "primaries": ["carbine", "shotgun"], "secondary": "pistol", "tool": "repair_torch",
-      "grenades": 1
+      "id": "Fabricator",
+      "name": "Fabricator",
+      "role": "Repair / ammo / turret",
+      "health": 500,
+      "shield": 500,
+      "sprintSpeed": 7.2,
+      "runSpeed": 5.2,
+      "ability": {
+        "key": "forge",
+        "name": "Field Forge",
+        "desc": "Place deployable: auto-turret or ammo cache (tf data: deployables).",
+        "cooldownSec": 30
+      },
+      "primaries": [
+        "carbine",
+        "shotgun"
+      ],
+      "secondary": "pistol",
+      "tool": "repair_torch",
+      "grenades": 1,
+      "mesh": "Models/MMOFPS/characters/char_fabricator.obj"
     },
     {
-      "id": "Bulwark", "name": "Bulwark", "role": "Overshield heavy",
-      "health": 550, "shield": 500, "sprintSpeed": 6.8, "runSpeed": 5.0,
-      "ability": { "key": "aegiswall", "name": "Bulwark Field", "desc": "Personal overshield, +450 absorb while active, -20% move speed.", "durationSec": 12, "cooldownSec": 30 },
-      "primaries": ["lmg", "rifle"], "secondary": "pistol", "tool": "none",
-      "grenades": 2, "rocketLauncher": true
+      "id": "Bulwark",
+      "name": "Bulwark",
+      "role": "Overshield heavy",
+      "health": 550,
+      "shield": 500,
+      "sprintSpeed": 6.8,
+      "runSpeed": 5.0,
+      "ability": {
+        "key": "aegiswall",
+        "name": "Bulwark Field",
+        "desc": "Personal overshield, +450 absorb while active, -20% move speed.",
+        "durationSec": 12,
+        "cooldownSec": 30
+      },
+      "primaries": [
+        "lmg",
+        "rifle"
+      ],
+      "secondary": "pistol",
+      "tool": "none",
+      "grenades": 2,
+      "rocketLauncher": true,
+      "mesh": "Models/MMOFPS/characters/char_bulwark.obj"
     },
     {
-      "id": "Colossus", "name": "Colossus", "role": "Flux exosuit (terminal purchase)",
-      "health": 2200, "shield": 0, "sprintSpeed": 5.6, "runSpeed": 4.2,
-      "ability": { "key": "lockdown", "name": "Anchor Lockdown", "desc": "Immobile; +40% RoF and knockback immunity.", "toggle": true },
-      "primaries": ["colossus_autocannon"], "secondary": "none", "tool": "none",
-      "grenades": 0, "fluxCost": 450, "noRegen": true
+      "id": "Colossus",
+      "name": "Colossus",
+      "role": "Flux exosuit (terminal purchase)",
+      "health": 2200,
+      "shield": 0,
+      "sprintSpeed": 5.6,
+      "runSpeed": 4.2,
+      "ability": {
+        "key": "lockdown",
+        "name": "Anchor Lockdown",
+        "desc": "Immobile; +40% RoF and knockback immunity.",
+        "toggle": true
+      },
+      "primaries": [
+        "colossus_autocannon"
+      ],
+      "secondary": "none",
+      "tool": "none",
+      "grenades": 0,
+      "fluxCost": 450,
+      "noRegen": true,
+      "mesh": "Models/MMOFPS/characters/colossus.obj"
     }
   ]
 }

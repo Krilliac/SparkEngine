@@ -106,7 +106,7 @@ class TFPlayerSystem {
                           float& outYaw) const;
     void  DestroyPawn(PlayerRec& rec);
     void  SyncClientRecords();      ///< pure client: discover replicated pawns
-    void  AttachPawnVisual(uint32_t localEntity, FactionId faction);
+    void  AttachPawnVisual(uint32_t localEntity, FactionId faction, ClassId cls);
 
     // W1 private helpers (ECS-backed implementation)
     double   NowSec() const;        ///< serverSim time on authority, local clock otherwise

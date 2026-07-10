@@ -199,7 +199,7 @@ void TFPlayerSystem::SyncClientRecords()
 
                 rec.local = static_cast<uint32_t>(e);
                 if (rp.owner != m_ctx->localPlayer) // own pawn is first-person
-                    AttachPawnVisual(rec.local, rp.faction);
+                    AttachPawnVisual(rec.local, rp.faction, rp.cls);
             }
 
             if (rp.owner == m_ctx->localPlayer && m_pendingLocalPawn == rp.entity)
@@ -221,7 +221,7 @@ void TFPlayerSystem::SyncClientRecords()
 
 // ---------------------------------------------------------------- visuals
 
-void TFPlayerSystem::AttachPawnVisual(uint32_t localEntity, FactionId faction)
+void TFPlayerSystem::AttachPawnVisual(uint32_t localEntity, FactionId faction, ClassId cls)
 {
     World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
     const auto e = static_cast<EntityID>(localEntity);
@@ -235,8 +235,16 @@ void TFPlayerSystem::AttachPawnVisual(uint32_t localEntity, FactionId faction)
     // path is data-driven (Assets/MMOFPS/Data/presentation.json pawnMesh);
     // the literal here is only the byte-identical fallback when no
     // TFDataTables instance exists at all (e.g. some headless harnesses).
-    const std::string pawnMesh = m_ctx->data ? m_ctx->data->GetPresentation().pawnMesh
-                                              : "Models/MMOFPS/characters/soldier.obj";
+    // Per-class body when classes.json gives one (Ghost/Striker/Medtech/
+    // Fabricator/Bulwark/Colossus silhouettes); otherwise the shared
+    // presentation.pawnMesh; literal only when no TFDataTables exists at all.
+    std::string pawnMesh = "Models/MMOFPS/characters/soldier.obj";
+    if (m_ctx->data)
+    {
+        pawnMesh = m_ctx->data->GetPresentation().pawnMesh;
+        if (const ClassDef* cd = m_ctx->data->GetClass(cls); cd && !cd->mesh.empty())
+            pawnMesh = cd->mesh;
+    }
     MeshRenderer& mr = world->AddComponent<MeshRenderer>(e);
     mr.meshPath = "Assets/" + pawnMesh;
     mr.materialPath = FactionStructureMaterial(*m_ctx, faction);

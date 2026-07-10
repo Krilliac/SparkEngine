@@ -161,7 +161,7 @@ namespace Terrafront
         // First-person local pawns render no body (W1; TF-W4: shadow-only body).
         const bool isLocalFirstPerson = m_ctx->HasLocalPlayer() && player == m_ctx->localPlayer;
         if (!isLocalFirstPerson)
-            AttachPawnVisual(static_cast<uint32_t>(e), faction);
+            AttachPawnVisual(static_cast<uint32_t>(e), faction, cls);
 
         return static_cast<uint32_t>(e);
     }

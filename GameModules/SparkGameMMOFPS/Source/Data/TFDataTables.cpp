@@ -352,6 +352,7 @@ namespace Terrafront
                 c.rocketLauncher = GetBool(o, "rocketLauncher", false);
                 c.fluxCost = GetInt(o, "fluxCost", 0);
                 c.noRegen = GetBool(o, "noRegen", false);
+                c.mesh = GetStr(o, "mesh", ""); // per-class pawn body; empty falls back to presentation.pawnMesh
                 out.push_back(std::move(c));
             }
             if (seen.size() != static_cast<size_t>(ClassId::COUNT))

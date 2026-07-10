@@ -73,6 +73,7 @@ struct ClassDef {
     bool rocketLauncher = false;                 // Bulwark
     int  fluxCost = 0;                           // Colossus
     bool noRegen = false;
+    std::string mesh;                            // per-class pawn OBJ (empty == presentation.pawnMesh)
 };
 
 struct VehicleSeatDef {
