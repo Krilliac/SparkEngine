@@ -70,7 +70,7 @@ namespace Spark
     {
       public:
         /// Default max cache size: 64 MB
-        static constexpr size_t DEFAULT_MAX_SIZE = 64 * 1024 * 1024;
+        static constexpr size_t DEFAULT_MAX_SIZE = size_t{64} * 1024 * 1024;
 
         explicit LocalFileCache(size_t maxSizeBytes = DEFAULT_MAX_SIZE) : m_maxSize(maxSizeBytes) {}
 

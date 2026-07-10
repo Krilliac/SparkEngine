@@ -78,7 +78,7 @@ namespace Spark
             report.results.push_back({ValidationSeverity::Error, path.string(), "Scene file is empty (0 bytes)",
                                       "Re-save scene from editor", 2002});
         }
-        else if (fileSize > 100 * 1024 * 1024)
+        else if (fileSize > uintmax_t{100} * 1024 * 1024)
         {
             report.results.push_back(
                 {ValidationSeverity::Warning, path.string(),

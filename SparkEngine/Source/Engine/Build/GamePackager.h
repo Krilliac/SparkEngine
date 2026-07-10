@@ -441,10 +441,10 @@ namespace Spark::Build
         {
             if (bytes < 1024)
                 return std::to_string(bytes) + " B";
-            if (bytes < 1024 * 1024)
+            if (bytes < uint64_t{1024} * 1024)
                 return std::to_string(bytes / 1024) + " KB";
             if (bytes < 1024ULL * 1024 * 1024)
-                return std::to_string(bytes / (1024 * 1024)) + " MB";
+                return std::to_string(bytes / (uint64_t{1024} * 1024)) + " MB";
             return std::to_string(bytes / (1024ULL * 1024 * 1024)) + " GB";
         }
 

@@ -188,9 +188,9 @@ namespace Spark::Accessibility
             // Matrix multiply then lerp with original based on strength
             for (int row = 0; row < 3; ++row)
             {
-                float corrected = mat[static_cast<size_t>(row * 3 + 0)] * rgbIn[0] +
-                                  mat[static_cast<size_t>(row * 3 + 1)] * rgbIn[1] +
-                                  mat[static_cast<size_t>(row * 3 + 2)] * rgbIn[2];
+                const size_t rowOffset = static_cast<size_t>(row) * 3;
+                float corrected =
+                    mat[rowOffset] * rgbIn[0] + mat[rowOffset + 1] * rgbIn[1] + mat[rowOffset + 2] * rgbIn[2];
                 rgbOut[row] = rgbIn[row] + (corrected - rgbIn[row]) * strength;
             }
         }

@@ -237,11 +237,11 @@ namespace Spark
         float m_checkInterval = DEFAULT_CHECK_INTERVAL;
 
         // Thresholds
-        size_t m_leakRateThreshold = 1 * 1024 * 1024; // 1 MB/s
-        size_t m_spikeThreshold = 10 * 1024 * 1024;   // 10 MB/frame
-        float m_budgetWarningPercent = 0.80f;         // 80%
-        size_t m_stackWarningBytes = 64 * 1024;       // 64 KB
-        size_t m_globalBudget = 0;                    // 0 = no limit
+        size_t m_leakRateThreshold = size_t{1} * 1024 * 1024; // 1 MB/s
+        size_t m_spikeThreshold = size_t{10} * 1024 * 1024;   // 10 MB/frame
+        float m_budgetWarningPercent = 0.80f;                 // 80%
+        size_t m_stackWarningBytes = size_t{64} * 1024;       // 64 KB
+        size_t m_globalBudget = 0;                            // 0 = no limit
 
         // Growth rate tracking (ring buffer of samples)
         struct GrowthSample

@@ -176,7 +176,9 @@ namespace Spark::Graphics
                     float sumR = 0, sumG = 0, sumB = 0;
                     float sumWeight = 0;
 
-                    const float* centerColor = m_colorInput.data + (y * w + x) * 3;
+                    const size_t centerIndex =
+                        (static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x)) * 3;
+                    const float* centerColor = m_colorInput.data + centerIndex;
 
                     for (int dy = -kRadius; dy <= kRadius; ++dy)
                     {
@@ -188,7 +190,9 @@ namespace Spark::Graphics
                             if (nx < 0 || nx >= static_cast<int>(w) || ny < 0 || ny >= static_cast<int>(h))
                                 continue;
 
-                            const float* neighborColor = m_colorInput.data + (ny * w + nx) * 3;
+                            const size_t neighborIndex =
+                                (static_cast<size_t>(ny) * static_cast<size_t>(w) + static_cast<size_t>(nx)) * 3;
+                            const float* neighborColor = m_colorInput.data + neighborIndex;
 
                             // Spatial weight
                             float spatialDist2 = static_cast<float>(dx * dx + dy * dy);
@@ -205,8 +209,8 @@ namespace Spark::Graphics
                             float wn = 1.0f;
                             if (m_normalInput.data)
                             {
-                                const float* cn = m_normalInput.data + (y * w + x) * 3;
-                                const float* nn = m_normalInput.data + (ny * w + nx) * 3;
+                                const float* cn = m_normalInput.data + centerIndex;
+                                const float* nn = m_normalInput.data + neighborIndex;
                                 float dot = cn[0] * nn[0] + cn[1] * nn[1] + cn[2] * nn[2];
                                 wn = std::exp(-(1.0f - std::max(dot, 0.0f)) / (2.0f * kSigmaNormal * kSigmaNormal));
                             }

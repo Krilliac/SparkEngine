@@ -321,7 +321,7 @@ namespace Spark
         {
             std::string directory = "Logs/";
             std::string prefix = "SparkEngine";
-            size_t maxFileSizeBytes = 50 * 1024 * 1024; ///< 50 MB
+            size_t maxFileSizeBytes = size_t{50} * 1024 * 1024; ///< 50 MB
             int maxBackupFiles = 5;
         };
 

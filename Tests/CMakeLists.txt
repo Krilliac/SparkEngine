@@ -466,7 +466,6 @@ add_executable(SparkTests
     TestHResultPlatform.cpp
     TestEngineBootPlatforms.cpp
     TestMacOSPlatform.cpp
-    TestMetalRayTracing.cpp
     # Subprocess spawning and piping
     TestProcess.cpp
     # SparkDaemon foundation (Phase 1)
@@ -543,7 +542,9 @@ add_executable(SparkTests
 # adding a .mm source unconditionally would fail CMake configure on the
 # Linux CI row that doesn't register OBJCXX.
 if(APPLE AND SPARK_METAL_AVAILABLE)
-    target_sources(SparkTests PRIVATE TestMetalRayTracingLive.mm)
+    target_sources(SparkTests PRIVATE
+        TestMetalRayTracing.cpp
+        TestMetalRayTracingLive.mm)
     # Match the engine's Metal linker flags — Foundation + Metal frameworks
     # are needed for MTLCreateSystemDefaultDevice and MTLDevice protocols.
     target_link_libraries(SparkTests PRIVATE "-framework Foundation" "-framework Metal")

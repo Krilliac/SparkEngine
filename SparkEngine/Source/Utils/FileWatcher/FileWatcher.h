@@ -149,8 +149,9 @@ namespace Spark::Utils
             ScanDirectory(entry);
 
             SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching directory '%s'", directoryPath.c_str());
-            m_watches[entry.id] = std::move(entry);
-            return entry.id;
+            const uint32_t watchId = entry.id;
+            m_watches[watchId] = std::move(entry);
+            return watchId;
         }
 
         /**
@@ -183,8 +184,9 @@ namespace Spark::Utils
             }
 
             SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: watching file '%s'", filePath.c_str());
-            m_watches[entry.id] = std::move(entry);
-            return entry.id;
+            const uint32_t watchId = entry.id;
+            m_watches[watchId] = std::move(entry);
+            return watchId;
         }
 
         /** @brief Stop watching a path */

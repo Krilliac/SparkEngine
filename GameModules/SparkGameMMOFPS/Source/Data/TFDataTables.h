@@ -3,8 +3,8 @@
  * @brief JSON data-table loaders (weapons/vehicles/classes/regions/factions).
  *
  * FROZEN CONTRACT: every system consumes these structs/accessors; the structs
- * mirror Assets/MMOFPS/Data/*.json field-for-field. The .cpp (loader) is owned
- * by the data-world agent; extend private helpers freely, do not change the
+ * mirror JSON files under Assets/MMOFPS/Data field-for-field. The loader is
+ * owned by the data-world agent; extend private helpers freely, do not change the
  * public surface without a DESIGN.md update.
  */
 #pragma once

@@ -69,16 +69,16 @@ namespace Spark
  */
     struct FileLoggerConfig
     {
-        std::string outputDirectory = "Logs/";           ///< Directory for log files
-        std::string filenamePrefix = "SparkEngine";      ///< Prefix for log filenames
-        FileLogLevel minimumLevel = FileLogLevel::Debug; ///< Minimum severity to write
-        LogFileFormat format = LogFileFormat::PlainText; ///< Output format
-        size_t maxFileSizeBytes = 50 * 1024 * 1024;      ///< Max file size before rotation (50 MB)
-        bool autoFlushOnError = true;                    ///< Flush immediately on Error/Fatal
-        bool includeTimestamp = true;                    ///< Include timestamp in each line
-        bool includeThreadId = true;                     ///< Include thread ID
-        bool includeSourceLocation = true;               ///< Include file:line info
-        bool writeSessionHeader = true;                  ///< Write system info at session start
+        std::string outputDirectory = "Logs/";              ///< Directory for log files
+        std::string filenamePrefix = "SparkEngine";         ///< Prefix for log filenames
+        FileLogLevel minimumLevel = FileLogLevel::Debug;    ///< Minimum severity to write
+        LogFileFormat format = LogFileFormat::PlainText;    ///< Output format
+        size_t maxFileSizeBytes = size_t{50} * 1024 * 1024; ///< Max file size before rotation (50 MB)
+        bool autoFlushOnError = true;                       ///< Flush immediately on Error/Fatal
+        bool includeTimestamp = true;                       ///< Include timestamp in each line
+        bool includeThreadId = true;                        ///< Include thread ID
+        bool includeSourceLocation = true;                  ///< Include file:line info
+        bool writeSessionHeader = true;                     ///< Write system info at session start
     };
 
     /**

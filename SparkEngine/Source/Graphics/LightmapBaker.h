@@ -260,7 +260,7 @@ namespace Spark::Graphics
                 return result;
             }
 
-            size_t texelCount = static_cast<size_t>(settings.resolution * settings.resolution);
+            size_t texelCount = static_cast<size_t>(settings.resolution) * static_cast<size_t>(settings.resolution);
             result.lightmapData.assign(texelCount * 3, 0.0f); // RGB
 
             std::mt19937 rng(42);

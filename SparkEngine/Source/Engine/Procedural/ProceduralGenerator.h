@@ -110,13 +110,13 @@ namespace Spark::Procedural
         {
             if (x < 0 || x >= width || y < 0 || y >= height)
                 return DungeonTile::Wall;
-            return tiles[static_cast<size_t>(y * width + x)];
+            return tiles[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)];
         }
 
         void SetTile(int x, int y, DungeonTile tile)
         {
             if (x >= 0 && x < width && y >= 0 && y < height)
-                tiles[static_cast<size_t>(y * width + x)] = tile;
+                tiles[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)] = tile;
         }
     };
 
@@ -147,7 +147,7 @@ namespace Spark::Procedural
         {
             if (x < 0 || x >= width || y < 0 || y >= height)
                 return -1;
-            return tiles[static_cast<size_t>(y * width + x)];
+            return tiles[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)];
         }
     };
 
@@ -241,7 +241,7 @@ namespace Spark::Procedural
                     if (params.exponent != 1.0f)
                         value = std::pow(std::max(0.0f, value), params.exponent);
 
-                    heightmap[static_cast<size_t>(y * width + x)] = value;
+                    heightmap[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)] = value;
                     maxVal = std::max(maxVal, value);
                     minVal = std::min(minVal, value);
                 }
@@ -375,7 +375,8 @@ namespace Spark::Procedural
             result.tiles.assign(cellCount, -1);
             result.success = true;
 
-            auto getIdx = [width](int x, int y) -> size_t { return static_cast<size_t>(y * width + x); };
+            auto getIdx = [width](int x, int y) -> size_t
+            { return static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x); };
 
             for (int iter = 0; iter < maxIterations; ++iter)
             {

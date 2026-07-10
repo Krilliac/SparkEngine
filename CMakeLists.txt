@@ -1173,6 +1173,12 @@ if(MINIZ_FOUND)
     message(STATUS "Linking SparkEngineLib with MINIZ")
 endif()
 
+if(ENABLE_NETWORKING)
+    # Detect curl before the linkage block so clean and cached configure runs
+    # produce the same SparkEngineLib link interface.
+    find_package(CURL QUIET)
+endif()
+
 # zstd — Zstandard compression (faster than miniz, used alongside it)
 if(TARGET zstd)
     target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:zstd>)
@@ -1922,8 +1928,7 @@ endif()
 if(ENABLE_NETWORKING)
     list(APPEND FEATURE_DEFINITIONS "ENABLE_NETWORKING")
 
-    # Check if libcurl is available for crash report uploading
-    find_package(CURL QUIET)
+    # Enable crash report uploads when the earlier dependency probe succeeded.
     if(CURL_FOUND)
         list(APPEND FEATURE_DEFINITIONS "SPARK_HAS_CURL")
     endif()

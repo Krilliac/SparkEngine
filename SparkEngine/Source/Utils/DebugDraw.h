@@ -386,7 +386,9 @@ namespace Spark
             {
                 for (int col = 0; col < side; ++col)
                 {
-                    uint32_t density = densityData[static_cast<size_t>(row * side + col)];
+                    const size_t densityIndex =
+                        static_cast<size_t>(row) * static_cast<size_t>(side) + static_cast<size_t>(col);
+                    uint32_t density = densityData[densityIndex];
                     if (density == 0)
                         continue;
 
