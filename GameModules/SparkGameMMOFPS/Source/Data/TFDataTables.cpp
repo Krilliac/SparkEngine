@@ -420,6 +420,7 @@ namespace Terrafront
                 v.audioEngine = GetStr(o, "audioEngine");
                 v.explodeAudio = GetStr(o, "explodeAudio");
                 v.turretMesh = GetStr(o, "turretMesh", "");
+                v.deployMesh = GetStr(o, "deployMesh", "");
                 if (o.HasKey("turretPivot") && o["turretPivot"].IsArray() && o["turretPivot"].Size() >= 3)
                 {
                     const Value& tp = o["turretPivot"];

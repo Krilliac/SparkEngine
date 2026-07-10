@@ -734,7 +734,44 @@ namespace Terrafront
         if (TFVehicleComp* vc = world->GetComponent<TFVehicleComp>(e))
             std::memcpy(vc->seats, v.seats, sizeof(vc->seats));
         if (TFAegisDeployComp* dc = world->GetComponent<TFAegisDeployComp>(e))
+        {
+            const bool was = dc->active;
             dc->active = v.deployed;
+            // Toggle the deployed-state pylon child on state change. The child is
+            // hull-parented, so DestroyVehicle's child-sweep also cleans it up.
+            TFVehicleComp* vc = world->GetComponent<TFVehicleComp>(e);
+            const VehicleDef* def = vc ? DefOf(vc->vehId) : nullptr;
+            if (v.deployed != was && def && !def->deployMesh.empty())
+            {
+                const std::string pylonPath = "Assets/" + def->deployMesh;
+                auto& registry = world->GetRegistry();
+                if (v.deployed)
+                {
+                    FactionId fac = FactionId::None;
+                    if (TFFactionComp* fc = world->GetComponent<TFFactionComp>(e))
+                        fac = fc->faction;
+                    const auto pylon = world->CreateEntity("TF_AegisPylons");
+                    Transform& pt = world->AddComponent<Transform>(pylon);
+                    pt.parent = e;
+                    MeshRenderer& pmr = world->AddComponent<MeshRenderer>(pylon);
+                    pmr.meshPath = pylonPath;
+                    pmr.materialPath = FactionStructureMaterial(*m_ctx, fac);
+                    pmr.castShadows = true;
+                }
+                else
+                {
+                    std::vector<EntityID> pylons;
+                    for (auto child : world->GetEntitiesWith<Transform, MeshRenderer>())
+                    {
+                        if (registry.get<Transform>(child).parent == e &&
+                            registry.get<MeshRenderer>(child).meshPath == pylonPath)
+                            pylons.push_back(child);
+                    }
+                    for (auto child : pylons)
+                        world->DestroyEntity(child);
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------

@@ -97,6 +97,9 @@ struct VehicleDef {
     // turretPivot (hull-local meters). Empty == no turret child.
     std::string turretMesh;
     float turretPivot[3] = {0.0f, 0.0f, 0.0f};
+    // Optional deployed-state mesh (e.g. Aegis spawn pylons) shown as a
+    // hull-parented child only while deployed. Empty == none.
+    std::string deployMesh;
 };
 
 struct RegionDef {
