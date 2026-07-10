@@ -463,9 +463,9 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 <!-- AUTO:component_list -->
 | Component | Header |
 |-----------|--------|
-| `AIComponent` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
 | `AbilityComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `ActiveComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
+| `AIComponent` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
 | `AnimationController` | `SparkEngine/Source/Engine/ECS/Components/AnimationComponents.h` |
 | `AreaBoundaryComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `AudioListenerComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
@@ -473,9 +473,9 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `AudioSourceComponent` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
 | `BillboardComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `BuoyancyVolumeComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
+| `Camera` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `Camera2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `CameraDrawMaskComponent` | `SparkEngine/Source/Engine/ECS/Components/VisibilityComponents.h` |
-| `Camera` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `CharacterControllerComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
 | `CinematicTriggerComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `Collider2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
@@ -493,10 +493,10 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `HealthComponent` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
 | `InteractionComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `InventoryTag` | `SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h` |
-| `LODGroupComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `LightComponent` | `SparkEngine/Source/Engine/ECS/Components/LightComponents.h` |
 | `LightProbeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `LineRendererComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
+| `LODGroupComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `MeshRenderer` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `NameComponent` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `NavLinkComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
@@ -549,20 +549,20 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 <!-- AUTO:system_list -->
 | System | Header |
 |--------|--------|
-| `AISystem` | `SparkEngine/Source/Engine/AI/AISystem.h` |
-| `AIUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AbilitySystem` | `SparkEngine/Source/Engine/Gameplay/AbilitySystem.h` |
 | `AbilityUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AccessibilitySystem` | `SparkEngine/Source/Engine/Accessibility/AccessibilitySystem.h` |
 | `AchievementSystem` | `SparkEngine/Source/Engine/Gameplay/AchievementSystem.h` |
+| `AISystem` | `SparkEngine/Source/Engine/AI/AISystem.h` |
+| `AIUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AnimationUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `AudioUpdateSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
-| `CSGSystem` | `SparkEngine/Source/Engine/LevelDesign/CSGSystem.h` |
 | `Camera2DFollowSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
 | `CollisionSystem` | `SparkEngine/Source/Physics/CollisionSystem.h` |
 | `ConditionSystem` | `SparkEngine/Source/Engine/Gameplay/ConditionSystem.h` |
 | `CoverSystem` | `SparkEngine/Source/Engine/AI/CoverSystem.h` |
 | `CraftingSystem` | `SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h` |
+| `CSGSystem` | `SparkEngine/Source/Engine/LevelDesign/CSGSystem.h` |
 | `DDGIProbeSystem` | `SparkEngine/Source/Graphics/DDGIProbeSystem.h` |
 | `DecalSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `DecalSystem` | `SparkEngine/Source/Graphics/DecalSystem.h` |
@@ -582,8 +582,8 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `JobSystem` | `SparkEngine/Source/Utils/JobSystem.h` |
 | `LifecycleSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `LightChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
-| `LightProbeSystem` | `SparkEngine/Source/Graphics/LightProbeSystem.h` |
 | `LightingSystem` | `SparkEngine/Source/Graphics/LightingSystem.h` |
+| `LightProbeSystem` | `SparkEngine/Source/Graphics/LightProbeSystem.h` |
 | `LocalizationSystem` | `SparkEngine/Source/Engine/Localization/LocalizationSystem.h` |
 | `MaterialChangeReactiveSystem` | `SparkEngine/Source/Engine/ECS/ReactiveSystem.h` |
 | `MaterialSystem` | `SparkEngine/Source/Graphics/MaterialSystem.h` |
@@ -602,11 +602,11 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `ProjectileSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ProximityTriggerSystem` | `SparkEngine/Source/Engine/World/ProximityTriggerSystem.h` |
 | `QuestSystem` | `SparkEngine/Source/Engine/Gameplay/QuestSystem.h` |
-| `RTHandleSystem` | `SparkEngine/Source/Graphics/RTHandleSystem.h` |
 | `RagdollSystem` | `SparkEngine/Source/Engine/Animation/RagdollSystem.h` |
 | `RemoteDebugSystem` | `SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h` |
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
+| `RTHandleSystem` | `SparkEngine/Source/Graphics/RTHandleSystem.h` |
 | `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |
 | `ShaderVariantSystem` | `SparkEngine/Source/Graphics/ShaderVariantSystem.h` |
 | `SplineFollowerSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
@@ -620,8 +620,8 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `TweenSystem` | `SparkEngine/Source/Engine/Tween/TweenSystem.h` |
 | `UISystem` | `SparkEngine/Source/Engine/UI/UISystem.h` |
 | `UpscalingSystem` | `SparkEngine/Source/Graphics/UpscalingSystem.h` |
-| `VRSystem` | `SparkEngine/Source/Engine/VR/VRSystem.h` |
 | `VirtualFileSystem` | `SparkEngine/Source/Engine/Modding/VirtualFileSystem.h` |
+| `VRSystem` | `SparkEngine/Source/Engine/VR/VRSystem.h` |
 | `WeatherSystem` | `SparkEngine/Source/Graphics/WeatherSystem.h` |
 | `WorldOriginSystem` | `SparkEngine/Source/Engine/World/WorldOriginSystem.h` |
 <!-- /AUTO:system_list -->

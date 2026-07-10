@@ -1,5 +1,13 @@
 # SparkEngine Hardening Fleet — Handoff (branch `claude/harden-fleet`)
 
+> **STATUS 2026-07-10 — COMPLETE.** The entire deferred queue below landed on `Working`
+> via the W6 expansion fleet (commits `5041159d`, `31dbec95`, `5faad907`, `fba52c23`):
+> BT Clone deep-copy, WeaponManager ownerEntity, EditorUI SwapWorld funnel,
+> HasUnsavedChanges sequence counters, MMO DI, Localization by-value, Sequencer audio,
+> plus the module EngineContext injection (landed earlier by codex). The
+> NetworkManager per-module `GetInstance()` fallback was intentionally KEPT as the
+> bootstrap source. This document is retained as historical record only.
+
 Two commits, both **compile clean (Debug, 0 errors/0 warnings)**:
 - `6658a75a` — Phase 1+2: 14-lane audit (130 findings) + 14 disjoint execution buckets. 74 engine files hardened, 30 regression tests added, compile break fixed.
 - `762cbb33` — `Tests/` added to `SparkTests` include path (harden tests resolve `TestFramework.h`).
