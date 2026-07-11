@@ -18,6 +18,8 @@
 #include <imgui.h>
 #endif
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace Terrafront
@@ -72,6 +74,8 @@ namespace Terrafront
     {
         m_pools.clear();
         m_teamKills.clear();
+        m_damageLog.clear(); // death-recap lane (W11)
+        m_recapMirror = nullptr;
         m_initialized = false;
     }
 
@@ -125,6 +129,7 @@ namespace Terrafront
     void TFDamageSystem::ServerForgetPawn(EntityId pawn)
     {
         m_pools.erase(pawn);
+        m_damageLog.erase(pawn); // death-recap lane (W11): no stale log across suit swaps
     }
 
     // ----------------------------------------------------------------------------
@@ -186,6 +191,19 @@ namespace Terrafront
         rec.health = std::max(0.0f, rec.health - remaining);
         rec.lastDamageAt = m_clock;
 
+        // death-recap lane (W11): per-pawn rolling damage log. Recorded BEFORE
+        // the kill branch so the fatal hit is part of the victim's timeline.
+        {
+            TFDamageLogHit hit;
+            hit.attackerPlayer = attackerPlayer;
+            hit.weapon = weapon;
+            hit.amount = amount;
+            hit.kind = kind;
+            hit.headshot = headshot;
+            hit.at = m_clock;
+            m_damageLog[victim].Push(hit);
+        }
+
         if (m_ctx->players)
             m_ctx->players->ServerSetPawnHealth(victim, rec.health, rec.shield);
 
@@ -224,11 +242,99 @@ namespace Terrafront
             // TF-W2: grief kick at 10 TKs / 15 min.
         }
 
+        // death-recap lane (W11): assemble + deliver the victim's recap while
+        // the pawn registry still holds both pawns (ServerKillPawn despawns).
+        SendDeathRecap(victim, rec, attackerPawn, attackerPlayer, attackerFaction);
+
         if (m_ctx->players)
             m_ctx->players->ServerKillPawn(victim, attackerPlayer, weapon, headshot);
 
         BroadcastKill(attackerPlayer, rec.owner, weapon, attackerFaction, rec.faction, headshot);
         m_pools.erase(it);
+        m_damageLog.erase(victim); // the dead pawn's log is spent
+    }
+
+    void TFDamageSystem::SendDeathRecap(EntityId victim, const HealthRec& rec, EntityId attackerPawn,
+                                        PlayerId attackerPlayer, FactionId attackerFaction)
+    {
+        if (rec.owner == kInvalidPlayer)
+            return; // ownerless pawn — nobody to show a recap to
+
+        TF_DeathRecap rc{};
+        rc.killerPlayer = attackerPlayer;
+        rc.killerClass = static_cast<uint8_t>(ClassId::COUNT);
+        rc.killerFaction = static_cast<uint8_t>(attackerFaction);
+        rc.killerHealth = 0xFFFFu;
+        rc.killerShield = 0xFFFFu;
+        rc.distanceDm = 0xFFFFu;
+
+        // Timeline: the victim's window-filtered log, oldest first.
+        auto logIt = m_damageLog.find(victim);
+        if (logIt != m_damageLog.end())
+        {
+            TFDamageLogHit rows[kTFDeathRecapMaxEntries];
+            const uint32_t n = logIt->second.Collect(m_clock, kTFDeathRecapWindowSec, rows);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                TF_DeathRecapEntry& e = rc.entries[i];
+                e.attackerPlayer = rows[i].attackerPlayer;
+                e.weaponId = rows[i].weapon;
+                e.damage = static_cast<uint16_t>(std::min(rows[i].amount, 65535.0f));
+                const double age = std::max(0.0, m_clock - rows[i].at);
+                e.ageDeciSec = static_cast<uint16_t>(std::min(age * 10.0, 65535.0));
+                e.headshot = rows[i].headshot ? 1 : 0;
+                e.damageKind = rows[i].kind;
+            }
+            rc.entryCount = static_cast<uint8_t>(n);
+        }
+
+        // Killer summary: class + distance from the pawn registry, remaining
+        // pools from our own records, "damage dealt to killer" from the
+        // KILLER's rolling log (the victim's hits on them, same window).
+        if (attackerPawn != 0)
+        {
+            PawnInfo killerPi{};
+            if (m_ctx->players && m_ctx->players->GetPawnByEntity(attackerPawn, killerPi))
+            {
+                rc.killerClass = static_cast<uint8_t>(killerPi.cls);
+                PawnInfo victimPi{};
+                if (m_ctx->players->GetPawnByEntity(victim, victimPi))
+                {
+                    const float dx = killerPi.pos[0] - victimPi.pos[0];
+                    const float dy = killerPi.pos[1] - victimPi.pos[1];
+                    const float dz = killerPi.pos[2] - victimPi.pos[2];
+                    const float distM = std::sqrt(dx * dx + dy * dy + dz * dz);
+                    rc.distanceDm = static_cast<uint16_t>(std::min(distM * 10.0f, 65534.0f));
+                }
+            }
+            auto killerPools = m_pools.find(attackerPawn);
+            if (killerPools != m_pools.end())
+            {
+                rc.killerHealth = static_cast<uint16_t>(std::clamp(killerPools->second.health, 0.0f, 65534.0f));
+                rc.killerShield = static_cast<uint16_t>(std::clamp(killerPools->second.shield, 0.0f, 65534.0f));
+            }
+            auto killerLog = m_damageLog.find(attackerPawn);
+            if (killerLog != m_damageLog.end())
+            {
+                float dmg = 0.0f;
+                uint32_t hits = 0;
+                killerLog->second.SumFrom(rec.owner, m_clock, kTFDeathRecapWindowSec, dmg, hits);
+                rc.damageToKiller = static_cast<uint16_t>(std::min(dmg, 65535.0f));
+                rc.hitsOnKiller = static_cast<uint8_t>(std::min(hits, 255u));
+            }
+        }
+
+        ++m_recapsSent;
+
+        // Listen-host/standalone local victim: no socket — direct mirror into
+        // the UI panel (TFMedalSystem::SendMedalToOwner pattern).
+        if (m_ctx->HasLocalPlayer() && rec.owner == m_ctx->localPlayer)
+        {
+            if (m_recapMirror)
+                m_recapMirror(rc);
+            return;
+        }
+        SendToOwner(rec.owner, kTFMsgDeathRecap, &rc, sizeof(rc));
     }
 
     void TFDamageSystem::SendToOwner(PlayerId owner, uint16_t msgId, const void* payload, size_t size)
@@ -296,6 +402,8 @@ namespace Terrafront
         ImGui::Text("tracked pawns : %zu", m_pools.size());
         ImGui::Text("kills         : %u", m_killCount);
         ImGui::Text("TK offenders  : %zu", m_teamKills.size());
+        ImGui::Text("damage logs   : %zu", m_damageLog.size()); // death-recap lane (W11)
+        ImGui::Text("recaps sent   : %u", m_recapsSent);
 #endif
     }
 

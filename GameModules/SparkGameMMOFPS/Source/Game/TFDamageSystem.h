@@ -10,17 +10,136 @@
  * regen delay, friendly fire at 50% with TK tally (log-only W1), kill credit
  * via TFPlayerSystem::ServerKillPawn, TF_HitConfirm / TF_DamageEvent /
  * TF_KillEvent feedback. TF-W2: move pools onto ECS components + grief kick.
+ *
+ * W11 death-recap lane (damage-log section, owned by that lane): per-pawn
+ * rolling damage log (TFDamageLog, last kTFDeathRecapWindowSec) recorded in
+ * ServerApplyDamage; on death the victim gets TF_DeathRecap (0x5474, reliable,
+ * victim only) — timeline + killer summary + the victim's damage on the
+ * killer. Wire structs live below (TFMedalSystem in-lane-header precedent);
+ * UI/TFDeathRecap.h/.cpp renders the client panel.
  */
 #pragma once
 
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
 
+#include <array>
 #include <functional>
 #include <unordered_map>
 
 namespace Terrafront
 {
+
+    // ---------------------------------------------------------------------------
+    // Death-recap wire protocol — reserved TFMsg id block 0x5474-0x5477 (W11
+    // death-recap lane). TFNetProtocol.h (contended) only gains a block comment
+    // via the wave wiringNotes; these constants keep the lane compiling
+    // standalone (TFMedalSystem 0x5460 precedent) and MUST stay value-identical
+    // to any future enum entries.
+    // ---------------------------------------------------------------------------
+
+    constexpr uint16_t kTFMsgDeathRecap = 0x5474; // S->C TF_DeathRecap (reliable, victim only)
+    // 0x5475-0x5477 reserved for future death-recap traffic.
+
+    /// Rolling damage-log window (seconds before death) and the ring/wire cap.
+    constexpr float kTFDeathRecapWindowSec = 8.0f;
+    constexpr uint32_t kTFDeathRecapMaxEntries = 8;
+
+#pragma pack(push, 1)
+
+    /// One timeline row: ids/amounts only — weapon icon + name resolve
+    /// client-side from WeaponId (keeps the wire small).
+    struct TF_DeathRecapEntry
+    {
+        uint32_t attackerPlayer; // kInvalidPlayer == environment/unknown
+        uint16_t weaponId;       // WeaponId (kInvalidWeapon when unknown)
+        uint16_t damage;         // post-mitigation, rounded down
+        uint16_t ageDeciSec;     // how long before death this hit landed (0.1 s units)
+        uint8_t headshot;        // 0/1
+        uint8_t damageKind;      // TF_DamageEvent vocabulary (0 bullet, 1 explosive, ...)
+    };
+    static_assert(sizeof(TF_DeathRecapEntry) == 12, "wire layout frozen");
+
+    /// Sent to the victim only, on death. Entries are oldest-first.
+    struct TF_DeathRecap
+    {
+        uint8_t entryCount;      // valid rows in entries[] (0..kTFDeathRecapMaxEntries)
+        uint8_t killerClass;     // ClassId; ClassId::COUNT == unknown
+        uint8_t killerFaction;   // FactionId
+        uint8_t hitsOnKiller;    // the victim's hits on the killer inside the window
+        uint32_t killerPlayer;   // kInvalidPlayer == environment/unknown
+        uint16_t killerHealth;   // killer HP left at the victim's death; 0xFFFF unknown
+        uint16_t killerShield;   // 0xFFFF unknown
+        uint16_t damageToKiller; // total damage the victim did to the killer inside the window
+        uint16_t distanceDm;     // killer distance in decimeters; 0xFFFF unknown
+        TF_DeathRecapEntry entries[kTFDeathRecapMaxEntries];
+    };
+    static_assert(sizeof(TF_DeathRecap) == 16 + 12 * kTFDeathRecapMaxEntries, "wire layout frozen");
+
+#pragma pack(pop)
+
+    /// One recorded hit in a pawn's rolling damage log (server bookkeeping).
+    struct TFDamageLogHit
+    {
+        PlayerId attackerPlayer = kInvalidPlayer;
+        WeaponId weapon = kInvalidWeapon;
+        float amount = 0.0f; // post-mitigation
+        uint8_t kind = 0;    // TF_DamageEvent vocabulary
+        bool headshot = false;
+        double at = 0.0; // TFDamageSystem clock seconds
+    };
+
+    /// Fixed 8-slot ring of the most recent hits on one pawn. Header-only and
+    /// self-contained so the wire/window behavior is testable without compiling
+    /// the module .cpp into SparkTests (TestTFRedeployRules pattern).
+    class TFDamageLog
+    {
+      public:
+        void Push(const TFDamageLogHit& hit)
+        {
+            m_hits[m_head] = hit;
+            m_head = (m_head + 1) % kTFDeathRecapMaxEntries;
+            if (m_count < kTFDeathRecapMaxEntries)
+                ++m_count;
+        }
+
+        /// Window-filtered hits, oldest first. Returns the row count (0..8).
+        uint32_t Collect(double now, float windowSec, TFDamageLogHit out[kTFDeathRecapMaxEntries]) const
+        {
+            uint32_t n = 0;
+            const uint32_t start = (m_head + kTFDeathRecapMaxEntries - m_count) % kTFDeathRecapMaxEntries;
+            for (uint32_t i = 0; i < m_count; ++i)
+            {
+                const TFDamageLogHit& h = m_hits[(start + i) % kTFDeathRecapMaxEntries];
+                if (now - h.at <= static_cast<double>(windowSec))
+                    out[n++] = h;
+            }
+            return n;
+        }
+
+        /// Total damage + hit count from one attacker inside the window.
+        void SumFrom(PlayerId attacker, double now, float windowSec, float& outDamage, uint32_t& outHits) const
+        {
+            outDamage = 0.0f;
+            outHits = 0;
+            if (attacker == kInvalidPlayer)
+                return;
+            TFDamageLogHit rows[kTFDeathRecapMaxEntries];
+            const uint32_t n = Collect(now, windowSec, rows);
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                if (rows[i].attackerPlayer != attacker)
+                    continue;
+                outDamage += rows[i].amount;
+                ++outHits;
+            }
+        }
+
+      private:
+        std::array<TFDamageLogHit, kTFDeathRecapMaxEntries> m_hits{};
+        uint32_t m_head{0};
+        uint32_t m_count{0};
+    };
 
     class TFDamageSystem
     {
@@ -63,6 +182,16 @@ namespace Terrafront
         using IncomingDamageFilter = std::function<float(EntityId victim, float amount)>;
         void SetIncomingDamageFilter(IncomingDamageFilter filter) { m_incomingFilter = std::move(filter); }
 
+        // --- death-recap lane (W11): local-victim mirror hook -------------------
+
+        /// Listen-host/standalone victims have no socket, so TF_DeathRecap can't
+        /// ride SendToOwner for them (TFMedalSystem::SendMedalToOwner precedent).
+        /// TFDeathRecap installs this from its Initialize and uninstalls
+        /// (nullptr) in its Shutdown so no dangling `this` survives (the
+        /// TFAbilitySystem incoming-filter pattern).
+        using DeathRecapMirror = std::function<void(const TF_DeathRecap&)>;
+        void SetDeathRecapMirror(DeathRecapMirror mirror) { m_recapMirror = std::move(mirror); }
+
       private:
         struct HealthRec
         {
@@ -80,6 +209,12 @@ namespace Terrafront
         void BroadcastKill(PlayerId killer, PlayerId victim, WeaponId weapon, FactionId killerF, FactionId victimF,
                            bool headshot);
 
+        /// death-recap lane (W11): assemble + deliver TF_DeathRecap to the
+        /// victim. Must run while the pawn registry still holds both pawns
+        /// (i.e. before ServerKillPawn despawns the victim).
+        void SendDeathRecap(EntityId victim, const HealthRec& rec, EntityId attackerPawn, PlayerId attackerPlayer,
+                            FactionId attackerFaction);
+
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
         bool m_initialized{false};
@@ -91,6 +226,14 @@ namespace Terrafront
 
         /// class-abilities lane (W9): optional pre-pool damage filter (see setter).
         IncomingDamageFilter m_incomingFilter;
+
+        // --- death-recap lane (W11) ---------------------------------------------
+        /// Per-pawn rolling damage log (erased with the pool record: kill path,
+        /// ServerForgetPawn, Shutdown).
+        std::unordered_map<EntityId, TFDamageLog> m_damageLog;
+        /// Local-victim delivery hook (see SetDeathRecapMirror).
+        DeathRecapMirror m_recapMirror;
+        uint32_t m_recapsSent{0};
     };
 
 } // namespace Terrafront
