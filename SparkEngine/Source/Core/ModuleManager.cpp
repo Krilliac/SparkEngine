@@ -567,6 +567,30 @@ void ModuleManager::InitializeAll(Spark::IEngineContext* context)
         else
         {
             console.LogError("Module initialization failed: " + entry.name);
+
+            // Failed-boot teardown ordering (W10 exit AV): a module that fails
+            // OnLoad never gets OnUnload from ShutdownAll (initialized stays
+            // false), so its instance used to survive until UnloadAll — which
+            // runs AFTER engine physics teardown. Its destructor then released
+            // shared_ptr<PhysicsBody> handles into a destroyed PhysicsSystem
+            // (dangling EngineContext/raw pointers → AV at exit). Destroy the
+            // instance NOW, while every engine service it may reference
+            // (physics, ECS world, event bus) is still alive. OnUnload() runs
+            // first so the module can deregister anything its partial OnLoad
+            // installed. The DLL itself stays mapped until the normal
+            // UnloadAll so any registrations that survive (console commands,
+            // event channels) never point at unmapped code.
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "Module '%s' failed OnLoad — destroying its instance immediately "
+                           "(DLL stays mapped until engine shutdown)",
+                           entry.name.c_str());
+            entry.instance->OnUnload();
+            if (entry.destroyFn)
+            {
+                entry.destroyFn(entry.instance);
+            }
+            entry.instance = nullptr;
+            entry.destroyFn = nullptr;
         }
     }
 }

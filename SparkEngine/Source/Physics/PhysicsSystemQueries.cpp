@@ -171,9 +171,28 @@ void PhysicsSystem::RemoveBody(std::shared_ptr<PhysicsBody> body)
     if (!body)
         return;
 
-    // Remove from Jolt world
-    if (m_joltSystem)
+    // Teardown guard (W10 exit AV): module destructors can release
+    // shared_ptr<PhysicsBody> handles through here AFTER Shutdown() destroyed
+    // the Jolt world (e.g. a module that failed OnLoad is only destroyed at
+    // UnloadAll, which runs after engine physics teardown). Every Jolt body was
+    // already removed and destroyed with the world, so this must be a safe
+    // no-op on the Jolt side — just purge any stale bookkeeping below and WARN
+    // once so the ordering bug stays visible instead of crashing at exit.
+    if (!m_joltSystem)
     {
+        if (!m_warnedRemoveAfterTeardown)
+        {
+            m_warnedRemoveAfterTeardown = true;
+            SPARK_LOG_WARN(Spark::LogCategory::Physics,
+                           "RemoveBody('%s') called after the Jolt world was destroyed — no-op "
+                           "(caller should release physics bodies before PhysicsSystem::Shutdown; "
+                           "further occurrences suppressed)",
+                           body->GetName().c_str());
+        }
+    }
+    else
+    {
+        // Remove from Jolt world
         auto& bodyInterface = m_joltSystem->GetBodyInterface();
         JPH::BodyID bodyID(body->GetJoltBodyID());
         if (bodyInterface.IsAdded(bodyID))

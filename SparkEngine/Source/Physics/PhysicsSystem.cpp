@@ -366,6 +366,9 @@ HRESULT PhysicsSystem::Initialize()
     // Initialize metrics
     m_metrics = {};
 
+    // Re-arm the teardown-guard WARN latch (see RemoveBody) for this world's lifetime
+    m_warnedRemoveAfterTeardown = false;
+
     // Register Jolt types and install callbacks (per-image guard — see
     // EnsureImageRuntime below for why this must also run inside module DLLs)
     EnsureImageRuntime();

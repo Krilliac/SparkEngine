@@ -230,6 +230,12 @@ void ShutdownPhysics()
     auto& rt = GetEngineRuntime();
     if (rt.physics)
     {
+        // Clear the graphics engine's non-owning pointer BEFORE destroying the
+        // physics system: graphics outlives physics in ShutdownEngine, and a
+        // stale pointer here is a dangling deref waiting for a late debug-draw
+        // (W10 teardown-AV hardening; setter is a plain assignment, null-safe).
+        if (rt.graphics)
+            rt.graphics->SetPhysicsSystem(nullptr);
         rt.physics->Shutdown();
         rt.physics.reset();
     }

@@ -734,6 +734,9 @@ class PhysicsSystem
     bool m_paused = false;
     bool m_deterministicMode = false;
 
+    /** @brief One-shot WARN latch for RemoveBody-after-teardown (W10 exit AV guard). */
+    bool m_warnedRemoveAfterTeardown = false;
+
     // =========================================================================
     // Interpolation
     // =========================================================================
