@@ -775,8 +775,16 @@ namespace Terrafront
             ss << in.rdbuf();
         in.close();
 
-        Spark::Json::Value root = Spark::Json::Parse(ss.str());
-        if (!root.IsObject() || !root.HasKey("characters") || !root["characters"].IsArray())
+        // Strict parse (W9): the lenient Parse accepts truncated/torn files as a
+        // partial object, which could pass the structural checks below with
+        // silently dropped rows; strict rejection routes them into quarantine.
+        Spark::Json::Value root;
+        std::string parseError;
+        const bool parsedOk = Spark::Json::ParseStrict(ss.str(), &root, &parseError);
+        if (!parsedOk)
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] social store %s rejected by strict JSON parse: %s",
+                            m_storePath.c_str(), parseError.c_str());
+        if (!parsedOk || !root.IsObject() || !root.HasKey("characters") || !root["characters"].IsArray())
         {
             // Corrupt/foreign content: quarantine instead of silently overwriting
             // on the next flush (TFDatabase::Open precedent).

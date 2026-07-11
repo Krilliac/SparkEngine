@@ -107,7 +107,18 @@ namespace Terrafront
         if (!ReadAllText(m_path, text))
             return false;
 
-        Spark::Json::Value root = Spark::Json::Parse(text);
+        // Strict parse (W9): the lenient Parse accepts truncated/torn files as a
+        // partial object, which silently loaded an empty db and wiped the file on
+        // the next eager flush. A strict failure here makes Open()'s quarantine
+        // path actually trigger.
+        Spark::Json::Value root;
+        std::string parseError;
+        if (!Spark::Json::ParseStrict(text, &root, &parseError))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] db %s rejected by strict JSON parse: %s", m_path.c_str(),
+                            parseError.c_str());
+            return false;
+        }
         if (!root.IsObject())
             return false;
 

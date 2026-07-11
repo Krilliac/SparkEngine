@@ -10,10 +10,16 @@
  *
  * ## Usage
  * @code
- *   // Parse
+ *   // Parse (lenient: Null on malformed input, no error reporting)
  *   auto val = Spark::Json::Parse(R"({"name": "Fireball", "damage": 50})");
  *   std::string name = val["name"].AsString();   // "Fireball"
  *   double dmg = val["damage"].AsNumber();        // 50.0
+ *
+ *   // ParseStrict (persistence files: rejects truncated/trailing-junk input)
+ *   Spark::Json::Value doc;
+ *   std::string err;
+ *   if (!Spark::Json::ParseStrict(text, &doc, &err))
+ *       SPARK_LOG_ERROR(Spark::LogCategory::Core, "bad file: %s", err.c_str());
  *
  *   // Build
  *   Spark::Json::Value obj;
@@ -317,9 +323,71 @@ namespace Spark::Json
                 return result;
             }
 
+            /**
+             * @brief Strict parse: exactly one well-formed JSON value, nothing else.
+             *
+             * Rejects empty input, malformed constructs anywhere in the document
+             * (the lenient path swallows them as Null), unterminated strings /
+             * arrays / objects (truncated files), and trailing content after the
+             * root value.
+             *
+             * @param outValue Receives the parsed value on success, Null on failure.
+             * @param outError Receives "<message> (offset N)" on failure.
+             * @return true when the whole input is one well-formed JSON value.
+             */
+            bool ParseStrictRoot(Value& outValue, std::string& outError)
+            {
+                SkipWhitespace();
+                if (m_pos >= m_input.size())
+                {
+                    outValue = Value();
+                    outError = "empty input (no JSON value)";
+                    return false;
+                }
+                Value result = ParseValue();
+                if (!m_failed)
+                {
+                    SkipWhitespace();
+                    if (m_pos < m_input.size())
+                        RecordError("trailing characters after root value");
+                }
+                if (m_failed)
+                {
+                    outValue = Value();
+                    outError = std::string(m_errorMsg) + " (offset " + std::to_string(m_errorPos) + ")";
+                    return false;
+                }
+                outValue = std::move(result);
+                return true;
+            }
+
           private:
             std::string_view m_input;
             size_t m_pos;
+            bool m_failed = false;
+            const char* m_errorMsg = "";
+            size_t m_errorPos = 0;
+
+            /// Record the first failure (message + offset). First error wins — it
+            /// carries the most useful position for nested constructs.
+            void RecordError(const char* msg)
+            {
+                if (!m_failed)
+                {
+                    m_failed = true;
+                    m_errorMsg = msg;
+                    m_errorPos = m_pos;
+                }
+            }
+
+            /// Record a failure and return Null, so malformed paths can
+            /// `return Fail(...)` while staying byte-identical to the lenient API
+            /// (Parse() never reads the error state).
+            Value Fail(const char* msg)
+            {
+                RecordError(msg);
+                return {};
+            }
 
             [[nodiscard]] char Peek() const
             {
@@ -374,14 +442,14 @@ namespace Spark::Json
                     return ParseNull();
                 if (c == '-' || (c >= '0' && c <= '9'))
                     return ParseNumber();
-                return {}; // Malformed — return null
+                return Fail("unexpected character (expected a JSON value)");
             }
 
             Value ParseNull()
             {
                 if (MatchLiteral("null"))
                     return Value();
-                return {};
+                return Fail("invalid literal (expected 'null')");
             }
 
             Value ParseBool()
@@ -390,7 +458,7 @@ namespace Spark::Json
                     return Value(true);
                 if (MatchLiteral("false"))
                     return Value(false);
-                return {};
+                return Fail("invalid literal (expected 'true' or 'false')");
             }
 
             Value ParseNumber()
@@ -412,7 +480,7 @@ namespace Spark::Json
                 }
                 else
                 {
-                    return {};
+                    return Fail("malformed number (no integer digits)");
                 }
 
                 // Fractional part
@@ -420,7 +488,7 @@ namespace Spark::Json
                 {
                     Advance();
                     if (!(Peek() >= '0' && Peek() <= '9'))
-                        return {};
+                        return Fail("malformed number (no digits after '.')");
                     while (Peek() >= '0' && Peek() <= '9')
                         Advance();
                 }
@@ -432,7 +500,7 @@ namespace Spark::Json
                     if (Peek() == '+' || Peek() == '-')
                         Advance();
                     if (!(Peek() >= '0' && Peek() <= '9'))
-                        return {};
+                        return Fail("malformed number (no digits in exponent)");
                     while (Peek() >= '0' && Peek() <= '9')
                         Advance();
                 }
@@ -445,14 +513,14 @@ namespace Spark::Json
                 }
                 catch (...)
                 {
-                    return {};
+                    return Fail("number out of range");
                 }
             }
 
             Value ParseString()
             {
                 if (Advance() != '"')
-                    return {};
+                    return Fail("expected '\"' to begin string");
 
                 std::string result;
                 while (m_pos < m_input.size())
@@ -502,7 +570,7 @@ namespace Spark::Json
                         result += c;
                     }
                 }
-                return {}; // Unterminated string
+                return Fail("unterminated string");
             }
 
             std::string ParseUnicodeEscape()
@@ -520,7 +588,12 @@ namespace Spark::Json
                     else if (c >= 'A' && c <= 'F')
                         codepoint |= (c - 'A' + 10);
                     else
-                        return "?"; // Invalid hex
+                    {
+                        // Lenient path keeps the historical '?' replacement; the
+                        // strict path reports the recorded error instead.
+                        RecordError("invalid \\u escape (expected 4 hex digits)");
+                        return "?";
+                    }
                 }
 
                 // Simple UTF-8 encoding for BMP
@@ -571,7 +644,9 @@ namespace Spark::Json
                         Advance();
                         return arr;
                     }
-                    return {}; // Malformed
+                    if (m_pos >= m_input.size())
+                        return Fail("unexpected end of input in array");
+                    return Fail("expected ',' or ']' in array");
                 }
             }
 
@@ -591,15 +666,19 @@ namespace Spark::Json
                 {
                     SkipWhitespace();
                     if (Peek() != '"')
-                        return {};
+                    {
+                        if (m_pos >= m_input.size())
+                            return Fail("unexpected end of input in object");
+                        return Fail("expected '\"' to begin object key");
+                    }
 
                     Value keyVal = ParseString();
                     if (!keyVal.IsString())
-                        return {};
+                        return Fail("malformed object key");
 
                     SkipWhitespace();
                     if (!Expect(':'))
-                        return {};
+                        return Fail("expected ':' after object key");
 
                     SkipWhitespace();
                     obj[keyVal.AsString()] = ParseValue();
@@ -615,7 +694,9 @@ namespace Spark::Json
                         Advance();
                         return obj;
                     }
-                    return {}; // Malformed
+                    if (m_pos >= m_input.size())
+                        return Fail("unexpected end of input in object");
+                    return Fail("expected ',' or '}' in object");
                 }
             }
 
@@ -751,6 +832,49 @@ namespace Spark::Json
         Detail::Parser parser(json);
         return parser.Parse();
 #endif
+    }
+
+    /**
+     * @brief Strictly parse a JSON string into a Value. Returns false on ANY malformed input.
+     *
+     * Parse() above is deliberately lenient — it yields Null (or, depending on the
+     * active backend, a PARTIAL value: the vendored nlohmann stub returns a
+     * '{'-prefixed truncated/garbage document as a valid-looking object) and gives
+     * the caller no way to distinguish "corrupt file" from "legitimately empty".
+     * Persistence stores that quarantine-and-refuse on corrupt files (TFDatabase,
+     * TFOutfitStore, TFSocialSystem's store, ...) must use this entry point instead,
+     * so truncated or torn-write files are rejected rather than silently loaded
+     * empty and OVERWRITTEN on the next save.
+     *
+     * Rejected inputs (beyond what Parse tolerates):
+     *  - empty / whitespace-only input,
+     *  - non-JSON prefixes and malformed constructs anywhere in the document,
+     *  - unterminated strings, arrays, and objects (truncated files),
+     *  - trailing content after the root value (torn/partially overwritten files),
+     *  - numbers that overflow double, invalid \u escapes.
+     *
+     * Always uses the built-in recursive-descent parser — never the nlohmann
+     * backend — so acceptance is deterministic across build configurations.
+     * Existing lenient callers (data tables, dialogue, modding, config) are
+     * intentionally untouched.
+     *
+     * @param json     Input text.
+     * @param outValue Receives the parsed value on success, Null on failure. May be nullptr
+     *                 (validation-only use).
+     * @param outError Receives "<message> (offset N)" on failure. May be nullptr.
+     * @return true when the input is exactly one well-formed JSON value.
+     */
+    [[nodiscard]] inline bool ParseStrict(std::string_view json, Value* outValue, std::string* outError = nullptr)
+    {
+        Value localValue;
+        std::string localError;
+        Detail::Parser parser(json);
+        const bool ok = parser.ParseStrictRoot(localValue, localError);
+        if (outValue)
+            *outValue = std::move(localValue);
+        if (!ok && outError)
+            *outError = std::move(localError);
+        return ok;
     }
 
     namespace Detail
