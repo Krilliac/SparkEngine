@@ -24,6 +24,11 @@
  *    scene bodies, registered into TFWorldSetup's scene collision set AFTER
  *    the .scene bodies (world init built those), with exactly ONE
  *    OptimizeBroadPhase() re-compact after the last decor body.
+ *    W11 gate-passages: a piece may instead author "collideParts" (model-local
+ *    boxes: offset/size/yawDeg) — then one rotated OBB per part is registered
+ *    via TFWorldCollision::AddObbPart and the whole-model OBB is SKIPPED, so
+ *    gate archways, watchtower undersides and gantry spans are genuinely
+ *    walkable while their pillars/legs still block.
  *
  * ## Determinism contract (why the layout is bit-identical server/client)
  *  - Iteration order is DATA order only: regions in regions.json order; per
@@ -80,6 +85,23 @@ namespace Terrafront
         uint32_t CulledDecorCount() const { return m_cullHidden; }
 
       private:
+        /// W11 gate-passages: one authored collision box of a multi-part piece
+        /// (decor.json "collideParts"). MODEL-LOCAL meters: `off` is the box
+        /// center relative to the piece origin, `size` the FULL box size,
+        /// `yawDeg` a local yaw about Y (DEGREES) composed with the piece yaw.
+        /// When a piece authors parts, RegisterCollision creates one rotated
+        /// OBB per part INSTEAD of the whole-model OBB — so gate archways /
+        /// tower undersides stay walkable. Parts inherit the piece's
+        /// determinism (pure data, same on both roles) and its clearance
+        /// demotion; EnforceCollisionClearance additionally probes every
+        /// part's world footprint, not just the piece origin.
+        struct DecorCollidePart
+        {
+            float off[3] = {0.0f, 0.0f, 0.0f};
+            float size[3] = {1.0f, 1.0f, 1.0f};
+            float yawDeg = 0.0f;
+        };
+
         struct DecorPiece
         {
             std::string model;        ///< OBJ path (Assets/Models/MMOFPS/...)
@@ -91,6 +113,9 @@ namespace Terrafront
             bool castShadows = true;
             float emissive = 0.0f;
             bool collide = false; ///< W10: "collide": true => static OBB on both roles
+            /// W11: non-empty => per-part OBBs replace the whole-model OBB
+            /// (authoring parts implies collide, see LoadTemplates).
+            std::vector<DecorCollidePart> collideParts;
         };
 
         struct ScatterSpec
@@ -118,6 +143,8 @@ namespace Terrafront
             bool castShadows = true;
             float emissive = 0.0f;
             bool collide = false;
+            /// W11: copied from the template piece; non-empty => per-part OBBs.
+            std::vector<DecorCollidePart> collideParts;
         };
 
         bool LoadTemplates(); ///< decor.json -> m_templates (fail-soft: no decor)

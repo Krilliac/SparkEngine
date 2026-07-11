@@ -38,6 +38,13 @@
  * decor piece through AddModelObb() — same determinism contract (the decor
  * layout is itself bit-identical across roles, see TFRegionDecor.h), same
  * WorldStatic layer, counted by BodyCount() and torn down with Shutdown().
+ *
+ * ## W11 gate-passages addendum
+ * Pieces whose decor.json entry authors "collideParts" register one rotated
+ * box per part through AddObbPart() INSTEAD of the whole-model OBB, so gate
+ * archways / tower undersides / gantry spans stay genuinely walkable. Parts
+ * come straight from data (no OBJ read), join the same body set, and follow
+ * the same determinism + WorldStatic-layer rules.
  */
 #pragma once
 
@@ -105,8 +112,26 @@ namespace Terrafront
         std::shared_ptr<::PhysicsBody> AddModelObb(const std::string& objPath, const float pos[3], float yawDeg,
                                                    const std::string& name);
 
-        /// Remove one body previously returned by AddModelObb. Null / foreign
-        /// handles are a safe no-op.
+        /// W11 gate-passages: create + register ONE static yaw-rotated Jolt box
+        /// body for a PART of a decor piece (decor.json "collideParts") so
+        /// archways/undersides stay walkable instead of the sealed whole-model
+        /// OBB. The part is authored MODEL-LOCAL: `partOffset` is the part-box
+        /// center and `partSize` its FULL size (meters), `partYawDeg` its local
+        /// yaw — all composed with the piece's world `piecePos`/`pieceYawDeg`
+        /// using the exact AddModelObb rotated-OBB math (center = piecePos +
+        /// Ry(pieceYaw) * partOffset; yaws about the same axis compose
+        /// additively, so total yaw = pieceYaw + partYaw). Both yaw arguments
+        /// are DEGREES (scene/Transform convention); converted to RADIANS here
+        /// for desc.rotation. No OBJ streaming — the box comes straight from
+        /// data, so determinism is inherited from the (bit-identical) layout +
+        /// decor.json. Same body set: counted by BodyCount(), removed by
+        /// Shutdown()/RemoveBody(). Returns null when Jolt is absent or the
+        /// body cap is hit. Call OptimizeBroadPhase() ONCE after the last add.
+        std::shared_ptr<::PhysicsBody> AddObbPart(const float piecePos[3], float pieceYawDeg, const float partOffset[3],
+                                                  const float partSize[3], float partYawDeg, const std::string& name);
+
+        /// Remove one body previously returned by AddModelObb / AddObbPart.
+        /// Null / foreign handles are a safe no-op.
         void RemoveBody(const std::shared_ptr<::PhysicsBody>& body);
 
         /// Re-compact the Jolt broadphase after a bulk of AddModelObb calls.

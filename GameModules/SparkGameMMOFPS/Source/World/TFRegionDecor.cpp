@@ -41,6 +41,8 @@ namespace Terrafront
         constexpr float kDecorSeparationM = 5.0f;   // scatter props keep clear of placed decor
         constexpr int kScatterAttempts = 12;        // rejection-sampling tries per scatter prop
         constexpr float kTwoPi = 6.2831853f;
+        constexpr float kDegToRad = 0.01745329252f; // W11: part footprints (same constant as TFWorldCollision)
+        constexpr size_t kMaxCollideParts = 5;      // W11 lane budget: keep per-piece part counts small
 
         /// The four regions.json tier strings (TFDataTables validates them).
         constexpr const char* kTiers[] = {"outpost", "fort", "facility", "skyanchor"};
@@ -246,6 +248,45 @@ namespace Terrafront
                     // W10: opt-IN collision (buildings). Absent flag = visual-only,
                     // so a new decor.json entry can never surprise movement.
                     piece.collide = GetBool(p, "collide", false);
+                    // W11 gate-passages: optional "collideParts" — model-local
+                    // boxes ({offset:[x,y,z], size:[x,y,z], yawDeg}) that
+                    // REPLACE the whole-model OBB so archways stay open.
+                    // Authoring parts implies collision (a part list on a
+                    // visual-only piece would be meaningless dead data).
+                    if (p.HasKey("collideParts") && p["collideParts"].IsArray())
+                    {
+                        const Value& parts = p["collideParts"];
+                        for (size_t k = 0; k < parts.Size(); ++k)
+                        {
+                            const Value& pv = parts[k];
+                            if (!pv.IsObject() || !pv.HasKey("offset") || !pv["offset"].IsArray() ||
+                                pv["offset"].Size() < 3 || !pv.HasKey("size") || !pv["size"].IsArray() ||
+                                pv["size"].Size() < 3)
+                            {
+                                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                               "[TF] decor: %s piece %zu collidePart %zu missing offset[3]/size[3]",
+                                               tier, i, k);
+                                continue;
+                            }
+                            if (piece.collideParts.size() >= kMaxCollideParts)
+                            {
+                                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                               "[TF] decor: %s piece %zu exceeds %zu collideParts - extras dropped",
+                                               tier, i, kMaxCollideParts);
+                                break;
+                            }
+                            DecorCollidePart part;
+                            for (int a = 0; a < 3; ++a)
+                            {
+                                part.off[a] = static_cast<float>(pv["offset"][a].AsNumber(0.0));
+                                part.size[a] = static_cast<float>(pv["size"][a].AsNumber(1.0));
+                            }
+                            part.yawDeg = GetNum(pv, "yawDeg", 0.0f);
+                            piece.collideParts.push_back(part);
+                        }
+                        if (!piece.collideParts.empty())
+                            piece.collide = true;
+                    }
                     if (!piece.model.empty())
                         out.pieces.push_back(std::move(piece));
                 }
@@ -342,8 +383,8 @@ namespace Terrafront
             placedXZ.reserve(kMaxDecorPerRegion);
 
             const auto addPiece = [&](const std::string& model, const std::string& material, float x, float z,
-                                      float yawDeg, bool terrainAlign, bool castShadows, float emissive,
-                                      bool collide) -> bool
+                                      float yawDeg, bool terrainAlign, bool castShadows, float emissive, bool collide,
+                                      const std::vector<DecorCollidePart>* collideParts) -> bool
             {
                 if (placed >= kMaxDecorPerRegion)
                 {
@@ -367,6 +408,8 @@ namespace Terrafront
                 piece.castShadows = castShadows;
                 piece.emissive = emissive;
                 piece.collide = collide;
+                if (collideParts) // W11: multi-part collision shape rides the layout
+                    piece.collideParts = *collideParts;
                 m_layout.push_back(std::move(piece));
                 placedXZ.push_back({x, z});
                 ++placed;
@@ -376,7 +419,7 @@ namespace Terrafront
             // 1) Fixed template pieces — identical layout on every role.
             for (const DecorPiece& p : tmpl.pieces)
                 addPiece(p.model, p.material, r.centerX + p.offX, r.centerZ + p.offZ, p.yawDeg, p.terrainAlign,
-                         p.castShadows, p.emissive, p.collide);
+                         p.castShadows, p.emissive, p.collide, &p.collideParts);
 
             // 2) Seeded prop scatter — RegionId-seeded so every role rolls the
             //    same props at the same spots (rejection sampling is fine: same
@@ -413,7 +456,7 @@ namespace Terrafront
                         }
                         if (nearDecor || !ClearOfGameplay(r, x, z))
                             continue;
-                        addPiece(model, std::string(), x, z, yaw, true, true, 0.0f, false);
+                        addPiece(model, std::string(), x, z, yaw, true, true, 0.0f, false, nullptr);
                         break;
                     }
                 }
@@ -446,18 +489,43 @@ namespace Terrafront
         {
             if (!p.collide)
                 continue;
+
+            // W11 gate-passages: probe the piece origin AND every collide-part
+            // center (parts sit off-origin — a gate pillar 2.6 m out can crowd
+            // a gameplay point the origin check would miss). Part world XZ =
+            // piece XZ + Ry(pieceYaw) * part offset — the same yaw mapping as
+            // TFWorldCollision (x' = x*c + z*s, z' = -x*s + z*c). A violation
+            // by ANY probe demotes the WHOLE piece (partial gates would look
+            // arbitrary and complicate determinism reasoning for no benefit).
+            std::vector<std::array<float, 2>> probes;
+            probes.reserve(1 + p.collideParts.size());
+            probes.push_back({p.x, p.z});
+            const float ryRad = p.yawDeg * kDegToRad;
+            const float cyaw = std::cos(ryRad), syaw = std::sin(ryRad);
+            for (const DecorCollidePart& part : p.collideParts)
+                probes.push_back(
+                    {part.off[0] * cyaw + part.off[2] * syaw + p.x, -part.off[0] * syaw + part.off[2] * cyaw + p.z});
+
+            bool demoted = false;
             for (const RegionDef& r : regions)
             {
-                if (ClearOfGameplay(r, p.x, p.z))
-                    continue;
-                SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                                "[TF] decor: CLEARANCE VIOLATION — collidable '%s' (region %u) within %.1fm of region "
-                                "%u gameplay point; demoted to visual-only (fix decor.json offsets)",
-                                p.model.c_str(), static_cast<unsigned>(p.region), static_cast<double>(m_clearanceM),
-                                static_cast<unsigned>(r.id));
-                p.collide = false;
-                ++m_colDemoted;
-                break;
+                for (const auto& q : probes)
+                {
+                    if (ClearOfGameplay(r, q[0], q[1]))
+                        continue;
+                    SPARK_LOG_ERROR(
+                        Spark::LogCategory::Game,
+                        "[TF] decor: CLEARANCE VIOLATION — collidable '%s' (region %u) within %.1fm of region "
+                        "%u gameplay point; demoted to visual-only (fix decor.json offsets)",
+                        p.model.c_str(), static_cast<unsigned>(p.region), static_cast<double>(m_clearanceM),
+                        static_cast<unsigned>(r.id));
+                    p.collide = false;
+                    ++m_colDemoted;
+                    demoted = true;
+                    break;
+                }
+                if (demoted)
+                    break;
             }
         }
     }
@@ -484,6 +552,37 @@ namespace Terrafront
             if (!p.collide)
                 continue;
             const float pos[3] = {p.x, p.y, p.z};
+
+            // W11 gate-passages: authored parts REPLACE the whole-model OBB —
+            // one rotated box per part (pillars/legs/lintels), leaving the
+            // archway/underside genuinely walkable. Parts inherit the piece's
+            // determinism (pure data + the bit-identical layout) and its
+            // clearance demotion (p.collide was cleared above if any part
+            // footprint violated). m_colSkipped counts per BODY, so a partly
+            // failed piece still reports every miss.
+            if (!p.collideParts.empty())
+            {
+                for (size_t k = 0; k < p.collideParts.size(); ++k)
+                {
+                    const DecorCollidePart& part = p.collideParts[k];
+                    const std::string name = "TF_DecorCol_r" + std::to_string(p.region) + "_" +
+                                             std::to_string(static_cast<unsigned>(m_colBodies.size())) + "_p" +
+                                             std::to_string(static_cast<unsigned>(k));
+                    std::shared_ptr<::PhysicsBody> body =
+                        col->AddObbPart(pos, p.yawDeg, part.off, part.size, part.yawDeg, name);
+                    if (body)
+                    {
+                        m_colBodies.push_back(std::move(body));
+                        ++added;
+                    }
+                    else
+                    {
+                        ++m_colSkipped; // no Jolt / body cap — logged inside
+                    }
+                }
+                continue;
+            }
+
             const std::string name = "TF_DecorCol_r" + std::to_string(p.region) + "_" +
                                      std::to_string(static_cast<unsigned>(m_colBodies.size()));
             std::shared_ptr<::PhysicsBody> body = col->AddModelObb(p.model, pos, p.yawDeg, name);

@@ -420,6 +420,56 @@ namespace Terrafront
         return body;
     }
 
+    std::shared_ptr<::PhysicsBody> TFWorldCollision::AddObbPart(const float piecePos[3], float pieceYawDeg,
+                                                                const float partOffset[3], const float partSize[3],
+                                                                float partYawDeg, const std::string& name)
+    {
+        if (!m_physics)
+            return nullptr; // Jolt absent: decor stays walk-through, like the scene set
+        if (m_bodies.size() >= kMaxBodies)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] world collision: body cap %zu reached - no body for %s",
+                           kMaxBodies, name.c_str());
+            return nullptr;
+        }
+
+        PhysicsBodyDesc desc;
+        desc.type = PhysicsBodyType::Static;
+        desc.mass = 0.0f;
+        desc.shape.type = CollisionShapeType::Box;
+
+        // W11 gate-passages: the part box is authored MODEL-LOCAL (center =
+        // partOffset, FULL size = partSize, local yaw = partYawDeg) and gets
+        // composed with the owning piece's world transform. Body center =
+        // piecePos + Ry(pieceYaw) * partOffset — the exact AddModelObb yaw
+        // mapping (x' = x*c + z*s, z' = -x*s + z*c), play-test-validated.
+        // Yaw about a common axis composes additively, so the body's rotation
+        // is pieceYaw + partYaw. desc.rotation is RADIANS (see AddModelObb);
+        // both yaw arguments arrive in the scene/Transform DEGREES convention.
+        const float ryPieceRad = pieceYawDeg * kDegToRad;
+        const float cyaw = std::cos(ryPieceRad), syaw = std::sin(ryPieceRad);
+        desc.position = {partOffset[0] * cyaw + partOffset[2] * syaw + piecePos[0], partOffset[1] + piecePos[1],
+                         -partOffset[0] * syaw + partOffset[2] * cyaw + piecePos[2]};
+        desc.shape.dimensions = {std::max(std::fabs(partSize[0]) * 0.5f, kMinHalfExtentM),
+                                 std::max(std::fabs(partSize[1]) * 0.5f, kMinHalfExtentM),
+                                 std::max(std::fabs(partSize[2]) * 0.5f, kMinHalfExtentM)};
+        desc.rotation = {0.0f, (pieceYawDeg + partYawDeg) * kDegToRad, 0.0f}; // radians (see comment above)
+        desc.material.friction = 0.7f;
+        desc.material.restitution = 0.0f;
+        desc.collisionGroup = CollisionLayers::WorldStatic;
+        desc.collisionMask = CollisionLayers::All;
+        desc.name = name;
+
+        std::shared_ptr<PhysicsBody> body = m_physics->CreateBody(desc);
+        if (!body)
+            return nullptr;
+        // Defensive layer push, mirroring Build() (never rely on the default).
+        body->SetCollisionGroup(CollisionLayers::WorldStatic);
+        body->SetCollisionMask(CollisionLayers::All);
+        m_bodies.push_back(body);
+        return body;
+    }
+
     void TFWorldCollision::RemoveBody(const std::shared_ptr<::PhysicsBody>& body)
     {
         if (!body)
