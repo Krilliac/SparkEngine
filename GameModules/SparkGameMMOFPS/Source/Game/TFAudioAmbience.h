@@ -96,6 +96,16 @@ namespace Terrafront
         void UpdateOneShots(::AudioEngine& audio, bool inSanctuary);
         void StopBeds();
 
+        // W10 audio-wave-2: looping capture_alarm.wav while the LOCAL pawn
+        // stands on a capture point that is actively being captured or
+        // contested. Uses the same predicate family as the HUD capture feed
+        // (TFRegionSystem::FeedLocalCaptureHUD "live" check) rebuilt from the
+        // PUBLIC accessors (CaptureProgress + regions.json points + the 10 m
+        // DESIGN §4 radius) so no contended file changes. Fast fade in/out via
+        // the same held-source revalidation discipline as the beds.
+        bool LocalOnActiveCapturePoint() const;
+        void UpdateCaptureAlarm(::AudioEngine& audio, float dt);
+
         // W9 remote-fire-events: 0x54F4 handler lifecycle (TFSocialSystem
         // pattern — pure-client only, polled from Update, released with a
         // no-op handler on Shutdown so no dangling `this` survives the module
@@ -119,6 +129,8 @@ namespace Terrafront
         double m_nextCombatShot{0.0};
         double m_nextGust{0.0};
         bool m_lastInSanctuary{false};
+        Bed m_alarmBed;            ///< W10 audio-wave-2: capture-alarm loop (Bed reuse)
+        bool m_alarmOn{false};     ///< W10 audio-wave-2: alarm predicate this frame
         bool m_netHandlers{false}; ///< 0x54F4 client handler registered (W9)
 
         std::unordered_set<std::string> m_loaded; ///< LoadSound already issued for these paths

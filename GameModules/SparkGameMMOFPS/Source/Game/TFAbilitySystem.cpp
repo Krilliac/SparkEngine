@@ -14,6 +14,7 @@
 #include "Game/TFDamageSystem.h"
 #include "Game/TFDeployableSystem.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFUiSounds.h" // W10 audio-wave-2: ability activation/end cues
 #include "Net/TFClientNet.h"
 #include "Net/TFServerSim.h"
 #include "UI/TFChatWindow.h"
@@ -753,6 +754,9 @@ namespace Terrafront
 
         if (m_ctx && st.player == m_ctx->localPlayer)
         {
+            // W10 audio-wave-2: local activation/end cue (bleep_04 reuse — no bespoke ability clips shipped).
+            TFUiSounds_ActiveEdge(m_ctx, m_mirror.valid && m_mirror.phase == TFAbilityPhase::Active,
+                                  phase == TFAbilityPhase::Active);
             m_mirror.valid = true;
             m_mirror.cls = cls;
             m_mirror.phase = phase;

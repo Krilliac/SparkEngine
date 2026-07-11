@@ -6,10 +6,12 @@
 #include "Game/TFAudioAmbience.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFImpactFx.h" // impact-fx lane (W10): puff at the remote tracer endpoint
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponMath.h" // W9: kEyeHeightM (muzzle -> pawn-pos rebase)
 #include "Game/TFWeaponSystem.h"
 #include "Net/TFFireFxProtocol.h" // W9 remote-fire-events: 0x54F4 wire struct
+#include "World/TFRegionSystem.h" // W10 audio-wave-2: capture-alarm predicate (public accessors)
 #include "World/TFSanctuaryZone.h"
 #include "World/TFWorldSetup.h" // W9: SpawnMuzzleFx (remote flash quad)
 #include "Utils/LogMacros.h"
@@ -57,6 +59,15 @@ namespace Terrafront
 
         constexpr double kGustIntervalMinSec = 18.0;
         constexpr double kGustIntervalMaxSec = 40.0;
+
+        // W10 audio-wave-2: capture-alarm loop.
+        constexpr const char* kCaptureAlarm = "Audio/MMOFPS/ui/capture_alarm.wav";
+        constexpr float kAlarmVol = 0.45f;     // target loop volume while on an active point
+        constexpr float kAlarmFadeSec = 0.35f; // full-swing fade (much snappier than the beds)
+        // Stand-on radius around a capture point — mirrors kCaptureRadiusM in
+        // TFRegionSystem.cpp (DESIGN §4; private there). Client presentation
+        // only, so a drift would desync nothing but this alarm's edge.
+        constexpr float kAlarmCaptureRadiusM = 10.0f;
 
         float Lerp(float a, float b, float t)
         {
@@ -129,6 +140,10 @@ namespace Terrafront
 
         UpdateBeds(*audio, inSanctuary, deltaTime);
         UpdateOneShots(*audio, inSanctuary);
+
+        // W10 audio-wave-2: capture-alarm loop (local pawn on an active point).
+        m_alarmOn = LocalOnActiveCapturePoint();
+        UpdateCaptureAlarm(*audio, deltaTime);
     }
 
     void TFAudioAmbience::FixedUpdate(float fixedDeltaTime)
@@ -222,6 +237,85 @@ namespace Terrafront
         };
         stop(m_windBed);
         stop(m_sanctuaryBed);
+        stop(m_alarmBed); // W10 audio-wave-2
+        m_alarmOn = false;
+    }
+
+    // ---------------------------------------------------------------------------
+    // W10 audio-wave-2: capture alarm (local pawn on an actively-capturing or
+    // contested point)
+    // ---------------------------------------------------------------------------
+
+    bool TFAudioAmbience::LocalOnActiveCapturePoint() const
+    {
+        if (!m_ctx->InWorld() || !m_ctx->players || !m_ctx->regions || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return false;
+        if (m_ctx->localPlayer == kInvalidPlayer)
+            return false;
+
+        PawnInfo pawn{};
+        if (!m_ctx->players->GetPawnByPlayer(m_ctx->localPlayer, pawn) || !pawn.alive)
+            return false;
+
+        // Same "live point" notion as the HUD capture feed (TFRegionSystem::
+        // FeedLocalCaptureHUD): the alarm sounds only where progress is moving
+        // or the point is contested — standing on an idle point stays silent.
+        constexpr float r2 = kAlarmCaptureRadiusM * kAlarmCaptureRadiusM;
+        for (const RegionDef& def : m_ctx->data->GetContinent().regions)
+        {
+            if (def.tier == "skyanchor" || def.capturePoints.empty())
+                continue;
+            bool onPoint = false;
+            for (const auto& pt : def.capturePoints)
+            {
+                const float dx = pawn.pos[0] - pt[0];
+                const float dz = pawn.pos[2] - pt[1];
+                if (dx * dx + dz * dz <= r2)
+                {
+                    onPoint = true;
+                    break;
+                }
+            }
+            if (!onPoint)
+                continue;
+            FactionId capturing = FactionId::None;
+            bool contested = false;
+            const float progress = m_ctx->regions->CaptureProgress(def.id, capturing, contested);
+            if (contested || capturing != FactionId::None || progress > 0.0f)
+                return true;
+        }
+        return false;
+    }
+
+    void TFAudioAmbience::UpdateCaptureAlarm(::AudioEngine& audio, float dt)
+    {
+        m_alarmBed.path = kCaptureAlarm;
+        const float target = m_alarmOn ? kAlarmVol : 0.0f;
+
+        // Same held-source discipline as the beds (see file header), with a
+        // much faster fade so the alarm reads as an on/off state change.
+        Bed& bed = m_alarmBed;
+        const float step = dt / kAlarmFadeSec;
+        bed.vol += std::clamp(target - bed.vol, -step, step);
+        bed.vol = std::clamp(bed.vol, 0.0f, 1.0f);
+
+        if (bed.src && (!bed.src->IsPlaying || !bed.src->IsLooping || bed.src->Sound != audio.GetSound(bed.path)))
+            bed.src = nullptr;
+
+        if (!bed.src)
+        {
+            if (bed.vol <= 0.001f)
+                return; // silent and not playing — keep the pool slot free
+            EnsureLoaded(audio, bed.path);
+            bed.src = audio.PlaySound(bed.path, bed.vol, 1.0f, /*loop*/ true);
+            if (!bed.src)
+                return; // pool exhausted — retry next frame
+        }
+
+        const float finalVol = bed.vol * audio.GetSFXVolume() * audio.GetMasterVolume();
+        bed.src->Volume = finalVol;
+        if (bed.src->Voice)
+            bed.src->Voice->SetVolume(finalVol);
     }
 
     // ---------------------------------------------------------------------------
@@ -276,7 +370,12 @@ namespace Terrafront
         // Brief world-space flash quad at the muzzle — same short-lived fx pool
         // (and reap/cap) as local shots; safe client-side (no authority path).
         if (m_ctx->world)
+        {
             m_ctx->world->SpawnMuzzleFx(muzzlePos, dirUnit);
+            // impact-fx lane (W10): puff at this tracer's visual endpoint —
+            // camera-gated (100 m) cheap ray, WorldStatic|Vehicle only.
+            TFImpactFx::Get().OnRemoteShot(*m_ctx, muzzlePos, dirUnit);
+        }
 
         // Audio + combat heat: converge on the W8 listen-host bucket logic in
         // TFWeaponSystem::ClientOnRemoteFire (near = weapon's own clip, far =
@@ -408,6 +507,8 @@ namespace Terrafront
         ImGui::Text("wind bed  : %.2f (%s)", m_windBed.vol, m_windBed.src ? "live" : "-");
         ImGui::Text("hum bed   : %.2f (%s)", m_sanctuaryBed.vol, m_sanctuaryBed.src ? "live" : "-");
         ImGui::Text("activity  : %.2f", m_activity);
+        ImGui::Text("cap alarm : %s (vol %.2f, %s)", m_alarmOn ? "ON" : "off", m_alarmBed.vol,
+                    m_alarmBed.src ? "live" : "-"); // W10 audio-wave-2
         ImGui::Text("next shot : combat %+.1fs  gust %+.1fs", m_nextCombatShot - m_clock, m_nextGust - m_clock);
 #endif
     }
