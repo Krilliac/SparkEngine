@@ -164,6 +164,21 @@ namespace Terrafront
         if (friendly)
             amount *= kFriendlyFireMult;
 
+        // class-abilities lane (W9): ability damage seam (Bulwark Field absorb).
+        // The installed filter can only REDUCE the hit (clamped); a fully
+        // absorbed hit still counts as damage for the shield-regen delay —
+        // the pawn WAS hit — but deals nothing and gives no kill credit.
+        if (m_incomingFilter)
+        {
+            const float filtered = m_incomingFilter(victim, amount);
+            amount = std::max(0.0f, std::min(filtered, amount));
+            if (amount <= 0.0f)
+            {
+                rec.lastDamageAt = m_clock;
+                return;
+            }
+        }
+
         // Shield absorbs first.
         const float toShield = std::min(rec.shield, amount);
         rec.shield -= toShield;
