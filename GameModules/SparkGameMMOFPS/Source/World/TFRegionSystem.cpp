@@ -115,8 +115,9 @@ namespace Terrafront
             m_debugCmd = true;
         }
 
-        // W9 world-decor lane: viewer-only tier decor, driven from Update()'s
-        // HasLocalPlayer block below (spawns nothing on dedicated servers).
+        // W9 world-decor lane / W10 decor-collision: role-agnostic decor layout
+        // + static OBBs on BOTH roles (the visual stamp stays viewer-only
+        // inside TFRegionDecor); driven from Update() below on every role.
         m_decor = std::make_unique<TFRegionDecor>();
         m_decor->Initialize(ctx);
 
@@ -148,9 +149,15 @@ namespace Terrafront
         {
             FeedLocalCaptureHUD();
             UpdateCaptureVisuals(deltaTime);
-            if (m_decor)
-                m_decor->Update(); // spawn-once tier decor (W9), no-op after stamp
         }
+
+        // W10 decor-collision lane: decor updates on EVERY role now — its
+        // layout is role-agnostic and it registers static OBBs for collidable
+        // pieces on both server and client; only the visual stamp stays
+        // HasLocalPlayer-gated (inside TFRegionDecor). Cheap no-op after all
+        // its one-shot passes ran.
+        if (m_decor)
+            m_decor->Update();
     }
 
     void TFRegionSystem::UpdateCaptureVisuals(float dt)
@@ -871,6 +878,8 @@ namespace Terrafront
                         TerritoryHash());
             ImGui::Text("flips %u   ticksTx %u   stateRx %u   tickRx %u   bad %u", m_flips, m_ticksSent, m_stateRx,
                         m_tickRx, m_badPackets);
+            if (m_decor)
+                ImGui::Text("decor: visible %u   culled %u", m_decor->VisibleDecorCount(), m_decor->CulledDecorCount());
             if (m_domActive)
             {
                 float col[4];

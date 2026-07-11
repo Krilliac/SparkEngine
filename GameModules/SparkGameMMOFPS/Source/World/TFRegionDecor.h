@@ -1,36 +1,56 @@
 /**
  * @file TFRegionDecor.h
- * @brief Client-side per-tier region decor: stamps the P2 building kit around
- *        every region center from Assets/MMOFPS/Data/decor.json templates
- *        (outpost/fort/facility/skyanchor), plus a seeded prop scatter.
+ * @brief Per-tier region decor: a deterministic ROLE-AGNOSTIC layout (region
+ *        defs + decor.json templates + RegionId-derived seed) consumed by two
+ *        independent passes — a viewer-only visual stamp (HasLocalPlayer) and
+ *        static Jolt OBB registration for collidable pieces (BOTH roles).
  *
- * OWNERSHIP: world-decor lane (W9) — this header + TFRegionDecor.cpp +
- * Assets/MMOFPS/Data/decor.json. Driven by TFRegionSystem (constructed,
- * updated inside its HasLocalPlayer block, shut down with it) so no Main.cpp
- * wiring is needed.
+ * OWNERSHIP: decor-collision lane (W10; layout/visuals landed W9) — this
+ * header + TFRegionDecor.cpp + Assets/MMOFPS/Data/decor.json. Driven by
+ * TFRegionSystem (constructed with it; W10: Update() is called on EVERY role,
+ * not just inside its HasLocalPlayer block) so no Main.cpp wiring is needed.
  *
- * Viewer-only decor (TFRegionSystem::UpdateCaptureVisuals /
- * TFVehicleTerminal precedent): spawned ONCE when the ECS world + terrain +
- * data tables are live, gated on HasLocalPlayer so the dedicated server never
- * builds it. Deterministic on every client — fixed template offsets plus a
- * prop scatter seeded from RegionId only.
+ * ## W10 split: role-agnostic layout, role-gated presentation
+ * TryComputeLayout() is a pure deterministic function producing world-space
+ * {model, position, yaw, collide} pieces. Both roles run it identically; only
+ * what CONSUMES the layout is gated:
+ *  - VISUALS (HasLocalPlayer only): one Transform+MeshRenderer entity per
+ *    piece — dedicated servers never build these.
+ *  - COLLISION (both roles): every piece whose decor.json entry says
+ *    "collide": true (buildings; small props / holo signs stay walk-through,
+ *    and scatter props NEVER collide) gets one static yaw-rotated Jolt OBB via
+ *    TFWorldCollision::AddModelObb — the same OBJ-bounds streaming and
+ *    rotated-box math (decor yaw DEGREES -> Jolt RADIANS) as the collision-v2
+ *    scene bodies, registered into TFWorldSetup's scene collision set AFTER
+ *    the .scene bodies (world init built those), with exactly ONE
+ *    OptimizeBroadPhase() re-compact after the last decor body.
  *
- * COLLISION HONESTY: these entities are Transform+MeshRenderer ONLY. They get
- * NO physics bodies — TFWorldCollision builds statics from the .scene file
- * alone, so players/vehicles walk straight through decor this wave. Templates
- * keep >= clearanceM (8 m) from every capture point, spawn position and
- * vehicle terminal, and the code re-checks that per piece per region (a piece
- * violating clearance for a given region is skipped, deterministically, and
- * counted in tf_decor_debug). Follow-up: decor-to-collision registration.
+ * ## Determinism contract (why the layout is bit-identical server/client)
+ *  - Iteration order is DATA order only: regions in regions.json order; per
+ *    region, template pieces in decor.json array order; the scatter rolls come
+ *    from a private LCG seeded from RegionId alone. Same code + same data
+ *    files => the same accept/reject sequence and the same floats everywhere.
+ *  - Heights come from TFWorldSetup::TerrainHeightAt, itself part of the
+ *    cross-role determinism contract (same params, same math, both sides).
+ *  - No wall-clock, no shared RNG state, and NO role branches inside layout:
+ *    HasLocalPlayer gates only the visual stamp, never layout content.
+ *  - The W10 generation-time clearance enforcement (a collidable piece within
+ *    clearanceM of ANY region's capture point/spawn/vehicle terminal is
+ *    demoted to visual-only) is a pure function of the finished layout + the
+ *    region table, so both roles demote the same pieces.
  */
 #pragma once
 
 #include "Core/TFTypes.h"
+#include "World/TFDecorCulling.h" // W10 distance-culling lane: cull entry + ranges
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+class PhysicsBody; // Physics/PhysicsBody.h (engine, global namespace)
 
 namespace Terrafront
 {
@@ -44,12 +64,20 @@ namespace Terrafront
         ~TFRegionDecor();
 
         bool Initialize(TFGameContext& ctx);
-        /// Spawn-once poll; called by TFRegionSystem::Update inside its
-        /// HasLocalPlayer block. Cheap no-op after the stamp succeeds.
+        /// Spawn-once poll; called by TFRegionSystem::Update on EVERY role
+        /// (W10). Computes the layout once when data + terrain are live, then
+        /// registers collision OBBs (both roles) and stamps the visual
+        /// entities (HasLocalPlayer roles). Cheap no-op after all passes ran.
         void Update();
         void Shutdown();
 
         uint32_t SpawnedCount() const { return static_cast<uint32_t>(m_entities.size()); }
+        uint32_t CollisionBodyCount() const { return static_cast<uint32_t>(m_colBodies.size()); }
+
+        // W10 distance-culling lane: counters from the last cull pass, for the
+        // region debug UI / tf_decor_debug (measurable win, not vibes).
+        uint32_t VisibleDecorCount() const { return m_cullVisible; }
+        uint32_t CulledDecorCount() const { return m_cullHidden; }
 
       private:
         struct DecorPiece
@@ -62,6 +90,7 @@ namespace Terrafront
             bool terrainAlign = true; ///< false = region-center height (level runs)
             bool castShadows = true;
             float emissive = 0.0f;
+            bool collide = false; ///< W10: "collide": true => static OBB on both roles
         };
 
         struct ScatterSpec
@@ -77,24 +106,81 @@ namespace Terrafront
             ScatterSpec scatter;
         };
 
+        /// One resolved world-space placement — the role-agnostic layout unit.
+        struct LayoutPiece
+        {
+            std::string model;
+            std::string material;             ///< empty = structure material (visual pass resolves)
+            FactionId tint = FactionId::None; ///< skyanchor home faction, else None
+            RegionId region = 0;              ///< owning region (body naming / debug)
+            float x = 0.0f, y = 0.0f, z = 0.0f;
+            float yawDeg = 0.0f;
+            bool castShadows = true;
+            float emissive = 0.0f;
+            bool collide = false;
+        };
+
         bool LoadTemplates(); ///< decor.json -> m_templates (fail-soft: no decor)
-        void SpawnAll();      ///< one deterministic stamp over all regions
+        /// One deterministic layout pass over all regions (see the contract in
+        /// the file header). Returns false while prerequisites (data tables,
+        /// terrain) are not live yet; sets m_layoutDone once it ran (including
+        /// the fail-soft empty-template case).
+        bool TryComputeLayout();
+        /// W10 generation-time clearance enforcement over the finished layout:
+        /// collidable pieces within m_clearanceM (XZ) of ANY region's capture
+        /// point/spawn/vehicle terminal are demoted to visual-only (logged +
+        /// counted). Belt-and-braces on top of the per-region placement check.
+        void EnforceCollisionClearance();
+        /// Both roles: one static OBB per collidable layout piece, registered
+        /// into TFWorldSetup's scene TFWorldCollision, then ONE broadphase
+        /// re-compact. Runs once.
+        void RegisterCollision();
+        /// HasLocalPlayer roles: one Transform+MeshRenderer entity per layout
+        /// piece. Runs once (waits for the ECS world).
+        void SpawnVisuals();
+        /// W10 distance-culling lane (SEPARATE function by design — see
+        /// World/TFDecorCulling.h): flips MeshRenderer.visible per decor entity
+        /// from camera XZ distance vs the spawn-time cull class (buildings
+        /// 600 m / props 250 m, +10% hide hysteresis), every ~0.25 s. VISUAL
+        /// ONLY — never touches the layout, collision, or determinism surface.
+        void UpdateCulling();
         /// >= m_clearanceM (XZ) from every capturePoint/spawn/vehicleTerminal.
         bool ClearOfGameplay(const RegionDef& r, float x, float z) const;
 
         TFGameContext* m_ctx{nullptr};
         bool m_initialized{false};
-        bool m_spawned{false};
         bool m_loadTried{false};
         bool m_loaded{false};
+
+        // One-shot pass latches (W10). Layout gates the other two.
+        bool m_layoutDone{false};
+        bool m_collisionDone{false};
+        bool m_visualsDone{false};
 
         float m_clearanceM{8.0f};
         std::unordered_map<std::string, TierTemplate> m_templates; ///< by tier name
 
+        std::vector<LayoutPiece> m_layout; ///< role-agnostic resolved placements
+
         std::vector<uint32_t> m_entities; ///< every decor entity, for Shutdown
-        uint32_t m_skippedClearance{0};   ///< pieces dropped by the gameplay-clearance check
-        uint32_t m_skippedBudget{0};      ///< pieces dropped by the 20-per-region cap
-        bool m_debugCmd{false};           ///< tf_decor_debug registered by this instance
+
+        // W10 distance-culling lane (visual-side only; parallel to m_entities
+        // but self-contained — carries its own entity ids so layout-side
+        // restructures cannot desync it).
+        std::vector<TFDecorCullEntry> m_cull; ///< spawn-time XZ + cull class per entity
+        uint32_t m_cullFrameCounter{0};       ///< pass every kDecorCullIntervalFrames
+        uint32_t m_cullVisible{0};            ///< entities shown by the last pass
+        uint32_t m_cullHidden{0};             ///< entities culled by the last pass
+        /// Static OBB handles registered via TFWorldCollision::AddModelObb —
+        /// removed one-by-one in Shutdown (Main.cpp shuts TFRegionSystem down
+        /// BEFORE TFWorldSetup, so the collision set still exists then).
+        std::vector<std::shared_ptr<::PhysicsBody>> m_colBodies;
+
+        uint32_t m_skippedClearance{0}; ///< pieces dropped by the gameplay-clearance check
+        uint32_t m_skippedBudget{0};    ///< pieces dropped by the 20-per-region cap
+        uint32_t m_colSkipped{0};       ///< collidable pieces with no body (no Jolt / bad OBJ / cap)
+        uint32_t m_colDemoted{0};       ///< collide -> visual-only demotions (clearance enforcement)
+        bool m_debugCmd{false};         ///< tf_decor_debug registered by this instance
     };
 
 } // namespace Terrafront

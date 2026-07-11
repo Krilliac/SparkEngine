@@ -32,13 +32,22 @@
  * valid dummy bodies, so null-body checks are NOT sufficient). When Jolt is
  * absent the class stays inactive and ResolveMove() is a no-op — movement
  * falls back to today's terrain-clamp-only behavior.
+ *
+ * ## W10 decor-collision addendum
+ * Beyond the .scene set, TFRegionDecor registers one static OBB per collidable
+ * decor piece through AddModelObb() — same determinism contract (the decor
+ * layout is itself bit-identical across roles, see TFRegionDecor.h), same
+ * WorldStatic layer, counted by BodyCount() and torn down with Shutdown().
  */
 #pragma once
 
 #include "Core/TFTypes.h"
 
+#include <array>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 class PhysicsSystem; // Physics/PhysicsSystem.h (engine, global namespace)
@@ -78,6 +87,33 @@ namespace Terrafront
 
         /// Remove every body this class created. Safe to call twice.
         void Shutdown();
+
+        /// W10 decor-collision: create + register ONE static yaw-rotated Jolt
+        /// box body from a model's local OBJ vertex bounds (streamed once,
+        /// cached per path) placed at world `pos` with `yawDeg` — the SAME
+        /// bounds source and rotated-OBB math as the Build() collision-v2
+        /// diagonal path (exact for every yaw, 90-degree multiples included;
+        /// decor never scales, so scale is 1). yawDeg is the scene/Transform
+        /// DEGREES convention; converted to RADIANS here for desc.rotation
+        /// (see the Build() doc for why radians). The body joins this set —
+        /// counted by BodyCount(), removed by Shutdown() — and the returned
+        /// handle lets the caller remove it earlier via RemoveBody(). Returns
+        /// null when Jolt is absent (Build() failed or never ran), the body
+        /// cap is hit, or the OBJ is unreadable (decor gets NO unit-cube
+        /// fallback: an invisible wrong-size wall is worse than staying
+        /// walk-through). Call OptimizeBroadPhase() ONCE after the last add.
+        std::shared_ptr<::PhysicsBody> AddModelObb(const std::string& objPath, const float pos[3], float yawDeg,
+                                                   const std::string& name);
+
+        /// Remove one body previously returned by AddModelObb. Null / foreign
+        /// handles are a safe no-op.
+        void RemoveBody(const std::shared_ptr<::PhysicsBody>& body);
+
+        /// Re-compact the Jolt broadphase after a bulk of AddModelObb calls.
+        /// Build() already compacts the scene set at world init; decor calls
+        /// this exactly once after ALL of its static bodies are registered so
+        /// the whole static world pays the sort a total of twice, not per body.
+        void OptimizeBroadPhase();
 
         bool IsActive() const { return m_physics != nullptr && !m_bodies.empty(); }
         size_t BodyCount() const { return m_bodies.size(); }
@@ -122,6 +158,10 @@ namespace Terrafront
 
         ::PhysicsSystem* m_physics{nullptr}; // engine-owned; reached via IEngineContext
         std::vector<std::shared_ptr<::PhysicsBody>> m_bodies;
+
+        /// AddModelObb per-OBJ local-AABB cache (decor reuses a handful of
+        /// building models across every region — stream each file once).
+        std::unordered_map<std::string, std::pair<std::array<float, 3>, std::array<float, 3>>> m_modelAabbCache;
 
         /// ResolveMove is const (shared client/server hook) — the diagnostic
         /// counter is mutable bookkeeping, not simulation state, so mutating it

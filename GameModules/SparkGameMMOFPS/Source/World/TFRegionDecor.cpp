@@ -1,21 +1,24 @@
 /**
  * @file TFRegionDecor.cpp
- * @brief Per-tier region decor stamper (see TFRegionDecor.h).
+ * @brief Role-agnostic region decor layout + visual stamp + static collision
+ *        (see TFRegionDecor.h for the W10 split and the determinism contract).
  *
- * Follows TFRegionSystem::UpdateCaptureVisuals / TFVehicleTerminal to the
- * letter: spawn once when the ECS world + terrain + data tables are all live,
- * viewer-only (the owner gates on HasLocalPlayer), Transform+MeshRenderer
- * entities with NO physics bodies. decor.json parsing goes through
- * Spark::Json (JsonUtils.h) like TFDataTables.cpp, but stays local to this
- * file — the data-tables surface is contended and this table is decor-only.
+ * Layout follows the TFRegionSystem::UpdateCaptureVisuals readiness bar minus
+ * the ECS world (dedicated servers may run without one — the 2026-07-10
+ * headless-boot lesson); visuals additionally wait for the ECS world and
+ * HasLocalPlayer. decor.json parsing goes through Spark::Json (JsonUtils.h)
+ * like TFDataTables.cpp, but stays local to this file — the data-tables
+ * surface is contended and this table is decor-only.
  */
 #include "World/TFRegionDecor.h"
 
 #include "Data/TFDataTables.h"
-#include "Game/TFVisualUtils.h" // FactionStructureMaterial (neutral/faction tint)
-#include "World/TFWorldSetup.h" // TerrainHeightAt for per-piece placement
+#include "Game/TFVisualUtils.h"     // FactionStructureMaterial (neutral/faction tint)
+#include "World/TFWorldCollision.h" // AddModelObb / RemoveBody / OptimizeBroadPhase
+#include "World/TFWorldSetup.h"     // TerrainHeightAt + Collision() accessor
 
-#include "Engine/ECS/Components.h" // Transform, MeshRenderer
+#include "Camera/SparkEngineCamera.h" // W10 distance culling: camera position
+#include "Engine/ECS/Components.h"    // Transform, MeshRenderer
 #include "Spark/IEngineContext.h"
 #include "Utils/JsonUtils.h"
 #include "Utils/LogMacros.h"
@@ -42,7 +45,7 @@ namespace Terrafront
         /// The four regions.json tier strings (TFDataTables validates them).
         constexpr const char* kTiers[] = {"outpost", "fort", "facility", "skyanchor"};
 
-        /// Tiny deterministic LCG (Numerical Recipes constants) so every client
+        /// Tiny deterministic LCG (Numerical Recipes constants) so every role
         /// scatters identically from the same RegionId seed. NOT std::rand /
         /// std::mt19937: no cross-CRT/no-header-weight, and trivially stable.
         struct DecorRng
@@ -69,6 +72,15 @@ namespace Terrafront
             return o.HasKey(k) ? o[k].AsBool(def) : def;
         }
 
+        /// W10 distance-culling lane: cull class from the asset convention —
+        /// scatter clutter lives under Models/MMOFPS/props/, kit pieces under
+        /// buildings/. Anything unrecognized defaults to the building range
+        /// (larger = safer visually; worst case it just culls later).
+        float DecorCullRangeForModel(const std::string& model)
+        {
+            return model.find("/props/") != std::string::npos ? kDecorCullRangePropM : kDecorCullRangeBuildingM;
+        }
+
     } // namespace
 
     TFRegionDecor::TFRegionDecor() = default;
@@ -90,16 +102,19 @@ namespace Terrafront
                 "tf_decor_debug",
                 [this](const std::vector<std::string>&) -> std::string
                 {
-                    char buf[256];
+                    char buf[384];
                     std::snprintf(buf, sizeof(buf),
-                                  "[TF] decor: spawned=%d entities=%u skipped(clearance)=%u skipped(budget)=%u "
-                                  "templates=%zu",
-                                  m_spawned ? 1 : 0, SpawnedCount(), m_skippedClearance, m_skippedBudget,
-                                  m_templates.size());
+                                  "[TF] decor: layout=%d pieces=%zu visuals=%u colBodies=%u colSkipped=%u "
+                                  "colDemoted=%u skipped(clearance)=%u skipped(budget)=%u templates=%zu "
+                                  "cullVisible=%u cullHidden=%u",
+                                  m_layoutDone ? 1 : 0, m_layout.size(), SpawnedCount(), CollisionBodyCount(),
+                                  m_colSkipped, m_colDemoted, m_skippedClearance, m_skippedBudget, m_templates.size(),
+                                  VisibleDecorCount(), CulledDecorCount());
                     return std::string(buf);
                 },
-                "Region decor status: entity total, clearance/budget skips, loaded tier templates", "TERRAFRONT",
-                "tf_decor_debug");
+                "Region decor status: layout pieces, visual entities, collision bodies, clearance/budget skips, "
+                "distance-cull visible/hidden counts",
+                "TERRAFRONT", "tf_decor_debug");
             m_debugCmd = true;
         }
 
@@ -109,9 +124,16 @@ namespace Terrafront
 
     void TFRegionDecor::Update()
     {
-        if (!m_initialized || !m_ctx || m_spawned || !m_ctx->HasLocalPlayer())
+        if (!m_initialized || !m_ctx)
             return;
-        SpawnAll();
+        if (!m_layoutDone && !TryComputeLayout())
+            return; // prerequisites not live yet — poll again next frame
+        if (!m_collisionDone)
+            RegisterCollision();
+        if (!m_visualsDone && m_ctx->HasLocalPlayer())
+            SpawnVisuals();
+        if (m_visualsDone && !m_cull.empty())
+            UpdateCulling(); // W10 distance-culling lane: ~4 Hz visibility pass
     }
 
     void TFRegionDecor::Shutdown()
@@ -136,8 +158,28 @@ namespace Terrafront
             }
         }
         m_entities.clear();
+        m_cull.clear(); // W10 distance-culling lane
+        m_cullFrameCounter = 0;
+        m_cullVisible = 0;
+        m_cullHidden = 0;
+
+        // Collision handles: Main.cpp shuts TFRegionSystem (and therefore us)
+        // down BEFORE TFWorldSetup, so the scene collision set is still alive
+        // here; if it is already gone, RemoveBody on a foreign handle is a
+        // safe no-op and the set's own Shutdown removed the bodies anyway.
+        TFWorldCollision* col = (m_ctx && m_ctx->world) ? m_ctx->world->Collision() : nullptr;
+        if (col)
+        {
+            for (const auto& body : m_colBodies)
+                col->RemoveBody(body);
+        }
+        m_colBodies.clear();
+
+        m_layout.clear();
         m_templates.clear();
-        m_spawned = false;
+        m_layoutDone = false;
+        m_collisionDone = false;
+        m_visualsDone = false;
         m_loadTried = false;
         m_loaded = false;
         m_initialized = false;
@@ -201,6 +243,9 @@ namespace Terrafront
                     piece.terrainAlign = GetBool(p, "terrainAlign", true);
                     piece.castShadows = GetBool(p, "castShadows", true);
                     piece.emissive = GetNum(p, "emissive", 0.0f);
+                    // W10: opt-IN collision (buildings). Absent flag = visual-only,
+                    // so a new decor.json entry can never surprise movement.
+                    piece.collide = GetBool(p, "collide", false);
                     if (!piece.model.empty())
                         out.pieces.push_back(std::move(piece));
                 }
@@ -239,7 +284,7 @@ namespace Terrafront
     }
 
     // ---------------------------------------------------------------------------
-    // Stamp
+    // Role-agnostic layout (W10) — see the determinism contract in the header
     // ---------------------------------------------------------------------------
 
     bool TFRegionDecor::ClearOfGameplay(const RegionDef& r, float x, float z) const
@@ -262,19 +307,20 @@ namespace Terrafront
         return true;
     }
 
-    void TFRegionDecor::SpawnAll()
+    bool TFRegionDecor::TryComputeLayout()
     {
-        // Same readiness bar as the capture landmarks: ECS world + terrain + data.
-        World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
-        if (!world || !m_ctx->world || !m_ctx->data || !m_ctx->data->IsLoaded())
-            return;
+        // Readiness bar: data tables + analytic terrain. Deliberately NOT the
+        // ECS world — dedicated servers may run headless without one, and the
+        // layout (and its collision) must exist there regardless.
+        if (!m_ctx->world || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return false;
         const auto& regions = m_ctx->data->GetContinent().regions;
         if (regions.empty())
-            return;
+            return false;
         if (!LoadTemplates())
         {
-            m_spawned = true; // fail-soft: don't retry every frame, regions stay bare
-            return;
+            m_layoutDone = true; // fail-soft: don't retry every frame, regions stay bare
+            return true;
         }
 
         uint32_t stampedRegions = 0;
@@ -295,8 +341,9 @@ namespace Terrafront
             std::vector<std::array<float, 2>> placedXZ; // scatter separation targets
             placedXZ.reserve(kMaxDecorPerRegion);
 
-            const auto spawnPiece = [&](const std::string& model, const std::string& material, float x, float z,
-                                        float yawDeg, bool terrainAlign, bool castShadows, float emissive) -> bool
+            const auto addPiece = [&](const std::string& model, const std::string& material, float x, float z,
+                                      float yawDeg, bool terrainAlign, bool castShadows, float emissive,
+                                      bool collide) -> bool
             {
                 if (placed >= kMaxDecorPerRegion)
                 {
@@ -308,30 +355,33 @@ namespace Terrafront
                     ++m_skippedClearance;
                     return false;
                 }
-                const float y = terrainAlign ? m_ctx->world->TerrainHeightAt(x, z) : centerY;
-                const auto ent = world->CreateEntity("TF_Decor");
-                Transform& tr = world->AddComponent<Transform>(ent);
-                tr.position = {x, y, z};
-                tr.rotation.y = yawDeg; // Transform Euler is DEGREES (radians rule is PhysicsBody-only)
-                MeshRenderer& mr = world->AddComponent<MeshRenderer>(ent);
-                mr.meshPath = model;
-                mr.materialPath = material.empty() ? FactionStructureMaterial(*m_ctx, tint) : material;
-                mr.castShadows = castShadows;
-                mr.emissive = emissive;
-                m_entities.push_back(static_cast<uint32_t>(ent));
+                LayoutPiece piece;
+                piece.model = model;
+                piece.material = material;
+                piece.tint = tint;
+                piece.region = r.id;
+                piece.x = x;
+                piece.y = terrainAlign ? m_ctx->world->TerrainHeightAt(x, z) : centerY;
+                piece.z = z;
+                piece.yawDeg = yawDeg;
+                piece.castShadows = castShadows;
+                piece.emissive = emissive;
+                piece.collide = collide;
+                m_layout.push_back(std::move(piece));
                 placedXZ.push_back({x, z});
                 ++placed;
                 return true;
             };
 
-            // 1) Fixed template pieces — identical layout on every client.
+            // 1) Fixed template pieces — identical layout on every role.
             for (const DecorPiece& p : tmpl.pieces)
-                spawnPiece(p.model, p.material, r.centerX + p.offX, r.centerZ + p.offZ, p.yawDeg, p.terrainAlign,
-                           p.castShadows, p.emissive);
+                addPiece(p.model, p.material, r.centerX + p.offX, r.centerZ + p.offZ, p.yawDeg, p.terrainAlign,
+                         p.castShadows, p.emissive, p.collide);
 
-            // 2) Seeded prop scatter — RegionId-seeded so every client rolls the
+            // 2) Seeded prop scatter — RegionId-seeded so every role rolls the
             //    same props at the same spots (rejection sampling is fine: same
             //    code + same data => same accept/reject sequence everywhere).
+            //    Scatter props NEVER collide (small clutter stays walk-through).
             const ScatterSpec& sc = tmpl.scatter;
             if (!sc.models.empty() && sc.countMax > 0 && sc.radiusMax > 0.0f)
             {
@@ -363,7 +413,7 @@ namespace Terrafront
                         }
                         if (nearDecor || !ClearOfGameplay(r, x, z))
                             continue;
-                        spawnPiece(model, std::string(), x, z, yaw, true, true, 0.0f);
+                        addPiece(model, std::string(), x, z, yaw, true, true, 0.0f, false);
                         break;
                     }
                 }
@@ -373,10 +423,171 @@ namespace Terrafront
                 ++stampedRegions;
         }
 
-        m_spawned = true;
+        EnforceCollisionClearance();
+
+        m_layoutDone = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "[TF] decor: stamped %u regions, %zu entities (skipped %u clearance, %u budget)", stampedRegions,
-                       m_entities.size(), m_skippedClearance, m_skippedBudget);
+                       "[TF] decor: layout %u regions, %zu pieces (skipped %u clearance, %u budget; %u demoted)",
+                       stampedRegions, m_layout.size(), m_skippedClearance, m_skippedBudget, m_colDemoted);
+        return true;
+    }
+
+    void TFRegionDecor::EnforceCollisionClearance()
+    {
+        // W10 sanity gate, enforced AT GENERATION: no collidable decor may sit
+        // within m_clearanceM of ANY region's capture points/spawns/terminals —
+        // ClearOfGameplay above already guaranteed the piece's OWN region, this
+        // closes the cross-region edge (adjacent gameplay points near a shared
+        // border). Violators are demoted to visual-only, deterministically on
+        // both roles (pure function of the same layout + region table), loudly:
+        // a demotion means decor.json offsets need re-authoring.
+        const auto& regions = m_ctx->data->GetContinent().regions;
+        for (LayoutPiece& p : m_layout)
+        {
+            if (!p.collide)
+                continue;
+            for (const RegionDef& r : regions)
+            {
+                if (ClearOfGameplay(r, p.x, p.z))
+                    continue;
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] decor: CLEARANCE VIOLATION — collidable '%s' (region %u) within %.1fm of region "
+                                "%u gameplay point; demoted to visual-only (fix decor.json offsets)",
+                                p.model.c_str(), static_cast<unsigned>(p.region), static_cast<double>(m_clearanceM),
+                                static_cast<unsigned>(r.id));
+                p.collide = false;
+                ++m_colDemoted;
+                break;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Collision pass (both roles)
+    // ---------------------------------------------------------------------------
+
+    void TFRegionDecor::RegisterCollision()
+    {
+        // The scene TFWorldCollision was built inside TFWorldSetup::Initialize —
+        // strictly before the first TFRegionSystem::Update (Main.cpp boot order)
+        // — so registering here is always AFTER the .scene static bodies.
+        TFWorldCollision* col = m_ctx->world ? m_ctx->world->Collision() : nullptr;
+        if (!col)
+        {
+            m_collisionDone = true; // no collision owner shipped: decor stays walk-through
+            return;
+        }
+
+        uint32_t added = 0;
+        for (const LayoutPiece& p : m_layout)
+        {
+            if (!p.collide)
+                continue;
+            const float pos[3] = {p.x, p.y, p.z};
+            const std::string name = "TF_DecorCol_r" + std::to_string(p.region) + "_" +
+                                     std::to_string(static_cast<unsigned>(m_colBodies.size()));
+            std::shared_ptr<::PhysicsBody> body = col->AddModelObb(p.model, pos, p.yawDeg, name);
+            if (body)
+            {
+                m_colBodies.push_back(std::move(body));
+                ++added;
+            }
+            else
+            {
+                ++m_colSkipped; // no Jolt / unreadable OBJ / body cap — logged inside
+            }
+        }
+
+        // ONE broadphase re-compact after ALL decor statics (the scene set was
+        // compacted once in Build(); this is the second and last static bulk).
+        if (added > 0)
+            col->OptimizeBroadPhase();
+
+        m_collisionDone = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] decor: %u static OBBs registered (%u skipped, %u demoted)",
+                       added, m_colSkipped, m_colDemoted);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Visual pass (HasLocalPlayer roles only)
+    // ---------------------------------------------------------------------------
+
+    void TFRegionDecor::SpawnVisuals()
+    {
+        // Visuals additionally need the engine ECS world (poll until it exists;
+        // headless roles never reach here — Update gates on HasLocalPlayer).
+        World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
+        if (!world)
+            return;
+
+        for (const LayoutPiece& p : m_layout)
+        {
+            const auto ent = world->CreateEntity("TF_Decor");
+            Transform& tr = world->AddComponent<Transform>(ent);
+            tr.position = {p.x, p.y, p.z};
+            tr.rotation.y = p.yawDeg; // Transform Euler is DEGREES (radians rule is PhysicsBody-only)
+            MeshRenderer& mr = world->AddComponent<MeshRenderer>(ent);
+            mr.meshPath = p.model;
+            mr.materialPath = p.material.empty() ? FactionStructureMaterial(*m_ctx, p.tint) : p.material;
+            mr.castShadows = p.castShadows;
+            mr.emissive = p.emissive;
+            m_entities.push_back(static_cast<uint32_t>(ent));
+            // W10 distance-culling lane: record spawn-time XZ + cull class
+            // (decor never moves, so the entry never needs updating).
+            m_cull.push_back({static_cast<uint32_t>(ent), p.x, p.z, DecorCullRangeForModel(p.model), /*visible*/ true});
+        }
+
+        m_visualsDone = true;
+        m_cullVisible = static_cast<uint32_t>(m_cull.size()); // until the first cull pass runs
+        m_cullHidden = 0;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] decor: %zu visual entities stamped", m_entities.size());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Distance culling (W10 distance-culling lane — SEPARATE section by design;
+    // see World/TFDecorCulling.h for ranges, hysteresis and the rationale)
+    // ---------------------------------------------------------------------------
+
+    void TFRegionDecor::UpdateCulling()
+    {
+        // Re-evaluate every kDecorCullIntervalFrames frames (~0.25 s @ 60 fps);
+        // the first call after SpawnVisuals (counter == 0) runs immediately so
+        // far decor never draws even one full-rate frame burst.
+        if (m_cullFrameCounter++ % kDecorCullIntervalFrames != 0)
+            return;
+
+        World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
+        SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
+        if (!world || !cam)
+            return;
+        const auto camPos = cam->GetPosition(); // XZ only: decor culls by ground distance
+
+        uint32_t visible = 0;
+        uint32_t hidden = 0;
+        auto& registry = world->GetRegistry();
+        for (TFDecorCullEntry& e : m_cull)
+        {
+            const auto ent = static_cast<EntityID>(e.entity);
+            if (e.entity == 0u || !registry.valid(ent))
+                continue;
+            const float dx = e.x - camPos.x;
+            const float dz = e.z - camPos.z;
+            const bool want = DecorShouldBeVisible(dx * dx + dz * dz, e.cullRange, e.visible);
+            if (want != e.visible)
+            {
+                // MeshRenderer.visible short-circuits TFWorldSetup's ECS draw
+                // loop before any mesh load or draw call — this flag IS the cull.
+                if (MeshRenderer* mr = registry.try_get<MeshRenderer>(ent))
+                    mr->visible = want;
+                e.visible = want;
+            }
+            if (want)
+                ++visible;
+            else
+                ++hidden;
+        }
+        m_cullVisible = visible;
+        m_cullHidden = hidden;
     }
 
 } // namespace Terrafront
