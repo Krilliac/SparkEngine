@@ -21,6 +21,8 @@
 #include "UI/TFMapScreen.h"
 #include "UI/TFUiCommon.h"
 #include "Game/TFVehicleSystem.h" // W3 shared-edit: deployed-Aegis spawn entries
+#include "Game/TFSocialSystem.h"  // W11 squad-v2: leader name on the squad spawn entry
+#include "Game/TFSquadSystem.h"   // W11 squad-v2: squad-leader spawn entry (spawnKind=3)
 #include "World/TFRegionSystem.h"
 
 #include "Input/InputManager.h" // W10 sanctuary-v2: terminal mode owns the mouse
@@ -422,6 +424,17 @@ namespace Terrafront
             }
         }
 
+        // W11 squad-v2 lane: keep the squad-leader selection valid (needs a
+        // squad and a leader who isn't you; the server re-validates
+        // leader-alive + the 15 s cooldown on request).
+        if (m_selKind == 3)
+        {
+            const auto squadView = m_ctx->squads ? m_ctx->squads->GetLocalSquadView() : TFSquadSystem::LocalSquadView{};
+            if (squadView.squad == kInvalidSquad || squadView.leader == kInvalidPlayer ||
+                squadView.leader == m_ctx->localPlayer)
+                m_selKind = 0;
+        }
+
         auto distTo = [&](const RegionDef& rd)
         {
             const float dx = rd.centerX - m_deathPos[0];
@@ -499,6 +512,47 @@ namespace Terrafront
                         m_selRegion = kInvalidRegion;
                     }
                 });
+        }
+
+        // W11 squad-v2 lane: squad-leader spawn (spawnKind=3). The server
+        // enforces leader-alive + the 15 s per-requester cooldown
+        // (TFSquadSystem::GetSquadLeaderSpawn) and denies with reason=timer +
+        // respawnDelay, so this entry only advertises; DEPLOY stays generic.
+        if (m_ctx->squads)
+        {
+            const auto squadView = m_ctx->squads->GetLocalSquadView();
+            if (squadView.squad != kInvalidSquad && squadView.leader != kInvalidPlayer &&
+                squadView.leader != m_ctx->localPlayer)
+            {
+                char leaderName[32];
+                std::string rosterName;
+                if (m_ctx->social && m_ctx->social->NameOfPlayer(squadView.leader, rosterName))
+                    std::snprintf(leaderName, sizeof(leaderName), "%s", rosterName.c_str());
+                else
+                    std::snprintf(leaderName, sizeof(leaderName), "P%u", squadView.leader);
+
+                PawnInfo leaderPawn{};
+                const bool leaderAlive =
+                    m_ctx->players && m_ctx->players->GetPawnByPlayer(squadView.leader, leaderPawn) && leaderPawn.alive;
+                if (leaderAlive)
+                {
+                    const float dx = leaderPawn.pos[0] - m_deathPos[0];
+                    const float dz = leaderPawn.pos[2] - m_deathPos[2];
+                    std::snprintf(buf, sizeof(buf), "Squad leader: %s   -   SQD   %.0fm##sq", leaderName,
+                                  std::sqrt(dx * dx + dz * dz));
+                    if (ImGui::Selectable(buf, m_selKind == 3))
+                    {
+                        m_selKind = 3;
+                        m_selRegion = kInvalidRegion;
+                        m_selAegis = 0;
+                    }
+                }
+                else
+                {
+                    std::snprintf(buf, sizeof(buf), "Squad leader: %s   -   DOWN##sq", leaderName);
+                    ImGui::Selectable(buf, false, ImGuiSelectableFlags_Disabled);
+                }
+            }
         }
         ImGui::EndChild();
 

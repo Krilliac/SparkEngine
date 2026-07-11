@@ -16,10 +16,24 @@
  *    member (roster sync) + a Promote echo (leader) + the waypoint, so the
  *    client mirror needs no extra snapshot message.
  *  - Squad-leader spawn rule: GetSquadLeaderSpawn() serves TFPlayerSystem's
- *    spawnKind==3 with a 30 s per-requester cooldown tracked here.
+ *    spawnKind==3 with a kSquadSpawnCooldownSec per-requester cooldown here.
  *  - Client mirror lives in this same class (local squad roster, pending
  *    invite, waypoint) — registered after link-up so it wins the handler slot
  *    over TFClientNet's accepted-but-unrouted no-op (TFRegionSystem pattern).
+ *
+ * W11 squad-v2 (waypoint + query sections, squad-v2 lane):
+ *  - TF_SquadWaypoint on the lane's RESERVED 0x546C block (TFRepProtocol
+ *    precedent: ids live here, NOT in the frozen TFMsg enum). Leader Set/Clear
+ *    replaces/removes the squad waypoint (beacon + map icon); non-leader
+ *    Request forwards a ping to the LEADER ONLY, who can promote it from the
+ *    squad HUD (UI/TFSquadHUD). Server handler self-registers with the
+ *    enter-world gate mirrored (TFSocialSystem::EnsureServerHandlers pattern).
+ *  - Squad-leader spawn cooldown tightened to 15 s (kSquadSpawnCooldownSec),
+ *    and the clock/sweep moved from FixedUpdate (never wired in Main.cpp —
+ *    m_clock froze at 0, so a charged cooldown never expired and disconnects
+ *    were never swept) into Update, which IS wired. FixedUpdate is now a no-op.
+ *  - IsSquadmate(player) — public accent query for nameplates/HUD lanes
+ *    (alias of IsLocalSquadMember; TFNameplates already reads it).
  */
 #pragma once
 
@@ -34,7 +48,38 @@ namespace Terrafront
 {
 
     constexpr SquadId kInvalidSquad = 0;            ///< 0 == "no squad"
-    constexpr float kSquadSpawnCooldownSec = 30.0f; ///< DESIGN §4 squad-leader spawn cd
+    constexpr float kSquadSpawnCooldownSec = 15.0f; ///< squad-leader spawn cd (W11 squad-v2, was DESIGN §4 30 s)
+
+    // --- W11 squad-v2 wire (RESERVED TFMsg block 0x546C-0x546F) ----------------
+    // Ids live OUTSIDE the frozen TFMsg enum (TFRepProtocol / TFSocialProtocol
+    // precedent); they ride NetworkManager's registry cast to MessageType and
+    // TFClientNet::SendMsg via static_cast<TFMsg>.
+
+    constexpr uint16_t kTFMsgSquadWaypoint = 0x546C; // C<->S TF_SquadWaypoint (0x546D-0x546F free)
+
+    /// TF_SquadWaypoint.op. C->S: the request. S->C echo: what happened
+    /// (Set/Clear broadcast to members; Request forwarded to the LEADER only).
+    enum class SquadWpOp : uint8_t
+    {
+        Set = 0, // leader: place/replace the squad waypoint
+        Clear,   // leader: remove it
+        Request  // non-leader: ping the leader with a suggested waypoint
+    };
+
+    /// Seconds a leader-side waypoint request ping stays promotable/visible.
+    constexpr float kSquadWpRequestTTLSec = 20.0f;
+
+#pragma pack(push, 1)
+    struct TF_SquadWaypoint
+    {
+        uint8_t op; // SquadWpOp
+        uint8_t _pad;
+        uint16_t regionId;   // map hex hint for icons (kInvalidRegion if none)
+        uint32_t fromPlayer; // S->C echo: who set/requested (server-filled)
+        float wpX, wpY, wpZ; // world position (Y = terrain height at set time)
+    };
+    static_assert(sizeof(TF_SquadWaypoint) == 20, "wire layout frozen");
+#pragma pack(pop)
 
     class TFSquadSystem
     {
@@ -65,11 +110,72 @@ namespace Terrafront
         /// this also resolves OTHER players on pure clients (client mirror roster).
         bool IsLocalSquadMember(PlayerId player) const;
 
+        /// W11 squad-v2: public accent query for nameplates/HUD lanes. Alias of
+        /// IsLocalSquadMember — one predicate, two lane-facing names.
+        bool IsSquadmate(PlayerId player) const { return IsLocalSquadMember(player); }
+
+        /// W11 squad-v2: true when the LOCAL player leads their squad (mirror;
+        /// valid on every role — the authority's mirror is fed by SendEchoTo).
+        bool IsLocalSquadLeader() const
+        {
+            return m_ctx != nullptr && m_mirror.squad != kInvalidSquad && m_mirror.leader == m_ctx->localPlayer;
+        }
+
+        /// W11 squad-v2: the LOCAL squad's active waypoint (mirror). Returns
+        /// false when none. `outRegion` (optional) receives the map hex hint
+        /// (kInvalidRegion when the waypoint was not placed via the map).
+        bool GetLocalWaypoint(float outPos[3], RegionId* outRegion = nullptr) const
+        {
+            if (m_mirror.squad == kInvalidSquad || !m_mirror.hasWaypoint)
+                return false;
+            outPos[0] = m_mirror.wp[0];
+            outPos[1] = m_mirror.wp[1];
+            outPos[2] = m_mirror.wp[2];
+            if (outRegion)
+                *outRegion = m_mirror.wpRegion;
+            return true;
+        }
+
+        // --- W11 squad-v2: TF_SquadWaypoint (0x546C) -----------------------------
+
+        /// Server: NetworkManager handler + local loopback route here (typed).
+        void ServerHandleSquadWaypoint(PlayerId sender, const TF_SquadWaypoint& msg);
+
+        /// Server: raw-payload convenience (size-validates, forwards to typed).
+        void ServerHandleSquadWaypointRaw(PlayerId sender, const void* data, size_t size);
+
+        /// TFMapScreen ctrl-click seam (wiringNotes): leader -> Set at (x, z)
+        /// (ctrl-click the SAME hex again to Clear); non-leader -> Request ping
+        /// to the leader. Y is resolved here via TFWorldSetup::TerrainHeightAt.
+        void UiMapWaypointClick(float x, float z, RegionId region);
+
+        /// Leader UI: clear the squad waypoint (no-op for non-leaders).
+        void UiClearWaypoint();
+
+        /// One leader-side waypoint request ping (TFSquadHUD renders these).
+        struct WaypointRequest
+        {
+            PlayerId from = kInvalidPlayer;
+            RegionId region = kInvalidRegion;
+            float wp[3]{};
+            double until = 0.0; // m_clock deadline (kSquadWpRequestTTLSec)
+        };
+
+        /// Leader only (empty otherwise): pending, unexpired request pings.
+        const std::vector<WaypointRequest>& PendingWaypointRequests() const { return m_mirror.wpRequests; }
+
+        /// Leader UI: promote request `index` into the live squad waypoint.
+        void PromoteWaypointRequest(size_t index);
+
+        /// Leader UI: drop request `index` without promoting it.
+        void DismissWaypointRequest(size_t index);
+
         /// Server: squad-leader spawn rule for TFPlayerSystem spawnKind==3.
         /// Succeeds only if `requester` is in a squad, is NOT the leader, the
-        /// leader has an alive pawn, and the 30 s per-requester cooldown has
-        /// elapsed — on success writes the leader's feet position to outPos and
-        /// STARTS the cooldown. Returns false otherwise (query is then free).
+        /// leader has an alive pawn, and the kSquadSpawnCooldownSec (15 s)
+        /// per-requester cooldown has elapsed — on success writes the leader's
+        /// feet position to outPos and STARTS the cooldown. Returns false
+        /// otherwise (query is then free).
         bool GetSquadLeaderSpawn(PlayerId requester, float outPos[3]);
 
         /// Server: seconds left on `requester`'s squad-spawn cooldown (0 = ready).
@@ -125,6 +231,7 @@ namespace Terrafront
             std::vector<PlayerId> members; // includes leader
             bool hasWaypoint = false;
             float wp[3]{};
+            RegionId wpRegion = kInvalidRegion; // W11: map hex hint (icon)
         };
 
         // --- client mirror (also the listen-host local player's view) ---
@@ -135,7 +242,9 @@ namespace Terrafront
             std::vector<PlayerId> members;
             bool hasWaypoint = false;
             float wp[3]{};
-            SquadId inviteSquad = kInvalidSquad; // pending invite
+            RegionId wpRegion = kInvalidRegion;      // W11: map hex hint (icon)
+            std::vector<WaypointRequest> wpRequests; // W11: leader-only pings
+            SquadId inviteSquad = kInvalidSquad;     // pending invite
             PlayerId inviteFrom = kInvalidPlayer;
         };
 
@@ -160,8 +269,17 @@ namespace Terrafront
         void SendEchoTo(PlayerId target, const TF_SquadMsg& echo);
         void EchoToMembers(const Squad& squad, const TF_SquadMsg& echo);
 
+        // W11 squad-v2 wire helpers (TF_SquadWaypoint, 0x546C)
+        void SendWaypointEchoTo(PlayerId target, const TF_SquadWaypoint& echo);
+        void EchoWaypointToMembers(const Squad& squad, const TF_SquadWaypoint& echo);
+        /// UI entry: routes a waypoint op to the authority (direct call on
+        /// listen host / standalone — enter-world-gated like SendOp — or
+        /// TFClientNet::SendMsg on pure clients).
+        void SendWaypointOp(SquadWpOp op, const float wp[3], RegionId region);
+
         // client mirror
         void ClientHandleEcho(const TF_SquadMsg& msg);
+        void ClientHandleWaypoint(const TF_SquadWaypoint& msg); // W11 squad-v2
         void ResetMirror() { m_mirror = Mirror{}; }
         /// UI entry: routes an op to the authority (direct call on listen host /
         /// standalone, TFClientNet::SendMsg on pure clients).
@@ -169,8 +287,11 @@ namespace Terrafront
 
 #ifdef ENABLE_NETWORKING
         bool ClientNetActive() const;
+        bool ServerNetActive() const; // W11 squad-v2 (TFSocialSystem pattern)
         void EnsureClientHandlers();
         void ReleaseClientHandlers();
+        void EnsureServerHandlers(); // W11: 0x546C server route + gate
+        void ReleaseServerHandlers();
 #endif
 
         TFGameContext* m_ctx{nullptr};
@@ -189,6 +310,7 @@ namespace Terrafront
         // client state
         Mirror m_mirror;
         bool m_clientHandlers{false};
+        bool m_serverHandlers{false}; // W11 squad-v2: 0x546C server route
 
 #ifdef SPARK_HAS_IMGUI
         int m_uiTargetId{0}; // debug UI: invite/kick/promote target player id
