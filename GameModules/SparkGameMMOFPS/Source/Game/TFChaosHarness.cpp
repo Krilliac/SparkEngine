@@ -6,6 +6,7 @@
 #include "Game/TFChaosHarness.h"
 
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFVehicleSystem.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldCollision.h"
 #include "World/TFWorldSetup.h"
@@ -15,6 +16,7 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <sstream>
 
@@ -35,6 +37,9 @@ namespace Terrafront
         m_ctx = &ctx;
         events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled&) { ++m_kills; });
         events.Subscribe<EvRegionCaptured>([this](const EvRegionCaptured&) { ++m_regionFlips; });
+        // W9 bots-v2: every EvVehicleSpawned is a validated ServerPurchaseVehicle
+        // success (the only firer); counter resets per run like the others.
+        events.Subscribe<EvVehicleSpawned>([this](const EvVehicleSpawned&) { ++m_vehiclePurchases; });
         return true;
     }
 
@@ -49,6 +54,12 @@ namespace Terrafront
         m_samples = 0;
         m_nextSampleAt = 0.0;
         m_blockedBaseline = BlockedMovesNow();
+        // W9 bots-v2: vehicles + abilities counters (seam presence is stamped by
+        // TFBotSystem right after this call).
+        m_vehiclePurchases = 0;
+        m_maxVehicleMoveM = 0.0f;
+        m_vehFirstPos.clear();
+        m_abilityUses = 0;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
                        "[TF] chaos harness armed: bots=%u seconds=%.0f blockedMoveBaseline=%llu", botCount,
                        static_cast<double>(seconds), static_cast<unsigned long long>(m_blockedBaseline));
@@ -72,6 +83,13 @@ namespace Terrafront
         m_ctx->players->ForEachAlivePawn(
             [&](const PawnInfo& p)
             {
+                // Seated pawns ride the vehicle: hover suspension legitimately
+                // dips ~0.3m into slopes at speed (below-ground rescue recovers
+                // it). This check exists to catch WALKERS under the world, so
+                // vehicle passengers get the vehicle's tolerance, not a foot
+                // pawn's. (First tripped by bots-v2 driving 2.3km in chaos.)
+                if (m_ctx->vehicles && m_ctx->vehicles->IsSeated(p.owner))
+                    return;
                 const float depth = world->TerrainHeightAt(p.pos[0], p.pos[2]) - p.pos[1];
                 if (depth > kBelowTolM)
                 {
@@ -107,6 +125,25 @@ namespace Terrafront
         CountBelowTerrain(below, worst);
         m_belowTerrainEver += below;
         m_worstBelowM = std::max(m_worstBelowM, worst);
+
+        // W9 bots-v2: vehicle displacement high-water.
+        SampleVehicles();
+    }
+
+    void TFChaosHarness::SampleVehicles()
+    {
+        if (!m_ctx || !m_ctx->vehicles)
+            return;
+        m_ctx->vehicles->ForEachVehicle(
+            [this](const TFVehicleInfo& v)
+            {
+                const auto [it, fresh] = m_vehFirstPos.try_emplace(v.entity, std::array<float, 2>{v.pos[0], v.pos[2]});
+                if (fresh)
+                    return;
+                const float dx = v.pos[0] - it->second[0];
+                const float dz = v.pos[2] - it->second[1];
+                m_maxVehicleMoveM = std::max(m_maxVehicleMoveM, std::sqrt(dx * dx + dz * dz));
+            });
     }
 
     std::string TFChaosHarness::BuildReport()
@@ -125,14 +162,20 @@ namespace Terrafront
         const uint64_t blockedNow = BlockedMovesNow();
         const uint64_t blockedRun = blockedNow >= m_blockedBaseline ? blockedNow - m_blockedBaseline : blockedNow;
 
+        // W9 bots-v2: fresh vehicle displacement sample at report time (covers a
+        // vehicle that moved between the last 1 Hz sample and the report).
+        SampleVehicles();
+
         const bool passPhysics = joltLive;
         const bool passCollision = bodies > 0 && blockedRun > 0;
         const bool passCapture = m_maxCaptureProgress > 0.0f || m_regionFlips > 0;
         const bool passKills = m_kills >= 1;
         const bool passTerrain = worstEver <= kBelowTolM && m_belowTerrainEver == 0 && belowNow == 0;
+        const bool passVehicles = m_vehiclePurchases >= 1 && m_maxVehicleMoveM > 20.0f;
+        const bool passAbilities = m_abilityUses >= 1;
 
         std::ostringstream os;
-        uint32_t passed = 0, failed = 0;
+        uint32_t passed = 0, failed = 0, skipped = 0;
         char buf[256];
         auto line = [&](bool pass, const char* fmt, auto... args)
         {
@@ -151,9 +194,24 @@ namespace Terrafront
         line(passKills, "kills: %s kills=%u", m_kills);
         line(passTerrain, "terrain: %s pawnsBelowEver=%u belowNow=%u worstDepthM=%.2f", m_belowTerrainEver, belowNow,
              static_cast<double>(worstEver));
+        line(passVehicles, "vehicles: %s purchases=%u maxVehicleMoveM=%.1f", m_vehiclePurchases,
+             static_cast<double>(m_maxVehicleMoveM));
+        if (m_abilitySeamPresent)
+        {
+            line(passAbilities, "abilities: %s activations=%u", m_abilityUses);
+        }
+        else
+        {
+            // SKIP, not FAIL: the class-abilities lane has not landed in this
+            // build — never count it against the verdict.
+            const std::string s = "[TF-VALIDATE] abilities: SKIP abilitySystem=absent";
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", s.c_str());
+            os << s << "\n";
+            ++skipped;
+        }
 
-        std::snprintf(buf, sizeof(buf), "RESULT: %s passed=%u failed=%u (armed=%d samples=%u)",
-                      failed == 0 ? "PASS" : "FAIL", passed, failed, m_armed ? 1 : 0, m_samples);
+        std::snprintf(buf, sizeof(buf), "RESULT: %s passed=%u failed=%u skipped=%u (armed=%d samples=%u)",
+                      failed == 0 ? "PASS" : "FAIL", passed, failed, skipped, m_armed ? 1 : 0, m_samples);
         const std::string res = std::string("[TF-VALIDATE] ") + buf;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", res.c_str());
         os << res;

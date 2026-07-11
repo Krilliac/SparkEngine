@@ -24,6 +24,15 @@
  *   terrain    no alive pawn was ever sampled meaningfully below
  *              TFWorldSetup::TerrainHeightAt at its own XZ (worst observed
  *              depth across all 1 Hz samples + a fresh sample at report time).
+ *   vehicles   (W9 bots-v2) at least one vehicle purchase succeeded this run
+ *              (EvVehicleSpawned) AND at least one vehicle moved > 20 m from
+ *              where it was first sampled (1 Hz ForEachVehicle displacement
+ *              high-water) — i.e. bots actually bought AND drove/flew.
+ *   abilities  (W9 bots-v2) at least one bot class-ability activation was
+ *              observed (TFBotSystem::NoteAbilityUse through the
+ *              CanUseAbility/UseAbility seam). When the ability system is not
+ *              compiled in / published, this line reports SKIP, not FAIL,
+ *              and does not affect the RESULT verdict.
  *
  * Counters reset on every OnChaosStart so each run is judged on its own.
  * Everything here is read-only w.r.t. gameplay: the harness never mutates
@@ -34,8 +43,10 @@
 #include "Core/TFEvents.h"
 #include "Core/TFTypes.h"
 
+#include <array>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 
 namespace Terrafront
 {
@@ -64,8 +75,20 @@ namespace Terrafront
 
         bool Armed() const { return m_armed; }
 
+        // --- W9 bots-v2 additions ------------------------------------------------
+        /// Whether the class-ability seam (TFAbilitySystem + ctx.abilities) is
+        /// compiled in AND published at runtime. TFBotSystem probes and reports
+        /// this at every OnChaosStart; false makes the abilities check SKIP.
+        void SetAbilitySeamPresent(bool present) { m_abilitySeamPresent = present; }
+        /// One successful CanUseAbility -> UseAbility activation by a bot.
+        void NoteAbilityUse() { ++m_abilityUses; }
+
       private:
         uint64_t BlockedMovesNow() const;
+        /// W9 bots-v2: 1 Hz vehicle displacement sweep — remember where each
+        /// vehicle entity was first seen and track the max XZ distance any of
+        /// them has moved from that point (also run once at report time).
+        void SampleVehicles();
         /// One pass over the alive pawns: how many are currently more than
         /// kBelowTolM under the terrain, and the deepest violation in meters.
         void CountBelowTerrain(uint32_t& outCount, float& outWorstDepthM) const;
@@ -82,6 +105,13 @@ namespace Terrafront
         float m_worstBelowM{0.0f};      ///< deepest below-terrain violation seen
         uint32_t m_samples{0};
         double m_nextSampleAt{0.0};
+
+        // W9 bots-v2: vehicles + abilities checks
+        uint32_t m_vehiclePurchases{0}; ///< EvVehicleSpawned since chaos start
+        float m_maxVehicleMoveM{0.0f};  ///< max XZ displacement from first-seen pos
+        std::unordered_map<EntityId, std::array<float, 2>> m_vehFirstPos;
+        bool m_abilitySeamPresent{false};
+        uint32_t m_abilityUses{0};
     };
 
 } // namespace Terrafront

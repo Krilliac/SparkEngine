@@ -23,7 +23,18 @@
  *  - drive:   TFVehicleSystem::ServerHandleSeatOp into the driver seat of a
  *             nearby friendly vehicle when the objective is far; the normal
  *             TF_ClientInput enqueue then steers it (TFServerSim forwards a
- *             seated player's inputs to ServerHandleSeatedInput).
+ *             seated player's inputs to ServerHandleSeatedInput). W9 bots-v2:
+ *             terrain look-ahead steering around plateau walls, a reverse-out
+ *             recovery phase before giving up on a wedged ride, and Vulture
+ *             VTOL flight (altitude hold on the Jump/Crouch lift axis, fly at
+ *             the objective, descend + landed-gated exit on arrival).
+ *  - ability: (W9 bots-v2) situational class-ability triggers — Medtech near
+ *             hurt friendlies, Bulwark under fire, Striker closing a gap.
+ *             Bots hold TFB_Ability on their input AND, when the
+ *             class-abilities lane's TFAbilitySystem is compiled in and
+ *             published on TFGameContext, call the public CanUseAbility/
+ *             UseAbility seam (detected at compile time, same shim pattern as
+ *             the TFRegionSystem queries — absent system == silent no-op).
  *
  * Tactics (all server-side, deterministic given the same tick sequence):
  *  - objective bias toward contested / actively-capturing regions and toward
@@ -91,6 +102,12 @@ namespace Terrafront
         /// collision world, periodic deployable placements (class-gated) and
         /// vehicle-purchase attempts (server-validated; refusals are free
         /// exercise). Authority only. `botCount` 0 stops chaos and despawns.
+        /// W9 bots-v2: two designated pilot slots scatter to their own faction
+        /// skyanchor terminal instead — slot 1 is bankrolled/ranked through the
+        /// REAL progression paths (ServerGrantFlux/ServerAwardXP/ServerTryUnlock)
+        /// and pulls a Vulture to fly at a far objective; slot 2 buys a Drifter
+        /// and drives there — so the tf_validate vehicles check has a
+        /// deterministic purchase + >20 m movement to observe.
         void ServerStartChaos(uint32_t botCount, float seconds);
         bool ChaosActive() const { return m_chaosActive; }
 
@@ -134,6 +151,20 @@ namespace Terrafront
             double vehicleRetryAt = 0.0; ///< no vehicle scan before this time
             uint8_t enterTries = 0;      ///< failed seat-op attempts this approach
 
+            // driving v2 (W9 bots-v2): wedge recovery instead of instant dismount
+            double reverseUntil = 0.0; ///< reverse-out phase deadline (0 = off)
+            int8_t reverseSteer = 0;   ///< steer held while reversing out
+            uint8_t wedgeCount = 0;    ///< wedges this ride; 2nd inside window -> walk
+            double lastWedgeAt = 0.0;
+
+            // class ability (W9 bots-v2; silent no-op until the abilities lane lands)
+            double nextAbilityAt = 0.0; ///< situational trigger rate limit
+            float lastPool = -1.0f;     ///< health+shield last think (-1 = unknown)
+            bool underFire = false;     ///< pool dropped since the previous think
+
+            // chaos pilot (W9 bots-v2): purchase retry schedule for pilot slots
+            double pilotBuyAt = 0.0;
+
             // fitness cache (drives engage-vs-advance; refreshed each Think)
             bool lowHealth = false;
 
@@ -175,6 +206,20 @@ namespace Terrafront
         /// while the vehicle plan owns this think's movement.
         bool TryUseVehicle(Bot& bot, const PawnInfo& self, double now, TF_ClientInput& in);
         void ExitVehicle(Bot& bot, double now);
+        // --- W9 bots-v2 -----------------------------------------------------
+        /// Situational class-ability trigger (Medtech near hurt friendlies,
+        /// Bulwark under fire, Striker closing a gap). Holds TFB_Ability on
+        /// `in` and calls the CanUseAbility/UseAbility seam when compiled in.
+        void TryClassAbility(Bot& bot, const PawnInfo& self, double now, TF_ClientInput& in);
+        /// True for the chaos pilot slots (Vulture pilot / Drifter driver).
+        bool ChaosIsPilot(const Bot& bot) const;
+        /// Pilot purchase: at the faction terminal with no free ride nearby,
+        /// buy the slot's vehicle (Vulture falls back to Drifter when refused)
+        /// and aim the bot at a far region so TryUseVehicle boards + goes.
+        void ChaosPilotTryPurchase(Bot& bot, const PawnInfo& self, double now);
+        /// Objective = the farthest non-skyanchor region (long ride target).
+        void SetFarObjective(Bot& bot, const float selfPos[3]);
+        // ---------------------------------------------------------------------
         void TryFire(Bot& bot, double now);
         bool AcquireTarget(const Bot& bot, const PawnInfo& self, EntityId& outTarget, float outTargetPos[3]) const;
         void PickObjective(Bot& bot, const float selfPos[3]) const;
@@ -214,6 +259,8 @@ namespace Terrafront
         bool m_chaosCmds{false};   ///< tf_chaos/tf_validate registered by this instance
         uint32_t m_chaosDeployTries{0};
         uint32_t m_chaosVehicleTries{0};
+        uint32_t m_chaosVehiclePurchases{0}; ///< W9: successful bot purchases this run
+        uint32_t m_abilityUses{0};           ///< W9: successful seam activations (lifetime)
 
         // debug counters
         uint32_t m_shotsFired{0};

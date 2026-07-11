@@ -31,12 +31,22 @@
 #include "Game/TFDeployableSystem.h"
 #include "Game/TFMovementModel.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFProgressionSystem.h"
 #include "Game/TFVehicleSystem.h"
 #include "Game/TFWeaponMath.h"
 #include "Game/TFWeaponSystem.h"
 #include "Net/TFServerSim.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
+
+// W9 bots-v2: the class-abilities lane's system is optional at this lane's
+// compile time. When the header exists in the tree, include it so the seam
+// concepts below see the full type; when it does not, TFGameContext has no
+// `abilities` member either (the integrator lands both together) and every
+// ability call in this file collapses to a compile-time no-op.
+#if __has_include("Game/TFAbilitySystem.h")
+#include "Game/TFAbilitySystem.h"
+#endif
 
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
@@ -51,6 +61,7 @@
 #include <cstdlib>
 #include <numbers>
 #include <sstream>
+#include <type_traits>
 
 namespace Terrafront
 {
@@ -83,9 +94,37 @@ namespace Terrafront
         constexpr float kVehScanRadiusM = 60.0f;  // hull must be within this to walk to it
         constexpr float kVehExitWithinM = 60.0f;  // objective closer than this -> dismount
         constexpr float kVehEnterTryM = 3.0f;     // issue the seat op inside this XZ range
-        constexpr float kVehStuckSec = 3.0f;      // wedged ride pose this long -> bail out
+        constexpr float kVehStuckSec = 3.0f;      // wedged ride pose this long -> recover
         constexpr double kVehRetrySec = 10.0;     // cooldown after a failed/abandoned plan
         constexpr uint8_t kVehMaxEnterTries = 3;
+
+        // driving v2 (W9 bots-v2)
+        constexpr float kVehProbeAheadM = 12.0f;    // terrain look-ahead probe distance
+        constexpr float kVehProbeSideRad = 0.7f;    // ~40 deg side probes around a wall
+        constexpr float kVehClimbLimitM = 3.0f;     // rise beyond this ahead = treat as a wall
+        constexpr double kVehReverseSec = 1.6;      // reverse-out recovery phase length
+        constexpr double kVehWedgeWindowSec = 20.0; // 2nd wedge inside this -> dismount
+        constexpr float kVehHardTurnRad = 1.5f;     // ease throttle past this yaw error
+
+        // Vulture VTOL flight (W9 bots-v2; lift axis = TFB_Jump/TFB_Crouch)
+        constexpr float kVulCruiseMinAglM = 25.0f; // climb below this while cruising
+        constexpr float kVulCruiseMaxAglM = 45.0f; // descend above this while cruising
+        constexpr float kVulLandWithinM = 60.0f;   // start the landing descent inside this
+        constexpr float kVulExitAglM = 1.5f;       // try the (landed-gated) exit below this
+        constexpr float kVulStuckSec = 6.0f;       // hover wedge window (yaw-in-place is slow)
+
+        // class abilities (W9 bots-v2)
+        constexpr double kAbilityCheckSec = 2.5; // situational trigger rate limit
+        constexpr float kMedtechHealRadiusM = 15.0f;
+        constexpr float kMedtechHurtFrac = 0.7f; // friendly pool below this -> heal
+        constexpr float kStrikerGapM = 25.0f;    // target farther than this -> jets
+
+        // chaos pilots (W9 bots-v2): deterministic vehicle exercise for tf_validate
+        constexpr uint32_t kChaosVulturePilotSlot = 1; // AUC; flies a Vulture
+        constexpr uint32_t kChaosDriverPilotSlot = 2;  // HLX; drives a Drifter
+        constexpr double kPilotBuyRetrySec = 4.0;
+        constexpr uint32_t kBotChaosFluxGrant = 200; // Drifter money for every bot
+        constexpr uint16_t kPilotXPGrant = 45000;    // rank >= 15 (500 * n^1.6): Vulture gate
 
         // ---------------------------------------------------------------------------
         // W2 TFRegionSystem contract detection (kept from the regions-parallel wave).
@@ -145,6 +184,65 @@ namespace Terrafront
             outCapturing = FactionId::None;
             outContested = false;
             return 0.0f;
+        }
+
+        // ---------------------------------------------------------------------------
+        // W9 class-ability seam detection (same philosophy as the region shim
+        // above): the class-abilities lane lands TFAbilitySystem + a
+        // TFGameContext::abilities pointer together (integrator). Until both
+        // exist in this tree these helpers compile to constant-false no-ops;
+        // once they land, bots drive the real public CanUseAbility/UseAbility
+        // seam with no change needed here. The `if constexpr` discard only works
+        // inside a template, so C is deduced from the ctx pointer.
+        // ---------------------------------------------------------------------------
+
+        template <typename C>
+        concept TFHasAbilityCtxPtr = requires(C& c) { c.abilities; };
+
+        template <typename A>
+        concept TFHasAbilityApi = requires(A& a, PlayerId p) {
+            { a.CanUseAbility(p) } -> std::convertible_to<bool>;
+            a.UseAbility(p);
+        };
+
+        /// True when the seam is compiled in AND published at runtime.
+        template <typename C> bool AbilitySeamPresent(C* ctx)
+        {
+            if constexpr (TFHasAbilityCtxPtr<C>)
+            {
+                if (ctx && ctx->abilities)
+                {
+                    using A = std::remove_pointer_t<std::remove_cvref_t<decltype(ctx->abilities)>>;
+                    if constexpr (TFHasAbilityApi<A>)
+                        return true;
+                }
+            }
+            (void)ctx;
+            return false;
+        }
+
+        /// CanUseAbility -> UseAbility through the seam. True only when an
+        /// activation actually happened.
+        template <typename C> bool TryUseAbilitySeam(C* ctx, PlayerId player)
+        {
+            if constexpr (TFHasAbilityCtxPtr<C>)
+            {
+                if (ctx && ctx->abilities)
+                {
+                    using A = std::remove_pointer_t<std::remove_cvref_t<decltype(ctx->abilities)>>;
+                    if constexpr (TFHasAbilityApi<A>)
+                    {
+                        if (ctx->abilities->CanUseAbility(player))
+                        {
+                            ctx->abilities->UseAbility(player);
+                            return true;
+                        }
+                    }
+                }
+            }
+            (void)ctx;
+            (void)player;
+            return false;
         }
 
         /// Static ownership guess when the live region system is not queryable yet:
@@ -507,6 +605,11 @@ namespace Terrafront
             bot.vehicleEntity = 0;
             bot.enterTries = 0;
             bot.lowHealth = false;
+            bot.reverseUntil = 0.0;
+            bot.wedgeCount = 0;
+            bot.lastWedgeAt = 0.0;
+            bot.lastPool = -1.0f;
+            bot.underFire = false;
             if (m_chaosActive)
                 bot.chaosScatterPending = true; // re-scatter every chaos life for coverage
             bot.stuckRefPos[0] = self.pos[0];
@@ -521,6 +624,37 @@ namespace Terrafront
 
     void TFBotSystem::ThinkAlive(Bot& bot, const PawnInfo& self, double now)
     {
+        // W9 bots-v2: a REFUSED exit (airborne Vulture — the seat-op is
+        // landed-gated) leaves the bot seated after ExitVehicle already reset
+        // its plan. Re-latch into Driving so it keeps flying/landing instead of
+        // walking-in-place through the seated-input forwarder. The one-tick
+        // exit latch after a SUCCESSFUL exit also reports IsSeated, but its
+        // seat slot is already freed — the seat scan below tells them apart.
+        if (bot.state != BotState::Driving && m_ctx->vehicles && m_ctx->vehicles->IsSeated(bot.id))
+        {
+            EntityId riding = 0;
+            m_ctx->vehicles->ForEachVehicle(
+                [&](const TFVehicleInfo& v)
+                {
+                    if (riding != 0)
+                        return;
+                    for (uint8_t i = 0; i < v.seatCount; ++i)
+                    {
+                        if (v.seats[i] == bot.id)
+                        {
+                            riding = v.entity;
+                            return;
+                        }
+                    }
+                });
+            if (riding != 0)
+            {
+                bot.state = BotState::Driving;
+                bot.vehicleEntity = riding;
+                bot.stuckSince = now; // fresh wedge window for the retry
+            }
+        }
+
         // A seated bot rides the vehicle: infantry combat, stuck-jump and walking
         // objectives do not apply until it dismounts.
         if (bot.state == BotState::Driving)
@@ -540,7 +674,12 @@ namespace Terrafront
 
         // --- chaos: periodic deployable / vehicle-purchase exercise ---
         if (m_chaosActive)
+        {
             ChaosTryUtility(bot, now);
+            // W9 pilots: buy the designated ride at the faction terminal.
+            if (ChaosIsPilot(bot) && now >= bot.pilotBuyAt)
+                ChaosPilotTryPurchase(bot, self, now);
+        }
 
         // --- stuck detection: pos unchanged > 2 s -> hold jump ---
         const float dsx = self.pos[0] - bot.stuckRefPos[0];
@@ -564,6 +703,11 @@ namespace Terrafront
 
         // Fitness drives engage-vs-advance below.
         bot.lowHealth = HealthFrac(bot, self) < kLowHealthFrac;
+
+        // Under-fire detection (W9 bots-v2): the pool dropped since last think.
+        const float pool = self.health + self.shield;
+        bot.underFire = bot.lastPool >= 0.0f && pool < bot.lastPool - 0.5f;
+        bot.lastPool = pool;
 
         // --- combat: nearest enemy alive pawn within 60 m with rough LoS ---
         float targetPos[3];
@@ -590,8 +734,11 @@ namespace Terrafront
         {
             bot.targetEntity = 0;
 
-            // --- objective (region march, contested-biased) ---
-            PickObjective(bot, self.pos);
+            // --- objective (region march, contested-biased). W9 chaos pilots
+            //     keep their scripted objective (terminal pad, then the far
+            //     ride target) — the scorer would clobber it every think. ---
+            if (!(m_chaosActive && ChaosIsPilot(bot)))
+                PickObjective(bot, self.pos);
 
             // --- chaos: randomized objective override (coverage over optimality);
             //     fireteam cohesion is skipped in chaos to maximize scatter ---
@@ -646,8 +793,86 @@ namespace Terrafront
         if (bot.jumping)
             in.buttons |= TFB_Jump;
 
+        // W9 bots-v2: situational class ability (rate-limited inside).
+        TryClassAbility(bot, self, now, in);
+
         bot.input = in; // seq is stamped per fixed tick in FixedUpdate
         bot.wantMove = true;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Class abilities (W9 bots-v2; real seam when the abilities lane is present)
+    // ---------------------------------------------------------------------------
+
+    void TFBotSystem::TryClassAbility(Bot& bot, const PawnInfo& self, double now, TF_ClientInput& in)
+    {
+        if (now < bot.nextAbilityAt || !m_ctx->players)
+            return;
+
+        bool want = false;
+        switch (bot.cls)
+        {
+        case ClassId::Medtech:
+        {
+            // Hurt self, or a hurt friendly inside heal reach.
+            want = HealthFrac(bot, self) < kMedtechHurtFrac;
+            if (!want)
+            {
+                m_ctx->players->ForEachAlivePawn(
+                    [&](const PawnInfo& p)
+                    {
+                        if (want || p.entity == self.entity || p.faction != bot.faction)
+                            return;
+                        const float dx = p.pos[0] - self.pos[0];
+                        const float dz = p.pos[2] - self.pos[2];
+                        if (dx * dx + dz * dz > kMedtechHealRadiusM * kMedtechHealRadiusM)
+                            return;
+                        float maxPool = 1000.0f; // ClassDef defaults
+                        if (m_ctx->data)
+                            if (const ClassDef* cd = m_ctx->data->GetClass(p.cls))
+                                maxPool = std::max(1.0f, cd->health + cd->shield);
+                        if ((p.health + p.shield) / maxPool < kMedtechHurtFrac)
+                            want = true;
+                    });
+            }
+            break;
+        }
+        case ClassId::Bulwark:
+            // Overshield when actually taking hits (or brawling on low health).
+            want = bot.underFire || (bot.state == BotState::Fighting && bot.lowHealth);
+            break;
+        case ClassId::Striker:
+            // Jets to close a wide gap on the current target.
+            if (bot.state == BotState::Fighting && bot.targetEntity != 0)
+            {
+                PawnInfo tp;
+                if (m_ctx->players->GetPawnByEntity(bot.targetEntity, tp) && tp.alive)
+                {
+                    const float dx = tp.pos[0] - self.pos[0];
+                    const float dz = tp.pos[2] - self.pos[2];
+                    want = dx * dx + dz * dz > kStrikerGapM * kStrikerGapM;
+                }
+            }
+            break;
+        default:
+            break; // Ghost/Fabricator: no situational trigger this wave
+        }
+        if (!want)
+            return;
+
+        bot.nextAbilityAt = now + kAbilityCheckSec + static_cast<double>(m_rng() % 10u) * 0.1;
+
+        // Input-driven path: harmless if nothing consumes the bit yet, and the
+        // moment an input-handled ability lane lands, bots exercise it for free.
+        in.buttons |= TFB_Ability;
+
+        // Direct seam (compile-time optional; see the shim at the top of file).
+        if (TryUseAbilitySeam(m_ctx, bot.id))
+        {
+            ++m_abilityUses;
+            if (m_chaos)
+                m_chaos->NoteAbilityUse();
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -730,6 +955,9 @@ namespace Terrafront
                 bot.stuckRefPos[2] = self.pos[2];
                 bot.stuckSince = now;
                 bot.jumping = false;
+                bot.reverseUntil = 0.0; // fresh ride: clear wedge-recovery state
+                bot.wedgeCount = 0;
+                bot.lastWedgeAt = 0.0;
                 in = TF_ClientInput{}; // neutral until ThinkDriving steers next think
                 return true;
             }
@@ -767,7 +995,23 @@ namespace Terrafront
             return;
         }
 
-        // Wedged ride: pose unchanged too long -> dismount and walk instead.
+        const bool vtol = veh.vehId == VehicleId::Vulture;
+
+        // Keep the objective fresh while riding (ownership can flip mid-drive).
+        // In chaos the scatter/pilot objective is kept: re-rolls happen on foot
+        // only, and the pilots' far target must survive the whole ride.
+        if (!m_chaosActive)
+            PickObjective(bot, self.pos);
+
+        const float dx = bot.objectiveX - self.pos[0];
+        const float dz = bot.objectiveZ - self.pos[2];
+        const float dist = std::sqrt(dx * dx + dz * dz);
+        const float desiredYaw = std::atan2(dx, dz);
+        const float yawErr = WrapPi(desiredYaw - veh.yaw);
+
+        // Wedge detection: ride pose unchanged too long. VTOLs get more slack —
+        // a gunship yaws in place at zero ground speed while lining up.
+        bool wedged = false;
         const float dsx = self.pos[0] - bot.stuckRefPos[0];
         const float dsz = self.pos[2] - bot.stuckRefPos[2];
         if (dsx * dsx + dsz * dsz > kStuckEpsM * kStuckEpsM)
@@ -777,34 +1021,117 @@ namespace Terrafront
             bot.stuckRefPos[2] = self.pos[2];
             bot.stuckSince = now;
         }
-        else if (now - bot.stuckSince > kVehStuckSec)
+        else if (now - bot.stuckSince > (vtol ? kVulStuckSec : kVehStuckSec))
         {
-            ExitVehicle(bot, now);
+            wedged = true;
+        }
+
+        TF_ClientInput in{};
+        in.weaponSlot = 0;
+        in.viewYaw = desiredYaw;
+        in.viewPitch = 0.0f;
+
+        if (vtol)
+        {
+            // --- Vulture flight: altitude hold + fly at the objective, then
+            //     descend and take the landed-gated exit on arrival. A wedged
+            //     hover (world edge / AGL ceiling) also lands and walks. ---
+            const float terrain = m_ctx->world ? m_ctx->world->TerrainHeightAt(veh.pos[0], veh.pos[2]) : 0.0f;
+            const float agl = veh.pos[1] - terrain;
+            in.moveX = static_cast<int8_t>(std::clamp(yawErr * 1.2f, -1.0f, 1.0f) * 127.0f);
+
+            if (dist < kVulLandWithinM || wedged)
+            {
+                in.buttons |= TFB_Crouch; // descend onto the point
+                in.moveY = static_cast<int8_t>((dist > 20.0f && !wedged) ? 45 : 0);
+                if (agl <= kVulExitAglM || wedged)
+                {
+                    // Server's VehicleLanded gate opens at 2 m AGL (clearance-
+                    // aware with a Jolt hull, so pads/roofs count even though
+                    // this terrain-AGL proxy can't see them). A refused exit
+                    // (still airborne) re-latches into Driving next think and
+                    // the descent simply continues.
+                    ExitVehicle(bot, now);
+                    return;
+                }
+            }
+            else
+            {
+                if (agl < kVulCruiseMinAglM)
+                    in.buttons |= TFB_Jump; // climb
+                else if (agl > kVulCruiseMaxAglM)
+                    in.buttons |= TFB_Crouch; // descend back into the cruise band
+                in.moveY = static_cast<int8_t>(std::fabs(yawErr) < 0.9f ? 127 : 40);
+            }
+
+            bot.input = in;
+            bot.wantMove = true;
             return;
         }
 
-        // Keep the objective fresh while riding (ownership can flip mid-drive).
-        PickObjective(bot, self.pos);
-        const float dx = bot.objectiveX - self.pos[0];
-        const float dz = bot.objectiveZ - self.pos[2];
-        const float dist = std::sqrt(dx * dx + dz * dz);
+        // --- ground hover-rig ---
+
         if (dist < kVehExitWithinM)
         {
             ExitVehicle(bot, now);
             return;
         }
 
-        // Drive: moveY = throttle, moveX = steer (ServerHandleSeatedInput mapping).
-        const float desiredYaw = std::atan2(dx, dz);
-        const float yawErr = WrapPi(desiredYaw - veh.yaw);
-        const float steer = std::clamp(yawErr * 1.5f, -1.0f, 1.0f);
+        if (wedged)
+        {
+            // First wedge on this leg: reverse out and try again. A second
+            // wedge inside the window means the ride is truly stuck — walk.
+            if (bot.wedgeCount > 0 && now - bot.lastWedgeAt < kVehWedgeWindowSec)
+            {
+                ExitVehicle(bot, now);
+                return;
+            }
+            ++bot.wedgeCount;
+            bot.lastWedgeAt = now;
+            bot.reverseUntil = now + kVehReverseSec;
+            bot.reverseSteer = (m_rng() & 1u) != 0u ? static_cast<int8_t>(90) : static_cast<int8_t>(-90);
+            bot.stuckSince = now; // fresh window after the recovery attempt
+        }
 
-        TF_ClientInput in{};
-        in.weaponSlot = 0;
-        in.viewYaw = desiredYaw;
-        in.viewPitch = 0.0f;
+        // Reverse-out recovery phase: back away swinging the tail.
+        if (now < bot.reverseUntil)
+        {
+            in.viewYaw = veh.yaw; // hold the current heading while backing out
+            in.moveY = -100;
+            in.moveX = bot.reverseSteer;
+            bot.input = in;
+            bot.wantMove = true;
+            return;
+        }
+
+        // Drive: moveY = throttle, moveX = steer (ServerHandleSeatedInput mapping).
+        float steer = std::clamp(yawErr * 1.5f, -1.0f, 1.0f);
+        float throttle = std::fabs(yawErr) > kVehHardTurnRad ? 60.0f : 127.0f;
+
+        // Terrain look-ahead: a wall-steep rise dead ahead means steer along
+        // the lower side probe instead of nosing in and wedging (plateau walls
+        // and mesa edges; the Jolt hull can't climb them either).
+        if (m_ctx->world)
+        {
+            const float here = m_ctx->world->TerrainHeightAt(veh.pos[0], veh.pos[2]);
+            const auto riseAt = [&](float relYaw)
+            {
+                const float a = veh.yaw + relYaw;
+                return m_ctx->world->TerrainHeightAt(veh.pos[0] + std::sin(a) * kVehProbeAheadM,
+                                                     veh.pos[2] + std::cos(a) * kVehProbeAheadM) -
+                       here;
+            };
+            if (riseAt(0.0f) > kVehClimbLimitM)
+            {
+                const float left = riseAt(-kVehProbeSideRad);
+                const float right = riseAt(kVehProbeSideRad);
+                steer = left < right ? -1.0f : 1.0f;
+                throttle = std::min(left, right) > kVehClimbLimitM ? 40.0f : 80.0f;
+            }
+        }
+
         in.moveX = static_cast<int8_t>(steer * 127.0f);
-        in.moveY = static_cast<int8_t>(std::fabs(yawErr) > 1.5f ? 60 : 127); // ease off in hard turns
+        in.moveY = static_cast<int8_t>(throttle);
 
         bot.input = in;
         bot.wantMove = true;
@@ -853,6 +1180,7 @@ namespace Terrafront
         m_chaosEndsAt = seconds > 0.0f ? now + static_cast<double>(seconds) : 0.0;
         m_chaosDeployTries = 0;
         m_chaosVehicleTries = 0;
+        m_chaosVehiclePurchases = 0;
         for (Bot& b : m_bots)
         {
             b.chaosScatterPending = true; // scatter on the first alive think
@@ -860,9 +1188,38 @@ namespace Terrafront
             // the randomized re-rolls kick in; stagger per slot.
             b.chaosRerollAt = now + 15.0 + static_cast<double>(b.id - kTFBotIdBase) * 0.7;
             b.chaosUtilityAt = now + 5.0 + static_cast<double>(m_rng() % 60) * 0.1;
+            b.pilotBuyAt = 0.0;
         }
+
+        // W9 pilots: bankroll + rank the designated pilots through the REAL
+        // progression paths (grant/award/unlock — the same seams tf_giveflux
+        // and gameplay use) so the Vulture/Drifter purchase gates actually
+        // open, then let the validated terminal purchase do the rest. Every
+        // bot gets Drifter money so incidental terminal purchases can succeed
+        // too. The 750-flux wallet cap forces the grant/unlock interleave.
+        if (m_ctx->progression)
+        {
+            for (Bot& b : m_bots)
+            {
+                m_ctx->progression->ServerGrantFlux(b.id, kBotChaosFluxGrant);
+                if (!ChaosIsPilot(b))
+                    continue;
+                if ((b.id - kTFBotIdBase) == kChaosVulturePilotSlot)
+                {
+                    m_ctx->progression->ServerAwardXP(b.id, kPilotXPGrant, kXPReasonKill); // rank >= 15
+                    m_ctx->progression->ServerGrantFlux(b.id, kFluxWalletCap);
+                    m_ctx->progression->ServerTryUnlock(b.id, "veh_ravager"); // Vulture prereq
+                    m_ctx->progression->ServerTryUnlock(b.id, "veh_vulture");
+                }
+                m_ctx->progression->ServerGrantFlux(b.id, kFluxWalletCap); // spawn money
+            }
+        }
+
         if (m_chaos)
+        {
             m_chaos->OnChaosStart(BotCount(), seconds);
+            m_chaos->SetAbilitySeamPresent(AbilitySeamPresent(m_ctx));
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] CHAOS: %u bots for %.0f s (0 = open-ended)", BotCount(),
                        static_cast<double>(seconds));
     }
@@ -900,10 +1257,43 @@ namespace Terrafront
         if (cont.regions.empty())
             return;
 
+        // W9 pilots: drop at the OWN faction skyanchor's vehicle terminal so the
+        // purchase gate (friendly terminal within 25 m) deterministically opens.
+        const uint32_t slot = bot.id - kTFBotIdBase;
+        if (ChaosIsPilot(bot))
+        {
+            for (const RegionDef& r : cont.regions)
+            {
+                if (r.tier != "skyanchor" || r.homeFaction != bot.faction || !r.vehicleTerminal.has_value())
+                    continue;
+                const float tx = (*r.vehicleTerminal)[0];
+                const float tz = (*r.vehicleTerminal)[1];
+                const float ang = static_cast<float>(m_rng() % 6283u) * 0.001f;
+                const float rad = 2.0f + static_cast<float>(m_rng() % 60u) * 0.1f; // 2-8 m off the pad
+                const float x = tx + std::sin(ang) * rad;
+                const float z = tz + std::cos(ang) * rad;
+                const float y = m_ctx->world->TerrainHeightAt(x, z) + 0.5f;
+                m_ctx->serverSim->TeleportPawn(bot.id, x, y, z);
+                bot.objectiveRegion = r.id;
+                bot.objectiveX = tx; // stay on the pad until the purchase lands
+                bot.objectiveZ = tz;
+                bot.stuckRefPos[0] = x;
+                bot.stuckRefPos[1] = y;
+                bot.stuckRefPos[2] = z;
+                bot.stuckSince = now;
+                bot.jumping = false;
+                bot.pilotBuyAt = now + 1.0; // let the teleport settle one tick
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] chaos pilot: bot 0x%08X %s -> terminal r%u (%.0f, %.0f)",
+                               bot.id, FactionTag(bot.faction), static_cast<unsigned>(r.id), x, z);
+                return;
+            }
+            // No terminal for this faction (data changed): fall through to the
+            // normal scatter below.
+        }
+
         // Even slots -> the shared multi-faction arena (guaranteed contact and
         // contested points). Odd slots -> a random region this bot's faction can
         // actually capture (guaranteed single-attacker progress somewhere).
-        const uint32_t slot = bot.id - kTFBotIdBase;
         const RegionDef* dest = nullptr;
         if ((slot % 2u) == 0u)
         {
@@ -965,6 +1355,10 @@ namespace Terrafront
 
     void TFBotSystem::ChaosMaybeReroll(Bot& bot, double now)
     {
+        // W9 pilots keep their scripted objectives (terminal, then far region):
+        // a re-roll mid-plan would strand the purchase or shorten the ride.
+        if (ChaosIsPilot(bot))
+            return;
         if (now < bot.chaosRerollAt)
             return;
         bot.chaosRerollAt = now + 6.0 + static_cast<double>(m_rng() % 100u) * 0.1; // 6-16 s
@@ -1023,8 +1417,102 @@ namespace Terrafront
         // the exercise; success hands nearby bots wheels for TryUseVehicle).
         if (m_ctx->vehicles && (m_rng() % 3u) == 0u)
         {
-            m_ctx->vehicles->ServerPurchaseVehicle(bot.id, static_cast<VehicleId>(1u + (m_rng() % 3u)));
+            if (m_ctx->vehicles->ServerPurchaseVehicle(bot.id, static_cast<VehicleId>(1u + (m_rng() % 3u))))
+                ++m_chaosVehiclePurchases;
             ++m_chaosVehicleTries;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Chaos pilots (W9 bots-v2): deterministic purchase + drive/fly exercise
+    // ---------------------------------------------------------------------------
+
+    bool TFBotSystem::ChaosIsPilot(const Bot& bot) const
+    {
+        const uint32_t slot = bot.id - kTFBotIdBase;
+        return slot == kChaosVulturePilotSlot || slot == kChaosDriverPilotSlot;
+    }
+
+    void TFBotSystem::SetFarObjective(Bot& bot, const float selfPos[3])
+    {
+        bot.objectiveRegion = kInvalidRegion;
+        bot.objectiveX = bot.objectiveZ = 2048.0f; // map-center fallback
+        if (!m_ctx->data || !m_ctx->data->IsLoaded())
+            return;
+        const ContinentDef& cont = m_ctx->data->GetContinent();
+        const RegionDef* best = nullptr;
+        float bestD2 = -1.0f;
+        for (const RegionDef& r : cont.regions)
+        {
+            if (r.tier == "skyanchor")
+                continue;
+            const float dx = r.centerX - selfPos[0];
+            const float dz = r.centerZ - selfPos[2];
+            const float d2 = dx * dx + dz * dz;
+            if (d2 > bestD2)
+            {
+                bestD2 = d2;
+                best = &r;
+            }
+        }
+        if (!best)
+            return;
+        bot.objectiveRegion = best->id;
+        bot.objectiveX = best->centerX;
+        bot.objectiveZ = best->centerZ;
+    }
+
+    void TFBotSystem::ChaosPilotTryPurchase(Bot& bot, const PawnInfo& self, double now)
+    {
+        bot.pilotBuyAt = now + kPilotBuyRetrySec;
+        if (!m_ctx->vehicles || m_ctx->vehicles->IsSeated(bot.id))
+            return;
+
+        // A free friendly ride already parked nearby (bought last try, or the
+        // pilot walked back to it): just make the march long so TryUseVehicle
+        // boards it on this same think.
+        bool haveRide = false;
+        m_ctx->vehicles->ForEachVehicle(
+            [&](const TFVehicleInfo& v)
+            {
+                if (haveRide || v.faction != bot.faction || v.hp <= 0.0f || v.deployed)
+                    return;
+                if (v.seatCount == 0 || v.seats[0] != kInvalidPlayer)
+                    return;
+                const float dx = v.pos[0] - self.pos[0];
+                const float dz = v.pos[2] - self.pos[2];
+                haveRide = dx * dx + dz * dz < kVehScanRadiusM * kVehScanRadiusM;
+            });
+        if (haveRide)
+        {
+            SetFarObjective(bot, self.pos);
+            bot.vehicleRetryAt = now; // board on this very think, not after cooldown
+            return;
+        }
+
+        const uint32_t slot = bot.id - kTFBotIdBase;
+        const VehicleId want = slot == kChaosVulturePilotSlot ? VehicleId::Vulture : VehicleId::Drifter;
+        ++m_chaosVehicleTries;
+        if (m_ctx->vehicles->ServerPurchaseVehicle(bot.id, want))
+        {
+            ++m_chaosVehiclePurchases;
+            SetFarObjective(bot, self.pos);
+            bot.vehicleRetryAt = now; // walk straight to the fresh hull
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] chaos pilot 0x%08X bought vehicle %u -> far objective r%d",
+                           bot.id, static_cast<unsigned>(want),
+                           bot.objectiveRegion == kInvalidRegion ? -1 : static_cast<int>(bot.objectiveRegion));
+        }
+        else if (want == VehicleId::Vulture)
+        {
+            // Vulture refused (wallet drained by respawns / unlock rejected):
+            // fall back to the ungated Drifter so the run still drives.
+            ++m_chaosVehicleTries;
+            if (m_ctx->vehicles->ServerPurchaseVehicle(bot.id, VehicleId::Drifter))
+            {
+                ++m_chaosVehiclePurchases;
+                SetFarObjective(bot, self.pos);
+                bot.vehicleRetryAt = now;
+            }
         }
     }
 
@@ -1307,7 +1795,8 @@ namespace Terrafront
         std::ostringstream os;
         os << "[TF] bots " << m_bots.size() << "  spawnReqs " << m_spawnRequests << "  shots " << m_shotsFired
            << "  chaos " << (m_chaosActive ? "ON" : "off") << " (deployTries " << m_chaosDeployTries << ", vehTries "
-           << m_chaosVehicleTries << ")  now " << Now();
+           << m_chaosVehicleTries << ", vehBuys " << m_chaosVehiclePurchases << ")  abilityUses " << m_abilityUses
+           << "  now " << Now();
         for (const Bot& b : m_bots)
         {
             PawnInfo p{};
