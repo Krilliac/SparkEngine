@@ -18,7 +18,9 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFAbilitySystem.h" // class-abilities lane (W9): HUD ability slot
+#include "Game/TFGrenadeSystem.h" // grenades lane (W10): HUD frag count
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFVehicleSystem.h" // W10 vehicle-hud: seated crosshair suppression
 #include "World/TFWorldSetup.h"
 #include "Camera/SparkEngineCamera.h"
 #include "Net/TFClientNet.h"
@@ -658,6 +660,21 @@ namespace Terrafront
         dl->AddText(ImGui::GetFont(), ammoSize, ImVec2(corner.x - ammoSz.x, corner.y - 34.0f),
                     IM_COL32(240, 240, 240, 235), ammo);
 
+        // grenades lane (W10): frag count above the weapon name in the ammo
+        // cluster (authoritative via TF_GrenadeSpawn's `remaining` echo).
+        if (m_ctx->grenades)
+        {
+            const int frags = m_ctx->grenades->GetLocalGrenadeCount();
+            if (frags >= 0)
+            {
+                char gr[32];
+                std::snprintf(gr, sizeof(gr), "FRAG x%d", frags);
+                ImVec2 grSz = ImGui::CalcTextSize(gr);
+                dl->AddText(ImVec2(corner.x - grSz.x, corner.y - 70.0f),
+                            frags > 0 ? IM_COL32(220, 220, 220, 220) : IM_COL32(150, 150, 150, 180), gr);
+            }
+        }
+
         if (m_weapReloading)
         {
             // Slow pulse so it reads as activity, not an error.
@@ -675,15 +692,21 @@ namespace Terrafront
         ImGuiViewport* vp = ImGui::GetMainViewport();
         const ImVec2 c(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f);
 
-        // Spread-reactive: widen with horizontal speed (cheap stand-in for weapon bloom).
-        const float gap = 4.0f + std::clamp(m_view.speed * 1.4f, 0.0f, 18.0f);
-        const float len = 8.0f;
-        const ImU32 col = IM_COL32(255, 255, 255, 210);
-        dl->AddLine(ImVec2(c.x, c.y - gap - len), ImVec2(c.x, c.y - gap), col, 2.0f);
-        dl->AddLine(ImVec2(c.x, c.y + gap), ImVec2(c.x, c.y + gap + len), col, 2.0f);
-        dl->AddLine(ImVec2(c.x - gap - len, c.y), ImVec2(c.x - gap, c.y), col, 2.0f);
-        dl->AddLine(ImVec2(c.x + gap, c.y), ImVec2(c.x + gap + len, c.y), col, 2.0f);
-        dl->AddCircleFilled(c, 1.5f, col);
+        // W10 vehicle-hud: seated players get their per-seat reticle from
+        // TFVehicleHUD; keep the hitmarker, skip the infantry crosshair.
+        const bool seated = m_ctx && m_ctx->vehicles && m_ctx->vehicles->IsSeated(m_ctx->localPlayer);
+        if (!seated)
+        {
+            // Spread-reactive: widen with horizontal speed (cheap stand-in for weapon bloom).
+            const float gap = 4.0f + std::clamp(m_view.speed * 1.4f, 0.0f, 18.0f);
+            const float len = 8.0f;
+            const ImU32 col = IM_COL32(255, 255, 255, 210);
+            dl->AddLine(ImVec2(c.x, c.y - gap - len), ImVec2(c.x, c.y - gap), col, 2.0f);
+            dl->AddLine(ImVec2(c.x, c.y + gap), ImVec2(c.x, c.y + gap + len), col, 2.0f);
+            dl->AddLine(ImVec2(c.x - gap - len, c.y), ImVec2(c.x - gap, c.y), col, 2.0f);
+            dl->AddLine(ImVec2(c.x + gap, c.y), ImVec2(c.x + gap + len, c.y), col, 2.0f);
+            dl->AddCircleFilled(c, 1.5f, col);
+        }
 
         if (m_hitTimer > 0.0f)
         {

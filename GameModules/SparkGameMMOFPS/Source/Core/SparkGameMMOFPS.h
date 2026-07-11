@@ -25,6 +25,9 @@ namespace Terrafront
     class TFDirectivePanel;  // W8 ui-polish lane (UI/TFDirectivePanel.h)
     class TFVehicleTerminal; // W8 ui-polish lane (Game/TFVehicleTerminal.h)
     class TFAudioAmbience;   // audio-polish lane (W8): zone beds + distant combat layer
+    class TFNameplates;      // W10 nameplates lane (UI/TFNameplates.h)
+    class TFMedalSystem;     // W10 medals-scoreboard lane (Game/TFMedalSystem.h)
+    class TFFootsteps;       // audio-wave-2 lane (W10): footstep audio
 } // namespace Terrafront
 
 class TerrafrontModule : public Spark::IModule
@@ -85,6 +88,7 @@ class TerrafrontModule : public Spark::IModule
     // audio-polish lane (W8): booted after bots (needs weapons + data live);
     // Main.cpp wiring applied by the integrator (see W8 wiring notes).
     std::unique_ptr<Terrafront::TFAudioAmbience> m_ambience;
+    std::unique_ptr<Terrafront::TFFootsteps> m_footsteps; // audio-wave-2 lane (W10)
     std::unique_ptr<Terrafront::TFHUD> m_hud;
     std::unique_ptr<Terrafront::TFMapScreen> m_map;
     std::unique_ptr<Terrafront::TFSpawnScreen> m_spawnUI;
@@ -99,6 +103,13 @@ class TerrafrontModule : public Spark::IModule
     // class-abilities lane (W9): booted after outfits, before bots (bot AI
     // calls CanUseAbility/UseAbility). Fwd-decl comes from TFTypes.h.
     std::unique_ptr<Terrafront::TFAbilitySystem> m_abilities;
+
+    // grenades lane (W10): booted after abilities, before bots (bot AI may
+    // call CanThrowGrenade/ServerBotThrowGrenade). Fwd-decl from TFTypes.h.
+    std::unique_ptr<Terrafront::TFGrenadeSystem> m_grenades;
+
+    // W10 medals-scoreboard lane: event-driven medal detection + score rows.
+    std::unique_ptr<Terrafront::TFMedalSystem> m_medals;
 
     // W5 onboarding (Task 6, additive): booted after every W1-W4 system above
     // (db -> account -> characters -> loginFlow), per DESIGN.md "W5 —
@@ -118,4 +129,7 @@ class TerrafrontModule : public Spark::IModule
     // W8 ui-polish lane (additive): booted after the chat-social systems.
     std::unique_ptr<Terrafront::TFDirectivePanel> m_directivePanel;
     std::unique_ptr<Terrafront::TFVehicleTerminal> m_vehicleTerminals;
+
+    // W10 nameplates lane (additive): booted after the W8 ui-polish systems.
+    std::unique_ptr<Terrafront::TFNameplates> m_nameplates;
 };

@@ -28,6 +28,8 @@
 #include "Game/PlaceholderMesh.h"
 #include "Game/TFComponents.h"
 #include "Game/TFGroundFx.h"
+#include "Game/TFImpactFx.h"      // impact-fx lane (W10)
+#include "Game/TFGrenadeSystem.h" // grenades lane (W10): replicated grenade fx
 #include "Game/TFViewModel.h"
 #include "Game/TFTransparentPass.h"
 #include "Utils/LogMacros.h"
@@ -888,6 +890,16 @@ namespace Terrafront
             //    vehicles (Game/TFGroundFx.h; camera-facing additive quads, cap 64).
             if (m_ctx->HasLocalPlayer())
                 TFGroundFx::Get().UpdateAndRender(*m_ctx, gfx, view, proj);
+
+            // 5b) Bullet-impact bursts: pooled flipbook quads at local/remote
+            //     shot impact points (Game/TFImpactFx.h; cap 48, ~0.15 s).
+            if (m_ctx->HasLocalPlayer())
+                TFImpactFx::Get().UpdateAndRender(*m_ctx, gfx, view, proj);
+
+            // 5c) Grenades (W10): replicated grenade bodies + boom flipbook
+            //     (Game/TFGrenadeSystem.h; restores blend/depth/texture state).
+            if (m_ctx->HasLocalPlayer() && m_ctx->grenades)
+                m_ctx->grenades->RenderClientFx(gfx, view, proj);
 
             // 6) Transparent surfaces (shield-wall energy planes + any queued
             //    alpha FX) — sorted back-to-front and drawn AFTER all opaque

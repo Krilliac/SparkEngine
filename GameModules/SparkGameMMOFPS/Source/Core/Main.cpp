@@ -31,6 +31,7 @@
 #include "Game/TFSquadSystem.h"
 #include "Game/TFBotSystem.h"
 #include "Game/TFAudioAmbience.h" // audio-polish lane: zone beds + distant combat layer
+#include "Game/TFFootsteps.h"     // audio-wave-2 lane (W10): footstep audio
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
@@ -39,6 +40,8 @@
 // Outfits lane: PS2-style clans (server-authoritative system + ImGui panel).
 #include "Game/TFOutfitSystem.h"
 #include "Game/TFAbilitySystem.h" // class-abilities lane (W9)
+#include "Game/TFGrenadeSystem.h" // grenades lane (W10)
+#include "Game/TFMedalSystem.h"   // medals-scoreboard lane (W10)
 #include "UI/TFOutfitPanel.h"
 
 // W5 onboarding (Task 6, additive): persistence + account/character core
@@ -57,6 +60,10 @@
 // W8 ui-polish lane: directives panel + vehicle terminal props.
 #include "UI/TFDirectivePanel.h"
 #include "Game/TFVehicleTerminal.h"
+
+// W10 nameplates lane: over-pawn name/outfit/health plates.
+#include "UI/TFNameplates.h"
+#include "UI/TFKeybinds.h" // grenades lane (W10): ThrowGrenade rebind seam
 
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -115,6 +122,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_squads = std::make_unique<TFSquadSystem>();
     m_bots = std::make_unique<TFBotSystem>();
     m_ambience = std::make_unique<TFAudioAmbience>(); // audio-polish lane
+    m_footsteps = std::make_unique<TFFootsteps>();    // audio-wave-2 lane (W10)
     m_hud = std::make_unique<TFHUD>();
     m_map = std::make_unique<TFMapScreen>();
     m_spawnUI = std::make_unique<TFSpawnScreen>();
@@ -123,6 +131,8 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_outfits = std::make_unique<TFOutfitSystem>(); // outfits lane
     m_outfitPanel = std::make_unique<TFOutfitPanel>();
     m_abilities = std::make_unique<TFAbilitySystem>(); // class-abilities lane (W9)
+    m_grenades = std::make_unique<TFGrenadeSystem>();  // grenades lane (W10)
+    m_medals = std::make_unique<TFMedalSystem>();      // medals-scoreboard lane (W10)
 
     // W5 onboarding (Task 6, additive): db -> account -> characters ->
     // loginFlow, after every system above (DESIGN.md "W5 — Onboarding").
@@ -139,6 +149,9 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     // W8 ui-polish lane.
     m_directivePanel = std::make_unique<TFDirectivePanel>();
     m_vehicleTerminals = std::make_unique<TFVehicleTerminal>();
+
+    // W10 nameplates lane.
+    m_nameplates = std::make_unique<TFNameplates>();
 
     // ---- publish context pointers before any Initialize ----
     m_ctx.data = m_data.get();
@@ -158,6 +171,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_ctx.squads = m_squads.get();
     m_ctx.outfits = m_outfits.get();     // outfits lane
     m_ctx.abilities = m_abilities.get(); // class-abilities lane (W9)
+    m_ctx.grenades = m_grenades.get();   // grenades lane (W10)
     m_ctx.hud = m_hud.get();
     m_ctx.map = m_map.get();
     m_ctx.spawnUI = m_spawnUI.get();
@@ -212,8 +226,14 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         {"TFOutfitSystem", m_outfits->Initialize(m_ctx, m_events)},
         // class-abilities lane (W9): after players/damage/deployables, before bots.
         {"TFAbilitySystem", m_abilities->Initialize(m_ctx, m_events)},
+        // grenades lane (W10): after players/damage/vehicles/deployables, before bots.
+        {"TFGrenadeSystem", m_grenades->Initialize(m_ctx, m_events)},
+        // medals-scoreboard lane (W10): after players/squads/progression (reads all
+        // three); self-wires to ctx.scoreboard (context pointers already published).
+        {"TFMedalSystem", m_medals->Initialize(m_ctx, m_events)},
         {"TFBotSystem", m_bots->Initialize(m_ctx, m_events)},
         {"TFAudioAmbience", m_ambience->Initialize(m_ctx, m_events)}, // audio-polish: after weapons/data
+        {"TFFootsteps", m_footsteps->Initialize(m_ctx, m_events)}, // audio-wave-2 (W10): after players/vehicles/world
         {"TFHUD", m_hud->Initialize(m_ctx, m_events)},
         {"TFMapScreen", m_map->Initialize(m_ctx, m_events)},
         {"TFSpawnScreen", m_spawnUI->Initialize(m_ctx, m_events)},
@@ -232,6 +252,8 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         // W8 ui-polish lane: after directives/clientNet/regions (read-only consumers).
         {"TFDirectivePanel", m_directivePanel->Initialize(m_ctx, m_events)},
         {"TFVehicleTerminal", m_vehicleTerminals->Initialize(m_ctx, m_events)},
+        // W10 nameplates lane: pure consumer of replicated state — booted last.
+        {"TFNameplates", m_nameplates->Initialize(m_ctx, m_events)},
     };
     for (const Boot& b : boots)
     {
@@ -241,6 +263,10 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
             return false;
         }
     }
+
+    // grenades lane (W10): route the throw key through the TFKeybinds table
+    // (defaults to 'G' either way; this makes runtime rebinds take effect).
+    m_grenades->SetThrowKey(TFKeys::KeyFor(TFKeys::Action::ThrowGrenade));
 
     RegisterConsoleCommands();
 
@@ -263,6 +289,8 @@ void TerrafrontModule::OnUnload()
     // core-logic classes with no Shutdown() of their own.
     // chat-social + outfits lanes (reverse boot order; outfit panel booted last).
     // W8 ui-polish lane (booted last, shut down first).
+    // W10 nameplates lane (booted last, shut down first).
+    m_nameplates->Shutdown();
     m_vehicleTerminals->Shutdown();
     m_directivePanel->Shutdown();
 
@@ -279,8 +307,11 @@ void TerrafrontModule::OnUnload()
     m_spawnUI->Shutdown();
     m_map->Shutdown();
     m_hud->Shutdown();
-    m_ambience->Shutdown(); // audio-polish lane
+    m_footsteps->Shutdown(); // audio-wave-2 lane (W10)
+    m_ambience->Shutdown();  // audio-polish lane
     m_bots->Shutdown();
+    m_medals->Shutdown();    // medals-scoreboard lane (W10): unhooks the scoreboard pointer
+    m_grenades->Shutdown();  // grenades lane (W10)
     m_abilities->Shutdown(); // class-abilities lane (W9): restores ghosted meshes + uninstalls the damage filter
     m_outfits->Shutdown();   // outfits lane: flushes Saves/outfits.json
     m_squads->Shutdown();
@@ -325,8 +356,11 @@ void TerrafrontModule::OnUpdate(float dt)
     m_squads->Update(dt);
     m_outfits->Update(dt);   // outfits lane: persistence debounce + sweeps
     m_abilities->Update(dt); // class-abilities lane (W9): F-key + mirror + veil visuals + late-join burst
+    m_grenades->Update(dt);  // grenades lane (W10): G-key + mirror extrapolation + HUD count
+    m_medals->Update(dt);    // medals-scoreboard lane (W10): 4 Hz row flush + toasts + mirror handlers
     m_bots->Update(dt);
-    m_ambience->Update(dt); // audio-polish lane
+    m_ambience->Update(dt);  // audio-polish lane
+    m_footsteps->Update(dt); // audio-wave-2 lane (W10)
     m_hud->Update(dt);
     m_map->Update(dt);
     m_spawnUI->Update(dt);
@@ -341,6 +375,8 @@ void TerrafrontModule::OnUpdate(float dt)
     // W8 ui-polish lane (directive net mirror + terminal prop upkeep).
     m_directivePanel->Update(dt);
     m_vehicleTerminals->Update(dt);
+    // W10 nameplates lane (damage-reveal tracking).
+    m_nameplates->Update(dt);
 }
 
 void TerrafrontModule::OnFixedUpdate(float fdt)
@@ -352,6 +388,7 @@ void TerrafrontModule::OnFixedUpdate(float fdt)
     m_serverSim->FixedUpdate(fdt);
     m_players->FixedUpdate(fdt);
     m_abilities->FixedUpdate(fdt); // class-abilities lane (W9): authoritative ability tick
+    m_grenades->FixedUpdate(fdt);  // grenades lane (W10): authoritative grenade sim + fuse
     m_weapons->FixedUpdate(fdt);
     m_vehicles->FixedUpdate(fdt);
     m_regions->FixedUpdate(fdt);
@@ -399,6 +436,7 @@ void TerrafrontModule::OnImGui()
             m_map->RenderUI();
             m_spawnUI->RenderUI();
             m_scoreboard->RenderUI();
+            m_medals->RenderUI(); // medals-scoreboard lane (W10): medal toast overlay
             // chat-social lane.
             m_chatWindow->RenderUI();
             m_socialPanel->RenderUI();
@@ -409,6 +447,8 @@ void TerrafrontModule::OnImGui()
             // continents lane: terminal prompt + continent-select menu
             // (player-facing; NOT debug-gated).
             m_travel->RenderUI();
+            // W10 nameplates lane: over-pawn plates (foreground drawlist).
+            m_nameplates->RenderUI();
         }
     }
 
@@ -441,12 +481,16 @@ void TerrafrontModule::OnImGui()
             m_squads->RenderDebugUI();
             m_outfits->RenderDebugUI();   // outfits lane
             m_abilities->RenderDebugUI(); // class-abilities lane (W9)
+            m_grenades->RenderDebugUI();  // grenades lane (W10)
+            m_medals->RenderDebugUI();    // medals-scoreboard lane (W10)
             m_bots->RenderDebugUI();
             m_loginFlow->RenderDebugUI();        // W5 onboarding (Task 6, additive)
             m_social->RenderDebugUI();           // chat-social lane
             m_ambience->RenderDebugUI();         // audio-polish lane
+            m_footsteps->RenderDebugUI();        // audio-wave-2 lane (W10)
             m_directivePanel->RenderDebugUI();   // W8 ui-polish lane
             m_vehicleTerminals->RenderDebugUI(); // W8 ui-polish lane
+            m_nameplates->RenderDebugUI();       // W10 nameplates lane
 #ifdef SPARK_HAS_IMGUI
         }
         ImGui::End();
