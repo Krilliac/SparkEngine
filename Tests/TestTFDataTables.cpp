@@ -37,7 +37,8 @@ namespace
 {
     const fs::path& RepoRoot()
     {
-        static const fs::path root = []() -> fs::path {
+        static const fs::path root = []() -> fs::path
+        {
             fs::path p = fs::current_path();
             for (int i = 0; i < 10; ++i)
             {
@@ -88,8 +89,9 @@ namespace
 
     // Vocabularies mirrored from TFDataTables.cpp's IsOneOf validation.
     const std::set<std::string> kWeaponSlots = {
-        "rifle", "carbine", "lmg", "sniper", "pistol", "shotgun", "launcher",
-        "melee", "tool", "colossus_autocannon", "vehicle_main", "vehicle_turret"};
+        "rifle",        "carbine",       "lmg",   "sniper", "pistol",
+        "shotgun",      "launcher",      "melee", "tool",   "colossus_autocannon",
+        "vehicle_main", "vehicle_turret"};
     const std::set<std::string> kWeaponKinds = {"hitscan", "projectile", "melee", "beam"};
     const std::set<std::string> kRegionTiers = {"skyanchor", "outpost", "fort", "facility"};
     const std::set<std::string> kFactionTags = {"MRA", "AUC", "HLX"};
@@ -137,8 +139,8 @@ TEST(TFData_Weapons_UniqueIdsAndKeys_ClosedVocabulary)
         const std::string key = Str(w, "key");
         EXPECT_GT(id, 0);
         EXPECT_FALSE(key.empty());
-        EXPECT_TRUE(ids.insert(id).second);    // unique id
-        EXPECT_TRUE(keys.insert(key).second);  // unique key
+        EXPECT_TRUE(ids.insert(id).second);   // unique id
+        EXPECT_TRUE(keys.insert(key).second); // unique key
 
         EXPECT_TRUE(InSet(Str(w, "slot"), kWeaponSlots));
         EXPECT_TRUE(InSet(Str(w, "kind"), kWeaponKinds));
@@ -307,8 +309,7 @@ TEST(TFData_Classes_SixClasses_ValidLoadoutVocabulary)
     const Value& list = doc["classes"];
     EXPECT_EQ(list.Size(), size_t{6});
 
-    const std::set<std::string> expected = {"Ghost", "Striker", "Medtech",
-                                            "Fabricator", "Bulwark", "Colossus"};
+    const std::set<std::string> expected = {"Ghost", "Striker", "Medtech", "Fabricator", "Bulwark", "Colossus"};
     std::set<std::string> ids;
     for (size_t i = 0; i < list.Size(); ++i)
     {
@@ -442,7 +443,10 @@ TEST(TFData_Deployables_ClosedVocabularyAndAssetsExist)
 {
     const Value doc = LoadTable("deployables.json");
     EXPECT_TRUE(doc["deployables"].IsArray());
-    std::set<std::string> expectedIds = {"FabTurret", "FabAmmoPack", "MedBeacon"};
+    // W6 extended kinds (ResupplyStation/AVTurret/ShieldWall, values 3-5 in
+    // Game/TFDeployableTypes.h) joined the table's documented vocabulary.
+    std::set<std::string> expectedIds = {"FabTurret",       "FabAmmoPack", "MedBeacon",
+                                         "ResupplyStation", "AVTurret",    "ShieldWall"};
     for (size_t i = 0; i < doc["deployables"].Size(); ++i)
     {
         const Value& deployable = doc["deployables"][i];
@@ -453,7 +457,7 @@ TEST(TFData_Deployables_ClosedVocabularyAndAssetsExist)
         EXPECT_TRUE(AssetExists(Str(deployable, "model")));
         EXPECT_EQ(deployable["scale"].Size(), size_t{3});
     }
-    EXPECT_EQ(expectedIds.size(), size_t{0}); // all three kinds present
+    EXPECT_EQ(expectedIds.size(), size_t{0}); // every documented kind present
 }
 
 TEST(TFData_Factions_StructureMaterialAssetsExist)

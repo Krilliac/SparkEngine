@@ -35,7 +35,8 @@ TEST(TFChat_NormalizeBoundsAndTerminates)
 
 TEST(TFChat_NormalizeDoesNotSplitUtf8AtWireBoundary)
 {
-    const char input[] = "A\xE2\x82\xAC" "B"; // A, euro sign, B
+    const char input[] = "A\xE2\x82\xAC"
+                         "B"; // A, euro sign, B
 
     std::array<char, 5> exact{};
     EXPECT_TRUE(NormalizeChatText(input, sizeof(input) - 1, exact.data(), exact.size()));
@@ -43,15 +44,13 @@ TEST(TFChat_NormalizeDoesNotSplitUtf8AtWireBoundary)
     EXPECT_TRUE(std::memcmp(exact.data(), "A\xE2\x82\xAC", 4) == 0);
 
     std::array<char, 4> truncated{};
-    EXPECT_TRUE(NormalizeChatText(input, sizeof(input) - 1,
-                                  truncated.data(), truncated.size()));
+    EXPECT_TRUE(NormalizeChatText(input, sizeof(input) - 1, truncated.data(), truncated.size()));
     EXPECT_TRUE(std::strcmp(truncated.data(), "A") == 0);
 }
 
 TEST(TFChat_NormalizeRejectsMalformedUtf8)
 {
-    const char truncated[] = {'o', 'k', ' ', static_cast<char>(0xE2),
-                              static_cast<char>(0x82)};
+    const char truncated[] = {'o', 'k', ' ', static_cast<char>(0xE2), static_cast<char>(0x82)};
     char output[122];
     std::memset(output, 'z', sizeof(output));
     EXPECT_FALSE(NormalizeChatText(truncated, sizeof(truncated), output, sizeof(output)));
@@ -61,8 +60,7 @@ TEST(TFChat_NormalizeRejectsMalformedUtf8)
     EXPECT_FALSE(NormalizeChatText(overlong, sizeof(overlong), output, sizeof(output)));
     EXPECT_EQ(output[0], '\0');
 
-    const char surrogate[] = {static_cast<char>(0xED), static_cast<char>(0xA0),
-                              static_cast<char>(0x80)};
+    const char surrogate[] = {static_cast<char>(0xED), static_cast<char>(0xA0), static_cast<char>(0x80)};
     EXPECT_FALSE(NormalizeChatText(surrogate, sizeof(surrogate), output, sizeof(output)));
     EXPECT_EQ(output[0], '\0');
 }
@@ -107,7 +105,9 @@ TEST(TFChat_ChannelValidationPinsWireRange)
 {
     EXPECT_TRUE(IsValidChatChannel(static_cast<uint8_t>(ChatChannel::Region)));
     EXPECT_TRUE(IsValidChatChannel(static_cast<uint8_t>(ChatChannel::Yell)));
-    EXPECT_FALSE(IsValidChatChannel(4));
+    // W8 ui-polish: Outfit (4) is the last valid channel now.
+    EXPECT_TRUE(IsValidChatChannel(static_cast<uint8_t>(ChatChannel::Outfit)));
+    EXPECT_FALSE(IsValidChatChannel(5));
     EXPECT_FALSE(IsValidChatChannel(255));
 }
 
