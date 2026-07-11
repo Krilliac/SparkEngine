@@ -1,11 +1,13 @@
 /**
  * @file TFScoreboard.cpp
- * @brief Hold-TAB fullscreen scoreboard: three faction columns of K/D/score,
- *        region counts, Dominion status, local rank/XP/flux footer.
+ * @brief Hold-TAB fullscreen scoreboard: stacked faction sections with
+ *        Name | Outfit | Class | Score | K | D | Cap tables (W10 v2), region
+ *        counts, Dominion status, local rank/XP/flux footer.
  */
 #include "UI/TFScoreboard.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFMedalSystem.h"  // W10 medals-scoreboard lane: authoritative rows
 #include "Game/TFOutfitSystem.h" // Outfits lane: row name tags
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
@@ -14,6 +16,7 @@
 #include "UI/TFKeybinds.h"
 #include "World/TFRegionSystem.h"
 
+#include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
@@ -52,7 +55,8 @@ namespace Terrafront
         // Authority roles tally straight off the bus (fired by TFPlayerSystem);
         // connected clients get TF_KillEvent forwarded via ClientNoteKill.
         events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled& ev) { OnPlayerKilled(ev); });
-        events.Subscribe<EvPlayerSpawned>([this](const EvPlayerSpawned& ev) { Ensure(ev.player, ev.faction); });
+        events.Subscribe<EvPlayerSpawned>([this](const EvPlayerSpawned& ev)
+                                          { Ensure(ev.player, ev.faction).cls = ev.cls; });
 
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFScoreboard initialized");
@@ -82,6 +86,7 @@ namespace Terrafront
     void TFScoreboard::Shutdown()
     {
         m_rows.clear();
+        m_medals = nullptr;
         m_open = false;
         m_initialized = false;
     }
@@ -139,15 +144,48 @@ namespace Terrafront
     {
         if (m_ctx && m_ctx->players)
         {
-            m_ctx->players->ForEachAlivePawn([this](const PawnInfo& p) { Ensure(p.owner, p.faction); });
+            m_ctx->players->ForEachAlivePawn(
+                [this](const PawnInfo& p)
+                {
+                    Row& row = Ensure(p.owner, p.faction);
+                    row.cls = p.cls; // live class beats the last replicated one
+                });
             if (m_ctx->localPlayer != kInvalidPlayer)
                 Ensure(m_ctx->localPlayer, m_ctx->players->FactionOf(m_ctx->localPlayer));
         }
+        MergeMedalRows();
+    }
+
+    void TFScoreboard::MergeMedalRows()
+    {
+        // W10: overlay the authoritative TFMedalSystem rows (server truth on
+        // authority roles, TF_ScoreUpdate mirror on pure clients). The W2 kill
+        // tallies keep accruing between 4 Hz flushes; each merge overwrites
+        // them with the server numbers. Null m_medals == W2 fallback behavior.
+        if (!m_medals)
+            return;
+        m_medals->ForEachScoreRow(
+            [this](PlayerId id, const TFScoreRow& sr)
+            {
+                Row& row = Ensure(id, sr.faction);
+                row.hasAuth = true;
+                row.authScore = sr.score;
+                row.kills = sr.kills;
+                row.deaths = sr.deaths;
+                row.captures = sr.captures;
+                row.medals = sr.medals;
+                if (row.cls == ClassId::COUNT && sr.cls != ClassId::COUNT)
+                    row.cls = sr.cls; // replicated class fills the gaps
+            });
     }
 
     uint32_t TFScoreboard::ScoreOf(PlayerId player, const Row& row) const
     {
-        // The authority has the real XP totals; clients show a kill-XP estimate.
+        // W10: the medal system's replicated score formula is the truth
+        // everywhere once available (kills*100 + captures*250 + medals*50).
+        if (row.hasAuth)
+            return row.authScore;
+        // W2 fallback: the authority has real XP totals; clients estimate.
         if (m_ctx && m_ctx->IsAuthority() && m_ctx->progression)
             return m_ctx->progression->XPOf(player);
         return row.score;
@@ -193,6 +231,50 @@ namespace Terrafront
                 std::snprintf(out, 16, "P%u", id);
         }
 
+        /// class_*.png basename for the shipped ui icon set (nullptr = unknown).
+        const char* ClassIconKey(ClassId c)
+        {
+            switch (c)
+            {
+            case ClassId::Ghost:
+                return "ghost";
+            case ClassId::Striker:
+                return "striker";
+            case ClassId::Medtech:
+                return "medtech";
+            case ClassId::Fabricator:
+                return "fabricator";
+            case ClassId::Bulwark:
+                return "bulwark";
+            case ClassId::Colossus:
+                return "colossus";
+            default:
+                return nullptr;
+            }
+        }
+
+        /// Two-letter text fallback when the icon texture is unavailable.
+        const char* ClassShortTag(ClassId c)
+        {
+            switch (c)
+            {
+            case ClassId::Ghost:
+                return "GH";
+            case ClassId::Striker:
+                return "ST";
+            case ClassId::Medtech:
+                return "MD";
+            case ClassId::Fabricator:
+                return "FB";
+            case ClassId::Bulwark:
+                return "BW";
+            case ClassId::Colossus:
+                return "CO";
+            default:
+                return "--";
+            }
+        }
+
     } // namespace
 
     void TFScoreboard::RenderUI()
@@ -216,19 +298,19 @@ namespace Terrafront
             return;
         }
 
-        ImGui::Dummy(ImVec2(0.0f, vp->Size.y * 0.06f));
+        ImGui::Dummy(ImVec2(0.0f, vp->Size.y * 0.04f));
         DrawHeader();
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
-        ImGui::Columns(3, "##tfsb_cols", true);
-        DrawFactionColumn(FactionId::MRA);
-        ImGui::NextColumn();
-        DrawFactionColumn(FactionId::AUC);
-        ImGui::NextColumn();
-        DrawFactionColumn(FactionId::HLX);
-        ImGui::Columns(1);
+        // W10 v2: three stacked faction sections, each a centered table
+        // (7 columns don't fit three-abreast).
+        DrawFactionSection(FactionId::MRA);
+        ImGui::Spacing();
+        DrawFactionSection(FactionId::AUC);
+        ImGui::Spacing();
+        DrawFactionSection(FactionId::HLX);
 
         ImGui::End();
         ImGui::PopStyleColor();
@@ -274,7 +356,7 @@ namespace Terrafront
         }
     }
 
-    void TFScoreboard::DrawFactionColumn(FactionId faction)
+    void TFScoreboard::DrawFactionSection(FactionId faction)
     {
         float col[4];
         FactionColor(faction, col);
@@ -284,9 +366,15 @@ namespace Terrafront
         if (m_ctx->regions)
             regions = m_ctx->regions->RegionsHeld(faction);
 
+        // Centered ~72%-width section (header text + table share the margin).
+        const float winW = ImGui::GetWindowWidth();
+        const float sectionW = winW * 0.72f;
+        const float marginX = (winW - sectionW) * 0.5f;
+
+        ImGui::SetCursorPosX(marginX);
         ImGui::TextColored(fcol, "%s  [%s]", FactionName(faction), FactionTag(faction));
-        ImGui::TextDisabled("regions held: %u", regions);
-        ImGui::Separator();
+        ImGui::SameLine();
+        ImGui::TextDisabled("-- regions held: %u", regions);
 
         // Collect + sort this faction's rows by score, then kills.
         std::vector<std::pair<PlayerId, const Row*>> list;
@@ -306,23 +394,86 @@ namespace Terrafront
                       return a.first < b.first;
                   });
 
-        ImGui::Text("%-14s %5s %5s %8s", "PLAYER", "K", "D", "SCORE");
+        if (list.empty())
+        {
+            ImGui::SetCursorPosX(marginX);
+            ImGui::TextDisabled("(no players)");
+            return;
+        }
+
+        GraphicsEngine* gfx = m_ctx->engine ? m_ctx->engine->GetGraphics() : nullptr;
+        const bool canDrawIcons = gfx && gfx->GetDevice() && gfx->GetContext();
+
+        char tableId[32];
+        std::snprintf(tableId, sizeof(tableId), "##tfsb_%u", static_cast<uint32_t>(faction));
+        const ImGuiTableFlags tflags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+        ImGui::SetCursorPosX(marginX);
+        if (!ImGui::BeginTable(tableId, 7, tflags, ImVec2(sectionW, 0.0f)))
+            return;
+
+        ImGui::TableSetupColumn("PLAYER", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+        ImGui::TableSetupColumn("OUTFIT", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+        ImGui::TableSetupColumn("CLASS", ImGuiTableColumnFlags_WidthFixed, 44.0f);
+        ImGui::TableSetupColumn("SCORE", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+        ImGui::TableSetupColumn("K", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("D", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("CAP", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableHeadersRow();
+
         for (const auto& [id, row] : list)
         {
+            const bool isLocal = id == m_ctx->localPlayer;
+            ImGui::TableNextRow();
+            if (isLocal)
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                       ImGui::ColorConvertFloat4ToU32(ImVec4(0.9f, 0.8f, 0.3f, 0.22f)));
+
             char name[16];
             PlayerLabel(id, m_ctx->localPlayer, name);
-            // Outfits lane: "[TAG] name" when the player is in an outfit (column
-            // widened %-8s -> %-14s so tags don't truncate).
-            char tagged[26];
-            OutfitTaggedLabel(m_ctx->outfits ? m_ctx->outfits->GetOutfitTag(id) : "", name, tagged, sizeof(tagged));
-            if (id == m_ctx->localPlayer)
-                ImGui::TextColored(ImVec4(1.0f, 0.95f, 0.6f, 1.0f), "%-14s %5u %5u %8u", tagged, row->kills,
-                                   row->deaths, ScoreOf(id, *row));
+            const ImVec4 rowCol = isLocal ? ImVec4(1.0f, 0.95f, 0.6f, 1.0f) : ImVec4(0.92f, 0.92f, 0.92f, 1.0f);
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextColored(rowCol, "%s", name);
+
+            ImGui::TableSetColumnIndex(1);
+            const char* tag = m_ctx->outfits ? m_ctx->outfits->GetOutfitTag(id) : "";
+            if (tag && tag[0] != '\0')
+                ImGui::TextColored(rowCol, "[%s]", tag);
             else
-                ImGui::Text("%-14s %5u %5u %8u", tagged, row->kills, row->deaths, ScoreOf(id, *row));
+                ImGui::TextDisabled("-");
+
+            ImGui::TableSetColumnIndex(2);
+            bool drewIcon = false;
+            if (canDrawIcons && row->cls != ClassId::COUNT)
+            {
+                if (const char* key = ClassIconKey(row->cls))
+                {
+                    char iconPath[80];
+                    std::snprintf(iconPath, sizeof(iconPath), "Assets/Textures/MMOFPS/ui/64/class_%s.png", key);
+                    if (ID3D11ShaderResourceView* srv = gfx->GetOrLoadTextureSRV(iconPath))
+                    {
+                        ImGui::Image(static_cast<void*>(srv), ImVec2(18.0f, 18.0f));
+                        drewIcon = true;
+                    }
+                }
+            }
+            if (!drewIcon)
+                ImGui::TextDisabled("%s", ClassShortTag(row->cls)); // headless / unknown class
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::TextColored(rowCol, "%u", ScoreOf(id, *row));
+            ImGui::TableSetColumnIndex(4);
+            ImGui::TextColored(rowCol, "%u", row->kills);
+            ImGui::TableSetColumnIndex(5);
+            ImGui::TextColored(rowCol, "%u", row->deaths);
+            ImGui::TableSetColumnIndex(6);
+            if (row->hasAuth)
+                ImGui::TextColored(rowCol, "%u", row->captures);
+            else
+                ImGui::TextDisabled("-"); // capture data needs the medal system
         }
-        if (list.empty())
-            ImGui::TextDisabled("(no players)");
+
+        ImGui::EndTable();
     }
 
     void TFScoreboard::RenderDebugUI()
@@ -331,13 +482,14 @@ namespace Terrafront
             return;
         ImGui::Text("open : %s", m_open ? "yes (TAB)" : "no");
         ImGui::Text("rows : %zu", m_rows.size());
+        ImGui::Text("medal system : %s", m_medals ? "wired" : "absent (W2 fallback)");
     }
 
 #else // !SPARK_HAS_IMGUI — headless / no ImGui: tallies only
 
     void TFScoreboard::RenderUI() {}
     void TFScoreboard::DrawHeader() {}
-    void TFScoreboard::DrawFactionColumn(FactionId) {}
+    void TFScoreboard::DrawFactionSection(FactionId) {}
     void TFScoreboard::RenderDebugUI() {}
 
 #endif // SPARK_HAS_IMGUI
