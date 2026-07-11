@@ -9,7 +9,11 @@
  * (the module world has no terrain collision body; TFWorldSetup::TerrainHeightAt is
  * always the floor). Driver throttle/steer become a drive force and a yaw-rate servo
  * torque; lateral grip and coast drag mirror the arcade feel of the original math
- * driving model in TFVehicleSystem::StepVehicle.
+ * driving model in TFVehicleSystem::StepVehicle. VTOL hulls (Vulture) add a vertical
+ * thrust servo on top of the same rig: Jump/Crouch climb or descend toward a target
+ * vertical velocity, the upright servo leans toward throttle/steer (forward tilt +
+ * banking), altitude is capped ~120 m above the ground under the hull plus a hard
+ * world ceiling, and a driverless hull auto-descends until the corner springs land it.
  *
  * When the engine has no live Jolt world (stub physics build), Initialize() reports
  * false and every per-vehicle call reports "not handled", so TFVehicleSystem keeps
@@ -45,6 +49,7 @@ namespace Terrafront
         // -- inputs (server-authoritative, cached from the driver's TF_ClientInput) --
         float throttle = 0.0f; ///< [-1, 1] forward/back
         float steer = 0.0f;    ///< [-1, 1] steering wheel
+        float lift = 0.0f;     ///< [-1, 1] climb/descend (VTOL hulls only; Jump/Crouch bits)
         bool driven = false;   ///< driver seated + fresh input + not deployed
         bool deployed = false; ///< Aegis deployed: hull frozen kinematic, no forces
         // -- vehicles.json balance (engine-side feel constants live in the .cpp) --
@@ -86,6 +91,12 @@ namespace Terrafront
         /// the caller falls back to math integration for it.
         bool TickVehicle(EntityId vehicle, TFVehicleDriveState& s);
 
+        /// Server: clearance of the hull BASE above the ground under it (analytic
+        /// terrain raised by static physics geometry — a Vulture parked on a pad
+        /// or roof counts as landed). False when this vehicle has no body; the
+        /// caller falls back to a pure-terrain test.
+        bool GroundClearanceOf(EntityId vehicle, float& outClearanceM) const;
+
         /// Debug: number of live hull bodies.
         size_t BodyCount() const { return m_bodies.size(); }
 
@@ -99,6 +110,7 @@ namespace Terrafront
             float halfZ = 2.0f; ///< box half length (m)
             float mass = 1500.0f;
             float hover = 0.5f; ///< rest clearance of the hull base above ground (m)
+            bool vtol = false;  ///< Vulture: lift thrust + lean servo instead of ground steering
         };
         struct BodyRec
         {

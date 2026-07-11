@@ -101,8 +101,8 @@
     {
       "id": "Vulture",
       "name": "Vulture",
-      "role": "VTOL gunship (W4 stretch)",
-      "enabled": false,
+      "role": "VTOL gunship",
+      "enabled": true,
       "health": 3000,
       "fluxCost": 350,
       "topSpeed": 55,

@@ -55,11 +55,74 @@ namespace Terrafront
         constexpr int kMaxVehicles = 64;
         constexpr uint8_t kDamageKindExplosive = 1; // TFNetProtocol damageKind convention
 
+        // VTOL (Vulture) math-path mirrors of the TFVehiclePhysics.cpp Jolt feel
+        // constants (same parity duplication convention as kDriveDrag above).
+        constexpr float kVtolClimbRate = 8.0f;    // m/s climb at full lift
+        constexpr float kVtolDescendRate = 6.0f;  // m/s descent at full negative lift
+        constexpr float kVtolAutoDescend = 3.0f;  // m/s driverless / input-starved auto-land
+        constexpr float kVtolCeilAGL = 120.0f;    // m max altitude above the terrain under the hull
+        constexpr float kVtolWorldCeilY = 200.0f; // m hard absolute world ceiling
+        constexpr float kVtolLeanPitch = 0.35f;   // rad nose-down visual lean at full throttle
+        constexpr float kVtolLeanRoll = 0.45f;    // rad banking visual lean at full steer
+        constexpr float kVtolLeanRate = 5.0f;     // 1/s lean approach speed (math path visual)
+        constexpr float kVtolLandedAGL = 2.0f;    // m hull base above ground = landed (exit gate)
+
         float Dist2XZ(const float a[3], const float bx, const float bz)
         {
             const float dx = a[0] - bx;
             const float dz = a[2] - bz;
             return dx * dx + dz * dz;
+        }
+
+        // --- W8 turret aim: per-vehicle rig mounts -----------------------------
+        // Mesh-footprint constants like VehicleRadius, NOT balance data. Pivots
+        // come from Tools/assetgen specs: the Ravager 90 mm mantlet+barrel
+        // attaches at turret-space (0, 0.18, 0.75) on the tank_turret pivot; the
+        // Aegis PDW pedestal sits on the apc roof ring at hull-space
+        // (0, 2.10, 1.10) with the twin-barrel head on top of it.
+        struct TurretRigSpec
+        {
+            VehicleId veh;
+            const char* pitchMesh; ///< Assets-relative barrel/head OBJ
+            float pitchPivot[3];   ///< yaw-parent space (headYawsToo: hull space)
+            const char* baseMesh;  ///< optional static pedestal (nullptr = none)
+            float basePivot[3];    ///< hull space
+            bool headYawsToo;      ///< pitch child also carries yaw (no yaw mesh)
+            float muzzleM;         ///< muzzle distance along aim dir from pitchPivot
+        };
+        constexpr TurretRigSpec kTurretRigs[] = {
+            {VehicleId::Ravager,
+             "Models/MMOFPS/weapons/veh_ravager_90.obj",
+             {0.0f, 0.18f, 0.75f},
+             nullptr,
+             {0.0f, 0.0f, 0.0f},
+             false,
+             2.85f},
+            {VehicleId::Aegis,
+             "Models/MMOFPS/weapons/veh_aegis_pdw_head.obj",
+             {0.0f, 2.40f, 1.10f},
+             "Models/MMOFPS/weapons/veh_aegis_pdw_base.obj",
+             {0.0f, 2.10f, 1.10f},
+             true,
+             0.95f},
+        };
+
+        const TurretRigSpec* RigSpecOf(VehicleId id)
+        {
+            for (const TurretRigSpec& r : kTurretRigs)
+                if (r.veh == id)
+                    return &r;
+            return nullptr;
+        }
+
+        /// Rotate a local-space offset by a yaw (TF basis: forward = (sin, 0, cos)).
+        void YawRotate(const float local[3], float yaw, float out[3])
+        {
+            const float c = std::cos(yaw);
+            const float s = std::sin(yaw);
+            out[0] = local[0] * c + local[2] * s;
+            out[1] = local[1];
+            out[2] = -local[0] * s + local[2] * c;
         }
 
     } // namespace
@@ -151,6 +214,7 @@ namespace Terrafront
         World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
         for (VehicleRec& v : m_vehicles)
         {
+            DestroyTurretRig(v.rig); // rig children (incl. grandchild barrel) first
             const auto e = static_cast<EntityID>(v.local);
             if (world && v.local != 0 && world->GetRegistry().valid(e))
                 world->DestroyEntity(e);
@@ -164,6 +228,7 @@ namespace Terrafront
         m_vehicles.clear();
         m_seatOf.clear();
         m_lastSent.clear();
+        m_lastAimSent.clear();
         m_knownClients.clear();
         m_loadedSounds.clear();
         m_initialized = false;
@@ -285,7 +350,7 @@ namespace Terrafront
     // ---------------------------------------------------------------------------
 
     uint32_t TFVehicleSystem::CreateVehicleEntity(const VehicleDef& def, FactionId faction, const float pos[3],
-                                                  float yaw)
+                                                  float yaw, TurretRig& outRig)
     {
         World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
         if (!world)
@@ -318,23 +383,113 @@ namespace Terrafront
             mr.castShadows = true;
         }
 
-        // Separate turret mesh: a hull-parented child at the pivot. The ECS
-        // render pass uses the hierarchical GetWorldMatrix, so the turret
-        // follows the hull's pose automatically (yaws with the hull today;
-        // seat-driven independent aim needs a replicated gunner-aim field —
-        // tracked as a follow-up). Destroyed with the hull in DestroyVehicle.
-        if (!def.turretMesh.empty())
-        {
-            const auto turret = world->CreateEntity("TF_VehTurret");
-            Transform& tt = world->AddComponent<Transform>(turret);
-            tt.parent = e;
-            tt.position = {def.turretPivot[0], def.turretPivot[1], def.turretPivot[2]};
-            MeshRenderer& tmr = world->AddComponent<MeshRenderer>(turret);
-            tmr.meshPath = "Assets/" + def.turretMesh;
-            tmr.materialPath = FactionStructureMaterial(*m_ctx, faction);
-            tmr.castShadows = true;
-        }
+        // W8: turret + barrel/head aim-rig children (seat-driven aim; the ECS
+        // render pass uses the hierarchical GetWorldMatrix, so children follow
+        // the hull's pose and add their own aim rotation on top).
+        AttachTurretRig(static_cast<uint32_t>(e), def, faction, outRig);
         return static_cast<uint32_t>(e);
+    }
+
+    // ---------------------------------------------------------------------------
+    // W8 turret aim rig (shared by the server entity + client mirror paths)
+    // ---------------------------------------------------------------------------
+
+    int TFVehicleSystem::TurretControllerSeat(const VehicleDef* def)
+    {
+        if (!def)
+            return -1;
+        const size_t count = std::min<size_t>(def->seats.size(), 8);
+        for (size_t i = 0; i < count; ++i)
+            if (!def->seats[i].weaponKey.empty())
+                return static_cast<int>(i);
+        return -1;
+    }
+
+    void TFVehicleSystem::AttachTurretRig(uint32_t hullLocal, const VehicleDef& def, FactionId faction, TurretRig& out)
+    {
+        World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
+        if (!world || hullLocal == 0)
+            return;
+        const auto hull = static_cast<EntityID>(hullLocal);
+
+        const auto makeChild = [&](const char* name, EntityID parent, const float pivot[3],
+                                   const std::string& meshAssetsRel) -> uint32_t
+        {
+            const auto child = world->CreateEntity(name);
+            Transform& ct = world->AddComponent<Transform>(child);
+            ct.parent = parent;
+            ct.position = {pivot[0], pivot[1], pivot[2]};
+            MeshRenderer& cmr = world->AddComponent<MeshRenderer>(child);
+            cmr.meshPath = "Assets/" + meshAssetsRel;
+            cmr.materialPath = FactionStructureMaterial(*m_ctx, faction);
+            cmr.castShadows = true;
+            return static_cast<uint32_t>(child);
+        };
+
+        // Data-driven turret mesh (Ravager tank_turret): the yaw part.
+        if (!def.turretMesh.empty())
+            out.yawChild = makeChild("TF_VehTurret", hull, def.turretPivot, def.turretMesh);
+
+        const TurretRigSpec* spec = RigSpecOf(def.id);
+        if (!spec)
+            return;
+
+        if (spec->baseMesh)
+            out.baseChild = makeChild("TF_VehTurretBase", hull, spec->basePivot, spec->baseMesh);
+
+        if (spec->headYawsToo)
+        {
+            // Aegis: one head child on the hull carries yaw AND pitch.
+            out.pitchChild = makeChild("TF_VehTurretHead", hull, spec->pitchPivot, spec->pitchMesh);
+            out.yawChild = out.pitchChild;
+        }
+        else if (out.yawChild != 0)
+        {
+            // Ravager: the barrel pitches as a child of the yawing turret.
+            out.pitchChild =
+                makeChild("TF_VehTurretBarrel", static_cast<EntityID>(out.yawChild), spec->pitchPivot, spec->pitchMesh);
+        }
+    }
+
+    void TFVehicleSystem::ApplyTurretPose(const TurretRig& rig, float hullYaw, float aimYaw, float aimPitch)
+    {
+        World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
+        if (!world)
+            return;
+        auto& registry = world->GetRegistry();
+        const float localYawDeg = QuantAim::WrapPi(aimYaw - hullYaw) * kRadToDeg;
+        const float pitchDeg = aimPitch * kRadToDeg; // camera convention == Transform +X
+
+        if (rig.yawChild != 0)
+        {
+            const auto e = static_cast<EntityID>(rig.yawChild);
+            if (registry.valid(e))
+                if (Transform* t = world->GetComponent<Transform>(e))
+                    t->rotation.y = localYawDeg;
+        }
+        if (rig.pitchChild != 0)
+        {
+            const auto e = static_cast<EntityID>(rig.pitchChild);
+            if (registry.valid(e))
+                if (Transform* t = world->GetComponent<Transform>(e))
+                    t->rotation.x = pitchDeg;
+        }
+    }
+
+    void TFVehicleSystem::DestroyTurretRig(TurretRig& rig)
+    {
+        World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
+        // Grandchild barrel first, then turret/head, then the pedestal.
+        for (uint32_t* id : {&rig.pitchChild, &rig.yawChild, &rig.baseChild})
+        {
+            if (*id != 0 && world)
+            {
+                const auto e = static_cast<EntityID>(*id);
+                if (world->GetRegistry().valid(e))
+                    world->DestroyEntity(e);
+            }
+            *id = 0;
+        }
     }
 
     bool TFVehicleSystem::ServerPurchaseVehicle(PlayerId player, VehicleId vehId)
@@ -407,7 +562,7 @@ namespace Terrafront
         const float yaw = std::atan2(kMapCenter - pos[0], kMapCenter - pos[2]);
 
         VehicleRec v;
-        v.local = CreateVehicleEntity(*def, pawn.faction, pos, yaw);
+        v.local = CreateVehicleEntity(*def, pawn.faction, pos, yaw, v.rig);
         // Headless unit tests have no ECS world; keep a synthetic non-zero id so
         // the record still round-trips (mirrors TFPlayerSystem's convention).
         static EntityId s_syntheticVehEntity = 2000000;
@@ -418,6 +573,7 @@ namespace Terrafront
         v.pos[1] = pos[1];
         v.pos[2] = pos[2];
         v.yaw = yaw;
+        v.aimYaw = yaw; // turret starts hull-forward, level
         v.hp = v.maxHp = def->health;
         v.seatCount = static_cast<uint8_t>(std::min<size_t>(def->seats.size(), 8));
         m_vehicles.push_back(v);
@@ -472,6 +628,11 @@ namespace Terrafront
             auto it = m_seatOf.find(player);
             if (it == m_seatOf.end() || it->second.exiting)
                 return;
+            // VTOL: no bailing out mid-flight — the Vulture must be landed
+            // (destruction still ejects everyone through UnseatPlayer directly).
+            if (const VehicleRec* v = FindRec(it->second.vehicle);
+                v && v->vehId == VehicleId::Vulture && !VehicleLanded(*v))
+                return;
             UnseatPlayer(player, true);
             return;
         }
@@ -490,6 +651,10 @@ namespace Terrafront
 
         const float reach = VehicleRadius(v->vehId) + kTFVehEnterRangeM;
         if (Dist2XZ(pawn.pos, v->pos[0], v->pos[2]) > reach * reach)
+            return;
+        // VTOL: the XZ reach test alone would let a pawn board a Vulture hovering
+        // 100 m straight above — flying hulls also need vertical proximity.
+        if (v->vehId == VehicleId::Vulture && std::fabs(pawn.pos[1] - v->pos[1]) > reach)
             return;
 
         // Requested seat if free, else first free (driver seat 0 first).
@@ -546,6 +711,7 @@ namespace Terrafront
             {
                 v->throttle = 0.0f;
                 v->steer = 0.0f;
+                v->lift = 0.0f;
             }
         }
 
@@ -583,14 +749,30 @@ namespace Terrafront
         auto it = m_seatOf.find(player);
         if (it == m_seatOf.end() || it->second.exiting)
             return;
-        if (it->second.seatIdx != 0)
-            return; // gunners/passengers aim + fire via the weapon path only
 
         VehicleRec* v = FindRec(it->second.vehicle);
         if (!v)
             return;
+
+        // W8 turret aim: the controller seat's view angles drive the turret.
+        // Guard non-finite angles OURSELVES — TFServerSim's seated-path guard
+        // runs after this call, so a poisoned viewYaw would reach WrapPi's
+        // non-terminating loop here otherwise.
+        if (static_cast<int>(it->second.seatIdx) == TurretControllerSeat(DefOf(v->vehId)) &&
+            std::isfinite(input.viewYaw) && std::isfinite(input.viewPitch))
+        {
+            v->aimYaw = QuantAim::WrapPi(input.viewYaw);
+            v->aimPitch = std::clamp(input.viewPitch, kTFTurretPitchMinRad, kTFTurretPitchMaxRad);
+        }
+
+        if (it->second.seatIdx != 0)
+            return; // non-driver seats: aim captured above, fire via the weapon path
+
         v->throttle = std::clamp(static_cast<float>(input.moveY) / 127.0f, -1.0f, 1.0f);
         v->steer = std::clamp(static_cast<float>(input.moveX) / 127.0f, -1.0f, 1.0f);
+        // Vertical axis for VTOL hulls: Jump climbs, Crouch descends (the seated
+        // pawn is not walking, so these bits are otherwise unused while driving).
+        v->lift = ((input.buttons & TFB_Jump) != 0 ? 1.0f : 0.0f) - ((input.buttons & TFB_Crouch) != 0 ? 1.0f : 0.0f);
         v->lastDriveInput = (m_ctx && m_ctx->serverSim) ? m_ctx->serverSim->ServerTime() : m_clock;
     }
 
@@ -637,14 +819,23 @@ namespace Terrafront
 
         const double now = (m_ctx && m_ctx->serverSim) ? m_ctx->serverSim->ServerTime() : m_clock;
         const bool driven = v.seats[0] != kInvalidPlayer && !v.deployed && (now - v.lastDriveInput) < kInputStaleSec;
+        const bool vtol = v.vehId == VehicleId::Vulture;
 
         if (driven)
         {
             v.speed += v.throttle * accel * dt;
-            // Steering authority scales in with speed; reversing mirrors the wheel.
-            const float authority = std::clamp(std::fabs(v.speed) / kSteerRefSpeed, 0.0f, 1.0f);
-            const float dir = (v.speed >= 0.0f) ? 1.0f : -1.0f;
-            v.yaw = QuantAim::WrapPi(v.yaw + v.steer * turnRate * authority * dir * dt);
+            if (vtol)
+            {
+                // A gunship yaws in place: full authority at any speed.
+                v.yaw = QuantAim::WrapPi(v.yaw + v.steer * turnRate * dt);
+            }
+            else
+            {
+                // Steering authority scales in with speed; reversing mirrors the wheel.
+                const float authority = std::clamp(std::fabs(v.speed) / kSteerRefSpeed, 0.0f, 1.0f);
+                const float dir = (v.speed >= 0.0f) ? 1.0f : -1.0f;
+                v.yaw = QuantAim::WrapPi(v.yaw + v.steer * turnRate * authority * dir * dt);
+            }
         }
         else
         {
@@ -659,6 +850,30 @@ namespace Terrafront
         const float fwdZ = std::cos(v.yaw);
         v.pos[0] = std::clamp(v.pos[0] + fwdX * v.speed * dt, kWorldMin, kWorldMax);
         v.pos[2] = std::clamp(v.pos[2] + fwdZ * v.speed * dt, kWorldMin, kWorldMax);
+
+        if (vtol)
+        {
+            // VTOL altitude: Jump/Crouch climb or descend, hold at lift 0,
+            // auto-land when driverless; AGL ceiling + hard world ceiling.
+            const float terrain = TerrainAt(v.pos[0], v.pos[2]);
+            const float vy = driven ? (v.lift > 0.0f   ? v.lift * kVtolClimbRate
+                                       : v.lift < 0.0f ? v.lift * kVtolDescendRate
+                                                       : 0.0f)
+                                    : -kVtolAutoDescend;
+            const float ceilY = std::min(terrain + kVtolCeilAGL, kVtolWorldCeilY);
+            v.pos[1] = std::clamp(v.pos[1] + vy * dt, terrain, std::max(terrain, ceilY));
+
+            // Visual lean: forward tilt with throttle, banking with steer
+            // (signs mirror the Jolt lean servo; positive pitch = nose down,
+            // positive roll = lean left in this module's readback convention).
+            const float k = std::min(1.0f, kVtolLeanRate * dt);
+            const float targetPitch = driven ? v.throttle * kVtolLeanPitch : 0.0f;
+            const float targetRoll = driven ? -v.steer * kVtolLeanRoll : 0.0f;
+            v.pitch += (targetPitch - v.pitch) * k;
+            v.roll += (targetRoll - v.roll) * k;
+            return;
+        }
+
         v.pos[1] = TerrainAt(v.pos[0], v.pos[2]);
 
         // Visual pitch/roll from the terrain slope under the hull.
@@ -684,6 +899,7 @@ namespace Terrafront
         TFVehicleDriveState s;
         s.throttle = v.throttle;
         s.steer = v.steer;
+        s.lift = v.lift;
         s.deployed = v.deployed;
         s.driven = v.seats[0] != kInvalidPlayer && !v.deployed && (now - v.lastDriveInput) < kInputStaleSec;
         if (def)
@@ -711,6 +927,16 @@ namespace Terrafront
         v.roll = s.roll;
         v.speed = s.speed;
         return true;
+    }
+
+    bool TFVehicleSystem::VehicleLanded(const VehicleRec& v) const
+    {
+        // Jolt hull: physics-aware clearance (a Vulture parked on a pad or roof
+        // counts as landed). Math path: analytic terrain under the hull base.
+        float clearance = 0.0f;
+        if (m_joltDrive && m_joltDrive->GroundClearanceOf(v.entity, clearance))
+            return clearance <= kVtolLandedAGL;
+        return v.pos[1] - TerrainAt(v.pos[0], v.pos[2]) <= kVtolLandedAGL;
     }
 
     void TFVehicleSystem::WriteVehicleTransform(VehicleRec& v)
@@ -772,6 +998,9 @@ namespace Terrafront
                 }
             }
         }
+
+        // W8: aim the turret rig (server visuals; clients mirror via 0x5448).
+        ApplyTurretPose(v.rig, v.yaw, v.aimYaw, v.aimPitch);
     }
 
     // ---------------------------------------------------------------------------
@@ -846,6 +1075,56 @@ namespace Terrafront
             return true; // seated, unarmed
         if (const WeaponDef* w = m_ctx->data->GetWeaponByKey(key))
             out = w->id;
+        return true;
+    }
+
+    bool TFVehicleSystem::GetSeatFireFrame(PlayerId player, float outOrigin[3], float outDir[3]) const
+    {
+        auto it = m_seatOf.find(player);
+        if (it == m_seatOf.end() || it->second.exiting)
+            return false;
+        const VehicleRec* v = FindRec(it->second.vehicle);
+        const VehicleDef* def = v ? DefOf(v->vehId) : nullptr;
+        const TurretRigSpec* spec = v ? RigSpecOf(v->vehId) : nullptr;
+        if (!v || !def || !spec)
+            return false;
+        if (static_cast<int>(it->second.seatIdx) != TurretControllerSeat(def))
+            return false;
+
+        // Aim direction from the server aim state (camera pitch is positive-down,
+        // BuildViewRay convention: dir.y = -sin(pitch)).
+        const float cp = std::cos(v->aimPitch);
+        outDir[0] = cp * std::sin(v->aimYaw);
+        outDir[1] = -std::sin(v->aimPitch);
+        outDir[2] = cp * std::cos(v->aimYaw);
+
+        // Pitch-pivot world position: hull-space mounts rotate with the hull yaw;
+        // the Ravager barrel pivot is turret-space, so it rotates with the AIM
+        // yaw on top of the hull-space turret pivot. Hull pitch/roll are ignored
+        // here (same approximation as RaycastVehicles' upright hull spheres).
+        float pivot[3] = {v->pos[0], v->pos[1], v->pos[2]};
+        float off[3];
+        if (spec->headYawsToo)
+        {
+            YawRotate(spec->pitchPivot, v->yaw, off);
+            pivot[0] += off[0];
+            pivot[1] += off[1];
+            pivot[2] += off[2];
+        }
+        else
+        {
+            YawRotate(def->turretPivot, v->yaw, off);
+            pivot[0] += off[0];
+            pivot[1] += off[1];
+            pivot[2] += off[2];
+            YawRotate(spec->pitchPivot, v->aimYaw, off);
+            pivot[0] += off[0];
+            pivot[1] += off[1];
+            pivot[2] += off[2];
+        }
+        outOrigin[0] = pivot[0] + outDir[0] * spec->muzzleM;
+        outOrigin[1] = pivot[1] + outDir[1] * spec->muzzleM;
+        outOrigin[2] = pivot[2] + outDir[2] * spec->muzzleM;
         return true;
     }
 
@@ -1063,6 +1342,10 @@ namespace Terrafront
         if (m_joltDrive)
             m_joltDrive->DetachVehicle(entity);
 
+        // W8: rig children first — the barrel is a GRANDCHILD (turret-parented),
+        // which the direct hull child-sweep below would miss.
+        DestroyTurretRig(v.rig);
+
         World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
         if (world && v.local != 0)
         {
@@ -1082,6 +1365,7 @@ namespace Terrafront
                 world->DestroyEntity(e);
         }
         m_lastSent.erase(entity);
+        m_lastAimSent.erase(entity);
         m_vehicles.erase(std::remove_if(m_vehicles.begin(), m_vehicles.end(),
                                         [entity](const VehicleRec& r) { return r.entity == entity; }),
                          m_vehicles.end());

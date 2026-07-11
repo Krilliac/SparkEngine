@@ -49,6 +49,17 @@ namespace Terrafront
         constexpr float kRayStartUp = 0.5f;     // suspension cast origin lift above the corner
         constexpr float kRescueDepthM = 5.0f;   // tunnelled this far below ground -> teleport out
 
+        // VTOL (Vulture) feel constants — keep in sync with the math-path mirrors
+        // in TFVehicleSystem.cpp (same duplication convention as kDriveDrag etc.).
+        constexpr float kVtolClimbRate = 8.0f;    // m/s target climb at full lift
+        constexpr float kVtolDescendRate = 6.0f;  // m/s target descent at full negative lift
+        constexpr float kVtolAutoDescend = 3.0f;  // m/s driverless / input-starved auto-land
+        constexpr float kVtolVyGain = 3.0f;       // 1/s vertical-velocity servo stiffness
+        constexpr float kVtolCeilAGL = 120.0f;    // m max altitude above the ground under the hull
+        constexpr float kVtolWorldCeilY = 200.0f; // m hard absolute world ceiling
+        constexpr float kVtolLeanPitch = 0.35f;   // rad nose-down lean at full throttle
+        constexpr float kVtolLeanRoll = 0.45f;    // rad banking lean at full steer
+
         float WrapPi(float a)
         {
             while (a > 3.14159265f)
@@ -112,7 +123,7 @@ namespace Terrafront
         case VehicleId::Ravager:
             return {1.8f, 0.75f, 2.6f, 3200.0f, 0.50f};
         case VehicleId::Vulture:
-            return {2.0f, 0.60f, 2.8f, 1800.0f, 0.60f};
+            return {2.0f, 0.60f, 2.8f, 1800.0f, 0.60f, /*vtol*/ true};
         default:
             return {};
         }
@@ -216,6 +227,18 @@ namespace Terrafront
         return ground;
     }
 
+    bool TFVehiclePhysics::GroundClearanceOf(EntityId vehicle, float& outClearanceM) const
+    {
+        auto it = m_bodies.find(vehicle);
+        if (!m_physics || it == m_bodies.end() || !it->second.body)
+            return false;
+        const PhysicsBody& body = *it->second.body;
+        const XMFLOAT3 c = body.GetPosition();
+        const float ground = GroundHeightAt(c.x, c.y, c.z, &body);
+        outClearanceM = (c.y - it->second.hull.halfY) - ground;
+        return true;
+    }
+
     // ---------------------------------------------------------------------------
     // Per-tick simulation half
     // ---------------------------------------------------------------------------
@@ -279,6 +302,13 @@ namespace Terrafront
             vel.y = 0.0f;
             poked = true;
         }
+        if (hull.vtol && c.y > kVtolWorldCeilY)
+        {
+            // Hard world ceiling (the soft AGL cap below normally stops climb first).
+            fixedPos.y = kVtolWorldCeilY;
+            vel.y = std::min(vel.y, 0.0f);
+            poked = true;
+        }
         if (poked)
         {
             body.SetPosition(fixedPos);
@@ -325,6 +355,28 @@ namespace Terrafront
             body.ApplyForce({0.0f, force, 0.0f}, off);
         }
 
+        // VTOL lift: servo the vertical velocity toward the lift input (hold
+        // altitude at lift 0, auto-land when driverless). Near the ground with no
+        // climb intent the corner springs take over so the hull settles at its
+        // hover clearance = landed.
+        if (hull.vtol)
+        {
+            const float agl = (c.y - hull.halfY) - baseGround;
+            float targetVy = s.driven ? (s.lift > 0.0f   ? s.lift * kVtolClimbRate
+                                         : s.lift < 0.0f ? s.lift * kVtolDescendRate
+                                                         : 0.0f)
+                                      : -kVtolAutoDescend;
+            if (agl >= kVtolCeilAGL || c.y >= kVtolWorldCeilY)
+                targetVy = std::min(targetVy, 0.0f); // soft ceiling: no more climb
+            const bool settling = targetVy <= 0.0f && agl <= maxSuspLen;
+            if (!settling)
+            {
+                float liftForce = hull.mass * (kGravity + (targetVy - vel.y) * kVtolVyGain);
+                liftForce = std::clamp(liftForce, 0.0f, hull.mass * kGravity * 2.0f);
+                body.ApplyForce({0.0f, liftForce, 0.0f});
+            }
+        }
+
         // Drive + steering servo (or coast drag when input starves).
         float targetYawRate = 0.0f;
         if (s.driven)
@@ -334,9 +386,18 @@ namespace Terrafront
                 drive = 0.0f;
             body.ApplyForce({fwdH[0] * drive, 0.0f, fwdH[2] * drive});
 
-            const float authority = std::clamp(std::fabs(fwdSpeed) / kSteerRefSpeed, 0.0f, 1.0f);
-            const float dir = (fwdSpeed >= 0.0f) ? 1.0f : -1.0f;
-            targetYawRate = s.steer * s.turnRate * authority * dir;
+            if (hull.vtol)
+            {
+                // A gunship yaws in place: full authority at any speed, no
+                // mirrored wheel when drifting backwards.
+                targetYawRate = s.steer * s.turnRate;
+            }
+            else
+            {
+                const float authority = std::clamp(std::fabs(fwdSpeed) / kSteerRefSpeed, 0.0f, 1.0f);
+                const float dir = (fwdSpeed >= 0.0f) ? 1.0f : -1.0f;
+                targetYawRate = s.steer * s.turnRate * authority * dir;
+            }
         }
         else
         {
@@ -353,10 +414,29 @@ namespace Terrafront
             {-rightH[0] * latSpeed * hull.mass * kLateralGrip, 0.0f, -rightH[2] * latSpeed * hull.mass * kLateralGrip});
 
         // Upright righting (flip recovery) + pitch/roll damping. Near the ground
-        // the suspension dominates, so the hull still tilts with the terrain.
+        // the suspension dominates, so the hull still tilts with the terrain. The
+        // servo rights the hull toward a target up vector — world up for ground
+        // hulls; a driven VTOL leans it forward with throttle and sideways with
+        // steer (banking), which is what produces the gunship's visual tilt.
+        float tUp[3] = {0.0f, 1.0f, 0.0f};
+        if (hull.vtol && s.driven)
+        {
+            const float lf = kVtolLeanPitch * s.throttle; // up leans toward the nose = nose-down tilt
+            const float lr = kVtolLeanRoll * s.steer;     // up leans toward +right = bank into the turn
+            tUp[0] = fwdH[0] * lf + rightH[0] * lr;
+            tUp[2] = fwdH[2] * lf + rightH[2] * lr;
+            const float len = std::sqrt(tUp[0] * tUp[0] + 1.0f + tUp[2] * tUp[2]);
+            tUp[0] /= len;
+            tUp[1] = 1.0f / len;
+            tUp[2] /= len;
+        }
+        // Righting torque axis = up x targetUp (reduces to the old -up.z / +up.x
+        // world-up form when tUp = (0,1,0)); yaw stays with the yaw servo above.
+        const float rightingX = up[1] * tUp[2] - up[2] * tUp[1];
+        const float rightingZ = up[0] * tUp[1] - up[1] * tUp[0];
         const float tiltInertia = hull.mass * (hull.halfY * hull.halfY + hull.halfZ * hull.halfZ) / 3.0f;
-        body.ApplyTorque({-up[2] * tiltInertia * kUprightGain - angVel.x * tiltInertia * kTiltDamp, 0.0f,
-                          up[0] * tiltInertia * kUprightGain - angVel.z * tiltInertia * kTiltDamp});
+        body.ApplyTorque({rightingX * tiltInertia * kUprightGain - angVel.x * tiltInertia * kTiltDamp, 0.0f,
+                          rightingZ * tiltInertia * kUprightGain - angVel.z * tiltInertia * kTiltDamp});
         return true;
     }
 
