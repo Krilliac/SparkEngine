@@ -30,6 +30,15 @@ namespace Terrafront
 
         constexpr size_t kMaxBodies = 512;       // safety cap (scene ships 109 objects)
         constexpr float kMinHalfExtentM = 0.05f; // degenerate-AABB floor
+        constexpr float kDegToRad = 0.01745329252f;
+        constexpr float kRotEpsDeg = 0.01f; // scene rotations are authored as whole degrees
+
+        /// True when `deg` is (within epsilon) a multiple of `stepDeg` (e.g. 90).
+        bool IsNearMultipleDeg(float deg, float stepDeg)
+        {
+            const float m = std::fabs(std::fmod(deg, stepDeg));
+            return m < kRotEpsDeg || m > stepDeg - kRotEpsDeg;
+        }
 
         /// Parse "a,b,c" into out[3]. Missing components keep their prior value.
         void ParseFloat3(const std::string& v, float out[3])
@@ -220,55 +229,92 @@ namespace Terrafront
                 }
             }
 
-            // World AABB: transform the 8 scaled local corners by the node's
-            // Euler-degree rotation (scene content is Y-only: 0..315 deg) and
-            // translation, then take min/max. Exact for 90-degree steps,
-            // conservatively larger for diagonal barriers - fine for blocking.
-            const float rx = o.rotDeg[0] * 0.01745329252f;
-            const float ry = o.rotDeg[1] * 0.01745329252f;
-            const float rz = o.rotDeg[2] * 0.01745329252f;
-            const float cx = std::cos(rx), sx = std::sin(rx);
-            const float cyaw = std::cos(ry), syaw = std::sin(ry);
-            const float cz = std::cos(rz), sz = std::sin(rz);
-
-            float wmin[3] = {0, 0, 0}, wmax[3] = {0, 0, 0};
-            for (int corner = 0; corner < 8; ++corner)
-            {
-                float p[3] = {(corner & 1 ? lmax[0] : lmin[0]) * o.scale[0],
-                              (corner & 2 ? lmax[1] : lmin[1]) * o.scale[1],
-                              (corner & 4 ? lmax[2] : lmin[2]) * o.scale[2]};
-                // R = Ry(yaw) * Rx(pitch) * Rz(roll), applied to column vector.
-                float q[3] = {p[0] * cz - p[1] * sz, p[0] * sz + p[1] * cz, p[2]};          // roll (Z)
-                float r[3] = {q[0], q[1] * cx - q[2] * sx, q[1] * sx + q[2] * cx};          // pitch (X)
-                float w[3] = {r[0] * cyaw + r[2] * syaw, r[1], -r[0] * syaw + r[2] * cyaw}; // yaw (Y)
-                for (int i = 0; i < 3; ++i)
-                    w[i] += o.pos[i];
-                if (corner == 0)
-                {
-                    for (int i = 0; i < 3; ++i)
-                    {
-                        wmin[i] = w[i];
-                        wmax[i] = w[i];
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < 3; ++i)
-                    {
-                        wmin[i] = std::min(wmin[i], w[i]);
-                        wmax[i] = std::max(wmax[i], w[i]);
-                    }
-                }
-            }
-
             PhysicsBodyDesc desc;
             desc.type = PhysicsBodyType::Static;
             desc.mass = 0.0f;
-            desc.position = {(wmin[0] + wmax[0]) * 0.5f, (wmin[1] + wmax[1]) * 0.5f, (wmin[2] + wmax[2]) * 0.5f};
             desc.shape.type = CollisionShapeType::Box;
-            desc.shape.dimensions = {std::max((wmax[0] - wmin[0]) * 0.5f, kMinHalfExtentM),
-                                     std::max((wmax[1] - wmin[1]) * 0.5f, kMinHalfExtentM),
-                                     std::max((wmax[2] - wmin[2]) * 0.5f, kMinHalfExtentM)};
+
+            // collision-v2: yaw-only diagonal nodes (35/45/135-degree barriers)
+            // get a properly ROTATED box — the baked world-AABB was up to ~40%
+            // oversize on those walls. Exact 90-degree-multiple nodes stay on
+            // the axis-aligned baked path (exact there, and no quaternion in
+            // the desc means nothing to get wrong).
+            const bool yawOnly = IsNearMultipleDeg(o.rotDeg[0], 360.0f) && IsNearMultipleDeg(o.rotDeg[2], 360.0f);
+            const bool diagonalYaw = yawOnly && !IsNearMultipleDeg(o.rotDeg[1], 90.0f);
+
+            if (diagonalYaw)
+            {
+                // Tight OBB: half extents are the scaled LOCAL half extents;
+                // the node's yaw is handed to Jolt as a body rotation.
+                // desc.rotation is RADIANS: PhysicsSystemQueries.cpp passes it
+                // straight to JPH::Quat::sEulerAngles (the PhysicsTypes.h
+                // "degrees" doc lies; TFVehiclePhysics depends on radians).
+                // Scene rotations are DEGREES — convert here.
+                const float ryRad = o.rotDeg[1] * kDegToRad;
+                const float cyaw = std::cos(ryRad), syaw = std::sin(ryRad);
+                const float ctr[3] = {(lmin[0] + lmax[0]) * 0.5f * o.scale[0], (lmin[1] + lmax[1]) * 0.5f * o.scale[1],
+                                      (lmin[2] + lmax[2]) * 0.5f * o.scale[2]};
+                // Body center = node pos + Ry(yaw) * scaled local center. The
+                // yaw mapping (x' = x*c + z*s, z' = -x*s + z*c) is the same
+                // convention the baked corner path used, which play-testing
+                // already validated against the rendered walls.
+                desc.position = {ctr[0] * cyaw + ctr[2] * syaw + o.pos[0], ctr[1] + o.pos[1],
+                                 -ctr[0] * syaw + ctr[2] * cyaw + o.pos[2]};
+                desc.shape.dimensions = {std::max(std::fabs((lmax[0] - lmin[0]) * 0.5f * o.scale[0]), kMinHalfExtentM),
+                                         std::max(std::fabs((lmax[1] - lmin[1]) * 0.5f * o.scale[1]), kMinHalfExtentM),
+                                         std::max(std::fabs((lmax[2] - lmin[2]) * 0.5f * o.scale[2]), kMinHalfExtentM)};
+                desc.rotation = {0.0f, ryRad, 0.0f}; // radians (see comment above)
+            }
+            else
+            {
+                // World AABB: transform the 8 scaled local corners by the node's
+                // Euler-degree rotation and translation, then take min/max.
+                // Exact for 90-degree steps (the only content on this path now;
+                // multi-axis non-90 nodes — none shipped — stay conservatively
+                // fat here rather than risking a quaternion-order mismatch).
+                const float rx = o.rotDeg[0] * kDegToRad;
+                const float ry = o.rotDeg[1] * kDegToRad;
+                const float rz = o.rotDeg[2] * kDegToRad;
+                const float cx = std::cos(rx), sx = std::sin(rx);
+                const float cyaw = std::cos(ry), syaw = std::sin(ry);
+                const float cz = std::cos(rz), sz = std::sin(rz);
+
+                float wmin[3] = {0, 0, 0}, wmax[3] = {0, 0, 0};
+                for (int corner = 0; corner < 8; ++corner)
+                {
+                    float p[3] = {(corner & 1 ? lmax[0] : lmin[0]) * o.scale[0],
+                                  (corner & 2 ? lmax[1] : lmin[1]) * o.scale[1],
+                                  (corner & 4 ? lmax[2] : lmin[2]) * o.scale[2]};
+                    // R = Ry(yaw) * Rx(pitch) * Rz(roll), applied to column vector.
+                    float q[3] = {p[0] * cz - p[1] * sz, p[0] * sz + p[1] * cz, p[2]};          // roll (Z)
+                    float r[3] = {q[0], q[1] * cx - q[2] * sx, q[1] * sx + q[2] * cx};          // pitch (X)
+                    float w[3] = {r[0] * cyaw + r[2] * syaw, r[1], -r[0] * syaw + r[2] * cyaw}; // yaw (Y)
+                    for (int i = 0; i < 3; ++i)
+                        w[i] += o.pos[i];
+                    if (corner == 0)
+                    {
+                        for (int i = 0; i < 3; ++i)
+                        {
+                            wmin[i] = w[i];
+                            wmax[i] = w[i];
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < 3; ++i)
+                        {
+                            wmin[i] = std::min(wmin[i], w[i]);
+                            wmax[i] = std::max(wmax[i], w[i]);
+                        }
+                    }
+                }
+
+                desc.position = {(wmin[0] + wmax[0]) * 0.5f, (wmin[1] + wmax[1]) * 0.5f, (wmin[2] + wmax[2]) * 0.5f};
+                desc.shape.dimensions = {std::max((wmax[0] - wmin[0]) * 0.5f, kMinHalfExtentM),
+                                         std::max((wmax[1] - wmin[1]) * 0.5f, kMinHalfExtentM),
+                                         std::max((wmax[2] - wmin[2]) * 0.5f, kMinHalfExtentM)};
+            }
+
             desc.material.friction = 0.7f;
             desc.material.restitution = 0.0f;
             // desc.collisionGroup defaults to WorldStatic but set it explicitly
@@ -316,88 +362,151 @@ namespace Terrafront
     // Shared move resolver (server integrator + client prediction)
     // -----------------------------------------------------------------------
 
-    void TFWorldCollision::ResolveMove(const float prevPos[3], float pos[3], float vel[3]) const
+    void TFWorldCollision::ResolveMove(const float prevPos[3], float pos[3], float vel[3], bool* grounded) const
     {
         if (!IsActive())
             return;
 
-        float remX = pos[0] - prevPos[0];
-        float remZ = pos[2] - prevPos[2];
-        if (remX * remX + remZ * remZ < 1.0e-10f)
-            return;
-
-        // Swept capsule: bottom lifted kTFStepUpM above the feet so standing on
-        // plateau-flush mesa tops (and stepping over low curbs) never registers
-        // as a wall hit; top at the pawn head. CapsuleCastFiltered's `height` is
-        // the cylindrical section (total = height + 2 * radius).
-        const float capTotal = kTFPawnHeightM - kTFStepUpM;          // 1.45
-        const float capCyl = capTotal - 2.0f * kTFPawnRadiusM;       // 0.65
-        const float centerY = pos[1] + kTFStepUpM + capTotal * 0.5f; // feet + 1.075
-
-        float curX = prevPos[0];
-        float curZ = prevPos[2];
         bool anyHit = false;
 
-        for (int iter = 0; iter < kTFSlideIters; ++iter)
+        // -------------------------------------------------------------------
+        // 1) Horizontal sweep + slide (unchanged from the 2026-07-10 wave).
+        // -------------------------------------------------------------------
+        float curX = pos[0]; // resolved column defaults to the integrated XZ
+        float curZ = pos[2]; // (vertical resolve below runs even without XZ motion)
+
+        float remX = pos[0] - prevPos[0];
+        float remZ = pos[2] - prevPos[2];
+        if (remX * remX + remZ * remZ >= 1.0e-10f)
         {
-            const float len = std::sqrt(remX * remX + remZ * remZ);
-            if (len < 1.0e-5f)
-                break;
+            // Swept capsule: bottom lifted kTFStepUpM above the feet so standing on
+            // plateau-flush mesa tops (and stepping over low curbs) never registers
+            // as a wall hit; top at the pawn head. CapsuleCastFiltered's `height` is
+            // the cylindrical section (total = height + 2 * radius).
+            const float capTotal = kTFPawnHeightM - kTFStepUpM;          // 1.45
+            const float capCyl = capTotal - 2.0f * kTFPawnRadiusM;       // 0.65
+            const float centerY = pos[1] + kTFStepUpM + capTotal * 0.5f; // feet + 1.075
 
-            const XMFLOAT3 from{curX, centerY, curZ};
-            const XMFLOAT3 to{curX + remX, centerY, curZ + remZ};
+            curX = prevPos[0];
+            curZ = prevPos[2];
+
+            for (int iter = 0; iter < kTFSlideIters; ++iter)
+            {
+                const float len = std::sqrt(remX * remX + remZ * remZ);
+                if (len < 1.0e-5f)
+                    break;
+
+                const XMFLOAT3 from{curX, centerY, curZ};
+                const XMFLOAT3 to{curX + remX, centerY, curZ + remZ};
+                const RaycastHit hit =
+                    m_physics->CapsuleCastFiltered(kTFPawnRadiusM, capCyl, from, to, CollisionLayers::MovementMask);
+                if (!hit.hasHit)
+                {
+                    curX += remX;
+                    curZ += remZ;
+                    break;
+                }
+                anyHit = true;
+
+                const float dirX = remX / len;
+                const float dirZ = remZ / len;
+                const float travel = std::clamp(hit.distance - kTFMoveSkinM, 0.0f, len);
+                curX += dirX * travel;
+                curZ += dirZ * travel;
+
+                // Slide the remainder along the surface (horizontal normal only;
+                // shape-cast normals are true outward unit normals as of today).
+                float nX = hit.normal.x;
+                float nZ = hit.normal.z;
+                const float nLen = std::sqrt(nX * nX + nZ * nZ);
+                if (nLen < 1.0e-4f)
+                    break; // floor/ceiling contact: nothing to slide along
+                nX /= nLen;
+                nZ /= nLen;
+
+                float leftX = dirX * (len - travel);
+                float leftZ = dirZ * (len - travel);
+                const float into = leftX * nX + leftZ * nZ;
+                if (into < 0.0f)
+                {
+                    leftX -= into * nX;
+                    leftZ -= into * nZ;
+                }
+                remX = leftX;
+                remZ = leftZ;
+
+                // Kill the velocity component pushing into the surface so the next
+                // tick does not re-accelerate into the wall.
+                const float vInto = vel[0] * nX + vel[2] * nZ;
+                if (vInto < 0.0f)
+                {
+                    vel[0] -= vInto * nX;
+                    vel[2] -= vInto * nZ;
+                }
+            }
+        }
+
+        pos[0] = curX;
+        pos[2] = curZ;
+
+        // -------------------------------------------------------------------
+        // 2) Vertical resolve at the resolved column (collision-v2). Uses the
+        //    FULL-height capsule (bottom at the feet — no step-up lift, or the
+        //    pawn would sink kTFStepUpM into every roof before contact).
+        //    TFMoveStep's terrain clamp already ran, so a falling pawn may
+        //    arrive here already snapped to terrain BELOW a roof — sweeping
+        //    from prevPos.y catches the roof on the way down regardless. The
+        //    caller's terrain re-clamp stays the floor-of-last-resort.
+        // -------------------------------------------------------------------
+        const float fullCyl = kTFPawnHeightM - 2.0f * kTFPawnRadiusM; // 1.0
+        const float halfTotal = kTFPawnHeightM * 0.5f;                // 0.9
+        const float dy = pos[1] - prevPos[1];
+
+        if (dy > 1.0e-6f && vel[1] > 0.0f)
+        {
+            // Rising (jump): stop under static-body undersides. One cheap cast;
+            // any hit blocks — the horizontal pass keeps the column skin-clear
+            // of walls, so a straight-up sweep only meets real overheads.
+            const XMFLOAT3 from{curX, prevPos[1] + halfTotal, curZ};
+            const XMFLOAT3 to{curX, prevPos[1] + halfTotal + dy, curZ};
             const RaycastHit hit =
-                m_physics->CapsuleCastFiltered(kTFPawnRadiusM, capCyl, from, to, CollisionLayers::MovementMask);
-            if (!hit.hasHit)
+                m_physics->CapsuleCastFiltered(kTFPawnRadiusM, fullCyl, from, to, CollisionLayers::MovementMask);
+            if (hit.hasHit)
             {
-                curX += remX;
-                curZ += remZ;
-                break;
+                pos[1] = prevPos[1] + std::clamp(hit.distance - kTFMoveSkinM, 0.0f, dy);
+                if (vel[1] > 0.0f)
+                    vel[1] = 0.0f; // head bonk: kill the ascent
+                anyHit = true;
             }
-            anyHit = true;
-
-            const float dirX = remX / len;
-            const float dirZ = remZ / len;
-            const float travel = std::clamp(hit.distance - kTFMoveSkinM, 0.0f, len);
-            curX += dirX * travel;
-            curZ += dirZ * travel;
-
-            // Slide the remainder along the surface (horizontal normal only;
-            // shape-cast normals are true outward unit normals as of today).
-            float nX = hit.normal.x;
-            float nZ = hit.normal.z;
-            const float nLen = std::sqrt(nX * nX + nZ * nZ);
-            if (nLen < 1.0e-4f)
-                break; // floor/ceiling contact: nothing to slide along
-            nX /= nLen;
-            nZ /= nLen;
-
-            float leftX = dirX * (len - travel);
-            float leftZ = dirZ * (len - travel);
-            const float into = leftX * nX + leftZ * nZ;
-            if (into < 0.0f)
+        }
+        else if (vel[1] <= 0.0f && dy <= 1.0e-6f)
+        {
+            // Descending (or standing on a body): land on static-body tops.
+            // kTFLandSnapM extends the sweep past the integrated position so
+            // the per-tick gravity droop (~5 mm at 60 Hz) keeps re-finding the
+            // roof through the kTFMoveSkinM hover gap — grounded stays stable
+            // instead of strobing (friction/jump would flicker otherwise).
+            const float sweepLen = -dy + kTFLandSnapM;
+            const XMFLOAT3 from{curX, prevPos[1] + halfTotal, curZ};
+            const XMFLOAT3 to{curX, prevPos[1] + halfTotal - sweepLen, curZ};
+            const RaycastHit hit =
+                m_physics->CapsuleCastFiltered(kTFPawnRadiusM, fullCyl, from, to, CollisionLayers::MovementMask);
+            if (hit.hasHit && hit.normal.y > kTFWalkableNormalY)
             {
-                leftX -= into * nX;
-                leftZ -= into * nZ;
-            }
-            remX = leftX;
-            remZ = leftZ;
-
-            // Kill the velocity component pushing into the surface so the next
-            // tick does not re-accelerate into the wall.
-            const float vInto = vel[0] * nX + vel[2] * nZ;
-            if (vInto < 0.0f)
-            {
-                vel[0] -= vInto * nX;
-                vel[2] -= vInto * nZ;
+                // Walkable top: stand skin-height above the contact. Side/edge
+                // grazes (normal mostly horizontal) are NOT landings — the pawn
+                // keeps falling and the terrain clamp remains the backstop.
+                pos[1] = prevPos[1] - std::clamp(hit.distance - kTFMoveSkinM, 0.0f, sweepLen);
+                if (vel[1] < 0.0f)
+                    vel[1] = 0.0f;
+                if (grounded)
+                    *grounded = true; // only ever SET here; TFMoveStep owns clearing
+                anyHit = true;
             }
         }
 
         if (anyHit)
             ++m_blockedMoves; // diagnostic only (tf_validate); see header note
-
-        pos[0] = curX;
-        pos[2] = curZ;
     }
 
 } // namespace Terrafront

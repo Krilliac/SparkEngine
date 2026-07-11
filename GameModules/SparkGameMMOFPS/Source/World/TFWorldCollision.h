@@ -11,9 +11,13 @@
  *    ground on every role (already clamped per tick inside TFMoveStep step 7).
  *    No heightfield mesh body is ever built here — a Jolt heightfield would be
  *    a second, subtly different ground truth and a determinism hazard.
- *  - SCENE OBJECTS get one static Jolt BOX body each, computed from the node's
- *    world-space AABB. Boxes (not tri-meshes) keep broadphase cheap and make
- *    the client/server body sets trivially identical.
+ *  - SCENE OBJECTS get one static Jolt BOX body each. Axis-aligned nodes
+ *    (rotation a multiple of 90 degrees) bake the node transform into a
+ *    world-space AABB. Yaw-only diagonal nodes (35/45/135-degree barriers)
+ *    get a properly ROTATED box (collision-v2) — the old conservative fat
+ *    AABB was up to ~40% oversize on those walls. Boxes (not tri-meshes)
+ *    keep broadphase cheap and make the client/server body sets trivially
+ *    identical.
  *
  * ## Determinism contract
  * Bodies are parsed straight from the .scene file ([Object] INI sections) —
@@ -48,6 +52,9 @@ namespace Terrafront
     constexpr float kTFStepUpM = 0.35f;   ///< swept capsule starts this far above the feet (step-over height)
     constexpr float kTFMoveSkinM = 0.02f; ///< stop this short of a blocking surface
     constexpr int kTFSlideIters = 3;      ///< max slide re-projections per tick
+    /// Vertical-resolve tuning (collision-v2). Also determinism-contract values.
+    constexpr float kTFLandSnapM = 0.05f;      ///< extra downward sweep so standing-on-body contact stays grounded
+    constexpr float kTFWalkableNormalY = 0.5f; ///< min upward normal.y for a down-sweep hit to count as a landing
 
     class TFWorldCollision
     {
@@ -58,9 +65,14 @@ namespace Terrafront
         /// Parse `scenePath` and create one static Jolt box body per collidable
         /// [Object] node (type=cube|model; spawnpoints/planes are skipped —
         /// the plane IS the analytic terrain). Model nodes stream their OBJ once
-        /// for a local AABB; the node transform (scale, Euler-degree rotation,
-        /// translation) is baked into a world-space AABB, so no desc.rotation is
-        /// ever passed (its radians-vs-degrees trap stays out of this file).
+        /// for a local AABB. Nodes whose rotation is a 90-degree multiple bake
+        /// the transform into a world-space AABB (exact, no desc.rotation).
+        /// Yaw-only diagonal nodes get a tight ROTATED box: desc.rotation is
+        /// passed in RADIANS — PhysicsSystemQueries.cpp feeds it straight to
+        /// JPH::Quat::sEulerAngles; the PhysicsTypes.h "degrees" doc is wrong
+        /// (TFVehiclePhysics depends on the radians behavior too). Scene files
+        /// store rotation in DEGREES, so this file converts. Multi-axis
+        /// non-90 rotations (none shipped) keep the conservative baked AABB.
         /// @return true when Jolt is live and at least one body was created.
         bool Build(TFGameContext& ctx, const std::string& scenePath);
 
@@ -70,19 +82,29 @@ namespace Terrafront
         bool IsActive() const { return m_physics != nullptr && !m_bodies.empty(); }
         size_t BodyCount() const { return m_bodies.size(); }
 
-        /// Number of ResolveMove calls that hit a static body (blocked or slid)
-        /// since Build(). Monotonic; game-thread only. The chaos-validation
-        /// harness (tf_validate) diffs this across a run to prove bot movement
-        /// actually interacts with the collision world.
+        /// Number of ResolveMove calls that hit a static body since Build():
+        /// horizontal block/slide OR vertical landing/ceiling stop (collision-v2
+        /// counts vertical hits too — at most one increment per call, so the
+        /// counting seam is unchanged). Monotonic; game-thread only. The
+        /// chaos-validation harness (tf_validate) diffs this across a run to
+        /// prove bot movement actually interacts with the collision world.
         uint64_t BlockedMoveCount() const { return m_blockedMoves; }
 
         /// Post-TFMoveStep collision resolve — THE shared client/server hook.
-        /// Sweeps the pawn capsule (Movement mask) along the horizontal part of
-        /// prevPos -> pos and slides along blocking geometry; pos/vel are
-        /// adjusted in place. Y is left untouched (terrain clamp owns it; the
-        /// caller re-clamps via TFWorldSetup::ResolveMoveCollision). No-op when
+        /// 1) Sweeps the pawn capsule (Movement mask) along the horizontal part
+        ///    of prevPos -> pos and slides along blocking geometry.
+        /// 2) collision-v2 vertical resolve at the resolved column: descending
+        ///    moves land on static-body tops (feet = contact + skin; vel.y
+        ///    zeroed; *grounded set true when provided) with a kTFLandSnapM
+        ///    ground-snap so standing stays stable; ascending moves stop under
+        ///    static-body undersides (vel.y zeroed).
+        /// pos/vel are adjusted in place. The terrain clamp stays the
+        /// floor-of-last-resort (caller re-clamps via
+        /// TFWorldSetup::ResolveMoveCollision AFTER this). `grounded` is
+        /// optional (may be null); it is only ever SET true (landing) — never
+        /// cleared, TFMoveStep step 7 owns the airborne transition. No-op when
         /// inactive. Deterministic: static bodies only + same code both sides.
-        void ResolveMove(const float prevPos[3], float pos[3], float vel[3]) const;
+        void ResolveMove(const float prevPos[3], float pos[3], float vel[3], bool* grounded = nullptr) const;
 
       private:
         struct SceneObj
