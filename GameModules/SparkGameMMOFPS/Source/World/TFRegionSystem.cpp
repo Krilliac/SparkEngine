@@ -9,8 +9,9 @@
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
-#include "Game/TFVisualUtils.h" // FactionStructureMaterial for capture-point banners
-#include "World/TFWorldSetup.h" // TerrainHeightAt for landmark placement
+#include "Game/TFVisualUtils.h"    // FactionStructureMaterial for capture-point banners
+#include "World/TFRegionDecor.h"   // W9: per-tier building-kit decor (owned member)
+#include "World/TFWorldSetup.h"    // TerrainHeightAt for landmark placement
 #include "Engine/ECS/Components.h" // Transform, MeshRenderer for capture landmarks
 #include "UI/TFHUD.h"
 #include "Utils/LogMacros.h"
@@ -114,6 +115,11 @@ namespace Terrafront
             m_debugCmd = true;
         }
 
+        // W9 world-decor lane: viewer-only tier decor, driven from Update()'s
+        // HasLocalPlayer block below (spawns nothing on dedicated servers).
+        m_decor = std::make_unique<TFRegionDecor>();
+        m_decor->Initialize(ctx);
+
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFRegionSystem initialized (%zu regions)", m_state.size());
         return true;
     }
@@ -142,6 +148,8 @@ namespace Terrafront
         {
             FeedLocalCaptureHUD();
             UpdateCaptureVisuals(deltaTime);
+            if (m_decor)
+                m_decor->Update(); // spawn-once tier decor (W9), no-op after stamp
         }
     }
 
@@ -155,7 +163,7 @@ namespace Terrafront
         if (regions.empty())
             return;
 
-        constexpr float kBannerHeightM = 11.5f;   // just under the 12.7m cap tower top
+        constexpr float kBannerHeightM = 11.5f; // just under the 12.7m cap tower top
         constexpr float kBannerSpinDegPerSec = 24.0f;
 
         if (!m_capVisualsSpawned)
@@ -175,10 +183,17 @@ namespace Terrafront
                     const char* gate = nullptr;
                     switch (r.homeFaction)
                     {
-                    case FactionId::MRA: gate = "Assets/Models/MMOFPS/buildings/warpgate_mra.obj"; break;
-                    case FactionId::AUC: gate = "Assets/Models/MMOFPS/buildings/warpgate_auc.obj"; break;
-                    case FactionId::HLX: gate = "Assets/Models/MMOFPS/buildings/warpgate_hlx.obj"; break;
-                    default: break;
+                    case FactionId::MRA:
+                        gate = "Assets/Models/MMOFPS/buildings/warpgate_mra.obj";
+                        break;
+                    case FactionId::AUC:
+                        gate = "Assets/Models/MMOFPS/buildings/warpgate_auc.obj";
+                        break;
+                    case FactionId::HLX:
+                        gate = "Assets/Models/MMOFPS/buildings/warpgate_hlx.obj";
+                        break;
+                    default:
+                        break;
                     }
                     if (gate)
                     {
@@ -280,6 +295,11 @@ namespace Terrafront
     {
         if (!m_initialized)
             return;
+        if (m_decor)
+        {
+            m_decor->Shutdown();
+            m_decor.reset();
+        }
         if (m_ctx && m_ctx->IsAuthority() && m_dirty)
             PersistNow();
         if (m_debugCmd)

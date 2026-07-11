@@ -51,6 +51,7 @@
 #include "Net/TFNetProtocol.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -58,7 +59,8 @@
 namespace Terrafront
 {
 
-    struct RegionDef; // Data/TFDataTables.h
+    struct RegionDef;    // Data/TFDataTables.h
+    class TFRegionDecor; // World/TFRegionDecor.h (W9 world-decor lane)
 
     class TFRegionSystem
     {
@@ -138,6 +140,11 @@ namespace Terrafront
         bool m_capVisualsSpawned = false;
         std::vector<uint32_t> m_capBannerEnt; ///< region-indexed banner entity (0 = none)
         std::vector<int> m_capBannerOwner;    ///< last-applied owner tint per banner
+
+        // W9 world-decor lane: per-tier building-kit decor around every region
+        // (World/TFRegionDecor.h). Owned + driven here so it inherits the same
+        // HasLocalPlayer gate as the capture landmarks, no Main.cpp wiring.
+        std::unique_ptr<TFRegionDecor> m_decor;
 
         // tf_capture_debug payload (TFRegionSystem.cpp)
         std::string DebugCaptureReport() const;
