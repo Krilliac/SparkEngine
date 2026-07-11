@@ -44,11 +44,15 @@
 #include "World/TFSanctuaryZone.h"
 
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 
 namespace Terrafront
 {
+
+    class TFSanctuaryDecor; // sanctuary-v2 lane (W10): World/TFSanctuaryDecor.h
+    class TFTargetRange;    // sanctuary-v2 lane (W10): Game/TFTargetRange.h
 
     // ---------------------------------------------------------------------
     // Travel wire channel (reserved TFMsg block 0x5434-0x5437, C<->S)
@@ -212,6 +216,14 @@ namespace Terrafront
         bool m_clientHandlers{false};
 #endif
         bool m_showDebug{false};
+
+        // sanctuary-v2 lane (W10): sanctuary decor + class terminal and the
+        // cosmetic firing range are owned + driven here (TFRegionSystem::
+        // m_decor precedent) so they inherit this system's lifecycle without
+        // touching contended Main.cpp. Both are viewer-only and no-op on
+        // dedicated servers.
+        std::unique_ptr<TFSanctuaryDecor> m_sanctuaryDecor;
+        std::unique_ptr<TFTargetRange> m_targetRange;
     };
 
 } // namespace Terrafront

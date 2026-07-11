@@ -28,58 +28,74 @@
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
 
-namespace Terrafront {
+namespace Terrafront
+{
 
-class TFSpawnScreen {
-  public:
-    TFSpawnScreen();
-    ~TFSpawnScreen();
+    class TFSpawnScreen
+    {
+      public:
+        TFSpawnScreen();
+        ~TFSpawnScreen();
 
-    bool Initialize(TFGameContext& ctx, TFEventBus& events);
-    void Update(float deltaTime);
-    void FixedUpdate(float fixedDeltaTime);
-    void Shutdown();
-    void RenderDebugUI();
-    void RenderUI();
+        bool Initialize(TFGameContext& ctx, TFEventBus& events);
+        void Update(float deltaTime);
+        void FixedUpdate(float fixedDeltaTime);
+        void Shutdown();
+        void RenderDebugUI();
+        void RenderUI();
 
-    // --- W2 cross-agent contract ---
-    void Open();
-    void Close();
-    bool IsOpen() const { return m_open; }
+        // --- W2 cross-agent contract ---
+        void Open();
+        void Close();
+        bool IsOpen() const { return m_open; }
 
-    // --- W2 additions ---
-    /// Class currently picked in the UI; TFMapScreen uses it for click-deploys.
-    ClassId SelectedClass() const { return m_selClass; }
+        // --- W10 sanctuary-v2 additions (class terminal) ---
+        /// Open the SAME deploy panel while ALIVE at the sanctuary class terminal
+        /// (TFSanctuaryDecor). There is no server-side live re-class — the server
+        /// denies TF_SpawnRequest while alive — so terminal mode is a class
+        /// PRE-SELECT for the next deploy: the alive auto-close is suppressed,
+        /// DEPLOY is disabled with a hint, and a CLOSE button appears. The picked
+        /// class persists in m_selClass (already the source for every deploy
+        /// path, incl. TFMapScreen click-deploys).
+        void OpenClassTerminal();
+        /// True while the screen is open in class-terminal mode (used by
+        /// TFSanctuaryDecor's [E] toggle so it only closes what it opened).
+        bool IsTerminalMode() const { return m_open && m_terminalMode; }
 
-  private:
-    bool LocalPawnAlive() const;
-    void OnLocalPlayerDied(const EvLocalPlayerDied& ev);
-    void SendSpawnRequest();
-    void SendFactionSelect(FactionId f);
+        // --- W2 additions ---
+        /// Class currently picked in the UI; TFMapScreen uses it for click-deploys.
+        ClassId SelectedClass() const { return m_selClass; }
 
-    // ImGui internals (stubbed out when !SPARK_HAS_IMGUI, TFHUD pattern).
-    void DrawFactionSplash(float panelX, float panelY, float panelW, float panelH);
-    void DrawDeployPanel(float panelX, float panelY, float panelW, float panelH);
+      private:
+        bool LocalPawnAlive() const;
+        void OnLocalPlayerDied(const EvLocalPlayerDied& ev);
+        void SendSpawnRequest();
+        void SendFactionSelect(FactionId f);
 
-    TFGameContext* m_ctx{nullptr};
-    TFEventBus*    m_events{nullptr};
-    bool           m_initialized{false};
+        // ImGui internals (stubbed out when !SPARK_HAS_IMGUI, TFHUD pattern).
+        void DrawFactionSplash(float panelX, float panelY, float panelW, float panelH);
+        void DrawDeployPanel(float panelX, float panelY, float panelW, float panelH);
 
-    bool  m_open{false};
-    float m_pendingOpen{0.0f};    ///< countdown to auto-open after death (0 = idle)
-    float m_bootOpenDelay{1.5f};  ///< one-shot first-deploy auto-open timer
-    bool  m_bootOpened{false};
+        TFGameContext* m_ctx{nullptr};
+        TFEventBus* m_events{nullptr};
+        bool m_initialized{false};
 
-    // Selection
-    ClassId  m_selClass{ClassId::Striker};
-    uint8_t  m_selKind{0};        ///< TF_SpawnRequest.spawnKind: 0 skyanchor, 1 region, 2 aegis
-    RegionId m_selRegion{kInvalidRegion};
-    EntityId m_selAegis{0};       ///< W3 shared-edit (vehicles agent): deployed-Aegis entity
+        bool m_open{false};
+        bool m_terminalMode{false};  ///< W10 sanctuary-v2: open-while-alive class pre-select
+        float m_pendingOpen{0.0f};   ///< countdown to auto-open after death (0 = idle)
+        float m_bootOpenDelay{1.5f}; ///< one-shot first-deploy auto-open timer
+        bool m_bootOpened{false};
 
-    // Death / respawn state (local mirror of the server timer)
-    float m_deathPos[3]{0.0f, 0.0f, 0.0f};
-    float m_respawnLeft{0.0f};
-    float m_debounce{0.0f};       ///< re-enable delay after a DEPLOY request
-};
+        // Selection
+        ClassId m_selClass{ClassId::Striker};
+        uint8_t m_selKind{0}; ///< TF_SpawnRequest.spawnKind: 0 skyanchor, 1 region, 2 aegis
+        RegionId m_selRegion{kInvalidRegion};
+        EntityId m_selAegis{0}; ///< W3 shared-edit (vehicles agent): deployed-Aegis entity
+
+        // Death / respawn state (local mirror of the server timer)
+        float m_deathPos[3]{0.0f, 0.0f, 0.0f};
+        float m_respawnLeft{0.0f};
+        float m_debounce{0.0f}; ///< re-enable delay after a DEPLOY request
+    };
 
 } // namespace Terrafront

@@ -23,6 +23,8 @@
 #include "Game/TFVehicleSystem.h" // W3 shared-edit: deployed-Aegis spawn entries
 #include "World/TFRegionSystem.h"
 
+#include "Input/InputManager.h" // W10 sanctuary-v2: terminal mode owns the mouse
+#include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
@@ -122,17 +124,43 @@ namespace Terrafront
         if (m_open || !m_initialized)
             return;
         m_open = true;
+        m_terminalMode = false; // normal opens (death/boot) are never terminal mode
         m_pendingOpen = 0.0f;
         // Suppress the HUD death overlay while this screen owns the frame.
         if (m_ctx && m_ctx->hud)
             m_ctx->hud->SetRespawnState(false, 0.0f);
     }
 
+    void TFSpawnScreen::OpenClassTerminal()
+    {
+        // W10 sanctuary-v2: same panel, alive-friendly mode (see header note).
+        if (m_open || !m_initialized)
+            return;
+        Open();
+        m_terminalMode = m_open;
+        // Unlike death opens (pawn already dead, mouse free), the terminal
+        // opens while ALIVE with mouse-look captured — release it so the
+        // panel is clickable (travel/vehicle-shop menu pattern).
+        InputManager* input = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetInput() : nullptr;
+        if (m_terminalMode && input && input->IsMouseCaptured())
+            input->CaptureMouse(false);
+    }
+
     void TFSpawnScreen::Close()
     {
         if (!m_open)
             return;
+        const bool wasTerminal = m_terminalMode; // W10 sanctuary-v2
         m_open = false;
+        m_terminalMode = false;
+        // Leaving the class terminal with a live pawn: hand the mouse back to
+        // mouse-look (mirror of the release in OpenClassTerminal).
+        if (wasTerminal && LocalPawnAlive())
+        {
+            InputManager* input = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetInput() : nullptr;
+            if (input)
+                input->CaptureMouse(true);
+        }
         // Closed while still dead (e.g. via console): hand the remaining countdown
         // back to the HUD overlay so the player is never without death feedback.
         if (m_ctx && m_ctx->hud && !LocalPawnAlive())
@@ -184,13 +212,23 @@ namespace Terrafront
         {
             if (LocalPawnAlive())
             {
-                Close(); // spawn went through (any path, incl. pure client)
+                // W10 sanctuary-v2: terminal mode is MEANT to be open while
+                // alive (class pre-select at the sanctuary class terminal).
+                if (!m_terminalMode)
+                    Close(); // spawn went through (any path, incl. pure client)
             }
-            else if (m_ctx->hud)
+            else
             {
-                // Keep the HUD overlay suppressed even if a late TF_SpawnReply
-                // (reason=timer) re-armed it via TFClientNet.
-                m_ctx->hud->SetRespawnState(false, 0.0f);
+                // Dying with the terminal panel up converts it into the normal
+                // death screen (otherwise the alive auto-close above would stay
+                // suppressed after the next respawn).
+                m_terminalMode = false;
+                if (m_ctx->hud)
+                {
+                    // Keep the HUD overlay suppressed even if a late TF_SpawnReply
+                    // (reason=timer) re-armed it via TFClientNet.
+                    m_ctx->hud->SetRespawnState(false, 0.0f);
+                }
             }
         }
     }
@@ -473,23 +511,41 @@ namespace Terrafront
             effRespawnLeft = std::max(
                 0.0f, m_respawnLeft - std::max(0.0f, kTFRespawnDelaySec - m_ctx->vehicles->AegisRespawnDelaySec()));
 
+        // W10 sanctuary-v2: class-terminal mode while alive — the server denies
+        // TF_SpawnRequest for a live pawn, so DEPLOY is disabled and the picked
+        // class simply persists (m_selClass) until the next real deploy.
+        const bool aliveTerminal = m_terminalMode && LocalPawnAlive();
+
         const float footY = panelY + panelH - 60.0f;
         ImGui::SetCursorScreenPos(ImVec2(panelX + pad, footY + 8.0f));
-        if (effRespawnLeft > 0.0f)
+        if (aliveTerminal)
+            ImGui::TextColored(ImVec4(0.55f, 0.80f, 0.95f, 1.0f),
+                               "Class terminal - selection applies on your next deploy");
+        else if (effRespawnLeft > 0.0f)
             ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.35f, 1.0f), "Respawn in %.1fs", effRespawnLeft);
         else
             ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.55f, 1.0f), "Ready to deploy");
 
         ImGui::SetCursorScreenPos(ImVec2(panelX + pad, footY + 28.0f));
-        ImGui::TextDisabled("M - continent map (click a linked region to deploy)");
+        if (aliveTerminal)
+            ImGui::TextDisabled("E or CLOSE - leave the terminal");
+        else
+            ImGui::TextDisabled("M - continent map (click a linked region to deploy)");
+
+        if (m_terminalMode)
+        {
+            ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 465.0f, footY));
+            if (ImGui::Button("CLOSE", ImVec2(120.0f, 44.0f)))
+                Close();
+        }
 
         ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 330.0f, footY));
         if (ImGui::Button("OPEN MAP", ImVec2(120.0f, 44.0f)) && m_ctx->map)
             m_ctx->map->Open();
 
         ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 195.0f, footY));
-        const bool blocked =
-            (effRespawnLeft > 0.0f) || (m_debounce > 0.0f) || !m_ctx->clientNet || !m_ctx->clientNet->IsConnected();
+        const bool blocked = aliveTerminal || (effRespawnLeft > 0.0f) || (m_debounce > 0.0f) || !m_ctx->clientNet ||
+                             !m_ctx->clientNet->IsConnected();
         ImGui::BeginDisabled(blocked);
         if (effRespawnLeft > 0.0f)
             std::snprintf(buf, sizeof(buf), "DEPLOY (%.1fs)", effRespawnLeft);

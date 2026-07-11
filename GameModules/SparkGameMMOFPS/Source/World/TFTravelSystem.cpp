@@ -19,12 +19,15 @@
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFRedeployRules.h" // ui-map-keys seam: SetExtraRule (sanctioned extension point)
+#include "Game/TFTargetRange.h"   // sanctuary-v2 lane (W10): cosmetic firing range
+#include "Game/TFUiSounds.h"      // W10 audio-wave-2: terminal bleeps
 #include "Net/TFClientNet.h"
 #include "Net/TFRedeployProtocol.h" // kTFRedeployBlocked reason code
 #include "Net/TFServerSim.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
 #include "World/TFRegionSystem.h"
+#include "World/TFSanctuaryDecor.h" // sanctuary-v2 lane (W10): decor + class terminal
 #include "World/TFWorldSetup.h"
 
 #include "Input/InputManager.h"
@@ -103,6 +106,14 @@ namespace Terrafront
         LoadContinentMeta();
         RegisterConsoleCommands();
 
+        // sanctuary-v2 lane (W10): sanctuary decor/class terminal + firing
+        // range live under this system (TFRegionSystem::m_decor precedent —
+        // no contended Main.cpp wiring). Both no-op on dedicated servers.
+        m_sanctuaryDecor = std::make_unique<TFSanctuaryDecor>();
+        m_sanctuaryDecor->Initialize(ctx);
+        m_targetRange = std::make_unique<TFTargetRange>();
+        m_targetRange->Initialize(ctx);
+
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
                        "[TF] TFTravelSystem initialized (sanctuary pad %.0f/%.0f, terminal %.0f/%.0f)",
@@ -114,6 +125,18 @@ namespace Terrafront
     {
         if (!m_initialized)
             return;
+        // sanctuary-v2 lane (W10): tear down owned subsystems first (the range
+        // releases its TFWeaponSystem hook and both destroy their entities).
+        if (m_targetRange)
+        {
+            m_targetRange->Shutdown();
+            m_targetRange.reset();
+        }
+        if (m_sanctuaryDecor)
+        {
+            m_sanctuaryDecor->Shutdown();
+            m_sanctuaryDecor.reset();
+        }
         TFRedeployRules::SetExtraRule({}); // capture-less, but clear for symmetry
 #ifdef ENABLE_NETWORKING
         if (m_serverHandlers)
@@ -556,6 +579,7 @@ namespace Terrafront
         if (rep.accepted)
         {
             std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Traveling to %s...", TFTravel_MapName(rep.mapId));
+            TFUiSounds_Play(m_ctx, TFUiBleep::Confirm); // W10 audio-wave-2
             SetMenuOpen(false);
             Spark::SimpleConsole::GetInstance().LogInfo(std::string("[TF] travel accepted -> ") +
                                                         TFTravel_MapName(rep.mapId));
@@ -563,6 +587,7 @@ namespace Terrafront
         else
         {
             std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Travel refused: %s", kReasons[r]);
+            TFUiSounds_Play(m_ctx, TFUiBleep::Deny); // W10 audio-wave-2
             Spark::SimpleConsole::GetInstance().LogWarning(std::string("[TF] travel refused: ") + kReasons[r]);
         }
     }
@@ -710,6 +735,14 @@ namespace Terrafront
         m_clock += deltaTime;
         m_interactDebounce = std::max(0.0f, m_interactDebounce - deltaTime);
 
+        // sanctuary-v2 lane (W10): drive the owned subsystems BEFORE this
+        // system's client-UX early returns — they gate themselves internally
+        // (HasLocalPlayer, open menus, pawn state).
+        if (m_sanctuaryDecor)
+            m_sanctuaryDecor->Update(deltaTime);
+        if (m_targetRange)
+            m_targetRange->Update(deltaTime);
+
 #ifdef ENABLE_NETWORKING
         // Late registration polls (region-system pattern: roles appear after
         // Initialize, once tf_host/tf_connect runs).
@@ -756,6 +789,7 @@ namespace Terrafront
             {
                 m_interactDebounce = kInteractDebounceSec;
                 SetMenuOpen(!m_menuOpen);
+                TFUiSounds_Play(m_ctx, m_menuOpen ? TFUiBleep::Open : TFUiBleep::Close); // W10 audio-wave-2
                 if (m_menuOpen)
                     ClientRequestInfo();
             }
@@ -787,6 +821,15 @@ namespace Terrafront
     {
         if (!m_initialized || !m_ctx || !m_ctx->HasLocalPlayer())
             return;
+
+        // sanctuary-v2 lane (W10): world-anchored range readouts + the class-
+        // terminal prompt draw before this system's own early returns; each
+        // subsystem gates itself on open menus / pawn state internally.
+        if (m_sanctuaryDecor)
+            m_sanctuaryDecor->RenderUI();
+        if (m_targetRange)
+            m_targetRange->RenderUI();
+
         if ((m_ctx->map && m_ctx->map->IsOpen()) || (m_ctx->spawnUI && m_ctx->spawnUI->IsOpen()))
             return;
 
