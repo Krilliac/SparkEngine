@@ -740,12 +740,16 @@ namespace Terrafront
 
                 const MuzzleFxDef& fx = pres.muzzleFx;
                 gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Additive);
+                // Depth READ-ONLY (W9): the flash is a burst of light, not
+                // geometry — it must never write depth over the view model.
+                gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::ReadOnly);
                 gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV(MuzzleSheetForWeapon(vmPath, pawn.faction)));
                 gfx->UpdateBasicConstants(
                     bb, view, proj, XMFLOAT4(fx.flashColor[0], fx.flashColor[1], fx.flashColor[2], fx.flashColor[3]),
                     {1.0f / kFlashFrames, 1.0f}, /*emissive*/ 1.0f, /*alpha*/ 1.0f,
                     XMFLOAT2(static_cast<float>(frame) / kFlashFrames, 0.0f));
                 m_quad->Render(dc);
+                gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::Default);
                 gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Opaque);
             }
         }

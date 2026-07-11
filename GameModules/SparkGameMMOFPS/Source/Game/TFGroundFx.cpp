@@ -201,6 +201,10 @@ namespace Terrafront
         gfx->SetBasicShaders();
         gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV(kDustSheet));
         gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Additive);
+        // Depth READ-ONLY (W9): puffs test against the scene but never write,
+        // so overlapping additive billboards can't occlude each other or
+        // anything drawn after this pass.
+        gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::ReadOnly);
 
         // Billboard basis from inv(view) rows (camera axes in world space): the
         // plane's local X -> camera right, local Z -> camera up (v=0 edge is +Z,
@@ -232,6 +236,7 @@ namespace Terrafront
             m_quad->Render(dc);
         }
 
+        gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::Default);
         gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Opaque);
         gfx->SetBasicTexture(nullptr);
     }

@@ -74,14 +74,17 @@ namespace Terrafront
             it.dist2 = dx * dx + dy * dy + dz * dz;
         }
         // Back-to-front: farthest first so nearer alpha surfaces composite over
-        // farther ones (also minimizes the depth-write occlusion artifact —
-        // see the header's depth policy note).
+        // farther ones.
         std::stable_sort(m_items.begin(), m_items.end(),
                          [](const Item& a, const Item& b) { return a.dist2 > b.dist2; });
 
         ID3D11DeviceContext* dc = gfx->GetContext();
         gfx->SetBasicShaders();
         gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Alpha);
+        // Depth READ-ONLY (W9): test against opaque geometry but never write,
+        // so transparent surfaces stop occluding anything drawn after Flush
+        // (the W8 artifact class the header's depth policy note describes).
+        gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::ReadOnly);
 
         m_drawnLastFlush = 0;
         for (const Item& it : m_items)
@@ -100,6 +103,7 @@ namespace Terrafront
         }
 
         // Restore the opaque defaults for whatever draws after us (HUD, next frame).
+        gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::Default);
         gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Opaque);
         gfx->SetBasicTexture(nullptr);
         m_items.clear();

@@ -14,14 +14,13 @@
  * engine's basic shader with SetBasicBlendMode(Alpha), then restores Opaque
  * blending and clears the batch.
  *
- * Depth policy (honest limitation): the engine's basic path exposes only the
- * default depth-stencil state (test ON, write ON) — there is no no-write
- * depth state to bind (GraphicsEngine has just m_defaultDepthState). This
- * pass therefore draws transparency WITH depth writes; back-to-front sorting
- * hides the artifact between transparent surfaces, but a transparent surface
- * still occludes anything drawn after Flush. Do NOT hack raw
- * OMSetDepthStencilState here — the no-write state is an engine ask (see the
- * lane wiring notes / risks).
+ * Depth policy (W9): Flush binds the engine's read-only depth state via
+ * SetBasicDepthMode(ReadOnly) — depth test LESS_EQUAL against the opaque
+ * scene, write mask ZERO — and restores Default afterwards. Transparent
+ * surfaces therefore never occlude later draws; back-to-front sorting still
+ * orders compositing between the transparent surfaces themselves. Do NOT
+ * hack raw OMSetDepthStencilState here — go through SetBasicDepthMode so the
+ * restore path stays in sync with the frame's baseline state.
  *
  * Why a singleton: same justification as TFViewModel — pure client-side
  * presentation, the producers and the flush site are owned by other lanes,

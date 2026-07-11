@@ -734,6 +734,22 @@ class GraphicsEngine
     void SetBasicBlendMode(BasicBlendMode mode);
 
     /**
+     * @brief Depth modes for the basic draw path.
+     */
+    enum class BasicDepthMode
+    {
+        Default, ///< depth test LESS, depth write ALL (the frame baseline)
+        ReadOnly ///< depth test LESS_EQUAL, write mask ZERO (transparent/FX batches)
+    };
+
+    /**
+     * @brief Set the output-merger depth-stencil state for subsequent basic
+     *        draws. Remember to restore Default after a read-only
+     *        (transparent/additive FX) batch.
+     */
+    void SetBasicDepthMode(BasicDepthMode mode);
+
+    /**
      * @brief Bind a texture to slot t0 for the basic pixel shader.
      * @param srv Texture SRV; nullptr binds the default 1x1 white texture.
      */
@@ -801,6 +817,13 @@ class GraphicsEngine
      * @return Cached material (srv may be null if textures missing); nullptr on parse failure.
      */
     const BasicMaterial* GetOrLoadBasicMaterial(const std::string& jsonPath);
+
+    /**
+     * @brief Drop a cached BasicMaterial so the next GetOrLoadBasicMaterial re-parses its JSON.
+     * @param jsonPath Same key the material was loaded with (e.g. "Assets/Materials/MMOFPS/Terrain_Rock.json")
+     * @return true if a cache entry was erased.
+     */
+    bool InvalidateBasicMaterial(const std::string& jsonPath);
 
     /**
      * @brief Update per-frame constants for lighting and camera
@@ -1038,6 +1061,9 @@ class GraphicsEngine
     ComPtr<ID3D11BlendState> m_blendOpaque;
     ComPtr<ID3D11BlendState> m_blendAlpha;
     ComPtr<ID3D11BlendState> m_blendAdditive;
+    // Basic-path read-only depth state (lazily created by SetBasicDepthMode;
+    // Default binds m_defaultDepthState, lazily recreating it if needed).
+    ComPtr<ID3D11DepthStencilState> m_depthReadOnly;
     std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>>
         m_basicTextureCache;                                             ///< WIC-loaded textures by path
     std::unordered_map<std::string, BasicMaterial> m_basicMaterialCache; ///< Parsed basic materials by JSON path

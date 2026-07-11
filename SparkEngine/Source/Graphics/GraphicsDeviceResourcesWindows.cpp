@@ -890,6 +890,49 @@ void GraphicsEngine::SetBasicBlendMode(BasicBlendMode mode)
     m_context->OMSetBlendState(bound, factor, 0xffffffff);
 }
 
+void GraphicsEngine::SetBasicDepthMode(BasicDepthMode mode)
+{
+    if (!m_context || !m_device)
+        return;
+
+    // Lazily create the depth-stencil states on first use (mirrors
+    // SetBasicBlendMode). Default recreates the exact desc CreateRenderStates()
+    // uses for m_defaultDepthState (LESS, write ALL), so restoring Default is
+    // identical to the frame baseline ApplyGraphicsState()/
+    // ApplyBasicRenderStates() bind — and still works in attached mode if the
+    // shared state object was never created.
+    auto ensure =
+        [this](ComPtr<ID3D11DepthStencilState>& state, D3D11_DEPTH_WRITE_MASK writeMask, D3D11_COMPARISON_FUNC func)
+    {
+        if (state)
+            return;
+        D3D11_DEPTH_STENCIL_DESC desc = {};
+        desc.DepthEnable = TRUE;
+        desc.DepthWriteMask = writeMask;
+        desc.DepthFunc = func;
+        desc.StencilEnable = FALSE;
+        m_device->CreateDepthStencilState(&desc, &state);
+    };
+
+    ID3D11DepthStencilState* bound = nullptr;
+    switch (mode)
+    {
+    case BasicDepthMode::ReadOnly:
+        // LESS_EQUAL (not LESS) so transparent/FX surfaces coplanar with
+        // already-written opaque geometry still pass the test; write mask ZERO
+        // is the whole point — transparent draws must not occlude later draws.
+        ensure(m_depthReadOnly, D3D11_DEPTH_WRITE_MASK_ZERO, D3D11_COMPARISON_LESS_EQUAL);
+        bound = m_depthReadOnly.Get();
+        break;
+    case BasicDepthMode::Default:
+    default:
+        ensure(m_defaultDepthState, D3D11_DEPTH_WRITE_MASK_ALL, D3D11_COMPARISON_LESS);
+        bound = m_defaultDepthState.Get();
+        break;
+    }
+    m_context->OMSetDepthStencilState(bound, 0);
+}
+
 void GraphicsEngine::SetBasicTexture(ID3D11ShaderResourceView* srv)
 {
     if (!m_context)
@@ -1101,6 +1144,15 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
 
     auto [ins, ok] = m_basicMaterialCache.emplace(jsonPath, std::move(mat));
     return &ins->second;
+}
+
+// Save-time invalidation for the editor's Basic Materials panel. Erasing one
+// unordered_map node never moves the other cached BasicMaterials, and the only
+// consumer (WorldBasicRenderer) re-fetches the pointer every draw, so dropping
+// an entry mid-frame is safe.
+bool GraphicsEngine::InvalidateBasicMaterial(const std::string& jsonPath)
+{
+    return m_basicMaterialCache.erase(jsonPath) != 0;
 }
 
 HRESULT GraphicsEngine::CreateDefaultTexture()
