@@ -7,6 +7,7 @@
 
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFVehicleSystem.h"
+#include "World/TFAlertSystem.h" // W11 alerts lane: EvAlertStarted/ScoreTick/Ended (alerts check)
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldCollision.h"
 #include "World/TFWorldSetup.h"
@@ -30,6 +31,15 @@ namespace Terrafront
         /// terrain" (small slack for slope sampling / float noise; the movement
         /// tick clamps feet to the terrain exactly, so real violations are big).
         constexpr float kBelowTolM = 0.30f;
+
+        // W11 alerts lane (single grant: TFChaosHarness.cpp only, so the
+        // counters are file-local instead of header members). One harness
+        // exists per module instance, so plain statics are safe here (and they
+        // live in this DLL image only — the per-image-statics gotcha does not
+        // bite because nothing outside the module reads them).
+        uint32_t g_alertStarts = 0;   ///< EvAlertStarted since chaos start
+        uint32_t g_alertEnds = 0;     ///< EvAlertEnded since chaos start
+        uint32_t g_alertTopScore = 0; ///< high-water faction score observed
     } // namespace
 
     bool TFChaosHarness::Initialize(TFGameContext& ctx, TFEventBus& events)
@@ -40,6 +50,17 @@ namespace Terrafront
         // W9 bots-v2: every EvVehicleSpawned is a validated ServerPurchaseVehicle
         // success (the only firer); counter resets per run like the others.
         events.Subscribe<EvVehicleSpawned>([this](const EvVehicleSpawned&) { ++m_vehiclePurchases; });
+        // W11 alerts lane: an alert running during chaos validates its scoring
+        // (bots already capture). SKIP line when no alert ran this run.
+        events.Subscribe<EvAlertStarted>([](const EvAlertStarted&) { ++g_alertStarts; });
+        events.Subscribe<EvAlertScoreTick>([](const EvAlertScoreTick& ev)
+                                           { g_alertTopScore = std::max(g_alertTopScore, ev.topScore); });
+        events.Subscribe<EvAlertEnded>(
+            [](const EvAlertEnded& ev)
+            {
+                ++g_alertEnds;
+                g_alertTopScore = std::max(g_alertTopScore, ev.topScore);
+            });
         return true;
     }
 
@@ -60,6 +81,11 @@ namespace Terrafront
         m_maxVehicleMoveM = 0.0f;
         m_vehFirstPos.clear();
         m_abilityUses = 0;
+        // W11 alerts lane: per-run alert counters (file-local; see the note at
+        // their definition).
+        g_alertStarts = 0;
+        g_alertEnds = 0;
+        g_alertTopScore = 0;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
                        "[TF] chaos harness armed: bots=%u seconds=%.0f blockedMoveBaseline=%llu", botCount,
                        static_cast<double>(seconds), static_cast<unsigned long long>(m_blockedBaseline));
@@ -205,6 +231,23 @@ namespace Terrafront
             // SKIP, not FAIL: the class-abilities lane has not landed in this
             // build — never count it against the verdict.
             const std::string s = "[TF-VALIDATE] abilities: SKIP abilitySystem=absent";
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", s.c_str());
+            os << s << "\n";
+            ++skipped;
+        }
+
+        // W11 alerts lane: alerts auto-start after 8-12 min of uneventful play,
+        // so a typical chaos run sees none — SKIP (not FAIL) keeps the verdict
+        // honest. Force one with `tf_alert start` during chaos to exercise the
+        // scoring path (bots capture, so a running alert MUST accumulate score).
+        if (g_alertStarts > 0)
+        {
+            line(g_alertTopScore > 0, "alerts: %s starts=%u ends=%u topScore=%u", g_alertStarts, g_alertEnds,
+                 g_alertTopScore);
+        }
+        else
+        {
+            const std::string s = "[TF-VALIDATE] alerts: SKIP noAlertThisRun";
             SPARK_LOG_INFO(Spark::LogCategory::Game, "%s", s.c_str());
             os << s << "\n";
             ++skipped;

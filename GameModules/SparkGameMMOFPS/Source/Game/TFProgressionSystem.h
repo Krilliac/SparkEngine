@@ -71,7 +71,8 @@ namespace Terrafront
         kXPReasonSync = 9,     ///< amount==0; totals refresh (spawn/spend)
         kXPReasonUnlock = 10,  ///< amount==0; unlock granted (wallet refresh; HUD toast cue)
         // 11 is claimed by kXPReasonDirective (Game/TFDirectiveData.h); 12 by
-        // kXPReasonMedal (Game/TFMedalSystem.h) — keep in sync.
+        // kXPReasonMedal (Game/TFMedalSystem.h); 13 by kXPReasonAlert
+        // (World/TFAlertSystem.h) — keep in sync.
     };
 
     /// Result of TFProgressionSystem::ServerTryUnlock (W6 progression expansion).
