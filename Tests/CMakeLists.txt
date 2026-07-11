@@ -509,6 +509,9 @@ add_executable(SparkTests
     TestTFDamageModel.cpp
     TestTFRegionLattice.cpp
     TestTFChatRules.cpp
+    # W7/W8 rule math + wire freezes (header-only includes / standalone mirrors)
+    TestTFRedeployRules.cpp
+    TestTFCaptureMath.cpp
     # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
@@ -516,6 +519,13 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp"
+    # W7/W8 outfit persistence + secondary-motion chain math — both module
+    # .cpps are deliberately minimal-dependency and link standalone into
+    # SparkTests (the TFDatabase.cpp pattern above).
+    TestTFOutfitStore.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp"
+    TestTFSecondaryMotion.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp"
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
     # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke is

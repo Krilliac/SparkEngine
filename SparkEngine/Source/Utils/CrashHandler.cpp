@@ -13,6 +13,8 @@
 #endif
 
 #include <miniz.h>
+#include <atomic>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -293,9 +295,106 @@ static void WriteMiniDump(const std::wstring& path, EXCEPTION_POINTERS* ep);
 static std::wstring MakeTimeStamp();
 static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep);
 static std::wstring SystemInfo();
-static std::wstring ThreadStacks();
+static std::wstring ThreadStacks(DWORD skipThreadId);
+static std::wstring ThreadStacksBounded(bool& outTimedOut);
 static void SaveScreenshot(const std::wstring& file);
 static void ZipFiles(const std::wstring& zip, const std::vector<std::wstring>& files);
+
+// ---------------------------------------------------------------------------
+// Teardown detection + bounded all-thread stack capture
+//
+// Live-debug history (cdb): ThreadStacks() used to suspend every thread in the
+// process from the CRASHING thread — including, eventually, threads holding
+// the loader/heap/dbghelp locks that StackWalk64 itself needs, and during
+// static-destructor crashes threads that the OS was already tearing down. The
+// handler then parked forever in NtSuspendThread and the process zombied
+// instead of dying. The rules now are:
+//   1. never capture thread stacks at all during process teardown,
+//   2. run the capture on a helper thread with a hard watchdog timeout,
+//   3. the helper never suspends itself NOR the crashing thread that is
+//      blocked waiting on it (suspending the waiter would freeze the watchdog
+//      and re-create the zombie),
+//   4. on timeout: keep the minidump + log already produced, skip everything
+//      that could touch a suspended thread, and TerminateProcess.
+// ---------------------------------------------------------------------------
+
+static std::atomic<bool> g_processTeardown{false}; ///< set once exit/static-dtor teardown begins
+
+using RtlDllShutdownInProgressFn = BOOLEAN(NTAPI*)();
+static RtlDllShutdownInProgressFn g_rtlDllShutdownInProgress = nullptr; // resolved in InstallCrashHandler
+
+static bool IsProcessTeardown()
+{
+    if (g_processTeardown.load(std::memory_order_relaxed))
+        return true;
+    // Authoritative OS-side answer (TRUE once ExitProcess/static-dtor shutdown
+    // has begun) — catches teardown paths that bypass our atexit hook.
+    return g_rtlDllShutdownInProgress && g_rtlDllShutdownInProgress();
+}
+
+namespace
+{
+    constexpr DWORD kThreadStacksTimeoutMs = 5000;
+
+    /// Shared with the (possibly abandoned) helper thread — static storage so a
+    /// wedged helper writing late can never touch a dead stack frame.
+    struct ThreadStacksCapture
+    {
+        std::wstring result;
+        DWORD crashThreadId = 0; ///< the thread waiting on the helper; never suspend it
+        HANDLE done = nullptr;
+    };
+} // namespace
+
+static DWORD WINAPI ThreadStacksThreadProc(LPVOID param)
+{
+    auto* cap = static_cast<ThreadStacksCapture*>(param);
+    cap->result = ThreadStacks(cap->crashThreadId);
+    SetEvent(cap->done);
+    return 0;
+}
+
+/// All-thread stack capture with the crash-safety bounds described above.
+/// On timeout returns a placeholder note and sets outTimedOut — the caller
+/// must finish the report WITHOUT touching other threads and terminate.
+static std::wstring ThreadStacksBounded(bool& outTimedOut)
+{
+    outTimedOut = false;
+
+    if (IsProcessTeardown())
+        return L"*** THREAD STACKS ***\nSkipped: process teardown in progress (thread suspension is unsafe here)\n";
+
+    static ThreadStacksCapture s_cap; // static: must outlive an abandoned helper
+    s_cap.result.clear();
+    s_cap.crashThreadId = GetCurrentThreadId();
+    s_cap.done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!s_cap.done)
+        return L"*** THREAD STACKS ***\nSkipped: watchdog event creation failed\n";
+
+    HANDLE helper = CreateThread(nullptr, 0, ThreadStacksThreadProc, &s_cap, 0, nullptr);
+    if (!helper)
+    {
+        CloseHandle(s_cap.done);
+        s_cap.done = nullptr;
+        return L"*** THREAD STACKS ***\nSkipped: watchdog helper thread creation failed\n";
+    }
+
+    if (WaitForSingleObject(s_cap.done, kThreadStacksTimeoutMs) == WAIT_OBJECT_0)
+    {
+        CloseHandle(helper);
+        CloseHandle(s_cap.done);
+        s_cap.done = nullptr;
+        return std::move(s_cap.result);
+    }
+
+    // Wedged (historically inside NtSuspendThread / StackWalk64 against a
+    // suspended lock-holder). Do NOT wait longer, resume anything, or read
+    // s_cap.result — the helper may still be mutating it. Handles are leaked
+    // deliberately; the process is about to be terminated by the caller.
+    outTimedOut = true;
+    return L"*** THREAD STACKS ***\nSkipped: capture timed out after 5 s (thread-suspension wedge) — "
+           L"report written without thread stacks\n";
+}
 
 void InstallCrashHandler(const CrashConfig& cfg)
 {
@@ -306,6 +405,13 @@ void InstallCrashHandler(const CrashConfig& cfg)
 #ifdef SPARK_HAS_CURL
     curl_global_init(CURL_GLOBAL_DEFAULT);
 #endif
+
+    // Teardown detection (see block comment above): resolve the ntdll probe up
+    // front so the crash path never calls GetProcAddress, and set our own flag
+    // as soon as normal exit processing starts.
+    g_rtlDllShutdownInProgress = reinterpret_cast<RtlDllShutdownInProgressFn>(
+        reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlDllShutdownInProgress")));
+    std::atexit([] { g_processTeardown.store(true, std::memory_order_relaxed); });
 
     SetUnhandledExceptionFilter(CrashFilter);
 
@@ -473,25 +579,31 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
     log << SymStackTrace(ep);
     if (g_cfg.captureSystemInfo)
         log << SystemInfo();
+    bool threadStacksTimedOut = false;
     if (g_cfg.captureAllThreads)
-        log << ThreadStacks();
+        log << ThreadStacksBounded(threadStacksTimedOut);
 
-    try
+    // Skipped after a thread-stacks timeout: the console-process IPC can block
+    // on the same suspended threads the wedged helper left behind.
+    if (!threadStacksTimedOut)
     {
-        std::string crashSummary = assertMsg ? "ASSERTION FAILURE" : "CRASH DETECTED";
-        crashSummary += "\nDump file: " + WideToUtf8(dump);
-        crashSummary += "\nLog file: " + WideToUtf8(logFile);
-        Spark::ConsoleProcessManager::GetInstance().LogCrash(crashSummary);
-    }
-    catch (const std::exception& e)
-    {
-        OutputDebugStringA("[SPARK ENGINE] Exception: ");
-        OutputDebugStringA(e.what());
-        OutputDebugStringA("\n");
-    }
-    catch (...)
-    {
-        OutputDebugStringA("[SPARK ENGINE] Unknown exception in crash handler\n");
+        try
+        {
+            std::string crashSummary = assertMsg ? "ASSERTION FAILURE" : "CRASH DETECTED";
+            crashSummary += "\nDump file: " + WideToUtf8(dump);
+            crashSummary += "\nLog file: " + WideToUtf8(logFile);
+            Spark::ConsoleProcessManager::GetInstance().LogCrash(crashSummary);
+        }
+        catch (const std::exception& e)
+        {
+            OutputDebugStringA("[SPARK ENGINE] Exception: ");
+            OutputDebugStringA(e.what());
+            OutputDebugStringA("\n");
+        }
+        catch (...)
+        {
+            OutputDebugStringA("[SPARK ENGINE] Unknown exception in crash handler\n");
+        }
     }
 
     {
@@ -503,6 +615,21 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg)
         std::wofstream ofs(narrowLogFile.c_str(), std::ios::out | std::ios::trunc);
 #endif
         ofs << log.str();
+    }
+
+    if (threadStacksTimedOut)
+    {
+        // The wedged helper may have left arbitrary threads suspended: the
+        // screenshot (render thread), zip/upload (heap, sockets) and dialog
+        // pumps below could all deadlock the same way. The minidump and log
+        // are already on disk — hand the manifest to the out-of-process
+        // reporter and die hard instead of zombieing (the historical failure
+        // mode this watchdog exists for).
+        WriteCrashManifest(WideToUtf8(dump), WideToUtf8(logFile), "", "",
+                           assertMsg ? "Assertion Failure (thread-stack capture timed out)"
+                                     : "Crash Detected (thread-stack capture timed out)");
+        TerminateProcess(GetCurrentProcess(), ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionCode
+                                                                  : static_cast<DWORD>(STATUS_FATAL_APP_EXIT));
     }
 
     if (g_cfg.captureScreenshot)
@@ -712,7 +839,7 @@ static std::wstring SystemInfo()
     return s.str();
 }
 
-static std::wstring ThreadStacks()
+static std::wstring ThreadStacks(DWORD skipThreadId)
 {
     SymInitialize(GetCurrentProcess(), nullptr, TRUE);
     DWORD pid = GetCurrentProcessId();
@@ -725,10 +852,17 @@ static std::wstring ThreadStacks()
 
     BYTE symBuffer[sizeof(SYMBOL_INFO) + 256] = {};
 
+    // Never suspend ourselves (instant self-deadlock in NtSuspendThread — the
+    // original zombie wedge, this function used to run on the crashing thread
+    // and suspend it) nor the crashing thread parked in ThreadStacksBounded's
+    // watchdog wait (a suspended waiter can't time out, re-creating the hang).
+    // Its stack is already in the report via SymStackTrace(ep).
+    const DWORD selfThreadId = GetCurrentThreadId();
+
     THREADENTRY32 te{sizeof(te)};
     for (BOOL ok = Thread32First(snap, &te); ok; ok = Thread32Next(snap, &te))
     {
-        if (te.th32OwnerProcessID != pid)
+        if (te.th32OwnerProcessID != pid || te.th32ThreadID == selfThreadId || te.th32ThreadID == skipThreadId)
             continue;
         HANDLE th = OpenThread(THREAD_ALL_ACCESS, FALSE, te.th32ThreadID);
         if (!th)
