@@ -20,10 +20,12 @@
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <DirectXMath.h>
+#include <DirectXPackedVector.h> // XMConvertFloatToHalf for the fp16 1x1 material defaults
 #include <wrl.h>
 #include <d3dcompiler.h>
 
 #include <string>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -593,6 +595,139 @@ void GraphicsEngine::SetBasicShaders()
     {
         m_context->PSSetShaderResources(0, 1, m_defaultSRV.GetAddressOf());
     }
+
+    // Default-bind the flat normal (t1) and fully-rough roughness (t2) so
+    // every existing basic draw keeps its exact current look without any
+    // call-site changes; callers with real maps opt in per-draw via
+    // SetBasicMaterialTextures(). Also resets the slots at the start of each
+    // basic batch in case another pass left stale SRVs bound there.
+    SetBasicMaterialTextures(nullptr, nullptr);
+}
+
+void GraphicsEngine::SetBasicMaterialTextures(ID3D11ShaderResourceView* normalSrv,
+                                              ID3D11ShaderResourceView* roughnessSrv)
+{
+    if (!m_context)
+        return;
+
+    EnsureDefaultMaterialTextures();
+    ID3D11ShaderResourceView* views[2] = {normalSrv ? normalSrv : m_defaultNormalSRV.Get(),
+                                          roughnessSrv ? roughnessSrv : m_defaultRoughnessSRV.Get()};
+    m_context->PSSetShaderResources(1, 2, views);
+}
+
+void GraphicsEngine::EnsureDefaultMaterialTextures()
+{
+    if (!m_device || (m_defaultNormalSRV && m_defaultRoughnessSRV))
+        return;
+
+    // Flat tangent-space normal (0.5, 0.5, 1). FLOAT16 format on purpose:
+    //  - the shader decodes n = sample * 2 - 1, and 0.5 / 1.0 are exact
+    //    powers of two in half-float, so nTS comes out EXACTLY (0, 0, 1).
+    //    An RGBA8 texel of 128 decodes to 128/255*2-1 = +0.0039, which would
+    //    lean every default-lit normal ~0.2 degrees off geometric.
+    //  - fp16 linear filtering is mandatory from feature level 10.0 up
+    //    (fp32 filtering is optional), and the basic sampler is trilinear.
+    // Half-float bit patterns: 0.5f == 0x3800, 1.0f == 0x3C00.
+    if (!m_defaultNormalSRV)
+    {
+        const uint16_t flatNormal[4] = {0x3800, 0x3800, 0x3C00, 0x3C00}; // (0.5, 0.5, 1, 1)
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Width = 1;
+        desc.Height = 1;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = flatNormal;
+        data.SysMemPitch = sizeof(flatNormal);
+
+        if (SUCCEEDED(m_device->CreateTexture2D(&desc, &data, &m_defaultNormalTexture)))
+            m_device->CreateShaderResourceView(m_defaultNormalTexture.Get(), nullptr, &m_defaultNormalSRV);
+        if (!m_defaultNormalSRV)
+            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create default flat normal texture", L"ERROR");
+    }
+
+    // Fully-rough default (1.0), NOT mid-gray: the specular term is scaled by
+    // (1 - roughness), so 1.0 makes it exactly zero and draws that never bind
+    // a roughness map render bit-identical to the pre-specular shader.
+    if (!m_defaultRoughnessSRV)
+    {
+        const uint16_t fullyRough = 0x3C00; // 1.0f as half
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Width = 1;
+        desc.Height = 1;
+        desc.MipLevels = 1;
+        desc.ArraySize = 1;
+        desc.Format = DXGI_FORMAT_R16_FLOAT;
+        desc.SampleDesc.Count = 1;
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA data = {};
+        data.pSysMem = &fullyRough;
+        data.SysMemPitch = sizeof(fullyRough);
+
+        if (SUCCEEDED(m_device->CreateTexture2D(&desc, &data, &m_defaultRoughnessTexture)))
+            m_device->CreateShaderResourceView(m_defaultRoughnessTexture.Get(), nullptr, &m_defaultRoughnessSRV);
+        if (!m_defaultRoughnessSRV)
+            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create default roughness texture", L"ERROR");
+    }
+}
+
+ID3D11ShaderResourceView* GraphicsEngine::GetOrCreateScalarRoughnessSRV(float roughness)
+{
+    if (!m_device)
+        return nullptr;
+
+    // Explicit clamp (windows.h min/max macros make std::clamp hazardous here)
+    if (roughness < 0.0f)
+        roughness = 0.0f;
+    else if (roughness > 1.0f)
+        roughness = 1.0f;
+
+    // Cache alongside file-loaded textures under a synthetic key ('#' cannot
+    // start a real path) so repeated materials share one 1x1 texture.
+    char key[48];
+    (void)sprintf_s(key, "#roughness:%.4f", roughness);
+
+    auto it = m_basicTextureCache.find(key);
+    if (it != m_basicTextureCache.end())
+        return it->second.Get();
+
+    // fp16 like the defaults (guaranteed filterable); ~3-decimal precision is
+    // plenty for a roughness scalar.
+    const uint16_t half = DirectX::PackedVector::XMConvertFloatToHalf(roughness);
+
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = 1;
+    desc.Height = 1;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R16_FLOAT;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA data = {};
+    data.pSysMem = &half;
+    data.SysMemPitch = sizeof(half);
+
+    ComPtr<ID3D11Texture2D> tex;
+    if (FAILED(m_device->CreateTexture2D(&desc, &data, &tex)))
+        return nullptr;
+
+    ComPtr<ID3D11ShaderResourceView> srv;
+    if (FAILED(m_device->CreateShaderResourceView(tex.Get(), nullptr, &srv)))
+        return nullptr;
+
+    auto& slot = m_basicTextureCache[key];
+    slot = srv;
+    return slot.Get();
 }
 
 void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX& view, const XMMATRIX& proj)
@@ -850,8 +985,9 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string&
     return slot.Get();
 }
 
-// Minimal extraction of "albedo" (string) and "tiling" ([x, y]) from the small
-// material JSON files under Assets/Materials. Not a general JSON parser.
+// Minimal extraction of "albedo"/"normal" (strings), "roughness" (string or
+// scalar) and "tiling" ([x, y]) from the small material JSON files under
+// Assets/Materials. Not a general JSON parser.
 const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& jsonPath)
 {
     if (jsonPath.empty())
@@ -891,13 +1027,49 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
         return content.substr(q1 + 1, q2 - q1 - 1);
     };
 
+    // Material texture paths are relative to Assets/ unless already prefixed
+    auto prefixAssets = [](std::string p) -> std::string
+    {
+        if (p.rfind("Assets/", 0) != 0 && p.rfind("Assets\\", 0) != 0)
+            p = "Assets/" + p;
+        return p;
+    };
+
     std::string albedo = findStringValue("albedo");
     if (!albedo.empty())
+        mat.srv = GetOrLoadTextureSRV(prefixAssets(albedo));
+
+    // "normal" : "path" — tangent-space normal map, bound at t1 by
+    // SetBasicMaterialTextures. Always a string in the shipped materials.
+    std::string normalPath = findStringValue("normal");
+    if (!normalPath.empty())
+        mat.normalSrv = GetOrLoadTextureSRV(prefixAssets(normalPath));
+
+    // "roughness" : "path" OR scalar (e.g. 0.3) — the shipped materials use
+    // both forms. findStringValue would misparse a scalar (it grabs the NEXT
+    // key's opening quote), so peek at the first non-whitespace character
+    // after the colon to disambiguate. Scalars get a cached 1x1 texture so
+    // the pixel shader has a single t2 sampling path.
+    size_t rp = content.find("\"roughness\"");
+    if (rp != std::string::npos)
     {
-        // Material texture paths are relative to Assets/ unless already prefixed
-        if (albedo.rfind("Assets/", 0) != 0 && albedo.rfind("Assets\\", 0) != 0)
-            albedo = "Assets/" + albedo;
-        mat.srv = GetOrLoadTextureSRV(albedo);
+        size_t colon = content.find(':', rp);
+        size_t vp = (colon == std::string::npos) ? std::string::npos : content.find_first_not_of(" \t\r\n", colon + 1);
+        if (vp != std::string::npos)
+        {
+            if (content[vp] == '"')
+            {
+                size_t q2 = content.find('"', vp + 1);
+                if (q2 != std::string::npos && q2 > vp + 1)
+                    mat.roughnessSrv = GetOrLoadTextureSRV(prefixAssets(content.substr(vp + 1, q2 - vp - 1)));
+            }
+            else
+            {
+                float r = 0.0f;
+                if (sscanf_s(content.c_str() + vp, "%f", &r) == 1)
+                    mat.roughnessSrv = GetOrCreateScalarRoughnessSRV(r);
+            }
+        }
     }
 
     // "tiling" : [x, y]
@@ -1121,6 +1293,12 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
         };
 
         Texture2D MainTexture : register(t0);
+        // Normal (t1) + roughness (t2) maps for the tangent-less normal-mapping
+        // path. SetBasicShaders() default-binds a flat FLOAT normal (0.5,0.5,1)
+        // and a fully-rough (1.0) roughness, which make both new terms exact
+        // no-ops — see CotangentFrame() and the specular block below.
+        Texture2D NormalTexture : register(t1);
+        Texture2D RoughnessTexture : register(t2);
         SamplerState MainSampler : register(s0);
 
         struct PixelInput
@@ -1132,11 +1310,54 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
             float4 Color        : COLOR;
         };
 
+        // Screen-space cotangent frame (Schuler, "Normal Mapping Without
+        // Precomputed Tangents" / Mikkelsen's derivative method). The vertex
+        // format has no tangents, so we rebuild the (T, B, N) frame per pixel:
+        // ddx/ddy of the world position give two in-triangle edge vectors,
+        // ddx/ddy of the UVs give the same edges in texture space, and solving
+        // that 2x2 system (via the cross-product co-vectors below) yields the
+        // directions in which u and v increase across the surface.
+        float3x3 CotangentFrame(float3 N, float3 p, float2 uv)
+        {
+            float3 dp1 = ddx(p);
+            float3 dp2 = ddy(p);
+            float2 duv1 = ddx(uv);
+            float2 duv2 = ddy(uv);
+
+            // Co-vectors perpendicular to N: projecting the edge vectors
+            // through these solves for T (du direction) and B (dv direction)
+            // while keeping both in the surface plane.
+            float3 dp2perp = cross(dp2, N);
+            float3 dp1perp = cross(N, dp1);
+            float3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+            float3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+
+            // Scale-invariant normalization (max keeps the T:B aspect so
+            // mirrored/anisotropic UVs stay correct). Guard degenerate UVs:
+            // constant texcoords across the pixel quad make T = B = 0, and
+            // rsqrt(0) = INF would turn the frame into NaNs; forcing 0 makes
+            // the tangential components drop out so N passes through instead.
+            float maxLen2 = max(dot(T, T), dot(B, B));
+            float invmax = (maxLen2 > 1e-10f) ? rsqrt(maxLen2) : 0.0f;
+            return float3x3(T * invmax, B * invmax, N);
+        }
+
         float4 main(PixelInput input) : SV_TARGET
         {
             float4 texColor = MainTexture.Sample(MainSampler, input.TexCoord);
 
-            float3 normal = normalize(input.Normal);
+            // Perturb the geometric normal with the t1 normal map.
+            // Identity proof for the default binding: the default texture is
+            // FLOAT-format (0.5, 0.5, 1), so nTS = sample*2-1 == (0, 0, 1)
+            // EXACTLY (an 8-bit 128/255 texel would leave +0.0039 in x/y).
+            // mul(rowVector, matrix) = x*T + y*B + z*N, so (0,0,1) selects the
+            // third row: geoN, already unit length -- the lighting below sees
+            // the same normalize(input.Normal) the pre-normal-map shader used.
+            float3 geoN = normalize(input.Normal);
+            float3 nTS = NormalTexture.Sample(MainSampler, input.TexCoord).xyz * 2.0f - 1.0f;
+            float3x3 TBN = CotangentFrame(geoN, input.WorldPos, input.TexCoord);
+            float3 normal = normalize(mul(nTS, TBN));
+
             float3 lightDir = normalize(-DirectionalLightDir);
             float NdotL = max(0.0f, dot(normal, lightDir));
 
@@ -1151,8 +1372,22 @@ HRESULT GraphicsEngine::CompileEmbeddedPixelShader(ID3DBlob** blobOut)
 
             float3 lighting = diffuse + ambient + float3(fill, fill * 0.95f, fill * 0.88f);
 
+            // Modest Blinn-Phong specular scaled by (1 - roughness). The
+            // default t2 binding is fully rough (1.0), so gloss == 0 and this
+            // whole term is EXACTLY zero for draws that never bind a roughness
+            // map -- specular is opt-in per material. The saturate(NdotL*4)
+            // fade kills the highlight on the unlit side without a hard edge.
+            float roughness = saturate(RoughnessTexture.Sample(MainSampler, input.TexCoord).r);
+            float gloss = 1.0f - roughness;
+            float3 halfVec = normalize(lightDir + viewDir);
+            float NdotH = max(0.0f, dot(normal, halfVec));
+            float specPower = lerp(8.0f, 96.0f, gloss); // rough -> broad sheen, smooth -> tight highlight
+            float3 specular = DirectionalLightColor * DirectionalLightIntensity *
+                              pow(NdotH, specPower) * gloss * 0.5f * saturate(NdotL * 4.0f);
+
             float4 finalColor = texColor * input.Color;
             finalColor.rgb *= lighting;
+            finalColor.rgb += specular; // dielectric-style: not tinted by albedo
 
             // Emissive term (MaterialProperties.z, default 0 == no change): adds
             // the surface color back UNLIT so glow strips / holo panels / muzzle

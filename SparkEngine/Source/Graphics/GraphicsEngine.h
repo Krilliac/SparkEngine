@@ -722,9 +722,9 @@ class GraphicsEngine
      */
     enum class BasicBlendMode
     {
-        Opaque,   ///< default: no blending, depth write on
-        Alpha,    ///< src-alpha / inv-src-alpha (holo panels, shields)
-        Additive  ///< src + dst (muzzle flashes, energy FX)
+        Opaque,  ///< default: no blending, depth write on
+        Alpha,   ///< src-alpha / inv-src-alpha (holo panels, shields)
+        Additive ///< src + dst (muzzle flashes, energy FX)
     };
 
     /**
@@ -738,6 +738,25 @@ class GraphicsEngine
      * @param srv Texture SRV; nullptr binds the default 1x1 white texture.
      */
     void SetBasicTexture(ID3D11ShaderResourceView* srv);
+
+    /**
+     * @brief Bind normal (t1) and roughness (t2) maps for the basic pixel shader.
+     *
+     * The basic PS reconstructs the tangent frame in-shader (screen-space
+     * derivatives — no vertex tangents), perturbs the normal with t1, and adds
+     * a Blinn-Phong specular term scaled by (1 - t2.r).
+     *
+     * @param normalSrv    Tangent-space normal map; nullptr binds the flat
+     *                     default (0.5, 0.5, 1) which reproduces the geometric
+     *                     normal exactly.
+     * @param roughnessSrv Roughness map (r channel); nullptr binds the
+     *                     fully-rough default (1.0) which zeroes the specular
+     *                     term, i.e. the pre-normal-map look.
+     *
+     * SetBasicShaders() default-binds both, so existing draw paths are
+     * unchanged unless they opt in per-draw with real maps.
+     */
+    void SetBasicMaterialTextures(ID3D11ShaderResourceView* normalSrv, ID3D11ShaderResourceView* roughnessSrv);
 
     /**
      * @brief Bind the default rasterizer/depth-stencil/blend states used by
@@ -754,15 +773,19 @@ class GraphicsEngine
     void ApplyBasicRenderStates();
 
     /**
-     * @brief Simple albedo material resolved from a material JSON for the basic shader path.
+     * @brief Simple material resolved from a material JSON for the basic shader path.
      *
-     * Loaded lazily from Assets/Materials/... JSON files ("albedo" + "tiling"
-     * keys) and cached by path. Cross-DLL safe: pure member state.
+     * Loaded lazily from Assets/Materials/... JSON files ("albedo", "normal",
+     * "roughness" + "tiling" keys) and cached by path. "roughness" may be a
+     * texture path OR a scalar (a cached 1x1 texture is synthesized for
+     * scalars so the shader path is uniform). Cross-DLL safe: pure member state.
      */
     struct BasicMaterial
     {
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv; ///< Albedo texture (null = white)
-        DirectX::XMFLOAT2 tiling{1.0f, 1.0f};                 ///< UV tiling from the material
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;          ///< Albedo texture (null = white)
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> normalSrv;    ///< Tangent-space normal map (null = flat)
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> roughnessSrv; ///< Roughness map or scalar (null = fully rough)
+        DirectX::XMFLOAT2 tiling{1.0f, 1.0f};                          ///< UV tiling from the material
     };
 
     /**
@@ -1001,6 +1024,16 @@ class GraphicsEngine
     ComPtr<ID3D11SamplerState> m_basicSamplerState;
     ComPtr<ID3D11Texture2D> m_defaultTexture;      ///< 1x1 white texture used when no material is assigned
     ComPtr<ID3D11ShaderResourceView> m_defaultSRV; ///< SRV for the default white texture
+    // Flat defaults for the basic-path normal (t1) / roughness (t2) slots,
+    // lazily created by EnsureDefaultMaterialTextures(). The normal default is
+    // FLOAT-format so 0.5 decodes to exactly 0.0 in tangent space (an 8-bit
+    // 128/255 texel would leave a ~0.004 residual lean); the roughness default
+    // is 1.0 (fully rough) so the new specular term is exactly zero for every
+    // draw that never binds a roughness map — identity with the legacy look.
+    ComPtr<ID3D11Texture2D> m_defaultNormalTexture;         ///< 1x1 (0.5, 0.5, 1, 1) flat tangent-space normal
+    ComPtr<ID3D11ShaderResourceView> m_defaultNormalSRV;    ///< SRV for the flat normal default (t1)
+    ComPtr<ID3D11Texture2D> m_defaultRoughnessTexture;      ///< 1x1 roughness = 1.0 (zero specular)
+    ComPtr<ID3D11ShaderResourceView> m_defaultRoughnessSRV; ///< SRV for the fully-rough default (t2)
     // Basic-path blend states (lazily created by SetBasicBlendMode).
     ComPtr<ID3D11BlendState> m_blendOpaque;
     ComPtr<ID3D11BlendState> m_blendAlpha;
@@ -1078,7 +1111,10 @@ class GraphicsEngine
     HRESULT CompileShaderFromFile(const std::wstring& filename, const char* entryPoint, const char* shaderModel,
                                   ID3DBlob** blobOut);
     HRESULT CreateBasicConstantBuffer();
-    HRESULT CreateDefaultTexture();                          ///< Create 1x1 white fallback texture
+    HRESULT CreateDefaultTexture();       ///< Create 1x1 white fallback texture
+    void EnsureDefaultMaterialTextures(); ///< Lazily create the flat normal / fully-rough 1x1 defaults (t1/t2)
+    ID3D11ShaderResourceView* GetOrCreateScalarRoughnessSRV(
+        float roughness);                                    ///< Cached 1x1 texture for scalar "roughness" JSON values
     HRESULT CompileEmbeddedVertexShader(ID3DBlob** blobOut); ///< Compile built-in vertex shader from source string
     HRESULT CompileEmbeddedPixelShader(ID3DBlob** blobOut);  ///< Compile built-in pixel shader from source string
 
