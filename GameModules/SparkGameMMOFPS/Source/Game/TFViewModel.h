@@ -2,7 +2,8 @@
  * @file TFViewModel.h
  * @brief First-person viewmodel: stylized arms + the equipped weapon, drawn at
  *        the camera with idle sway, walk bob, sprint lower, and a spring-damped
- *        recoil kick + muzzle flash when the local player fires. Secondary
+ *        recoil kick + a 4-frame flipbook muzzle flash (faction sprite sheet,
+ *        camera-facing additive quad) when the local player fires. Secondary
  *        motion (TFSecondaryMotion chains): a faction-tinted charm and a
  *        sling-strap hint dangle from the weapon and react to look/move/jump/
  *        land/fire, plus a transient barrel flex on recoil.
@@ -84,12 +85,14 @@ namespace Terrafront
 
         /// Per-slot grip layout: where the support hand holds the weapon and how
         /// far forward the muzzle tip sits (all view-space meters relative to the
-        /// weapon anchor / right-hand grip).
+        /// weapon anchor / right-hand grip). muzzleForwardM is measured from the
+        /// shipped P0 weapon OBJs (pivot at grip, +Z muzzle — see the length
+        /// table in BATCH_REPORT_P0.md), per slot family.
         struct GripPose
         {
             bool twoHanded = true;
             float leftGrip[3] = {-0.015f, -0.025f, 0.20f};
-            float muzzleForwardM = 0.55f;
+            float muzzleForwardM = 0.72f; ///< rifle-family default (avg 0.97 m OBJ)
         };
 
         void Reset();
@@ -124,7 +127,8 @@ namespace Terrafront
         bool m_hasPrevVel = false;         ///< m_prevVelY valid (jump/land detection)
 
         // GPU resources (lazy; client render thread only)
-        std::unique_ptr<Mesh> m_cube; ///< unit cube reused for every arm segment + flash
+        std::unique_ptr<Mesh> m_cube; ///< unit cube reused for every arm segment
+        std::unique_ptr<Mesh> m_quad; ///< unit plane billboarded for the muzzle-flash flipbook
         std::unordered_map<std::string, std::unique_ptr<Mesh>> m_weaponMeshCache;
 
         // slot lookup cache (avoid scanning AllWeapons() every frame)

@@ -97,10 +97,14 @@ namespace Terrafront
         constexpr float kCharmFobBase[3] = {0.45f, 0.45f, 0.48f};
         constexpr float kCharmFobTintK = 0.75f; ///< faction color strength on the fob
 
-        // Muzzle flash quad (first-person; the world-space flash/tracer from
-        // TFWorldSetup::SpawnMuzzleFx stays the source of truth for other players).
+        // Muzzle flash: camera-facing quad running the 4-frame horizontal
+        // flipbook strips shipped in P0 (Textures/MMOFPS/fx/muzzle_flash_*.png,
+        // frames selected via UVTiling (0.25,1) + UVTiling.zw offset). The
+        // world-space flash/tracer from TFWorldSetup::SpawnMuzzleFx stays the
+        // source of truth for other players.
         constexpr float kFlashLifeSec = 0.045f;
-        constexpr float kFlashScaleM[3] = {0.13f, 0.13f, 0.20f};
+        constexpr int kFlashFrames = 4;
+        constexpr float kFlashQuadSizeM = 0.28f; ///< billboard edge (sheet frames are square)
 
         // Arm palette. Sleeves take the faction hue (same moderated-lerp scheme as the
         // ECS pawn tint) so your own arms match your team color; gloves stay dark.
@@ -166,6 +170,31 @@ namespace Terrafront
         {
             using clock = std::chrono::steady_clock;
             return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
+        }
+
+        /// P0 muzzle-flash sprite sheet for the active weapon: the weapon OBJ
+        /// key prefix picks the family sheet (mra_/auc_/hlx_; np_/tool_ use the
+        /// common sheet), with the local faction as fallback for legacy models.
+        std::string MuzzleSheetForWeapon(const std::string& modelPath, FactionId faction)
+        {
+            const char* tag = nullptr;
+            if (modelPath.find("/mra_") != std::string::npos)
+                tag = "mra";
+            else if (modelPath.find("/auc_") != std::string::npos)
+                tag = "auc";
+            else if (modelPath.find("/hlx_") != std::string::npos)
+                tag = "hlx";
+            else if (modelPath.find("/np_") != std::string::npos || modelPath.find("/tool_") != std::string::npos)
+                tag = "common";
+            else if (faction == FactionId::MRA)
+                tag = "mra";
+            else if (faction == FactionId::AUC)
+                tag = "auc";
+            else if (faction == FactionId::HLX)
+                tag = "hlx";
+            else
+                tag = "common";
+            return std::string("Assets/Textures/MMOFPS/fx/muzzle_flash_") + tag + ".png";
         }
 
         /// Per-slot charm dressing: where the trinket hangs off the weapon (grip
@@ -322,30 +351,53 @@ namespace Terrafront
 
     TFViewModel::GripPose TFViewModel::PoseForSlot(const std::string& slot)
     {
-        GripPose pose{}; // default: rifle-family two-handed grip
-        if (slot == "pistol")
+        // muzzleForwardM per slot, measured from the shipped P0 weapon OBJs
+        // (pivot at grip, +Z muzzle; BATCH_REPORT_P0.md length table): family
+        // average length minus the behind-grip receiver/stock run. Rifle 0.72,
+        // sniper 1.04, pistol 0.21, launcher 0.60 are the report's own numbers;
+        // carbine/lmg/shotgun/tool scale from their family lengths.
+        GripPose pose{}; // default: rifle-family two-handed grip (0.72 m)
+        if (slot == "carbine")
+        {
+            pose.muzzleForwardM = 0.57f; // avg 0.77 m family
+        }
+        else if (slot == "lmg")
+        {
+            pose.leftGrip[2] = 0.23f;    // long handguard ahead of the drum
+            pose.muzzleForwardM = 0.82f; // avg 1.11 m family
+        }
+        else if (slot == "shotgun")
+        {
+            pose.muzzleForwardM = 0.75f; // Bulkhead 1.02 m
+        }
+        else if (slot == "pistol")
         {
             pose.leftGrip[0] = -0.010f;
             pose.leftGrip[1] = -0.050f;
             pose.leftGrip[2] = 0.070f; // support hand cups under the grip
-            pose.muzzleForwardM = 0.30f;
+            pose.muzzleForwardM = 0.21f;
         }
         else if (slot == "sniper")
         {
             pose.leftGrip[2] = 0.26f; // long forestock
-            pose.muzzleForwardM = 0.70f;
+            pose.muzzleForwardM = 1.04f;
         }
         else if (slot == "launcher")
         {
             pose.leftGrip[0] = -0.020f;
             pose.leftGrip[1] = -0.060f;
             pose.leftGrip[2] = 0.15f; // underslung support
-            pose.muzzleForwardM = 0.50f;
+            pose.muzzleForwardM = 0.60f;
         }
-        else if (slot == "melee" || slot == "tool")
+        else if (slot == "melee")
         {
             pose.twoHanded = false; // free left hand
             pose.muzzleForwardM = 0.25f;
+        }
+        else if (slot == "tool")
+        {
+            pose.twoHanded = false;      // free left hand
+            pose.muzzleForwardM = 0.22f; // torch/applicator tip ~0.26-0.30 m OBJ
         }
         return pose;
     }
@@ -652,21 +704,50 @@ namespace Terrafront
         }
 
         // ------------------------------------------------------------ muzzle flash
-        // Attached to the animated grip frame so it tracks the kicking weapon (the
-        // world-space SpawnMuzzleFx flash stays eye-anchored). Skipped for melee.
-        if (m_clock < m_flashUntil && slot != "melee" && m_cube && m_cube->GetIndexCount() > 0)
+        // 4-frame flipbook: a camera-facing quad at the per-slot muzzle point of
+        // the animated grip frame (so it tracks the kicking weapon), running the
+        // P0 faction sprite strip via UV offset x = 0/0.25/0.5/0.75 over the
+        // flash lifetime. Additive + fully emissive so it reads as a burst of
+        // light. Skipped for melee. The world-space SpawnMuzzleFx flash stays
+        // eye-anchored for other players.
+        if (m_clock < m_flashUntil && slot != "melee")
         {
-            const XMMATRIX flashWorld = XMMatrixScaling(kFlashScaleM[0], kFlashScaleM[1], kFlashScaleM[2]) *
-                                        XMMatrixTranslation(0.0f, 0.02f, pose.muzzleForwardM) * gripFrame;
-            const MuzzleFxDef& fx = pres.muzzleFx;
-            // Additive + fully emissive so the flash reads as a burst of light
-            // that adds to the scene rather than an opaque colored box.
-            gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Additive);
-            gfx->UpdateBasicConstants(flashWorld, view, proj,
-                                      XMFLOAT4(fx.flashColor[0], fx.flashColor[1], fx.flashColor[2], fx.flashColor[3]),
-                                      {1.0f, 1.0f}, /*emissive*/ 1.0f);
-            m_cube->Render(dc);
-            gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Opaque);
+            if (!m_quad)
+            {
+                m_quad = std::make_unique<Mesh>();
+                m_quad->Initialize(gfx->GetDevice(), gfx->GetContext());
+                m_quad->CreatePlane(1.0f, 1.0f); // XZ plane, +Y normal, 0..1 UVs
+            }
+            if (m_quad && m_quad->GetIndexCount() > 0)
+            {
+                // Flipbook frame from normalized flash age (0..1 over kFlashLifeSec).
+                const float age =
+                    std::clamp(1.0f - static_cast<float>((m_flashUntil - m_clock) / kFlashLifeSec), 0.0f, 1.0f);
+                const int frame = std::min(kFlashFrames - 1, static_cast<int>(age * kFlashFrames));
+
+                // Billboard basis from inv(view) rows (camera axes in world space):
+                // plane local X -> camera right, local Z -> camera up (v=0 edge is
+                // +Z, so the sheet's top stays screen-up), local Y (the plane's
+                // front face) -> toward the camera. Determinant stays +1, so the
+                // CreatePlane winding remains front-facing under back-face cull.
+                const XMVECTOR muzzleW =
+                    XMVector3TransformCoord(XMVectorSet(0.0f, 0.02f, pose.muzzleForwardM, 1.0f), gripFrame);
+                XMMATRIX bb = XMMatrixIdentity();
+                bb.r[0] = XMVectorScale(XMVector3Normalize(invView.r[0]), kFlashQuadSizeM);
+                bb.r[1] = XMVectorNegate(XMVector3Normalize(invView.r[2]));
+                bb.r[2] = XMVectorScale(XMVector3Normalize(invView.r[1]), kFlashQuadSizeM);
+                bb.r[3] = XMVectorSetW(muzzleW, 1.0f);
+
+                const MuzzleFxDef& fx = pres.muzzleFx;
+                gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Additive);
+                gfx->SetBasicTexture(gfx->GetOrLoadTextureSRV(MuzzleSheetForWeapon(vmPath, pawn.faction)));
+                gfx->UpdateBasicConstants(
+                    bb, view, proj, XMFLOAT4(fx.flashColor[0], fx.flashColor[1], fx.flashColor[2], fx.flashColor[3]),
+                    {1.0f / kFlashFrames, 1.0f}, /*emissive*/ 1.0f, /*alpha*/ 1.0f,
+                    XMFLOAT2(static_cast<float>(frame) / kFlashFrames, 0.0f));
+                m_quad->Render(dc);
+                gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Opaque);
+            }
         }
 
         gfx->SetBasicTexture(nullptr);
