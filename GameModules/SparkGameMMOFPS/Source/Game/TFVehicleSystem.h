@@ -68,6 +68,17 @@
  *   seated. Pure-client caveat (documented): walking prediction keeps running
  *   while seated, so the first-person view reconciles toward the ride pose at
  *   20 Hz instead of predicting it — listen-host/standalone is smooth.
+ *  W10 vehicle HUD + seat swap (this lane):
+ *   - Seated cockpit widget lives in UI/TFVehicleHUD.h/.cpp (owned + rendered
+ *     by this system from RenderDebugUI; it replaced the W3 RenderSeatedHud
+ *     bar). GetSeatOf is the public accessor it reads seats through.
+ *   - SEAT SWAP reuses the existing wire message: TFMsg::VehicleEnter with a
+ *     TF_VehicleSeatOp naming the CURRENT vehicle while already seated in it
+ *     is a swap request (no new TFMsg, no struct change — the previous
+ *     behaviour for that packet was a silent no-op). Server validation is
+ *     STRICT: same vehicle, requested seat exists, is not yours, and is empty
+ *     — no first-free fallback, a failed swap keeps the current seat. Keys:
+ *     1-8 request that seat, F cycles to the next free seat.
  */
 #pragma once
 
@@ -90,6 +101,7 @@ namespace Terrafront
     struct VehicleDef;      // Data/TFDataTables.h
     struct RegionDef;       // Data/TFDataTables.h
     class TFVehiclePhysics; // Game/TFVehiclePhysics.h (Jolt-backed server driving)
+    class TFVehicleHUD;     // UI/TFVehicleHUD.h (W10 seated cockpit widget)
 
     // W3 vehicle tuning constants (engine-side limits; balance lives in vehicles.json).
     constexpr float kTFVehTerminalRangeM = 25.0f; ///< purchase reach from a terminal
@@ -221,6 +233,11 @@ namespace Terrafront
         /// HUD: hp pool of the vehicle `player` is seated in (both roles).
         bool GetSeatedVehicleHp(PlayerId player, float& outCur, float& outMax) const;
 
+        /// W10 HUD: which vehicle + seat index `player` occupies (both roles —
+        /// authoritative seat map on servers, replicated seat tables on pure
+        /// clients). False when not seated. Read-only; TFVehicleHUD's seam.
+        bool GetSeatOf(PlayerId player, EntityId& outVehicle, uint8_t& outSeatIdx) const;
+
         /// Enumerate vehicles (authoritative records on server roles, replication
         /// mirror on pure clients). TFSpawnScreen builds Aegis entries from this.
         void ForEachVehicle(const std::function<void(const TFVehicleInfo&)>& fn) const;
@@ -348,6 +365,8 @@ namespace Terrafront
         /// as landed — exit is only allowed while landed. Physics-aware when the
         /// Jolt hull exists (pads/roofs count); analytic terrain fallback otherwise.
         bool VehicleLanded(const VehicleRec& v) const;
+        /// Write/refresh the pawn's TFSeatComp ECS mirror (enter + W10 swap).
+        void WriteSeatComp(PlayerId player, EntityId vehicle, uint8_t seatIdx);
         void UnseatPlayer(PlayerId player, bool placeBeside);
         void DestroyVehicle(VehicleRec& v, PlayerId destroyer);
         void OnPlayerKilled(const EvPlayerKilled& ev);
@@ -389,7 +408,6 @@ namespace Terrafront
         bool LocalPlayerPawn(float outPos[3], bool& outAlive) const;
         PlayerId LocalPlayerId() const;
         void RenderPromptsAndMenus(); ///< SPARK_HAS_IMGUI-only body
-        void RenderSeatedHud();       ///< SPARK_HAS_IMGUI-only body
         void SetShopOpen(bool open);
 
         // -------------------------------------------------------------------- state
@@ -414,6 +432,7 @@ namespace Terrafront
         bool m_clientHandlers{false};
 
         // client UX state
+        std::unique_ptr<TFVehicleHUD> m_vehicleHud; ///< W10 cockpit widget (lazy, ImGui builds only)
         bool m_shopOpen{false};
         float m_shopTerminal[2]{0.0f, 0.0f};
         float m_interactDebounce{0.0f};

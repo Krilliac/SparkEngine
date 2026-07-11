@@ -18,6 +18,7 @@
 #include "Game/TFVehiclePhysics.h"
 #include "Game/TFVisualUtils.h"
 #include "Net/TFServerSim.h"
+#include "UI/TFVehicleHUD.h" // complete type for the m_vehicleHud unique_ptr (dtor/Shutdown)
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
 
@@ -231,6 +232,7 @@ namespace Terrafront
         m_lastAimSent.clear();
         m_knownClients.clear();
         m_loadedSounds.clear();
+        m_vehicleHud.reset();
         m_initialized = false;
     }
 
@@ -637,8 +639,41 @@ namespace Terrafront
             return;
         }
 
-        if (m_seatOf.contains(player))
-            return; // already seated
+        // W10 seat swap: VehicleEnter while ALREADY seated in the named vehicle
+        // moves the player to op.seatIndex without exiting (previously a silent
+        // no-op, so the message reuse is backward-compatible). Validation is
+        // strict — same vehicle, seat exists, not the current seat, and empty;
+        // a failed swap keeps the current seat (no first-free fallback).
+        if (auto sit = m_seatOf.find(player); sit != m_seatOf.end())
+        {
+            SeatRef& ref = sit->second;
+            if (ref.exiting || op.vehicleEntity != ref.vehicle)
+                return;
+            VehicleRec* sv = FindRec(ref.vehicle);
+            if (!sv || sv->hp <= 0.0f)
+                return;
+            if (op.seatIndex >= sv->seatCount || op.seatIndex == ref.seatIdx ||
+                sv->seats[op.seatIndex] != kInvalidPlayer)
+                return;
+            if (ref.seatIdx < 8 && sv->seats[ref.seatIdx] == player)
+                sv->seats[ref.seatIdx] = kInvalidPlayer;
+            if (ref.seatIdx == 0)
+            {
+                // vacating the driver seat kills the cached drive inputs (same
+                // as UnseatPlayer) — a Vulture starts its driverless auto-land.
+                sv->throttle = 0.0f;
+                sv->steer = 0.0f;
+                sv->lift = 0.0f;
+            }
+            sv->seats[op.seatIndex] = player;
+            sv->seatsDirty = true;
+            ref.seatIdx = op.seatIndex;
+            WriteSeatComp(player, sv->entity, op.seatIndex);
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] player %u swapped to seat %u of vehicle %u", player,
+                           static_cast<unsigned>(op.seatIndex), sv->entity);
+            return;
+        }
+
         VehicleRec* v = FindRec(op.vehicleEntity);
         if (!v || v->hp <= 0.0f)
             return;
@@ -678,22 +713,30 @@ namespace Terrafront
         ref.seatIdx = static_cast<uint8_t>(seat);
         m_seatOf[player] = ref;
 
-        // ECS mirror on the pawn (TFComponents contract).
-        uint32_t local = 0;
-        World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
-        if (world && m_ctx->players->ResolveEntity(pawn.entity, local))
-        {
-            const auto e = static_cast<EntityID>(local);
-            if (world->GetRegistry().valid(e))
-            {
-                TFSeatComp& sc = world->HasComponent<TFSeatComp>(e) ? *world->GetComponent<TFSeatComp>(e)
-                                                                    : world->AddComponent<TFSeatComp>(e);
-                sc.vehicle = v->entity;
-                sc.seatIdx = static_cast<uint8_t>(seat);
-            }
-        }
+        WriteSeatComp(player, v->entity, static_cast<uint8_t>(seat));
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] player %u entered vehicle %u seat %d", player, v->entity, seat);
+    }
+
+    void TFVehicleSystem::WriteSeatComp(PlayerId player, EntityId vehicle, uint8_t seatIdx)
+    {
+        // ECS mirror on the pawn (TFComponents contract) — shared by the enter
+        // and W10 swap paths. No-op headless (no world) or with no live pawn.
+        if (!m_ctx || !m_ctx->players)
+            return;
+        World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
+        PawnInfo pawn{};
+        uint32_t local = 0;
+        if (!world || !m_ctx->players->GetPawnByPlayer(player, pawn) ||
+            !m_ctx->players->ResolveEntity(pawn.entity, local))
+            return;
+        const auto e = static_cast<EntityID>(local);
+        if (!world->GetRegistry().valid(e))
+            return;
+        TFSeatComp& sc = world->HasComponent<TFSeatComp>(e) ? *world->GetComponent<TFSeatComp>(e)
+                                                            : world->AddComponent<TFSeatComp>(e);
+        sc.vehicle = vehicle;
+        sc.seatIdx = seatIdx;
     }
 
     void TFVehicleSystem::UnseatPlayer(PlayerId player, bool placeBeside)

@@ -2,9 +2,18 @@
  * @file TFVehicleClient.cpp
  * @brief W3 vehicles — client UX half of TFVehicleSystem: terminal purchase
  *        menu (E), vehicle enter/exit prompts (E), Aegis deploy toggle (B),
- *        seated vehicle hp bar, and the debug panel. All ImGui bodies compile
- *        only under SPARK_HAS_IMGUI (module rule); requests route directly into
- *        the server methods on authority roles and over the wire otherwise.
+ *        and the debug panel. All ImGui bodies compile only under
+ *        SPARK_HAS_IMGUI (module rule); requests route directly into the
+ *        server methods on authority roles and over the wire otherwise.
+ *
+ *        W10 (vehicle-hud lane): the seated hp bar grew into the full cockpit
+ *        widget in UI/TFVehicleHUD.h/.cpp (name/HP/speed/seat diagram/deploy/
+ *        altitude + per-seat crosshair), lazily constructed here and rendered
+ *        from RenderDebugUI. Seat swap while seated: keys 1-8 request that
+ *        seat, F cycles to the next free one — both send TFMsg::VehicleEnter
+ *        for the CURRENT vehicle (see TFVehicleSystem.h W10 notes; the server
+ *        validates strictly). The enter prompt now lists the vehicle name,
+ *        free-seat count and the seat role you would take.
  *
  *        Known W3 caveat (documented in the header): while the purchase menu
  *        is open the mouse is released (TFMapScreen pattern), but TFClientNet
@@ -16,11 +25,13 @@
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
+#include "Game/TFUiSounds.h" // W10 audio-wave-2: terminal bleeps
 #include "Game/TFVehiclePhysics.h"
 #include "Net/TFClientNet.h"
 #include "Net/TFServerSim.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
+#include "UI/TFVehicleHUD.h"
 #include "World/TFRegionSystem.h"
 
 #include "Input/InputManager.h"
@@ -58,6 +69,27 @@ namespace Terrafront
         if (m_ctx->localPlayer != kInvalidPlayer)
             return m_ctx->localPlayer;
         return m_ctx->clientNet ? m_ctx->clientNet->LocalPlayerId() : kInvalidPlayer;
+    }
+
+    bool TFVehicleSystem::GetSeatOf(PlayerId player, EntityId& outVehicle, uint8_t& outSeatIdx) const
+    {
+        // Authoritative seat map first (server roles), replicated tables second
+        // (pure clients) — the same two-source pattern as IsSeated.
+        if (auto it = m_seatOf.find(player); it != m_seatOf.end())
+        {
+            outVehicle = it->second.vehicle;
+            outSeatIdx = it->second.seatIdx;
+            return true;
+        }
+        for (const auto& [entity, seats] : m_mirrorSeats)
+            for (uint8_t i = 0; i < seats.seatCount && i < 8; ++i)
+                if (seats.seats[i] == player)
+                {
+                    outVehicle = entity;
+                    outSeatIdx = i;
+                    return true;
+                }
+        return false;
     }
 
     bool TFVehicleSystem::LocalPlayerPawn(float outPos[3], bool& outAlive) const
@@ -198,27 +230,13 @@ namespace Terrafront
 
         const bool seated = IsSeated(pid);
 
-        // ---- seated: E exits, B toggles Aegis deploy ---------------------------
+        // ---- seated: E exits, B toggles Aegis deploy, 1-8/F swap seats ---------
         if (seated)
         {
             SetShopOpen(false);
             EntityId myVeh = 0;
             uint8_t mySeat = 0;
-            if (auto it = m_seatOf.find(pid); it != m_seatOf.end())
-            {
-                myVeh = it->second.vehicle;
-                mySeat = it->second.seatIdx;
-            }
-            else
-            {
-                for (const auto& [entity, seats] : m_mirrorSeats)
-                    for (uint8_t i = 0; i < seats.seatCount && i < 8; ++i)
-                        if (seats.seats[i] == pid)
-                        {
-                            myVeh = entity;
-                            mySeat = i;
-                        }
-            }
+            GetSeatOf(pid, myVeh, mySeat);
 
             if (input->WasKeyPressed('E') && m_interactDebounce <= 0.0f)
             {
@@ -236,6 +254,44 @@ namespace Terrafront
                 {
                     m_interactDebounce = kInteractDebounceSec;
                     ClientRequestDeploy(myVeh, !info.deployed);
+                }
+            }
+
+            // W10 seat swap: 1-8 request that seat directly, F cycles forward to
+            // the next free one. Client-side pre-check against the local seat
+            // view keeps the wire quiet for obviously-invalid requests; the
+            // server re-validates strictly (see ServerHandleSeatOp). Known key
+            // overlap (accepted): 1-3 also drive TFWeaponSystem slot switching
+            // and F drives class abilities — both harmless while seated (seat
+            // weapons override the infantry loadout; TF-W11 candidate: a shared
+            // seated input-suppression gate).
+            if (m_interactDebounce <= 0.0f && myVeh != 0)
+            {
+                TFVehicleInfo info;
+                if (GetVehicleInfo(myVeh, info))
+                {
+                    int want = -1;
+                    for (uint8_t i = 0; i < info.seatCount && i < 8; ++i)
+                        if (i != mySeat && info.seats[i] == kInvalidPlayer &&
+                            input->WasKeyPressed('1' + static_cast<int>(i)))
+                            want = i;
+                    if (want < 0 && input->WasKeyPressed('F'))
+                    {
+                        for (uint8_t step = 1; step < info.seatCount; ++step)
+                        {
+                            const uint8_t i = static_cast<uint8_t>((mySeat + step) % info.seatCount);
+                            if (i < 8 && info.seats[i] == kInvalidPlayer)
+                            {
+                                want = i;
+                                break;
+                            }
+                        }
+                    }
+                    if (want >= 0)
+                    {
+                        m_interactDebounce = kInteractDebounceSec;
+                        ClientRequestSeatOp(myVeh, static_cast<uint8_t>(want), true); // enter-while-seated == swap
+                    }
                 }
             }
             return;
@@ -294,6 +350,7 @@ namespace Terrafront
             {
                 m_interactDebounce = kInteractDebounceSec;
                 SetShopOpen(!m_shopOpen);
+                TFUiSounds_Play(m_ctx, m_shopOpen ? TFUiBleep::Open : TFUiBleep::Close); // W10 audio-wave-2
             }
         }
         else
@@ -359,9 +416,19 @@ namespace Terrafront
             TFVehicleInfo info;
             if (GetVehicleInfo(m_promptVehicle, info))
             {
+                // W10 prompt polish: vehicle name + free-seat count + the seat
+                // role you would take (all data already client-side).
                 const VehicleDef* def = DefOf(info.vehId);
-                std::snprintf(buf, sizeof(buf), "[E] Enter %s (%s)", def ? def->name.c_str() : "vehicle",
-                              m_promptSeat == 0 ? "driver" : "seat");
+                int freeSeats = 0;
+                for (uint8_t i = 0; i < info.seatCount && i < 8; ++i)
+                    if (info.seats[i] == kInvalidPlayer)
+                        ++freeSeats;
+                const char* role = (def && static_cast<size_t>(m_promptSeat) < def->seats.size())
+                                       ? def->seats[m_promptSeat].role.c_str()
+                                       : (m_promptSeat == 0 ? "driver" : "seat");
+                std::snprintf(buf, sizeof(buf), "[E] Enter %s as %s  -  %d/%u seats free",
+                              def ? def->name.c_str() : "vehicle", role, freeSeats,
+                              static_cast<unsigned>(info.seatCount));
                 TFUi::AddTextCentered(fg, 17.0f, promptAt, IM_COL32(230, 230, 230, 220), buf);
             }
             return;
@@ -414,6 +481,7 @@ namespace Terrafront
                 if (ImGui::Button(label, ImVec2(-1.0f, 0.0f)))
                 {
                     ClientRequestPurchase(def.id);
+                    TFUiSounds_Play(m_ctx, TFUiBleep::Confirm); // W10 audio-wave-2
                     open = false;
                 }
                 ImGui::EndDisabled();
@@ -429,41 +497,16 @@ namespace Terrafront
             SetShopOpen(false);
     }
 
-    void TFVehicleSystem::RenderSeatedHud()
-    {
-        const PlayerId pid = LocalPlayerId();
-        if (pid == kInvalidPlayer || !IsSeated(pid))
-            return;
-        float hp = 0.0f, maxHp = 0.0f;
-        if (!GetSeatedVehicleHp(pid, hp, maxHp) || maxHp <= 0.0f)
-            return;
-
-        ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImDrawList* fg = ImGui::GetForegroundDrawList();
-        const float w = 260.0f, h = 14.0f;
-        const float x = vp->Pos.x + (vp->Size.x - w) * 0.5f;
-        const float y = vp->Pos.y + vp->Size.y - 84.0f;
-        const float frac = std::clamp(hp / maxHp, 0.0f, 1.0f);
-
-        fg->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), IM_COL32(10, 12, 16, 200), 3.0f);
-        const ImU32 fill = frac > 0.5f    ? IM_COL32(120, 200, 130, 230)
-                           : frac > 0.25f ? IM_COL32(230, 190, 80, 230)
-                                          : IM_COL32(220, 80, 70, 230);
-        fg->AddRectFilled(ImVec2(x + 2, y + 2), ImVec2(x + 2 + (w - 4) * frac, y + h - 2), fill, 2.0f);
-        fg->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), IM_COL32(200, 200, 200, 120), 3.0f);
-
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "VEHICLE %.0f / %.0f", hp, maxHp);
-        TFUi::AddTextCentered(fg, 13.0f, ImVec2(x + w * 0.5f, y - 9.0f), IM_COL32(220, 220, 220, 220), buf);
-    }
-
     void TFVehicleSystem::RenderDebugUI()
     {
         if (m_ctx && m_ctx->HasLocalPlayer() && m_initialized)
         {
             // Player-facing overlays ride the module's only per-frame ImGui hook.
             RenderPromptsAndMenus();
-            RenderSeatedHud();
+            // W10: the seated cockpit widget (superseded the W3 hp-only bar).
+            if (!m_vehicleHud)
+                m_vehicleHud = std::make_unique<TFVehicleHUD>();
+            m_vehicleHud->Render(*m_ctx, *this);
         }
 
         if (!m_showDebug)
@@ -496,7 +539,6 @@ namespace Terrafront
 #else // !SPARK_HAS_IMGUI — headless builds keep the state machine, drop the pixels
 
     void TFVehicleSystem::RenderPromptsAndMenus() {}
-    void TFVehicleSystem::RenderSeatedHud() {}
     void TFVehicleSystem::RenderDebugUI() {}
 
 #endif // SPARK_HAS_IMGUI
