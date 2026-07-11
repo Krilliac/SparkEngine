@@ -731,6 +731,53 @@
         "Audio/MMOFPS/weapons/veh_aegis_pdw_fire_02.wav",
         "Audio/MMOFPS/weapons/veh_aegis_pdw_fire_03.wav"
       ]
+    },
+    {
+      "id": 51,
+      "key": "fab_turret",
+      "name": "Fab Turret",
+      "faction": "ALL",
+      "slot": "vehicle_turret",
+      "kind": "hitscan",
+      "damage": 95,
+      "headshotMult": 1.0,
+      "rofRpm": 450,
+      "magSize": 0,
+      "reserve": 0,
+      "reloadSec": 0,
+      "adsSec": 0,
+      "falloffStartM": 40,
+      "falloffEndM": 40,
+      "minDamage": 95,
+      "projSpeed": 0,
+      "pellets": 1,
+      "model": "",
+      "audioFire": "Audio/MMOFPS/weapons/turret_fire.wav",
+      "audioReload": ""
+    },
+    {
+      "id": 52,
+      "key": "av_turret",
+      "name": "AV Turret",
+      "faction": "ALL",
+      "slot": "vehicle_turret",
+      "kind": "hitscan",
+      "damage": 140,
+      "headshotMult": 1.0,
+      "rofRpm": 24,
+      "magSize": 0,
+      "reserve": 0,
+      "reloadSec": 0,
+      "adsSec": 0,
+      "falloffStartM": 60,
+      "falloffEndM": 60,
+      "minDamage": 140,
+      "projSpeed": 0,
+      "pellets": 1,
+      "vsVehicleMult": 1.0,
+      "model": "",
+      "audioFire": "Audio/MMOFPS/weapons/turret_fire.wav",
+      "audioReload": ""
     }
   ]
 }

@@ -61,6 +61,23 @@ namespace Terrafront
         /// first-person viewmodel drawn at the camera in TFWorldSetup::RenderWorld.
         std::string ActiveWeaponModel() const;
 
+        // --- W8 audio-polish additions (remote/distant gunfire) ---
+
+        /// Local-audio seam for OTHER shooters: called from ServerHandleFire for
+        /// every VALIDATED fire event so the local client hears bots + remote
+        /// players. Distance-bucketed: <60 m plays the weapon's own fire clip at
+        /// reduced volume, 60-600 m plays the faction's distant_fire_* tail
+        /// (concurrent tails capped), beyond that nothing. No-op on dedicated
+        /// servers (no local player / no audio device) and for the local shooter
+        /// (ClientTriggerFire already played the first-person clip).
+        /// NOTE: only reaches remote-HUMAN fire on Standalone/ListenHost — pure
+        /// clients have no per-shot wire message (see wave report).
+        void ClientOnRemoteFire(PlayerId shooter, const PawnInfo& pawn, const WeaponDef& def);
+
+        /// 0..1 decaying "someone is shooting near me" heat for the ambience
+        /// system's combat layer (TFAudioAmbience). Client-presentation only.
+        float RemoteFireHeat() const { return m_remoteFireHeat; }
+
       private:
         static constexpr EntityId kNoPawnEntity = 0xFFFFFFFFu;
 
@@ -126,9 +143,13 @@ namespace Terrafront
         void StartReload();
         void SwitchSlot(int slotIdx);
         bool BuildViewRay(const PawnInfo& pawn, float outOrigin[3], float outDir[3]) const;
-        void PlayWeaponAudio(const std::string& assetPath);
+        void PlayWeaponAudio(const std::string& assetPath, float volume = 0.8f);
         WeaponId FindWeaponForSlotKey(const std::string& slotKey, FactionId faction) const;
         WeaponId FindToolWeapon(const std::string& toolKey) const;
+
+        // --- remote/distant fire audio (W8 audio-polish, TFWeaponSystem.cpp) ---
+        bool LocalListenerPos(float out[3]) const;
+        static const char* DistantTailFor(FactionId faction);
 
         // --- server side (TFWeaponServer.cpp) ---
         double ServerNow() const;
@@ -171,10 +192,19 @@ namespace Terrafront
         EntityId m_localPawn = kNoPawnEntity;
         std::unordered_set<std::string> m_loadedSounds;
 
+        // remote/distant fire audio (W8 audio-polish; client presentation only)
+        static constexpr int kMaxDistantOneShots = 6; // concurrent-tail cap
+        // Ring of tail start times, seeded far in the past so the cap never
+        // miscounts the zero-initialized slots against a near-zero m_clock.
+        double m_distantPlayTimes[kMaxDistantOneShots] = {-1.0e9, -1.0e9, -1.0e9, -1.0e9, -1.0e9, -1.0e9};
+        int m_distantPlayCursor = 0;
+        uint32_t m_remoteFireSeq = 0;  // round-robin over the shooter's fire variants
+        float m_remoteFireHeat = 0.0f; // see RemoteFireHeat()
+
         // server state
         std::unordered_map<PlayerId, ShooterState> m_shooters;
         std::vector<ServerProjectile> m_projectiles;
-        double m_serverClock = 0.0; // fallback time when ctx.serverSim is null
+        double m_serverClock = 0.0;  // fallback time when ctx.serverSim is null
         uint32_t m_fireAudioSeq = 0; // round-robin index into WeaponDef.audioFireVariants
         uint32_t m_shotsValidated = 0;
         uint32_t m_shotsRejected = 0;

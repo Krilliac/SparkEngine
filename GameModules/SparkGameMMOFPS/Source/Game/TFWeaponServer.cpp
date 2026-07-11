@@ -112,6 +112,33 @@ namespace Terrafront
         if (!viaVehicleSeat && !IsWeaponInLoadout(fireWeapon, pawn))
             return;
 
+        // W8 unlock enforcement (the deliberate non-wiring from W6): a
+        // loadout-ELIGIBLE weapon must also be UNLOCKED for this player
+        // (Persistence/TFUnlockTree.h via TFProgressionSystem). Weapons with no
+        // tree entry are default kit and always pass -- IsWeaponUnlocked
+        // returns true for them, and fails open while data tables are not
+        // loaded (verified against TFUnlockTree::All(): only carbines, lmgs,
+        // snipers, np_shotgun and np_launcher are gated). One deliberate
+        // exemption: the class-DEFAULT primary (primarySlots.front()). Ghost's
+        // default equip is a tree-gated sniper and Striker/Fabricator's is the
+        // rank-3 carbine; RefreshLocalLoadout hands those to every fresh spawn
+        // regardless of rank, so rejecting them would brick rank-1 players of
+        // those classes. Every OTHER slot-pool weapon (e.g. np_shotgun on
+        // Striker, the carbine in Ghost's second primary slot) is enforced.
+        // Seated shooters stay exempt like the loadout check above: their
+        // fireWeapon is the server-resolved seat weapon, not client input.
+        if (!viaVehicleSeat && m_ctx->progression && !m_ctx->progression->IsWeaponUnlocked(shooter, fireWeapon))
+        {
+            const ClassDef* cls = m_ctx->data->GetClass(pawn.cls);
+            const bool defaultPrimary = cls && !cls->primarySlots.empty() &&
+                                        FindWeaponForSlotKey(cls->primarySlots.front(), pawn.faction) == fireWeapon;
+            if (!defaultPrimary)
+            {
+                ++m_shotsRejected;
+                return;
+            }
+        }
+
         const WeaponDef* base = m_ctx->data->GetWeapon(fireWeapon);
         if (!base || base->kind == "melee" || base->kind == "beam")
             return; // TF-W2: melee reach + tool beams take a different server path
@@ -126,6 +153,12 @@ namespace Terrafront
             return;
         }
         ++m_shotsValidated;
+
+        // W8 audio-polish: a validated fire event is the local client's only
+        // in-process knowledge of OTHER shooters (bots + remote players on a
+        // listen host), so the distant-gunfire layer hooks here. No-op on
+        // dedicated servers and for the local shooter (checked inside).
+        ClientOnRemoteFire(shooter, pawn, def);
 
         // W6 progression: one validated trigger pull == one shot (pellets are
         // still one shot; hits below are capped at one per fire event to match).
@@ -144,6 +177,13 @@ namespace Terrafront
         float dir[3] = {ev.dirX, ev.dirY, ev.dirZ};
         if (!WeaponMath::Normalize3(dir))
             return;
+
+        // W8 shared-edit (turret-aim/vehicles agent): the turret-controller seat
+        // fires from the AIMED turret muzzle frame (server aim state, unit dir)
+        // instead of the riding pawn's eye, so shots match the replicated turret
+        // visual. Non-controller armed seats keep the pawn-eye path above.
+        if (viaVehicleSeat)
+            m_ctx->vehicles->GetSeatFireFrame(shooter, origin, dir);
 
         if (def.projSpeed > 0.0f)
         {
