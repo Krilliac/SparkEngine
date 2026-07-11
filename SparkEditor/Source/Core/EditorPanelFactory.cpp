@@ -71,6 +71,7 @@
 #include "../Panels/ScriptDebugPanel.h"
 #include "../Panels/CSGEditorPanel.h"
 #include "../Panels/NetworkDebugPanel.h"
+#include "../Panels/SceneImportPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 // Phase AA Theme 3C: activate the two remaining orphan EditorPanel
@@ -191,6 +192,13 @@ namespace SparkEditor
         tryRegister("Modding", [&] { return std::make_shared<ModdingPanel>(); });
         tryRegister("CoroutineDebug", [&] { return std::make_shared<CoroutineDebugPanel>(); });
         tryRegister("GameModuleSelector", [&] { return std::make_shared<GameModuleSelectorPanel>(); });
+        tryRegister("SceneImport",
+                    [&]
+                    {
+                        auto sceneImport = std::make_shared<SceneImportPanel>();
+                        sceneImport->SetEditorUI(this);
+                        return sceneImport;
+                    });
         tryRegister("Collaboration", [&] { return std::make_shared<CollaborationPanel>(m_collabSession.get()); });
 
         tryRegister("TimeOfDay", [&] { return std::make_shared<TimeOfDayPanel>(); });
@@ -284,6 +292,7 @@ namespace SparkEditor
             {"ScriptDebugger", ICON_FA_BUG},
             {"CSGEditor", ICON_FA_CUBES},
             {"NetworkDebug", ICON_FA_NETWORK_WIRED},
+            {"SceneImport", ICON_FA_FILE_IMPORT},
             // Phase AA Theme 3C: icons for the two newly-activated panels.
             {"LevelStreaming", ICON_FA_MAP},
             {"VersionControl", ICON_FA_CODE_BRANCH},
@@ -348,6 +357,7 @@ namespace SparkEditor
             {"Prototyping", PanelCategory::Tool},
             {"Workflows", PanelCategory::Tool},
             {"EventResponses", PanelCategory::Tool},
+            {"SceneImport", PanelCategory::Tool},
 
             // Config
             {"SaveSystem", PanelCategory::Config},
