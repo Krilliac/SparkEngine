@@ -109,7 +109,9 @@ namespace Terrafront
         // W9 remote-fire-events: 0x54F4 handler lifecycle (TFSocialSystem
         // pattern — pure-client only, polled from Update, released with a
         // no-op handler on Shutdown so no dangling `this` survives the module
-        // DLL). Definitions live under ENABLE_NETWORKING in the .cpp.
+        // DLL). W11 impact-broadcast: the 0x54F5 TF_ImpactFx handler rides the
+        // same lifecycle (inline lambda -> TFImpactFx::OnServerImpact).
+        // Definitions live under ENABLE_NETWORKING in the .cpp.
         bool ClientNetActive() const;
         void EnsureNetHandlers();
         void ReleaseNetHandlers();
@@ -131,7 +133,7 @@ namespace Terrafront
         bool m_lastInSanctuary{false};
         Bed m_alarmBed;            ///< W10 audio-wave-2: capture-alarm loop (Bed reuse)
         bool m_alarmOn{false};     ///< W10 audio-wave-2: alarm predicate this frame
-        bool m_netHandlers{false}; ///< 0x54F4 client handler registered (W9)
+        bool m_netHandlers{false}; ///< 0x54F4 + 0x54F5 client handlers registered (W9/W11)
 
         std::unordered_set<std::string> m_loaded; ///< LoadSound already issued for these paths
         std::mt19937 m_rng{0xA3B1Eu};

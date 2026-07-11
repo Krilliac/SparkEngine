@@ -12,6 +12,7 @@
 #include "Game/TFBallistics.h"
 #include "Game/TFDamageSystem.h"
 #include "Game/TFDeployableSystem.h" // W3 shared-edit: splash vs deployables
+#include "Game/TFImpactFx.h"         // W11 impact-broadcast: in-process listen-host route
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h" // W6 progression: per-weapon shot/hit stats
 #include "Game/TFVehicleSystem.h"     // W3 shared-edit: vehicle hit tests + seat weapons
@@ -282,6 +283,100 @@ namespace Terrafront
     }
 
     // ---------------------------------------------------------------------------
+    // W11 impact-broadcast: 0x54F5 authoritative impact fx (Net/TFFireFxProtocol.h)
+    // ---------------------------------------------------------------------------
+
+    bool TFWeaponSystem::ImpactFxCapOpen(PlayerId shooter) const
+    {
+        const auto it = m_shooters.find(shooter);
+        if (it == m_shooters.end())
+            return true;
+        return ServerNow() - it->second.lastImpactFxSent >= kTFImpactFxMinIntervalSec;
+    }
+
+    float TFWeaponSystem::TerrainHitT(const float origin[3], const float dir[3], float dist) const
+    {
+        // Same 1 m march as TerrainBlocked, plus the bisection refine the client
+        // guess-trace used (TFImpactFx precedent) so the puff sits ON the
+        // surface instead of up to 1 m past it.
+        if (!m_ctx || !m_ctx->world)
+            return -1.0f;
+        const float step = 1.0f;
+        for (float t = step; t < dist; t += step)
+        {
+            const float y = origin[1] + dir[1] * t;
+            if (y < m_ctx->world->TerrainHeightAt(origin[0] + dir[0] * t, origin[2] + dir[2] * t))
+            {
+                float lo = t - step;
+                float hi = t;
+                for (int i = 0; i < 5; ++i)
+                {
+                    const float mid = 0.5f * (lo + hi);
+                    const float my = origin[1] + dir[1] * mid;
+                    if (my < m_ctx->world->TerrainHeightAt(origin[0] + dir[0] * mid, origin[2] + dir[2] * mid))
+                        hi = mid;
+                    else
+                        lo = mid;
+                }
+                return 0.5f * (lo + hi);
+            }
+        }
+        return -1.0f;
+    }
+
+    void TFWeaponSystem::ServerBroadcastImpactFx(PlayerId shooter, const float point[3], uint8_t surface)
+    {
+        if (!m_ctx || !m_ctx->IsAuthority())
+            return;
+
+        // Per-shooter rate cap (~8/s; multi-pellet shotguns collapse to one
+        // puff per window). The stamp only advances when something was actually
+        // delivered below — same semantics as the 0x54F4 fire-fx cap.
+        ShooterState& st = m_shooters[shooter];
+        const double now = ServerNow();
+        if (now - st.lastImpactFxSent < kTFImpactFxMinIntervalSec)
+            return;
+
+        bool delivered = false;
+
+        // In-process route: the listen host / standalone player never receives
+        // 0x54F5 (a server cannot message itself), so bots' and remote players'
+        // impacts near the host feed TFImpactFx directly. The local shooter is
+        // excluded — their puff is the immediate OnLocalShot prediction.
+        if (m_ctx->HasLocalPlayer() && m_ctx->localPlayer != shooter)
+            delivered |= TFImpactFx::Get().OnServerImpact(*m_ctx, point, surface);
+
+#ifdef ENABLE_NETWORKING
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        if (nm.IsInitialized() && nm.GetRole() == Spark::Net::NetworkRole::Server && !nm.GetClients().empty())
+        {
+            const TF_ImpactFx fx = TF_ImpactFx::From(point, static_cast<TFImpactSurface>(surface));
+            Spark::Net::NetworkMessage msg;
+            msg.type = static_cast<Spark::Net::MessageType>(kTFFxMsg_ImpactFx);
+            msg.channel = Spark::Net::ChannelType::Unreliable; // presentational; drops are free
+            msg.payload.resize(sizeof(fx));
+            std::memcpy(msg.payload.data(), &fx, sizeof(fx));
+
+            constexpr float kRange2 = kTFImpactFxRangeM * kTFImpactFxRangeM;
+            for (const auto& [clientId, info] : nm.GetClients())
+            {
+                if (clientId == shooter || info.state != Spark::Net::ConnectionState::Connected)
+                    continue; // the shooter's own puff is client-predicted
+                PawnInfo listener;
+                if (!m_ctx->players || !m_ctx->players->GetPawnByPlayer(clientId, listener))
+                    continue; // not entered world / no pawn yet — nothing to see with
+                if (WeaponMath::Dist2(listener.pos, point) > kRange2)
+                    continue;
+                nm.SendToClient(clientId, msg);
+                delivered = true;
+            }
+        }
+#endif
+        if (delivered)
+            st.lastImpactFxSent = now;
+    }
+
+    // ---------------------------------------------------------------------------
     // Validation
     // ---------------------------------------------------------------------------
 
@@ -348,6 +443,11 @@ namespace Terrafront
         EntityId physPawn = 0;
         float physPawnDist = 0.0f;
         float physPawnPoint[3]{};
+        // W11 impact-broadcast: remember the world-geometry stop so blocked
+        // shots can broadcast their true visual endpoint (0x54F5).
+        bool wallValid = false;
+        float wallPointFx[3]{};
+        uint8_t wallSurface = static_cast<uint8_t>(TFImpactSurface::Static);
         Ballistics::WorldHit wall;
         if (Ballistics::RaycastWorld(m_ctx->engine, origin, dir, maxDist, wall) && wall.blocked)
         {
@@ -369,8 +469,29 @@ namespace Terrafront
             else
             {
                 blockDist = wall.dist;
+                wallValid = true;
+                wallPointFx[0] = wall.point[0];
+                wallPointFx[1] = wall.point[1];
+                wallPointFx[2] = wall.point[2];
+                TFDeployableView dv;
+                if (wall.entityId != 0 && m_ctx->deployables &&
+                    m_ctx->deployables->GetDeployable(static_cast<EntityId>(wall.entityId), dv))
+                    wallSurface = static_cast<uint8_t>(TFImpactSurface::Shield);
             }
         }
+
+        // W11 impact-broadcast: terrain-stop fx helper (cap pre-gated so capped
+        // shots skip the march entirely).
+        const auto fxTerrain = [&](float dist)
+        {
+            if (!ImpactFxCapOpen(shooter))
+                return;
+            const float tT = TerrainHitT(origin, dir, dist);
+            if (tT <= 0.0f)
+                return;
+            const float pt[3] = {origin[0] + dir[0] * tT, origin[1] + dir[1] * tT, origin[2] + dir[2] * tT};
+            ServerBroadcastImpactFx(shooter, pt, static_cast<uint8_t>(TFImpactSurface::Terrain));
+        };
 
         float hitPoint[3];
         float hitDist = 0.0f;
@@ -402,24 +523,48 @@ namespace Terrafront
         if (vehHit != 0 && (hit == 0 || vehDist < hitDist))
         {
             if (vehDist > blockDist)
+            {
+                if (wallValid)
+                    ServerBroadcastImpactFx(shooter, wallPointFx, wallSurface);
                 return false; // world geometry in front of the vehicle
+            }
             if (TerrainBlocked(origin, dir, vehDist))
+            {
+                fxTerrain(vehDist);
                 return false;
+            }
             const float vdmg =
                 WeaponMath::LinearFalloff(def.damage, def.minDamage, def.falloffStartM, def.falloffEndM, vehDist) *
                 def.vsVehicleMult;
             m_ctx->vehicles->ServerDamageVehicle(vehHit, vdmg, pawn.entity, shooter, def.id);
+            ServerBroadcastImpactFx(shooter, vehPoint, static_cast<uint8_t>(TFImpactSurface::Vehicle));
             return true;
         }
 
         if (hit == 0)
+        {
+            // W11 impact-broadcast: nothing registered — the shot's true visual
+            // stop is the world-geometry block or terrain along the full ray
+            // (a genuine sky shot broadcasts nothing).
+            if (wallValid)
+                ServerBroadcastImpactFx(shooter, wallPointFx, wallSurface);
+            else
+                fxTerrain(maxDist);
             return false;
+        }
 
         if (hitDist > blockDist)
+        {
+            if (wallValid)
+                ServerBroadcastImpactFx(shooter, wallPointFx, wallSurface);
             return false; // world geometry in front of the target
+        }
 
         if (TerrainBlocked(origin, dir, hitDist))
+        {
+            fxTerrain(hitDist);
             return false;
+        }
 
         // Hit zone from the hit height on the victim's capsule: head band takes
         // headshotMult, leg band takes the limb malus, torso is baseline.
@@ -438,6 +583,7 @@ namespace Terrafront
             zoneMult;
 
         m_ctx->damage->ServerApplyDamage(hit, pawn.entity, shooter, damage, damageKind, def.id, head);
+        ServerBroadcastImpactFx(shooter, hitPoint, static_cast<uint8_t>(TFImpactSurface::Pawn));
         return true;
 #else
         (void)shooter;
@@ -600,6 +746,7 @@ namespace Terrafront
                         WeaponMath::LinearFalloff(p.damage, p.minDamage, p.falloffStartM, p.falloffEndM, p.traveledM) *
                         (base ? base->vsVehicleMult : 1.0f);
                     m_ctx->vehicles->ServerDamageVehicle(vehHit, vdmg, p.shooterPawn, p.shooter, p.weapon);
+                    ServerBroadcastImpactFx(p.shooter, vehPoint, static_cast<uint8_t>(TFImpactSurface::Vehicle));
                     ExplodeAt(p, vehPoint, 0, vehHit);
                     it = m_projectiles.erase(it);
                     continue;
@@ -629,12 +776,21 @@ namespace Terrafront
                     if (m_ctx->damage)
                         m_ctx->damage->ServerApplyDamage(hit, p.shooterPawn, p.shooter, damage, kDamageKindBullet,
                                                          p.weapon, head);
+                    ServerBroadcastImpactFx(p.shooter, hitPoint, static_cast<uint8_t>(TFImpactSurface::Pawn));
                     ExplodeAt(p, hitPoint, hit);
                     dead = true;
                 }
                 else if (wallBlocked)
                 {
                     // Warhead meets world geometry mid-flight: detonate on the wall.
+                    // W11 impact-broadcast: a wall stop carrying a deployable
+                    // entity is a shield hit; anything else is static world.
+                    TFDeployableView dv;
+                    const bool shieldStop = wall.entityId != 0 && m_ctx->deployables &&
+                                            m_ctx->deployables->GetDeployable(static_cast<EntityId>(wall.entityId), dv);
+                    ServerBroadcastImpactFx(
+                        p.shooter, wallPoint,
+                        static_cast<uint8_t>(shieldStop ? TFImpactSurface::Shield : TFImpactSurface::Static));
                     ExplodeAt(p, wallPoint, 0);
                     dead = true;
                 }
@@ -643,6 +799,10 @@ namespace Terrafront
             // Terrain impact.
             if (!dead && m_ctx && m_ctx->world && p.pos[1] <= m_ctx->world->TerrainHeightAt(p.pos[0], p.pos[2]))
             {
+                // W11 impact-broadcast: lift the fx point back onto the surface
+                // (the integrated pos can be up to one step underground).
+                const float surfPt[3] = {p.pos[0], m_ctx->world->TerrainHeightAt(p.pos[0], p.pos[2]), p.pos[2]};
+                ServerBroadcastImpactFx(p.shooter, surfPt, static_cast<uint8_t>(TFImpactSurface::Terrain));
                 ExplodeAt(p, p.pos, 0);
                 dead = true;
             }

@@ -372,9 +372,10 @@ namespace Terrafront
         if (m_ctx->world)
         {
             m_ctx->world->SpawnMuzzleFx(muzzlePos, dirUnit);
-            // impact-fx lane (W10): puff at this tracer's visual endpoint —
-            // camera-gated (100 m) cheap ray, WorldStatic|Vehicle only.
-            TFImpactFx::Get().OnRemoteShot(*m_ctx, muzzlePos, dirUnit);
+            // W11 impact-broadcast: the impact puff no longer rides this seam —
+            // the W10 client guess-trace was replaced by the authoritative
+            // 0x54F5 TF_ImpactFx point (handler below), so tracer flash and
+            // puff can arrive independently (both unreliable, both cosmetic).
         }
 
         // Audio + combat heat: converge on the W8 listen-host bucket logic in
@@ -425,8 +426,24 @@ namespace Terrafront
         nm.RegisterHandler(static_cast<MessageType>(kTFFxMsg_RemoteFire),
                            [this](const NetworkMessage& m) { OnNetRemoteFireFx(m.payload.data(), m.payload.size()); });
 
+        // W11 impact-broadcast: 0x54F5 authoritative impact point -> the
+        // surface-flavored puff (Game/TFImpactFx). Registered here because this
+        // system already owns the pure-client fx handler lifecycle (and its
+        // Shutdown no-op replacement keeps module unload dangle-free).
+        nm.RegisterHandler(static_cast<MessageType>(kTFFxMsg_ImpactFx),
+                           [this](const NetworkMessage& m)
+                           {
+                               if (m.payload.size() != sizeof(TF_ImpactFx) || !m_ctx)
+                                   return; // malformed — drop
+                               TF_ImpactFx fx;
+                               std::memcpy(&fx, m.payload.data(), sizeof(fx));
+                               float pos[3];
+                               fx.DecodePos(pos);
+                               TFImpactFx::Get().OnServerImpact(*m_ctx, pos, fx.surface);
+                           });
+
         m_netHandlers = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] remote-fire fx handler registered");
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] remote-fire/impact fx handlers registered");
     }
 
     void TFAudioAmbience::ReleaseNetHandlers()
@@ -435,6 +452,8 @@ namespace Terrafront
         // dangling `this` survives module shutdown (TFSocialSystem pattern).
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         nm.RegisterHandler(static_cast<Spark::Net::MessageType>(kTFFxMsg_RemoteFire),
+                           [](const Spark::Net::NetworkMessage&) {});
+        nm.RegisterHandler(static_cast<Spark::Net::MessageType>(kTFFxMsg_ImpactFx),
                            [](const Spark::Net::NetworkMessage&) {});
         m_netHandlers = false;
     }

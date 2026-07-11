@@ -3,8 +3,9 @@
  * @brief Client-side bullet-impact feedback: short-lived camera-facing
  *        flipbook quads at shot impact points, surface-flavored.
  *
- * Pure client presentation — no networking, no wire changes, no server state
- * (W10 impact-fx lane). Two producers feed one pooled emitter:
+ * Pure client presentation — no server state (W10 impact-fx lane; W11
+ * impact-broadcast made the remote path server-authoritative). Two producers
+ * feed one pooled emitter:
  *
  *  - LOCAL SHOOTER (OnLocalShot, hooked after TFWorldSetup::SpawnMuzzleFx in
  *    TFWeaponSystem::ClientTriggerFire): the impact POSITION is client-
@@ -13,11 +14,15 @@
  *    TF_HitConfirm hitmarker carries no position (Net/TFNetProtocol.h,
  *    8 bytes), so the burst is predictive, mirroring how the muzzle
  *    flash/tracer are already client-side-only.
- *  - REMOTE FIRE (OnRemoteShot, hooked after SpawnMuzzleFx in
- *    TFAudioAmbience::ClientOnRemoteFire — the 0x54F4 TF_RemoteFireFx client
- *    seam, which carries pos + dir): a puff at the remote tracer's visual
- *    endpoint. Gated to shots whose muzzle is within kRemoteCamGateM of the
- *    camera, ray budget kTraceBudgetM, WorldStatic+Vehicle mask only.
+ *  - REMOTE SHOTS (OnServerImpact — W11 impact-broadcast lane): the SERVER's
+ *    authoritative impact point + surface kind, delivered on 0x54F5
+ *    TF_ImpactFx (Net/TFFireFxProtocol.h; handler lifecycle rides
+ *    TFAudioAmbience's Ensure/ReleaseNetHandlers next to its 0x54F4 sibling)
+ *    and, on listen hosts / standalone, routed in-process from
+ *    TFWeaponSystem::ServerBroadcastImpactFx. This REPLACED the W10 client
+ *    guess-trace for remote shots (OnRemoteShot, removed): no ray is cast —
+ *    the puff spawns straight at the wire point, camera-gated to
+ *    kTFImpactFxRangeM.
  *
  * Surface flavor: terrain / static-world hits spawn a dirt puff (hover_dust
  * sheet, ALPHA blend — reads better than additive against bright sand);
@@ -81,13 +86,15 @@ namespace Terrafront
         /// the predicted impact point. No-op headless / on misses into the sky.
         void OnLocalShot(TFGameContext& ctx, const float origin[3], const float dir[3]);
 
-        /// Remote validated shot (TFAudioAmbience::ClientOnRemoteFire — the
-        /// 0x54F4 seam, muzzle pos + dir): spawn the puff at the tracer's visual
-        /// endpoint. Cheap by construction: only for muzzles within
-        /// kRemoteCamGateM of the camera, one WorldStatic|Vehicle ray capped at
-        /// kTraceBudgetM (+ the analytic terrain fallback shared with the local
-        /// path). Pawn capsules are skipped — this is flavor, not hit reg.
-        void OnRemoteShot(TFGameContext& ctx, const float origin[3], const float dir[3]);
+        /// W11 impact-broadcast: authoritative server impact (0x54F5
+        /// TF_ImpactFx via the TFAudioAmbience handler, or the in-process
+        /// listen-host/standalone route from ServerBroadcastImpactFx). Spawns
+        /// the surface-flavored puff directly at the wire point — no trace.
+        /// `surface` is a Terrafront::TFImpactSurface value as uint8_t
+        /// (terrain/static -> dust, pawn/vehicle/shield -> spark). Gated to
+        /// impacts within kTFImpactFxRangeM of the camera; returns true when a
+        /// quad was actually spawned (the server's cap only advances then).
+        bool OnServerImpact(TFGameContext& ctx, const float point[3], uint8_t surface);
 
         /// Advance and draw all live impact quads. Call once per frame from
         /// TFWorldSetup::RenderWorld (BeginFrame active; basic shaders are
@@ -98,9 +105,8 @@ namespace Terrafront
                              const DirectX::XMMATRIX& proj);
 
         // Tuning surfaced for tests / debug UI readability.
-        static constexpr float kTraceBudgetM = 250.0f;   ///< max visual trace length (any path)
-        static constexpr float kRemoteCamGateM = 100.0f; ///< remote shots farther than this from the camera: skip
-        static constexpr std::size_t kMaxImpacts = 48;   ///< hard process-wide live-quad cap (pooled)
+        static constexpr float kTraceBudgetM = 250.0f; ///< max visual trace length (local prediction path)
+        static constexpr std::size_t kMaxImpacts = 48; ///< hard process-wide live-quad cap (pooled)
 
       private:
         TFImpactFx() = default;

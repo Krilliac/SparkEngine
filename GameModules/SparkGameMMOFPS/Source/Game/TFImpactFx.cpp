@@ -10,6 +10,7 @@
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFVehicleSystem.h"
 #include "Game/TFWeaponMath.h"
+#include "Net/TFFireFxProtocol.h" // W11 impact-broadcast: TFImpactSurface + kTFImpactFxRangeM
 #include "World/TFWorldSetup.h"
 
 #include "Camera/SparkEngineCamera.h"
@@ -255,9 +256,9 @@ namespace Terrafront
             }
         }
 
-        // 4) Vehicle mirror spheres (both paths): pure clients have no
-        //    vehicle physics bodies, so the analytic test keeps vehicle hits
-        //    sparking on remote tracers too. Clipped to the current bestT.
+        // 4) Vehicle mirror spheres: pure clients have no vehicle physics
+        //    bodies, so the analytic test keeps local-prediction vehicle hits
+        //    sparking. Clipped to the current bestT.
         if (ctx.vehicles)
         {
             float bestVehT = bestT;
@@ -305,22 +306,25 @@ namespace Terrafront
             Spawn(point, kind);
     }
 
-    void TFImpactFx::OnRemoteShot(TFGameContext& ctx, const float origin[3], const float dir[3])
+    bool TFImpactFx::OnServerImpact(TFGameContext& ctx, const float point[3], uint8_t surface)
     {
-        if (!ctx.HasLocalPlayer() || !ctx.world)
-            return;
+        // W11 impact-broadcast: the point is server truth (0x54F5 wire or the
+        // in-process listen-host route) — no trace, just the flavored puff.
+        if (!ctx.HasLocalPlayer())
+            return false;
 
-        // Cheapness gate: only shots fired near the camera get a ray at all.
+        // Camera gate: the server already range-gates recipients by PAWN pos;
+        // this re-gate covers the in-process route and free-flying cameras.
         float cam[3];
         if (!CameraPos(ctx, cam))
-            return;
-        if (WeaponMath::Dist2(origin, cam) > kRemoteCamGateM * kRemoteCamGateM)
-            return;
+            return false;
+        if (WeaponMath::Dist2(point, cam) > kTFImpactFxRangeM * kTFImpactFxRangeM)
+            return false;
 
-        float point[3];
-        Kind kind = Kind::Dust;
-        if (TraceImpact(ctx, origin, dir, kTraceBudgetM, /*includePawns*/ false, point, kind))
-            Spawn(point, kind);
+        const auto s = static_cast<TFImpactSurface>(surface);
+        const Kind kind = (s == TFImpactSurface::Terrain || s == TFImpactSurface::Static) ? Kind::Dust : Kind::Spark;
+        Spawn(point, kind);
+        return true;
     }
 
     void TFImpactFx::Spawn(const float point[3], Kind kind)

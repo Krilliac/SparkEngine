@@ -15,7 +15,8 @@
  *
  * Channel map:
  *   0x54F4 RemoteFireFx S->C unreliable TF_RemoteFireFx (validated fire, <=250 m, never to the shooter)
- *   0x54F5-0x54F7 reserved (unused)
+ *   0x54F5 ImpactFx     S->C unreliable TF_ImpactFx     (authoritative impact point, <=150 m, never to the shooter)
+ *   0x54F6-0x54F7 reserved (unused)
  *
  * Server-authoritative: sent only from TFWeaponSystem::ServerHandleFire AFTER
  * full fire validation (loadout/unlock/RoF/ammo), rate-capped per shooter
@@ -23,6 +24,14 @@
  * (kTFRemoteFireFxRangeM). Purely presentational on the client: flash quad +
  * distant-fire tail + combat heat — a dropped packet costs nothing, hence
  * unreliable.
+ *
+ * W11 impact-broadcast lane adds 0x54F5 TF_ImpactFx: the TRUE server hit point
+ * of a validated shot (hitscan terminal point / projectile detonation) plus a
+ * surface-kind byte, so pure clients place the surface-flavored impact puff
+ * (Game/TFImpactFx) at the authoritative position instead of the W10 client
+ * ray guess. Same discipline as 0x54F4: rate-capped per shooter
+ * (kTFImpactFxMinIntervalSec), range-gated per recipient (kTFImpactFxRangeM),
+ * shooter excluded (their puff is the immediate OnLocalShot prediction).
  *
  * Packed POD with a static_assert frozen-layout guard, exactly like
  * TFNetProtocol.h / TFRepProtocol.h. Budget <= 16 bytes:
@@ -44,8 +53,10 @@
 namespace Terrafront
 {
 
-    // Message id (remote-fire-events lane reserved block 0x54F4-0x54F7).
+    // Message ids (remote-fire-events lane reserved block 0x54F4-0x54F7;
+    // 0x54F5 claimed by the W11 impact-broadcast lane).
     constexpr uint16_t kTFFxMsg_RemoteFire = 0x54F4; // S->C TF_RemoteFireFx
+    constexpr uint16_t kTFFxMsg_ImpactFx = 0x54F5;   // S->C TF_ImpactFx
 
     /// Recipient range gate: clients farther than this from the muzzle get
     /// nothing (matches TFWeaponSystem's kRemoteFireMaxM audio cutoff tier).
@@ -54,6 +65,14 @@ namespace Terrafront
     /// Per-shooter send rate cap (~10/s). Full-auto weapons fire faster than
     /// this; the fx layer is impressionistic, not a shot counter.
     constexpr double kTFRemoteFireFxMinIntervalSec = 0.1;
+
+    /// W11 impact-broadcast: recipient range gate for 0x54F5 — clients whose
+    /// pawn is farther than this from the IMPACT point get nothing.
+    constexpr float kTFImpactFxRangeM = 150.0f;
+
+    /// W11 impact-broadcast: per-shooter 0x54F5 send rate cap (~8/s). Like the
+    /// fire-fx cap, the stamp only advances when something was delivered.
+    constexpr double kTFImpactFxMinIntervalSec = 0.125;
 
     /// Muzzle position quantization: world meters * 4 -> int16 (0.25 m steps).
     constexpr float kTFFireFxPosScale = 4.0f;
@@ -120,6 +139,48 @@ namespace Terrafront
         }
     };
     static_assert(sizeof(TF_RemoteFireFx) == 16, "wire layout frozen (<= 16 byte budget)");
+
+    /// W11 impact-broadcast: surface flavor of one authoritative impact
+    /// (append only — rides the wire as a raw byte).
+    enum class TFImpactSurface : uint8_t
+    {
+        Terrain = 0, ///< heightfield hit (analytic march)
+        Static,      ///< world geometry / decor OBB / unclassified physics body
+        Pawn,        ///< infantry hit (lag-comp capsule or physics pawn body)
+        Vehicle,     ///< vehicle hull hit
+        Shield       ///< deployable hit (ShieldWall et al.)
+    };
+
+    /// S->C: the authoritative impact point of one validated shot (hitscan
+    /// terminal point or projectile detonation). Position quantization reuses
+    /// the muzzle scheme above (0.25 m steps — invisible under a 0.45 m puff).
+    struct TF_ImpactFx
+    {
+        int16_t posQX; // impact world pos * kTFFireFxPosScale (0.25 m steps)
+        int16_t posQY;
+        int16_t posQZ;
+        uint8_t surface; // TFImpactSurface
+        uint8_t _pad;
+
+        static TF_ImpactFx From(const float point[3], TFImpactSurface s)
+        {
+            using namespace FireFxDetail;
+            TF_ImpactFx fx{};
+            fx.posQX = QuantCoord(point[0]);
+            fx.posQY = QuantCoord(point[1]);
+            fx.posQZ = QuantCoord(point[2]);
+            fx.surface = static_cast<uint8_t>(s);
+            return fx;
+        }
+
+        void DecodePos(float out[3]) const
+        {
+            out[0] = posQX / kTFFireFxPosScale;
+            out[1] = posQY / kTFFireFxPosScale;
+            out[2] = posQZ / kTFFireFxPosScale;
+        }
+    };
+    static_assert(sizeof(TF_ImpactFx) == 8, "wire layout frozen (<= 12 byte budget)");
 
 #pragma pack(pop)
 

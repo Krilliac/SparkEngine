@@ -153,7 +153,7 @@ namespace Terrafront
     // W3 ADDITIVE EXTENSIONS — existing layouts above stay frozen.
     //   0x54F8-0x54FB, 0x54FF : vehicle block (vehicles agent, below)
     //   0x54FC-0x54FE         : deployable replication block (deployables agent, below)
-    //   0x54F4-0x54F7         : remote-fire fx block (remote-fire-events lane, Net/TFFireFxProtocol.h — 0x54F4 used, rest reserved)
+    //   0x54F4-0x54F7         : remote-fire fx block (Net/TFFireFxProtocol.h — 0x54F4 fire fx (W9), 0x54F5 impact fx (W11), rest reserved)
     // ===========================================================================
 
     // --- Vehicles (TFVehicleSystem, W3) -----------------------------------------
