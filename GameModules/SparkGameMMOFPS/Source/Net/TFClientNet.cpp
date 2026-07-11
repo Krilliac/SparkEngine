@@ -11,6 +11,7 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFMovementModel.h"
+#include "Game/TFAbilitySystem.h" // class-abilities lane (W9): move-mod mirror
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponSystem.h"
 #include "Net/TFReplication.h"
@@ -469,8 +470,16 @@ namespace Terrafront
         mi.sprint = in.sprint;
         mi.crouch = in.crouch;
 
+        // class-abilities lane (W9): the exact mirror of TFServerSim::
+        // StepPlayer's ability move-mod snippet (both-or-neither).
+        TFAbilityMoveMods abilityMods;
+        if (m_ctx && m_ctx->abilities)
+            abilityMods = m_ctx->abilities->MoveModsLocal();
+        if (abilityMods.speedMult <= 0.0f)
+            mi.jump = false; // rooted: no jump either
+
         const TFWorldSetup* world = m_ctx ? m_ctx->world : nullptr;
-        TFMoveStep(ms, mi, m_runSpeed, m_sprintSpeed, dt,
+        TFMoveStep(ms, mi, m_runSpeed * abilityMods.speedMult, m_sprintSpeed * abilityMods.speedMult, dt,
                    [world](float x, float z) { return world ? world->TerrainHeightAt(x, z) : 0.0f; });
 
         // 2026-07-10 collision wave: identical post-step resolve as TFServerSim
@@ -480,6 +489,10 @@ namespace Terrafront
             const float prevPos[3] = {s.position.x, s.position.y, s.position.z};
             world->ResolveMoveCollision(prevPos, ms.pos, ms.vel, &ms.grounded);
         }
+
+        // class-abilities lane (W9): jet thrust after step+collision resolve.
+        if (abilityMods.jetThrust)
+            TFApplyJetThrust(ms, dt);
 
         s.position = {ms.pos[0], ms.pos[1], ms.pos[2]};
         s.velocity = {ms.vel[0], ms.vel[1], ms.vel[2]};

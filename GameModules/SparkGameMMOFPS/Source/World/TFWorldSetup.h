@@ -234,9 +234,7 @@ namespace Terrafront
         std::unique_ptr<Spark::Net::AreaServer> m_areaServer;
         std::unordered_set<uint32_t> m_knownClients; // Spark::Net::ClientID
 #endif
-        bool m_netBooted{false};      // this module booted NetworkManager (so it pumps + tears down)
-        bool m_ambientStarted{false}; // looping ambience kicked off once a local player exists
-        void MaybeStartAmbientAudio();
+        bool m_netBooted{false}; // this module booted NetworkManager (so it pumps + tears down)
     };
 
 } // namespace Terrafront

@@ -17,6 +17,7 @@
 #include "UI/TFHUD.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFAbilitySystem.h" // class-abilities lane (W9): HUD ability slot
 #include "Game/TFPlayerSystem.h"
 #include "World/TFWorldSetup.h"
 #include "Camera/SparkEngineCamera.h"
@@ -324,6 +325,46 @@ namespace Terrafront
 
     } // namespace
 
+    namespace
+    {
+        // class-abilities lane (W9): ability icon + cooldown/fuel radial next
+        // to the weapon box. Self-contained: reads GetLocalHudView per frame.
+        void DrawAbilitySlot(const TFGameContext* ctx)
+        {
+            if (!ctx || !ctx->abilities)
+                return;
+            const TFAbilitySystem::HudView v = ctx->abilities->GetLocalHudView();
+            if (!v.valid)
+                return;
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImGuiViewport* vp = ImGui::GetMainViewport();
+            const ImVec2 c(vp->Pos.x + vp->Size.x * 0.5f + 190.0f, vp->Pos.y + vp->Size.y - 92.0f);
+            const float r = 22.0f;
+            ImU32 ring = IM_COL32(140, 205, 255, 235); // ready / fuel
+            if (v.phase == TFAbilityPhase::Active)
+                ring = IM_COL32(120, 255, 160, 240);
+            else if (v.phase == TFAbilityPhase::Cooldown)
+                ring = IM_COL32(255, 190, 80, 220);
+            dl->AddCircleFilled(c, r, IM_COL32(16, 20, 26, 200));
+            const float frac = v.fraction01 < 0.0f ? 0.0f : (v.fraction01 > 1.0f ? 1.0f : v.fraction01);
+            if (frac > 0.001f)
+            {
+                dl->PathArcTo(c, r - 3.0f, -1.570796f, -1.570796f + 6.283185f * frac, 48);
+                dl->PathStroke(ring, 0, 4.0f);
+            }
+            const char key[2] = {v.hotkey, '\0'};
+            dl->AddText(ImVec2(c.x - 4.0f, c.y - 8.0f), IM_COL32(235, 235, 235, 255), key);
+            dl->AddText(ImVec2(c.x - ImGui::CalcTextSize(v.name.c_str()).x * 0.5f, c.y - r - 18.0f),
+                        IM_COL32(200, 210, 220, 210), v.name.c_str());
+            if (v.phase == TFAbilityPhase::Cooldown && v.remainingSec > 0.05f)
+            {
+                char cd[16];
+                std::snprintf(cd, sizeof(cd), "%.0fs", v.remainingSec);
+                dl->AddText(ImVec2(c.x - 8.0f, c.y + r + 4.0f), IM_COL32(255, 190, 80, 255), cd);
+            }
+        }
+    } // namespace
+
     void TFHUD::RenderUI()
     {
         if (!m_initialized || !m_ctx || !m_ctx->HasLocalPlayer())
@@ -366,6 +407,8 @@ namespace Terrafront
                 DrawCrosshairAndHitmarker();
             DrawVitals();
             DrawWeaponBox();
+            if (m_view.alive && !m_dead)
+                DrawAbilitySlot(m_ctx); // class-abilities lane (W9)
             DrawKillfeed();
             DrawDamageOctants();
             DrawCaptureBar();

@@ -78,6 +78,13 @@ namespace Terrafront
         OutfitTagUpdate = 0x543B, // S->C  TF_OutfitTagUpdate (broadcast player->tag for nameplates/killfeed)
         OutfitInvite = 0x543C,    // S->C  TF_OutfitInvite (invite notice to the invitee)
 
+        // W9 class-abilities block (reserved 0x5458-0x545F; 0x545A-0x545F free).
+        // Packed wire structs + static_assert layout guards live in
+        // Game/TFAbilitySystem.h (its kTFMsgAbility* constants name the same wire
+        // values so the lane compiles standalone).
+        AbilityRequest = 0x5458, // C->S  TF_AbilityRequest (activate / toggle-off)
+        AbilityState = 0x5459,   // S->C  TF_AbilityState (self detail + visible-pawn broadcast)
+
         // 0x5440-0x5447: chat-social block — ids + structs in
         // Net/TFSocialProtocol.h (TFRepProtocol precedent; not enumerators).
         // 0x5448-0x544B: turret-aim block — id + struct in

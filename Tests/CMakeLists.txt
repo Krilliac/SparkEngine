@@ -13,6 +13,7 @@ add_executable(SparkTests
     TestObjectPool.cpp
     TestECSWorld.cpp
     TestReflectedScene.cpp
+    TestReflectedSceneEmissiveHierarchy.cpp
     TestGameMode.cpp
     TestNoiseGenerator.cpp
     TestSaveSystem.cpp
@@ -186,6 +187,7 @@ add_executable(SparkTests
     TestScheduledCallback.cpp
     TestFixtures.cpp
     TestJsonUtils.cpp
+    TestJsonStrict.cpp
     TestThirdPartyIntegration.cpp
     TestNetworkStress.cpp
     TestNetworkMMOIntegration.cpp
@@ -512,6 +514,8 @@ add_executable(SparkTests
     # W7/W8 rule math + wire freezes (header-only includes / standalone mirrors)
     TestTFRedeployRules.cpp
     TestTFCaptureMath.cpp
+    # W9 class-abilities wire freeze + shared jet-thrust math (header-only)
+    TestTFAbilityWire.cpp
     # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp

@@ -5,6 +5,7 @@
  */
 #include "Game/TFWeaponSystem.h"
 
+#include "Game/TFAbilitySystem.h" // class-abilities lane (W9): Lockdown RoF mirror
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponMath.h"
 #include "Game/TFViewModel.h"
@@ -184,7 +185,10 @@ namespace Terrafront
 
         if (slot.def.magSize > 0)
             --slot.magAmmo;
-        m_nextFireTime = m_clock + 60.0 / std::max(1.0f, slot.def.rofRpm);
+        float rof = std::max(1.0f, slot.def.rofRpm);
+        if (m_ctx->abilities)
+            rof *= m_ctx->abilities->RoFMultiplierLocal(); // class-abilities lane (W9)
+        m_nextFireTime = m_clock + 60.0 / rof;
 
         // Round-robin fire one-shots so sustained fire does not machine-gun one
         // identical clip; falls back to audioFire via the parser-populated list.

@@ -38,6 +38,7 @@
 
 // Outfits lane: PS2-style clans (server-authoritative system + ImGui panel).
 #include "Game/TFOutfitSystem.h"
+#include "Game/TFAbilitySystem.h" // class-abilities lane (W9)
 #include "UI/TFOutfitPanel.h"
 
 // W5 onboarding (Task 6, additive): persistence + account/character core
@@ -121,6 +122,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_travel = std::make_unique<TFTravelSystem>();  // continents lane
     m_outfits = std::make_unique<TFOutfitSystem>(); // outfits lane
     m_outfitPanel = std::make_unique<TFOutfitPanel>();
+    m_abilities = std::make_unique<TFAbilitySystem>(); // class-abilities lane (W9)
 
     // W5 onboarding (Task 6, additive): db -> account -> characters ->
     // loginFlow, after every system above (DESIGN.md "W5 — Onboarding").
@@ -154,7 +156,8 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_ctx.progression = m_progression.get();
     m_ctx.directives = m_directives.get();
     m_ctx.squads = m_squads.get();
-    m_ctx.outfits = m_outfits.get(); // outfits lane
+    m_ctx.outfits = m_outfits.get();     // outfits lane
+    m_ctx.abilities = m_abilities.get(); // class-abilities lane (W9)
     m_ctx.hud = m_hud.get();
     m_ctx.map = m_map.get();
     m_ctx.spawnUI = m_spawnUI.get();
@@ -207,6 +210,8 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         {"TFSquadSystem", m_squads->Initialize(m_ctx, m_events)},
         // Outfits lane: after squads (uses the same session surface).
         {"TFOutfitSystem", m_outfits->Initialize(m_ctx, m_events)},
+        // class-abilities lane (W9): after players/damage/deployables, before bots.
+        {"TFAbilitySystem", m_abilities->Initialize(m_ctx, m_events)},
         {"TFBotSystem", m_bots->Initialize(m_ctx, m_events)},
         {"TFAudioAmbience", m_ambience->Initialize(m_ctx, m_events)}, // audio-polish: after weapons/data
         {"TFHUD", m_hud->Initialize(m_ctx, m_events)},
@@ -276,7 +281,8 @@ void TerrafrontModule::OnUnload()
     m_hud->Shutdown();
     m_ambience->Shutdown(); // audio-polish lane
     m_bots->Shutdown();
-    m_outfits->Shutdown(); // outfits lane: flushes Saves/outfits.json
+    m_abilities->Shutdown(); // class-abilities lane (W9): restores ghosted meshes + uninstalls the damage filter
+    m_outfits->Shutdown();   // outfits lane: flushes Saves/outfits.json
     m_squads->Shutdown();
     m_directives->Shutdown(); // W6: before progression (reverse of init order)
     m_progression->Shutdown();
@@ -317,7 +323,8 @@ void TerrafrontModule::OnUpdate(float dt)
     m_progression->Update(dt);
     m_directives->Update(dt);
     m_squads->Update(dt);
-    m_outfits->Update(dt); // outfits lane: persistence debounce + sweeps
+    m_outfits->Update(dt);   // outfits lane: persistence debounce + sweeps
+    m_abilities->Update(dt); // class-abilities lane (W9): F-key + mirror + veil visuals + late-join burst
     m_bots->Update(dt);
     m_ambience->Update(dt); // audio-polish lane
     m_hud->Update(dt);
@@ -344,6 +351,7 @@ void TerrafrontModule::OnFixedUpdate(float fdt)
     // Authoritative simulation runs on the fixed step.
     m_serverSim->FixedUpdate(fdt);
     m_players->FixedUpdate(fdt);
+    m_abilities->FixedUpdate(fdt); // class-abilities lane (W9): authoritative ability tick
     m_weapons->FixedUpdate(fdt);
     m_vehicles->FixedUpdate(fdt);
     m_regions->FixedUpdate(fdt);
@@ -431,7 +439,8 @@ void TerrafrontModule::OnImGui()
             m_progression->RenderDebugUI();
             m_directives->RenderDebugUI();
             m_squads->RenderDebugUI();
-            m_outfits->RenderDebugUI(); // outfits lane
+            m_outfits->RenderDebugUI();   // outfits lane
+            m_abilities->RenderDebugUI(); // class-abilities lane (W9)
             m_bots->RenderDebugUI();
             m_loginFlow->RenderDebugUI();        // W5 onboarding (Task 6, additive)
             m_social->RenderDebugUI();           // chat-social lane

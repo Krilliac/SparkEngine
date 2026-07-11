@@ -96,6 +96,10 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFOutfitSystem> m_outfits;
     std::unique_ptr<Terrafront::TFOutfitPanel> m_outfitPanel;
 
+    // class-abilities lane (W9): booted after outfits, before bots (bot AI
+    // calls CanUseAbility/UseAbility). Fwd-decl comes from TFTypes.h.
+    std::unique_ptr<Terrafront::TFAbilitySystem> m_abilities;
+
     // W5 onboarding (Task 6, additive): booted after every W1-W4 system above
     // (db -> account -> characters -> loginFlow), per DESIGN.md "W5 —
     // Onboarding". TFDatabase/TFAccountSystem/TFCharacterSystem are plain

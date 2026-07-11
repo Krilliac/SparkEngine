@@ -142,6 +142,8 @@ namespace Terrafront
     class TFSocialSystem;
     class TFChatWindow;
     class TFSocialPanel;
+    // class-abilities lane (additive): Game/TFAbilitySystem.h.
+    class TFAbilitySystem;
 
     struct TFGameContext
     {
@@ -174,6 +176,9 @@ namespace Terrafront
         // OTHER lanes (e.g. redeploy/sanctuary queries); TFTravelSystem itself
         // deliberately never reads this pointer.
         TFTravelSystem* travel = nullptr;
+
+        // class-abilities lane (additive): ability activation/cooldowns + effects.
+        TFAbilitySystem* abilities = nullptr;
 
         // W5 onboarding (Task 4, additive): null until Task 6 constructs + publishes
         // them in Main.cpp boot order. Net handlers guard every use with `if

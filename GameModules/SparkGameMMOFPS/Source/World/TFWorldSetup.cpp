@@ -18,7 +18,6 @@
 #include "Net/TFServerSim.h"
 
 #include "Spark/IEngineContext.h"
-#include "Audio/AudioEngine.h"
 #include "SceneManager/SceneManager.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/World/WorldOriginSystem.h"
@@ -1112,9 +1111,9 @@ namespace Terrafront
         if (m_ctx->role == NetRole::Client)
             DriveOriginRebase();
 
-        // audio-polish lane (W8): TFAudioAmbience owns the ambient beds now
-        // (sanctuary hum <-> wind crossfade); starting the old single wind loop
-        // here would double it up. MaybeStartAmbientAudio() deliberately unused.
+        // audio-polish lane (W8): TFAudioAmbience owns the ambient beds
+        // (sanctuary hum <-> wind crossfade); the old single-wind-loop starter
+        // (MaybeStartAmbientAudio) was removed as dead code in W9.
 
         m_fxClock += deltaTime;
         // Reap expired shot effects (longest-lived component is the tracer).
@@ -1135,25 +1134,6 @@ namespace Terrafront
         fx.origin = {origin[0], origin[1], origin[2]};
         fx.dir = {dir[0], dir[1], dir[2]};
         m_shotFx.push_back(fx);
-    }
-
-    void TFWorldSetup::MaybeStartAmbientAudio()
-    {
-        if (m_ambientStarted || !m_ctx->HasLocalPlayer() || !m_ctx->engine)
-            return;
-        ::AudioEngine* audio = m_ctx->engine->GetAudio();
-        if (!audio)
-            return; // no audio system (headless / init failed) — try again next frame? no: mark done
-        m_ambientStarted = true;
-
-        const AmbientAudioDef& amb = Pres().ambient;
-        const std::string full = "Assets/" + amb.path;
-        if (FAILED(audio->LoadSound(amb.path, std::wstring(full.begin(), full.end()))))
-        {
-            Spark::SimpleConsole::GetInstance().LogWarning("[TFAudio] ambient wind load FAIL");
-            return;
-        }
-        audio->PlaySound(amb.path, amb.volume, 1.0f, /*loop*/ true);
     }
 
     void TFWorldSetup::DriveOriginRebase()

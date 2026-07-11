@@ -19,6 +19,7 @@
 #include "Game/TFVehicleSystem.h"     // TF-W3: seat routing + seated-pawn ride sync
 #include "Game/TFWeaponSystem.h"
 #include "Game/TFOutfitSystem.h"  // Outfits lane: OutfitRequest routing + session hooks
+#include "Game/TFAbilitySystem.h" // class-abilities lane (W9): AbilityRequest routing
 #include "Game/TFRedeployRules.h" // W7 ui-map-keys: redeploy validation
 #include "Net/TFRedeployProtocol.h"
 
@@ -382,7 +383,17 @@ namespace Terrafront
         minput.sprint = (buttons & TFB_Sprint) != 0 && my > 0.0f;
         minput.crouch = (buttons & TFB_Crouch) != 0;
 
-        TFMoveStep(mstate, minput, runSpeed, sprintSpeed, dt,
+        // class-abilities lane (W9): per-pawn ability movement modifiers
+        // (Striker jets / Bulwark Field slow / Colossus lockdown root).
+        // MUST stay the exact mirror of TFClientNet::SimulateMove's snippet
+        // (prediction symmetry — both-or-neither).
+        TFAbilityMoveMods abilityMods;
+        if (m_ctx->abilities)
+            abilityMods = m_ctx->abilities->MoveModsForPawn(ms.pawn);
+        if (abilityMods.speedMult <= 0.0f)
+            minput.jump = false; // rooted: no jump either
+
+        TFMoveStep(mstate, minput, runSpeed * abilityMods.speedMult, sprintSpeed * abilityMods.speedMult, dt,
                    [this](float x, float z) { return m_ctx->world ? m_ctx->world->TerrainHeightAt(x, z) : 0.0f; });
 
         // 2026-07-10 collision wave: block/slide against the static scene
@@ -394,6 +405,11 @@ namespace Terrafront
             const float prevPos[3] = {ms.pos[0], ms.pos[1], ms.pos[2]};
             m_ctx->world->ResolveMoveCollision(prevPos, mstate.pos, mstate.vel, &mstate.grounded);
         }
+
+        // class-abilities lane (W9): jet thrust after step+collision resolve —
+        // same order as the client mirror (see Game/TFAbilitySystem.h).
+        if (abilityMods.jetThrust)
+            TFApplyJetThrust(mstate, dt);
 
         ms.pos[0] = mstate.pos[0];
         ms.pos[1] = mstate.pos[1];
@@ -557,6 +573,10 @@ namespace Terrafront
         route(TFMsg::OutfitRequest, [this](const NetworkMessage& m)
               { RouteClientMessage(m.senderID, TFMsg::OutfitRequest, m.payload.data(), m.payload.size()); });
 
+        // class-abilities lane (W9): enter-world-gated like the other gameplay ids.
+        route(TFMsg::AbilityRequest, [this](const NetworkMessage& m)
+              { RouteClientMessage(m.senderID, TFMsg::AbilityRequest, m.payload.data(), m.payload.size()); });
+
         route(TFMsg::ChatMsg, [this](const NetworkMessage& m)
               { RouteClientMessage(m.senderID, TFMsg::ChatMsg, m.payload.data(), m.payload.size()); });
 
@@ -580,11 +600,11 @@ namespace Terrafront
         // so no dangling `this` survives module shutdown.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (TFMsg id : {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent, TFMsg::FactionSelect,
-                         TFMsg::LoadoutChange, TFMsg::UnlockRequest, TFMsg::SquadMsg, TFMsg::ChatMsg,
-                         TFMsg::VehicleEnter, TFMsg::VehicleExit, TFMsg::AegisDeploy, TFMsg::LoginRequest,
+        for (TFMsg id : {TFMsg::ClientInput,     TFMsg::SpawnRequest,    TFMsg::FireEvent,     TFMsg::FactionSelect,
+                         TFMsg::LoadoutChange,   TFMsg::UnlockRequest,   TFMsg::SquadMsg,      TFMsg::ChatMsg,
+                         TFMsg::VehicleEnter,    TFMsg::VehicleExit,     TFMsg::AegisDeploy,   TFMsg::LoginRequest,
                          TFMsg::RegisterRequest, TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq,
-                         TFMsg::EnterWorldReq, TFMsg::RedeployRequest, TFMsg::OutfitRequest})
+                         TFMsg::EnterWorldReq,   TFMsg::RedeployRequest, TFMsg::OutfitRequest, TFMsg::AbilityRequest})
         {
             nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                [](const Spark::Net::NetworkMessage&) {});
@@ -1012,6 +1032,7 @@ namespace Terrafront
         case TFMsg::UnlockRequest:
         case TFMsg::RedeployRequest: // W7 ui-map-keys: MUST be gated
         case TFMsg::OutfitRequest:   // Outfits lane: gated like the other gameplay ids
+        case TFMsg::AbilityRequest:  // class-abilities lane (W9): gated
             if (!m_enteredWorld.contains(sender))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -1064,6 +1085,11 @@ namespace Terrafront
         case TFMsg::OutfitRequest:
             if (m_ctx->outfits)
                 m_ctx->outfits->ServerHandleOutfitMsgRaw(sender, data, size);
+            break;
+        // class-abilities lane (W9): TFAbilitySystem size-validates and replies.
+        case TFMsg::AbilityRequest:
+            if (m_ctx->abilities)
+                m_ctx->abilities->ServerHandleAbilityMsgRaw(sender, data, size);
             break;
         // final-review #3: vehicle/squad verbs, now gated the same as the
         // other gameplay ids above.
