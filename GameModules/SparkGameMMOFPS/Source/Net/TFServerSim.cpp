@@ -392,7 +392,7 @@ namespace Terrafront
         if (m_ctx->world)
         {
             const float prevPos[3] = {ms.pos[0], ms.pos[1], ms.pos[2]};
-            m_ctx->world->ResolveMoveCollision(prevPos, mstate.pos, mstate.vel);
+            m_ctx->world->ResolveMoveCollision(prevPos, mstate.pos, mstate.vel, &mstate.grounded);
         }
 
         ms.pos[0] = mstate.pos[0];
@@ -1182,6 +1182,8 @@ namespace Terrafront
         const FactionId senderFaction = GetPlayerFaction(sender);
         const SquadId senderSquad = m_ctx->squads ? m_ctx->squads->SquadOf(sender) : kInvalidSquad;
         const RegionId senderRegion = RegionOfPlayer(sender);
+        // W8 ui-polish: outfit channel membership (authority registry truth).
+        const uint32_t senderOutfit = m_ctx->outfits ? m_ctx->outfits->OutfitIdOf(sender) : 0u;
         PawnInfo senderPawn{};
         const bool senderHasPawn = m_ctx->players && m_ctx->players->GetPawnByPlayer(sender, senderPawn);
 
@@ -1209,6 +1211,7 @@ namespace Terrafront
                 senderSquad != kInvalidSquad && recipientSquad == senderSquad,
                 senderHasPawn && recipientHasPawn,
                 distanceSq,
+                senderOutfit != 0u && m_ctx->outfits->OutfitIdOf(recipient) == senderOutfit,
             };
             if (!ShouldReceiveChat(channel, view))
                 continue;

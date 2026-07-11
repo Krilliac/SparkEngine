@@ -36,10 +36,11 @@ namespace Terrafront::TFKeys
 
     enum class Action : uint8_t
     {
-        OpenMap = 0,    ///< toggle the fullscreen continent map (TFMapScreen)
-        HoldScoreboard, ///< hold-to-show scoreboard (TFScoreboard)
-        FocusChat,      ///< focus the chat input line (TFHUD; chat-lane hook)
-        CloseOverlay,   ///< close the topmost fullscreen overlay (map/chat)
+        OpenMap = 0,      ///< toggle the fullscreen continent map (TFMapScreen)
+        HoldScoreboard,   ///< hold-to-show scoreboard (TFScoreboard)
+        FocusChat,        ///< focus the chat input line (TFHUD; chat-lane hook)
+        CloseOverlay,     ///< close the topmost fullscreen overlay (map/chat)
+        ToggleDirectives, ///< toggle the directives panel (TFDirectivePanel, W8 ui-polish)
         COUNT
     };
 
@@ -55,6 +56,7 @@ namespace Terrafront::TFKeys
             kVkTab,    // HoldScoreboard
             kVkEnter,  // FocusChat
             kVkEscape, // CloseOverlay
+            'J',       // ToggleDirectives (W8 ui-polish)
         };
     } // namespace Detail
 

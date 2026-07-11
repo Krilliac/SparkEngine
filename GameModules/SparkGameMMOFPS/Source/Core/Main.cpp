@@ -30,6 +30,7 @@
 #include "Game/TFDirectiveSystem.h"
 #include "Game/TFSquadSystem.h"
 #include "Game/TFBotSystem.h"
+#include "Game/TFAudioAmbience.h" // audio-polish lane: zone beds + distant combat layer
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
@@ -51,6 +52,10 @@
 #include "Game/TFSocialSystem.h"
 #include "UI/TFChatWindow.h"
 #include "UI/TFSocialPanel.h"
+
+// W8 ui-polish lane: directives panel + vehicle terminal props.
+#include "UI/TFDirectivePanel.h"
+#include "Game/TFVehicleTerminal.h"
 
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -108,6 +113,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_directives = std::make_unique<TFDirectiveSystem>();
     m_squads = std::make_unique<TFSquadSystem>();
     m_bots = std::make_unique<TFBotSystem>();
+    m_ambience = std::make_unique<TFAudioAmbience>(); // audio-polish lane
     m_hud = std::make_unique<TFHUD>();
     m_map = std::make_unique<TFMapScreen>();
     m_spawnUI = std::make_unique<TFSpawnScreen>();
@@ -127,6 +133,10 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_social = std::make_unique<TFSocialSystem>();
     m_chatWindow = std::make_unique<TFChatWindow>();
     m_socialPanel = std::make_unique<TFSocialPanel>();
+
+    // W8 ui-polish lane.
+    m_directivePanel = std::make_unique<TFDirectivePanel>();
+    m_vehicleTerminals = std::make_unique<TFVehicleTerminal>();
 
     // ---- publish context pointers before any Initialize ----
     m_ctx.data = m_data.get();
@@ -198,6 +208,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         // Outfits lane: after squads (uses the same session surface).
         {"TFOutfitSystem", m_outfits->Initialize(m_ctx, m_events)},
         {"TFBotSystem", m_bots->Initialize(m_ctx, m_events)},
+        {"TFAudioAmbience", m_ambience->Initialize(m_ctx, m_events)}, // audio-polish: after weapons/data
         {"TFHUD", m_hud->Initialize(m_ctx, m_events)},
         {"TFMapScreen", m_map->Initialize(m_ctx, m_events)},
         {"TFSpawnScreen", m_spawnUI->Initialize(m_ctx, m_events)},
@@ -213,6 +224,9 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         // Outfits lane: panel takes the system by reference (3-arg Initialize)
         // so it does not depend on ctx.outfits publish order.
         {"TFOutfitPanel", m_outfitPanel->Initialize(m_ctx, m_events, *m_outfits)},
+        // W8 ui-polish lane: after directives/clientNet/regions (read-only consumers).
+        {"TFDirectivePanel", m_directivePanel->Initialize(m_ctx, m_events)},
+        {"TFVehicleTerminal", m_vehicleTerminals->Initialize(m_ctx, m_events)},
     };
     for (const Boot& b : boots)
     {
@@ -243,6 +257,10 @@ void TerrafrontModule::OnUnload()
     // so they shut down first. TFAccountSystem/TFCharacterSystem are plain
     // core-logic classes with no Shutdown() of their own.
     // chat-social + outfits lanes (reverse boot order; outfit panel booted last).
+    // W8 ui-polish lane (booted last, shut down first).
+    m_vehicleTerminals->Shutdown();
+    m_directivePanel->Shutdown();
+
     m_outfitPanel->Shutdown();
     m_socialPanel->Shutdown();
     m_chatWindow->Shutdown();
@@ -256,6 +274,7 @@ void TerrafrontModule::OnUnload()
     m_spawnUI->Shutdown();
     m_map->Shutdown();
     m_hud->Shutdown();
+    m_ambience->Shutdown(); // audio-polish lane
     m_bots->Shutdown();
     m_outfits->Shutdown(); // outfits lane: flushes Saves/outfits.json
     m_squads->Shutdown();
@@ -300,6 +319,7 @@ void TerrafrontModule::OnUpdate(float dt)
     m_squads->Update(dt);
     m_outfits->Update(dt); // outfits lane: persistence debounce + sweeps
     m_bots->Update(dt);
+    m_ambience->Update(dt); // audio-polish lane
     m_hud->Update(dt);
     m_map->Update(dt);
     m_spawnUI->Update(dt);
@@ -311,6 +331,9 @@ void TerrafrontModule::OnUpdate(float dt)
     m_chatWindow->Update(dt);
     m_socialPanel->Update(dt);
     m_outfitPanel->Update(dt);
+    // W8 ui-polish lane (directive net mirror + terminal prop upkeep).
+    m_directivePanel->Update(dt);
+    m_vehicleTerminals->Update(dt);
 }
 
 void TerrafrontModule::OnFixedUpdate(float fdt)
@@ -373,6 +396,8 @@ void TerrafrontModule::OnImGui()
             m_socialPanel->RenderUI();
             // Outfits lane: standalone 'tf_outfit' window.
             m_outfitPanel->RenderUI();
+            // W8 ui-polish: directives panel (J).
+            m_directivePanel->RenderUI();
             // continents lane: terminal prompt + continent-select menu
             // (player-facing; NOT debug-gated).
             m_travel->RenderUI();
@@ -408,8 +433,11 @@ void TerrafrontModule::OnImGui()
             m_squads->RenderDebugUI();
             m_outfits->RenderDebugUI(); // outfits lane
             m_bots->RenderDebugUI();
-            m_loginFlow->RenderDebugUI(); // W5 onboarding (Task 6, additive)
-            m_social->RenderDebugUI();    // chat-social lane
+            m_loginFlow->RenderDebugUI();        // W5 onboarding (Task 6, additive)
+            m_social->RenderDebugUI();           // chat-social lane
+            m_ambience->RenderDebugUI();         // audio-polish lane
+            m_directivePanel->RenderDebugUI();   // W8 ui-polish lane
+            m_vehicleTerminals->RenderDebugUI(); // W8 ui-polish lane
 #ifdef SPARK_HAS_IMGUI
         }
         ImGui::End();

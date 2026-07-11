@@ -20,8 +20,11 @@
 namespace Terrafront
 {
     class TFBotSystem;
-    class TFOutfitPanel;  // outfits lane (TFOutfitSystem fwd-decl comes from TFTypes.h)
-    class TFTravelSystem; // continents lane
+    class TFOutfitPanel;     // outfits lane (TFOutfitSystem fwd-decl comes from TFTypes.h)
+    class TFTravelSystem;    // continents lane
+    class TFDirectivePanel;  // W8 ui-polish lane (UI/TFDirectivePanel.h)
+    class TFVehicleTerminal; // W8 ui-polish lane (Game/TFVehicleTerminal.h)
+    class TFAudioAmbience;   // audio-polish lane (W8): zone beds + distant combat layer
 } // namespace Terrafront
 
 class TerrafrontModule : public Spark::IModule
@@ -79,6 +82,9 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFDirectiveSystem> m_directives;
     std::unique_ptr<Terrafront::TFSquadSystem> m_squads;
     std::unique_ptr<Terrafront::TFBotSystem> m_bots;
+    // audio-polish lane (W8): booted after bots (needs weapons + data live);
+    // Main.cpp wiring applied by the integrator (see W8 wiring notes).
+    std::unique_ptr<Terrafront::TFAudioAmbience> m_ambience;
     std::unique_ptr<Terrafront::TFHUD> m_hud;
     std::unique_ptr<Terrafront::TFMapScreen> m_map;
     std::unique_ptr<Terrafront::TFSpawnScreen> m_spawnUI;
@@ -104,4 +110,8 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFSocialSystem> m_social;
     std::unique_ptr<Terrafront::TFChatWindow> m_chatWindow;
     std::unique_ptr<Terrafront::TFSocialPanel> m_socialPanel;
+
+    // W8 ui-polish lane (additive): booted after the chat-social systems.
+    std::unique_ptr<Terrafront::TFDirectivePanel> m_directivePanel;
+    std::unique_ptr<Terrafront::TFVehicleTerminal> m_vehicleTerminals;
 };

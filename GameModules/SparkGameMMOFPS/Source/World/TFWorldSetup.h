@@ -141,7 +141,7 @@ namespace Terrafront
         /// terrain is impossible regardless of physics availability. Deterministic
         /// (static bodies from the same scene file on both roles); a no-op beyond
         /// the terrain clamp when Jolt is absent.
-        void ResolveMoveCollision(const float prevPos[3], float pos[3], float vel[3]) const;
+        void ResolveMoveCollision(const float prevPos[3], float pos[3], float vel[3], bool* grounded = nullptr) const;
 
         /// Static scene collision (null before Initialize; inactive without Jolt).
         TFWorldCollision* Collision() const { return m_collision.get(); }

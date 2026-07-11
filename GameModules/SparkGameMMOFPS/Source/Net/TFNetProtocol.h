@@ -80,6 +80,12 @@ namespace Terrafront
 
         // 0x5440-0x5447: chat-social block — ids + structs in
         // Net/TFSocialProtocol.h (TFRepProtocol precedent; not enumerators).
+        // 0x5448-0x544B: turret-aim block — id + struct in
+        // Game/TFVehicleSystem.h (TFRepProtocol precedent; not enumerators).
+        // 0x5448 = S->C TF_RepVehicleAim; 0x5449-0x544B free.
+        // 0x544C-0x544F: directives-ui block — ids + structs in
+        // UI/TFDirectivePanel.h. 0x544C = C->S DirectiveStatusReq,
+        // 0x544D = S->C TF_DirectiveStatus; 0x544E-0x544F free.
     };
 
 #pragma pack(push, 1)
@@ -233,7 +239,8 @@ namespace Terrafront
         Region = 0,
         Faction,
         Squad,
-        Yell
+        Yell,
+        Outfit // W8 ui-polish: outfit-scoped chat (wire value 4; routing rules in Net/TFChatRules.h)
     };
 
     struct TF_ChatMsg

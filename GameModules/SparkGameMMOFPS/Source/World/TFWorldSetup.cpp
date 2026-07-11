@@ -28,7 +28,9 @@
 #include "Graphics/Mesh.h"
 #include "Game/PlaceholderMesh.h"
 #include "Game/TFComponents.h"
+#include "Game/TFGroundFx.h"
 #include "Game/TFViewModel.h"
+#include "Game/TFTransparentPass.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
@@ -337,16 +339,16 @@ namespace Terrafront
         return h;
     }
 
-    void TFWorldSetup::ResolveMoveCollision(const float prevPos[3], float pos[3], float vel[3]) const
+    void TFWorldSetup::ResolveMoveCollision(const float prevPos[3], float pos[3], float vel[3], bool* grounded) const
     {
         // 1) Capsule-sweep + slide against the static scene bodies (no-op when
         //    Jolt is absent or the scene produced no bodies). The sanctuary zone
         //    bodies are a second independent set (continents lane) — the sets are
         //    ~1.7 km apart, so resolving them sequentially never double-slides.
         if (m_collision)
-            m_collision->ResolveMove(prevPos, pos, vel);
+            m_collision->ResolveMove(prevPos, pos, vel, grounded);
         if (m_sanctuaryCollision)
-            m_sanctuaryCollision->ResolveMove(prevPos, pos, vel);
+            m_sanctuaryCollision->ResolveMove(prevPos, pos, vel, grounded);
 
         // 2) Terrain backstop at the RESOLVED column: the slide can change the
         //    final XZ after TFMoveStep's own step-7 clamp ran, and this also keeps
@@ -522,8 +524,7 @@ namespace Terrafront
 
         // Per-zone sky: the sanctuary shows its own (orbital) sky; the continent
         // shows Veyra's. Selected by the camera's world position.
-        const SkyboxDef& sky =
-            TFTravel_IsInSanctuary(cam.x, cam.z) ? Pres().sanctuarySkybox : Pres().skybox;
+        const SkyboxDef& sky = TFTravel_IsInSanctuary(cam.x, cam.z) ? Pres().sanctuarySkybox : Pres().skybox;
         const XMMATRIX world =
             XMMatrixScaling(sky.scale, sky.scale, sky.scale) * XMMatrixTranslation(cam.x, cam.y, cam.z);
 
@@ -645,6 +646,10 @@ namespace Terrafront
                 obj->GetMaterialPath().empty() ? nullptr : gfx->GetOrLoadBasicMaterial(obj->GetMaterialPath());
             ID3D11ShaderResourceView* sceneSrv = sceneMat ? sceneMat->srv.Get() : nullptr;
             const DirectX::XMFLOAT2 sceneTiling = sceneMat ? sceneMat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
+            // W8 render-pbr-lite: bind the material's normal/roughness maps
+            // (nullptr binds the flat identity defaults — unchanged look).
+            gfx->SetBasicMaterialTextures(sceneMat ? sceneMat->normalSrv.Get() : nullptr,
+                                          sceneMat ? sceneMat->roughnessSrv.Get() : nullptr);
 
             const DirectX::XMMATRIX world = obj->GetWorldMatrix();
             const auto& submeshes = mesh->GetSubmeshes();
@@ -682,6 +687,7 @@ namespace Terrafront
         }
         // Restore default texture binding for subsequent draw paths
         gfx->SetBasicTexture(nullptr);
+        gfx->SetBasicMaterialTextures(nullptr, nullptr); // W8 pbr-lite: flat defaults
     }
 
     void TFWorldSetup::RenderWorld()
@@ -752,6 +758,9 @@ namespace Terrafront
                         mr.materialPath.empty() ? nullptr : gfx->GetOrLoadBasicMaterial(mr.materialPath);
                     ID3D11ShaderResourceView* matSrv = mat ? mat->srv.Get() : nullptr;
                     const DirectX::XMFLOAT2 matTiling = mat ? mat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
+                    // W8 render-pbr-lite: per-material normal/roughness (defaults on nullptr).
+                    gfx->SetBasicMaterialTextures(mat ? mat->normalSrv.Get() : nullptr,
+                                                  mat ? mat->roughnessSrv.Get() : nullptr);
 
                     const DirectX::XMMATRIX worldM = ecsView.get<Transform>(entity).GetWorldMatrix(registry);
                     const auto& submeshes = mesh->GetSubmeshes();
@@ -799,6 +808,7 @@ namespace Terrafront
                     }
                 }
                 gfx->SetBasicTexture(nullptr);
+                gfx->SetBasicMaterialTextures(nullptr, nullptr); // W8 pbr-lite: flat defaults
             }
 
             // 3) First-person viewmodel — arms + equipped weapon with sway/walk
@@ -874,6 +884,17 @@ namespace Terrafront
                     gfx->SetBasicTexture(nullptr);
                 }
             }
+
+            // 5) Hover dust: client-side flipbook ground puffs under fast-moving
+            //    vehicles (Game/TFGroundFx.h; camera-facing additive quads, cap 64).
+            if (m_ctx->HasLocalPlayer())
+                TFGroundFx::Get().UpdateAndRender(*m_ctx, gfx, view, proj);
+
+            // 6) Transparent surfaces (shield-wall energy planes + any queued
+            //    alpha FX) — sorted back-to-front and drawn AFTER all opaque
+            //    passes (W8 render-transparency lane; producers queue during
+            //    their Update, e.g. TFDeployableSystem's shield walls).
+            TFTransparentPass::Get().Flush(gfx, view, proj);
         }
         catch (const std::exception& e)
         {
@@ -1091,7 +1112,9 @@ namespace Terrafront
         if (m_ctx->role == NetRole::Client)
             DriveOriginRebase();
 
-        MaybeStartAmbientAudio();
+        // audio-polish lane (W8): TFAudioAmbience owns the ambient beds now
+        // (sanctuary hum <-> wind crossfade); starting the old single wind loop
+        // here would double it up. MaybeStartAmbientAudio() deliberately unused.
 
         m_fxClock += deltaTime;
         // Reap expired shot effects (longest-lived component is the tracer).

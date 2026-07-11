@@ -478,7 +478,7 @@ namespace Terrafront
         if (world)
         {
             const float prevPos[3] = {s.position.x, s.position.y, s.position.z};
-            world->ResolveMoveCollision(prevPos, ms.pos, ms.vel);
+            world->ResolveMoveCollision(prevPos, ms.pos, ms.vel, &ms.grounded);
         }
 
         s.position = {ms.pos[0], ms.pos[1], ms.pos[2]};
