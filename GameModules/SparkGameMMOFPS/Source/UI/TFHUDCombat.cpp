@@ -26,6 +26,7 @@
 #include "Data/TFDataTables.h"
 #include "Game/TFDeployableSystem.h"
 #include "Game/TFOutfitSystem.h" // Outfits lane: death-panel killer tag
+#include "Game/TFPingSystem.h"   // ping-system lane (W11): minimap ping diamonds
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFSquadSystem.h"
 #include "Game/TFVehicleSystem.h"
@@ -612,6 +613,25 @@ namespace Terrafront
                     {
                         dl->AddCircleFilled(mp, 2.5f, CombatFactionCol(myFaction, 0.9f));
                     }
+                });
+        }
+
+        // Squad pings (W11 ping-system lane): type-colored diamonds.
+        if (m_ctx->pings)
+        {
+            m_ctx->pings->ForEachActivePing(
+                [&](const TFPingView& pg)
+                {
+                    if (std::fabs(pg.pos[0] - cx) > half || std::fabs(pg.pos[2] - cz) > half)
+                        return;
+                    const ImVec2 p = toMini(pg.pos[0], pg.pos[2]);
+                    float c[4];
+                    PingColor(pg.type, c);
+                    const ImU32 col = ImGui::ColorConvertFloat4ToU32(ImVec4(c[0], c[1], c[2], 0.95f));
+                    const ImVec2 pts[4] = {ImVec2(p.x, p.y - 4.5f), ImVec2(p.x + 4.5f, p.y), ImVec2(p.x, p.y + 4.5f),
+                                           ImVec2(p.x - 4.5f, p.y)};
+                    dl->AddConvexPolyFilled(pts, 4, col);
+                    dl->AddPolyline(pts, 4, IM_COL32(15, 15, 20, 220), ImDrawFlags_Closed, 1.0f);
                 });
         }
 

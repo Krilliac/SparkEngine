@@ -42,6 +42,9 @@
 #include "Game/TFAbilitySystem.h" // class-abilities lane (W9)
 #include "Game/TFGrenadeSystem.h" // grenades lane (W10)
 #include "Game/TFMedalSystem.h"   // medals-scoreboard lane (W10)
+#include "World/TFAlertSystem.h"  // alerts lane (W11): continent timed events
+#include "Game/TFPingSystem.h"    // ping-system lane (W11)
+#include "UI/TFPingUI.h"          // ping-system lane (W11)
 #include "UI/TFOutfitPanel.h"
 
 // W5 onboarding (Task 6, additive): persistence + account/character core
@@ -63,7 +66,10 @@
 
 // W10 nameplates lane: over-pawn name/outfit/health plates.
 #include "UI/TFNameplates.h"
-#include "UI/TFKeybinds.h" // grenades lane (W10): ThrowGrenade rebind seam
+// W11 squad-v2 lane: squad list HUD + waypoint beacon + request pings.
+#include "UI/TFSquadHUD.h"
+#include "UI/TFDeathRecap.h" // death-recap lane (W11)
+#include "UI/TFKeybinds.h"   // grenades lane (W10): ThrowGrenade rebind seam
 
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -133,6 +139,9 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_abilities = std::make_unique<TFAbilitySystem>(); // class-abilities lane (W9)
     m_grenades = std::make_unique<TFGrenadeSystem>();  // grenades lane (W10)
     m_medals = std::make_unique<TFMedalSystem>();      // medals-scoreboard lane (W10)
+    m_alerts = std::make_unique<TFAlertSystem>();      // alerts lane (W11)
+    m_pingSystem = std::make_unique<TFPingSystem>();   // ping-system lane (W11)
+    m_pingUI = std::make_unique<TFPingUI>();
 
     // W5 onboarding (Task 6, additive): db -> account -> characters ->
     // loginFlow, after every system above (DESIGN.md "W5 — Onboarding").
@@ -153,6 +162,12 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     // W10 nameplates lane.
     m_nameplates = std::make_unique<TFNameplates>();
 
+    // W11 squad-v2 lane.
+    m_squadHUD = std::make_unique<TFSquadHUD>();
+
+    // W11 death-recap lane.
+    m_deathRecap = std::make_unique<TFDeathRecap>();
+
     // ---- publish context pointers before any Initialize ----
     m_ctx.data = m_data.get();
     m_ctx.world = m_world.get();
@@ -172,6 +187,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_ctx.outfits = m_outfits.get();     // outfits lane
     m_ctx.abilities = m_abilities.get(); // class-abilities lane (W9)
     m_ctx.grenades = m_grenades.get();   // grenades lane (W10)
+    m_ctx.pings = m_pingSystem.get();    // ping-system lane (W11)
     m_ctx.hud = m_hud.get();
     m_ctx.map = m_map.get();
     m_ctx.spawnUI = m_spawnUI.get();
@@ -231,6 +247,11 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         // medals-scoreboard lane (W10): after players/squads/progression (reads all
         // three); self-wires to ctx.scoreboard (context pointers already published).
         {"TFMedalSystem", m_medals->Initialize(m_ctx, m_events)},
+        // alerts lane (W11): after regions/players/progression (reads all three
+        // through ctx); before bots so chaos runs see a live scheduler.
+        {"TFAlertSystem", m_alerts->Initialize(m_ctx, m_events)},
+        // ping-system lane (W11): squad-scoped tactical pings.
+        {"TFPingSystem", m_pingSystem->Initialize(m_ctx, m_events)},
         {"TFBotSystem", m_bots->Initialize(m_ctx, m_events)},
         {"TFAudioAmbience", m_ambience->Initialize(m_ctx, m_events)}, // audio-polish: after weapons/data
         {"TFFootsteps", m_footsteps->Initialize(m_ctx, m_events)}, // audio-wave-2 (W10): after players/vehicles/world
@@ -254,6 +275,14 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         {"TFVehicleTerminal", m_vehicleTerminals->Initialize(m_ctx, m_events)},
         // W10 nameplates lane: pure consumer of replicated state — booted last.
         {"TFNameplates", m_nameplates->Initialize(m_ctx, m_events)},
+        // W11 squad-v2 lane: pure consumer of squad/pawn mirrors — booted last.
+        {"TFSquadHUD", m_squadHUD->Initialize(m_ctx, m_events)},
+        // W11 death-recap lane: pure consumer — self-wires the ctx.damage
+        // mirror + its own socket handler; booted last.
+        {"TFDeathRecap", m_deathRecap->Initialize(m_ctx, m_events)},
+        // W11 ping-system lane: UI layer takes the system by reference (3-arg
+        // Initialize, TFOutfitPanel precedent) — booted last.
+        {"TFPingUI", m_pingUI->Initialize(m_ctx, m_events, *m_pingSystem)},
     };
     for (const Boot& b : boots)
     {
@@ -289,6 +318,10 @@ void TerrafrontModule::OnUnload()
     // core-logic classes with no Shutdown() of their own.
     // chat-social + outfits lanes (reverse boot order; outfit panel booted last).
     // W8 ui-polish lane (booted last, shut down first).
+    // W11 lanes (booted last, shut down first): ping UI, death recap, squad HUD.
+    m_pingUI->Shutdown();     // W11 ping-system lane
+    m_deathRecap->Shutdown(); // W11 death-recap lane
+    m_squadHUD->Shutdown();   // W11 squad-v2 lane
     // W10 nameplates lane (booted last, shut down first).
     m_nameplates->Shutdown();
     m_vehicleTerminals->Shutdown();
@@ -310,10 +343,12 @@ void TerrafrontModule::OnUnload()
     m_footsteps->Shutdown(); // audio-wave-2 lane (W10)
     m_ambience->Shutdown();  // audio-polish lane
     m_bots->Shutdown();
-    m_medals->Shutdown();    // medals-scoreboard lane (W10): unhooks the scoreboard pointer
-    m_grenades->Shutdown();  // grenades lane (W10)
-    m_abilities->Shutdown(); // class-abilities lane (W9): restores ghosted meshes + uninstalls the damage filter
-    m_outfits->Shutdown();   // outfits lane: flushes Saves/outfits.json
+    m_pingSystem->Shutdown(); // ping-system lane (W11)
+    m_alerts->Shutdown();     // alerts lane (W11): unregisters tf_alert + wire handler
+    m_medals->Shutdown();     // medals-scoreboard lane (W10): unhooks the scoreboard pointer
+    m_grenades->Shutdown();   // grenades lane (W10)
+    m_abilities->Shutdown();  // class-abilities lane (W9): restores ghosted meshes + uninstalls the damage filter
+    m_outfits->Shutdown();    // outfits lane: flushes Saves/outfits.json
     m_squads->Shutdown();
     m_directives->Shutdown(); // W6: before progression (reverse of init order)
     m_progression->Shutdown();
@@ -354,10 +389,12 @@ void TerrafrontModule::OnUpdate(float dt)
     m_progression->Update(dt);
     m_directives->Update(dt);
     m_squads->Update(dt);
-    m_outfits->Update(dt);   // outfits lane: persistence debounce + sweeps
-    m_abilities->Update(dt); // class-abilities lane (W9): F-key + mirror + veil visuals + late-join burst
-    m_grenades->Update(dt);  // grenades lane (W10): G-key + mirror extrapolation + HUD count
-    m_medals->Update(dt);    // medals-scoreboard lane (W10): 4 Hz row flush + toasts + mirror handlers
+    m_outfits->Update(dt);    // outfits lane: persistence debounce + sweeps
+    m_abilities->Update(dt);  // class-abilities lane (W9): F-key + mirror + veil visuals + late-join burst
+    m_grenades->Update(dt);   // grenades lane (W10): G-key + mirror extrapolation + HUD count
+    m_medals->Update(dt);     // medals-scoreboard lane (W10): 4 Hz row flush + toasts + mirror handlers
+    m_alerts->Update(dt);     // alerts lane (W11): scheduler + scoring + 1 Hz broadcast + mirror
+    m_pingSystem->Update(dt); // ping-system lane (W11): expiry sweep + mirror aging + handler lifecycle
     m_bots->Update(dt);
     m_ambience->Update(dt);  // audio-polish lane
     m_footsteps->Update(dt); // audio-wave-2 lane (W10)
@@ -377,6 +414,11 @@ void TerrafrontModule::OnUpdate(float dt)
     m_vehicleTerminals->Update(dt);
     // W10 nameplates lane (damage-reveal tracking).
     m_nameplates->Update(dt);
+    m_pingUI->Update(dt); // ping-system lane (W11): Q tap/hold input + receive bleeps
+    // W11 squad-v2 lane (beacon pulse clock).
+    m_squadHUD->Update(dt);
+    // W11 death-recap lane (handler lifecycle + respawn-edge clear).
+    m_deathRecap->Update(dt);
 }
 
 void TerrafrontModule::OnFixedUpdate(float fdt)
@@ -437,6 +479,7 @@ void TerrafrontModule::OnImGui()
             m_spawnUI->RenderUI();
             m_scoreboard->RenderUI();
             m_medals->RenderUI(); // medals-scoreboard lane (W10): medal toast overlay
+            m_alerts->RenderUI(); // alerts lane (W11): top-center alert banner + end splash
             // chat-social lane.
             m_chatWindow->RenderUI();
             m_socialPanel->RenderUI();
@@ -449,6 +492,11 @@ void TerrafrontModule::OnImGui()
             m_travel->RenderUI();
             // W10 nameplates lane: over-pawn plates (foreground drawlist).
             m_nameplates->RenderUI();
+            m_pingUI->RenderUI(); // ping-system lane (W11): ping wheel + distance labels
+            // W11 squad-v2 lane: squad list + waypoint beacon.
+            m_squadHUD->RenderUI();
+            // W11 death-recap lane: recap panel on the death screen.
+            m_deathRecap->RenderUI();
         }
     }
 
@@ -479,10 +527,12 @@ void TerrafrontModule::OnImGui()
             m_progression->RenderDebugUI();
             m_directives->RenderDebugUI();
             m_squads->RenderDebugUI();
-            m_outfits->RenderDebugUI();   // outfits lane
-            m_abilities->RenderDebugUI(); // class-abilities lane (W9)
-            m_grenades->RenderDebugUI();  // grenades lane (W10)
-            m_medals->RenderDebugUI();    // medals-scoreboard lane (W10)
+            m_outfits->RenderDebugUI();    // outfits lane
+            m_abilities->RenderDebugUI();  // class-abilities lane (W9)
+            m_grenades->RenderDebugUI();   // grenades lane (W10)
+            m_medals->RenderDebugUI();     // medals-scoreboard lane (W10)
+            m_alerts->RenderDebugUI();     // alerts lane (W11)
+            m_pingSystem->RenderDebugUI(); // ping-system lane (W11)
             m_bots->RenderDebugUI();
             m_loginFlow->RenderDebugUI();        // W5 onboarding (Task 6, additive)
             m_social->RenderDebugUI();           // chat-social lane
@@ -491,6 +541,9 @@ void TerrafrontModule::OnImGui()
             m_directivePanel->RenderDebugUI();   // W8 ui-polish lane
             m_vehicleTerminals->RenderDebugUI(); // W8 ui-polish lane
             m_nameplates->RenderDebugUI();       // W10 nameplates lane
+            m_pingUI->RenderDebugUI();           // W11 ping-system lane
+            m_squadHUD->RenderDebugUI();         // W11 squad-v2 lane
+            m_deathRecap->RenderDebugUI();       // W11 death-recap lane
 #ifdef SPARK_HAS_IMGUI
         }
         ImGui::End();

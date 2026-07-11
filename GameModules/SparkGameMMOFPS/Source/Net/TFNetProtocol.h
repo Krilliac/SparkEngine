@@ -91,6 +91,12 @@ namespace Terrafront
         // wire values so the lane compiles standalone).
         GrenadeThrow = 0x5464, // C->S  TF_GrenadeThrow (server validates + simulates)
 
+        // W11 ping-system block (reserved 0x5468-0x546B). S->C state id 0x5469
+        // + packed structs + static_assert layout guards live in
+        // Game/TFPingSystem.h (its kTFMsgPing* constants name the same wire
+        // values so the lane compiles standalone).
+        PingPlace = 0x5468, // C->S  TF_PingPlace (server validates + squad-rebroadcasts)
+
         // 0x5440-0x5447: chat-social block — ids + structs in
         // Net/TFSocialProtocol.h (TFRepProtocol precedent; not enumerators).
         // 0x5448-0x544B: turret-aim block — id + struct in
@@ -103,6 +109,14 @@ namespace Terrafront
         // Game/TFMedalSystem.h (TFRepProtocol precedent; not enumerators).
         // 0x5460 = S->C TF_MedalAward; 0x5461 = S->C TF_ScoreUpdate;
         // 0x5462-0x5463 free.
+        // 0x546C-0x546F: squad-v2 block — id + struct in Game/TFSquadSystem.h.
+        // 0x546C = C<->S TF_SquadWaypoint; 0x546D-0x546F free.
+        // 0x5470-0x5473: alerts block — id + struct in World/TFAlertSystem.h
+        // (TFRepProtocol precedent; not enumerators). 0x5470 = S->C
+        // TF_AlertState; 0x5471-0x5473 free.
+        // 0x5474-0x5477: death-recap block — id + packed structs in
+        // Game/TFDamageSystem.h (TFRepProtocol precedent; not enumerators).
+        // 0x5474 = S->C TF_DeathRecap (reliable, victim only); 0x5475-0x5477 free.
     };
 
 #pragma pack(push, 1)

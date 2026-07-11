@@ -146,6 +146,8 @@ namespace Terrafront
     class TFAbilitySystem;
     // grenades lane (additive): Game/TFGrenadeSystem.h.
     class TFGrenadeSystem;
+    // ping-system lane (additive): Game/TFPingSystem.h.
+    class TFPingSystem;
 
     struct TFGameContext
     {
@@ -183,6 +185,8 @@ namespace Terrafront
         TFAbilitySystem* abilities = nullptr;
         // grenades lane (additive): throw validation/simulation + HUD count.
         TFGrenadeSystem* grenades = nullptr;
+        // ping-system lane (additive): squad-scoped tactical pings (W11).
+        TFPingSystem* pings = nullptr;
 
         // W5 onboarding (Task 4, additive): null until Task 6 constructs + publishes
         // them in Main.cpp boot order. Net handlers guard every use with `if

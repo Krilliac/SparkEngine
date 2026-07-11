@@ -28,6 +28,10 @@ namespace Terrafront
     class TFNameplates;      // W10 nameplates lane (UI/TFNameplates.h)
     class TFMedalSystem;     // W10 medals-scoreboard lane (Game/TFMedalSystem.h)
     class TFFootsteps;       // audio-wave-2 lane (W10): footstep audio
+    class TFSquadHUD;        // W11 squad-v2 lane (UI/TFSquadHUD.h)
+    class TFPingUI;          // W11 ping-system lane (UI/TFPingUI.h; TFPingSystem fwd-decl comes from TFTypes.h)
+    class TFAlertSystem;     // W11 alerts lane (World/TFAlertSystem.h)
+    class TFDeathRecap;      // W11 death-recap lane (UI/TFDeathRecap.h)
 } // namespace Terrafront
 
 class TerrafrontModule : public Spark::IModule
@@ -111,6 +115,14 @@ class TerrafrontModule : public Spark::IModule
     // W10 medals-scoreboard lane: event-driven medal detection + score rows.
     std::unique_ptr<Terrafront::TFMedalSystem> m_medals;
 
+    // W11 ping-system lane: squad-scoped pings + Q-key input/label layer.
+    std::unique_ptr<Terrafront::TFPingSystem> m_pingSystem;
+    std::unique_ptr<Terrafront::TFPingUI> m_pingUI;
+
+    // W11 alerts lane: continent timed events (Territory Rush / Facility
+    // Control) — scheduler + scoring + TF_AlertState wire + HUD banner.
+    std::unique_ptr<Terrafront::TFAlertSystem> m_alerts;
+
     // W5 onboarding (Task 6, additive): booted after every W1-W4 system above
     // (db -> account -> characters -> loginFlow), per DESIGN.md "W5 —
     // Onboarding". TFDatabase/TFAccountSystem/TFCharacterSystem are plain
@@ -132,4 +144,11 @@ class TerrafrontModule : public Spark::IModule
 
     // W10 nameplates lane (additive): booted after the W8 ui-polish systems.
     std::unique_ptr<Terrafront::TFNameplates> m_nameplates;
+
+    // W11 squad-v2 lane (additive): squad list HUD + waypoint beacon.
+    std::unique_ptr<Terrafront::TFSquadHUD> m_squadHUD;
+
+    // W11 death-recap lane (additive): client recap panel — pure consumer of
+    // TF_DeathRecap / TFDamageSystem's local mirror; booted after nameplates.
+    std::unique_ptr<Terrafront::TFDeathRecap> m_deathRecap;
 };

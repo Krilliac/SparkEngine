@@ -21,6 +21,7 @@
 #include "Game/TFOutfitSystem.h"  // Outfits lane: OutfitRequest routing + session hooks
 #include "Game/TFAbilitySystem.h" // class-abilities lane (W9): AbilityRequest routing
 #include "Game/TFGrenadeSystem.h" // grenades lane (W10): GrenadeThrow routing
+#include "Game/TFPingSystem.h"    // ping-system lane (W11): PingPlace routing
 #include "Game/TFRedeployRules.h" // W7 ui-map-keys: redeploy validation
 #include "Net/TFRedeployProtocol.h"
 
@@ -582,6 +583,10 @@ namespace Terrafront
         route(TFMsg::GrenadeThrow, [this](const NetworkMessage& m)
               { RouteClientMessage(m.senderID, TFMsg::GrenadeThrow, m.payload.data(), m.payload.size()); });
 
+        // ping-system lane (W11): enter-world-gated like the other gameplay ids.
+        route(TFMsg::PingPlace, [this](const NetworkMessage& m)
+              { RouteClientMessage(m.senderID, TFMsg::PingPlace, m.payload.data(), m.payload.size()); });
+
         route(TFMsg::ChatMsg, [this](const NetworkMessage& m)
               { RouteClientMessage(m.senderID, TFMsg::ChatMsg, m.payload.data(), m.payload.size()); });
 
@@ -610,7 +615,7 @@ namespace Terrafront
                          TFMsg::VehicleEnter,    TFMsg::VehicleExit,     TFMsg::AegisDeploy,   TFMsg::LoginRequest,
                          TFMsg::RegisterRequest, TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq,
                          TFMsg::EnterWorldReq,   TFMsg::RedeployRequest, TFMsg::OutfitRequest, TFMsg::AbilityRequest,
-                         TFMsg::GrenadeThrow})
+                         TFMsg::GrenadeThrow,    TFMsg::PingPlace})
         {
             nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                [](const Spark::Net::NetworkMessage&) {});
@@ -1040,6 +1045,7 @@ namespace Terrafront
         case TFMsg::OutfitRequest:   // Outfits lane: gated like the other gameplay ids
         case TFMsg::AbilityRequest:  // class-abilities lane (W9): gated
         case TFMsg::GrenadeThrow:    // grenades lane (W10): gated
+        case TFMsg::PingPlace:       // ping-system lane (W11): gated
             if (!m_enteredWorld.contains(sender))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -1102,6 +1108,11 @@ namespace Terrafront
         case TFMsg::GrenadeThrow:
             if (m_ctx->grenades)
                 m_ctx->grenades->ServerHandleThrowMsgRaw(sender, data, size);
+            break;
+        // ping-system lane (W11): TFPingSystem size-validates and rebroadcasts.
+        case TFMsg::PingPlace:
+            if (m_ctx->pings)
+                m_ctx->pings->ServerHandlePingMsgRaw(sender, data, size);
             break;
         // final-review #3: vehicle/squad verbs, now gated the same as the
         // other gameplay ids above.

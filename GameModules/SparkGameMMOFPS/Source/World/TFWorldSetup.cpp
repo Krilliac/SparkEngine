@@ -30,6 +30,8 @@
 #include "Game/TFGroundFx.h"
 #include "Game/TFImpactFx.h"      // impact-fx lane (W10)
 #include "Game/TFGrenadeSystem.h" // grenades lane (W10): replicated grenade fx
+#include "Game/TFPingSystem.h"    // ping-system lane (W11): world-space ping diamonds
+#include "Game/TFOpticsSystem.h"  // W11 weapon-optics: scoped FOV zoom + hold-breath sway
 #include "Game/TFViewModel.h"
 #include "Game/TFTransparentPass.h"
 #include "Utils/LogMacros.h"
@@ -401,7 +403,17 @@ namespace Terrafront
                 const XMFLOAT3 cp = m_camera->GetPosition();
                 const XMFLOAT3 cf = m_camera->GetForward();
                 const XMVECTOR eye = XMLoadFloat3(&cp);
-                const XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&cf));
+                XMVECTOR fwd = XMVector3Normalize(XMLoadFloat3(&cf));
+                // W11 weapon-optics: scoped hold-breath sway — a sub-0.1-deg VISUAL-ONLY
+                // rotation of the view basis. Fire rays are built from the unswayed camera
+                // pose (TFWeaponSystem::BuildViewRay), so no aim effect is encoded here.
+                float optSwayYaw = 0.0f, optSwayPitch = 0.0f;
+                TFOpticsSystem::Get().CameraSwayRad(optSwayYaw, optSwayPitch);
+                if (optSwayYaw != 0.0f || optSwayPitch != 0.0f)
+                {
+                    fwd = XMVector3Normalize(
+                        XMVector3TransformNormal(fwd, XMMatrixRotationRollPitchYaw(optSwayPitch, optSwayYaw, 0.0f)));
+                }
                 outView = XMMatrixLookAtLH(eye, XMVectorAdd(eye, fwd), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
 
                 float aspect = 16.0f / 9.0f;
@@ -411,7 +423,11 @@ namespace Terrafront
                     if (h > 0.0f)
                         aspect = static_cast<float>(gfx->GetWindowWidth()) / h;
                 }
-                outProj = XMMatrixPerspectiveFovLH(XM_PIDIV4 * 1.6f, aspect, 0.3f, 6000.0f);
+                // W11 weapon-optics: ADS FOV zoom (1x hip -> 0.9x red dot / 0.25x 4x scope,
+                // blended). TFNameplates mirrors this factor in its matching hardcoded
+                // projection — keep them in sync.
+                outProj = XMMatrixPerspectiveFovLH(XM_PIDIV4 * 1.6f * TFOpticsSystem::Get().CameraFovScale(), aspect,
+                                                   0.3f, 6000.0f);
                 return;
             }
         }
@@ -900,6 +916,11 @@ namespace Terrafront
             //     (Game/TFGrenadeSystem.h; restores blend/depth/texture state).
             if (m_ctx->HasLocalPlayer() && m_ctx->grenades)
                 m_ctx->grenades->RenderClientFx(gfx, view, proj);
+
+            // 5d) Pings (W11): squad-scoped tactical ping diamonds
+            //     (Game/TFPingSystem.h; restores blend/depth/texture state).
+            if (m_ctx->HasLocalPlayer() && m_ctx->pings)
+                m_ctx->pings->RenderClientFx(gfx, view, proj);
 
             // 6) Transparent surfaces (shield-wall energy planes + any queued
             //    alpha FX) — sorted back-to-front and drawn AFTER all opaque

@@ -124,6 +124,7 @@ add_executable(SparkTests
     TestAudioEngine.cpp
     TestSceneManager.cpp
     TestPhysicsSystem.cpp
+    TestPhysicsTeardownGuard.cpp
     TestGraphicsEngine.cpp
     TestProcessDrawListLinux.cpp
     TestRenderGraph.cpp
@@ -516,6 +517,8 @@ add_executable(SparkTests
     TestTFCaptureMath.cpp
     # W9 class-abilities wire freeze + shared jet-thrust math (header-only)
     TestTFAbilityWire.cpp
+    # W11 death-recap wire freeze + damage-log ring semantics (header-only)
+    TestTFDeathRecapWire.cpp
     # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp

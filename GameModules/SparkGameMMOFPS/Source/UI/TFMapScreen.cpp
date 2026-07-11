@@ -17,6 +17,7 @@
 #include "UI/TFMapScreen.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFPingSystem.h" // ping-system lane (W11): fullscreen-map ping badges
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFRedeployRules.h"
 #include "Game/TFSquadSystem.h"
@@ -544,6 +545,22 @@ namespace Terrafront
             }
             dl->AddPolyline(corners, 6, outline, ImDrawFlags_Closed, thick);
 
+            // W11 squad-v2 lane: squad waypoint hex icon (same green as the
+            // world beacon / nameplate squad accent).
+            if (m_ctx->squads)
+            {
+                float sqWp[3];
+                RegionId sqWpRegion = kInvalidRegion;
+                if (m_ctx->squads->GetLocalWaypoint(sqWp, &sqWpRegion) && sqWpRegion == rd.id)
+                {
+                    const float wr = m_hexSize * 0.30f;
+                    const ImVec2 dia[4] = {ImVec2(c.x, c.y - wr), ImVec2(c.x + wr, c.y), ImVec2(c.x, c.y + wr),
+                                           ImVec2(c.x - wr, c.y)};
+                    dl->AddConvexPolyFilled(dia, 4, IM_COL32(110, 235, 140, 220));
+                    dl->AddPolyline(dia, 4, IM_COL32(16, 40, 24, 230), ImDrawFlags_Closed, 2.0f);
+                }
+            }
+
             // W7: pending-redeploy target gets a gold spinner ring.
             if (m_redeployPending && rd.id == m_redeployTarget)
             {
@@ -613,6 +630,41 @@ namespace Terrafront
                 dl->AddPolyline(big, 6, ImGui::ColorConvertFloat4ToU32(ImVec4(0.55f, 0.95f, 0.55f, a)),
                                 ImDrawFlags_Closed, 2.0f);
             }
+        }
+
+        // Squad pings (W11 ping-system lane): diamond badge on the nearest
+        // region's hex (the axial hex map has no continuous world transform).
+        if (m_ctx->pings)
+        {
+            m_ctx->pings->ForEachActivePing(
+                [&](const TFPingView& pg)
+                {
+                    const RegionDef* best = nullptr;
+                    float bestD2 = 1.0e18f;
+                    for (const RegionDef& rd : regions)
+                    {
+                        const float dx = rd.centerX - pg.pos[0];
+                        const float dz = rd.centerZ - pg.pos[2];
+                        const float d2 = dx * dx + dz * dz;
+                        if (d2 < bestD2)
+                        {
+                            bestD2 = d2;
+                            best = &rd;
+                        }
+                    }
+                    if (!best)
+                        return;
+                    const ImVec2 c = screenOf(*best);
+                    const ImVec2 p(c.x + m_hexSize * 0.45f, c.y - m_hexSize * 0.45f);
+                    float col[4];
+                    PingColor(pg.type, col);
+                    const ImU32 u32 = ImGui::ColorConvertFloat4ToU32(ImVec4(col[0], col[1], col[2], 1.0f));
+                    const float s = std::max(4.0f, m_hexSize * 0.16f);
+                    const ImVec2 pts[4] = {ImVec2(p.x, p.y - s), ImVec2(p.x + s, p.y), ImVec2(p.x, p.y + s),
+                                           ImVec2(p.x - s, p.y)};
+                    dl->AddConvexPolyFilled(pts, 4, u32);
+                    dl->AddPolyline(pts, 4, IM_COL32(10, 12, 16, 230), ImDrawFlags_Closed, 1.5f);
+                });
         }
 
         // ---- title + legend -------------------------------------------------------
@@ -703,7 +755,16 @@ namespace Terrafront
         // ---- click ------------------------------------------------------------------
         if (hoveredDef && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered())
         {
-            if (dead)
+            // W11 squad-v2 lane: ctrl-click = squad waypoint seam. Leader sets /
+            // replaces (ctrl-click the waypoint's own hex clears); non-leaders
+            // send a request ping only the leader sees and can promote. Y is
+            // resolved to terrain height inside TFSquadSystem. Dead or alive;
+            // plain clicks below keep their W2/W7 meaning.
+            if (ImGui::GetIO().KeyCtrl && m_ctx->squads)
+            {
+                m_ctx->squads->UiMapWaypointClick(hoveredDef->centerX, hoveredDef->centerZ, hoveredDef->id);
+            }
+            else if (dead)
             {
                 if (rs && myFaction != FactionId::None && rs->CanSpawnAt(hoveredDef->id, myFaction))
                 {
