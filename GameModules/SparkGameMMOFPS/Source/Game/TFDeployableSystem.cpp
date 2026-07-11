@@ -17,12 +17,15 @@
 #include "Game/TFDamageSystem.h"
 #include "Game/TFDeployableTypes.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFTransparentPass.h"
 #include "Game/TFVehicleSystem.h"
 #include "Game/TFVisualUtils.h"
 #include "Net/TFRepProtocol.h"
 #include "World/TFWorldSetup.h"
 
 #include "Engine/ECS/Components.h"
+#include "Graphics/GraphicsEngine.h"
+#include "Graphics/Mesh.h"
 #include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
 
@@ -87,6 +90,71 @@ namespace Terrafront
             return dx * dx + dy * dy + dz * dz;
         }
 
+        // --- W8 render-transparency lane: shield-wall energy plane --------------
+        // Frame-local rectangle of the energy plane inside dep_shieldwall.obj
+        // (meters, unscaled): posts at x = +-1.45 (inner clearance ~1.32), emitter
+        // bar top at y ~0.34, post caps at y ~2.28. Multiplied by the SAME visual
+        // scale the frame renders with so the plane always fills the frame.
+        constexpr float kShieldPlaneHalfW = 1.30f;
+        constexpr float kShieldPlaneY0 = 0.36f;
+        constexpr float kShieldPlaneY1 = 2.18f;
+        constexpr float kShieldPlaneEmissive = 0.6f;    // unlit glow (MaterialProperties.z)
+        constexpr float kShieldPlaneAlphaMin = 0.28f;   // near-destroyed wall
+        constexpr float kShieldPlaneAlphaMax = 0.55f;   // full-health wall
+        constexpr float kShieldPlaneFactionMix = 0.65f; // white -> faction color blend
+        constexpr const char* kShieldPlaneTexture = "Assets/Textures/MMOFPS/fx/shield_plane.png";
+
+        /// Queue one shield wall's energy plane into the transparent pass (pure
+        /// presentation; drawn by TFTransparentPass::Flush after all opaque
+        /// passes — flush call site lives in TFWorldSetup::RenderWorld).
+        void SubmitShieldWallPlane(TFGameContext& ctx, const TFDeployableView& view, Mesh* plane,
+                                   ID3D11ShaderResourceView* srv)
+        {
+            using namespace DirectX;
+
+            // Match the rendered frame's scale exactly: bespoke data row first,
+            // else the aliased row * visualScaleMult — the same resolve order as
+            // AttachDeployableVisual (never stack both).
+            const DeployableVisualDef* dv = nullptr;
+            bool aliased = false;
+            if (ctx.data && ctx.data->IsLoaded())
+            {
+                dv = ctx.data->GetDeployableVisual(view.kind);
+                if (!dv)
+                {
+                    dv = ctx.data->GetDeployableVisual(TFDeployVisualAlias(view.kind));
+                    aliased = true;
+                }
+            }
+            if (!dv)
+                return; // no data tables -> no frame rendered -> no plane either
+            const TFDeployableSpec* spec = TFDeploySpecOf(view.kind);
+            const float sx = dv->scale[0] * ((aliased && spec) ? spec->visualScaleMult[0] : 1.0f);
+            const float sy = dv->scale[1] * ((aliased && spec) ? spec->visualScaleMult[1] : 1.0f);
+
+            const float w = 2.0f * kShieldPlaneHalfW * sx;
+            const float h = (kShieldPlaneY1 - kShieldPlaneY0) * sy;
+            const float cy = 0.5f * (kShieldPlaneY0 + kShieldPlaneY1) * sy;
+            // Same composition as Transform::GetLocalMatrix (S * R * T); yaw stays
+            // in RADIANS here (the ECS/PhysicsBody degree conversions are their
+            // consumers' concern, not this draw's).
+            const XMMATRIX world = XMMatrixScaling(w, h, 1.0f) * XMMatrixRotationY(view.yaw) *
+                                   XMMatrixTranslation(view.pos[0], view.pos[1] + cy, view.pos[2]);
+
+            // Faction-colored energy; alpha tracks health so a battered wall
+            // visibly thins out before it pops.
+            float fcol[4];
+            FactionColor(view.faction, fcol);
+            const float healthFrac =
+                (view.maxHealth > 0.0f) ? std::clamp(view.health / view.maxHealth, 0.0f, 1.0f) : 1.0f;
+            const float alpha = kShieldPlaneAlphaMin + (kShieldPlaneAlphaMax - kShieldPlaneAlphaMin) * healthFrac;
+            const XMFLOAT4 tint{1.0f + kShieldPlaneFactionMix * (fcol[0] - 1.0f),
+                                1.0f + kShieldPlaneFactionMix * (fcol[1] - 1.0f),
+                                1.0f + kShieldPlaneFactionMix * (fcol[2] - 1.0f), alpha};
+
+            TFTransparentPass::Get().Submit(plane, world, srv, tint, kShieldPlaneEmissive);
+        }
+
     } // namespace
 
     TFDeployableSystem::TFDeployableSystem() = default;
@@ -120,6 +188,33 @@ namespace Terrafront
             // client mirror: decay lifetimes locally between server keepalives
             for (auto& [entity, rec] : m_deployables)
                 rec.view.life = std::max(0.0f, rec.view.life - deltaTime);
+        }
+
+        // --- W8 render-transparency: queue shield-wall energy planes ------------
+        // Pure presentation, both roles (listen host draws its own authority set,
+        // pure clients their replicated mirror); headless (no device) skips, so
+        // nothing ever queues without a Flush. Lazy plane/SRV lookup only when a
+        // wall actually exists this frame.
+        if (GraphicsEngine* gfx = m_ctx->engine ? m_ctx->engine->GetGraphics() : nullptr;
+            gfx && gfx->GetDevice() && gfx->GetContext())
+        {
+            Mesh* plane = nullptr;
+            ID3D11ShaderResourceView* srv = nullptr;
+            bool resolved = false;
+            for (const auto& [entity, rec] : m_deployables)
+            {
+                if (rec.view.kind != kDeployShieldWall)
+                    continue;
+                if (!resolved)
+                {
+                    resolved = true;
+                    plane = TFTransparentPass::Get().GetUnitPlane(*gfx);
+                    srv = gfx->GetOrLoadTextureSRV(kShieldPlaneTexture);
+                }
+                if (!plane)
+                    break; // quad creation failed — visual-only, skip quietly
+                SubmitShieldWallPlane(*m_ctx, rec.view, plane, srv);
+            }
         }
 
 #ifdef ENABLE_NETWORKING
@@ -294,6 +389,16 @@ namespace Terrafront
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] deployable %u (kind %u) placed by player %u at (%.0f %.0f %.0f)",
                        view.entity, static_cast<unsigned>(kind), player, view.pos[0], view.pos[1], view.pos[2]);
+
+        // W8: server-side placement bus event (synchronous, authority-only by
+        // construction -- this whole function early-outs on non-authority).
+        // Fired LAST so subscribers observe the fully registered deployable
+        // (m_deployables/m_ownerIndex updated, Create already replicated), and
+        // so a re-entrant subscriber chain (e.g. TFDirectiveSystem tier payout
+        // -> ServerAwardXP -> EvXPAwarded) runs after all state changes here.
+        if (m_events)
+            m_events->Fire(EvDeployablePlaced{view.entity, view.kind, view.owner, view.faction});
+
         return TFDeployResult::Ok;
     }
 

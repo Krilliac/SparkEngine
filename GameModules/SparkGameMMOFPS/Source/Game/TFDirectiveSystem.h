@@ -19,10 +19,14 @@
  *                            codes 4/5/6 (per-player capture credit already
  *                            flows through TFRegionSystem::AwardCaptureXP ->
  *                            ServerAwardXP, so no new event is needed)
- *    Deployable placements have NO bus event yet, so DeployItems progress
- *    diff-polls TFDeployableSystem::ForEachDeployable (0.5 s cadence, first
- *    poll seeds the baseline without crediting). If a later wave adds an
- *    EvDeployablePlaced event, swap the poll for a subscription.
+ *      EvDeployablePlaced -> DeployItems (W8: fired by TFDeployableSystem's
+ *                            ServerTryPlaceDeployable; credits immediately and
+ *                            marks the entity known). The original 0.5 s
+ *                            ForEachDeployable diff-poll survives as FALLBACK
+ *                            for deployables that appear without the event
+ *                            (first poll still seeds the baseline without
+ *                            crediting; event-credited entities are already
+ *                            in the known set, so the poll never double-pays).
  *  - Tier payouts go through TFProgressionSystem's REAL API only:
  *    ServerAwardXP(player, tier.xp, kXPReasonDirective) — which also pushes
  *    the existing TF_XPEvent toast to the owning client — plus
@@ -96,6 +100,7 @@ namespace Terrafront
         void OnPlayerKilled(const EvPlayerKilled& ev);
         void OnVehicleDestroyed(const EvVehicleDestroyed& ev);
         void OnXPAwarded(const EvXPAwarded& ev);
+        void OnDeployablePlaced(const EvDeployablePlaced& ev); ///< W8: primary DeployItems source
 
         /// Add `amount` to every directive of `kind` whose param accepts `value`,
         /// paying any newly crossed tiers.
@@ -112,7 +117,8 @@ namespace Terrafront
 
         std::unordered_map<PlayerId, Rec> m_players;
 
-        // DeployItems diff-poll state (no placement bus event exists yet).
+        // DeployItems known-entity set: fed by EvDeployablePlaced (primary, W8)
+        // and by the diff-poll fallback sweep.
         std::unordered_set<EntityId> m_knownDeployables;
         float m_deployPollAccum{0.0f};
         bool m_deploySeeded{false};

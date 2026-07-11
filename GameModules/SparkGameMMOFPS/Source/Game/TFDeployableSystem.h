@@ -55,6 +55,15 @@
  *    W3 one-per-kind rule) + a total cap that REFUSES (LimitReached).
  *  - New kinds ride the existing 0x54FC-0x54FE wire unchanged (`kind` is a
  *    uint8_t on the wire); no protocol additions.
+ *
+ * W8 combat-features (this lane):
+ *  - EvDeployablePlaced (Core/TFEvents.h) fired at the end of a successful
+ *    ServerTryPlaceDeployable (server-side only, after all state changes +
+ *    Create replication). TFDirectiveSystem subscribes for DeployItems credit;
+ *    its 0.5 s diff-poll survives as the fallback path.
+ *  - Killfeed naming: TickTurret / TickAVTurret lazily resolve the additive
+ *    weapons.json rows "fab_turret" / "av_turret" (ids 51/52), so turret kills
+ *    show a proper weapon name instead of "-".
  */
 #pragma once
 

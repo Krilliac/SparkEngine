@@ -2,10 +2,12 @@
  * @file TFDirectiveSystem.cpp
  * @brief Directive progress tracking + tiered payouts (see header for design).
  *
- * Event flow: EvPlayerKilled / EvVehicleDestroyed / EvXPAwarded(capture) ->
- * AddProgress -> tier crossings -> TFProgressionSystem::ServerAwardXP (which
- * fires the client TF_XPEvent toast for free) + ServerGrantFlux. DeployItems
- * progress diff-polls TFDeployableSystem (no placement event on the bus yet).
+ * Event flow: EvPlayerKilled / EvVehicleDestroyed / EvXPAwarded(capture) /
+ * EvDeployablePlaced (W8) -> AddProgress -> tier crossings ->
+ * TFProgressionSystem::ServerAwardXP (which fires the client TF_XPEvent toast
+ * for free) + ServerGrantFlux. The DeployItems diff-poll over
+ * TFDeployableSystem survives as a fallback for placements that appear
+ * without the event; the shared known-entity set prevents double credit.
  */
 #include "Game/TFDirectiveSystem.h"
 
@@ -54,6 +56,7 @@ namespace Terrafront
         events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled& ev) { OnPlayerKilled(ev); });
         events.Subscribe<EvVehicleDestroyed>([this](const EvVehicleDestroyed& ev) { OnVehicleDestroyed(ev); });
         events.Subscribe<EvXPAwarded>([this](const EvXPAwarded& ev) { OnXPAwarded(ev); });
+        events.Subscribe<EvDeployablePlaced>([this](const EvDeployablePlaced& ev) { OnDeployablePlaced(ev); });
 
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFDirectiveSystem initialized (%zu directives, %zu tiers each)",
@@ -172,6 +175,21 @@ namespace Terrafront
         // participation (alive, right faction, inside the radius) — one award
         // per player per flip, so each award is exactly one capture credit.
         AddProgress(ev.player, TFDirectiveKind::CaptureRegions, 0, 1);
+    }
+
+    void TFDirectiveSystem::OnDeployablePlaced(const EvDeployablePlaced& ev)
+    {
+        if (!m_initialized || !m_ctx || !m_ctx->IsAuthority())
+            return;
+
+        // Mark the entity known FIRST so the fallback diff-poll below can never
+        // double-credit this placement, then credit immediately -- no 0.5 s poll
+        // lag, and no missed credit when a deployable is placed and destroyed
+        // inside a single poll window. AddProgress may re-enter the bus via
+        // GrantTier -> ServerAwardXP -> EvXPAwarded; OnXPAwarded's reason filter
+        // keeps that safe (same contract as the other handlers).
+        m_knownDeployables.insert(ev.entity);
+        AddProgress(ev.owner, TFDirectiveKind::DeployItems, static_cast<uint8_t>(ev.kind), 1);
     }
 
     void TFDirectiveSystem::PollDeployables(float dt)
