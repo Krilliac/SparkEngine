@@ -144,6 +144,8 @@ namespace Terrafront
     class TFSocialPanel;
     // class-abilities lane (additive): Game/TFAbilitySystem.h.
     class TFAbilitySystem;
+    // grenades lane (additive): Game/TFGrenadeSystem.h.
+    class TFGrenadeSystem;
 
     struct TFGameContext
     {
@@ -179,6 +181,8 @@ namespace Terrafront
 
         // class-abilities lane (additive): ability activation/cooldowns + effects.
         TFAbilitySystem* abilities = nullptr;
+        // grenades lane (additive): throw validation/simulation + HUD count.
+        TFGrenadeSystem* grenades = nullptr;
 
         // W5 onboarding (Task 4, additive): null until Task 6 constructs + publishes
         // them in Main.cpp boot order. Net handlers guard every use with `if

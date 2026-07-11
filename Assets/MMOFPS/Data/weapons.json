@@ -778,6 +778,33 @@
       "model": "",
       "audioFire": "Audio/MMOFPS/weapons/turret_fire.wav",
       "audioReload": ""
+    },
+    {
+      "id": 53,
+      "key": "frag_grenade",
+      "name": "Frag Grenade",
+      "faction": "ALL",
+      "slot": "tool",
+      "kind": "projectile",
+      "damage": 500,
+      "headshotMult": 1.0,
+      "rofRpm": 60,
+      "magSize": 1,
+      "reserve": 0,
+      "reloadSec": 1.0,
+      "adsSec": 0,
+      "falloffStartM": 999,
+      "falloffEndM": 999,
+      "minDamage": 0,
+      "projSpeed": 17,
+      "gravity": 1.0,
+      "pellets": 1,
+      "splashRadiusM": 6.0,
+      "splashDamage": 500,
+      "vsVehicleMult": 0.5,
+      "model": "",
+      "audioFire": "",
+      "audioReload": ""
     }
   ]
 }

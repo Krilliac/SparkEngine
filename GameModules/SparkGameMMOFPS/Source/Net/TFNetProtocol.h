@@ -85,6 +85,12 @@ namespace Terrafront
         AbilityRequest = 0x5458, // C->S  TF_AbilityRequest (activate / toggle-off)
         AbilityState = 0x5459,   // S->C  TF_AbilityState (self detail + visible-pawn broadcast)
 
+        // W10 grenades block (reserved 0x5464-0x5467). S->C fx ids 0x5465-0x5467
+        // + packed structs + static_assert layout guards live in
+        // Game/TFGrenadeSystem.h (its kTFMsgGrenade* constants name the same
+        // wire values so the lane compiles standalone).
+        GrenadeThrow = 0x5464, // C->S  TF_GrenadeThrow (server validates + simulates)
+
         // 0x5440-0x5447: chat-social block — ids + structs in
         // Net/TFSocialProtocol.h (TFRepProtocol precedent; not enumerators).
         // 0x5448-0x544B: turret-aim block — id + struct in
@@ -93,6 +99,10 @@ namespace Terrafront
         // 0x544C-0x544F: directives-ui block — ids + structs in
         // UI/TFDirectivePanel.h. 0x544C = C->S DirectiveStatusReq,
         // 0x544D = S->C TF_DirectiveStatus; 0x544E-0x544F free.
+        // 0x5460-0x5463: medals-scoreboard block — ids + structs in
+        // Game/TFMedalSystem.h (TFRepProtocol precedent; not enumerators).
+        // 0x5460 = S->C TF_MedalAward; 0x5461 = S->C TF_ScoreUpdate;
+        // 0x5462-0x5463 free.
     };
 
 #pragma pack(push, 1)

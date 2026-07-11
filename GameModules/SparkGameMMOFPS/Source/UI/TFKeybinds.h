@@ -41,6 +41,7 @@ namespace Terrafront::TFKeys
         FocusChat,        ///< focus the chat input line (TFHUD; chat-lane hook)
         CloseOverlay,     ///< close the topmost fullscreen overlay (map/chat)
         ToggleDirectives, ///< toggle the directives panel (TFDirectivePanel, W8 ui-polish)
+        ThrowGrenade,     ///< throw a frag grenade (TFGrenadeSystem, W10)
         COUNT
     };
 
@@ -57,6 +58,7 @@ namespace Terrafront::TFKeys
             kVkEnter,  // FocusChat
             kVkEscape, // CloseOverlay
             'J',       // ToggleDirectives (W8 ui-polish)
+            'G',       // ThrowGrenade (W10 grenades)
         };
     } // namespace Detail
 
