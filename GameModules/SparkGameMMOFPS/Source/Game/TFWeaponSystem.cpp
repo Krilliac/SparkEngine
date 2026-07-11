@@ -127,6 +127,16 @@ namespace Terrafront
         return m.rfind("Assets/", 0) == 0 ? m : "Assets/" + m;
     }
 
+    const WeaponDef* TFWeaponSystem::ActiveWeaponDefLocal() const
+    {
+        // W11 weapon-optics lane: presentation-side read of the active slot's
+        // resolved def (see the header note; never fed back into gameplay).
+        if (m_localPawn == kNoPawnEntity)
+            return nullptr;
+        const SlotState& slot = m_slots[m_activeSlot];
+        return slot.IsValid() ? &slot.def : nullptr;
+    }
+
     // ---------------------------------------------------------------------------
     // Frozen API: client fire
     // ---------------------------------------------------------------------------

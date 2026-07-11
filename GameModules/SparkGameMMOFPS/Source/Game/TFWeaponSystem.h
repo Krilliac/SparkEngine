@@ -62,6 +62,19 @@ namespace Terrafront
         /// first-person viewmodel drawn at the camera in TFWorldSetup::RenderWorld.
         std::string ActiveWeaponModel() const;
 
+        // --- W11 weapon-optics additions (client presentation reads) ---
+
+        /// Client: resolved def (faction traits applied) of the active slot, or
+        /// nullptr when the local player has no pawn/valid slot. The optics lane
+        /// (Game/TFOpticsSystem) reads key/slot/adsSec for sight presentation —
+        /// spread/recoil/damage stay server-validated data truth. Pointer is
+        /// into slot state: do not hold across frames.
+        const WeaponDef* ActiveWeaponDefLocal() const;
+
+        /// Client: local aim-down-sights state (RMB; the same flag the spread
+        /// pick in ClientTriggerFire uses). Presentation consumers only.
+        bool IsAdsLocal() const { return m_ads; }
+
         // --- W8 audio-polish additions (remote/distant gunfire) ---
 
         /// Local-audio seam for OTHER shooters: called from ServerHandleFire for
@@ -134,6 +147,10 @@ namespace Terrafront
             // for this shooter (rate cap kTFRemoteFireFxMinIntervalSec; only
             // advanced when a client in range received one).
             double lastFireFxSent = -1.0e9;
+            // W11 impact-broadcast: last 0x54F5 TF_ImpactFx actually delivered
+            // for this shooter (rate cap kTFImpactFxMinIntervalSec; same
+            // advance-on-delivery semantics as lastFireFxSent).
+            double lastImpactFxSent = -1.0e9;
         };
 
         // Server-simulated projectile (rockets, energy bolts, sniper rounds).
@@ -200,6 +217,22 @@ namespace Terrafront
         // TFAudioAmbience::ClientOnRemoteFire (flash + distant tail + heat).
         void ServerBroadcastRemoteFireFx(ShooterState& st, PlayerId shooter, EntityId shooterPawn, WeaponId weapon,
                                          const float muzzle[3], const float dir[3]);
+        // W11 impact-broadcast (TFWeaponServer.cpp impact broadcast section):
+        // deliver the AUTHORITATIVE impact point of a validated shot — 0x54F5
+        // TF_ImpactFx (Net/TFFireFxProtocol.h) to clients with a pawn within
+        // kTFImpactFxRangeM of the point, plus the in-process listen-host/
+        // standalone route straight into TFImpactFx — always EXCEPT the
+        // shooter (their puff is the immediate OnLocalShot prediction).
+        // Rate-capped per shooter via st.lastImpactFxSent. `surface` is a
+        // TFImpactSurface value as uint8_t.
+        void ServerBroadcastImpactFx(PlayerId shooter, const float point[3], uint8_t surface);
+        /// True when the shooter's 0x54F5 rate-cap window is open (cheap
+        /// pre-gate so miss-path terrain marches are skipped while capped).
+        bool ImpactFxCapOpen(PlayerId shooter) const;
+        /// Refined terrain-impact distance along the ray (TerrainBlocked's
+        /// march + bisection), or a negative value when the ray stays clear
+        /// within `dist`.
+        float TerrainHitT(const float origin[3], const float dir[3], float dist) const;
 
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};

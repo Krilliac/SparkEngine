@@ -9,6 +9,7 @@
 #include "Game/TFViewModel.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFOpticsSystem.h" // W11 weapon-optics lane: ADS sights
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFVehicleSystem.h"
 #include "Game/TFWeaponSystem.h"
@@ -305,6 +306,9 @@ namespace Terrafront
         m_barrelFlex = SpringVal{};
         m_pendingFireKick = 0.0f;
         m_hasPrevVel = false;
+
+        // W11 weapon-optics: death / vehicle entry / holster snap the zoom out.
+        TFOpticsSystem::Get().NotifyInactive();
     }
 
     Mesh* TFViewModel::GetOrLoadWeaponMesh(GraphicsEngine* gfx, const std::string& assetPath)
@@ -433,6 +437,17 @@ namespace Terrafront
         m_lastRealTime = nowReal;
         dt = std::clamp(dt, 0.0f, kMaxFrameDtSec);
         m_clock += dt;
+
+        // ------------------------------------------------------------ optics
+        // W11 weapon-optics lane: ADS sight state (blend / B-key cycle / sway
+        // clocks). This call site already guarantees the gates the optics need
+        // (gfx present, local pawn alive, unseated, weapon in hand). FOV zoom +
+        // hold-breath sway are consumed by TFWorldSetup::ComputeViewProj, the
+        // reticle overlays draw later in the OnImGui phase (TFNameplates hook);
+        // here we only need to know whether the 4x scope hides the viewmodel.
+        TFOpticsSystem& optics = TFOpticsSystem::Get();
+        optics.Update(ctx, dt);
+        const bool hideForScope = optics.HideViewModel();
 
         // ------------------------------------------------------------ springs
         // View-turn lag: the weapon trails camera rotation slightly.
@@ -581,7 +596,11 @@ namespace Terrafront
         gfx->SetBasicTexture(nullptr); // arms/charm/muzzle below are solid color
 
         // ------------------------------------------------------------ weapon
-        if (Mesh* vm = GetOrLoadWeaponMesh(gfx, vmPath); vm && vm->GetVertexCount() > 0 && vm->GetIndexCount() > 0)
+        // Fully scoped with the 4x optic: the weapon/arms/charm/flash draws are
+        // skipped (scope overlay owns the screen) but every spring/chain above
+        // kept simulating, so dropping out of ADS never pops stale motion.
+        if (Mesh* vm = GetOrLoadWeaponMesh(gfx, vmPath);
+            !hideForScope && vm && vm->GetVertexCount() > 0 && vm->GetIndexCount() > 0)
         {
             // Recenter/scale/orient exactly as the old pass-3 draw, then follow the
             // animated grip frame.
@@ -627,7 +646,7 @@ namespace Terrafront
             m_cube->Initialize(gfx->GetDevice(), gfx->GetContext());
             m_cube->CreateCube(1.0f);
         }
-        if (m_cube && m_cube->GetIndexCount() > 0)
+        if (m_cube && m_cube->GetIndexCount() > 0 && !hideForScope)
         {
             float fcol[4];
             FactionColor(pawn.faction, fcol);
@@ -710,7 +729,7 @@ namespace Terrafront
         // flash lifetime. Additive + fully emissive so it reads as a burst of
         // light. Skipped for melee. The world-space SpawnMuzzleFx flash stays
         // eye-anchored for other players.
-        if (m_clock < m_flashUntil && slot != "melee")
+        if (m_clock < m_flashUntil && slot != "melee" && !hideForScope)
         {
             if (!m_quad)
             {

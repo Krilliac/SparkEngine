@@ -12,6 +12,7 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFAbilitySystem.h"
+#include "Game/TFOpticsSystem.h" // W11: mirror the scoped-FOV zoom in the plate projection
 #include "Game/TFOutfitSystem.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFSocialSystem.h"
@@ -216,6 +217,14 @@ namespace Terrafront
         if (!m_ctx->players->GetPawnByPlayer(m_ctx->localPlayer, me) || !me.alive)
             return; // dead: no first-person camera to project through
 
+        // W11 weapon-optics: reticle/scope overlays + sight-cycle toast ride
+        // this per-frame foreground pass — the gates above (in-world, alive,
+        // no fullscreen UI) are exactly the ones a scope overlay wants, and
+        // this is the module's only always-on OnImGui hook outside contended
+        // files. Drawn before the plates so plates stay readable over the
+        // scope vignette.
+        TFOpticsSystem::Get().RenderOverlay();
+
         using namespace DirectX;
         const XMFLOAT3 cp = cam->GetPosition();
         const XMFLOAT3 cf = cam->GetForward();
@@ -233,7 +242,12 @@ namespace Terrafront
         const XMVECTOR eye = XMLoadFloat3(&cp);
         const XMVECTOR fwd = XMVectorSet(fx, fy, fz, 0.0f);
         const XMMATRIX view = XMMatrixLookAtLH(eye, XMVectorAdd(eye, fwd), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
-        const XMMATRIX proj = XMMatrixPerspectiveFovLH(XM_PIDIV4 * 1.6f, vp->Size.x / vp->Size.y, 0.3f, 6000.0f);
+        // W11 weapon-optics: multiply by the same CameraFovScale the render
+        // projection in TFWorldSetup::ComputeViewProj uses, so plates stay
+        // glued to pawns while ADS-zoomed (this matrix must mirror it exactly;
+        // the sub-0.1-deg scoped sway is deliberately ignored — cosmetic).
+        const XMMATRIX proj = XMMatrixPerspectiveFovLH(XM_PIDIV4 * 1.6f * TFOpticsSystem::Get().CameraFovScale(),
+                                                       vp->Size.x / vp->Size.y, 0.3f, 6000.0f);
 
         ImDrawList* dl = ImGui::GetForegroundDrawList();
         const FactionId myFaction = m_ctx->localFaction;
