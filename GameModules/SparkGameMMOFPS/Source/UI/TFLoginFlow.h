@@ -22,103 +22,134 @@
  * NOTE: context wiring (the loginFlow pointer in TFGameContext, gating the
  * spawn screen behind InWorld, boot construction in Main.cpp) is Task 6 —
  * done; see DESIGN.md "W5 — Onboarding".
+ *
+ * W11 server-browser lane: TFLoginFlow additionally OWNS the TFLanDiscovery
+ * instance (Game/TFLanDiscovery.h) — Main.cpp calls m_loginFlow->Update on
+ * every role (dedicated servers included), so this one member drives BOTH the
+ * server-side LAN beacon (self-arming off ctx.role after tf_host/tf_dedicated)
+ * and the client-side scanner (armed only while the login screen renders, so
+ * headless test runs never bind UDP 27025). The login screen gains a 'LAN
+ * SERVERS' list whose Join button runs the existing tf_connect path
+ * (TFWorldSetup::Connect) against the beacon's source IP + advertised port.
  */
 #pragma once
 
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
+#include "Game/TFLanDiscovery.h"
 #include "Net/TFNetProtocol.h"
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace Terrafront {
+namespace Terrafront
+{
 
-enum class TFFlowState : uint8_t {
-    Login,
-    Register,
-    CharSelect,
-    CharCreate,
-    EnteringWorld,
-    InWorld,
-};
+    enum class TFFlowState : uint8_t
+    {
+        Login,
+        Register,
+        CharSelect,
+        CharCreate,
+        EnteringWorld,
+        InWorld,
+    };
 
-class TFLoginFlow {
-  public:
-    TFLoginFlow();
-    ~TFLoginFlow();
+    class TFLoginFlow
+    {
+      public:
+        TFLoginFlow();
+        ~TFLoginFlow();
 
-    bool Initialize(TFGameContext& ctx, TFEventBus& events);
-    void Update(float deltaTime);
-    void Shutdown();
-    void RenderDebugUI();
-    void RenderUI();
+        bool Initialize(TFGameContext& ctx, TFEventBus& events);
+        void Update(float deltaTime);
+        void Shutdown();
+        void RenderDebugUI();
+        void RenderUI();
 
-    bool ToggleDebugUI() { return m_showDebug = !m_showDebug; }
+        bool ToggleDebugUI() { return m_showDebug = !m_showDebug; }
 
-    // --- W5 cross-agent contract (Task 6 gates the rest of the game UI on
-    // this) ---
-    bool        IsOpen() const { return m_state != TFFlowState::InWorld; }
-    TFFlowState State() const { return m_state; }
+        // --- W5 cross-agent contract (Task 6 gates the rest of the game UI on
+        // this) ---
+        bool IsOpen() const { return m_state != TFFlowState::InWorld; }
+        TFFlowState State() const { return m_state; }
 
-    // --- reply sinks: Task 6 wires TFClientNet's onboarding handlers to call
-    // these directly once `m_ctx->loginFlow` exists. Until then, Update()'s
-    // getter poll calls the same methods internally so the flow still works
-    // standalone/loopback pre-Task-6. ---
-    void OnLoginReply(bool ok, uint8_t err, uint64_t accountId);
-    void OnRegisterReply(bool ok, uint8_t err);
-    void OnCharList(const TF_CharListReply& reply);
-    void OnCharOpReply(bool ok, uint8_t err, uint64_t charId);
-    void OnEnteredWorld();
+        // --- reply sinks: Task 6 wires TFClientNet's onboarding handlers to call
+        // these directly once `m_ctx->loginFlow` exists. Until then, Update()'s
+        // getter poll calls the same methods internally so the flow still works
+        // standalone/loopback pre-Task-6. ---
+        void OnLoginReply(bool ok, uint8_t err, uint64_t accountId);
+        void OnRegisterReply(bool ok, uint8_t err);
+        void OnCharList(const TF_CharListReply& reply);
+        void OnCharOpReply(bool ok, uint8_t err, uint64_t charId);
+        void OnEnteredWorld();
 
-  private:
-    // ImGui internals (stubbed out when !SPARK_HAS_IMGUI, TFSpawnScreen/TFHUD
-    // pattern).
-    void RenderLoginScreen(float panelX, float panelY, float panelW, float panelH);
-    void RenderCharacterSelectScreen(float panelX, float panelY, float panelW, float panelH);
-    void RenderCharacterCreateScreen(float panelX, float panelY, float panelW, float panelH);
-    void RenderEnteringWorldScreen(float panelX, float panelY, float panelW, float panelH);
+      private:
+        // ImGui internals (stubbed out when !SPARK_HAS_IMGUI, TFSpawnScreen/TFHUD
+        // pattern).
+        void RenderLoginScreen(float panelX, float panelY, float panelW, float panelH);
+        // W11 server-browser lane: the LAN SERVERS list inside the login screen.
+        void RenderLanServerList(float x, float y, float w, float h, bool blocked);
+        void RenderCharacterSelectScreen(float panelX, float panelY, float panelW, float panelH);
+        void RenderCharacterCreateScreen(float panelX, float panelY, float panelW, float panelH);
+        void RenderEnteringWorldScreen(float panelX, float panelY, float panelW, float panelH);
 
-    // Sends
-    void SendLogin();
-    void SendRegister();
-    void SendCharList();
-    void SendCharCreate();
-    void SendCharDelete(uint64_t charId);
-    void SendEnterWorld(uint64_t charId);
+        // W11 server-browser lane: run the existing tf_connect path
+        // (TFWorldSetup::Connect) against a discovered LAN server.
+        void JoinLanServer(const std::string& ip, uint16_t port);
 
-    TFGameContext* m_ctx{nullptr};
-    TFEventBus*    m_events{nullptr};
-    bool           m_initialized{false};
-    bool           m_showDebug{false};
+        // Sends
+        void SendLogin();
+        void SendRegister();
+        void SendCharList();
+        void SendCharCreate();
+        void SendCharDelete(uint64_t charId);
+        void SendEnterWorld(uint64_t charId);
 
-    TFFlowState m_state{TFFlowState::Login};
-    std::string m_error;
+        TFGameContext* m_ctx{nullptr};
+        TFEventBus* m_events{nullptr};
+        bool m_initialized{false};
+        bool m_showDebug{false};
 
-    // Login / Register form (sizes mirror TF_AuthRequest's wire fields).
-    char m_username[32]{};
-    char m_password[64]{};
+        TFFlowState m_state{TFFlowState::Login};
+        std::string m_error;
 
-    // Session
-    uint64_t m_accountId{0};
+        // Login / Register form (sizes mirror TF_AuthRequest's wire fields).
+        char m_username[32]{};
+        char m_password[64]{};
 
-    // Character select
-    std::vector<TF_CharBrief> m_chars;
-    int                       m_selectedIdx{-1};
+        // Session
+        uint64_t m_accountId{0};
 
-    // Character create (name size mirrors TF_CharCreateRequest::name).
-    char      m_createName[24]{};
-    FactionId m_createFaction{FactionId::MRA};
+        // Character select
+        std::vector<TF_CharBrief> m_chars;
+        int m_selectedIdx{-1};
 
-    // Entering-world splash
-    float m_enterTimer{0.0f};
+        // Character create (name size mirrors TF_CharCreateRequest::name).
+        char m_createName[24]{};
+        FactionId m_createFaction{FactionId::MRA};
 
-    // Pending-request tracking: disables the relevant buttons while a reply
-    // is in flight. Cleared by the reply sinks themselves (Task 6 — TFClientNet
-    // forwards replies directly instead of the old getter-poll fallback).
-    enum class PendingOp : uint8_t { None, Login, Register, CharList, CharCreate, CharDelete };
-    PendingOp m_pending{PendingOp::None};
-};
+        // Entering-world splash
+        float m_enterTimer{0.0f};
+
+        // Pending-request tracking: disables the relevant buttons while a reply
+        // is in flight. Cleared by the reply sinks themselves (Task 6 — TFClientNet
+        // forwards replies directly instead of the old getter-poll fallback).
+        enum class PendingOp : uint8_t
+        {
+            None,
+            Login,
+            Register,
+            CharList,
+            CharCreate,
+            CharDelete
+        };
+        PendingOp m_pending{PendingOp::None};
+
+        // W11 server-browser lane: LAN beacon (server) + scanner (client), owned
+        // here because this Update runs on every role — see the header comment.
+        TFLanDiscovery m_lan;
+    };
 
 } // namespace Terrafront
