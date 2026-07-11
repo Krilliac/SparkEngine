@@ -942,6 +942,8 @@ std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& 
             {
                 discovered.isLoaded = true;
                 discovered.name = loaded.name;
+                discovered.kind = loaded.kind;
+                discovered.kindKnown = true;
                 if (loaded.instance)
                 {
                     auto info = loaded.instance->GetModuleInfo();
@@ -969,6 +971,8 @@ std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& 
                         auto info = mod->GetModuleInfo();
                         discovered.name = info.name;
                         discovered.version = info.version;
+                        discovered.kind = info.kind;
+                        discovered.kindKnown = true;
                         destroyFn(mod);
                     }
                 }
@@ -989,6 +993,8 @@ std::vector<DiscoveredModule> ModuleManager::DiscoverModules(const std::string& 
                         auto info = mod->GetModuleInfo();
                         discovered.name = info.name;
                         discovered.version = info.version;
+                        discovered.kind = info.kind;
+                        discovered.kindKnown = true;
                         destroyFn(mod);
                     }
                 }
@@ -1014,6 +1020,8 @@ std::vector<DiscoveredModule> ModuleManager::GetLoadedModuleInfo() const
         info.name = entry.name;
         info.path = entry.path;
         info.isLoaded = true;
+        info.kind = entry.kind;
+        info.kindKnown = true;
 
         if (entry.instance)
         {

@@ -431,10 +431,11 @@ namespace SparkEditor
     // ============================================================================
     // World-backed mode (Unit C2)
     //
-    // Undo/redo for these ECS operations is deferred (out of scope for C2) —
-    // unlike the legacy SceneFile path above, these mutate m_world directly
+    // Undo/redo for entity create/delete is deferred (out of scope for C2) —
+    // unlike the legacy SceneFile path above, those mutate m_world directly
     // without going through CommandHistory. Rename is also deferred (skipped
-    // to keep C2 to create/delete/select).
+    // to keep C2 to create/delete/select). Reparenting (W9) IS undoable: it
+    // routes through CommandHistory via ReparentWorldEntity.
     // ============================================================================
 
     void HierarchyPanel::RenderWorldToolbar()
@@ -473,6 +474,50 @@ namespace SparkEditor
             ImGui::EndDisabled();
     }
 
+    namespace
+    {
+        /// Drag-and-drop payload type for World-backed hierarchy rows (raw uint32 entity id).
+        constexpr const char* kWorldEntityPayload = "SPARK_WORLD_ENTITY";
+
+        /// Relink an entity under a new parent (or entt::null to unparent),
+        /// maintaining both Transform.parent and the parents' children vectors.
+        /// Adds a Transform to child/new parent if missing. No-ops on invalid
+        /// entities so stale undo/redo lambdas are safe after deletions.
+        void SetWorldEntityParent(::World* world, ::EntityID child, ::EntityID newParent)
+        {
+            if (!world)
+                return;
+            entt::registry& registry = world->GetRegistry();
+            if (!registry.valid(child))
+                return;
+
+            ::Transform* childT = world->GetComponent<::Transform>(child);
+            if (!childT)
+                childT = &world->AddComponent<::Transform>(child);
+
+            // Detach from the current parent's children list.
+            if (childT->parent != entt::null && registry.valid(childT->parent))
+            {
+                if (::Transform* oldPT = world->GetComponent<::Transform>(childT->parent))
+                {
+                    auto& kids = oldPT->children;
+                    kids.erase(std::remove(kids.begin(), kids.end(), child), kids.end());
+                }
+            }
+            childT->parent = entt::null;
+
+            // Attach to the new parent (if any).
+            if (newParent != entt::null && registry.valid(newParent))
+            {
+                ::Transform* newPT = world->GetComponent<::Transform>(newParent);
+                if (!newPT)
+                    newPT = &world->AddComponent<::Transform>(newParent);
+                childT->parent = newParent;
+                newPT->children.push_back(child);
+            }
+        }
+    } // namespace
+
     void HierarchyPanel::RenderWorldHierarchy()
     {
         ImGui::BeginChild("##WorldHierarchyTree");
@@ -484,29 +529,178 @@ namespace SparkEditor
             return;
         }
 
-        ::EntityID selected = m_selectionSink ? m_selectionSink->GetSelectedEntity() : entt::null;
-
         entt::registry& registry = m_world->GetRegistry();
         // Non-const overload of entt::registry::storage<Type>() returns a
         // reference (the const overload used by ReflectedSceneSerializer
         // returns a pointer) — use '.' here, not '->'.
+        // Roots: entities with no Transform, or whose Transform has no (valid)
+        // parent. Children are rendered recursively by RenderWorldEntityNode.
         for (auto&& [e] : registry.storage<entt::entity>().each())
         {
-            const ::NameComponent* nc = m_world->GetComponent<::NameComponent>(e);
-            const char* label = (nc && !nc->name.empty()) ? nc->name.c_str() : "Entity";
-
-            ImGui::PushID(static_cast<int>(static_cast<uint32_t>(e)));
-            if (ImGui::Selectable(label, e == selected))
+            const ::Transform* t = m_world->GetComponent<::Transform>(e);
+            const bool isRoot = !t || t->parent == entt::null || !registry.valid(t->parent);
+            if (isRoot)
             {
-                if (m_selectionSink)
-                {
-                    m_selectionSink->SetSelectedEntity(e);
-                }
+                RenderWorldEntityNode(e);
             }
-            ImGui::PopID();
+        }
+
+        // Remaining empty area doubles as an "unparent" drop target: dragging
+        // a row here makes it a root entity.
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        avail.x = avail.x < 1.0f ? 1.0f : avail.x;
+        avail.y = avail.y < 24.0f ? 24.0f : avail.y;
+        ImGui::Dummy(avail);
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kWorldEntityPayload))
+            {
+                uint32_t raw = 0;
+                std::memcpy(&raw, payload->Data, sizeof(raw));
+                ReparentWorldEntity(static_cast<::EntityID>(raw), entt::null);
+            }
+            ImGui::EndDragDropTarget();
         }
 
         ImGui::EndChild();
+    }
+
+    void HierarchyPanel::RenderWorldEntityNode(::EntityID entity)
+    {
+        entt::registry& registry = m_world->GetRegistry();
+        if (!registry.valid(entity))
+            return;
+
+        ::EntityID selected = m_selectionSink ? m_selectionSink->GetSelectedEntity() : entt::null;
+        const ::NameComponent* nc = m_world->GetComponent<::NameComponent>(entity);
+        const char* label = (nc && !nc->name.empty()) ? nc->name.c_str() : "Entity";
+
+        // Copy the children list before recursing: a drop handled mid-walk
+        // mutates the live vectors (ReparentWorldEntity), which must not
+        // invalidate this node's iteration.
+        std::vector<::EntityID> children;
+        const ::Transform* t = m_world->GetComponent<::Transform>(entity);
+        if (t)
+        {
+            for (::EntityID c : t->children)
+            {
+                if (registry.valid(c))
+                    children.push_back(c);
+            }
+        }
+        const bool hasChildren = !children.empty();
+        const bool hasParent = t && t->parent != entt::null && registry.valid(t->parent);
+
+        ImGui::PushID(static_cast<int>(static_cast<uint32_t>(entity)));
+
+        ImGuiTreeNodeFlags flags =
+            ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+        if (!hasChildren)
+            flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+        if (entity == selected)
+            flags |= ImGuiTreeNodeFlags_Selected;
+
+        const bool nodeOpen = ImGui::TreeNodeEx(label, flags);
+
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen() && m_selectionSink)
+        {
+            m_selectionSink->SetSelectedEntity(entity);
+        }
+
+        // Drag source: carry the raw entity id.
+        if (ImGui::BeginDragDropSource())
+        {
+            const uint32_t raw = static_cast<uint32_t>(entity);
+            ImGui::SetDragDropPayload(kWorldEntityPayload, &raw, sizeof(raw));
+            ImGui::Text("%s", label);
+            ImGui::EndDragDropSource();
+        }
+
+        // Drop target: reparent the dragged entity under this one.
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kWorldEntityPayload))
+            {
+                uint32_t raw = 0;
+                std::memcpy(&raw, payload->Data, sizeof(raw));
+                ReparentWorldEntity(static_cast<::EntityID>(raw), entity);
+            }
+            ImGui::EndDragDropTarget();
+        }
+
+        // Context menu: explicit Set-Parent escape hatches.
+        if (ImGui::BeginPopupContextItem("##WorldEntityCtx"))
+        {
+            if (!hasParent)
+                ImGui::BeginDisabled();
+            if (ImGui::MenuItem(ICON_FA_LEVEL_UP_ALT " Unparent"))
+            {
+                ReparentWorldEntity(entity, entt::null);
+            }
+            if (!hasParent)
+                ImGui::EndDisabled();
+            const bool canParentToSelection = selected != entt::null && selected != entity && registry.valid(selected);
+            if (!canParentToSelection)
+                ImGui::BeginDisabled();
+            if (ImGui::MenuItem(ICON_FA_SITEMAP " Set Parent: Selected Entity"))
+            {
+                ReparentWorldEntity(entity, selected);
+            }
+            if (!canParentToSelection)
+                ImGui::EndDisabled();
+            ImGui::EndPopup();
+        }
+
+        if (nodeOpen && hasChildren)
+        {
+            for (::EntityID child : children)
+            {
+                RenderWorldEntityNode(child);
+            }
+            ImGui::TreePop();
+        }
+
+        ImGui::PopID();
+    }
+
+    void HierarchyPanel::ReparentWorldEntity(::EntityID child, ::EntityID newParent)
+    {
+        if (!m_world)
+            return;
+        entt::registry& registry = m_world->GetRegistry();
+        if (!registry.valid(child) || child == newParent)
+            return;
+
+        // Refuse cycles: newParent must not be child itself (above) or any
+        // descendant of child — walk up from newParent looking for child.
+        for (::EntityID walk = newParent; walk != entt::null && registry.valid(walk);)
+        {
+            if (walk == child)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                               "Reparent refused: entity %u is an ancestor of target parent %u",
+                               static_cast<uint32_t>(child), static_cast<uint32_t>(newParent));
+                return;
+            }
+            const ::Transform* wt = m_world->GetComponent<::Transform>(walk);
+            walk = wt ? wt->parent : entt::null;
+        }
+
+        const ::Transform* childT = m_world->GetComponent<::Transform>(child);
+        const ::EntityID oldParent =
+            (childT && childT->parent != entt::null && registry.valid(childT->parent)) ? childT->parent : entt::null;
+        if (oldParent == newParent)
+            return; // No-op.
+
+        ::World* capturedWorld = m_world;
+        auto& history = Spark::Editor::CommandHistory::GetInstance();
+        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+            [capturedWorld, child, newParent]() { SetWorldEntityParent(capturedWorld, child, newParent); },
+            [capturedWorld, child, oldParent]() { SetWorldEntityParent(capturedWorld, child, oldParent); },
+            "Reparent Entity"));
+
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Reparented ECS entity %u under %s", static_cast<uint32_t>(child),
+                       newParent == entt::null ? "<root>" : std::to_string(static_cast<uint32_t>(newParent)).c_str());
     }
 
     void HierarchyPanel::RenderObjectNode(SceneObject* object, int depth)

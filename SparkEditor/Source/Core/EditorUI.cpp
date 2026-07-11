@@ -17,6 +17,7 @@
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"
 #include "../Panels/SceneViewPanel.h"
+#include "../Panels/BasicMaterialEditorPanel.h"
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/AssetAuditGraph.h"
 #include "../Panels/HierarchyPanel.h"
@@ -1567,8 +1568,19 @@ namespace SparkEditor
             {
                 sceneView->SetDevice(device, context);
                 sceneView->SetGraphics(m_graphics.get());
+                sceneView->SetSelectionSink(
+                    this); // W9: viewport gizmo/duplicate/align/focus read the document selection
                 console.LogSuccess("Graphics device passed to Scene View panel");
             }
+        }
+
+        // Wire the Basic Materials panel to the editor's GraphicsEngine
+        // (texture thumbnails + save-time basic-material cache invalidation).
+        auto bmIt = m_panels.find("BasicMaterialEditor");
+        if (bmIt != m_panels.end())
+        {
+            if (auto* basicMat = dynamic_cast<BasicMaterialEditorPanel*>(bmIt->second.get()))
+                basicMat->SetGraphics(m_graphics.get());
         }
 
         // Wire the Hierarchy panel's selection sink (one-time; the panel

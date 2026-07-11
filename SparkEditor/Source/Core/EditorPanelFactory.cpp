@@ -34,6 +34,7 @@
 #include "../Panels/SearchPanel.h"
 #include "../Panels/DedicatedServerPanel.h"
 #include "../Panels/MaterialEditorPanel.h"
+#include "../Panels/BasicMaterialEditorPanel.h"
 #include "../Panels/PlayModeToolbarPanel.h"
 #include "../Panels/PostProcessingPanel.h"
 #include "../Panels/DialogueEditorPanel.h"
@@ -165,6 +166,7 @@ namespace SparkEditor
         tryRegister("BuildCook", [&] { return std::make_shared<BuildCookPanel>(); });
         tryRegister("PlayModeToolbar", [&] { return std::make_shared<PlayModeToolbarPanel>(); });
         tryRegister("MaterialEditor", [&] { return std::make_shared<MaterialEditorPanel>(); });
+        tryRegister("BasicMaterialEditor", [&] { return std::make_shared<BasicMaterialEditorPanel>(); });
         tryRegister("TerrainEditor", [&] { return std::make_shared<TerrainEditor>(); });
 
         tryRegister("PostProcessing", [&] { return std::make_shared<PostProcessingPanel>(); });
@@ -320,6 +322,7 @@ namespace SparkEditor
             // Tools
             {"AssetBrowser", PanelCategory::Tool},
             {"MaterialEditor", PanelCategory::Tool},
+            {"BasicMaterialEditor", PanelCategory::Tool},
             {"SpriteEditor", PanelCategory::Tool},
             {"SpriteAnimEditor", PanelCategory::Tool},
             {"ParticleEditor", PanelCategory::Tool},

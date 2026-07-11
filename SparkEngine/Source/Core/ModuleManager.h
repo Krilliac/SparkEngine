@@ -46,6 +46,12 @@ struct DiscoveredModule
     std::string path;      ///< Full path to the DLL/SO
     std::string version;   ///< Module version string
     bool isLoaded = false; ///< Whether this module is currently loaded
+
+    /// Load-policy class from ModuleInfo (single-game-module policy applies to
+    /// ModuleKind::Game). Only meaningful when kindKnown is true — legacy
+    /// CreateGameModule()-only DLLs cannot be probed for a kind.
+    Spark::ModuleKind kind = Spark::ModuleKind::Game;
+    bool kindKnown = false; ///< True when kind came from an actual ModuleInfo probe
 };
 
 /**

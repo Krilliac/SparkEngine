@@ -9,8 +9,13 @@
 #include "SelectionManager.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "../Core/EditorUI.h"
+#include "../CommandHistory.h"
+#include "../Gizmos/SceneEditTools.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 
 namespace SparkEditor
@@ -136,11 +141,31 @@ namespace SparkEditor
                     ImGui::InvisibleButton("##SceneViewArea", viewportSize);
                 }
 
+                // The last submitted item is the scene image (or the fallback
+                // InvisibleButton, which covers the same rect) — capture its
+                // rect and hover state for input routing and the gizmo overlay.
+                const ImVec2 imagePos = ImGui::GetItemRectMin();
+                const bool viewportHovered = ImGui::IsItemHovered();
+
                 // Handle input in scene view
-                if (ImGui::IsItemHovered())
+                if (viewportHovered)
                 {
                     HandleInput();
+                    HandleEditShortcuts();
                 }
+
+#ifdef _WIN32
+                // W9: translate gizmo for the selected World entity, drawn as
+                // an ImGui overlay on top of the rendered scene. Called even
+                // when the viewport isn't hovered so an in-flight drag keeps
+                // tracking the mouse outside the panel.
+                if (m_showGizmos)
+                {
+                    RenderTranslateGizmo(imagePos.x, imagePos.y, viewportSize.x, viewportSize.y, viewportHovered);
+                }
+#else
+                (void)imagePos;
+#endif
 
                 // Render collaborative peer overlays on top of scene
                 RenderPeerOverlays();
@@ -282,6 +307,70 @@ namespace SparkEditor
         ImGui::Text("|");
         ImGui::SameLine();
 
+        // Grid snap toggle + size — applied to gizmo translation drags (W9).
+        {
+            const bool snapActive = m_snapEnabled;
+            if (snapActive)
+                ImGui::PushStyleColor(ImGuiCol_Button, accentBlue);
+            if (ImGui::Button(ICON_FA_MAGNET, btnDim))
+                m_snapEnabled = !m_snapEnabled;
+            if (snapActive)
+                ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Grid Snap (gizmo translation)");
+            ImGui::SameLine();
+
+            constexpr float kSnapSizes[] = {0.25f, 0.5f, 1.0f, 2.0f};
+            const char* kSnapLabels[] = {"0.25", "0.5", "1", "2"};
+            int snapIndex = 2;
+            for (int i = 0; i < 4; i++)
+            {
+                if (m_snapSize == kSnapSizes[i])
+                    snapIndex = i;
+            }
+            ImGui::SetNextItemWidth(52);
+            if (ImGui::BeginCombo("##SnapSize", kSnapLabels[snapIndex]))
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    const bool selected = (i == snapIndex);
+                    if (ImGui::Selectable(kSnapLabels[i], selected))
+                        m_snapSize = kSnapSizes[i];
+                    if (selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Snap Size (m)");
+        }
+
+        ImGui::SameLine();
+        ImGui::Text("|");
+        ImGui::SameLine();
+
+        // Scene-edit actions on the current World selection (W9).
+        {
+            const bool hasSelection = GetSelectedWorldEntity() != entt::null;
+            if (!hasSelection)
+                ImGui::BeginDisabled();
+            if (ImGui::Button(ICON_FA_COPY, btnDim))
+                DuplicateSelectedEntity();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Duplicate (Ctrl+D)");
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_ARROW_DOWN, btnDim))
+                AlignSelectedEntityToGround();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Align to Ground (End)");
+            if (!hasSelection)
+                ImGui::EndDisabled();
+        }
+
+        ImGui::SameLine();
+        ImGui::Text("|");
+        ImGui::SameLine();
+
         // Camera speed
         ImGui::SetNextItemWidth(80);
         ImGui::DragFloat("##CamSpeed", &m_cameraSpeed, 0.1f, 0.1f, 50.0f, ICON_FA_CAMERA " %.1f");
@@ -337,24 +426,12 @@ namespace SparkEditor
             {
                 using namespace DirectX;
 
-                // Spherical orbit camera: derive the eye from the same
-                // yaw/pitch forward-vector formula UpdateCamera() uses, so
-                // right-drag orbit (HandleInput), wheel zoom (HandleInput),
-                // and WASD/QE pan (UpdateCamera) all visibly move this view.
-                const float cosP = cosf(m_cameraPitch);
-                const float forwardX = cosP * sinf(m_cameraYaw);
-                const float forwardY = -sinf(m_cameraPitch);
-                const float forwardZ = cosP * cosf(m_cameraYaw);
-
-                const XMVECTOR at = XMVectorSet(m_cameraTarget.x, m_cameraTarget.y, m_cameraTarget.z, 1.0f);
-                const XMVECTOR eye = XMVectorSet(m_cameraTarget.x - forwardX * m_cameraDistance,
-                                                 m_cameraTarget.y - forwardY * m_cameraDistance,
-                                                 m_cameraTarget.z - forwardZ * m_cameraDistance, 1.0f);
-                const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-                const XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
-                const float aspect =
-                    static_cast<float>(m_renderTextureWidth) / static_cast<float>(m_renderTextureHeight);
-                const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), aspect, 0.1f, 6000.0f);
+                // Camera matrices shared with the gizmo overlay so the
+                // overlay projects with exactly the matrices the scene
+                // renders with (see ComputeCameraMatrices).
+                XMMATRIX view;
+                XMMATRIX proj;
+                ComputeCameraMatrices(view, proj);
 
                 Spark::RenderWorldBasic(*m_world, *m_graphics, m_meshCache, view, proj);
             }
@@ -565,5 +642,379 @@ namespace SparkEditor
         m_cameraTarget.y += dy;
         m_cameraTarget.z += dz;
     }
+
+    // ========================================================================
+    // W9 scene-edit tools
+    // ========================================================================
+
+    ::EntityID SceneViewPanel::GetSelectedWorldEntity() const
+    {
+        if (!m_world || !m_selectionSink)
+        {
+            return entt::null;
+        }
+        const ::EntityID selected = m_selectionSink->GetSelectedEntity();
+        if (selected == entt::null || !m_world->GetRegistry().valid(selected))
+        {
+            return entt::null;
+        }
+        return selected;
+    }
+
+    void SceneViewPanel::HandleEditShortcuts()
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.WantTextInput)
+        {
+            return;
+        }
+
+        // F — frame the selected entity in the viewport camera. Plain F only:
+        // Ctrl+F belongs to the editor-wide search shortcut.
+        if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false))
+        {
+            FocusSelectedEntity();
+        }
+
+        // Ctrl+D — duplicate the selection.
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false))
+        {
+            DuplicateSelectedEntity();
+        }
+
+        // End — align the selection to the surface below (Unreal convention).
+        if (ImGui::IsKeyPressed(ImGuiKey_End, false))
+        {
+            AlignSelectedEntityToGround();
+        }
+    }
+
+    void SceneViewPanel::FocusSelectedEntity()
+    {
+        const ::EntityID selected = GetSelectedWorldEntity();
+        if (selected == entt::null)
+        {
+            return;
+        }
+        entt::registry& registry = m_world->GetRegistry();
+        const ::Transform* transform = registry.try_get<::Transform>(selected);
+        if (!transform)
+        {
+            return;
+        }
+
+        using namespace DirectX;
+        const XMVECTOR worldPos = XMVector3TransformCoord(XMVectorZero(), transform->GetWorldMatrix(registry));
+        XMStoreFloat3(&m_cameraTarget, worldPos);
+
+        // Frame the unit-cube proxy: ~3x the largest scale axis, clamped to
+        // the zoom range HandleInput() enforces. Camera state is not a
+        // document mutation, so focusing is intentionally NOT routed through
+        // CommandHistory (it would dirty the scene and pollute the undo
+        // stack).
+        const float maxScale =
+            std::max({std::abs(transform->scale.x), std::abs(transform->scale.y), std::abs(transform->scale.z)});
+        m_cameraDistance = std::clamp(maxScale * 3.0f, 2.0f, 50.0f);
+    }
+
+    void SceneViewPanel::DuplicateSelectedEntity()
+    {
+        const ::EntityID selected = GetSelectedWorldEntity();
+        if (selected == entt::null)
+        {
+            return;
+        }
+        const ::EntityID copy = SceneEditTools::DuplicateEntity(*m_world, selected);
+        if (copy != entt::null && m_selectionSink)
+        {
+            m_selectionSink->SetSelectedEntity(copy);
+        }
+    }
+
+    void SceneViewPanel::AlignSelectedEntityToGround()
+    {
+        const ::EntityID selected = GetSelectedWorldEntity();
+        if (selected == entt::null)
+        {
+            return;
+        }
+        SceneEditTools::AlignEntityToGround(*m_world, selected);
+    }
+
+#ifdef _WIN32
+    void SceneViewPanel::ComputeCameraMatrices(DirectX::XMMATRIX& view, DirectX::XMMATRIX& proj) const
+    {
+        using namespace DirectX;
+
+        // Spherical orbit camera: derive the eye from the same yaw/pitch
+        // forward-vector formula UpdateCamera() uses, so right-drag orbit
+        // (HandleInput), wheel zoom (HandleInput), and WASD/QE pan
+        // (UpdateCamera) all visibly move this view.
+        const float cosP = cosf(m_cameraPitch);
+        const float forwardX = cosP * sinf(m_cameraYaw);
+        const float forwardY = -sinf(m_cameraPitch);
+        const float forwardZ = cosP * cosf(m_cameraYaw);
+
+        const XMVECTOR at = XMVectorSet(m_cameraTarget.x, m_cameraTarget.y, m_cameraTarget.z, 1.0f);
+        const XMVECTOR eye =
+            XMVectorSet(m_cameraTarget.x - forwardX * m_cameraDistance, m_cameraTarget.y - forwardY * m_cameraDistance,
+                        m_cameraTarget.z - forwardZ * m_cameraDistance, 1.0f);
+        const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        view = XMMatrixLookAtLH(eye, at, up);
+
+        const float aspect = (m_renderTextureHeight > 0)
+                                 ? static_cast<float>(m_renderTextureWidth) / static_cast<float>(m_renderTextureHeight)
+                                 : 1.0f;
+        proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), aspect, 0.1f, 6000.0f);
+    }
+
+    namespace
+    {
+        float PointToSegmentDistance(const ImVec2& point, const ImVec2& a, const ImVec2& b)
+        {
+            const float dx = b.x - a.x;
+            const float dy = b.y - a.y;
+            const float lenSq = dx * dx + dy * dy;
+            if (lenSq < 1e-6f)
+            {
+                const float ex = point.x - a.x;
+                const float ey = point.y - a.y;
+                return std::sqrt(ex * ex + ey * ey);
+            }
+            const float t = std::clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq, 0.0f, 1.0f);
+            const float ex = point.x - (a.x + t * dx);
+            const float ey = point.y - (a.y + t * dy);
+            return std::sqrt(ex * ex + ey * ey);
+        }
+    } // namespace
+
+    void SceneViewPanel::RenderTranslateGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered)
+    {
+        using namespace DirectX;
+
+        // Translation-only for W9 — Rotate/Scale toolbar modes keep their
+        // existing (no-op) behavior in the viewport.
+        if (m_gizmoMode != GizmoMode::Move || imgW <= 0.0f || imgH <= 0.0f)
+        {
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+            return;
+        }
+
+        const ::EntityID selected = GetSelectedWorldEntity();
+        if (m_gizmoDragging && selected != m_gizmoDragEntity)
+        {
+            // Selection changed mid-drag (e.g. hierarchy click) — abandon the
+            // drag without committing a command.
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+        }
+        if (selected == entt::null)
+        {
+            return;
+        }
+
+        entt::registry& registry = m_world->GetRegistry();
+        ::Transform* transform = registry.try_get<::Transform>(selected);
+        if (!transform)
+        {
+            return;
+        }
+
+        XMMATRIX view;
+        XMMATRIX proj;
+        ComputeCameraMatrices(view, proj);
+
+        const XMVECTOR worldPosV = XMVector3TransformCoord(XMVectorZero(), transform->GetWorldMatrix(registry));
+        XMFLOAT3 worldPos;
+        XMStoreFloat3(&worldPos, worldPosV);
+
+        auto project = [&](const XMFLOAT3& p, ImVec2& out) -> bool
+        {
+            const XMVECTOR s =
+                XMVector3Project(XMLoadFloat3(&p), imgX, imgY, imgW, imgH, 0.0f, 1.0f, proj, view, XMMatrixIdentity());
+            XMFLOAT3 sp;
+            XMStoreFloat3(&sp, s);
+            out = ImVec2(sp.x, sp.y);
+            return sp.z > 0.0f && sp.z < 1.0f;
+        };
+
+        ImVec2 center;
+        if (!project(worldPos, center))
+        {
+            return; // behind the camera — nothing sensible to draw
+        }
+
+        constexpr float kAxisPixels = 70.0f; // on-screen axis length
+        constexpr float kArrowPixels = 9.0f; // arrowhead size
+        constexpr float kHitPixels = 8.0f;   // hover pick threshold
+        const XMFLOAT3 kAxisDirs[3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+        const ImU32 kAxisColors[3] = {IM_COL32(230, 80, 80, 255), IM_COL32(80, 220, 80, 255),
+                                      IM_COL32(90, 110, 255, 255)};
+
+        ImVec2 ends[3];
+        ImVec2 screenDirs[3];
+        float worldPerPixel[3] = {0.0f, 0.0f, 0.0f};
+        int hover = -1;
+        float bestDist = kHitPixels;
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+
+        for (int i = 0; i < 3; i++)
+        {
+            const XMFLOAT3 tip = {worldPos.x + kAxisDirs[i].x, worldPos.y + kAxisDirs[i].y,
+                                  worldPos.z + kAxisDirs[i].z};
+            ImVec2 tipScreen;
+            project(tip, tipScreen);
+            const float dx = tipScreen.x - center.x;
+            const float dy = tipScreen.y - center.y;
+            const float len = std::sqrt(dx * dx + dy * dy);
+            if (len < 1e-3f)
+            {
+                // Axis points straight at the camera — not draggable this frame.
+                ends[i] = center;
+                screenDirs[i] = ImVec2(0.0f, 0.0f);
+                continue;
+            }
+            screenDirs[i] = ImVec2(dx / len, dy / len);
+            worldPerPixel[i] = 1.0f / len; // the 1m tip offset spans 'len' pixels
+            ends[i] = ImVec2(center.x + screenDirs[i].x * kAxisPixels, center.y + screenDirs[i].y * kAxisPixels);
+
+            const float dist = PointToSegmentDistance(mouse, center, ends[i]);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                hover = i;
+            }
+        }
+
+        if (!m_gizmoDragging)
+        {
+            m_gizmoHoverAxis = viewportHovered ? hover : -1;
+        }
+
+        // Draw the axes into the window draw list (clipped to the panel).
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        for (int i = 0; i < 3; i++)
+        {
+            if (screenDirs[i].x == 0.0f && screenDirs[i].y == 0.0f)
+            {
+                continue;
+            }
+            const bool active = m_gizmoDragging && m_gizmoDragAxis == i;
+            const bool hovered = !m_gizmoDragging && m_gizmoHoverAxis == i;
+            const ImU32 color =
+                active ? IM_COL32(255, 230, 60, 255) : (hovered ? IM_COL32(255, 255, 255, 255) : kAxisColors[i]);
+            drawList->AddLine(center, ends[i], color, 2.5f);
+            const float nx = screenDirs[i].x;
+            const float ny = screenDirs[i].y;
+            const ImVec2 arrowA(ends[i].x - nx * kArrowPixels + ny * kArrowPixels * 0.5f,
+                                ends[i].y - ny * kArrowPixels - nx * kArrowPixels * 0.5f);
+            const ImVec2 arrowB(ends[i].x - nx * kArrowPixels - ny * kArrowPixels * 0.5f,
+                                ends[i].y - ny * kArrowPixels + nx * kArrowPixels * 0.5f);
+            drawList->AddTriangleFilled(ends[i], arrowA, arrowB, color);
+        }
+        drawList->AddCircleFilled(center, 3.5f, IM_COL32(255, 255, 255, 200));
+
+        // Begin drag on left-press over a hovered axis.
+        if (!m_gizmoDragging && viewportHovered && m_gizmoHoverAxis >= 0 &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_gizmoDragging = true;
+            m_gizmoDragAxis = m_gizmoHoverAxis;
+            m_gizmoDragEntity = selected;
+            m_dragStartLocalPos = transform->position;
+            m_dragStartWorldPos = worldPos;
+            m_dragStartMouseX = mouse.x;
+            m_dragStartMouseY = mouse.y;
+        }
+
+        if (!m_gizmoDragging)
+        {
+            return;
+        }
+
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+        {
+            const int axis = m_gizmoDragAxis;
+            if (axis >= 0 && axis < 3 && worldPerPixel[axis] > 0.0f)
+            {
+                // Total mouse delta since drag start, projected onto the
+                // axis' current screen direction → world units along the
+                // (world-aligned) axis.
+                const float mouseDx = mouse.x - m_dragStartMouseX;
+                const float mouseDy = mouse.y - m_dragStartMouseY;
+                const float alongPixels = mouseDx * screenDirs[axis].x + mouseDy * screenDirs[axis].y;
+                const float worldDelta = alongPixels * worldPerPixel[axis];
+
+                XMFLOAT3 targetWorld = m_dragStartWorldPos;
+                float* coord = (&targetWorld.x) + axis;
+                *coord += worldDelta;
+
+                // Grid snap: quantise the ABSOLUTE coordinate along the
+                // dragged axis so entities land on the grid rather than at
+                // grid-sized offsets from where they started.
+                if (m_snapEnabled && m_snapSize > 0.0f)
+                {
+                    *coord = std::round(*coord / m_snapSize) * m_snapSize;
+                }
+
+                const XMFLOAT3 worldDeltaVec = {targetWorld.x - m_dragStartWorldPos.x,
+                                                targetWorld.y - m_dragStartWorldPos.y,
+                                                targetWorld.z - m_dragStartWorldPos.z};
+                const XMFLOAT3 localDelta =
+                    SceneEditTools::WorldDeltaToParentLocal(registry, *transform, worldDeltaVec);
+
+                // Live preview mutation; the single undo step is committed on
+                // release (same snapshot-at-drag-begin pattern GizmoSystem
+                // uses for the legacy SceneFile path).
+                transform->position = {m_dragStartLocalPos.x + localDelta.x, m_dragStartLocalPos.y + localDelta.y,
+                                       m_dragStartLocalPos.z + localDelta.z};
+            }
+        }
+        else
+        {
+            // Release — commit the whole drag as one undoable command,
+            // capturing the entity id (never a component pointer).
+            const XMFLOAT3 endPos = transform->position;
+            const bool moved = endPos.x != m_dragStartLocalPos.x || endPos.y != m_dragStartLocalPos.y ||
+                               endPos.z != m_dragStartLocalPos.z;
+            if (moved)
+            {
+                ::World* worldPtr = m_world; // safe: SwapWorld clears the history before freeing the World
+                const ::EntityID id = m_gizmoDragEntity;
+                const XMFLOAT3 oldPos = m_dragStartLocalPos;
+                Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                    [worldPtr, id, endPos]()
+                    {
+                        entt::registry& reg = worldPtr->GetRegistry();
+                        if (!reg.valid(id))
+                        {
+                            return;
+                        }
+                        if (::Transform* t = reg.try_get<::Transform>(id))
+                        {
+                            t->position = endPos;
+                        }
+                    },
+                    [worldPtr, id, oldPos]()
+                    {
+                        entt::registry& reg = worldPtr->GetRegistry();
+                        if (!reg.valid(id))
+                        {
+                            return;
+                        }
+                        if (::Transform* t = reg.try_get<::Transform>(id))
+                        {
+                            t->position = oldPos;
+                        }
+                    },
+                    "Move Entity"));
+            }
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+            m_gizmoDragEntity = entt::null;
+        }
+    }
+#endif
 
 } // namespace SparkEditor

@@ -314,6 +314,7 @@ SPARK_REFLECT_FIELD(MeshRenderer, materialPath, "Material Path")
 SPARK_REFLECT_FIELD(MeshRenderer, castShadows, "Cast Shadows")
 SPARK_REFLECT_FIELD(MeshRenderer, receiveShadows, "Receive Shadows")
 SPARK_REFLECT_FIELD(MeshRenderer, visible, "Visible")
+SPARK_REFLECT_FIELD_RANGE(MeshRenderer, emissive, "Emissive", 0.0f, 2.0f)
 SPARK_REFLECT_END(MeshRenderer)
 
 SPARK_REFLECT_TYPE(Camera)

@@ -13,16 +13,16 @@
 
 #include "../Core/EditorPanel.h"
 #include "../SceneSystem/SceneFile.h"
+// Engine ECS World/EntityID — needed in this header (not just the .cpp)
+// because RenderWorldEntityNode()/ReparentWorldEntity() take ::EntityID,
+// which is a type alias (entt::entity) and not forward-declarable. Mirrors
+// InspectorPanel.h, which includes this for the same reason.
+#include "Engine/ECS/Components.h"
 #include <functional>
 #include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
-
-// Engine ECS World (Unit C2). Forward-declared only — the panel holds a
-// non-owning pointer; full definition (entt registry, CreateEntity, etc.)
-// is only needed in HierarchyPanel.cpp.
-class World;
 
 namespace SparkEditor
 {
@@ -238,8 +238,34 @@ namespace SparkEditor
      * Lists every entity in m_world by its NameComponent (or "Entity" if
      * unnamed), highlighting the entity currently selected via
      * m_selectionSink, and publishes selection on row click.
+     *
+     * Renders as a Transform.parent/children tree: root entities (no
+     * Transform, or Transform.parent == entt::null) at top level, children
+     * nested beneath. Rows are drag-and-drop reparent sources/targets
+     * (payload "SPARK_WORLD_ENTITY"); dropping on the empty area below the
+     * tree unparents.
      */
         void RenderWorldHierarchy();
+
+        /**
+     * @brief Render one ECS entity row (and its Transform children, recursively)
+     * for World-backed mode.
+     * @param entity Entity to render. Must be valid in m_world's registry.
+     */
+        void RenderWorldEntityNode(::EntityID entity);
+
+        /**
+     * @brief Reparent an ECS entity under a new parent (or unparent) — undoable.
+     *
+     * Routes through CommandHistory (LambdaCommand). Maintains both sides of
+     * the link: child's Transform.parent and the parents' Transform.children
+     * vectors. Adds a Transform to child/new parent if missing. Refuses
+     * self-parenting and cycles (new parent being a descendant of child).
+     *
+     * @param child     Entity to move.
+     * @param newParent New parent entity, or entt::null to make it a root.
+     */
+        void ReparentWorldEntity(::EntityID child, ::EntityID newParent);
 
         /**
      * @brief Render a single object in the tree

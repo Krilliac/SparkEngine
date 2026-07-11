@@ -1,13 +1,19 @@
 /**
  * @file GameModuleSelectorPanel.h
- * @brief Panel for discovering and selecting which game modules to load
+ * @brief Panel for discovering game modules and launching the game as a separate process
  * @author Spark Engine Team
  * @date 2026
  *
- * When multiple game modules are present (e.g., SparkGame + SparkGameMMO),
- * this panel lets the user see which modules are available on disk, which
- * are currently loaded, and toggle modules on/off. It can also generate
- * or update the spark.modules.json manifest for persistent selection.
+ * The editor's cockpit for game modules:
+ * - Lists module DLL candidates found next to the editor (safe scan — no DllMain)
+ * - On-demand metadata probe (name / version / ModuleKind) via ModuleManager::DiscoverModules
+ * - Shows the single-game-module policy (exactly ONE Game-kind module loads per process)
+ * - Launches the selected module in a SEPARATE SparkEngine.exe process
+ *   ("-game <dll>"), windowed or dedicated/headless ("-headless"), and tracks
+ *   the last-launch status. In-editor play is deliberately NOT offered: module
+ *   DLLs statically link the engine, so per-image globals and type-ids make
+ *   in-process play unsafe.
+ * - Generates spark.modules.json for persistent module selection
  *
  * Accessible via Window > Game Module Selector.
  */
@@ -18,21 +24,11 @@
 #include <string>
 #include <vector>
 
-// Forward declare — avoids pulling ModuleManager.h into the header
-struct DiscoveredModule;
-
 namespace SparkEditor
 {
 
     /**
-     * @brief Editor panel for discovering and managing game module DLLs
-     *
-     * Features:
-     * - Scans the engine's output directory for available module DLLs
-     * - Shows loaded vs. available modules with version info
-     * - Allows toggling which modules are active
-     * - Generates spark.modules.json for persistent module selection
-     * - Shows module metadata (name, version, load order)
+     * @brief Editor panel for discovering, selecting, and launching game module DLLs
      */
     class GameModuleSelectorPanel : public EditorPanel
     {
@@ -49,23 +45,38 @@ namespace SparkEditor
 
       private:
         void RefreshModuleList();
+        void ProbeModuleMetadata();
         void RenderModuleList();
+        void RenderLaunchControls();
         void RenderManifestControls();
         void SaveModuleManifest();
+        void LaunchGame(bool headless);
+        void PollLaunchedProcess();
+        static std::string GetExecutableDirectory();
 
         struct ModuleEntry
         {
-            std::string name;
-            std::string path;
-            std::string version;
-            bool isLoaded = false;
+            std::string name;        ///< Display name (filename stem until probed)
+            std::string path;        ///< Full path to the DLL
+            std::string version;     ///< Version string ("?" until probed)
+            std::string kindLabel;   ///< "Game" / "Addon" / "?" (unprobed)
+            bool isGameKind = true;  ///< Counts against the single-game-module policy
+            bool kindKnown = false;  ///< True once metadata was probed
             bool isSelected = false; ///< User selection for manifest generation
         };
 
         std::vector<ModuleEntry> m_modules;
         float m_refreshTimer = 0.0f;
         bool m_needsRefresh = true;
+        bool m_hasProbed = false; ///< User has run the metadata probe at least once (summary display only)
         std::string m_statusMessage;
+
+        // --- Launch state (separate-process game launch) ---
+        int m_launchSelection = -1;        ///< Index into m_modules chosen for launch
+        std::string m_launchSelectionPath; ///< Path of the selection (survives refresh reordering)
+        void* m_gameProcess = nullptr;     ///< HANDLE of the last launched game (kept as void* — no windows.h here)
+        unsigned long m_gamePid = 0;       ///< PID of the last launched game
+        std::string m_launchStatus;        ///< Human-readable last-launch status line
     };
 
 } // namespace SparkEditor

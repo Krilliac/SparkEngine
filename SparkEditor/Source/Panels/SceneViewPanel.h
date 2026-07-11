@@ -9,6 +9,7 @@
 
 #include "../Core/EditorPanel.h"
 #include "../Communication/CollaborativeEditSession.h"
+#include "Engine/ECS/Components.h"
 #ifdef _WIN32
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -25,6 +26,7 @@ class World;
 
 namespace SparkEditor
 {
+    class EditorUI;
 
     /**
  * @brief Scene view panel
@@ -91,7 +93,21 @@ namespace SparkEditor
         /// @brief Inject the shared ECS World to render (owned by EditorUI; the
         /// panel holds a non-owning pointer). Unit C1: the panel no longer owns
         /// its own demo World — EditorUI owns the single live document World.
-        void SetWorld(World* world) { m_world = world; }
+        /// Any in-flight gizmo drag references the previous World, so it is
+        /// abandoned here (SwapWorld() clears the CommandHistory separately).
+        void SetWorld(World* world)
+        {
+            m_world = world;
+            m_gizmoDragging = false;
+            m_gizmoDragAxis = -1;
+            m_gizmoDragEntity = entt::null;
+        }
+
+        /// @brief Wire the EditorUI document-selection sink (same Unit C2
+        /// pattern as HierarchyPanel::SetSelectionSink). Supplies the selected
+        /// World entity for the W9 viewport tools (translate gizmo, duplicate,
+        /// align-to-ground, focus). Tools stay disabled while unwired.
+        void SetSelectionSink(EditorUI* sink) { m_selectionSink = sink; }
 
         /// @brief Set collaborative session for peer visualization in viewport
         void SetCollabSession(CollaborativeEditSession* session) { m_collabSession = session; }
@@ -103,6 +119,17 @@ namespace SparkEditor
         void HandleInput();
         void UpdateCamera(float deltaTime);
         void CreateRenderTexture(int width, int height);
+
+        // W9 scene-edit tools (translate gizmo / duplicate / align / focus)
+        void HandleEditShortcuts();
+        ::EntityID GetSelectedWorldEntity() const;
+        void FocusSelectedEntity();
+        void DuplicateSelectedEntity();
+        void AlignSelectedEntityToGround();
+#ifdef _WIN32
+        void ComputeCameraMatrices(DirectX::XMMATRIX& view, DirectX::XMMATRIX& proj) const;
+        void RenderTranslateGizmo(float imgX, float imgY, float imgW, float imgH, bool viewportHovered);
+#endif
 
       private:
         // Rendering resources
@@ -173,6 +200,27 @@ namespace SparkEditor
         // so the scene view can render gizmo highlights on it.
         uint64_t m_selectedEntityId = 0;       ///< Primary selected entity (0 = none).
         uint32_t m_selectionMgrCallbackId = 0; ///< SelectionManager subscription handle.
+
+        // ── W9 scene-edit tools ─────────────────────────────────────────────
+        // Non-owning; supplies the World-mode selected entity
+        // (EditorUI::GetSelectedEntity) — the document selection the
+        // Hierarchy publishes and the Inspector consumes.
+        EditorUI* m_selectionSink = nullptr;
+
+        bool m_snapEnabled = false; ///< Grid snap applied to gizmo translation drags.
+        float m_snapSize = 1.0f;    ///< Snap size in meters (0.25 / 0.5 / 1 / 2).
+
+        // Translate-gizmo drag state (Move mode). Captures entity id + start
+        // snapshots — never component pointers, which EnTT invalidates on
+        // storage growth.
+        bool m_gizmoDragging = false;
+        int m_gizmoDragAxis = -1;  ///< 0=X 1=Y 2=Z while dragging, else -1.
+        int m_gizmoHoverAxis = -1; ///< Axis under the mouse this frame, else -1.
+        ::EntityID m_gizmoDragEntity = entt::null;
+        DirectX::XMFLOAT3 m_dragStartLocalPos = {0.0f, 0.0f, 0.0f};
+        DirectX::XMFLOAT3 m_dragStartWorldPos = {0.0f, 0.0f, 0.0f};
+        float m_dragStartMouseX = 0.0f;
+        float m_dragStartMouseY = 0.0f;
     };
 
 } // namespace SparkEditor
