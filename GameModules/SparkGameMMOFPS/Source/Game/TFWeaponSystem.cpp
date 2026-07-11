@@ -6,6 +6,7 @@
 #include "Game/TFWeaponSystem.h"
 
 #include "Game/TFAbilitySystem.h" // class-abilities lane (W9): Lockdown RoF mirror
+#include "Game/TFImpactFx.h"      // impact-fx lane (W10): predicted impact burst on local fire
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFWeaponMath.h"
 #include "Game/TFViewModel.h"
@@ -110,6 +111,7 @@ namespace Terrafront
         m_shooters.clear();
         m_projectiles.clear();
         m_loadedSounds.clear();
+        m_localShotHook = nullptr; // W10 sanctuary-v2: drop the cosmetic seam
         m_initialized = false;
     }
 
@@ -197,8 +199,18 @@ namespace Terrafront
         else
             PlayWeaponAudio(slot.def.audioFire);
         if (m_ctx->world)
+        {
             m_ctx->world->SpawnMuzzleFx(origin, dir);
+            // impact-fx lane (W10): client-predicted impact burst at the traced
+            // hit point of the same (spread-perturbed) ray the tracer uses.
+            TFImpactFx::Get().OnLocalShot(*m_ctx, origin, dir);
+        }
         TFViewModel::Get().NotifyLocalFire(slot.def.recoilVert, slot.def.recoilHoriz);
+
+        // W10 sanctuary-v2: cosmetic local-shot seam (target-range dummies).
+        // Same ray as the TF_FireEvent above; consumers are presentation-only.
+        if (m_localShotHook)
+            m_localShotHook(origin, dir, slot.def);
     }
 
     // ---------------------------------------------------------------------------

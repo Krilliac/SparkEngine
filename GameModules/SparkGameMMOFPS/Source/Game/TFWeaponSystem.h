@@ -25,6 +25,7 @@
 #include "Data/TFDataTables.h"
 #include "Net/TFNetProtocol.h"
 
+#include <functional>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -77,6 +78,18 @@ namespace Terrafront
         /// 0..1 decaying "someone is shooting near me" heat for the ambience
         /// system's combat layer (TFAudioAmbience). Client-presentation only.
         float RemoteFireHeat() const { return m_remoteFireHeat; }
+
+        // --- W10 sanctuary-v2 addition (client presentation seam) ---
+
+        /// Local-shot presentation hook: invoked once per LOCAL shot that
+        /// actually fires (after the RoF/ammo/reload gates, with the same
+        /// post-spread ray ClientTriggerFire puts in TF_FireEvent) plus the
+        /// resolved weapon def. COSMETIC ONLY — consumers must never feed this
+        /// back into damage/movement/net; the server stays the only damage
+        /// authority. Consumer: Game/TFTargetRange (sanctuary range dummies).
+        /// Single-slot (last setter wins); cleared by Shutdown.
+        using LocalShotHook = std::function<void(const float origin[3], const float dir[3], const WeaponDef& def)>;
+        void SetLocalShotHook(LocalShotHook hook) { m_localShotHook = std::move(hook); }
 
       private:
         static constexpr EntityId kNoPawnEntity = 0xFFFFFFFFu;
@@ -213,6 +226,9 @@ namespace Terrafront
         int m_distantPlayCursor = 0;
         uint32_t m_remoteFireSeq = 0;  // round-robin over the shooter's fire variants
         float m_remoteFireHeat = 0.0f; // see RemoteFireHeat()
+
+        // W10 sanctuary-v2: cosmetic local-shot seam (see SetLocalShotHook).
+        LocalShotHook m_localShotHook;
 
         // server state
         std::unordered_map<PlayerId, ShooterState> m_shooters;
