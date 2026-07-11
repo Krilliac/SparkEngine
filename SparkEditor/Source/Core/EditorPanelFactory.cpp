@@ -72,6 +72,7 @@
 #include "../Panels/CSGEditorPanel.h"
 #include "../Panels/NetworkDebugPanel.h"
 #include "../Panels/SceneImportPanel.h"
+#include "../Panels/RegionMapEditorPanel.h"
 #include "../Terrain/TerrainEditor.h"
 #include "../Profiler/PerformanceProfiler.h"
 // Phase AA Theme 3C: activate the two remaining orphan EditorPanel
@@ -199,6 +200,7 @@ namespace SparkEditor
                         sceneImport->SetEditorUI(this);
                         return sceneImport;
                     });
+        tryRegister("RegionMapEditor", [&] { return std::make_shared<RegionMapEditorPanel>(); });
         tryRegister("Collaboration", [&] { return std::make_shared<CollaborationPanel>(m_collabSession.get()); });
 
         tryRegister("TimeOfDay", [&] { return std::make_shared<TimeOfDayPanel>(); });
@@ -293,6 +295,7 @@ namespace SparkEditor
             {"CSGEditor", ICON_FA_CUBES},
             {"NetworkDebug", ICON_FA_NETWORK_WIRED},
             {"SceneImport", ICON_FA_FILE_IMPORT},
+            {"RegionMapEditor", ICON_FA_GLOBE},
             // Phase AA Theme 3C: icons for the two newly-activated panels.
             {"LevelStreaming", ICON_FA_MAP},
             {"VersionControl", ICON_FA_CODE_BRANCH},
@@ -358,6 +361,7 @@ namespace SparkEditor
             {"Workflows", PanelCategory::Tool},
             {"EventResponses", PanelCategory::Tool},
             {"SceneImport", PanelCategory::Tool},
+            {"RegionMapEditor", PanelCategory::Tool},
 
             // Config
             {"SaveSystem", PanelCategory::Config},
