@@ -4,6 +4,7 @@
  */
 #include "UI/TFChatWindow.h"
 
+#include "Game/TFOutfitSystem.h" // W8 ui-polish: /o channel membership pre-check
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFSocialSystem.h"
 #include "Net/TFChatRules.h"
@@ -48,7 +49,23 @@ namespace Terrafront
             {ChatChannel::Faction, "Faction", "/f", "/faction"},
             {ChatChannel::Squad, "Squad", "/s", "/squad"},
             {ChatChannel::Yell, "Yell", "/y", "/yell"},
+            // W8 ui-polish: outfit channel (server routes by TFOutfitSystem
+            // membership — see TFChatRules::ShouldReceiveChat sameOutfit).
+            {ChatChannel::Outfit, "Outfit", "/o", "/outfit"},
         };
+
+        /// Is the LOCAL player in an outfit? Authority resolves live from the
+        /// outfit registry; pure clients read their own roster mirror. Client
+        /// pre-check only — the server's OutfitIdOf routing is the real gate.
+        bool LocalInOutfit(const TFGameContext& ctx)
+        {
+            if (!ctx.outfits)
+                return false;
+            if (!ctx.IsAuthority())
+                return ctx.outfits->InOutfit();
+            const char* tag = ctx.outfits->GetOutfitTag(ctx.localPlayer);
+            return tag != nullptr && tag[0] != '\0';
+        }
 
     } // namespace
 
@@ -200,6 +217,14 @@ namespace Terrafront
             m_input[0] = '\0';
             return;
         }
+        if (m_channel == ChatChannel::Outfit && m_ctx && !LocalInOutfit(*m_ctx))
+        {
+            // Client pre-check (server still routes by real membership); keep
+            // the typed text so the player can switch channels and resend.
+            PushFeedback("you are not in an outfit — /outfit chat needs one (see tf_outfit)");
+            m_focusInput = true;
+            return;
+        }
         if (m_clock < m_nextSendAt)
         {
             PushFeedback("sending too fast — wait a moment");
@@ -317,6 +342,7 @@ namespace Terrafront
             const ImU32 channelColor = line.channel == ChatChannel::Squad     ? IM_COL32(110, 225, 150, 255)
                                        : line.channel == ChatChannel::Faction ? TFUi::FactionCol(m_ctx->localFaction)
                                        : line.channel == ChatChannel::Yell    ? IM_COL32(255, 180, 90, 255)
+                                       : line.channel == ChatChannel::Outfit  ? IM_COL32(205, 145, 255, 255)
                                                                               : IM_COL32(130, 205, 255, 255);
             char tag[16];
             std::snprintf(tag, sizeof(tag), "[%s] ", ChatChannelName(line.channel));
@@ -357,7 +383,7 @@ namespace Terrafront
         }
 
         // --- channel tabs ----------------------------------------------------------
-        for (size_t i = 0; i < 4; ++i)
+        for (size_t i = 0; i < std::size(kChannels); ++i)
         {
             const ChannelStyle& ch = kChannels[i];
             const bool active = m_channel == ch.channel;

@@ -210,6 +210,13 @@ namespace Terrafront
         /// broadcast tag map. THE nameplate/killfeed/scoreboard integration point.
         const char* GetOutfitTag(PlayerId player) const;
 
+        /// Outfit id of `player` (0 == none/unknown). AUTHORITY-only truth —
+        /// resolves live from the registry like GetOutfitTag's authority path;
+        /// pure clients always get 0 (membership of OTHER players is not
+        /// mirrored client-side). W8 ui-polish addition: the outfit chat
+        /// channel's server-side recipient check (TFServerSim::HandleChatMsg).
+        uint32_t OutfitIdOf(PlayerId player) const;
+
         /// Server: TFServerSim routes TFMsg 0x5438 (OutfitRequest) here
         /// (size-validates, then dispatches) — same one-line hook shape as
         /// TFSquadSystem::ServerHandleSquadMsgRaw.

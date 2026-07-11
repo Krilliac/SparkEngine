@@ -264,6 +264,19 @@ namespace Terrafront
         return it != m_tags.end() ? it->second.c_str() : "";
     }
 
+    uint32_t TFOutfitSystem::OutfitIdOf(PlayerId player) const
+    {
+        // Mirrors GetOutfitTag's authority path exactly (registry is server
+        // truth); there is no client-side fallback — outfit chat routing is a
+        // server decision (W8 ui-polish, see the header note).
+        if (!m_initialized || player == kInvalidPlayer || !m_ctx || !m_ctx->IsAuthority() || !m_store.IsOpen())
+            return 0;
+        if (const BoundChar* bc = BoundCharOf(player))
+            if (const TFOutfitRecord* rec = m_store.FindByCharacter(bc->charId))
+                return rec->id;
+        return 0;
+    }
+
     TFOutfitRank TFOutfitSystem::LocalRank() const
     {
         for (const MirrorMember& m : m_mirror.members)
