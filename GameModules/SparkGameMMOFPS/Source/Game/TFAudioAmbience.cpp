@@ -7,8 +7,11 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFWeaponMath.h" // W9: kEyeHeightM (muzzle -> pawn-pos rebase)
 #include "Game/TFWeaponSystem.h"
+#include "Net/TFFireFxProtocol.h" // W9 remote-fire-events: 0x54F4 wire struct
 #include "World/TFSanctuaryZone.h"
+#include "World/TFWorldSetup.h" // W9: SpawnMuzzleFx (remote flash quad)
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
@@ -16,12 +19,17 @@
 #include "Camera/SparkEngineCamera.h"
 #include "Spark/IEngineContext.h"
 
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/NetworkManager.h"
+#endif
+
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iterator>
 
 namespace Terrafront
@@ -93,6 +101,17 @@ namespace Terrafront
             return;
         m_clock += deltaTime;
 
+#ifdef ENABLE_NETWORKING
+        // W9 remote-fire-events: 0x54F4 handler lifecycle, polled like
+        // TFSocialSystem's mirror handlers (pure clients only — the server
+        // never sends the message to itself or the listen host's player).
+        const bool clientUp = ClientNetActive();
+        if (clientUp && !m_netHandlers)
+            EnsureNetHandlers();
+        else if (!clientUp && m_netHandlers)
+            ReleaseNetHandlers();
+#endif
+
         // Exponential decay toward calm (half-life ~10 s).
         m_activity *= std::exp(-deltaTime * 0.6931472f / kActivityHalfLifeSec);
         if (m_ctx->weapons)
@@ -119,6 +138,10 @@ namespace Terrafront
 
     void TFAudioAmbience::Shutdown()
     {
+#ifdef ENABLE_NETWORKING
+        if (m_netHandlers)
+            ReleaseNetHandlers();
+#endif
         StopBeds();
         m_loaded.clear();
         m_initialized = false;
@@ -239,6 +262,99 @@ namespace Terrafront
             m_nextGust = m_clock + next(m_rng);
         }
     }
+
+    // ---------------------------------------------------------------------------
+    // W9 remote-fire-events: client fx seam + 0x54F4 handler lifecycle
+    // ---------------------------------------------------------------------------
+
+    void TFAudioAmbience::ClientOnRemoteFire(const float muzzlePos[3], const float dirUnit[3], WeaponId weaponId,
+                                             EntityId shooterEntity)
+    {
+        if (!m_initialized || !m_ctx || !m_ctx->HasLocalPlayer())
+            return;
+
+        // Brief world-space flash quad at the muzzle — same short-lived fx pool
+        // (and reap/cap) as local shots; safe client-side (no authority path).
+        if (m_ctx->world)
+            m_ctx->world->SpawnMuzzleFx(muzzlePos, dirUnit);
+
+        // Audio + combat heat: converge on the W8 listen-host bucket logic in
+        // TFWeaponSystem::ClientOnRemoteFire (near = weapon's own clip, far =
+        // faction distant tail with the concurrent-tail cap). It also bumps
+        // RemoteFireHeat(), which Update() already max-merges into m_activity —
+        // that IS the combat-heat hook; no second heat path.
+        if (!m_ctx->weapons || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return;
+        if (!m_ctx->data->GetWeapon(weaponId))
+            return; // unknown weapon id (stale tables / bad packet) — flash only
+
+        // Resolve faction/owner from the replicated pawn mirror; a not-yet-
+        // mirrored shooter degrades to the common distant tail.
+        PawnInfo shooter{};
+        shooter.entity = shooterEntity;
+        shooter.owner = kInvalidPlayer;
+        shooter.faction = FactionId::None;
+        if (m_ctx->players)
+            m_ctx->players->GetPawnByEntity(shooterEntity, shooter);
+
+        // The wire muzzle pos is the authoritative fire origin; the bucket
+        // logic measures pawn.pos + eye height, so re-base onto the muzzle.
+        shooter.pos[0] = muzzlePos[0];
+        shooter.pos[1] = muzzlePos[1] - WeaponMath::kEyeHeightM;
+        shooter.pos[2] = muzzlePos[2];
+
+        const WeaponDef def = m_ctx->data->ResolveWeapon(weaponId, shooter.faction);
+        m_ctx->weapons->ClientOnRemoteFire(shooter.owner, shooter, def);
+    }
+
+#ifdef ENABLE_NETWORKING
+
+    bool TFAudioAmbience::ClientNetActive() const
+    {
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        return m_ctx && m_ctx->role == NetRole::Client && nm.IsInitialized() &&
+               nm.GetRole() == Spark::Net::NetworkRole::Client &&
+               nm.GetConnectionState() == Spark::Net::ConnectionState::Connected;
+    }
+
+    void TFAudioAmbience::EnsureNetHandlers()
+    {
+        using Spark::Net::MessageType;
+        using Spark::Net::NetworkMessage;
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+
+        nm.RegisterHandler(static_cast<MessageType>(kTFFxMsg_RemoteFire),
+                           [this](const NetworkMessage& m) { OnNetRemoteFireFx(m.payload.data(), m.payload.size()); });
+
+        m_netHandlers = true;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] remote-fire fx handler registered");
+    }
+
+    void TFAudioAmbience::ReleaseNetHandlers()
+    {
+        // NetworkManager has no per-type removal; replace with a no-op so no
+        // dangling `this` survives module shutdown (TFSocialSystem pattern).
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        nm.RegisterHandler(static_cast<Spark::Net::MessageType>(kTFFxMsg_RemoteFire),
+                           [](const Spark::Net::NetworkMessage&) {});
+        m_netHandlers = false;
+    }
+
+    void TFAudioAmbience::OnNetRemoteFireFx(const void* data, size_t size)
+    {
+        if (size != sizeof(TF_RemoteFireFx))
+            return; // malformed — drop
+        TF_RemoteFireFx fx;
+        std::memcpy(&fx, data, sizeof(fx));
+
+        float pos[3];
+        float dir[3];
+        fx.DecodePos(pos);
+        fx.DecodeDir(dir);
+        ClientOnRemoteFire(pos, dir, static_cast<WeaponId>(fx.weaponId), static_cast<EntityId>(fx.shooterEntity));
+    }
+
+#endif // ENABLE_NETWORKING
 
     // ---------------------------------------------------------------------------
     // Helpers

@@ -8,6 +8,7 @@
  */
 #include "Game/TFWeaponSystem.h"
 
+#include "Game/TFAbilitySystem.h" // class-abilities lane (W9): Lockdown RoF bonus
 #include "Game/TFBallistics.h"
 #include "Game/TFDamageSystem.h"
 #include "Game/TFDeployableSystem.h" // W3 shared-edit: splash vs deployables
@@ -15,12 +16,18 @@
 #include "Game/TFProgressionSystem.h" // W6 progression: per-weapon shot/hit stats
 #include "Game/TFVehicleSystem.h"     // W3 shared-edit: vehicle hit tests + seat weapons
 #include "Game/TFWeaponMath.h"
+#include "Net/TFFireFxProtocol.h" // W9 remote-fire-events: 0x54F4 S->C fx broadcast
 #include "Net/TFServerSim.h"
 #include "World/TFWorldSetup.h"
 #include "Utils/LogMacros.h"
 
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/NetworkManager.h"
+#endif
+
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace Terrafront
 {
@@ -143,7 +150,11 @@ namespace Terrafront
         if (!base || base->kind == "melee" || base->kind == "beam")
             return; // TF-W2: melee reach + tool beams take a different server path
 
-        const WeaponDef def = m_ctx->data->ResolveWeapon(fireWeapon, pawn.faction);
+        WeaponDef def = m_ctx->data->ResolveWeapon(fireWeapon, pawn.faction);
+        // class-abilities lane (W9): Anchor Lockdown RoF bonus — MUST land
+        // together with the client fire-interval edit (both-or-neither).
+        if (m_ctx->abilities)
+            def.rofRpm *= m_ctx->abilities->RoFMultiplierForPawn(pawn.entity);
 
         ShooterState& st = m_shooters[shooter];
         const double now = ServerNow();
@@ -185,6 +196,13 @@ namespace Terrafront
         if (viaVehicleSeat)
             m_ctx->vehicles->GetSeatFireFrame(shooter, origin, dir);
 
+        // W9 remote-fire-events: PURE clients have no in-process view of this
+        // validated fire (ClientOnRemoteFire above only covers the listen
+        // host), so broadcast a per-shot fx message from the FINAL fire frame
+        // (post seat/turret resolution) to clients in range. Both hitscan and
+        // projectile paths pass through here.
+        ServerBroadcastRemoteFireFx(st, shooter, pawn.entity, def.id, origin, dir);
+
         if (def.projSpeed > 0.0f)
         {
             SpawnServerProjectile(shooter, pawn, def, origin, dir);
@@ -206,6 +224,61 @@ namespace Terrafront
         // count as a single hit so accuracy never exceeds 100%).
         if (anyPelletHit && m_ctx->progression)
             m_ctx->progression->ServerRecordHits(shooter, def.id, 1);
+    }
+
+    // ---------------------------------------------------------------------------
+    // W9 remote-fire-events: 0x54F4 fx broadcast (Net/TFFireFxProtocol.h)
+    // ---------------------------------------------------------------------------
+
+    void TFWeaponSystem::ServerBroadcastRemoteFireFx(ShooterState& st, PlayerId shooter, EntityId shooterPawn,
+                                                     WeaponId weapon, const float muzzle[3], const float dir[3])
+    {
+#ifdef ENABLE_NETWORKING
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        if (!nm.IsInitialized() || nm.GetRole() != Spark::Net::NetworkRole::Server)
+            return; // Standalone / client role: no remote clients can exist
+        const auto& clients = nm.GetClients();
+        if (clients.empty())
+            return;
+
+        // Per-shooter rate cap (~10/s). The stamp only advances when a message
+        // is actually delivered below, so shooters with nobody in range never
+        // burn their budget ("skip if no clients in range").
+        const double now = ServerNow();
+        if (now - st.lastFireFxSent < kTFRemoteFireFxMinIntervalSec)
+            return;
+
+        const TF_RemoteFireFx fx = TF_RemoteFireFx::From(shooterPawn, weapon, muzzle, dir);
+        Spark::Net::NetworkMessage msg;
+        msg.type = static_cast<Spark::Net::MessageType>(kTFFxMsg_RemoteFire);
+        msg.channel = Spark::Net::ChannelType::Unreliable; // presentational; drops are free
+        msg.payload.resize(sizeof(fx));
+        std::memcpy(msg.payload.data(), &fx, sizeof(fx));
+
+        constexpr float kRange2 = kTFRemoteFireFxRangeM * kTFRemoteFireFxRangeM;
+        bool sentAny = false;
+        for (const auto& [clientId, info] : clients)
+        {
+            if (clientId == shooter || info.state != Spark::Net::ConnectionState::Connected)
+                continue; // never echo the shooter's own shot back
+            PawnInfo listener;
+            if (!m_ctx->players || !m_ctx->players->GetPawnByPlayer(clientId, listener))
+                continue; // not entered world / no pawn yet — nothing to hear with
+            if (WeaponMath::Dist2(listener.pos, muzzle) > kRange2)
+                continue;
+            nm.SendToClient(clientId, msg);
+            sentAny = true;
+        }
+        if (sentAny)
+            st.lastFireFxSent = now;
+#else
+        (void)st;
+        (void)shooter;
+        (void)shooterPawn;
+        (void)weapon;
+        (void)muzzle;
+        (void)dir;
+#endif
     }
 
     // ---------------------------------------------------------------------------

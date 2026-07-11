@@ -117,6 +117,10 @@ namespace Terrafront
         struct ShooterState
         {
             std::unordered_map<WeaponId, WeaponFireState> perWeapon;
+            // W9 remote-fire-events: last 0x54F4 TF_RemoteFireFx actually sent
+            // for this shooter (rate cap kTFRemoteFireFxMinIntervalSec; only
+            // advanced when a client in range received one).
+            double lastFireFxSent = -1.0e9;
         };
 
         // Server-simulated projectile (rockets, energy bolts, sniper rounds).
@@ -174,6 +178,15 @@ namespace Terrafront
         bool TerrainBlocked(const float origin[3], const float dir[3], float dist) const;
         EntityId RaycastPawnsNow(const float origin[3], const float dir[3], float maxDist, EntityId ignore,
                                  float outHitPoint[3], float* outDist) const;
+        // W9 remote-fire-events (TFWeaponServer.cpp broadcast section): send
+        // 0x54F4 TF_RemoteFireFx (Net/TFFireFxProtocol.h) for a VALIDATED fire
+        // to every connected client with a pawn within kTFRemoteFireFxRangeM
+        // of the muzzle, EXCEPT the shooter. Rate-capped per shooter via
+        // st.lastFireFxSent; no-op when NetworkManager is not a server
+        // (Standalone) or no client is in range. Pure clients route it to
+        // TFAudioAmbience::ClientOnRemoteFire (flash + distant tail + heat).
+        void ServerBroadcastRemoteFireFx(ShooterState& st, PlayerId shooter, EntityId shooterPawn, WeaponId weapon,
+                                         const float muzzle[3], const float dir[3]);
 
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
