@@ -12,12 +12,14 @@
 #include "Game/TFDeployableTypes.h" // W6: extended DeployableKind constants
 #include "Utils/LogMacros.h"
 #include "Utils/JsonUtils.h"
+#include "Utils/ConsoleVariable.h"
 
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -149,6 +151,62 @@ namespace Terrafront
                 if (s == o)
                     return true;
             return false;
+        }
+
+        // ------------------------------------------------------------------
+        // W12 continent-2-data: which continent this server process loads.
+        // The choice is PINNED at first load (function-local static in
+        // LoadAllInternal): TFWorldSetup builds scene+collision once at module
+        // init and does NOT rebuild on EvDataReloaded, so switching continents
+        // mid-process would desync lattice vs. world. One continent per
+        // server process. Boot-time selection: set the TF_CONTINENT
+        // environment variable before launching (works today), or the
+        // tf_continent cvar once a config/autoexec path can set cvars
+        // pre-module-init (the cvar is read first so that path needs no
+        // further loader changes).
+        // ------------------------------------------------------------------
+        Spark::CVar<std::string> cv_tfContinent(
+            "tf_continent", "cindral_wastes", Spark::CVarFlags::RequiresRestart,
+            "Continent (continents.json key) this server process loads at boot; restart required to change");
+
+        /// continents.json key -> region-lattice data file ("regions.json" for
+        /// the default). Never fails: unknown keys fall back to the default
+        /// with a loud log so a typo cannot boot a half-configured server.
+        std::string ResolveRegionsFile()
+        {
+            std::string want = cv_tfContinent.Get();
+            if (want == "cindral_wastes" || want.empty())
+            {
+                if (const char* env = std::getenv("TF_CONTINENT"); env && env[0] != '\0')
+                    want = env;
+            }
+            if (want == "cindral_wastes" || want.empty())
+                return "regions.json";
+
+            Value root;
+            std::string err;
+            if (LoadJsonFile("continents.json", root, err) && root["continents"].IsArray())
+            {
+                const Value& arr = root["continents"];
+                for (size_t i = 0; i < arr.Size(); ++i)
+                {
+                    const Value& o = arr[i];
+                    if (!o.IsObject() || GetStr(o, "key") != want)
+                        continue;
+                    const std::string file = GetStr(o, "regions");
+                    if (!file.empty())
+                    {
+                        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] tf_continent=%s -> %s", want.c_str(),
+                                       file.c_str());
+                        return file;
+                    }
+                }
+            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] tf_continent '%s' unknown in continents.json (or entry lacks 'regions'); "
+                            "falling back to Cindral Wastes",
+                            want.c_str());
+            return "regions.json";
         }
 
         // -------------------------------------------------------------------------
@@ -679,8 +737,7 @@ namespace Terrafront
                 const Value& ssky = pres["sanctuarySkybox"];
                 if (ssky["faceTex"].IsArray() && ssky["faceTex"].Size() == 6)
                     for (size_t i = 0; i < 6; ++i)
-                        out.sanctuarySkybox.faceTex[i] =
-                            ssky["faceTex"][i].AsString(out.sanctuarySkybox.faceTex[i]);
+                        out.sanctuarySkybox.faceTex[i] = ssky["faceTex"][i].AsString(out.sanctuarySkybox.faceTex[i]);
                 out.sanctuarySkybox.scale = GetNum(ssky, "scale", out.sanctuarySkybox.scale);
                 if (ssky["tint"].IsArray() && ssky["tint"].Size() == 4)
                     for (size_t i = 0; i < 4; ++i)
@@ -900,7 +957,11 @@ namespace Terrafront
             return false;
         if (!LoadJsonFile("vehicles.json", jVehicles, outError))
             return false;
-        if (!LoadJsonFile("regions.json", jRegions, outError))
+        // W12: region lattice selected by tf_continent/TF_CONTINENT, pinned for
+        // the process lifetime; ReloadAll (tf_reload_data) re-reads the SAME
+        // file — switching continents requires a server restart.
+        static const std::string kRegionsFile = ResolveRegionsFile();
+        if (!LoadJsonFile(kRegionsFile, jRegions, outError))
             return false;
         if (!LoadJsonFile("presentation.json", jPresentation, outError))
             return false;

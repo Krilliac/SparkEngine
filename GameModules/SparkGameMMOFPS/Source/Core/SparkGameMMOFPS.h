@@ -32,6 +32,8 @@ namespace Terrafront
     class TFPingUI;          // W11 ping-system lane (UI/TFPingUI.h; TFPingSystem fwd-decl comes from TFTypes.h)
     class TFAlertSystem;     // W11 alerts lane (World/TFAlertSystem.h)
     class TFDeathRecap;      // W11 death-recap lane (UI/TFDeathRecap.h)
+    class TFDayNight;        // W12 time-of-day lane (World/TFDayNight.h)
+    class TFSpectator;       // W12 spectator-mode lane (Game/TFSpectator.h)
 } // namespace Terrafront
 
 class TerrafrontModule : public Spark::IModule
@@ -151,4 +153,15 @@ class TerrafrontModule : public Spark::IModule
     // W11 death-recap lane (additive): client recap panel — pure consumer of
     // TF_DeathRecap / TFDamageSystem's local mirror; booted after nameplates.
     std::unique_ptr<Terrafront::TFDeathRecap> m_deathRecap;
+
+    // W12 time-of-day lane (additive): server-authoritative day/night clock +
+    // TF_TimeOfDay sync (0x5478) + basic-path lighting drive. Main.cpp wiring
+    // applied by the integrator (see W12 wiringNotes).
+    std::unique_ptr<Terrafront::TFDayNight> m_dayNight;
+
+    // W12 spectator-mode lane (additive): client-only dead-time camera —
+    // squadmate follow-cam + bounded free-fly fallback. No wire messages, no
+    // server state. Main.cpp wiring applied by the integrator (see W12
+    // spectator-mode wiringNotes).
+    std::unique_ptr<Terrafront::TFSpectator> m_spectator;
 };

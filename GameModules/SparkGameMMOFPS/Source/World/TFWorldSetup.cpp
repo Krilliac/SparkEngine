@@ -28,6 +28,9 @@
 #include "Game/PlaceholderMesh.h"
 #include "Game/TFComponents.h"
 #include "Game/TFGroundFx.h"
+#include "World/TFWeatherFx.h"    // W12 weather-visuals: storm cycle + client visuals
+#include "World/TFRegionDecor.h"  // W12 decor-instancing: RenderInstanced opt-in
+#include "World/TFRegionSystem.h" // W12 decor-instancing: Decor() accessor
 #include "Game/TFImpactFx.h"      // impact-fx lane (W10)
 #include "Game/TFGrenadeSystem.h" // grenades lane (W10): replicated grenade fx
 #include "Game/TFPingSystem.h"    // ping-system lane (W11): world-space ping diamonds
@@ -548,7 +551,9 @@ namespace Terrafront
         ID3D11DeviceContext* dc = gfx->GetContext();
         gfx->SetBasicShaders();
         // Over-1.0 so the shader's ambient+N.L keeps the sky near full-bright.
-        const XMFLOAT4 kSky{sky.tint[0], sky.tint[1], sky.tint[2], sky.tint[3]};
+        // W12 weather-visuals: storms dim the sky (basic path has no fog).
+        const float skyDim = TFWeatherFx::Get().SkyboxDim();
+        const XMFLOAT4 kSky{sky.tint[0] * skyDim, sky.tint[1] * skyDim, sky.tint[2] * skyDim, sky.tint[3]};
         for (int i = 0; i < 6; ++i)
         {
             gfx->UpdateBasicConstants(world, view, proj, kSky, XMFLOAT2(1, 1));
@@ -828,6 +833,18 @@ namespace Terrafront
                 gfx->SetBasicMaterialTextures(nullptr, nullptr); // W8 pbr-lite: flat defaults
             }
 
+            // 2b) W12 decor-instancing: grouped region decor — one
+            //     DrawMeshInstanced per (mesh, material, emissive) group.
+            //     Small groups (< 4) and everything else stayed in the
+            //     per-entity loop above; falls back automatically when the
+            //     engine lacks the instanced pipeline. Uses this frame's
+            //     view/proj and the b1 constants set at the top of RenderWorld.
+            if (m_ctx->regions)
+            {
+                if (TFRegionDecor* decor = m_ctx->regions->Decor())
+                    decor->RenderInstanced(gfx, view, proj);
+            }
+
             // 3) First-person viewmodel — arms + equipped weapon with sway/walk
             //    bob/recoil (Game/TFViewModel.h; supersedes the old static draw —
             //    keeping both double-draws the gun).
@@ -927,6 +944,12 @@ namespace Terrafront
             //    passes (W8 render-transparency lane; producers queue during
             //    their Update, e.g. TFDeployableSystem's shield walls).
             TFTransparentPass::Get().Flush(gfx, view, proj);
+
+            // 7) Dust storm (W12): wind-blown dust billboards + fullscreen sandy
+            //    tint, drawn last so the wash covers transparents too
+            //    (World/TFWeatherFx.h; cap 120, restores blend/depth/texture).
+            if (m_ctx->HasLocalPlayer())
+                TFWeatherFx::Get().Render(*m_ctx, gfx, view, proj);
         }
         catch (const std::exception& e)
         {
@@ -1143,6 +1166,10 @@ namespace Terrafront
 
         if (m_ctx->role == NetRole::Client)
             DriveOriginRebase();
+
+        // W12 weather-visuals: server-owned dust-storm cycle + 0x547C sync +
+        // pure-client handler poll (all roles; presentation reads the singleton).
+        TFWeatherFx::Get().Update(*m_ctx, deltaTime);
 
         // audio-polish lane (W8): TFAudioAmbience owns the ambient beds
         // (sanctuary hum <-> wind crossfade); the old single-wind-loop starter

@@ -103,6 +103,11 @@ namespace Terrafront
         /// Debug panel toggle (hidden by default; wired from tf_* console commands).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
 
+        /// W12 decor-instancing: render-path access to the decor stamp (null
+        /// until Initialize). TFWorldSetup::RenderWorld calls
+        /// Decor()->RenderInstanced(...) right after the per-entity ECS loop.
+        TFRegionDecor* Decor() const { return m_decor.get(); }
+
       private:
         /// Runtime per-region state: the server truth on authority roles, the
         /// broadcast-fed mirror on pure clients.

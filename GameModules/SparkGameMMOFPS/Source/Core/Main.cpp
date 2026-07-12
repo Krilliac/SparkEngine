@@ -68,8 +68,10 @@
 #include "UI/TFNameplates.h"
 // W11 squad-v2 lane: squad list HUD + waypoint beacon + request pings.
 #include "UI/TFSquadHUD.h"
-#include "UI/TFDeathRecap.h" // death-recap lane (W11)
-#include "UI/TFKeybinds.h"   // grenades lane (W10): ThrowGrenade rebind seam
+#include "UI/TFDeathRecap.h"  // death-recap lane (W11)
+#include "World/TFDayNight.h" // W12 time-of-day lane: day/night clock + lighting
+#include "Game/TFSpectator.h" // W12 spectator-mode lane
+#include "UI/TFKeybinds.h"    // grenades lane (W10): ThrowGrenade rebind seam
 
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -168,6 +170,12 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     // W11 death-recap lane.
     m_deathRecap = std::make_unique<TFDeathRecap>();
 
+    // W12 time-of-day lane.
+    m_dayNight = std::make_unique<TFDayNight>();
+
+    // W12 spectator-mode lane.
+    m_spectator = std::make_unique<TFSpectator>();
+
     // ---- publish context pointers before any Initialize ----
     m_ctx.data = m_data.get();
     m_ctx.world = m_world.get();
@@ -252,6 +260,8 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         {"TFAlertSystem", m_alerts->Initialize(m_ctx, m_events)},
         // ping-system lane (W11): squad-scoped tactical pings.
         {"TFPingSystem", m_pingSystem->Initialize(m_ctx, m_events)},
+        // W12 time-of-day lane: independent (engine gfx + NetworkManager only).
+        {"TFDayNight", m_dayNight->Initialize(m_ctx, m_events)},
         {"TFBotSystem", m_bots->Initialize(m_ctx, m_events)},
         {"TFAudioAmbience", m_ambience->Initialize(m_ctx, m_events)}, // audio-polish: after weapons/data
         {"TFFootsteps", m_footsteps->Initialize(m_ctx, m_events)}, // audio-wave-2 (W10): after players/vehicles/world
@@ -283,6 +293,8 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         // W11 ping-system lane: UI layer takes the system by reference (3-arg
         // Initialize, TFOutfitPanel precedent) — booted last.
         {"TFPingUI", m_pingUI->Initialize(m_ctx, m_events, *m_pingSystem)},
+        // W12 spectator-mode lane: client-only dead-time camera, pure consumer — booted last.
+        {"TFSpectator", m_spectator->Initialize(m_ctx, m_events)},
     };
     for (const Boot& b : boots)
     {
@@ -319,6 +331,7 @@ void TerrafrontModule::OnUnload()
     // chat-social + outfits lanes (reverse boot order; outfit panel booted last).
     // W8 ui-polish lane (booted last, shut down first).
     // W11 lanes (booted last, shut down first): ping UI, death recap, squad HUD.
+    m_spectator->Shutdown();  // W12 spectator-mode lane
     m_pingUI->Shutdown();     // W11 ping-system lane
     m_deathRecap->Shutdown(); // W11 death-recap lane
     m_squadHUD->Shutdown();   // W11 squad-v2 lane
@@ -343,6 +356,7 @@ void TerrafrontModule::OnUnload()
     m_footsteps->Shutdown(); // audio-wave-2 lane (W10)
     m_ambience->Shutdown();  // audio-polish lane
     m_bots->Shutdown();
+    m_dayNight->Shutdown();   // W12 time-of-day lane: unregisters tf_time + wire handler
     m_pingSystem->Shutdown(); // ping-system lane (W11)
     m_alerts->Shutdown();     // alerts lane (W11): unregisters tf_alert + wire handler
     m_medals->Shutdown();     // medals-scoreboard lane (W10): unhooks the scoreboard pointer
@@ -395,6 +409,7 @@ void TerrafrontModule::OnUpdate(float dt)
     m_medals->Update(dt);     // medals-scoreboard lane (W10): 4 Hz row flush + toasts + mirror handlers
     m_alerts->Update(dt);     // alerts lane (W11): scheduler + scoring + 1 Hz broadcast + mirror
     m_pingSystem->Update(dt); // ping-system lane (W11): expiry sweep + mirror aging + handler lifecycle
+    m_dayNight->Update(dt);   // W12 time-of-day lane: clock + 30 s sync + lighting drive
     m_bots->Update(dt);
     m_ambience->Update(dt);  // audio-polish lane
     m_footsteps->Update(dt); // audio-wave-2 lane (W10)
@@ -419,6 +434,8 @@ void TerrafrontModule::OnUpdate(float dt)
     m_squadHUD->Update(dt);
     // W11 death-recap lane (handler lifecycle + respawn-edge clear).
     m_deathRecap->Update(dt);
+    // W12 spectator-mode lane (dead-time camera; must run after m_clientNet->Update).
+    m_spectator->Update(dt);
 }
 
 void TerrafrontModule::OnFixedUpdate(float fdt)
@@ -497,6 +514,8 @@ void TerrafrontModule::OnImGui()
             m_squadHUD->RenderUI();
             // W11 death-recap lane: recap panel on the death screen.
             m_deathRecap->RenderUI();
+            // W12 spectator-mode lane: 'Spectating' label + LMB/RMB cycle clicks.
+            m_spectator->RenderUI();
         }
     }
 
@@ -544,6 +563,8 @@ void TerrafrontModule::OnImGui()
             m_pingUI->RenderDebugUI();           // W11 ping-system lane
             m_squadHUD->RenderDebugUI();         // W11 squad-v2 lane
             m_deathRecap->RenderDebugUI();       // W11 death-recap lane
+            m_dayNight->RenderDebugUI();         // W12 time-of-day lane
+            m_spectator->RenderDebugUI();        // W12 spectator-mode lane
 #ifdef SPARK_HAS_IMGUI
         }
         ImGui::End();

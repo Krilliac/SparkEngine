@@ -117,6 +117,15 @@ namespace Terrafront
         // 0x5474-0x5477: death-recap block — id + packed structs in
         // Game/TFDamageSystem.h (TFRepProtocol precedent; not enumerators).
         // 0x5474 = S->C TF_DeathRecap (reliable, victim only); 0x5475-0x5477 free.
+        // 0x5478-0x547B time-of-day lane (W12): 0x5478 TF_TimeOfDay S->C reliable
+        // — ids + struct live in World/TFDayNight.h (TFFireFxProtocol precedent).
+        // 0x5479-0x547B free.
+        // 0x547C-0x547F: weather block — id + packed struct in World/TFWeatherFx.h
+        // (TFRepProtocol precedent; not enumerators). 0x547C = S->C
+        // TF_WeatherState heartbeat; 0x547D-0x547F free.
+        // 0x5480-0x5483: outfit-leaderboards block (W12) — id + packed struct in
+        // Game/TFOutfitSystem.h. 0x5480 = S->C TF_OutfitLeaderboard (the request is
+        // TFOutfitOp::Leaderboard riding OutfitRequest 0x5438); 0x5481-0x5483 free.
     };
 
 #pragma pack(push, 1)
