@@ -837,6 +837,10 @@ void InputManager::CaptureMouse(bool capture)
             while (ShowCursor(FALSE) >= 0)
             {
             }
+            // Uncaptured WM_MOUSEMOVE stores client coordinates, while the
+            // captured path reads screen coordinates. Force the next Update
+            // to re-seed at the window center instead of mixing the two spaces.
+            m_captureHadFocus = false;
             m_mouseCaptured = true;
             Spark::SimpleConsole::GetInstance().Log("Mouse captured.", "INFO");
         }
@@ -850,6 +854,7 @@ void InputManager::CaptureMouse(bool capture)
             while (ShowCursor(TRUE) < 0)
             {
             }
+            m_captureHadFocus = false;
             m_mouseCaptured = false;
             Spark::SimpleConsole::GetInstance().Log("Mouse capture released.", "INFO");
         }
