@@ -39,7 +39,10 @@ namespace Spark
  *
  * Caller is responsible for BeginFrame()/EndFrame() around this call.
  */
-    void RenderWorldBasic(World& world, GraphicsEngine& g, WorldMeshCache& cache, const DirectX::XMMATRIX& view,
+    // NOTE: '::World' (not bare 'World') — TUs that include a header declaring
+    // 'namespace Spark::World' (e.g. TFWorldSetup.h) before this one would
+    // otherwise resolve the unqualified name to that namespace (C2882).
+    void RenderWorldBasic(::World& world, GraphicsEngine& g, WorldMeshCache& cache, const DirectX::XMMATRIX& view,
                           const DirectX::XMMATRIX& proj);
 
 } // namespace Spark

@@ -86,6 +86,7 @@ class VRAMBudgetMonitor;
 class PhysicsSystem;
 class GameObject;
 class Shader;
+class Mesh; // W12 decor-instancing: DrawMeshInstanced parameter
 
 namespace Spark::RHI
 {
@@ -788,6 +789,46 @@ class GraphicsEngine
      */
     void ApplyBasicRenderStates();
 
+    // ========================================================================
+    // BASIC INSTANCED DRAW PATH (W12 decor-instancing)
+    // ========================================================================
+
+    /**
+     * @brief True if the basic instanced pipeline is available (lazily
+     *        compiles the second VS permutation + instance input layout on
+     *        first call; a failure reports false forever). Feature probe for
+     *        module opt-in — callers fall back to per-entity draws when false.
+     */
+    bool HasInstancedBasicPipeline();
+
+    /**
+     * @brief Bind the instanced basic pipeline: the per-instance-world VS
+     *        permutation + the SHARED basic pixel shader, the instanced input
+     *        layout, and the same cbuffers/sampler/texture defaults as
+     *        SetBasicShaders(). No-op if the pipeline is unavailable.
+     */
+    void SetBasicShadersInstanced();
+
+    /**
+     * @brief Draw a mesh N times in one DrawIndexedInstanced (basic path).
+     *
+     * Caller contract: SetBasicShadersInstanced() bound the pipeline and
+     * UpdateBasicConstants(...) set the per-group color/tiling/emissive (the
+     * b0 world matrices are ignored — instance worlds replace them). Instance
+     * worlds are uploaded UNTRANSPOSED (XMFLOAT4X4 rows = HLSL float4x4 rows)
+     * and must be rotation+translation+uniform-scale (normals use the world
+     * 3x3 + normalize instead of an inverse-transpose).
+     *
+     * @param mesh           Mesh whose vertex/index buffers to draw.
+     * @param instanceWorlds Per-instance world matrices (row-major XMFLOAT4X4).
+     * @param instanceCount  Number of instances (chunked internally at 4096).
+     * @param indexStart     First index (RenderRange semantics).
+     * @param indexCount     Index count; 0 = whole mesh.
+     * @return true if the draw call(s) were issued.
+     */
+    bool DrawMeshInstanced(Mesh& mesh, const DirectX::XMFLOAT4X4* instanceWorlds, uint32_t instanceCount,
+                           uint32_t indexStart = 0, uint32_t indexCount = 0);
+
     /**
      * @brief Simple material resolved from a material JSON for the basic shader path.
      *
@@ -841,6 +882,22 @@ class GraphicsEngine
 
     /// @brief Get the camera position from the most recent frame.
     const DirectX::XMFLOAT3& GetFrameCameraPosition() const { return m_frameCameraPos; }
+
+    /**
+     * @brief Override the basic-path environment lighting (W12 day/night lane).
+     * Consumed by UpdateFrameConstants every frame once set; never calling this
+     * keeps the legacy fixed daylight constants.
+     */
+    void SetEnvironmentLighting(const DirectX::XMFLOAT3& lightDir, const DirectX::XMFLOAT3& lightColor,
+                                float lightIntensity, const DirectX::XMFLOAT3& ambientColor, float ambientIntensity)
+    {
+        m_envLightDir = lightDir;
+        m_envLightColor = lightColor;
+        m_envLightIntensity = lightIntensity;
+        m_envAmbientColor = ambientColor;
+        m_envAmbientIntensity = ambientIntensity;
+        m_envLightingSet = true;
+    }
 
     /// @brief Get near clip plane distance.
     float GetNearPlane() const { return m_nearPlane; }
@@ -1068,6 +1125,18 @@ class GraphicsEngine
         m_basicTextureCache;                                             ///< WIC-loaded textures by path
     std::unordered_map<std::string, BasicMaterial> m_basicMaterialCache; ///< Parsed basic materials by JSON path
 
+    // --- W12 decor-instancing: basic instanced draw path (lazy, default-off).
+    //     Second VS permutation + instance input layout + dynamic instance
+    //     buffer; the existing basic VS/IL/PS above are untouched.
+    ComPtr<ID3D11VertexShader> m_basicVertexShaderInstanced;          ///< per-instance-world VS permutation
+    ComPtr<ID3D11InputLayout> m_basicInputLayoutInstanced;            ///< slot0 vertex + slot1 instance matrix
+    ComPtr<ID3D11Buffer> m_basicInstanceBuffer;                       ///< dynamic instance-world vertex buffer
+    uint32_t m_basicInstanceCapacity = 0;                             ///< buffer capacity in matrices (cap 4096)
+    bool m_basicInstancedTried = false;                               ///< lazy-create attempted (fail = off)
+    HRESULT CompileEmbeddedVertexShaderInstanced(ID3DBlob** blobOut); ///< instanced VS permutation
+    bool EnsureBasicInstancedPipeline();                              ///< lazy create; false = unavailable
+    bool EnsureBasicInstanceCapacity(uint32_t instanceCount);         ///< geometric growth, 4096 cap
+
     // Pre-present hook: invoked in EndFrame() immediately before Present().
     // Plain function pointer (NOT std::function) so a module DLL calling
     // EndFrame() safely invokes exe-side code — used for the game-mode ImGui
@@ -1148,6 +1217,15 @@ class GraphicsEngine
     DirectX::XMMATRIX m_frameViewMatrix = DirectX::XMMatrixIdentity();
     DirectX::XMMATRIX m_frameProjMatrix = DirectX::XMMatrixIdentity();
     DirectX::XMFLOAT3 m_frameCameraPos{0.0f, 0.0f, 0.0f};
+
+    // Environment lighting override (W12 day/night lane; read by UpdateFrameConstants)
+    bool m_envLightingSet = false;
+    DirectX::XMFLOAT3 m_envLightDir{0.35f, -0.8f, 0.45f};
+    DirectX::XMFLOAT3 m_envLightColor{1.0f, 0.97f, 0.9f};
+    float m_envLightIntensity = 1.0f;
+    DirectX::XMFLOAT3 m_envAmbientColor{0.52f, 0.5f, 0.46f};
+    float m_envAmbientIntensity = 0.6f;
+
     float m_nearPlane = 0.1f;
     float m_farPlane = 1000.0f;
 };
