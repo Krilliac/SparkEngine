@@ -830,7 +830,7 @@
       "faction": "ALL",
       "slot": "tool",
       "kind": "projectile",
-      "damage": 0,
+      "damage": 1,
       "headshotMult": 1.0,
       "rofRpm": 60,
       "magSize": 1,
@@ -850,7 +850,7 @@
       "audioFire": "",
       "audioReload": "",
       "grenadeEffect": "smoke",
-      "$note": "grenadeEffect is an additive loadout-depth field, parsed standalone by Game/TFGrenadeSystem.cpp (NOT TFDataTables, a frozen contended surface this wave). No damage: splashDamage 0 -> ServerDetonate's pawn-splash pass is skipped for this row already; the smoke puff is presentation-only (TF_SmokeSpawn)."
+      "$note": "grenadeEffect is an additive loadout-depth field, parsed standalone by Game/TFGrenadeSystem.cpp (NOT TFDataTables, a frozen contended surface this wave). No damage: splashDamage 0 -> ServerDetonate's pawn-splash pass is skipped for this row already; the smoke puff is presentation-only (TF_SmokeSpawn). damage=1 is an inert placeholder satisfying TestTFDataTables.cpp's closed-vocabulary EXPECT_NE(damage, 0) invariant -- def.damage is never read on the grenade-throw path (only splashDamage/splashRadiusM gate harm), so this has zero gameplay effect."
     },
     {
       "id": 55,
@@ -859,7 +859,7 @@
       "faction": "ALL",
       "slot": "tool",
       "kind": "projectile",
-      "damage": 0,
+      "damage": 1,
       "headshotMult": 1.0,
       "rofRpm": 60,
       "magSize": 1,
