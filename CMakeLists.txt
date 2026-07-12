@@ -1688,8 +1688,18 @@ if(WIN32 AND NOT MINGW)
     endif()
 endif()
 
-# Copy all asset subdirectories (Models, Textures, Audio, Materials, Scenes, Scripts, MMO)
-foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO)
+# Copy all asset subdirectories (Models, Textures, Audio, Materials, Scenes, Scripts, MMO,
+# MMOFPS). MMOFPS holds Assets/MMOFPS/Data/*.json (weapons/classes/regions/factions/vehicles/
+# suits/continents/decor/presentation) — TFDataTables::Initialize() loads these via a
+# hardcoded cwd-relative "Assets/MMOFPS/Data/" path (Data/TFDataTables.cpp), so without this
+# entry the TERRAFRONT module's data tables (and therefore the whole module, and every tf_*
+# console command) silently fail to boot whenever SparkEngine.exe is run from the build output
+# directory instead of the repo root. Found via the W13 integration acceptance pass
+# (2026-07-12): chaos_accept.cfg's tf_dedicated/tf_chaos/tf_validate all came back "Unknown
+# command" because TFDataTables::Initialize() returned false before the module could register
+# them. SparkTests.exe never hit this because its TFData_* tests walk up to the repo root
+# instead of trusting cwd.
+foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO MMOFPS)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}")
         add_custom_command(TARGET SparkEngine POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
