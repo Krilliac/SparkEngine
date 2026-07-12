@@ -28,6 +28,8 @@
 #include "Game/PlaceholderMesh.h"
 #include "Game/TFComponents.h"
 #include "Game/TFGroundFx.h"
+#include "Game/TFBlobShadows.h" // W13 shadow-polish lane: ground-projected blob shadows
+#include "Game/TFVehicleFx.h"   // W13 vehicle-damage-states lane: hull-hp smoke/spark/fire
 #include "World/TFWeatherFx.h"    // W12 weather-visuals: storm cycle + client visuals
 #include "World/TFRegionDecor.h"  // W12 decor-instancing: RenderInstanced opt-in
 #include "World/TFRegionSystem.h" // W12 decor-instancing: Decor() accessor
@@ -919,6 +921,14 @@ namespace Terrafront
                 }
             }
 
+            // 4b) Blob shadows (W13 shadow-polish lane): soft dark ground discs
+            //     under live pawns/vehicles/deployables — the basic path's scoped
+            //     stand-in for a real shadow map (Game/TFBlobShadows.h; cap 128,
+            //     camera-distance culled, height-above-ground faded). Drawn before
+            //     the additive ground/impact puffs so the shadow reads under them.
+            if (m_ctx->HasLocalPlayer())
+                TFBlobShadows::Get().UpdateAndRender(*m_ctx, gfx, view, proj);
+
             // 5) Hover dust: client-side flipbook ground puffs under fast-moving
             //    vehicles (Game/TFGroundFx.h; camera-facing additive quads, cap 64).
             if (m_ctx->HasLocalPlayer())
@@ -928,6 +938,13 @@ namespace Terrafront
             //     shot impact points (Game/TFImpactFx.h; cap 48, ~0.15 s).
             if (m_ctx->HasLocalPlayer())
                 TFImpactFx::Get().UpdateAndRender(*m_ctx, gfx, view, proj);
+
+            // 5b2) Vehicle damage FX (W13 vehicle-damage-states lane): hull-hp
+            //      smoke/spark/fire billboards + a critical-tier pitched-down
+            //      engine cue on damaged hulls (Game/TFVehicleFx.h; reads
+            //      TFVehicleInfo.hp via the existing ForEachVehicle enumerator).
+            if (m_ctx->HasLocalPlayer())
+                TFVehicleFx::Get().UpdateAndRender(*m_ctx, gfx, view, proj);
 
             // 5c) Grenades (W10): replicated grenade bodies + boom flipbook
             //     (Game/TFGrenadeSystem.h; restores blend/depth/texture state).
