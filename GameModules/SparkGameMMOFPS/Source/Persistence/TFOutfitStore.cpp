@@ -62,7 +62,55 @@ namespace Terrafront
             return static_cast<TFOutfitRank>(v);
         }
 
+        // --- civil-calendar helpers (Howard Hinnant's algorithms; UTC) ----------
+
+        /// days since 1970-01-01 -> (year, month, day)
+        void CivilFromDays(int64_t days, int64_t& y, unsigned& m, unsigned& d)
+        {
+            const int64_t z = days + 719468;
+            const int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+            const uint64_t doe = static_cast<uint64_t>(z - era * 146097);
+            const uint64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+            const uint64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+            const uint64_t mp = (5 * doy + 2) / 153;
+            d = static_cast<unsigned>(doy - (153 * mp + 2) / 5 + 1);
+            m = static_cast<unsigned>(mp < 10 ? mp + 3 : mp - 9);
+            y = static_cast<int64_t>(yoe) + era * 400 + (m <= 2 ? 1 : 0);
+        }
+
+        /// (year, month, day) -> days since 1970-01-01
+        int64_t DaysFromCivil(int64_t y, unsigned m, unsigned d)
+        {
+            y -= m <= 2 ? 1 : 0;
+            const int64_t era = (y >= 0 ? y : y - 399) / 400;
+            const uint64_t yoe = static_cast<uint64_t>(y - era * 400);
+            const uint64_t doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+            const uint64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+            return era * 146097 + static_cast<int64_t>(doe) - 719468;
+        }
+
     } // namespace
+
+    uint32_t TFOutfitISOWeekKey(int64_t unixMs)
+    {
+        constexpr int64_t kMsPerDay = 86400000;
+        int64_t days = unixMs / kMsPerDay;
+        if (unixMs < 0 && (unixMs % kMsPerDay) != 0)
+            --days; // floor toward -inf for pre-epoch times
+
+        // ISO weekday 1=Mon..7=Sun (1970-01-01 was a Thursday). The %-of-negative
+        // fold keeps pre-epoch days correct too.
+        const int isoDow = static_cast<int>(((days % 7) + 10) % 7) + 1;
+
+        // The ISO week/year of any date equal those of its week's Thursday.
+        const int64_t thursday = days + (4 - isoDow);
+        int64_t isoYear = 0;
+        unsigned m = 0, d = 0;
+        CivilFromDays(thursday, isoYear, m, d);
+        const int64_t jan1 = DaysFromCivil(isoYear, 1, 1);
+        const uint32_t week = static_cast<uint32_t>((thursday - jan1) / 7) + 1;
+        return static_cast<uint32_t>(isoYear) * 100 + week;
+    }
 
     // ---------------------------------------------------------------------------
     // TFOutfitRecord helpers
@@ -225,6 +273,10 @@ namespace Terrafront
                 rec.name = row["name"].AsString();
                 rec.tag = row["tag"].AsString();
                 rec.createdAtMs = static_cast<int64_t>(row["createdAtMs"].AsNumber(0.0));
+                // W12 competition score — additive keys, absent loads as 0.
+                rec.weeklyScore = static_cast<uint64_t>(row["weeklyScore"].AsNumber(0.0));
+                rec.allTimeScore = static_cast<uint64_t>(row["allTimeScore"].AsNumber(0.0));
+                rec.weekKey = static_cast<uint32_t>(row["weekKey"].AsNumber(0.0));
                 if (rec.id == 0 || rec.name.empty())
                     continue;
 
@@ -272,6 +324,9 @@ namespace Terrafront
             row["name"] = Spark::Json::Value(rec.name);
             row["tag"] = Spark::Json::Value(rec.tag);
             row["createdAtMs"] = Spark::Json::Value(static_cast<double>(rec.createdAtMs));
+            row["weeklyScore"] = Spark::Json::Value(static_cast<double>(rec.weeklyScore));
+            row["allTimeScore"] = Spark::Json::Value(static_cast<double>(rec.allTimeScore));
+            row["weekKey"] = Spark::Json::Value(static_cast<double>(rec.weekKey));
 
             Spark::Json::Value members = Spark::Json::Value::MakeArray();
             for (const TFOutfitMemberRecord& m : rec.members)
@@ -447,6 +502,44 @@ namespace Terrafront
         m_outfits.erase(it);
         MarkDirty();
         return true;
+    }
+
+    bool TFOutfitStore::AddScore(uint32_t outfitId, uint32_t points, uint32_t weekKey)
+    {
+        if (!m_open || points == 0)
+            return false;
+        TFOutfitRecord* rec = const_cast<TFOutfitRecord*>(FindById(outfitId));
+        if (!rec)
+            return false;
+        if (rec->weekKey != weekKey)
+        {
+            // Self-healing rollover: score landing in a new ISO week resets the
+            // weekly counter even before the next RolloverWeek sweep runs.
+            rec->weeklyScore = 0;
+            rec->weekKey = weekKey;
+        }
+        rec->weeklyScore += points;
+        rec->allTimeScore += points;
+        MarkDirty();
+        return true;
+    }
+
+    size_t TFOutfitStore::RolloverWeek(uint32_t weekKey)
+    {
+        if (!m_open)
+            return 0;
+        size_t stamped = 0;
+        for (TFOutfitRecord& rec : m_outfits)
+        {
+            if (rec.weekKey == weekKey)
+                continue;
+            rec.weeklyScore = 0;
+            rec.weekKey = weekKey;
+            ++stamped;
+        }
+        if (stamped > 0)
+            MarkDirty();
+        return stamped;
     }
 
     void TFOutfitStore::UpdateMemberName(uint64_t charId, const std::string& name)

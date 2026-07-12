@@ -45,14 +45,17 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace Terrafront
 {
 
     class TFSanctuaryDecor; // sanctuary-v2 lane (W10): World/TFSanctuaryDecor.h
     class TFTargetRange;    // sanctuary-v2 lane (W10): Game/TFTargetRange.h
+    class TFTutorial;       // tutorial-flow lane (W12): Game/TFTutorial.h
 
     // ---------------------------------------------------------------------
     // Travel wire channel (reserved TFMsg block 0x5434-0x5437, C<->S)
@@ -114,6 +117,19 @@ namespace Terrafront
     class TFTravelSystem
     {
       public:
+        /// One continents.json continent row (display metadata; W12 continent-2-data:
+        /// the terminal lists EVERY registered continent, but only the one whose
+        /// region lattice this process loaded is joinable — one continent per
+        /// server process; the others render as different-server destinations).
+        struct ContinentMeta
+        {
+            int mapId{-1};
+            std::string key; ///< continents.json key (== tf_continent boot value)
+            std::string name;
+            std::string blurb;
+            bool active{false}; ///< true == the continent THIS process loaded
+        };
+
         TFTravelSystem();
         ~TFTravelSystem();
 
@@ -206,10 +222,13 @@ namespace Terrafront
         double m_clock{0.0};
         char m_lastTravelMsg[96]{}; ///< last reply, surfaced in the menu
 
-        // display metadata from continents.json (falls back to built-ins)
+        // display metadata from continents.json (falls back to built-ins).
+        // m_continentDisplayName/Blurb mirror the ACTIVE entry of m_continentList
+        // (W12: the continent whose lattice TFDataTables loaded this process).
         std::string m_sanctuaryDisplayName{"Sanctuary Haven"};
         std::string m_continentDisplayName{"Cindral Wastes"};
         std::string m_continentBlurb{"The contested desert continent."};
+        std::vector<ContinentMeta> m_continentList; ///< every registered continent
 
 #ifdef ENABLE_NETWORKING
         bool m_serverHandlers{false};
@@ -224,6 +243,12 @@ namespace Terrafront
         // dedicated servers.
         std::unique_ptr<TFSanctuaryDecor> m_sanctuaryDecor;
         std::unique_ptr<TFTargetRange> m_targetRange;
+
+        // tutorial-flow lane (W12): the first-join sanctuary tutorial is
+        // owned + driven here too (same precedent as the two members above)
+        // so it inherits this system's lifecycle without touching contended
+        // Main.cpp. Client-presentation-only; no-op on dedicated servers.
+        std::unique_ptr<TFTutorial> m_tutorial;
     };
 
 } // namespace Terrafront

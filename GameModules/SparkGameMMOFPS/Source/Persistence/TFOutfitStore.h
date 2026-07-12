@@ -54,6 +54,12 @@ namespace Terrafront
         int64_t joinedAtMs = 0;
     };
 
+    /// ISO-8601 week key (isoYear*100 + isoWeek, e.g. 202628) of a UTC unix-ms
+    /// timestamp. THE week identity for outfit weekly-score rollover — weeks
+    /// run Mon-Sun and the year boundary follows ISO rules (Jan 1 can belong
+    /// to week 52/53 of the previous ISO year). Pure function, unit-tested.
+    uint32_t TFOutfitISOWeekKey(int64_t unixMs);
+
     struct TFOutfitRecord
     {
         uint32_t id = 0;
@@ -61,6 +67,13 @@ namespace Terrafront
         std::string tag;  ///< 2-5 chars, unique (case-insensitive)
         int64_t createdAtMs = 0;
         std::vector<TFOutfitMemberRecord> members;
+
+        // --- competition score (W12 outfit-leaderboards; additive JSON keys,
+        // absent keys load as 0). weeklyScore belongs to ISO week `weekKey`;
+        // AddScore/RolloverWeek reset it when the week rolls over. ------------
+        uint64_t weeklyScore = 0;  ///< score earned in ISO week `weekKey`
+        uint64_t allTimeScore = 0; ///< lifetime score (never reset)
+        uint32_t weekKey = 0;      ///< TFOutfitISOWeekKey the weekly belongs to (0 == never scored)
 
         const TFOutfitMemberRecord* FindMember(uint64_t charId) const;
         TFOutfitMemberRecord* FindMember(uint64_t charId);
@@ -105,6 +118,20 @@ namespace Terrafront
         bool RemoveMember(uint32_t outfitId, uint64_t charId);
         bool SetMemberRank(uint32_t outfitId, uint64_t charId, TFOutfitRank rank);
         bool Disband(uint32_t outfitId);
+
+        /// Add competition score to an outfit (weekly + all-time). `weekKey` is
+        /// the CURRENT TFOutfitISOWeekKey: when it differs from the record's
+        /// stored key the weekly score is reset first (self-healing rollover for
+        /// scores landing right on a week boundary between rollover sweeps).
+        /// False for unknown outfit / closed store / points == 0.
+        bool AddScore(uint32_t outfitId, uint32_t points, uint32_t weekKey);
+
+        /// Stamp every outfit to the CURRENT `weekKey`, zeroing the weekly score
+        /// of any record still on an older week. Returns how many records were
+        /// re-stamped (0 == nothing to do, no dirty churn). Call on server load
+        /// and when a tick crosses the ISO-week boundary (TFOutfitSystem::
+        /// RolloverIfNeeded is the single shared caller).
+        size_t RolloverWeek(uint32_t weekKey);
 
         /// Refresh the stored character-name copy wherever `charId` is a member
         /// (called when a character enters world, so renames/typos never go

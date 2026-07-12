@@ -1,8 +1,10 @@
 /**
  * @file TFOutfitPanel.h
  * @brief Outfit (clan) UI: create form, roster with ranks, invite-by-name,
- *        leave/disband — a standalone ImGui window that the chat-social lane
- *        can also embed as a tab.
+ *        leave/disband, plus the W12 competition Leaderboard tab (top-10 by
+ *        weekly score, own outfit highlighted at its true rank, 60 s
+ *        auto-refresh while visible) — a standalone ImGui window that the
+ *        chat-social lane can also embed as a tab.
  *
  * OWNERSHIP: outfits lane (with Game/TFOutfitSystem.h/.cpp and
  * Persistence/TFOutfitStore.h/.cpp).
@@ -64,6 +66,7 @@ namespace Terrafront
         void DrawInviteBox();
         void DrawCreateForm();
         void DrawRoster();
+        void DrawLeaderboard(); ///< W12: Leaderboard tab body (auto-refreshes while visible)
 #endif
 
         TFGameContext* m_ctx{nullptr};
@@ -78,6 +81,7 @@ namespace Terrafront
         char m_inviteBuf[24]{}; // character-name max (TF_CharBrief) + NUL
         bool m_confirmLeave{false};
         bool m_confirmDisband{false};
+        double m_lbLastRequest{-1.0e9}; ///< ImGui::GetTime() of the last leaderboard request
     };
 
 } // namespace Terrafront

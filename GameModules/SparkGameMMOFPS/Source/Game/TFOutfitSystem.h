@@ -37,6 +37,22 @@
  *  - Member: leave only.
  *  - Leader leave auto-promotes (senior Officer, else senior Member);
  *    the last member leaving disbands the outfit.
+ *
+ * W12 outfit-leaderboards (score aggregation section):
+ *  - SERVER: outfits accumulate competition score from member actions on
+ *    existing surfaces only — EvPlayerKilled kills +1 (TFMedalSystem's
+ *    suicide/team-kill filter), capture participation +10 (canonical XP
+ *    reasons 4/5/6 riding EvXPAwarded) and alert wins +100 (kXPReasonAlert 13,
+ *    TFAlertSystem's per-winning-participant payout). Persisted per outfit in
+ *    outfits.json (weekly + all-time, additive keys); the weekly column rolls
+ *    over by ISO week number via ONE shared RolloverIfNeeded() (called on
+ *    server load and on the tick crossing the boundary).
+ *  - WIRE: reserved block 0x5480-0x5483. The request is TFOutfitOp::
+ *    Leaderboard on the already-routed TF_OutfitRequest (no new C->S id);
+ *    0x5480 S->C TF_OutfitLeaderboard answers with the top 10 (ranked weekly,
+ *    then all-time) + the requester's own row at its true rank.
+ *  - CLIENT: LeaderboardMirror consumed by TFOutfitPanel's Leaderboard tab,
+ *    which re-requests every kTFOutfitLbRefreshSec while visible.
  */
 #pragma once
 
@@ -66,6 +82,13 @@ namespace Terrafront
     constexpr uint16_t kTFMsgOutfitInvite = 0x543C;    // S->C  TF_OutfitInvite (notice to the invitee)
     // 0x543D-0x543F reserved for future outfit traffic.
 
+    // W12 outfit-leaderboards — reserved TFMsg block 0x5480-0x5483. The C->S
+    // side needs NO new id: the request is TFOutfitOp::Leaderboard riding the
+    // already-routed TF_OutfitRequest (0x5438), so TFServerSim gains no new
+    // wiring. Only the S->C snapshot uses the new block.
+    constexpr uint16_t kTFMsgOutfitLeaderboard = 0x5480; // S->C  TF_OutfitLeaderboard (top-10 + your row)
+    // 0x5481-0x5483 reserved for future outfit-competition traffic.
+
     enum class TFOutfitOp : uint8_t
     {
         Create = 0, // name+tag
@@ -76,6 +99,7 @@ namespace Terrafront
         Kick,    // targetCharId
         SetRank, // targetCharId + rank (SetRank to Leader == leadership transfer)
         Disband,
+        Leaderboard, // W12: request the TF_OutfitLeaderboard snapshot (no other fields used)
     };
 
     enum class TFOutfitResult : uint8_t
@@ -105,6 +129,19 @@ namespace Terrafront
     constexpr size_t kTFOutfitTagMax = 5;
     constexpr uint32_t kTFMaxOutfitMembers = 128;
     constexpr uint8_t kTFOutfitRosterChunk = 8; ///< members per TF_OutfitRoster message
+
+    // --- W12 competition score (design weights) + leaderboard sizing ----------
+    // Server-side aggregation hooks (TFMedalSystem precedent — EXISTING event
+    // surfaces only): kills via EvPlayerKilled (same suicide/team-kill filter),
+    // capture participation via the canonical XP reasons 4/5/6, alert wins via
+    // kXPReasonAlert (13) — the per-participant payout TFAlertSystem routes
+    // through ServerAwardXP, so "won an alert" needs no new event.
+    constexpr uint32_t kTFOutfitScorePerKill = 1;
+    constexpr uint32_t kTFOutfitScorePerCapture = 10;
+    constexpr uint32_t kTFOutfitScorePerAlertWin = 100;
+    constexpr uint8_t kTFOutfitLbTopN = 10;                     ///< ranked rows in the snapshot
+    constexpr uint8_t kTFOutfitLbMaxRows = kTFOutfitLbTopN + 1; ///< + requester's own out-of-top row
+    constexpr float kTFOutfitLbRefreshSec = 60.0f;              ///< panel auto-refresh cadence
 
 #pragma pack(push, 1)
 
@@ -173,6 +210,31 @@ namespace Terrafront
     };
     static_assert(sizeof(TF_OutfitInvite) == 68, "wire layout frozen");
 
+    /// One leaderboard row (W12).
+    struct TF_OutfitLbRow
+    {
+        uint32_t outfitId;
+        uint32_t rank; // 1-based true rank (own row keeps its rank outside the top 10)
+        uint64_t weekly;
+        uint64_t allTime;
+        char name[32]; // NUL-terminated
+        char tag[8];   // NUL-terminated
+    };
+    static_assert(sizeof(TF_OutfitLbRow) == 64, "wire layout frozen");
+
+    /// Leaderboard snapshot (W12): top kTFOutfitLbTopN outfits ranked by weekly
+    /// score (all-time, then name break ties) + the requester's own outfit row
+    /// appended with its true rank when it falls outside the top N.
+    struct TF_OutfitLeaderboard
+    {
+        uint8_t count;     // valid entries in rows[]
+        uint8_t yourIndex; // index of the requester's outfit in rows[] (0xFF == not in an outfit)
+        uint16_t totalOutfits;
+        uint32_t weekKey; // TFOutfitISOWeekKey the weekly column belongs to
+        TF_OutfitLbRow rows[kTFOutfitLbMaxRows];
+    };
+    static_assert(sizeof(TF_OutfitLeaderboard) == 8 + 11 * 64, "wire layout frozen");
+
 #pragma pack(pop)
 
     /// Render-site helper: "[TAG] P7" when tag is non-empty, "P7" otherwise.
@@ -240,6 +302,7 @@ namespace Terrafront
         void ClientRequestKick(uint64_t targetCharId);
         void ClientRequestSetRank(uint64_t targetCharId, TFOutfitRank rank);
         void ClientRequestDisband();
+        void ClientRequestLeaderboard(); ///< W12: fetch/refresh the leaderboard snapshot
 
         // --- client mirror (read-only view for the UI) ---------------------------
         struct MirrorMember
@@ -275,6 +338,28 @@ namespace Terrafront
         bool InOutfit() const { return m_mirror.outfitId != 0; }
         TFOutfitRank LocalRank() const;
 
+        // --- client leaderboard mirror (W12, read-only view for the UI) ---------
+        struct LbRow
+        {
+            uint32_t outfitId = 0;
+            uint32_t rank = 0;
+            uint64_t weekly = 0;
+            uint64_t allTime = 0;
+            std::string name;
+            std::string tag;
+        };
+
+        struct LeaderboardMirror
+        {
+            bool valid = false; ///< a TF_OutfitLeaderboard snapshot has arrived
+            uint16_t totalOutfits = 0;
+            uint32_t weekKey = 0; ///< ISO week of the weekly column
+            int yourIndex = -1;   ///< index of your outfit in rows (-1 == none)
+            std::vector<LbRow> rows;
+        };
+
+        const LeaderboardMirror& LocalLeaderboard() const { return m_lb; }
+
         // --- validation (public for UI pre-checks + unit tests) -----------------
         static bool ValidateOutfitName(const std::string& name); ///< 3-24, alnum + single internal spaces
         static bool ValidateOutfitTag(const std::string& tag);   ///< 2-5, alnum only
@@ -307,6 +392,16 @@ namespace Terrafront
         void ServerAfterLeaderChange(uint32_t outfitId); ///< auto-promote / disband-on-empty
         void SweepDepartedPlayers();
 
+        // --- W12 competition score (server aggregation) -------------------------
+        /// Weekly rollover — THE single shared path: called after a successful
+        /// store open (server load) AND from the authority Update when a tick
+        /// crosses the ISO-week boundary (m_lastWeekKey guards the sweep).
+        void RolloverIfNeeded();
+        void ServerAddOutfitScore(PlayerId player, uint32_t points); ///< resolves player -> outfit, no-op if none
+        void ServerSendLeaderboard(PlayerId requester);              ///< build + send TF_OutfitLeaderboard
+        void OnPlayerKilledScore(const EvPlayerKilled& ev);          ///< kills +1 (medal-system kill filter)
+        void OnXPAwardedScore(const EvXPAwarded& ev);                ///< captures +10 (4/5/6), alert wins +100 (13)
+
         // wire send (server side)
         void SendReply(PlayerId player, TFOutfitOp op, TFOutfitResult result, uint32_t outfitId);
         void SendRosterTo(PlayerId player, const TFOutfitRecord* outfit); ///< nullptr == cleared roster
@@ -322,6 +417,7 @@ namespace Terrafront
         void ClientHandleRoster(const TF_OutfitRoster& roster);
         void ClientHandleTagUpdate(const TF_OutfitTagUpdate& upd);
         void ClientHandleInvite(const TF_OutfitInvite& inv);
+        void ClientHandleLeaderboard(const TF_OutfitLeaderboard& lb);
         void NoteResult(TFOutfitOp op, TFOutfitResult result);
 
         void OnPlayerSpawned(const EvPlayerSpawned& ev); ///< server binding fallback
@@ -345,9 +441,12 @@ namespace Terrafront
         std::unordered_map<uint64_t, PlayerId> m_playerOfChar;
         std::unordered_map<uint64_t, uint32_t> m_invites; ///< invitee charId -> outfit id
         float m_sweepAccum{0.0f};
+        uint32_t m_lastWeekKey{0}; ///< last ISO week RolloverWeek was run for (0 == never)
+        uint32_t m_scoreEvents{0}; ///< debug: score-yielding events aggregated this session
 
         // --- client state (all roles with a local player) ---
         Mirror m_mirror;
+        LeaderboardMirror m_lb;
         std::unordered_map<PlayerId, std::string> m_tags; ///< broadcast tag map (pure-client render path)
         bool m_clientHandlers{false};
         bool m_cmdsRegistered{false};

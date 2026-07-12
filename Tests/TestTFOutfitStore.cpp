@@ -316,6 +316,153 @@ TEST(TFOutfitStore_CorruptFileQuarantinedNotWiped)
     fs::remove(path);
 }
 
+// ---------------------------------------------------------------------------
+// W12 outfit-leaderboards: ISO week key + competition score fields
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    constexpr int64_t kMsPerDay = 86400000;
+} // namespace
+
+TEST(TFOutfitStore_ISOWeekKey)
+{
+    // Known ISO-8601 vectors (days since 1970-01-01; 1970-01-01 was a Thursday).
+    // 2026-01-01 (Thu, day 20454) -> W1 of 2026; 2026 has 53 ISO weeks.
+    EXPECT_EQ(TFOutfitISOWeekKey(20454 * kMsPerDay), 202601u);
+    // 2026-01-04 (Sun) still W1; 2026-01-05 (Mon) starts W2.
+    EXPECT_EQ(TFOutfitISOWeekKey(20457 * kMsPerDay), 202601u);
+    EXPECT_EQ(TFOutfitISOWeekKey(20458 * kMsPerDay), 202602u);
+    // 2027-01-01 (Fri, day 20819) belongs to W53 of ISO year 2026.
+    EXPECT_EQ(TFOutfitISOWeekKey(20819 * kMsPerDay), 202653u);
+    // Classic Wikipedia vectors: 2005-01-01 (Sat, day 12784) -> 2004-W53;
+    // 2005-12-31 (Sat, day 13148) -> 2005-W52.
+    EXPECT_EQ(TFOutfitISOWeekKey(12784 * kMsPerDay), 200453u);
+    EXPECT_EQ(TFOutfitISOWeekKey(13148 * kMsPerDay), 200552u);
+    // Sub-day precision: last ms of a Sunday vs first ms of the Monday after.
+    EXPECT_EQ(TFOutfitISOWeekKey(20458 * kMsPerDay - 1), 202601u);
+    EXPECT_EQ(TFOutfitISOWeekKey(20458 * kMsPerDay + 1), 202602u);
+}
+
+TEST(TFOutfitStore_ScoreAccumulationAndRollover)
+{
+    const std::string path = TempStorePath("tfoutfit_score");
+    fs::remove(path);
+
+    TFOutfitStore store;
+    EXPECT_TRUE(store.Open(path));
+    const TFOutfitRecord* created = store.Create("Iron Vultures", "IVLT", 1001, "Raska", 1000);
+    EXPECT_NE(created, nullptr);
+    if (!created)
+        return;
+    const uint32_t id = created->id;
+
+    // Fresh outfit: zero scores, no week stamped.
+    EXPECT_EQ(created->weeklyScore, uint64_t{0});
+    EXPECT_EQ(created->allTimeScore, uint64_t{0});
+    EXPECT_EQ(created->weekKey, uint32_t{0});
+
+    // Accumulate inside one week.
+    EXPECT_TRUE(store.AddScore(id, 1, 202628));  // kill
+    EXPECT_TRUE(store.AddScore(id, 10, 202628)); // capture
+    const TFOutfitRecord* rec = store.FindById(id);
+    EXPECT_NE(rec, nullptr);
+    if (!rec)
+        return;
+    EXPECT_EQ(rec->weeklyScore, uint64_t{11});
+    EXPECT_EQ(rec->allTimeScore, uint64_t{11});
+    EXPECT_EQ(rec->weekKey, uint32_t{202628});
+
+    // Self-healing rollover: a score landing in the NEXT week resets weekly
+    // first, all-time keeps accumulating.
+    EXPECT_TRUE(store.AddScore(id, 100, 202629)); // alert win, new week
+    rec = store.FindById(id);
+    EXPECT_NE(rec, nullptr);
+    if (!rec)
+        return;
+    EXPECT_EQ(rec->weeklyScore, uint64_t{100});
+    EXPECT_EQ(rec->allTimeScore, uint64_t{111});
+    EXPECT_EQ(rec->weekKey, uint32_t{202629});
+
+    // Explicit sweep (server load / tick boundary): weekly zeroed, stamp moves.
+    EXPECT_EQ(store.RolloverWeek(202630), size_t{1});
+    EXPECT_EQ(store.RolloverWeek(202630), size_t{0}); // idempotent, no dirty churn
+    rec = store.FindById(id);
+    EXPECT_NE(rec, nullptr);
+    if (rec)
+    {
+        EXPECT_EQ(rec->weeklyScore, uint64_t{0});
+        EXPECT_EQ(rec->allTimeScore, uint64_t{111});
+        EXPECT_EQ(rec->weekKey, uint32_t{202630});
+    }
+
+    // Rejections: unknown outfit, zero points, closed store.
+    EXPECT_FALSE(store.AddScore(id + 100, 5, 202630));
+    EXPECT_FALSE(store.AddScore(id, 0, 202630));
+    store.Close();
+    EXPECT_FALSE(store.AddScore(id, 5, 202630));
+    EXPECT_EQ(store.RolloverWeek(202631), size_t{0});
+
+    fs::remove(path);
+}
+
+TEST(TFOutfitStore_ScoreDiskRoundTripAndAdditiveDefaults)
+{
+    const std::string path = TempStorePath("tfoutfit_score_rt");
+    fs::remove(path);
+
+    uint32_t id = 0;
+    {
+        TFOutfitStore store;
+        EXPECT_TRUE(store.Open(path));
+        const TFOutfitRecord* created = store.Create("Iron Vultures", "IVLT", 1001, "Raska", 1000);
+        EXPECT_NE(created, nullptr);
+        if (!created)
+            return;
+        id = created->id;
+        EXPECT_TRUE(store.AddScore(id, 111, 202628));
+        EXPECT_TRUE(store.SaveNow());
+        store.Close();
+    }
+    {
+        TFOutfitStore store;
+        EXPECT_TRUE(store.Open(path));
+        const TFOutfitRecord* rec = store.FindById(id);
+        EXPECT_NE(rec, nullptr);
+        if (rec)
+        {
+            EXPECT_EQ(rec->weeklyScore, uint64_t{111});
+            EXPECT_EQ(rec->allTimeScore, uint64_t{111});
+            EXPECT_EQ(rec->weekKey, uint32_t{202628});
+        }
+        store.Close();
+    }
+    fs::remove(path);
+
+    // Pre-W12 file without the score keys: additive defaults load as zero.
+    {
+        std::ofstream f(path, std::ios::binary | std::ios::trunc);
+        f << "{\n  \"nextOutfitId\": 2,\n  \"outfits\": [\n    {\n      \"id\": 1,\n      \"name\": \"Old Guard\",\n"
+             "      \"tag\": \"OLDG\",\n      \"createdAtMs\": 1000,\n      \"members\": [\n        {\n"
+             "          \"charId\": 1001, \"name\": \"Raska\", \"rank\": 2, \"joinedAtMs\": 1000\n        }\n"
+             "      ]\n    }\n  ]\n}\n";
+    }
+    {
+        TFOutfitStore store;
+        EXPECT_TRUE(store.Open(path));
+        const TFOutfitRecord* rec = store.FindById(1);
+        EXPECT_NE(rec, nullptr);
+        if (rec)
+        {
+            EXPECT_EQ(rec->weeklyScore, uint64_t{0});
+            EXPECT_EQ(rec->allTimeScore, uint64_t{0});
+            EXPECT_EQ(rec->weekKey, uint32_t{0});
+        }
+        store.Close();
+    }
+    fs::remove(path);
+}
+
 TEST(TFOutfitStore_DebouncedFlush)
 {
     const std::string path = TempStorePath("tfoutfit_debounce");

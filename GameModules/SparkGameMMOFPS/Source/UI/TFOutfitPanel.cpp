@@ -91,15 +91,31 @@ namespace Terrafront
         if (!m_initialized || !m_outfits)
             return;
 
-        DrawStatusLine();
+        // Nested tab bar (fine inside the social panel's tab item too).
+        if (!ImGui::BeginTabBar("##outfittabs"))
+            return;
 
-        if (m_outfits->LocalMirror().hasInvite)
-            DrawInviteBox();
+        if (ImGui::BeginTabItem("Outfit"))
+        {
+            DrawStatusLine();
 
-        if (!m_outfits->InOutfit())
-            DrawCreateForm();
-        else
-            DrawRoster();
+            if (m_outfits->LocalMirror().hasInvite)
+                DrawInviteBox();
+
+            if (!m_outfits->InOutfit())
+                DrawCreateForm();
+            else
+                DrawRoster();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Leaderboard"))
+        {
+            DrawLeaderboard();
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
 #endif
     }
 
@@ -284,6 +300,87 @@ namespace Terrafront
                     m_confirmDisband = false;
             }
         }
+    }
+
+    void TFOutfitPanel::DrawLeaderboard()
+    {
+        const TFOutfitSystem::LeaderboardMirror& lb = m_outfits->LocalLeaderboard();
+
+        // Request while the tab is visible: every kTFOutfitLbRefreshSec once a
+        // snapshot exists, with a short 2 s retry until the first one arrives.
+        const double now = ImGui::GetTime();
+        const double due = lb.valid ? static_cast<double>(kTFOutfitLbRefreshSec) : 2.0;
+        if (now - m_lbLastRequest >= due)
+        {
+            m_outfits->ClientRequestLeaderboard();
+            m_lbLastRequest = now;
+        }
+
+        if (!lb.valid)
+        {
+            ImGui::TextDisabled("Fetching leaderboard...");
+            return;
+        }
+
+        ImGui::Text("Top outfits - ISO week %u   (%u outfit%s total)", lb.weekKey, lb.totalOutfits,
+                    lb.totalOutfits == 1 ? "" : "s");
+        ImGui::TextDisabled("Score: kill +1, capture +10, alert win +100. Refreshes every %.0f s.",
+                            kTFOutfitLbRefreshSec);
+        ImGui::Separator();
+
+        if (lb.rows.empty())
+        {
+            ImGui::TextDisabled("No outfits yet — create one on the Outfit tab.");
+            return;
+        }
+
+        if (ImGui::BeginTable("##outfitlb", 5,
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
+                                  ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableSetupColumn("Rank", ImGuiTableColumnFlags_WidthFixed, 42.0f);
+            ImGui::TableSetupColumn("Tag", ImGuiTableColumnFlags_WidthFixed, 58.0f);
+            ImGui::TableSetupColumn("Name");
+            ImGui::TableSetupColumn("Weekly", ImGuiTableColumnFlags_WidthFixed, 74.0f);
+            ImGui::TableSetupColumn("All-time", ImGuiTableColumnFlags_WidthFixed, 84.0f);
+            ImGui::TableHeadersRow();
+
+            for (size_t i = 0; i < lb.rows.size(); ++i)
+            {
+                const TFOutfitSystem::LbRow& r = lb.rows[i];
+
+                // Gap marker between the top 10 and an own row beyond it.
+                if (i > 0 && r.rank > lb.rows[i - 1].rank + 1)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextDisabled("...");
+                }
+
+                const bool you = static_cast<int>(i) == lb.yourIndex;
+                ImGui::TableNextRow();
+                if (you)
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                           ImGui::GetColorU32(ImVec4(0.18f, 0.42f, 0.24f, 0.55f)));
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%u", r.rank);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("[%s]", r.tag.c_str());
+                ImGui::TableSetColumnIndex(2);
+                if (you)
+                    ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.60f, 1.0f), "%s (yours)", r.name.c_str());
+                else
+                    ImGui::TextUnformatted(r.name.c_str());
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%llu", static_cast<unsigned long long>(r.weekly));
+                ImGui::TableSetColumnIndex(4);
+                ImGui::Text("%llu", static_cast<unsigned long long>(r.allTime));
+            }
+            ImGui::EndTable();
+        }
+
+        if (lb.yourIndex < 0 && m_outfits->InOutfit())
+            ImGui::TextDisabled("Your outfit has not scored yet this week.");
     }
 
 #endif // SPARK_HAS_IMGUI

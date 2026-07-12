@@ -6,11 +6,14 @@
  */
 #include "Game/TFOutfitSystem.h"
 
+#include "Game/TFPlayerSystem.h"      // FactionOf — the kill-credit team filter
+#include "Game/TFProgressionSystem.h" // kXPReasonCapture* (score hooks)
 #include "Net/TFClientNet.h"
 #include "Net/TFServerSim.h"
 #include "Persistence/TFDatabase.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
+#include "World/TFAlertSystem.h" // kXPReasonAlert (alert-win score hook)
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -165,6 +168,11 @@ namespace Terrafront
         // still binds player<->character here, so tags/rosters flow either way.
         events.Subscribe<EvPlayerSpawned>([this](const EvPlayerSpawned& ev) { OnPlayerSpawned(ev); });
 
+        // W12 competition score — aggregation off EXISTING event surfaces only
+        // (TFMedalSystem precedent); handlers self-gate on authority.
+        events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled& ev) { OnPlayerKilledScore(ev); });
+        events.Subscribe<EvXPAwarded>([this](const EvXPAwarded& ev) { OnXPAwardedScore(ev); });
+
         RegisterConsoleCommands();
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFOutfitSystem initialized");
@@ -185,6 +193,7 @@ namespace Terrafront
             {
                 m_sweepAccum = 0.0f;
                 SweepDepartedPlayers();
+                RolloverIfNeeded(); // tick-crossing-the-boundary weekly rollover path
             }
         }
 
@@ -198,6 +207,7 @@ namespace Terrafront
             // Connection dropped: the mirror + tag map describe a session that no
             // longer exists.
             m_mirror = Mirror{};
+            m_lb = LeaderboardMirror{};
             m_tags.clear();
         }
 #endif
@@ -227,7 +237,7 @@ namespace Terrafront
             auto& console = Spark::SimpleConsole::GetInstance();
             for (const char* cmd :
                  {"tf_outfit_create", "tf_outfit_invite", "tf_outfit_accept", "tf_outfit_decline", "tf_outfit_leave",
-                  "tf_outfit_kick", "tf_outfit_rank", "tf_outfit_disband", "tf_outfit_status"})
+                  "tf_outfit_kick", "tf_outfit_rank", "tf_outfit_disband", "tf_outfit_status", "tf_outfit_leaderboard"})
                 console.UnregisterCommand(cmd);
             m_cmdsRegistered = false;
         }
@@ -238,6 +248,8 @@ namespace Terrafront
         m_invites.clear();
         m_tags.clear();
         m_mirror = Mirror{};
+        m_lb = LeaderboardMirror{};
+        m_lastWeekKey = 0; // a re-Initialize must re-run the load-time rollover sweep
         m_initialized = false;
     }
 
@@ -392,6 +404,7 @@ namespace Terrafront
         {
             SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened outfit store (%zu outfits)",
                            m_store.OutfitCount());
+            RolloverIfNeeded(); // server-load weekly rollover path (shared with the Update tick)
             return true;
         }
         SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] authority failed to open Saves/outfits.json");
@@ -477,6 +490,11 @@ namespace Terrafront
         case TFOutfitOp::Disband:
             result = ServerDisband(sender, outfitId);
             break;
+        case TFOutfitOp::Leaderboard:
+            // The snapshot IS the reply — no TF_OutfitReply (it would flash the
+            // panel's op-status line on every silent 60 s refresh).
+            ServerSendLeaderboard(sender);
+            return;
         default:
             ++m_badPackets;
             result = TFOutfitResult::BadRequest;
@@ -795,6 +813,139 @@ namespace Terrafront
     }
 
     // ---------------------------------------------------------------------------
+    // Server: competition score aggregation + leaderboard (W12)
+    // ---------------------------------------------------------------------------
+
+    void TFOutfitSystem::RolloverIfNeeded()
+    {
+        if (!m_store.IsOpen())
+            return;
+        const uint32_t wk = TFOutfitISOWeekKey(NowMs());
+        if (wk == m_lastWeekKey)
+            return; // still inside the week RolloverWeek last stamped
+        const size_t stamped = m_store.RolloverWeek(wk);
+        if (stamped > 0)
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] outfit weekly scores rolled to ISO week %u (%zu outfits)",
+                           wk, stamped);
+        m_lastWeekKey = wk;
+    }
+
+    void TFOutfitSystem::ServerAddOutfitScore(PlayerId player, uint32_t points)
+    {
+        if (player == kInvalidPlayer || points == 0)
+            return;
+        const BoundChar* bc = BoundCharOf(player);
+        if (!bc)
+            return; // bots / pre-onboarding sessions never score
+        if (!EnsureStoreOpen())
+            return;
+        const TFOutfitRecord* rec = m_store.FindByCharacter(bc->charId);
+        if (!rec)
+            return; // unaffiliated player
+        if (m_store.AddScore(rec->id, points, TFOutfitISOWeekKey(NowMs())))
+            ++m_scoreEvents;
+    }
+
+    void TFOutfitSystem::OnPlayerKilledScore(const EvPlayerKilled& ev)
+    {
+        if (!m_initialized || !m_ctx || !m_ctx->IsAuthority())
+            return;
+        // Same credit filter as TFMedalSystem/TFProgressionSystem: no score for
+        // environment deaths, suicides, or team kills.
+        if (ev.killer == kInvalidPlayer || ev.killer == ev.victim)
+            return;
+        if (m_ctx->players)
+        {
+            const FactionId killerF = m_ctx->players->FactionOf(ev.killer);
+            const FactionId victimF = m_ctx->players->FactionOf(ev.victim);
+            if (killerF != FactionId::None && killerF == victimF)
+                return;
+        }
+        ServerAddOutfitScore(ev.killer, kTFOutfitScorePerKill);
+    }
+
+    void TFOutfitSystem::OnXPAwardedScore(const EvXPAwarded& ev)
+    {
+        if (!m_initialized || !m_ctx || !m_ctx->IsAuthority())
+            return;
+        // Capture participation (the canonical reason codes 4/5/6 —
+        // TFMedalSystem/TFAlertSystem precedent) and alert wins (13 — the
+        // per-winning-participant payout TFAlertSystem routes through
+        // ServerAwardXP). Everything else is ignored.
+        if (ev.reason == kXPReasonCaptureFacility || ev.reason == kXPReasonCaptureFort ||
+            ev.reason == kXPReasonCaptureOutpost)
+            ServerAddOutfitScore(ev.player, kTFOutfitScorePerCapture);
+        else if (ev.reason == kXPReasonAlert)
+            ServerAddOutfitScore(ev.player, kTFOutfitScorePerAlertWin);
+    }
+
+    void TFOutfitSystem::ServerSendLeaderboard(PlayerId requester)
+    {
+        RolloverIfNeeded(); // the weekly column is always current-week truth
+
+        // Rank every outfit: weekly desc, all-time desc, then name (stable,
+        // deterministic order for equal scores).
+        std::vector<const TFOutfitRecord*> ranked;
+        ranked.reserve(m_store.OutfitCount());
+        for (const TFOutfitRecord& o : m_store.All())
+            ranked.push_back(&o);
+        std::sort(ranked.begin(), ranked.end(),
+                  [](const TFOutfitRecord* a, const TFOutfitRecord* b)
+                  {
+                      if (a->weeklyScore != b->weeklyScore)
+                          return a->weeklyScore > b->weeklyScore;
+                      if (a->allTimeScore != b->allTimeScore)
+                          return a->allTimeScore > b->allTimeScore;
+                      return a->name < b->name;
+                  });
+
+        uint32_t yourOutfitId = 0;
+        if (const BoundChar* bc = BoundCharOf(requester))
+            if (const TFOutfitRecord* mine = m_store.FindByCharacter(bc->charId))
+                yourOutfitId = mine->id;
+
+        TF_OutfitLeaderboard lb{};
+        lb.totalOutfits = static_cast<uint16_t>(std::min<size_t>(ranked.size(), 0xFFFF));
+        lb.weekKey = TFOutfitISOWeekKey(NowMs());
+        lb.yourIndex = 0xFF;
+
+        auto fillRow = [](TF_OutfitLbRow& row, const TFOutfitRecord& rec, size_t rank)
+        {
+            row.outfitId = rec.id;
+            row.rank = static_cast<uint32_t>(rank);
+            row.weekly = rec.weeklyScore;
+            row.allTime = rec.allTimeScore;
+            CopyField(row.name, sizeof(row.name), rec.name);
+            CopyField(row.tag, sizeof(row.tag), rec.tag);
+        };
+
+        const size_t topN = std::min<size_t>(ranked.size(), kTFOutfitLbTopN);
+        for (size_t i = 0; i < topN; ++i)
+        {
+            fillRow(lb.rows[lb.count], *ranked[i], i + 1);
+            if (ranked[i]->id == yourOutfitId)
+                lb.yourIndex = lb.count;
+            ++lb.count;
+        }
+        // Requester's outfit outside the top N: append its row at its TRUE rank
+        // so the panel can highlight it either way.
+        if (yourOutfitId != 0 && lb.yourIndex == 0xFF)
+        {
+            for (size_t i = topN; i < ranked.size(); ++i)
+            {
+                if (ranked[i]->id != yourOutfitId)
+                    continue;
+                fillRow(lb.rows[lb.count], *ranked[i], i + 1);
+                lb.yourIndex = lb.count;
+                ++lb.count;
+                break;
+            }
+        }
+
+        SendWireTo(requester, kTFMsgOutfitLeaderboard, &lb, sizeof(lb));
+    }
+
+    // ---------------------------------------------------------------------------
     // Server: wire send
     // ---------------------------------------------------------------------------
 
@@ -997,6 +1148,13 @@ namespace Terrafront
         SendRequest(req);
     }
 
+    void TFOutfitSystem::ClientRequestLeaderboard()
+    {
+        TF_OutfitRequest req{};
+        req.op = static_cast<uint8_t>(TFOutfitOp::Leaderboard);
+        SendRequest(req);
+    }
+
     // ---------------------------------------------------------------------------
     // Client: mirror
     // ---------------------------------------------------------------------------
@@ -1047,6 +1205,20 @@ namespace Terrafront
             inv.tag[sizeof(inv.tag) - 1] = '\0';
             inv.inviter[sizeof(inv.inviter) - 1] = '\0';
             ClientHandleInvite(inv);
+            break;
+        }
+        case kTFMsgOutfitLeaderboard:
+        {
+            if (size != sizeof(TF_OutfitLeaderboard))
+                return;
+            TF_OutfitLeaderboard lb;
+            std::memcpy(&lb, data, sizeof(lb));
+            for (TF_OutfitLbRow& row : lb.rows)
+            {
+                row.name[sizeof(row.name) - 1] = '\0';
+                row.tag[sizeof(row.tag) - 1] = '\0';
+            }
+            ClientHandleLeaderboard(lb);
             break;
         }
         default:
@@ -1115,6 +1287,29 @@ namespace Terrafront
         m_mirror.inviteFrom = FieldToString(inv.inviter, sizeof(inv.inviter));
     }
 
+    void TFOutfitSystem::ClientHandleLeaderboard(const TF_OutfitLeaderboard& lb)
+    {
+        m_lb.rows.clear();
+        m_lb.valid = true;
+        m_lb.totalOutfits = lb.totalOutfits;
+        m_lb.weekKey = lb.weekKey;
+        const uint8_t n = std::min<uint8_t>(lb.count, kTFOutfitLbMaxRows);
+        m_lb.yourIndex = lb.yourIndex < n ? static_cast<int>(lb.yourIndex) : -1;
+        m_lb.rows.reserve(n);
+        for (uint8_t i = 0; i < n; ++i)
+        {
+            const TF_OutfitLbRow& r = lb.rows[i];
+            LbRow row;
+            row.outfitId = r.outfitId;
+            row.rank = r.rank;
+            row.weekly = r.weekly;
+            row.allTime = r.allTime;
+            row.name = FieldToString(r.name, sizeof(r.name));
+            row.tag = FieldToString(r.tag, sizeof(r.tag));
+            m_lb.rows.push_back(std::move(row));
+        }
+    }
+
     void TFOutfitSystem::NoteResult(TFOutfitOp op, TFOutfitResult result)
     {
         m_mirror.hasResult = true;
@@ -1147,7 +1342,8 @@ namespace Terrafront
         using Spark::Net::NetworkMessage;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
 
-        for (uint16_t id : {kTFMsgOutfitReply, kTFMsgOutfitRoster, kTFMsgOutfitTagUpdate, kTFMsgOutfitInvite})
+        for (uint16_t id : {kTFMsgOutfitReply, kTFMsgOutfitRoster, kTFMsgOutfitTagUpdate, kTFMsgOutfitInvite,
+                            kTFMsgOutfitLeaderboard})
         {
             nm.RegisterHandler(static_cast<MessageType>(id), [this, id](const NetworkMessage& m)
                                { ClientHandleWire(id, m.payload.data(), m.payload.size()); });
@@ -1161,7 +1357,8 @@ namespace Terrafront
         // No per-type removal in NetworkManager; overwrite with no-ops so no
         // dangling `this` survives module shutdown (TFServerSim pattern).
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (uint16_t id : {kTFMsgOutfitReply, kTFMsgOutfitRoster, kTFMsgOutfitTagUpdate, kTFMsgOutfitInvite})
+        for (uint16_t id : {kTFMsgOutfitReply, kTFMsgOutfitRoster, kTFMsgOutfitTagUpdate, kTFMsgOutfitInvite,
+                            kTFMsgOutfitLeaderboard})
             nm.RegisterHandler(static_cast<Spark::Net::MessageType>(id), [](const Spark::Net::NetworkMessage&) {});
         m_clientHandlers = false;
     }
@@ -1338,6 +1535,30 @@ namespace Terrafront
             },
             "Show your outfit roster, pending invite and last op result", "TERRAFRONT", "tf_outfit_status");
 
+        console.RegisterCommand(
+            "tf_outfit_leaderboard",
+            [this](const std::vector<std::string>&) -> std::string
+            {
+                ClientRequestLeaderboard(); // refresh in flight; print what we have
+                if (!m_lb.valid)
+                    return "[TF] outfit leaderboard requested (re-run to see the snapshot)";
+                std::string out = "[TF] outfit leaderboard (ISO week " + std::to_string(m_lb.weekKey) + ", " +
+                                  std::to_string(m_lb.totalOutfits) + " outfits):";
+                for (size_t i = 0; i < m_lb.rows.size(); ++i)
+                {
+                    const LbRow& r = m_lb.rows[i];
+                    out += "\n  #" + std::to_string(r.rank) + " [" + r.tag + "] " + r.name +
+                           "  weekly=" + std::to_string(r.weekly) + "  all-time=" + std::to_string(r.allTime);
+                    if (static_cast<int>(i) == m_lb.yourIndex)
+                        out += "  <- yours";
+                }
+                if (m_lb.rows.empty())
+                    out += "\n  (no outfits yet)";
+                return out;
+            },
+            "Fetch + print the outfit score leaderboard (kill +1, capture +10, alert win +100)", "TERRAFRONT",
+            "tf_outfit_leaderboard");
+
         m_cmdsRegistered = true;
     }
 
@@ -1354,6 +1575,7 @@ namespace Terrafront
         ImGui::Text("outfits      : %zu", m_store.OutfitCount());
         ImGui::Text("bound players: %zu   invites: %zu", m_boundChars.size(), m_invites.size());
         ImGui::Text("tag map      : %zu   bad packets: %u", m_tags.size(), m_badPackets);
+        ImGui::Text("score events : %u   week key: %u   lb rows: %zu", m_scoreEvents, m_lastWeekKey, m_lb.rows.size());
         if (m_mirror.outfitId != 0)
             ImGui::Text("mirror       : '%s' [%s] %u members (you: %s)", m_mirror.name.c_str(), m_mirror.tag.c_str(),
                         m_mirror.totalMembers, OutfitRankName(LocalRank()));

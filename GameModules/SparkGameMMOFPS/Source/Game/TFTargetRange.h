@@ -30,6 +30,7 @@
 #include "Core/TFTypes.h"
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace Terrafront
@@ -52,6 +53,15 @@ namespace Terrafront
         void RenderUI();
 
         uint32_t SpawnedCount() const { return static_cast<uint32_t>(m_entities.size()); }
+
+        /// tutorial-flow lane (W12), additive seam: read-only observer invoked
+        /// after a LOCAL shot registers a dummy hit (the same cosmetic estimate
+        /// the floaters show + the hit distance). Presentation-only by the
+        /// header contract above — the observer must never feed gameplay.
+        /// Single consumer (TFTutorial, installed by TFTravelSystem); pass {}
+        /// to detach.
+        using HitObserver = std::function<void(float dmgEstimate, float distM)>;
+        void SetHitObserver(HitObserver fn) { m_hitObserver = std::move(fn); }
 
       private:
         struct Dummy
@@ -92,6 +102,8 @@ namespace Terrafront
         std::vector<uint32_t> m_entities; ///< every range entity, for Shutdown
         std::vector<Dummy> m_dummies;     ///< size 6 once spawned
         std::vector<Floater> m_floaters;  ///< live floating damage numbers
+
+        HitObserver m_hitObserver; ///< tutorial-flow lane (W12) seam; may be empty
 
         uint32_t m_hits{0};  ///< lifetime dummy hits (debug)
         uint32_t m_shots{0}; ///< lifetime hook invocations in sanctuary (debug)

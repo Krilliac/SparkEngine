@@ -20,6 +20,7 @@
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFRedeployRules.h" // ui-map-keys seam: SetExtraRule (sanctioned extension point)
 #include "Game/TFTargetRange.h"   // sanctuary-v2 lane (W10): cosmetic firing range
+#include "Game/TFTutorial.h"      // tutorial-flow lane (W12): first-join guided flow
 #include "Game/TFUiSounds.h"      // W10 audio-wave-2: terminal bleeps
 #include "Net/TFClientNet.h"
 #include "Net/TFRedeployProtocol.h" // kTFRedeployBlocked reason code
@@ -114,6 +115,13 @@ namespace Terrafront
         m_targetRange = std::make_unique<TFTargetRange>();
         m_targetRange->Initialize(ctx);
 
+        // tutorial-flow lane (W12): first-join guided flow, owned here like
+        // the decor/range above. AttachRange installs the read-only dummy-hit
+        // observer for the firing-range step.
+        m_tutorial = std::make_unique<TFTutorial>();
+        m_tutorial->Initialize(ctx);
+        m_tutorial->AttachRange(m_targetRange.get());
+
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
                        "[TF] TFTravelSystem initialized (sanctuary pad %.0f/%.0f, terminal %.0f/%.0f)",
@@ -125,6 +133,13 @@ namespace Terrafront
     {
         if (!m_initialized)
             return;
+        // tutorial-flow lane (W12): the tutorial detaches its TFTargetRange
+        // hit observer in Shutdown, so it must go down BEFORE the range.
+        if (m_tutorial)
+        {
+            m_tutorial->Shutdown();
+            m_tutorial.reset();
+        }
         // sanctuary-v2 lane (W10): tear down owned subsystems first (the range
         // releases its TFWeaponSystem hook and both destroy their entities).
         if (m_targetRange)
@@ -175,6 +190,14 @@ namespace Terrafront
             return;
         }
         const Spark::Json::Value& arr = root["continents"];
+
+        // W12 continent-2-data: collect EVERY registered continent. Which one
+        // is live in THIS process is decided by TFDataTables (it loaded exactly
+        // one region lattice — Main.cpp initializes data before travel); its
+        // scene path is the stable join key against continents.json entries.
+        const std::string activeScene =
+            (m_ctx && m_ctx->data && m_ctx->data->IsLoaded()) ? m_ctx->data->GetContinent().scene : std::string();
+        m_continentList.clear();
         for (size_t i = 0; i < arr.Size(); ++i)
         {
             const Spark::Json::Value& o = arr[i];
@@ -185,13 +208,34 @@ namespace Terrafront
             if (name.empty())
                 continue;
             if (mapId == kTFMapSanctuary)
-                m_sanctuaryDisplayName = name;
-            else if (mapId == kTFMapCindralWastes)
             {
-                m_continentDisplayName = name;
-                if (o.HasKey("blurb"))
-                    m_continentBlurb = o["blurb"].AsString(m_continentBlurb);
+                m_sanctuaryDisplayName = name;
+                continue;
             }
+            ContinentMeta meta;
+            meta.mapId = mapId;
+            meta.key = o.HasKey("key") ? o["key"].AsString("") : std::string();
+            meta.name = name;
+            meta.blurb = o.HasKey("blurb") ? o["blurb"].AsString("") : std::string();
+            meta.active = !activeScene.empty() && o.HasKey("scene") && o["scene"].AsString("") == activeScene;
+            m_continentList.push_back(std::move(meta));
+        }
+
+        // Fallback (older continents.json / no data tables): mapId 1 is active.
+        if (std::none_of(m_continentList.begin(), m_continentList.end(),
+                         [](const ContinentMeta& c) { return c.active; }))
+        {
+            for (ContinentMeta& c : m_continentList)
+                c.active = (c.mapId == kTFMapCindralWastes);
+        }
+        for (const ContinentMeta& c : m_continentList)
+        {
+            if (!c.active)
+                continue;
+            m_continentDisplayName = c.name;
+            if (!c.blurb.empty())
+                m_continentBlurb = c.blurb;
+            break;
         }
     }
 
@@ -742,6 +786,8 @@ namespace Terrafront
             m_sanctuaryDecor->Update(deltaTime);
         if (m_targetRange)
             m_targetRange->Update(deltaTime);
+        if (m_tutorial) // tutorial-flow lane (W12): gates itself internally
+            m_tutorial->Update(deltaTime);
 
 #ifdef ENABLE_NETWORKING
         // Late registration polls (region-system pattern: roles appear after
@@ -829,6 +875,8 @@ namespace Terrafront
             m_sanctuaryDecor->RenderUI();
         if (m_targetRange)
             m_targetRange->RenderUI();
+        if (m_tutorial) // tutorial-flow lane (W12): checklist + hint markers
+            m_tutorial->RenderUI();
 
         if ((m_ctx->map && m_ctx->map->IsOpen()) || (m_ctx->spawnUI && m_ctx->spawnUI->IsOpen()))
             return;
@@ -859,7 +907,7 @@ namespace Terrafront
         }
 
         // ---- continent select menu -------------------------------------------
-        const float w = 420.0f, h = 240.0f;
+        const float w = 420.0f, h = 320.0f;
         ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + (vp->Size.x - w) * 0.5f, vp->Pos.y + (vp->Size.y - h) * 0.5f),
                                 ImGuiCond_Appearing);
         ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Appearing);
@@ -907,12 +955,35 @@ namespace Terrafront
 
             ImGui::Spacing();
             const bool inSanctuary = TFTravel_IsInSanctuary(pos[0], pos[2]);
+            // The live continent always travels as positional mapId 1 ("the
+            // continent this process loaded" — see TFSanctuaryZone.h mapId trick);
+            // only the label follows the active continents.json entry.
+            char deployLbl[96];
+            std::snprintf(deployLbl, sizeof(deployLbl), "Deploy to %s", m_continentDisplayName.c_str());
             ImGui::BeginDisabled(!inSanctuary);
-            if (ImGui::Button("Deploy to Cindral Wastes", ImVec2(-1.0f, 0.0f)))
+            if (ImGui::Button(deployLbl, ImVec2(-1.0f, 0.0f)))
                 ClientRequestTravel(kTFMapCindralWastes);
             ImGui::EndDisabled();
             if (!inSanctuary)
                 ImGui::TextDisabled("(already deployed - use the map to redeploy)");
+
+            // W12 continent-2-data: continents hosted by OTHER server processes
+            // are listed but never joinable from here (one continent per
+            // process; cross-server travel is a future server-browser hop).
+            for (const ContinentMeta& c : m_continentList)
+            {
+                if (c.active)
+                    continue;
+                ImGui::Spacing();
+                ImGui::Text("%s", c.name.c_str());
+                if (!c.blurb.empty())
+                    ImGui::TextDisabled("%s", c.blurb.c_str());
+                char otherLbl[112];
+                std::snprintf(otherLbl, sizeof(otherLbl), "%s - different server##tfcont%d", c.name.c_str(), c.mapId);
+                ImGui::BeginDisabled(true);
+                ImGui::Button(otherLbl, ImVec2(-1.0f, 0.0f));
+                ImGui::EndDisabled();
+            }
 
             if (m_lastTravelMsg[0] != '\0')
             {
@@ -940,6 +1011,9 @@ namespace Terrafront
             ImGui::Text("bad packets     : %u", m_badPackets);
             ImGui::Text("near terminal   : %s   menu: %s", m_nearTerminal ? "yes" : "no",
                         m_menuOpen ? "open" : "closed");
+            for (const ContinentMeta& c : m_continentList)
+                ImGui::Text("continent %d    : %s [%s]%s", c.mapId, c.name.c_str(), c.key.c_str(),
+                            c.active ? "  (ACTIVE this process)" : "  (different server)");
             if (m_hasInfo)
                 ImGui::Text("last info       : pop MRA %u / AUC %u / HLX %u", m_lastInfo.pop[1], m_lastInfo.pop[2],
                             m_lastInfo.pop[3]);

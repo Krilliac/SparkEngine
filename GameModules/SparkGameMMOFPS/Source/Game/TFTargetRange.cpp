@@ -319,6 +319,10 @@ namespace Terrafront
         fl.pos[2] = origin[2] + dir[2] * bestT;
         fl.amount = dmg;
         m_floaters.push_back(fl);
+
+        // tutorial-flow lane (W12): read-only hit notification (see header).
+        if (m_hitObserver)
+            m_hitObserver(dmg, bestT);
     }
 
     // ---------------------------------------------------------------------------
