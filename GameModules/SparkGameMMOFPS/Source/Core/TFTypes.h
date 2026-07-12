@@ -122,6 +122,10 @@ namespace Terrafront
     class TFHUD;
     class TFMapScreen;
     class TFSpawnScreen;
+    // loadout-depth wave (additive): Source/UI/TFLoadoutScreen.h. Forward-declared
+    // here only as an opaque context pointer target, same reasoning as the other
+    // UI screens above — this FROZEN header never includes TFLoadoutScreen.h.
+    class TFLoadoutScreen;
     class TFScoreboard;
     // W5 onboarding (Task 4): account/character systems live under Source/Account
     // and Source/Persistence; forward-declared here only as opaque pointer targets
@@ -148,6 +152,8 @@ namespace Terrafront
     class TFGrenadeSystem;
     // ping-system lane (additive): Game/TFPingSystem.h.
     class TFPingSystem;
+    // alerts lane (additive): World/TFAlertSystem.h.
+    class TFAlertSystem;
 
     struct TFGameContext
     {
@@ -175,6 +181,7 @@ namespace Terrafront
         TFHUD* hud = nullptr;
         TFMapScreen* map = nullptr;
         TFSpawnScreen* spawnUI = nullptr;
+        TFLoadoutScreen* loadoutUI = nullptr; // loadout-depth wave (Source/UI/TFLoadoutScreen.h)
         TFScoreboard* scoreboard = nullptr;
         // continents lane (additive): sanctuary/warpgate travel. Published for
         // OTHER lanes (e.g. redeploy/sanctuary queries); TFTravelSystem itself
@@ -187,6 +194,11 @@ namespace Terrafront
         TFGrenadeSystem* grenades = nullptr;
         // ping-system lane (additive): squad-scoped tactical pings (W11).
         TFPingSystem* pings = nullptr;
+        // alerts lane (additive, W13): continent-alert scheduler/scoring +
+        // TF_AlertState wire. Null until Main.cpp constructs + publishes it;
+        // every reader guards with `if (m_ctx->alerts)` so the module builds
+        // and runs inert until the wave wiring lands.
+        TFAlertSystem* alerts = nullptr;
 
         // W5 onboarding (Task 4, additive): null until Task 6 constructs + publishes
         // them in Main.cpp boot order. Net handlers guard every use with `if

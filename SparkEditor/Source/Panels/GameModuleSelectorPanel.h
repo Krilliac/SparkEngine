@@ -43,6 +43,12 @@ namespace SparkEditor
 
         std::string GetTypeName() const override { return "GameModuleSelectorPanel"; }
 
+        /// @brief Path of the module currently chosen for launch (radio selection),
+        /// or empty if none selected. Consumed by PlayControlPanel (W13) so its play
+        /// bar launches the same module the user picked here, instead of duplicating
+        /// module discovery/probing.
+        const std::string& GetLaunchSelectionPath() const { return m_launchSelectionPath; }
+
       private:
         void RefreshModuleList();
         void ProbeModuleMetadata();

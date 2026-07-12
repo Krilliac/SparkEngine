@@ -96,6 +96,10 @@ namespace Terrafront
         // TFAbilitySystem incoming-filter pattern).
         if (m_ctx && m_ctx->damage)
             m_ctx->damage->SetDeathRecapMirror(nullptr);
+        // Killcam lane hook: TFSpectator uninstalls its own registration in
+        // its Shutdown before this runs, but drop our copy too so a stale
+        // std::function never outlives the object it closed over.
+        m_killcamNotify = nullptr;
         m_valid = false;
         m_initialized = false;
     }
@@ -138,6 +142,11 @@ namespace Terrafront
             m_recap.entryCount = kTFDeathRecapMaxEntries; // never trust the wire
         m_valid = true;
         ++m_recapsReceived;
+
+        // Killcam lane: push the killer id (kInvalidPlayer == environment/
+        // unknown) so TFSpectator can start the killcam without polling.
+        if (m_killcamNotify)
+            m_killcamNotify(static_cast<PlayerId>(m_recap.killerPlayer));
     }
 
     PlayerId TFDeathRecap::LocalPlayer() const

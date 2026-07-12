@@ -128,6 +128,15 @@ namespace Terrafront
             std::string name;
             std::string blurb;
             bool active{false}; ///< true == the continent THIS process loaded
+
+            // multimap-plumbing lane (W13): OPTIONAL operator-configured
+            // endpoint for a continent hosted by a DIFFERENT server process
+            // (continents.json "host"/"port" keys, additive; see
+            // docs/TERRAFRONT_MULTIMAP.md). Empty host / zero port == no known
+            // server for this continent — the terminal says so and the hop
+            // button stays disabled. Never set for the active entry.
+            std::string host;
+            uint16_t port{0};
         };
 
         TFTravelSystem();
@@ -159,6 +168,13 @@ namespace Terrafront
 
         /// Client/loopback request entry (terminal menu + tf_travel console).
         void ClientRequestTravel(uint8_t destMapId);
+
+        /// multimap-plumbing lane (W13): client-side hop to a continent hosted
+        /// by a DIFFERENT server process (continents.json host/port). No-op
+        /// (sets m_lastTravelMsg) unless role==Client and target has a
+        /// configured endpoint — see docs/TERRAFRONT_MULTIMAP.md for the
+        /// process-per-continent design and the known teardown-gap caveat.
+        void ClientRequestContinentHop(const ContinentMeta& target);
 
         /// Debug panel toggle (tf_* console pattern).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }

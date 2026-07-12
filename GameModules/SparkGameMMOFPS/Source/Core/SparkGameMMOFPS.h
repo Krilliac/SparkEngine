@@ -98,6 +98,9 @@ class TerrafrontModule : public Spark::IModule
     std::unique_ptr<Terrafront::TFHUD> m_hud;
     std::unique_ptr<Terrafront::TFMapScreen> m_map;
     std::unique_ptr<Terrafront::TFSpawnScreen> m_spawnUI;
+    // loadout-depth wave: grenade/suit/optic editor (Main.cpp wiring applied by
+    // the integrator, W8 audio-polish precedent above).
+    std::unique_ptr<Terrafront::TFLoadoutScreen> m_loadoutUI;
     std::unique_ptr<Terrafront::TFScoreboard> m_scoreboard;
     // continents lane: sanctuary/warpgate travel (booted after scoreboard).
     std::unique_ptr<Terrafront::TFTravelSystem> m_travel;

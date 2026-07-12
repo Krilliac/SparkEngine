@@ -178,6 +178,11 @@ namespace Terrafront
                         rec.loadoutSecondary = lo["secondary"].AsString();
                     if (lo["tool"].IsString())
                         rec.loadoutTool = lo["tool"].AsString();
+                    // loadout-depth wave (additive keys; tolerant of old rows)
+                    if (lo["grenade"].IsString())
+                        rec.loadoutGrenade = lo["grenade"].AsString();
+                    if (lo["suit"].IsString())
+                        rec.loadoutSuit = lo["suit"].AsString();
                 }
                 if (row.HasKey("weaponStats") && row["weaponStats"].IsArray())
                 {
@@ -252,6 +257,8 @@ namespace Terrafront
             lo["primary"] = Spark::Json::Value(c.loadoutPrimary);
             lo["secondary"] = Spark::Json::Value(c.loadoutSecondary);
             lo["tool"] = Spark::Json::Value(c.loadoutTool);
+            lo["grenade"] = Spark::Json::Value(c.loadoutGrenade); // loadout-depth wave
+            lo["suit"] = Spark::Json::Value(c.loadoutSuit);
             row["loadout"] = std::move(lo);
 
             Spark::Json::Value stats = Spark::Json::Value::MakeArray();
@@ -434,7 +441,8 @@ namespace Terrafront
 
     void TFDatabase::SaveCharacterMeta(uint64_t charId, const std::vector<std::string>& unlocks,
                                        const std::string& loadoutPrimary, const std::string& loadoutSecondary,
-                                       const std::string& loadoutTool, const std::vector<TFWeaponStatsRow>& stats)
+                                       const std::string& loadoutTool, const std::string& loadoutGrenade,
+                                       const std::string& loadoutSuit, const std::vector<TFWeaponStatsRow>& stats)
     {
         auto it = std::find_if(m_characters.begin(), m_characters.end(),
                                [&](const TFCharacterRecord& c) { return c.id == charId; });
@@ -444,6 +452,8 @@ namespace Terrafront
         it->loadoutPrimary = loadoutPrimary;
         it->loadoutSecondary = loadoutSecondary;
         it->loadoutTool = loadoutTool;
+        it->loadoutGrenade = loadoutGrenade; // loadout-depth wave
+        it->loadoutSuit = loadoutSuit;
         it->weaponStats = stats;
         if (!SaveToDisk())
             SPARK_LOG_ERROR(Spark::LogCategory::Game,

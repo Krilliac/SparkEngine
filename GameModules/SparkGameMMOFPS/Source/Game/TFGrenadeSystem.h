@@ -52,6 +52,31 @@
  *  - BOTS: CanThrowGrenade/ServerBotThrowGrenade are the public server-side
  *    entry points for TFBotSystem (direct calls, same validation path,
  *    bypassing the enter-world gate exactly like bot spawn/fire calls).
+ *
+ * loadout-depth wave (progression lane): grenade KIND selection.
+ *  - Every throw now resolves the thrower's weapons.json row from
+ *    TFProgressionSystem::GetLoadout(player)->grenade (empty/invalid/
+ *    not-unlocked all fall back to kTFGrenadeWeaponKey == frag_grenade,
+ *    exactly the pre-wave behavior) instead of always FragDef() — see
+ *    SelectedGrenadeDef. The def's additive "grenadeEffect" JSON field
+ *    (own lazy parse, EnsureEffectTable — TFOpticsSystem precedent, NOT
+ *    TFDataTables) selects the detonation behavior:
+ *     - absent / "damage" (frag_grenade): unchanged splash-damage path.
+ *     - "smoke" (smoke_grenade, splashDamage 0 in its data row so the
+ *       existing damage pass already no-ops): ServerDetonate broadcasts
+ *       TF_SmokeSpawn instead; presentation-only, no server state kept.
+ *     - "flash" (flash_grenade, splashDamage 0 likewise): ServerDetonate
+ *       walks ForEachAlivePawn with the same LOS+falloff recipe as splash
+ *       damage, records each affected player's flash-until in m_flashedUntil
+ *       (server truth, IsFlashed/FlashAlpha01 query it) and unicasts
+ *       TF_FlashState to that player's owner so the HUD-adjacent overlay
+ *       (RenderFlashOverlay, hooked next to TFOpticsSystem::RenderOverlay)
+ *       can fade the screen white.
+ *  - WIRE: rides the loadout-depth lane's reserved TFMsg block
+ *    0x5488-0x548B (Game/TFProgressionSystem.h owns 0x5488; the S->C ids
+ *    here are 0x5489 TF_FlashState and 0x548A TF_SmokeSpawn, unicast/
+ *    broadcast respectively via the same ServerBroadcast/SendToOwner
+ *    machinery as the W10 grenade ids).
  */
 #pragma once
 
@@ -67,6 +92,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -88,6 +114,12 @@ namespace Terrafront
     constexpr uint16_t kTFMsgGrenadeUpdate = 0x5466; // S->C  TF_GrenadeUpdate (~10 Hz, unreliable)
     constexpr uint16_t kTFMsgGrenadeBoom = 0x5467;   // S->C  TF_GrenadeBoom (reliable)
 
+    // loadout-depth wave: riding the loadout-depth lane's reserved block
+    // (Game/TFProgressionSystem.h owns 0x5488; see that header's wire-protocol
+    // comment). Unicast/broadcast respectively, both reliable (rare events).
+    constexpr uint16_t kTFMsgFlashState = 0x5489; // S->C  TF_FlashState (unicast to the flashed player)
+    constexpr uint16_t kTFMsgSmokeSpawn = 0x548A; // S->C  TF_SmokeSpawn (broadcast, reliable)
+
     // ---------------------------------------------------------------------------
     // Tuning (fuse/interval/bounce are gameplay contract from the wave brief;
     // splash radius/damage/throw speed live in the weapons.json frag_grenade row)
@@ -105,6 +137,21 @@ namespace Terrafront
 
     /// weapons.json key of the splash-stat row (ADDITIVE data entry, this lane).
     constexpr const char* kTFGrenadeWeaponKey = "frag_grenade";
+
+    // loadout-depth wave: the two additional player-selectable grenade kinds
+    // (weapons.json keys; additive rows, "grenadeEffect": "smoke"/"flash").
+    // TFProgressionSystem::ValidGrenadeChoiceKey checks a loadout pick against
+    // these three names (single source of truth to avoid drift).
+    constexpr const char* kTFGrenadeKeySmoke = "smoke_grenade";
+    constexpr const char* kTFGrenadeKeyFlash = "flash_grenade";
+
+    // Detonation effect kinds (ServerDetonate branches on this; see
+    // EnsureEffectTable's lazy "grenadeEffect" parse).
+    constexpr uint8_t kTFGrenadeEffectDamage = 0; // frag_grenade (default when the field is absent)
+    constexpr uint8_t kTFGrenadeEffectSmoke = 1;
+    constexpr uint8_t kTFGrenadeEffectFlash = 2;
+
+    constexpr float kTFFlashMaxDurationSec = 3.0f; ///< at point-blank (falloff to 0 at the splash edge)
 
     // ---------------------------------------------------------------------------
     // Quantization (TFFireFxProtocol precedent). Positions: 0.125 m steps in
@@ -172,6 +219,27 @@ namespace Terrafront
     };
     static_assert(sizeof(TF_GrenadeBoom) == 8, "wire layout frozen (<= 16 byte budget)");
 
+    /// S->C: unicast to the flashed player only. durationMs/intensityQ (0..255,
+    /// linear falloff already baked in server-side) drive RenderFlashOverlay's
+    /// fade; no positional data needed (self-only presentation).
+    struct TF_FlashState
+    {
+        uint16_t durationMs;
+        uint8_t intensityQ;
+    };
+    static_assert(sizeof(TF_FlashState) == 3, "wire layout frozen (<= 16 byte budget)");
+
+    /// S->C: broadcast (visible to everyone, like a grenade boom). Position +
+    /// radius quantized with the existing grenade scale; durationMs is the
+    /// puff's client-side presentation lifetime.
+    struct TF_SmokeSpawn
+    {
+        int16_t posQX, posQY, posQZ;
+        uint16_t radiusQ; // meters * kTFGrenadePosScale
+        uint16_t durationMs;
+    };
+    static_assert(sizeof(TF_SmokeSpawn) == 10, "wire layout frozen (<= 16 byte budget)");
+
 #pragma pack(pop)
 
     struct WeaponDef; // Data/TFDataTables.h
@@ -230,6 +298,22 @@ namespace Terrafront
         /// recipe; DirectX types come from Core/Platform.h stubs off-Windows).
         void RenderClientFx(GraphicsEngine* gfx, const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
 
+        // --- loadout-depth wave: flash presentation ------------------------------
+
+        /// True while the LOCAL player is under a flash effect. HUD-adjacent
+        /// query (no TFHUD coupling needed — RenderFlashOverlay draws itself).
+        bool IsLocalFlashed() const { return m_localFlashUntil > NowSec(); }
+
+        /// Draw the full-screen flash whiteout fade. MUST run in the OnImGui
+        /// phase (TFOpticsSystem::RenderOverlay precedent) — hooked next to it
+        /// from TFNameplates::RenderUI (wiring snippet). Headless no-op.
+        void RenderFlashOverlay();
+
+        /// Server: true while `player` is currently flashed (server truth;
+        /// other systems, e.g. a future accuracy-penalty pass, can query this
+        /// without depending on the wire message).
+        bool IsFlashed(PlayerId player) const;
+
       private:
         // --- server state ---
         struct ThrowerRec
@@ -252,6 +336,7 @@ namespace Terrafront
             float vel[3]{};
             float lifeSec = 0.0f;
             bool resting = false;
+            uint8_t effect = kTFGrenadeEffectDamage; ///< loadout-depth wave: damage/smoke/flash
         };
 
         // --- client mirror ---
@@ -269,8 +354,40 @@ namespace Terrafront
             float age = 0.0f;
         };
 
+        /// loadout-depth wave: client-side smoke puff mirror (presentation only).
+        struct SmokePuff
+        {
+            float pos[3]{};
+            float radiusM = 0.0f;
+            float life = 1.0f;
+            float age = 0.0f;
+        };
+
         double NowSec() const;
         const WeaponDef* FragDef() const; ///< nullptr while tables unloaded
+
+        // --- loadout-depth wave: grenade-kind resolution + effects ---------------
+
+        /// Server: the thrower's selected grenade def, resolved from
+        /// TFProgressionSystem::GetLoadout (falls back to FragDef() when no
+        /// pick / unknown key / not unlocked — defense in depth mirrors
+        /// TFProgressionSystem::ValidGrenadeChoiceKey, which already gated the
+        /// pick at save time).
+        const WeaponDef* SelectedGrenadeDef(PlayerId player) const;
+
+        /// Own lazy one-shot parse of weapons.json's additive "grenadeEffect"
+        /// field (TFOpticsSystem::EnsureTable precedent). Absent/unknown ==
+        /// kTFGrenadeEffectDamage.
+        void EnsureEffectTable();
+        uint8_t EffectKindOf(const std::string& weaponKey); ///< calls EnsureEffectTable (lazy load)
+
+        void ServerSpawnSmoke(const ServerGrenade& g);
+        void ServerApplyFlash(const ServerGrenade& g);
+        void SendToOwner(PlayerId owner, uint16_t msgId, const void* payload, size_t size); ///< unicast (TFProgressionSystem::SendToOwner pattern)
+
+        void ClientHandleFlash(const TF_FlashState& msg);
+        void ClientHandleSmoke(const TF_SmokeSpawn& msg);
+        void ClientAdvanceSmoke(float dt);
 
         // server internals
         bool ServerTryThrow(PlayerId player, const float dirUnit[3]);
@@ -307,9 +424,18 @@ namespace Terrafront
         uint16_t m_nextGrenadeId{1};
         float m_updateAccum{0.0f};
 
+        // loadout-depth wave: own lazy parse of weapons.json's additive
+        // "grenadeEffect" field (frag/smoke/flash), and server-truth flash state.
+        bool m_effectTableLoaded{false};
+        std::unordered_map<std::string, uint8_t> m_effectByKey;
+        std::unordered_map<PlayerId, double> m_flashedUntil; ///< server time (NowSec()) the flash clears
+
         // client state (all roles with a local player)
         std::unordered_map<uint16_t, ClientGrenade> m_clientGrenades;
         std::vector<BoomFx> m_booms;
+        std::vector<SmokePuff> m_smokePuffs; ///< loadout-depth wave
+        double m_localFlashUntil{-1.0};      ///< loadout-depth wave: local player's flash-clears time
+        float m_localFlashDurationSec{0.0f}; ///< loadout-depth wave: total duration, for the fade curve
         int m_localRemaining{-1};
         bool m_wasAliveLocal{false};
         int m_throwVk{'G'};

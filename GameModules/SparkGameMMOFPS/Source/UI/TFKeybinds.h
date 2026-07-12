@@ -42,6 +42,7 @@ namespace Terrafront::TFKeys
         CloseOverlay,     ///< close the topmost fullscreen overlay (map/chat)
         ToggleDirectives, ///< toggle the directives panel (TFDirectivePanel, W8 ui-polish)
         ThrowGrenade,     ///< throw a frag grenade (TFGrenadeSystem, W10)
+        CycleMinimapZoom, ///< cycle the corner minimap's zoom span (TFHUDCombat, W13 minimap-v2)
         COUNT
     };
 
@@ -59,6 +60,7 @@ namespace Terrafront::TFKeys
             kVkEscape, // CloseOverlay
             'J',       // ToggleDirectives (W8 ui-polish)
             'G',       // ThrowGrenade (W10 grenades)
+            'N',       // CycleMinimapZoom (W13 minimap-v2)
         };
     } // namespace Detail
 

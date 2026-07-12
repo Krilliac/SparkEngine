@@ -43,6 +43,8 @@ namespace Terrafront
         meta.loadout.primary = rec.loadoutPrimary;
         meta.loadout.secondary = rec.loadoutSecondary;
         meta.loadout.tool = rec.loadoutTool;
+        meta.loadout.grenade = rec.loadoutGrenade; // loadout-depth wave (additive)
+        meta.loadout.suit = rec.loadoutSuit;
 
         meta.stats.clear();
         for (const TFWeaponStatsRow& row : rec.weaponStats)
@@ -91,7 +93,7 @@ namespace Terrafront
                   [](const TFWeaponStatsRow& a, const TFWeaponStatsRow& b) { return a.weaponKey < b.weaponKey; });
 
         db.SaveCharacterMeta(meta.charId, unlocks, meta.loadout.primary, meta.loadout.secondary, meta.loadout.tool,
-                             stats);
+                             meta.loadout.grenade, meta.loadout.suit, stats);
         meta.dirty = false;
         return true;
     }

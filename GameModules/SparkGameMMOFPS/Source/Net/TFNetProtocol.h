@@ -126,6 +126,12 @@ namespace Terrafront
         // 0x5480-0x5483: outfit-leaderboards block (W12) — id + packed struct in
         // Game/TFOutfitSystem.h. 0x5480 = S->C TF_OutfitLeaderboard (the request is
         // TFOutfitOp::Leaderboard riding OutfitRequest 0x5438); 0x5481-0x5483 free.
+        // 0x5484-0x5487: killcam lane (W13) — RESERVED but left UNUSED. The
+        // killcam (Game/TFSpectator.h KillcamFollow mode) needs no new wire
+        // message: it reuses TF_DeathRecap.killerPlayer (0x5474, already
+        // victim-only + reliable) for "who" and the killer's already
+        // globally-broadcast PawnInfo (TFReplication, no interest culling)
+        // for "where". See UI/TFDeathRecap.h's SetKillcamNotify push hook.
     };
 
 #pragma pack(push, 1)

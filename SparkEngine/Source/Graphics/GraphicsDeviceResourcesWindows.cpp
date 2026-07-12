@@ -28,6 +28,7 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
+#include <cmath> // sqrtf (GetOrCreateSoftCircleShadowSRV radial falloff)
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -729,6 +730,110 @@ ID3D11ShaderResourceView* GraphicsEngine::GetOrCreateScalarRoughnessSRV(float ro
     auto& slot = m_basicTextureCache[key];
     slot = srv;
     return slot.Get();
+}
+
+// ============================================================================
+// Blob shadow support (W13 shadow-polish lane)
+// ----------------------------------------------------------------------------
+// The basic render path (SetBasicShaders / this file) has no shadow term at
+// all: the embedded basic PS below is ambient + N.L directional + a view fill
+// + opt-in specular, and DrawSceneObjects never binds a depth/shadow map for
+// it. ShadowAtlas.h/.cpp DOES exist engine-side, but it is wired only into the
+// deferred/PBR path (RenderPipeline.cpp, RenderGraph/RenderGraphBuilder.cpp,
+// LightingSystem*) -- SceneRenderer.cpp (the other candidate consumer) never
+// references it either. Splicing real shadow-map sampling into the basic PS
+// would need a shadow depth pass, atlas slot allocation for the basic path,
+// and a new sampler/texture seam through SetBasicShaders() -- real work, not
+// a scoped pass.
+//
+// Instead: a cheap ground-projected "blob shadow" (soft dark alpha disc under
+// pawns/vehicles/deployables) reads well at MMOFPS scale and needs zero
+// shadow-map plumbing. This is the only new engine-side piece it needs: a
+// cached 32x32 procedural radial-falloff alpha texture. The draw itself
+// (flat CreatePlane() quad, scaled to the blob radius, alpha-blended, depth
+// READ-ONLY) lives client-side in Game/TFBlobShadows.cpp and uses only the
+// existing SetBasicShaders/UpdateBasicConstants/SetBasicBlendMode/
+// SetBasicDepthMode surface -- ObjectColor.rgb is driven to (0,0,0) so the
+// basic PS's lighting/specular terms multiply out to exactly black
+// regardless of the sun angle (finalColor.rgb = texColor.rgb *
+// ObjectColor.rgb * lighting + specular; specular is 0 because the draw
+// never binds a roughness map, so the default fully-rough t2 binding zeroes
+// gloss), and MaterialProperties.w (the alpha param) carries the
+// per-instance height/distance fade.
+// ============================================================================
+ID3D11ShaderResourceView* GraphicsEngine::GetOrCreateSoftCircleShadowSRV()
+{
+    if (!m_device)
+        return nullptr;
+    if (m_blobShadowSRV)
+        return m_blobShadowSRV.Get();
+
+    constexpr int kDim = 32;
+    constexpr float kCenter = (kDim - 1) * 0.5f;
+    constexpr float kMaxDist = kDim * 0.5f; // texel-space radius to the edge
+
+    uint8_t pixels[kDim * kDim * 4];
+    for (int y = 0; y < kDim; ++y)
+    {
+        for (int x = 0; x < kDim; ++x)
+        {
+            const float dx = static_cast<float>(x) - kCenter;
+            const float dy = static_cast<float>(y) - kCenter;
+            const float dist = sqrtf(dx * dx + dy * dy);
+
+            // Explicit clamps (windows.h min/max macros make std::clamp
+            // hazardous here -- same reasoning as GetOrCreateScalarRoughnessSRV).
+            float t = dist / kMaxDist; // 0 at center .. ~1 at the corner
+            if (t < 0.0f)
+                t = 0.0f;
+            else if (t > 1.0f)
+                t = 1.0f;
+
+            // Solid-ish core (kInnerT) softening to fully transparent at the
+            // rim (kOuterT) via smoothstep, so the disc has no hard ring edge.
+            constexpr float kInnerT = 0.35f;
+            constexpr float kOuterT = 1.0f;
+            float edge = (t - kInnerT) / (kOuterT - kInnerT);
+            if (edge < 0.0f)
+                edge = 0.0f;
+            else if (edge > 1.0f)
+                edge = 1.0f;
+            const float smoothEdge = edge * edge * (3.0f - 2.0f * edge); // smoothstep
+            const float alpha = 1.0f - smoothEdge;
+
+            uint8_t* px = &pixels[(y * kDim + x) * 4];
+            px[0] = 0; // R -- unused; the caller drives ObjectColor.rgb to 0,
+            px[1] = 0; // G    so texColor.rgb is multiplied out regardless.
+            px[2] = 0; // B
+            px[3] = static_cast<uint8_t>(alpha * 255.0f + 0.5f);
+        }
+    }
+
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = kDim;
+    desc.Height = kDim;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA data = {};
+    data.pSysMem = pixels;
+    data.SysMemPitch = kDim * 4;
+
+    if (FAILED(m_device->CreateTexture2D(&desc, &data, &m_blobShadowTexture)))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create blob-shadow circle texture", L"ERROR");
+        return nullptr;
+    }
+    if (FAILED(m_device->CreateShaderResourceView(m_blobShadowTexture.Get(), nullptr, &m_blobShadowSRV)))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create blob-shadow circle SRV", L"ERROR");
+        return nullptr;
+    }
+    return m_blobShadowSRV.Get();
 }
 
 void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX& view, const XMMATRIX& proj)

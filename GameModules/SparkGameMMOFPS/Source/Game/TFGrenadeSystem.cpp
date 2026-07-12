@@ -15,6 +15,7 @@
 #include "Game/TFDamageSystem.h"
 #include "Game/TFDeployableSystem.h"
 #include "Game/TFPlayerSystem.h"
+#include "Game/TFProgressionSystem.h" // loadout-depth wave: GetLoadout (grenade kind resolution)
 #include "Game/TFVehicleSystem.h"
 #include "Game/TFWeaponMath.h"
 #include "Net/TFClientNet.h"
@@ -33,6 +34,7 @@
 #include "Input/InputManager.h"
 #include "Physics/PhysicsSystem.h" // engine umbrella header; stub-safe when Jolt is absent
 #include "Spark/IEngineContext.h"
+#include "Utils/JsonUtils.h" // loadout-depth wave: own lazy "grenadeEffect" parse (TFOpticsSystem precedent)
 #include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
@@ -46,6 +48,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 
 namespace Terrafront
 {
@@ -66,6 +70,10 @@ namespace Terrafront
         // Client-side mirror pruning: fuse + net slack. A grenade whose boom
         // packet was lost (unreliable updates can't revive it) dies here.
         constexpr float kClientStaleSec = kTFGrenadeFuseSec + 1.5f;
+
+        // loadout-depth wave: smoke/flash tuning + own "grenadeEffect" parse path.
+        constexpr const char* kGrenadeDataJsonPath = "Assets/MMOFPS/Data/weapons.json";
+        constexpr float kTFSmokeLifeSec = 6.0f; ///< client-side puff presentation lifetime
 
         /// TFWeaponSystem::BuildViewRay convention (yaw/pitch radians -> unit dir).
         void ViewDir(float yaw, float pitch, float out[3])
@@ -108,8 +116,10 @@ namespace Terrafront
 #endif
         m_throwers.clear();
         m_live.clear();
+        m_flashedUntil.clear(); // loadout-depth wave
         m_clientGrenades.clear();
         m_booms.clear();
+        m_smokePuffs.clear(); // loadout-depth wave
         m_sphere.reset();
         m_quad.reset();
         m_initialized = false;
@@ -131,6 +141,8 @@ namespace Terrafront
             ReleaseClientHandlers();
             m_clientGrenades.clear();
             m_booms.clear();
+            m_smokePuffs.clear(); // loadout-depth wave
+            m_localFlashUntil = -1.0;
             m_localRemaining = -1;
         }
 #endif
@@ -140,6 +152,7 @@ namespace Terrafront
             ClientReseedLocalCount();
             ClientPollThrowKey();
             ClientAdvance(deltaTime);
+            ClientAdvanceSmoke(deltaTime); // loadout-depth wave
         }
     }
 
@@ -210,6 +223,82 @@ namespace Terrafront
     }
 
     // ---------------------------------------------------------------------------
+    // loadout-depth wave: grenade-kind resolution + effect table
+    // ---------------------------------------------------------------------------
+
+    const WeaponDef* TFGrenadeSystem::SelectedGrenadeDef(PlayerId player) const
+    {
+        if (m_ctx && m_ctx->progression && m_ctx->data && m_ctx->data->IsLoaded())
+        {
+            if (const TFLoadout* lo = m_ctx->progression->GetLoadout(player))
+            {
+                if (!lo->grenade.empty() && lo->grenade != kTFGrenadeWeaponKey)
+                {
+                    if (const WeaponDef* def = m_ctx->data->GetWeaponByKey(lo->grenade))
+                    {
+                        // Defense in depth: the pick was already validated at
+                        // save time (TFProgressionSystem::ValidGrenadeChoiceKey);
+                        // re-checking the unlock here means a later un-grant
+                        // can't leave a stale pick silently in effect.
+                        if (m_ctx->progression->IsWeaponUnlocked(player, def->id))
+                            return def;
+                    }
+                }
+            }
+        }
+        return FragDef();
+    }
+
+    void TFGrenadeSystem::EnsureEffectTable()
+    {
+        if (m_effectTableLoaded)
+            return;
+        m_effectTableLoaded = true; // one attempt; missing/malformed == everything defaults to damage
+
+        std::ifstream f(kGrenadeDataJsonPath, std::ios::binary);
+        if (!f.is_open())
+            return;
+        std::ostringstream ss;
+        ss << f.rdbuf();
+
+        const Spark::Json::Value root = Spark::Json::Parse(ss.str());
+        if (!root.IsObject() || !root.HasKey("weapons") || !root["weapons"].IsArray())
+            return;
+
+        const Spark::Json::Value& weapons = root["weapons"];
+        for (size_t i = 0; i < weapons.Size(); ++i)
+        {
+            const Spark::Json::Value& w = weapons[i];
+            if (!w.IsObject() || !w.HasKey("key") || !w.HasKey("grenadeEffect"))
+                continue;
+            const std::string key = w["key"].AsString({});
+            const std::string effect = w["grenadeEffect"].AsString({});
+            if (key.empty())
+                continue;
+
+            uint8_t kind = kTFGrenadeEffectDamage;
+            if (effect == "smoke")
+                kind = kTFGrenadeEffectSmoke;
+            else if (effect == "flash")
+                kind = kTFGrenadeEffectFlash;
+            else if (effect != "damage" && !effect.empty())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] grenade effect: '%s': unknown grenadeEffect '%s' (damage)",
+                               key.c_str(), effect.c_str());
+            }
+            m_effectByKey[key] = kind;
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] grenade effect: %zu tagged rows", m_effectByKey.size());
+    }
+
+    uint8_t TFGrenadeSystem::EffectKindOf(const std::string& weaponKey)
+    {
+        EnsureEffectTable();
+        auto it = m_effectByKey.find(weaponKey);
+        return it != m_effectByKey.end() ? it->second : kTFGrenadeEffectDamage;
+    }
+
+    // ---------------------------------------------------------------------------
     // Server: throw validation + spawn
     // ---------------------------------------------------------------------------
 
@@ -238,7 +327,7 @@ namespace Terrafront
     {
         if (!m_ctx || !m_ctx->IsAuthority() || !m_ctx->players || player == kInvalidPlayer)
             return false;
-        if (m_live.size() >= kTFMaxLiveGrenades || !FragDef())
+        if (m_live.size() >= kTFMaxLiveGrenades || !SelectedGrenadeDef(player))
             return false;
         PawnInfo pawn{};
         if (!m_ctx->players->GetPawnByPlayer(player, pawn) || !pawn.alive)
@@ -274,7 +363,7 @@ namespace Terrafront
         if (!m_ctx || !m_ctx->IsAuthority() || !m_ctx->players || player == kInvalidPlayer)
             return false;
 
-        const WeaponDef* def = FragDef();
+        const WeaponDef* def = SelectedGrenadeDef(player); // loadout-depth wave: frag/smoke/flash
         if (!def || m_live.size() >= kTFMaxLiveGrenades)
         {
             ++m_rejected;
@@ -325,6 +414,7 @@ namespace Terrafront
         g.vel[0] = dirUnit[0] * speed;
         g.vel[1] = dirUnit[1] * speed;
         g.vel[2] = dirUnit[2] * speed;
+        g.effect = EffectKindOf(def->key); // loadout-depth wave
 
         rec.remaining -= 1;
         rec.nextThrowAt = now + kTFGrenadeThrowIntervalSec;
@@ -429,7 +519,26 @@ namespace Terrafront
     void TFGrenadeSystem::ServerDetonate(const ServerGrenade& g)
     {
         ++m_detonations;
-        if (g.splashRadiusM <= 0.0f || g.splashDamage <= 0.0f || !m_ctx || !m_ctx->players || !m_ctx->damage)
+        if (!m_ctx)
+            return;
+
+        // loadout-depth wave: smoke/flash are status/presentation effects, not
+        // damage — branch BEFORE the splash-damage pass (their weapons.json
+        // rows already carry splashDamage 0, so the fallthrough below would
+        // have no-op'd anyway; this also skips two ForEachAlivePawn sweeps for
+        // the common frag case).
+        if (g.effect == kTFGrenadeEffectSmoke)
+        {
+            ServerSpawnSmoke(g);
+            return;
+        }
+        if (g.effect == kTFGrenadeEffectFlash)
+        {
+            ServerApplyFlash(g);
+            return;
+        }
+
+        if (g.splashRadiusM <= 0.0f || g.splashDamage <= 0.0f || !m_ctx->players || !m_ctx->damage)
             return;
 
         // Pawn splash — the exact TFWeaponSystem::ExplodeAt recipe: linear
@@ -485,6 +594,12 @@ namespace Terrafront
                 std::memcpy(&msg, payload, sizeof(msg));
                 ClientHandleBoom(msg);
             }
+            else if (msgId == kTFMsgSmokeSpawn && size == sizeof(TF_SmokeSpawn)) // loadout-depth wave
+            {
+                TF_SmokeSpawn msg{};
+                std::memcpy(&msg, payload, sizeof(msg));
+                ClientHandleSmoke(msg);
+            }
         }
 
 #ifdef ENABLE_NETWORKING
@@ -504,6 +619,97 @@ namespace Terrafront
 #else
         (void)reliable;
 #endif
+    }
+
+    // ---------------------------------------------------------------------------
+    // loadout-depth wave: smoke / flash detonation effects
+    // ---------------------------------------------------------------------------
+
+    void TFGrenadeSystem::ServerSpawnSmoke(const ServerGrenade& g)
+    {
+        TF_SmokeSpawn msg{};
+        msg.posQX = GrenadeDetail::QuantPos(g.pos[0]);
+        msg.posQY = GrenadeDetail::QuantPos(g.pos[1]);
+        msg.posQZ = GrenadeDetail::QuantPos(g.pos[2]);
+        msg.radiusQ = static_cast<uint16_t>(std::lround(std::clamp(g.splashRadiusM, 0.0f, 8000.0f) * kTFGrenadePosScale));
+        msg.durationMs = static_cast<uint16_t>(kTFSmokeLifeSec * 1000.0f);
+        ServerBroadcast(kTFMsgSmokeSpawn, &msg, sizeof(msg), /*reliable*/ true);
+    }
+
+    void TFGrenadeSystem::ServerApplyFlash(const ServerGrenade& g)
+    {
+        if (!m_ctx->players || g.splashRadiusM <= 0.0f)
+            return;
+        const double now = NowSec();
+
+        // Same LOS + linear-falloff recipe as splash damage (TFWeaponSystem::
+        // ExplodeAt / this file's own damage pass above), but every visible
+        // pawn in radius is affected regardless of faction — a flashbang
+        // blinds anyone looking its way, thrower's team included.
+        m_ctx->players->ForEachAlivePawn(
+            [&](const PawnInfo& pawn)
+            {
+                const float d = std::sqrt(WeaponMath::Dist2(pawn.pos, g.pos));
+                if (d > g.splashRadiusM)
+                    return;
+                const float chest[3] = {pawn.pos[0], pawn.pos[1] + WeaponMath::kPawnHeightM * 0.5f, pawn.pos[2]};
+                if (!Ballistics::SplashVisible(m_ctx->engine, g.pos, chest))
+                    return;
+                const float t = std::clamp(1.0f - d / g.splashRadiusM, 0.0f, 1.0f);
+                if (t <= 0.02f)
+                    return;
+
+                const float durSec = kTFFlashMaxDurationSec * t;
+                m_flashedUntil[pawn.owner] = now + durSec; // server truth (IsFlashed query)
+
+                TF_FlashState msg{};
+                msg.durationMs = static_cast<uint16_t>(std::lround(durSec * 1000.0f));
+                msg.intensityQ = static_cast<uint8_t>(std::lround(t * 255.0f));
+                SendToOwner(pawn.owner, kTFMsgFlashState, &msg, sizeof(msg));
+            });
+    }
+
+    void TFGrenadeSystem::SendToOwner(PlayerId owner, uint16_t msgId, const void* payload, size_t size)
+    {
+        if (owner == kInvalidPlayer)
+            return;
+
+        // Listen host / standalone: feed the local mirror directly
+        // (ServerBroadcast pattern above; TFProgressionSystem::SendToOwner
+        // precedent for the unicast shape).
+        if (m_ctx && m_ctx->HasLocalPlayer() && owner == m_ctx->localPlayer && m_ctx->role != NetRole::Client)
+        {
+            if (msgId == kTFMsgFlashState && size == sizeof(TF_FlashState))
+            {
+                TF_FlashState msg{};
+                std::memcpy(&msg, payload, sizeof(msg));
+                ClientHandleFlash(msg);
+            }
+        }
+
+#ifdef ENABLE_NETWORKING
+        if (!m_ctx || m_ctx->role == NetRole::Standalone)
+            return;
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        if (!nm.IsInitialized())
+            return;
+        Spark::Net::NetworkMessage msg;
+        msg.type = static_cast<Spark::Net::MessageType>(msgId);
+        msg.channel = Spark::Net::ChannelType::Reliable;
+        msg.payload.resize(size);
+        std::memcpy(msg.payload.data(), payload, size);
+        nm.SendToClient(owner, msg);
+#else
+        (void)msgId;
+        (void)payload;
+        (void)size;
+#endif
+    }
+
+    bool TFGrenadeSystem::IsFlashed(PlayerId player) const
+    {
+        const auto it = m_flashedUntil.find(player);
+        return it != m_flashedUntil.end() && it->second > NowSec();
     }
 
     // ---------------------------------------------------------------------------
@@ -664,6 +870,38 @@ namespace Terrafront
         }
     }
 
+    // ---------------------------------------------------------------------------
+    // loadout-depth wave: client mirror for flash / smoke
+    // ---------------------------------------------------------------------------
+
+    void TFGrenadeSystem::ClientHandleFlash(const TF_FlashState& msg)
+    {
+        // Unicast to us specifically (SendToOwner), so no player-id check needed.
+        m_localFlashDurationSec = msg.durationMs / 1000.0f;
+        m_localFlashUntil = NowSec() + m_localFlashDurationSec;
+    }
+
+    void TFGrenadeSystem::ClientHandleSmoke(const TF_SmokeSpawn& msg)
+    {
+        SmokePuff puff;
+        puff.pos[0] = msg.posQX / kTFGrenadePosScale;
+        puff.pos[1] = msg.posQY / kTFGrenadePosScale;
+        puff.pos[2] = msg.posQZ / kTFGrenadePosScale;
+        puff.radiusM = msg.radiusQ / kTFGrenadePosScale;
+        puff.life = std::max(0.1f, msg.durationMs / 1000.0f);
+        puff.age = 0.0f;
+        m_smokePuffs.push_back(puff);
+    }
+
+    void TFGrenadeSystem::ClientAdvanceSmoke(float dt)
+    {
+        if (dt <= 0.0f || m_smokePuffs.empty())
+            return;
+        for (SmokePuff& p : m_smokePuffs)
+            p.age += dt;
+        std::erase_if(m_smokePuffs, [](const SmokePuff& p) { return p.age >= p.life; });
+    }
+
     void TFGrenadeSystem::ClientAdvance(float dt)
     {
         if (dt <= 0.0f)
@@ -707,7 +945,7 @@ namespace Terrafront
 
         if (!m_initialized || !gfx || !gfx->GetDevice() || !gfx->GetContext())
             return;
-        if (m_clientGrenades.empty() && m_booms.empty())
+        if (m_clientGrenades.empty() && m_booms.empty() && m_smokePuffs.empty())
             return;
 
         ID3D11DeviceContext* dc = gfx->GetContext();
@@ -783,6 +1021,86 @@ namespace Terrafront
                 gfx->SetBasicTexture(nullptr);
             }
         }
+
+        // ------------------------------------------------- loadout-depth wave: smoke puffs
+        // Reuses the procedural soft-circle disc (GetOrCreateSoftCircleShadowSRV,
+        // TFBlobShadows precedent) — no new texture asset needed.
+        if (!m_smokePuffs.empty())
+        {
+            if (ID3D11ShaderResourceView* soft = gfx->GetOrCreateSoftCircleShadowSRV())
+            {
+                if (!m_quad)
+                {
+                    m_quad = std::make_unique<Mesh>();
+                    m_quad->Initialize(gfx->GetDevice(), gfx->GetContext());
+                    m_quad->CreatePlane(1.0f, 1.0f);
+                }
+                if (m_quad && m_quad->GetIndexCount() > 0)
+                {
+                    gfx->SetBasicShaders();
+                    gfx->SetBasicTexture(soft);
+                    gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Alpha);
+                    gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::ReadOnly);
+
+                    const XMMATRIX invView = XMMatrixInverse(nullptr, view);
+                    const XMVECTOR right = XMVector3Normalize(invView.r[0]);
+                    const XMVECTOR up = XMVector3Normalize(invView.r[1]);
+                    const XMVECTOR toward = XMVectorNegate(XMVector3Normalize(invView.r[2]));
+
+                    for (const SmokePuff& p : m_smokePuffs)
+                    {
+                        const float t = std::clamp(p.age / p.life, 0.0f, 1.0f);
+                        // Quick bloom-in over the first third of the life, then a
+                        // slow linear fade to nothing by the end.
+                        const float size = p.radiusM * (0.35f + 0.65f * std::min(1.0f, t * 3.0f));
+                        const float fade = (t < 0.15f) ? (t / 0.15f) : (1.0f - (t - 0.15f) / 0.85f);
+                        if (fade <= 0.0f)
+                            continue;
+
+                        XMMATRIX bb = XMMatrixIdentity();
+                        bb.r[0] = XMVectorScale(right, size);
+                        bb.r[1] = toward;
+                        bb.r[2] = XMVectorScale(up, size);
+                        bb.r[3] = XMVectorSet(p.pos[0], p.pos[1], p.pos[2], 1.0f);
+
+                        gfx->UpdateBasicConstants(bb, view, proj, XMFLOAT4(0.72f, 0.72f, 0.70f, 1.0f),
+                                                  XMFLOAT2(1.0f, 1.0f), /*emissive*/ 0.0f, /*alpha*/ fade * 0.6f);
+                        m_quad->Render(dc);
+                    }
+
+                    gfx->SetBasicDepthMode(GraphicsEngine::BasicDepthMode::Default);
+                    gfx->SetBasicBlendMode(GraphicsEngine::BasicBlendMode::Opaque);
+                    gfx->SetBasicTexture(nullptr);
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // loadout-depth wave: flash whiteout overlay (TFOpticsSystem::RenderOverlay
+    // precedent — plain foreground-drawlist writes, no window, no input capture)
+    // ---------------------------------------------------------------------------
+
+    void TFGrenadeSystem::RenderFlashOverlay()
+    {
+#ifdef SPARK_HAS_IMGUI
+        if (!ImGui::GetCurrentContext() || !IsLocalFlashed())
+            return;
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        if (!vp || vp->Size.x <= 0.0f || vp->Size.y <= 0.0f)
+            return;
+
+        const float remainingSec = static_cast<float>(m_localFlashUntil - NowSec());
+        const float alpha = m_localFlashDurationSec > 0.0f
+                                ? std::clamp(remainingSec / m_localFlashDurationSec, 0.0f, 1.0f)
+                                : 0.0f;
+        if (alpha <= 0.0f)
+            return;
+
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        fg->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y),
+                          IM_COL32(255, 255, 255, static_cast<int>(235.0f * alpha)));
+#endif // SPARK_HAS_IMGUI
     }
 
     // ---------------------------------------------------------------------------
@@ -840,6 +1158,31 @@ namespace Terrafront
                                std::memcpy(&msg, m.payload.data(), sizeof(msg));
                                ClientHandleBoom(msg);
                            });
+        // loadout-depth wave
+        nm.RegisterHandler(static_cast<MessageType>(kTFMsgFlashState),
+                           [this](const NetworkMessage& m)
+                           {
+                               if (m.payload.size() != sizeof(TF_FlashState))
+                               {
+                                   ++m_badPackets;
+                                   return;
+                               }
+                               TF_FlashState msg{};
+                               std::memcpy(&msg, m.payload.data(), sizeof(msg));
+                               ClientHandleFlash(msg);
+                           });
+        nm.RegisterHandler(static_cast<MessageType>(kTFMsgSmokeSpawn),
+                           [this](const NetworkMessage& m)
+                           {
+                               if (m.payload.size() != sizeof(TF_SmokeSpawn))
+                               {
+                                   ++m_badPackets;
+                                   return;
+                               }
+                               TF_SmokeSpawn msg{};
+                               std::memcpy(&msg, m.payload.data(), sizeof(msg));
+                               ClientHandleSmoke(msg);
+                           });
         m_clientHandlers = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] grenade mirror handlers registered");
     }
@@ -849,7 +1192,8 @@ namespace Terrafront
         // NetworkManager has no per-type removal; replace with no-ops so no
         // dangling `this` survives module shutdown (TFServerSim pattern).
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (uint16_t id : {kTFMsgGrenadeSpawn, kTFMsgGrenadeUpdate, kTFMsgGrenadeBoom})
+        for (uint16_t id :
+            {kTFMsgGrenadeSpawn, kTFMsgGrenadeUpdate, kTFMsgGrenadeBoom, kTFMsgFlashState, kTFMsgSmokeSpawn})
         {
             nm.RegisterHandler(static_cast<Spark::Net::MessageType>(id), [](const Spark::Net::NetworkMessage&) {});
         }
@@ -870,9 +1214,11 @@ namespace Terrafront
         ImGui::Text("server live : %zu / %u", m_live.size(), kTFMaxLiveGrenades);
         ImGui::Text("throws      : %u ok, %u rejected", m_throws, m_rejected);
         ImGui::Text("detonations : %u", m_detonations);
-        ImGui::Text("client view : %zu bodies, %zu booms", m_clientGrenades.size(), m_booms.size());
+        ImGui::Text("client view : %zu bodies, %zu booms, %zu smoke", m_clientGrenades.size(), m_booms.size(),
+                    m_smokePuffs.size());
         ImGui::Text("local count : %d", m_localRemaining);
         ImGui::Text("bad packets : %u", m_badPackets);
+        ImGui::Text("flashed now : %zu players, local %s", m_flashedUntil.size(), IsLocalFlashed() ? "YES" : "no");
 #endif
     }
 

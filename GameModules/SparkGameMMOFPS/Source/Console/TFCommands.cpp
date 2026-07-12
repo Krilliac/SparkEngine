@@ -28,6 +28,7 @@
 #include "Game/TFDeployableSystem.h"
 #include "Game/TFDeployableTypes.h" // W6 deployables: extended kind catalog
 #include "Game/TFProgressionSystem.h"
+#include "Game/TFServerValidation.h" // W13 anti-cheat lane: tf_cheat_stats
 #include "Persistence/TFUnlockTree.h" // W6 progression: tf_unlock
 #include "World/TFRegionSystem.h"
 #include "UI/TFMapScreen.h"
@@ -36,6 +37,7 @@
 #include "Camera/SparkEngineCamera.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/TFPerfCounters.h" // TF-W13 server-perf lane: tf_perf
 #include "Spark/IEngineContext.h"
 #include "Engine/ECS/Components.h"
 
@@ -917,6 +919,25 @@ void TerrafrontModule::RegisterConsoleCommands()
         },
         "Toggle a TF debug panel", cat, "tf_debug <system>");
 
+    // TF-W13 server-perf lane: per-phase tick averages/peaks + tick budget
+    // headroom. Works standalone/listen-host too (the authoritative tick
+    // runs there regardless of ENABLE_NETWORKING), so this is deliberately
+    // NOT inside the ENABLE_NETWORKING block below. `tf_perf reset` clears
+    // the ring buffers (useful for isolating one chaos-harness run).
+    console.RegisterCommand(
+        "tf_perf",
+        [](const std::vector<std::string>& args) -> std::string
+        {
+            auto& perf = Terrafront::TFPerfCounters::Instance();
+            if (!args.empty() && Lower(args[0]) == "reset")
+            {
+                perf.Reset();
+                return "[TF] perf counters reset";
+            }
+            return perf.Report(Terrafront::kServerTickHz);
+        },
+        "Server tick phase timing (avg/peak ms) + budget headroom", cat, "tf_perf [reset]");
+
     // ------------------------------------------------------------------- W3
     console.RegisterCommand(
         "tf_vehicle",
@@ -1185,4 +1206,33 @@ void TerrafrontModule::RegisterConsoleCommands()
         "W5 T7 acceptance: proves onboarding happy-path + the enter-world security gate (loopback)", cat,
         "tf_selftest_onboarding");
 #endif // ENABLE_NETWORKING
+
+    // ------------------------------------------------------------------- W13
+    // Anti-cheat lane: per-player detection/clamp/reject counters (movement
+    // speed-hack/teleport clamps, TFWeaponSystem::ValidateFire RoF rejects,
+    // TF_FireEvent claimed-origin rejects). Everything this wave is
+    // detection + clamp/reject only — no bans — so this command is the only
+    // visibility into who's been tripping the checks (see
+    // Game/TFServerValidation.h for the full design writeup).
+    console.RegisterCommand(
+        "tf_cheat_stats",
+        [this](const std::vector<std::string>&) -> std::string
+        {
+            const auto& stats = TFServerValidation::Get().Stats();
+            if (stats.empty())
+            {
+                return m_ctx.IsAuthority() ? "[TF] anti-cheat: no violations recorded"
+                                            : "[TF] anti-cheat: no data (this instance is not the server)";
+            }
+            std::ostringstream os;
+            os << "[TF] anti-cheat violations (" << stats.size() << " player" << (stats.size() == 1 ? "" : "s")
+               << "):";
+            for (const auto& [player, st] : stats)
+            {
+                os << "\n  p" << player << "  moveClamps=" << st.movementClamps << " (spikes=" << st.movementSpikes
+                   << ")  fireRateRejects=" << st.fireRateRejects << "  fireOriginRejects=" << st.fireOriginRejects;
+            }
+            return os.str();
+        },
+        "Anti-cheat: dump per-player violation counters (authority only)", cat, "tf_cheat_stats");
 }

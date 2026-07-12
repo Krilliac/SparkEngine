@@ -12,6 +12,7 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFAbilitySystem.h"
+#include "Game/TFGrenadeSystem.h" // loadout-depth wave: RenderFlashOverlay
 #include "Game/TFOpticsSystem.h" // W11: mirror the scoped-FOV zoom in the plate projection
 #include "Game/TFOutfitSystem.h"
 #include "Game/TFPlayerSystem.h"
@@ -224,6 +225,13 @@ namespace Terrafront
         // files. Drawn before the plates so plates stay readable over the
         // scope vignette.
         TFOpticsSystem::Get().RenderOverlay();
+
+        // loadout-depth wave: flash-grenade whiteout rides the same per-frame
+        // foreground pass (TFOpticsSystem::RenderOverlay precedent above) —
+        // same gates (in-world, alive, no fullscreen UI) are exactly what a
+        // flash overlay wants too.
+        if (m_ctx->grenades)
+            m_ctx->grenades->RenderFlashOverlay();
 
         using namespace DirectX;
         const XMFLOAT3 cp = cam->GetPosition();

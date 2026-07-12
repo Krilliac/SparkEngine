@@ -47,6 +47,20 @@ namespace Terrafront
                     {"veh_ravager", TFUnlockKind::Vehicle, "", VehicleId::Ravager, 9, 200, nullptr, "Ravager Tank"},
                     {"veh_vulture", TFUnlockKind::Vehicle, "", VehicleId::Vulture, 15, 400, "veh_ravager",
                      "Vulture Gunship"},
+                    // --- loadout-depth wave: grenade choices (frag_grenade stays the
+                    // free default kit, no tree entry) -------------------------------
+                    {"gr_smoke", TFUnlockKind::Weapon, "smoke_grenade", VehicleId::None, 4, 75, nullptr,
+                     "Smoke Grenade"},
+                    {"gr_flash", TFUnlockKind::Weapon, "flash_grenade", VehicleId::None, 4, 75, nullptr,
+                     "Flash Grenade"},
+                    // --- loadout-depth wave: suit passives (overshield stays the free
+                    // default kit, no tree entry) --------------------------------------
+                    {"suit_regen_delay", TFUnlockKind::Suit, "", VehicleId::None, 5, 100, nullptr, "Rapid Capacitor",
+                     "regen_delay"},
+                    {"suit_reserves", TFUnlockKind::Suit, "", VehicleId::None, 5, 100, nullptr, "Loader Harness",
+                     "reserves"},
+                    {"suit_fortified", TFUnlockKind::Suit, "", VehicleId::None, 7, 150, nullptr, "Fortified Plating",
+                     "fortified"},
                 };
                 return s_table;
             }
@@ -82,6 +96,16 @@ namespace Terrafront
                 return nullptr;
             for (const TFUnlockDef& d : Table())
                 if (d.kind == TFUnlockKind::Vehicle && d.vehicle == vehicle)
+                    return &d;
+            return nullptr;
+        }
+
+        const TFUnlockDef* FindBySuitKey(std::string_view suitKey)
+        {
+            if (suitKey.empty())
+                return nullptr;
+            for (const TFUnlockDef& d : Table())
+                if (d.kind == TFUnlockKind::Suit && suitKey == d.itemKey)
                     return &d;
             return nullptr;
         }

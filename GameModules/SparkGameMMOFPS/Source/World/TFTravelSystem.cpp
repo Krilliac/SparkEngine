@@ -218,6 +218,13 @@ namespace Terrafront
             meta.name = name;
             meta.blurb = o.HasKey("blurb") ? o["blurb"].AsString("") : std::string();
             meta.active = !activeScene.empty() && o.HasKey("scene") && o["scene"].AsString("") == activeScene;
+            // multimap-plumbing lane (W13): OPTIONAL operator-configured
+            // endpoint for a continent hosted by a different process (see
+            // docs/TERRAFRONT_MULTIMAP.md). Absent on every shipped entry
+            // today — no second server actually runs — so the terminal always
+            // shows "no server hosting X" until an operator adds these keys.
+            meta.host = o.HasKey("host") ? o["host"].AsString("") : std::string();
+            meta.port = o.HasKey("port") ? static_cast<uint16_t>(o["port"].AsInt(0)) : uint16_t{0};
             m_continentList.push_back(std::move(meta));
         }
 
@@ -268,6 +275,32 @@ namespace Terrafront
                 "Request travel to a map (server validates: alive, entered world, terminal proximity for "
                 "sanctuary departures)",
                 "TERRAFRONT", "tf_travel <sanctuary|cindral>");
+        }
+
+        // multimap-plumbing lane (W13): console-testable hop to a continent
+        // hosted by a different process (mirrors the terminal menu button —
+        // see docs/TERRAFRONT_MULTIMAP.md).
+        if (!console.HasCommand("tf_travel_hop"))
+        {
+            console.RegisterCommand(
+                "tf_travel_hop",
+                [this](const std::vector<std::string>& args) -> std::string
+                {
+                    if (!m_initialized)
+                        return "[TF] travel system not ready";
+                    if (args.empty())
+                        return "usage: tf_travel_hop <continent key>";
+                    for (const ContinentMeta& c : m_continentList)
+                    {
+                        if (c.active || c.key != args[0])
+                            continue;
+                        ClientRequestContinentHop(c);
+                        return std::string("[TF] ") + m_lastTravelMsg;
+                    }
+                    return "[TF] unknown or already-active continent key: " + args[0];
+                },
+                "Hop to a different continent's server (needs continents.json host/port for that key)",
+                "TERRAFRONT", "tf_travel_hop <key>");
         }
 
         if (!console.HasCommand("tf_travel_debug"))
@@ -596,6 +629,59 @@ namespace Terrafront
         }
         if (m_ctx->clientNet && m_ctx->clientNet->IsConnected())
             m_ctx->clientNet->SendMsg(static_cast<TFMsg>(kTFTravelMsg_Request), &req, sizeof(req));
+    }
+
+    void TFTravelSystem::ClientRequestContinentHop(const ContinentMeta& target)
+    {
+        // multimap-plumbing lane (W13): see docs/TERRAFRONT_MULTIMAP.md for the
+        // process-per-continent design this implements the client half of.
+        // Only a genuine remote client can hop — the local authority role
+        // (ListenHost/DedicatedServer/Standalone loopback) already IS the
+        // server for the active continent, so there is nothing to reconnect.
+        if (!m_ctx || !m_ctx->world)
+            return;
+        if (m_ctx->role != NetRole::Client)
+        {
+            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Only a connected client can travel servers");
+            return;
+        }
+        if (target.host.empty() || target.port == 0)
+        {
+            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "No server hosting %s", target.name.c_str());
+            return;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] continent hop -> %s (%s:%u)", target.name.c_str(),
+                       target.host.c_str(), static_cast<unsigned>(target.port));
+
+        // Best-effort teardown of the CURRENT connection before dialing the new
+        // one. TFClientNet::Disconnect() resets TF-level client state + ctx.role
+        // but does not itself touch the NetworkManager socket; the raw
+        // NetworkManager::Disconnect() call mirrors the tf_disconnect console
+        // command (TFCommands.cpp) which drops the socket but is tagged "TF-W2"
+        // there as not yet routed through a clean TFWorldSetup teardown API.
+        // Both are best-effort — see docs/TERRAFRONT_MULTIMAP.md "known gaps"
+        // for the residual risk (stale WorldServer/AreaServer/scene state on
+        // the OLD continent surviving into the new connection).
+        if (m_ctx->clientNet)
+            m_ctx->clientNet->Disconnect();
+#ifdef ENABLE_NETWORKING
+        {
+            auto& nm = Spark::Net::NetworkManager::GetInstance();
+            if (nm.IsInitialized())
+                nm.Disconnect();
+        }
+#endif
+
+        if (!m_ctx->world->Connect(target.host, target.port))
+        {
+            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Connect to %s failed (see log)",
+                          target.name.c_str());
+            return;
+        }
+        std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Connecting to %s...", target.name.c_str());
+        TFUiSounds_Play(m_ctx, TFUiBleep::Confirm);
+        SetMenuOpen(false);
     }
 
     void TFTravelSystem::ClientRequestInfo()
@@ -967,9 +1053,12 @@ namespace Terrafront
             if (!inSanctuary)
                 ImGui::TextDisabled("(already deployed - use the map to redeploy)");
 
-            // W12 continent-2-data: continents hosted by OTHER server processes
-            // are listed but never joinable from here (one continent per
-            // process; cross-server travel is a future server-browser hop).
+            // W12 continent-2-data + W13 multimap-plumbing: continents hosted by
+            // OTHER server processes are listed; joinable ONLY when this client
+            // is connected to a real remote server (role==Client) AND
+            // continents.json configured a host/port for that continent (see
+            // docs/TERRAFRONT_MULTIMAP.md). Otherwise honest and disabled: "no
+            // server hosting X" (no second server is running by default).
             for (const ContinentMeta& c : m_continentList)
             {
                 if (c.active)
@@ -978,11 +1067,22 @@ namespace Terrafront
                 ImGui::Text("%s", c.name.c_str());
                 if (!c.blurb.empty())
                     ImGui::TextDisabled("%s", c.blurb.c_str());
-                char otherLbl[112];
-                std::snprintf(otherLbl, sizeof(otherLbl), "%s - different server##tfcont%d", c.name.c_str(), c.mapId);
-                ImGui::BeginDisabled(true);
-                ImGui::Button(otherLbl, ImVec2(-1.0f, 0.0f));
+
+                const bool haveEndpoint = !c.host.empty() && c.port != 0;
+                const bool canHop = haveEndpoint && m_ctx->role == NetRole::Client;
+                char otherLbl[144];
+                if (haveEndpoint)
+                    std::snprintf(otherLbl, sizeof(otherLbl), "Travel to %s (%s:%u)##tfcont%d", c.name.c_str(),
+                                 c.host.c_str(), static_cast<unsigned>(c.port), c.mapId);
+                else
+                    std::snprintf(otherLbl, sizeof(otherLbl), "%s - no server hosting this continent##tfcont%d",
+                                 c.name.c_str(), c.mapId);
+                ImGui::BeginDisabled(!canHop);
+                if (ImGui::Button(otherLbl, ImVec2(-1.0f, 0.0f)) && canHop)
+                    ClientRequestContinentHop(c);
                 ImGui::EndDisabled();
+                if (haveEndpoint && !canHop)
+                    ImGui::TextDisabled("(server-hop needs a live client connection, not a local host)");
             }
 
             if (m_lastTravelMsg[0] != '\0')
@@ -1012,8 +1112,22 @@ namespace Terrafront
             ImGui::Text("near terminal   : %s   menu: %s", m_nearTerminal ? "yes" : "no",
                         m_menuOpen ? "open" : "closed");
             for (const ContinentMeta& c : m_continentList)
-                ImGui::Text("continent %d    : %s [%s]%s", c.mapId, c.name.c_str(), c.key.c_str(),
-                            c.active ? "  (ACTIVE this process)" : "  (different server)");
+            {
+                if (c.active)
+                {
+                    ImGui::Text("continent %d    : %s [%s]  (ACTIVE this process)", c.mapId, c.name.c_str(),
+                                c.key.c_str());
+                    continue;
+                }
+                // multimap-plumbing lane (W13): surface the configured endpoint
+                // (or its absence) for the other registered continents.
+                if (!c.host.empty() && c.port != 0)
+                    ImGui::Text("continent %d    : %s [%s]  (endpoint %s:%u)", c.mapId, c.name.c_str(), c.key.c_str(),
+                                c.host.c_str(), static_cast<unsigned>(c.port));
+                else
+                    ImGui::Text("continent %d    : %s [%s]  (no endpoint configured)", c.mapId, c.name.c_str(),
+                                c.key.c_str());
+            }
             if (m_hasInfo)
                 ImGui::Text("last info       : pop MRA %u / AUC %u / HLX %u", m_lastInfo.pop[1], m_lastInfo.pop[2],
                             m_lastInfo.pop[3]);

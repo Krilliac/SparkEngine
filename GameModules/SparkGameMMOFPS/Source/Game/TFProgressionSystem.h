@@ -39,6 +39,32 @@
  *    (Persistence/TFPlayerMeta.h store; seeded in ServerLoadCharacter, flushed
  *    in SaveNow / ClearPlayer / Shutdown). Session-only players (charId 0,
  *    e.g. bots) keep runtime stats but are never persisted.
+ *
+ * loadout-depth wave (this lane): deeper per-character loadout slots riding
+ * the same TFPlayerMeta/TFDatabase persistence seam.
+ *  - GRENADE CHOICE: TFLoadout::grenade (weapons.json key: frag_grenade
+ *    default / smoke_grenade / flash_grenade). Validated + stored here
+ *    (ServerSetLoadoutExt); actually CONSUMED by Game/TFGrenadeSystem.h/.cpp
+ *    (OnPlayerSpawned resolves the thrower's kind from GetLoadout, falling
+ *    back to frag_grenade). Unlock-gated via Persistence/TFUnlockTree.h
+ *    ("gr_smoke"/"gr_flash"); frag stays free (no tree entry).
+ *  - SUIT SLOT: TFLoadout::suit (Assets/MMOFPS/Data/suits.json key), a small
+ *    data-driven passive scalar (shield/regen-delay/ammo-reserve/health
+ *    multiplier). Parsed by this system's own lazy loader (LoadSuitTable,
+ *    TFOpticsSystem-style standalone parse — Data/TFDataTables.h is a frozen
+ *    contended surface this wave) and applied ONCE at pawn spawn by
+ *    Game/TFPlayerSystem.cpp::CreatePawnEntity via the Suit*Mult queries
+ *    below, at the exact seam ClassDef health/shield/ammo stats already
+ *    reach the pawn. Unlock-gated via TFUnlockTree ("suit_*"); "overshield"
+ *    stays free (no tree entry).
+ *  - Kept OUT of ServerSetLoadout's frozen primary/secondary/tool triad
+ *    deliberately: the existing TF_LoadoutChange wire message (8-byte frozen
+ *    layout, TFNetProtocol.h) never carries these two fields, so folding them
+ *    into ServerSetLoadout's overwrite-semantics would silently wipe a saved
+ *    grenade/suit pick every time a player only changes weapons. A separate
+ *    C->S TF_LoadoutExtChange (reserved TFMsg block 0x5488-0x548B, struct
+ *    below) carries just these two, and ServerSetLoadoutExt merges them into
+ *    the existing TFLoadout in place.
  */
 #pragma once
 
@@ -88,6 +114,46 @@ namespace Terrafront
     };
 
     constexpr uint16_t kTFMaxRank = 30;
+
+    // ---------------------------------------------------------------------------
+    // Wire protocol — reserved TFMsg id block 0x5488-0x548B (loadout-depth
+    // wave). TFNetProtocol.h (contended) only gains the LoadoutExtChange C->S
+    // enum entry via the wave wiringNotes (TFServerSim::RouteClientMessage
+    // dispatches it to ServerHandleLoadoutExtMsgRaw below); this constant keeps
+    // this lane compiling standalone and MUST stay value-identical to that
+    // enum entry (TFGrenadeSystem.h precedent). 0x5489-0x548A are grenade-lane
+    // FX ids (flash/smoke) defined in Game/TFGrenadeSystem.h, same block;
+    // 0x548B is free.
+    // ---------------------------------------------------------------------------
+
+    constexpr uint16_t kTFMsgLoadoutExtChange = 0x5488; // C->S TF_LoadoutExtChange (server validates)
+
+#pragma pack(push, 1)
+
+    /// C->S: grenade + suit loadout selection. The UI always sends its full
+    /// current pick for both fields; an empty (all-zero) string means "class
+    /// default" (frag_grenade / no suit), matching the primary/secondary/tool
+    /// convention on TF_LoadoutChange.
+    struct TF_LoadoutExtChange
+    {
+        char grenadeKey[24]; // weapons.json key; empty == frag_grenade default
+        char suitKey[24];    // suits.json key; empty == no passive
+    };
+    static_assert(sizeof(TF_LoadoutExtChange) == 48, "wire layout frozen");
+
+#pragma pack(pop)
+
+    /// loadout-depth wave: one suits.json row (Assets/MMOFPS/Data/suits.json).
+    /// Multipliers default to 1.0 (no effect) so a row that only sets one stat
+    /// leaves the others untouched.
+    struct TFSuitDef
+    {
+        std::string key, name, desc;
+        float shieldMult = 1.0f;
+        float regenDelayMult = 1.0f;
+        float reserveMult = 1.0f;
+        float healthMult = 1.0f;
+    };
 
     class TFProgressionSystem
     {
@@ -196,6 +262,44 @@ namespace Terrafront
         /// slot rules stay enforced per-spawn by TFWeaponSystem.
         bool ServerSetLoadout(PlayerId player, const TFLoadout& loadout);
 
+        // --- loadout-depth wave: grenade choice + suit slot ---------------------
+
+        /// Server: TFServerSim routes TFMsg 0x5488 (LoadoutExtChange) here
+        /// (size-validates, decodes, then dispatches to ServerSetLoadoutExt) —
+        /// same one-line hook shape as TFGrenadeSystem::ServerHandleThrowMsgRaw.
+        void ServerHandleLoadoutExtMsgRaw(PlayerId sender, const void* data, size_t size);
+
+        /// Server: validate + store the player's grenade + suit picks. Grenade
+        /// must be "" (frag default) or a weapons.json key tagged with an
+        /// additive "grenadeEffect" of smoke/flash (TFGrenadeSystem's own
+        /// parse) AND unlocked; suit must be "" (no passive) or a suits.json
+        /// key AND unlocked (TFUnlockTree "gr_*"/"suit_*"). Deliberately
+        /// separate from ServerSetLoadout (see the header note above) — merges
+        /// into the existing TFLoadout in place, never touching
+        /// primary/secondary/tool. Returns false (nothing stored) on any
+        /// violation.
+        bool ServerSetLoadoutExt(PlayerId player, const std::string& grenadeKey, const std::string& suitKey);
+
+        /// suits.json passive scalars for the player's current suit pick (1.0 ==
+        /// no effect / no suit / tables not loaded). Safe from any system;
+        /// TFPlayerSystem::CreatePawnEntity applies these at spawn.
+        float SuitShieldMult(PlayerId player) const;
+        float SuitRegenDelayMult(PlayerId player) const;
+        float SuitReserveMult(PlayerId player) const;
+        float SuitHealthMult(PlayerId player) const;
+
+        /// Pure read-only legality checks (empty == default kit == always true;
+        /// unknown key == false; a known key checks the TFUnlockTree gate).
+        /// Public so UI/TFLoadoutScreen can grey out locked picks without a
+        /// TFUnlockTree include of its own; ServerSetLoadoutExt uses the same
+        /// two calls server-side as the actual gate.
+        bool ValidGrenadeChoiceKey(PlayerId player, const std::string& weaponKey) const;
+        bool ValidSuitChoiceKey(PlayerId player, const std::string& suitKey) const;
+
+        /// All loaded suits.json passives, for UI enumeration (stable
+        /// insertion order not guaranteed — callers sort by name if needed).
+        const std::unordered_map<std::string, TFSuitDef>& AllSuits() const { return m_suits; }
+
       private:
         struct Prog
         {
@@ -218,6 +322,10 @@ namespace Terrafront
         const std::string* WeaponKeyOf(WeaponId weapon) const; ///< nullptr if tables unloaded/unknown id
         bool ValidLoadoutSlotKey(PlayerId player, const std::string& weaponKey, int slot) const;
 
+        // loadout-depth wave helpers
+        void LoadSuitTable();  ///< one-shot parse of Assets/MMOFPS/Data/suits.json, called from Initialize
+        const TFSuitDef* SuitDefFor(PlayerId player) const; ///< nullptr if no/unknown suit picked
+
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
         bool m_initialized{false};
@@ -225,6 +333,7 @@ namespace Terrafront
         std::unordered_map<PlayerId, Prog> m_players;
         std::array<uint32_t, kTFMaxRank + 1> m_rankXP{}; ///< [rank] = cumulative XP
         TFPlayerMetaStore m_meta;                        ///< W6: unlocks / loadout / weapon stats
+        std::unordered_map<std::string, TFSuitDef> m_suits; ///< loadout-depth wave: suits.json, by key
 
         float m_fluxAccum{0.0f}; ///< seconds toward the next flux income tick
         float m_sinceSave{0.0f}; ///< seconds since the last disk write

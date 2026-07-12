@@ -33,6 +33,7 @@
 #include "Game/TFAudioAmbience.h" // audio-polish lane: zone beds + distant combat layer
 #include "Game/TFFootsteps.h"     // audio-wave-2 lane (W10): footstep audio
 #include "UI/TFHUD.h"
+#include "UI/TFLoadoutScreen.h" // loadout-depth wave: owns m_loadoutUI (complete type for dtor)
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
 #include "UI/TFScoreboard.h"
@@ -304,6 +305,12 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
             return false;
         }
     }
+
+    // Killcam lane (W13): direct pointer hookup between the two sibling
+    // lanes (neither TFDeathRecap nor TFSpectator lives on TFGameContext).
+    // Both Initialize()'d above; wires TFDeathRecap's push notify to
+    // TFSpectator's killer-follow gate.
+    m_spectator->SetDeathRecapSource(*m_deathRecap);
 
     // grenades lane (W10): route the throw key through the TFKeybinds table
     // (defaults to 'G' either way; this makes runtime rebinds take effect).

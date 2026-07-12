@@ -464,10 +464,11 @@ namespace Terrafront
             if (const VehicleDef* def = DefOf(it->second.info.vehId))
                 PlayOneShot(def->explodeAudio);
             DestroyTurretRig(it->second.rig); // rig children before the hull
-            World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
-            const auto e = static_cast<EntityID>(it->second.local);
-            if (world && it->second.local != 0 && world->GetRegistry().valid(e))
-                world->DestroyEntity(e);
+            // W13: leave a charred, static wreck (see TFVehicleSystem.cpp
+            // SpawnWreck/UpdateWrecks) instead of an immediate despawn. Erased
+            // from m_mirror below, so this hull stops being a "vehicle" to
+            // every mirror-side query the instant it becomes a wreck.
+            SpawnWreck(it->second.local);
             m_mirror.erase(it);
         }
         m_mirrorSeats.erase(d.entityId);

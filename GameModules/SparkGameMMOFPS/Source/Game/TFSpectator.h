@@ -4,13 +4,17 @@
  *        follow-cam with LMB/RMB cycling, plus a bounded free-fly fallback
  *        when no squadmate is alive.
  *
- * OWNERSHIP: spectator-mode lane (this header + TFSpectator.cpp). Purely
- * client-side — NO TFMsg block, NO server changes. Everything it consumes is
- * already replicated: squadmate pawns arrive through the TFReplication
- * RemotePawn store (broadcast to ALL clients with no interest culling — see
- * TFReplication::ServerBroadcastUpdates), surfaced via the frozen
- * TFPlayerSystem::GetPawnByPlayer API and the interpolated local visual
- * entities TFClientNet writes each frame.
+ * OWNERSHIP: spectator-mode lane (this header + TFSpectator.cpp), plus the
+ * killcam lane (W13: killcam trigger in UI/TFDeathRecap.h/.cpp, reserved
+ * TFMsg block 0x5484-0x5487 — left unused, see the KILLCAM_FOLLOW mode note
+ * below). Purely client-side — NO TFMsg block, NO server changes. Everything
+ * it consumes is already replicated: squadmate (and, for killcam, killer)
+ * pawns arrive through the TFReplication RemotePawn store (broadcast to ALL
+ * clients with no interest culling — see TFReplication::ServerBroadcastUpdates),
+ * surfaced via the frozen TFPlayerSystem::GetPawnByPlayer API and the
+ * interpolated local visual entities TFClientNet writes each frame.
+ * SetDeathRecapSource wires the two lanes' instances directly (Main.cpp,
+ * one line — neither system lives on TFGameContext).
  *
  * Camera-ownership handoff (verified against TFClientNet):
  *  - ALIVE: TFClientNet::DriveFirstPersonCamera owns the module camera
@@ -32,6 +36,25 @@
  *    hold RMB to look, kTFSpectFreeSpeedMps, bounded to kTFSpectFreeRangeM
  *    of the death point and to terrain + kTFSpectFreeTerrainClearM.
  *    Automatically returns to FOLLOW when a squadmate (re)spawns.
+ *  - KILLCAM_FOLLOW (killcam lane, W13): on a fresh death, a brief
+ *    (kTFKillcamDurationSec) forced follow-cam on the KILLER before FOLLOW/
+ *    FREE ever get to pick a squadmate. No new wire message and no server
+ *    replay buffer (reserved TFMsg block 0x5484-0x5487 stays unused —
+ *    documented in Net/TFNetProtocol.h): the killer id comes from
+ *    TF_DeathRecap.killerPlayer (already sent to the victim, see
+ *    UI/TFDeathRecap.h's SetKillcamNotify push hook) and the live pose is
+ *    the SAME globally-broadcast PawnInfo the FOLLOW mode already reads via
+ *    TargetPose — DriveFollow is reused verbatim with m_target pointed at
+ *    the killer instead of a squadmate. A short grace window
+ *    (kTFKillcamGraceSec) absorbs the recap's network delivery lag relative
+ *    to the alive->dead edge (the authority's own in-process mirror usually
+ *    beats it; a pure client's reliable TF_DeathRecap usually lands inside
+ *    the window). Ends on kTFKillcamDurationSec, ESC (TFTutorial skip-key
+ *    precedent), or the killer's PawnInfo going unresolvable for good (dead/
+ *    disconnected/never arrived) — the last two cases freeze on the last
+ *    resolved pose (DriveFollow's existing "target vanished" behavior) and
+ *    fade a dim vignette in via m_killerGoneFade. Hands off to whatever
+ *    FOLLOW/FREE would have picked on a normal death.
  *
  * Input routing (verified against the death screen):
  *  - The world renders before ImGui, so spectating naturally sits BEHIND the
@@ -58,6 +81,8 @@ class SparkEngineCamera;
 namespace Terrafront
 {
 
+    class TFDeathRecap;
+
     // --- follow-cam tuning ------------------------------------------------------
     constexpr float kTFSpectFollowBackM = 4.0f;   ///< chase distance behind the pawn
     constexpr float kTFSpectFollowUpM = 1.8f;     ///< chase height above the pawn's feet
@@ -71,13 +96,19 @@ namespace Terrafront
     constexpr float kTFSpectFreeRangeM = 300.0f;      ///< max distance from the death point
     constexpr float kTFSpectFreeTerrainClearM = 0.5f; ///< min clearance above terrain (free)
 
+    // --- killcam tuning (killcam lane, W13) --------------------------------------
+    constexpr float kTFKillcamDurationSec = 4.0f;     ///< forced killer follow-cam hold
+    constexpr float kTFKillcamGraceSec = 0.5f;        ///< wait this long for the killer id before giving up
+    constexpr float kTFKillcamFadeRatePerSec = 1.0f;  ///< dim-vignette ramp once the killer pose is unresolvable
+
     class TFSpectator
     {
       public:
         enum class Mode : uint8_t
         {
             Follow = 0,
-            Free
+            Free,
+            KillcamFollow, ///< forced follow on the killer (killcam lane, W13)
         };
 
         TFSpectator();
@@ -94,6 +125,13 @@ namespace Terrafront
         Mode ActiveMode() const { return m_mode; }
         PlayerId Target() const { return m_target; }
 
+        /// Killcam lane wiring: called once from Main.cpp right after both
+        /// lanes are constructed (TFClientNet::SetChatUI self-wiring
+        /// precedent — neither system lives on TFGameContext, so this is a
+        /// direct pointer hookup instead of a ctx.* publish). Registers
+        /// OnRecapKiller as TFDeathRecap's push notify.
+        void SetDeathRecapSource(TFDeathRecap& recap);
+
       private:
         // lifecycle
         void Activate(SparkEngineCamera& cam);
@@ -107,9 +145,11 @@ namespace Terrafront
         void DriveFollow(SparkEngineCamera& cam, float dt);
         void DriveFree(SparkEngineCamera& cam, float dt, bool inputBlocked);
 
-        /// Best available pose of a squadmate pawn: the interpolated local
-        /// visual entity Transform when resolvable (smooth), else the raw
-        /// replicated PawnInfo sample. Returns false when the pawn is gone.
+        /// Best available pose of a target pawn (squadmate in FOLLOW, killer
+        /// in KILLCAM_FOLLOW — GetPawnByPlayer is not squad-filtered, so
+        /// either works): the interpolated local visual entity Transform
+        /// when resolvable (smooth), else the raw replicated PawnInfo
+        /// sample. Returns false when the pawn is gone.
         bool TargetPose(PlayerId player, float outPos[3], float& outYawRad) const;
 
         /// Absolute camera aim via incremental Yaw/Pitch (those apply
@@ -118,6 +158,11 @@ namespace Terrafront
         static void AimCameraAt(SparkEngineCamera& cam, const float from[3], const float at[3]);
 
         void ResolveTargetName(PlayerId player, char* out, size_t outSize) const;
+
+        /// Killcam lane push handler (registered via SetDeathRecapSource):
+        /// stashes the killer id from the latest TF_DeathRecap; Update()
+        /// consumes it on the next pass (kInvalidPlayer == environment kill).
+        void OnRecapKiller(PlayerId killer);
 
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
@@ -134,6 +179,16 @@ namespace Terrafront
         bool m_haveCamPos{false};
         float m_freePos[3]{}; ///< free-cam position
         bool m_freeInit{false};
+        bool m_lastPoseValid{true}; ///< set by DriveFollow: false when TargetPose failed this frame
+
+        // killcam lane state (W13)
+        TFDeathRecap* m_deathRecapSrc{nullptr};
+        PlayerId m_pendingKiller{kInvalidPlayer};
+        bool m_pendingKillerFresh{false};   ///< a NEW recap arrived; Update() hasn't consumed it yet
+        bool m_killcamShownThisLife{false}; ///< the per-life killcam decision has already been made
+        float m_killcamGraceTimer{0.0f};    ///< counts down while waiting for the killer id
+        float m_killcamTimer{0.0f};         ///< counts down while KillcamFollow is active
+        float m_killerGoneFade{0.0f};       ///< 0..1 dim-vignette ramp (killer pose unresolvable)
 
         // RenderUI -> Update handshake (ImGui state is only valid in OnImGui)
         bool m_uiWantsMouse{false};

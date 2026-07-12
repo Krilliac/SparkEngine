@@ -18,6 +18,7 @@
 
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 6): re-key persistence
 #include "Data/TFDataTables.h"
+#include "Game/TFGrenadeSystem.h" // loadout-depth wave: grenade choice key constants (single source of truth)
 #include "Game/TFPlayerSystem.h"
 #include "Net/TFNetProtocol.h"
 #include "Net/TFServerSim.h"          // W5 onboarding (Task 6): ActiveCharacterOf
@@ -57,6 +58,10 @@ namespace Terrafront
         constexpr const char* kSaveFile = "Saves/terrafront_state.json";
         constexpr const char* kTmpFile = "Saves/terrafront_state.prog.tmp";
 
+        // loadout-depth wave: own lazy parse of the suit passive table (TFOpticsSystem
+        // ::EnsureTable precedent — Data/TFDataTables.h is a frozen contended surface).
+        constexpr const char* kSuitsJsonPath = "Assets/MMOFPS/Data/suits.json";
+
         /// Read a whole file into a string; false if it does not exist / can't open.
         bool ReadAllText(const char* path, std::string& out)
         {
@@ -94,6 +99,7 @@ namespace Terrafront
         events.Subscribe<EvPlayerSpawned>([this](const EvPlayerSpawned& ev) { OnPlayerSpawned(ev); });
 
         LoadFromDisk();
+        LoadSuitTable(); // loadout-depth wave
 
         m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game,
@@ -739,6 +745,139 @@ namespace Terrafront
             return false;
 
         return IsWeaponUnlocked(player, def->id);
+    }
+
+    // ---------------------------------------------------------------------------
+    // loadout-depth wave: grenade choice + suit slot
+    // ---------------------------------------------------------------------------
+
+    void TFProgressionSystem::LoadSuitTable()
+    {
+        std::string text;
+        if (!ReadAllText(kSuitsJsonPath, text))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] suits: cannot open %s (no passives)", kSuitsJsonPath);
+            return;
+        }
+        const Spark::Json::Value root = Spark::Json::Parse(text);
+        if (!root.IsObject() || !root.HasKey("suits") || !root["suits"].IsArray())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] suits: %s malformed (no passives)", kSuitsJsonPath);
+            return;
+        }
+        const Spark::Json::Value& suits = root["suits"];
+        for (size_t i = 0; i < suits.Size(); ++i)
+        {
+            const Spark::Json::Value& s = suits[i];
+            if (!s.IsObject() || !s.HasKey("key"))
+                continue;
+            TFSuitDef def;
+            def.key = s["key"].AsString({});
+            if (def.key.empty())
+                continue;
+            def.name = s["name"].AsString(def.key);
+            def.desc = s["desc"].AsString({});
+            if (s.HasKey("shieldMult"))
+                def.shieldMult = static_cast<float>(s["shieldMult"].AsNumber(1.0));
+            if (s.HasKey("regenDelayMult"))
+                def.regenDelayMult = static_cast<float>(s["regenDelayMult"].AsNumber(1.0));
+            if (s.HasKey("reserveMult"))
+                def.reserveMult = static_cast<float>(s["reserveMult"].AsNumber(1.0));
+            if (s.HasKey("healthMult"))
+                def.healthMult = static_cast<float>(s["healthMult"].AsNumber(1.0));
+            m_suits.emplace(def.key, def);
+        }
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] suits: %zu passives loaded from %s", m_suits.size(),
+                       kSuitsJsonPath);
+    }
+
+    const TFSuitDef* TFProgressionSystem::SuitDefFor(PlayerId player) const
+    {
+        const TFLoadout* lo = GetLoadout(player);
+        if (!lo || lo->suit.empty())
+            return nullptr;
+        const auto it = m_suits.find(lo->suit);
+        return it != m_suits.end() ? &it->second : nullptr;
+    }
+
+    float TFProgressionSystem::SuitShieldMult(PlayerId player) const
+    {
+        const TFSuitDef* d = SuitDefFor(player);
+        return d ? d->shieldMult : 1.0f;
+    }
+
+    float TFProgressionSystem::SuitRegenDelayMult(PlayerId player) const
+    {
+        const TFSuitDef* d = SuitDefFor(player);
+        return d ? d->regenDelayMult : 1.0f;
+    }
+
+    float TFProgressionSystem::SuitReserveMult(PlayerId player) const
+    {
+        const TFSuitDef* d = SuitDefFor(player);
+        return d ? d->reserveMult : 1.0f;
+    }
+
+    float TFProgressionSystem::SuitHealthMult(PlayerId player) const
+    {
+        const TFSuitDef* d = SuitDefFor(player);
+        return d ? d->healthMult : 1.0f;
+    }
+
+    bool TFProgressionSystem::ValidGrenadeChoiceKey(PlayerId player, const std::string& weaponKey) const
+    {
+        if (weaponKey.empty())
+            return true; // frag_grenade default
+        if (weaponKey != kTFGrenadeKeySmoke && weaponKey != kTFGrenadeKeyFlash)
+            return false; // only these two are player-selectable; frag is the empty-string default
+        // Unlock-gated, mirroring ValidLoadoutSlotKey's weapon check (IsWeaponUnlocked
+        // resolves through TFUnlockTree::FindByWeaponKey -> "gr_smoke"/"gr_flash").
+        if (!m_ctx || !m_ctx->data || !m_ctx->data->IsLoaded())
+            return false; // can't validate a concrete key without tables: reject
+        const WeaponDef* def = m_ctx->data->GetWeaponByKey(weaponKey);
+        return def && IsWeaponUnlocked(player, def->id);
+    }
+
+    bool TFProgressionSystem::ValidSuitChoiceKey(PlayerId player, const std::string& suitKey) const
+    {
+        if (suitKey.empty())
+            return true; // no passive
+        if (m_suits.find(suitKey) == m_suits.end())
+            return false; // unknown suits.json key
+        const TFUnlockDef* node = TFUnlockTree::FindBySuitKey(suitKey);
+        if (!node)
+            return true; // not in the tree (overshield) == default kit
+        return IsUnlocked(player, node->key);
+    }
+
+    void TFProgressionSystem::ServerHandleLoadoutExtMsgRaw(PlayerId sender, const void* data, size_t size)
+    {
+        if (!m_initialized || !m_ctx || !m_ctx->IsAuthority() || size < sizeof(TF_LoadoutExtChange) || !data)
+            return;
+        TF_LoadoutExtChange msg{};
+        std::memcpy(&msg, data, sizeof(msg));
+        msg.grenadeKey[sizeof(msg.grenadeKey) - 1] = '\0';
+        msg.suitKey[sizeof(msg.suitKey) - 1] = '\0';
+        ServerSetLoadoutExt(sender, std::string(msg.grenadeKey), std::string(msg.suitKey));
+    }
+
+    bool TFProgressionSystem::ServerSetLoadoutExt(PlayerId player, const std::string& grenadeKey,
+                                                  const std::string& suitKey)
+    {
+        if (!m_initialized || !m_ctx || !m_ctx->IsAuthority() || player == kInvalidPlayer)
+            return false;
+        if (!ValidGrenadeChoiceKey(player, grenadeKey) || !ValidSuitChoiceKey(player, suitKey))
+            return false;
+
+        // Merges into the existing TFLoadout in place — deliberately never
+        // touches primary/secondary/tool (see the header note on why this is
+        // a separate entry point from ServerSetLoadout).
+        auto& meta = m_meta.Ensure(player);
+        meta.loadout.grenade = grenadeKey;
+        meta.loadout.suit = suitKey;
+        meta.dirty = true;
+        m_dirty = true; // prompt durability (2 s debounce path)
+        return true;
     }
 
     // ---------------------------------------------------------------------------

@@ -61,6 +61,9 @@ namespace Terrafront
         std::string loadoutPrimary;       ///< weapons.json keys; empty ==
         std::string loadoutSecondary;     ///<   class-default slot
         std::string loadoutTool;
+        // --- loadout-depth wave (additive; absent on old rows -> empty defaults)
+        std::string loadoutGrenade; ///< weapons.json key; empty == frag_grenade
+        std::string loadoutSuit;    ///< suits.json key; empty == no passive
         std::vector<TFWeaponStatsRow> weaponStats;
     };
 
@@ -92,9 +95,12 @@ namespace Terrafront
         /// W6 progression expansion: overwrite the meta block (unlocks / loadout /
         /// per-weapon stats) of one character and flush. Additive counterpart to
         /// SaveCharacterProgress; no-op if charId is unknown.
+        /// loadout-depth wave: grenade/suit are additive params appended at the
+        /// end so this stays a pure extension of the W6 signature.
         void SaveCharacterMeta(uint64_t charId, const std::vector<std::string>& unlocks,
                                const std::string& loadoutPrimary, const std::string& loadoutSecondary,
-                               const std::string& loadoutTool, const std::vector<TFWeaponStatsRow>& stats);
+                               const std::string& loadoutTool, const std::string& loadoutGrenade,
+                               const std::string& loadoutSuit, const std::vector<TFWeaponStatsRow>& stats);
 
       private:
         bool LoadFromDisk();

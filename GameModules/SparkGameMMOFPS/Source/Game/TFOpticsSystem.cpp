@@ -181,6 +181,24 @@ namespace Terrafront
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] optics: %zu weapons with sight lists", m_allowed.size());
     }
 
+    uint8_t TFOpticsSystem::AllowedMask(std::string_view weaponKey)
+    {
+        EnsureTable();
+        const auto it = m_allowed.find(std::string(weaponKey));
+        return it != m_allowed.end() ? it->second.mask : OpticList{}.mask;
+    }
+
+    void TFOpticsSystem::SetSelected(std::string_view weaponKey, TFOpticKind kind)
+    {
+        EnsureTable();
+        const std::string key(weaponKey);
+        const auto it = m_allowed.find(key);
+        const uint8_t mask = it != m_allowed.end() ? it->second.mask : OpticList{}.mask;
+        if ((mask & (1u << static_cast<uint8_t>(kind))) == 0)
+            return; // not an allowed sight for this weapon
+        m_selected[key] = static_cast<uint8_t>(kind);
+    }
+
     void TFOpticsSystem::NotifyInactive()
     {
         m_blend = 0.0f;

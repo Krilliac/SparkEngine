@@ -36,18 +36,21 @@ namespace Terrafront
     {
         Weapon = 0,
         Vehicle,
+        Suit, ///< loadout-depth wave: Assets/MMOFPS/Data/suits.json passive (itemKey holds the suit key)
     };
 
     struct TFUnlockDef
     {
         const char* key; ///< durable unlock key (persisted; never rename)
         TFUnlockKind kind;
-        const char* weaponKey; ///< weapons.json key (Weapon kind); "" for vehicles
-        VehicleId vehicle;     ///< target vehicle (Vehicle kind); None for weapons
+        const char* weaponKey; ///< weapons.json key (Weapon kind, incl. smoke/flash grenade
+                               ///< choices); "" for vehicles/suits
+        VehicleId vehicle;     ///< target vehicle (Vehicle kind); None otherwise
         uint16_t requiredRank; ///< minimum rank (1 == no rank gate)
         uint32_t fluxCost;     ///< one-time purchase price; 0 == auto-granted at rank
         const char* prereq;    ///< prerequisite unlock key; nullptr == root node
         const char* name;      ///< display name for HUD/directives UI
+        const char* itemKey = ""; ///< loadout-depth wave: suits.json key (Suit kind only)
     };
 
     namespace TFUnlockTree
@@ -64,6 +67,10 @@ namespace Terrafront
 
         /// nullptr if this vehicle is not gated (== always available).
         const TFUnlockDef* FindByVehicle(VehicleId vehicle);
+
+        /// loadout-depth wave: nullptr if this suits.json key is not gated (==
+        /// default kit; overshield ships with no tree entry, see TFUnlockTree.cpp).
+        const TFUnlockDef* FindBySuitKey(std::string_view suitKey);
 
     } // namespace TFUnlockTree
 

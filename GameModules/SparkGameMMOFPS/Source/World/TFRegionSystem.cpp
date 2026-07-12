@@ -7,6 +7,7 @@
 #include "World/TFRegionSystem.h"
 
 #include "Data/TFDataTables.h"
+#include "Game/TFCaptureFx.h"      // W13 capture-fx lane: tower beam/burst/standing-ring
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
 #include "Game/TFVisualUtils.h"    // FactionStructureMaterial for capture-point banners
@@ -170,6 +171,12 @@ namespace Terrafront
         if (regions.empty())
             return;
 
+        // W13 capture-fx lane: advance/redraw the pooled owner-flip burst
+        // particles + rising flares (independent of the spawn-once/retint work
+        // below — pure pool bookkeeping, safe to call every frame regardless of
+        // whether any region actually changed).
+        TFCaptureFx::Get().Update(*m_ctx, dt);
+
         constexpr float kBannerHeightM = 11.5f; // just under the 12.7m cap tower top
         constexpr float kBannerSpinDegPerSec = 24.0f;
 
@@ -237,7 +244,10 @@ namespace Terrafront
             m_capVisualsSpawned = true;
         }
 
-        // Per-frame: spin each banner and retint it when its region owner changes.
+        // Per-frame: spin each banner, retint it when its region owner changes,
+        // and drive the W13 capture-fx lane's tower progress beam + one-shot
+        // owner-flip burst off the same banner entity (capture-fx section of
+        // this file; TFCaptureFx.h/.cpp own the actual FX).
         auto& registry = world->GetRegistry();
         for (size_t i = 0; i < m_capBannerEnt.size() && i < m_state.size(); ++i)
         {
@@ -246,16 +256,34 @@ namespace Terrafront
             const auto e = static_cast<EntityID>(m_capBannerEnt[i]);
             if (!registry.valid(e))
                 continue;
-            if (Transform* t = registry.try_get<Transform>(e))
+            Transform* t = registry.try_get<Transform>(e);
+            if (t)
                 t->rotation.y += kBannerSpinDegPerSec * dt;
             const int owner = static_cast<int>(m_state[i].owner);
             if (owner != m_capBannerOwner[i])
             {
+                const bool firstPaint = (m_capBannerOwner[i] == -2); // spawn-time sentinel, not a real flip
                 m_capBannerOwner[i] = owner;
                 if (MeshRenderer* mr = registry.try_get<MeshRenderer>(e))
                     mr->materialPath = FactionStructureMaterial(*m_ctx, m_state[i].owner);
+                if (!firstPaint && t)
+                {
+                    const float towerBase[3] = {t->position.x, t->position.y - kBannerHeightM, t->position.z};
+                    TFCaptureFx::Get().SpawnOwnerFlipBurst(*m_ctx, towerBase, m_state[i].owner);
+                }
+            }
+            if (t)
+            {
+                const float towerBase[3] = {t->position.x, t->position.y - kBannerHeightM, t->position.z};
+                TFCaptureFx::Get().SubmitTowerBeam(*m_ctx, towerBase, m_state[i].progress, m_state[i].capturing,
+                                                   m_state[i].contested);
             }
         }
+
+        // Standing-in-point ground ring under the local player: does its own
+        // pawn-position + capturable-point lookup off the public accessors
+        // (capture-fx section), so it needs nothing else from this loop.
+        TFCaptureFx::Get().UpdateStandingRing(*m_ctx);
     }
 
     void TFRegionSystem::FixedUpdate(float fixedDeltaTime)

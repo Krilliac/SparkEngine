@@ -16,6 +16,7 @@
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h" // W6 progression: per-weapon shot/hit stats
 #include "Game/TFVehicleSystem.h"     // W3 shared-edit: vehicle hit tests + seat weapons
+#include "Game/TFServerValidation.h" // W13 anti-cheat lane: mirror ValidateFire rejections into tf_cheat_stats
 #include "Game/TFWeaponMath.h"
 #include "Net/TFFireFxProtocol.h" // W9 remote-fire-events: 0x54F4 S->C fx broadcast
 #include "Net/TFServerSim.h"
@@ -162,6 +163,10 @@ namespace Terrafront
         if (!ValidateFire(def, st, now))
         {
             ++m_shotsRejected;
+            // W13 anti-cheat lane: mirror into the unified per-player counters
+            // (tf_cheat_stats) — no second gate, this ValidateFire call above
+            // is still the sole fire-rate authority (see TFServerValidation.h).
+            TFServerValidation::Get().RecordFireRateReject(shooter);
             return;
         }
         ++m_shotsValidated;

@@ -59,6 +59,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace Terrafront
@@ -116,6 +117,18 @@ namespace Terrafront
 
         /// 0..1 aim-down-sights blend for the current sight (0 == hip).
         float AdsBlend() const { return m_blend; }
+
+        // --- loadout-depth wave: TFLoadoutScreen picker support ------------------
+
+        /// Bitmask of sights this weapon allows (bit == 1u << TFOpticKind), plus
+        /// the authored default (first weapons.json "optics" entry). Loads the
+        /// table on first call if needed. Unknown/untagged key == irons-only.
+        uint8_t AllowedMask(std::string_view weaponKey);
+
+        /// Explicit pick (TFLoadoutScreen's optic row), bypassing the B-key
+        /// cycle. Session-local (see the class doc); no-op if `kind` is not in
+        /// `weaponKey`'s allowed mask.
+        void SetSelected(std::string_view weaponKey, TFOpticKind kind);
 
       private:
         TFOpticsSystem() = default;

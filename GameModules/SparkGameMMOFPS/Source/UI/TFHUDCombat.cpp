@@ -3,12 +3,36 @@
  * @brief TFHUD combat half (W6): killfeed with weapon + headshot marker and
  *        local-row highlight, death panel (killer/weapon/distance) + clickable
  *        DEPLOY/MAP actions, world-anchored damage pings with the octant-flash
- *        dedup, and the player-centered minimap v2 (same-faction deployables +
+ *        dedup, and the player-centered minimap (same-faction deployables +
  *        friendly/squad pawn markers).
  *
  * Split from TFHUD.cpp per the repo file-size rule (TFPlayerSystemClient.cpp
  * pattern — same class, feature-owned translation units). TFHUD.cpp keeps the
  * lifecycle, feed-in setters, vitals/weapon/crosshair/compass/chat drawing.
+ *
+ * W13 minimap-v2 lane (builds on the W6/W10/W11 baseline, regresses nothing):
+ *  - Region HEXES (TFUi::HexCorners — same shape language as TFMapScreen's
+ *    full map) instead of plain owner-colored circles, with the same
+ *    contested pulse + capture-progress ring formulas as the full map.
+ *  - Conduit lattice links drawn under the hexes (TFRegionSystem neighbors).
+ *  - Zoom: 3 world-span levels cycled via TFKeys::Action::CycleMinimapZoom
+ *    (default 'N'; see UI/TFKeybinds.h), plus a subtle fixed-radius range
+ *    ring for spatial reference.
+ *  - Squadmate diamonds (was a plain dot) + a pulsing-ring squad waypoint
+ *    marker (TFSquadSystem::GetLocalWaypoint) that clamps to the frame edge
+ *    when the waypoint is outside the current zoom span.
+ *  - Nearby friendly vehicle icons (TFVehicleSystem::ForEachVehicle):
+ *    yaw-oriented triangle when mobile, square when deployed/stationary.
+ *  - Continent-alert overlay: while TFAlertSystem reports a running alert,
+ *    the frame border pulses amber; a FacilityControl alert additionally
+ *    rings its target hex (TerritoryRush has no single region, so the
+ *    border pulse is the only cue). Requires TFGameContext::alerts — null
+ *    until the wave wiringNotes land, and the overlay is a silent no-op
+ *    until then (same additive-null pattern as every other m_ctx-> system
+ *    pointer this file reads).
+ *  - Local player marker upgraded from a line+dot wedge to a filled arrow
+ *    (still north-up, still the only thing on the map that visibly turns —
+ *    see the in-function comment for why north-up over player-up).
  *
  * Data-visibility notes (what a pure client actually knows):
  *  - Pawns: replicated for every player (TFReplication RemotePawn store ->
@@ -16,6 +40,8 @@
  *    owner/faction/pos on all roles. Enemy pawns are deliberately NOT drawn
  *    on the minimap (friendly/squad intel only).
  *  - Deployables: TFDeployableSystem's client mirror (0x54FC-0x54FE).
+ *  - Vehicles: TFVehicleSystem serves the same authoritative/mirror split
+ *    (m_ctx->vehicles is already published — no wiring needed).
  *  - Squad membership: TFSquadSystem::SquadOf only resolves the LOCAL player
  *    on pure clients (the roster mirror is private), so squadmates render as
  *    plain friendlies there; on authority roles the full registry resolves.
@@ -33,8 +59,11 @@
 #include "Camera/SparkEngineCamera.h"
 #include "Net/TFClientNet.h"
 #include "Net/TFNetProtocol.h"
+#include "UI/TFKeybinds.h"  // minimap-v2 lane (W13): zoom-cycle key seam
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
+#include "UI/TFUiCommon.h" // minimap-v2 lane (W13): shared HexCorners/kPi (same shape language as TFMapScreen)
+#include "World/TFAlertSystem.h" // minimap-v2 lane (W13): continent-alert overlay (m_ctx->alerts — see wiringNotes)
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
 
@@ -58,7 +87,13 @@ namespace Terrafront
         constexpr float kPendingKillTTL = 0.30f;    // EvPlayerKilled <-> PushKillfeed pairing window
         constexpr float kOctantSuppressSec = 0.05f; // world ping already covered this hit
         constexpr float kPingMergeDot = 0.94f;      // ~20 deg: refresh instead of new ping
-        constexpr float kMinimapSpanM = 340.0f;     // player-centered minimap world span
+        // W13 minimap-v2: zoom levels cycled via TFKeys::Action::CycleMinimapZoom
+        // (default 'N'). Index 1 reproduces the exact pre-W13 340 m framing so
+        // the default view is unchanged; 0/2 give a tighter combat view and a
+        // wider tactical overview.
+        constexpr float kMinimapZoomSpansM[3] = {170.0f, 340.0f, 680.0f};
+        constexpr int kMinimapDefaultZoom = 1;
+        constexpr float kMinimapRangeRingM = 75.0f; // subtle self-range reference ring, world m
         constexpr float kDeployDebounceSec = 1.0f;
 
         /// Local mirror of the TFClientNetHandlers PlayerLabel convention — keeps the
@@ -548,27 +583,133 @@ namespace Terrafront
         const ImVec2 mid(tl.x + mapSz * 0.5f, tl.y + mapSz * 0.5f);
         dl->AddRectFilled(tl, br, IM_COL32(8, 10, 14, 150), 6.0f);
 
-        // Player-centered zoomed view, north (+Z) up, world frame (no rotation —
-        // the facing wedge shows heading; matches the compass strip convention).
+        // Zoom cycle (TFKeys seam, ImGui route so typing in chat never eats the
+        // key — TFDirectivePanel's toggleKey precedent). `static` is safe: one
+        // TFHUD instance ever runs (the local player's), so this is really
+        // per-player state, just not worth a header field for one int.
+        static int s_zoomIdx = kMinimapDefaultZoom;
+        const ImGuiKey zoomKey = TFKeys::ImGuiKeyFor(TFKeys::Action::CycleMinimapZoom);
+        if (zoomKey != ImGuiKey_None && !ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(zoomKey, false))
+            s_zoomIdx = (s_zoomIdx + 1) % 3;
+        const float span = kMinimapZoomSpansM[s_zoomIdx];
+
+        // Player-centered view, north (+Z) up, world frame (no map rotation).
+        // Kept north-up rather than switching to player-up: it matches
+        // TFMapScreen's static orientation and the compass strip's world-frame
+        // headings 1:1 (no separate mental mapping between the two UIs), it's
+        // cheaper (every marker blits at its world-delta offset — no per-marker
+        // rotation matrix), and it was the W6 baseline this lane extends rather
+        // than replaces. The player arrow below is the one element that visibly
+        // turns, which is enough to read heading at a glance.
         const float cx = m_view.pos[0];
         const float cz = m_view.pos[2];
-        const float half = kMinimapSpanM * 0.5f;
-        const float scale = mapSz / kMinimapSpanM;
+        const float half = span * 0.5f;
+        const float scale = mapSz / span;
         const auto toMini = [&](float wx, float wz) -> ImVec2
         { return ImVec2(mid.x + (wx - cx) * scale, mid.y - (wz - cz) * scale); };
+        const float nowT = static_cast<float>(ImGui::GetTime());
 
         dl->PushClipRect(tl, br, true);
 
-        // Region centers in range (owner-colored, sized by tier).
+        // Subtle fixed-radius range ring — spatial reference at a glance; fades
+        // out once a zoom level makes it too big (or too small) to be useful.
+        const float ringR = kMinimapRangeRingM * scale;
+        if (ringR > 3.0f && ringR < mapSz * 0.62f)
+            dl->AddCircle(mid, ringR, IM_COL32(255, 255, 255, 35), 28, 1.0f);
+
         TFRegionSystem* rs = m_ctx->regions;
+
+        // Conduit lattice links (drawn under the hexes — TFMapScreen ordering).
+        // Same-faction-linked pairs pop the owner color; everything else is a
+        // faint gray thread.
+        for (const RegionDef& rd : m_ctx->data->GetContinent().regions)
+        {
+            if (std::fabs(rd.centerX - cx) > half + 60.0f || std::fabs(rd.centerZ - cz) > half + 60.0f)
+                continue;
+            const ImVec2 a = toMini(rd.centerX, rd.centerZ);
+            for (RegionId nb : rd.neighbors)
+            {
+                if (nb <= rd.id)
+                    continue; // each pair once
+                const RegionDef* nd = m_ctx->data->GetRegion(nb);
+                if (!nd)
+                    continue;
+                if (std::fabs(nd->centerX - cx) > half + 60.0f || std::fabs(nd->centerZ - cz) > half + 60.0f)
+                    continue;
+                const ImVec2 b = toMini(nd->centerX, nd->centerZ);
+                ImU32 col = IM_COL32(120, 128, 140, 70);
+                if (rs)
+                {
+                    const FactionId fa = rs->OwnerOf(rd.id);
+                    const FactionId fb = rs->OwnerOf(nb);
+                    if (fa != FactionId::None && fa == fb)
+                        col = CombatFactionCol(fa, 0.5f);
+                }
+                dl->AddLine(a, b, col, 1.4f);
+            }
+        }
+
+        // Continent-alert overlay (W13): TFGameContext::alerts is additive-null
+        // until the wave wiringNotes land (TFTypes.h + Main.cpp are contended —
+        // see wiringNotes), so this degrades to a silent no-op until then.
+        bool alertActive = false;
+        RegionId alertTarget = kInvalidRegion;
+        if (m_ctx->alerts)
+        {
+            TF_AlertState av{};
+            m_ctx->alerts->GetView(av);
+            if (static_cast<TFAlertPhase>(av.phase) == TFAlertPhase::Running)
+            {
+                alertActive = true;
+                alertTarget = av.regionId; // kInvalidRegion for TerritoryRush (no single target)
+            }
+        }
+
+        // Region hexes (owner-tinted, tier-sized), contested pulse, capture-
+        // progress ring — same visual formulas as TFMapScreen's full map so the
+        // two views read as one system.
         for (const RegionDef& r : m_ctx->data->GetContinent().regions)
         {
             if (std::fabs(r.centerX - cx) > half + 30.0f || std::fabs(r.centerZ - cz) > half + 30.0f)
                 continue;
             const FactionId owner = rs ? rs->OwnerOf(r.id) : r.homeFaction;
             const ImVec2 p = toMini(r.centerX, r.centerZ);
-            const float rad = (r.tier == "skyanchor") ? 6.0f : (r.tier == "facility" ? 5.0f : 4.0f);
-            dl->AddCircle(p, rad, CombatFactionCol(owner, 0.9f), 0, 2.0f);
+            const float hexR = (r.tier == "skyanchor") ? 7.0f : (r.tier == "facility" ? 6.0f : 5.0f);
+
+            FactionId capturing = FactionId::None;
+            bool contested = false;
+            const float progress = rs ? rs->CaptureProgress(r.id, capturing, contested) : 0.0f;
+
+            ImVec2 corners[6];
+            TFUi::HexCorners(p, hexR, corners);
+            float fillA = (owner == FactionId::None) ? 0.22f : 0.42f;
+            if (contested)
+                fillA = 0.35f + 0.25f * std::sin(nowT * 6.0f); // capture-point pulse
+            dl->AddConvexPolyFilled(corners, 6, CombatFactionCol(owner, fillA));
+
+            ImU32 outline = IM_COL32(210, 214, 220, 110);
+            float outlineThick = 1.2f;
+            if (contested)
+            {
+                outline = IM_COL32(255, 255, 255, static_cast<int>(130.0f + 100.0f * std::sin(nowT * 6.0f)));
+                outlineThick = 2.0f;
+            }
+            dl->AddPolyline(corners, 6, outline, ImDrawFlags_Closed, outlineThick);
+
+            if (progress > 0.001f && capturing != FactionId::None)
+            {
+                dl->PathArcTo(p, hexR * 0.6f, -TFUi::kPi * 0.5f, -TFUi::kPi * 0.5f + progress * 2.0f * TFUi::kPi, 16);
+                dl->PathStroke(CombatFactionCol(capturing, contested ? 0.6f : 0.95f), 0, 2.0f);
+            }
+
+            // FacilityControl alert target ring (TerritoryRush has no single
+            // region here — its cue is the border flash after PopClipRect).
+            if (alertActive && alertTarget != kInvalidRegion && alertTarget == r.id)
+            {
+                const float pulse = 0.5f + 0.5f * std::sin(nowT * 5.0f);
+                dl->AddCircle(p, hexR + 3.0f + pulse * 3.0f, IM_COL32(255, 175, 40, static_cast<int>(140 + 100 * pulse)),
+                              0, 2.2f);
+            }
         }
 
         // Same-faction deployables (client mirror on pure clients).
@@ -590,8 +731,44 @@ namespace Terrafront
                 });
         }
 
-        // Friendly pawns; squadmates pop bright green (IsLocalSquadMember resolves
-        // other players on pure clients through the replicated mirror roster).
+        // Nearby friendly vehicles (W13): yaw-oriented triangle when mobile, a
+        // dimmer square when deployed/stationary (m_ctx->vehicles is already
+        // published — TFVehicleInfo serves the same authority/mirror split as
+        // every other client-visible system this file reads).
+        if (m_ctx->vehicles && myFaction != FactionId::None)
+        {
+            m_ctx->vehicles->ForEachVehicle(
+                [&](const TFVehicleInfo& v)
+                {
+                    if (v.faction != myFaction)
+                        return;
+                    if (std::fabs(v.pos[0] - cx) > half || std::fabs(v.pos[2] - cz) > half)
+                        return;
+                    const ImVec2 vp2 = toMini(v.pos[0], v.pos[2]);
+                    const ImU32 col = CombatFactionCol(myFaction, 0.92f);
+                    if (v.deployed)
+                    {
+                        dl->AddRectFilled(ImVec2(vp2.x - 3.5f, vp2.y - 3.5f), ImVec2(vp2.x + 3.5f, vp2.y + 3.5f), col,
+                                          1.0f);
+                        dl->AddRect(ImVec2(vp2.x - 3.5f, vp2.y - 3.5f), ImVec2(vp2.x + 3.5f, vp2.y + 3.5f),
+                                    IM_COL32(20, 20, 24, 200), 1.0f);
+                    }
+                    else
+                    {
+                        const ImVec2 fwd(std::sin(v.yaw), -std::cos(v.yaw));
+                        const ImVec2 right(fwd.y, -fwd.x);
+                        const ImVec2 vtip(vp2.x + fwd.x * 5.5f, vp2.y + fwd.y * 5.5f);
+                        const ImVec2 backL(vp2.x - fwd.x * 3.5f + right.x * 3.5f, vp2.y - fwd.y * 3.5f + right.y * 3.5f);
+                        const ImVec2 backR(vp2.x - fwd.x * 3.5f - right.x * 3.5f, vp2.y - fwd.y * 3.5f - right.y * 3.5f);
+                        dl->AddTriangleFilled(vtip, backL, backR, col);
+                        dl->AddTriangle(vtip, backL, backR, IM_COL32(20, 20, 24, 200), 1.2f);
+                    }
+                });
+        }
+
+        // Friendly pawns; squadmates pop as bright-green diamonds (distinct
+        // from the plain-friendly dot) — IsLocalSquadMember resolves other
+        // players on pure clients through the replicated mirror roster.
         if (m_ctx->players && myFaction != FactionId::None)
         {
             const PlayerId local = m_ctx->localPlayer;
@@ -606,14 +783,52 @@ namespace Terrafront
                     const bool squadmate = m_ctx->squads && m_ctx->squads->IsLocalSquadMember(p.owner);
                     if (squadmate)
                     {
-                        dl->AddCircleFilled(mp, 3.5f, IM_COL32(110, 235, 140, 240));
-                        dl->AddCircle(mp, 3.5f, IM_COL32(10, 40, 15, 200), 0, 1.0f);
+                        const float wr = 3.6f;
+                        const ImVec2 dia[4] = {ImVec2(mp.x, mp.y - wr), ImVec2(mp.x + wr, mp.y),
+                                               ImVec2(mp.x, mp.y + wr), ImVec2(mp.x - wr, mp.y)};
+                        dl->AddConvexPolyFilled(dia, 4, IM_COL32(110, 235, 140, 240));
+                        dl->AddPolyline(dia, 4, IM_COL32(10, 40, 15, 200), ImDrawFlags_Closed, 1.2f);
                     }
                     else
                     {
                         dl->AddCircleFilled(mp, 2.5f, CombatFactionCol(myFaction, 0.9f));
                     }
                 });
+        }
+
+        // Squad waypoint (W11 TFSquadSystem, drawn here since W13): green
+        // diamond + a slow gold pulse ring so it reads over the squadmate
+        // diamonds; clamped to the frame edge along the waypoint direction
+        // when it falls outside the current zoom span.
+        if (m_ctx->squads)
+        {
+            float wpPos[3];
+            if (m_ctx->squads->GetLocalWaypoint(wpPos))
+            {
+                const float dx = wpPos[0] - cx;
+                const float dz = wpPos[2] - cz;
+                const bool offscreen = std::fabs(dx) > half || std::fabs(dz) > half;
+                ImVec2 wp2 = toMini(wpPos[0], wpPos[2]);
+                if (offscreen)
+                {
+                    const float len = std::sqrt(dx * dx + dz * dz);
+                    if (len > 0.001f)
+                    {
+                        const float ux = dx / len, uz = dz / len;
+                        const float edge = half - 12.0f;
+                        const float tX = edge / std::max(std::fabs(ux), 1e-4f);
+                        const float tZ = edge / std::max(std::fabs(uz), 1e-4f);
+                        const float t = std::min(tX, tZ);
+                        wp2 = toMini(cx + ux * t, cz + uz * t);
+                    }
+                }
+                const float wr = 5.0f;
+                const ImVec2 dia[4] = {ImVec2(wp2.x, wp2.y - wr), ImVec2(wp2.x + wr, wp2.y),
+                                       ImVec2(wp2.x, wp2.y + wr), ImVec2(wp2.x - wr, wp2.y)};
+                dl->AddConvexPolyFilled(dia, 4, IM_COL32(110, 235, 140, offscreen ? 200 : 235));
+                dl->AddPolyline(dia, 4, IM_COL32(16, 40, 24, 230), ImDrawFlags_Closed, 1.6f);
+                dl->AddCircle(wp2, wr + 2.5f + 1.5f * std::sin(nowT * 5.0f), IM_COL32(255, 215, 90, 150), 0, 1.3f);
+            }
         }
 
         // Squad pings (W11 ping-system lane): type-colored diamonds.
@@ -635,17 +850,36 @@ namespace Terrafront
                 });
         }
 
-        // Local player: facing wedge from the camera heading.
+        // Local player: filled directional arrow from the camera heading (see
+        // the north-up justification above — this is the one marker that turns).
         SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
         const float yaw = cam ? cam->GetRotation().y : 0.0f;
-        const ImVec2 tip(mid.x + std::sin(yaw) * 9.0f, mid.y - std::cos(yaw) * 9.0f);
-        dl->AddLine(mid, tip, IM_COL32(255, 255, 255, 230), 2.0f);
-        dl->AddCircleFilled(mid, 3.0f, IM_COL32(255, 255, 255, 240));
+        const ImVec2 fwd(std::sin(yaw), -std::cos(yaw));
+        const ImVec2 right(fwd.y, -fwd.x);
+        const ImVec2 tip(mid.x + fwd.x * 10.0f, mid.y + fwd.y * 10.0f);
+        const ImVec2 baseL(mid.x - fwd.x * 4.0f + right.x * 3.5f, mid.y - fwd.y * 4.0f + right.y * 3.5f);
+        const ImVec2 baseR(mid.x - fwd.x * 4.0f - right.x * 3.5f, mid.y - fwd.y * 4.0f - right.y * 3.5f);
+        dl->AddTriangleFilled(tip, baseL, baseR, IM_COL32(255, 255, 255, 240));
+        dl->AddTriangle(tip, baseL, baseR, IM_COL32(15, 15, 20, 220), 1.5f);
+        dl->AddCircleFilled(mid, 2.0f, IM_COL32(255, 255, 255, 255));
 
         dl->PopClipRect();
 
         dl->AddRect(tl, br, IM_COL32(90, 100, 110, 180), 6.0f);
         dl->AddText(ImVec2(mid.x - 4.0f, tl.y + 3.0f), IM_COL32(220, 225, 230, 200), "N");
+
+        // Continent-alert border flash — any running alert pulses the frame
+        // (TerritoryRush's only cue, since it has no single target region).
+        if (alertActive)
+        {
+            const float pulse = 0.5f + 0.5f * std::sin(nowT * 5.0f);
+            dl->AddRect(tl, br, IM_COL32(255, 175, 40, static_cast<int>(110 + 120 * pulse)), 6.0f, 0,
+                        2.0f + pulse * 1.5f);
+        }
+
+        char zoomLabel[8];
+        std::snprintf(zoomLabel, sizeof(zoomLabel), "%.0fm", span);
+        dl->AddText(ImVec2(tl.x + 4.0f, br.y - 14.0f), IM_COL32(200, 205, 210, 150), zoomLabel);
     }
 
 #else // !SPARK_HAS_IMGUI — headless: combat HUD is state-only

@@ -92,6 +92,20 @@ namespace Terrafront
         /// movement tick overwrites it from MoveState one fixed step later.
         void TeleportPawn(PlayerId player, float x, float y, float z);
 
+        /// TF-W13 server-perf lane: replication interest gate. Returns true
+        /// if `subject`'s pawn/vehicle state is relevant enough to `observer`
+        /// to be worth sending — always true for self and squadmates
+        /// (regardless of distance), otherwise a flat-radius cull at
+        /// kInterestRadiusM. SEND-ONLY optimization: this must never be
+        /// consulted by movement/collision/damage — only by the code that
+        /// decides which connections a replication payload goes to — so it
+        /// cannot change simulation outcomes or determinism between clients.
+        /// Fails OPEN (returns true) whenever it lacks enough data to decide
+        /// (no squad system, no pawn registry, either side not yet spawned)
+        /// so a wiring gap degrades to "un-culled" rather than "invisible".
+        bool IsRelevantTo(PlayerId observer, PlayerId subject) const;
+        static constexpr float kInterestRadiusM = 250.0f;
+
 #ifdef ENABLE_NETWORKING
         /// W5 onboarding (Task 4): dispatches one of the onboarding client->server
         /// messages (Login/Register/CharList/CharCreate/CharDelete/EnterWorld) to

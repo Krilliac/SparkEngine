@@ -68,6 +68,22 @@ namespace Terrafront
         constexpr float kVtolLeanRate = 5.0f;     // 1/s lean approach speed (math path visual)
         constexpr float kVtolLandedAGL = 2.0f;    // m hull base above ground = landed (exit gate)
 
+        // W13 damage-state performance degradation (server-authoritative). The
+        // threshold is INTENTIONALLY the same numeric literal as
+        // TFVehicleFx.cpp's kCriticalHpFrac (0.66f/0.33f tiers) so the client-
+        // side smoke/fire tier and this movement penalty change state at the
+        // same hp fraction (same cross-file duplication convention as the VTOL
+        // math-path/Jolt-path constants above -- see DamageMovementMults). Only
+        // the critical tier (<=33% hp) carries a movement penalty; the damaged
+        // tier (33-66%, TFVehicleFx-only) is visuals with no mechanical effect.
+        constexpr float kTFVehCriticalHpFrac = 0.33f;    // <=33% hp -> critical tier (speed/turn penalty)
+        constexpr float kTFVehCriticalSpeedMult = 0.70f; // critical: ~30% top-speed loss
+        constexpr float kTFVehCriticalTurnMult = 0.75f;  // critical: slower turn authority
+
+        // W13 persistent wreck (kills leave a mark).
+        constexpr float kTFVehWreckLifeSec = 15.0f;
+        constexpr char kTFVehWreckMaterial[] = "Assets/Materials/MMOFPS/Structure_AlloyDark.json"; // charred tint
+
         float Dist2XZ(const float a[3], const float bx, const float bz)
         {
             const float dx = a[0] - bx;
@@ -166,6 +182,10 @@ namespace Terrafront
 
         if (m_ctx->HasLocalPlayer())
             ClientUpdateUX(deltaTime);
+
+        // W13: persistent wrecks exist on both roles (server hulls + client
+        // mirror hulls), so the despawn timer runs unconditionally here.
+        UpdateWrecks();
     }
 
     void TFVehicleSystem::FixedUpdate(float fixedDeltaTime)
@@ -220,6 +240,14 @@ namespace Terrafront
             if (world && v.local != 0 && world->GetRegistry().valid(e))
                 world->DestroyEntity(e);
         }
+        // W13: leftover wreck entities (module teardown; no despawn timer wait).
+        for (WreckRec& w : m_wrecks)
+        {
+            const auto e = static_cast<EntityID>(w.local);
+            if (world && w.local != 0 && world->GetRegistry().valid(e))
+                world->DestroyEntity(e);
+        }
+        m_wrecks.clear();
         ClientDropMirror();
         if (m_joltDrive)
         {
@@ -851,14 +879,29 @@ namespace Terrafront
     // Driving
     // ---------------------------------------------------------------------------
 
+    void TFVehicleSystem::DamageMovementMults(const VehicleRec& v, float& outSpeedMult, float& outTurnMult) const
+    {
+        outSpeedMult = 1.0f;
+        outTurnMult = 1.0f;
+        if (v.maxHp <= 0.0f)
+            return;
+        if (v.hp / v.maxHp <= kTFVehCriticalHpFrac)
+        {
+            outSpeedMult = kTFVehCriticalSpeedMult;
+            outTurnMult = kTFVehCriticalTurnMult;
+        }
+    }
+
     void TFVehicleSystem::StepVehicle(VehicleRec& v, const VehicleDef* def, float dt)
     {
         if (v.hp <= 0.0f)
             return;
 
-        const float topSpeed = def ? def->topSpeed : 10.0f;
+        float speedMult = 1.0f, turnMult = 1.0f;
+        DamageMovementMults(v, speedMult, turnMult);
+        const float topSpeed = (def ? def->topSpeed : 10.0f) * speedMult;
         const float accel = def ? def->accel : 5.0f;
-        const float turnRate = def ? def->turnRate : 1.5f;
+        const float turnRate = (def ? def->turnRate : 1.5f) * turnMult;
 
         const double now = (m_ctx && m_ctx->serverSim) ? m_ctx->serverSim->ServerTime() : m_clock;
         const bool driven = v.seats[0] != kInvalidPlayer && !v.deployed && (now - v.lastDriveInput) < kInputStaleSec;
@@ -947,9 +990,15 @@ namespace Terrafront
         s.driven = v.seats[0] != kInvalidPlayer && !v.deployed && (now - v.lastDriveInput) < kInputStaleSec;
         if (def)
         {
-            s.topSpeed = def->topSpeed;
+            // Same critical-tier speed/turn penalty as the math path (see
+            // DamageMovementMults) -- both driving paths run only on the
+            // authority role, so applying the identical multiplier here keeps
+            // them bit-for-bit consistent regardless of which one executes.
+            float speedMult = 1.0f, turnMult = 1.0f;
+            DamageMovementMults(v, speedMult, turnMult);
+            s.topSpeed = def->topSpeed * speedMult;
             s.accel = def->accel;
-            s.turnRate = def->turnRate;
+            s.turnRate = def->turnRate * turnMult;
         }
         s.pos[0] = v.pos[0];
         s.pos[1] = v.pos[1];
@@ -1404,14 +1453,60 @@ namespace Terrafront
             }
             for (auto child : children)
                 world->DestroyEntity(child);
-            if (registry.valid(e))
-                world->DestroyEntity(e);
+            // W13: leave a charred, static wreck in place instead of an
+            // immediate despawn -- kills leave a mark. This vehicle is removed
+            // from m_vehicles/m_lastSent below, so ServerDamageVehicle,
+            // RaycastVehicles, ForEachVehicle and TFGroundFx/TFVehicleFx never
+            // see it again; UpdateWrecks() cleans up the leftover entity after
+            // kTFVehWreckLifeSec.
+            SpawnWreck(v.local);
         }
         m_lastSent.erase(entity);
         m_lastAimSent.erase(entity);
         m_vehicles.erase(std::remove_if(m_vehicles.begin(), m_vehicles.end(),
                                         [entity](const VehicleRec& r) { return r.entity == entity; }),
                          m_vehicles.end());
+    }
+
+    // ---------------------------------------------------------------------------
+    // W13 persistent wreck (kills leave a mark)
+    // ---------------------------------------------------------------------------
+
+    void TFVehicleSystem::SpawnWreck(uint32_t local)
+    {
+        if (local == 0)
+            return;
+        World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
+        if (!world)
+            return;
+        const auto e = static_cast<EntityID>(local);
+        if (!world->GetRegistry().valid(e))
+            return;
+        if (MeshRenderer* mr = world->GetComponent<MeshRenderer>(e))
+            mr->materialPath = kTFVehWreckMaterial; // charred/darkened tint, same mesh
+        m_wrecks.push_back({local, m_clock + kTFVehWreckLifeSec});
+    }
+
+    void TFVehicleSystem::UpdateWrecks()
+    {
+        if (m_wrecks.empty())
+            return;
+        World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
+        for (auto it = m_wrecks.begin(); it != m_wrecks.end();)
+        {
+            if (m_clock < it->expireAt)
+            {
+                ++it;
+                continue;
+            }
+            if (world && it->local != 0)
+            {
+                const auto e = static_cast<EntityID>(it->local);
+                if (world->GetRegistry().valid(e))
+                    world->DestroyEntity(e);
+            }
+            it = m_wrecks.erase(it);
+        }
     }
 
     // ---------------------------------------------------------------------------

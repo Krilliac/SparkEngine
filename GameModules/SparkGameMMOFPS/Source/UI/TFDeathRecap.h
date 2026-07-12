@@ -30,6 +30,17 @@
  *    resolve client-side from WeaponId (WeaponDef.name / ui/128/wpn_<key>.png),
  *    killer name via the TFSocialSystem roster mirror + outfit tag
  *    (TFNameplates precedent), class name/icon via ClassDef + class_<key>.png.
+ *
+ *  - KILLCAM HOOK (killcam lane, Game/TFSpectator.h/.cpp + this lane's
+ *    reserved TFMsg block 0x5484-0x5487): no new wire message. The killcam
+ *    reuses TF_DeathRecap.killerPlayer (already delivered here, victim-only,
+ *    reliable) as its "who" and the killer's live PawnInfo (already broadcast
+ *    to ALL clients with no interest culling — see TFReplication) as its
+ *    "where"; TFNetProtocol.h documents the block as reserved-but-unused for
+ *    this reason. SetKillcamNotify below is a push callback (TFClientNet::
+ *    SetChatUI self-wiring pattern) so TFSpectator starts the killcam on
+ *    arrival instead of polling; wired from Main.cpp because neither system
+ *    lives on TFGameContext.
  */
 #pragma once
 
@@ -39,6 +50,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <utility>
 
 namespace Terrafront
 {
@@ -59,6 +72,13 @@ namespace Terrafront
         /// Net-handler + local-mirror entry point: stash the recap; RenderUI
         /// draws it until the local pawn respawns.
         void ClientHandleRecap(const TF_DeathRecap& recap);
+
+        /// Killcam lane hook: fires once per recap arrival with the killer id
+        /// (kInvalidPlayer for an environment/unknown kill). Set nullptr to
+        /// uninstall (TFSpectator does this in its own Shutdown before `this`
+        /// goes away — SetDeathRecapMirror(nullptr) precedent below).
+        using KillcamNotifyFn = std::function<void(PlayerId killer)>;
+        void SetKillcamNotify(KillcamNotifyFn fn) { m_killcamNotify = std::move(fn); }
 
       private:
         PlayerId LocalPlayer() const;
@@ -82,6 +102,9 @@ namespace Terrafront
 
         TF_DeathRecap m_recap{};
         bool m_valid{false};
+
+        // killcam lane hook (push notify on each recap arrival)
+        KillcamNotifyFn m_killcamNotify;
 
         // debug counters
         uint32_t m_recapsReceived{0};

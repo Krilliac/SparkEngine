@@ -7,10 +7,10 @@
 #include "Core/ModuleManager.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
+#include "../Utils/EditorProcessLaunch.h"
 #include <imgui.h>
 #include <filesystem>
 #include <fstream>
-#include <string_view>
 #include <vector>
 #ifdef _WIN32
 #include <windows.h>
@@ -365,52 +365,32 @@ namespace SparkEditor
             return;
         }
 
-        // The engine's -game parser reads up to the FIRST SPACE and does not
-        // understand quotes (FindGameModuleFromCmdLine). A DLL path containing
-        // spaces must be converted to its 8.3 short form before being passed.
-        std::wstring dllArg = fs::path(mod.path).wstring();
-        if (dllArg.find(L' ') != std::wstring::npos)
+        // Shared CreateProcessW path (also used by PlayControlPanel) — handles the
+        // -game parser's "reads up to the FIRST SPACE, no quotes" gotcha internally
+        // (FindGameModuleFromCmdLine).
+        std::string buildError;
+        const std::wstring cmd =
+            BuildGameLaunchCommandLine(engineExe, fs::path(mod.path), headless, {}, L"", buildError);
+        if (cmd.empty() && !buildError.empty())
         {
-            wchar_t shortBuf[MAX_PATH];
-            const DWORD len = GetShortPathNameW(dllArg.c_str(), shortBuf, MAX_PATH);
-            if (len == 0 || len >= MAX_PATH || std::wstring_view(shortBuf, len).find(L' ') != std::wstring_view::npos)
-            {
-                m_launchStatus = "Module path contains spaces and has no short form — the engine's "
-                                 "-game parser cannot receive it. Move the build to a space-free path.";
-                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
-                return;
-            }
-            dllArg.assign(shortBuf, len);
+            m_launchStatus = buildError;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
+            return;
         }
 
-        std::wstring cmd = L"\"" + engineExe.wstring() + L"\" -game " + dllArg;
-        if (headless)
-            cmd += L" -headless";
-
-        // CreateProcessW may modify the command-line buffer — pass a writable copy
-        std::vector<wchar_t> cmdBuf(cmd.begin(), cmd.end());
-        cmdBuf.push_back(L'\0');
-
-        STARTUPINFOW startup{};
-        startup.cb = sizeof(startup);
-        PROCESS_INFORMATION process{};
-
-        const std::wstring workingDir = exeDir.wstring();
-        const BOOL ok = CreateProcessW(engineExe.wstring().c_str(), cmdBuf.data(), nullptr, nullptr, FALSE, 0, nullptr,
-                                       workingDir.c_str(), &startup, &process);
-        if (!ok)
+        const ProcessLaunchResult launch = LaunchEditorProcess(engineExe, cmd, exeDir);
+        if (!launch.success)
         {
-            m_launchStatus = "Launch failed (Win32 error " + std::to_string(GetLastError()) + ")";
+            m_launchStatus = launch.error;
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
             Spark::SimpleConsole::GetInstance().LogError("[Editor] " + m_launchStatus);
             return;
         }
 
-        CloseHandle(process.hThread);
         if (m_gameProcess)
             CloseHandle(static_cast<HANDLE>(m_gameProcess)); // forget the previous launch (process keeps running)
-        m_gameProcess = process.hProcess;
-        m_gamePid = process.dwProcessId;
+        m_gameProcess = launch.processHandle;
+        m_gamePid = launch.pid;
 
         m_launchStatus = std::string(headless ? "Dedicated (headless)" : "Game") + " running — " + mod.name + ", PID " +
                          std::to_string(m_gamePid);

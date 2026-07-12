@@ -18,9 +18,11 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFComponents.h"
-#include "Game/TFVehicleSystem.h" // W3 shared-edit: Aegis mobile-spawn (spawnKind==2)
-#include "Game/TFSquadSystem.h"   // W4: squad-leader spawn (spawnKind==3)
-#include "World/TFRegionSystem.h" // W4: region spawn (spawnKind==1)
+#include "Game/TFProgressionSystem.h" // loadout-depth wave: suit passive scalars applied at spawn
+#include "Game/TFServerValidation.h" // W13 anti-cheat lane: recycled-PlayerId counter hygiene
+#include "Game/TFVehicleSystem.h"    // W3 shared-edit: Aegis mobile-spawn (spawnKind==2)
+#include "Game/TFSquadSystem.h"      // W4: squad-leader spawn (spawnKind==3)
+#include "World/TFRegionSystem.h"    // W4: region spawn (spawnKind==1)
 #include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
 #include "World/TFWorldSetup.h"
@@ -123,8 +125,18 @@ namespace Terrafront
         t.rotation.y = yaw * kRadToDeg;
 
         const ClassDef* cd = (m_ctx->data && m_ctx->data->IsLoaded()) ? m_ctx->data->GetClass(cls) : nullptr;
-        const float maxHealth = cd ? cd->health : 500.0f;
-        const float maxShield = cd ? cd->shield : 500.0f;
+        float maxHealth = cd ? cd->health : 500.0f;
+        float maxShield = cd ? cd->shield : 500.0f;
+
+        // loadout-depth wave: suit passive scalars, applied ONCE here — the
+        // exact seam ClassDef health/shield/ammo stats already reach the pawn
+        // (TFProgressionSystem::Suit*Mult; 1.0 == no suit / no progression
+        // pointer, e.g. headless unit tests that construct pawns directly).
+        if (m_ctx->progression)
+        {
+            maxHealth *= m_ctx->progression->SuitHealthMult(player);
+            maxShield *= m_ctx->progression->SuitShieldMult(player);
+        }
 
         HealthComponent& hc = world->AddComponent<HealthComponent>(e);
         hc.health = maxHealth;
@@ -144,7 +156,11 @@ namespace Terrafront
         sh.max = maxShield;
         if (const FactionDef* fd =
                 (m_ctx->data && m_ctx->data->IsLoaded()) ? m_ctx->data->GetFaction(faction) : nullptr)
+        {
             sh.regenDelay = fd->shieldRegenDelaySec;
+            if (m_ctx->progression)
+                sh.regenDelay = std::max(0.0f, sh.regenDelay * m_ctx->progression->SuitRegenDelayMult(player));
+        }
 
         TFPawnMoveComp& mv = world->AddComponent<TFPawnMoveComp>(e);
         mv.yaw = yaw;
@@ -156,6 +172,9 @@ namespace Terrafront
         {
             wh.ammoMag = wd->magSize;
             wh.ammoPool = wd->reserve;
+            if (m_ctx->progression) // loadout-depth wave: suit reserve-ammo passive
+                wh.ammoPool =
+                    static_cast<int>(std::lround(wh.ammoPool * m_ctx->progression->SuitReserveMult(player)));
         }
 
         // First-person local pawns render no body (W1; TF-W4: shadow-only body).
@@ -389,6 +408,12 @@ namespace Terrafront
 
     void TFPlayerSystem::ServerHandlePlayerDisconnect(PlayerId player)
     {
+        // W13 anti-cheat lane: drop this player's violation counters here too
+        // (independent of TFServerSim::CleanupPlayerSession's own call — this
+        // is a second, non-networked entry point into the same disconnect
+        // flow) so a recycled PlayerId never inherits a stranger's history.
+        TFServerValidation::Get().ClearPlayer(player);
+
         auto it = m_players.find(player);
         if (it == m_players.end())
             return;

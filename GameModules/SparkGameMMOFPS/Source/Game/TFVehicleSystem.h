@@ -79,6 +79,27 @@
  *     STRICT: same vehicle, requested seat exists, is not yours, and is empty
  *     — no first-free fallback, a failed swap keeps the current seat. Keys:
  *     1-8 request that seat, F cycles to the next free seat.
+ *  W13 damage states + wrecks (this lane):
+ *   - No new TFMsg: hull hp already replicates (0x54F8 create/update health
+ *     fields) so the client-side tier presentation (smoke/fire/spark, see
+ *     Game/TFVehicleFx.h) reads TFVehicleInfo.hp/maxHp off the existing
+ *     ForEachVehicle enumerator.
+ *   - PERFORMANCE DEGRADATION is server-authoritative: critical hulls
+ *     (<=33% hp) lose ~30% top speed + turn authority
+ *     (DamageMovementMults). Determinism: StepVehicle (math) and
+ *     StepVehicleJolt (Jolt) are the only two driving paths and both run
+ *     authority-only (pure clients interpolate the replicated pose, never
+ *     predict vehicle physics — see the W3 caveat above), so applying the
+ *     identical multiplier to whichever path executes for a given tick is
+ *     sufficient; there is no separate client prediction to keep in sync.
+ *   - DESTRUCTION now leaves a persistent charred wreck (SpawnWreck/
+ *     UpdateWrecks): the hull entity is retinted (Structure_AlloyDark.json,
+ *     same mesh) instead of destroyed immediately, and despawns after
+ *     kTFVehWreckLifeSec (15 s). It is removed from m_vehicles/m_mirror at
+ *     the same point as before, so every other query (damage, raycast,
+ *     ForEachVehicle, HUD, TFGroundFx/TFVehicleFx) stops seeing it as a
+ *     "vehicle" the instant it becomes a wreck — only the leftover render
+ *     entity lingers.
  */
 #pragma once
 
@@ -361,6 +382,15 @@ namespace Terrafront
         /// Jolt path (TFVehiclePhysics): read back the stepped hull pose and queue
         /// forces for the next step. False = no body — StepVehicle math fallback.
         bool StepVehicleJolt(VehicleRec& v, const VehicleDef* def);
+        /// W13 damage-state: hull-hp-fraction speed/turn multipliers (critical
+        /// tier only, see kTFVehCriticalHpFrac in the .cpp). Computed once and
+        /// applied identically by StepVehicle (math) and StepVehicleJolt (Jolt)
+        /// — the only two driving paths, both authority-only (pure clients only
+        /// interpolate the replicated pose, per the VehicleLanded pure-client
+        /// caveat above), so applying the same multiplier function to whichever
+        /// path executes for a given tick is sufficient for determinism — there
+        /// is no separate client-side prediction of vehicle movement to mirror.
+        void DamageMovementMults(const VehicleRec& v, float& outSpeedMult, float& outTurnMult) const;
         /// VTOL (Vulture): hull base close enough to the ground under it to count
         /// as landed — exit is only allowed while landed. Physics-aware when the
         /// Jolt hull exists (pads/roofs count); analytic terrain fallback otherwise.
@@ -371,6 +401,19 @@ namespace Terrafront
         void DestroyVehicle(VehicleRec& v, PlayerId destroyer);
         void OnPlayerKilled(const EvPlayerKilled& ev);
         void PlayOneShot(const std::string& assetsRelPath);
+
+        // --- W13 persistent wreck (kills leave a mark) -------------------------
+        /// Retint the given local entity's MeshRenderer charred/static and hand
+        /// it to the wreck timer instead of destroying it immediately. Shared by
+        /// DestroyVehicle (server hull) and OnNetVehDestroy (client mirror hull)
+        /// — both already removed the entity from m_vehicles/m_mirror by the
+        /// time this runs, so it stops being a "vehicle" to every other query
+        /// (damage, raycast, ForEachVehicle, TFGroundFx/TFVehicleFx) the instant
+        /// it becomes a wreck. No-op on an invalid/zero local id.
+        void SpawnWreck(uint32_t local);
+        /// Despawns wrecks whose kTFVehWreckLifeSec timer has elapsed. Called
+        /// once per Update (both roles — wrecks can exist on pure clients too).
+        void UpdateWrecks();
 
         // ---------------------------------------------- net half (TFVehicleNet.cpp)
 #ifdef ENABLE_NETWORKING
@@ -441,6 +484,14 @@ namespace Terrafront
 
         // audio (one-shot explode sfx; PlayWeaponAudio pattern)
         std::unordered_set<std::string> m_loadedSounds;
+
+        // W13 persistent wrecks (kills leave a mark; see SpawnWreck/UpdateWrecks)
+        struct WreckRec
+        {
+            uint32_t local = 0;
+            double expireAt = 0.0;
+        };
+        std::vector<WreckRec> m_wrecks;
 
         // stats / debug
         uint32_t m_purchases{0};

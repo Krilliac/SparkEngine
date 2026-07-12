@@ -30,8 +30,10 @@
 #include "Physics/PhysicsSystem.h" // TF vehicle physics: single per-process step
 #include "Game/TFComponents.h"
 #include "Game/TFMovementModel.h"
+#include "Game/TFServerValidation.h" // W13 anti-cheat lane: movement/fire-origin sanity (see file header)
 #include "Game/TFSquadSystem.h"
 #include "Utils/LogMacros.h"
+#include "Utils/TFPerfCounters.h" // TF-W13 server-perf lane
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -63,6 +65,11 @@ namespace Terrafront
         constexpr float kDefaultRunSpeed = 5.2f; // fallback if classes.json missing
         constexpr float kDefaultSprintSpeed = 7.2f;
         constexpr float kRadToDeg = 57.2957795f;
+        // W13 anti-cheat lane: TF_FireEvent claimed origin vs the server's
+        // trusted pawn position (see TFServerValidation.h). Generous relative
+        // to real network latency/prediction drift (well under a meter) so it
+        // only ever fires on a gross, no-legitimate-cause lie.
+        constexpr float kMaxFireOriginDivergenceM = 6.0f;
 
     } // namespace
 
@@ -128,6 +135,7 @@ namespace Terrafront
             {
                 if (auto* physics = m_ctx->engine->GetPhysics())
                 {
+                    TFPerfCounters::ScopedTimer perfPhysics(TFPerfCounters::Phase::PhysicsStep);
                     physics->SetTimeStep(fixedDeltaTime);
                     physics->StepFixed(1, 1.0f);
                 }
@@ -209,12 +217,51 @@ namespace Terrafront
         if (it == m_move.end())
             return;
         MoveState& ms = it->second;
+        // W13 anti-cheat lane: this is an explicit server-authoritative
+        // reposition (redeploy / tf_tp), not a validated walk — whitelist the
+        // next TickMovement tick's displacement check for this player (see
+        // TFServerValidation.h file header for why this is defense-in-depth
+        // rather than load-bearing).
+        TFServerValidation::Get().NoteExemptTeleport(player);
         ms.pos[0] = x;
         ms.pos[1] = y;
         ms.pos[2] = z;
         ms.vel[0] = ms.vel[1] = ms.vel[2] = 0.0f;
         ms.grounded = false; // settle onto the terrain on the next step
         WritePawnTransform(ms);
+    }
+
+    // TF-W13 server-perf lane: replication interest gate (see TFServerSim.h
+    // for the contract). Reuses the exact same squad/distance shape as
+    // HandleChatMsg's per-recipient TFChatRouteView below — proven pattern in
+    // this file, just without the faction/region legs chat needs.
+    bool TFServerSim::IsRelevantTo(PlayerId observer, PlayerId subject) const
+    {
+        if (observer == subject)
+            return true;
+
+        if (m_ctx->squads)
+        {
+            const SquadId a = m_ctx->squads->SquadOf(observer);
+            const SquadId b = m_ctx->squads->SquadOf(subject);
+            if (a != kInvalidSquad && a == b)
+                return true; // squadmates always relevant regardless of distance
+        }
+
+        if (!m_ctx->players)
+            return true; // fail open: no pawn registry to distance-check against
+
+        PawnInfo observerPawn{};
+        PawnInfo subjectPawn{};
+        const bool haveObserver = m_ctx->players->GetPawnByPlayer(observer, observerPawn);
+        const bool haveSubject = m_ctx->players->GetPawnByPlayer(subject, subjectPawn);
+        if (!haveObserver || !haveSubject)
+            return true; // fail open: e.g. subject not yet registered — let the Create through
+
+        const float dx = observerPawn.pos[0] - subjectPawn.pos[0];
+        const float dy = observerPawn.pos[1] - subjectPawn.pos[1];
+        const float dz = observerPawn.pos[2] - subjectPawn.pos[2];
+        return (dx * dx + dy * dy + dz * dz) <= (kInterestRadiusM * kInterestRadiusM);
     }
 
     // ---------------------------------------------------------------------------
@@ -226,17 +273,30 @@ namespace Terrafront
         m_serverTime += fdt;
         ++m_tickCount;
 
-        TickMovement(fdt);
-        RecordLagCompSnapshot();
+        {
+            TFPerfCounters::ScopedTimer perfMove(TFPerfCounters::Phase::Movement);
+            TickMovement(fdt);
+        }
+
+        // TF-W13 server-perf lane: lag-comp snapshot + owner move-state send
+        // prep is the replication-adjacent work TFServerSim itself performs.
+        // The OTHER major replication-build cost — TFReplication's pawn
+        // Create/Update quantize-and-diff pass and TFVehicleSystem's vehicle
+        // Update/Aim broadcasts — lives in those files (not owned by this
+        // lane); see wiringNotes for the one-line ScopedTimer drop-in there.
+        {
+            TFPerfCounters::ScopedTimer perfRep(TFPerfCounters::Phase::ReplicationBuild);
+            RecordLagCompSnapshot();
 
 #ifdef ENABLE_NETWORKING
-        m_moveStateAccum += fdt;
-        if (m_moveStateAccum >= 1.0f / kReplicationHz)
-        {
-            m_moveStateAccum = 0.0f;
-            SendMoveStates();
-        }
+            m_moveStateAccum += fdt;
+            if (m_moveStateAccum >= 1.0f / kReplicationHz)
+            {
+                m_moveStateAccum = 0.0f;
+                SendMoveStates();
+            }
 #endif
+        }
     }
 
     void TFServerSim::TickMovement(float fdt)
@@ -290,6 +350,13 @@ namespace Terrafront
                 continue;
             }
 
+            // W13 anti-cheat lane: snapshot the pre-tick position so the whole
+            // tick's NET displacement (across every replayed input below) can
+            // be validated as one unit — see TFServerValidation.h file header
+            // for why per-call checks inside StepPlayer would miss the
+            // multi-input-per-tick catch-up exploit.
+            const float prevPos[3] = {ms.pos[0], ms.pos[1], ms.pos[2]};
+
             auto qit = m_inputs.find(player);
             int applied = 0;
             if (qit != m_inputs.end())
@@ -306,6 +373,22 @@ namespace Terrafront
             }
             if (applied == 0)
                 StepPlayer(ms, nullptr, fdt); // input starvation: friction + gravity only
+
+            // W13 anti-cheat lane: detect + clamp a tick displacement beyond
+            // what this pawn's class/ability state could legitimately produce.
+            // maxHorizSpeed mirrors StepPlayer's own per-call cap (class
+            // sprintSpeed * ability speedMult) so a legitimate single-input
+            // tick never trips this.
+            {
+                float sprintSpeed = kDefaultSprintSpeed;
+                if (const ClassDef* cd = m_ctx->data ? m_ctx->data->GetClass(ms.cls) : nullptr)
+                    sprintSpeed = cd->sprintSpeed;
+                float speedMult = 1.0f;
+                if (m_ctx->abilities)
+                    speedMult = m_ctx->abilities->MoveModsForPawn(ms.pawn).speedMult;
+                TFServerValidation::Get().ValidateMovementTick(player, prevPos, ms.pos, sprintSpeed * speedMult, fdt,
+                                                                m_serverTime);
+            }
 
             WritePawnTransform(ms);
         }
@@ -669,6 +752,11 @@ namespace Terrafront
         m_enteredWorld.erase(id);
         m_chatNextAt.erase(id);
         m_redeployNextAt.erase(id); // W7 ui-map-keys
+        // W13 anti-cheat lane: same recycled-PlayerId hygiene as the
+        // progression/directives/outfits ClearPlayer calls below — a fresh
+        // client reusing a freed PlayerId must not inherit a stranger's
+        // violation history.
+        TFServerValidation::Get().ClearPlayer(id);
         // W5 onboarding (Task 6): flush the active character's progress
         // one last time before dropping the session (DESIGN.md W5 "Error
         // handling": "On disconnect, flush the active character's
@@ -884,6 +972,30 @@ namespace Terrafront
             return;
         TF_FireEvent ev;
         std::memcpy(&ev, data, sizeof(ev));
+
+        // W13 anti-cheat lane (position sanity, item 3): reject a fire event
+        // whose CLAIMED muzzle position diverges wildly from the server's own
+        // trusted pawn position, before it ever reaches TFWeaponSystem.
+        // ServerHandleFire already never trusts ev.origin* for damage/hit
+        // resolution EXCEPT as a fallback when the pawn registry reports the
+        // zeroed stub position — that exact condition is mirrored below so
+        // this can never false-reject the legitimate fallback path. A gross
+        // divergence otherwise has no legitimate cause (network latency /
+        // client-side prediction drift is well under a meter) and is a strong
+        // signal of a modified client lying about where it is.
+        if (m_ctx->players)
+        {
+            PawnInfo pawn;
+            if (m_ctx->players->GetPawnByPlayer(sender, pawn) && pawn.alive &&
+                !(pawn.pos[0] == 0.0f && pawn.pos[1] == 0.0f && pawn.pos[2] == 0.0f))
+            {
+                const float trusted[3] = {pawn.pos[0], pawn.pos[1] + kTFEyeHeightM, pawn.pos[2]};
+                const float claimed[3] = {ev.originX, ev.originY, ev.originZ};
+                if (!TFServerValidation::Get().CheckFireOrigin(sender, claimed, trusted, kMaxFireOriginDivergenceM))
+                    return; // dropped: claimed origin too far from the server's known pawn position
+            }
+        }
+
         m_ctx->weapons->ServerHandleFire(sender, ev);
     }
 
@@ -1522,6 +1634,16 @@ namespace Terrafront
             ImGui::Text("moving pawns : %zu", m_move.size());
             ImGui::Text("factions set : %zu", m_factions.size());
             ImGui::Text("speed clamps : %u   bad packets: %u", m_speedClamps, m_badPackets);
+            ImGui::Separator();
+            // TF-W13 server-perf lane: same numbers `tf_perf` prints, inline for
+            // the panel. See Utils/TFPerfCounters.h.
+            {
+                auto& perf = TFPerfCounters::Instance();
+                ImGui::Text("perf: move %.3fms  phys %.3fms  rep %.3fms  budget %.3fms",
+                            perf.AverageMs(TFPerfCounters::Phase::Movement),
+                            perf.AverageMs(TFPerfCounters::Phase::PhysicsStep),
+                            perf.AverageMs(TFPerfCounters::Phase::ReplicationBuild), 1000.0 / kServerTickHz);
+            }
             ImGui::Separator();
             for (const auto& [pid, ms] : m_move)
             {

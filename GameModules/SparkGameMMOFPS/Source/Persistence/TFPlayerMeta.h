@@ -47,13 +47,32 @@ namespace Terrafront
     /// Persisted weapon selection (weapons.json keys). An empty slot string means
     /// "use the class default" — TFWeaponSystem's per-class slot rules remain the
     /// authoritative per-spawn gate; this is only the player's saved preference.
+    ///
+    /// loadout-depth wave: `grenade` (frag_grenade/smoke_grenade/flash_grenade,
+    /// weapons.json keys, empty == frag default) and `suit` (Assets/MMOFPS/Data/
+    /// suits.json key, empty == no passive) are additive fields, set/validated
+    /// ONLY through TFProgressionSystem::ServerSetLoadoutExt (kept separate from
+    /// ServerSetLoadout's frozen primary/secondary/tool triad so the existing
+    /// TF_LoadoutChange wire message, which never populates these two fields,
+    /// cannot silently wipe them). grenade IS consumed at spawn (TFGrenadeSystem::
+    /// OnPlayerSpawned resolves the thrower's kind from this field); suit IS
+    /// consumed at spawn (TFPlayerSystem::CreatePawnEntity applies its scalar via
+    /// the TFProgressionSystem::Suit*Mult queries). The pre-existing primary/
+    /// secondary/tool fields remain validated-and-persisted only — nothing reads
+    /// them back into the spawn equip path yet (pre-existing W6 gap, not touched
+    /// by this wave).
     struct TFLoadout
     {
         std::string primary;
         std::string secondary;
         std::string tool;
+        std::string grenade; ///< weapons.json key; empty == frag_grenade default
+        std::string suit;    ///< suits.json key; empty == no passive
 
-        bool Any() const { return !primary.empty() || !secondary.empty() || !tool.empty(); }
+        bool Any() const
+        {
+            return !primary.empty() || !secondary.empty() || !tool.empty() || !grenade.empty() || !suit.empty();
+        }
     };
 
     class TFPlayerMetaStore

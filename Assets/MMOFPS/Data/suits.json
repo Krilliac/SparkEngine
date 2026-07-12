@@ -1,0 +1,29 @@
+{
+  "$schema_note": "TERRAFRONT loadout-depth (this wave): suit slot passives. Read by TFProgressionSystem's own lazy loader (Data/TFDataTables.h is a frozen contended surface this wave, so this table is parsed standalone, TFOpticsSystem precedent). Multipliers are intentionally small/balanced -- applied ONCE at pawn spawn (Game/TFPlayerSystem.cpp CreatePawnEntity, the same seam ClassDef health/shield/ammo stats reach the pawn).",
+  "suits": [
+    {
+      "key": "overshield",
+      "name": "Overshield Rig",
+      "desc": "+25% max shield.",
+      "shieldMult": 1.25
+    },
+    {
+      "key": "regen_delay",
+      "name": "Rapid Capacitor",
+      "desc": "Shield regen kicks in 40% sooner after taking damage.",
+      "regenDelayMult": 0.6
+    },
+    {
+      "key": "reserves",
+      "name": "Loader Harness",
+      "desc": "+30% reserve ammo on your starting weapon.",
+      "reserveMult": 1.3
+    },
+    {
+      "key": "fortified",
+      "name": "Fortified Plating",
+      "desc": "+15% max health.",
+      "healthMult": 1.15
+    }
+  ]
+}

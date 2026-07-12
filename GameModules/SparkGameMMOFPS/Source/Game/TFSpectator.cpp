@@ -12,7 +12,9 @@
 #include "Game/TFWeaponMath.h"
 #include "Net/TFClientNet.h" // kTFLocalHostPlayer (HOST label fallback)
 #include "UI/TFChatWindow.h"
+#include "UI/TFDeathRecap.h" // killcam lane: SetKillcamNotify push hook
 #include "UI/TFHUD.h"
+#include "UI/TFKeybinds.h" // killcam lane: kVkEscape skip key (TFTutorial precedent)
 #include "UI/TFLoginFlow.h"
 #include "UI/TFMapScreen.h"
 #include "UI/TFSocialPanel.h"
@@ -77,11 +79,28 @@ namespace Terrafront
     void TFSpectator::Shutdown()
     {
         Deactivate();
+        // Killcam lane: uninstall our registration before `this` goes away
+        // (the TFDeathRecap::SetDeathRecapMirror(nullptr) precedent).
+        if (m_deathRecapSrc)
+            m_deathRecapSrc->SetKillcamNotify(nullptr);
+        m_deathRecapSrc = nullptr;
         m_wasAlive = false;
         m_initialized = false;
     }
 
     void TFSpectator::FixedUpdate(float) {}
+
+    void TFSpectator::SetDeathRecapSource(TFDeathRecap& recap)
+    {
+        m_deathRecapSrc = &recap;
+        recap.SetKillcamNotify([this](PlayerId killer) { OnRecapKiller(killer); });
+    }
+
+    void TFSpectator::OnRecapKiller(PlayerId killer)
+    {
+        m_pendingKiller = killer;
+        m_pendingKillerFresh = true;
+    }
 
     // ---------------------------------------------------------------------------
     // Lifecycle
@@ -95,6 +114,18 @@ namespace Terrafront
         m_haveCamPos = false;
         m_freeInit = false;
         m_pendingCycle = 0;
+        m_lastPoseValid = true;
+
+        // Killcam lane: fresh death — arm the grace window and drop any
+        // leftover fade/decision state from a previous life's killcam. Do
+        // NOT clear m_pendingKiller/m_pendingKillerFresh here: the
+        // authority's in-process recap mirror can fire before this Activate()
+        // call in the same frame, and that value must survive to be consumed
+        // by Update() right after.
+        m_killcamShownThisLife = false;
+        m_killcamGraceTimer = kTFKillcamGraceSec;
+        m_killcamTimer = 0.0f;
+        m_killerGoneFade = 0.0f;
 
         // Death anchor: the camera still holds the last first-person eye pose
         // (nothing drives it once DriveFirstPersonCamera early-outs on death).
@@ -240,6 +271,60 @@ namespace Terrafront
         if (!m_active)
             return;
 
+        // ---------------------------------------------------------------
+        // Killcam gate (killcam lane, W13): decide once per life whether
+        // this death has a killer to force-follow, before FOLLOW/FREE ever
+        // pick a squadmate target. Holds the frozen death-frame camera (no
+        // SetPosition call below) during the short grace window.
+        // ---------------------------------------------------------------
+        if (!m_killcamShownThisLife)
+        {
+            if (m_pendingKillerFresh)
+            {
+                m_pendingKillerFresh = false;
+                m_killcamShownThisLife = true;
+                if (m_pendingKiller != kInvalidPlayer)
+                {
+                    m_mode = Mode::KillcamFollow;
+                    m_target = m_pendingKiller;
+                    m_killcamTimer = kTFKillcamDurationSec;
+                    m_haveCamPos = false; // snap to the killer instead of gliding
+                }
+                // else: environment/unknown kill — fall through to normal
+                // FOLLOW/FREE selection below, same frame.
+            }
+            else
+            {
+                m_killcamGraceTimer -= deltaTime;
+                if (m_killcamGraceTimer > 0.0f)
+                    return; // still waiting on TF_DeathRecap; hold the frozen view
+                m_killcamShownThisLife = true; // recap lost/late — proceed normally
+            }
+        }
+
+        if (m_mode == Mode::KillcamFollow)
+        {
+            InputManager* input = m_ctx->engine ? m_ctx->engine->GetInput() : nullptr;
+            const bool skip = input && !FullscreenUiOpen() && input->IsKeyDown(TFKeys::kVkEscape);
+            m_killcamTimer -= deltaTime;
+            if (skip || m_killcamTimer <= 0.0f)
+            {
+                // Hand off to whatever FOLLOW/FREE would have picked on a
+                // normal death (selection logic runs below, same frame).
+                m_mode = Mode::Follow;
+                m_target = kInvalidPlayer;
+                m_haveCamPos = false;
+            }
+            else
+            {
+                if (!m_lastPoseValid)
+                    m_killerGoneFade =
+                        std::min(1.0f, m_killerGoneFade + kTFKillcamFadeRatePerSec * std::max(deltaTime, 0.0f));
+                DriveFollow(*cam, deltaTime); // reused verbatim: m_target is the killer here
+                return;
+            }
+        }
+
         std::vector<PlayerId> targets;
         BuildTargets(targets);
 
@@ -319,7 +404,15 @@ namespace Terrafront
         float tpos[3];
         float tyaw = 0.0f;
         if (!TargetPose(m_target, tpos, tyaw))
-            return; // target vanished mid-frame; Update revalidates next frame
+        {
+            // Target vanished mid-frame. Squad-FOLLOW revalidates next frame
+            // (Update picks a new target); KILLCAM_FOLLOW has nowhere else to
+            // go, so it freezes on the last resolved pose (m_camPos is left
+            // untouched below) and Update() ramps m_killerGoneFade off this.
+            m_lastPoseValid = false;
+            return;
+        }
+        m_lastPoseValid = true;
 
         const float fwdX = std::sin(tyaw);
         const float fwdZ = std::cos(tyaw);
@@ -505,12 +598,24 @@ namespace Terrafront
 
         // Cycle clicks — read here (not in Update) so a click on the DEPLOY
         // SCREEN / MAP buttons or the death-recap panel never also cycles.
+        // (KillcamFollow has no cycling — LMB/RMB stay inert during it.)
         if (m_mode == Mode::Follow && !io.WantCaptureMouse && !FullscreenUiOpen())
         {
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left, false))
                 m_pendingCycle = 1;
             else if (ImGui::IsMouseClicked(ImGuiMouseButton_Right, false))
                 m_pendingCycle = -1;
+        }
+
+        // Killcam lane: dim vignette once the killer's pose has gone
+        // unresolvable (dead/disconnected) — a background-layer fade so it
+        // never blocks the DEPLOY/MAP buttons or the recap panel underneath.
+        if (m_mode == Mode::KillcamFollow && m_killerGoneFade > 0.0f)
+        {
+            ImGuiViewport* fvp = ImGui::GetMainViewport();
+            ImGui::GetBackgroundDrawList()->AddRectFilled(
+                fvp->Pos, ImVec2(fvp->Pos.x + fvp->Size.x, fvp->Pos.y + fvp->Size.y),
+                ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.0f, 0.0f, m_killerGoneFade * 0.35f)));
         }
 
         // Hide the label under the fullscreen screens (DrawDeathActions /
@@ -545,6 +650,16 @@ namespace Terrafront
             }
             ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.78f, 0.75f), "LMB next squadmate   RMB previous");
         }
+        else if (m_mode == Mode::KillcamFollow)
+        {
+            char name[48];
+            ResolveTargetName(m_target, name, sizeof(name));
+            ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.30f, 0.95f), "KILLED BY  %s", name);
+            if (!m_lastPoseValid)
+                ImGui::TextColored(ImVec4(0.65f, 0.65f, 0.68f, 0.85f), "(signal lost)");
+            ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.78f, 0.75f), "ESC to skip   %.0fs",
+                               std::max(m_killcamTimer, 0.0f));
+        }
         else
         {
             ImGui::TextColored(ImVec4(0.65f, 0.80f, 0.95f, 0.95f), "FREE CAMERA  (no squadmate alive)");
@@ -560,10 +675,14 @@ namespace Terrafront
     {
         if (!ImGui::CollapsingHeader("TF Spectator"))
             return;
-        ImGui::Text("active:%d  mode:%s  target:%u  cycles:%u", m_active ? 1 : 0,
-                    m_mode == Mode::Follow ? "follow" : "free", m_target, m_cycles);
+        const char* modeName =
+            m_mode == Mode::Follow ? "follow" : (m_mode == Mode::KillcamFollow ? "killcam" : "free");
+        ImGui::Text("active:%d  mode:%s  target:%u  cycles:%u", m_active ? 1 : 0, modeName, m_target, m_cycles);
         ImGui::Text("death:(%.1f %.1f %.1f)  cam:(%.1f %.1f %.1f)  free:(%.1f %.1f %.1f)", m_deathPos[0], m_deathPos[1],
                     m_deathPos[2], m_camPos[0], m_camPos[1], m_camPos[2], m_freePos[0], m_freePos[1], m_freePos[2]);
+        ImGui::Text("killcam: shown:%d grace:%.2f timer:%.2f fade:%.2f pendingKiller:%u pendingFresh:%d",
+                    m_killcamShownThisLife ? 1 : 0, m_killcamGraceTimer, m_killcamTimer, m_killerGoneFade,
+                    m_pendingKiller, m_pendingKillerFresh ? 1 : 0);
     }
 
 #else // !SPARK_HAS_IMGUI — headless: no label, no cycle clicks (no ImGui io)

@@ -18,6 +18,7 @@
 #include "Net/TFClientNet.h"
 #include "Net/TFNetProtocol.h"
 #include "UI/TFHUD.h"
+#include "UI/TFLoadoutScreen.h" // loadout-depth wave: deploy-panel LOADOUT button
 #include "UI/TFMapScreen.h"
 #include "UI/TFUiCommon.h"
 #include "Game/TFVehicleSystem.h" // W3 shared-edit: deployed-Aegis spawn entries
@@ -592,6 +593,13 @@ namespace Terrafront
             if (ImGui::Button("CLOSE", ImVec2(120.0f, 44.0f)))
                 Close();
         }
+
+        // loadout-depth wave: reachable from the deploy panel (and the
+        // sanctuary class terminal, via terminal mode above — same button).
+        // Left of OPEN MAP so it never collides with the terminal CLOSE slot.
+        ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 600.0f, footY));
+        if (ImGui::Button("LOADOUT", ImVec2(120.0f, 44.0f)) && m_ctx->loadoutUI)
+            m_ctx->loadoutUI->Open();
 
         ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 330.0f, footY));
         if (ImGui::Button("OPEN MAP", ImVec2(120.0f, 44.0f)) && m_ctx->map)
