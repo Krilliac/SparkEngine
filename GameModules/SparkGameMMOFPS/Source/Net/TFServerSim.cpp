@@ -387,7 +387,7 @@ namespace Terrafront
                 if (m_ctx->abilities)
                     speedMult = m_ctx->abilities->MoveModsForPawn(ms.pawn).speedMult;
                 TFServerValidation::Get().ValidateMovementTick(player, prevPos, ms.pos, sprintSpeed * speedMult, fdt,
-                                                                m_serverTime);
+                                                               m_serverTime);
             }
 
             WritePawnTransform(ms);
@@ -1152,6 +1152,7 @@ namespace Terrafront
         case TFMsg::SquadMsg:
         case TFMsg::ChatMsg:
         case TFMsg::LoadoutChange:
+        case TFMsg::LoadoutExtChange: // loadout-depth wave: gated like the other gameplay ids
         case TFMsg::UnlockRequest:
         case TFMsg::RedeployRequest: // W7 ui-map-keys: MUST be gated
         case TFMsg::OutfitRequest:   // Outfits lane: gated like the other gameplay ids
@@ -1266,6 +1267,11 @@ namespace Terrafront
             m_ctx->progression->ServerSetLoadout(sender, lo);
             break;
         }
+        // loadout-depth wave: grenade + suit picks (size-validated inside).
+        case TFMsg::LoadoutExtChange:
+            if (m_ctx->progression)
+                m_ctx->progression->ServerHandleLoadoutExtMsgRaw(sender, data, size);
+            break;
         // W6 progression: unlock-tree purchase (Persistence/TFUnlockTree.h).
         case TFMsg::UnlockRequest:
         {

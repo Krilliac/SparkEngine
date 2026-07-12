@@ -132,6 +132,17 @@ namespace Terrafront
         // victim-only + reliable) for "who" and the killer's already
         // globally-broadcast PawnInfo (TFReplication, no interest culling)
         // for "where". See UI/TFDeathRecap.h's SetKillcamNotify push hook.
+
+        // 0x5488-0x548B: loadout-depth wave (reserved). 0x5488 = C->S
+        // TF_LoadoutExtChange (grenade + suit picks) — dispatched via
+        // RouteClientMessage to TFProgressionSystem::ServerHandleLoadoutExtMsgRaw;
+        // struct + static_assert live in Game/TFProgressionSystem.h (its
+        // kTFMsgLoadoutExtChange constant names the same wire value so that lane
+        // compiles standalone). 0x5489 TF_FlashState (S->C unicast) and 0x548A
+        // TF_SmokeSpawn (S->C broadcast) are grenade-lane FX ids defined in
+        // Game/TFGrenadeSystem.h (TFRepProtocol precedent: no enum entry needed,
+        // never routed through RouteClientMessage). 0x548B free.
+        LoadoutExtChange = 0x5488, // C->S  TF_LoadoutExtChange (server validates)
     };
 
 #pragma pack(push, 1)

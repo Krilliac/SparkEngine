@@ -38,6 +38,7 @@
 #include "Net/TFServerSim.h"
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
+#include "Utils/TFPerfCounters.h" // TF-W13 server-perf lane: AI phase timing
 
 // W12 bot-navigation: feeler rays against the live Jolt world (GetJoltSystem()
 // probe — the no-Jolt stub hands out dummy bodies; TFImpactFx precedent).
@@ -431,6 +432,7 @@ namespace Terrafront
 
     void TFBotSystem::FixedUpdate(float fixedDeltaTime)
     {
+        Terrafront::TFPerfCounters::ScopedTimer _tfPerf(Terrafront::TFPerfCounters::Phase::AI);
         (void)fixedDeltaTime;
         if (!m_initialized || !m_ctx || !m_ctx->IsAuthority() || !m_ctx->serverSim)
             return;

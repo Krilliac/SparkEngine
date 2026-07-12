@@ -135,6 +135,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_hud = std::make_unique<TFHUD>();
     m_map = std::make_unique<TFMapScreen>();
     m_spawnUI = std::make_unique<TFSpawnScreen>();
+    m_loadoutUI = std::make_unique<TFLoadoutScreen>(); // loadout-depth wave
     m_scoreboard = std::make_unique<TFScoreboard>();
     m_travel = std::make_unique<TFTravelSystem>();  // continents lane
     m_outfits = std::make_unique<TFOutfitSystem>(); // outfits lane
@@ -197,9 +198,11 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
     m_ctx.abilities = m_abilities.get(); // class-abilities lane (W9)
     m_ctx.grenades = m_grenades.get();   // grenades lane (W10)
     m_ctx.pings = m_pingSystem.get();    // ping-system lane (W11)
+    m_ctx.alerts = m_alerts.get();       // minimap-v2 lane (W13): corner-minimap alert overlay
     m_ctx.hud = m_hud.get();
     m_ctx.map = m_map.get();
     m_ctx.spawnUI = m_spawnUI.get();
+    m_ctx.loadoutUI = m_loadoutUI.get(); // loadout-depth wave
     m_ctx.scoreboard = m_scoreboard.get();
     m_ctx.travel = m_travel.get(); // continents lane
 
@@ -269,6 +272,7 @@ bool TerrafrontModule::OnLoad(Spark::IEngineContext* context)
         {"TFHUD", m_hud->Initialize(m_ctx, m_events)},
         {"TFMapScreen", m_map->Initialize(m_ctx, m_events)},
         {"TFSpawnScreen", m_spawnUI->Initialize(m_ctx, m_events)},
+        {"TFLoadoutScreen", m_loadoutUI->Initialize(m_ctx, m_events)}, // loadout-depth wave
         {"TFScoreboard", m_scoreboard->Initialize(m_ctx, m_events)},
         // continents lane: must run AFTER world/serverSim/regions/players.
         {"TFTravelSystem", m_travel->Initialize(m_ctx, m_events)},
@@ -358,6 +362,7 @@ void TerrafrontModule::OnUnload()
     m_travel->Shutdown(); // continents lane
     m_scoreboard->Shutdown();
     m_spawnUI->Shutdown();
+    m_loadoutUI->Shutdown(); // loadout-depth wave
     m_map->Shutdown();
     m_hud->Shutdown();
     m_footsteps->Shutdown(); // audio-wave-2 lane (W10)
@@ -423,6 +428,7 @@ void TerrafrontModule::OnUpdate(float dt)
     m_hud->Update(dt);
     m_map->Update(dt);
     m_spawnUI->Update(dt);
+    m_loadoutUI->Update(dt); // loadout-depth wave
     m_scoreboard->Update(dt);
     m_travel->Update(dt);    // continents lane
     m_loginFlow->Update(dt); // W5 onboarding (Task 6, additive)
@@ -501,6 +507,7 @@ void TerrafrontModule::OnImGui()
             m_hud->RenderUI();
             m_map->RenderUI();
             m_spawnUI->RenderUI();
+            m_loadoutUI->RenderUI(); // loadout-depth wave
             m_scoreboard->RenderUI();
             m_medals->RenderUI(); // medals-scoreboard lane (W10): medal toast overlay
             m_alerts->RenderUI(); // alerts lane (W11): top-center alert banner + end splash

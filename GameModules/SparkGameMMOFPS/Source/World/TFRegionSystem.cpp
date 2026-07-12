@@ -7,7 +7,7 @@
 #include "World/TFRegionSystem.h"
 
 #include "Data/TFDataTables.h"
-#include "Game/TFCaptureFx.h"      // W13 capture-fx lane: tower beam/burst/standing-ring
+#include "Game/TFCaptureFx.h" // W13 capture-fx lane: tower beam/burst/standing-ring
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
 #include "Game/TFVisualUtils.h"    // FactionStructureMaterial for capture-point banners
@@ -17,6 +17,7 @@
 #include "UI/TFHUD.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/TFPerfCounters.h" // TF-W13 server-perf lane: Capture phase timing
 
 #include "Spark/IEngineContext.h" // tf_capture_debug: GetWorld() null-probe (headless ECS gap)
 
@@ -288,6 +289,7 @@ namespace Terrafront
 
     void TFRegionSystem::FixedUpdate(float fixedDeltaTime)
     {
+        Terrafront::TFPerfCounters::ScopedTimer _tfPerf(Terrafront::TFPerfCounters::Phase::Capture);
         if (!m_initialized || !m_ctx)
             return;
 

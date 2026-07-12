@@ -57,6 +57,7 @@
 #include "../Panels/ModdingPanel.h"
 #include "../Panels/CoroutineDebugPanel.h"
 #include "../Panels/GameModuleSelectorPanel.h"
+#include "../Panels/PlayControlPanel.h"
 #include "../Panels/CollaborationPanel.h"
 #include "../Panels/TimeOfDayPanel.h"
 #include "../Panels/AbilityEditorPanel.h"
@@ -194,6 +195,7 @@ namespace SparkEditor
         tryRegister("Modding", [&] { return std::make_shared<ModdingPanel>(); });
         tryRegister("CoroutineDebug", [&] { return std::make_shared<CoroutineDebugPanel>(); });
         tryRegister("GameModuleSelector", [&] { return std::make_shared<GameModuleSelectorPanel>(); });
+        tryRegister("PlayControl", [&] { return std::make_shared<PlayControlPanel>(); });
         tryRegister("SceneImport",
                     [&]
                     {
@@ -282,6 +284,7 @@ namespace SparkEditor
             {"Modding", ICON_FA_BOXES},
             {"CoroutineDebug", ICON_FA_CLOCK},
             {"GameModuleSelector", ICON_FA_PUZZLE_PIECE},
+            {"PlayControl", ICON_FA_PLAY},
             {"Collaboration", ICON_FA_USERS},
             {"TimeOfDay", ICON_FA_SUN},
             {"AbilityEditor", ICON_FA_MAGIC},
@@ -359,6 +362,7 @@ namespace SparkEditor
             {"VisualScript", PanelCategory::Tool},
             {"FPSTools", PanelCategory::Tool},
             {"PlayModeToolbar", PanelCategory::Tool},
+            {"PlayControl", PanelCategory::Tool},
             {"BuildCook", PanelCategory::Tool},
             {"Prototyping", PanelCategory::Tool},
             {"Workflows", PanelCategory::Tool},
@@ -496,6 +500,17 @@ namespace SparkEditor
             if (auto* dedicatedServer = dynamic_cast<DedicatedServerPanel*>(it->second.get()))
             {
                 dedicatedServer->SetPlayModeManager(&m_playModeManager);
+            }
+        }
+        if (auto it = m_panels.find("PlayControl"); it != m_panels.end())
+        {
+            if (auto* playControl = dynamic_cast<PlayControlPanel*>(it->second.get()))
+            {
+                if (auto selIt = m_panels.find("GameModuleSelector"); selIt != m_panels.end())
+                {
+                    if (auto* selector = dynamic_cast<GameModuleSelectorPanel*>(selIt->second.get()))
+                        playControl->SetGameModuleSelector(selector);
+                }
             }
         }
 
