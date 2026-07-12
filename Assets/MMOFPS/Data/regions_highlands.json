@@ -1,0 +1,31 @@
+{
+  "$schema_note": "Veyra Highlands territory lattice (W12 continent-2-data lane). Same schema as regions.json (Cindral Wastes). World 4096x4096 m, origin SW corner; hex = axial map coords; tier: skyanchor|outpost|fort|facility. ONE CONTINENT PER SERVER PROCESS: this file is loaded INSTEAD of regions.json when tf_continent=veyra_highlands (see continents.json 'regions' field); live multi-map in one process is not supported.",
+  "continent": {"name": "Veyra Highlands", "sizeM": 4096, "scene": "Scenes/MMOFPS/veyra_highlands.scene", "fluxTickSec": 60},
+  "regions": [
+    {"id": 0, "key": "sky_south", "name": "Skyanchor Meridian", "tier": "skyanchor", "homeFaction": "MRA", "hex": [-2, 3], "center": [2048, 480], "captureSec": 0, "fluxPerTick": 0, "capturePoints": [], "spawns": [[2000, 520], [2096, 520], [2048, 420]], "vehicleTerminal": [2048, 560]},
+    {"id": 1, "key": "sky_east", "name": "Skyanchor Aurora Shelf", "tier": "skyanchor", "homeFaction": "AUC", "hex": [3, 0], "center": [3560, 2048], "captureSec": 0, "fluxPerTick": 0, "capturePoints": [], "spawns": [[3520, 2008], [3520, 2088], [3640, 2048]], "vehicleTerminal": [3474, 2048]},
+    {"id": 2, "key": "sky_west", "name": "Skyanchor Palecrest", "tier": "skyanchor", "homeFaction": "HLX", "hex": [-3, 0], "center": [560, 2048], "captureSec": 0, "fluxPerTick": 0, "capturePoints": [], "spawns": [[600, 2008], [600, 2088], [480, 2048]], "vehicleTerminal": [646, 2048]},
+    {"id": 3, "key": "saltpan", "name": "Saltpan Verge", "tier": "outpost", "hex": [-3, 2], "center": [1250, 800], "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[1250, 800]], "spawns": [[1220, 770]], "vehicleTerminal": null},
+    {"id": 4, "key": "glasscut", "name": "Glasscut Terrace", "tier": "outpost", "hex": [1, 2], "center": [2850, 800], "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[2850, 800]], "spawns": [[2880, 770]], "vehicleTerminal": null},
+    {"id": 5, "key": "palecliff", "name": "Palecliff Steps", "tier": "outpost", "hex": [-2, -1], "center": [1050, 2750], "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[1050, 2750]], "spawns": [[1020, 2780]], "vehicleTerminal": null},
+    {"id": 6, "key": "bastion", "name": "Bastion Veyr", "tier": "fort", "hex": [-2, 1], "center": [1350, 1550], "captureSec": 120, "fluxPerTick": 2, "capturePoints": [[1300, 1550], [1400, 1550]], "spawns": [[1350, 1500]], "vehicleTerminal": [1350, 1620]},
+    {"id": 7, "key": "aurora", "name": "Aurora Landing", "tier": "outpost", "hex": [3, -1], "center": [3050, 2750], "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[3050, 2750]], "spawns": [[3080, 2780]], "vehicleTerminal": null},
+    {"id": 8, "key": "riftwatch", "name": "Riftwatch Hold", "tier": "fort", "hex": [1, 1], "center": [2750, 1550], "captureSec": 120, "fluxPerTick": 2, "capturePoints": [[2700, 1550], [2800, 1550]], "spawns": [[2750, 1500]], "vehicleTerminal": [2750, 1620]},
+    {"id": 9, "key": "riftglass", "name": "Riftglass Refinery", "tier": "facility", "hex": [0, 0], "center": [2048, 1900], "captureSec": 240, "fluxPerTick": 5, "capturePoints": [[1980, 1900], [2048, 1962], [2116, 1900]], "spawns": [[2048, 1832]], "vehicleTerminal": [2048, 2032]},
+    {"id": 10, "key": "shalecrown", "name": "Shalecrown Depot", "tier": "outpost", "hex": [0, -1], "center": [2048, 2650], "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[2048, 2650]], "spawns": [[2018, 2620]], "vehicleTerminal": null},
+    {"id": 11, "key": "whitereach", "name": "Whitereach Post", "tier": "outpost", "hex": [0, -3], "center": [1500, 3350], "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[1500, 3350]], "spawns": [[1470, 3320]], "vehicleTerminal": null},
+    {"id": 12, "key": "emberfall", "name": "Emberfall Station", "tier": "outpost", "hex": [3, -3], "center": [2600, 3350], "captureSec": 60, "fluxPerTick": 1, "capturePoints": [[2600, 3350]], "spawns": [[2630, 3320]], "vehicleTerminal": null}
+  ],
+  "conduits": [
+    [0, 3], [0, 4], [1, 7], [1, 8], [2, 5], [2, 6],
+    [3, 6], [3, 9], [4, 8], [4, 9], [6, 9], [8, 9],
+    [9, 10], [5, 10], [7, 10], [5, 11], [7, 12], [11, 12],
+    [10, 11]
+  ],
+  "initialOwnership": {
+    "MRA": [0, 3, 4],
+    "AUC": [1, 7, 8, 12],
+    "HLX": [2, 5, 6, 11],
+    "neutral": [9, 10]
+  }
+}

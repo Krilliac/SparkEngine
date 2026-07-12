@@ -131,8 +131,12 @@ namespace Terrafront
         double m_nextCombatShot{0.0};
         double m_nextGust{0.0};
         bool m_lastInSanctuary{false};
-        Bed m_alarmBed;            ///< W10 audio-wave-2: capture-alarm loop (Bed reuse)
-        bool m_alarmOn{false};     ///< W10 audio-wave-2: alarm predicate this frame
+        Bed m_alarmBed;        ///< W10 audio-wave-2: capture-alarm loop (Bed reuse)
+        bool m_alarmOn{false}; ///< W10 audio-wave-2: alarm predicate this frame
+        // W12 weather-visuals: dust-storm wind loop (wind_loop_02) riding the
+        // same Bed crossfade machinery; target volume follows
+        // TFWeatherFx::Get().StormIntensity01() (0 while clear / in sanctuary).
+        Bed m_stormBed;
         bool m_netHandlers{false}; ///< 0x54F4 + 0x54F5 client handlers registered (W9/W11)
 
         std::unordered_set<std::string> m_loaded; ///< LoadSound already issued for these paths

@@ -1,5 +1,5 @@
 {
-  "$schema_note": "TERRAFRONT continent/map registry (continents lane, 2026-07-10). DISPLAY METADATA ONLY: the geometry/zone constants (sanctuary rectangle, pad plateau, terminal, spawn pads) are compile-time constexpr in Source/World/TFSanctuaryZone.h so terrain and damage determinism never depend on a data-file load. Loaded by TFTravelSystem::LoadContinentMeta; unknown keys ignored; file optional (built-in names as fallback). mapId 0 = sanctuary, 1 = the live continent. Additive only - other lanes append new continents with new mapIds, never renumber.",
+  "$schema_note": "TERRAFRONT continent/map registry (continents lane, 2026-07-10; W12 continent-2-data additions). DISPLAY METADATA ONLY: the geometry/zone constants (sanctuary rectangle, pad plateau, terminal, spawn pads) are compile-time constexpr in Source/World/TFSanctuaryZone.h so terrain and damage determinism never depend on a data-file load. Loaded by TFTravelSystem::LoadContinentMeta; unknown keys ignored; file optional (built-in names as fallback). mapId 0 = sanctuary, 1 = the live continent in THIS server process. W12: 'regions' names the region-lattice data file TFDataTables loads when tf_continent=<key> selects this continent at boot (default cindral_wastes); exactly ONE continent is live per server process - entries beyond the selected one are shown in the travel terminal as different-server destinations. Additive only - other lanes append new continents with new mapIds, never renumber.",
   "continents": [
     {
       "mapId": 0,
@@ -15,8 +15,19 @@
       "key": "cindral_wastes",
       "name": "Cindral Wastes",
       "scene": "Scenes/MMOFPS/cindral_wastes.scene",
+      "regions": "regions.json",
       "kind": "continent",
       "blurb": "The contested desert continent - 13 regions, three fronts, one lattice.",
+      "rules": { "damage": true, "capture": true, "redeploy": true }
+    },
+    {
+      "mapId": 2,
+      "key": "veyra_highlands",
+      "name": "Veyra Highlands",
+      "scene": "Scenes/MMOFPS/veyra_highlands.scene",
+      "regions": "regions_highlands.json",
+      "kind": "continent",
+      "blurb": "Salt highlands split by the Riftglass canyon - 13 regions, plateau islands in the rift.",
       "rules": { "damage": true, "capture": true, "redeploy": true }
     }
   ]

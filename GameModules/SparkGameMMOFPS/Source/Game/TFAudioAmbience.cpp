@@ -13,6 +13,7 @@
 #include "Net/TFFireFxProtocol.h" // W9 remote-fire-events: 0x54F4 wire struct
 #include "World/TFRegionSystem.h" // W10 audio-wave-2: capture-alarm predicate (public accessors)
 #include "World/TFSanctuaryZone.h"
+#include "World/TFWeatherFx.h"  // W12 weather-visuals: storm intensity for the wind bed + gust bias
 #include "World/TFWorldSetup.h" // W9: SpawnMuzzleFx (remote flash quad)
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
@@ -59,6 +60,14 @@ namespace Terrafront
 
         constexpr double kGustIntervalMinSec = 18.0;
         constexpr double kGustIntervalMaxSec = 40.0;
+
+        // W12 weather-visuals: dust-storm wind bed (wind_loop_02 as a loop) +
+        // gust one-shot bias. The bed target is kStormBedVol * storm intensity,
+        // so it crossfades up through Building and back down through Clearing.
+        constexpr const char* kStormBedPath = "Audio/MMOFPS/ambient/wind_loop_02.wav";
+        constexpr float kStormBedVol = 0.55f;
+        constexpr float kStormGustVolBoost = 1.6f;       // gust volume multiplier at full storm
+        constexpr double kStormGustIntervalScale = 0.45; // gust interval multiplier at full storm
 
         // W10 audio-wave-2: capture-alarm loop.
         constexpr const char* kCaptureAlarm = "Audio/MMOFPS/ui/capture_alarm.wav";
@@ -222,6 +231,13 @@ namespace Terrafront
 
         fade(m_windBed, windTarget);
         fade(m_sanctuaryBed, humTarget);
+
+        // W12 weather-visuals: storm wind loop rides the SAME fade helper —
+        // held-source revalidation and volume mirroring come for free. Silent
+        // in the sanctuary (storms are a continent phenomenon).
+        m_stormBed.path = kStormBedPath;
+        const float storm = TFWeatherFx::Get().StormIntensity01();
+        fade(m_stormBed, inSanctuary ? 0.0f : kStormBedVol * storm);
     }
 
     void TFAudioAmbience::StopBeds()
@@ -238,6 +254,7 @@ namespace Terrafront
         stop(m_windBed);
         stop(m_sanctuaryBed);
         stop(m_alarmBed); // W10 audio-wave-2
+        stop(m_stormBed); // W12 weather-visuals
         m_alarmOn = false;
     }
 
@@ -347,13 +364,16 @@ namespace Terrafront
 
         if (m_clock >= m_nextGust)
         {
+            // W12 weather-visuals: storms make gusts louder and more frequent
+            // (intensity 0 leaves both factors at exactly 1 — legacy behavior).
+            const float storm = TFWeatherFx::Get().StormIntensity01();
             std::uniform_int_distribution<size_t> pick(0, std::size(kWindGusts) - 1);
             std::uniform_real_distribution<float> gustVol(0.12f, 0.22f);
             const char* gust = kWindGusts[pick(m_rng)];
             EnsureLoaded(audio, gust);
-            audio.PlaySound(gust, gustVol(m_rng));
+            audio.PlaySound(gust, std::min(0.6f, gustVol(m_rng) * (1.0f + (kStormGustVolBoost - 1.0f) * storm)));
             std::uniform_real_distribution<double> next(kGustIntervalMinSec, kGustIntervalMaxSec);
-            m_nextGust = m_clock + next(m_rng);
+            m_nextGust = m_clock + next(m_rng) * (1.0 + (kStormGustIntervalScale - 1.0) * static_cast<double>(storm));
         }
     }
 
@@ -525,6 +545,8 @@ namespace Terrafront
         ImGui::Text("zone      : %s", m_lastInSanctuary ? "sanctuary" : "continent");
         ImGui::Text("wind bed  : %.2f (%s)", m_windBed.vol, m_windBed.src ? "live" : "-");
         ImGui::Text("hum bed   : %.2f (%s)", m_sanctuaryBed.vol, m_sanctuaryBed.src ? "live" : "-");
+        ImGui::Text("storm bed : %.2f (%s, weather %s)", m_stormBed.vol, m_stormBed.src ? "live" : "-",
+                    TFWeatherFx::PhaseName(TFWeatherFx::Get().CurrentPhase())); // W12 weather-visuals
         ImGui::Text("activity  : %.2f", m_activity);
         ImGui::Text("cap alarm : %s (vol %.2f, %s)", m_alarmOn ? "ON" : "off", m_alarmBed.vol,
                     m_alarmBed.src ? "live" : "-"); // W10 audio-wave-2
