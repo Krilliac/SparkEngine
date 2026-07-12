@@ -78,6 +78,35 @@ namespace Terrafront
 
 #pragma pack(pop)
 
+    // ---------------------------------------------------------------------------
+    // Killcam wire protocol — reserved TFMsg id block 0x5484-0x5487 (W13 killcam
+    // lane). Same in-lane-header precedent as the death-recap block above:
+    // TFNetProtocol.h (contended) only gains a block comment via the wave
+    // wiringNotes; these values MUST stay identical to any future enum entries.
+    // ---------------------------------------------------------------------------
+
+    constexpr uint16_t kTFMsgKillcamData = 0x5484; // S->C TF_KillcamData (reliable, victim only)
+    // 0x5485-0x5487 reserved for future killcam traffic.
+
+#pragma pack(push, 1)
+
+    /// Sent to the victim only, on death, alongside TF_DeathRecap: who killed
+    /// you + a server-truth pose snapshot. The client killcam (TFSpectator
+    /// Mode::Killcam) follows the killer's replicated pawn live and falls back
+    /// to this snapshot when the pawn is no longer resolvable (killer died /
+    /// despawned / respawned into a new pawn). No replay buffer — one sample.
+    struct TF_KillcamData
+    {
+        uint32_t killerPlayer; // kInvalidPlayer == environment (client shows no killcam)
+        uint32_t killerEntity; // network EntityId of the killer pawn at the kill (0 == unknown)
+        float killerPos[3];    // killer position at the victim's death (server truth)
+        float killerYawRad;    // killer yaw at the victim's death (radians)
+        uint8_t hasPose;       // 0 == pos/yaw invalid (killer pawn already gone server-side)
+    };
+    static_assert(sizeof(TF_KillcamData) == 25, "wire layout frozen");
+
+#pragma pack(pop)
+
     /// One recorded hit in a pawn's rolling damage log (server bookkeeping).
     struct TFDamageLogHit
     {
@@ -192,6 +221,15 @@ namespace Terrafront
         using DeathRecapMirror = std::function<void(const TF_DeathRecap&)>;
         void SetDeathRecapMirror(DeathRecapMirror mirror) { m_recapMirror = std::move(mirror); }
 
+        // --- killcam lane (W13): local-victim mirror hook ------------------------
+
+        /// Listen-host/standalone victims have no socket, so TF_KillcamData can't
+        /// ride SendToOwner for them (SetDeathRecapMirror precedent, identical
+        /// lifecycle: TFDeathRecap installs this from its Initialize and
+        /// uninstalls (nullptr) in its Shutdown so no dangling `this` survives).
+        using KillcamMirror = std::function<void(const TF_KillcamData&)>;
+        void SetKillcamMirror(KillcamMirror mirror) { m_killcamMirror = std::move(mirror); }
+
       private:
         struct HealthRec
         {
@@ -215,6 +253,12 @@ namespace Terrafront
         void SendDeathRecap(EntityId victim, const HealthRec& rec, EntityId attackerPawn, PlayerId attackerPlayer,
                             FactionId attackerFaction);
 
+        /// killcam lane (W13): deliver TF_KillcamData to the victim (skipped for
+        /// environment deaths and suicides). Runs next to SendDeathRecap, before
+        /// ServerKillPawn despawns anything, so the killer pawn registry entry is
+        /// still the freshest server truth.
+        void SendKillcam(const HealthRec& rec, EntityId attackerPawn, PlayerId attackerPlayer);
+
         TFGameContext* m_ctx{nullptr};
         TFEventBus* m_events{nullptr};
         bool m_initialized{false};
@@ -234,6 +278,11 @@ namespace Terrafront
         /// Local-victim delivery hook (see SetDeathRecapMirror).
         DeathRecapMirror m_recapMirror;
         uint32_t m_recapsSent{0};
+
+        // --- killcam lane (W13) ---------------------------------------------------
+        /// Local-victim delivery hook (see SetKillcamMirror).
+        KillcamMirror m_killcamMirror;
+        uint32_t m_killcamsSent{0};
     };
 
 } // namespace Terrafront

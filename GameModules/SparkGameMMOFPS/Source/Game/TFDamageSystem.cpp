@@ -76,6 +76,7 @@ namespace Terrafront
         m_teamKills.clear();
         m_damageLog.clear(); // death-recap lane (W11)
         m_recapMirror = nullptr;
+        m_killcamMirror = nullptr; // killcam lane (W13)
         m_initialized = false;
     }
 
@@ -246,6 +247,11 @@ namespace Terrafront
         // the pawn registry still holds both pawns (ServerKillPawn despawns).
         SendDeathRecap(victim, rec, attackerPawn, attackerPlayer, attackerFaction);
 
+        // killcam lane (W13): server-truth killer pose snapshot to the victim,
+        // captured next to the recap so the killer pawn registry entry is still
+        // the freshest truth (before ServerKillPawn despawns anything).
+        SendKillcam(rec, attackerPawn, attackerPlayer);
+
         if (m_ctx->players)
             m_ctx->players->ServerKillPawn(victim, attackerPlayer, weapon, headshot);
 
@@ -337,6 +343,46 @@ namespace Terrafront
         SendToOwner(rec.owner, kTFMsgDeathRecap, &rc, sizeof(rc));
     }
 
+    void TFDamageSystem::SendKillcam(const HealthRec& rec, EntityId attackerPawn, PlayerId attackerPlayer)
+    {
+        if (rec.owner == kInvalidPlayer)
+            return; // ownerless pawn — nobody to show a killcam to
+        if (attackerPlayer == kInvalidPlayer || attackerPlayer == rec.owner)
+            return; // environment death or suicide — no killcam target
+
+        TF_KillcamData kc{};
+        kc.killerPlayer = attackerPlayer;
+        kc.killerEntity = static_cast<uint32_t>(attackerPawn);
+        kc.hasPose = 0;
+
+        // Server-truth killer pose, straight from the pawn registry while it is
+        // still live (SendDeathRecap runs immediately before ServerKillPawn).
+        if (attackerPawn != 0 && m_ctx->players)
+        {
+            PawnInfo killerPi{};
+            if (m_ctx->players->GetPawnByEntity(attackerPawn, killerPi))
+            {
+                kc.killerPos[0] = killerPi.pos[0];
+                kc.killerPos[1] = killerPi.pos[1];
+                kc.killerPos[2] = killerPi.pos[2];
+                kc.killerYawRad = killerPi.yaw; // PawnInfo::yaw is radians (TFSpectator precedent)
+                kc.hasPose = 1;
+            }
+        }
+
+        ++m_killcamsSent;
+
+        // Listen-host/standalone local victim: no socket — direct mirror into
+        // the client killcam (SendDeathRecap mirror pattern).
+        if (m_ctx->HasLocalPlayer() && rec.owner == m_ctx->localPlayer)
+        {
+            if (m_killcamMirror)
+                m_killcamMirror(kc);
+            return;
+        }
+        SendToOwner(rec.owner, kTFMsgKillcamData, &kc, sizeof(kc));
+    }
+
     void TFDamageSystem::SendToOwner(PlayerId owner, uint16_t msgId, const void* payload, size_t size)
     {
 #ifdef ENABLE_NETWORKING
@@ -404,6 +450,7 @@ namespace Terrafront
         ImGui::Text("TK offenders  : %zu", m_teamKills.size());
         ImGui::Text("damage logs   : %zu", m_damageLog.size()); // death-recap lane (W11)
         ImGui::Text("recaps sent   : %u", m_recapsSent);
+        ImGui::Text("killcams sent : %u", m_killcamsSent); // killcam lane (W13)
 #endif
     }
 
