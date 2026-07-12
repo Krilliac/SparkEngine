@@ -14,6 +14,7 @@
 
 #include "Data/TFDataTables.h"
 #include "Game/TFVisualUtils.h"     // FactionStructureMaterial (neutral/faction tint)
+#include "World/TFWeatherFx.h"      // W12 weather-visuals: storm cull-range scale (fog-in)
 #include "World/TFWorldCollision.h" // AddModelObb / RemoveBody / OptimizeBroadPhase
 #include "World/TFWorldSetup.h"     // TerrainHeightAt + Collision() accessor
 
@@ -23,6 +24,12 @@
 #include "Utils/JsonUtils.h"
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
+
+// W12 decor-instancing lane: grouped decor draws through the engine's basic
+// instanced pipeline (one GraphicsEngine::DrawMeshInstanced per group).
+#include "Graphics/GraphicsEngine.h"
+#include "Graphics/Mesh.h"
+#include "Graphics/WorldBasicRenderer.h" // Spark::WorldMeshCache (tinyobjloader path)
 
 #include <array>
 #include <cmath>
@@ -104,20 +111,50 @@ namespace Terrafront
                 "tf_decor_debug",
                 [this](const std::vector<std::string>&) -> std::string
                 {
-                    char buf[384];
+                    char buf[448];
                     std::snprintf(buf, sizeof(buf),
                                   "[TF] decor: layout=%d pieces=%zu visuals=%u colBodies=%u colSkipped=%u "
                                   "colDemoted=%u skipped(clearance)=%u skipped(budget)=%u templates=%zu "
-                                  "cullVisible=%u cullHidden=%u",
+                                  "cullVisible=%u cullHidden=%u instGroups=%zu instDraws=%u instInstances=%u",
                                   m_layoutDone ? 1 : 0, m_layout.size(), SpawnedCount(), CollisionBodyCount(),
                                   m_colSkipped, m_colDemoted, m_skippedClearance, m_skippedBudget, m_templates.size(),
-                                  VisibleDecorCount(), CulledDecorCount());
+                                  VisibleDecorCount(), CulledDecorCount(), m_groups.size(), m_instDrawsLast,
+                                  m_instInstancesLast);
                     return std::string(buf);
                 },
                 "Region decor status: layout pieces, visual entities, collision bodies, clearance/budget skips, "
-                "distance-cull visible/hidden counts",
+                "distance-cull visible/hidden counts, instanced-draw groups/calls",
                 "TERRAFRONT", "tf_decor_debug");
             m_debugCmd = true;
+        }
+
+        // W12 decor-instancing lane: A/B toggle — the visual sanity gate is
+        // "tf_decor_inst off" vs "on" looking pixel-identical (same meshes,
+        // materials, world matrices and lighting through both paths).
+        if (!console.HasCommand("tf_decor_inst"))
+        {
+            console.RegisterCommand(
+                "tf_decor_inst",
+                [this](const std::vector<std::string>& args) -> std::string
+                {
+                    if (!args.empty() && (args[0] == "off" || args[0] == "0"))
+                    {
+                        DissolveInstanceGroups();
+                        return "[TF] decor instancing OFF (per-entity path restored)";
+                    }
+                    if (!args.empty() && (args[0] == "on" || args[0] == "1"))
+                    {
+                        m_groupsBuilt = false; // re-partition on the next RenderInstanced
+                        return "[TF] decor instancing re-armed (groups rebuild next frame)";
+                    }
+                    char buf[96];
+                    std::snprintf(buf, sizeof(buf), "[TF] decor instancing: %s (%zu groups) — tf_decor_inst on|off",
+                                  m_groups.empty() ? "inactive" : "active", m_groups.size());
+                    return std::string(buf);
+                },
+                "A/B toggle for instanced decor rendering (visual sanity: on and off must look identical)",
+                "TERRAFRONT", "tf_decor_inst");
+            m_instCmd = true;
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFRegionDecor initialized");
@@ -148,6 +185,11 @@ namespace Terrafront
             Spark::SimpleConsole::GetInstance().UnregisterCommand("tf_decor_debug");
             m_debugCmd = false;
         }
+        if (m_instCmd) // W12 decor-instancing lane
+        {
+            Spark::SimpleConsole::GetInstance().UnregisterCommand("tf_decor_inst");
+            m_instCmd = false;
+        }
 
         World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
         if (world)
@@ -164,6 +206,18 @@ namespace Terrafront
         m_cullFrameCounter = 0;
         m_cullVisible = 0;
         m_cullHidden = 0;
+
+        // W12 decor-instancing lane: groups reference m_cull indexes and the
+        // entities destroyed above — drop everything (the mesh cache releases
+        // its device buffers here, safely before engine teardown: Main.cpp
+        // shuts TFRegionSystem down while the GraphicsEngine is still alive).
+        m_groups.clear();
+        m_grouped.clear();
+        m_instScratch.clear();
+        m_meshCache.reset();
+        m_groupsBuilt = false;
+        m_instDrawsLast = 0;
+        m_instInstancesLast = 0;
 
         // Collision handles: Main.cpp shuts TFRegionSystem (and therefore us)
         // down BEFORE TFWorldSetup, so the scene collision set is still alive
@@ -528,6 +582,170 @@ namespace Terrafront
                     break;
             }
         }
+
+        // -------------------------------------------------------------------
+        // W12 part-validation (gate-parts-reauthor lane). The W11 leg-cage
+        // lesson: four thin watchtower legs formed a convex pocket local
+        // avoidance could not escape, so the collideParts DATA was disabled.
+        // The data is now re-authored cage-free (single tower column, archway
+        // gates, two-support gantry) and these two passes are the guard rail
+        // that keeps FUTURE decor.json edits honest:
+        //   A) no two ground-blocking parts of DIFFERENT pieces in the same
+        //      region may pinch a corridor narrower than 1.2 m (bot trap) —
+        //      the smaller piece is demoted to visual-only;
+        //   B) every capture point keeps a >= 120-degree open ground approach
+        //      (12 directions, samples out to 6 m) — blocking pieces demoted.
+        // Both passes are pure functions of the finished layout + decor.json +
+        // the region table with fixed iteration order and the same float math
+        // on every role — the same determinism contract as the W10 pass above.
+        // Whole-model-OBB pieces are NOT probed here: their bounds live in
+        // TFWorldCollision's OBJ cache (not reachable from layout, by design);
+        // solid buildings are covered by the 8 m clearance gate instead.
+        // -------------------------------------------------------------------
+        constexpr float kCorridorMinM = 1.2f;    // narrower than this between pieces = bot trap
+        constexpr float kTouchEpsM = 0.01f;      // gaps below this are one merged solid, not a corridor
+        constexpr float kPartBaseWalkY = 2.0f;   // parts starting this far up never block ground movement
+        constexpr float kApproachRadiusM = 6.0f; // capture-point approach probe radius
+        constexpr int kApproachDirs = 12;        // 30-degree sampling
+        constexpr int kApproachRunNeeded = 4;    // 4 consecutive open samples ~= a 120-degree wedge
+
+        // Ground-blocking part footprints as conservative world-XZ AABBs of
+        // each yaw-rotated part box. Elevated parts (gate lintels, the gantry
+        // span — model-local bottom >= 2 m) are walk-under and excluded.
+        struct PartFootprint
+        {
+            float minX, minZ, maxX, maxZ;
+            size_t piece; // index into m_layout (ascending build order)
+        };
+        std::vector<PartFootprint> feet;
+        std::vector<float> pieceArea(m_layout.size(), 0.0f); // summed ground footprint per piece
+        for (size_t i = 0; i < m_layout.size(); ++i)
+        {
+            const LayoutPiece& p = m_layout[i];
+            if (!p.collide || p.collideParts.empty())
+                continue;
+            const float yawRad = p.yawDeg * kDegToRad;
+            const float cy = std::cos(yawRad), sy = std::sin(yawRad);
+            for (const DecorCollidePart& part : p.collideParts)
+            {
+                if (part.off[1] - part.size[1] * 0.5f >= kPartBaseWalkY)
+                    continue; // lintel/span: pawns walk under it
+                // Same part-center yaw mapping as the clearance probes above.
+                const float cx = part.off[0] * cy + part.off[2] * sy + p.x;
+                const float cz = -part.off[0] * sy + part.off[2] * cy + p.z;
+                const float totRad = (p.yawDeg + part.yawDeg) * kDegToRad;
+                const float tc = std::cos(totRad), ts = std::sin(totRad);
+                const float hx = part.size[0] * 0.5f, hz = part.size[2] * 0.5f;
+                const float ex = std::fabs(hx * tc) + std::fabs(hz * ts);
+                const float ez = std::fabs(hx * ts) + std::fabs(hz * tc);
+                feet.push_back({cx - ex, cz - ez, cx + ex, cz + ez, i});
+                pieceArea[i] += 4.0f * ex * ez;
+            }
+        }
+
+        // Pass A: pairwise corridor-pocket check within a region. Same-piece
+        // pairs are skipped (an archway's own pillar spacing is authored
+        // intent). Interpenetrating/touching parts are one merged solid — the
+        // hazard is strictly the 0 < gap < 1.2 m pinch. Demotion goes to the
+        // smaller summed footprint (less silhouette lost); ties demote the
+        // later layout index — both deterministic.
+        const auto axisGap = [](float minA, float maxA, float minB, float maxB)
+        {
+            const float g1 = minA - maxB;
+            const float g2 = minB - maxA;
+            const float g = g1 > g2 ? g1 : g2;
+            return g > 0.0f ? g : 0.0f;
+        };
+        for (size_t a = 0; a < feet.size(); ++a)
+        {
+            for (size_t b = a + 1; b < feet.size(); ++b)
+            {
+                const PartFootprint& fa = feet[a];
+                const PartFootprint& fb = feet[b];
+                if (fa.piece == fb.piece)
+                    continue;
+                LayoutPiece& pa = m_layout[fa.piece];
+                LayoutPiece& pb = m_layout[fb.piece];
+                if (!pa.collide || !pb.collide || pa.region != pb.region)
+                    continue; // already demoted, or different regions (8 m clearance covers borders)
+                const float gx = axisGap(fa.minX, fa.maxX, fb.minX, fb.maxX);
+                const float gz = axisGap(fa.minZ, fa.maxZ, fb.minZ, fb.maxZ);
+                const float gap = std::sqrt(gx * gx + gz * gz);
+                if (gap <= kTouchEpsM || gap >= kCorridorMinM)
+                    continue;
+                LayoutPiece& loser = (pieceArea[fa.piece] < pieceArea[fb.piece]) ? pa : pb;
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] decor: CORRIDOR POCKET — parts of '%s' and '%s' (region %u) pinch a %.2fm "
+                               "gap (< %.1fm); '%s' demoted to visual-only (re-author decor.json offsets)",
+                               pa.model.c_str(), pb.model.c_str(), static_cast<unsigned>(pa.region),
+                               static_cast<double>(gap), static_cast<double>(kCorridorMinM), loser.model.c_str());
+                loser.collide = false;
+                ++m_colDemoted;
+            }
+        }
+
+        // Pass B: capture-point approach audit. A direction is open when none
+        // of its samples (2/4/6 m — the mid samples catch footprints straddling
+        // the ring) lies inside a LIVE ground footprint; the point passes with
+        // >= 4 CONSECUTIVE open directions (circular scan), i.e. a ~120-degree
+        // wedge (3 x 30 degrees between extremes + half-spacing margins). On
+        // failure EVERY blocking piece is demoted — with all blockers gone the
+        // wedge trivially opens, and partial demotion would need an arbitrary
+        // tie-break for no navigation benefit.
+        for (const RegionDef& r : regions)
+        {
+            for (const auto& cp : r.capturePoints)
+            {
+                bool open[kApproachDirs];
+                std::vector<char> isBlocker(m_layout.size(), 0);
+                bool anyBlocked = false;
+                for (int d = 0; d < kApproachDirs; ++d)
+                {
+                    open[d] = true;
+                    const float ang = (kTwoPi * static_cast<float>(d)) / static_cast<float>(kApproachDirs);
+                    const float dirX = std::sin(ang), dirZ = std::cos(ang);
+                    for (int step = 1; step <= 3; ++step)
+                    {
+                        const float t = kApproachRadiusM * (static_cast<float>(step) / 3.0f);
+                        const float sx = cp[0] + dirX * t;
+                        const float sz = cp[1] + dirZ * t;
+                        for (const PartFootprint& f : feet)
+                        {
+                            if (!m_layout[f.piece].collide)
+                                continue; // demoted in pass A (or by this pass for an earlier point)
+                            if (sx < f.minX || sx > f.maxX || sz < f.minZ || sz > f.maxZ)
+                                continue;
+                            open[d] = false;
+                            anyBlocked = true;
+                            isBlocker[f.piece] = 1;
+                        }
+                    }
+                }
+                if (!anyBlocked)
+                    continue;
+                int best = 0, run = 0;
+                for (int d = 0; d < kApproachDirs * 2 && best < kApproachDirs; ++d) // doubled scan = circular wrap
+                {
+                    run = open[d % kApproachDirs] ? run + 1 : 0;
+                    if (run > best)
+                        best = run;
+                }
+                if (best >= kApproachRunNeeded)
+                    continue;
+                for (size_t i = 0; i < m_layout.size(); ++i)
+                {
+                    if (!isBlocker[i] || !m_layout[i].collide)
+                        continue;
+                    SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                   "[TF] decor: APPROACH BLOCKED — capture point (%.0f, %.0f) of region %u keeps "
+                                   "< 120 degrees of open approach; '%s' (region %u) demoted to visual-only",
+                                   static_cast<double>(cp[0]), static_cast<double>(cp[1]), static_cast<unsigned>(r.id),
+                                   m_layout[i].model.c_str(), static_cast<unsigned>(m_layout[i].region));
+                    m_layout[i].collide = false;
+                    ++m_colDemoted;
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -661,23 +879,38 @@ namespace Terrafront
             return;
         const auto camPos = cam->GetPosition(); // XZ only: decor culls by ground distance
 
+        // W12 weather-visuals: dust storms pull the cull ranges in (1.0 clear
+        // -> 0.4 at full intensity) — the basic path has no fog, so distant
+        // decor "fogging out" IS the storm's visibility read. VISUAL ONLY,
+        // exactly like the base cull: never touches layout or collision.
+        const float stormScale = TFWeatherFx::Get().DecorCullScale();
+
         uint32_t visible = 0;
         uint32_t hidden = 0;
         auto& registry = world->GetRegistry();
-        for (TFDecorCullEntry& e : m_cull)
+        for (size_t i = 0; i < m_cull.size(); ++i)
         {
+            TFDecorCullEntry& e = m_cull[i];
             const auto ent = static_cast<EntityID>(e.entity);
             if (e.entity == 0u || !registry.valid(ent))
                 continue;
             const float dx = e.x - camPos.x;
             const float dz = e.z - camPos.z;
-            const bool want = DecorShouldBeVisible(dx * dx + dz * dz, e.cullRange, e.visible);
+            const bool want = DecorShouldBeVisible(dx * dx + dz * dz, e.cullRange * stormScale, e.visible);
             if (want != e.visible)
             {
                 // MeshRenderer.visible short-circuits TFWorldSetup's ECS draw
                 // loop before any mesh load or draw call — this flag IS the cull.
-                if (MeshRenderer* mr = registry.try_get<MeshRenderer>(ent))
-                    mr->visible = want;
+                // W12 decor-instancing: entities consumed by an instance group
+                // stay ECS-invisible permanently (RenderInstanced reads
+                // e.visible directly when filling instance buffers), so only
+                // ungrouped decor flips the MeshRenderer flag here.
+                const bool grouped = i < m_grouped.size() && m_grouped[i] != 0u;
+                if (!grouped)
+                {
+                    if (MeshRenderer* mr = registry.try_get<MeshRenderer>(ent))
+                        mr->visible = want;
+                }
                 e.visible = want;
             }
             if (want)
@@ -687,6 +920,262 @@ namespace Terrafront
         }
         m_cullVisible = visible;
         m_cullHidden = hidden;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Instanced rendering (W12 decor-instancing lane — SEPARATE section by
+    // design; see RenderInstanced in the header for the opt-in contract)
+    // ---------------------------------------------------------------------------
+
+    namespace
+    {
+        /// Groups smaller than this stay on the per-entity ECS path — below
+        /// four instances the extra instance-buffer Map/upload costs more than
+        /// the draw calls it saves.
+        constexpr uint32_t kMinInstancedGroup = 4;
+    } // namespace
+
+    void TFRegionDecor::BuildInstanceGroups(GraphicsEngine* gfx)
+    {
+        // One deterministic attempt per arm: whatever this pass decides
+        // (groups, or per-entity fallback) stays until Shutdown or a
+        // tf_decor_inst re-arm. Clear first so a re-arm never duplicates.
+        m_groupsBuilt = true;
+        m_groups.clear();
+
+        // Feature probe: engines without the basic instanced pipeline (compile
+        // failure, Linux) keep the per-entity path — zero behavior change.
+        if (!gfx || !gfx->HasInstancedBasicPipeline())
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Game,
+                           "[TF] decor: instanced pipeline unavailable — per-entity draw path kept");
+            return;
+        }
+
+        World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
+        if (!world)
+            return;
+
+        // SpawnVisuals pushes m_entities and m_cull in lock-step with its
+        // m_layout iteration, so index i is the same piece in all three. If a
+        // future restructure breaks that invariant, bail to per-entity rather
+        // than group the wrong transforms under the wrong mesh.
+        if (m_layout.size() != m_cull.size() || m_entities.size() != m_cull.size())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] decor: layout/visuals index mismatch (%zu/%zu/%zu) — instancing skipped",
+                           m_layout.size(), m_entities.size(), m_cull.size());
+            return;
+        }
+
+        m_grouped.assign(m_cull.size(), 0u);
+
+        // Partition by (model, resolved material, emissive) — everything the
+        // per-entity draw varies per decor piece. Decor entities never carry
+        // TFFactionComp, so the ECS loop's faction tint is always white for
+        // them; material resolution matches SpawnVisuals exactly (skyanchor
+        // pieces resolve their home-faction structure material).
+        std::unordered_map<std::string, size_t> keyToGroup;
+        std::vector<DecorInstanceGroup> groups;
+        char key[560];
+        for (size_t i = 0; i < m_layout.size(); ++i)
+        {
+            const LayoutPiece& p = m_layout[i];
+            const std::string& material = p.material.empty() ? FactionStructureMaterial(*m_ctx, p.tint) : p.material;
+            std::snprintf(key, sizeof(key), "%s|%s|%.3f", p.model.c_str(), material.c_str(),
+                          static_cast<double>(p.emissive));
+
+            const auto [it, inserted] = keyToGroup.try_emplace(key, groups.size());
+            if (inserted)
+            {
+                DecorInstanceGroup g;
+                g.model = p.model;
+                g.material = material;
+                g.emissive = p.emissive;
+                groups.push_back(std::move(g));
+            }
+            DecorInstanceGroup& g = groups[it->second];
+            g.cullIdx.push_back(static_cast<uint32_t>(i));
+
+            // EXACTLY Transform::GetLocalMatrix for this entity (scale 1,
+            // yaw-only Euler in DEGREES, no parent): the same
+            // XMMatrixRotationRollPitchYaw + XMMatrixTranslation calls, so the
+            // instanced world matrix is bit-identical to the per-entity one.
+            using namespace DirectX;
+            const XMMATRIX wm = XMMatrixRotationRollPitchYaw(0.0f, XMConvertToRadians(p.yawDeg), 0.0f) *
+                                XMMatrixTranslation(p.x, p.y, p.z);
+            XMFLOAT4X4 w4;
+            XMStoreFloat4x4(&w4, wm);
+            g.worlds.push_back(w4);
+        }
+
+        // Keep only groups worth instancing; hide their entities from the
+        // per-entity ECS loop (the instanced path draws them from now on).
+        auto& registry = world->GetRegistry();
+        uint32_t groupedPieces = 0;
+        for (auto& g : groups)
+        {
+            if (g.cullIdx.size() < kMinInstancedGroup)
+                continue; // stays per-entity (MeshRenderer.visible untouched)
+            for (const uint32_t idx : g.cullIdx)
+            {
+                m_grouped[idx] = 1u;
+                const auto ent = static_cast<EntityID>(m_cull[idx].entity);
+                if (m_cull[idx].entity != 0u && registry.valid(ent))
+                {
+                    if (MeshRenderer* mr = registry.try_get<MeshRenderer>(ent))
+                        mr->visible = false;
+                }
+            }
+            groupedPieces += static_cast<uint32_t>(g.cullIdx.size());
+            m_groups.push_back(std::move(g));
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Game,
+                       "[TF] decor: instancing %u pieces in %zu groups (%zu pieces stay per-entity)", groupedPieces,
+                       m_groups.size(), m_layout.size() - groupedPieces);
+    }
+
+    void TFRegionDecor::DissolveInstanceGroups()
+    {
+        // Un-opt-in (runtime draw failure, or the tf_decor_inst A/B toggle):
+        // hand every grouped entity back to the per-entity ECS loop with its
+        // current cull state, then drop the groups (m_groupsBuilt stays set —
+        // no rebuild unless tf_decor_inst re-arms it).
+        World* world = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetWorld() : nullptr;
+        if (world)
+        {
+            auto& registry = world->GetRegistry();
+            for (const DecorInstanceGroup& g : m_groups)
+            {
+                for (const uint32_t idx : g.cullIdx)
+                {
+                    const auto ent = static_cast<EntityID>(m_cull[idx].entity);
+                    if (m_cull[idx].entity != 0u && registry.valid(ent))
+                    {
+                        if (MeshRenderer* mr = registry.try_get<MeshRenderer>(ent))
+                            mr->visible = m_cull[idx].visible;
+                    }
+                }
+            }
+        }
+        m_groups.clear();
+        m_grouped.clear();
+        m_instDrawsLast = 0;
+        m_instInstancesLast = 0;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] decor: instance groups dissolved — per-entity path active");
+    }
+
+    void TFRegionDecor::RenderInstanced(GraphicsEngine* gfx, const DirectX::XMMATRIX& view,
+                                        const DirectX::XMMATRIX& proj)
+    {
+        if (!m_initialized || !m_visualsDone || !gfx)
+            return;
+        if (!m_groupsBuilt)
+            BuildInstanceGroups(gfx);
+        if (m_groups.empty())
+            return;
+
+        if (!m_meshCache)
+            m_meshCache = std::make_unique<Spark::WorldMeshCache>();
+
+        m_instDrawsLast = 0;
+        m_instInstancesLast = 0;
+
+        // Instanced VS + the SHARED basic PS; b1 (view*proj, lighting) was set
+        // by RenderWorld's UpdateFrameConstants for this exact view/proj.
+        gfx->SetBasicShadersInstanced();
+
+        bool drawFailed = false;
+        for (const DecorInstanceGroup& g : m_groups)
+        {
+            // Visible subset (spawn-order stable): the cull pass maintains
+            // e.visible for grouped entries without touching MeshRenderer.
+            m_instScratch.clear();
+            for (size_t k = 0; k < g.cullIdx.size(); ++k)
+            {
+                if (m_cull[g.cullIdx[k]].visible)
+                    m_instScratch.push_back(g.worlds[k]);
+            }
+            if (m_instScratch.empty())
+                continue;
+
+            Mesh* mesh = m_meshCache->GetOrLoad(*gfx, g.model);
+            if (!mesh || mesh->GetIndexCount() == 0)
+                continue;
+
+            // Material resolution mirrors the per-entity ECS loop in
+            // TFWorldSetup::RenderWorld (decor materials are always JSON).
+            const GraphicsEngine::BasicMaterial* mat =
+                g.material.empty() ? nullptr : gfx->GetOrLoadBasicMaterial(g.material);
+            ID3D11ShaderResourceView* matSrv = mat ? mat->srv.Get() : nullptr;
+            const DirectX::XMFLOAT2 matTiling = mat ? mat->tiling : DirectX::XMFLOAT2{1.0f, 1.0f};
+            gfx->SetBasicMaterialTextures(mat ? mat->normalSrv.Get() : nullptr,
+                                          mat ? mat->roughnessSrv.Get() : nullptr);
+
+            const uint32_t count = static_cast<uint32_t>(m_instScratch.size());
+            const DirectX::XMFLOAT4X4* worlds = m_instScratch.data();
+            const DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
+            const auto& submeshes = mesh->GetSubmeshes();
+            if (submeshes.empty())
+            {
+                // b0 world part is ignored by the instanced VS (identity is
+                // just a placeholder); color/tiling/emissive ride b0 per group
+                // exactly as the per-entity path sets them per entity.
+                gfx->UpdateBasicConstants(identity, view, proj, DirectX::XMFLOAT4{1.0f, 1.0f, 1.0f, 1.0f}, matTiling,
+                                          g.emissive);
+                gfx->SetBasicTexture(matSrv);
+                if (!gfx->DrawMeshInstanced(*mesh, worlds, count))
+                {
+                    drawFailed = true;
+                    break;
+                }
+                ++m_instDrawsLast;
+                m_instInstancesLast += count;
+            }
+            else
+            {
+                // OBJ submesh ranges: same texture/tint fallback rules as the
+                // per-entity loop (map_Kd at 1:1 UVs, else material texture
+                // tinted by the MTL Kd), one instanced draw per range.
+                for (const MeshSubmesh& smesh : submeshes)
+                {
+                    ID3D11ShaderResourceView* srv =
+                        smesh.diffuseTexture.empty() ? nullptr : gfx->GetOrLoadTextureSRV(smesh.diffuseTexture);
+                    DirectX::XMFLOAT2 tiling{1.0f, 1.0f};
+                    if (!srv)
+                    {
+                        srv = matSrv;
+                        tiling = matTiling;
+                    }
+                    gfx->UpdateBasicConstants(identity, view, proj, smesh.diffuseColor, tiling, g.emissive);
+                    gfx->SetBasicTexture(srv);
+                    if (!gfx->DrawMeshInstanced(*mesh, worlds, count, smesh.indexStart, smesh.indexCount))
+                    {
+                        drawFailed = true;
+                        break;
+                    }
+                    ++m_instDrawsLast;
+                    m_instInstancesLast += count;
+                }
+                if (drawFailed)
+                    break;
+            }
+        }
+
+        // Hand the pipeline back to the per-entity basic path (viewmodel, FX
+        // and later passes rebind SetBasicShaders anyway — this keeps the
+        // frame's state invariants explicit).
+        gfx->SetBasicShaders();
+        gfx->SetBasicTexture(nullptr);
+        gfx->SetBasicMaterialTextures(nullptr, nullptr);
+
+        if (drawFailed)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] decor: DrawMeshInstanced failed — falling back to the per-entity path");
+            DissolveInstanceGroups();
+        }
     }
 
 } // namespace Terrafront

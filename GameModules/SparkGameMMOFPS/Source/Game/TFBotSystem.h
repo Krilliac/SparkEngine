@@ -35,6 +35,13 @@
  *             published on TFGameContext, call the public CanUseAbility/
  *             UseAbility seam (detected at compile time, same shim pattern as
  *             the TFRegionSystem queries — absent system == silent no-op).
+ *  - avoid:   (W12 bot-navigation) local obstacle avoidance while walking —
+ *             short chest-height feeler rays (RaycastFiltered, WorldStatic)
+ *             steer marching bots around structure OBBs (the W11 watchtower
+ *             leg cages) instead of nosing in; a coarse no-progress detector
+ *             breaks residual stalls with a random 90-150 deg unstick leg,
+ *             and persistent stalls fall back to the chaos teleport-scatter
+ *             (chaos mode only). tf_botinfo carries the counters.
  *
  * Tactics (all server-side, deterministic given the same tick sequence):
  *  - objective bias toward contested / actively-capturing regions and toward
@@ -188,6 +195,21 @@ namespace Terrafront
             bool jumping = false;
             float strafePhase = 0.0f;
 
+            // local obstacle avoidance (W12 bot-navigation)
+            uint8_t feelerPhase = 0;      ///< stagger: full feeler pattern 1-in-4 thinks
+            int8_t lastAvoidSide = 0;     ///< last steer side (+1 right / -1 left)
+            float lastBlockedYaw = 0.0f;  ///< path memory: heading that hit a wall
+            double blockedYawUntil = 0.0; ///< memory expiry (bias away while fresh)
+            float backTurnYaw = 0.0f;     ///< heading held while backing off a pocket
+            double backTurnUntil = 0.0;   ///< both-feelers-blocked back-turn deadline
+
+            // unstick (W12): coarse no-progress detector while trying to walk
+            float moveRefPos[2]{0.0f, 0.0f}; ///< XZ progress reference
+            double moveRefAt = 0.0;          ///< when the reference was taken
+            float unstickYaw = 0.0f;         ///< random 90-150 deg escape heading
+            double unstickUntil = 0.0;       ///< escape leg deadline (0 = off)
+            uint8_t unstickCount = 0;        ///< consecutive unsticks; 3rd -> chaos scatter
+
             // chaos exercise mode (bots-chaos lane)
             bool chaosScatterPending = false; ///< teleport-scatter on next alive think
             double chaosRerollAt = 0.0;       ///< next randomized objective re-roll
@@ -219,6 +241,20 @@ namespace Terrafront
         void ChaosPilotTryPurchase(Bot& bot, const PawnInfo& self, double now);
         /// Objective = the farthest non-skyanchor region (long ride target).
         void SetFarObjective(Bot& bot, const float selfPos[3]);
+        // ---------------------------------------------------------------------
+        // --- W12 bot-navigation: local obstacle avoidance -------------------
+        /// Walking-leg avoidance: no-progress unstick detector + feeler
+        /// steering, applied to the movement input after the march/approach
+        /// heading is chosen (Moving/ToVehicle states only).
+        void ApplyAvoidance(Bot& bot, const PawnInfo& self, double now, TF_ClientInput& in);
+        /// Feeler steering: forward + ±30 deg chest-height rays against
+        /// WorldStatic. Returns the (possibly detoured) heading to walk.
+        float SteerFeelers(Bot& bot, const PawnInfo& self, double now, float desiredYaw);
+        /// Clear distance along one feeler (kFeelerLenM when nothing hit or
+        /// the physics world is not live).
+        float FeelerClearance(const float origin[3], float yaw) const;
+        /// Reset the avoidance/unstick reference state (fresh life, teleport).
+        static void ResetAvoidance(Bot& bot, float x, float z, double now);
         // ---------------------------------------------------------------------
         void TryFire(Bot& bot, double now);
         bool AcquireTarget(const Bot& bot, const PawnInfo& self, EntityId& outTarget, float outTargetPos[3]) const;
@@ -265,6 +301,10 @@ namespace Terrafront
         // debug counters
         uint32_t m_shotsFired{0};
         uint32_t m_spawnRequests{0};
+        // W12 bot-navigation instrumentation (tf_botinfo)
+        uint32_t m_feelerBlocked{0};  ///< feeler rays that hit WorldStatic
+        uint32_t m_unsticks{0};       ///< no-progress escape legs started
+        uint32_t m_stuckTeleports{0}; ///< persistent-stuck chaos scatters
         bool m_showDebug{false};
     };
 

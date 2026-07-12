@@ -490,5 +490,24 @@ void GraphicsEngine::UpdateFrameConstants(const XMMATRIX& view, const XMMATRIX& 
     // Frame constants are managed per-subsystem through the RHI on Linux.
 }
 
+// --- W12 decor-instancing: the basic instanced draw path is D3D11-only for
+//     now. The probe reports "unavailable" so callers (region decor) fall
+//     back to their per-entity path automatically on Linux.
+bool GraphicsEngine::HasInstancedBasicPipeline()
+{
+    return false;
+}
+
+void GraphicsEngine::SetBasicShadersInstanced()
+{
+    // No instanced basic pipeline on Linux yet (see HasInstancedBasicPipeline).
+}
+
+bool GraphicsEngine::DrawMeshInstanced(Mesh& /*mesh*/, const DirectX::XMFLOAT4X4* /*instanceWorlds*/,
+                                       uint32_t /*instanceCount*/, uint32_t /*indexStart*/, uint32_t /*indexCount*/)
+{
+    return false;
+}
+
 
 #endif // !SPARK_PLATFORM_WINDOWS

@@ -1,5 +1,5 @@
 {
-    "$schema_note": "TERRAFRONT region decor templates (W9 world-decor lane; W10 decor-collision). Per-tier layout computed once per region by World/TFRegionDecor — the layout is role-agnostic and deterministic on BOTH server and client; visuals spawn on viewer roles only. offset = [x, z] meters from region center (+x east, +z north); yaw in DEGREES (Transform.rotation is degrees; the RADIANS rule is PhysicsBody-only — TFWorldCollision converts for Jolt). terrainAlign true (default) snaps each piece to TerrainHeightAt at its own column; false uses the region-center height (level runs, e.g. pipelines). material optional — default is the neutral/faction structure material (skyanchor pieces tint by homeFaction, everything else neutral). collide (W10, default FALSE) — true gives the piece one static Jolt OBB from its model bounds on BOTH roles (buildings only; keep small props, pipelines and holo signs walk-through; scatter props never collide). scatter = per-region seeded prop ring (seed = RegionId, deterministic across roles): count [min,max], radius [min,max] meters from center. Code enforces >= clearanceM from every capturePoint/spawn/vehicleTerminal (collidable pieces against EVERY region's points, demoted to visual-only on violation) and caps total pieces at 20 per region.",
+    "$schema_note": "TERRAFRONT region decor templates (W9 world-decor lane; W10 decor-collision). Per-tier layout computed once per region by World/TFRegionDecor — the layout is role-agnostic and deterministic on BOTH server and client; visuals spawn on viewer roles only. offset = [x, z] meters from region center (+x east, +z north); yaw in DEGREES (Transform.rotation is degrees; the RADIANS rule is PhysicsBody-only — TFWorldCollision converts for Jolt). terrainAlign true (default) snaps each piece to TerrainHeightAt at its own column; false uses the region-center height (level runs, e.g. pipelines). material optional — default is the neutral/faction structure material (skyanchor pieces tint by homeFaction, everything else neutral). collide (W10, default FALSE) — true gives the piece one static Jolt OBB from its model bounds on BOTH roles (buildings only; keep small props, pipelines and holo signs walk-through; scatter props never collide). scatter = per-region seeded prop ring (seed = RegionId, deterministic across roles): count [min,max], radius [min,max] meters from center. Code enforces >= clearanceM from every capturePoint/spawn/vehicleTerminal (collidable pieces against EVERY region's points, demoted to visual-only on violation) and caps total pieces at 20 per region. collideParts (W11 API; data re-authored W12 after the leg-cage stall) = MODEL-LOCAL boxes {offset:[x,y,z] box center, size:[x,y,z] FULL size, yawDeg local yaw} that REPLACE the whole-model OBB (authoring parts implies collide:true; max 5 per piece). Authoring rules: keep gate archways >= 2.2m wide x 2.6m tall clear; NEVER author cage patterns (the W11 four-leg watchtower trapped bots between its own legs — use ONE convex central column; players cannot stand inside the tower base, accepted approximation); parts whose bottom sits >= 2m up (lintels, gantry spans) are walk-under. TFRegionDecor validates after layout: parts of DIFFERENT pieces pinching a <1.2m corridor demote the smaller piece, and every capturePoint must keep a >= 120-degree open ground approach (blockers demoted).",
     "clearanceM": 8.0,
     "templates": {
         "outpost": {
@@ -7,7 +7,10 @@
                 { "model": "Assets/Models/MMOFPS/buildings/barracks.obj", "collide": true, "offset": [18, 14], "yaw": -30 },
                 { "model": "Assets/Models/MMOFPS/buildings/silo_cluster.obj", "collide": true, "offset": [-20, 16], "yaw": 15, "material": "Assets/Materials/MMOFPS/Structure_Metal.json" },
                 { "model": "Assets/Models/MMOFPS/buildings/silo_cluster.obj", "collide": true, "offset": [-27, 6], "yaw": 80, "material": "Assets/Materials/MMOFPS/Structure_Metal.json" },
-                { "model": "Assets/Models/MMOFPS/buildings/watchtower.obj", "collide": true, "offset": [24, -12], "yaw": 200 }
+                { "model": "Assets/Models/MMOFPS/buildings/watchtower.obj", "collide": true, "offset": [24, -12], "yaw": 200,
+                  "collideParts": [
+                      { "offset": [0.0, 5.03, 0.0], "size": [3.0, 10.24, 3.0], "yawDeg": 0 }
+                  ] }
             ],
             "scatter": {
                 "models": [
@@ -27,7 +30,10 @@
                 { "model": "Assets/Models/MMOFPS/buildings/barracks.obj", "collide": true, "offset": [12, 18], "yaw": -20 },
                 { "model": "Assets/Models/MMOFPS/buildings/warehouse.obj", "collide": true, "offset": [-16, 20], "yaw": 10 },
                 { "model": "Assets/Models/MMOFPS/buildings/silo_cluster.obj", "collide": true, "offset": [-30, -14], "yaw": 40, "material": "Assets/Materials/MMOFPS/Structure_Metal.json" },
-                { "model": "Assets/Models/MMOFPS/buildings/watchtower.obj", "collide": true, "offset": [28, -16], "yaw": 180 },
+                { "model": "Assets/Models/MMOFPS/buildings/watchtower.obj", "collide": true, "offset": [28, -16], "yaw": 180,
+                  "collideParts": [
+                      { "offset": [0.0, 5.03, 0.0], "size": [3.0, 10.24, 3.0], "yawDeg": 0 }
+                  ] },
                 { "model": "Assets/Models/MMOFPS/buildings/comms_relay.obj", "collide": true, "offset": [0, 30], "yaw": 0, "material": "Assets/Materials/MMOFPS/Structure_AlloyDark.json" },
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [-62, 0], "yaw": 90 },
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [-59, 9], "yaw": 135 },
@@ -35,7 +41,12 @@
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [62, 0], "yaw": 90 },
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [59, 9], "yaw": 45 },
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [59, -9], "yaw": 135 },
-                { "model": "Assets/Models/MMOFPS/buildings/blastwall_gate.obj", "collide": true, "offset": [0, -20], "yaw": 0 }
+                { "model": "Assets/Models/MMOFPS/buildings/blastwall_gate.obj", "collide": true, "offset": [0, -20], "yaw": 0,
+                  "collideParts": [
+                      { "offset": [-2.58, 1.63, 0.0], "size": [1.24, 3.25, 1.2], "yawDeg": 0 },
+                      { "offset": [2.58, 1.63, 0.0], "size": [1.24, 3.25, 1.2], "yawDeg": 0 },
+                      { "offset": [0.0, 4.7, 0.045], "size": [6.4, 1.9, 1.29], "yawDeg": 0 }
+                  ] }
             ],
             "scatter": {
                 "models": [
@@ -52,7 +63,12 @@
         "facility": {
             "pieces": [
                 { "model": "Assets/Models/MMOFPS/buildings/refinery_stack.obj", "collide": true, "offset": [20, 20], "yaw": 0, "material": "Assets/Materials/MMOFPS/Structure_AlloyWorn.json" },
-                { "model": "Assets/Models/MMOFPS/buildings/excavator_gantry.obj", "collide": true, "offset": [-24, 22], "yaw": -35, "material": "Assets/Materials/MMOFPS/Structure_AlloyWorn.json" },
+                { "model": "Assets/Models/MMOFPS/buildings/excavator_gantry.obj", "collide": true, "offset": [-24, 22], "yaw": -35, "material": "Assets/Materials/MMOFPS/Structure_AlloyWorn.json",
+                  "collideParts": [
+                      { "offset": [-5.15, 2.95, 0.0], "size": [3.1, 5.9, 5.45], "yawDeg": 0 },
+                      { "offset": [6.0, 1.47, 0.0], "size": [1.4, 2.93, 3.4], "yawDeg": 0 },
+                      { "offset": [0.0, 8.75, 0.0], "size": [13.6, 4.3, 5.76], "yawDeg": 0 }
+                  ] },
                 { "model": "Assets/Models/MMOFPS/buildings/warehouse.obj", "collide": true, "offset": [16, -26], "yaw": 90 },
                 { "model": "Assets/Models/MMOFPS/buildings/silo_cluster.obj", "collide": true, "offset": [-20, -24], "yaw": 60, "material": "Assets/Materials/MMOFPS/Structure_Metal.json" },
                 { "model": "Assets/Models/MMOFPS/buildings/comms_relay.obj", "collide": true, "offset": [34, -6], "yaw": 0, "material": "Assets/Materials/MMOFPS/Structure_AlloyDark.json" },
@@ -67,7 +83,12 @@
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [77, 8], "yaw": 45 },
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [0, 74], "yaw": 0 },
                 { "model": "Assets/Models/MMOFPS/buildings/blastwall_seg.obj", "collide": true, "offset": [8, 71], "yaw": 45 },
-                { "model": "Assets/Models/MMOFPS/buildings/blastwall_gate.obj", "collide": true, "offset": [0, -16], "yaw": 0 }
+                { "model": "Assets/Models/MMOFPS/buildings/blastwall_gate.obj", "collide": true, "offset": [0, -16], "yaw": 0,
+                  "collideParts": [
+                      { "offset": [-2.58, 1.63, 0.0], "size": [1.24, 3.25, 1.2], "yawDeg": 0 },
+                      { "offset": [2.58, 1.63, 0.0], "size": [1.24, 3.25, 1.2], "yawDeg": 0 },
+                      { "offset": [0.0, 4.7, 0.045], "size": [6.4, 1.9, 1.29], "yawDeg": 0 }
+                  ] }
             ],
             "scatter": {
                 "models": [

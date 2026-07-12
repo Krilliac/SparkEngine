@@ -259,6 +259,22 @@ class Mesh
      */
     UINT GetIndexCount() const { return m_indexCount; }
 
+    /**
+     * @brief Raw D3D11 vertex buffer (stride = sizeof(Vertex), slot-0 layout).
+     *
+     * W12 decor-instancing: GraphicsEngine::DrawMeshInstanced binds this at
+     * IA slot 0 next to the shared per-instance matrix buffer at slot 1, so
+     * instanced draws reuse the exact buffers Render()/RenderRange() bind.
+     * @return Vertex buffer, or nullptr before CreateBuffers() ran.
+     */
+    ID3D11Buffer* GetVertexBuffer() const { return m_vb.Get(); }
+
+    /**
+     * @brief Raw D3D11 index buffer (DXGI_FORMAT_R32_UINT, triangle list).
+     * @return Index buffer, or nullptr before CreateBuffers() ran.
+     */
+    ID3D11Buffer* GetIndexBuffer() const { return m_ib.Get(); }
+
   private:
     /**
      * @brief Create DirectX vertex and index buffers from mesh data

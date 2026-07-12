@@ -39,6 +39,11 @@
 #include "World/TFRegionSystem.h"
 #include "World/TFWorldSetup.h"
 
+// W12 bot-navigation: feeler rays against the live Jolt world (GetJoltSystem()
+// probe — the no-Jolt stub hands out dummy bodies; TFImpactFx precedent).
+#include "Physics/PhysicsSystem.h" // engine umbrella header; stub-safe when Jolt is absent
+#include "Spark/IEngineContext.h"
+
 // W9 bots-v2: the class-abilities lane's system is optional at this lane's
 // compile time. When the header exists in the tree, include it so the seam
 // concepts below see the full type; when it does not, TFGameContext has no
@@ -118,6 +123,18 @@ namespace Terrafront
         constexpr float kMedtechHealRadiusM = 15.0f;
         constexpr float kMedtechHurtFrac = 0.7f; // friendly pool below this -> heal
         constexpr float kStrikerGapM = 25.0f;    // target farther than this -> jets
+
+        // local obstacle avoidance (W12 bot-navigation)
+        constexpr float kFeelerLenM = 3.0f;         // chest-height feeler ray length
+        constexpr float kFeelerSideRad = 0.5236f;   // ±30 deg side feelers
+        constexpr float kAvoidSteerRad = 0.9f;      // detour angle past a blocked forward
+        constexpr float kBackTurnRad = 2.0944f;     // 120 deg pocket escape turn
+        constexpr double kBackTurnSec = 1.0;        // pocket escape leg length
+        constexpr double kBlockedMemorySec = 5.0;   // remember a blocked heading this long
+        constexpr float kUnstickMinMoveM = 1.5f;    // < this progress inside the window = stalled
+        constexpr double kUnstickWindowSec = 3.0;   // progress measurement window
+        constexpr double kUnstickSteerSec = 2.0;    // random-heading escape leg length
+        constexpr uint8_t kUnstickScatterAfter = 3; // consecutive unsticks -> chaos scatter
 
         // chaos pilots (W9 bots-v2): deterministic vehicle exercise for tf_validate
         constexpr uint32_t kChaosVulturePilotSlot = 1; // AUC; flies a Vulture
@@ -469,6 +486,7 @@ namespace Terrafront
         b.cls = static_cast<ClassId>(m_rng() % kSelectableClasses);
         b.state = BotState::Deploying;
         b.strafePhase = static_cast<float>(slot) * 1.7f;
+        b.feelerPhase = static_cast<uint8_t>(slot & 3u); // desync the 1-in-4 feeler patterns
         const double now = Now();
         b.nextThinkAt = now + static_cast<double>(slot) * 0.031; // stagger the 5 Hz brains
         b.nextSpawnTryAt = now;
@@ -617,6 +635,8 @@ namespace Terrafront
             bot.stuckRefPos[2] = self.pos[2];
             bot.stuckSince = now;
             bot.jumping = false;
+            ResetAvoidance(bot, self.pos[0], self.pos[2], now); // W12: fresh nav state per life
+            bot.unstickCount = 0;
         }
 
         ThinkAlive(bot, self, now);
@@ -790,6 +810,21 @@ namespace Terrafront
             }
         }
 
+        // W12 bot-navigation: walking legs get local obstacle avoidance (feeler
+        // steering + no-progress unstick). Combat movement is strafe-driven and
+        // keeps the target in the sights, so only the march/approach states
+        // steer around geometry; other states just re-arm the progress window.
+        if (bot.state == BotState::Moving || bot.state == BotState::ToVehicle)
+        {
+            ApplyAvoidance(bot, self, now, in);
+        }
+        else
+        {
+            bot.moveRefPos[0] = self.pos[0];
+            bot.moveRefPos[1] = self.pos[2];
+            bot.moveRefAt = now;
+        }
+
         if (bot.jumping)
             in.buttons |= TFB_Jump;
 
@@ -798,6 +833,161 @@ namespace Terrafront
 
         bot.input = in; // seq is stamped per fixed tick in FixedUpdate
         bot.wantMove = true;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Local obstacle avoidance (W12 bot-navigation)
+    //
+    // W11 root cause: bots nosed into watchtower leg-cage OBBs and stalemated
+    // (no fights -> the chaos abilities gate failed and the walkable-gates data
+    // was reverted). Feeler rays steer marching bots around static geometry
+    // BEFORE they wedge; the coarse no-progress detector below catches whatever
+    // slips through and breaks it with a random escape leg, escalating to the
+    // existing chaos teleport-scatter after three consecutive failures (chaos
+    // mode only — the scatter path already resets objectives + stuck state).
+    // ---------------------------------------------------------------------------
+
+    void TFBotSystem::ResetAvoidance(Bot& bot, float x, float z, double now)
+    {
+        bot.moveRefPos[0] = x;
+        bot.moveRefPos[1] = z;
+        bot.moveRefAt = now;
+        bot.unstickUntil = 0.0;
+        bot.backTurnUntil = 0.0;
+        bot.blockedYawUntil = 0.0;
+        bot.lastAvoidSide = 0;
+    }
+
+    float TFBotSystem::FeelerClearance(const float origin[3], float yaw) const
+    {
+        ::PhysicsSystem* physics = (m_ctx && m_ctx->engine) ? m_ctx->engine->GetPhysics() : nullptr;
+        if (!physics || !physics->GetJoltSystem())
+            return kFeelerLenM; // no live Jolt world: nothing to feel, walk on
+        const DirectX::XMFLOAT3 o{origin[0], origin[1], origin[2]};
+        const DirectX::XMFLOAT3 d{std::sin(yaw), 0.0f, std::cos(yaw)};
+        const RaycastHit hit = physics->RaycastFiltered(o, d, kFeelerLenM, CollisionLayers::WorldStatic);
+        return hit.hasHit ? std::min(hit.distance, kFeelerLenM) : kFeelerLenM;
+    }
+
+    float TFBotSystem::SteerFeelers(Bot& bot, const PawnInfo& self, double now, float desiredYaw)
+    {
+        // Pocket escape in progress: hold the back-turn heading, no rays.
+        if (now < bot.backTurnUntil)
+            return bot.backTurnYaw;
+
+        // Stagger: full pattern 1-in-4 thinks per bot in open field; every
+        // think while actively working an obstacle (fresh blocked memory).
+        bot.feelerPhase = static_cast<uint8_t>((bot.feelerPhase + 1u) & 3u);
+        const bool active = now < bot.blockedYawUntil;
+        if (bot.feelerPhase != 0 && !active)
+            return desiredYaw;
+
+        // Path memory: while the remembered blocked heading is fresh, bias away
+        // from it instead of re-probing head-on every time the scorer re-aims.
+        const auto memoryBias = [&](float yaw)
+        {
+            if (now >= bot.blockedYawUntil)
+                return yaw;
+            const float delta = WrapPi(yaw - bot.lastBlockedYaw);
+            if (std::fabs(delta) >= kFeelerSideRad)
+                return yaw;
+            float side = static_cast<float>(bot.lastAvoidSide);
+            if (side == 0.0f)
+                side = delta >= 0.0f ? 1.0f : -1.0f;
+            return WrapPi(yaw + side * kFeelerSideRad);
+        };
+
+        const float origin[3] = {self.pos[0], self.pos[1] + kChestHeightM, self.pos[2]};
+        const float fwd = FeelerClearance(origin, desiredYaw);
+        if (fwd >= kFeelerLenM)
+            return memoryBias(desiredYaw); // clear ahead
+
+        // Forward blocked: remember the heading and probe the side feelers.
+        ++m_feelerBlocked;
+        bot.lastBlockedYaw = desiredYaw;
+        bot.blockedYawUntil = now + kBlockedMemorySec;
+
+        const float left = FeelerClearance(origin, WrapPi(desiredYaw - kFeelerSideRad));
+        const float right = FeelerClearance(origin, WrapPi(desiredYaw + kFeelerSideRad));
+        if (left < kFeelerLenM)
+            ++m_feelerBlocked;
+        if (right < kFeelerLenM)
+            ++m_feelerBlocked;
+
+        if (left < kFeelerLenM && right < kFeelerLenM)
+        {
+            // Boxed in: back-turn 120 deg for a second and re-approach.
+            const float sign = (m_rng() & 1u) != 0u ? 1.0f : -1.0f;
+            bot.backTurnYaw = WrapPi(desiredYaw + sign * kBackTurnRad);
+            bot.backTurnUntil = now + kBackTurnSec;
+            bot.lastAvoidSide = 0;
+            return bot.backTurnYaw;
+        }
+
+        // Steer along the least-blocked feeler; ties break away from the
+        // remembered blocked heading via the previous side, else randomly.
+        float side;
+        if (left > right)
+            side = -1.0f;
+        else if (right > left)
+            side = 1.0f;
+        else if (bot.lastAvoidSide != 0)
+            side = static_cast<float>(bot.lastAvoidSide);
+        else
+            side = (m_rng() & 1u) != 0u ? 1.0f : -1.0f;
+        bot.lastAvoidSide = side > 0.0f ? int8_t{1} : int8_t{-1};
+        return WrapPi(desiredYaw + side * kAvoidSteerRad);
+    }
+
+    void TFBotSystem::ApplyAvoidance(Bot& bot, const PawnInfo& self, double now, TF_ClientInput& in)
+    {
+        // --- no-progress unstick detector (coarser than the jump nudge) ---
+        const float mdx = self.pos[0] - bot.moveRefPos[0];
+        const float mdz = self.pos[2] - bot.moveRefPos[1];
+        if (mdx * mdx + mdz * mdz >= kUnstickMinMoveM * kUnstickMinMoveM)
+        {
+            bot.moveRefPos[0] = self.pos[0];
+            bot.moveRefPos[1] = self.pos[2];
+            bot.moveRefAt = now;
+            bot.unstickCount = 0; // making progress again
+        }
+        else if (now - bot.moveRefAt >= kUnstickWindowSec)
+        {
+            bot.moveRefPos[0] = self.pos[0];
+            bot.moveRefPos[1] = self.pos[2];
+            bot.moveRefAt = now;
+            ++m_unsticks;
+            if (bot.unstickCount < kUnstickScatterAfter)
+                ++bot.unstickCount;
+            if (bot.unstickCount >= kUnstickScatterAfter && m_chaosActive)
+            {
+                // Persistent stuck: fall back to the chaos teleport-scatter
+                // (consumed at the top of the next alive think — it re-rolls
+                // the drop point and resets objective + stuck state there).
+                bot.chaosScatterPending = true;
+                bot.unstickCount = 0;
+                ++m_stuckTeleports;
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] bot 0x%08X persistently stuck -> chaos scatter", bot.id);
+            }
+            else
+            {
+                // Random 90-150 deg escape heading for 2 s, then re-seek.
+                const float sign = (m_rng() & 1u) != 0u ? 1.0f : -1.0f;
+                const float mag = 1.5708f + static_cast<float>(m_rng() % 61u) * 0.0174533f;
+                bot.unstickYaw = WrapPi(in.viewYaw + sign * mag);
+                bot.unstickUntil = now + kUnstickSteerSec;
+            }
+        }
+
+        // Escape leg overrides the objective heading while it runs.
+        if (now < bot.unstickUntil)
+        {
+            in.viewYaw = bot.unstickYaw;
+            in.moveY = 127;
+        }
+
+        // Feelers steer whatever heading survived the above.
+        in.viewYaw = SteerFeelers(bot, self, now, in.viewYaw);
     }
 
     // ---------------------------------------------------------------------------
@@ -1282,6 +1472,8 @@ namespace Terrafront
                 bot.stuckRefPos[2] = z;
                 bot.stuckSince = now;
                 bot.jumping = false;
+                ResetAvoidance(bot, x, z, now); // W12: fresh nav window at the new drop
+                bot.unstickCount = 0;
                 bot.pilotBuyAt = now + 1.0; // let the teleport settle one tick
                 SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] chaos pilot: bot 0x%08X %s -> terminal r%u (%.0f, %.0f)",
                                bot.id, FactionTag(bot.faction), static_cast<unsigned>(r.id), x, z);
@@ -1349,6 +1541,8 @@ namespace Terrafront
         bot.stuckRefPos[2] = z;
         bot.stuckSince = now;
         bot.jumping = false;
+        ResetAvoidance(bot, x, z, now); // W12: fresh nav window at the new drop
+        bot.unstickCount = 0;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] chaos scatter: bot 0x%08X %s -> region %u (%.0f, %.0f)", bot.id,
                        FactionTag(bot.faction), static_cast<unsigned>(dest->id), x, z);
     }
@@ -1796,7 +1990,8 @@ namespace Terrafront
         os << "[TF] bots " << m_bots.size() << "  spawnReqs " << m_spawnRequests << "  shots " << m_shotsFired
            << "  chaos " << (m_chaosActive ? "ON" : "off") << " (deployTries " << m_chaosDeployTries << ", vehTries "
            << m_chaosVehicleTries << ", vehBuys " << m_chaosVehiclePurchases << ")  abilityUses " << m_abilityUses
-           << "  now " << Now();
+           << "  nav(blockedFeelers " << m_feelerBlocked << ", unsticks " << m_unsticks << ", stuckTeleports "
+           << m_stuckTeleports << ")  now " << Now();
         for (const Bot& b : m_bots)
         {
             PawnInfo p{};
@@ -1807,7 +2002,8 @@ namespace Terrafront
                 os << " pos(" << static_cast<int>(p.pos[0]) << "," << static_cast<int>(p.pos[1]) << ","
                    << static_cast<int>(p.pos[2]) << ") hp=" << static_cast<int>(p.health);
             os << " obj=r" << (b.objectiveRegion == kInvalidRegion ? -1 : static_cast<int>(b.objectiveRegion))
-               << " tgt=" << b.targetEntity << " veh=" << b.vehicleEntity << " nextSpawnTry=" << b.nextSpawnTryAt;
+               << " tgt=" << b.targetEntity << " veh=" << b.vehicleEntity
+               << " us=" << static_cast<unsigned>(b.unstickCount) << " nextSpawnTry=" << b.nextSpawnTryAt;
         }
         return os.str();
     }
@@ -1821,6 +2017,8 @@ namespace Terrafront
         {
             ImGui::Text("bots: %u / %u   shots fired: %u   spawn requests: %u", BotCount(), kTFMaxBots, m_shotsFired,
                         m_spawnRequests);
+            ImGui::Text("nav: blocked feelers %u   unsticks %u   stuck teleports %u", m_feelerBlocked, m_unsticks,
+                        m_stuckTeleports);
             ImGui::Separator();
             for (const Bot& b : m_bots)
             {

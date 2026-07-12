@@ -49,13 +49,20 @@
 #include "Core/TFTypes.h"
 #include "World/TFDecorCulling.h" // W10 distance-culling lane: cull entry + ranges
 
+#include <DirectXMath.h> // W12 decor-instancing: view/proj + per-instance world matrices
+
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-class PhysicsBody; // Physics/PhysicsBody.h (engine, global namespace)
+class PhysicsBody;    // Physics/PhysicsBody.h (engine, global namespace)
+class GraphicsEngine; // Graphics/GraphicsEngine.h (W12 decor-instancing)
+namespace Spark
+{
+    class WorldMeshCache; // Graphics/WorldBasicRenderer.h (W12 decor-instancing)
+} // namespace Spark
 
 namespace Terrafront
 {
@@ -78,6 +85,18 @@ namespace Terrafront
 
         uint32_t SpawnedCount() const { return static_cast<uint32_t>(m_entities.size()); }
         uint32_t CollisionBodyCount() const { return static_cast<uint32_t>(m_colBodies.size()); }
+
+        /// W12 decor-instancing lane: draw the GROUPED decor with one
+        /// GraphicsEngine::DrawMeshInstanced per mesh+material group. Called
+        /// from TFWorldSetup::RenderWorld right after the per-entity ECS draw
+        /// loop (same frame, same view/proj, b1 frame constants already set).
+        /// On the first call it partitions the stamped decor into groups of
+        /// >= 4 identical (model, material, emissive) pieces, flips those
+        /// entities' MeshRenderer.visible off so the contended ECS loop skips
+        /// them, and keeps everything else (small groups, or when the engine
+        /// reports no instanced pipeline) on the per-entity path unchanged.
+        /// VISUAL ONLY — never touches layout, collision or determinism.
+        void RenderInstanced(GraphicsEngine* gfx, const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& proj);
 
         // W10 distance-culling lane: counters from the last cull pass, for the
         // region debug UI / tf_decor_debug (measurable win, not vibes).
@@ -173,6 +192,45 @@ namespace Terrafront
         void UpdateCulling();
         /// >= m_clearanceM (XZ) from every capturePoint/spawn/vehicleTerminal.
         bool ClearOfGameplay(const RegionDef& r, float x, float z) const;
+
+        // ------------------------------------------------------------------
+        // W12 decor-instancing lane (render-path opt-in; SEPARATE section)
+        // ------------------------------------------------------------------
+
+        /// One instanced-draw group: every stamped decor piece sharing the
+        /// same (model, resolved material, emissive). `cullIdx[k]` indexes
+        /// m_cull (visibility source) and `worlds[k]` is that member's
+        /// precomputed world matrix — decor never moves, so both are filled
+        /// once at group build. Groups only exist for >= 4 members AND an
+        /// available engine instanced pipeline; everything else stays on the
+        /// per-entity ECS path.
+        struct DecorInstanceGroup
+        {
+            std::string model;    ///< OBJ path (group mesh)
+            std::string material; ///< resolved material JSON (faction tint already applied)
+            float emissive = 0.0f;
+            std::vector<uint32_t> cullIdx;           ///< members, as indexes into m_cull
+            std::vector<DirectX::XMFLOAT4X4> worlds; ///< parallel to cullIdx (static)
+        };
+
+        /// One-shot partition of the stamped decor into instance groups (see
+        /// RenderInstanced). Requires m_layout / m_entities / m_cull to be in
+        /// lock-step (SpawnVisuals pushes all three per piece, same order);
+        /// bails to the per-entity path if that invariant ever breaks.
+        void BuildInstanceGroups(GraphicsEngine* gfx);
+        /// Emergency un-opt-in: restore grouped entities' MeshRenderer.visible
+        /// from their cull state and drop all groups (permanent per-entity
+        /// fallback). Used if a DrawMeshInstanced call fails at runtime.
+        void DissolveInstanceGroups();
+
+        std::vector<DecorInstanceGroup> m_groups;           ///< instanced groups (empty = per-entity)
+        std::vector<uint8_t> m_grouped;                     ///< parallel to m_cull: 1 = consumed by a group
+        std::vector<DirectX::XMFLOAT4X4> m_instScratch;     ///< per-frame visible-subset fill buffer
+        std::unique_ptr<Spark::WorldMeshCache> m_meshCache; ///< group meshes (tinyobjloader path)
+        bool m_groupsBuilt{false};                          ///< build latch (tf_decor_inst can re-arm)
+        bool m_instCmd{false};                              ///< tf_decor_inst registered by this instance
+        uint32_t m_instDrawsLast{0};                        ///< instanced draw calls last frame (debug)
+        uint32_t m_instInstancesLast{0};                    ///< instances drawn last frame (debug)
 
         TFGameContext* m_ctx{nullptr};
         bool m_initialized{false};
