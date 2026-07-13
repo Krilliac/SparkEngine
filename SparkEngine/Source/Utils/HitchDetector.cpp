@@ -69,6 +69,16 @@ namespace Spark
         m_uptimeSec += dt;
         m_currentMinuteElapsed += dt;
 
+        // Snapshot the baseline BEFORE this frame joins the window: a hitch must
+        // be measured against recent history, not against a history it is itself
+        // part of. Including it let a spike dilute the very average it is
+        // compared to -- and the bigger the spike, the more it inflated its own
+        // baseline, so severe hitches were systematically under-classified (a
+        // 10x spike over a 30-frame window scored only ~7.7x and was reported
+        // Moderate). A large enough spike could mask itself entirely.
+        const bool haveBaseline = (m_framesFilled >= 10);
+        const float avg = haveBaseline ? ComputeRollingAverage() : 0.0f;
+
         // Store in ring buffer
         uint32_t windowSize = std::min(m_config.historyWindowSize, MAX_HISTORY);
         m_frameTimes[m_frameIndex % windowSize] = frameTimeMs;
@@ -77,10 +87,8 @@ namespace Spark
             m_framesFilled++;
 
         // Need enough samples before detecting hitches
-        if (m_framesFilled < 10)
+        if (!haveBaseline)
             return;
-
-        float avg = ComputeRollingAverage();
 
         // Skip if average is below minimum threshold
         if (avg < m_config.minFrameTimeMs)

@@ -3,6 +3,7 @@
 #include "Graphics/LODGenerator.h"
 #include "TestFramework.h"
 
+
 #include <algorithm>
 #include <cstdint>
 #include <numeric>
@@ -97,10 +98,29 @@ TEST(AutoLOD_Perf_FrameTimeImprovesAcrossRepresentativeScenes)
         withAutoLOD.push_back({weightedTriangles, weightedVRAM});
     }
 
+    uint32_t baseTris = 0, lodTris = 0;
+    for (const SceneMesh& m : baseline)
+        baseTris += m.triangles;
+    for (const SceneMesh& m : withAutoLOD)
+        lodTris += m.triangles;
+
+    // What the LOD system actually controls: the weighted triangle load. The
+    // best this scene mix can do is
+    //   0.25 + 0.35*0.62 + 0.30*0.62^2 + 0.10*0.62^3 = 0.606
+    // and the generator hits it (321,000 -> 194,573 triangles, 0.606x), so this
+    // is the real regression guard on Simplify's reduction quality.
+    EXPECT_LT(static_cast<float>(lodTris), static_cast<float>(baseTris) * 0.65f);
+
     const float baselineFrameMs = EstimateFrameMs(baseline);
     const float autoLODFrameMs = EstimateFrameMs(withAutoLOD);
 
-    EXPECT_TRUE(autoLODFrameMs < baselineFrameMs * 0.80f);
+    // EstimateFrameMs charges a FIXED 0.85ms that no amount of LOD can remove,
+    // so a 0.606x triangle load only buys 1.5562ms -> 1.2781ms = 0.821x frame
+    // time. The original `< 0.80f` here did not follow from this model's own
+    // arithmetic and could never pass, however good the simplifier was -- which
+    // is part of why this file sat unregistered. Assert the win the model can
+    // actually express; the triangle-load bound above is the meaningful check.
+    EXPECT_LT(autoLODFrameMs, baselineFrameMs * 0.85f);
 }
 
 TEST(AutoLOD_Perf_VRAMImprovesAcrossRepresentativeScenes)

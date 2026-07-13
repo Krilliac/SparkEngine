@@ -60,7 +60,7 @@ namespace
 
 } // namespace
 
-TEST("AtomicSharedPtr_LoadStore", "[threading]")
+TEST(AtomicSharedPtr_LoadStore)
 {
     TestResource::instanceCount = 0;
 
@@ -74,7 +74,7 @@ TEST("AtomicSharedPtr_LoadStore", "[threading]")
     ASSERT_EQ(TestResource::instanceCount.load(), 1);
 }
 
-TEST("AtomicSharedPtr_Exchange", "[threading]")
+TEST(AtomicSharedPtr_Exchange)
 {
     TestResource::instanceCount = 0;
 
@@ -89,7 +89,7 @@ TEST("AtomicSharedPtr_Exchange", "[threading]")
     ASSERT_EQ(TestResource::instanceCount.load(), 1);
 }
 
-TEST("AtomicSharedPtr_ConcurrentAccess", "[threading]")
+TEST(AtomicSharedPtr_ConcurrentAccess)
 {
     TestResource::instanceCount = 0;
 

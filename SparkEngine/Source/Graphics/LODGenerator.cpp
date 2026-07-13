@@ -240,6 +240,24 @@ namespace Spark::Graphics
             }
         }
 
+        // Vertex -> incident triangles. A collapse can only ever change the
+        // triangles that touch the vertex being removed, so this is what keeps
+        // the loop below near-linear. Rescanning ALL triangles per collapse made
+        // Simplify O(collapses * triCount): the 540k-vert / 180k-tri case needed
+        // ~34k collapses x 180k triangles (~6 billion iterations) and never
+        // finished in practice.
+        std::vector<std::vector<uint32_t>> vertexTris(vertexCount);
+        for (uint32_t t = 0; t < triCount; ++t)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                uint32_t v = tris[t * 3 + i];
+                if (v < vertexCount)
+                    vertexTris[v].push_back(t);
+            }
+        }
+        std::vector<bool> triRemoved(triCount, false);
+
         // Collapse edges until target is reached
         uint32_t currentTriCount = triCount;
         float maxObservedError = 0.0f;
@@ -265,10 +283,13 @@ namespace Spark::Graphics
 
             maxObservedError = std::max(maxObservedError, static_cast<float>(top.cost));
 
-            // Update all triangles referencing v1 to reference v0
+            // Rewrite only the triangles incident to v1 (the vertex going away).
             uint32_t removedTris = 0;
-            for (uint32_t t = 0; t < triCount; ++t)
+            for (uint32_t t : vertexTris[top.v1])
             {
+                if (triRemoved[t])
+                    continue;
+
                 uint32_t* tri = &tris[t * 3];
                 bool hasV0 = false, hasV1 = false;
 
@@ -283,13 +304,23 @@ namespace Spark::Graphics
                     }
                 }
 
-                // Degenerate triangle (has v0 twice now)
                 if (hasV0 && hasV1)
                 {
+                    // Degenerate: the edge's two endpoints are now the same vertex.
+                    triRemoved[t] = true;
                     tri[0] = tri[1] = tri[2] = 0;
                     removedTris++;
                 }
+                else if (hasV1)
+                {
+                    // Survives, but is now owned by v0 as well.
+                    vertexTris[top.v0].push_back(t);
+                }
             }
+
+            // v1 is gone; release its adjacency (its live triangles moved to v0).
+            vertexTris[top.v1].clear();
+            vertexTris[top.v1].shrink_to_fit();
 
             currentTriCount -= removedTris;
         }

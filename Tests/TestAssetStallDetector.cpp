@@ -158,36 +158,34 @@ namespace TestAssetStall
 // Tests
 // ============================================================================
 
-SPARK_TEST(AssetStall_InitialState)
+TEST(AssetStall_InitialState)
 {
     TestAssetStall::AssetStallDetector detector;
     detector.Initialize();
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.activeLoads == 0);
-    SPARK_TEST_ASSERT(status.completedLoads == 0);
-    SPARK_TEST_ASSERT(status.stalledLoads == 0);
-    return true;
+    EXPECT_TRUE(status.activeLoads == 0);
+    EXPECT_TRUE(status.completedLoads == 0);
+    EXPECT_TRUE(status.stalledLoads == 0);
 }
 
-SPARK_TEST(AssetStall_TrackLoadLifecycle)
+TEST(AssetStall_TrackLoadLifecycle)
 {
     TestAssetStall::AssetStallDetector detector;
     detector.Initialize();
 
     auto id = detector.OnLoadBegin("player.mesh", TestAssetStall::AssetLoadType::Mesh);
-    SPARK_TEST_ASSERT(id > 0);
-    SPARK_TEST_ASSERT(detector.GetStatus().activeLoads == 1);
+    EXPECT_TRUE(id > 0);
+    EXPECT_TRUE(detector.GetStatus().activeLoads == 1);
 
     detector.Update(1.0f); // advance 1 second
     detector.OnLoadComplete(id);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.activeLoads == 0);
-    SPARK_TEST_ASSERT(status.completedLoads == 1);
-    return true;
+    EXPECT_TRUE(status.activeLoads == 0);
+    EXPECT_TRUE(status.completedLoads == 1);
 }
 
-SPARK_TEST(AssetStall_DetectsStall)
+TEST(AssetStall_DetectsStall)
 {
     TestAssetStall::AssetStallDetector detector;
     TestAssetStall::AssetStallConfig cfg;
@@ -202,12 +200,11 @@ SPARK_TEST(AssetStall_DetectsStall)
         detector.Update(0.1f); // 3 seconds total
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.stalledLoads == 1);
-    SPARK_TEST_ASSERT(status.activeLoads == 1);
-    return true;
+    EXPECT_TRUE(status.stalledLoads == 1);
+    EXPECT_TRUE(status.activeLoads == 1);
 }
 
-SPARK_TEST(AssetStall_FailedLoadTracked)
+TEST(AssetStall_FailedLoadTracked)
 {
     TestAssetStall::AssetStallDetector detector;
     detector.Initialize();
@@ -217,13 +214,12 @@ SPARK_TEST(AssetStall_FailedLoadTracked)
     detector.OnLoadFailed(id);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.failedLoads == 1);
-    SPARK_TEST_ASSERT(status.completedLoads == 0);
-    SPARK_TEST_ASSERT(status.activeLoads == 0);
-    return true;
+    EXPECT_TRUE(status.failedLoads == 1);
+    EXPECT_TRUE(status.completedLoads == 0);
+    EXPECT_TRUE(status.activeLoads == 0);
 }
 
-SPARK_TEST(AssetStall_AverageAndWorstTime)
+TEST(AssetStall_AverageAndWorstTime)
 {
     TestAssetStall::AssetStallDetector detector;
     detector.Initialize();
@@ -239,12 +235,11 @@ SPARK_TEST(AssetStall_AverageAndWorstTime)
     detector.OnLoadComplete(id2);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.averageLoadTimeSec > 1.9f && status.averageLoadTimeSec < 2.1f);
-    SPARK_TEST_ASSERT(status.worstLoadTimeSec > 2.9f);
-    return true;
+    EXPECT_TRUE(status.averageLoadTimeSec > 1.9f && status.averageLoadTimeSec < 2.1f);
+    EXPECT_TRUE(status.worstLoadTimeSec > 2.9f);
 }
 
-SPARK_TEST(AssetStall_QueueOverflow)
+TEST(AssetStall_QueueOverflow)
 {
     TestAssetStall::AssetStallDetector detector;
     TestAssetStall::AssetStallConfig cfg;
@@ -257,12 +252,11 @@ SPARK_TEST(AssetStall_QueueOverflow)
     detector.OnLoadBegin("c.tex", TestAssetStall::AssetLoadType::Texture); // overflow
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.queueOverflowCount >= 1);
-    SPARK_TEST_ASSERT(status.activeLoads == 3);
-    return true;
+    EXPECT_TRUE(status.queueOverflowCount >= 1);
+    EXPECT_TRUE(status.activeLoads == 3);
 }
 
-SPARK_TEST(AssetStall_DisabledIgnoresLoads)
+TEST(AssetStall_DisabledIgnoresLoads)
 {
     TestAssetStall::AssetStallDetector detector;
     TestAssetStall::AssetStallConfig cfg;
@@ -271,12 +265,11 @@ SPARK_TEST(AssetStall_DisabledIgnoresLoads)
     detector.Initialize();
 
     auto id = detector.OnLoadBegin("x.mesh", TestAssetStall::AssetLoadType::Mesh);
-    SPARK_TEST_ASSERT(id == 0);
-    SPARK_TEST_ASSERT(detector.GetStatus().activeLoads == 0);
-    return true;
+    EXPECT_TRUE(id == 0);
+    EXPECT_TRUE(detector.GetStatus().activeLoads == 0);
 }
 
-SPARK_TEST(AssetStall_MultipleLoadsTracked)
+TEST(AssetStall_MultipleLoadsTracked)
 {
     TestAssetStall::AssetStallDetector detector;
     detector.Initialize();
@@ -285,21 +278,20 @@ SPARK_TEST(AssetStall_MultipleLoadsTracked)
     auto id2 = detector.OnLoadBegin("b.tex", TestAssetStall::AssetLoadType::Texture);
     auto id3 = detector.OnLoadBegin("c.wav", TestAssetStall::AssetLoadType::Audio);
 
-    SPARK_TEST_ASSERT(detector.GetStatus().activeLoads == 3);
+    EXPECT_TRUE(detector.GetStatus().activeLoads == 3);
 
     detector.Update(0.5f);
     detector.OnLoadComplete(id1);
     detector.OnLoadComplete(id2);
 
-    SPARK_TEST_ASSERT(detector.GetStatus().activeLoads == 1);
-    SPARK_TEST_ASSERT(detector.GetStatus().completedLoads == 2);
+    EXPECT_TRUE(detector.GetStatus().activeLoads == 1);
+    EXPECT_TRUE(detector.GetStatus().completedLoads == 2);
 
     detector.OnLoadComplete(id3);
-    SPARK_TEST_ASSERT(detector.GetStatus().activeLoads == 0);
-    return true;
+    EXPECT_TRUE(detector.GetStatus().activeLoads == 0);
 }
 
-SPARK_TEST(AssetStall_WarningSetOnSlowLoad)
+TEST(AssetStall_WarningSetOnSlowLoad)
 {
     TestAssetStall::AssetStallDetector detector;
     TestAssetStall::AssetStallConfig cfg;
@@ -315,7 +307,6 @@ SPARK_TEST(AssetStall_WarningSetOnSlowLoad)
 
     // The load is still active (warning was issued internally)
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.activeLoads == 1);
-    SPARK_TEST_ASSERT(status.stalledLoads == 0); // Not yet stalled
-    return true;
+    EXPECT_TRUE(status.activeLoads == 1);
+    EXPECT_TRUE(status.stalledLoads == 0); // Not yet stalled
 }

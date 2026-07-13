@@ -301,22 +301,28 @@ namespace Spark::Text
                     cursorY += lineHeight * scale;
                 }
 
-                float qx0 = cursorX + glyph.bearingX * scale;
-                float qy0 = cursorY - glyph.bearingY * scale;
-                float qx1 = qx0 + glyph.width * scale;
-                float qy1 = qy0 + glyph.height * scale;
+                // Whitespace (space is stored as a zero-size glyph: it advances
+                // the cursor but has nothing to rasterize) emits no quad — a
+                // zero-area quad draws nothing and would just cost a vertex.
+                if (glyph.width > 0.0f && glyph.height > 0.0f)
+                {
+                    float qx0 = cursorX + glyph.bearingX * scale;
+                    float qy0 = cursorY - glyph.bearingY * scale;
+                    float qx1 = qx0 + glyph.width * scale;
+                    float qy1 = qy0 + glyph.height * scale;
 
-                TextQuad quad;
-                quad.x0 = qx0;
-                quad.y0 = qy0;
-                quad.x1 = qx1;
-                quad.y1 = qy1;
-                quad.u0 = glyph.u0;
-                quad.v0 = glyph.v0;
-                quad.u1 = glyph.u1;
-                quad.v1 = glyph.v1;
-                quad.color = style.color;
-                quads.push_back(quad);
+                    TextQuad quad;
+                    quad.x0 = qx0;
+                    quad.y0 = qy0;
+                    quad.x1 = qx1;
+                    quad.y1 = qy1;
+                    quad.u0 = glyph.u0;
+                    quad.v0 = glyph.v0;
+                    quad.u1 = glyph.u1;
+                    quad.v1 = glyph.v1;
+                    quad.color = style.color;
+                    quads.push_back(quad);
+                }
 
                 cursorX += (glyph.advanceX + style.letterSpacing) * scale;
 

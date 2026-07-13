@@ -42,37 +42,37 @@ namespace
 
 } // namespace
 
-TEST("GPUStallProfiler_CPUBound", "[profiler]")
+TEST(GPUStallProfiler_CPUBound)
 {
     auto result = ClassifyFrame(16.0, 4.0);
     ASSERT_TRUE(result == TestBottleneck::CPUBound);
 }
 
-TEST("GPUStallProfiler_GPUBound", "[profiler]")
+TEST(GPUStallProfiler_GPUBound)
 {
     auto result = ClassifyFrame(4.0, 16.0);
     ASSERT_TRUE(result == TestBottleneck::GPUBound);
 }
 
-TEST("GPUStallProfiler_Balanced", "[profiler]")
+TEST(GPUStallProfiler_Balanced)
 {
     auto result = ClassifyFrame(15.0, 14.0);
     ASSERT_TRUE(result == TestBottleneck::Balanced);
 }
 
-TEST("GPUStallProfiler_GPUBound_Asymmetric", "[profiler]")
+TEST(GPUStallProfiler_GPUBound_Asymmetric)
 {
     auto result = ClassifyFrame(3.0, 10.0);
     ASSERT_TRUE(result == TestBottleneck::GPUBound);
 }
 
-TEST("GPUStallProfiler_Unknown", "[profiler]")
+TEST(GPUStallProfiler_Unknown)
 {
     auto result = ClassifyFrame(0.0, 0.0);
     ASSERT_TRUE(result == TestBottleneck::Unknown);
 }
 
-TEST("GPUStallProfiler_BottleneckDistribution", "[profiler]")
+TEST(GPUStallProfiler_BottleneckDistribution)
 {
     std::array<TestBottleneck, 10> frames = {
         TestBottleneck::CPUBound, TestBottleneck::CPUBound, TestBottleneck::GPUBound, TestBottleneck::Balanced,

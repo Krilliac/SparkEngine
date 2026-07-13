@@ -79,15 +79,20 @@ namespace TestHitch
             if (windowSize > MAX_HISTORY)
                 windowSize = MAX_HISTORY;
 
+            // Baseline is snapshotted BEFORE this frame enters the window --
+            // mirrors HitchDetector::Update (a spike must not dilute the average
+            // it is compared against, or it under-classifies itself).
+            const bool haveBaseline = (m_framesFilled >= 10);
+            const float avg = haveBaseline ? ComputeRollingAverage() : 0.0f;
+
             m_frameTimes[m_frameIndex % windowSize] = frameTimeMs;
             m_frameIndex++;
             if (m_framesFilled < windowSize)
                 m_framesFilled++;
 
-            if (m_framesFilled < 10)
+            if (!haveBaseline)
                 return;
 
-            float avg = ComputeRollingAverage();
             if (avg < m_config.minFrameTimeMs)
                 return;
 
@@ -197,19 +202,18 @@ namespace TestHitch
 // Tests
 // ============================================================================
 
-SPARK_TEST(HitchDetector_InitialState)
+TEST(HitchDetector_InitialState)
 {
     TestHitch::HitchDetector detector;
     detector.Initialize();
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.totalHitches == 0);
-    SPARK_TEST_ASSERT(status.framesAnalyzed == 0);
-    SPARK_TEST_ASSERT(status.worstHitchMs == 0.0f);
-    SPARK_TEST_ASSERT(status.lastHitchSeverity == TestHitch::HitchSeverity::None);
-    return true;
+    EXPECT_TRUE(status.totalHitches == 0);
+    EXPECT_TRUE(status.framesAnalyzed == 0);
+    EXPECT_TRUE(status.worstHitchMs == 0.0f);
+    EXPECT_TRUE(status.lastHitchSeverity == TestHitch::HitchSeverity::None);
 }
 
-SPARK_TEST(HitchDetector_SteadyFramesNoHitches)
+TEST(HitchDetector_SteadyFramesNoHitches)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -223,12 +227,11 @@ SPARK_TEST(HitchDetector_SteadyFramesNoHitches)
         detector.Update(0.0166f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.totalHitches == 0);
-    SPARK_TEST_ASSERT(status.framesAnalyzed == 60);
-    return true;
+    EXPECT_TRUE(status.totalHitches == 0);
+    EXPECT_TRUE(status.framesAnalyzed == 60);
 }
 
-SPARK_TEST(HitchDetector_DetectsMildHitch)
+TEST(HitchDetector_DetectsMildHitch)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -245,12 +248,11 @@ SPARK_TEST(HitchDetector_DetectsMildHitch)
     detector.Update(0.0166f * 2.5f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.mildCount >= 1);
-    SPARK_TEST_ASSERT(status.lastHitchSeverity == TestHitch::HitchSeverity::Mild);
-    return true;
+    EXPECT_TRUE(status.mildCount >= 1);
+    EXPECT_TRUE(status.lastHitchSeverity == TestHitch::HitchSeverity::Mild);
 }
 
-SPARK_TEST(HitchDetector_DetectsModerateHitch)
+TEST(HitchDetector_DetectsModerateHitch)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -266,12 +268,11 @@ SPARK_TEST(HitchDetector_DetectsModerateHitch)
     detector.Update(0.0166f * 5.0f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.moderateCount >= 1);
-    SPARK_TEST_ASSERT(status.lastHitchSeverity == TestHitch::HitchSeverity::Moderate);
-    return true;
+    EXPECT_TRUE(status.moderateCount >= 1);
+    EXPECT_TRUE(status.lastHitchSeverity == TestHitch::HitchSeverity::Moderate);
 }
 
-SPARK_TEST(HitchDetector_DetectsSevereHitch)
+TEST(HitchDetector_DetectsSevereHitch)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -287,12 +288,11 @@ SPARK_TEST(HitchDetector_DetectsSevereHitch)
     detector.Update(0.0166f * 10.0f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.severeCount >= 1);
-    SPARK_TEST_ASSERT(status.lastHitchSeverity == TestHitch::HitchSeverity::Severe);
-    return true;
+    EXPECT_TRUE(status.severeCount >= 1);
+    EXPECT_TRUE(status.lastHitchSeverity == TestHitch::HitchSeverity::Severe);
 }
 
-SPARK_TEST(HitchDetector_TracksWorstHitch)
+TEST(HitchDetector_TracksWorstHitch)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -311,11 +311,10 @@ SPARK_TEST(HitchDetector_TracksWorstHitch)
     detector.Update(0.0166f * 6.0f); // ~99.6ms
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.worstHitchMs > 90.0f);
-    return true;
+    EXPECT_TRUE(status.worstHitchMs > 90.0f);
 }
 
-SPARK_TEST(HitchDetector_ResetClearsStats)
+TEST(HitchDetector_ResetClearsStats)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -330,13 +329,12 @@ SPARK_TEST(HitchDetector_ResetClearsStats)
 
     detector.Reset();
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.totalHitches == 0);
-    SPARK_TEST_ASSERT(status.worstHitchMs == 0.0f);
-    SPARK_TEST_ASSERT(status.framesAnalyzed == 0);
-    return true;
+    EXPECT_TRUE(status.totalHitches == 0);
+    EXPECT_TRUE(status.worstHitchMs == 0.0f);
+    EXPECT_TRUE(status.framesAnalyzed == 0);
 }
 
-SPARK_TEST(HitchDetector_DisabledIgnoresFrames)
+TEST(HitchDetector_DisabledIgnoresFrames)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -348,11 +346,10 @@ SPARK_TEST(HitchDetector_DisabledIgnoresFrames)
         detector.Update(0.0166f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.framesAnalyzed == 0);
-    return true;
+    EXPECT_TRUE(status.framesAnalyzed == 0);
 }
 
-SPARK_TEST(HitchDetector_MinFrameTimeFilter)
+TEST(HitchDetector_MinFrameTimeFilter)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -369,11 +366,10 @@ SPARK_TEST(HitchDetector_MinFrameTimeFilter)
     detector.Update(0.00166f * 5.0f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.totalHitches == 0);
-    return true;
+    EXPECT_TRUE(status.totalHitches == 0);
 }
 
-SPARK_TEST(HitchDetector_StatusSnapshot)
+TEST(HitchDetector_StatusSnapshot)
 {
     TestHitch::HitchDetector detector;
     TestHitch::HitchDetectorConfig cfg;
@@ -387,8 +383,7 @@ SPARK_TEST(HitchDetector_StatusSnapshot)
 
     auto status = detector.GetStatus();
     // Average should be close to 16.6ms
-    SPARK_TEST_ASSERT(status.currentAvgFrameTimeMs > 15.0f);
-    SPARK_TEST_ASSERT(status.currentAvgFrameTimeMs < 18.0f);
-    SPARK_TEST_ASSERT(status.framesAnalyzed == 30);
-    return true;
+    EXPECT_TRUE(status.currentAvgFrameTimeMs > 15.0f);
+    EXPECT_TRUE(status.currentAvgFrameTimeMs < 18.0f);
+    EXPECT_TRUE(status.framesAnalyzed == 30);
 }

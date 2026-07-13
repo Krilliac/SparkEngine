@@ -98,7 +98,7 @@ namespace
 // Zombie pool tests
 // ============================================================================
 
-TEST("ZombiePool_EvictAndResurrect", "[texture]")
+TEST(ZombiePool_EvictAndResurrect)
 {
     TestZombiePool pool;
     pool.Evict("brick.png", 42, 100);
@@ -112,7 +112,7 @@ TEST("ZombiePool_EvictAndResurrect", "[texture]")
     ASSERT_EQ(pool.GetResurrections(), 1u);
 }
 
-TEST("ZombiePool_ExpiredNotResurrected", "[texture]")
+TEST(ZombiePool_ExpiredNotResurrected)
 {
     TestZombiePool pool;
     pool.Evict("old.png", 1, 100);
@@ -121,7 +121,7 @@ TEST("ZombiePool_ExpiredNotResurrected", "[texture]")
     ASSERT_EQ(result, -1);
 }
 
-TEST("ZombiePool_PurgeExpired", "[texture]")
+TEST(ZombiePool_PurgeExpired)
 {
     TestZombiePool pool;
     pool.Evict("old.png", 1, 100);
@@ -131,7 +131,7 @@ TEST("ZombiePool_PurgeExpired", "[texture]")
     ASSERT_EQ(pool.GetCount(), 1u);
 }
 
-TEST("ZombiePool_MaxCapacity", "[texture]")
+TEST(ZombiePool_MaxCapacity)
 {
     TestZombiePool pool;
     for (uint32_t i = 0; i < TestZombiePool::MAX_ZOMBIES + 10; ++i)
@@ -143,7 +143,7 @@ TEST("ZombiePool_MaxCapacity", "[texture]")
 // Thrash detection tests
 // ============================================================================
 
-TEST("ThrashDetection_PromotesAfterThreshold", "[texture]")
+TEST(ThrashDetection_PromotesAfterThreshold)
 {
     TestThrashTracker tracker;
 
@@ -158,7 +158,7 @@ TEST("ThrashDetection_PromotesAfterThreshold", "[texture]")
     ASSERT_TRUE(tracker.promoted);
 }
 
-TEST("ThrashDetection_ResetsAfterWindow", "[texture]")
+TEST(ThrashDetection_ResetsAfterWindow)
 {
     TestThrashTracker tracker;
 

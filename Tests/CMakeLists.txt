@@ -625,6 +625,38 @@ if(WIN32)
 endif()
 
 # =============================================================================
+# Previously-authored but unregistered tests (found by the 2026-07-13
+# test-health sweep): substantial, non-stub test files that existed in Tests/
+# but were never added to this target, so they silently never ran in CI.
+# Several used a nonexistent SPARK_TEST/SPARK_TEST_ASSERT macro convention or
+# a Catch2-style two-arg TEST("name","[tag]") signature that don't match this
+# project's TestFramework.h -- fixed to TEST(name)/EXPECT_TRUE before adding.
+#
+# TestAutoLODPerformance.cpp is included again now that LODGenerator::Simplify
+# no longer rescans every triangle on each edge collapse (it was accidentally
+# O(collapses * triCount) and never finished on the 540k-vert scene this test
+# builds -- which is almost certainly why the file was left unregistered).
+# =============================================================================
+target_sources(SparkTests PRIVATE
+    TestAssetStallDetector.cpp
+    TestAtomicSharedPtr.cpp
+    TestAutoLODPerformance.cpp
+    TestCSGSystem.cpp
+    TestCompressionUtils.cpp
+    TestDescriptorCache.cpp
+    TestFontSystem.cpp
+    TestGPUResourceLeakDetector.cpp
+    TestGPUStallProfiler.cpp
+    TestHitchDetector.cpp
+    TestInputActionSystem.cpp
+    TestNetworkHealthMonitor.cpp
+    TestRHICapabilityParity.cpp
+    TestShaderDiskCache.cpp
+    TestSubsystemConsoleCommands.cpp
+    TestTextureZombiePool.cpp
+)
+
+# =============================================================================
 # Hardening regression tests (claude/harden-fleet) — shared TestMain runner
 # =============================================================================
 target_sources(SparkTests PRIVATE

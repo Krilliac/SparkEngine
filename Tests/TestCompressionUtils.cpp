@@ -44,7 +44,7 @@ namespace
 
 } // namespace
 
-TEST("CompressionUtils_ZstdRoundTrip", "[compression]")
+TEST(CompressionUtils_ZstdRoundTrip)
 {
     std::vector<uint8_t> original(4096);
     for (size_t i = 0; i < original.size(); ++i)
@@ -58,7 +58,7 @@ TEST("CompressionUtils_ZstdRoundTrip", "[compression]")
     ASSERT_TRUE(std::memcmp(decompressed.data(), original.data(), original.size()) == 0);
 }
 
-TEST("CompressionUtils_EmptyData", "[compression]")
+TEST(CompressionUtils_EmptyData)
 {
     std::vector<uint8_t> empty;
     auto compressed = TestCompress(empty);
@@ -68,7 +68,7 @@ TEST("CompressionUtils_EmptyData", "[compression]")
     ASSERT_EQ(decompressed.size(), 0u);
 }
 
-TEST("CompressionUtils_LargeData", "[compression]")
+TEST(CompressionUtils_LargeData)
 {
     std::vector<uint8_t> large(1024 * 1024);
     for (size_t i = 0; i < large.size(); ++i)
@@ -82,7 +82,7 @@ TEST("CompressionUtils_LargeData", "[compression]")
     ASSERT_TRUE(std::memcmp(decompressed.data(), large.data(), large.size()) == 0);
 }
 
-TEST("PakCompression_ZstdEnumExists", "[compression]")
+TEST(PakCompression_ZstdEnumExists)
 {
     ASSERT_TRUE(static_cast<uint8_t>(TestCompression::Zstd) == 2);
     ASSERT_TRUE(static_cast<uint8_t>(TestCompression::Deflate) == 1);

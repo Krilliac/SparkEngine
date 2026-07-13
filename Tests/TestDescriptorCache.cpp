@@ -68,7 +68,7 @@ namespace
 
 } // namespace
 
-TEST("DescriptorCache_LayoutDeduplication", "[vulkan]")
+TEST(DescriptorCache_LayoutDeduplication)
 {
     TestLayoutCache cache;
 
@@ -84,7 +84,7 @@ TEST("DescriptorCache_LayoutDeduplication", "[vulkan]")
     ASSERT_EQ(cache.GetCount(), 2u);
 }
 
-TEST("DescriptorCache_EvictsLeastUsed", "[vulkan]")
+TEST(DescriptorCache_EvictsLeastUsed)
 {
     TestLayoutCache cache;
 
@@ -101,7 +101,7 @@ TEST("DescriptorCache_EvictsLeastUsed", "[vulkan]")
     ASSERT_EQ(cache.GetCount(), TestLayoutCache::MAX_LAYOUTS);
 }
 
-TEST("DescriptorCache_BatchedWrites", "[vulkan]")
+TEST(DescriptorCache_BatchedWrites)
 {
     std::vector<int> pendingWrites;
     for (int i = 0; i < 100; ++i)
@@ -116,7 +116,7 @@ TEST("DescriptorCache_BatchedWrites", "[vulkan]")
     ASSERT_EQ(pendingWrites.size(), 0u);
 }
 
-TEST("VMA_MemoryUsageEnums", "[vulkan]")
+TEST(VMA_MemoryUsageEnums)
 {
     enum class TestMemUsage
     {

@@ -259,18 +259,17 @@ namespace TestNetHealth
 // Tests
 // ============================================================================
 
-SPARK_TEST(NetHealth_InitialState)
+TEST(NetHealth_InitialState)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     monitor.Initialize();
     auto status = monitor.GetStatus();
-    SPARK_TEST_ASSERT(status.state == TestNetHealth::NetworkHealthState::Disconnected);
-    SPARK_TEST_ASSERT(status.packetsSent == 0);
-    SPARK_TEST_ASSERT(status.avgRttMs == 0.0f);
-    return true;
+    EXPECT_TRUE(status.state == TestNetHealth::NetworkHealthState::Disconnected);
+    EXPECT_TRUE(status.packetsSent == 0);
+    EXPECT_TRUE(status.avgRttMs == 0.0f);
 }
 
-SPARK_TEST(NetHealth_ExcellentOnLowRTT)
+TEST(NetHealth_ExcellentOnLowRTT)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     monitor.Initialize();
@@ -283,11 +282,10 @@ SPARK_TEST(NetHealth_ExcellentOnLowRTT)
         monitor.RecordRTT(30.0f);
 
     monitor.Update(0.016f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Excellent);
-    return true;
+    EXPECT_TRUE(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Excellent);
 }
 
-SPARK_TEST(NetHealth_DegradedOnHighRTT)
+TEST(NetHealth_DegradedOnHighRTT)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     monitor.Initialize();
@@ -297,18 +295,17 @@ SPARK_TEST(NetHealth_DegradedOnHighRTT)
         monitor.RecordRTT(150.0f); // Between Good and Degraded
 
     monitor.Update(0.016f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Good);
+    EXPECT_TRUE(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Good);
 
     // Now push into degraded range
     for (int i = 0; i < 50; i++)
         monitor.RecordRTT(250.0f);
 
     monitor.Update(0.016f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Degraded);
-    return true;
+    EXPECT_TRUE(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Degraded);
 }
 
-SPARK_TEST(NetHealth_DisconnectOnTimeout)
+TEST(NetHealth_DisconnectOnTimeout)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     TestNetHealth::NetworkHealthConfig cfg;
@@ -318,19 +315,18 @@ SPARK_TEST(NetHealth_DisconnectOnTimeout)
     monitor.RecordPacketReceived(); // Start connected
 
     monitor.Update(0.016f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().state != TestNetHealth::NetworkHealthState::Disconnected);
+    EXPECT_TRUE(monitor.GetStatus().state != TestNetHealth::NetworkHealthState::Disconnected);
 
     // Advance past timeout
     for (int i = 0; i < 150; i++)
         monitor.Update(0.016f); // ~2.4 seconds
 
     auto status = monitor.GetStatus();
-    SPARK_TEST_ASSERT(status.state == TestNetHealth::NetworkHealthState::Disconnected);
-    SPARK_TEST_ASSERT(status.disconnectCount >= 1);
-    return true;
+    EXPECT_TRUE(status.state == TestNetHealth::NetworkHealthState::Disconnected);
+    EXPECT_TRUE(status.disconnectCount >= 1);
 }
 
-SPARK_TEST(NetHealth_ReconnectAfterDisconnect)
+TEST(NetHealth_ReconnectAfterDisconnect)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     TestNetHealth::NetworkHealthConfig cfg;
@@ -342,19 +338,18 @@ SPARK_TEST(NetHealth_ReconnectAfterDisconnect)
     // Disconnect
     for (int i = 0; i < 70; i++)
         monitor.Update(0.016f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().disconnectCount >= 1);
+    EXPECT_TRUE(monitor.GetStatus().disconnectCount >= 1);
 
     // Reconnect
     monitor.RecordPacketReceived();
     monitor.Update(0.016f);
 
     auto status = monitor.GetStatus();
-    SPARK_TEST_ASSERT(status.reconnectCount >= 1);
-    SPARK_TEST_ASSERT(status.state != TestNetHealth::NetworkHealthState::Disconnected);
-    return true;
+    EXPECT_TRUE(status.reconnectCount >= 1);
+    EXPECT_TRUE(status.state != TestNetHealth::NetworkHealthState::Disconnected);
 }
 
-SPARK_TEST(NetHealth_PacketLossDegratesState)
+TEST(NetHealth_PacketLossDegratesState)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     TestNetHealth::NetworkHealthConfig cfg;
@@ -381,11 +376,10 @@ SPARK_TEST(NetHealth_PacketLossDegratesState)
 
     auto status = monitor.GetStatus();
     // Excellent RTT + warning loss => degraded to Good
-    SPARK_TEST_ASSERT(status.state == TestNetHealth::NetworkHealthState::Good);
-    return true;
+    EXPECT_TRUE(status.state == TestNetHealth::NetworkHealthState::Good);
 }
 
-SPARK_TEST(NetHealth_CriticalLossForcesPoor)
+TEST(NetHealth_CriticalLossForcesPoor)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     TestNetHealth::NetworkHealthConfig cfg;
@@ -407,11 +401,10 @@ SPARK_TEST(NetHealth_CriticalLossForcesPoor)
     }
 
     monitor.Update(1.1f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Poor);
-    return true;
+    EXPECT_TRUE(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Poor);
 }
 
-SPARK_TEST(NetHealth_RTTPeakTracked)
+TEST(NetHealth_RTTPeakTracked)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     monitor.Initialize();
@@ -421,11 +414,10 @@ SPARK_TEST(NetHealth_RTTPeakTracked)
     monitor.RecordRTT(50.0f);
 
     auto status = monitor.GetStatus();
-    SPARK_TEST_ASSERT(status.peakRttMs >= 200.0f);
-    return true;
+    EXPECT_TRUE(status.peakRttMs >= 200.0f);
 }
 
-SPARK_TEST(NetHealth_JitterComputed)
+TEST(NetHealth_JitterComputed)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     monitor.Initialize();
@@ -437,11 +429,10 @@ SPARK_TEST(NetHealth_JitterComputed)
     monitor.RecordRTT(80.0f);
 
     auto status = monitor.GetStatus();
-    SPARK_TEST_ASSERT(status.jitterMs > 20.0f);
-    return true;
+    EXPECT_TRUE(status.jitterMs > 20.0f);
 }
 
-SPARK_TEST(NetHealth_ManualDisconnectReconnect)
+TEST(NetHealth_ManualDisconnectReconnect)
 {
     TestNetHealth::NetworkHealthMonitor monitor;
     monitor.Initialize();
@@ -449,14 +440,13 @@ SPARK_TEST(NetHealth_ManualDisconnectReconnect)
 
     monitor.OnDisconnect();
     monitor.Update(0.016f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Disconnected);
-    SPARK_TEST_ASSERT(monitor.GetStatus().disconnectCount == 1);
+    EXPECT_TRUE(monitor.GetStatus().state == TestNetHealth::NetworkHealthState::Disconnected);
+    EXPECT_TRUE(monitor.GetStatus().disconnectCount == 1);
 
     monitor.OnReconnect();
     for (int i = 0; i < 10; i++)
         monitor.RecordRTT(30.0f);
     monitor.Update(0.016f);
-    SPARK_TEST_ASSERT(monitor.GetStatus().state != TestNetHealth::NetworkHealthState::Disconnected);
-    SPARK_TEST_ASSERT(monitor.GetStatus().reconnectCount == 1);
-    return true;
+    EXPECT_TRUE(monitor.GetStatus().state != TestNetHealth::NetworkHealthState::Disconnected);
+    EXPECT_TRUE(monitor.GetStatus().reconnectCount == 1);
 }

@@ -60,7 +60,7 @@ namespace
 // Disk cache tests
 // ============================================================================
 
-TEST("ShaderDiskCache_StoreAndLookup", "[shader]")
+TEST(ShaderDiskCache_StoreAndLookup)
 {
     TestShaderDiskCache cache;
 
@@ -78,7 +78,7 @@ TEST("ShaderDiskCache_StoreAndLookup", "[shader]")
     ASSERT_EQ(retrieved.bytecode[0], 0x01);
 }
 
-TEST("ShaderDiskCache_MissReturnsEmpty", "[shader]")
+TEST(ShaderDiskCache_MissReturnsEmpty)
 {
     TestShaderDiskCache cache;
     auto result = cache.Lookup(12345);
@@ -86,7 +86,7 @@ TEST("ShaderDiskCache_MissReturnsEmpty", "[shader]")
     ASSERT_TRUE(result.bytecode.empty());
 }
 
-TEST("ShaderDiskCache_Clear", "[shader]")
+TEST(ShaderDiskCache_Clear)
 {
     TestShaderDiskCache cache;
     TestShaderBlob blob;
@@ -105,7 +105,7 @@ TEST("ShaderDiskCache_Clear", "[shader]")
 // Async compilation tests
 // ============================================================================
 
-TEST("AsyncShaderCompile_FutureResolves", "[shader]")
+TEST(AsyncShaderCompile_FutureResolves)
 {
     auto future = std::async(std::launch::async,
                              []()
@@ -121,7 +121,7 @@ TEST("AsyncShaderCompile_FutureResolves", "[shader]")
     ASSERT_EQ(result.bytecode.size(), 4u);
 }
 
-TEST("AsyncShaderCompile_MultipleVariants", "[shader]")
+TEST(AsyncShaderCompile_MultipleVariants)
 {
     std::vector<std::future<TestShaderBlob>> futures;
 
@@ -146,7 +146,7 @@ TEST("AsyncShaderCompile_MultipleVariants", "[shader]")
     }
 }
 
-TEST("ShaderCacheStats_HitRate", "[shader]")
+TEST(ShaderCacheStats_HitRate)
 {
     struct CacheStats
     {

@@ -186,33 +186,31 @@ namespace TestGPULeak
 // Tests
 // ============================================================================
 
-SPARK_TEST(GPULeak_InitialState)
+TEST(GPULeak_InitialState)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     detector.Initialize();
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.totalAllocations == 0);
-    SPARK_TEST_ASSERT(status.totalFrees == 0);
-    SPARK_TEST_ASSERT(status.estimatedMemoryMB == 0.0f);
-    return true;
+    EXPECT_TRUE(status.totalAllocations == 0);
+    EXPECT_TRUE(status.totalFrees == 0);
+    EXPECT_TRUE(status.estimatedMemoryMB == 0.0f);
 }
 
-SPARK_TEST(GPULeak_TrackCreateDestroy)
+TEST(GPULeak_TrackCreateDestroy)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     detector.Initialize();
 
     detector.OnResourceCreated(TestGPULeak::GPUResourceType::Texture, 1, 1024 * 1024);
-    SPARK_TEST_ASSERT(detector.GetTrackedResourceCount() == 1);
-    SPARK_TEST_ASSERT(detector.GetStatus().totalAllocations == 1);
+    EXPECT_TRUE(detector.GetTrackedResourceCount() == 1);
+    EXPECT_TRUE(detector.GetStatus().totalAllocations == 1);
 
     detector.OnResourceDestroyed(TestGPULeak::GPUResourceType::Texture, 1);
-    SPARK_TEST_ASSERT(detector.GetTrackedResourceCount() == 0);
-    SPARK_TEST_ASSERT(detector.GetStatus().totalFrees == 1);
-    return true;
+    EXPECT_TRUE(detector.GetTrackedResourceCount() == 0);
+    EXPECT_TRUE(detector.GetStatus().totalFrees == 1);
 }
 
-SPARK_TEST(GPULeak_MemoryTracking)
+TEST(GPULeak_MemoryTracking)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     detector.Initialize();
@@ -222,15 +220,14 @@ SPARK_TEST(GPULeak_MemoryTracking)
     detector.OnResourceCreated(TestGPULeak::GPUResourceType::Buffer, 2, oneMB * 2);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.estimatedMemoryMB > 5.9f && status.estimatedMemoryMB < 6.1f);
+    EXPECT_TRUE(status.estimatedMemoryMB > 5.9f && status.estimatedMemoryMB < 6.1f);
 
     detector.OnResourceDestroyed(TestGPULeak::GPUResourceType::Texture, 1);
     status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.estimatedMemoryMB > 1.9f && status.estimatedMemoryMB < 2.1f);
-    return true;
+    EXPECT_TRUE(status.estimatedMemoryMB > 1.9f && status.estimatedMemoryMB < 2.1f);
 }
 
-SPARK_TEST(GPULeak_PeakMemory)
+TEST(GPULeak_PeakMemory)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     detector.Initialize();
@@ -241,12 +238,11 @@ SPARK_TEST(GPULeak_PeakMemory)
     detector.OnResourceCreated(TestGPULeak::GPUResourceType::Texture, 2, oneMB * 2);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.peakMemoryMB > 9.9f);
-    SPARK_TEST_ASSERT(status.estimatedMemoryMB < 2.1f);
-    return true;
+    EXPECT_TRUE(status.peakMemoryMB > 9.9f);
+    EXPECT_TRUE(status.estimatedMemoryMB < 2.1f);
 }
 
-SPARK_TEST(GPULeak_PerTypeCounters)
+TEST(GPULeak_PerTypeCounters)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     detector.Initialize();
@@ -259,15 +255,14 @@ SPARK_TEST(GPULeak_PerTypeCounters)
     auto status = detector.GetStatus();
     uint32_t texIdx = static_cast<uint32_t>(TestGPULeak::GPUResourceType::Texture);
     uint32_t bufIdx = static_cast<uint32_t>(TestGPULeak::GPUResourceType::Buffer);
-    SPARK_TEST_ASSERT(status.allocatedByType[texIdx] == 2);
-    SPARK_TEST_ASSERT(status.freedByType[texIdx] == 1);
-    SPARK_TEST_ASSERT(status.outstandingByType[texIdx] == 1);
-    SPARK_TEST_ASSERT(status.allocatedByType[bufIdx] == 1);
-    SPARK_TEST_ASSERT(status.outstandingByType[bufIdx] == 1);
-    return true;
+    EXPECT_TRUE(status.allocatedByType[texIdx] == 2);
+    EXPECT_TRUE(status.freedByType[texIdx] == 1);
+    EXPECT_TRUE(status.outstandingByType[texIdx] == 1);
+    EXPECT_TRUE(status.allocatedByType[bufIdx] == 1);
+    EXPECT_TRUE(status.outstandingByType[bufIdx] == 1);
 }
 
-SPARK_TEST(GPULeak_DetectsSuspectedLeaks)
+TEST(GPULeak_DetectsSuspectedLeaks)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     TestGPULeak::GPUResourceLeakConfig cfg;
@@ -283,11 +278,10 @@ SPARK_TEST(GPULeak_DetectsSuspectedLeaks)
         detector.Update(0.1f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.suspectedLeaks >= 1);
-    return true;
+    EXPECT_TRUE(status.suspectedLeaks >= 1);
 }
 
-SPARK_TEST(GPULeak_AccessResetsLeakTimer)
+TEST(GPULeak_AccessResetsLeakTimer)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     TestGPULeak::GPUResourceLeakConfig cfg;
@@ -308,11 +302,10 @@ SPARK_TEST(GPULeak_AccessResetsLeakTimer)
         detector.Update(0.1f);
 
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.suspectedLeaks == 0);
-    return true;
+    EXPECT_TRUE(status.suspectedLeaks == 0);
 }
 
-SPARK_TEST(GPULeak_DisabledIgnoresResources)
+TEST(GPULeak_DisabledIgnoresResources)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     TestGPULeak::GPUResourceLeakConfig cfg;
@@ -321,11 +314,10 @@ SPARK_TEST(GPULeak_DisabledIgnoresResources)
     detector.Initialize();
 
     detector.OnResourceCreated(TestGPULeak::GPUResourceType::Texture, 1, 100);
-    SPARK_TEST_ASSERT(detector.GetTrackedResourceCount() == 0);
-    return true;
+    EXPECT_TRUE(detector.GetTrackedResourceCount() == 0);
 }
 
-SPARK_TEST(GPULeak_DestroyNonexistentResourceSafe)
+TEST(GPULeak_DestroyNonexistentResourceSafe)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     detector.Initialize();
@@ -333,20 +325,18 @@ SPARK_TEST(GPULeak_DestroyNonexistentResourceSafe)
     // Destroying a resource that was never created should not crash
     detector.OnResourceDestroyed(TestGPULeak::GPUResourceType::Texture, 999);
     auto status = detector.GetStatus();
-    SPARK_TEST_ASSERT(status.totalFrees == 0);
-    return true;
+    EXPECT_TRUE(status.totalFrees == 0);
 }
 
-SPARK_TEST(GPULeak_ShutdownReportsRemaining)
+TEST(GPULeak_ShutdownReportsRemaining)
 {
     TestGPULeak::GPUResourceLeakDetector detector;
     detector.Initialize();
 
     detector.OnResourceCreated(TestGPULeak::GPUResourceType::Buffer, 1, 100);
     detector.OnResourceCreated(TestGPULeak::GPUResourceType::Texture, 2, 200);
-    SPARK_TEST_ASSERT(detector.GetTrackedResourceCount() == 2);
+    EXPECT_TRUE(detector.GetTrackedResourceCount() == 2);
 
     detector.Shutdown();
-    SPARK_TEST_ASSERT(detector.GetTrackedResourceCount() == 0);
-    return true;
+    EXPECT_TRUE(detector.GetTrackedResourceCount() == 0);
 }
