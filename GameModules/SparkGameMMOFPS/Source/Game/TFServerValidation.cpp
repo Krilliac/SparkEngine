@@ -49,6 +49,24 @@ namespace Terrafront
         // spirit as TFWeaponSystem::ValidateFire's 2-token burst cap.
         constexpr float kInputBucketCapacity = 4.0f;
         constexpr double kInputRejectLogThrottleSec = 5.0;
+
+        // KICK ESCALATION (W14, file header): per-counter weights feeding
+        // ViolationScore(). fireOriginRejects is weighted highest -- a claimed
+        // muzzle position that grossly diverges from the server's trusted pawn
+        // position has essentially no legitimate cause. movementSpikes (the
+        // >= kSpikeRatio subset of clamps) is next -- a sustained catch-up
+        // flood clamped hard enough to log as a spike. fireRateRejects and
+        // inputRateRejects are weighted lowest since their underlying gates
+        // (TFWeaponSystem::ValidateFire's burst-2 bucket, AllowInput's
+        // burst-4 bucket) are already the most jitter-tolerant of the four.
+        constexpr uint32_t kWeightMovementSpike = 3;
+        constexpr uint32_t kWeightFireOriginReject = 4;
+        constexpr uint32_t kWeightFireRateReject = 2;
+        constexpr uint32_t kWeightInputRateReject = 1;
+        // Requires accumulating several violations, never a single one (the
+        // highest single weight above is 4): e.g. 3 movement spikes (9) still
+        // doesn't trip, but 3 spikes + 1 fire-origin reject (13) does.
+        constexpr uint32_t kKickThreshold = 10;
     } // namespace
 
     TFServerValidation& TFServerValidation::Get()
@@ -166,6 +184,19 @@ namespace Terrafront
         tokens -= 1.0f;
         return true;
     }
+
+    uint32_t TFServerValidation::ViolationScore(PlayerId player) const
+    {
+        const auto it = m_stats.find(player);
+        if (it == m_stats.end())
+            return 0;
+
+        const TFViolationStats& st = it->second;
+        return st.movementSpikes * kWeightMovementSpike + st.fireOriginRejects * kWeightFireOriginReject +
+               st.fireRateRejects * kWeightFireRateReject + st.inputRateRejects * kWeightInputRateReject;
+    }
+
+    bool TFServerValidation::ShouldKick(PlayerId player) const { return ViolationScore(player) >= kKickThreshold; }
 
     void TFServerValidation::ClearPlayer(PlayerId player)
     {

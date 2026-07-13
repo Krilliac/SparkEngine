@@ -60,12 +60,33 @@
  *    desync). A legitimate client enqueues at most one input per its own
  *    frame and bots enqueue exactly once per fixed tick (TFBotSystem), so
  *    both stay comfortably under budget by construction.
+ *  - KICK ESCALATION (W14): every counter above already survived its own
+ *    deliberately-tolerant gate before it was counted (fudge factors, burst
+ *    allowances, "gross divergence only"), so ViolationScore() sums them
+ *    with per-counter weights (see the .cpp anonymous namespace) and
+ *    ShouldKick() trips once the weighted total crosses kKickThreshold.
+ *    movementClamps is deliberately EXCLUDED from the score -- only the
+ *    movementSpikes subset (>= kSpikeRatio overshoot) counts, since mild
+ *    clamps are expected occasionally even for legitimate clients (terrain,
+ *    packet loss) and are already handled by the gentle pull-back alone.
+ *    TFServerSim::EnforceAntiCheatKicks() polls ShouldKick() once per
+ *    authoritative tick (after TickMovement() has returned, never from
+ *    inside its per-player loop -- see that method's own comment for why),
+ *    and for any player that trips it: calls NetworkManager::KickClient()
+ *    then the same CleanupPlayerSession() teardown a real socket drop runs
+ *    (which in turn calls ClearPlayer() below, so a recycled PlayerId never
+ *    inherits a stale score and instantly re-trips the same kick).
  *
- * All counters are DETECTION + CLAMP/REJECT only (no bans this wave -- see
- * tf_cheat_stats, Console/TFCommands.cpp). False-positive risk is kept low by
+ * All counters below are DETECTION + CLAMP/REJECT as they're recorded; the
+ * KICK ESCALATION bullet above is what finally acts on them (closing what
+ * used to be a "no bans this wave" gap -- see tf_cheat_stats,
+ * Console/TFCommands.cpp, for the live per-counter view an operator watches
+ * before that threshold is reached). False-positive risk is kept low by
  * design: movement clamps gently pull the position back in place (never a
- * hard reject/kick) with a generous fudge factor, and the fire-origin reject
- * only fires on gross, no-legitimate-cause divergence.
+ * hard reject/kick) with a generous fudge factor, the fire-origin reject only
+ * fires on gross, no-legitimate-cause divergence, and the kick threshold
+ * itself requires accumulating several such violations (not a single one)
+ * before it trips.
  */
 #pragma once
 
@@ -130,6 +151,20 @@ namespace Terrafront
         /// Mirrors a TFWeaponSystem::ValidateFire rejection into the unified
         /// per-player counters (see file header: no second gate here).
         void RecordFireRateReject(PlayerId player);
+
+        /// Weighted sum of `player`'s violation counters (see the .cpp
+        /// anonymous namespace for the per-counter weights). movementClamps
+        /// is NOT included -- only its movementSpikes subset is (file header:
+        /// KICK ESCALATION). Zero for a player with no recorded violations.
+        uint32_t ViolationScore(PlayerId player) const;
+
+        /// True once ViolationScore(player) has crossed kKickThreshold (see
+        /// .cpp). Pure query, no side effects -- callers (TFServerSim) own
+        /// actually disconnecting the player and MUST follow up with
+        /// ClearPlayer() (directly or via the existing CleanupPlayerSession
+        /// teardown) so a recycled PlayerId doesn't inherit the score and
+        /// instantly re-trip the same kick.
+        bool ShouldKick(PlayerId player) const;
 
         /// Session teardown hygiene: drop this player's counters so a recycled
         /// PlayerId doesn't inherit a stale violation history (same pattern as

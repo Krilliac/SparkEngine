@@ -287,6 +287,10 @@ namespace Terrafront
             TickMovement(fdt);
         }
 
+#ifdef ENABLE_NETWORKING
+        EnforceAntiCheatKicks();
+#endif
+
         // TF-W13 server-perf lane: lag-comp snapshot + owner move-state send
         // prep is the replication-adjacent work TFServerSim itself performs.
         // The OTHER major replication-build cost — TFReplication's pawn
@@ -752,6 +756,35 @@ namespace Terrafront
             {
                 ++it;
             }
+        }
+    }
+
+    void TFServerSim::EnforceAntiCheatKicks()
+    {
+        // Two-pass: CleanupPlayerSession() erases the m_move entry for a kicked
+        // player, so mutating m_move while iterating it here would invalidate
+        // the iterator. Collect offenders first, act after.
+        std::vector<PlayerId> toKick;
+        for (const auto& [player, ms] : m_move)
+        {
+            if (TFServerValidation::Get().ShouldKick(player))
+                toKick.push_back(player);
+        }
+        if (toKick.empty())
+            return;
+
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        for (PlayerId player : toKick)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF-anticheat] player %u crossed the kick threshold (violation score %u) -- "
+                           "disconnecting",
+                           player, TFServerValidation::Get().ViolationScore(player));
+            nm.KickClient(player, "Anti-cheat: excessive validation failures");
+            // Same teardown a real socket drop runs (PollClientJoinsLeaves) --
+            // don't wait for the next poll to notice the disconnect.
+            CleanupPlayerSession(player);
+            m_knownClients.erase(player);
         }
     }
 

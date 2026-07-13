@@ -1,10 +1,12 @@
 /**
  * @file TestTFServerValidation.cpp
- * @brief TERRAFRONT server-authoritative anti-cheat sanity layer (W13):
+ * @brief TERRAFRONT server-authoritative anti-cheat sanity layer (W13/W14):
  *        ValidateMovementTick's horizontal/vertical clamp math + spike
  *        counting, NoteExemptTeleport's one-shot skip, CheckFireOrigin's
- *        divergence reject, AllowInput's 60Hz(+fudge) token bucket, and
- *        ClearPlayer's per-counter session-teardown hygiene.
+ *        divergence reject, AllowInput's 60Hz(+fudge) token bucket,
+ *        ViolationScore/ShouldKick's per-counter weighting and kick
+ *        threshold (W14 kick escalation), and ClearPlayer's per-counter
+ *        session-teardown hygiene.
  *
  * Game/TFServerValidation.cpp is compiled into SparkTests explicitly (the
  * TFDatabase.cpp / TFOutfitStore.cpp pattern — see Tests/CMakeLists.txt): it
@@ -274,4 +276,122 @@ TEST(TFServerValidation_ClearPlayer_ResetsCountersAndTokenBucket)
     // The input-rate token bucket was reset too -- a fresh full bucket is
     // available at the very same timestamp the old one was drained at.
     EXPECT_TRUE(TFServerValidation::Get().AllowInput(kPlayer, now));
+}
+
+// -- W14 kick escalation: ViolationScore() / ShouldKick() ------------------
+// Weights (TFServerValidation.cpp anonymous namespace): movementSpikes=3,
+// fireOriginRejects=4, fireRateRejects=2, inputRateRejects=1, kKickThreshold=10.
+// These tests pin that weighting/threshold as observable behavior through the
+// public API (the weights themselves are not exposed) rather than hardcoding
+// against the .cpp's private constants directly.
+
+TEST(TFServerValidation_ViolationScore_ZeroForUntouchedPlayer)
+{
+    constexpr PlayerId kPlayer = 90013;
+    TFServerValidation::Get().ClearPlayer(kPlayer);
+
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{0});
+    EXPECT_FALSE(TFServerValidation::Get().ShouldKick(kPlayer));
+}
+
+TEST(TFServerValidation_ViolationScore_ExcludesMovementClampsIncludesSpikes)
+{
+    constexpr PlayerId kPlayer = 90014;
+    TFServerValidation::Get().ClearPlayer(kPlayer);
+
+    const float prevPos[3] = {0.0f, 0.0f, 0.0f};
+
+    // Mild clamp (ratio 1.6, below kSpikeRatio 2.5): a clamp, not a spike.
+    float posMild[3] = {0.2f, 0.0f, 0.0f};
+    TFServerValidation::Get().ValidateMovementTick(kPlayer, prevPos, posMild, 5.0f, 1.0f / 60.0f, 0.0);
+    EXPECT_EQ(StatsFor(kPlayer).movementClamps, uint32_t{1});
+    EXPECT_EQ(StatsFor(kPlayer).movementSpikes, uint32_t{0});
+    // movementClamps is deliberately excluded from the score -- still zero.
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{0});
+
+    // Gross overshoot (ratio 5x, >= kSpikeRatio): a clamp AND a spike.
+    float posGross[3] = {0.625f, 0.0f, 0.0f};
+    TFServerValidation::Get().ValidateMovementTick(kPlayer, prevPos, posGross, 5.0f, 1.0f / 60.0f, 1.0);
+    EXPECT_EQ(StatsFor(kPlayer).movementSpikes, uint32_t{1});
+    // Only the movementSpikes weight (3) enters the score.
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{3});
+    EXPECT_FALSE(TFServerValidation::Get().ShouldKick(kPlayer));
+}
+
+TEST(TFServerValidation_ViolationScore_WeightsEachCounterCorrectly)
+{
+    constexpr PlayerId kPlayer = 90015;
+    TFServerValidation::Get().ClearPlayer(kPlayer);
+
+    // fireOriginRejects: weight 4 (highest -- essentially no legitimate cause).
+    const float trusted[3] = {0.0f, 0.0f, 0.0f};
+    const float claimedFar[3] = {50.0f, 0.0f, 0.0f};
+    TFServerValidation::Get().CheckFireOrigin(kPlayer, claimedFar, trusted, 1.0f);
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{4});
+
+    // fireRateRejects: weight 2.
+    TFServerValidation::Get().RecordFireRateReject(kPlayer);
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{6});
+
+    // inputRateRejects: weight 1 -- drain the 4-token bucket, then the 5th
+    // call at the same instant is rejected.
+    const double now = 400.0;
+    for (int i = 0; i < 5; ++i)
+        TFServerValidation::Get().AllowInput(kPlayer, now);
+    EXPECT_EQ(StatsFor(kPlayer).inputRateRejects, uint32_t{1});
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{7});
+
+    EXPECT_FALSE(TFServerValidation::Get().ShouldKick(kPlayer));
+}
+
+TEST(TFServerValidation_ShouldKick_TripsOnlyAtThresholdNeverOnASingleEvent)
+{
+    constexpr PlayerId kPlayer = 90016;
+    TFServerValidation::Get().ClearPlayer(kPlayer);
+
+    // A single highest-weight event (fireOriginReject, weight 4) alone must
+    // never trip the kick -- the design explicitly requires accumulating
+    // several violations, not one (file header: KICK ESCALATION).
+    const float trusted[3] = {0.0f, 0.0f, 0.0f};
+    const float claimedFar[3] = {50.0f, 0.0f, 0.0f};
+    TFServerValidation::Get().CheckFireOrigin(kPlayer, claimedFar, trusted, 1.0f);
+    EXPECT_FALSE(TFServerValidation::Get().ShouldKick(kPlayer));
+
+    // Three movement spikes (3 * 3 = 9) plus the fire-origin reject above (4)
+    // = 13 -- crosses kKickThreshold(10).
+    const float prevPos[3] = {0.0f, 0.0f, 0.0f};
+    for (int i = 0; i < 3; ++i)
+    {
+        float pos[3] = {0.625f, 0.0f, 0.0f};
+        // Distinct `now` per call so this test doesn't depend on the spike
+        // log's own kSpikeLogThrottleSec(5s) throttle -- that only gates the
+        // WARN log line, not the movementSpikes counter itself.
+        TFServerValidation::Get().ValidateMovementTick(kPlayer, prevPos, pos, 5.0f, 1.0f / 60.0f,
+                                                        static_cast<double>(i));
+    }
+    EXPECT_EQ(StatsFor(kPlayer).movementSpikes, uint32_t{3});
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{13});
+    EXPECT_TRUE(TFServerValidation::Get().ShouldKick(kPlayer));
+}
+
+TEST(TFServerValidation_ClearPlayer_ResetsViolationScoreAndShouldKick)
+{
+    constexpr PlayerId kPlayer = 90018;
+    TFServerValidation::Get().ClearPlayer(kPlayer);
+
+    // Push the player past the kick threshold (3 fire-origin rejects * 4 = 12).
+    const float trusted[3] = {0.0f, 0.0f, 0.0f};
+    const float claimedFar[3] = {50.0f, 0.0f, 0.0f};
+    for (int i = 0; i < 3; ++i)
+        TFServerValidation::Get().CheckFireOrigin(kPlayer, claimedFar, trusted, 1.0f);
+    EXPECT_TRUE(TFServerValidation::Get().ShouldKick(kPlayer));
+
+    TFServerValidation::Get().ClearPlayer(kPlayer);
+
+    // A recycled PlayerId must not inherit the prior occupant's score and
+    // instantly re-trip the kick (file header: the whole point of
+    // CleanupPlayerSession calling ClearPlayer before a socket-drop PlayerId
+    // can be reused).
+    EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{0});
+    EXPECT_FALSE(TFServerValidation::Get().ShouldKick(kPlayer));
 }

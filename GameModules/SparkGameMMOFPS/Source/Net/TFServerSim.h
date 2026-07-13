@@ -159,6 +159,12 @@ namespace Terrafront
         void RegisterNetHandlers();
         void UnregisterNetHandlers();
         void PollClientJoinsLeaves();
+        /// W14 anti-cheat kick escalation (TFServerValidation.h file header):
+        /// called once per authoritative tick, AFTER TickMovement() has
+        /// returned. Never called from inside TickMovement's per-player loop
+        /// -- a kick here erases the very m_move entry that loop would be
+        /// iterating (via CleanupPlayerSession), which would invalidate it.
+        void EnforceAntiCheatKicks();
         /// Shared by PollClientJoinsLeaves (real socket drop) and
         /// DebugSimulateDisconnect (test hook): pawn cleanup, final progression
         /// flush to the active character, ClearPlayer, session teardown.
