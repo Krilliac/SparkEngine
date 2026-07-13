@@ -3,9 +3,9 @@
  * @brief Capture-point presentation FX (see TFCaptureFx.h for the contract).
  *        All three effects submit through TFTransparentPass::Get() (W8
  *        recipe: unit two-sided quad, alpha-blended, depth read-only) using
- *        the shared Assets/Textures/MMOFPS/fx/shield_plane.png soft-glow
- *        texture — no new texture assets, matching the "reuse the emissive +
- *        TFGroundFx/billboard patterns" brief.
+ *        their own dedicated Assets/Textures/MMOFPS/fx/capture_*.png
+ *        textures — tower beam, owner-flip burst/flare, and standing ring
+ *        each get a purpose-built glow shape.
  */
 #include "Game/TFCaptureFx.h"
 
@@ -35,8 +35,12 @@ namespace Terrafront
     namespace
     {
 
-        constexpr const char* kGlowTexture =
-            "Assets/Textures/MMOFPS/fx/shield_plane.png"; // soft radial glow (W8 shield-wall precedent)
+        constexpr const char* kBeamTexture =
+            "Assets/Textures/MMOFPS/fx/capture_beam.png"; // tower progress beam
+        constexpr const char* kBurstTexture =
+            "Assets/Textures/MMOFPS/fx/capture_disc.png"; // owner-flip burst particles + flare
+        constexpr const char* kRingTexture =
+            "Assets/Textures/MMOFPS/fx/capture_ring.png"; // standing capture ring
 
         // ---- tower progress beam ----
         constexpr float kBeamMaxHeightM = 9.0f; // just under the 11.5 m banner height
@@ -97,9 +101,11 @@ namespace Terrafront
         }
 
         /// Lazily resolves the GraphicsEngine/unit-plane/glow-SRV trio shared by
-        /// every submission below. False (nothing resolved) when headless or the
-        /// device isn't up yet — callers just skip drawing this frame.
-        bool ResolveFx(TFGameContext& ctx, GraphicsEngine*& outGfx, Mesh*& outPlane, ID3D11ShaderResourceView*& outSrv)
+        /// every submission below, loading the caller-specified per-effect
+        /// texture. False (nothing resolved) when headless or the device isn't
+        /// up yet — callers just skip drawing this frame.
+        bool ResolveFx(TFGameContext& ctx, const char* texturePath, GraphicsEngine*& outGfx, Mesh*& outPlane,
+                       ID3D11ShaderResourceView*& outSrv)
         {
             outGfx = ctx.engine ? ctx.engine->GetGraphics() : nullptr;
             if (!outGfx || !outGfx->GetDevice() || !outGfx->GetContext())
@@ -107,7 +113,7 @@ namespace Terrafront
             outPlane = TFTransparentPass::Get().GetUnitPlane(*outGfx);
             if (!outPlane)
                 return false;
-            outSrv = outGfx->GetOrLoadTextureSRV(kGlowTexture);
+            outSrv = outGfx->GetOrLoadTextureSRV(texturePath);
             return true;
         }
 
@@ -137,7 +143,7 @@ namespace Terrafront
         GraphicsEngine* gfx = nullptr;
         Mesh* plane = nullptr;
         ID3D11ShaderResourceView* srv = nullptr;
-        const bool canDraw = ResolveFx(ctx, gfx, plane, srv);
+        const bool canDraw = ResolveFx(ctx, kBurstTexture, gfx, plane, srv);
 
         for (BurstParticle& p : m_particles)
         {
@@ -198,7 +204,7 @@ namespace Terrafront
         GraphicsEngine* gfx = nullptr;
         Mesh* plane = nullptr;
         ID3D11ShaderResourceView* srv = nullptr;
-        if (!ResolveFx(ctx, gfx, plane, srv))
+        if (!ResolveFx(ctx, kBeamTexture, gfx, plane, srv))
             return;
 
         float color[4];
@@ -349,7 +355,7 @@ namespace Terrafront
             GraphicsEngine* gfx = nullptr;
             Mesh* plane = nullptr;
             ID3D11ShaderResourceView* srv = nullptr;
-            if (!ResolveFx(ctx, gfx, plane, srv))
+            if (!ResolveFx(ctx, kRingTexture, gfx, plane, srv))
                 return;
 
             float color[4];
