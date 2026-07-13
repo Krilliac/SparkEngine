@@ -490,6 +490,25 @@ namespace DirectX
         return v.w;
     }
 
+    // Component setters: return a copy of `v` with one component replaced
+    // (DirectXMath semantics). Mirrors the XMVectorGet* accessors above.
+    inline XMVECTOR XMVectorSetX(XMVECTOR v, float x)
+    {
+        return {x, v.y, v.z, v.w};
+    }
+    inline XMVECTOR XMVectorSetY(XMVECTOR v, float y)
+    {
+        return {v.x, y, v.z, v.w};
+    }
+    inline XMVECTOR XMVectorSetZ(XMVECTOR v, float z)
+    {
+        return {v.x, v.y, z, v.w};
+    }
+    inline XMVECTOR XMVectorSetW(XMVECTOR v, float w)
+    {
+        return {v.x, v.y, v.z, w};
+    }
+
     inline XMMATRIX XMMatrixLookAtLH(XMVECTOR eye, XMVECTOR target, XMVECTOR up)
     {
         XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(target, eye));

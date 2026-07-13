@@ -1122,8 +1122,8 @@ class GraphicsEngine
     ComPtr<ID3D11ShaderResourceView> m_defaultNormalSRV;    ///< SRV for the flat normal default (t1)
     ComPtr<ID3D11Texture2D> m_defaultRoughnessTexture;      ///< 1x1 roughness = 1.0 (zero specular)
     ComPtr<ID3D11ShaderResourceView> m_defaultRoughnessSRV; ///< SRV for the fully-rough default (t2)
-    ComPtr<ID3D11Texture2D> m_blobShadowTexture;            ///< 32x32 procedural radial-falloff alpha disc (W13 blob shadows)
-    ComPtr<ID3D11ShaderResourceView> m_blobShadowSRV;       ///< SRV for the cached blob-shadow circle
+    ComPtr<ID3D11Texture2D> m_blobShadowTexture;      ///< 32x32 procedural radial-falloff alpha disc (W13 blob shadows)
+    ComPtr<ID3D11ShaderResourceView> m_blobShadowSRV; ///< SRV for the cached blob-shadow circle
     // Basic-path blend states (lazily created by SetBasicBlendMode).
     ComPtr<ID3D11BlendState> m_blendOpaque;
     ComPtr<ID3D11BlendState> m_blendAlpha;
