@@ -74,6 +74,11 @@ namespace Spark
         void Shutdown();
         void RegisterScenario(std::unique_ptr<IBenchmarkScenario> scenario);
 
+        /// Register the built-in dependency-free CPU/memory throughput canaries.
+        /// Called from engine startup (not Initialize) so a running engine has
+        /// real regression signal while unit tests keep an empty framework.
+        void RegisterBuiltinScenarios();
+
         [[nodiscard]] std::vector<BenchmarkResult> RunAll();
         [[nodiscard]] BenchmarkResult RunScenario(std::string_view name);
 
@@ -84,6 +89,11 @@ namespace Spark
             const std::vector<BenchmarkResult>& results, const std::vector<BenchmarkBaseline>& baselines) const;
         [[nodiscard]] bool HasRegressions(const std::vector<BenchmarkComparison>& comparisons) const;
         [[nodiscard]] std::string Console_GetStatus() const;
+
+        /// Register the benchmark.* console commands (status/run). Called
+        /// once during engine startup alongside the sibling diagnostic singletons
+        /// so the framework is reachable from the console.
+        void RegisterConsoleCommands();
 
       private:
         BenchmarkFramework() = default;

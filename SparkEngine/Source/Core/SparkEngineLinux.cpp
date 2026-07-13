@@ -48,7 +48,9 @@
 #include "Utils/FreezeDetector.h"
 #include "Utils/DeadlockDetector.h"
 #include "Utils/HitchDetector.h"
+#include "Utils/BenchmarkFramework.h"
 #include "Utils/AssetStallDetector.h"
+#include "Core/AssetValidator.h"
 #include "Utils/NetworkHealthMonitor.h"
 #include "Utils/GPUResourceLeakDetector.h"
 #include "Utils/InvalidStateDetector.h"
@@ -487,7 +489,9 @@ static int RunHeadlessLinux(int argc, char* argv[])
         Spark::FreezeDetector::GetInstance().Start();
         Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
         Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+        Spark::BenchmarkFramework::GetInstance().RegisterConsoleCommands();
         Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+        Spark::AssetValidator::GetInstance().RegisterConsoleCommands();
         Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
         Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
         Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
@@ -761,7 +765,9 @@ static void InitializeSDL2Subsystems(SDL_Window* window, int argc, char* argv[])
     Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
     Spark::FreezeDetector::GetInstance().Start();
     Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+    Spark::BenchmarkFramework::GetInstance().RegisterConsoleCommands();
     Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+    Spark::AssetValidator::GetInstance().RegisterConsoleCommands();
     Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
     Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
     Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();

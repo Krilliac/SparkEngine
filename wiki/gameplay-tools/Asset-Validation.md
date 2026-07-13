@@ -1,6 +1,8 @@
 # Asset Validation
 
-The Asset Validation system provides a rule-based pipeline for verifying asset health before packaging or at editor load time. Built-in rules check texture references in materials, scene cross-references, shader compilability, and metadata completeness. Custom rules are added via the `IAssetValidationRule` interface.
+The Asset Validation system provides a rule-based pipeline for verifying asset health. Built-in rules check texture references in materials, scene cross-references, shader compilability, and metadata completeness. Custom rules are added via the `IAssetValidationRule` interface.
+
+`AssetValidator::Initialize()` is called during engine startup (in `GameplayLifecycleShared.cpp`, alongside the sibling diagnostic singletons), which registers the four built-in rules. Validation is then driven **on demand** via the `assetvalidate.*` console commands (see [Console Commands](#console-commands)); it is well-suited to a pre-packaging or editor-load pass, and [Game-Packaging](Game-Packaging.md) can invoke `ValidateDirectory()`/`ValidateAll()` directly.
 
 **Source:** `SparkEngine/Source/Core/AssetValidator.h`
 
@@ -345,6 +347,16 @@ The editor can invoke `ValidateFile()` on individual assets at load time or `Val
 `AssetValidator` is **not thread-safe**. All validation methods perform filesystem I/O and modify internal state (`m_lastReport`). Call from a single thread. The singleton access via `GetInstance()` is safe (function-local static), but concurrent calls to `ValidateAll()` or `RegisterRule()` must be externally synchronized.
 
 Individual `IAssetValidationRule` implementations should be stateless or internally synchronized if shared across threads.
+
+## Console Commands
+
+Registered during engine startup (`AssetValidator::RegisterConsoleCommands()`), so the pipeline is reachable from the in-engine console:
+
+| Command | Description |
+|---------|-------------|
+| `assetvalidate.status` | Show initialization state, registered rule count, and last-run summary |
+| `assetvalidate.report` | Show the full findings (severity, path, message, suggestion) of the last run |
+| `assetvalidate.dir <path>` | Validate every asset under a directory and print a pass/fail/warning summary |
 
 ## See Also
 

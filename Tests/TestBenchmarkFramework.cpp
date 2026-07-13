@@ -119,6 +119,31 @@ TEST(BenchmarkFramework_RunAll_EmptyWhenNoScenarios)
     bench.Shutdown();
 }
 
+TEST(BenchmarkFramework_BuiltinScenariosRunAndProduceMetrics)
+{
+    // The built-in canaries (registered from engine startup, not Initialize)
+    // must actually run and produce a positive-duration metric each -- this is
+    // what makes `benchmark.run` non-hollow once the framework is wired in.
+    auto& bench = Spark::BenchmarkFramework::GetInstance();
+    bench.Initialize();
+    EXPECT_TRUE(bench.RunAll().empty()); // empty until built-ins are registered
+
+    bench.RegisterBuiltinScenarios();
+
+    auto results = bench.RunAll();
+    EXPECT_EQ(results.size(), 2u);
+    for (const auto& result : results)
+    {
+        EXPECT_FALSE(result.metrics.empty());
+        EXPECT_TRUE(result.iterations > 0u);
+        // A timing canary always takes a non-negative, finite amount of time.
+        EXPECT_TRUE(result.metrics[0].value >= 0.0);
+        EXPECT_TRUE(result.metrics[0].unit == "ms");
+    }
+
+    bench.Shutdown();
+}
+
 TEST(BenchmarkFramework_RunAll_MetricsHaveValues)
 {
     auto& bench = Spark::BenchmarkFramework::GetInstance();

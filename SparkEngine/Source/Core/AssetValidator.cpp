@@ -1,8 +1,11 @@
 #include "AssetValidator.h"
 
+#include "Utils/SparkConsole.h"
+
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <format>
 #include <iomanip>
 #include <sstream>
 
@@ -389,6 +392,35 @@ namespace Spark
         }
 
         return output.str();
+    }
+
+    void AssetValidator::RegisterConsoleCommands()
+    {
+        auto& console = SimpleConsole::GetInstance();
+
+        console.RegisterCommand(
+            "assetvalidate.status", [](const std::vector<std::string>&) -> std::string
+            { return AssetValidator::GetInstance().Console_GetStatus(); },
+            "Show asset validator status and last-run summary", "AssetValidator");
+
+        console.RegisterCommand(
+            "assetvalidate.report", [](const std::vector<std::string>&) -> std::string
+            { return AssetValidator::GetInstance().Console_GetLastReport(); },
+            "Show the full findings of the last asset validation run", "AssetValidator");
+
+        console.RegisterCommand(
+            "assetvalidate.dir",
+            [](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.empty())
+                    return "Usage: assetvalidate.dir <directory>";
+                const ValidationReport report = AssetValidator::GetInstance().ValidateDirectory(args[0]);
+                return std::format("Validated {} asset(s) in {:.1f} ms: {} pass, {} fail, {} warning(s). "
+                                   "Use assetvalidate.report for details.",
+                                   report.totalAssets, report.durationMs, report.passCount, report.failCount,
+                                   report.warningCount);
+            },
+            "Validate every asset under a directory (assetvalidate.dir <path>)", "AssetValidator");
     }
 
     std::string AssetValidator::GetTimestamp()

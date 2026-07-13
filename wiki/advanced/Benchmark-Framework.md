@@ -2,6 +2,8 @@
 
 The Benchmark Framework provides a structured way to define, run, and compare performance benchmarks against saved baselines. It detects regressions by comparing measured metrics against stored thresholds, making it suitable for CI integration and automated performance regression testing.
 
+`BenchmarkFramework::Initialize()` is called during engine startup (in `GameplayLifecycleShared.cpp`) and starts **empty** by design — scenarios are registered by whoever wants to benchmark. Engine startup then calls `RegisterBuiltinScenarios()`, which adds two dependency-free, deterministic throughput canaries (`cpu.sort_1m`, `mem.churn_4k_x10k`) so `benchmark.run` has real regression signal out of the box; feature code registers domain-specific scenarios via `RegisterScenario()`. Runs are triggered on demand via the `benchmark.*` console commands (see [Console Commands](#console-commands)).
+
 **Source:** `SparkEngine/Source/Utils/BenchmarkFramework.h`
 
 ## Overview
@@ -346,6 +348,17 @@ TEST_CASE("Performance regression check")
 - `BenchmarkFramework` is **not thread-safe**. All calls to `RegisterScenario()`, `RunAll()`, `RunScenario()`, and baseline I/O must happen on the same thread.
 - Individual `IBenchmarkScenario::Run()` implementations may use threads internally (e.g., multithreaded physics simulation), but the framework itself is single-threaded.
 - `GetInstance()` uses a function-local static and is safe for concurrent first-access under C++11 magic-statics guarantees.
+
+## Console Commands
+
+Registered during engine startup (`BenchmarkFramework::RegisterConsoleCommands()`):
+
+| Command | Description |
+|---------|-------------|
+| `benchmark.status` | Show initialization state and registered scenario count |
+| `benchmark.run` | Run all registered scenarios and print averaged metrics per scenario |
+
+The built-in canaries (`cpu.sort_1m`, `mem.churn_4k_x10k`) are covered by `Tests/TestBenchmarkFramework.cpp` (`BenchmarkFramework_BuiltinScenariosRunAndProduceMetrics`).
 
 ## See Also
 

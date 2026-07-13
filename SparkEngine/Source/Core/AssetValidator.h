@@ -96,6 +96,12 @@ namespace Spark
         [[nodiscard]] std::string Console_GetStatus() const;
         [[nodiscard]] std::string Console_GetLastReport() const;
 
+        /// Register the assetvalidate.* console commands (status/report/dir).
+        /// Called once during engine startup alongside the sibling diagnostic
+        /// singletons (AssetStallDetector, HitchDetector, ...) so the pipeline
+        /// is reachable from the console.
+        void RegisterConsoleCommands();
+
       private:
         AssetValidator() = default;
         ~AssetValidator() = default;

@@ -24,7 +24,9 @@
 #include "Utils/MemoryDebugger.h"
 #include "Utils/MemoryMonitor.h"
 #include "Utils/HitchDetector.h"
+#include "Utils/BenchmarkFramework.h"
 #include "Utils/AssetStallDetector.h"
+#include "Core/AssetValidator.h"
 #include "Utils/NetworkHealthMonitor.h"
 #include "Utils/GPUResourceLeakDetector.h"
 #include "Utils/FrameInspector.h"
@@ -345,7 +347,10 @@ namespace Spark::Core::Lifecycle
         Spark::DebugOverlay::GetInstance().SetEnabled(true);
         Spark::MemoryMonitor::GetInstance().Initialize();
         Spark::HitchDetector::GetInstance().Initialize();
+        Spark::BenchmarkFramework::GetInstance().Initialize();
+        Spark::BenchmarkFramework::GetInstance().RegisterBuiltinScenarios();
         Spark::AssetStallDetector::GetInstance().Initialize();
+        Spark::AssetValidator::GetInstance().Initialize();
         Spark::NetworkHealthMonitor::GetInstance().Initialize();
         Spark::GPUResourceLeakDetector::GetInstance().Initialize();
         Spark::Security::MemoryIntegritySystem::GetInstance().Initialize();
@@ -1329,7 +1334,9 @@ namespace Spark::Core::Lifecycle
         Spark::DebugDrawManager::GetInstance().Clear();
         Spark::MemoryMonitor::GetInstance().Shutdown();
         Spark::HitchDetector::GetInstance().Shutdown();
+        Spark::BenchmarkFramework::GetInstance().Shutdown();
         Spark::AssetStallDetector::GetInstance().Shutdown();
+        Spark::AssetValidator::GetInstance().Shutdown();
         Spark::NetworkHealthMonitor::GetInstance().Shutdown();
         Spark::GPUResourceLeakDetector::GetInstance().Shutdown();
         Spark::Security::MemoryIntegritySystem::GetInstance().Shutdown();
