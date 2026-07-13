@@ -31,6 +31,12 @@
  * headless test runs never bind UDP 27025). The login screen gains a 'LAN
  * SERVERS' list whose Join button runs the existing tf_connect path
  * (TFWorldSetup::Connect) against the beacon's source IP + advertised port.
+ *
+ * W13 multimap follow-up (docs/TERRAFRONT_MULTIMAP.md section 5.1): Update()
+ * now also re-arms the scanner once InWorld on NetRole::Client (still never
+ * in headless/other-role runs), and LanServers() exposes the live results so
+ * Game/TFTravelSystem.cpp's continent-hop terminal can prefer a live LAN
+ * match over the static continents.json host/port.
  */
 #pragma once
 
@@ -74,6 +80,15 @@ namespace Terrafront
         // this) ---
         bool IsOpen() const { return m_state != TFFlowState::InWorld; }
         TFFlowState State() const { return m_state; }
+
+        /// W13 multimap follow-up (docs/TERRAFRONT_MULTIMAP.md section 5.1):
+        /// read-only accessor onto the LAN scanner's live results. Update()
+        /// keeps `m_lan` armed past the login screen while InWorld on
+        /// NetRole::Client (see the .cpp), so TFTravelSystem::RenderUI can
+        /// prefer a live-discovered continent endpoint over the static
+        /// continents.json host/port. Empty whenever the scanner isn't armed
+        /// (e.g. still mid-onboarding, or a role that never arms it).
+        const std::vector<TFLanServerEntry>& LanServers() const { return m_lan.Servers(); }
 
         /// multimap-plumbing lane (W13) gap #3 fix: nothing previously reset
         /// `m_state` back to Login on disconnect, so a manual tf_disconnect or

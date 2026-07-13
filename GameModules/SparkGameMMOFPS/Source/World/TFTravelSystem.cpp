@@ -25,6 +25,7 @@
 #include "Net/TFClientNet.h"
 #include "Net/TFRedeployProtocol.h" // kTFRedeployBlocked reason code
 #include "Net/TFServerSim.h"
+#include "UI/TFLoginFlow.h" // W13 multimap follow-up: live LAN endpoint preference (see RenderUI)
 #include "UI/TFMapScreen.h"
 #include "UI/TFSpawnScreen.h"
 #include "World/TFRegionSystem.h"
@@ -1068,18 +1069,44 @@ namespace Terrafront
                 if (!c.blurb.empty())
                     ImGui::TextDisabled("%s", c.blurb.c_str());
 
-                const bool haveEndpoint = !c.host.empty() && c.port != 0;
+                // W13 multimap follow-up (docs/TERRAFRONT_MULTIMAP.md section
+                // 5.1): prefer a live LAN-discovered endpoint over the static
+                // continents.json host/port when both are present. TFLoginFlow
+                // keeps its scanner armed past the login screen while InWorld
+                // on NetRole::Client (see TFLoginFlow::Update), so this is
+                // just a read of its already-fresh, already-deduped results —
+                // matched by beacon map name against this continent's
+                // display name or continents.json key. Falls back to the
+                // static entry, exactly as before, when no beacon matches.
+                ContinentMeta effective = c;
+                bool viaLan = false;
+                if (m_ctx->loginFlow)
+                {
+                    for (const TFLanServerEntry& s : m_ctx->loginFlow->LanServers())
+                    {
+                        if (s.map == c.name || s.map == c.key)
+                        {
+                            effective.host = s.ip;
+                            effective.port = s.gamePort;
+                            viaLan = true;
+                            break;
+                        }
+                    }
+                }
+
+                const bool haveEndpoint = !effective.host.empty() && effective.port != 0;
                 const bool canHop = haveEndpoint && m_ctx->role == NetRole::Client;
-                char otherLbl[144];
+                char otherLbl[160];
                 if (haveEndpoint)
-                    std::snprintf(otherLbl, sizeof(otherLbl), "Travel to %s (%s:%u)##tfcont%d", c.name.c_str(),
-                                 c.host.c_str(), static_cast<unsigned>(c.port), c.mapId);
+                    std::snprintf(otherLbl, sizeof(otherLbl), "Travel to %s (%s:%u)%s##tfcont%d", c.name.c_str(),
+                                 effective.host.c_str(), static_cast<unsigned>(effective.port),
+                                 viaLan ? " [LAN]" : "", c.mapId);
                 else
                     std::snprintf(otherLbl, sizeof(otherLbl), "%s - no server hosting this continent##tfcont%d",
                                  c.name.c_str(), c.mapId);
                 ImGui::BeginDisabled(!canHop);
                 if (ImGui::Button(otherLbl, ImVec2(-1.0f, 0.0f)) && canHop)
-                    ClientRequestContinentHop(c);
+                    ClientRequestContinentHop(effective);
                 ImGui::EndDisabled();
                 if (haveEndpoint && !canHop)
                     ImGui::TextDisabled("(server-hop needs a live client connection, not a local host)");

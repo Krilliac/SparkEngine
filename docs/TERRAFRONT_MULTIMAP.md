@@ -265,34 +265,42 @@ this up next:
 
 ## 5. Deferred / explicitly not done
 
-### 5.1 LAN auto-discovery integration
+### 5.1 LAN auto-discovery integration — FIXED (follow-up pass)
 
 W11's `TFLanDiscovery` (owned by `UI/TFLoginFlow.h/.cpp`) already broadcasts
 `mapName` in its beacon (`TF_LanBeacon::mapName`) and the scanner already
 dedupes by source IP + port — in principle it's a ready-made live registry:
 match a discovered beacon's `mapName` against a continent's `name`/`key` and
-you have an auto-populated `host`/`port` with zero operator config. This
-lane did NOT wire that in, on purpose:
+you have an auto-populated `host`/`port` with zero operator config. The
+original W13 pass did NOT wire that in, on purpose (see the original
+reasoning below), and recommended a small, specific follow-up. That
+follow-up has now landed, exactly as recommended:
 
-- `TFLanDiscovery`'s instance lives inside `TFLoginFlow` (`m_lan`, private,
-  no accessor), and its scanner is only armed "only while the login screen
-  renders" (per its own header) — it's explicitly not designed to run while
-  already in-world, which is exactly when the terminal menu needs it.
-- Reading it from `TFTravelSystem` would require either (a) a new accessor
-  on `TFLoginFlow` plus a `TFGameContext` member to reach it (both files
-  outside this lane's OWNS list), or (b) `TFTravelSystem` standing up its
-  OWN second UDP listener on port 27025 (the beacon header notes
-  `SO_REUSEADDR` already supports multiple listeners on one box) — which
-  duplicates real socket-handling code for a "design-heavy, code-light"
-  lane. Neither fit this pass.
+- `TFLoginFlow::LanServers()` (`UI/TFLoginFlow.h`) is a new read-only
+  accessor onto `m_lan.Servers()`.
+- `TFLoginFlow::Update()` (`UI/TFLoginFlow.cpp`) keeps the scanner armed past
+  the login screen: once `m_state == TFFlowState::InWorld` on
+  `NetRole::Client` it calls `m_lan.StartScanning()` itself (idempotent) —
+  every other state/role still calls `StopScanning()`, so headless runs and
+  non-client roles never bind the extra socket, matching the original
+  design's safety story.
+- `TFTravelSystem::RenderUI` (`World/TFTravelSystem.cpp`) reads
+  `m_ctx->loginFlow->LanServers()` for each non-active continent and, when a
+  fresh beacon's `mapName` matches that continent's `name` or `key`, prefers
+  the beacon's `ip`/`gamePort` over the static `continents.json`
+  `host`/`port` for both the button's enabled state and the label (suffixed
+  `[LAN]` so it's visually distinguishable from an operator-configured
+  static entry). Falls back to the static entry exactly as before when no
+  beacon matches. `ClientRequestContinentHop` is unchanged — it's handed the
+  resolved (possibly LAN-sourced) endpoint the same way it always took the
+  static one.
 
-Recommended follow-up (small, for whoever owns `UI/TFLoginFlow.*` next): add
-`const std::vector<TFLanServerEntry>& TFLoginFlow::LanServers() const`, keep
-`m_lan.Update()` running (or start a second lightweight scan pass) even past
-the login screen while `ctx.inWorld` is true, and have
-`TFTravelSystem::RenderUI` prefer a live LAN match over the static
-`continents.json` `host`/`port` when one is fresher. `TFGameContext` already
-exposes `loginFlow`, so this is a small addition, not new wiring.
+Original reasoning (kept for context): reading `m_lan` from `TFTravelSystem`
+needed either (a) a new accessor on `TFLoginFlow` plus a `TFGameContext`
+member to reach it (both files outside the original lane's OWNS list), or
+(b) `TFTravelSystem` standing up its OWN second UDP listener on port 27025
+— (a) is what got built; `TFGameContext` already exposed `loginFlow`, so it
+was a small addition, not new wiring.
 
 ### 5.2 In-process multi-world
 

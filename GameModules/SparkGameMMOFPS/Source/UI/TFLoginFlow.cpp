@@ -141,9 +141,31 @@ namespace Terrafront
         // ctx.role) and drains/expires scanner results. The scanner itself is only
         // ARMED from RenderLoginScreen, so it stops once the login screen is left
         // (and never starts at all in headless runs, where RenderUI is a stub).
+        //
+        // W13 multimap follow-up (docs/TERRAFRONT_MULTIMAP.md section 5.1):
+        // once InWorld, re-arm it ourselves (RenderLoginScreen no longer
+        // renders — TFLoginFlow::RenderUI early-outs on InWorld) so
+        // TFTravelSystem::RenderUI's continent-hop terminal has a live feed
+        // to prefer over the static continents.json host/port. Gated to
+        // NetRole::Client: that's the only role that can ever continent-hop
+        // (see TFTravelSystem::ClientRequestContinentHop), so a listen host /
+        // dedicated server / standalone loopback never binds the extra
+        // socket for no reason. Every other state (CharSelect/CharCreate/
+        // EnteringWorld, or InWorld on a non-Client role) stops it exactly as
+        // before.
         m_lan.Update(deltaTime);
-        if (m_state != TFFlowState::Login && m_state != TFFlowState::Register)
+        if (m_state == TFFlowState::Login || m_state == TFFlowState::Register)
+        {
+            // armed by RenderLanServerList while this state actually renders
+        }
+        else if (m_state == TFFlowState::InWorld && m_ctx->role == NetRole::Client)
+        {
+            m_lan.StartScanning();
+        }
+        else
+        {
             m_lan.StopScanning();
+        }
     }
 
     // ---------------------------------------------------------------------------
