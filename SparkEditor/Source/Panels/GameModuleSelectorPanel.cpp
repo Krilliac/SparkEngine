@@ -130,17 +130,6 @@ namespace SparkEditor
 #endif
     }
 
-    std::string GameModuleSelectorPanel::GetExecutableDirectory()
-    {
-#ifdef _WIN32
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        return std::filesystem::path(exePath).parent_path().string();
-#else
-        return std::filesystem::canonical("/proc/self/exe").parent_path().string();
-#endif
-    }
-
     void GameModuleSelectorPanel::RefreshModuleList()
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "GameModuleSelectorPanel: refreshing module list");
@@ -149,7 +138,7 @@ namespace SparkEditor
         std::vector<ModuleEntry> previous = std::move(m_modules);
         m_modules.clear();
 
-        const std::string scanDir = GetExecutableDirectory();
+        const std::string scanDir = GetEditorExecutableDirectory();
 
         // Safe enumeration: name hint + export probe with DONT_RESOLVE_DLL_REFERENCES.
         // Never runs DllMain — cheap enough for the 5-second auto-refresh.
@@ -196,7 +185,7 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::ProbeModuleMetadata()
     {
-        const std::string scanDir = GetExecutableDirectory();
+        const std::string scanDir = GetEditorExecutableDirectory();
 
         // DiscoverModules briefly loads each DLL (CreateModule + GetModuleInfo +
         // DestroyModule + FreeLibrary — no OnLoad, no engine context). An empty
@@ -354,16 +343,15 @@ namespace SparkEditor
         const auto& mod = m_modules[static_cast<size_t>(m_launchSelection)];
         namespace fs = std::filesystem;
 
-        const fs::path exeDir = fs::path(GetExecutableDirectory());
-        const fs::path engineExe = exeDir / "SparkEngine.exe";
-
-        std::error_code ec;
-        if (!fs::exists(engineExe, ec) || ec)
+        fs::path engineExe;
+        std::string findError;
+        if (!FindEngineExecutable(engineExe, findError))
         {
-            m_launchStatus = "SparkEngine.exe not found next to the editor (" + exeDir.string() + ")";
+            m_launchStatus = findError;
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_launchStatus.c_str());
             return;
         }
+        const fs::path exeDir = engineExe.parent_path();
 
         // Shared CreateProcessW path (also used by PlayControlPanel) — handles the
         // -game parser's "reads up to the FIRST SPACE, no quotes" gotcha internally
@@ -408,8 +396,8 @@ namespace SparkEditor
         if (!m_gameProcess)
             return;
 
-        DWORD exitCode = 0;
-        if (GetExitCodeProcess(static_cast<HANDLE>(m_gameProcess), &exitCode) && exitCode != STILL_ACTIVE)
+        unsigned long exitCode = 0;
+        if (PollProcessExited(m_gameProcess, exitCode))
         {
             m_launchStatus =
                 "Last launch (PID " + std::to_string(m_gamePid) + ") exited with code " + std::to_string(exitCode);
@@ -434,7 +422,7 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::SaveModuleManifest()
     {
-        const std::string manifestDir = GetExecutableDirectory();
+        const std::string manifestDir = GetEditorExecutableDirectory();
         auto manifestPath = std::filesystem::path(manifestDir) / "spark.modules.json";
 
         // Build JSON manually (no dependency on a JSON library)

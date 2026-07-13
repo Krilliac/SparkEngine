@@ -90,7 +90,6 @@ namespace SparkEditor
         void RefreshLogTail();
         std::string WriteDedicatedBotsCfg(int botCount);
         std::string WriteConnectCfg(const std::string& hostPort);
-        static std::string GetExecutableDirectory();
 
         GameModuleSelectorPanel* m_gameModuleSelector = nullptr;
 

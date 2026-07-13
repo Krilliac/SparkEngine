@@ -112,6 +112,34 @@ namespace SparkEditor
 #endif
     }
 
+    std::string GetEditorExecutableDirectory()
+    {
+#ifdef _WIN32
+        wchar_t exePath[MAX_PATH];
+        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+        return std::filesystem::path(exePath).parent_path().string();
+#else
+        return std::filesystem::canonical("/proc/self/exe").parent_path().string();
+#endif
+    }
+
+    bool FindEngineExecutable(std::filesystem::path& outExePath, std::string& outError)
+    {
+        namespace fs = std::filesystem;
+        const fs::path exeDir = fs::path(GetEditorExecutableDirectory());
+        const fs::path engineExe = exeDir / "SparkEngine.exe";
+
+        std::error_code ec;
+        if (!fs::exists(engineExe, ec) || ec)
+        {
+            outError = "SparkEngine.exe not found next to the editor (" + exeDir.string() + ")";
+            return false;
+        }
+
+        outExePath = engineExe;
+        return true;
+    }
+
     std::wstring BuildGameLaunchCommandLine(const std::filesystem::path& engineExe, const std::filesystem::path& dll,
                                             bool headless, const std::filesystem::path& execCfg,
                                             const std::wstring& extraArgs, std::string& outError)

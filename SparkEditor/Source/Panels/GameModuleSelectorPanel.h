@@ -58,7 +58,6 @@ namespace SparkEditor
         void SaveModuleManifest();
         void LaunchGame(bool headless);
         void PollLaunchedProcess();
-        static std::string GetExecutableDirectory();
 
         struct ModuleEntry
         {

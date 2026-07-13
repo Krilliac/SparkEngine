@@ -27,7 +27,7 @@ namespace SparkEditor
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayControlPanel initialized");
         m_isInitialized = true;
-        m_logPath = (std::filesystem::path(GetExecutableDirectory()) / "exec_audit.log").string();
+        m_logPath = (std::filesystem::path(GetEditorExecutableDirectory()) / "exec_audit.log").string();
         return true;
     }
 
@@ -77,17 +77,6 @@ namespace SparkEditor
             inst.processHandle = nullptr;
         }
         m_instances.clear();
-    }
-
-    std::string PlayControlPanel::GetExecutableDirectory()
-    {
-#ifdef _WIN32
-        wchar_t exePath[MAX_PATH];
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        return std::filesystem::path(exePath).parent_path().string();
-#else
-        return std::filesystem::canonical("/proc/self/exe").parent_path().string();
-#endif
     }
 
     const char* PlayControlPanel::RoleLabel(InstanceRole role)
@@ -246,17 +235,17 @@ namespace SparkEditor
         }
 
         namespace fs = std::filesystem;
-        const fs::path exeDir = fs::path(GetExecutableDirectory());
-        const fs::path engineExe = exeDir / "SparkEngine.exe";
         const fs::path dll = fs::path(m_gameModuleSelector->GetLaunchSelectionPath());
 
-        std::error_code ec;
-        if (!fs::exists(engineExe, ec) || ec)
+        fs::path engineExe;
+        std::string findError;
+        if (!FindEngineExecutable(engineExe, findError))
         {
-            m_statusMessage = "SparkEngine.exe not found next to the editor (" + exeDir.string() + ")";
+            m_statusMessage = findError;
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
             return;
         }
+        const fs::path exeDir = engineExe.parent_path();
 
         std::string buildError;
         const std::wstring cmd = BuildGameLaunchCommandLine(engineExe, dll, false, {}, L"", buildError);
@@ -299,17 +288,17 @@ namespace SparkEditor
         }
 
         namespace fs = std::filesystem;
-        const fs::path exeDir = fs::path(GetExecutableDirectory());
-        const fs::path engineExe = exeDir / "SparkEngine.exe";
         const fs::path dll = fs::path(m_gameModuleSelector->GetLaunchSelectionPath());
 
-        std::error_code ec;
-        if (!fs::exists(engineExe, ec) || ec)
+        fs::path engineExe;
+        std::string findError;
+        if (!FindEngineExecutable(engineExe, findError))
         {
-            m_statusMessage = "SparkEngine.exe not found next to the editor (" + exeDir.string() + ")";
+            m_statusMessage = findError;
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
             return;
         }
+        const fs::path exeDir = engineExe.parent_path();
 
         const std::string cfgPath = WriteDedicatedBotsCfg(m_botCount);
         if (cfgPath.empty())
@@ -365,17 +354,17 @@ namespace SparkEditor
         }
 
         namespace fs = std::filesystem;
-        const fs::path exeDir = fs::path(GetExecutableDirectory());
-        const fs::path engineExe = exeDir / "SparkEngine.exe";
         const fs::path dll = fs::path(m_gameModuleSelector->GetLaunchSelectionPath());
 
-        std::error_code ec;
-        if (!fs::exists(engineExe, ec) || ec)
+        fs::path engineExe;
+        std::string findError;
+        if (!FindEngineExecutable(engineExe, findError))
         {
-            m_statusMessage = "SparkEngine.exe not found next to the editor (" + exeDir.string() + ")";
+            m_statusMessage = findError;
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PlayControlPanel: %s", m_statusMessage.c_str());
             return;
         }
+        const fs::path exeDir = engineExe.parent_path();
 
         const std::string cfgPath = WriteConnectCfg(hostPort);
         if (cfgPath.empty())

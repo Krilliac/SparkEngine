@@ -9,6 +9,11 @@
  * so PlayControlPanel (W13) and any future launcher panel reuse one CreateProcessW
  * path instead of duplicating it. GameModuleSelectorPanel itself was updated to call
  * this helper too.
+ *
+ * Also centralizes the two bits of "exe-lookup" logic every launcher panel needs:
+ * the editor's own executable directory, and locating SparkEngine.exe next to it
+ * (GetEditorExecutableDirectory / FindEngineExecutable) — previously each panel
+ * carried its own private copy of both.
  */
 
 #pragma once
@@ -83,5 +88,21 @@ namespace SparkEditor
     std::wstring BuildGameLaunchCommandLine(const std::filesystem::path& engineExe, const std::filesystem::path& dll,
                                             bool headless, const std::filesystem::path& execCfg,
                                             const std::wstring& extraArgs, std::string& outError);
+
+    /// @brief Directory containing the current (editor) executable. Shared so every
+    /// panel that needs its own exe's folder (module scan dir, manifest dir, log
+    /// path, engine exe lookup, ...) doesn't carry a private GetModuleFileNameW copy.
+    std::string GetEditorExecutableDirectory();
+
+    /**
+     * @brief Locate SparkEngine.exe next to the current (editor) executable.
+     *
+     * Shared "exe-lookup" step used by every launcher panel before building a
+     * command line and calling LaunchEditorProcess.
+     *
+     * @return true with outExePath set on success; false with outError set
+     *         (human-readable) if SparkEngine.exe isn't present next to the editor.
+     */
+    bool FindEngineExecutable(std::filesystem::path& outExePath, std::string& outError);
 
 } // namespace SparkEditor
