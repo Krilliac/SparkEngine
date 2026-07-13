@@ -533,6 +533,12 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp"
     TestTFSecondaryMotion.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp"
+    # W13 anti-cheat lane (TFServerValidation) -- movement-clamp, fire-origin,
+    # and input-rate token-bucket math; pure logic (Core/TFTypes.h +
+    # Utils/LogMacros.h only), same minimal-dependency pattern as the two
+    # module .cpps immediately above.
+    TestTFServerValidation.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp"
     # Compile-time validation that shipped project templates are real C++
     TestTemplatesCompile.cpp
     # GraphicsEngine device-attach init + headless WorldBasicRenderer smoke is
