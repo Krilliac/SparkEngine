@@ -1008,6 +1008,19 @@ namespace Terrafront
     bool TFWorldSetup::Connect(const std::string& ip, uint16_t port)
     {
 #ifdef ENABLE_NETWORKING
+        // Reconnect hygiene (multimap-plumbing W13 gap #2, docs/TERRAFRONT_MULTIMAP.md
+        // §4 item 2): Connect() can be called a second time on an already-used
+        // instance — TFTravelSystem::ClientRequestContinentHop does exactly this
+        // for a continent hop. Without tearing down first, the OLD m_worldServer/
+        // m_areaServer/m_knownClients survive (leaked + still ticking) and the new
+        // NetworkManager::Connect races whatever socket state the previous session
+        // left behind. StopNetworking() is the same reset Shutdown() already uses;
+        // it does NOT touch scene/collision/camera (those stay owned by the
+        // single-continent-per-process boot — see the design doc), only the
+        // networking layer, so this is safe to run before every (re)connect.
+        if (m_netBooted)
+            StopNetworking();
+
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         if (!nm.IsInitialized() && !nm.Initialize())
         {

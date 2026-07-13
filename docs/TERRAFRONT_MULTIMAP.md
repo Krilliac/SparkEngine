@@ -215,27 +215,31 @@ this up next:
 1. **Shared `Saves/` prerequisite** — §2.3. Infra/ops fix, or a `TFDatabase`
    redesign; not a `TFTravelSystem` change.
 
-2. **`TFClientNet::Disconnect()` doesn't touch the socket.** It resets
-   TF-level client state (`m_connected`, prediction/interp buffers, chat
-   history) and flips `ctx.role` back to `Standalone`, but never calls
-   `NetworkManager::Disconnect()`. The existing `tf_disconnect` console
-   command (`Console/TFCommands.cpp`) calls the raw `NetworkManager`
-   Disconnect/StopServer directly instead, and is tagged with its own
-   `TF-W2` comment admitting this should "route through a TFWorldSetup
-   stop/teardown API so world state (role, servers, scene) resets cleanly
-   alongside the socket" — and that API does not exist yet. This lane's
-   `ClientRequestContinentHop` calls BOTH (`TFClientNet::Disconnect()` for
-   TF state + `NetworkManager::Disconnect()` for the socket) as the best
-   available combination, but it is still not a *clean* teardown: `
-   TFWorldSetup` owns `m_worldServer`/`m_areaServer`/`m_knownClients`/the
-   loaded scene/collision state, none of which is reset by `Connect()` when
-   called a second time on an already-used `TFWorldSetup` instance. In
-   practice this means a continent hop may carry stale scene/collision state
-   from the OLD continent into the new connection until that scene data is
-   naturally overwritten by the new server's replication. Recommend the
-   `World/TFWorldSetup.h/.cpp` owner add a real `Teardown()`/`Reconnect()`
-   entry point (the TF-W2 comment already asks for this — this lane just
-   independently re-discovered the same need from the travel side).
+2. **PARTIALLY FIXED (follow-up pass).** `TFClientNet::Disconnect()` doesn't
+   touch the socket. It resets TF-level client state (`m_connected`,
+   prediction/interp buffers, chat history) and flips `ctx.role` back to
+   `Standalone`, but never calls `NetworkManager::Disconnect()`. The existing
+   `tf_disconnect` console command (`Console/TFCommands.cpp`) calls the raw
+   `NetworkManager` Disconnect/StopServer directly instead, and is tagged
+   with its own `TF-W2` comment admitting this should "route through a
+   TFWorldSetup stop/teardown API so world state (role, servers, scene)
+   resets cleanly alongside the socket." `ClientRequestContinentHop` calls
+   BOTH (`TFClientNet::Disconnect()` for TF state + `NetworkManager::
+   Disconnect()` for the socket) as the best available combination.
+   `TFWorldSetup::Connect()` (`World/TFWorldSetup.cpp`) now closes the
+   networking half of the gap directly: it calls the same `StopNetworking()`
+   that `Shutdown()` uses whenever `m_netBooted` is already true, so a second
+   `Connect()` on an already-used instance (exactly what a continent hop
+   does) no longer leaks the old `m_worldServer`/`m_areaServer`/
+   `m_knownClients` or races the old socket against the new one — those are
+   torn down before the new `NetworkManager::Connect()` is attempted. What
+   this does **NOT** do: reload scene/collision. `TFWorldSetup` still loads
+   exactly one continent's scene/terrain/collision at `Initialize()`
+   (single-continent-per-process, §1), so a hopped-to client keeps rendering
+   the OLD continent's geometry — that remains a real gap for anyone who
+   wants the client's *visuals* to follow the hop, not just its network
+   session, and is a much larger change (co-owned by the scene-load path,
+   `LoadSceneAndTerrain`/`LoadSanctuaryScene`) than this pass's scope.
 
 3. **FIXED (follow-up pass).** `TFLoginFlow`'s state machine previously did
    not reset on disconnect: `TFFlowState m_state` only advanced via the
