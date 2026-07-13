@@ -75,6 +75,20 @@ namespace Terrafront
         bool IsOpen() const { return m_state != TFFlowState::InWorld; }
         TFFlowState State() const { return m_state; }
 
+        /// multimap-plumbing lane (W13) gap #3 fix: nothing previously reset
+        /// `m_state` back to Login on disconnect, so a manual tf_disconnect or
+        /// a continent hop (TFTravelSystem::ClientRequestContinentHop) left the
+        /// client in a dead InWorld state -- IsOpen() stayed false, so the rest
+        /// of the game UI kept rendering as if still connected, and the login
+        /// screen the player needs to sign into the NEW server never
+        /// reappeared (see docs/TERRAFRONT_MULTIMAP.md section 4, gap #3).
+        /// Called from TFClientNet::Disconnect(). Keeps the typed username
+        /// (convenience — same server/account is the common case) but clears
+        /// the password, character list/selection, and any in-flight error so
+        /// the login screen renders fresh rather than showing stale state from
+        /// the previous session.
+        void ResetToLogin();
+
         // --- reply sinks: Task 6 wires TFClientNet's onboarding handlers to call
         // these directly once `m_ctx->loginFlow` exists. Until then, Update()'s
         // getter poll calls the same methods internally so the flow still works

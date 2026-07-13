@@ -270,6 +270,15 @@ namespace Terrafront
             m_ctx->inWorld = false;
         if (m_ctx && m_ctx->role == NetRole::Client)
             m_ctx->role = NetRole::Standalone;
+        // multimap-plumbing lane (W13) gap #3 fix (docs/TERRAFRONT_MULTIMAP.md
+        // section 4): without this, TFLoginFlow::m_state stayed InWorld after a
+        // disconnect/continent-hop, so IsOpen() stayed false and the login
+        // screen never reappeared even though the socket was gone. Reset
+        // unconditionally except when already at Login, so an early connect
+        // failure (Disconnect() called before ever reaching InWorld) doesn't
+        // clobber in-progress form state the player is still looking at.
+        if (m_ctx && m_ctx->loginFlow && m_ctx->loginFlow->State() != TFFlowState::Login)
+            m_ctx->loginFlow->ResetToLogin();
     }
 
     // ---------------------------------------------------------------------------

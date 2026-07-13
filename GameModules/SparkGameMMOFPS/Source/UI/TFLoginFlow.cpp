@@ -110,6 +110,25 @@ namespace Terrafront
         m_initialized = false;
     }
 
+    void TFLoginFlow::ResetToLogin()
+    {
+        // See the header comment: called on client disconnect (manual
+        // tf_disconnect or a continent hop) so the login screen reappears
+        // instead of leaving the game UI believing it is still InWorld.
+        m_state = TFFlowState::Login;
+        std::memset(m_password, 0, sizeof(m_password));
+        m_error.clear();
+        m_chars.clear();
+        m_selectedIdx = -1;
+        m_pending = PendingOp::None;
+        m_accountId = 0;
+        m_enterTimer = 0.0f;
+        // m_username intentionally preserved (same server/account is the
+        // common case — re-typing it every hop is pure friction). m_lan is
+        // untouched: it self-arms off ctx.role and the login screen render
+        // condition, not this flow's m_state.
+    }
+
     void TFLoginFlow::Update(float deltaTime)
     {
         if (!m_initialized || !m_ctx)

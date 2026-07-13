@@ -237,24 +237,21 @@ this up next:
    entry point (the TF-W2 comment already asks for this — this lane just
    independently re-discovered the same need from the travel side).
 
-3. **`TFLoginFlow`'s state machine does not reset on disconnect.**
-   `TFFlowState m_state` only advances via the onboarding reply sinks
-   (`OnLoginReply`/`OnCharList`/`OnEnteredWorld`/...); nothing sets it back
-   to `TFFlowState::Login` when the connection drops. Today a manual
-   `tf_disconnect` (or this lane's hop) leaves `m_state == InWorld` (so
-   `IsOpen()` stays `false`), meaning the rest of the game UI
-   (HUD/map/scoreboard, gated on `ctx.InWorld()`/`loginFlow->IsOpen()`)
-   keeps rendering as if still connected, and the login screen the player
-   needs to actually sign into the NEW server never reappears. **This is the
-   most player-visible gap**: as shipped, hopping to a different continent's
-   server leaves the client in a dead, disconnected-but-UI-says-connected
-   state rather than dropping the player back at a login screen for the new
-   server. Fixing it is a small, contained change to `UI/TFLoginFlow.cpp`
-   (not contended, not owned by this lane) — e.g. have `TFClientNet::
-   Disconnect()` or the hop path itself call something like `loginFlow->
-   ResetToLogin()`. Flagging it in wiringNotes rather than fixing it here
-   since it's outside this lane's OWNS list and touches a file another wave
-   may also be mid-edit on.
+3. **FIXED (follow-up pass).** `TFLoginFlow`'s state machine previously did
+   not reset on disconnect: `TFFlowState m_state` only advanced via the
+   onboarding reply sinks, and nothing set it back to `TFFlowState::Login`
+   when the connection dropped, so a manual `tf_disconnect` (or this lane's
+   hop) left `m_state == InWorld` — `IsOpen()` stayed `false`, the rest of
+   the game UI kept rendering as if still connected, and the login screen
+   the player needed to sign into the NEW server never reappeared. Fixed
+   exactly as recommended above: `TFLoginFlow::ResetToLogin()`
+   (`UI/TFLoginFlow.h/.cpp`) clears the flow back to `Login` (password,
+   char list/selection, error, pending-op, account id — username is kept
+   for convenience), and `TFClientNet::Disconnect()` calls it whenever
+   `loginFlow->State() != Login`. Both the manual-disconnect and
+   continent-hop paths route through `TFClientNet::Disconnect()`, so this
+   closes the gap for both. Step 6 in the walkthrough below is now stale —
+   the login screen DOES reappear after a hop.
 
 4. **No server-authoritative redirect** — §2.2. The client self-serves its
    own `continents.json` copy rather than asking its current server to
@@ -314,9 +311,9 @@ as understood today.
 5. Walk to the sanctuary terminal, open it: "Veyra Highlands" now shows a
    live "Travel to Veyra Highlands (127.0.0.1:27021)" button instead of the
    disabled "no server hosting" text.
-6. Click it. Expect (per §4 gap #3): the client disconnects and connects to
-   :27021, but the login screen does NOT currently reappear — this is the
-   known `TFLoginFlow` gap, not a bug in this lane's code. Verify the hop
-   itself worked via the server logs (`[TF] continent hop -> Veyra Highlands
-   (127.0.0.1:27021)` on the client, a fresh connection log line on the
-   :27021 server) and `tf_status`/`tf_travel_debug`.
+6. Click it. The client disconnects and connects to :27021; the login screen
+   now reappears (gap #3 fixed — see §4 item 3) so the player signs into the
+   :27021 server directly. Verify the hop itself worked via the server logs
+   (`[TF] continent hop -> Veyra Highlands (127.0.0.1:27021)` on the client,
+   a fresh connection log line on the :27021 server) and
+   `tf_status`/`tf_travel_debug`.
