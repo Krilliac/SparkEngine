@@ -1210,10 +1210,11 @@ void TerrafrontModule::RegisterConsoleCommands()
     // ------------------------------------------------------------------- W13
     // Anti-cheat lane: per-player detection/clamp/reject counters (movement
     // speed-hack/teleport clamps, TFWeaponSystem::ValidateFire RoF rejects,
-    // TF_FireEvent claimed-origin rejects). Everything this wave is
-    // detection + clamp/reject only — no bans — so this command is the only
-    // visibility into who's been tripping the checks (see
-    // Game/TFServerValidation.h for the full design writeup).
+    // TF_FireEvent claimed-origin rejects, TFServerSim::EnqueueInput input-rate
+    // token-bucket rejects). Everything this wave is detection + clamp/reject
+    // only — no bans — so this command is the only visibility into who's
+    // been tripping the checks (see Game/TFServerValidation.h for the full
+    // design writeup).
     console.RegisterCommand(
         "tf_cheat_stats",
         [this](const std::vector<std::string>&) -> std::string
@@ -1230,7 +1231,8 @@ void TerrafrontModule::RegisterConsoleCommands()
             for (const auto& [player, st] : stats)
             {
                 os << "\n  p" << player << "  moveClamps=" << st.movementClamps << " (spikes=" << st.movementSpikes
-                   << ")  fireRateRejects=" << st.fireRateRejects << "  fireOriginRejects=" << st.fireOriginRejects;
+                   << ")  fireRateRejects=" << st.fireRateRejects << "  fireOriginRejects=" << st.fireOriginRejects
+                   << "  inputRateRejects=" << st.inputRateRejects;
             }
             return os.str();
         },

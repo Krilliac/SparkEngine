@@ -33,6 +33,22 @@ namespace Terrafront
         // of only seeing it after the fact in tf_cheat_stats.
         constexpr float kSpikeRatio = 2.5f;
         constexpr double kSpikeLogThrottleSec = 5.0;
+
+        // AllowInput's token bucket. Refill rate is the server tick rate with
+        // a fudge multiplier -- generous enough that a legitimate client's
+        // own frame-time jitter (its inputs are enqueued once per client
+        // frame, not perfectly paced to the server's fixed tick) never trips
+        // it, while still firmly bounding a client that floods TF_ClientInput
+        // packets far faster than the server can ever consume them (see file
+        // header: this is what actually closes the input-queue catch-up
+        // exploit, not just the queue-depth cap in TFServerSim::EnqueueInput).
+        constexpr float kInputRateFudge = 1.5f;
+        constexpr float kInputRefillPerSec = kServerTickHz * kInputRateFudge;
+        // Small burst allowance -- covers a client briefly bunching a couple
+        // of frames' worth of inputs (e.g. a hitch catching back up), same
+        // spirit as TFWeaponSystem::ValidateFire's 2-token burst cap.
+        constexpr float kInputBucketCapacity = 4.0f;
+        constexpr double kInputRejectLogThrottleSec = 5.0;
     } // namespace
 
     TFServerValidation& TFServerValidation::Get()
@@ -120,11 +136,45 @@ namespace Terrafront
 
     void TFServerValidation::RecordFireRateReject(PlayerId player) { ++m_stats[player].fireRateRejects; }
 
+    bool TFServerValidation::AllowInput(PlayerId player, double now)
+    {
+        auto [tokIt, tokInserted] = m_inputTokens.try_emplace(player, kInputBucketCapacity);
+        if (tokInserted)
+            m_inputLastRefill[player] = now;
+
+        double& lastRefill = m_inputLastRefill[player];
+        float& tokens = tokIt->second;
+        tokens = std::min(kInputBucketCapacity, tokens + static_cast<float>((now - lastRefill) * kInputRefillPerSec));
+        lastRefill = now;
+
+        if (tokens < 1.0f)
+        {
+            TFViolationStats& st = m_stats[player];
+            ++st.inputRateRejects;
+            double& lastLog = m_lastInputRejectLog[player];
+            if (now - lastLog > kInputRejectLogThrottleSec)
+            {
+                lastLog = now;
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF-anticheat] player %u input rate exceeded the 60Hz(+fudge) budget (dropped, "
+                               "%u total)",
+                               player, st.inputRateRejects);
+            }
+            return false;
+        }
+
+        tokens -= 1.0f;
+        return true;
+    }
+
     void TFServerValidation::ClearPlayer(PlayerId player)
     {
         m_stats.erase(player);
         m_exemptOnce.erase(player);
         m_lastSpikeLog.erase(player);
+        m_inputTokens.erase(player);
+        m_inputLastRefill.erase(player);
+        m_lastInputRejectLog.erase(player);
     }
 
 } // namespace Terrafront

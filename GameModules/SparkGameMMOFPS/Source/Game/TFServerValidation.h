@@ -42,6 +42,24 @@
  *    special-cases that same condition so it never false-rejects the
  *    legitimate fallback), so this closes the seam where a client lying about
  *    its position would otherwise go completely unnoticed.
+ *  - INPUT RATE: TFServerSim::EnqueueInput calls AllowInput() before a
+ *    TF_ClientInput packet is even pushed onto the per-player queue, charging
+ *    it against a 60 Hz(+fudge) token bucket (same shape as
+ *    TFWeaponSystem::ValidateFire's per-weapon-id RoF bucket, just keyed on
+ *    the player instead of a weapon id). This is what actually closes the
+ *    catch-up exploit the MOVEMENT bullet above describes: TickMovement's
+ *    kMaxInputsPerTick replay is a bound on how much backlog is drained per
+ *    tick, not on how fast the queue can be FILLED -- without this gate a
+ *    client flooding TF_ClientInput packets faster than the server drains
+ *    them keeps the queue permanently backlogged and sustains the
+ *    kMaxInputsPerTick x displacement multiplier indefinitely (ValidateMovementTick's
+ *    fudge factor is tuned to barely tolerate that catch-up path, not a
+ *    sustained flood). Rejected inputs are simply dropped -- never queued --
+ *    so the offending client just sees its own inputs stop being acked
+ *    (server-auth reconciliation turns that into rubber-banding, never a
+ *    desync). A legitimate client enqueues at most one input per its own
+ *    frame and bots enqueue exactly once per fixed tick (TFBotSystem), so
+ *    both stay comfortably under budget by construction.
  *
  * All counters are DETECTION + CLAMP/REJECT only (no bans this wave -- see
  * tf_cheat_stats, Console/TFCommands.cpp). False-positive risk is kept low by
@@ -65,6 +83,7 @@ namespace Terrafront
         uint32_t movementSpikes = 0;    ///< subset of movementClamps that were a gross (>= kSpikeRatio) overshoot
         uint32_t fireRateRejects = 0;   ///< TFWeaponSystem::ValidateFire rejections (mirrored counter)
         uint32_t fireOriginRejects = 0; ///< TF_FireEvent claimed origin diverged from the trusted pawn position
+        uint32_t inputRateRejects = 0;  ///< TF_ClientInput dropped by AllowInput()'s 60Hz(+fudge) token bucket
     };
 
     /// Process-singleton (same lifetime/access pattern as TFImpactFx::Get()).
@@ -99,6 +118,15 @@ namespace Terrafront
         /// the packet without forwarding it to TFWeaponSystem.
         bool CheckFireOrigin(PlayerId player, const float claimed[3], const float trusted[3], float maxDivergenceM);
 
+        /// Call once per TF_ClientInput BEFORE it is pushed onto TFServerSim's
+        /// per-player input queue (see file header: this is the seam that
+        /// actually bounds sustained input flood rate, not just queue depth).
+        /// Charges one token from a per-player 60Hz(+fudge) bucket; returns
+        /// false (and counts the violation) when the bucket is empty --
+        /// caller should drop the input without enqueueing it. `now` is
+        /// TFServerSim::ServerTime(), same clock as ValidateMovementTick.
+        bool AllowInput(PlayerId player, double now);
+
         /// Mirrors a TFWeaponSystem::ValidateFire rejection into the unified
         /// per-player counters (see file header: no second gate here).
         void RecordFireRateReject(PlayerId player);
@@ -116,6 +144,12 @@ namespace Terrafront
         std::unordered_map<PlayerId, TFViolationStats> m_stats;
         std::unordered_map<PlayerId, bool> m_exemptOnce;
         std::unordered_map<PlayerId, double> m_lastSpikeLog;
+
+        // AllowInput's per-player token bucket (kept as parallel maps, same
+        // shape as the rest of this class, rather than a nested struct).
+        std::unordered_map<PlayerId, float> m_inputTokens;
+        std::unordered_map<PlayerId, double> m_inputLastRefill;
+        std::unordered_map<PlayerId, double> m_lastInputRejectLog;
     };
 
 } // namespace Terrafront

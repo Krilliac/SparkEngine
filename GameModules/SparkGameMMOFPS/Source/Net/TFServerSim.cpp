@@ -186,6 +186,14 @@ namespace Terrafront
         if (input.seq != 0 && input.seq <= mv->second.lastSeq)
             return; // stale / duplicate
 
+        // W13 anti-cheat lane: input-rate budget -- TickMovement's
+        // kMaxInputsPerTick replay only bounds how much backlog is DRAINED
+        // per tick, not how fast the queue can be FILLED. Gate acceptance
+        // here so a client flooding TF_ClientInput packets can't sustain a
+        // permanent backlog (see TFServerValidation.h file header).
+        if (!TFServerValidation::Get().AllowInput(player, m_serverTime))
+            return;
+
         auto& q = m_inputs[player];
         if (q.size() >= kMaxQueuedInputs)
             q.pop_front(); // drop oldest under flood; never grow unbounded
