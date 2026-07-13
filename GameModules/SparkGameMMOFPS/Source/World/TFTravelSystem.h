@@ -170,11 +170,25 @@ namespace Terrafront
         void ClientRequestTravel(uint8_t destMapId);
 
         /// multimap-plumbing lane (W13): client-side hop to a continent hosted
-        /// by a DIFFERENT server process (continents.json host/port). No-op
-        /// (sets m_lastTravelMsg) unless role==Client and target has a
-        /// configured endpoint — see docs/TERRAFRONT_MULTIMAP.md for the
-        /// process-per-continent design and the known teardown-gap caveat.
+        /// by a DIFFERENT server process. No-op (sets m_lastTravelMsg) unless
+        /// role==Client and connected — see docs/TERRAFRONT_MULTIMAP.md for
+        /// the process-per-continent design and the known teardown-gap
+        /// caveat. server-authoritative follow-up (§2.2): `target.host`/
+        /// `target.port` are used only for the request's display name now —
+        /// the actual endpoint is resolved by THIS client's current server
+        /// (via TF_ContinentHopRequest/Reply) and applied on a later Update()
+        /// tick once the reply arrives (see OnNetContinentHopReply).
         void ClientRequestContinentHop(const ContinentMeta& target);
+
+        /// server-authoritative continent-hop follow-up (W13,
+        /// docs/TERRAFRONT_MULTIMAP.md §2.2): registry lookup Net/TFServerSim.cpp
+        /// calls to answer a client's TF_ContinentHopRequest with THIS
+        /// process's own continents.json-sourced host/port for `mapId` — a
+        /// connecting client's local copy of that file is no longer trusted
+        /// for the actual endpoint, only used client-side as a display hint.
+        /// Returns false (host/port untouched) when `mapId` is unregistered
+        /// or has no configured endpoint.
+        bool LookupContinentEndpoint(uint8_t mapId, std::string& outHost, uint16_t& outPort) const;
 
         /// Debug panel toggle (tf_* console pattern).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
@@ -198,6 +212,15 @@ namespace Terrafront
         void ApplyTravelReply(const TF_TravelReply& rep);
         void ApplyContinentInfo(const TF_ContinentInfo& info);
 
+        /// server-authoritative continent-hop follow-up (W13): deferred apply
+        /// of an arrived TF_ContinentHopReply — called from Update(), NOT
+        /// from OnNetContinentHopReply itself. Disconnecting/reconnecting
+        /// synchronously inside the network message-dispatch callback would
+        /// tear down the very socket that dispatch loop is iterating (the
+        /// same reentrancy hazard OnPlayerSpawned avoids by deferring
+        /// TeleportPawn to ServerPlacePending on the next fixed tick).
+        void ApplyPendingContinentHop();
+
 #ifdef ENABLE_NETWORKING
         bool ServerNetActive() const;
         bool ClientNetActive() const;
@@ -210,6 +233,10 @@ namespace Terrafront
         void ServerSendTo(PlayerId player, uint16_t msgId, const void* payload, size_t size);
         void OnNetTravelReply(const void* data, size_t size);
         void OnNetContinentInfo(const void* data, size_t size);
+        /// server-authoritative continent-hop follow-up (W13): stashes the
+        /// reply into m_hopReply* and sets m_hopReplyPending — see
+        /// ApplyPendingContinentHop for why it isn't applied here directly.
+        void OnNetContinentHopReply(const void* data, size_t size);
 #endif
 
         void LoadContinentMeta(); ///< Assets/MMOFPS/Data/continents.json (display metadata only)
@@ -237,6 +264,17 @@ namespace Terrafront
         double m_infoRequestedAt{-1.0};
         double m_clock{0.0};
         char m_lastTravelMsg[96]{}; ///< last reply, surfaced in the menu
+
+        // server-authoritative continent-hop follow-up (W13,
+        // docs/TERRAFRONT_MULTIMAP.md §2.2): request in flight + the reply,
+        // once it arrives, staged for ApplyPendingContinentHop on the next
+        // Update() tick (see that method's doc comment for why it's deferred).
+        int m_hopRequestMapId{-1};    ///< mapId awaiting a reply; -1 == none in flight
+        std::string m_hopRequestName; ///< display name for status text / logging
+        bool m_hopReplyPending{false};
+        bool m_hopReplyOk{false};
+        std::string m_hopReplyHost;
+        uint16_t m_hopReplyPort{0};
 
         // display metadata from continents.json (falls back to built-ins).
         // m_continentDisplayName/Blurb mirror the ACTIVE entry of m_continentList

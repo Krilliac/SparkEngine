@@ -1,10 +1,13 @@
 # TERRAFRONT Multi-Continent Hosting — Design + Current State
 
 **Lane:** multimap-plumbing (W13). **Owns:** `Game/TFTravelSystem.h/.cpp` (code),
-this doc (design). **Status:** design complete; small, safe partial plumbing
-shipped; several PREREQUISITES documented below are still open in files this
-lane does not own (contended or out-of-scope) — do not treat "the hop button
-works" as "multi-continent hosting is done."
+this doc (design). Server-authoritative follow-up pass additionally touched
+`Net/TFNetProtocol.h` and `Net/TFServerSim.h/.cpp` (contended, but the touch
+is additive/minimal — see §3). **Status:** design complete; the handshake in
+§2.2 is now fully shipped and server-authoritative; several PREREQUISITES
+documented below are still open in files this lane does not own (contended or
+out-of-scope) — do not treat "the hop button works" as "multi-continent
+hosting is done."
 
 ## 1. The question
 
@@ -90,37 +93,52 @@ copy every client/server loads, e.g. a shared asset sync) to say where it
 lives. It is deliberately NOT auto-populated by LAN discovery in this pass —
 see §5.1 for why and how a follow-up could close that gap.
 
-### 2.2 Travel handshake
+### 2.2 Travel handshake — FIXED (server-authoritative, follow-up pass)
 
-Full target (server-authoritative redirect):
+Target (server-authoritative redirect), now fully shipped:
 1. Client at the sanctuary terminal picks a continent that isn't the one this
    process hosts.
 2. Client sends a travel-to-continent request to **the server it's currently
    connected to** (not directly to the target — the server is the trust
-   boundary, same as every other TFMsg).
-3. The current server looks up the target continent in its own registry and
-   replies with either `NoSuchServer` or an endpoint (`host`, `port`).
-4. Client disconnects from the current server and connects to the returned
-   endpoint (the existing `TFWorldSetup::Connect` path).
+   boundary, same as every other TFMsg). Wire: `TFMsg::ContinentHopRequest`
+   (`0x548C`, C->S `TF_ContinentHopRequest{mapId}`) — a fresh reserved block
+   in `Net/TFNetProtocol.h` (`0x548C-0x548F`; this lane's own travel channel,
+   `0x5434-0x5437`, was already full). Routed through the same
+   `TFServerSim::RouteClientMessage` choke point and enter-world gate as
+   every other post-onboarding gameplay id.
+3. The current server looks up the target continent in **its own** registry
+   — `World/TFTravelSystem.h`'s `LookupContinentEndpoint(mapId)`, sourced
+   from THAT process's own `continents.json`, never from anything the
+   client asserts — and replies `TFMsg::ContinentHopReply` (`0x548D`, S->C
+   `TF_ContinentHopReply{ok, mapId, port, host[64]}`). `ok == 0` means "no
+   endpoint configured for that mapId on this server" (unregistered mapId
+   and "registered but no host/port" both collapse to the same honest
+   refusal — no `NoSuchServer` vs. `BadMap` split; one boolean was enough).
+4. Client disconnects from the current server and connects to the endpoint
+   **the reply carried** (the existing `TFWorldSetup::Connect` path) — never
+   to whatever its own local `continents.json` copy or a LAN beacon guessed.
+   Applied on the client's next `Update()` tick after the reply arrives
+   (`TFTravelSystem::ApplyPendingContinentHop`), not synchronously inside the
+   network message-dispatch callback that received it — doing the
+   disconnect/reconnect there would tear down the very socket that dispatch
+   loop is iterating (same reentrancy hazard `OnPlayerSpawned` avoids by
+   deferring `TeleportPawn` to `ServerPlacePending` on the next fixed tick).
 5. Client re-runs onboarding against the new server: login (same
    username/password — this only works if accounts are shared, §2.3) →
    character select (same character, if any) → enter world.
 
-**What W13 actually ships is a simplification of step 2-3**: the CLIENT reads
-its own local `continents.json` copy directly (steps skipped: no new wire
-message, no server-side registry lookup) and self-serves the endpoint. This
-is not server-authoritative — a malicious client could point itself anywhere,
-which is fine (it's still just connecting-as-a-client to *some* TERRAFRONT
-server; the target server is the one that authorizes everything from there).
-It keeps this pass code-light: no new `TFMsg` in the frozen wire block, no
-edits to `Net/TFNetProtocol.h` or `Net/TFServerSim.*` (both contended).
-
-If a future wave wants the fully server-authoritative version: add a new
-reserved wire pair (this lane's block is `0x5434-0x5437`, already full — the
-next lane would need a fresh reserved block per the `TFNetProtocol.h`
-convention) carrying `{mapId}` request / `{ok, host[64], port}` reply, and
-have `TFServerSim` (or a small owned system) hold the same registry
-server-side. Low cost, but touches a contended file, so it wasn't done here.
+**What changed from the original W13 pass**: previously the CLIENT read its
+own local `continents.json` copy directly and self-served the endpoint — not
+server-authoritative; a malicious client could point itself at an arbitrary
+host by editing that file (still harmless in isolation, since the target
+server authorizes everything from there, but not the intended trust model).
+The client's local `continents.json` copy (and any LAN-discovered beacon,
+§5.1) is now used **only** as a display hint in the terminal menu — whether
+to show a continent's "Travel to X (host:port)" button as enabled at all —
+never as the actual connect target. `RenderUI`'s button-enable check
+(`canHop`/`haveEndpoint`) is unchanged and still reads the local copy for
+that hint; only the connect step changed to trust the server's reply
+instead.
 
 ### 2.3 State carry-over — VERIFIED, with a hard prerequisite
 
@@ -169,42 +187,68 @@ seamless cross-continent travel with no reconnect/loading screen, that is a
 different, much larger design (see §1 Option B) and deserves its own
 dedicated design pass, not an incremental patch on top of this one.
 
-## 3. What W13 ships (partial plumbing, `Game/TFTravelSystem.h/.cpp`)
+## 3. What W13 ships (`Game/TFTravelSystem.h/.cpp` + `Net/TFNetProtocol.h` + `Net/TFServerSim.*`)
 
 - `TFTravelSystem::ContinentMeta` gained `host`/`port`, parsed from
   `continents.json`'s new optional keys in the existing
   `LoadContinentMeta()`.
-- New public method `ClientRequestContinentHop(const ContinentMeta&)`:
+- `Net/TFNetProtocol.h` gained a fresh reserved wire block (`0x548C-0x548F`):
+  `TFMsg::ContinentHopRequest`/`ContinentHopReply` + packed
+  `TF_ContinentHopRequest{mapId}` / `TF_ContinentHopReply{ok, mapId, port,
+  host[64]}` — this lane's own travel channel (`0x5434-0x5437`) was full, so
+  per that block's own upgrade note this needed a new one.
+- `Net/TFServerSim.*` gained `HandleContinentHopRequest`: enter-world-gated
+  like every other post-onboarding gameplay id, resolves the request against
+  `m_ctx->travel->LookupContinentEndpoint(mapId)` (THIS process's own
+  registry) and replies — never trusting anything the client sent beyond the
+  `mapId` it's asking about.
+- `TFTravelSystem` gained the public `LookupContinentEndpoint(mapId, &host,
+  &port)` accessor `TFServerSim` calls above (server-authoritative follow-up,
+  §2.2), and `ClientRequestContinentHop(const ContinentMeta&)` was
+  rewritten:
   - No-op (sets the status line) unless `ctx.role == NetRole::Client` — only
     a genuine remote client can meaningfully hop; a `ListenHost`/
     `DedicatedServer`/`Standalone` process IS the authority for the active
     continent, so there's nothing to reconnect.
-  - No-op with `"No server hosting <name>"` if the target has no configured
-    `host`/`port`.
-  - Otherwise: best-effort teardown of the current connection
+  - No-op with `"Not connected to a server"` if there's no live connection to
+    ask.
+  - Otherwise: sends `TF_ContinentHopRequest{target.mapId}` to the CURRENT
+    server and returns immediately (`"Requesting <name> server address..."`)
+    — `target.host`/`target.port` are no longer read for the connect
+    decision, only `target.mapId`/`target.name`.
+  - `OnNetContinentHopReply` stashes the reply; `ApplyPendingContinentHop`
+    (run from the next `Update()` tick, see §2.2 step 4 for why it's
+    deferred) does the actual work: `"No server hosting <name>"` if
+    `!ok`, otherwise best-effort teardown of the current connection
     (`TFClientNet::Disconnect()` + `NetworkManager::Disconnect()`, see §5.2
     for why both are called and what's still missing) then
-    `TFWorldSetup::Connect(host, port)` — the exact same public entry point
-    `TFLoginFlow::JoinLanServer` already uses for LAN joins.
-- The sanctuary terminal menu (`RenderUI`) now renders a live "Travel to
-  `<name>` (`host`:`port`)" button for any non-active continent with a
-  configured endpoint (only enabled for `NetRole::Client`), and an honest
-  disabled "`<name>` - no server hosting this continent" otherwise — no
-  fabricated servers, ever.
+    `TFWorldSetup::Connect(reply.host, reply.port)` — the exact same public
+    entry point `TFLoginFlow::JoinLanServer` already uses for LAN joins, now
+    fed the SERVER-verified endpoint instead of the client's local guess.
+- The sanctuary terminal menu (`RenderUI`) still renders a live "Travel to
+  `<name>` (`host`:`port`)" button for any non-active continent the CLIENT's
+  own `continents.json` copy (or a matching LAN beacon, §5.1) believes has an
+  endpoint (only enabled for `NetRole::Client`), and an honest disabled
+  "`<name>` - no server hosting this continent" otherwise — no fabricated
+  servers, ever. That local knowledge is now a display hint only, per §2.2;
+  clicking it always re-resolves against the current server before
+  connecting anywhere.
 - Console command `tf_travel_hop <continent key>` mirrors the button for
-  headless/scripted testing.
+  headless/scripted testing (now also async — the returned status line is
+  `"Requesting..."`, not an immediate connect result).
 - `RenderDebugUI` (`tf_travel_debug` panel) lists each continent's
-  configured endpoint or "no endpoint configured".
+  client-locally-configured endpoint or "no endpoint configured".
 - `continents.json`'s `$schema_note` documents the new keys. No continent in
   the shipped file has real `host`/`port` values — there is no second server
   actually running by default, so shipping fake values would violate "keep
   it honest."
 
-This is intentionally the full extent of the code change. It is safe to ship
-with zero risk to the single-continent path (every new branch is gated behind
-`host`/`port` being present, which is never true today) and gives an operator
-who DOES stand up a second process (with a shared `Saves/`, per §2.3) a
-working button, immediately, with no further code changes.
+This is safe to ship with zero risk to the single-continent path (every new
+branch is gated behind `host`/`port` being configured on the SERVER side,
+which is never true today) and gives an operator who DOES stand up a second
+process (with a shared `Saves/`, per §2.3, and `host`/`port` configured in
+**each server's own** `continents.json` for the OTHER continent) a working,
+server-verified button with no further code changes.
 
 ## 4. Known gaps (found during investigation, NOT fixed by this lane)
 
@@ -257,11 +301,18 @@ this up next:
    closes the gap for both. Step 6 in the walkthrough below is now stale —
    the login screen DOES reappear after a hop.
 
-4. **No server-authoritative redirect** — §2.2. The client self-serves its
-   own `continents.json` copy rather than asking its current server to
-   resolve the target. Acceptable for a first pass (the target server is
-   still the trust boundary for everything downstream) but not the "real"
-   design; upgrade path is specced in §2.2 for whoever wants it.
+4. **FIXED (this pass).** No server-authoritative redirect — §2.2. The
+   client used to self-serve its own `continents.json` copy rather than
+   asking its current server to resolve the target. Fixed exactly as
+   specced: `TFMsg::ContinentHopRequest`/`ContinentHopReply`
+   (`Net/TFNetProtocol.h`, `0x548C-0x548F`) round-trips the hop through
+   `Net/TFServerSim.cpp`'s `HandleContinentHopRequest`, which answers from
+   `TFTravelSystem::LookupContinentEndpoint` — THIS server's own
+   `continents.json`-sourced registry — never the requesting client's. The
+   client's local copy (and LAN discovery, §5.1) is now a display hint only;
+   see §2.2 and §3 for the full mechanics, including why the reply is applied
+   a tick late (`ApplyPendingContinentHop`) rather than synchronously inside
+   the network dispatch callback that received it.
 
 ## 5. Deferred / explicitly not done
 
@@ -291,9 +342,12 @@ follow-up has now landed, exactly as recommended:
   `host`/`port` for both the button's enabled state and the label (suffixed
   `[LAN]` so it's visually distinguishable from an operator-configured
   static entry). Falls back to the static entry exactly as before when no
-  beacon matches. `ClientRequestContinentHop` is unchanged — it's handed the
-  resolved (possibly LAN-sourced) endpoint the same way it always took the
-  static one.
+  beacon matches. **Post server-authoritative follow-up (§2.2):** this
+  LAN-vs-static resolution is now display-only — it decides what the button
+  says and whether it's enabled, not where the client actually connects.
+  `ClientRequestContinentHop` reads only `target.mapId`/`target.name` off
+  whichever `ContinentMeta` `RenderUI` passes it; the real endpoint always
+  comes back from the current server's `TF_ContinentHopReply`.
 
 Original reasoning (kept for context): reading `m_lan` from `TFTravelSystem`
 needed either (a) a new accessor on `TFLoginFlow` plus a `TFGameContext`
@@ -308,7 +362,7 @@ Not implemented. See §1 Option B and §2.4. Do not build without a fresh
 design pass — this doc explicitly recommends against it for the requirements
 as understood today.
 
-## 6. How to try the partial plumbing today
+## 6. How to try the plumbing today
 
 1. Stand up continent A: `tf_dedicated 27020` (default `tf_continent=
    cindral_wastes`), from working directory `X`.
@@ -316,16 +370,34 @@ as understood today.
    (or however the boot cvar is set), from working directory `Y` where
    `Y/Saves` is the SAME physical location as `X/Saves` (symlink/junction) —
    **required**, see §2.3, or character state won't carry over.
-3. In BOTH copies of `continents.json` (client's and both servers' asset
-   trees), add to the `veyra_highlands` entry:
-   `"host": "127.0.0.1", "port": 27021`.
+3. In BOTH copies of `continents.json` (client's and continent A's asset
+   tree — continent B's own copy is never consulted by this handshake) add
+   to the `veyra_highlands` entry: `"host": "127.0.0.1", "port": 27021`.
+   - **Continent A's copy is load-bearing** since the server-authoritative
+     follow-up (§2.2): continent A's server (working directory `X`) is the
+     one that actually answers the hop request, so ITS `continents.json` is
+     the one that decides whether the reply is `ok`. Miss this one and the
+     hop is refused ("No server hosting Veyra Highlands") even though
+     continent B is really up.
+   - **The client's copy is display-only now**: it only decides whether the
+     terminal button shows as enabled and what host:port it *claims* (step 5)
+     — omit it there and the button stays honestly disabled even though
+     clicking it would have worked, but it no longer affects where a
+     successful hop actually connects (that's always continent A's answer).
+     Same for a matching LAN beacon (§5.1) and for continent B's own copy —
+     neither is read by this handshake at all.
 4. Client: `tf_connect 127.0.0.1:27020`, log in, create a character.
 5. Walk to the sanctuary terminal, open it: "Veyra Highlands" now shows a
    live "Travel to Veyra Highlands (127.0.0.1:27021)" button instead of the
-   disabled "no server hosting" text.
-6. Click it. The client disconnects and connects to :27021; the login screen
-   now reappears (gap #3 fixed — see §4 item 3) so the player signs into the
-   :27021 server directly. Verify the hop itself worked via the server logs
-   (`[TF] continent hop -> Veyra Highlands (127.0.0.1:27021)` on the client,
-   a fresh connection log line on the :27021 server) and
-   `tf_status`/`tf_travel_debug`.
+   disabled "no server hosting" text (this label is still the CLIENT's local
+   guess — step 6 is where the server confirms it).
+6. Click it. The client sends `TF_ContinentHopRequest` to :27020 and shows
+   "Requesting Veyra Highlands server address..."; :27020 resolves it from
+   its own registry and replies `TF_ContinentHopReply`; on the client's next
+   tick it disconnects from :27020 and connects to the endpoint THAT REPLY
+   carried. The login screen reappears (gap #3 fixed — see §4 item 3) so the
+   player signs into the :27021 server directly. Verify the hop itself
+   worked via the server logs (`[TF] player <id> continent-hop request:
+   mapId 2 -> 127.0.0.1:27021` on :27020, `[TF] continent hop -> Veyra
+   Highlands (127.0.0.1:27021, server-verified)` on the client, a fresh
+   connection log line on the :27021 server) and `tf_status`/`tf_travel_debug`.

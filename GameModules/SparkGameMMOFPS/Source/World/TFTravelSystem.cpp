@@ -23,6 +23,7 @@
 #include "Game/TFTutorial.h"      // tutorial-flow lane (W12): first-join guided flow
 #include "Game/TFUiSounds.h"      // W10 audio-wave-2: terminal bleeps
 #include "Net/TFClientNet.h"
+#include "Net/TFNetProtocol.h"      // W13 server-authoritative continent-hop: TF_ContinentHopRequest/Reply
 #include "Net/TFRedeployProtocol.h" // kTFRedeployBlocked reason code
 #include "Net/TFServerSim.h"
 #include "UI/TFLoginFlow.h" // W13 multimap follow-up: live LAN endpoint preference (see RenderUI)
@@ -634,8 +635,8 @@ namespace Terrafront
 
     void TFTravelSystem::ClientRequestContinentHop(const ContinentMeta& target)
     {
-        // multimap-plumbing lane (W13): see docs/TERRAFRONT_MULTIMAP.md for the
-        // process-per-continent design this implements the client half of.
+        // multimap-plumbing lane (W13) + server-authoritative follow-up: see
+        // docs/TERRAFRONT_MULTIMAP.md §2.2 for the design this implements.
         // Only a genuine remote client can hop — the local authority role
         // (ListenHost/DedicatedServer/Standalone loopback) already IS the
         // server for the active continent, so there is nothing to reconnect.
@@ -646,14 +647,71 @@ namespace Terrafront
             std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Only a connected client can travel servers");
             return;
         }
-        if (target.host.empty() || target.port == 0)
+        if (target.mapId < 0)
         {
-            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "No server hosting %s", target.name.c_str());
+            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Unknown continent");
+            return;
+        }
+        if (!m_ctx->clientNet || !m_ctx->clientNet->IsConnected())
+        {
+            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Not connected to a server");
             return;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] continent hop -> %s (%s:%u)", target.name.c_str(),
-                       target.host.c_str(), static_cast<unsigned>(target.port));
+        // Server-authoritative redirect (§2.2): ask the server THIS client is
+        // CURRENTLY connected to — the trust boundary, same as every other
+        // TFMsg — to resolve `target.mapId` against ITS OWN registry
+        // (TFTravelSystem::LookupContinentEndpoint on that process) rather
+        // than trusting this client's local continents.json copy (or a
+        // locally-observed LAN beacon) for the actual endpoint; those are now
+        // display hints only (see RenderUI). The reply drives
+        // ApplyPendingContinentHop on a later Update() tick — see
+        // OnNetContinentHopReply.
+        m_hopRequestMapId = target.mapId;
+        m_hopRequestName = target.name;
+        TF_ContinentHopRequest req{};
+        req.mapId = static_cast<uint8_t>(target.mapId);
+        m_ctx->clientNet->SendMsg(TFMsg::ContinentHopRequest, &req, sizeof(req));
+        std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Requesting %s server address...",
+                     target.name.c_str());
+    }
+
+    bool TFTravelSystem::LookupContinentEndpoint(uint8_t mapId, std::string& outHost, uint16_t& outPort) const
+    {
+        for (const ContinentMeta& c : m_continentList)
+        {
+            if (c.mapId != static_cast<int>(mapId))
+                continue;
+            if (c.host.empty() || c.port == 0)
+                return false; // registered continent, but no endpoint configured
+            outHost = c.host;
+            outPort = c.port;
+            return true;
+        }
+        return false; // unregistered mapId
+    }
+
+    void TFTravelSystem::ApplyPendingContinentHop()
+    {
+        const std::string name = m_hopRequestName.empty() ? std::string("that continent") : m_hopRequestName;
+        const bool ok = m_hopReplyOk;
+        const std::string host = m_hopReplyHost;
+        const uint16_t port = m_hopReplyPort;
+        m_hopReplyPending = false;
+        m_hopRequestMapId = -1;
+        m_hopRequestName.clear();
+
+        if (!ok)
+        {
+            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "No server hosting %s", name.c_str());
+            TFUiSounds_Play(m_ctx, TFUiBleep::Deny); // W10 audio-wave-2
+            Spark::SimpleConsole::GetInstance().LogWarning(std::string("[TF] continent hop refused: no server for ") +
+                                                            name);
+            return;
+        }
+
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] continent hop -> %s (%s:%u, server-verified)", name.c_str(),
+                       host.c_str(), static_cast<unsigned>(port));
 
         // Best-effort teardown of the CURRENT connection before dialing the new
         // one. TFClientNet::Disconnect() resets TF-level client state + ctx.role
@@ -662,8 +720,8 @@ namespace Terrafront
         // command (TFCommands.cpp) which drops the socket but is tagged "TF-W2"
         // there as not yet routed through a clean TFWorldSetup teardown API.
         // Both are best-effort — see docs/TERRAFRONT_MULTIMAP.md "known gaps"
-        // for the residual risk (stale WorldServer/AreaServer/scene state on
-        // the OLD continent surviving into the new connection).
+        // for the residual risk (client visuals don't reload for the new
+        // continent's scene/collision).
         if (m_ctx->clientNet)
             m_ctx->clientNet->Disconnect();
 #ifdef ENABLE_NETWORKING
@@ -674,13 +732,12 @@ namespace Terrafront
         }
 #endif
 
-        if (!m_ctx->world->Connect(target.host, target.port))
+        if (!m_ctx->world || !m_ctx->world->Connect(host, port))
         {
-            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Connect to %s failed (see log)",
-                          target.name.c_str());
+            std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Connect to %s failed (see log)", name.c_str());
             return;
         }
-        std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Connecting to %s...", target.name.c_str());
+        std::snprintf(m_lastTravelMsg, sizeof(m_lastTravelMsg), "Connecting to %s...", name.c_str());
         TFUiSounds_Play(m_ctx, TFUiBleep::Confirm);
         SetMenuOpen(false);
     }
@@ -779,13 +836,25 @@ namespace Terrafront
                            [this](const NetworkMessage& m) { OnNetTravelReply(m.payload.data(), m.payload.size()); });
         nm.RegisterHandler(static_cast<MessageType>(kTFTravelMsg_Info),
                            [this](const NetworkMessage& m) { OnNetContinentInfo(m.payload.data(), m.payload.size()); });
+        // server-authoritative continent-hop follow-up (W13,
+        // docs/TERRAFRONT_MULTIMAP.md §2.2): TFMsg::ContinentHopReply is a
+        // frozen TFNetProtocol.h id (Net/TFServerSim.cpp answers it
+        // server-side) but the client-side reaction — disconnect from this
+        // server, connect to the resolved one — belongs to this system's
+        // existing connect/disconnect sequence, so it registers its own
+        // handler here (this system's own-channel precedent, same as the
+        // travel-reply ids above) instead of routing through
+        // TFClientNet/TFClientNetHandlers.cpp.
+        nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(TFMsg::ContinentHopReply)),
+                           [this](const NetworkMessage& m)
+                           { OnNetContinentHopReply(m.payload.data(), m.payload.size()); });
         m_clientHandlers = true;
     }
 
     void TFTravelSystem::ClientReleaseNetHandlers()
     {
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (uint16_t id : {kTFTravelMsg_Reply, kTFTravelMsg_Info})
+        for (uint16_t id : {kTFTravelMsg_Reply, kTFTravelMsg_Info, static_cast<uint16_t>(TFMsg::ContinentHopReply)})
             nm.RegisterHandler(static_cast<Spark::Net::MessageType>(id), [](const Spark::Net::NetworkMessage&) {});
         m_clientHandlers = false;
     }
@@ -853,6 +922,30 @@ namespace Terrafront
         ApplyContinentInfo(info);
     }
 
+    void TFTravelSystem::OnNetContinentHopReply(const void* data, size_t size)
+    {
+        if (size != sizeof(TF_ContinentHopReply))
+        {
+            ++m_badPackets;
+            return;
+        }
+        TF_ContinentHopReply rep{};
+        std::memcpy(&rep, data, sizeof(rep));
+        rep.host[sizeof(rep.host) - 1] = '\0'; // defense-in-depth: guarantee NUL even if the wire string wasn't
+
+        if (m_hopRequestMapId != static_cast<int>(rep.mapId))
+            return; // stale/unsolicited reply (already applied, or superseded by a newer request)
+
+        // Deferred apply — see ApplyPendingContinentHop's doc comment: doing
+        // the Disconnect()/Connect() here, synchronously inside
+        // NetworkManager's message-dispatch loop, would tear down the very
+        // socket that loop is iterating.
+        m_hopReplyOk = rep.ok != 0;
+        m_hopReplyHost = rep.host;
+        m_hopReplyPort = rep.port;
+        m_hopReplyPending = true;
+    }
+
 #endif // ENABLE_NETWORKING
 
     // ---------------------------------------------------------------------------
@@ -863,6 +956,14 @@ namespace Terrafront
     {
         if (!m_initialized || !m_ctx)
             return;
+
+        // server-authoritative continent-hop follow-up (W13): apply any
+        // TF_ContinentHopReply that arrived since the last tick BEFORE
+        // anything below reads ctx->role/localPlayer/clientNet — a positive
+        // reply disconnects and reconnects, changing all three.
+        if (m_hopReplyPending)
+            ApplyPendingContinentHop();
+
         m_clock += deltaTime;
         m_interactDebounce = std::max(0.0f, m_interactDebounce - deltaTime);
 
@@ -1094,6 +1195,15 @@ namespace Terrafront
                     }
                 }
 
+                // server-authoritative follow-up (W13, §2.2): host/port here
+                // are display hints only now (this client's local guess of
+                // whether a hop is worth offering) — ClientRequestContinentHop
+                // no longer trusts them for the actual connect. It re-resolves
+                // `effective.mapId` against the CURRENT server's own registry
+                // over the wire and only ever connects to what THAT reply
+                // says, so a stale/edited local continents.json (or a bogus
+                // LAN beacon) can misinform this label but can't misdirect
+                // the connection.
                 const bool haveEndpoint = !effective.host.empty() && effective.port != 0;
                 const bool canHop = haveEndpoint && m_ctx->role == NetRole::Client;
                 char otherLbl[160];

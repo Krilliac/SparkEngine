@@ -198,6 +198,14 @@ namespace Terrafront
         // CanRedeploy (the same predicate the client pre-checks) + the per-player
         // interval map below; executes via TeleportPawn (no kill/respawn).
         void HandleRedeployRequest(PlayerId sender, const void* data, size_t size);
+
+        // W13 multimap server-authoritative continent-hop (docs/TERRAFRONT_
+        // MULTIMAP.md §2.2): resolves TF_ContinentHopRequest.mapId against
+        // this process's own registry (World/TFTravelSystem.h::
+        // LookupContinentEndpoint, sourced from THIS server's continents.json)
+        // and replies with TF_ContinentHopReply — the requesting client's own
+        // copy of that file is never trusted for the actual endpoint.
+        void HandleContinentHopRequest(PlayerId sender, const void* data, size_t size);
 #endif
 
         TFGameContext* m_ctx{nullptr};

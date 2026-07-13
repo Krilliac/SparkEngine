@@ -12,6 +12,7 @@
 #include "Net/TFChatRules.h"
 #include "Data/TFDataTables.h"
 #include "World/TFRegionSystem.h"
+#include "World/TFTravelSystem.h" // W13 multimap server-authoritative continent-hop: LookupContinentEndpoint
 #include "World/TFWorldSetup.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h" // W5 onboarding (Task 6): disconnect progress flush
@@ -683,6 +684,12 @@ namespace Terrafront
                   { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
         }
 
+        // W13 multimap server-authoritative continent-hop (docs/TERRAFRONT_
+        // MULTIMAP.md §2.2): enter-world-gated like the other post-onboarding
+        // gameplay ids (only sent from the sanctuary terminal).
+        route(TFMsg::ContinentHopRequest, [this](const NetworkMessage& m)
+              { RouteClientMessage(m.senderID, TFMsg::ContinentHopRequest, m.payload.data(), m.payload.size()); });
+
         m_handlersRegistered = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] server TFMsg handlers registered");
     }
@@ -698,7 +705,7 @@ namespace Terrafront
                          TFMsg::VehicleEnter,    TFMsg::VehicleExit,     TFMsg::AegisDeploy,   TFMsg::LoginRequest,
                          TFMsg::RegisterRequest, TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq,
                          TFMsg::EnterWorldReq,   TFMsg::RedeployRequest, TFMsg::OutfitRequest, TFMsg::AbilityRequest,
-                         TFMsg::GrenadeThrow,    TFMsg::PingPlace})
+                         TFMsg::GrenadeThrow,    TFMsg::PingPlace,       TFMsg::ContinentHopRequest})
         {
             nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                [](const Spark::Net::NetworkMessage&) {});
@@ -1094,6 +1101,54 @@ namespace Terrafront
         SendToPlayer(sender, static_cast<uint16_t>(TFMsg::RedeployReply), &rep, sizeof(rep), true);
     }
 
+    // W13 multimap server-authoritative continent-hop (docs/TERRAFRONT_MULTIMAP.md
+    // §2.2): answer TF_ContinentHopRequest from THIS process's own registry
+    // (World/TFTravelSystem.h, sourced from THIS server's continents.json) —
+    // never from anything the requesting client asserts. This is the
+    // load-bearing trust-boundary fix the doc's "what W13 actually ships"
+    // section flagged as missing: previously the CLIENT read its own
+    // continents.json copy and self-served the endpoint.
+    void TFServerSim::HandleContinentHopRequest(PlayerId sender, const void* data, size_t size)
+    {
+        if (data == nullptr || size != sizeof(TF_ContinentHopRequest) || sender == Spark::Net::INVALID_CLIENT)
+        {
+            ++m_badPackets;
+            return;
+        }
+        TF_ContinentHopRequest req{};
+        std::memcpy(&req, data, sizeof(req));
+
+        TF_ContinentHopReply rep{};
+        rep.mapId = req.mapId;
+        rep.ok = 0;
+        rep.port = 0;
+        rep.host[0] = '\0';
+
+        std::string host;
+        uint16_t port = 0;
+        if (m_ctx->travel && m_ctx->travel->LookupContinentEndpoint(req.mapId, host, port))
+        {
+            // Truncate rather than reject an oversized operator-configured
+            // hostname — the wire field is a fixed 64 bytes (DNS names can
+            // exceed that; IPs/short hostnames never will in practice).
+            const size_t n = std::min(host.size(), sizeof(rep.host) - 1);
+            std::memcpy(rep.host, host.data(), n);
+            rep.host[n] = '\0';
+            rep.port = port;
+            rep.ok = 1;
+        }
+
+        if (rep.ok)
+            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] player %u continent-hop request: mapId %u -> %s:%u",
+                           sender, static_cast<unsigned>(req.mapId), rep.host, static_cast<unsigned>(rep.port));
+        else
+            SPARK_LOG_INFO(Spark::LogCategory::Game,
+                           "[TF] player %u continent-hop request: mapId %u -> no server configured", sender,
+                           static_cast<unsigned>(req.mapId));
+
+        SendToPlayer(sender, static_cast<uint16_t>(TFMsg::ContinentHopReply), &rep, sizeof(rep), true);
+    }
+
     void TFServerSim::SendSpawnReply(PlayerId player, const TF_SpawnReply& reply)
     {
         SendToPlayer(player, static_cast<uint16_t>(TFMsg::SpawnReply), &reply, sizeof(reply), true);
@@ -1159,6 +1214,7 @@ namespace Terrafront
         case TFMsg::AbilityRequest:  // class-abilities lane (W9): gated
         case TFMsg::GrenadeThrow:    // grenades lane (W10): gated
         case TFMsg::PingPlace:       // ping-system lane (W11): gated
+        case TFMsg::ContinentHopRequest: // multimap server-authoritative hop (W13): gated
             if (!m_enteredWorld.contains(sender))
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Game,
@@ -1287,6 +1343,11 @@ namespace Terrafront
             SendToPlayer(sender, static_cast<uint16_t>(TFMsg::UnlockReply), &rep, sizeof(rep), true);
             break;
         }
+        // W13 multimap server-authoritative continent-hop (docs/TERRAFRONT_
+        // MULTIMAP.md §2.2).
+        case TFMsg::ContinentHopRequest:
+            HandleContinentHopRequest(sender, data, size);
+            break;
         default:
             break;
         }

@@ -126,12 +126,15 @@ namespace Terrafront
         // 0x5480-0x5483: outfit-leaderboards block (W12) — id + packed struct in
         // Game/TFOutfitSystem.h. 0x5480 = S->C TF_OutfitLeaderboard (the request is
         // TFOutfitOp::Leaderboard riding OutfitRequest 0x5438); 0x5481-0x5483 free.
-        // 0x5484-0x5487: killcam lane (W13) — RESERVED but left UNUSED. The
-        // killcam (Game/TFSpectator.h KillcamFollow mode) needs no new wire
-        // message: it reuses TF_DeathRecap.killerPlayer (0x5474, already
-        // victim-only + reliable) for "who" and the killer's already
-        // globally-broadcast PawnInfo (TFReplication, no interest culling)
-        // for "where". See UI/TFDeathRecap.h's SetKillcamNotify push hook.
+        // 0x5484-0x5487: killcam lane (W13) — 0x5484 is LIVE (this comment
+        // previously said the block was reserved-but-unused; that went stale
+        // the moment the killcam shipped). Game/TFDamageSystem.h defines
+        // kTFMsgKillcamData = 0x5484 (S->C TF_KillcamData, reliable, victim
+        // only, sent via TFDamageSystem::SendToOwner alongside TF_DeathRecap)
+        // — same TFRepProtocol-precedent split as the other in-lane-header
+        // blocks below: TFNetProtocol.h (contended) only carries this block
+        // comment, the id + struct live in the owning lane header, and both
+        // MUST stay numerically identical. 0x5485-0x5487 free.
 
         // 0x5488-0x548B: loadout-depth wave (reserved). 0x5488 = C->S
         // TF_LoadoutExtChange (grenade + suit picks) — dispatched via
@@ -143,6 +146,22 @@ namespace Terrafront
         // Game/TFGrenadeSystem.h (TFRepProtocol precedent: no enum entry needed,
         // never routed through RouteClientMessage). 0x548B free.
         LoadoutExtChange = 0x5488, // C->S  TF_LoadoutExtChange (server validates)
+
+        // 0x548C-0x548F: continent-hop redirect block (W13 multimap
+        // server-authoritative follow-up, docs/TERRAFRONT_MULTIMAP.md §2.2).
+        // Fresh reserved block (the travel lane's own 0x5434-0x5437 is full)
+        // per that doc's stated upgrade path. Unlike the travel lane's block
+        // (owned in World/TFTravelSystem.h, its own channel), this one is
+        // dispatched through the SAME RouteClientMessage choke point as the
+        // other onboarding/gameplay ids, so — like TF_AuthRequest/TF_AuthReply
+        // above — its structs live directly here rather than in an in-lane
+        // header. Net/TFServerSim.cpp owns the handler and answers from
+        // World/TFTravelSystem.h's continents.json-sourced registry
+        // (TFTravelSystem::LookupContinentEndpoint) rather than letting the
+        // client's own copy of that file dictate where it connects next —
+        // the server is the trust boundary. 0x548E-0x548F free.
+        ContinentHopRequest = 0x548C, // C->S  TF_ContinentHopRequest
+        ContinentHopReply = 0x548D,   // S->C  TF_ContinentHopReply
     };
 
 #pragma pack(push, 1)
@@ -428,6 +447,26 @@ namespace Terrafront
         char unlockKey[32];
     };
     static_assert(sizeof(TF_UnlockReply) == 36, "wire layout frozen");
+
+    // --- W13 multimap server-authoritative continent-hop (docs/TERRAFRONT_MULTIMAP.md §2.2) ---
+
+    struct TF_ContinentHopRequest
+    {
+        uint8_t mapId; // destination continent (continents.json mapId, NOT the
+                       // position-isolation kTFMap* constants — see
+                       // World/TFTravelSystem.h::ContinentMeta::mapId)
+        uint8_t _pad[3];
+    };
+    static_assert(sizeof(TF_ContinentHopRequest) == 4, "wire layout frozen");
+
+    struct TF_ContinentHopReply
+    {
+        uint8_t ok;    // 0/1 — 1 == host/port below are a live registry entry
+        uint8_t mapId; // destination echoed back
+        uint16_t port; // 0 if !ok
+        char host[64]; // null-terminated; empty if !ok
+    };
+    static_assert(sizeof(TF_ContinentHopReply) == 68, "wire layout frozen");
 
 #pragma pack(pop)
 
