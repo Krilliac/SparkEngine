@@ -509,5 +509,23 @@ bool GraphicsEngine::DrawMeshInstanced(Mesh& /*mesh*/, const DirectX::XMFLOAT4X4
     return false;
 }
 
+// --- Basic-material texture path: the Windows implementation decodes via WIC
+//     into a D3D11 SRV. That path is D3D11-only; on Linux real texturing goes
+//     through the RHI bridge, so no basic-path SRV is produced. Every caller
+//     already treats a null return as "no texture" (SetBasicTexture binds the
+//     default, and the editor/game guards skip the bind), so returning nullptr
+//     is the correct non-Windows behavior rather than a hard failure.
+ID3D11ShaderResourceView* GraphicsEngine::GetOrLoadTextureSRV(const std::string& /*path*/)
+{
+    return nullptr;
+}
+
+// Mirrors the Windows one-liner: drop any cached parse for this material JSON
+// so a subsequent load re-reads it. Portable (plain unordered_map::erase).
+bool GraphicsEngine::InvalidateBasicMaterial(const std::string& jsonPath)
+{
+    return m_basicMaterialCache.erase(jsonPath) != 0;
+}
+
 
 #endif // !SPARK_PLATFORM_WINDOWS
