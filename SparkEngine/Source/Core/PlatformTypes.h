@@ -11,6 +11,8 @@
 
 #ifndef SPARK_PLATFORM_WINDOWS
 
+#include <ctime>
+#include <cstdio>
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
@@ -241,6 +243,41 @@ inline int wcscpy_s(wchar_t* dest, size_t destsz, const wchar_t* src)
 
 #ifndef swprintf_s
 #define swprintf_s swprintf
+#endif
+
+// MSVC secure-CRT shims for non-Windows. sscanf_s matches sscanf for the
+// numeric formats used here (%f/%d).
+#ifndef sscanf_s
+#define sscanf_s sscanf
+#endif
+// localtime_s/gmtime_s take (result, time) on MSVC and return errno_t (0 = ok).
+// Implemented via standard localtime/gmtime + copy so there is no dependency on
+// POSIX *_r functions (which strict -std=c++NN can hide under glibc). The static
+// buffer is copied immediately, which is sufficient for the timestamp/logging
+// call sites here.
+#ifndef localtime_s
+inline int localtime_s(struct tm* result, const time_t* timep)
+{
+    if (!result || !timep)
+        return 1;
+    const struct tm* tmp = std::localtime(timep);
+    if (!tmp)
+        return 1;
+    *result = *tmp;
+    return 0;
+}
+#endif
+#ifndef gmtime_s
+inline int gmtime_s(struct tm* result, const time_t* timep)
+{
+    if (!result || !timep)
+        return 1;
+    const struct tm* tmp = std::gmtime(timep);
+    if (!tmp)
+        return 1;
+    *result = *tmp;
+    return 0;
+}
 #endif
 
 // --- COM / DirectX stub macros ---
