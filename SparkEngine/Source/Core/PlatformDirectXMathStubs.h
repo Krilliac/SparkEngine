@@ -44,7 +44,19 @@ namespace DirectX
 
     struct XMFLOAT4X4
     {
-        float m[4][4];
+        // Named row-major elements (_11.._44) alias the m[4][4] grid, matching
+        // DirectXMath so code like `mat._41` (the translation row) compiles.
+        union
+        {
+            struct
+            {
+                float _11, _12, _13, _14;
+                float _21, _22, _23, _24;
+                float _31, _32, _33, _34;
+                float _41, _42, _43, _44;
+            };
+            float m[4][4];
+        };
         XMFLOAT4X4() { memset(m, 0, sizeof(m)); }
     };
 
@@ -395,6 +407,51 @@ namespace DirectX
         }
         result.w = 0.0f;
         return result;
+    }
+
+    // Transform a direction (normal): row-vector * matrix with w=0, so the
+    // translation row is ignored and no perspective divide is applied.
+    inline XMVECTOR XMVector3TransformNormal(XMVECTOR v, const XMMATRIX& m)
+    {
+        XMVECTOR r;
+        r.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0];
+        r.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1];
+        r.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2];
+        r.w = 0.0f;
+        return r;
+    }
+
+    // Full 4D transform: row-vector * matrix, w participates, no divide.
+    inline XMVECTOR XMVector4Transform(XMVECTOR v, const XMMATRIX& m)
+    {
+        XMVECTOR r;
+        r.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + v.w * m.m[3][0];
+        r.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + v.w * m.m[3][1];
+        r.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + v.w * m.m[3][2];
+        r.w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + v.w * m.m[3][3];
+        return r;
+    }
+
+    // Predicate: true iff every component of a is strictly less than b's.
+    inline bool XMVector4Less(XMVECTOR a, XMVECTOR b)
+    {
+        return a.x < b.x && a.y < b.y && a.z < b.z && a.w < b.w;
+    }
+
+    // Per-component compare producing a float mask (1.0 = true, 0.0 = false),
+    // consumed by XMVectorSelect below. (The stub uses a float mask rather than
+    // DirectXMath's bit mask; the two helpers are only ever used as a pair.)
+    inline XMVECTOR XMVectorGreaterOrEqual(XMVECTOR a, XMVECTOR b)
+    {
+        return {a.x >= b.x ? 1.0f : 0.0f, a.y >= b.y ? 1.0f : 0.0f, a.z >= b.z ? 1.0f : 0.0f, a.w >= b.w ? 1.0f : 0.0f};
+    }
+
+    // Per-component select: where control is non-zero take b, else a. Pairs with
+    // the float mask from XMVectorGreaterOrEqual.
+    inline XMVECTOR XMVectorSelect(XMVECTOR a, XMVECTOR b, XMVECTOR control)
+    {
+        return {control.x != 0.0f ? b.x : a.x, control.y != 0.0f ? b.y : a.y, control.z != 0.0f ? b.z : a.z,
+                control.w != 0.0f ? b.w : a.w};
     }
 
     inline XMVECTOR XMVector3Project(XMVECTOR v, float viewportX, float viewportY, float viewportWidth,
