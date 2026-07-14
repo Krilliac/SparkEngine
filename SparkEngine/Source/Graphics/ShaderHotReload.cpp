@@ -21,7 +21,7 @@
 #include "../Utils/SparkConsole.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3dcompiler.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include "RHI/RHIFactory.h"
 #include "RHI/RHITypes.h"

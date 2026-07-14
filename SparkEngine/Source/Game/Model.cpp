@@ -9,7 +9,7 @@
 #include <vector>
 #include <string>
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #include <d3d11.h>
 #endif // SPARK_PLATFORM_WINDOWS
 

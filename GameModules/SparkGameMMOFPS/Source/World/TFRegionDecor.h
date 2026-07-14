@@ -49,7 +49,7 @@
 #include "Core/TFTypes.h"
 #include "World/TFDecorCulling.h" // W10 distance-culling lane: cull entry + ranges
 
-#include <DirectXMath.h> // W12 decor-instancing: view/proj + per-instance world matrices
+#include "Core/Platform.h" // W12 decor-instancing: view/proj + per-instance world matrices
 
 #include <cstdint>
 #include <memory>

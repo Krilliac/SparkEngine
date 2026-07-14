@@ -4,7 +4,7 @@
 #include "Utils/Validate.h"
 #include "Game/PlaceholderMesh.h" // Add this include for LoadOrPlaceholderMesh
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <iostream>
 #include <string>

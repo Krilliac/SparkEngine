@@ -27,7 +27,7 @@
 
 // DirectX includes
 #include <d3d11.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #include <d3dcompiler.h>
 
 // Link libraries

@@ -17,7 +17,7 @@
 #include "Graphics/GraphicsEngine.h"
 #include <algorithm>
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <cmath>
 #include <iostream>

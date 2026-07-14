@@ -17,7 +17,7 @@
 #include <unordered_map>
 #include <functional>
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 
 namespace Spark

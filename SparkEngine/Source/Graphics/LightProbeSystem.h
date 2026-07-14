@@ -11,7 +11,7 @@
 #include "../Core/Platform.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 using Float3 = DirectX::XMFLOAT3;
 #else
 struct Float3

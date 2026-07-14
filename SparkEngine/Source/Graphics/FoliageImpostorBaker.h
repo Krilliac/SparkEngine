@@ -65,7 +65,7 @@
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #endif

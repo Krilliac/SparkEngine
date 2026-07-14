@@ -20,7 +20,7 @@
 #include <windows.h>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #include <DirectXPackedVector.h> // XMConvertFloatToHalf for the fp16 1x1 material defaults
 #include <wrl.h>
 #include <d3dcompiler.h>

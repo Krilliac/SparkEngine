@@ -25,7 +25,7 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #include <windows.h>
 
 #include <algorithm>

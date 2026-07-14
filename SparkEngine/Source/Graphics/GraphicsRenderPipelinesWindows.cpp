@@ -26,7 +26,7 @@
 
 #include <windows.h>
 #include <d3d11_1.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #include <wrl.h>
 
 #include <chrono>

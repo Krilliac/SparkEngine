@@ -27,7 +27,7 @@
 #include "Game/Primitives.h"
 #include "Utils/Assert.h" // custom assert system
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
 

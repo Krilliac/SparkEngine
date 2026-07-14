@@ -26,7 +26,7 @@
 #include "../Utils/Assert.h"
 #include "../Graphics/Mesh.h" // MeshData
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 using DirectX::XMFLOAT2;
 using DirectX::XMFLOAT3;

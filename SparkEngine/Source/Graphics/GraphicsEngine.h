@@ -19,7 +19,7 @@
 #include <d3d11_1.h>
 #include <dxgi1_3.h>
 #include <dxgidebug.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include "../Core/framework.h"
 #include "GraphicsEngineTypes.h"

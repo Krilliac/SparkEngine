@@ -35,7 +35,7 @@
 #include "../ScreenSpaceEffects.h" // SSRSettings for compositor coordination
 
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif
 
 #ifdef SPARK_METAL_SUPPORT

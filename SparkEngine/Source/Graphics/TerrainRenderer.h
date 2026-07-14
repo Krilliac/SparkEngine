@@ -26,7 +26,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include <wrl/client.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif
 
 #include <cstdint>

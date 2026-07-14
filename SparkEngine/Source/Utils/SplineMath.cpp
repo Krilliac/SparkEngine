@@ -8,7 +8,7 @@
 #include "Utils/Assert.h"
 #include "Validate.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <cmath>
 

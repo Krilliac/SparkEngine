@@ -19,7 +19,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif                    // SPARK_PLATFORM_WINDOWS
 #include <algorithm>      // std::clamp
 #include <functional>     // std::function

@@ -19,7 +19,7 @@
 #include "Projectiles/WeaponStats.h"
 #include "ClassSystem.h"
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <vector>
 #include <memory>

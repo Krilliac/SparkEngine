@@ -49,7 +49,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #include <windows.h>
 #include <d3d11_1.h>
 #include <dxgi1_2.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #include <wrl.h>
 #include <d3dcompiler.h>
 #endif // SPARK_PLATFORM_WINDOWS

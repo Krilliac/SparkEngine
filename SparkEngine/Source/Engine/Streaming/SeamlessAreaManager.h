@@ -40,7 +40,7 @@
 #include "SceneManifest.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif
 
 #include <cstdint>

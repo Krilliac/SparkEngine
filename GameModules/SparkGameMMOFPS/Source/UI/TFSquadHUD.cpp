@@ -27,7 +27,7 @@
 
 #include "Core/Platform.h" // DirectXMath on Windows / vector-math stubs elsewhere
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif
 
 #ifdef SPARK_HAS_IMGUI

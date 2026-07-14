@@ -15,7 +15,7 @@
 #include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
-#include <DirectXMath.h>
+#include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <memory>
 #include <queue>
