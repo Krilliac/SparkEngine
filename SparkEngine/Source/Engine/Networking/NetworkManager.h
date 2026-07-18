@@ -143,6 +143,12 @@ namespace Spark::Net
         PlayerRespawn,
         ScoreUpdate,
 
+        // Delta replication acknowledgement — client echo of the last applied
+        // delta sequence. Deltas number their own per-connection sequence space
+        // (DeltaSnapshotManager), distinct from the reliable-channel sequences
+        // acknowledged by MessageType::Ack; the two must never be mixed.
+        DeltaAck,
+
         // Custom
         UserDefined = 1000
     };

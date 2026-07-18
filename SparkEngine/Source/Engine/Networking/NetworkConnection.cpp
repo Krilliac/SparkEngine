@@ -103,16 +103,53 @@ namespace Spark::Net
                         [this](const NetworkMessage& msg)
                         {
                             NetworkRole role;
+                            ClientID localID;
                             {
                                 std::lock_guard<std::mutex> lock(m_stateMutex);
                                 role = m_role;
+                                localID = m_localClientID;
                             }
                             if (role == NetworkRole::Client)
                             {
                                 NetBuffer buf;
                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
                                 DeserializeEntityState(buf);
+
+                                // Delta-ack echo: unreliable state updates carry the server's
+                                // per-connection delta sequence in the message header (its own
+                                // sequence space — the reliable-channel sequence is only ever
+                                // assigned on reliable messages, so the two cannot collide
+                                // here). Echo it so the server's DeltaSnapshotManager advances
+                                // this client's baseline and releases the pending delta.
+                                if (msg.channel == ChannelType::Unreliable && msg.sequence > 0)
+                                {
+                                    NetworkMessage deltaAck;
+                                    deltaAck.type = MessageType::DeltaAck;
+                                    deltaAck.channel = ChannelType::Unreliable;
+                                    deltaAck.senderID = localID;
+                                    NetBuffer ackBuf;
+                                    ackBuf.WriteUint32(msg.sequence);
+                                    deltaAck.payload = ackBuf.GetData();
+                                    SendMessage(deltaAck);
+                                }
                             }
+                        });
+        RegisterHandler(MessageType::DeltaAck,
+                        [this](const NetworkMessage& msg)
+                        {
+                            // Server-only: advance the sending client's delta baseline.
+                            // senderID is trusted (stamped by ProcessIncoming from the
+                            // address->client table), so one client's ack can never advance
+                            // another client's baseline. Stale or duplicate sequences are
+                            // ignored inside AcknowledgeSequence (latest-wins).
+                            if (GetRole() != NetworkRole::Server || msg.senderID == INVALID_CLIENT)
+                                return;
+                            if (msg.payload.size() < sizeof(uint32_t))
+                                return;
+
+                            NetBuffer buf;
+                            buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                            DeltaSnapshotManager::GetInstance().AcknowledgeSequence(msg.senderID, buf.ReadUint32());
                         });
         RegisterHandler(MessageType::ClientInput,
                         [this](const NetworkMessage& msg)

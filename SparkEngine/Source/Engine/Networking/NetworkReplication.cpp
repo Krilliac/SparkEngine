@@ -12,6 +12,7 @@
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
 #include <algorithm>
+#include <cstring>
 
 #ifdef SendMessage
 #undef SendMessage
@@ -382,7 +383,8 @@ namespace Spark::Net
                     // dirty properties — a property-level delta in the same wire format the
                     // client's EntityStateUpdate handler (DeserializeEntityState) parses.
                     // BuildDeltaPacket's field-indexed format has no receive-side parser and
-                    // must not go on the wire.
+                    // must not go on the wire; it serves as the per-connection sequence and
+                    // baseline tracker for the delta-ack loop.
                     NetBuffer buf;
                     SerializeEntityState(netID, buf);
                     std::vector<uint8_t> payload = buf.GetData();
@@ -394,9 +396,27 @@ namespace Spark::Net
                         {
                             continue;
                         }
+
+                        // Assign this connection's next delta sequence and record the pending
+                        // baseline that the client's DeltaAck echo will confirm. The record
+                        // format is [uint32 entityId][uint32 sequence][fieldCount...] — read
+                        // the sequence back from offset 4. An empty record means nothing
+                        // changed against this connection's acked baseline; still send
+                        // (position/rotation travel in the payload) but with sequence 0 so
+                        // the client does not echo an ack for untracked state.
+                        uint32_t deltaSequence = 0;
+                        const std::vector<uint8_t> deltaRecord = deltaManager.BuildDeltaPacket(clientId, netID);
+                        if (deltaRecord.size() >= 2 * sizeof(uint32_t))
+                        {
+                            std::memcpy(&deltaSequence, deltaRecord.data() + sizeof(uint32_t), sizeof(deltaSequence));
+                        }
+
                         NetworkMessage msg;
                         msg.type = MessageType::EntityStateUpdate;
                         msg.channel = ChannelType::Unreliable;
+                        // Unreliable messages never get a reliable-channel sequence, so the
+                        // header field is free to carry the delta sequence space.
+                        msg.sequence = deltaSequence;
                         msg.payload = payload;
                         SendToClient(clientId, msg);
                     }

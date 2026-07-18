@@ -84,6 +84,13 @@ namespace Spark::Net
         DeltaSnapshotManager(const DeltaSnapshotManager&) = delete;
         DeltaSnapshotManager& operator=(const DeltaSnapshotManager&) = delete;
 
+        /// Upper bound on unacknowledged deltas kept per connection. A client
+        /// that never echoes DeltaAck (old build, hostile, or silently dropping
+        /// packets) must not grow server memory without limit: once the window
+        /// is exceeded, the oldest pending deltas are dropped. Their fields
+        /// simply remain unacked and are resent in later deltas.
+        static constexpr size_t kMaxPendingDeltasPerConnection = 256;
+
         // ----- Connection lifecycle -----
 
         /// @brief Register a new connection for delta tracking
@@ -124,6 +131,13 @@ namespace Spark::Net
         // ----- Acknowledgement -----
 
         /// @brief Mark a sequence number as acknowledged by a connection
+        ///
+        /// Acks are cumulative (latest wins): acknowledging sequence S releases
+        /// every pending delta up to and including S. Stale or out-of-order acks
+        /// (a sequence at or below the last acknowledged one, or one whose
+        /// pending record no longer exists) are ignored — the baseline never
+        /// regresses.
+        ///
         /// @param connectionId  Connection that sent the ack
         /// @param sequence      Sequence number being acknowledged
         void AcknowledgeSequence(uint32_t connectionId, uint32_t sequence);

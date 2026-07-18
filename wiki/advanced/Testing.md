@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*535 test files, 6305+ test cases*
+*535 test files, 6307+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -829,7 +829,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestNetworkManagerIntegration` | 15 |
 | `TestNetworkManagerOrchestration` | 27 |
 | `TestNetworkManagerReal` | 23 |
-| `TestNetworkReplicationIntegration` | 11 |
+| `TestNetworkReplicationIntegration` | 13 |
 | `TestNetworkSecurity` | 12 |
 | `TestNetworkSecurityPhaseHH` | 8 |
 | `TestNetworkStack` | 2 |

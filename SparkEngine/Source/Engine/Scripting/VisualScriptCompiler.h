@@ -6,11 +6,18 @@
  * nodes, then emit code in dependency order. The generated .as file feeds
  * directly into AngelScriptEngine + ScriptHotReload — no new runtime needed.
  *
+ * Umbrella header: node type enum lives in VisualScriptNodeTypes.h and the
+ * graph data structures live in VisualScriptGraphTypes.h; both are included
+ * here so existing includers need no changes.
+ *
  * @see ShaderGraphCompiler.h for the HLSL equivalent
  * @see AngelScriptEngine.h for script compilation and execution
  */
 
 #pragma once
+
+#include "VisualScriptNodeTypes.h"
+#include "VisualScriptGraphTypes.h"
 
 #include <cstdint>
 #include <string>
@@ -19,218 +26,6 @@
 
 namespace Spark::Scripting
 {
-
-    // ========================================================================
-    // Node Type Enum
-    // ========================================================================
-
-    /**
-     * @brief Types of nodes in a visual script graph
-     */
-    enum class ScriptNodeType : uint32_t
-    {
-        // Events (entry points — each generates a method in the class)
-        OnStart = 0,
-        OnUpdate = 1,
-        OnTriggerEnter = 2,
-        OnTriggerExit = 3,
-        OnDamaged = 4,
-        OnKeyPress = 5,
-        OnCollision = 6,
-        OnCustomEvent = 7,
-
-        // Flow control
-        Branch = 50,
-        ForLoop = 51,
-        Sequence = 52,
-        DoNothing = 53,
-
-        // Getters (produce data values)
-        GetPosition = 100,
-        GetRotation = 101,
-        GetHealth = 102,
-        GetSpeed = 103,
-        GetEntityByName = 104,
-        GetSelf = 105,
-        GetKeyDown = 106,
-        GetKey = 107,
-        GetDeltaTime = 108,
-
-        // Setters / Actions (execute side effects)
-        SetPosition = 150,
-        SetRotation = 151,
-        SetHealth = 152,
-        ApplyForce = 153,
-        PlaySound = 154,
-        PlayAnimation = 155,
-        SpawnEntity = 156,
-        DestroyEntity = 157,
-        PrintMessage = 158,
-        FireEvent = 159,
-
-        // Math
-        Add = 200,
-        Subtract = 201,
-        Multiply = 202,
-        Divide = 203,
-        Normalize = 204,
-        DotProduct = 205,
-        Distance = 206,
-        Lerp = 207,
-        Clamp = 208,
-        Random = 209,
-        RandomRange = 210,
-        Abs = 211,
-        Negate = 212,
-
-        // Logic
-        And = 250,
-        Or = 251,
-        Not = 252,
-        Equal = 253,
-        NotEqual = 254,
-        Greater = 255,
-        Less = 256,
-        GreaterEqual = 257,
-        LessEqual = 258,
-
-        // Variables
-        GetVariable = 300,
-        SetVariable = 301,
-
-        // Constants
-        ConstFloat = 350,
-        ConstInt = 351,
-        ConstBool = 352,
-        ConstString = 353,
-        ConstVector3 = 354,
-
-        // Custom events & functions (user-defined)
-        DefineCustomEvent = 400, ///< Defines a custom event handler method
-        CallFunction = 401,      ///< Calls a reusable function sub-graph
-        ReturnValue = 402,       ///< Returns a value from a function sub-graph
-
-        // Editor-only (not compiled)
-        Comment = 500, ///< Visual comment box for graph organization
-    };
-
-    // ========================================================================
-    // Pin and Node Structures
-    // ========================================================================
-
-    /**
-     * @brief Data type of a visual script pin
-     */
-    enum class PinKind : uint8_t
-    {
-        Execution, ///< Flow control (white wire)
-        Bool,
-        Int,
-        Float,
-        String,
-        Vector3,
-        Entity, ///< EntityID (uint32)
-        Any,    ///< Untyped (resolved at compile time)
-    };
-
-    /**
-     * @brief A single input or output pin on a script node
-     */
-    struct ScriptPin
-    {
-        PinKind kind = PinKind::Float;
-        float defaultValue[4] = {};
-        std::string defaultString;
-        bool isConnected = false;
-    };
-
-    /**
-     * @brief A node in the visual script graph
-     */
-    struct ScriptNode
-    {
-        uint32_t id = 0;
-        ScriptNodeType type{};
-        std::vector<ScriptPin> inputs;
-        std::vector<ScriptPin> outputs;
-        std::unordered_map<std::string, std::string> properties; ///< Node-specific properties
-    };
-
-    /**
-     * @brief A connection between two pins
-     */
-    struct ScriptConnection
-    {
-        uint32_t fromNode = 0;
-        uint32_t fromPin = 0;
-        uint32_t toNode = 0;
-        uint32_t toPin = 0;
-    };
-
-    /**
-     * @brief A user-defined variable in the script
-     */
-    struct VariableDecl
-    {
-        std::string name;
-        PinKind type = PinKind::Float;
-        std::string defaultValue;
-    };
-
-    /**
-     * @brief A reusable function sub-graph (compiles to a separate method)
-     */
-    struct FunctionGraph
-    {
-        std::string name;                     ///< Function name (becomes method name)
-        PinKind returnType = PinKind::Float;  ///< Return type (or Execution for void)
-        std::vector<VariableDecl> parameters; ///< Function parameters
-        std::vector<ScriptNode> nodes;
-        std::vector<ScriptConnection> connections;
-    };
-
-    /**
-     * @brief A custom event definition
-     */
-    struct CustomEventDef
-    {
-        std::string name;                     ///< Event name (becomes method name)
-        std::vector<VariableDecl> parameters; ///< Event parameters
-    };
-
-    /**
-     * @brief Complete visual script graph
-     */
-    struct VisualScriptGraph
-    {
-        std::string className = "MyScript";
-        std::vector<ScriptNode> nodes;
-        std::vector<ScriptConnection> connections;
-        std::vector<VariableDecl> variables;
-        std::vector<FunctionGraph> functions;     ///< Reusable function sub-graphs
-        std::vector<CustomEventDef> customEvents; ///< Custom event definitions
-    };
-
-    /**
-     * @brief Result of compiling a visual script graph
-     */
-    struct ScriptCompileResult
-    {
-        std::string angelScriptSource; ///< Generated AngelScript code
-        std::vector<std::string> errors;
-        bool success = false;
-    };
-
-    /**
-     * @brief Node palette metadata for visual scripting authoring UI.
-     */
-    struct ScriptNodePaletteEntry
-    {
-        ScriptNodeType type{};
-        const char* displayName = "";
-        const char* category = "";
-        const char* tooltip = "";
-    };
 
     // ========================================================================
     // Compiler

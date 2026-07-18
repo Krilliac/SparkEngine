@@ -9,6 +9,7 @@
 #include "TestFramework.h"
 #include "Engine/Networking/NetworkManager.h"
 #include "Engine/Networking/ClientPrediction.h"
+#include "Engine/Networking/DeltaSnapshotManager.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include <cmath>
 #include <cstring>
@@ -320,6 +321,80 @@ TEST(NetReplication_LagCompensationRewind)
 
     EXPECT_EQ(closestIdx, static_cast<size_t>(6));
     EXPECT_NEAR(history[closestIdx].posX, 3.0f, 0.001f);
+}
+
+// ============================================================================
+// Delta-ack loop (real DeltaSnapshotManager)
+// ============================================================================
+
+namespace
+{
+    // Build a single-field snapshot with the given value byte
+    std::vector<Spark::Net::FieldSnapshot> MakeFieldState(uint8_t fieldIndex, uint8_t value)
+    {
+        Spark::Net::FieldSnapshot field;
+        field.fieldIndex = fieldIndex;
+        field.serializedValue = {value};
+        return {field};
+    }
+} // namespace
+
+TEST(NetReplication_DeltaAckReleasesPendingAndAdvancesBaseline)
+{
+    auto& deltaManager = Spark::Net::DeltaSnapshotManager::GetInstance();
+    deltaManager.Shutdown(); // fresh state — other tests share the singleton
+    constexpr uint32_t clientId = 1;
+    constexpr uint32_t entityId = 7;
+    deltaManager.RegisterConnection(clientId);
+
+    // Server records two successive states and builds a delta for each —
+    // sequences 1 and 2 become pending, awaiting the client's ack echo.
+    deltaManager.RecordEntityState(entityId, MakeFieldState(0, 100));
+    EXPECT_FALSE(deltaManager.BuildDeltaPacket(clientId, entityId).empty()); // seq 1
+    deltaManager.RecordEntityState(entityId, MakeFieldState(0, 90));
+    EXPECT_FALSE(deltaManager.BuildDeltaPacket(clientId, entityId).empty()); // seq 2
+    EXPECT_EQ(deltaManager.GetPendingDeltaCount(clientId), static_cast<size_t>(2));
+
+    // Client acks sequence 2 — cumulative, so both pending deltas release.
+    deltaManager.AcknowledgeSequence(clientId, 2);
+    EXPECT_EQ(deltaManager.GetPendingDeltaCount(clientId), static_cast<size_t>(0));
+
+    // Baseline advanced: the unchanged state produces no further delta.
+    EXPECT_TRUE(deltaManager.BuildDeltaPacket(clientId, entityId).empty());
+
+    // A stale ack (S-1 after S) is ignored — no crash, no baseline regression.
+    deltaManager.AcknowledgeSequence(clientId, 1);
+    EXPECT_EQ(deltaManager.GetPendingDeltaCount(clientId), static_cast<size_t>(0));
+    EXPECT_TRUE(deltaManager.BuildDeltaPacket(clientId, entityId).empty());
+
+    deltaManager.Shutdown();
+}
+
+TEST(NetReplication_SilentClientPendingDeltasBounded)
+{
+    auto& deltaManager = Spark::Net::DeltaSnapshotManager::GetInstance();
+    deltaManager.Shutdown();
+    constexpr uint32_t clientId = 2;
+    constexpr uint32_t entityId = 9;
+    deltaManager.RegisterConnection(clientId);
+
+    // A client that never acks: pending deltas must stay bounded by the cap
+    // instead of growing one entry per replication tick until disconnect.
+    const size_t sendCount = Spark::Net::DeltaSnapshotManager::kMaxPendingDeltasPerConnection + 50;
+    for (size_t i = 0; i < sendCount; ++i)
+    {
+        deltaManager.RecordEntityState(entityId, MakeFieldState(0, static_cast<uint8_t>(i & 0xFF)));
+        EXPECT_FALSE(deltaManager.BuildDeltaPacket(clientId, entityId).empty());
+    }
+
+    EXPECT_TRUE(deltaManager.GetPendingDeltaCount(clientId) <=
+                Spark::Net::DeltaSnapshotManager::kMaxPendingDeltasPerConnection);
+
+    // A late ack for the newest sequence still works after pruning.
+    deltaManager.AcknowledgeSequence(clientId, static_cast<uint32_t>(sendCount));
+    EXPECT_EQ(deltaManager.GetPendingDeltaCount(clientId), static_cast<size_t>(0));
+
+    deltaManager.Shutdown();
 }
 
 TEST(NetReplication_MultiplayerSmoke_ServerClientConvergence)
