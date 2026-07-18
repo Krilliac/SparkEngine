@@ -100,32 +100,16 @@ Constructor: `explicit ThreadSafeQueue(size_t maxSize = 0)` — `0` = unbounded.
 Used by `NetworkManager` (message I/O), `JobSystem` distribution, and audio command
 buffering.
 
-### 1c. `Spark::ECS::StageBasedExecutor` — the live ECS stage runner
-`SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h` + `.cpp` (singleton).
+### 1c. `StageBasedExecutor` — DELETED 2026-07-18; `PhaseSystemManager` is the live path
 
-This is the executor actually ticked by the main loop. Runs systems **within** a stage
-in parallel on `JobSystem`, joins, then advances to the next stage — preserving the §0
-order.
-
-```cpp
-enum class SystemStage : uint8_t { Physics, Animation, AI, Audio, Lifecycle, Render, Count };
-
-StageBasedExecutor& StageBasedExecutor::GetInstance();
-void RegisterSystem(const std::string& name, SystemStage stage, std::function<void(float)> fn);
-void ExecuteAll(float dt);   // stages sequential; systems in a stage parallel-then-joined
-void Shutdown();
-std::string Console_GetStatus() const;
-```
-
-Wiring status (verified 2026-07-07): `ExecuteAll(dt)` **is** called every frame from
-`SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp`
-(`StageBasedExecutor::GetInstance().ExecuteAll(dt)`), and `Shutdown()` is called on
-teardown. **However, no `RegisterSystem(...)` call exists anywhere in the codebase**
-(only the definition). So today this is a **dead tick**: the executor is invoked but has
-zero registered systems. This is exactly the ECS-consolidation debt called out in
-`HARDEN_FLEET_HANDOFF.md` ("register systems into `StageBasedExecutor` (dead tick)").
-If you are adding a system to run in a stage, this is the API to register it against —
-but be aware nothing else is registered yet, so verify the tick path end-to-end.
+`StageBasedExecutor` (formerly in `ParallelSystemExecutor.h/.cpp`) was a per-frame tick
+over zero registered systems (no `RegisterSystem` caller ever existed). It was deleted
+when the ECS phase pipeline was wired for real: `GameplayLifecycleShared.cpp` now
+creates the `PhaseSystemManager` via `EngineSetup.h::CreatePhaseSystemManager(ctx)`
+during gameplay init and pumps `UpdateAll(*world, dt)` every frame in `Phase` enum
+order (serial; preserves the §0 order). **To run a new system in a stage, register it
+in `CreatePhaseSystemManager` with the correct `Phase::` bucket.** Regression test:
+`Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp`.
 
 ### 1d. `Spark::ECS::ParallelSystemExecutor` — access-set batching (present, NOT wired)
 Same header. A **different, non-singleton** class that auto-derives parallel batches
@@ -148,8 +132,8 @@ Wiring status (verified 2026-07-07): defined and configured by
 `ConfigureParallelExecution(...)` in `SparkEngine/Source/Engine/ECS/ECSIntegration.h`,
 but `ConfigureParallelExecution` is **never called** from any `.cpp`, and no live
 `Execute(world, dt)` call exists. Treat this class as **candidate / not wired into the
-live tick** — do not assume registering here runs anything. `StageBasedExecutor` (§1c) is
-the live path.
+live tick** — do not assume registering here runs anything. `PhaseSystemManager`
+(created and ticked by `GameplayLifecycleShared.cpp`, see §1c) is the live path.
 
 > Relationship note (accurate, not a guess): the handoff's phrase
 > "`SystemManager`/`PhaseSystemManager`/`StageBasedExecutor`" refers to three *ordering*
@@ -190,7 +174,7 @@ so you never read a result before it's produced:
 
 | Barrier | Code | What it guarantees |
 |---------|------|--------------------|
-| Between ECS stages | `StageBasedExecutor::ExecuteAll` loops stages; per stage it `Submit`s each system then `for (f : futures) f.get();` before the next stage | Stage N fully completes before stage N+1 starts. |
+| Between ECS phases | `PhaseSystemManager::UpdateAll` runs phases serially in `Phase` enum order | Phase N fully completes before phase N+1 starts. |
 | Between access-batches | `ParallelSystemExecutor::Execute` joins each batch's futures before the next batch | No conflicting batch overlaps (when wired). |
 | End of a parallel loop | `JobSystem::ParallelFor` collects all batch futures and `.get()`s them before returning | Every index processed before the call returns. |
 | Explicit drain | `JobSystem::WaitForAll()` | All currently-queued jobs done (submits a sentinel and blocks). |
@@ -256,21 +240,15 @@ Work top to bottom. Stop at the first row that says stop.
    - A handful of independent one-off tasks → `JobSystem::Get().Submit(lambda)` per task,
      then `future.get()` each before you use results (pattern used in
      `GameplayLifecycleShared.cpp` `UpdateNonECSSystems`).
-   - A whole ECS system that should run inside a stage → register it with
-     `StageBasedExecutor::GetInstance().RegisterSystem(name, SystemStage::X, fn)`.
-     **Caveat (see §1c):** this is the *intended-but-unfinished* parallel path.
-     Its `ExecuteAll(dt)` tick is live (called every frame from
-     `GameplayLifecycleShared.cpp`), but **zero other systems are registered into
-     it today**, and the intended-canonical `PhaseSystemManager` is not wired at
-     all — so "where an ECS system runs" is a known OPEN architectural weak point
-     (see `sparkengine-architecture-contract` Invariant 3). Registering here does
-     tick, but verify the whole path end-to-end and flag the wiring gap rather
-     than assuming this is a settled home.
+   - A whole ECS system that should run inside a phase → add it in
+     `EngineSetup.h::CreatePhaseSystemManager(ctx)` with the correct `Phase::`
+     bucket (see §1c — `PhaseSystemManager` is created and ticked by
+     `GameplayLifecycleShared.cpp` as of 2026-07-18; execution is serial).
 
 4. **Gate on pool availability.** Before dispatching, check
    `jobs.IsInitialized() && jobs.GetWorkerCount() > 0`; fall back to an inline loop
-   otherwise (this is exactly what `StageBasedExecutor::ExecuteAll` and
-   `UpdateNonECSSystems` do). `ParallelFor` already handles the zero-worker case.
+   otherwise (this is exactly what
+   `UpdateNonECSSystems` does). `ParallelFor` already handles the zero-worker case.
 
 5. **Never block a worker on another job.** Do not call `future.get()` (or otherwise wait
    on other jobs) *from inside* a job body. The pool has a fixed worker count; a job that
@@ -322,7 +300,7 @@ WriteResultsBackToECS(world, jobs);          // main-thread writes only
 | Push/pop a `ThreadSafeQueue` from two threads | YES | That's its job. |
 | `future.get()` inside a worker job | NO | Deadlock risk (fixed pool). Join on main. |
 | Reorder ECS stages to "optimize" | NO | §0 invariant. |
-| Register a system into `StageBasedExecutor` and expect it to tick | PARTIAL | The tick is called, but nothing is registered yet (§1c) — verify end-to-end. |
+| Register a system in `CreatePhaseSystemManager` and expect it to tick | YES | Wired 2026-07-18; ticked serially each frame by the gameplay lifecycle (§1c). |
 
 ---
 
@@ -354,15 +332,12 @@ grep -nE 'Submit|ParallelFor|void (Initialize|Shutdown)|GetWorkerCount|IsInitial
 # ThreadSafeQueue signatures (TryPop is bool + out-param, not optional)
 grep -nE 'TryPush|ForcePush|TryPop|PopAll' SparkEngine/Source/Utils/ThreadSafeQueue.h
 
-# Stage order + StageBasedExecutor / ParallelSystemExecutor API
-grep -nE 'enum class SystemStage|RegisterSystem|ExecuteAll|DeclareReads|DeclareWrites|BuildSchedule|void Execute' \
+# ParallelSystemExecutor (access-set batcher) API
+grep -nE 'DeclareReads|DeclareWrites|BuildSchedule|void Execute' \
   SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h
 
-# Is StageBasedExecutor still a DEAD TICK? (definition should be the ONLY hit)
-grep -rn 'RegisterSystem(' SparkEngine/Source | grep -i stage
-
-# Confirm the live tick site
-grep -n 'StageBasedExecutor::GetInstance().ExecuteAll' \
+# Confirm the live phase tick site (PhaseSystemManager, wired 2026-07-18)
+grep -n 'CreatePhaseSystemManager\|UpdateAll' \
   SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp
 
 # Is ParallelSystemExecutor wired yet? (ConfigureParallelExecution should have NO .cpp caller)
@@ -377,8 +352,6 @@ grep -n 'JobSystem::Get().Shutdown' SparkEngine/Source/Core/SparkEngine.cpp
 ```
 
 Volatile claims to re-check when they may have changed:
-- **`StageBasedExecutor` dead-tick status** (§1c) — flips the moment someone adds a
-  `RegisterSystem` call. Re-run the grep above.
 - **`ParallelSystemExecutor` unwired status** (§1d) — flips when `ConfigureParallelExecution`
   gets a caller.
 - **`PhaseSystemManager` serial-only** (§1d note) — re-read the `UpdateAll` comment in

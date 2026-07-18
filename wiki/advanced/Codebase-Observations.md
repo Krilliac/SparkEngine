@@ -114,13 +114,13 @@ If a `ThirdParty/` directory looks empty or CMake reports missing files there, a
 
 ---
 
-## Confirmed Open Defects Deferred From the 2026-07-18 Sweep
+## Architectural Defects Found by the 2026-07-18 Sweep (now fixed)
 
-A multi-agent defect sweep (2026-07-18) confirmed and fixed 41 defects across 31 files. Three additional findings were double-confirmed as real but deliberately **not** auto-fixed because the correct fix is architectural, not local. They remain open:
+A multi-agent defect sweep (2026-07-18) confirmed and fixed 41 local defects across 31 files, plus three architectural ones that were fixed in follow-up commits the same day:
 
-1. **Per-client reliable-message state is server-wide** (`SparkEngine/Source/Engine/Networking/NetworkManager.cpp:494`, high). Receive-side dedup/ACK/ordered state lives per-`NetworkManager`, not per sender, and every client numbers reliable messages from 1. With ≥2 clients, client B's sequence N is dropped as a duplicate of client A's, and the merged broadcast ACK makes B stop retransmitting — silent permanent message loss. Fix requires keying receive/ACK/ordered state by peer across the reliability layer (`NetworkReliable.cpp`, `NetworkConnection.cpp`).
-2. **Core ECS systems never registered** (`SparkEngine/Source/Core/EngineSetup.h:175`, high). `CreatePhaseSystemManager` has no non-test callers; the ECS-component AI/animation/lifecycle/projectile systems only run in tests. Game modules tick their own OO behavior trees, but the ECS-component path is dead. Fix requires deciding where phase-system registration belongs in the startup path and wiring `UpdateAll` into the main loop.
-3. **Delta snapshot ACKs never wired** (`SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.cpp:209`, medium). `AcknowledgeSequence` has zero production callers, so `pendingDeltas` grows unbounded per client until disconnect. Naively wiring transport ACKs in would falsely advance baselines (transport sequence ≠ delta sequence) and cause silent desync — deltas need their own ack echo.
+1. **Per-client reliable-message state was server-wide** (fixed). Receive-side dedup/ACK/ordered state lived per-`NetworkManager`, not per sender, so with ≥2 clients, client B's sequence N was dropped as a duplicate of client A's and the merged broadcast ACK silently cancelled B's retransmit. Now all reliability state (dedup windows, reorder buffers, outgoing sequences, unacked/retransmit maps) lives in a per-peer `PeerState` keyed by ClientID, with per-peer unicast ACKs. Regression tests: `Tests/TestReliableChannel.cpp` (overlapping sequence spaces, ordered independence, ACK isolation).
+2. **Core ECS phase systems were never registered in production** (fixed). `CreatePhaseSystemManager` had no non-test callers. The gameplay lifecycle (`GameplayLifecycleShared.cpp`) now creates the manager during init and pumps `UpdateAll` each frame in the documented phase order; the dead `StageBasedExecutor` was deleted. Regression test: `Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp`.
+3. **Delta snapshot ACKs were never wired** (fix in progress at time of writing — verify `DeltaSnapshotManager::AcknowledgeSequence` has production callers before trusting this entry). Deltas need their own ack echo: the transport ack sequence is a different sequence space than the delta sequence, so wiring transport ACKs directly would falsely advance baselines and desync.
 
 ---
 
