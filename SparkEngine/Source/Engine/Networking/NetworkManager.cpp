@@ -501,7 +501,12 @@ namespace Spark::Net
                         toDispatch.pop();
                         continue;
                     }
-                    RecordReceivedSequence(msg.sequence);
+                    // ReliableOrdered recording is deferred until the message is
+                    // accepted below — a sequence dropped by a full reorder buffer
+                    // must not be ACKed, or the sender stops retransmitting and the
+                    // ordered channel wedges on the gap forever.
+                    if (msg.channel != ChannelType::ReliableOrdered)
+                        RecordReceivedSequence(msg.sequence);
                 }
 
                 // Ordered delivery: buffer out-of-order ReliableOrdered messages
@@ -524,12 +529,14 @@ namespace Spark::Net
                             continue;
                         }
                         // Buffer for later delivery
+                        RecordReceivedSequence(msg.sequence);
                         m_orderedBuffer[msg.sequence] = msg;
                         m_stats.packetsReceived++;
                         toDispatch.pop();
                         continue;
                     }
                     // This is the expected sequence — deliver it, then flush buffer
+                    RecordReceivedSequence(msg.sequence);
                     m_expectedOrderedSequence++;
                 }
 

@@ -169,6 +169,12 @@ namespace Spark
 
                 if (m_swapChain != VK_NULL_HANDLE)
                     vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+
+                // Reset handles so a repeat Cleanup (e.g. destructor after a failed Resize) is a no-op
+                m_imageAvailable = VK_NULL_HANDLE;
+                m_renderFinished = VK_NULL_HANDLE;
+                m_inFlightFence = VK_NULL_HANDLE;
+                m_swapChain = VK_NULL_HANDLE;
             }
 
             bool VulkanSwapChain::Present(bool vsync)

@@ -3,7 +3,7 @@
 > Complete visual guide to how SparkEngine works, from boot to shutdown.
 
 <!-- AUTO:flowchart_stats -->
-_Generated 2026-04-18 from 644 headers, 486 source files, 79 ECS components, 11 ECS systems, 59 editor panels, 6 RHI backends._
+_Generated 2026-07-18 from 662 headers, 501 source files, 79 ECS components, 11 ECS systems, 64 editor panels, 6 RHI backends._
 <!-- /AUTO:flowchart_stats -->
 
 ---
@@ -46,7 +46,7 @@ Three executables and dynamically loaded game modules, all connected through `En
  │   (Runtime Host)   │  │  (Editor + Engine) │  │ (External UI)  │
  │                    │  │                    │  │                │
  │ - Win32/SDL2 host  │  │ - Dear ImGui UI    │  │ - Pipe I/O     │
- │ - Windowed or      │  │ - 59 editor panels │  │ - Command input │
+ │ - Windowed or      │  │ - 64 editor panels │  │ - Command input │
  │   headless mode    │  │ - Engine embedded  │  │ - Log display  │
  │ - Game loop owner  │  │ - Live viewport    │  │                │
  └────────┬───────────┘  └────────┬───────────┘  └───────┬────────┘
@@ -1147,7 +1147,7 @@ Large worlds require streaming adjacent areas in/out and periodically rebasing t
 
 ## 14. Editor Architecture (SparkEditor)
 
-The editor is a standalone executable that embeds the engine and adds a Dear ImGui-based interface with 59 specialized panels.
+The editor is a standalone executable that embeds the engine and adds a Dear ImGui-based interface with 64 specialized panels.
 
 ```
  ┌───────────────── EditorApplication ─────────────────────┐
@@ -1201,7 +1201,7 @@ The editor is a standalone executable that embeds the engine and adds a Dear ImG
  │  └──────────────────────────────────────┘               │
  └─────────────────────────────────────────────────────────┘
 
- Editor Panels (59 total):
+ Editor Panels (64 total):
  ┌────────────────────── CORE ─────────────────────────────┐
  │  Hierarchy, Inspector, SceneView, GameView, Console,    │
  │  AssetBrowser, ProjectBrowser, ProjectSettings, Search  │
@@ -1240,7 +1240,7 @@ The editor is a standalone executable that embeds the engine and adds a Dear ImG
 **Key files:**
 - `SparkEditor/Source/Core/EditorApplication.h` — Editor lifecycle
 - `SparkEditor/Source/Core/EditorUI.h` — Panel registry and rendering
-- `SparkEditor/Source/Panels/` — All 59 panel implementations
+- `SparkEditor/Source/Panels/` — All 64 panel implementations
 - `SparkEditor/Source/Communication/CollaborativeEditSession.h`
 
 

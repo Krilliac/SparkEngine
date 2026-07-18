@@ -142,6 +142,68 @@ namespace Spark::Persistence
     // SQLiteConnection — file-based JSON key-value fallback
     // ============================================================================
 
+    namespace
+    {
+        // The KV file stores one "key\tvalue\n" record per line, but SET supports values
+        // with embedded newlines (and tabs). Escape the delimiters (and the escape
+        // character itself) on write and reverse it on load so multi-line values survive
+        // a flush/reload round trip instead of being silently truncated.
+        std::string EscapeKVField(const std::string& field)
+        {
+            std::string escaped;
+            escaped.reserve(field.size());
+            for (char c : field)
+            {
+                switch (c)
+                {
+                case '\\':
+                    escaped += "\\\\";
+                    break;
+                case '\t':
+                    escaped += "\\t";
+                    break;
+                case '\n':
+                    escaped += "\\n";
+                    break;
+                default:
+                    escaped += c;
+                    break;
+                }
+            }
+            return escaped;
+        }
+
+        std::string UnescapeKVField(const std::string& field)
+        {
+            std::string unescaped;
+            unescaped.reserve(field.size());
+            for (size_t i = 0; i < field.size(); ++i)
+            {
+                if (field[i] == '\\' && i + 1 < field.size())
+                {
+                    ++i;
+                    switch (field[i])
+                    {
+                    case 't':
+                        unescaped += '\t';
+                        break;
+                    case 'n':
+                        unescaped += '\n';
+                        break;
+                    default:
+                        unescaped += field[i];
+                        break;
+                    }
+                }
+                else
+                {
+                    unescaped += field[i];
+                }
+            }
+            return unescaped;
+        }
+    } // namespace
+
     SQLiteConnection::~SQLiteConnection()
     {
         if (m_open)
@@ -334,6 +396,43 @@ namespace Spark::Persistence
                 value = value.substr(1);
             }
 
+            // Execute() substitutes string parameters as single-quoted SQL literals with
+            // doubled apostrophes, but this fallback store is not SQL and would otherwise
+            // keep the quoting verbatim, leaking it back out of every GET. If the entire
+            // value is one well-formed quoted literal, decode it; anything else (multiple
+            // tokens, stray quotes) is raw text and is stored verbatim.
+            if (value.size() >= 2 && value.front() == '\'' && value.back() == '\'')
+            {
+                std::string decoded;
+                decoded.reserve(value.size() - 2);
+                bool wellFormed = true;
+                for (size_t i = 1; i + 1 < value.size(); ++i)
+                {
+                    if (value[i] == '\'')
+                    {
+                        // An interior apostrophe must be the first half of a doubled pair.
+                        if (i + 2 < value.size() && value[i + 1] == '\'')
+                        {
+                            decoded += '\'';
+                            ++i;
+                        }
+                        else
+                        {
+                            wellFormed = false;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        decoded += value[i];
+                    }
+                }
+                if (wellFormed)
+                {
+                    value = std::move(decoded);
+                }
+            }
+
             m_kvStore[key] = value;
             result.success = true;
             result.affectedRows = 1;
@@ -446,7 +545,7 @@ namespace Spark::Persistence
 
         for (const auto& [key, value] : m_kvStore)
         {
-            file << key << '\t' << value << '\n';
+            file << EscapeKVField(key) << '\t' << EscapeKVField(value) << '\n';
         }
 
         if (file.fail())
@@ -474,8 +573,8 @@ namespace Spark::Persistence
             auto tabPos = line.find('\t');
             if (tabPos != std::string::npos)
             {
-                std::string key = line.substr(0, tabPos);
-                std::string value = line.substr(tabPos + 1);
+                std::string key = UnescapeKVField(line.substr(0, tabPos));
+                std::string value = UnescapeKVField(line.substr(tabPos + 1));
                 m_kvStore[key] = value;
             }
         }
@@ -590,9 +689,30 @@ namespace Spark::Persistence
         }
     }
 
+    namespace
+    {
+        // With the pool closed there are no workers to drain the queue, so enqueueing
+        // would strand the item forever (future.get() deadlocks, callbacks never fire).
+        // Fail fast with the same error SyncQuery reports.
+        QueryResult MakePoolClosedResult()
+        {
+            QueryResult result;
+            result.success = false;
+            result.errorMessage = "Database pool is not open";
+            return result;
+        }
+    } // namespace
+
     std::future<QueryResult> AsyncDatabasePool::AsyncQuery(PreparedStatementID id,
                                                            std::vector<PreparedStatementParam> params)
     {
+        if (!m_open.load())
+        {
+            std::promise<QueryResult> promise;
+            promise.set_value(MakePoolClosedResult());
+            return promise.get_future();
+        }
+
         WorkItem item;
         item.stmtId = id;
         item.params = std::move(params);
@@ -611,6 +731,14 @@ namespace Spark::Persistence
     void AsyncDatabasePool::AsyncQueryWithCallback(PreparedStatementID id, std::vector<PreparedStatementParam> params,
                                                    Spark::Persistence::AsyncQueryCallback callback)
     {
+        if (!m_open.load())
+        {
+            // Deliver the failure through ProcessCallbacks like any completed query.
+            std::lock_guard<std::mutex> lock(m_callbackMutex);
+            m_completedCallbacks.push_back({std::move(callback), MakePoolClosedResult()});
+            return;
+        }
+
         WorkItem item;
         item.stmtId = id;
         item.params = std::move(params);
@@ -626,6 +754,13 @@ namespace Spark::Persistence
 
     std::future<QueryResult> AsyncDatabasePool::AsyncTransaction(Transaction transaction)
     {
+        if (!m_open.load())
+        {
+            std::promise<QueryResult> promise;
+            promise.set_value(MakePoolClosedResult());
+            return promise.get_future();
+        }
+
         WorkItem item;
         item.isTransaction = true;
         item.transaction = std::move(transaction);

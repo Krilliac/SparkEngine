@@ -280,6 +280,11 @@ namespace Spark::Scripting
         /// Emit AngelScript code for a single node
         static void EmitNode(const ScriptNode& node, const VisualScriptGraph& graph, std::string& code);
 
+        /// Emit every node in the execution chain hanging off an output pin (used
+        /// by Branch/ForLoop/Sequence so multi-node chains stay inside the block)
+        static void EmitExecChain(const VisualScriptGraph& graph, uint32_t fromNodeID, uint32_t fromPinIndex,
+                                  std::string& code);
+
         /// Resolve an input pin to its expression (connected var or default)
         static std::string ResolveInput(const ScriptNode& node, uint32_t inputIndex, const VisualScriptGraph& graph);
 

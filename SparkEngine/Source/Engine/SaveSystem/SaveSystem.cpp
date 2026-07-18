@@ -95,7 +95,9 @@ namespace Spark
     // Safe deserialization helpers — reject malformed save data instead of crashing
     // ============================================================================
 
-    static constexpr size_t kMaxPropertyLen = 4096;
+    // Must match the writer's limit (rejectIfTooLong in WriteToFile): every string on the wire
+    // carries a uint16 length prefix, so anything the writer accepts must load back cleanly.
+    static constexpr size_t kMaxPropertyLen = std::numeric_limits<uint16_t>::max();
 
     static float SafeGetFloat(const std::unordered_map<std::string, std::string>& props, const std::string& key,
                               float def)
@@ -1171,10 +1173,9 @@ namespace Spark
                 uint16_t nameLen;
                 if (!readBytes(&nameLen, sizeof(nameLen)))
                     return false;
-                // Cap string lengths to prevent malformed data from causing huge allocations
-                constexpr uint16_t kMaxStringLen = 4096;
-                if (nameLen > kMaxStringLen)
-                    return false;
+                // No explicit cap: the uint16 length prefix bounds allocations to 65535 bytes,
+                // matching the writer's rejectIfTooLong limit. A tighter cap here would make
+                // saves the writer accepted unloadable.
                 entity.name.resize(nameLen);
                 if (!readBytes(entity.name.data(), nameLen))
                     return false;
@@ -1189,9 +1190,6 @@ namespace Spark
 
                     uint16_t typeLen;
                     if (!readBytes(&typeLen, sizeof(typeLen)))
-                        return false;
-                    constexpr uint16_t kMaxTypeLen = 4096;
-                    if (typeLen > kMaxTypeLen)
                         return false;
                     comp.typeName.resize(typeLen);
                     if (!readBytes(comp.typeName.data(), typeLen))

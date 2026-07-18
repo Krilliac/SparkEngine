@@ -114,6 +114,16 @@ If a `ThirdParty/` directory looks empty or CMake reports missing files there, a
 
 ---
 
+## Confirmed Open Defects Deferred From the 2026-07-18 Sweep
+
+A multi-agent defect sweep (2026-07-18) confirmed and fixed 41 defects across 31 files. Three additional findings were double-confirmed as real but deliberately **not** auto-fixed because the correct fix is architectural, not local. They remain open:
+
+1. **Per-client reliable-message state is server-wide** (`SparkEngine/Source/Engine/Networking/NetworkManager.cpp:494`, high). Receive-side dedup/ACK/ordered state lives per-`NetworkManager`, not per sender, and every client numbers reliable messages from 1. With ≥2 clients, client B's sequence N is dropped as a duplicate of client A's, and the merged broadcast ACK makes B stop retransmitting — silent permanent message loss. Fix requires keying receive/ACK/ordered state by peer across the reliability layer (`NetworkReliable.cpp`, `NetworkConnection.cpp`).
+2. **Core ECS systems never registered** (`SparkEngine/Source/Core/EngineSetup.h:175`, high). `CreatePhaseSystemManager` has no non-test callers; the ECS-component AI/animation/lifecycle/projectile systems only run in tests. Game modules tick their own OO behavior trees, but the ECS-component path is dead. Fix requires deciding where phase-system registration belongs in the startup path and wiring `UpdateAll` into the main loop.
+3. **Delta snapshot ACKs never wired** (`SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.cpp:209`, medium). `AcknowledgeSequence` has zero production callers, so `pendingDeltas` grows unbounded per client until disconnect. Naively wiring transport ACKs in would falsely advance baselines (transport sequence ≠ delta sequence) and cause silent desync — deltas need their own ack echo.
+
+---
+
 ## Source & Freshness
 
 - **Original observation:** `.claude/knowledge/codebase-observations.md`, last updated 2026-03-19.

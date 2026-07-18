@@ -16,6 +16,7 @@
 #include "StackTrace.h"
 #include "DebugHookManager.h"
 
+#include <algorithm>
 #include <iostream>
 #include <cstring>
 #include <filesystem>
@@ -56,9 +57,13 @@ namespace Spark
 
         auto levelStr = LogLevelToString(msg.level);
         auto catStr = LogCategoryToString(msg.category);
-        offset += snprintf(buf + offset, sizeof(buf) - offset, "[%s.%03d] [TID:%s] [%-5.*s] [%-10.*s] %s", timeBuf,
-                           static_cast<int>(ms), tidStr.c_str(), static_cast<int>(levelStr.size()), levelStr.data(),
-                           static_cast<int>(catStr.size()), catStr.data(), msg.message.c_str());
+        // snprintf returns the would-be length, not the written length — clamp so a long
+        // message can't push offset past the buffer (OOB write/read on the next steps).
+        int written = snprintf(buf + offset, sizeof(buf) - offset, "[%s.%03d] [TID:%s] [%-5.*s] [%-10.*s] %s", timeBuf,
+                               static_cast<int>(ms), tidStr.c_str(), static_cast<int>(levelStr.size()), levelStr.data(),
+                               static_cast<int>(catStr.size()), catStr.data(), msg.message.c_str());
+        offset += (written > 0) ? written : 0;
+        offset = std::min(offset, static_cast<int>(sizeof(buf)) - 1);
 
         // Append source location if available
         if (!msg.file.empty())
@@ -75,7 +80,9 @@ namespace Spark
                 shortFile = slash + 1;
             }
 
-            offset += snprintf(buf + offset, sizeof(buf) - offset, "  (%s:%d)", shortFile, msg.line);
+            written = snprintf(buf + offset, sizeof(buf) - offset, "  (%s:%d)", shortFile, msg.line);
+            offset += (written > 0) ? written : 0;
+            offset = std::min(offset, static_cast<int>(sizeof(buf)) - 1);
         }
 
         std::string result(buf, offset);

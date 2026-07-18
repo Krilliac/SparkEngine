@@ -12,6 +12,7 @@
 #include <cctype>
 #include <queue>
 #include <sstream>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace Spark::Scripting
@@ -303,15 +304,29 @@ namespace Spark::Scripting
 
     std::vector<uint32_t> VisualScriptCompiler::TopologicalSortData(const VisualScriptGraph& graph, uint32_t startNode)
     {
-        std::unordered_set<uint32_t> visited;
-        std::vector<uint32_t> order;
+        // Classify a connection as execution flow (white wire) vs data. When pin
+        // metadata is missing on both endpoints (hand-built graphs without pin
+        // declarations), assume execution so those graphs still compile.
+        auto isExecConnection = [&graph](const ScriptConnection& conn)
+        {
+            const auto* from = FindNode(graph, conn.fromNode);
+            if (from && conn.fromPin < from->outputs.size())
+                return from->outputs[conn.fromPin].kind == PinKind::Execution;
+            const auto* to = FindNode(graph, conn.toNode);
+            if (to && conn.toPin < to->inputs.size())
+                return to->inputs[conn.toPin].kind == PinKind::Execution;
+            return true;
+        };
 
-        // BFS in both directions from the start node:
-        // Forward (fromNode → toNode): follows execution flow from event to actions
-        // Backward (toNode → fromNode): follows data dependencies from consumers to producers
+        std::unordered_set<uint32_t> visited;
+        std::vector<uint32_t> order; // discovery order — stable tie-break for the sort below
+
+        // Phase 1 — forward along execution connections only: the nodes that
+        // actually belong to this event's execution chain.
         std::queue<uint32_t> queue;
         queue.push(startNode);
         visited.insert(startNode);
+        order.push_back(startNode);
 
         while (!queue.empty())
         {
@@ -320,38 +335,84 @@ namespace Spark::Scripting
 
             for (const auto& conn : graph.connections)
             {
-                // Forward: find nodes this node connects TO
-                if (conn.fromNode == current && visited.find(conn.toNode) == visited.end())
+                if (conn.fromNode == current && isExecConnection(conn) && visited.find(conn.toNode) == visited.end())
                 {
                     visited.insert(conn.toNode);
+                    order.push_back(conn.toNode);
                     queue.push(conn.toNode);
                 }
-                // Backward: find nodes that connect TO this node
-                if (conn.toNode == current && visited.find(conn.fromNode) == visited.end())
+            }
+        }
+
+        // Phase 2 — backward along data connections to pull in producers for the
+        // chain. Never expand forward out of a producer: a data node shared with
+        // another event would drag that event's whole action chain into this one.
+        for (uint32_t id : order)
+            queue.push(id);
+        while (!queue.empty())
+        {
+            uint32_t current = queue.front();
+            queue.pop();
+
+            for (const auto& conn : graph.connections)
+            {
+                if (conn.toNode == current && !isExecConnection(conn) && visited.find(conn.fromNode) == visited.end())
                 {
                     visited.insert(conn.fromNode);
+                    order.push_back(conn.fromNode);
                     queue.push(conn.fromNode);
                 }
             }
-            order.push_back(current);
         }
 
-        // Sort so dependencies come before dependents
-        // A node that feeds into another (fromNode in a connection) should come first
-        std::sort(order.begin(), order.end(),
-                  [&graph](uint32_t a, uint32_t b)
-                  {
-                      for (const auto& conn : graph.connections)
-                      {
-                          if (conn.fromNode == a && conn.toNode == b)
-                              return true;
-                          if (conn.fromNode == b && conn.toNode == a)
-                              return false;
-                      }
-                      return a < b;
-                  });
+        // Kahn's algorithm over the collected subset so producers are emitted
+        // before consumers. A pairwise std::sort comparator cannot express a
+        // topological order and is not a strict weak ordering (std::sort UB).
+        std::unordered_map<uint32_t, uint32_t> inDegree;
+        for (uint32_t id : order)
+            inDegree[id] = 0;
+        for (const auto& conn : graph.connections)
+        {
+            if (conn.fromNode != conn.toNode && visited.count(conn.fromNode) != 0 && visited.count(conn.toNode) != 0)
+                ++inDegree[conn.toNode];
+        }
 
-        return order;
+        std::vector<uint32_t> sorted;
+        sorted.reserve(order.size());
+        std::queue<uint32_t> ready;
+        for (uint32_t id : order)
+        {
+            if (inDegree[id] == 0)
+                ready.push(id);
+        }
+        while (!ready.empty())
+        {
+            uint32_t id = ready.front();
+            ready.pop();
+            sorted.push_back(id);
+
+            for (const auto& conn : graph.connections)
+            {
+                if (conn.fromNode == id && conn.fromNode != conn.toNode && visited.count(conn.toNode) != 0 &&
+                    --inDegree[conn.toNode] == 0)
+                {
+                    ready.push(conn.toNode);
+                }
+            }
+        }
+
+        // Cycle fallback: append any remaining nodes in discovery order.
+        if (sorted.size() < order.size())
+        {
+            std::unordered_set<uint32_t> emitted(sorted.begin(), sorted.end());
+            for (uint32_t id : order)
+            {
+                if (emitted.find(id) == emitted.end())
+                    sorted.push_back(id);
+            }
+        }
+
+        return sorted;
     }
 
     // ========================================================================
@@ -557,36 +618,17 @@ namespace Spark::Scripting
             std::string idx = out(1); // out[0] is LoopBody exec, out[1] is Index
             code += "    for (int " + idx + " = " + start + "; " + idx + " < " + end + "; " + idx + "++)\n";
             code += "    {\n";
-            // Emit body nodes connected to output pin 0 (LoopBody exec)
-            for (const auto& c : graph.connections)
-            {
-                if (c.fromNode == node.id && c.fromPin == 0)
-                {
-                    const auto* bodyNode = FindNode(graph, c.toNode);
-                    if (bodyNode && !IsEventNode(bodyNode->type))
-                    {
-                        std::string bodyCode;
-                        EmitNode(*bodyNode, graph, bodyCode);
-                        code += "    " + bodyCode;
-                    }
-                }
-            }
+            // Emit the whole execution chain hanging off output pin 0 (LoopBody
+            // exec), not just its first node, so multi-node bodies stay in the loop
+            EmitExecChain(graph, node.id, 0, code);
             code += "    }\n";
             break;
         }
         case ScriptNodeType::Sequence:
-            // Emit connected nodes for each execution output in order
+            // Emit the full execution chain of each execution output in order
             for (uint32_t outIdx = 0; outIdx < static_cast<uint32_t>(node.outputs.size()); outIdx++)
             {
-                for (const auto& c : graph.connections)
-                {
-                    if (c.fromNode == node.id && c.fromPin == outIdx)
-                    {
-                        const auto* seqNode = FindNode(graph, c.toNode);
-                        if (seqNode && !IsEventNode(seqNode->type))
-                            EmitNode(*seqNode, graph, code);
-                    }
-                }
+                EmitExecChain(graph, node.id, outIdx, code);
             }
             break;
         case ScriptNodeType::DoNothing:
@@ -663,6 +705,48 @@ namespace Spark::Scripting
         }
     }
 
+    void VisualScriptCompiler::EmitExecChain(const VisualScriptGraph& graph, uint32_t fromNodeID, uint32_t fromPinIndex,
+                                             std::string& code)
+    {
+        // Find the first node connected to the given output pin
+        uint32_t currentNode = 0;
+        for (const auto& c : graph.connections)
+        {
+            if (c.fromNode == fromNodeID && c.fromPin == fromPinIndex)
+            {
+                currentNode = c.toNode;
+                break;
+            }
+        }
+
+        // Walk the chain following execution connections. Seeding the guard set
+        // with the origin prevents infinite recursion if a chain cycles back.
+        std::unordered_set<uint32_t> emittedInChain;
+        emittedInChain.insert(fromNodeID);
+        while (currentNode != 0 && emittedInChain.find(currentNode) == emittedInChain.end())
+        {
+            const auto* chainNode = FindNode(graph, currentNode);
+            if (!chainNode || IsEventNode(chainNode->type))
+                break;
+
+            emittedInChain.insert(currentNode);
+            EmitNode(*chainNode, graph, code);
+
+            // Find next node connected via first execution output
+            uint32_t nextNode = 0;
+            for (const auto& c : graph.connections)
+            {
+                if (c.fromNode == currentNode && c.fromPin < chainNode->outputs.size() &&
+                    chainNode->outputs[c.fromPin].kind == PinKind::Execution)
+                {
+                    nextNode = c.toNode;
+                    break;
+                }
+            }
+            currentNode = nextNode;
+        }
+    }
+
     // ========================================================================
     // Main Compile Entry Point
     // ========================================================================
@@ -723,7 +807,53 @@ namespace Spark::Scripting
             source << "\n";
         }
 
-        // Emit methods for each event node
+        // Collect nodes that are emitted inside control flow blocks (Branch/ForLoop/Sequence)
+        // to prevent double-emission in the main loop. Each block emits the WHOLE execution
+        // chain hanging off its output pins, so the full transitive chain must be skipped,
+        // not just the direct successors.
+        std::unordered_set<uint32_t> controlFlowChildren;
+        for (const auto& conn : graph.connections)
+        {
+            const auto* fromNode = FindNode(graph, conn.fromNode);
+            if (fromNode && (fromNode->type == ScriptNodeType::Branch || fromNode->type == ScriptNodeType::ForLoop ||
+                             fromNode->type == ScriptNodeType::Sequence))
+            {
+                // Walk the chain exactly like EmitExecChain does
+                uint32_t chainNodeId = conn.toNode;
+                std::unordered_set<uint32_t> seenInChain;
+                while (chainNodeId != 0 && seenInChain.insert(chainNodeId).second)
+                {
+                    const auto* chainNode = FindNode(graph, chainNodeId);
+                    if (!chainNode || IsEventNode(chainNode->type))
+                        break;
+                    controlFlowChildren.insert(chainNodeId);
+
+                    uint32_t nextNodeId = 0;
+                    for (const auto& c : graph.connections)
+                    {
+                        if (c.fromNode == chainNodeId && c.fromPin < chainNode->outputs.size() &&
+                            chainNode->outputs[c.fromPin].kind == PinKind::Execution)
+                        {
+                            nextNodeId = c.toNode;
+                            break;
+                        }
+                    }
+                    chainNodeId = nextNodeId;
+                }
+            }
+        }
+
+        // Group event nodes by generated method signature — OnKeyPress compiles into
+        // Update(float dt), so OnUpdate plus OnKeyPress (or several OnKeyPress nodes)
+        // must share one method or the class would contain duplicate definitions
+        struct EventMethod
+        {
+            std::string name;
+            std::string params;
+            std::vector<const ScriptNode*> events;
+        };
+        std::vector<EventMethod> eventMethods;
+
         for (const auto* eventNode : eventNodes)
         {
             // Determine method signature from event type
@@ -756,150 +886,96 @@ namespace Spark::Scripting
                 params = "float amount";
                 break;
             case ScriptNodeType::OnKeyPress:
-            {
-                auto it = eventNode->properties.find("key");
-                std::string key = (it != eventNode->properties.end()) ? it->second : "Space";
-                methodName = "Update"; // Key checks go in Update
+                methodName = "Update"; // Key checks go in Update, wrapped in getKeyDown()
                 params = "float dt";
                 break;
-            }
             default:
                 methodName = "CustomHandler";
                 break;
             }
 
-            source << "    void " << methodName << "(" << params << ")\n    {\n";
+            auto existing = std::find_if(eventMethods.begin(), eventMethods.end(), [&](const EventMethod& m)
+                                         { return m.name == methodName && m.params == params; });
+            if (existing != eventMethods.end())
+                existing->events.push_back(eventNode);
+            else
+                eventMethods.push_back({std::move(methodName), std::move(params), {eventNode}});
+        }
 
-            // Collect all nodes reachable from this event via execution connections
-            auto sortedNodes = TopologicalSortData(graph, eventNode->id);
+        // Emit one method per signature, concatenating the bodies of every event sharing it
+        for (const auto& method : eventMethods)
+        {
+            source << "    void " << method.name << "(" << method.params << ")\n    {\n";
 
-            // For OnKeyPress, wrap in a key check
-            if (eventNode->type == ScriptNodeType::OnKeyPress)
+            for (const ScriptNode* eventNode : method.events)
             {
-                auto it = eventNode->properties.find("key");
-                std::string key = (it != eventNode->properties.end()) ? it->second : "Space";
-                source << "        if (getKeyDown(\"" << EscapeAngelScriptString(key) << "\"))\n        {\n";
-            }
+                // Collect all nodes reachable from this event via execution connections
+                auto sortedNodes = TopologicalSortData(graph, eventNode->id);
 
-            // Collect nodes that are emitted inside control flow blocks (Branch/ForLoop/Sequence)
-            // to prevent double-emission in the main loop
-            std::unordered_set<uint32_t> controlFlowChildren;
-            for (const auto& conn : graph.connections)
-            {
-                const auto* fromNode = FindNode(graph, conn.fromNode);
-                if (fromNode &&
-                    (fromNode->type == ScriptNodeType::Branch || fromNode->type == ScriptNodeType::ForLoop ||
-                     fromNode->type == ScriptNodeType::Sequence))
-                {
-                    controlFlowChildren.insert(conn.toNode);
-                }
-            }
-
-            // Emit code for each node in dependency order
-            std::string bodyCode;
-            for (uint32_t nodeId : sortedNodes)
-            {
-                if (nodeId == eventNode->id)
-                    continue;
-                const auto* node = FindNode(graph, nodeId);
-                if (!node || IsEventNode(node->type))
-                    continue;
-                // Skip nodes that are children of control flow — they get emitted inside the block
-                if (controlFlowChildren.count(nodeId) && node->type != ScriptNodeType::Branch &&
-                    node->type != ScriptNodeType::ForLoop && node->type != ScriptNodeType::Sequence)
-                    continue;
-
-                // Debug trace instrumentation
-                if (debugMode)
-                {
-                    bodyCode += "    debugTrace(" + std::to_string(node->id) + ", \"" +
-                                std::to_string(static_cast<uint32_t>(node->type)) + "\", \"executing\");\n";
-                }
-
-                // Handle Branch nodes specially — emit if/else with true/false paths
-                if (node->type == ScriptNodeType::Branch)
-                {
-                    std::string condition = ResolveInput(*node, 1, graph); // input[0] is Exec, [1] is Bool
-                    bodyCode += "    if (" + condition + ")\n    {\n";
-
-                    // Walk an execution chain from a given output pin
-                    auto emitExecChain = [&](uint32_t fromNodeId, uint32_t fromPinIdx)
-                    {
-                        std::string chainCode;
-                        uint32_t currentNode = 0;
-
-                        // Find first connected node
-                        for (const auto& c : graph.connections)
-                        {
-                            if (c.fromNode == fromNodeId && c.fromPin == fromPinIdx)
-                            {
-                                currentNode = c.toNode;
-                                break;
-                            }
-                        }
-                        if (currentNode == 0)
-                            return chainCode;
-
-                        // Walk the chain following execution connections
-                        std::unordered_set<uint32_t> emittedInChain;
-                        while (currentNode != 0 && emittedInChain.find(currentNode) == emittedInChain.end())
-                        {
-                            const auto* chainNode = FindNode(graph, currentNode);
-                            if (!chainNode || IsEventNode(chainNode->type))
-                                break;
-
-                            emittedInChain.insert(currentNode);
-                            EmitNode(*chainNode, graph, chainCode);
-
-                            // Find next node connected via first execution output
-                            uint32_t nextNode = 0;
-                            for (const auto& c : graph.connections)
-                            {
-                                if (c.fromNode == currentNode)
-                                {
-                                    // Check if this is an execution output
-                                    if (c.fromPin < chainNode->outputs.size() &&
-                                        chainNode->outputs[c.fromPin].kind == PinKind::Execution)
-                                    {
-                                        nextNode = c.toNode;
-                                        break;
-                                    }
-                                }
-                            }
-                            currentNode = nextNode;
-                        }
-                        return chainCode;
-                    };
-
-                    bodyCode += emitExecChain(node->id, 0); // True branch (output pin 0)
-                    bodyCode += "    }\n    else\n    {\n";
-                    bodyCode += emitExecChain(node->id, 1); // False branch (output pin 1)
-                    bodyCode += "    }\n";
-                }
-                else
-                {
-                    EmitNode(*node, graph, bodyCode);
-                }
-            }
-
-            // Indent body code
-            std::istringstream bodyStream(bodyCode);
-            std::string line;
-            while (std::getline(bodyStream, line))
-            {
+                // For OnKeyPress, wrap the body in a key check
                 if (eventNode->type == ScriptNodeType::OnKeyPress)
                 {
-                    source << "        " << line << "\n";
+                    auto it = eventNode->properties.find("key");
+                    std::string key = (it != eventNode->properties.end()) ? it->second : "Space";
+                    source << "        if (getKeyDown(\"" << EscapeAngelScriptString(key) << "\"))\n        {\n";
                 }
-                else
-                {
-                    source << "    " << line << "\n";
-                }
-            }
 
-            if (eventNode->type == ScriptNodeType::OnKeyPress)
-            {
-                source << "        }\n";
+                // Emit code for each node in dependency order
+                std::string bodyCode;
+                for (uint32_t nodeId : sortedNodes)
+                {
+                    if (nodeId == eventNode->id)
+                        continue;
+                    const auto* node = FindNode(graph, nodeId);
+                    if (!node || IsEventNode(node->type))
+                        continue;
+                    // Skip nodes that are children of control flow — they get emitted inside the block
+                    if (controlFlowChildren.count(nodeId) && node->type != ScriptNodeType::Branch &&
+                        node->type != ScriptNodeType::ForLoop && node->type != ScriptNodeType::Sequence)
+                        continue;
+
+                    // Debug trace instrumentation
+                    if (debugMode)
+                    {
+                        bodyCode += "    debugTrace(" + std::to_string(node->id) + ", \"" +
+                                    std::to_string(static_cast<uint32_t>(node->type)) + "\", \"executing\");\n";
+                    }
+
+                    // Handle Branch nodes specially — emit if/else with true/false paths
+                    if (node->type == ScriptNodeType::Branch)
+                    {
+                        std::string condition = ResolveInput(*node, 1, graph); // input[0] is Exec, [1] is Bool
+                        bodyCode += "    if (" + condition + ")\n    {\n";
+                        EmitExecChain(graph, node->id, 0, bodyCode); // True branch (output pin 0)
+                        bodyCode += "    }\n    else\n    {\n";
+                        EmitExecChain(graph, node->id, 1, bodyCode); // False branch (output pin 1)
+                        bodyCode += "    }\n";
+                    }
+                    else
+                    {
+                        EmitNode(*node, graph, bodyCode);
+                    }
+                }
+
+                // Indent body code
+                std::istringstream bodyStream(bodyCode);
+                std::string line;
+                while (std::getline(bodyStream, line))
+                {
+                    if (eventNode->type == ScriptNodeType::OnKeyPress)
+                    {
+                        source << "        " << line << "\n";
+                    }
+                    else
+                    {
+                        source << "    " << line << "\n";
+                    }
+                }
+
+                if (eventNode->type == ScriptNodeType::OnKeyPress)
+                {
+                    source << "        }\n";
+                }
             }
 
             source << "    }\n\n";

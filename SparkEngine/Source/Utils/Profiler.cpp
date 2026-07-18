@@ -229,7 +229,11 @@ void Profiler::EndGPUTimer(std::string_view name)
     std::lock_guard<std::mutex> lock(m_mutex);
 
     auto it = m_gpuTimers.find(std::string(name));
-    if (it == m_gpuTimers.end())
+
+    // Skip stale entries left behind when BeginGPUTimer's query creation failed:
+    // D3D11 End() does not accept a null async object, and End without a
+    // matching Begin (pending == false) is invalid.
+    if (it == m_gpuTimers.end() || !it->second.pending || !it->second.endQuery)
     {
         return;
     }

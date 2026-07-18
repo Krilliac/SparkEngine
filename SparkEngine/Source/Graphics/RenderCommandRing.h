@@ -120,7 +120,8 @@ namespace Spark
                 uint32_t r = m_readPos.load(std::memory_order_relaxed);
                 uint32_t w = m_writePos.load(std::memory_order_acquire);
 
-                if (r >= w)
+                // Modular comparison: counters are free-running and wrap past 2^32 (matches Post's full check)
+                if (r == w)
                     return false; // Ring empty
 
                 outCmd = std::move(m_ring[r & MASK]);

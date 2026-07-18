@@ -289,6 +289,7 @@ namespace Spark::Engine2D
             m_srcY = y;
             m_srcW = w;
             m_srcH = h;
+            MarkDirty(UpdateFlag::Image);
         }
         uint32_t GetTextureId() const { return m_textureId; }
 
@@ -310,7 +311,11 @@ namespace Spark::Engine2D
             }
         }
         const std::string& GetText() const { return m_text; }
-        void SetFontSize(float size) { m_fontSize = size; }
+        void SetFontSize(float size)
+        {
+            m_fontSize = size;
+            MarkDirty(UpdateFlag::Path);
+        }
 
       private:
         std::string m_text;

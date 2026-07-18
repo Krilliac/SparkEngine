@@ -430,6 +430,41 @@ namespace Spark::UI
         m_open = !m_open;
     }
 
+    namespace
+    {
+        // Mirrors UILayoutLoader::FindMatchingBrace, but for the '[' ... ']' of a JSON array.
+        size_t FindMatchingBracket(std::string_view json, size_t pos)
+        {
+            int depth = 0;
+            bool inString = false;
+            for (size_t i = pos; i < json.size(); ++i)
+            {
+                char c = json[i];
+                if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+                {
+                    inString = !inString;
+                }
+                if (inString)
+                {
+                    continue;
+                }
+                if (c == '[')
+                {
+                    ++depth;
+                }
+                else if (c == ']')
+                {
+                    --depth;
+                    if (depth == 0)
+                    {
+                        return i;
+                    }
+                }
+            }
+            return std::string_view::npos;
+        }
+    } // namespace
+
     bool UILayoutLoader::LoadFromJSON(std::string_view json, UIPanel* parent)
     {
         if (!parent || json.empty())
@@ -449,11 +484,18 @@ namespace Spark::UI
             return false;
         }
 
-        size_t pos = arrayStart + 1;
-        while (pos < json.size())
+        auto arrayEnd = FindMatchingBracket(json, arrayStart);
+        if (arrayEnd == std::string_view::npos)
         {
+            return false;
+        }
+
+        size_t pos = arrayStart + 1;
+        while (pos < arrayEnd)
+        {
+            // Objects found past arrayEnd belong to sibling keys after "children", not to the array.
             auto objStart = json.find('{', pos);
-            if (objStart == std::string_view::npos)
+            if (objStart == std::string_view::npos || objStart > arrayEnd)
             {
                 break;
             }
@@ -573,9 +615,28 @@ namespace Spark::UI
 
     void UILayoutLoader::ParseWidgetBlock(std::string_view block, UIPanel* parent)
     {
-        std::string type = ExtractString(block, "type");
-        std::string widgetName = ExtractString(block, "name");
-        std::string text = ExtractString(block, "text");
+        // Extract* does a flat first-occurrence search, so scalar keys must be read from a view
+        // of the widget with its nested "children" array excised — otherwise a child's
+        // "x"/"y"/"type"/... would be silently applied to this widget.
+        std::string scalarBlock(block);
+        auto childrenKey = block.find("\"children\"");
+        if (childrenKey != std::string_view::npos)
+        {
+            auto childArrayStart = block.find('[', childrenKey);
+            if (childArrayStart != std::string_view::npos)
+            {
+                auto childArrayEnd = FindMatchingBracket(block, childArrayStart);
+                if (childArrayEnd != std::string_view::npos)
+                {
+                    scalarBlock = std::string(block.substr(0, childrenKey));
+                    scalarBlock += block.substr(childArrayEnd + 1);
+                }
+            }
+        }
+
+        std::string type = ExtractString(scalarBlock, "type");
+        std::string widgetName = ExtractString(scalarBlock, "name");
+        std::string text = ExtractString(scalarBlock, "text");
 
         if (widgetName.empty())
         {
@@ -599,7 +660,7 @@ namespace Spark::UI
         }
         else if (type == "image")
         {
-            std::string src = ExtractString(block, "src");
+            std::string src = ExtractString(scalarBlock, "src");
             created = parent->CreateImage(widgetName, src);
         }
         else if (type == "panel")
@@ -611,10 +672,10 @@ namespace Spark::UI
 
         if (created)
         {
-            float xPos = ExtractFloat(block, "x", created->GetX());
-            float yPos = ExtractFloat(block, "y", created->GetY());
-            float w = ExtractFloat(block, "w", created->GetWidth());
-            float h = ExtractFloat(block, "h", created->GetHeight());
+            float xPos = ExtractFloat(scalarBlock, "x", created->GetX());
+            float yPos = ExtractFloat(scalarBlock, "y", created->GetY());
+            float w = ExtractFloat(scalarBlock, "w", created->GetWidth());
+            float h = ExtractFloat(scalarBlock, "h", created->GetHeight());
             created->SetPosition(xPos, yPos);
             created->SetSize(w, h);
         }

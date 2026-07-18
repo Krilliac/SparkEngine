@@ -21,6 +21,42 @@ using namespace DirectX;
 namespace Spark::Net
 {
 
+    namespace
+    {
+        // Serializes an entity's state without touching m_replicatedEntities.
+        // Callers that hold m_replicationMutex use this directly; locking wrappers
+        // must not call SerializeEntityState while holding the mutex (non-recursive).
+        void SerializeEntityStateUnlocked(uint32_t networkID, const ReplicatedEntity& entity, NetBuffer& outBuffer)
+        {
+            outBuffer.WriteUint32(networkID);
+            outBuffer.WriteVector3(entity.position);
+            outBuffer.WriteVector3(entity.rotation);
+            outBuffer.WriteVector3(entity.velocity);
+
+            // Serialize replicated properties
+            uint16_t propCount = 0;
+            for (const auto& prop : entity.properties)
+            {
+                if (prop.dirty || entity.needsFullSync)
+                    propCount++;
+            }
+            outBuffer.WriteUint16(propCount);
+
+            for (const auto& prop : entity.properties)
+            {
+                if (prop.dirty || entity.needsFullSync)
+                {
+                    outBuffer.WriteString(prop.name);
+                    outBuffer.WriteUint8(static_cast<uint8_t>(prop.type));
+                    if (prop.serialize)
+                    {
+                        prop.serialize(outBuffer);
+                    }
+                }
+            }
+        }
+    } // namespace
+
     // --------------------------------------------------------------------------
     // Entity Replication
     // --------------------------------------------------------------------------
@@ -154,7 +190,8 @@ namespace Spark::Net
             stateMsg.channel = ChannelType::Reliable;
 
             NetBuffer stateBuf;
-            SerializeEntityState(netID, stateBuf);
+            // Already holding m_replicationMutex — must not re-lock via SerializeEntityState.
+            SerializeEntityStateUnlocked(netID, entity, stateBuf);
             stateMsg.payload = stateBuf.GetData();
             SendToClient(targetClient, stateMsg);
         }
@@ -167,34 +204,7 @@ namespace Spark::Net
         if (it == m_replicatedEntities.end())
             return;
 
-        const auto& entity = it->second;
-
-        outBuffer.WriteUint32(networkID);
-        outBuffer.WriteVector3(entity.position);
-        outBuffer.WriteVector3(entity.rotation);
-        outBuffer.WriteVector3(entity.velocity);
-
-        // Serialize replicated properties
-        uint16_t propCount = 0;
-        for (const auto& prop : entity.properties)
-        {
-            if (prop.dirty || entity.needsFullSync)
-                propCount++;
-        }
-        outBuffer.WriteUint16(propCount);
-
-        for (const auto& prop : entity.properties)
-        {
-            if (prop.dirty || entity.needsFullSync)
-            {
-                outBuffer.WriteString(prop.name);
-                outBuffer.WriteUint8(static_cast<uint8_t>(prop.type));
-                if (prop.serialize)
-                {
-                    prop.serialize(outBuffer);
-                }
-            }
-        }
+        SerializeEntityStateUnlocked(networkID, it->second, outBuffer);
     }
 
     void NetworkManager::DeserializeEntityState(NetBuffer& inBuffer)
@@ -368,7 +378,15 @@ namespace Spark::Net
                 }
                 else
                 {
-                    // Delta sync: build per-connection delta packets, filtered by scope.
+                    // Delta sync: with needsFullSync false, SerializeEntityState emits only
+                    // dirty properties — a property-level delta in the same wire format the
+                    // client's EntityStateUpdate handler (DeserializeEntityState) parses.
+                    // BuildDeltaPacket's field-indexed format has no receive-side parser and
+                    // must not go on the wire.
+                    NetBuffer buf;
+                    SerializeEntityState(netID, buf);
+                    std::vector<uint8_t> payload = buf.GetData();
+
                     for (ClientID clientId : connectedClients)
                     {
                         if (!scopeFilter.IsEntityInScope(clientId, entity.position, entity.areaId, entity.teamMask,
@@ -376,15 +394,11 @@ namespace Spark::Net
                         {
                             continue;
                         }
-                        auto deltaPacket = deltaManager.BuildDeltaPacket(clientId, netID);
-                        if (!deltaPacket.empty())
-                        {
-                            NetworkMessage msg;
-                            msg.type = MessageType::EntityStateUpdate;
-                            msg.channel = ChannelType::Unreliable;
-                            msg.payload = std::move(deltaPacket);
-                            SendToClient(clientId, msg);
-                        }
+                        NetworkMessage msg;
+                        msg.type = MessageType::EntityStateUpdate;
+                        msg.channel = ChannelType::Unreliable;
+                        msg.payload = payload;
+                        SendToClient(clientId, msg);
                     }
                 }
 

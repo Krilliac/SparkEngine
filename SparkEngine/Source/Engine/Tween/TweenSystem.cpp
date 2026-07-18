@@ -114,14 +114,21 @@ namespace Spark
 
     void TweenInstance::Pause()
     {
-        if (m_state == TweenState::Running)
+        // Pending must be pausable too: CreateSequence pauses freshly created
+        // tweens before their first Update() ever runs.
+        if (m_state == TweenState::Running || m_state == TweenState::Pending)
             m_state = TweenState::Paused;
     }
 
     void TweenInstance::Resume()
     {
-        if (m_state == TweenState::Paused)
-            m_state = TweenState::Running;
+        if (m_state != TweenState::Paused)
+            return;
+
+        // A tween paused before it started still has delay to serve (the
+        // Pending branch in Update() is the only place that consumes it, and
+        // leaves it <= 0 afterwards), so send it back to Pending.
+        m_state = (m_delay > 0.0f) ? TweenState::Pending : TweenState::Running;
     }
 
     void TweenInstance::Cancel()
@@ -143,7 +150,9 @@ namespace Spark
 
         if (m_state == TweenState::Pending)
         {
-            m_delay -= dt * m_playRate;
+            // Consume the delay in wall-clock units: the overshoot assigned to
+            // dt below is scaled by m_playRate exactly once, at m_elapsed +=.
+            m_delay -= dt;
             if (m_delay > 0.0f)
                 return false;
             m_state = TweenState::Running;

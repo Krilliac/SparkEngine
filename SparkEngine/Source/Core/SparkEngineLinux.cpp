@@ -245,6 +245,10 @@ static void TickFrame(float dt)
     {
         SPARK_GUARDED_UPDATE("Modules", "Core", {
             GetEngineRuntime().moduleManager->UpdateAll(dt);
+            auto& fixedAcc = Spark::FixedTimestepAccumulator::GetInstance();
+            const float fixedDt = fixedAcc.GetFixedTimestep();
+            for (uint32_t i = fixedAcc.GetFixedStepCount(); i > 0; --i)
+                GetEngineRuntime().moduleManager->FixedUpdateAll(fixedDt);
             GetEngineRuntime().moduleManager->RenderAll();
         });
     }
@@ -529,7 +533,13 @@ static int RunHeadlessLinux(int argc, char* argv[])
 
         SPARK_GUARDED_UPDATE("Modules", "Core", {
             if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasModules())
+            {
                 GetEngineRuntime().moduleManager->UpdateAll(dt);
+                auto& fixedAcc = Spark::FixedTimestepAccumulator::GetInstance();
+                const float fixedDt = fixedAcc.GetFixedTimestep();
+                for (uint32_t i = fixedAcc.GetFixedStepCount(); i > 0; --i)
+                    GetEngineRuntime().moduleManager->FixedUpdateAll(fixedDt);
+            }
         });
 
         if (GetEngineRuntime().moduleHotReload)

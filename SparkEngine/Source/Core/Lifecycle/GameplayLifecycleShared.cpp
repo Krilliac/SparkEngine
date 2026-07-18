@@ -80,8 +80,6 @@
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
 #include "Engine/VR/VRSystem.h"
-#include "Engine/Animation/RagdollSystem.h"
-#include "Engine/Mobile/MobilePlatform.h"
 #include "Core/FaultIsolation.h"
 #include "Core/FixedTimestepAccumulator.h"
 #include "Core/PluginRegistry.h"
@@ -713,10 +711,11 @@ namespace Spark::Core::Lifecycle
         ctx->SetCinematic(&Spark::Cinematic::SequencerManager::GetInstance());
         ctx->SetReplay(&Spark::ReplaySystem::GetInstance());
 
-        {
-            static Spark::Animation::RagdollSystem s_ragdollSystem;
-            s_ragdollSystem.Initialize();
-        }
+        // RagdollSystem and MobilePlatform were formerly initialized here
+        // into block-scope statics with no accessor — unreachable after
+        // this function returned, so nothing could call their APIs or
+        // pump their Update loops. Removed per the wire-in-or-delete
+        // rule; re-add via an EngineContext slot when actually wired.
 
         {
             static Spark::VR::VRSystem s_vrSystem;
@@ -731,13 +730,6 @@ namespace Spark::Core::Lifecycle
             }
         }
 
-        {
-            static Spark::Mobile::MobilePlatform s_mobilePlatform;
-            if (s_mobilePlatform.Initialize())
-            {
-                SPARK_LOG_INFO(Spark::LogCategory::Core, "MobilePlatform initialized");
-            }
-        }
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "ScriptingAndPlatform", 0.0);
     }
 
@@ -1112,6 +1104,8 @@ namespace Spark::Core::Lifecycle
         SPARK_GUARDED_UPDATE("Crafting", "Core", { Spark::Gameplay::CraftingSystem::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("FileWatcher", "Core", { Spark::Utils::FileWatcher::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("TimerManager", "Core", { Spark::TimerManager::GetInstance().Update(dt); });
+        SPARK_GUARDED_UPDATE("EventResponse", "Core",
+                             { Spark::Gameplay::EventResponseSystem::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("InGameConsole", "Core", { Spark::InGameConsole::GetInstance().Update(dt); });
 
         UpdateNonECSSystems(ctx, dt);

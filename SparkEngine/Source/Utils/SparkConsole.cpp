@@ -160,6 +160,9 @@ namespace Spark
             "help",
             [this](const std::vector<std::string>& args) -> std::string
             {
+                // DispatchCommand releases m_commandMutex before invoking handlers, so lock here
+                // to keep m_commands iteration safe against concurrent Register/UnregisterCommand.
+                std::lock_guard<std::mutex> lock(m_commandMutex);
                 if (!args.empty())
                 {
                     auto it = m_commands.find(args[0]);

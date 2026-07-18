@@ -41,6 +41,24 @@ namespace MMO
         return PreparedStatementParam{QueryValue{v}};
     }
 
+    // SQLiteConnection::Execute single-quotes string parameters (escaping ' as '')
+    // before substitution, and the key-value store keeps that text verbatim.
+    // Loads must invert the transformation to recover the original string.
+    static std::string UnquoteStoredString(std::string s)
+    {
+        if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'')
+        {
+            s = s.substr(1, s.size() - 2);
+        }
+        size_t pos = 0;
+        while ((pos = s.find("''", pos)) != std::string::npos)
+        {
+            s.erase(pos, 1);
+            ++pos;
+        }
+        return s;
+    }
+
     // =========================================================================
     // Initialization
     // =========================================================================
@@ -103,72 +121,80 @@ namespace MMO
                                "play_time REAL, currency INTEGER, "
                                "created_at INTEGER, last_login INTEGER, last_save INTEGER)");
 
+        // Placeholders use the engine's zero-based "?N" syntax — the only form
+        // SQLiteConnection::Execute substitutes (AsyncDatabase.cpp).
         m_db->PrepareStatement(sid(MMOStmtId::InsertCharacter),
-                               "SET character_%1 %2|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0");
+                               "SET character_?0 ?1|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0");
 
-        m_db->PrepareStatement(sid(MMOStmtId::UpdateCharacter),
-                               "SET character_%1 %2|%3|%4|%5|%6|%7|%8|%9|%10|%11|%12|%13|%14|%15");
+        // ?1 is the full pipe-delimited character blob built by the save paths.
+        m_db->PrepareStatement(sid(MMOStmtId::UpdateCharacter), "SET character_?0 ?1");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadCharacter), "GET character_%1");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadCharacter), "GET character_?0");
 
-        m_db->PrepareStatement(sid(MMOStmtId::DeleteCharacter), "DELETE character_%1");
+        m_db->PrepareStatement(sid(MMOStmtId::DeleteCharacter), "DELETE character_?0");
 
         m_db->PrepareStatement(sid(MMOStmtId::ListCharacters), "KEYS character_");
 
         // Inventory
-        m_db->PrepareStatement(sid(MMOStmtId::SaveInventorySlot), "SET inv_%1_%2 %3|%4");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveInventorySlot), "SET inv_?0_?1 ?2|?3");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadInventory), "KEYS inv_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadInventory), "KEYS inv_?0_");
 
-        m_db->PrepareStatement(sid(MMOStmtId::ClearInventory), "DELETE inv_%1_*");
+        m_db->PrepareStatement(sid(MMOStmtId::ClearInventory), "DELETE inv_?0_*");
 
-        m_db->PrepareStatement(sid(MMOStmtId::SaveCurrency), "SET currency_%1 %2");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveCurrency), "SET currency_?0 ?1");
+
+        m_db->PrepareStatement(sid(MMOStmtId::LoadCurrency), "GET currency_?0");
 
         // Reputation
-        m_db->PrepareStatement(sid(MMOStmtId::SaveReputation), "SET rep_%1_%2 %3");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveReputation), "SET rep_?0_?1 ?2");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadReputation), "KEYS rep_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadReputation), "KEYS rep_?0_");
 
-        m_db->PrepareStatement(sid(MMOStmtId::ClearReputation), "DELETE rep_%1_*");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadReputationValue), "GET rep_?0_?1");
+
+        m_db->PrepareStatement(sid(MMOStmtId::ClearReputation), "DELETE rep_?0_*");
 
         // Achievements
-        m_db->PrepareStatement(sid(MMOStmtId::SaveAchievement), "SET ach_%1_%2 1");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveAchievement), "SET ach_?0_?1 1");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadAchievements), "KEYS ach_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadAchievements), "KEYS ach_?0_");
 
-        m_db->PrepareStatement(sid(MMOStmtId::SaveAchievementStat), "SET achstat_%1_%2 %3");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveAchievementStat), "SET achstat_?0_?1 ?2");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadAchievementStats), "KEYS achstat_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadAchievementStats), "KEYS achstat_?0_");
+
+        m_db->PrepareStatement(sid(MMOStmtId::LoadAchievementStatValue), "GET achstat_?0_?1");
 
         // Crafting
-        m_db->PrepareStatement(sid(MMOStmtId::SaveCraftingSkill), "SET craft_%1_%2 %3|%4");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveCraftingSkill), "SET craft_?0_?1 ?2|?3");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadCraftingSkills), "KEYS craft_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadCraftingSkills), "KEYS craft_?0_");
 
-        m_db->PrepareStatement(sid(MMOStmtId::SaveKnownRecipe), "SET recipe_%1_%2 1");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveKnownRecipe), "SET recipe_?0_?1 1");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadKnownRecipes), "KEYS recipe_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadKnownRecipes), "KEYS recipe_?0_");
 
-        // Guilds
-        m_db->PrepareStatement(sid(MMOStmtId::SaveGuild), "SET guild_%1 %2|%3|%4|%5|%6");
+        // Guilds (?1 is the full pipe-delimited guild blob built by SaveWorldAsync)
+        m_db->PrepareStatement(sid(MMOStmtId::SaveGuild), "SET guild_?0 ?1");
 
         m_db->PrepareStatement(sid(MMOStmtId::LoadGuilds), "KEYS guild_");
 
-        m_db->PrepareStatement(sid(MMOStmtId::SaveGuildMember), "SET gm_%1_%2 %3|%4");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveGuildMember), "SET gm_?0_?1 ?2|?3");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadGuildMembers), "KEYS gm_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadGuildMembers), "KEYS gm_?0_");
 
-        m_db->PrepareStatement(sid(MMOStmtId::DeleteGuildMember), "DELETE gm_%1_%2");
+        m_db->PrepareStatement(sid(MMOStmtId::DeleteGuildMember), "DELETE gm_?0_?1");
 
         // Lockouts
-        m_db->PrepareStatement(sid(MMOStmtId::SaveLockout), "SET lockout_%1_%2_%3 %4");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveLockout), "SET lockout_?0_?1_?2 ?3");
 
-        m_db->PrepareStatement(sid(MMOStmtId::LoadLockouts), "KEYS lockout_%1_");
+        m_db->PrepareStatement(sid(MMOStmtId::LoadLockouts), "KEYS lockout_?0_");
 
-        m_db->PrepareStatement(sid(MMOStmtId::ClearExpiredLockouts), "DELETE lockout_%1_expired");
+        m_db->PrepareStatement(sid(MMOStmtId::ClearExpiredLockouts), "DELETE lockout_?0_expired");
 
         // Boss kills
-        m_db->PrepareStatement(sid(MMOStmtId::SaveBossKill), "SET bosskill_%1_%2 %3|%4");
+        m_db->PrepareStatement(sid(MMOStmtId::SaveBossKill), "SET bosskill_?0_?1 ?2");
 
         m_db->PrepareStatement(sid(MMOStmtId::LoadBossKills), "KEYS bosskill_");
     }
@@ -226,7 +252,9 @@ namespace MMO
             const auto& val = result.rows[0].columns[0];
             if (std::holds_alternative<std::string>(val))
             {
-                const auto& dataStr = std::get<std::string>(val);
+                // UpdateCharacter stores the whole blob as one quoted string;
+                // InsertCharacter quotes only the leading name token.
+                const auto dataStr = UnquoteStoredString(std::get<std::string>(val));
                 // Parse pipe-delimited values
                 std::istringstream ss(dataStr);
                 std::string token;
@@ -238,7 +266,7 @@ namespace MMO
                 {
                     try
                     {
-                        outData.name = tokens[0];
+                        outData.name = UnquoteStoredString(tokens[0]);
                         outData.level = std::stoi(tokens[1]);
                         outData.xp = std::stoi(tokens[2]);
                         outData.areaId = static_cast<uint32_t>(std::stoi(tokens[3]));
@@ -442,7 +470,7 @@ namespace MMO
         }
 
         // Load currency
-        auto currResult = m_db->SyncQuery(sid(MMOStmtId::SaveCurrency), {MakeInt(charId)});
+        auto currResult = m_db->SyncQuery(sid(MMOStmtId::LoadCurrency), {MakeInt(charId)});
         if (currResult.success && !currResult.rows.empty())
         {
             const auto& val = currResult.rows[0].columns[0];
@@ -492,8 +520,8 @@ namespace MMO
                         try
                         {
                             uint32_t factionId = static_cast<uint32_t>(std::stoul(key.substr(prefix.size())));
-                            auto valResult =
-                                m_db->SyncQuery(sid(MMOStmtId::SaveReputation), {MakeInt(charId), MakeInt(factionId)});
+                            auto valResult = m_db->SyncQuery(sid(MMOStmtId::LoadReputationValue),
+                                                             {MakeInt(charId), MakeInt(factionId)});
                             if (valResult.success && !valResult.rows.empty())
                             {
                                 FactionStanding standing;
@@ -576,8 +604,11 @@ namespace MMO
                     auto prefix = "achstat_" + std::to_string(charId) + "_";
                     if (key.starts_with(prefix))
                     {
-                        std::string statKey = key.substr(prefix.size());
-                        auto valResult = m_db->SyncQuery(sid(MMOStmtId::SaveAchievementStat),
+                        // The stored key carries the quotes MakeString added on save;
+                        // strip them so the map key round-trips, then re-quote via
+                        // MakeString for the lookup to match the stored key.
+                        std::string statKey = UnquoteStoredString(key.substr(prefix.size()));
+                        auto valResult = m_db->SyncQuery(sid(MMOStmtId::LoadAchievementStatValue),
                                                          {MakeInt(charId), MakeString(statKey)});
                         if (valResult.success && !valResult.rows.empty())
                         {

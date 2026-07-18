@@ -241,6 +241,7 @@ namespace Spark::Gameplay
             {
                 weapon.state = WeaponState::Switching;
                 weapon.stateTimer = def->holsterTime;
+                weapon.burstShotsRemaining = 0; // Abort any in-progress burst
                 inv.pendingSlot = targetSlot;
                 SPARK_LOG_INFO(Spark::LogCategory::Core, "Weapon switch initiated from slot %d to slot %d",
                                static_cast<int>(inv.activeSlot), inv.inputSwitchSlot);
@@ -291,8 +292,9 @@ namespace Spark::Gameplay
             }
         }
 
-        // Firing logic
-        if (inv.inputFire && weapon.state == WeaponState::Idle && weapon.fireCooldown <= 0.0f)
+        // Firing logic — an in-progress burst continues regardless of trigger input
+        const bool burstContinuation = def->fireMode == FireMode::Burst && weapon.burstShotsRemaining > 0;
+        if ((inv.inputFire || burstContinuation) && weapon.state == WeaponState::Idle && weapon.fireCooldown <= 0.0f)
         {
             if (weapon.HasAmmo())
             {
@@ -301,12 +303,13 @@ namespace Spark::Gameplay
             else
             {
                 weapon.state = WeaponState::Empty;
+                weapon.burstShotsRemaining = 0; // Abort any in-progress burst
                 SPARK_LOG_INFO(Spark::LogCategory::Core, "Weapon ammo depleted — switching to Empty state");
             }
         }
 
-        // For semi-auto, clear trigger on release
-        if (!inv.inputFire && def->fireMode == FireMode::SemiAuto)
+        // For semi-auto and burst, clear trigger on release
+        if (!inv.inputFire && (def->fireMode == FireMode::SemiAuto || def->fireMode == FireMode::Burst))
         {
             weapon.triggerHeld = false;
         }
@@ -322,8 +325,10 @@ namespace Spark::Gameplay
                                     WeaponInventoryComponent& inv)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        // Semi-auto: prevent firing while trigger is held from previous shot
-        if (def.fireMode == FireMode::SemiAuto && weapon.triggerHeld)
+        // Semi-auto and burst: prevent firing while trigger is held from a previous shot.
+        // A burst continuation shot (burstShotsRemaining > 0) always goes through.
+        if (weapon.triggerHeld && (def.fireMode == FireMode::SemiAuto ||
+                                   (def.fireMode == FireMode::Burst && weapon.burstShotsRemaining <= 0)))
             return;
 
         weapon.currentAmmo--;
@@ -357,13 +362,10 @@ namespace Spark::Gameplay
         // Handle burst mode
         if (def.fireMode == FireMode::Burst)
         {
-            if (weapon.burstShotsRemaining <= 0)
-                weapon.burstShotsRemaining = def.burstCount - 1; // Already fired one
+            if (weapon.burstShotsRemaining > 0)
+                weapon.burstShotsRemaining--; // Continuation shot within the burst
             else
-                weapon.burstShotsRemaining--;
-
-            if (weapon.burstShotsRemaining <= 0)
-                weapon.triggerHeld = true; // Prevent re-fire until release
+                weapon.burstShotsRemaining = def.burstCount - 1; // Trigger pull starts a new burst
         }
 
         // Clear input for non-auto modes
@@ -394,18 +396,23 @@ namespace Spark::Gameplay
 
         if (weapon.stateTimer <= 0.0f)
         {
-            // Complete the switch
+            // Complete the current phase
             weapon.state = WeaponState::Idle;
             weapon.stateTimer = 0.0f;
-            inv.activeSlot = inv.pendingSlot;
 
-            // Start equip timer on new weapon
-            auto& newWeapon = inv.GetActiveWeapon();
-            const auto* newDef = WeaponRegistry::GetInstance().GetWeapon(newWeapon.definitionID);
-            if (newDef)
+            // Holster phase done: swap slots and start the equip timer on the new weapon.
+            // If activeSlot already equals pendingSlot, the equip phase just finished — stay Idle.
+            if (inv.activeSlot != inv.pendingSlot)
             {
-                newWeapon.state = WeaponState::Switching;
-                newWeapon.stateTimer = newDef->equipTime;
+                inv.activeSlot = inv.pendingSlot;
+
+                auto& newWeapon = inv.GetActiveWeapon();
+                const auto* newDef = WeaponRegistry::GetInstance().GetWeapon(newWeapon.definitionID);
+                if (newDef)
+                {
+                    newWeapon.state = WeaponState::Switching;
+                    newWeapon.stateTimer = newDef->equipTime;
+                }
             }
         }
     }

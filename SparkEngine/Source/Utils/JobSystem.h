@@ -198,9 +198,11 @@ namespace Spark
          */
         void WaitForAll()
         {
-            // Submit a barrier job and wait for it
-            auto future = Submit([]() {});
-            future.get();
+            // A FIFO barrier job is insufficient: it can complete on one worker while
+            // earlier-dequeued jobs still run on others. Wait for the queue to drain
+            // AND every in-flight job to finish.
+            std::unique_lock<std::mutex> lock(m_queueMutex);
+            m_idleCondition.wait(lock, [this] { return m_jobQueue.empty() && m_activeJobs == 0; });
         }
 
         /** @brief Get number of worker threads */
@@ -240,6 +242,7 @@ namespace Spark
 
                     job = std::move(m_jobQueue.front());
                     m_jobQueue.pop();
+                    ++m_activeJobs;
                 }
 
                 // Tasks that throw must not kill the worker; packaged_task captures
@@ -256,6 +259,15 @@ namespace Spark
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Core, "JobSystem worker caught unknown exception");
                 }
+
+                {
+                    std::lock_guard<std::mutex> lock(m_queueMutex);
+                    --m_activeJobs;
+                    if (m_activeJobs == 0 && m_jobQueue.empty())
+                    {
+                        m_idleCondition.notify_all();
+                    }
+                }
             }
         }
 
@@ -263,6 +275,8 @@ namespace Spark
         std::queue<std::function<void()>> m_jobQueue;
         mutable std::mutex m_queueMutex;
         std::condition_variable m_condition;
+        std::condition_variable m_idleCondition;
+        size_t m_activeJobs{0}; // guarded by m_queueMutex
         std::atomic<bool> m_stop{false};
         std::atomic<bool> m_initialized{false};
         std::once_flag m_initFlag;
