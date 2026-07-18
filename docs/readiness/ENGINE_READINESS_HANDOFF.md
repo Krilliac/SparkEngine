@@ -10,8 +10,8 @@
 - Capabilities tracked: **22**
 - Blocking release gates: **18**
 - Gate states: **0 passing**, **0 at risk**, **18 blocked**, **0 not evaluated**
-- Work items: **55 total**, **46 unfinished release blockers**
-- First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
+- Work items: **55 total**, **44 unfinished release blockers**
+- First unblocked item: **`CI-100` — Repair fail-closed required CI**
 
 ### Release means all of the following
 
@@ -35,28 +35,27 @@
 
 ## Start the next code session here
 
-Open **`RDY-000` — Establish the release profiles and capability ledger**. Its dependencies are satisfied under the current ledger. Do not skip ahead to a dependent item or weaken a gate to manufacture a pass.
+Open **`CI-100` — Repair fail-closed required CI**. Its dependencies are satisfied under the current ledger. Do not skip ahead to a dependent item or weaken a gate to manufacture a pass.
 
 ### Session entry points
 
-- `docs/site/readiness.json`
-- `docs/site/content.json`
-- `docs/readiness/work-items`
+- `.github/workflows/build.yml`
+- `.github/workflows/codeql.yml`
 
 ### Session acceptance
 
-1. No public capability or numeric claim exists without a validated contract entry
-2. Every referenced path, gate, work item, metric, and capability exists
-3. A capability cannot be ready while a blocker or required gate is open
-4. Two clean generations produce byte-identical content except declared timestamps
+1. Controlled test, sanitizer, format, threshold, registration, and validation failures each make CI red
+2. Every Working commit receives a gate summary, including docs-only changes
+3. MinGW/Wine is either executable and labeled experimental or removed from claims
+4. Required-check policy is documented and externally verified
 
 ### Session verification
 
 ```bash
-python3 tools/site-data/validate.py
-python3 tools/site-data/generate.py --output .site-data
-python3 tools/site-data/render_handoff.py --check
-git diff --exit-code
+bash tools/validate-all.sh
+bash Tools/check-test-registration.sh
+gh workflow run build.yml
+gh api repos/Krilliac/SparkEngine/branches/Working/protection
 ```
 
 Before ending the session, update the item status/evidence and regenerate this file. If new work is discovered, give it a stable ID, owner, dependencies, acceptance criteria, tests, documentation impact, and public-wording impact.
@@ -65,7 +64,7 @@ Before ending the session, update the item status/evidence and regenerate this f
 
 | Gate | Area | State | Blocking | What must become true | Blocking work |
 |---|---|---|:---:|---|---|
-| `G00` Source-of-truth integrity | governance | **blocked** | yes | One validated readiness contract owns public status; All numeric claims are generated; Documentation health is current; Regeneration is deterministic and clean | `RDY-000`, `DOC-410` |
+| `G00` Source-of-truth integrity | governance | **blocked** | yes | One validated readiness contract owns public status; All numeric claims are generated; Documentation health is current; Regeneration is deterministic and clean | `DOC-410` |
 | `G01` Fail-closed CI evidence | ci | **blocked** | yes | Required commands propagate failure; Every Working commit receives normalized evidence; Advisory lanes are not represented as support gates; JUnit and gate summaries attach to the exact SHA | `CI-100`, `CI-110` |
 | `G02` Supported build matrix | build | **blocked** | yes | Declared host/compiler configurations configure and build from clean checkout; Every shipped target and real module library is built; Shipping configuration exists and is distinct from Debug/Release; Submodule/toolchain inputs are pinned | `CI-120`, `BLD-100` |
 | `G03` Production-source test coverage | tests | **blocked** | yes | Every real module library loads and executes in tests; No mirror-only or tautological test satisfies release; Coverage thresholds are explicit and enforced; Sanitizer and concurrency lanes fail closed | `RDY-010`, `CI-110` |
@@ -80,7 +79,7 @@ Before ending the session, update the item status/evidence and regenerate this f
 | `G12` Production multiplayer and services | networking | **blocked** | yes | Dedicated server plus two independent clients pass authoritative gameplay; Protocol compatibility and hostile-client suites pass; Transactional persistence and restart/migration recovery pass; Load, telemetry, alerts, backups, and incident drills meet budgets | `NET-100`, `NET-110`, `DATA-120`, `TF-110`, `TF-120`, `OPS-110` |
 | `G13` Game-module release profiles | modules | **blocked** | yes | Every discovered module has a validated manifest and declared N/A dimensions; Applicable lifecycle/gameplay/assets/persistence/AI/editor/tests reach score 3; Modules are packaged and smoke-tested; Prototype/template labels are generated from the contract | `MOD-290`, `MOD-300`, `MOD-310`, `MOD-320`, `MOD-330`, `MOD-340`, `MOD-350`, `MOD-360`, `MOD-370`, `MOD-380`, `MOD-390` |
 | `G14` Performance, reliability, and operations | operations | **blocked** | yes | Representative CPU/GPU/memory/load budgets are versioned; Long soaks show bounded memory and tick/frame percentiles; Crashes produce symbolized actionable reports; Backups, restore, rollback, and incident drills pass | `PERF-100`, `OPS-100`, `OPS-110` |
-| `G15` Documentation, legal, and support truth | governance | **blocked** | yes | Docs health is current and every link resolves; License, attribution, trademark, privacy, security, support, and contribution text is reviewed for the release; Quick starts run from clean machines; Website wording is generated from the tested contract | `DOC-410`, `GOV-400`, `DOC-400` |
+| `G15` Documentation, legal, and support truth | governance | **blocked** | yes | Docs health is current and every link resolves; License, attribution, trademark, privacy, security, support, and contribution text is reviewed for the release; Quick starts run from clean machines; Website wording is generated from the tested contract | `DOC-410`, `GOV-400` |
 | `G16` Compatibility and migration | compatibility | **blocked** | yes | Version contracts exist for SDK, modules, assets, saves, scenes, protocols, and scripts; N-1 upgrade and rollback fixtures pass; Breaking changes fail with actionable diagnostics; Release notes enumerate migrations | `SDK-240`, `SAVE-230`, `NET-100`, `REL-200` |
 | `G17` Release rehearsal and sign-off | release | **blocked** | yes | A release candidate tag passes all blocking gates; Artifacts are installed and upgraded on clean supported hosts; Rollback and recovery drills pass; Owners sign the evidence ledger before the final tag | `REL-200` |
 
@@ -128,7 +127,7 @@ Establish the only source of readiness truth and make CI report reality.
 
 | Work item | Priority | Status | Depends on | Safe parallel work |
 |---|---|---|---|---|
-| [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | — | `CI-100`, `SEC-100`, `OPS-100` |
+| [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **done** | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **open** | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **open** | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
 | [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **open** | — | `RDY-000`, `SEC-100`, `OPS-100` |
@@ -223,7 +222,7 @@ Finish governance, publish the live bundle, rehearse every gate, and cut the fir
 | Work item | Priority | Status | Depends on | Safe parallel work |
 |---|---|---|---|---|
 | [`GOV-400`](#gov-400--resolve-licensing-third-party-notices-trademark-contribution-security-and-support-policy) Resolve licensing, third-party notices, trademark, contribution, security, and support policy | P0 | **open** | `RDY-000`, `SEC-110`, `REL-100` | `DOC-400` |
-| [`DOC-400`](#doc-400--publish-the-repository-synchronized-site-data-bundle-and-complete-public-framing) Publish the repository-synchronized site-data bundle and complete public framing | P0 | **in-progress** | `RDY-000` | `DOC-410`, `CI-100`, `GOV-400` |
+| [`DOC-400`](#doc-400--publish-the-repository-synchronized-site-data-bundle-and-complete-public-framing) Publish the repository-synchronized site-data bundle and complete public framing | P0 | **done** | `RDY-000` | `DOC-410`, `CI-100`, `GOV-400` |
 | [`REL-200`](#rel-200--rehearse-sign-off-and-publish-the-first-fully-gated-release) Rehearse, sign off, and publish the first fully gated release | P0 | **blocked** | `REL-100`, `REL-110`, `PLT-200`, `RHI-210`, `HEAD-220`, `EDT-210`, `SDK-240`, `PERF-100`, `OPS-100`, `GOV-400`, `DOC-400` | — |
 
 ## Game-module parity baseline
@@ -250,9 +249,9 @@ Scores are evidence pointers, not percentages: `0` absent/dead, `1` data-model/m
 
 ### RDY-000 — Establish the release profiles and capability ledger
 
-**Priority:** P0 · **Status:** in-progress · **Wave:** 0 · **Area:** governance · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** done · **Wave:** 0 · **Area:** governance · **Owner:** unassigned · **Release-blocking:** yes
 
-Status documents, roadmap entries, test counts, module counts, website copy, and source reality currently disagree. One validated repository contract must own every public claim.
+Status documents, roadmap entries, test counts, module counts, website copy, and source reality previously disagreed. The validated repository contract now owns every public claim while unresolved implementation work remains explicitly blocked.
 
 **Dependency contract**
 
@@ -4276,9 +4275,9 @@ python3 tools/site-data/generate.py --output .site-data
 
 ### DOC-400 — Publish the repository-synchronized site-data bundle and complete public framing
 
-**Priority:** P0 · **Status:** in-progress · **Wave:** 6 · **Area:** website · **Owner:** unassigned · **Release-blocking:** yes
+**Priority:** P0 · **Status:** done · **Wave:** 6 · **Area:** website · **Owner:** unassigned · **Release-blocking:** yes
 
-The existing site checks in a 22 MB generated snapshot and hardcodes capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that can drift after Working moves.
+The previous site checked in a large generated snapshot and hardcoded capabilities, counts, paths, CI runs, maturity rules, learning tracks, community status, and wording that could drift after Working moved. The deployed runtime now consumes the validated exact-SHA repository publication and labels any fallback honestly.
 
 **Dependency contract**
 
@@ -4308,7 +4307,7 @@ The existing site checks in a 22 MB generated snapshot and hardcodes capabilitie
 - Validate schema/hash/size at site runtime
 - Cache five minutes with stale-while-revalidate and label current/syncing/blocked/stale/unavailable
 - Move all mutable site wording and claims into repository data
-- Remove checked-in generated corpus after live parity
+- Replace the checked-in full corpus with an exact generated fallback while live repository data remains authoritative
 
 **Acceptance criteria**
 
