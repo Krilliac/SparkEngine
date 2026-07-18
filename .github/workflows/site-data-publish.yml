@@ -16,8 +16,9 @@ permissions:
 env:
   SOURCE_COMMIT: ${{ github.event.workflow_run.head_sha }}
   SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
-  EVIDENCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+  REPORTED_EVIDENCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
   EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id }}
+  EVIDENCE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
 
 jobs:
   site-data-prepare:
@@ -25,10 +26,92 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
+      actions: read
       contents: read
     outputs:
       publish: ${{ steps.final-head.outputs.publish }}
+      evidence_conclusion: ${{ steps.normalize_evidence.outputs.conclusion }}
     steps:
+      - name: Normalize evidence across every build job
+        id: normalize_evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          JOBS_FILE="$RUNNER_TEMP/build-evidence-jobs.tsv"
+          NON_PASSING_FILE="$RUNNER_TEMP/build-evidence-non-passing.tsv"
+          : > "$JOBS_FILE"
+          case "$EVIDENCE_RUN_ATTEMPT" in
+            ''|*[!0-9]*) echo "Invalid workflow attempt: $EVIDENCE_RUN_ATTEMPT" >&2; exit 1 ;;
+          esac
+          test "$EVIDENCE_RUN_ATTEMPT" -ge 1
+
+          PAGE=1
+          EXPECTED_JOB_COUNT=""
+          while true; do
+            PAGE_FILE="$RUNNER_TEMP/build-evidence-jobs-${PAGE}.json"
+            curl --fail-with-body --silent --show-error \
+              --retry 3 \
+              --retry-all-errors \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}/jobs?per_page=100&page=${PAGE}" \
+              --output "$PAGE_FILE"
+
+            PAGE_METADATA="$(python3 -I -c 'import json, os, sys; payload = json.load(open(sys.argv[1], encoding="utf-8")); jobs = payload.get("jobs"); total = payload.get("total_count"); assert isinstance(jobs, list) and isinstance(total, int) and total > 0; expected_run = int(os.environ["EVIDENCE_RUN_ID"]); expected_sha = os.environ["SOURCE_COMMIT"]; assert all(isinstance(job, dict) and isinstance(job.get("id"), int) and job["id"] > 0 and job.get("run_id") == expected_run and job.get("head_sha") == expected_sha and isinstance(job.get("name"), str) and job["name"] for job in jobs); print(f"{total}\t{len(jobs)}")' \
+              "$PAGE_FILE")"
+            PAGE_TOTAL_COUNT="${PAGE_METADATA%%$'\t'*}"
+            PAGE_JOB_COUNT="${PAGE_METADATA#*$'\t'}"
+            if test "$PAGE" -eq 1; then
+              EXPECTED_JOB_COUNT="$PAGE_TOTAL_COUNT"
+            else
+              test "$PAGE_TOTAL_COUNT" -eq "$EXPECTED_JOB_COUNT"
+            fi
+
+            if test "$PAGE_JOB_COUNT" -eq 0; then
+              break
+            fi
+
+            python3 -I -c 'import json, sys; field = lambda value: str(value or "").replace("\\", "\\\\").replace("\t", "\\t").replace("\r", "\\r").replace("\n", "\\n"); payload = json.load(open(sys.argv[1], encoding="utf-8")); [print("\t".join(field(job.get(key)) for key in ("id", "name", "status", "conclusion"))) for job in payload["jobs"]]' \
+              "$PAGE_FILE" >> "$JOBS_FILE"
+
+            if test "$PAGE_JOB_COUNT" -lt 100; then
+              break
+            fi
+            PAGE="$((PAGE + 1))"
+            test "$PAGE" -le 100
+          done
+
+          test -s "$JOBS_FILE"
+          JOB_COUNT="$(wc -l < "$JOBS_FILE" | tr -d '[:space:]')"
+          UNIQUE_JOB_COUNT="$(cut -f 1 "$JOBS_FILE" | LC_ALL=C sort -u | wc -l | tr -d '[:space:]')"
+          test "$JOB_COUNT" -eq "$EXPECTED_JOB_COUNT"
+          test "$UNIQUE_JOB_COUNT" -eq "$JOB_COUNT"
+          awk -F '\t' \
+            '$3 != "completed" || ($4 != "success" && $4 != "skipped") { print }' \
+            "$JOBS_FILE" > "$NON_PASSING_FILE"
+
+          NORMALIZED_CONCLUSION="failure"
+          if test "$EVIDENCE_RUN_ATTEMPT" -eq 1 \
+            && test "$REPORTED_EVIDENCE_CONCLUSION" = "success" \
+            && test ! -s "$NON_PASSING_FILE"; then
+            NORMALIZED_CONCLUSION="success"
+          else
+            echo "::warning::The build evidence is not fully passing (workflow=${REPORTED_EVIDENCE_CONCLUSION})."
+            if test "$EVIDENCE_RUN_ATTEMPT" -ne 1; then
+              echo "::warning::A rerun cannot promote site evidence because a partial rerun does not prove the complete job roster. Push a new commit for a full run."
+            fi
+            while IFS=$'\t' read -r JOB_ID JOB_NAME JOB_STATUS JOB_CONCLUSION; do
+              printf 'Non-passing job %s: %s (%s/%s)\n' \
+                "$JOB_ID" "$JOB_NAME" "$JOB_STATUS" "${JOB_CONCLUSION:-missing}"
+            done < "$NON_PASSING_FILE"
+          fi
+
+          printf 'Evaluated %s jobs; normalized conclusion: %s\n' \
+            "$JOB_COUNT" "$NORMALIZED_CONCLUSION"
+          printf 'conclusion=%s\n' "$NORMALIZED_CONCLUSION" >> "$GITHUB_OUTPUT"
+
       - name: Checkout the evaluated source commit without persisted credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -50,6 +133,8 @@ jobs:
 
       - name: Repeat the complete repository proof
         if: steps.initial-head.outputs.publish == 'true'
+        env:
+          NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.normalize_evidence.outputs.conclusion }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
@@ -66,8 +151,8 @@ jobs:
               --source-branch "$SOURCE_BRANCH" \
               --committed-at "$COMMITTED_AT" \
               --evidence-commit "$SOURCE_COMMIT" \
-              --ci-conclusion "$EVIDENCE_CONCLUSION" \
-              --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}"
+              --ci-conclusion "$NORMALIZED_EVIDENCE_CONCLUSION" \
+              --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}"
             python3 tools/site-data/validate.py --published "$OUTPUT"
           done
           diff --recursive --brief \
@@ -89,6 +174,7 @@ jobs:
       - name: Generate and validate the retained publication payload
         if: steps.initial-head.outputs.publish == 'true'
         env:
+          NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.normalize_evidence.outputs.conclusion }}
           PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
         run: |
           set -euo pipefail
@@ -101,8 +187,8 @@ jobs:
             --source-branch "$SOURCE_BRANCH" \
             --committed-at "$COMMITTED_AT" \
             --evidence-commit "$SOURCE_COMMIT" \
-            --ci-conclusion "$EVIDENCE_CONCLUSION" \
-            --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}"
+            --ci-conclusion "$NORMALIZED_EVIDENCE_CONCLUSION" \
+            --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}"
           python3 tools/site-data/validate.py --published "$PUBLISH_DIR"
 
       - name: Recheck Working immediately before handing off the payload
@@ -136,6 +222,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write
+    env:
+      EVIDENCE_CONCLUSION: ${{ needs.site-data-prepare.outputs.evidence_conclusion }}
     steps:
       - name: Download the proven publication payload
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -153,6 +241,8 @@ jobs:
           test -f "$PAYLOAD_DIR/latest.json"
           test -d "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT"
           test ! -e "$PAYLOAD_DIR/.git"
+          python3 -I -c 'import json, sys; payload = json.load(open(sys.argv[1], encoding="utf-8")); conclusion = sys.argv[2]; assert payload["publication"]["conclusion"] == conclusion; assert payload["publication"]["state"] == ("current" if conclusion == "success" else "blocked")' \
+            "$PAYLOAD_DIR/latest.json" "$EVIDENCE_CONCLUSION"
 
           git init "$PUBLISH_REPO"
           git -C "$PUBLISH_REPO" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
