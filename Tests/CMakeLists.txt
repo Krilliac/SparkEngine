@@ -687,6 +687,7 @@ target_sources(SparkTests PRIVATE
     harden/Test_engine-misc_EventQueueEviction.cpp
     harden/Test_ecs_audio_doppler.cpp
     harden/Test_ecs_ai_pathfollow.cpp
+    harden/Test_lifecycle_ecs_phase_wiring.cpp
     "${CMAKE_SOURCE_DIR}/SparkConsole/src/CommandParser.cpp"
 )
 # harden/ tests live one directory deeper; ensure they resolve the shared TestFramework.h

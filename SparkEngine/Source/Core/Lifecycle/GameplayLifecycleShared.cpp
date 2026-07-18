@@ -9,8 +9,8 @@
 #include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Core/Platform.h"
 #include "Engine/ECS/Components.h"
-#include "Engine/ECS/Systems/ParallelSystemExecutor.h"
 #include "Core/EngineContext.h"
+#include "Core/EngineSetup.h"
 #include "Core/EngineSettings.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
@@ -50,7 +50,6 @@
 #include "Engine/Gameplay/QuestSystem.h"
 #include "Engine/AI/MovementSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
-#include "Engine/ECS/Systems/TerrainSystem.h"
 #include "Engine/AI/TacticalPointSystem.h"
 #include "Engine/AI/CoverSystem.h"
 #include "Engine/AI/FormationSystem.h"
@@ -448,8 +447,9 @@ namespace Spark::Core::Lifecycle
         Spark::AI::CollisionAvoidanceSystem::GetInstance().Initialize();
         // AIIntegratedSystem owns ParallelPerceptionSystem + NavMeshObstacleManager
         // and (optionally) the heavy AISystem pipeline. Default config keeps
-        // runCoreAISystem=false so behavior trees are not double-ticked
-        // alongside Spark::ECS::AIUpdateSystem (registered in EngineSetup.h).
+        // runCoreAISystem=false so AIComponent behavior trees are ticked exactly
+        // once per frame — by Spark::ECS::AIUpdateSystem, which runs in the
+        // lifecycle-owned PhaseSystemManager (see InitializeEcsPhaseSystemsImpl).
         Spark::AI::AIIntegratedSystem::GetInstance().Initialize();
         Spark::Gameplay::MaterialEffectSystem::GetInstance().Initialize();
         Spark::Dialogue::DynamicResponseSystem::GetInstance().Initialize();
@@ -745,6 +745,29 @@ namespace Spark::Core::Lifecycle
         InitNetworkingLifecycle(ctx);
     }
 
+    Spark::ECS::PhaseSystemManager& GetPhaseSystemManagerImpl()
+    {
+        static Spark::ECS::PhaseSystemManager s_phaseSystems;
+        return s_phaseSystems;
+    }
+
+    void InitializeEcsPhaseSystemsImpl()
+    {
+        auto* ctx = EngineContext::Get();
+        if (!ctx)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::ECS, "EngineContext is null — ECS phase systems not registered");
+            return;
+        }
+
+        // Rebuild from scratch (move-assign) so a repeated init — editor
+        // restart, tests — replaces the previous set instead of accumulating
+        // duplicate systems that would double-tick component data.
+        GetPhaseSystemManagerImpl() = Spark::EngineSetup::CreatePhaseSystemManager(*ctx);
+        SPARK_LOG_INFO(Spark::LogCategory::ECS, "ECS phase pipeline registered: %zu systems",
+                       GetPhaseSystemManagerImpl().GetSystemCount());
+    }
+
     void InitializeGameplaySystemsImpl()
     {
         auto* ctx = EngineContext::Get();
@@ -769,6 +792,12 @@ namespace Spark::Core::Lifecycle
         }
         InitRenderingAndUtilitySystems(ctx);
         InitScriptingAndPlatformSystems(ctx);
+
+        // Canonical ECS phase pipeline (architecture contract, Invariant 3).
+        // Registered last so the subsystem pointers CreatePhaseSystemManager
+        // reads from the context (physics, audio, graphics) are all set.
+        // UpdateGameplaySystemsImpl pumps UpdateAll on this manager each frame.
+        InitializeEcsPhaseSystemsImpl();
     }
 
     // ============================================================================
@@ -879,7 +908,8 @@ namespace Spark::Core::Lifecycle
         // AIIntegratedSystem owns the parallel perception spatial index and
         // (optionally) the heavy AISystem pipeline. Default config skips the
         // inner AISystem so behavior trees aren't double-ticked alongside the
-        // ECS AIUpdateSystem registered in EngineSetup.h.
+        // ECS AIUpdateSystem, which runs in the phase pipeline pumped at the
+        // end of UpdateGameplaySystemsImpl.
         SPARK_GUARDED_UPDATE("AIIntegrated", "Core", {
             SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "AIIntegrated", 0.0);
             Spark::AI::AIIntegratedSystem::GetInstance().Update(*world, dt);
@@ -907,10 +937,9 @@ namespace Spark::Core::Lifecycle
             SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Destruction", 0.0);
         });
 
-        SPARK_GUARDED_UPDATE("Terrain", "Core", {
-            static Spark::ECS::TerrainSystem s_terrainSystem;
-            s_terrainSystem.Update(*world, dt);
-        });
+        // TerrainSystem is ticked by the ECS phase pipeline (Phase::PreRender,
+        // see CreatePhaseSystemManager) — no ad-hoc tick here, or terrain
+        // streaming/LOD state would advance twice per frame.
 
         SPARK_GUARDED_UPDATE("Foliage", "Core", {
             auto& foliage = Spark::Graphics::FoliageManager::GetInstance();
@@ -1026,7 +1055,8 @@ namespace Spark::Core::Lifecycle
                     vr->UpdateTracking();
             });
 
-            // Wait for parallel batch before ECS executor (which may depend on Tween/Cinematic results)
+            // Wait for parallel batch before the ECS phase pipeline runs
+            // (phase systems may depend on Tween/Cinematic results)
             futSeamless.get();
             futTween.get();
             futCinematic.get();
@@ -1055,8 +1085,6 @@ namespace Spark::Core::Lifecycle
 
         SPARK_GUARDED_UPDATE("GameplayDebugger", "Core", { Spark::Utils::GameplayDebugger::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("VideoPlayer", "Core", { Spark::Cinematic::VideoPlayer::GetInstance().Update(dt); });
-
-        SPARK_GUARDED_UPDATE("ECS_Executor", "Core", { Spark::ECS::StageBasedExecutor::GetInstance().ExecuteAll(dt); });
     }
 
     static uint64_t g_frameCounter = 0;
@@ -1122,6 +1150,13 @@ namespace Spark::Core::Lifecycle
 
         UpdateClusteredLighting(world);
         UpdateExtendedSystems(ctx, dt);
+
+        // Canonical ECS phase pipeline: Physics -> Animation -> AI -> Audio ->
+        // Gameplay -> PreRender -> Render, serially in Phase enum order
+        // (architecture contract, Invariant 3). This is the ONLY tick site for
+        // the Spark::ECS phase systems — Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp
+        // guards the registration; do not remove this pump without replacing it.
+        SPARK_GUARDED_UPDATE("ECS_Phases", "Core", { GetPhaseSystemManagerImpl().UpdateAll(*world, dt); });
 
         Profiler::GetInstance().EndFrame();
 
@@ -1196,7 +1231,10 @@ namespace Spark::Core::Lifecycle
                 vr->Shutdown();
         }
 
-        Spark::ECS::StageBasedExecutor::GetInstance().Shutdown();
+        // Drop the ECS phase systems first: they hold non-owning pointers to
+        // physics/audio/graphics, which the platform layer tears down next.
+        GetPhaseSystemManagerImpl() = Spark::ECS::PhaseSystemManager{};
+
         Spark::Streaming::SeamlessAreaManager::GetInstance().Shutdown();
         Spark::Net::ConnectionScopeFilter::GetInstance().Shutdown();
 

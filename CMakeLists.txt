@@ -1079,6 +1079,8 @@ if(NOT JOLT_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsConstraints\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsMotorControl\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSpatialQueries\\.cpp$")
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSpatialQueriesCasts\\.cpp$")
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSpatialQueriesFiltered\\.cpp$")
     message(WARNING "Jolt Physics not found — using PhysicsSystemStub.cpp fallback (no rigid body physics)")
 else()
     # When the real PhysicsSystem is built, exclude the stub

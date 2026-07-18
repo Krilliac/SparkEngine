@@ -15,7 +15,7 @@
  * Body lifecycle, debug rendering, materials, serialization live in PhysicsSystemQueries.cpp.
  * Constraint creation lives in PhysicsConstraints.cpp.
  * Constraint motor control lives in PhysicsMotorControl.cpp.
- * Raycasting, overlap, and sweep queries live in PhysicsSpatialQueries.cpp.
+ * Raycasting, overlap, and sweep queries live in PhysicsSpatialQueries*.cpp.
  * Shape creation and Jolt conversion helpers live in PhysicsShapeFactory.cpp.
  * PhysicsBody and PhysicsConstraint methods live in PhysicsBodyImpl.cpp.
  */

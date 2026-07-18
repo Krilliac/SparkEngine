@@ -205,14 +205,11 @@ namespace Spark::Net
             m_handlers.clear();
         }
 
-        m_unacknowledgedMessages.clear();
-        m_reliableOriginalSendTime.clear();
-        m_retransmitCounts.clear();
+        m_peers.clear();
         m_lagCompensator.Clear();
         m_serverTime = 0.0f;
         m_nextClientID = 1;
         m_nextNetworkID = 1;
-        m_nextOutgoingSequence = 1;
         m_inputSequence = 0;
         m_heartbeatTimer = 0.0f;
         m_replicationTimer = 0.0f;
@@ -310,8 +307,7 @@ namespace Spark::Net
             std::lock_guard<std::mutex> lock(m_inputMutex);
             m_pendingInputs.clear();
         }
-        m_unacknowledgedMessages.clear();
-        m_reliableOriginalSendTime.clear();
+        m_peers.clear();
 
         {
             std::lock_guard<std::mutex> stateLock(m_stateMutex);
@@ -427,8 +423,7 @@ namespace Spark::Net
             m_pendingInputs.clear();
             m_inputHistory.clear();
         }
-        m_unacknowledgedMessages.clear();
-        m_reliableOriginalSendTime.clear();
+        m_peers.clear();
     }
 
     // --------------------------------------------------------------------------
@@ -437,6 +432,15 @@ namespace Spark::Net
 
     void NetworkManager::SendMessage(const NetworkMessage& msg)
     {
+        // Server-side reliable broadcasts must fan out per client: each peer
+        // has its own sequence stream and unacked map, so a single broadcast
+        // sequence number cannot represent delivery to N independent peers.
+        if (GetRole() == NetworkRole::Server && msg.channel != ChannelType::Unreliable)
+        {
+            SendToAll(msg);
+            return;
+        }
+
         std::lock_guard<std::mutex> lock(m_queueMutex);
 
         NetworkMessage queued = msg;
@@ -452,10 +456,11 @@ namespace Spark::Net
         }
 
         // Assign sequence number for reliable messages (after the drop check so we
-        // never burn a sequence number on a dropped packet).
+        // never burn a sequence number on a dropped packet). Only the client path
+        // reaches here for reliable traffic, so the peer is always the server.
         if (queued.channel != ChannelType::Unreliable)
         {
-            queued.sequence = m_nextOutgoingSequence++;
+            queued.sequence = GetPeerState(SERVER_PEER).nextOutgoingSequence++;
         }
 
         m_outgoingQueue.push(queued);
@@ -470,22 +475,27 @@ namespace Spark::Net
 
         NetworkMessage copy = msg;
         copy.senderID = 0; // From server
+        copy.timestamp = m_serverTime;
 
 #ifdef ENABLE_NETWORKING
         auto addrIt = m_clientAddresses.find(client);
         if (addrIt == m_clientAddresses.end())
             return;
 
+        // Assign this client's own reliable sequence and track for
+        // retransmission — sequence streams and unacked maps are per peer, so
+        // an ACK from one client can never erase another client's messages.
+        if (copy.channel != ChannelType::Unreliable)
+        {
+            PeerState& peer = GetPeerState(client);
+            copy.sequence = peer.nextOutgoingSequence++;
+            peer.unacknowledgedMessages[copy.sequence] = copy;
+            peer.reliableOriginalSendTime.try_emplace(copy.sequence, m_serverTime);
+        }
+
         auto serialized = SerializeMessage(copy);
         SendRawTo(serialized, addrIt->second);
         m_stats.packetsSent++;
-
-        // Track reliable messages for retransmission
-        if (copy.channel != ChannelType::Unreliable)
-        {
-            m_unacknowledgedMessages[copy.sequence] = copy;
-            m_reliableOriginalSendTime.try_emplace(copy.sequence, m_serverTime);
-        }
 #else
         // Without networking, just enqueue for local testing
         std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -494,6 +504,10 @@ namespace Spark::Net
         {
             m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
             return;
+        }
+        if (copy.channel != ChannelType::Unreliable)
+        {
+            copy.sequence = GetPeerState(client).nextOutgoingSequence++;
         }
         m_outgoingQueue.push(copy);
         m_stats.packetsSent++;
@@ -569,6 +583,9 @@ namespace Spark::Net
 #ifdef ENABLE_NETWORKING
         m_clientAddresses.erase(client);
 #endif
+        // Drop the peer's reliability state so a future client reusing the ID
+        // starts with fresh sequence/dedup/ordered bookkeeping.
+        m_peers.erase(client);
         // Drop any interest-management scope tied to this connection so
         // a future client reusing the ID starts with "see everything".
         ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(client));
@@ -669,6 +686,10 @@ namespace Spark::Net
 #endif
         }
 
+        // Drop the peer's reliability state (sequence streams, unacked maps,
+        // dedup window) so a reused ClientID starts fresh.
+        m_peers.erase(clientID);
+
         // Remove entities owned by this client
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Cleaning up entities owned by client %u", clientID);
         std::vector<uint32_t> ownedEntities;
@@ -741,6 +762,9 @@ namespace Spark::Net
                     m_clientAddresses.erase(id);
 #endif
                 }
+
+                // Drop the timed-out peer's reliability state.
+                m_peers.erase(id);
 
                 // Drop interest-management scope for timed-out clients.
                 ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(id));
@@ -920,6 +944,19 @@ namespace Spark::Net
         auto& instability = InstabilitySimulator::GetInstance();
         float currentTimeMs = m_serverTime * 1000.0f;
 
+        // Reliable messages only reach this queue on the client path (server
+        // reliable sends fan out through SendToClient), so they are tracked
+        // against the single implicit server peer.
+        auto trackReliable = [this](const NetworkMessage& reliableMsg)
+        {
+            if (reliableMsg.channel != ChannelType::Unreliable && reliableMsg.sequence > 0)
+            {
+                PeerState& peer = GetPeerState(SERVER_PEER);
+                peer.unacknowledgedMessages[reliableMsg.sequence] = reliableMsg;
+                peer.reliableOriginalSendTime.try_emplace(reliableMsg.sequence, m_serverTime);
+            }
+        };
+
         // First, flush any delayed packets that are now ready for transmission
         if (instability.GetSettings().enabled)
         {
@@ -953,11 +990,7 @@ namespace Spark::Net
                 {
                     m_stats.packetsDropped++;
                     // Track reliable messages even if "dropped" (for retransmission)
-                    if (msg.channel != ChannelType::Unreliable && msg.sequence > 0)
-                    {
-                        m_unacknowledgedMessages[msg.sequence] = msg;
-                        m_reliableOriginalSendTime.try_emplace(msg.sequence, m_serverTime);
-                    }
+                    trackReliable(msg);
                     toSend.pop();
                     continue;
                 }
@@ -969,11 +1002,7 @@ namespace Spark::Net
                     instability.QueuePacket(serialized, currentTimeMs + delayMs);
 
                     // Track reliable messages for retransmission
-                    if (msg.channel != ChannelType::Unreliable && msg.sequence > 0)
-                    {
-                        m_unacknowledgedMessages[msg.sequence] = msg;
-                        m_reliableOriginalSendTime.try_emplace(msg.sequence, m_serverTime);
-                    }
+                    trackReliable(msg);
                     toSend.pop();
                     continue;
                 }
@@ -993,11 +1022,7 @@ namespace Spark::Net
             }
 
             // Track reliable messages for retransmission
-            if (msg.channel != ChannelType::Unreliable && msg.sequence > 0)
-            {
-                m_unacknowledgedMessages[msg.sequence] = msg;
-                m_reliableOriginalSendTime.try_emplace(msg.sequence, m_serverTime);
-            }
+            trackReliable(msg);
 
             toSend.pop();
         }
@@ -1013,58 +1038,79 @@ namespace Spark::Net
     void NetworkManager::HandleRetransmissions()
     {
 #ifdef ENABLE_NETWORKING
-        // Retransmit unacknowledged reliable messages with exponential backoff
-        std::vector<SequenceNumber> toRetransmit;
-        for (auto& [seq, unacked] : m_unacknowledgedMessages)
+        // Retransmit each peer's unacknowledged reliable messages with
+        // exponential backoff — unicast to the owning peer only, never a
+        // broadcast (another client's ACK must not silence a retransmission,
+        // and other clients must not receive foreign sequences).
+        const NetworkRole role = GetRole();
+        for (auto& [peerKey, peer] : m_peers)
         {
-            float age = m_serverTime - unacked.timestamp;
-            int retryCount = 0;
-            auto rcIt = m_retransmitCounts.find(seq);
-            if (rcIt != m_retransmitCounts.end())
-                retryCount = rcIt->second;
-
-            // Exponential backoff: base * 2^retryCount, capped at 8x base
-            float backoff = m_reliableRetransmitInterval * static_cast<float>(1 << (std::min)(retryCount, 3));
-            if (age > backoff)
-            {
-                toRetransmit.push_back(seq);
-            }
-        }
-
-        for (SequenceNumber seq : toRetransmit)
-        {
-            auto it = m_unacknowledgedMessages.find(seq);
-            if (it == m_unacknowledgedMessages.end())
+            if (peer.unacknowledgedMessages.empty())
                 continue;
 
-            // Increment retry count for exponential backoff
-            int& retryCount = m_retransmitCounts[seq];
-            retryCount++;
-
-            // Drop if max retries exceeded
-            if (retryCount > m_maxReliableRetries)
+            // Resolve this peer's destination address
+            const sockaddr_in* destination = nullptr;
+            if (role == NetworkRole::Client)
             {
-                m_unacknowledgedMessages.erase(it);
-                m_reliableOriginalSendTime.erase(seq);
-                m_retransmitCounts.erase(seq);
-                m_stats.packetsDropped++;
+                destination = &m_serverAddress;
+            }
+            else
+            {
+                auto addrIt = m_clientAddresses.find(peerKey);
+                if (addrIt != m_clientAddresses.end())
+                    destination = &addrIt->second;
+            }
+            if (!destination)
+            {
+                // Peer has no address (disconnected or never addressable) —
+                // drop its outgoing state instead of retransmitting forever.
+                peer.unacknowledgedMessages.clear();
+                peer.reliableOriginalSendTime.clear();
+                peer.retransmitCounts.clear();
                 continue;
             }
 
-            auto& retransmitMsg = it->second;
-            retransmitMsg.timestamp = m_serverTime; // Reset retransmit timer
-            auto serialized = SerializeMessage(retransmitMsg);
+            std::vector<SequenceNumber> toRetransmit;
+            for (auto& [seq, unacked] : peer.unacknowledgedMessages)
+            {
+                float age = m_serverTime - unacked.timestamp;
+                int retryCount = 0;
+                auto rcIt = peer.retransmitCounts.find(seq);
+                if (rcIt != peer.retransmitCounts.end())
+                    retryCount = rcIt->second;
 
-            if (m_role == NetworkRole::Client)
-            {
-                SendRawTo(serialized, m_serverAddress);
-            }
-            else if (m_role == NetworkRole::Server)
-            {
-                for (const auto& [id, addr] : m_clientAddresses)
+                // Exponential backoff: base * 2^retryCount, capped at 8x base
+                float backoff = m_reliableRetransmitInterval * static_cast<float>(1 << (std::min)(retryCount, 3));
+                if (age > backoff)
                 {
-                    SendRawTo(serialized, addr);
+                    toRetransmit.push_back(seq);
                 }
+            }
+
+            for (SequenceNumber seq : toRetransmit)
+            {
+                auto it = peer.unacknowledgedMessages.find(seq);
+                if (it == peer.unacknowledgedMessages.end())
+                    continue;
+
+                // Increment retry count for exponential backoff
+                int& retryCount = peer.retransmitCounts[seq];
+                retryCount++;
+
+                // Drop if max retries exceeded
+                if (retryCount > m_maxReliableRetries)
+                {
+                    peer.unacknowledgedMessages.erase(it);
+                    peer.reliableOriginalSendTime.erase(seq);
+                    peer.retransmitCounts.erase(seq);
+                    m_stats.packetsDropped++;
+                    continue;
+                }
+
+                auto& retransmitMsg = it->second;
+                retransmitMsg.timestamp = m_serverTime; // Reset retransmit timer
+                auto serialized = SerializeMessage(retransmitMsg);
+                SendRawTo(serialized, *destination);
             }
         }
 #endif // ENABLE_NETWORKING
@@ -1160,7 +1206,10 @@ namespace Spark::Net
            << m_stats.packetsDropped << "\n";
         ss << "Prediction Corrections: " << m_stats.correctionCount << "\n";
         ss << "Bytes: Sent " << m_stats.bytesSent << ", Received " << m_stats.bytesReceived << "\n";
-        ss << "Unacked reliable messages: " << m_unacknowledgedMessages.size() << "\n";
+        size_t unackedTotal = 0;
+        for (const auto& [peerKey, peer] : m_peers)
+            unackedTotal += peer.unacknowledgedMessages.size();
+        ss << "Unacked reliable messages: " << unackedTotal << "\n";
         return ss.str();
     }
 

@@ -4,6 +4,11 @@
  *
  * Extracted from NetworkManager.cpp — implements ACK handling, duplicate
  * detection, sequence tracking, ordered delivery, and sequence pruning.
+ *
+ * All reliability state is keyed per peer (PeerState): every client numbers
+ * its reliable stream independently from 1, so the server must track dedup,
+ * ACK bitfields, ordered delivery, and unacked/retransmit maps per client.
+ * A client has a single implicit peer — the server — keyed by SERVER_PEER.
  */
 
 #include "NetworkManager.h"
@@ -20,6 +25,17 @@ namespace Spark::Net
 {
 
     // --------------------------------------------------------------------------
+    // Peer resolution
+    // --------------------------------------------------------------------------
+
+    ClientID NetworkManager::GetIncomingPeerKey(const NetworkMessage& msg) const
+    {
+        // Server: senderID is trusted — ProcessIncoming stamps it from the
+        // address→client table, not from the wire. Client: single server peer.
+        return (GetRole() == NetworkRole::Server) ? msg.senderID : SERVER_PEER;
+    }
+
+    // --------------------------------------------------------------------------
     // ACK processing
     // --------------------------------------------------------------------------
 
@@ -29,21 +45,23 @@ namespace Spark::Net
         if (msg.payload.size() < 8)
             return;
 
-        NetBuffer buf;
-        // Reconstruct buffer from payload for reading
-        // (payload is already deserialized bytes)
         uint32_t ackSeq = 0;
         uint32_t ackBits = 0;
         std::memcpy(&ackSeq, msg.payload.data(), 4);
         std::memcpy(&ackBits, msg.payload.data() + 4, 4);
 
+        // Only the sending peer's outgoing stream is covered by this ACK.
+        // Erasing from a shared map would let client A's ACK delete messages
+        // still in flight to client B — silent permanent loss.
+        PeerState& peer = GetPeerState(GetIncomingPeerKey(msg));
+
         // Compute RTT from the ACKed sequence's original send time (only if not retransmitted)
-        auto origIt = m_reliableOriginalSendTime.find(ackSeq);
-        auto retryIt = m_retransmitCounts.find(ackSeq);
-        if (origIt != m_reliableOriginalSendTime.end())
+        auto origIt = peer.reliableOriginalSendTime.find(ackSeq);
+        auto retryIt = peer.retransmitCounts.find(ackSeq);
+        if (origIt != peer.reliableOriginalSendTime.end())
         {
             // Only use first-send samples for RTT (Karn's algorithm: skip retransmitted)
-            if (retryIt == m_retransmitCounts.end() || retryIt->second == 0)
+            if (retryIt == peer.retransmitCounts.end() || retryIt->second == 0)
             {
                 float sampleRTT = m_serverTime - origIt->second;
                 if (sampleRTT > 0.0f && sampleRTT < m_connectionTimeout)
@@ -51,11 +69,11 @@ namespace Spark::Net
             }
         }
 
-        // Remove the acknowledged sequence from unack map
+        // Remove the acknowledged sequence from this peer's unack map
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "ACK received: seq=%u, bitfield=0x%08X", ackSeq, ackBits);
-        m_unacknowledgedMessages.erase(ackSeq);
-        m_reliableOriginalSendTime.erase(ackSeq);
-        m_retransmitCounts.erase(ackSeq);
+        peer.unacknowledgedMessages.erase(ackSeq);
+        peer.reliableOriginalSendTime.erase(ackSeq);
+        peer.retransmitCounts.erase(ackSeq);
 
         // Process bitfield: bit N means (ackSeq - 1 - N) is also acknowledged
         for (uint32_t bit = 0; bit < 32; ++bit)
@@ -65,9 +83,9 @@ namespace Spark::Net
                 SequenceNumber ackedSeq = ackSeq - 1 - bit;
                 if (ackedSeq > 0)
                 {
-                    m_unacknowledgedMessages.erase(ackedSeq);
-                    m_reliableOriginalSendTime.erase(ackedSeq);
-                    m_retransmitCounts.erase(ackedSeq);
+                    peer.unacknowledgedMessages.erase(ackedSeq);
+                    peer.reliableOriginalSendTime.erase(ackedSeq);
+                    peer.retransmitCounts.erase(ackedSeq);
                 }
             }
         }
@@ -75,27 +93,43 @@ namespace Spark::Net
 
     void NetworkManager::SendAckPacket()
     {
-        if (m_remoteSequenceHighest == 0)
-            return; // Nothing to acknowledge
+        // One ACK per peer, covering only that peer's incoming stream. A merged
+        // broadcast ACK would make client B erase unacked messages the server
+        // never received just because client A's identically-numbered message
+        // arrived.
+        const bool isServer = (GetRole() == NetworkRole::Server);
+        for (auto& [peerKey, peer] : m_peers)
+        {
+            if (peer.remoteSequenceHighest == 0)
+                continue; // Nothing to acknowledge for this peer
 
-        NetworkMessage ack;
-        ack.type = MessageType::Ack;
-        ack.channel = ChannelType::Unreliable; // ACKs are unreliable (redundancy handles loss)
-        ack.senderID = m_localClientID;
-        ack.payload.resize(8);
-        std::memcpy(ack.payload.data(), &m_remoteSequenceHighest, 4);
-        std::memcpy(ack.payload.data() + 4, &m_ackBitfield, 4);
+            // Unknown senders (senderID 0 on the server) have no address to
+            // ACK back to; their retransmissions age out on their side.
+            if (isServer && peerKey == INVALID_CLIENT)
+                continue;
 
-        SendMessage(ack);
+            NetworkMessage ack;
+            ack.type = MessageType::Ack;
+            ack.channel = ChannelType::Unreliable; // ACKs are unreliable (redundancy handles loss)
+            ack.senderID = m_localClientID;
+            ack.payload.resize(8);
+            std::memcpy(ack.payload.data(), &peer.remoteSequenceHighest, 4);
+            std::memcpy(ack.payload.data() + 4, &peer.ackBitfield, 4);
+
+            if (isServer)
+                SendToClient(peerKey, ack);
+            else
+                SendMessage(ack);
+        }
     }
 
     // --------------------------------------------------------------------------
     // Duplicate detection
     // --------------------------------------------------------------------------
 
-    bool NetworkManager::IsDuplicateSequence(SequenceNumber seq) const
+    bool NetworkManager::IsDuplicateSequence(const PeerState& peer, SequenceNumber seq) const
     {
-        bool dup = Spark::ContainerUtils::Contains(m_receivedSequences, seq);
+        bool dup = Spark::ContainerUtils::Contains(peer.receivedSequences, seq);
         if (dup)
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Duplicate sequence %u detected — suppressing", seq);
@@ -103,35 +137,35 @@ namespace Spark::Net
         return dup;
     }
 
-    void NetworkManager::RecordReceivedSequence(SequenceNumber seq)
+    void NetworkManager::RecordReceivedSequence(PeerState& peer, SequenceNumber seq)
     {
-        m_receivedSequences[seq] = m_serverTime;
+        peer.receivedSequences[seq] = m_serverTime;
 
-        if (seq > m_remoteSequenceHighest)
+        if (seq > peer.remoteSequenceHighest)
         {
-            if (m_remoteSequenceHighest == 0)
+            if (peer.remoteSequenceHighest == 0)
             {
                 // First sequence ever received — no previous sequences to set in bitfield
-                m_ackBitfield = 0;
+                peer.ackBitfield = 0;
             }
             else
             {
                 // Shift bitfield: the old highest becomes bit 0, etc.
-                uint32_t shift = seq - m_remoteSequenceHighest;
+                uint32_t shift = seq - peer.remoteSequenceHighest;
                 if (shift < 32)
-                    m_ackBitfield = (m_ackBitfield << shift) | (1u << (shift - 1));
+                    peer.ackBitfield = (peer.ackBitfield << shift) | (1u << (shift - 1));
                 else
-                    m_ackBitfield = 0; // Gap too large, reset bitfield
+                    peer.ackBitfield = 0; // Gap too large, reset bitfield
             }
 
-            m_remoteSequenceHighest = seq;
+            peer.remoteSequenceHighest = seq;
         }
-        else if (seq < m_remoteSequenceHighest)
+        else if (seq < peer.remoteSequenceHighest)
         {
             // Set the corresponding bit for this older sequence
-            uint32_t offset = m_remoteSequenceHighest - seq - 1;
+            uint32_t offset = peer.remoteSequenceHighest - seq - 1;
             if (offset < 32)
-                m_ackBitfield |= (1u << offset);
+                peer.ackBitfield |= (1u << offset);
         }
     }
 
@@ -139,39 +173,52 @@ namespace Spark::Net
     // Ordered delivery
     // --------------------------------------------------------------------------
 
-    void NetworkManager::FlushOrderedBuffer()
+    void NetworkManager::FlushOrderedBuffer(ClientID peerKey)
     {
         while (true)
         {
-            auto it = m_orderedBuffer.find(m_expectedOrderedSequence);
-            if (it == m_orderedBuffer.end())
+            // Re-resolve the peer every iteration: a dispatched handler may
+            // mutate m_peers (e.g. a Disconnect handler erasing this peer),
+            // which would invalidate a held reference.
+            auto peerIt = m_peers.find(peerKey);
+            if (peerIt == m_peers.end())
+                return;
+
+            PeerState& peer = peerIt->second;
+            auto it = peer.orderedBuffer.find(peer.expectedOrderedSequence);
+            if (it == peer.orderedBuffer.end())
                 break;
 
-            // Dispatch this now-in-order message
+            // Detach the message before dispatching so handler side effects
+            // cannot invalidate the buffer entry mid-use
+            NetworkMessage message = std::move(it->second);
+            peer.orderedBuffer.erase(it);
+            peer.expectedOrderedSequence++;
+
             MessageHandler handler;
             {
                 std::lock_guard<std::mutex> lock(m_handlerMutex);
-                auto handlerIt = m_handlers.find(static_cast<uint16_t>(it->second.type));
+                auto handlerIt = m_handlers.find(static_cast<uint16_t>(message.type));
                 if (handlerIt != m_handlers.end())
                     handler = handlerIt->second;
             }
             if (handler)
-                handler(it->second);
-
-            m_orderedBuffer.erase(it);
-            m_expectedOrderedSequence++;
+                handler(message);
         }
     }
 
     void NetworkManager::PruneReceivedSequences()
     {
-        auto it = m_receivedSequences.begin();
-        while (it != m_receivedSequences.end())
+        for (auto& [peerKey, peer] : m_peers)
         {
-            if (m_serverTime - it->second > RECEIVED_SEQ_EXPIRY)
-                it = m_receivedSequences.erase(it);
-            else
-                ++it;
+            auto it = peer.receivedSequences.begin();
+            while (it != peer.receivedSequences.end())
+            {
+                if (m_serverTime - it->second > RECEIVED_SEQ_EXPIRY)
+                    it = peer.receivedSequences.erase(it);
+                else
+                    ++it;
+            }
         }
     }
 

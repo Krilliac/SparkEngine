@@ -26,10 +26,14 @@
  * NavMesh obstacle update); the inner heavy `Spark::AI::AISystem::Update`
  * pipeline is gated behind `AIIntegrationConfig::runCoreAISystem` and
  * defaults to `false` so it does not double-tick behavior trees alongside
- * the existing `Spark::ECS::AIUpdateSystem` (registered in
- * `EngineSetup.h`). Game modules that want the full heavy pipeline can
- * opt in via `AIIntegratedSystem::GetInstance().SetRunCoreAISystem(true)`
- * after disabling `AIUpdateSystem` on the PhaseSystemManager.
+ * `Spark::ECS::AIUpdateSystem`, which is registered by
+ * `EngineSetup::CreatePhaseSystemManager` into the lifecycle-owned
+ * `PhaseSystemManager` and ticked every frame from
+ * `GameplayLifecycleShared.cpp` (`InitializeEcsPhaseSystemsImpl` /
+ * `UpdateGameplaySystemsImpl`). Game modules that want the full heavy
+ * pipeline can opt in via
+ * `AIIntegratedSystem::GetInstance().SetRunCoreAISystem(true)` after
+ * disabling `AIUpdateSystem` on the PhaseSystemManager.
  *
  * @see AISystem.h, ParallelPerception.h, AIBudgetLimiter.h, NavMeshObstacles.h
  */

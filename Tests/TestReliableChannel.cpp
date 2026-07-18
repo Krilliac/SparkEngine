@@ -1,5 +1,7 @@
 // TestReliableChannel.cpp - Tests for reliable networking: ACK, duplicate detection, ordered delivery
-// Standalone implementations for CI testing (no networking/socket dependency)
+// First half: standalone mirror implementations of the channel logic (no socket dependency).
+// Second half (SPARK_TEST_HAS_NETWORKING): loopback regression tests that drive the real
+// NetworkManager server with raw UDP clients to prove reliability state is keyed per peer.
 
 #include "TestFramework.h"
 #include <algorithm>
@@ -402,3 +404,307 @@ TEST(ReliableChannel_MaxRetriesExceeded)
     EXPECT_EQ(tracker.dropped.size(), 1u);
     EXPECT_EQ(tracker.dropped[0], 42u);
 }
+
+// =============================================================================
+// Per-peer reliability regression tests (real NetworkManager over UDP loopback)
+//
+// Every client numbers its reliable stream independently from 1. These tests
+// drive the production server with two raw UDP clients to prove that the
+// receive-side dedup/ordered state and the send-side unacked/ACK state are
+// keyed per peer — previously they were server-wide, so client B's seq N was
+// dropped as a duplicate of client A's seq N and a merged ACK broadcast made
+// B erase messages the server never received (silent permanent loss).
+// =============================================================================
+
+#if defined(SPARK_TEST_HAS_NETWORKING) && defined(ENABLE_NETWORKING)
+
+#include "Engine/Networking/NetworkManager.h"
+#include <chrono>
+#include <thread>
+
+namespace TestReliablePerPeer
+{
+    namespace Net = Spark::Net;
+
+    constexpr uint32_t kWireMagic = 0x5350524B; // "SPRK"
+
+    /// Raw UDP endpoint speaking the engine wire format — lets one test process
+    /// simulate multiple independent clients against the singleton server.
+    class RawUdpClient
+    {
+      public:
+        ~RawUdpClient() { Close(); }
+
+        bool Open(uint16_t serverPort)
+        {
+            m_socket = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if (m_socket == INVALID_SOCKET)
+                return false;
+
+#ifdef SPARK_PLATFORM_WINDOWS
+            u_long nonBlocking = 1;
+            ioctlsocket(m_socket, FIONBIO, &nonBlocking);
+#else
+            int flags = fcntl(m_socket, F_GETFL, 0);
+            fcntl(m_socket, F_SETFL, flags | O_NONBLOCK);
+#endif
+            std::memset(&m_serverAddr, 0, sizeof(m_serverAddr));
+            m_serverAddr.sin_family = AF_INET;
+            m_serverAddr.sin_port = htons(serverPort);
+            return inet_pton(AF_INET, "127.0.0.1", &m_serverAddr.sin_addr) == 1;
+        }
+
+        void Close()
+        {
+            if (m_socket != INVALID_SOCKET)
+            {
+                closesocket(m_socket);
+                m_socket = INVALID_SOCKET;
+            }
+        }
+
+        void Send(Net::MessageType type, Net::ChannelType channel, Net::SequenceNumber sequence,
+                  const std::vector<uint8_t>& payload)
+        {
+            Net::NetBuffer buf;
+            buf.WriteUint32(kWireMagic);
+            buf.WriteUint16(static_cast<uint16_t>(type));
+            buf.WriteUint8(static_cast<uint8_t>(channel));
+            buf.WriteUint32(m_clientID);
+            buf.WriteUint32(sequence);
+            buf.WriteFloat(0.0f); // timestamp
+            buf.WriteUint32(static_cast<uint32_t>(payload.size()));
+            if (!payload.empty())
+                buf.WriteBytes(payload.data(), payload.size());
+
+            const auto& data = buf.GetData();
+            ::sendto(m_socket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0,
+                     reinterpret_cast<const sockaddr*>(&m_serverAddr), sizeof(m_serverAddr));
+        }
+
+        /// Non-blocking receive of one engine-format message. False = nothing waiting.
+        bool TryReceive(Net::NetworkMessage& outMsg)
+        {
+            uint8_t raw[4096];
+            sockaddr_in from{};
+            socklen_t fromLen = sizeof(from);
+            int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw), sizeof(raw), 0,
+                                      reinterpret_cast<sockaddr*>(&from), &fromLen);
+            if (received < 23)
+                return false;
+
+            Net::NetBuffer buf;
+            buf.WriteBytes(raw, static_cast<size_t>(received));
+            if (buf.ReadUint32() != kWireMagic)
+                return false;
+            outMsg.type = static_cast<Net::MessageType>(buf.ReadUint16());
+            outMsg.channel = static_cast<Net::ChannelType>(buf.ReadUint8());
+            outMsg.senderID = buf.ReadUint32();
+            outMsg.sequence = buf.ReadUint32();
+            outMsg.timestamp = buf.ReadFloat();
+            uint32_t payloadLen = buf.ReadUint32();
+            outMsg.payload.resize(payloadLen);
+            if (payloadLen > 0)
+                buf.ReadBytes(outMsg.payload.data(), payloadLen);
+            return buf.IsValid();
+        }
+
+        /// Handshake: send Connect and pump the server until ConnectAccepted arrives.
+        bool Connect(Net::NetworkManager& server, const std::string& name)
+        {
+            Net::NetBuffer payload;
+            payload.WriteString(name);
+            for (int attempt = 0; attempt < 50; ++attempt)
+            {
+                Send(Net::MessageType::Connect, Net::ChannelType::Reliable, 0, payload.GetData());
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                server.Update(0.01f);
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+
+                Net::NetworkMessage msg;
+                while (TryReceive(msg))
+                {
+                    if (msg.type == Net::MessageType::ConnectAccepted && msg.payload.size() >= 4)
+                    {
+                        Net::NetBuffer acceptBuf;
+                        acceptBuf.WriteBytes(msg.payload.data(), msg.payload.size());
+                        m_clientID = acceptBuf.ReadUint32();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// Drain the socket; count messages of the given type and record the last sequence seen.
+        int DrainCount(Net::MessageType type, Net::SequenceNumber& outLastSequence)
+        {
+            int count = 0;
+            Net::NetworkMessage msg;
+            while (TryReceive(msg))
+            {
+                if (msg.type == type)
+                {
+                    ++count;
+                    outLastSequence = msg.sequence;
+                }
+            }
+            return count;
+        }
+
+        Net::ClientID GetClientID() const { return m_clientID; }
+
+      private:
+        SOCKET m_socket = INVALID_SOCKET;
+        sockaddr_in m_serverAddr{};
+        Net::ClientID m_clientID = 0;
+    };
+
+    /// Pump the server with real-time gaps so loopback datagrams land.
+    inline void PumpServer(Net::NetworkManager& server, int frames, float deltaTime = 0.01f)
+    {
+        for (int i = 0; i < frames; ++i)
+        {
+            server.Update(deltaTime);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    }
+} // namespace TestReliablePerPeer
+
+using namespace TestReliablePerPeer;
+
+TEST(ReliablePerPeer_TwoClientsSameSequences_BothDispatched)
+{
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_TRUE(nm.StartServer(28451, 8));
+
+    std::unordered_map<Net::ClientID, int> receivedBySender;
+    nm.RegisterHandler(Net::MessageType::ChatMessage,
+                       [&receivedBySender](const Net::NetworkMessage& msg) { receivedBySender[msg.senderID]++; });
+
+    RawUdpClient clientA;
+    RawUdpClient clientB;
+    EXPECT_TRUE(clientA.Open(28451));
+    EXPECT_TRUE(clientB.Open(28451));
+    EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
+    EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
+    EXPECT_NE(clientA.GetClientID(), clientB.GetClientID());
+
+    // Both clients number their reliable streams identically from 1 — the
+    // exact collision that server-wide receive state silently dropped.
+    const std::vector<uint8_t> chat{'h', 'i'};
+    for (Net::SequenceNumber seq = 1; seq <= 3; ++seq)
+    {
+        clientA.Send(Net::MessageType::ChatMessage, Net::ChannelType::Reliable, seq, chat);
+        clientB.Send(Net::MessageType::ChatMessage, Net::ChannelType::Reliable, seq, chat);
+    }
+    PumpServer(nm, 20);
+
+    EXPECT_EQ(receivedBySender[clientA.GetClientID()], 3);
+    EXPECT_EQ(receivedBySender[clientB.GetClientID()], 3);
+
+    nm.Shutdown();
+}
+
+TEST(ReliablePerPeer_OrderedChannelIndependentPerPeer)
+{
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_TRUE(nm.StartServer(28452, 8));
+
+    std::unordered_map<Net::ClientID, std::vector<uint8_t>> deliveredBySender;
+    nm.RegisterHandler(Net::MessageType::UserDefined, [&deliveredBySender](const Net::NetworkMessage& msg)
+                       { deliveredBySender[msg.senderID].push_back(msg.payload.empty() ? 0 : msg.payload[0]); });
+
+    RawUdpClient clientA;
+    RawUdpClient clientB;
+    EXPECT_TRUE(clientA.Open(28452));
+    EXPECT_TRUE(clientB.Open(28452));
+    EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
+    EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
+
+    // A sends its ordered stream in order; B sends the same sequence numbers
+    // out of order. Each peer's reorder buffer and next-expected counter must
+    // be independent: B's gap must not stall A, and B's stream must be
+    // delivered in order once its seq 1 arrives.
+    clientA.Send(Net::MessageType::UserDefined, Net::ChannelType::ReliableOrdered, 1, {1});
+    clientA.Send(Net::MessageType::UserDefined, Net::ChannelType::ReliableOrdered, 2, {2});
+    clientB.Send(Net::MessageType::UserDefined, Net::ChannelType::ReliableOrdered, 2, {12});
+    PumpServer(nm, 10);
+    clientB.Send(Net::MessageType::UserDefined, Net::ChannelType::ReliableOrdered, 1, {11});
+    PumpServer(nm, 20);
+
+    const auto& fromA = deliveredBySender[clientA.GetClientID()];
+    const auto& fromB = deliveredBySender[clientB.GetClientID()];
+    EXPECT_EQ(fromA.size(), 2u);
+    EXPECT_EQ(fromB.size(), 2u);
+    if (fromA.size() == 2)
+    {
+        EXPECT_EQ(fromA[0], 1);
+        EXPECT_EQ(fromA[1], 2);
+    }
+    if (fromB.size() == 2)
+    {
+        EXPECT_EQ(fromB[0], 11);
+        EXPECT_EQ(fromB[1], 12);
+    }
+
+    nm.Shutdown();
+}
+
+TEST(ReliablePerPeer_AckFromOnePeerDoesNotClearAnothers)
+{
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_TRUE(nm.StartServer(28453, 8));
+
+    RawUdpClient clientA;
+    RawUdpClient clientB;
+    EXPECT_TRUE(clientA.Open(28453));
+    EXPECT_TRUE(clientB.Open(28453));
+    EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
+    EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
+
+    // Server reliable broadcast: each peer gets its own sequence stream
+    // (seq 1 = ConnectAccepted, seq 2 = this chat message, per peer).
+    Net::NetworkMessage chat;
+    chat.type = Net::MessageType::ChatMessage;
+    chat.channel = Net::ChannelType::Reliable;
+    chat.payload = {'y', 'o'};
+    nm.SendMessage(chat);
+    PumpServer(nm, 6);
+
+    Net::SequenceNumber seqToA = 0;
+    Net::SequenceNumber seqToB = 0;
+    EXPECT_GE(clientA.DrainCount(Net::MessageType::ChatMessage, seqToA), 1);
+    EXPECT_GE(clientB.DrainCount(Net::MessageType::ChatMessage, seqToB), 1);
+    EXPECT_EQ(seqToA, 2u);
+    EXPECT_EQ(seqToB, 2u);
+
+    // A acknowledges its whole stream: ackSeq=2 with bitfield bit 0 = seq 1.
+    // This must clear ONLY A's unacked map — B never acked anything.
+    std::vector<uint8_t> ackPayload(8);
+    const uint32_t ackSeq = seqToA;
+    const uint32_t ackBits = 0x1u;
+    std::memcpy(ackPayload.data(), &ackSeq, 4);
+    std::memcpy(ackPayload.data() + 4, &ackBits, 4);
+    clientA.Send(Net::MessageType::Ack, Net::ChannelType::Unreliable, 0, ackPayload);
+    PumpServer(nm, 6);
+
+    // Discard anything already in flight, then advance simulated time past the
+    // retransmit backoff (0.5 s base) while staying under the 10 s timeout.
+    clientA.DrainCount(Net::MessageType::ChatMessage, seqToA);
+    clientB.DrainCount(Net::MessageType::ChatMessage, seqToB);
+    PumpServer(nm, 4, 0.4f);
+
+    Net::SequenceNumber ignored = 0;
+    const int retransmitsToA = clientA.DrainCount(Net::MessageType::ChatMessage, ignored);
+    const int retransmitsToB = clientB.DrainCount(Net::MessageType::ChatMessage, ignored);
+    EXPECT_EQ(retransmitsToA, 0); // A acked — its stream is settled
+    EXPECT_GE(retransmitsToB, 1); // B's copy must still be tracked and retransmitted
+
+    nm.Shutdown();
+}
+
+#endif // SPARK_TEST_HAS_NETWORKING && ENABLE_NETWORKING
