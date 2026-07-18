@@ -6,9 +6,11 @@
  * The lifecycle below is the frozen module contract (called from Main.cpp) —
  * extend this class freely, but do not change the lifecycle signatures.
  *
- * W2 implementation (split across TFRegionSystem.cpp = authoritative capture
- * loop + accessors + debug UI, and TFRegionSystemNet.cpp = wire broadcasts,
- * client mirror handlers and territory persistence):
+ * W2 implementation (split across TFRegionSystem.cpp = lifecycle + topology +
+ * contract accessors, TFRegionSystemCapture.cpp = authoritative capture loop +
+ * Dominion, TFRegionSystemUi.cpp = capture visuals/HUD feed/debug surfaces,
+ * and TFRegionSystemNet.cpp = wire broadcasts, client mirror handlers and
+ * territory persistence; shared helpers in TFRegionSystemInternal.h):
  *  - Server (authority roles): 1 Hz capture tick over the alive-pawn set
  *    (10 m XZ radius around any capture point). Single attacker faction that
  *    is lattice-linked advances progress at 1/captureSec; several distinct
@@ -126,7 +128,7 @@ namespace Terrafront
         void RebuildFromData(bool preserveOwners);
         void OnDataReloaded();
 
-        // authoritative capture loop (TFRegionSystem.cpp)
+        // authoritative capture loop (TFRegionSystemCapture.cpp)
         void TickCapture(float dt);
         void FlipOwner(size_t idx, FactionId newOwner, bool awardXp);
         void AwardCaptureXP(const RegionDef& def, FactionId newOwner);
@@ -134,7 +136,7 @@ namespace Terrafront
         void StartDominion(FactionId faction);
         void SoftResetToInitial(const char* reason);
 
-        // local-player HUD feed (TFRegionSystem.cpp)
+        // local-player HUD feed (TFRegionSystemUi.cpp)
         void FeedLocalCaptureHUD();
 
         // Client-side capture-point landmarks: a cap tower + a slowly rotating
@@ -151,7 +153,7 @@ namespace Terrafront
         // HasLocalPlayer gate as the capture landmarks, no Main.cpp wiring.
         std::unique_ptr<TFRegionDecor> m_decor;
 
-        // tf_capture_debug payload (TFRegionSystem.cpp)
+        // tf_capture_debug payload (TFRegionSystemUi.cpp)
         std::string DebugCaptureReport() const;
 
         // persistence (TFRegionSystemNet.cpp)

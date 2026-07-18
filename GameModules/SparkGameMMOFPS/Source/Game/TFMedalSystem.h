@@ -3,7 +3,8 @@
  * @brief Medals (killstreak / multikill / Savior / Avenger) + the server-tracked
  *        score rows behind the scoreboard (W10 medals-scoreboard lane).
  *
- * OWNERSHIP: medals-scoreboard lane (this header + TFMedalSystem.cpp, plus
+ * OWNERSHIP: medals-scoreboard lane (this header + TFMedalSystem.cpp /
+ * TFMedalSystemServer.cpp / TFMedalSystemClient.cpp, plus
  * UI/TFScoreboard.h/.cpp).
  *
  * Design (TFAbilitySystem/TFOutfitSystem precedent: server registry + client

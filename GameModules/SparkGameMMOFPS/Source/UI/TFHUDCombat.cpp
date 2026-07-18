@@ -8,7 +8,9 @@
  *
  * Split from TFHUD.cpp per the repo file-size rule (TFPlayerSystemClient.cpp
  * pattern — same class, feature-owned translation units). TFHUD.cpp keeps the
- * lifecycle, feed-in setters, vitals/weapon/crosshair/compass/chat drawing.
+ * lifecycle, feed-in setters and pawn-state gather; the overlay drawing
+ * (vitals/weapon/crosshair/compass) lives in TFHUDDraw.cpp and the chat
+ * window in TFHUDChat.cpp.
  *
  * Minimap-v2 lane (W13): DrawMinimap below is a thin delegating call into
  * UI/TFMinimap.h's TFMinimapDraw() — the corner-minimap-v3 implementation

@@ -8,20 +8,20 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-07-
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 291450 |
+| **SparkEngine/Source** | 291476 |
 | **SparkEditor/Source** | 97889 |
-| **GameModules** | 126963 |
+| **GameModules** | 127921 |
 | **Tests** | 145661 |
 | **SparkConsole/src** | 1571 |
 | **SparkShaderCompiler/src** | 578 |
-| **Total C++ (excl. ThirdParty)** | **~664112** |
+| **Total C++ (excl. ThirdParty)** | **~665096** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 918 |
-| Implementation files (.cpp) | 1315 |
+| Header files (.h/.hpp) | 926 |
+| Implementation files (.cpp) | 1342 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -32,9 +32,9 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-07-
 
 | Metric | Value |
 |--------|-------|
-| Average lines per .cpp file | ~729 |
+| Average lines per .cpp file | ~727 |
 | Average lines per .h file | ~572 |
-| Largest codebase section | Graphics (116207 lines — 39% of SparkEngine/Source) |
+| Largest codebase section | Graphics (116233 lines — 39% of SparkEngine/Source) |
 
 ## SparkEngine/Source Breakdown
 
@@ -42,7 +42,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-07-
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 116207 | 39.8% |
+| Graphics | 116233 | 39.8% |
 | Engine (all subsystems) | 83981 | 28.8% |
 | Utils | 39872 | 13.6% |
 | Core | 24641 | 8.4% |

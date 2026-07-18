@@ -1,6 +1,10 @@
 /**
  * @file TFWorldCollision.cpp
- * @brief Scene-file -> static Jolt box bodies + the shared capsule move resolver.
+ * @brief Scene-file -> static Jolt box bodies: scene parse, OBJ AABB streaming,
+ *        Build() and Shutdown(). The W10/W11 decor-OBB registration lives in
+ *        TFWorldCollisionDecor.cpp and the shared capsule move resolver in
+ *        TFWorldCollisionMove.cpp (same class, split per the repo file-size
+ *        rules — mirrors the TFWorldSetup/-Net split).
  *
  * See TFWorldCollision.h for the terrain/object split and the determinism
  * contract. Everything here must stay byte-identical in behavior between the
@@ -9,7 +13,7 @@
  */
 #include "World/TFWorldCollision.h"
 
-#include "Game/TFMovementModel.h" // kTFPawnRadiusM / kTFPawnHeightM
+#include "World/TFWorldCollisionInternal.h" // WorldCollisionDetail: kMaxBodies, kMinHalfExtentM, kDegToRad
 
 #include "Physics/PhysicsSystem.h"
 #include "Spark/IEngineContext.h"
@@ -25,12 +29,11 @@
 namespace Terrafront
 {
 
+    using namespace WorldCollisionDetail;
+
     namespace
     {
 
-        constexpr size_t kMaxBodies = 512;       // safety cap (scene ships 109 objects)
-        constexpr float kMinHalfExtentM = 0.05f; // degenerate-AABB floor
-        constexpr float kDegToRad = 0.01745329252f;
         constexpr float kRotEpsDeg = 0.01f; // scene rotations are authored as whole degrees
 
         /// True when `deg` is (within epsilon) a multiple of `stepDeg` (e.g. 90).
@@ -344,150 +347,6 @@ namespace Terrafront
         return created > 0;
     }
 
-    // -----------------------------------------------------------------------
-    // W10 decor-collision: model-bounds OBB registration (TFRegionDecor)
-    // -----------------------------------------------------------------------
-
-    std::shared_ptr<::PhysicsBody> TFWorldCollision::AddModelObb(const std::string& objPath, const float pos[3],
-                                                                 float yawDeg, const std::string& name)
-    {
-        if (!m_physics)
-            return nullptr; // Jolt absent: decor stays walk-through, like the scene set
-        if (m_bodies.size() >= kMaxBodies)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] world collision: body cap %zu reached - no body for %s",
-                           kMaxBodies, name.c_str());
-            return nullptr;
-        }
-
-        auto it = m_modelAabbCache.find(objPath);
-        if (it == m_modelAabbCache.end())
-        {
-            float mn[3], mx[3];
-            if (!ObjLocalAabb(objPath, mn, mx))
-            {
-                // NO unit-cube fallback here (unlike scene models, which must
-                // mirror the engine's placeholder mesh): a wrong-size invisible
-                // wall around decor is worse than leaving the piece walk-through.
-                SPARK_LOG_WARN(Spark::LogCategory::Game,
-                               "[TF] world collision: OBJ %s unreadable - decor piece %s stays walk-through",
-                               objPath.c_str(), name.c_str());
-                return nullptr;
-            }
-            it = m_modelAabbCache
-                     .emplace(objPath, std::make_pair(std::array<float, 3>{mn[0], mn[1], mn[2]},
-                                                      std::array<float, 3>{mx[0], mx[1], mx[2]}))
-                     .first;
-        }
-        const std::array<float, 3>& lmin = it->second.first;
-        const std::array<float, 3>& lmax = it->second.second;
-
-        PhysicsBodyDesc desc;
-        desc.type = PhysicsBodyType::Static;
-        desc.mass = 0.0f;
-        desc.shape.type = CollisionShapeType::Box;
-
-        // Tight OBB at scale 1 — the Build() diagonal-yaw math verbatim (also
-        // exact for 0/90/180/270: the rotated box degenerates to the same AABB).
-        // desc.rotation is RADIANS (PhysicsSystemQueries.cpp -> JPH sEulerAngles;
-        // the PhysicsTypes.h "degrees" doc lies). Decor yaw arrives in the scene/
-        // Transform DEGREES convention — convert here.
-        const float ryRad = yawDeg * kDegToRad;
-        const float cyaw = std::cos(ryRad), syaw = std::sin(ryRad);
-        const float ctr[3] = {(lmin[0] + lmax[0]) * 0.5f, (lmin[1] + lmax[1]) * 0.5f, (lmin[2] + lmax[2]) * 0.5f};
-        // Body center = piece pos + Ry(yaw) * local center; the yaw mapping
-        // (x' = x*c + z*s, z' = -x*s + z*c) is the play-test-validated Build()
-        // convention.
-        desc.position = {ctr[0] * cyaw + ctr[2] * syaw + pos[0], ctr[1] + pos[1],
-                         -ctr[0] * syaw + ctr[2] * cyaw + pos[2]};
-        desc.shape.dimensions = {std::max(std::fabs((lmax[0] - lmin[0]) * 0.5f), kMinHalfExtentM),
-                                 std::max(std::fabs((lmax[1] - lmin[1]) * 0.5f), kMinHalfExtentM),
-                                 std::max(std::fabs((lmax[2] - lmin[2]) * 0.5f), kMinHalfExtentM)};
-        desc.rotation = {0.0f, ryRad, 0.0f}; // radians (see comment above)
-        desc.material.friction = 0.7f;
-        desc.material.restitution = 0.0f;
-        desc.collisionGroup = CollisionLayers::WorldStatic;
-        desc.collisionMask = CollisionLayers::All;
-        desc.name = name;
-
-        std::shared_ptr<PhysicsBody> body = m_physics->CreateBody(desc);
-        if (!body)
-            return nullptr;
-        // Defensive layer push, mirroring Build() (never rely on the default).
-        body->SetCollisionGroup(CollisionLayers::WorldStatic);
-        body->SetCollisionMask(CollisionLayers::All);
-        m_bodies.push_back(body);
-        return body;
-    }
-
-    std::shared_ptr<::PhysicsBody> TFWorldCollision::AddObbPart(const float piecePos[3], float pieceYawDeg,
-                                                                const float partOffset[3], const float partSize[3],
-                                                                float partYawDeg, const std::string& name)
-    {
-        if (!m_physics)
-            return nullptr; // Jolt absent: decor stays walk-through, like the scene set
-        if (m_bodies.size() >= kMaxBodies)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] world collision: body cap %zu reached - no body for %s",
-                           kMaxBodies, name.c_str());
-            return nullptr;
-        }
-
-        PhysicsBodyDesc desc;
-        desc.type = PhysicsBodyType::Static;
-        desc.mass = 0.0f;
-        desc.shape.type = CollisionShapeType::Box;
-
-        // W11 gate-passages: the part box is authored MODEL-LOCAL (center =
-        // partOffset, FULL size = partSize, local yaw = partYawDeg) and gets
-        // composed with the owning piece's world transform. Body center =
-        // piecePos + Ry(pieceYaw) * partOffset — the exact AddModelObb yaw
-        // mapping (x' = x*c + z*s, z' = -x*s + z*c), play-test-validated.
-        // Yaw about a common axis composes additively, so the body's rotation
-        // is pieceYaw + partYaw. desc.rotation is RADIANS (see AddModelObb);
-        // both yaw arguments arrive in the scene/Transform DEGREES convention.
-        const float ryPieceRad = pieceYawDeg * kDegToRad;
-        const float cyaw = std::cos(ryPieceRad), syaw = std::sin(ryPieceRad);
-        desc.position = {partOffset[0] * cyaw + partOffset[2] * syaw + piecePos[0], partOffset[1] + piecePos[1],
-                         -partOffset[0] * syaw + partOffset[2] * cyaw + piecePos[2]};
-        desc.shape.dimensions = {std::max(std::fabs(partSize[0]) * 0.5f, kMinHalfExtentM),
-                                 std::max(std::fabs(partSize[1]) * 0.5f, kMinHalfExtentM),
-                                 std::max(std::fabs(partSize[2]) * 0.5f, kMinHalfExtentM)};
-        desc.rotation = {0.0f, (pieceYawDeg + partYawDeg) * kDegToRad, 0.0f}; // radians (see comment above)
-        desc.material.friction = 0.7f;
-        desc.material.restitution = 0.0f;
-        desc.collisionGroup = CollisionLayers::WorldStatic;
-        desc.collisionMask = CollisionLayers::All;
-        desc.name = name;
-
-        std::shared_ptr<PhysicsBody> body = m_physics->CreateBody(desc);
-        if (!body)
-            return nullptr;
-        // Defensive layer push, mirroring Build() (never rely on the default).
-        body->SetCollisionGroup(CollisionLayers::WorldStatic);
-        body->SetCollisionMask(CollisionLayers::All);
-        m_bodies.push_back(body);
-        return body;
-    }
-
-    void TFWorldCollision::RemoveBody(const std::shared_ptr<::PhysicsBody>& body)
-    {
-        if (!body)
-            return;
-        const auto it = std::find(m_bodies.begin(), m_bodies.end(), body);
-        if (it == m_bodies.end())
-            return; // foreign / already removed
-        if (m_physics)
-            m_physics->RemoveBody(*it);
-        m_bodies.erase(it);
-    }
-
-    void TFWorldCollision::OptimizeBroadPhase()
-    {
-        if (m_physics)
-            m_physics->OptimizeBroadPhase();
-    }
-
     void TFWorldCollision::Shutdown()
     {
         if (m_physics)
@@ -501,157 +360,6 @@ namespace Terrafront
         m_bodies.clear();
         m_modelAabbCache.clear();
         m_physics = nullptr;
-    }
-
-    // -----------------------------------------------------------------------
-    // Shared move resolver (server integrator + client prediction)
-    // -----------------------------------------------------------------------
-
-    void TFWorldCollision::ResolveMove(const float prevPos[3], float pos[3], float vel[3], bool* grounded) const
-    {
-        if (!IsActive())
-            return;
-
-        bool anyHit = false;
-
-        // -------------------------------------------------------------------
-        // 1) Horizontal sweep + slide (unchanged from the 2026-07-10 wave).
-        // -------------------------------------------------------------------
-        float curX = pos[0]; // resolved column defaults to the integrated XZ
-        float curZ = pos[2]; // (vertical resolve below runs even without XZ motion)
-
-        float remX = pos[0] - prevPos[0];
-        float remZ = pos[2] - prevPos[2];
-        if (remX * remX + remZ * remZ >= 1.0e-10f)
-        {
-            // Swept capsule: bottom lifted kTFStepUpM above the feet so standing on
-            // plateau-flush mesa tops (and stepping over low curbs) never registers
-            // as a wall hit; top at the pawn head. CapsuleCastFiltered's `height` is
-            // the cylindrical section (total = height + 2 * radius).
-            const float capTotal = kTFPawnHeightM - kTFStepUpM;          // 1.45
-            const float capCyl = capTotal - 2.0f * kTFPawnRadiusM;       // 0.65
-            const float centerY = pos[1] + kTFStepUpM + capTotal * 0.5f; // feet + 1.075
-
-            curX = prevPos[0];
-            curZ = prevPos[2];
-
-            for (int iter = 0; iter < kTFSlideIters; ++iter)
-            {
-                const float len = std::sqrt(remX * remX + remZ * remZ);
-                if (len < 1.0e-5f)
-                    break;
-
-                const XMFLOAT3 from{curX, centerY, curZ};
-                const XMFLOAT3 to{curX + remX, centerY, curZ + remZ};
-                const RaycastHit hit =
-                    m_physics->CapsuleCastFiltered(kTFPawnRadiusM, capCyl, from, to, CollisionLayers::MovementMask);
-                if (!hit.hasHit)
-                {
-                    curX += remX;
-                    curZ += remZ;
-                    break;
-                }
-                anyHit = true;
-
-                const float dirX = remX / len;
-                const float dirZ = remZ / len;
-                const float travel = std::clamp(hit.distance - kTFMoveSkinM, 0.0f, len);
-                curX += dirX * travel;
-                curZ += dirZ * travel;
-
-                // Slide the remainder along the surface (horizontal normal only;
-                // shape-cast normals are true outward unit normals as of today).
-                float nX = hit.normal.x;
-                float nZ = hit.normal.z;
-                const float nLen = std::sqrt(nX * nX + nZ * nZ);
-                if (nLen < 1.0e-4f)
-                    break; // floor/ceiling contact: nothing to slide along
-                nX /= nLen;
-                nZ /= nLen;
-
-                float leftX = dirX * (len - travel);
-                float leftZ = dirZ * (len - travel);
-                const float into = leftX * nX + leftZ * nZ;
-                if (into < 0.0f)
-                {
-                    leftX -= into * nX;
-                    leftZ -= into * nZ;
-                }
-                remX = leftX;
-                remZ = leftZ;
-
-                // Kill the velocity component pushing into the surface so the next
-                // tick does not re-accelerate into the wall.
-                const float vInto = vel[0] * nX + vel[2] * nZ;
-                if (vInto < 0.0f)
-                {
-                    vel[0] -= vInto * nX;
-                    vel[2] -= vInto * nZ;
-                }
-            }
-        }
-
-        pos[0] = curX;
-        pos[2] = curZ;
-
-        // -------------------------------------------------------------------
-        // 2) Vertical resolve at the resolved column (collision-v2). Uses the
-        //    FULL-height capsule (bottom at the feet — no step-up lift, or the
-        //    pawn would sink kTFStepUpM into every roof before contact).
-        //    TFMoveStep's terrain clamp already ran, so a falling pawn may
-        //    arrive here already snapped to terrain BELOW a roof — sweeping
-        //    from prevPos.y catches the roof on the way down regardless. The
-        //    caller's terrain re-clamp stays the floor-of-last-resort.
-        // -------------------------------------------------------------------
-        const float fullCyl = kTFPawnHeightM - 2.0f * kTFPawnRadiusM; // 1.0
-        const float halfTotal = kTFPawnHeightM * 0.5f;                // 0.9
-        const float dy = pos[1] - prevPos[1];
-
-        if (dy > 1.0e-6f && vel[1] > 0.0f)
-        {
-            // Rising (jump): stop under static-body undersides. One cheap cast;
-            // any hit blocks — the horizontal pass keeps the column skin-clear
-            // of walls, so a straight-up sweep only meets real overheads.
-            const XMFLOAT3 from{curX, prevPos[1] + halfTotal, curZ};
-            const XMFLOAT3 to{curX, prevPos[1] + halfTotal + dy, curZ};
-            const RaycastHit hit =
-                m_physics->CapsuleCastFiltered(kTFPawnRadiusM, fullCyl, from, to, CollisionLayers::MovementMask);
-            if (hit.hasHit)
-            {
-                pos[1] = prevPos[1] + std::clamp(hit.distance - kTFMoveSkinM, 0.0f, dy);
-                if (vel[1] > 0.0f)
-                    vel[1] = 0.0f; // head bonk: kill the ascent
-                anyHit = true;
-            }
-        }
-        else if (vel[1] <= 0.0f && dy <= 1.0e-6f)
-        {
-            // Descending (or standing on a body): land on static-body tops.
-            // kTFLandSnapM extends the sweep past the integrated position so
-            // the per-tick gravity droop (~5 mm at 60 Hz) keeps re-finding the
-            // roof through the kTFMoveSkinM hover gap — grounded stays stable
-            // instead of strobing (friction/jump would flicker otherwise).
-            const float sweepLen = -dy + kTFLandSnapM;
-            const XMFLOAT3 from{curX, prevPos[1] + halfTotal, curZ};
-            const XMFLOAT3 to{curX, prevPos[1] + halfTotal - sweepLen, curZ};
-            const RaycastHit hit =
-                m_physics->CapsuleCastFiltered(kTFPawnRadiusM, fullCyl, from, to, CollisionLayers::MovementMask);
-            if (hit.hasHit && hit.normal.y > kTFWalkableNormalY)
-            {
-                // Walkable top: stand skin-height above the contact. Side/edge
-                // grazes (normal mostly horizontal) are NOT landings — the pawn
-                // keeps falling and the terrain clamp remains the backstop.
-                pos[1] = prevPos[1] - std::clamp(hit.distance - kTFMoveSkinM, 0.0f, sweepLen);
-                if (vel[1] < 0.0f)
-                    vel[1] = 0.0f;
-                if (grounded)
-                    *grounded = true; // only ever SET here; TFMoveStep owns clearing
-                anyHit = true;
-            }
-        }
-
-        if (anyHit)
-            ++m_blockedMoves; // diagnostic only (tf_validate); see header note
     }
 
 } // namespace Terrafront

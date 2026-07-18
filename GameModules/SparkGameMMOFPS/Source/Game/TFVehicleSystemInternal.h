@@ -12,6 +12,7 @@ namespace Terrafront
     {
 
         inline constexpr float kRadToDeg = 57.2957795f;
+        inline constexpr float kPi = 3.14159265f;
         inline constexpr float kWorldMin = 0.0f;
         inline constexpr float kWorldMax = 4096.0f;
 
