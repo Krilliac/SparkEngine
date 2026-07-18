@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "include": {
+    "rootDocuments": ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "TROUBLESHOOTING.md", "CODE_OF_CONDUCT.md", "ASSET_DESIGN_BRIEF.md"],
+    "recursiveMarkdownRoots": ["wiki", "docs", "Assets", "cmake", "GameModules", "Templates", "SparkBuild", "SparkConsole", "SparkCrashReporter", "SparkDaemon", "SparkInstaller", "SparkLauncher", "SparkSDK", "SparkShaderCompiler", "Tests", "Tools", "tools"]
+  },
+  "excludePrefixes": ["docs/superpowers/", ".claude/", ".github/prompts/", "ThirdParty/"],
+  "excludePaths": ["wiki/_Sidebar.md", "wiki/_Template.md", "CLAUDE.md", "AGENTS.md"],
+  "sections": [
+    {"id": "getting-started", "label": "Getting started", "description": "Build, run, and orient yourself in SparkEngine."},
+    {"id": "engine-systems", "label": "Engine systems", "description": "Runtime systems, gameplay foundations, and lifecycle behavior."},
+    {"id": "rendering", "label": "Rendering", "description": "RHI backends, graphics features, shaders, and rendering research."},
+    {"id": "tools-workflows", "label": "Tools and workflows", "description": "Editor, asset, packaging, and authoring workflows."},
+    {"id": "platforms", "label": "Platforms", "description": "Platform requirements, input, accessibility, mobile, VR, and portability."},
+    {"id": "api-reference", "label": "API reference", "description": "Generated indexes, source structure, symbols, and hierarchy."},
+    {"id": "specifications", "label": "Specifications", "description": "Formats, protocols, plugin contracts, and stable boundaries."},
+    {"id": "architecture", "label": "Architecture", "description": "Subsystem boundaries, dependency rules, and engine structure."},
+    {"id": "advanced-engineering", "label": "Advanced engineering", "description": "Testing, profiling, safety, performance, and operations."},
+    {"id": "contributor-workflow", "label": "Contributor workflow", "description": "Build, CI, code quality, and collaboration practices."},
+    {"id": "game-modules", "label": "Game modules", "description": "Genre modules, templates, and reference slices."},
+    {"id": "project-status", "label": "Status and readiness", "description": "Repository-authored maturity snapshots and known gaps."},
+    {"id": "roadmap-plans", "label": "Roadmap and plans", "description": "Forward-looking plans, milestones, and proposals."},
+    {"id": "research", "label": "Research", "description": "Comparative research and ideas; not implementation promises."},
+    {"id": "project-governance", "label": "Project and governance", "description": "Overview, changelog, contribution, conduct, license, and security."},
+    {"id": "toolchain", "label": "Toolchain", "description": "Standalone tools, installers, tests, and documentation automation."},
+    {"id": "repository-atlas", "label": "Repository atlas", "description": "Pages derived directly from manifests and source layout."}
+  ],
+  "classificationRules": [
+    {"prefix": "wiki/getting-started/", "section": "getting-started", "kind": "guide"},
+    {"prefix": "wiki/subsystems/", "section": "engine-systems", "kind": "guide"},
+    {"prefix": "wiki/graphics/", "section": "rendering", "kind": "guide"},
+    {"prefix": "wiki/gameplay-tools/", "section": "tools-workflows", "kind": "guide"},
+    {"prefix": "wiki/platform/", "section": "platforms", "kind": "guide"},
+    {"prefix": "wiki/reference/", "section": "api-reference", "kind": "generated", "provenance": "derived"},
+    {"prefix": "wiki/specifications/", "section": "specifications", "kind": "specification"},
+    {"prefix": "wiki/development/", "section": "contributor-workflow", "kind": "guide"},
+    {"prefix": "wiki/research/", "section": "research", "kind": "research"},
+    {"prefix": "docs/architecture/", "section": "architecture", "kind": "specification"},
+    {"prefix": "docs/api/", "section": "api-reference", "kind": "generated", "provenance": "derived"},
+    {"prefix": "docs/specs/", "section": "specifications", "kind": "specification"},
+    {"prefix": "docs/plans/", "section": "roadmap-plans", "kind": "proposal"},
+    {"prefix": "docs/status/", "section": "project-status", "kind": "status"},
+    {"prefix": "docs/guides/", "section": "tools-workflows", "kind": "guide"},
+    {"prefix": "docs/wine-upstream/", "section": "platforms", "kind": "engineering-note"},
+    {"prefix": "docs/tooling/", "section": "toolchain", "kind": "reference"},
+    {"prefix": "GameModules/", "section": "game-modules", "kind": "reference"},
+    {"prefix": "Templates/", "section": "game-modules", "kind": "reference"},
+    {"prefix": "Assets/", "section": "tools-workflows", "kind": "reference"}
+  ],
+  "featuredSourcePaths": [
+    "wiki/getting-started/Getting-Started.md",
+    "wiki/getting-started/Quick-Start-Tutorial.md",
+    "wiki/getting-started/Creating-a-Game-Module.md",
+    "wiki/subsystems/Entity-Component-System.md",
+    "wiki/graphics/RHI-Abstraction-Layer.md",
+    "wiki/reference/API-Reference.md",
+    "docs/status/PROJECT_STATUS.md",
+    "GameModules/SparkGameMMOFPS/DESIGN.md",
+    "docs/readiness/ENGINE_READINESS_HANDOFF.md"
+  ],
+  "routeOverrides": {
+    "wiki/Home.md": "home",
+    "docs/TERRAFRONT_MULTIMAP.md": "game-modules/terrafront-multimap",
+    "docs/README.md": "toolchain/documentation-index",
+    "docs/readiness/ENGINE_READINESS_HANDOFF.md": "project-status/engine-readiness-handoff"
+  }
+}

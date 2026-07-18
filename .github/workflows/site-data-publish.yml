@@ -1,0 +1,116 @@
+name: Publish Repository Site Data
+
+on:
+  workflow_run:
+    workflows: ["Build SparkEngine"]
+    branches: [Working]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact commit to publish (defaults to the dispatch commit)
+        required: false
+        type: string
+
+concurrency:
+  group: sparkengine-site-data-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  site-data-publish:
+    name: Publish exact-commit site-data branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_COMMIT: ${{ github.event.workflow_run.head_sha || inputs.source_commit || github.sha }}
+      SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+      # Manual dispatch is deliberately blocked; only Build SparkEngine may
+      # supply a successful exact-commit conclusion.
+      EVIDENCE_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'failure' }}
+      EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id || github.run_id }}
+    steps:
+      - name: Checkout the evaluated source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_COMMIT }}
+          fetch-depth: 0
+
+      - name: Refuse to replace a newer Working snapshot
+        id: branch-head
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin Working:refs/remotes/origin/Working
+          if test "$SOURCE_COMMIT" = "$(git rev-parse refs/remotes/origin/Working)"; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping superseded commit $SOURCE_COMMIT"
+          fi
+
+      - name: Validate repository contract before publication
+        if: steps.branch-head.outputs.publish == 'true'
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          python3 tools/site-data/validate.py
+          python3 tools/site-data/render_handoff.py --check
+
+      - name: Prepare the site-data publication worktree
+        if: steps.branch-head.outputs.publish == 'true'
+        env:
+          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-publish
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin site-data >/dev/null 2>&1; then
+            git fetch --no-tags origin site-data:refs/remotes/origin/site-data
+            git worktree add --detach "$PUBLISH_DIR" refs/remotes/origin/site-data
+          else
+            git worktree add --detach "$PUBLISH_DIR" "$SOURCE_COMMIT"
+            git -C "$PUBLISH_DIR" switch --orphan site-data
+          fi
+
+      - name: Generate validated publication payload
+        if: steps.branch-head.outputs.publish == 'true'
+        env:
+          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-publish
+        run: |
+          set -euo pipefail
+          COMMITTED_AT="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          python3 tools/site-data/generate.py \
+            --output "$PUBLISH_DIR" \
+            --preserve-existing \
+            --retain 3 \
+            --source-commit "$SOURCE_COMMIT" \
+            --source-branch "$SOURCE_BRANCH" \
+            --committed-at "$COMMITTED_AT" \
+            --evidence-commit "$SOURCE_COMMIT" \
+            --ci-conclusion "$EVIDENCE_CONCLUSION" \
+            --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}"
+          python3 tools/site-data/validate.py --published "$PUBLISH_DIR"
+
+      - name: Commit and publish site-data last
+        if: steps.branch-head.outputs.publish == 'true'
+        env:
+          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-publish
+        run: |
+          set -euo pipefail
+          # Generation can take long enough for Working to advance after the
+          # earlier eligibility check. Never let a superseded run replace the
+          # latest exact-commit publication, even briefly.
+          git fetch --no-tags origin Working:refs/remotes/origin/Working
+          if test "$SOURCE_COMMIT" != "$(git rev-parse refs/remotes/origin/Working)"; then
+            echo "Skipping superseded commit $SOURCE_COMMIT"
+            exit 0
+          fi
+          git -C "$PUBLISH_DIR" config user.name "github-actions[bot]"
+          git -C "$PUBLISH_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$PUBLISH_DIR" add --all
+          if git -C "$PUBLISH_DIR" diff --cached --quiet; then
+            echo "site-data already matches $SOURCE_COMMIT"
+            exit 0
+          fi
+          git -C "$PUBLISH_DIR" commit -m "site-data: publish ${SOURCE_COMMIT:0:12} (${EVIDENCE_CONCLUSION})"
+          git -C "$PUBLISH_DIR" push origin HEAD:site-data

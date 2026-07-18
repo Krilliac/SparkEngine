@@ -7,6 +7,29 @@ Master index for every SparkEngine documentation artifact, grouped by type. Each
 
 ---
 
+## Repository-driven website and readiness handoff
+
+The website does not maintain a second copy of engine status, counts, learning paths, legal framing, or documentation. The controlling inputs are:
+
+- [`site/content.json`](site/content.json) — repository-owned public wording and navigation data.
+- [`site/readiness.json`](site/readiness.json) — capability dimensions, release gates, promotion rules, and execution waves.
+- [`site/docs-catalog.json`](site/docs-catalog.json) — recursive documentation inclusion, classification, and routes.
+- [`readiness/work-items/`](readiness/work-items/) — dependency-ordered, code-session-ready implementation briefs.
+- [`readiness/ENGINE_READINESS_HANDOFF.md`](readiness/ENGINE_READINESS_HANDOFF.md) — generated complete handoff; do not edit it directly.
+
+Validate and regenerate locally:
+
+```bash
+python3 tools/site-data/validate.py
+python3 tools/site-data/render_handoff.py --check
+python3 tools/site-data/generate.py --output .site-data
+python3 tools/site-data/validate.py --published .site-data
+```
+
+`.github/workflows/site-data.yml` proves deterministic generation on pull requests and pushes. After the exact `Working` commit's `Build SparkEngine` run completes, `.github/workflows/site-data-publish.yml` publishes a hash-verified snapshot to the `site-data` branch. A failed/cancelled build publishes the exact commit with a blocked publication state; an invalid contract publishes nothing. Application/layout changes still require the website's own deployment workflow.
+
+---
+
 ## Categories
 
 | Folder | Contents | Index |

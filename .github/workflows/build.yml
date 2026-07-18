@@ -3,14 +3,9 @@ name: Build SparkEngine
 on:
   push:
     branches: [ main, develop, Working, 'feature/**', 'claude/**' ]
-    paths-ignore:
-      - '**.md'
-      - 'wiki/**'
-      - 'docs/**'
-      - '.claude/**'
-      - 'LICENSE'
   pull_request:
     branches: [ main, develop, Working ]
+  workflow_dispatch:
 
 # Cancel in-progress runs on the same branch/PR when a new commit is pushed
 concurrency:

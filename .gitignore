@@ -469,6 +469,9 @@ docs/output/
 docs/.api_checksums
 docs/.doc_checksums
 
+# Repository-generated website bundle (published by .github/workflows/site-data-publish.yml)
+/.site-data/
+
 # CTest artifacts
 Testing/
 
