@@ -5,41 +5,39 @@ on:
     workflows: ["Build SparkEngine"]
     branches: [Working]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      source_commit:
-        description: Exact commit to publish (defaults to the dispatch commit)
-        required: false
-        type: string
 
 concurrency:
   group: sparkengine-site-data-publish
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  SOURCE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+  SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch }}
+  EVIDENCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+  EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id }}
 
 jobs:
-  site-data-publish:
-    name: Publish exact-commit site-data branch
+  site-data-prepare:
+    name: Prove and prepare exact-commit site data
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      SOURCE_COMMIT: ${{ github.event.workflow_run.head_sha || inputs.source_commit || github.sha }}
-      SOURCE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-      # Manual dispatch is deliberately blocked; only Build SparkEngine may
-      # supply a successful exact-commit conclusion.
-      EVIDENCE_CONCLUSION: ${{ github.event.workflow_run.conclusion || 'failure' }}
-      EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id || github.run_id }}
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.final-head.outputs.publish }}
     steps:
-      - name: Checkout the evaluated source commit
-        uses: actions/checkout@v4
+      - name: Checkout the evaluated source commit without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ env.SOURCE_COMMIT }}
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Refuse to replace a newer Working snapshot
-        id: branch-head
+      - name: Refuse to prepare a superseded Working snapshot
+        id: initial-head
         run: |
           set -euo pipefail
           git fetch --no-tags origin Working:refs/remotes/origin/Working
@@ -50,8 +48,8 @@ jobs:
             echo "Skipping superseded commit $SOURCE_COMMIT"
           fi
 
-      - name: Validate repository contract before publication
-        if: steps.branch-head.outputs.publish == 'true'
+      - name: Repeat the complete repository proof
+        if: steps.initial-head.outputs.publish == 'true'
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
@@ -76,24 +74,22 @@ jobs:
             "$RUNNER_TEMP/.site-data-proof-a" \
             "$RUNNER_TEMP/.site-data-proof-b"
 
-      - name: Prepare the site-data publication worktree
-        if: steps.branch-head.outputs.publish == 'true'
+      - name: Seed publication payload from the current public site-data branch
+        if: steps.initial-head.outputs.publish == 'true'
         env:
-          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-publish
+          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
         run: |
           set -euo pipefail
+          mkdir -p "$PUBLISH_DIR"
           if git ls-remote --exit-code --heads origin site-data >/dev/null 2>&1; then
             git fetch --no-tags origin site-data:refs/remotes/origin/site-data
-            git worktree add --detach "$PUBLISH_DIR" refs/remotes/origin/site-data
-          else
-            git worktree add --detach "$PUBLISH_DIR" "$SOURCE_COMMIT"
-            git -C "$PUBLISH_DIR" switch --orphan site-data
+            git archive refs/remotes/origin/site-data | tar -x -C "$PUBLISH_DIR"
           fi
 
-      - name: Generate validated publication payload
-        if: steps.branch-head.outputs.publish == 'true'
+      - name: Generate and validate the retained publication payload
+        if: steps.initial-head.outputs.publish == 'true'
         env:
-          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-publish
+          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
         run: |
           set -euo pipefail
           COMMITTED_AT="$(git show -s --format=%cI "$SOURCE_COMMIT")"
@@ -109,26 +105,88 @@ jobs:
             --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}"
           python3 tools/site-data/validate.py --published "$PUBLISH_DIR"
 
-      - name: Commit and publish site-data last
-        if: steps.branch-head.outputs.publish == 'true'
-        env:
-          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-publish
+      - name: Recheck Working immediately before handing off the payload
+        id: final-head
+        if: steps.initial-head.outputs.publish == 'true'
         run: |
           set -euo pipefail
-          # Generation can take long enough for Working to advance after the
-          # earlier eligibility check. Never let a superseded run replace the
-          # latest exact-commit publication, even briefly.
           git fetch --no-tags origin Working:refs/remotes/origin/Working
-          if test "$SOURCE_COMMIT" != "$(git rev-parse refs/remotes/origin/Working)"; then
+          if test "$SOURCE_COMMIT" = "$(git rev-parse refs/remotes/origin/Working)"; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping superseded commit $SOURCE_COMMIT"
+          fi
+
+      - name: Upload the credential-free publication payload
+        if: steps.final-head.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sparkengine-site-data-publication-${{ env.SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/sparkengine-site-data-payload
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  site-data-publish:
+    name: Publish proven payload with isolated write permission
+    needs: site-data-prepare
+    if: needs.site-data-prepare.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download the proven publication payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sparkengine-site-data-publication-${{ env.SOURCE_COMMIT }}
+          path: ${{ runner.temp }}/sparkengine-site-data-payload
+
+      - name: Recheck Working, commit, recheck again, and publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PAYLOAD_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
+          PUBLISH_REPO: ${{ runner.temp }}/sparkengine-site-data-repository
+        run: |
+          set -euo pipefail
+          test -f "$PAYLOAD_DIR/latest.json"
+          test -d "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT"
+          test ! -e "$PAYLOAD_DIR/.git"
+
+          git init "$PUBLISH_REPO"
+          git -C "$PUBLISH_REPO" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$PUBLISH_REPO" fetch --no-tags origin Working:refs/remotes/origin/Working
+          if test "$SOURCE_COMMIT" != "$(git -C "$PUBLISH_REPO" rev-parse refs/remotes/origin/Working)"; then
             echo "Skipping superseded commit $SOURCE_COMMIT"
             exit 0
           fi
-          git -C "$PUBLISH_DIR" config user.name "github-actions[bot]"
-          git -C "$PUBLISH_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C "$PUBLISH_DIR" add --all
-          if git -C "$PUBLISH_DIR" diff --cached --quiet; then
+
+          if git -C "$PUBLISH_REPO" ls-remote --exit-code --heads origin site-data >/dev/null 2>&1; then
+            git -C "$PUBLISH_REPO" fetch --no-tags origin site-data:refs/remotes/origin/site-data
+            git -C "$PUBLISH_REPO" switch --create site-data refs/remotes/origin/site-data
+            git -C "$PUBLISH_REPO" rm -r --force .
+          else
+            git -C "$PUBLISH_REPO" switch --orphan site-data
+          fi
+          cp -a "$PAYLOAD_DIR"/. "$PUBLISH_REPO"/
+
+          git -C "$PUBLISH_REPO" config user.name "github-actions[bot]"
+          git -C "$PUBLISH_REPO" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$PUBLISH_REPO" add --all
+          if git -C "$PUBLISH_REPO" diff --cached --quiet; then
             echo "site-data already matches $SOURCE_COMMIT"
             exit 0
           fi
-          git -C "$PUBLISH_DIR" commit -m "site-data: publish ${SOURCE_COMMIT:0:12} (${EVIDENCE_CONCLUSION})"
-          git -C "$PUBLISH_DIR" push origin HEAD:site-data
+          git -C "$PUBLISH_REPO" commit -m "site-data: publish ${SOURCE_COMMIT:0:12} (${EVIDENCE_CONCLUSION})"
+
+          # Minimize the unavoidable cross-ref race: compare after the commit
+          # exists and immediately before the only write-capable operation.
+          git -C "$PUBLISH_REPO" fetch --no-tags origin Working:refs/remotes/origin/Working
+          if test "$SOURCE_COMMIT" != "$(git -C "$PUBLISH_REPO" rev-parse refs/remotes/origin/Working)"; then
+            echo "Skipping superseded commit $SOURCE_COMMIT"
+            exit 0
+          fi
+          git -C "$PUBLISH_REPO" remote set-url origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$PUBLISH_REPO" push origin HEAD:site-data

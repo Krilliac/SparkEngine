@@ -62,7 +62,7 @@ def regenerate_api_docs(committed_at: str) -> None:
         raise SiteDataError("missing API documentation generator: docs/generate-api-docs.sh")
 
     environment = os.environ.copy()
-    environment["SPARKENGINE_DOC_GENERATED_AT"] = committed_at
+    environment["SPARKENGINE_DOC_SOURCE_COMMITTED_AT"] = committed_at
     try:
         result = subprocess.run(
             ["bash", str(script), "generate"],
@@ -84,6 +84,52 @@ def regenerate_api_docs(committed_at: str) -> None:
     if not (api_root / "README.md").is_file() or len(pages) < 3:
         raise SiteDataError(
             "API documentation generator did not produce its index and reference pages"
+        )
+    manifest_path = api_root / ".generation.json"
+    symbols_path = api_root / ".symbols.tsv"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SiteDataError("API documentation generation manifest is missing or invalid") from error
+
+    source_roots = [
+        REPO_ROOT / "SparkEngine" / "Source",
+        REPO_ROOT / "SparkEditor" / "Source",
+        REPO_ROOT / "SparkConsole" / "src",
+        REPO_ROOT / "SparkShaderCompiler" / "src",
+        REPO_ROOT / "SparkSDK",
+        REPO_ROOT / "Tests",
+        *sorted((REPO_ROOT / "GameModules").glob("*/Source")),
+    ]
+    expected_headers = sum(
+        1
+        for root in source_roots
+        if root.is_dir()
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".h", ".hpp"}
+    )
+    expected_cpp = sum(
+        1
+        for root in source_roots
+        if root.is_dir()
+        for path in root.rglob("*.cpp")
+        if path.is_file()
+    )
+    try:
+        symbol_records = sum(1 for _ in symbols_path.open(encoding="utf-8", errors="replace"))
+    except OSError as error:
+        raise SiteDataError("API documentation symbol index is missing") from error
+    expected_manifest = {
+        "sourceCommittedAt": committed_at,
+        "headersScanned": expected_headers,
+        "cppFilesScanned": expected_cpp,
+        "markdownPages": len(pages),
+        "symbolRecords": symbol_records,
+    }
+    if manifest != expected_manifest:
+        raise SiteDataError(
+            "API documentation generation manifest does not match the complete source corpus: "
+            f"expected {expected_manifest}, got {manifest}"
         )
 
 
