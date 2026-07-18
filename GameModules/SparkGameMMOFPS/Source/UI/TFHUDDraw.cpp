@@ -8,8 +8,9 @@
  * pattern — same class, feature-owned translation units). TFHUD.cpp keeps the
  * lifecycle, feed-in setters and pawn-state gather; the chat window lives in
  * TFHUDChat.cpp and the W6 combat half (killfeed, damage pings, death panel +
- * actions, minimap v2) in TFHUDCombat.cpp. Shared internals (kHitmarkerDuration,
- * FactionCol) live in TFHUDInternal.h.
+ * actions, minimap v2) in TFHUDCombat.cpp (state) + TFHUDCombatDraw.cpp
+ * (drawing). Shared internals (kHitmarkerDuration, FactionCol) live in
+ * TFHUDInternal.h.
  */
 #include "UI/TFHUD.h"
 

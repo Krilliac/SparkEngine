@@ -181,7 +181,7 @@ namespace Terrafront
         WeaponId FindWeaponForSlotKey(const std::string& slotKey, FactionId faction) const;
         WeaponId FindToolWeapon(const std::string& toolKey) const;
 
-        // --- remote/distant fire audio (W8 audio-polish, TFWeaponSystem.cpp) ---
+        // --- remote/distant fire audio (W8 audio-polish, TFWeaponSystemRemoteFire.cpp) ---
         bool LocalListenerPos(float out[3]) const;
         static const char* DistantTailFor(FactionId faction);
 

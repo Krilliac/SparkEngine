@@ -5,8 +5,9 @@
  *
  * OWNERSHIP: this header + the TFHUD*.cpp translation units (TFHUD.cpp core,
  * TFHUDDraw.cpp overlay drawing, TFHUDChat.cpp chat, TFHUDCombat.cpp combat
- * half, TFHUDInternal.h shared internals) belong to ONE implementation agent
- * (split per the repo file-size rule).
+ * state, TFHUDCombatDraw.cpp combat drawing, TFHUDInternal.h shared
+ * internals) belong to ONE implementation agent (split per the repo
+ * file-size rule).
  * The lifecycle below is the frozen module contract (called from Main.cpp) —
  * extend this class freely, but do not change the lifecycle signatures.
  *

@@ -531,6 +531,7 @@ add_executable(SparkTests
     # SparkTests (the TFDatabase.cpp pattern above).
     TestTFOutfitStore.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp"
     TestTFSecondaryMotion.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp"
     # W13 anti-cheat lane (TFServerValidation) -- movement-clamp, fire-origin,

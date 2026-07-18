@@ -2,9 +2,10 @@
  * @file TFClientNetView.cpp
  * @brief TFClientNet presentation plumbing: remote-pawn interpolation, the
  *        first-person camera and the debug panel (same class, split per repo
- *        file-size rules — core pump/prediction logic lives in TFClientNet.cpp,
- *        the TFMsg handlers in TFClientNetHandlers.cpp and the loopback/local
- *        feedback path in TFClientNetLoopback.cpp).
+ *        file-size rules — connection/send core lives in TFClientNet.cpp, the
+ *        input pump/prediction in TFClientNetInput.cpp, the TFMsg handlers in
+ *        TFClientNetHandlers.cpp and the loopback/local feedback path in
+ *        TFClientNetLoopback.cpp).
  */
 #include "Net/TFClientNet.h"
 
