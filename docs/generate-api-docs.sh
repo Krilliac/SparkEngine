@@ -4,12 +4,13 @@
 # Replaces Doxygen — parses C++ headers and generates markdown API reference
 # Works in any environment (no doxygen/graphviz required)
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$SCRIPT_DIR/api"
 SYMBOLS_TSV="$OUTPUT_DIR/.symbols.tsv"
+SOURCE_COMMITTED_AT="${SPARKENGINE_DOC_SOURCE_COMMITTED_AT:-$(date '+%Y-%m-%d %H:%M:%S')}"
 
 # Source directories to scan (auto-discovers every GameModules/*/Source)
 SOURCE_DIRS=(
@@ -75,7 +76,7 @@ parse_header() {
 
     # Extract @file, @brief from the top-of-file doc comment
     local file_brief=""
-    file_brief=$(sed -n '/\/\*\*/,/\*\//{ s/.*@brief \(.*\)/\1/p; }' "$file" | head -1)
+    file_brief=$(sed -n '/\/\*\*/,/\*\//{ /@brief /{ s/.*@brief \(.*\)/\1/; p; q; } }' "$file")
 
     # Extract classes/structs with their doc comments
     local classes=""
@@ -328,7 +329,7 @@ generate_index() {
     {
         echo "# SparkEngine API Reference"
         echo ""
-        echo "> Auto-generated from source headers on $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "> Auto-generated for source committed at $SOURCE_COMMITTED_AT"
         echo ">"
         echo "> **Generator:** \`docs/generate-api-docs.sh\` (no Doxygen required)"
         echo ""
@@ -395,7 +396,7 @@ generate_index() {
         echo "|--------|-------|"
         echo "| Headers scanned | $header_count |"
         echo "| API pages generated | $page_count |"
-        echo "| Last generated | $(date '+%Y-%m-%d %H:%M:%S') |"
+        echo "| Source commit timestamp | $SOURCE_COMMITTED_AT |"
 
     } > "$index_file"
 }
@@ -423,7 +424,7 @@ generate_component_index() {
             echo ""
 
             # Extract struct names that look like components
-            grep -E '^\s*struct\s+[A-Z][A-Za-z0-9]+' "$cfile" | while read -r sline; do
+            while read -r sline; do
                 local sname
                 sname=$(echo "$sline" | sed 's/.*struct\s\+//' | sed 's/[:{; ].*//' | tr -d ' ')
                 [ -z "$sname" ] && continue
@@ -437,7 +438,7 @@ generate_component_index() {
                 else
                     echo "- **\`$sname\`**"
                 fi
-            done
+            done < <(grep -E '^\s*struct\s+[A-Z][A-Za-z0-9]+' "$cfile" || true)
             echo ""
         done
 
@@ -543,6 +544,9 @@ main() {
             local page_count sym_count
             page_count=$(find "$OUTPUT_DIR" -name '*.md' | wc -l)
             sym_count=$(wc -l < "$SYMBOLS_TSV" 2>/dev/null || echo 0)
+            printf '{"sourceCommittedAt":"%s","headersScanned":%s,"cppFilesScanned":%s,"markdownPages":%s,"symbolRecords":%s}\n' \
+                "$SOURCE_COMMITTED_AT" "$count" "$cpp_count" "$page_count" "$sym_count" \
+                > "$OUTPUT_DIR/.generation.json"
             log_success "Generated $page_count markdown pages and $sym_count symbol records in docs/api/"
             ;;
 

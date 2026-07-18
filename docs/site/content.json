@@ -1,0 +1,654 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "name": "SparkEngine",
+    "tagline": "Build worlds. Own the stack.",
+    "description": "A source-first C++23 game-engine project under active release hardening, with an inspectable runtime, editor, tools, modular games, and server-authoritative multiplayer foundations."
+  },
+  "links": {
+    "repository": "https://github.com/Krilliac/SparkEngine",
+    "issues": "https://github.com/Krilliac/SparkEngine/issues",
+    "pullRequests": "https://github.com/Krilliac/SparkEngine/pulls",
+    "actions": "https://github.com/Krilliac/SparkEngine/actions",
+    "securityReport": "https://github.com/Krilliac/SparkEngine/security/advisories/new",
+    "discord": "https://discord.gg/NyX8d9UZM",
+    "licensePath": "LICENSE",
+    "securityPath": "SECURITY.md",
+    "conductPath": "CODE_OF_CONDUCT.md",
+    "contributingPath": "CONTRIBUTING.md",
+    "statusPath": "docs/status/PROJECT_STATUS.md",
+    "roadmapPath": "docs/plans/FEATURE_ROADMAP.md",
+    "changelogPath": "CHANGELOG.md"
+  },
+  "home": {
+    "hero": {
+      "kicker": "C++23 · source-first · release hardening",
+      "title": "Build worlds.",
+      "accent": "Own the stack.",
+      "lede": "SparkEngine brings a multi-backend rendering architecture, EnTT ECS, Jolt physics, an ImGui editor, modular games, and server-authoritative multiplayer work into one inspectable codebase. Its readiness is defined by evidence and release gates—not feature-count marketing.",
+      "trust": [
+        "Full source",
+        "No engine royalties",
+        "Every maturity claim linked to evidence"
+      ],
+      "metricIds": [
+        "code.totalLines",
+        "tests.definitions",
+        "editor.panels",
+        "modules.discovered"
+      ]
+    },
+    "overview": {
+      "eyebrow": "Engine overview",
+      "title": "A broad engine. Every boundary visible.",
+      "copy": "SparkEngine began around FPS needs and expanded into editor workflows, runtime modules, dedicated servers, asset tooling, large-world foundations, and reference games. The repository now records what is implemented, how it is verified, what is supported, and what still blocks a release.",
+      "grounding": "The current strongest route remains Windows, C++, and D3D11. That is a candidate path, not a production-readiness certificate; the global release gates remain authoritative.",
+      "pillars": [
+        {
+          "icon": "layers",
+          "eyebrow": "Rendering",
+          "title": "One abstraction, unequal backend maturity",
+          "copy": "D3D11 is the primary path. D3D12, Vulkan, OpenGL, Metal, and NullRHI are described independently so implementation depth is never confused with support or release status."
+        },
+        {
+          "icon": "box",
+          "eyebrow": "Simulation",
+          "title": "Runtime systems share one source tree",
+          "copy": "ECS, Jolt physics, animation, navigation, audio, assets, persistence, job execution, and modular games can be inspected and tested together."
+        },
+        {
+          "icon": "server",
+          "eyebrow": "Multiplayer",
+          "title": "Authority is designed into the runtime",
+          "copy": "Transport, replication, prediction, reconciliation, lag rewind, dedicated-server execution, and Area/World coordination exist, while public-service security and operations remain explicit work."
+        },
+        {
+          "icon": "monitor",
+          "eyebrow": "Tooling",
+          "title": "The workbench is part of the product",
+          "copy": "SparkEditor sits beside the console, shader compiler, build tooling, launcher, installer, crash reporter, profiler, and validation utilities. End-to-end authoring and shipping gates determine readiness."
+        }
+      ]
+    },
+    "referenceGame": {
+      "name": "TERRAFRONT",
+      "label": "MMOFPS reference module",
+      "title": "A combined-arms engineering vertical slice",
+      "lede": "The MMOFPS module is the deepest in-repository proof that rendering, simulation, UI, persistence, vehicles, territory, and networking can meet in one game. It is a reference implementation, not evidence of a shipped public MMO service.",
+      "sourcePath": "GameModules/SparkGameMMOFPS",
+      "designPath": "GameModules/SparkGameMMOFPS/DESIGN.md",
+      "metricIds": [
+        "module.mmofps.lines",
+        "module.mmofps.files",
+        "module.mmofps.serverHz",
+        "module.mmofps.replicationHz"
+      ],
+      "features": [
+        {
+          "icon": "gamepad",
+          "title": "Playable proving ground",
+          "copy": "Factions, classes, weapons, vehicles, deployables, territory, squads, bots, HUD, map, and account flow exercise the module boundary."
+        },
+        {
+          "icon": "shield",
+          "title": "Server-authoritative validation",
+          "copy": "Movement and fire validation, rate budgets, finite-value checks, weighted violations, and kick escalation provide concrete security entry points."
+        },
+        {
+          "icon": "gauge",
+          "title": "Prediction and reconciliation",
+          "copy": "Shared movement, quantized state, owner reconciliation, interpolation, unchanged-state suppression, and hit rewind form the gameplay network loop."
+        },
+        {
+          "icon": "database",
+          "title": "Local persistence reference",
+          "copy": "Accounts, characters, unlocks, loadouts, territory, and progression demonstrate a local pipeline that still needs a transactional service design for production use."
+        }
+      ],
+      "boundary": "This module proves substantial vertical integration. It does not prove secure public hosting, distributed production shards, operational scale, transactional persistence, abuse controls, or commercial release readiness."
+    },
+    "showcases": [
+      {
+        "src": "/images/editor-panels.png",
+        "eyebrow": "SparkEditor",
+        "title": "Dockable tools, one authoring surface",
+        "copy": "A repository capture of the editor panel system and its scene, asset, profiler, server, and content-authoring surfaces."
+      },
+      {
+        "src": "/images/editor-collaboration.png",
+        "eyebrow": "Collaboration",
+        "title": "Host and join editing sessions",
+        "copy": "A repository capture of the experimental collaboration lane, including presence, locking, hosting, and joining."
+      },
+      {
+        "src": "/images/headless-server.png",
+        "eyebrow": "Headless runtime",
+        "title": "Authority without a GPU",
+        "copy": "A repository capture of NullRHI-backed headless execution for dedicated-server and automation paths."
+      },
+      {
+        "src": "/images/spark-console.png",
+        "eyebrow": "SparkConsole",
+        "title": "The runtime stays inspectable",
+        "copy": "A repository capture of logs, history, completion, aliases, and forwarded engine commands in the standalone console."
+      }
+    ],
+    "status": {
+      "eyebrow": "Release readiness without the fog",
+      "title": "Know what the evidence proves.",
+      "copy": "Implementation breadth, test coverage, supported use, and release readiness are separate dimensions. SparkEngine is source-usable today and remains blocked from a fully ready release until every global gate has current evidence.",
+      "groups": [
+        {
+          "tone": "primary",
+          "icon": "check",
+          "label": "Primary candidates",
+          "title": "The strongest routes to harden first",
+          "capabilityIds": [
+            "platform.windows",
+            "rendering.d3d11",
+            "runtime.cpp",
+            "runtime.nullrhi"
+          ]
+        },
+        {
+          "tone": "experimental",
+          "icon": "flask",
+          "label": "Experimental",
+          "title": "Implemented surfaces with validation debt",
+          "capabilityIds": [
+            "platform.linux",
+            "platform.macos",
+            "rendering.d3d12",
+            "rendering.vulkan",
+            "rendering.opengl",
+            "networking.multiplayer"
+          ]
+        },
+        {
+          "tone": "framework",
+          "icon": "alert",
+          "label": "Framework or planned",
+          "title": "Do not frame these as shipped",
+          "capabilityIds": [
+            "rendering.metal",
+            "platform.mobile",
+            "platform.vr",
+            "platform.console",
+            "services.production"
+          ]
+        }
+      ],
+      "platformCapabilityIds": [
+        "platform.windows",
+        "platform.linux",
+        "platform.macos",
+        "runtime.nullrhi"
+      ]
+    },
+    "quality": {
+      "eyebrow": "Repository discipline",
+      "title": "Evidence is part of the engine.",
+      "copy": "A large source tree only becomes trustworthy when the required builds, tests, sanitizers, packaging checks, performance budgets, and security gates fail closed and attach evidence to the exact commit.",
+      "metricIds": [
+        "code.totalLines",
+        "code.files",
+        "tests.definitions",
+        "docs.authored"
+      ],
+      "lanes": [
+        "MSVC",
+        "GCC",
+        "Clang",
+        "ASan",
+        "UBSan",
+        "LSan",
+        "TSan",
+        "Coverage",
+        "clang-format",
+        "clang-tidy",
+        "CodeQL"
+      ]
+    },
+    "ecosystem": [
+      {
+        "href": "/learn",
+        "icon": "book",
+        "index": "01",
+        "status": "Repository-driven",
+        "tone": "live",
+        "eyebrow": "Learning hub",
+        "title": "Choose a verified path through the engine.",
+        "copy": "Role-based paths resolve to current repository documents and source entry points, so renamed or removed guidance cannot silently linger.",
+        "meta": "Generated from the docs catalog"
+      },
+      {
+        "href": "/forums",
+        "icon": "message",
+        "index": "02",
+        "status": "First-party",
+        "tone": "live",
+        "eyebrow": "Forums",
+        "title": "Keep durable technical discussion in the ecosystem.",
+        "copy": "Categories, threads, replies, search, profiles, subscriptions, notifications, reporting, and moderation replace GitHub Discussions without inventing activity.",
+        "meta": "Persistent · identity-aware"
+      },
+      {
+        "href": "/community",
+        "icon": "users",
+        "index": "03",
+        "status": "Source-linked",
+        "tone": "live",
+        "eyebrow": "Community",
+        "title": "Move from a question to an owned change.",
+        "copy": "Issues, pull requests, forum work, and contribution policy point back to the current repository instead of a manually copied roadmap.",
+        "meta": "Questions · issues · code · stewardship"
+      },
+      {
+        "href": "/legal",
+        "icon": "scale",
+        "index": "04",
+        "status": "Source controls",
+        "tone": "source",
+        "eyebrow": "Legal and trust",
+        "title": "Read the controlling files before you ship.",
+        "copy": "License, attribution, contribution, conduct, and security guidance link to the exact repository revision and never replace legal review.",
+        "meta": "License · conduct · security"
+      },
+      {
+        "href": "/readiness",
+        "icon": "gauge",
+        "index": "05",
+        "status": "Executable program",
+        "tone": "planning",
+        "eyebrow": "Release readiness",
+        "title": "Turn every blocker into verifiable work.",
+        "copy": "Global gates, dependency-ordered work items, source entry points, commands, tests, documentation changes, and promotion rules form a complete code-session handoff.",
+        "meta": "Gates · work queue · evidence"
+      }
+    ],
+    "build": {
+      "eyebrow": "Build from source",
+      "title": "Start with a reproducible checkout.",
+      "copy": "There is no published versioned release yet. The repository is the available distribution surface, and its release handoff lists what must pass before that changes.",
+      "commands": {
+        "windows": "git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git\ncd SparkEngine\n.\\generate.bat -g \"Visual Studio 17 2022\" release\n.\\build.ps1 -config Release -editor -angelscript",
+        "unix": "git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git\ncd SparkEngine\n./generate.sh release -g Ninja\n./build.sh release"
+      },
+      "requirements": "CMake 3.25+ · C++23 · recursive submodules"
+    }
+  },
+  "readiness": {
+    "title": "SparkEngine Release Readiness",
+    "description": "A repository-owned release-gate program and dependency-resolved implementation handoff for taking SparkEngine from source-usable to fully ready.",
+    "heroEyebrow": "Release readiness / live repository contract",
+    "heroTitle": "Finish the engine.",
+    "heroAccent": "Prove every gate.",
+    "heroCopy": "This is the engine completion program: current evidence, blocking release gates, and the exact work a code session can pick up next. Project-fit guidance remains available, but it now follows the same capability contract.",
+    "methodLabel": "No blended maturity score",
+    "methodTitle": "Implementation. Verification. Support. Release.",
+    "methodCopy": "A feature can be substantially implemented and still be unverified, unsupported, or release-blocked. The site names all four dimensions and links every promotion to evidence.",
+    "questions": [
+      {
+        "id": "platform",
+        "step": "01",
+        "title": "Target host",
+        "icon": "monitor",
+        "defaultValue": "windows",
+        "choices": [
+          {
+            "value": "windows",
+            "label": "Windows",
+            "note": "The primary host candidate; release gates still apply.",
+            "tag": "Primary candidate",
+            "level": 0,
+            "strengths": ["Windows has the broadest engine, editor, and D3D11 coverage."],
+            "boundaries": ["A current Shipping build, installer, signing, and release evidence are still required."],
+            "nextMove": "Run the required Windows build-and-test gate at the target commit.",
+            "capabilityIds": ["platform.windows"]
+          },
+          {
+            "value": "linux",
+            "label": "Linux",
+            "note": "Build and headless foundations exist with renderer and packaging validation debt.",
+            "tag": "Experimental",
+            "level": 2,
+            "strengths": ["GCC, Clang, sanitizers, NullRHI, OpenGL, and Vulkan have repository surfaces."],
+            "boundaries": ["End-to-end rendering, packaging, driver coverage, and support commitments are incomplete."],
+            "nextMove": "Prove one packaged golden scene on the declared Linux support matrix.",
+            "capabilityIds": ["platform.linux"]
+          },
+          {
+            "value": "macos",
+            "label": "macOS",
+            "note": "Build work exists; Metal is not a complete production renderer.",
+            "tag": "Experimental",
+            "level": 2,
+            "strengths": ["The repository contains macOS build and platform entry points."],
+            "boundaries": ["Metal implementation, notarized packaging, renderer parity, and system tests remain open."],
+            "nextMove": "Complete the Metal backend and prove a notarized packaged golden scene.",
+            "capabilityIds": ["platform.macos", "rendering.metal"]
+          }
+        ]
+      },
+      {
+        "id": "renderer",
+        "step": "02",
+        "title": "Runtime path",
+        "icon": "layers",
+        "defaultValue": "d3d11",
+        "choices": [
+          {
+            "value": "d3d11",
+            "label": "D3D11 client",
+            "note": "The primary rendered candidate on Windows.",
+            "tag": "Primary candidate",
+            "level": 0,
+            "strengths": ["D3D11 carries the deepest production-renderer implementation."],
+            "boundaries": ["Golden-scene coverage, performance budgets, packaging, and current release evidence still gate readiness."],
+            "nextMove": "Run the Windows D3D11 golden-scene and performance certification lane.",
+            "capabilityIds": ["rendering.d3d11"]
+          },
+          {
+            "value": "nullrhi",
+            "label": "Headless / NullRHI",
+            "note": "Purpose-built for no-render servers and automation.",
+            "tag": "Supported candidate",
+            "level": 1,
+            "strengths": ["NullRHI provides a real no-GPU device path."],
+            "boundaries": ["Soak, load, shutdown, crash, and packaged-server gates remain required."],
+            "nextMove": "Run the packaged dedicated-server soak and load suite.",
+            "capabilityIds": ["runtime.nullrhi"]
+          },
+          {
+            "value": "modern-rhi",
+            "label": "D3D12 / Vulkan / OpenGL / Metal",
+            "note": "Implementation depth varies and parity is not yet certified.",
+            "tag": "Experimental",
+            "level": 2,
+            "strengths": ["Modern and portable backend implementations provide real R&D entry points."],
+            "boundaries": ["Feature parity, shader toolchains, golden scenes, drivers, synchronization, and packaging need backend-specific proof."],
+            "nextMove": "Choose one backend and close its explicit parity gate before combining targets.",
+            "capabilityIds": ["rendering.d3d12", "rendering.vulkan", "rendering.opengl", "rendering.metal"]
+          }
+        ]
+      },
+      {
+        "id": "scope",
+        "step": "03",
+        "title": "Project shape",
+        "icon": "network",
+        "defaultValue": "single-player",
+        "choices": [
+          {
+            "value": "single-player",
+            "label": "Single-player",
+            "note": "Avoids the public-service layer while exercising the core runtime and tools.",
+            "tag": "Core path",
+            "level": 0,
+            "strengths": ["The runtime, editor, save, asset, input, audio, physics, and gameplay systems can be proven locally."],
+            "boundaries": ["Cooked asset loading, save migration, installer, crash, performance, and end-to-end authoring gates still apply."],
+            "nextMove": "Ship one packaged vertical slice through the full editor-to-runtime loop.",
+            "capabilityIds": ["scope.singleplayer"]
+          },
+          {
+            "value": "controlled-multiplayer",
+            "label": "Controlled multiplayer",
+            "note": "Exercises authority and replication on known hosts.",
+            "tag": "Integration",
+            "level": 1,
+            "strengths": ["Transport, replication, prediction, reconciliation, and dedicated-server foundations exist."],
+            "boundaries": ["Protocol compatibility, hostile-client testing, observability, persistence, and operations require explicit proof."],
+            "nextMove": "Run a versioned client/server compatibility and soak test under loss and latency.",
+            "capabilityIds": ["networking.multiplayer"]
+          },
+          {
+            "value": "public-service",
+            "label": "Public internet service",
+            "note": "Adds security, identity, fleet, abuse, persistence, and operational requirements.",
+            "tag": "Product infrastructure",
+            "level": 2,
+            "strengths": ["TERRAFRONT and the network stack offer implementation references."],
+            "boundaries": ["Secure transport, accounts, secrets, matchmaking, fleet control, backups, moderation, telemetry, incident response, and load proof are not turnkey."],
+            "nextMove": "Treat the service layer as its own product program and close the production-network gate.",
+            "capabilityIds": ["services.production", "networking.multiplayer"]
+          }
+        ]
+      },
+      {
+        "id": "logic",
+        "step": "04",
+        "title": "Gameplay logic",
+        "icon": "code",
+        "defaultValue": "cpp",
+        "choices": [
+          {
+            "value": "cpp",
+            "label": "C++ modules",
+            "note": "The primary extension and game-module path.",
+            "tag": "Primary candidate",
+            "level": 0,
+            "strengths": ["C++ owns the complete runtime and module boundary."],
+            "boundaries": ["ABI/versioning, hot reload, packaged modules, and SDK compatibility need release gates."],
+            "nextMove": "Prove a packaged module against the declared SDK compatibility contract.",
+            "capabilityIds": ["runtime.cpp"]
+          },
+          {
+            "value": "angelscript",
+            "label": "AngelScript",
+            "note": "A functional integration with runtime and workflow completion work remaining.",
+            "tag": "Experimental",
+            "level": 2,
+            "strengths": ["VM, bindings, module isolation, and entity-facing APIs exist."],
+            "boundaries": ["Per-frame dispatch, reload state, debugging, packaging, migration, and authoring acceptance remain open."],
+            "nextMove": "Close the script lifecycle and hot-reload work item with packaged tests.",
+            "capabilityIds": ["scripting.angelscript"]
+          },
+          {
+            "value": "visual",
+            "label": "Visual scripting",
+            "note": "The graph/compiler surface is not yet a complete production authoring loop.",
+            "tag": "Experimental",
+            "level": 2,
+            "strengths": ["A node palette and AngelScript generation path exist."],
+            "boundaries": ["Validation, debugging, source mapping, migration, reload, packaging, and editor acceptance remain open."],
+            "nextMove": "Prove graph-to-packaged-runtime execution with diagnostics and migration coverage.",
+            "capabilityIds": ["scripting.visual"]
+          }
+        ]
+      }
+    ]
+  },
+  "learn": {
+    "title": "Learn SparkEngine",
+    "description": "Repository-resolved learning tracks that stay aligned with the current documentation and source tree.",
+    "heroEyebrow": "Learning paths / generated from current docs",
+    "heroTitle": "Learn the system.",
+    "heroAccent": "Then prove the workflow.",
+    "heroCopy": "Every path combines concepts, exact repository documents, source entry points, and a concrete outcome. Missing or renamed documents fail publication instead of leaving a dead tutorial behind.",
+    "tracks": [
+      {
+        "id": "first-build",
+        "label": "First build",
+        "audience": "New engine users",
+        "outcome": "Configure, build, launch, and record a reproducible baseline.",
+        "icon": "terminal",
+        "documentSourcePaths": [
+          "wiki/getting-started/Getting-Started.md",
+          "wiki/getting-started/Quick-Start-Tutorial.md",
+          "wiki/getting-started/Architecture-Overview.md"
+        ]
+      },
+      {
+        "id": "game-module",
+        "label": "Create a game module",
+        "audience": "Gameplay programmers",
+        "outcome": "Build a lifecycle-correct C++ module with tests and a package smoke check.",
+        "icon": "box",
+        "documentSourcePaths": [
+          "wiki/getting-started/Creating-a-Game-Module.md",
+          "GameModules/README.md",
+          "wiki/subsystems/Entity-Component-System.md"
+        ]
+      },
+      {
+        "id": "rendering",
+        "label": "Rendering architecture",
+        "audience": "Graphics programmers",
+        "outcome": "Trace one frame from RHI selection through the render graph and backend.",
+        "icon": "layers",
+        "documentSourcePaths": [
+          "wiki/graphics/RHI-Abstraction-Layer.md",
+          "wiki/subsystems/Rendering-and-Graphics.md",
+          "wiki/gameplay-tools/Shader-Pipeline.md"
+        ]
+      },
+      {
+        "id": "multiplayer",
+        "label": "Authority and replication",
+        "audience": "Network/gameplay programmers",
+        "outcome": "Run a controlled server/client loop and trace prediction, replication, and reconciliation.",
+        "icon": "network",
+        "documentSourcePaths": [
+          "wiki/subsystems/Multiplayer-Quick-Start.md",
+          "wiki/subsystems/Networking.md",
+          "GameModules/SparkGameMMOFPS/DESIGN.md"
+        ]
+      },
+      {
+        "id": "editor",
+        "label": "Editor and content workflow",
+        "audience": "Tools programmers and technical designers",
+        "outcome": "Author, save, reload, cook, package, and run a small piece of content.",
+        "icon": "monitor",
+        "documentSourcePaths": [
+          "wiki/gameplay-tools/SparkEditor.md",
+          "wiki/gameplay-tools/Asset-Pipeline.md",
+          "wiki/gameplay-tools/Game-Packaging.md"
+        ]
+      },
+      {
+        "id": "contribute",
+        "label": "Contribute safely",
+        "audience": "Engine contributors",
+        "outcome": "Make a scoped change with the required tests, docs, readiness update, and evidence.",
+        "icon": "git",
+        "documentSourcePaths": [
+          "CONTRIBUTING.md",
+          "wiki/advanced/Testing.md",
+          "docs/readiness/ENGINE_READINESS_HANDOFF.md"
+        ]
+      }
+    ]
+  },
+  "docs": {
+    "title": "SparkEngine Documentation",
+    "description": "The recursively indexed SparkEngine guides, specifications, module notes, project status, and source-derived API reference for the published repository commit.",
+    "heroEyebrow": "Documentation / exact-commit corpus",
+    "heroTitle": "Read the system.",
+    "heroAccent": "Verify the source.",
+    "heroCopy": "Every route is rebuilt from the repository documentation catalog and pinned to the source commit that produced it. Authored guidance, generated reference, status, research, and proposals retain distinct provenance labels.",
+    "sourceCopy": "The repository is the controlling source. A document's presence proves that it is published context—not that every forward-looking statement is implemented or release-ready.",
+    "proposalNotice": "Forward-looking material is rendered for engineering context and does not promote the described capability.",
+    "researchNotice": "Research material records investigation and options; it is not a support or release commitment."
+  },
+  "community": {
+    "title": "SparkEngine Community",
+    "description": "The first-party forum, project chat, issue tracker, pull requests, documentation, and contribution path around SparkEngine.",
+    "heroEyebrow": "Build in the open",
+    "heroTitle": "The engine is code.",
+    "heroAccent": "The project is people.",
+    "heroCopy": "Questions become searchable answers. Ideas become proposals. Reproductions become issues. Focused changes become reviewed code. Each surface has a clear job and an auditable path back to the repository.",
+    "channels": [
+      {"id": "forums", "icon": "messages", "label": "Forums", "copy": "Durable questions, proposals, module discussion, and show and tell.", "href": "/forums", "status": "First-party forum", "external": false},
+      {"id": "discord", "icon": "message", "label": "Discord", "copy": "Fast coordination when an answer does not need to be permanent.", "linkKey": "discord", "status": "External / Discord", "external": true},
+      {"id": "issues", "icon": "bug", "label": "Issues", "copy": "Reproducible defects and accepted, scoped implementation work.", "linkKey": "issues", "status": "External / GitHub", "external": true},
+      {"id": "pull-requests", "icon": "git", "label": "Pull requests", "copy": "Reviewed code, tests, documentation, and auditable contribution history.", "linkKey": "pullRequests", "status": "External / GitHub", "external": true}
+    ],
+    "support": {
+      "eyebrow": "Support router",
+      "title": "Send the problem to the right system.",
+      "copy": "There is no paid support desk or guaranteed service level today. Use the project surfaces that exist and keep reusable technical knowledge searchable.",
+      "routes": [
+        {"id": "docs", "question": "How does it work?", "label": "Documentation", "copy": "Search the repository guides, specifications, and API reference.", "href": "/docs"},
+        {"id": "forums", "question": "Why is this happening?", "label": "Forums / Q&A", "copy": "Ask with context and leave a searchable answer.", "href": "/forums"},
+        {"id": "issues", "question": "I can reproduce a defect.", "label": "Issue tracker", "copy": "Include platform, compiler, flags, steps, and logs.", "linkKey": "issues"},
+        {"id": "security", "question": "This may be a vulnerability.", "label": "Private security report", "copy": "Keep exploit details out of public issues, forums, and chat.", "linkKey": "securityReport"}
+      ]
+    },
+    "contribution": {
+      "eyebrow": "Contributor runway",
+      "title": "From curious to reviewable.",
+      "copy": "Contribution begins with a bounded observation and enough evidence for another person to review it.",
+      "steps": [
+        {"icon": "book", "title": "Improve an explanation", "copy": "Correct or clarify a repository document and link the code that proves it."},
+        {"icon": "wrench", "title": "Reproduce a rough edge", "copy": "Turn a vague complaint into a minimal build, editor, or runtime reproduction."},
+        {"icon": "code", "title": "Implement one bounded change", "copy": "Follow the C++23 style, wire the lifecycle, add production-source tests, and update readiness evidence."},
+        {"icon": "users", "title": "Review and teach", "copy": "Help another contributor connect a change to architecture, evidence, and user impact."}
+      ]
+    },
+    "ecosystem": {
+      "eyebrow": "Ecosystem runway",
+      "title": "Table stakes now. Infrastructure after proof.",
+      "copy": "Website polish and operating infrastructure are different deliverables. SparkEngine labels the boundary and only promotes repository-backed services.",
+      "stages": [
+        {"status": "Live now", "title": "Use what exists", "items": ["First-party forum with search, profiles, saves, and moderation", "Discord community", "Repository documentation and API index", "Issue and pull-request workflows", "Security and conduct source documents"]},
+        {"status": "Next layer", "title": "Curate the ecosystem", "items": ["Project showcase submissions", "Module compatibility catalog", "Reference-module learning missions", "Public governance and decision log", "Build logs and community events"]},
+        {"status": "Requires infrastructure", "title": "Do not fake it", "items": ["Signed package and template registry", "Jobs and collaborator board", "Release provenance and SBOM portal", "Program calendar and speaker system", "Maintainer and mentor program"]}
+      ],
+      "promotionRule": "Every future surface must publish its owner, maturity, evidence, data footprint, and known limitations before it earns a live label."
+    },
+    "policyBaseline": "The repository Code of Conduct is the effective project-wide behavior source. Forum-specific moderation and appeals require a separately maintained operating policy."
+  },
+  "legal": {
+    "title": "SparkEngine Legal & Trust",
+    "description": "The exact-commit SparkEngine license, conduct, contribution, security, attribution, and unresolved governance status.",
+    "heroEyebrow": "Plain language. Source controls.",
+    "heroTitle": "Know what applies.",
+    "heroAccent": "See what does not.",
+    "heroCopy": "SparkEngine's enforceable project documents live with the source. This overview routes readers to those documents and marks unresolved governance work instead of presenting a draft as policy.",
+    "license": {
+      "sourcePath": "LICENSE",
+      "name": "Spark Open License 1.0",
+      "kind": "Custom software license",
+      "osiApproved": false,
+      "summary": "The license grants broad commercial and non-commercial use, modification, publication, distribution, sublicensing, and sale, subject to notice, naming, anti-plagiarism, and attribution conditions.",
+      "disclaimer": "Plain-language overview—not legal advice. If this site differs from the checked-in license text, the license text controls.",
+      "permissions": [
+        {"title": "Use and copy", "copy": "Run the software and make copies."},
+        {"title": "Modify and merge", "copy": "Change the source and combine it with other work."},
+        {"title": "Publish and distribute", "copy": "Share, sublicense, or sell covered copies."}
+      ],
+      "conditions": [
+        "Retain the copyright and license notice in covered copies or substantial portions.",
+        "Provide visible attribution to SparkEngine and Krilliac when distributing derived work.",
+        "Do not brand a fork or modified version as SparkEngine, Spark Engine, SparkEditor, or with the SparkEngine logo without permission.",
+        "Accurate statements that work is based on or derived from SparkEngine are allowed.",
+        "Do not present a substantially unmodified copy as original work."
+      ],
+      "attributionTemplate": "This software is derived from SparkEngine by Krilliac (https://github.com/Krilliac/SparkEngine)."
+    },
+    "documents": [
+      {"id": "license", "label": "License", "sourcePath": "LICENSE", "status": "effective-source"},
+      {"id": "conduct", "label": "Code of Conduct", "sourcePath": "CODE_OF_CONDUCT.md", "status": "effective-source"},
+      {"id": "contributing", "label": "Contributing guide", "sourcePath": "CONTRIBUTING.md", "status": "effective-source"},
+      {"id": "security", "label": "Security guidance", "sourcePath": "SECURITY.md", "status": "review-required"}
+    ],
+    "securityCaution": "Use the repository's private advisory route when available. Do not post exploit details in a public issue, forum, or chat. Version-support and response commitments remain release-governance work until the legal/support gate passes.",
+    "policyGaps": [
+      "Website privacy notice and terms of use",
+      "Cookie notice if non-essential cookies are introduced",
+      "Forum retention, deletion, moderation, appeals, and operator-contact policy",
+      "Full trademark and logo-use policy",
+      "Copyright and takedown process with a designated contact",
+      "Security support scope and approved response commitments",
+      "Compiled-game, static-linking, plugin, asset, and template license interpretation",
+      "Inbound contribution licensing model",
+      "Consolidated third-party notices, SBOM, and release provenance"
+    ]
+  },
+  "footer": {
+    "description": "A source-first C++23 game-engine project and engineering community with implementation, verification, support, and release maturity kept distinct.",
+    "cta": "Build with every layer visible.",
+    "copyright": "© 2024–2026 Krilliac. SparkEngine."
+  }
+}

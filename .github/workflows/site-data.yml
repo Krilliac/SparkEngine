@@ -1,0 +1,64 @@
+name: Repository Site Data
+
+on:
+  push:
+    branches: [Working]
+  pull_request:
+    branches: [Working, main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: site-data-validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  site-data-validate:
+    name: Validate repository site data
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Validate contract and generated handoff
+        run: |
+          set -euo pipefail
+          python3 tools/site-data/validate.py
+          python3 tools/site-data/validate.py --assets
+          python3 tools/site-data/validate.py --docs
+          python3 tools/site-data/validate.py --legal
+          python3 tools/site-data/render_handoff.py --check
+
+      - name: Prove deterministic exact-commit generation
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          python3 tools/site-data/generate.py \
+            --output "$RUNNER_TEMP/.site-data-a" \
+            --source-commit "$GITHUB_SHA" \
+            --source-branch "$SOURCE_BRANCH" \
+            --committed-at "$COMMITTED_AT"
+          python3 tools/site-data/generate.py \
+            --output "$RUNNER_TEMP/.site-data-b" \
+            --source-commit "$GITHUB_SHA" \
+            --source-branch "$SOURCE_BRANCH" \
+            --committed-at "$COMMITTED_AT"
+          python3 tools/site-data/validate.py --published "$RUNNER_TEMP/.site-data-a"
+          python3 tools/site-data/validate.py --published "$RUNNER_TEMP/.site-data-b"
+          diff --recursive --brief "$RUNNER_TEMP/.site-data-a" "$RUNNER_TEMP/.site-data-b"
+
+      - name: Upload validated bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sparkengine-site-data-${{ github.sha }}
+          path: ${{ runner.temp }}/.site-data-a
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

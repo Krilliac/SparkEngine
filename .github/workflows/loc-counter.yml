@@ -122,5 +122,7 @@ jobs:
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add .github/badges/
         git diff --cached --quiet && echo "No changes to commit" && exit 0
-        git commit -m "chore: update lines of code counter [skip ci]"
+        # Do not skip CI: the repository-driven site must publish the bot commit
+        # too, otherwise Working advances beyond the displayed exact SHA.
+        git commit -m "chore: update lines of code counter"
         git push
