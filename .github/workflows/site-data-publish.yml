@@ -56,7 +56,25 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
           python3 tools/site-data/validate.py
+          python3 tools/site-data/validate.py --assets
+          python3 tools/site-data/validate.py --docs
+          python3 tools/site-data/validate.py --legal
           python3 tools/site-data/render_handoff.py --check
+          COMMITTED_AT="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          for OUTPUT in "$RUNNER_TEMP/.site-data-proof-a" "$RUNNER_TEMP/.site-data-proof-b"; do
+            python3 tools/site-data/generate.py \
+              --output "$OUTPUT" \
+              --source-commit "$SOURCE_COMMIT" \
+              --source-branch "$SOURCE_BRANCH" \
+              --committed-at "$COMMITTED_AT" \
+              --evidence-commit "$SOURCE_COMMIT" \
+              --ci-conclusion "$EVIDENCE_CONCLUSION" \
+              --workflow-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}"
+            python3 tools/site-data/validate.py --published "$OUTPUT"
+          done
+          diff --recursive --brief \
+            "$RUNNER_TEMP/.site-data-proof-a" \
+            "$RUNNER_TEMP/.site-data-proof-b"
 
       - name: Prepare the site-data publication worktree
         if: steps.branch-head.outputs.publish == 'true'
