@@ -10,18 +10,18 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-07-
 |---------|------:|
 | **SparkEngine/Source** | 291450 |
 | **SparkEditor/Source** | 97889 |
-| **GameModules** | 125302 |
+| **GameModules** | 126963 |
 | **Tests** | 145661 |
 | **SparkConsole/src** | 1571 |
 | **SparkShaderCompiler/src** | 578 |
-| **Total C++ (excl. ThirdParty)** | **~662451** |
+| **Total C++ (excl. ThirdParty)** | **~664112** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hpp) | 907 |
-| Implementation files (.cpp) | 1268 |
+| Header files (.h/.hpp) | 918 |
+| Implementation files (.cpp) | 1315 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |

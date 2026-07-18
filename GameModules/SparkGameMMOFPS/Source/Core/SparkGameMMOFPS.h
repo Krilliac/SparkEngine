@@ -58,7 +58,12 @@ class TerrafrontModule : public Spark::IModule
     Terrafront::TFEventBus& Events() { return m_events; }
 
   private:
-    void RegisterConsoleCommands(); // Console/TFCommands.cpp
+    // Console command registration: RegisterConsoleCommands() is the single
+    // entry point (Console/TFCommands.cpp); it calls the split parts below in
+    // the original registration order.
+    void RegisterConsoleCommands();
+    void RegisterConsoleCommandsGameplay(); // Console/TFCommandsGameplay.cpp
+    void RegisterConsoleCommandsNet();      // Console/TFCommandsNet.cpp
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};

@@ -5,9 +5,10 @@
  *        VTOL gunship enabled in W8 — Jump/Crouch climb axis, ~120 m AGL
  *        ceiling, landed-only exit).
  *
- * OWNERSHIP: this header + TFVehicleSystem.cpp + TFVehicleNet.cpp +
- * TFVehicleClient.cpp + TFVehiclePhysics.h/.cpp belong to ONE implementation
- * agent. The lifecycle below is the frozen module contract (called from
+ * OWNERSHIP: this header + the TFVehicleSystem*.cpp split parts (core /
+ * Spawn / Seats / Drive / Damage + TFVehicleSystemInternal.h) +
+ * TFVehicleNet.cpp + TFVehicleClient.cpp + TFVehiclePhysics.h/.cpp belong to
+ * ONE implementation agent. The lifecycle below is the frozen module contract (called from
  * Main.cpp) — extend this class freely, but do not change the lifecycle
  * signatures.
  *
