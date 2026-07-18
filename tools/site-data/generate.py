@@ -49,6 +49,44 @@ SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", "
 LARGE_DOCUMENT_BYTES = 240_000
 
 
+def regenerate_api_docs(committed_at: str) -> None:
+    """Rebuild ignored API reference pages from the checked-out source tree.
+
+    ``docs/api`` is intentionally not tracked, so a clean CI checkout cannot
+    rely on a developer's previously generated copy.  Treat the generator as
+    part of publication and fail closed if it cannot produce the corpus.
+    """
+
+    script = REPO_ROOT / "docs" / "generate-api-docs.sh"
+    if not script.is_file():
+        raise SiteDataError("missing API documentation generator: docs/generate-api-docs.sh")
+
+    environment = os.environ.copy()
+    environment["SPARKENGINE_DOC_GENERATED_AT"] = committed_at
+    try:
+        result = subprocess.run(
+            ["bash", str(script), "generate"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=240,
+            check=False,
+            env=environment,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise SiteDataError("API documentation generation exceeded 240 seconds") from error
+    if result.returncode:
+        detail = (result.stderr.strip() or result.stdout.strip())[-4000:]
+        raise SiteDataError(f"API documentation generation failed: {detail}")
+
+    api_root = REPO_ROOT / "docs" / "api"
+    pages = list(api_root.rglob("*.md")) if api_root.is_dir() else []
+    if not (api_root / "README.md").is_file() or len(pages) < 3:
+        raise SiteDataError(
+            "API documentation generator did not produce its index and reference pages"
+        )
+
+
 def file_lines(paths: Iterable[Path]) -> tuple[int, int]:
     count = 0
     lines = 0
@@ -655,6 +693,8 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
         raise SiteDataError(
             f"evidence commit {args.evidence_commit} does not match checked-out commit {source['commit']}"
         )
+
+    regenerate_api_docs(source["committedAt"])
 
     output = ensure_safe_output(args.output, preserve_existing=args.preserve_existing)
     snapshot_root = output / "snapshots" / source["commit"]

@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$SCRIPT_DIR/api"
 SYMBOLS_TSV="$OUTPUT_DIR/.symbols.tsv"
+GENERATED_AT="${SPARKENGINE_DOC_GENERATED_AT:-$(date '+%Y-%m-%d %H:%M:%S')}"
 
 # Source directories to scan (auto-discovers every GameModules/*/Source)
 SOURCE_DIRS=(
@@ -328,7 +329,7 @@ generate_index() {
     {
         echo "# SparkEngine API Reference"
         echo ""
-        echo "> Auto-generated from source headers on $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "> Auto-generated from source headers on $GENERATED_AT"
         echo ">"
         echo "> **Generator:** \`docs/generate-api-docs.sh\` (no Doxygen required)"
         echo ""
@@ -395,7 +396,7 @@ generate_index() {
         echo "|--------|-------|"
         echo "| Headers scanned | $header_count |"
         echo "| API pages generated | $page_count |"
-        echo "| Last generated | $(date '+%Y-%m-%d %H:%M:%S') |"
+        echo "| Last generated | $GENERATED_AT |"
 
     } > "$index_file"
 }

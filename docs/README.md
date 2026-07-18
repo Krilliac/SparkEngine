@@ -26,6 +26,10 @@ python3 tools/site-data/generate.py --output .site-data
 python3 tools/site-data/validate.py --published .site-data
 ```
 
+The site-data generator rebuilds the ignored `docs/api/` reference corpus from
+the checked-out headers and sources before collecting documentation. This keeps
+clean CI runners and local generation on the same exact-commit inputs.
+
 `.github/workflows/site-data.yml` proves deterministic generation on pull requests and pushes. After the exact `Working` commit's `Build SparkEngine` run completes, `.github/workflows/site-data-publish.yml` publishes a hash-verified snapshot to the `site-data` branch. A failed/cancelled build publishes the exact commit with a blocked publication state; an invalid contract publishes nothing. Application/layout changes still require the website's own deployment workflow.
 
 ---
