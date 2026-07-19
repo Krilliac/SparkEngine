@@ -76,7 +76,9 @@ if(INSTALLER_GUI_AVAILABLE)
     target_compile_definitions(SparkInstaller PRIVATE SPARKINSTALLER_ENABLE_GUI=1)
     target_link_libraries(SparkInstaller PRIVATE imgui)
     if(WIN32)
-        target_link_libraries(SparkInstaller PRIVATE d3d11 dxgi user32 gdi32 shell32 ole32 oleaut32 uuid comdlg32 advapi32)
+        # d3dcompiler: imgui_impl_dx11 calls D3DCompile and relies on MSVC's
+        # #pragma comment(lib) auto-link, which MinGW ignores — link explicitly.
+        target_link_libraries(SparkInstaller PRIVATE d3d11 dxgi d3dcompiler user32 gdi32 shell32 ole32 oleaut32 uuid comdlg32 advapi32)
     else()
         find_package(Threads REQUIRED)
         target_link_libraries(SparkInstaller PRIVATE Threads::Threads)

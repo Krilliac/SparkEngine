@@ -1054,6 +1054,13 @@ list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 set(SPARK_ENGINE_ENTRY_POINTS
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows.cpp"
+    # SparkEngineWindows.cpp split parts: exe-only — they define/consume the
+    # entry-point globals and (Init/Modules/Win32) the game-mode ImGui overlay,
+    # which is a SparkEngine-target-only compile definition (SPARK_HAS_IMGUI).
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsInit.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsModules.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux.cpp"
     # Game-mode ImGui overlay: exe-only (owns the ImGui context that is
     # injected into module DLLs; must NOT live in SparkEngineLib which the

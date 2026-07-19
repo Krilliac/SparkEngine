@@ -546,7 +546,7 @@ graph LR
 - [`TFPingSystemFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPingSystemFx.cpp) — 112 LOC — TFPingSystem client rendering: the billboarded diamond world markers
 - [`TFPlayerSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.cpp) — 357 LOC — Pawn registry + server spawn/kill/respawn flow, W1 full ECS
 - [`TFPlayerSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h) — 133 LOC — Spawn/death/respawn, class loadouts, pawn registry (both sides).
-- [`TFPlayerSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystemClient.cpp) — 284 LOC — TFPlayerSystem query surface + pure-client half: PawnInfo queries,
+- [`TFPlayerSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystemClient.cpp) — 295 LOC — TFPlayerSystem query surface + pure-client half: PawnInfo queries,
 - [`TFPlayerSystemSpawn.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystemSpawn.cpp) — 219 LOC — TFPlayerSystem spawn-request flow: TF_SpawnRequest validation
 - [`TFProgressionSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.cpp) — 440 LOC — Server-authoritative XP/rank/flux progression core: lifecycle, the
 - [`TFProgressionSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h) — 273 LOC — XP events, ranks 1-30, flux income, persistence.
@@ -1466,7 +1466,12 @@ graph LR
 - [`SparkEngineLinuxSDL2Events.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2Events.cpp) — 215 LOC — SDL2 event translation, dispatch, and per-frame main loop (Linux + macOS).
 - [`SparkEngineMacOS.cpp`](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp) — 136 LOC — macOS-specific engine entry-point helpers (Metal view lifecycle, exe path).
 - [`SparkEngineMacOS.h`](../../SparkEngine/Source/Core/SparkEngineMacOS.h) — 54 LOC — macOS-specific engine entry-point helpers (Metal view, exe path).
-- [`SparkEngineWindows.cpp`](../../SparkEngine/Source/Core/SparkEngineWindows.cpp) — 1562 LOC — Windows entry point (wWinMain) and platform helpers
+- [`SparkEngineWindows.cpp`](../../SparkEngine/Source/Core/SparkEngineWindows.cpp) — 439 LOC — Windows entry point (wWinMain), command-line parsing, and -exec script playback
+- [`SparkEngineWindowsHeadless.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp) — 355 LOC — Headless/dedicated-server loop (Windows).
+- [`SparkEngineWindowsInit.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsInit.cpp) — 291 LOC — Windowed-mode subsystem initialization (Windows).
+- [`SparkEngineWindowsInternal.h`](../../SparkEngine/Source/Core/SparkEngineWindowsInternal.h) — 102 LOC — Internal declarations shared by the Windows entry-point files.
+- [`SparkEngineWindowsModules.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsModules.cpp) — 224 LOC — Game-module discovery, -game/manifest loading, and the bare-launch project selector (Windows).
+- [`SparkEngineWindowsWin32.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp) — 377 LOC — Win32 message pump, window creation, and window procedure (Windows).
 - [`SparkExport.h`](../../SparkEngine/Source/Core/SparkExport.h) — 38 LOC — DLL export/import macros for the Spark Engine module system
 - [`SparkPak.cpp`](../../SparkEngine/Source/Core/SparkPak.cpp) — 342 LOC — SparkPakReader implementation — opens .spk archives and reads entries
 - [`SparkPak.h`](../../SparkEngine/Source/Core/SparkPak.h) — 165 LOC — MPQ-inspired binary archive format for asset packaging
@@ -1912,7 +1917,8 @@ graph LR
 - [`AssetTypes.cpp`](../../SparkEngine/Source/Graphics/AssetTypes.cpp) — 55 LOC — Cross-platform asset type definitions.
 - [`AssetTypesLinux.cpp`](../../SparkEngine/Source/Graphics/AssetTypesLinux.cpp) — 388 LOC — Linux mesh asset implementation (MeshAsset)
 - [`AssetTypesLinuxMedia.cpp`](../../SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp) — 250 LOC — Linux texture/audio asset implementations (TextureAsset, AudioAsset) and AssetCache
-- [`AssetTypesWindows.cpp`](../../SparkEngine/Source/Graphics/AssetTypesWindows.cpp) — 522 LOC — Windows/D3D11 asset type implementations (MeshAsset, TextureAsset, AudioAsset, AssetCache)
+- [`AssetTypesWindows.cpp`](../../SparkEngine/Source/Graphics/AssetTypesWindows.cpp) — 187 LOC — Windows/D3D11 mesh asset implementation (MeshAsset)
+- [`AssetTypesWindowsMedia.cpp`](../../SparkEngine/Source/Graphics/AssetTypesWindowsMedia.cpp) — 358 LOC — Windows/D3D11 texture/audio asset implementations (TextureAsset, AudioAsset) and AssetCache
 - [`AsyncComputeScheduler.cpp`](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.cpp) — 282 LOC — Implementation of the async compute workload scheduler
 - [`AsyncComputeScheduler.h`](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h) — 198 LOC — Async compute workload scheduler with multi-backend support
 - [`BVHAccelerator.h`](../../SparkEngine/Source/Graphics/BVHAccelerator.h) — 447 LOC — SAH-based Bounding Volume Hierarchy for hierarchical frustum culling
@@ -1981,11 +1987,16 @@ graph LR
 - [`GraphicsConsoleCommands.h`](../../SparkEngine/Source/Graphics/GraphicsConsoleCommands.h) — 24 LOC — Registers graphics-related console commands
 - [`GraphicsConsoleOps.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOps.cpp) — 8 LOC — Platform-split redirect
 - [`GraphicsConsoleOpsLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsLinux.cpp) — 267 LOC — Linux implementation — split from GraphicsConsoleOps.cpp
-- [`GraphicsConsoleOpsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsWindows.cpp) — 608 LOC — Windows/D3D11 implementation — split from GraphicsConsoleOps.cpp
+- [`GraphicsConsoleOpsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsWindows.cpp) — 233 LOC — Windows/D3D11 implementation — split from GraphicsConsoleOps.cpp
+- [`GraphicsConsoleOpsWindowsDiagnostics.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp) — 405 LOC — Windows/D3D11 console diagnostics and device operations
 - [`GraphicsDeviceResources.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResources.cpp) — 8 LOC — Device creation and resource management — platform-split redirect
 - [`GraphicsDeviceResourcesLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinux.cpp) — 239 LOC — Linux RHI-bridge device and resource management for GraphicsEngine
 - [`GraphicsDeviceResourcesLinuxShaders.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp) — 316 LOC — Linux RHI-bridge basic shader system for GraphicsEngine
-- [`GraphicsDeviceResourcesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp) — 1904 LOC — D3D11 device creation, render targets, render states, and shader system
+- [`GraphicsDeviceResourcesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp) — 435 LOC — D3D11 device creation, render targets, render states, and pipeline setup
+- [`GraphicsDeviceResourcesWindowsBasicState.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsBasicState.cpp) — 417 LOC — D3D11 basic shader binding, constants, and basic material cache
+- [`GraphicsDeviceResourcesWindowsInstanced.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsInstanced.cpp) — 340 LOC — D3D11 basic instanced draw path (W12 decor-instancing)
+- [`GraphicsDeviceResourcesWindowsShaders.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsShaders.cpp) — 443 LOC — D3D11 basic shader system initialization and shader compilation
+- [`GraphicsDeviceResourcesWindowsTextures.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsTextures.cpp) — 378 LOC — D3D11 default, procedural, and file-loaded textures for the basic path
 - [`GraphicsEngine.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngine.cpp) — 13 LOC — Central rendering orchestrator — platform-split redirect
 - [`GraphicsEngine.h`](../../SparkEngine/Source/Graphics/GraphicsEngine.h) — 1241 LOC — Advanced DirectX 11 graphics engine with AAA features and console integration
 - [`GraphicsEngineHybridRT.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineHybridRT.cpp) — 61 LOC — Platform-agnostic HybridRT post-lighting dispatch.
@@ -1996,13 +2007,21 @@ graph LR
 - [`GraphicsEngineRHI.h`](../../SparkEngine/Source/Graphics/GraphicsEngineRHI.h) — 63 LOC — Internal header for Linux RHI state shared across GraphicsEngine translation units
 - [`GraphicsEngineSubmit.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineSubmit.cpp) — 151 LOC — Platform-agnostic ECS mesh draw submission for GraphicsEngine.
 - [`GraphicsEngineTypes.h`](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h) — 214 LOC — Enums, settings structs, and data-transfer types used by GraphicsEngine
-- [`GraphicsEngineWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp) — 1568 LOC — Windows/D3D11 central rendering orchestrator for SparkEngine
+- [`GraphicsEngineWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp) — 388 LOC — Windows/D3D11 central rendering orchestrator for SparkEngine
+- [`GraphicsEngineWindowsAccessors.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsAccessors.cpp) — 131 LOC — Windows/D3D11 system/state accessors for GraphicsEngine
+- [`GraphicsEngineWindowsDeviceLost.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp) — 157 LOC — Windows/D3D11 device-lost recovery for GraphicsEngine
+- [`GraphicsEngineWindowsDrawList.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsDrawList.cpp) — 189 LOC — Windows/D3D11 ECS mesh draw-list processing for GraphicsEngine
+- [`GraphicsEngineWindowsFrame.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp) — 478 LOC — Windows/D3D11 per-frame rendering path for GraphicsEngine
+- [`GraphicsEngineWindowsInit.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsInit.cpp) — 412 LOC — Windows/D3D11 windowed initialization for GraphicsEngine
 - [`GraphicsRenderPipelines.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelines.cpp) — 8 LOC — Rendering pipeline implementations — platform-split redirect
 - [`GraphicsRenderPipelinesLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesLinux.cpp) — 423 LOC — Linux RHI-bridge rendering pipeline implementations
-- [`GraphicsRenderPipelinesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindows.cpp) — 632 LOC — D3D11 rendering pipeline implementations (Forward, Deferred, Forward+)
+- [`GraphicsRenderPipelinesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindows.cpp) — 273 LOC — D3D11 rendering pipeline implementations (Forward, Deferred, Forward+)
+- [`GraphicsRenderPipelinesWindowsPasses.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindowsPasses.cpp) — 393 LOC — D3D11 G-Buffer fill, lighting pass, frustum culling, and post-processing passes
 - [`GraphicsStateAndSettings.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettings.cpp) — 8 LOC — Graphics state, metrics, and settings — platform-split redirect
 - [`GraphicsStateAndSettingsLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsLinux.cpp) — 359 LOC — Linux RHI-bridge graphics state management, metrics, and settings
-- [`GraphicsStateAndSettingsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindows.cpp) — 678 LOC — D3D11 graphics state management, metrics, settings, and resize
+- [`GraphicsStateAndSettingsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindows.cpp) — 252 LOC — D3D11 graphics state management and metrics
+- [`GraphicsStateAndSettingsWindowsResize.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindowsResize.cpp) — 206 LOC — D3D11 resize handling, statistics reset, and screenshot capture
+- [`GraphicsStateAndSettingsWindowsSettings.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindowsSettings.cpp) — 266 LOC — D3D11 graphics settings and configuration
 
 ### `SparkEngine/Source/Graphics/HybridRT/`
 
@@ -2032,10 +2051,15 @@ graph LR
 - [`LightingSystem.h`](../../SparkEngine/Source/Graphics/LightingSystem.h) — 477 LOC — Advanced lighting system with PBR support for Spark Engine
 - [`LightingSystemInternal.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternal.cpp) — 8 LOC — Platform-split redirect
 - [`LightingSystemInternalLinux.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalLinux.cpp) — 59 LOC — Linux implementation — split from LightingSystemInternal.cpp
-- [`LightingSystemInternalWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindows.cpp) — 987 LOC — Windows/D3D11 implementation — split from LightingSystemInternal.cpp
+- [`LightingSystemInternalWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindows.cpp) — 323 LOC — Windows/D3D11 implementation — split from LightingSystemInternal.cpp
+- [`LightingSystemInternalWindowsCulling.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsCulling.cpp) — 254 LOC — Windows/D3D11 light culling and shadow matrix math for LightingSystem
+- [`LightingSystemInternalWindowsIBL.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsIBL.cpp) — 385 LOC — Windows/D3D11 image-based lighting generation for LightingSystem
+- [`LightingSystemInternalWindowsTypes.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsTypes.cpp) — 105 LOC — Windows light/shadow type string conversions for LightingSystem
 - [`LightingSystemLinux.cpp`](../../SparkEngine/Source/Graphics/LightingSystemLinux.cpp) — 325 LOC — Linux implementation — split from LightingSystem.cpp
 - [`LightingSystemLinuxTypes.cpp`](../../SparkEngine/Source/Graphics/LightingSystemLinuxTypes.cpp) — 205 LOC — Linux Light class implementation and light/shadow type string conversions
-- [`LightingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindows.cpp) — 851 LOC — Windows/D3D11 implementation — split from LightingSystem.cpp
+- [`LightingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindows.cpp) — 467 LOC — Windows/D3D11 implementation — split from LightingSystem.cpp
+- [`LightingSystemWindowsLightOps.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindowsLightOps.cpp) — 288 LOC — Windows light management and console operations for LightingSystem
+- [`LightingSystemWindowsTypes.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindowsTypes.cpp) — 146 LOC — Windows Light class implementation for LightingSystem
 - [`LightmapBaker.h`](../../SparkEngine/Source/Graphics/LightmapBaker.h) — 497 LOC — Offline lightmap baking system for pre-computed global illumination
 - [`LineTrailRenderer.h`](../../SparkEngine/Source/Graphics/LineTrailRenderer.h) — 138 LOC — World-space line rendering and trail effects
 - [`MSDFTextRenderer.cpp`](../../SparkEngine/Source/Graphics/MSDFTextRenderer.cpp) — 476 LOC — MSDF text rendering implementation with instanced glyph quads
@@ -2065,7 +2089,8 @@ graph LR
 - [`MeshShaderPipeline.cpp`](../../SparkEngine/Source/Graphics/MeshShaderPipeline.cpp) — 312 LOC — Mesh shader rendering pipeline implementation
 - [`MeshShaderPipeline.h`](../../SparkEngine/Source/Graphics/MeshShaderPipeline.h) — 152 LOC — Mesh shader rendering pipeline for meshlet-based geometry
 - [`MeshTypes.h`](../../SparkEngine/Source/Graphics/MeshTypes.h) — 83 LOC — Vertex, mesh data, and submesh structures for the mesh system
-- [`MeshWindows.cpp`](../../SparkEngine/Source/Graphics/MeshWindows.cpp) — 564 LOC — Windows/D3D11 implementation — split from Mesh.cpp
+- [`MeshWindows.cpp`](../../SparkEngine/Source/Graphics/MeshWindows.cpp) — 325 LOC — Windows/D3D11 implementation — split from Mesh.cpp
+- [`MeshWindowsPrimitives.cpp`](../../SparkEngine/Source/Graphics/MeshWindowsPrimitives.cpp) — 264 LOC — Procedural primitive generation for the Windows/D3D11 Mesh implementation
 - [`ModelLoading.cpp`](../../SparkEngine/Source/Graphics/ModelLoading.cpp) — 255 LOC — Cross-platform model rendering helpers (BindMesh, BindMaterial, DrawBoundMesh)
 - [`ModelLoadingLinux.cpp`](../../SparkEngine/Source/Graphics/ModelLoadingLinux.cpp) — 484 LOC — Linux model loading — split from ModelLoading.cpp
 - [`ModelLoadingWindows.cpp`](../../SparkEngine/Source/Graphics/ModelLoadingWindows.cpp) — 75 LOC — Windows/D3D11 model loading — split from ModelLoading.cpp
@@ -2105,15 +2130,21 @@ graph LR
 - [`ParticleSystem.h`](../../SparkEngine/Source/Graphics/ParticleSystem.h) — 265 LOC — GPU-friendly particle system for visual effects
 - [`ParticleSystemLinux.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemLinux.cpp) — 266 LOC — Linux ParticleSystem manager and console helpers — split from ParticleSystem.cpp.
 - [`ParticleSystemLinuxEmitter.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemLinuxEmitter.cpp) — 324 LOC — Linux ParticleEmitter implementation — split from ParticleSystemLinux.cpp,
-- [`ParticleSystemWindows.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemWindows.cpp) — 679 LOC — Windows/D3D11 implementation — split from ParticleSystem.cpp
+- [`ParticleSystemWindows.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemWindows.cpp) — 294 LOC — Windows/D3D11 ParticleSystem manager and console helpers — split from ParticleSystem.cpp.
+- [`ParticleSystemWindowsEmitter.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemWindowsEmitter.cpp) — 395 LOC — Windows/D3D11 ParticleEmitter implementation — split from ParticleSystemWindows.cpp,
 - [`PersistentMaterialCB.h`](../../SparkEngine/Source/Graphics/PersistentMaterialCB.h) — 223 LOC — Persistent GPU material constant buffers (SRP Batcher pattern)
 - [`PipelineStateCache.h`](../../SparkEngine/Source/Graphics/PipelineStateCache.h) — 401 LOC — Hash-based caching of D3D11 pipeline state objects
 - [`PortalCulling.cpp`](../../SparkEngine/Source/Graphics/PortalCulling.cpp) — 296 LOC — Portal-based visibility culling — cell graph traversal and frustum narrowing
 - [`PortalCulling.h`](../../SparkEngine/Source/Graphics/PortalCulling.h) — 267 LOC — Portal-based visibility culling for indoor/architectural scenes
 - [`PostProcessingEffects.h`](../../SparkEngine/Source/Graphics/PostProcessingEffects.h) — 17 LOC — Post-processing effect type definitions and settings structs
-- [`PostProcessingPipeline.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipeline.cpp) — 1538 LOC
+- [`PostProcessingPipeline.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipeline.cpp) — 1539 LOC
 - [`PostProcessingPipeline.h`](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h) — 434 LOC — Configurable post-processing effect chain with ordered passes
-- [`PostProcessingPipelineWindows.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindows.cpp) — 1089 LOC — D3D11 GPU implementation of post-processing passes
+- [`PostProcessingPipelineWindows.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindows.cpp) — 207 LOC — D3D11 GPU resource creation and effect-shader compilation
+- [`PostProcessingPipelineWindowsPasses.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsPasses.cpp) — 298 LOC — D3D11 per-pass GPU execution for the post-processing pipeline
+- [`PostProcessingPipelineWindowsShadersAO.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersAO.h) — 172 LOC — Inline HLSL sources for the ambient-occlusion post-process pixel shaders
+- [`PostProcessingPipelineWindowsShadersColor.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersColor.h) — 167 LOC — Inline HLSL sources for the color/HDR post-process pixel shaders
+- [`PostProcessingPipelineWindowsShadersFilter.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersFilter.h) — 166 LOC — Inline HLSL sources for the filtering post-process pixel shaders
+- [`PostProcessingPipelineWindowsShadersLens.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersLens.h) — 188 LOC — Inline HLSL sources for the lens/camera post-process pixel shaders
 - [`PostProcessingTypes.h`](../../SparkEngine/Source/Graphics/PostProcessingTypes.h) — 285 LOC — Type definitions, enums, and settings structs for the post-processing pipeline
 
 ### `SparkEngine/Source/Graphics/RHI/D3D11/`
@@ -2216,7 +2247,8 @@ graph LR
 - [`RenderTargetManagerLinux.cpp`](../../SparkEngine/Source/Graphics/RenderTargetManagerLinux.cpp) — 299 LOC — Linux implementation — split from RenderTargetManager.cpp
 - [`RenderTargetManagerWindows.cpp`](../../SparkEngine/Source/Graphics/RenderTargetManagerWindows.cpp) — 364 LOC — Windows/D3D11 implementation — split from RenderTargetManager.cpp
 - [`RenderTargetPool.h`](../../SparkEngine/Source/Graphics/RenderTargetPool.h) — 401 LOC — Pooled transient render target management
-- [`RenderTargetWindows.cpp`](../../SparkEngine/Source/Graphics/RenderTargetWindows.cpp) — 510 LOC — Windows/D3D11 implementation — split from RenderTarget.cpp
+- [`RenderTargetWindows.cpp`](../../SparkEngine/Source/Graphics/RenderTargetWindows.cpp) — 402 LOC — Windows/D3D11 implementation — split from RenderTarget.cpp
+- [`RenderTargetWindowsMulti.cpp`](../../SparkEngine/Source/Graphics/RenderTargetWindowsMulti.cpp) — 123 LOC — Windows/D3D11 MultipleRenderTargets implementation — split from RenderTargetWindows.cpp
 - [`SHLighting.h`](../../SparkEngine/Source/Graphics/SHLighting.h) — 299 LOC — Spherical harmonics evaluation and BRDF LUT generation for IBL (Filament-inspired)
 - [`SSAOTemporal.h`](../../SparkEngine/Source/Graphics/SSAOTemporal.h) — 234 LOC — Temporal denoising for SSAO with history reprojection
 - [`SVGRenderer.h`](../../SparkEngine/Source/Graphics/SVGRenderer.h) — 803 LOC — SVG path parsing, tessellation, and rendering to vertex buffers
@@ -2231,7 +2263,8 @@ graph LR
 - [`ShaderCompilationLinux.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp) — 462 LOC — Linux implementation — split from ShaderCompilation.cpp
 - [`ShaderCompilationLinuxCompileOps.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxCompileOps.cpp) — 222 LOC — Linux compile utilities — split from ShaderCompilationLinux.cpp
 - [`ShaderCompilationLinuxInternal.h`](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxInternal.h) — 76 LOC — Shared Linux-only helpers for the ShaderCompilationLinux*.cpp split parts
-- [`ShaderCompilationWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp) — 742 LOC — Windows/D3D11 implementation — split from ShaderCompilation.cpp
+- [`ShaderCompilationWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp) — 467 LOC — Windows/D3D11 implementation — split from ShaderCompilation.cpp
+- [`ShaderCompilationWindowsCompileOps.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationWindowsCompileOps.cpp) — 303 LOC — Windows/D3D11 compile utilities — split from ShaderCompilationWindows.cpp
 - [`ShaderConsoleOps.cpp`](../../SparkEngine/Source/Graphics/ShaderConsoleOps.cpp) — 482 LOC — Console integration methods for the Shader system
 - [`ShaderCrossCompiler.h`](../../SparkEngine/Source/Graphics/ShaderCrossCompiler.h) — 394 LOC — Shader cross-compilation pipeline for multi-backend RHI support
 - [`ShaderDaemonBridge.cpp`](../../SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp) — 67 LOC — Implementation of the CompiledShaderBlob wire codec.
@@ -2250,7 +2283,8 @@ graph LR
 - [`ShaderHotReload.h`](../../SparkEngine/Source/Graphics/ShaderHotReload.h) — 549 LOC — Shader file watcher and hot-reload system
 - [`ShaderLinux.cpp`](../../SparkEngine/Source/Graphics/ShaderLinux.cpp) — 383 LOC — Linux implementation — split from Shader.cpp
 - [`ShaderVariantSystem.h`](../../SparkEngine/Source/Graphics/ShaderVariantSystem.h) — 396 LOC — Shader variant keyword and stripping system
-- [`ShaderWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderWindows.cpp) — 502 LOC — Windows/D3D11 implementation — split from Shader.cpp
+- [`ShaderWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderWindows.cpp) — 324 LOC — Windows/D3D11 implementation — split from Shader.cpp
+- [`ShaderWindowsConstantBuffers.cpp`](../../SparkEngine/Source/Graphics/ShaderWindowsConstantBuffers.cpp) — 204 LOC — Windows/D3D11 constant buffer management — split from ShaderWindows.cpp
 - [`ShadowAtlas.cpp`](../../SparkEngine/Source/Graphics/ShadowAtlas.cpp) — 366 LOC — Implementation of priority-based shadow map atlas tile allocation
 - [`ShadowAtlas.h`](../../SparkEngine/Source/Graphics/ShadowAtlas.h) — 138 LOC — Priority-based shadow map atlas for efficient shadow rendering
 - [`ShadowAtlasTypes.h`](../../SparkEngine/Source/Graphics/ShadowAtlasTypes.h) — 41 LOC — Type definitions for the shadow atlas system
@@ -2270,14 +2304,17 @@ graph LR
 - [`TextureSystem.h`](../../SparkEngine/Source/Graphics/TextureSystem.h) — 449 LOC — Advanced texture loading and management system for Spark Engine
 - [`TextureSystemLinux.cpp`](../../SparkEngine/Source/Graphics/TextureSystemLinux.cpp) — 387 LOC — CPU-portable texture system logic (metadata, caching, format detection)
 - [`TextureSystemLinuxTexture.cpp`](../../SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp) — 176 LOC — Texture class implementation for Linux (stb_image/tinyexr CPU-side image loading)
-- [`TextureSystemWindows.cpp`](../../SparkEngine/Source/Graphics/TextureSystemWindows.cpp) — 748 LOC — D3D11 GPU texture loading, creation, and binding
+- [`TextureSystemWindows.cpp`](../../SparkEngine/Source/Graphics/TextureSystemWindows.cpp) — 470 LOC — TextureSystem manager, console operations, and format utilities (Windows/D3D11)
+- [`TextureSystemWindowsTexture.cpp`](../../SparkEngine/Source/Graphics/TextureSystemWindowsTexture.cpp) — 303 LOC — Texture class implementation for Windows (D3D11 + WIC image loading)
 - [`TonemapColorGrading.cpp`](../../SparkEngine/Source/Graphics/TonemapColorGrading.cpp) — 541 LOC — Auto-exposure, tonemapping, and color grading implementation
 - [`TonemapColorGrading.h`](../../SparkEngine/Source/Graphics/TonemapColorGrading.h) — 203 LOC — Tonemapping, auto-exposure, and color grading post-processing
 - [`UICompositor.h`](../../SparkEngine/Source/Graphics/UICompositor.h) — 244 LOC — Compositor stack with pooled render targets for per-element UI effects
 - [`UpscalingShaders.h`](../../SparkEngine/Source/Graphics/UpscalingShaders.h) — 690 LOC — Inline HLSL compute shader source strings for the upscaling system
 - [`UpscalingSystem.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp) — 483 LOC — CPU-side upscaling utilities: Halton jitter, DLL detection, resolution calculation, mode/quality names
 - [`UpscalingSystem.h`](../../SparkEngine/Source/Graphics/UpscalingSystem.h) — 656 LOC — Upscaling integration: FSR 1.0/2.0, DLSS, XeSS
-- [`UpscalingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystemWindows.cpp) — 605 LOC — GPU-side upscaling implementation: D3D11 resource creation, shader compilation, execute dispatches
+- [`UpscalingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystemWindows.cpp) — 441 LOC — GPU-side upscaling implementation: D3D11 resource creation, shader compilation, execute dispatches
+- [`UpscalingSystemWindowsExecute.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystemWindowsExecute.cpp) — 194 LOC — Per-backend upscaling Execute dispatches (FSR1, FSR2, DLSS, XeSS, SparkSR)
+- [`UpscalingSystemWindowsInternal.h`](../../SparkEngine/Source/Graphics/UpscalingSystemWindowsInternal.h) — 30 LOC — Shared Windows-only UpscalingUtils declarations for the UpscalingSystemWindows*.cpp split parts
 - [`UpscalingTypes.h`](../../SparkEngine/Source/Graphics/UpscalingTypes.h) — 352 LOC — Type definitions for the upscaling system: enums, structs, constants
 - [`VRAMBudgetMonitor.cpp`](../../SparkEngine/Source/Graphics/VRAMBudgetMonitor.cpp) — 169 LOC — GPU memory budget monitoring implementation
 - [`VRAMBudgetMonitor.h`](../../SparkEngine/Source/Graphics/VRAMBudgetMonitor.h) — 109 LOC — GPU memory budget monitoring via DXGI adapter queries
@@ -2470,7 +2507,9 @@ graph LR
 - [`Process.h`](../../SparkEngine/Source/Utils/Process.h) — 143 LOC — Cross-platform subprocess spawning with optional stdin/stdout/stderr piping.
 - [`ProcessLinux.cpp`](../../SparkEngine/Source/Utils/ProcessLinux.cpp) — 467 LOC — Linux/macOS implementation of Spark::Process
 - [`ProcessStub.cpp`](../../SparkEngine/Source/Utils/ProcessStub.cpp) — 92 LOC — Fallback stubs for platforms without subprocess support.
-- [`ProcessWin32.cpp`](../../SparkEngine/Source/Utils/ProcessWin32.cpp) — 515 LOC — Windows implementation of Spark::Process
+- [`ProcessWin32.cpp`](../../SparkEngine/Source/Utils/ProcessWin32.cpp) — 151 LOC — Windows implementation of Spark::Process
+- [`ProcessWin32Internal.h`](../../SparkEngine/Source/Utils/ProcessWin32Internal.h) — 118 LOC — Shared Windows-only Process::Impl definition for the ProcessWin32*.cpp split parts
+- [`ProcessWin32Launch.cpp`](../../SparkEngine/Source/Utils/ProcessWin32Launch.cpp) — 299 LOC — Windows implementation of Spark::Process::Builder (configuration and launch)
 - [`ProfileProperties.cpp`](../../SparkEngine/Source/Utils/ProfileProperties.cpp) — 118 LOC — Implementation of frame-resetting typed profile properties
 - [`ProfileProperties.h`](../../SparkEngine/Source/Utils/ProfileProperties.h) — 126 LOC — Typed profile properties that auto-reset each frame
 - [`Profiler.cpp`](../../SparkEngine/Source/Utils/Profiler.cpp) — 457 LOC — Frame profiling and performance analysis implementation
@@ -3091,7 +3130,7 @@ graph LR
 
 | Metric | Count |
 |--------|-------|
-| Source files scanned | 2298 |
-| Total lines of code  | 667117 |
+| Source files scanned | 2337 |
+| Total lines of code  | 668265 |
 | Source directories   | 17 |
-| Last generated       | 2026-07-18 22:46:05 |
+| Last generated       | 2026-07-19 03:58:42 |
