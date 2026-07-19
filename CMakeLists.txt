@@ -1056,7 +1056,7 @@ set(SPARK_ENGINE_ENTRY_POINTS
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows.cpp"
     # SparkEngineWindows.cpp split parts: exe-only — they define/consume the
     # entry-point globals and (Init/Modules/Win32) the game-mode ImGui overlay,
-    # which is a SparkEngine-target-only compile definition (SPARK_HAS_IMGUI).
+    # whose enabling compile definition is set on the SparkEngine target only.
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsInit.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsModules.cpp"
