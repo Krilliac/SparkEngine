@@ -546,6 +546,9 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     {
         SetLastError("Failed to start new module '" + moduleName + "'.");
         LogError(m_lastError);
+        // StartNewModule (asGM_ALWAYS_CREATE) discards any previous module of this name even on
+        // failure; drop the stale pointer so AttachScript cannot dereference freed memory.
+        m_modules.erase(moduleName);
         return false;
     }
 
@@ -554,6 +557,8 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     {
         SetLastError("Failed to add script section from file '" + scriptPath + "'.");
         LogError(m_lastError);
+        // StartNewModule already discarded any previous module of this name; drop the stale pointer.
+        m_modules.erase(moduleName);
         return false;
     }
 
@@ -562,6 +567,8 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     {
         SetLastError("Compilation failed for module '" + moduleName + "'.");
         LogError(m_lastError);
+        // StartNewModule already discarded any previous module of this name; drop the stale pointer.
+        m_modules.erase(moduleName);
         return false;
     }
 
@@ -702,6 +709,9 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
     {
         SetLastError("Failed to start new module '" + moduleName + "'.");
         LogError(m_lastError);
+        // StartNewModule (asGM_ALWAYS_CREATE) discards any previous module of this name even on
+        // failure; drop the stale pointer so AttachScript cannot dereference freed memory.
+        m_modules.erase(moduleName);
         return false;
     }
 
@@ -710,6 +720,8 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
     {
         SetLastError("Failed to add inline script section for module '" + moduleName + "'.");
         LogError(m_lastError);
+        // StartNewModule already discarded any previous module of this name; drop the stale pointer.
+        m_modules.erase(moduleName);
         return false;
     }
 
@@ -718,6 +730,8 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
     {
         SetLastError("Compilation failed for module '" + moduleName + "'.");
         LogError(m_lastError);
+        // StartNewModule already discarded any previous module of this name; drop the stale pointer.
+        m_modules.erase(moduleName);
         return false;
     }
 

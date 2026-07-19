@@ -42,6 +42,7 @@ classDiagram
     GameObject <|-- SphereObject
     InteractiveObject <|-- SwitchObject
     InteractiveObject <|-- TeleporterObject
+    IModule <|-- TerrafrontModule
     GameObject <|-- Vehicle
     GameObject <|-- WallObject
 ```
@@ -53,7 +54,6 @@ classDiagram
     EditorPanel <|-- AIDebugPanel
     EditorPanel <|-- AIEditorPanel
     EditorPanel <|-- AbilityEditorPanel
-    EditorCommand <|-- AddComponentCommand
     EditorCommand <|-- AddConnectionCommand
     EditorCommand <|-- AddNodeCommand
     EditorPanel <|-- AdvancedAssetPipeline
@@ -61,6 +61,7 @@ classDiagram
     EditorPanel <|-- AssetBrowserPanel
     EditorPanel <|-- AudioMixerPanel
     AssetProcessor <|-- AudioProcessor
+    EditorPanel <|-- BasicMaterialEditorPanel
     EditorCommand <|-- BatchCommand
     EditorPanel <|-- BuildCookPanel
     EditorPanel <|-- CSGEditorPanel
@@ -72,11 +73,10 @@ classDiagram
     LogTarget <|-- ConsoleLogTarget
     EditorPanel <|-- ConsolePanel
     EditorPanel <|-- CoroutineDebugPanel
-    EditorCommand <|-- CreateEntityCommand
     EditorPanel <|-- DebugVisualizerPanel
     EditorPanel <|-- DecalEditorPanel
+    EditorPanel <|-- DecorLayoutEditorPanel
     EditorPanel <|-- DedicatedServerPanel
-    EditorCommand <|-- DeleteEntityCommand
     EditorPanel <|-- DestructionEditorPanel
     EditorPanel <|-- DialogueEditorPanel
     EditorPanel <|-- EventMonitorPanel
@@ -104,18 +104,19 @@ classDiagram
     EditorPanel <|-- PerformanceProfiler
     EditorPanel <|-- Physics2DPanel
     EditorPanel <|-- Physics3DPanel
+    EditorPanel <|-- PlayControlPanel
     EditorPanel <|-- PlayModeToolbarPanel
     EditorPanel <|-- PostProcessingPanel
     EditorPanel <|-- PrefabEditorPanel
     EditorPanel <|-- ProjectBrowserPanel
     EditorPanel <|-- ProjectSettingsPanel
-    EditorCommand <|-- PropertyChangeCommand
     EditorPanel <|-- PrototypingPanel
-    EditorCommand <|-- RemoveComponentCommand
+    EditorPanel <|-- RegionMapEditorPanel
     EditorCommand <|-- RemoveNodeCommand
     EditorCommand <|-- ReparentCommand
     EditorPanel <|-- ReplayPanel
     EditorPanel <|-- SaveSystemPanel
+    EditorPanel <|-- SceneImportPanel
     AssetMergeHandler <|-- SceneMergeHandler
     EditorPanel <|-- SceneStatisticsPanel
     EditorPanel <|-- SceneViewPanel
@@ -130,7 +131,6 @@ classDiagram
     AssetProcessor <|-- TextureProcessor
     EditorPanel <|-- TilemapEditorPanel
     EditorPanel <|-- TimeOfDayPanel
-    EditorCommand <|-- TransformChangeCommand
     EditorPanel <|-- TriggerEditorPanel
     EditorPanel <|-- UIDesignerPanel
     EditorPanel <|-- UndoHistoryPanel

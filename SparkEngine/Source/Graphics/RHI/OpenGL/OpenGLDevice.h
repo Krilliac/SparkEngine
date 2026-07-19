@@ -145,7 +145,7 @@ namespace Spark
             {
               public:
                 GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer = 0,
-                          GLenum target = GL_TEXTURE_2D);
+                          GLenum target = GL_TEXTURE_2D, bool ownsTexture = true);
                 ~GLTexture() override;
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
@@ -179,6 +179,7 @@ namespace Spark
                 GLuint m_texture;
                 GLenum m_target;
                 GLuint m_framebuffer;
+                bool m_ownsTexture; ///< False for WrapNativeTexture — caller owns the GL texture
             };
 
             class GLShader : public IRHIShader
@@ -305,7 +306,7 @@ namespace Spark
             {
               public:
                 GLCommandList(bool isImmediate, RHIStatistics* statistics);
-                ~GLCommandList() override = default;
+                ~GLCommandList() override;
 
                 void Begin() override;
                 void End() override;
@@ -356,6 +357,8 @@ namespace Spark
                 GLuint m_boundIndexBuffer = 0;
                 uint32_t m_indexStride = 4;
                 IRHIPipelineState* m_lastBoundPipeline = nullptr; ///< Redundant bind elimination
+                GLuint m_compositeFBO = 0;          ///< FBO composing MRT color targets + depth for SetRenderTargets
+                uint32_t m_compositeColorCount = 0; ///< Color attachments currently set on m_compositeFBO
             };
 
             // ============================================================================

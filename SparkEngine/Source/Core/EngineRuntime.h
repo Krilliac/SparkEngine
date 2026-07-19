@@ -6,9 +6,8 @@
  * process lifetime. Populated during engine startup (SparkEngine.cpp +
  * SparkEngine{Windows,Linux}.cpp) and torn down during shutdown.
  *
- * This struct replaces the previous pattern of individual file-scope
- * `g_graphics` / `g_input` / etc. globals declared `extern` in each
- * platform entry file.
+ * This struct replaces the previous pattern of individual per-subsystem
+ * file-scope globals declared `extern` in each platform entry file.
  *
  * External code should NOT touch these fields directly. Access live
  * subsystem pointers through EngineContext::Get() instead. This header

@@ -57,25 +57,10 @@
  */
 #pragma once
 
-#include "Core/TFEvents.h"
-#include "Core/TFTypes.h"
-#include "Net/TFNetProtocol.h"
-
-#include <memory>
-#include <random>
-#include <string>
-#include <vector>
+#include "Game/TFBotSystemTypes.h"
 
 namespace Terrafront
 {
-
-    struct PawnInfo;      // defined in Game/TFPlayerSystem.h (frozen W1 contract)
-    class TFChaosHarness; // Game/TFChaosHarness.h (bots-chaos lane validation)
-
-    /// Bot player ids live in their own range, distinct from real network client
-    /// ids (small integers from NetworkManager) and kTFLocalHostPlayer (0xFFFFFF01).
-    constexpr PlayerId kTFBotIdBase = 0xB0700000u;
-    constexpr uint32_t kTFMaxBots = 32;
 
     class TFBotSystem
     {

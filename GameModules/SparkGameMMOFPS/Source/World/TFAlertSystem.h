@@ -4,7 +4,8 @@
  *        Facility Control) with per-faction scoring, winner XP payouts, a
  *        replicated alert state, and the local HUD banner/splash.
  *
- * OWNERSHIP: alerts lane (W11 fleet) — this header + TFAlertSystem.cpp.
+ * OWNERSHIP: alerts lane (W11 fleet) — this header + the TFAlertSystem*.cpp
+ * split parts (core / Net / Ui + TFAlertSystemInternal.h).
  *
  * Design (TFMedalSystem precedent: server registry + client mirror in one
  * class; wire ids + packed structs live HERE, not in TFNetProtocol.h):

@@ -208,6 +208,16 @@ namespace Spark::Net
 
         conn.pendingDeltas[sequence] = std::move(pending);
 
+        // Bound per-connection memory: a silent client that never acks must not
+        // grow pendingDeltas without limit. Sequences are monotonic from 1, so
+        // dropping everything older than the window keeps at most
+        // kMaxPendingDeltasPerConnection entries alive.
+        if (conn.pendingDeltas.size() > kMaxPendingDeltasPerConnection)
+        {
+            const uint32_t oldestKept = sequence - static_cast<uint32_t>(kMaxPendingDeltasPerConnection);
+            std::erase_if(conn.pendingDeltas, [oldestKept](const auto& pair) { return pair.first <= oldestKept; });
+        }
+
         return packet;
     }
 

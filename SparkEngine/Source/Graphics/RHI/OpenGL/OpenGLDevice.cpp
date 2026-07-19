@@ -60,8 +60,10 @@ namespace Spark
             // GL TEXTURE
             // ============================================================================
 
-            GLTexture::GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer, GLenum target)
-                : m_desc(desc), m_texture(texture), m_target(target), m_framebuffer(framebuffer)
+            GLTexture::GLTexture(const RHITextureDesc& desc, GLuint texture, GLuint framebuffer, GLenum target,
+                                 bool ownsTexture)
+                : m_desc(desc), m_texture(texture), m_target(target), m_framebuffer(framebuffer),
+                  m_ownsTexture(ownsTexture)
             {
             }
 
@@ -71,7 +73,8 @@ namespace Spark
                 {
                     glDeleteFramebuffers(1, &m_framebuffer);
                 }
-                if (m_texture != 0)
+                // Wrapped textures (WrapNativeTexture) are externally owned — never delete them
+                if (m_texture != 0 && m_ownsTexture)
                 {
                     glDeleteTextures(1, &m_texture);
                 }
@@ -496,6 +499,14 @@ namespace Spark
             {
             }
 
+            GLCommandList::~GLCommandList()
+            {
+                if (m_compositeFBO != 0)
+                {
+                    glDeleteFramebuffers(1, &m_compositeFBO);
+                }
+            }
+
             void GLCommandList::Begin() {}
             void GLCommandList::End()
             {
@@ -515,22 +526,57 @@ namespace Spark
                 }
 
                 auto* glTex = static_cast<GLTexture*>(renderTargets[0]);
-                GLuint fbo = glTex->GetGLFramebuffer();
-                glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-                if (fbo == 0)
+                if (glTex->GetGLFramebuffer() == 0)
                 {
                     // Default framebuffer: valid draw buffers are GL_BACK (not GL_COLOR_ATTACHMENT0)
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
                     GLenum backBuf = GL_BACK;
                     glDrawBuffers(1, &backBuf);
                 }
                 else
                 {
-                    // FBO: use color attachment points
+                    // Each texture's private FBO holds only that texture, so color+depth and
+                    // MRT passes must compose all attachments into a command-list-owned FBO.
+                    // Attachments are rewritten on every call, so no destroyed texture can
+                    // linger on the FBO at draw time.
+                    if (m_compositeFBO == 0)
+                    {
+                        glCreateFramebuffers(1, &m_compositeFBO);
+                    }
+
+                    for (uint32_t i = 0; i < count; ++i)
+                    {
+                        auto* colorTex = static_cast<GLTexture*>(renderTargets[i]);
+                        glNamedFramebufferTexture(m_compositeFBO, GL_COLOR_ATTACHMENT0 + i,
+                                                  colorTex ? colorTex->GetGLTexture() : 0, 0);
+                    }
+                    // Detach color attachments left over from a previous wider MRT bind
+                    for (uint32_t i = count; i < m_compositeColorCount; ++i)
+                    {
+                        glNamedFramebufferTexture(m_compositeFBO, GL_COLOR_ATTACHMENT0 + i, 0, 0);
+                    }
+                    m_compositeColorCount = count;
+
+                    // Texture 0 on GL_DEPTH_STENCIL_ATTACHMENT detaches both depth and stencil
+                    glNamedFramebufferTexture(m_compositeFBO, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0);
+                    if (depthStencil)
+                    {
+                        auto* depthTex = static_cast<GLTexture*>(depthStencil);
+                        const PixelFormat depthFormat = depthTex->GetFormat();
+                        const bool hasStencil = depthFormat == PixelFormat::D24_UNORM_S8_UINT ||
+                                                depthFormat == PixelFormat::D32_FLOAT_S8_UINT;
+                        glNamedFramebufferTexture(m_compositeFBO,
+                                                  hasStencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT,
+                                                  depthTex->GetGLTexture(), 0);
+                    }
+
                     std::vector<GLenum> drawBuffers(count);
                     for (uint32_t i = 0; i < count; ++i)
                         drawBuffers[i] = GL_COLOR_ATTACHMENT0 + i;
-                    glDrawBuffers(count, drawBuffers.data());
+                    glNamedFramebufferDrawBuffers(m_compositeFBO, static_cast<GLsizei>(count), drawBuffers.data());
+
+                    glBindFramebuffer(GL_FRAMEBUFFER, m_compositeFBO);
                 }
 
                 if (m_statistics)
@@ -898,6 +944,11 @@ namespace Spark
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+                    // The reuse path must still run the common post-bootstrap setup —
+                    // without it GetImmediateCommandList() stays null and RHIAdapter fails.
+                    QueryCapabilities();
+                    m_immediateCommandList = std::make_unique<GLCommandList>(true, &m_statistics);
+                    m_transientBuffers.Initialize(this);
                     return true;
                 }
 
@@ -1022,6 +1073,11 @@ namespace Spark
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+                    // The reuse path must still run the common post-bootstrap setup —
+                    // without it GetImmediateCommandList() stays null and RHIAdapter fails.
+                    QueryCapabilities();
+                    m_immediateCommandList = std::make_unique<GLCommandList>(true, &m_statistics);
+                    m_transientBuffers.Initialize(this);
                     return true;
                 }
 
@@ -1489,9 +1545,10 @@ namespace Spark
             {
                 if (!nativeHandle)
                     return nullptr;
-                // Interpret as OpenGL texture name (GLuint stored in pointer)
-                auto glTex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(nativeHandle));
-                return std::make_unique<GLTexture>(desc, glTex, 0, GL_TEXTURE_2D);
+                // Interpret as OpenGL texture name (GLuint stored in pointer).
+                // Per the RHIDevice contract the wrapper does NOT own the resource.
+                return std::make_unique<GLTexture>(desc, static_cast<GLuint>(reinterpret_cast<uintptr_t>(nativeHandle)),
+                                                   0, GL_TEXTURE_2D, false);
             }
 
             std::unique_ptr<IRHIShader> GLDevice::CreateShader(const RHIShaderDesc& desc)

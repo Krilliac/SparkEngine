@@ -154,6 +154,14 @@ namespace Spark::Net
                                                   .requiresAuth = true,
                                                   .allowedFromClient = false,
                                                   .allowedFromServer = true});
+
+        // Delta replication acknowledgement (client -> server only):
+        // [4 bytes deltaSequence] echoed from an applied EntityStateUpdate
+        RegisterSchema(MessageType::DeltaAck, {.minPayloadSize = 4,
+                                               .maxPayloadSize = 16,
+                                               .requiresAuth = true,
+                                               .allowedFromClient = true,
+                                               .allowedFromServer = false});
     }
 
     // ========================================================================

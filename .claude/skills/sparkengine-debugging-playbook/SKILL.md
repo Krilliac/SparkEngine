@@ -193,22 +193,18 @@ named symbol, do not trust the number blindly.
 - **Symptom**: You added an ECS system, it compiles, but its `Update` never runs — entities aren't
   processed and no error is raised.
 - **Where to look**: three names historically collided; here is the **verified current model
-  (2026-07-07)** — none of these is a cleanly-wired home, which is exactly why a system can
-  silently never tick:
+  (2026-07-18)** — `PhaseSystemManager` is now the wired canonical manager:
   | Class | File | Role |
   |-------|------|------|
-  | `PhaseSystemManager` | `SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h` | **Intended-canonical, but NOT wired.** `CreatePhaseSystemManager()` has zero callers and `UpdateAll` is never invoked in any `.cpp` — so it does not tick in the shipping loop. Phased execution in `Phase` enum order (if it were driven). |
-  | `SystemManager` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` (line 735) | **Legacy** flat, insertion-order manager. `EngineSetup.h` says it is *replaced* by `PhaseSystemManager`. |
-  | `StageBasedExecutor` | `SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h` (line 378) | **EXISTS and is ticked every frame** — `GetInstance().ExecuteAll(dt)` runs from `Core/Lifecycle/GameplayLifecycleShared.cpp:1062`. BUT **no `RegisterSystem(...)` caller exists anywhere**, so it is a **dead tick**: a live per-frame tick over zero registered systems. (The handoff doc's claim that this class is gone is stale — it is present.) |
-  | `ParallelSystemExecutor` | same header | A separate access-set batcher, **not wired** into the live tick; the old global parallel path was removed and `PhaseSystemManager::UpdateAll` was made serial (see its `@note`). See `sparkengine-job-system-threading §1c/§1d`. |
+  | `PhaseSystemManager` | `SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h` | **Canonical and WIRED (2026-07-18).** `GameplayLifecycleShared.cpp` calls `CreatePhaseSystemManager(ctx)` during gameplay init and pumps `UpdateAll(*world, dt)` every frame in `Phase` enum order. Regression test: `Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp`. |
+  | `SystemManager` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` | **Legacy** flat, insertion-order manager. Do not add new systems here. |
+  | `StageBasedExecutor` | *(deleted 2026-07-18)* | Was a live tick over zero registered systems; removed when `PhaseSystemManager` was wired. |
+  | `ParallelSystemExecutor` | `ParallelSystemExecutor.h` | A separate access-set batcher, **not wired** into the live tick; `PhaseSystemManager::UpdateAll` is serial (see its `@note`). See `sparkengine-job-system-threading §1c/§1d`. |
 - **The three ways a system silently doesn't tick**:
-  1. **Registered into a manager that never runs.** The `PhaseSystemManager` set built by
-     `Spark::CreatePhaseSystemManager(ctx)` in `SparkEngine/Source/Core/EngineSetup.h` is **not called
-     anywhere** — that helper has zero callers and the shipping Core loop drives
-     `moduleManager->UpdateAll(dt)` instead (see `SparkEngineWindows.cpp` / `SparkEngineLinux.cpp`). The
-     only live ECS-stage tick is `StageBasedExecutor::ExecuteAll` (above), and nothing is registered
-     into it. So a system added to *any* of these three can dead-tick — verify the tick path
-     end-to-end (see `sparkengine-architecture-contract` Invariant 3, this is a known OPEN weak point).
+  1. **Not added to `CreatePhaseSystemManager`.** New systems must be registered in
+     `Spark::CreatePhaseSystemManager(ctx)` (`SparkEngine/Source/Core/EngineSetup.h`) with the correct
+     `Phase::` bucket — that is the set the gameplay lifecycle creates and ticks. A system registered
+     into the legacy `SystemManager` or constructed ad hoc will not tick.
   2. **Registered via the flat overload.** `AddSystem<T>(Phase::AI, …)` is phased;
      `AddSystem<T>(…)` (no `Phase`) drops into the **flat list that runs LAST, after all phases**. If
      ordering matters (you read another system's output), the flat overload is the cause.

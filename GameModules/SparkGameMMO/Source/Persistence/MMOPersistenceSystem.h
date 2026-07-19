@@ -124,17 +124,20 @@ namespace MMO
         LoadInventory = 1201,
         ClearInventory = 1202,
         SaveCurrency = 1203,
+        LoadCurrency = 1204,
 
         // Reputation
         SaveReputation = 1300,
         LoadReputation = 1301,
         ClearReputation = 1302,
+        LoadReputationValue = 1303,
 
         // Achievements
         SaveAchievement = 1400,
         LoadAchievements = 1401,
         SaveAchievementStat = 1402,
         LoadAchievementStats = 1403,
+        LoadAchievementStatValue = 1404,
 
         // Crafting
         SaveCraftingSkill = 1500,

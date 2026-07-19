@@ -3,8 +3,11 @@
  * @brief ImGui HUD: health/shield/ammo, crosshair, hitmarkers, killfeed,
  *        damage direction indicators, death panel, minimap.
  *
- * OWNERSHIP: this header + TFHUD.cpp + TFHUDCombat.cpp belong to ONE
- * implementation agent (combat half split out per the repo file-size rule).
+ * OWNERSHIP: this header + the TFHUD*.cpp translation units (TFHUD.cpp core,
+ * TFHUDDraw.cpp overlay drawing, TFHUDChat.cpp chat, TFHUDCombat.cpp combat
+ * state, TFHUDCombatDraw.cpp combat drawing, TFHUDInternal.h shared
+ * internals) belong to ONE implementation agent (split per the repo
+ * file-size rule).
  * The lifecycle below is the frozen module contract (called from Main.cpp) —
  * extend this class freely, but do not change the lifecycle signatures.
  *

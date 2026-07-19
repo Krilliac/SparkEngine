@@ -25,6 +25,7 @@
 #include "ECSystems.h"
 #include "../../../Utils/MathUtils.h"
 #include <cmath>
+#include <unordered_map>
 
 namespace Spark::ECS
 {
@@ -440,10 +441,28 @@ namespace Spark::ECS
                 auto& camTf = camView.get<Transform>(camEntity);
                 auto& cam = camView.get<Camera2D>(camEntity);
 
+                // Remove last frame's shake contribution so shake stays transient
+                // instead of accumulating into the persistent transform
+                const uint32_t camKey = static_cast<uint32_t>(camEntity);
+                if (auto applied = m_appliedShake.find(camKey); applied != m_appliedShake.end())
+                {
+                    camTf.position.x -= applied->second.x;
+                    camTf.position.y -= applied->second.y;
+                    m_appliedShake.erase(applied);
+                }
+
                 if (cam.followTarget == Camera2D::INVALID_FOLLOW_TARGET)
                     continue;
 
                 auto targetEntity = static_cast<EntityID>(cam.followTarget);
+                if (!world.GetRegistry().valid(targetEntity))
+                {
+                    // Target was destroyed — clear the stale reference instead of
+                    // tripping GetComponent's entity-validity assert
+                    cam.followTarget = Camera2D::INVALID_FOLLOW_TARGET;
+                    continue;
+                }
+
                 auto* targetTf = world.GetComponent<Transform>(targetEntity);
                 if (!targetTf)
                     continue;
@@ -469,17 +488,25 @@ namespace Spark::ECS
                     camTf.position.y += (target - camTf.position.y) * t;
                 }
 
-                // Apply shake offset
+                // Apply shake offset (subtracted again at the start of the next update)
                 camTf.position.x += cam.shakeOffset.x;
                 camTf.position.y += cam.shakeOffset.y;
+                if (cam.shakeOffset.x != 0.0f || cam.shakeOffset.y != 0.0f)
+                    m_appliedShake[camKey] = cam.shakeOffset;
 
-                // Decay shake
-                cam.shakeOffset.x *= 0.9f;
-                cam.shakeOffset.y *= 0.9f;
+                // Decay shake — frame-rate independent, 0.9 per frame at the 60 FPS reference rate
+                const float shakeDecay = std::exp(std::log(0.9f) * deltaTime * 60.0f);
+                cam.shakeOffset.x *= shakeDecay;
+                cam.shakeOffset.y *= shakeDecay;
             }
         }
 
         const char* GetName() const override { return "Camera2DFollowSystem"; }
+
+      private:
+        // Shake applied to each camera transform last frame, keyed by raw entity id
+        // (includes version bits, so recycled entity slots cannot alias)
+        std::unordered_map<uint32_t, DirectX::XMFLOAT2> m_appliedShake;
     };
 
 } // namespace Spark::ECS

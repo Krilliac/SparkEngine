@@ -490,47 +490,62 @@ namespace Spark::Net
                     continue;
                 }
 
+                // Reliability state is per sending peer: every client numbers its
+                // reliable stream independently from 1, so dedup/ACK/ordered
+                // bookkeeping must never be shared across senders.
+                const ClientID peerKey = GetIncomingPeerKey(msg);
+
                 // Duplicate detection for reliable messages
                 if (msg.channel != ChannelType::Unreliable && msg.sequence > 0)
                 {
-                    if (IsDuplicateSequence(msg.sequence))
+                    PeerState& peer = GetPeerState(peerKey);
+                    if (IsDuplicateSequence(peer, msg.sequence))
                     {
                         // Already received — send ACK again but don't dispatch
-                        RecordReceivedSequence(msg.sequence);
+                        RecordReceivedSequence(peer, msg.sequence);
                         m_stats.packetsReceived++;
                         toDispatch.pop();
                         continue;
                     }
-                    RecordReceivedSequence(msg.sequence);
+                    // ReliableOrdered recording is deferred until the message is
+                    // accepted below — a sequence dropped by a full reorder buffer
+                    // must not be ACKed, or the sender stops retransmitting and the
+                    // ordered channel wedges on the gap forever.
+                    if (msg.channel != ChannelType::ReliableOrdered)
+                        RecordReceivedSequence(peer, msg.sequence);
                 }
 
                 // Ordered delivery: buffer out-of-order ReliableOrdered messages
                 if (msg.channel == ChannelType::ReliableOrdered && msg.sequence > 0)
                 {
-                    if (msg.sequence != m_expectedOrderedSequence)
+                    PeerState& peer = GetPeerState(peerKey);
+                    if (msg.sequence != peer.expectedOrderedSequence)
                     {
                         // Bound the reorder buffer so a peer that never sends the
                         // expected sequence (always leaving a gap) cannot grow this
                         // map without limit — a remote memory-exhaustion DoS.
                         // Overwriting an already-buffered sequence is fine; only a
                         // *new* out-of-order sequence past the cap is dropped.
-                        if (m_orderedBuffer.size() >= kMaxQueuedMessages && !m_orderedBuffer.contains(msg.sequence))
+                        if (peer.orderedBuffer.size() >= kMaxQueuedMessages &&
+                            !peer.orderedBuffer.contains(msg.sequence))
                         {
                             m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
                             SPARK_LOG_WARN(Spark::LogCategory::Network,
                                            "Ordered reorder buffer full (%zu) — dropping out-of-order sequence %u",
-                                           m_orderedBuffer.size(), static_cast<unsigned>(msg.sequence));
+                                           peer.orderedBuffer.size(), static_cast<unsigned>(msg.sequence));
                             toDispatch.pop();
                             continue;
                         }
                         // Buffer for later delivery
-                        m_orderedBuffer[msg.sequence] = msg;
+                        RecordReceivedSequence(peer, msg.sequence);
+                        peer.orderedBuffer[msg.sequence] = msg;
                         m_stats.packetsReceived++;
                         toDispatch.pop();
                         continue;
                     }
                     // This is the expected sequence — deliver it, then flush buffer
-                    m_expectedOrderedSequence++;
+                    RecordReceivedSequence(peer, msg.sequence);
+                    peer.expectedOrderedSequence++;
                 }
 
                 MessageHandler handler;
@@ -557,9 +572,11 @@ namespace Spark::Net
                 m_stats.packetsReceived++;
                 toDispatch.pop();
 
-                // After delivering an ordered message, flush any buffered successors
+                // After delivering an ordered message, flush any buffered
+                // successors from the same peer (by key — the handler above may
+                // have mutated m_peers, invalidating references)
                 if (wasReliableOrdered)
-                    FlushOrderedBuffer();
+                    FlushOrderedBuffer(peerKey);
             }
         }
 

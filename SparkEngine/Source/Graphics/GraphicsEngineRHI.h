@@ -52,6 +52,12 @@ namespace Spark::Graphics::Detail
         return s;
     }
 
+    // Platform render target helpers (Linux/macOS). Defined in
+    // GraphicsEngineLinuxRenderTargets.cpp; called from the lifecycle TU
+    // (GraphicsEngineLinux.cpp: Initialize / Shutdown / Resize).
+    void CreatePlatformRenderTargets(uint32_t width, uint32_t height);
+    void ReleasePlatformRenderTargets();
+
 } // namespace Spark::Graphics::Detail
 
 #endif // !SPARK_PLATFORM_WINDOWS

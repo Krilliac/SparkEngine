@@ -4,7 +4,8 @@
  *        follow-cam with LMB/RMB cycling, plus a bounded free-fly fallback
  *        when no squadmate is alive.
  *
- * OWNERSHIP: spectator-mode lane (this header + TFSpectator.cpp), plus the
+ * OWNERSHIP: spectator-mode lane (this header + TFSpectator.cpp /
+ * TFSpectatorDrive.cpp / TFSpectatorUi.cpp), plus the
  * killcam lane (W13: killcam trigger in UI/TFDeathRecap.h/.cpp, reserved
  * TFMsg block 0x5484-0x5487 — left unused, see the KILLCAM_FOLLOW mode note
  * below). Purely client-side — NO TFMsg block, NO server changes. Everything
@@ -97,9 +98,9 @@ namespace Terrafront
     constexpr float kTFSpectFreeTerrainClearM = 0.5f; ///< min clearance above terrain (free)
 
     // --- killcam tuning (killcam lane, W13) --------------------------------------
-    constexpr float kTFKillcamDurationSec = 4.0f;     ///< forced killer follow-cam hold
-    constexpr float kTFKillcamGraceSec = 0.5f;        ///< wait this long for the killer id before giving up
-    constexpr float kTFKillcamFadeRatePerSec = 1.0f;  ///< dim-vignette ramp once the killer pose is unresolvable
+    constexpr float kTFKillcamDurationSec = 4.0f;    ///< forced killer follow-cam hold
+    constexpr float kTFKillcamGraceSec = 0.5f;       ///< wait this long for the killer id before giving up
+    constexpr float kTFKillcamFadeRatePerSec = 1.0f; ///< dim-vignette ramp once the killer pose is unresolvable
 
     class TFSpectator
     {

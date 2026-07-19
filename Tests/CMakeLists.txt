@@ -531,6 +531,7 @@ add_executable(SparkTests
     # SparkTests (the TFDatabase.cpp pattern above).
     TestTFOutfitStore.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp"
     TestTFSecondaryMotion.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp"
     # W13 anti-cheat lane (TFServerValidation) -- movement-clamp, fire-origin,
@@ -687,6 +688,7 @@ target_sources(SparkTests PRIVATE
     harden/Test_engine-misc_EventQueueEviction.cpp
     harden/Test_ecs_audio_doppler.cpp
     harden/Test_ecs_ai_pathfollow.cpp
+    harden/Test_lifecycle_ecs_phase_wiring.cpp
     "${CMAKE_SOURCE_DIR}/SparkConsole/src/CommandParser.cpp"
 )
 # harden/ tests live one directory deeper; ensure they resolve the shared TestFramework.h

@@ -143,6 +143,12 @@ namespace Spark::Net
         PlayerRespawn,
         ScoreUpdate,
 
+        // Delta replication acknowledgement — client echo of the last applied
+        // delta sequence. Deltas number their own per-connection sequence space
+        // (DeltaSnapshotManager), distinct from the reliable-channel sequences
+        // acknowledged by MessageType::Ack; the two must never be mixed.
+        DeltaAck,
+
         // Custom
         UserDefined = 1000
     };
@@ -601,15 +607,48 @@ namespace Spark::Net
         mutable std::mutex m_queueMutex;   ///< Protects m_outgoingQueue, m_incomingQueue
         mutable std::mutex m_handlerMutex; ///< Protects m_handlers (lowest in lock order)
 
-        // Reliable message tracking
-        SequenceNumber m_nextOutgoingSequence = 1;
-        std::unordered_map<SequenceNumber, NetworkMessage> m_unacknowledgedMessages;
-        std::unordered_map<SequenceNumber, float>
-            m_reliableOriginalSendTime; ///< Tracks when each reliable msg was first sent
-        /// @brief Per-message retransmit count for exponential backoff.
-        std::unordered_map<SequenceNumber, int> m_retransmitCounts;
+        // Reliable message tracking — all sequence-keyed reliability state is
+        // per peer (see PeerState below). Two clients both numbering their
+        // reliable streams from 1 must never collide in the server's
+        // dedup/ACK/ordered bookkeeping, and an ACK from one client must never
+        // clear another client's unacknowledged messages.
         float m_reliableRetransmitInterval = 0.5f; ///< Base interval; doubles per retry
         int m_maxReliableRetries = 10;             ///< Max retransmissions before marking connection failed
+
+        /// @brief Reliability state for one remote peer.
+        ///
+        /// On the server the peer key is the ClientID of the remote client; on
+        /// a client there is a single implicit peer — the server — keyed by
+        /// SERVER_PEER. Both the outgoing stream (sequence counter, unacked
+        /// map, retransmit counts) and the incoming stream (dedup window, ACK
+        /// bitfield, ordered reorder buffer) live here.
+        struct PeerState
+        {
+            // Outgoing reliable stream (messages we sent to this peer)
+            SequenceNumber nextOutgoingSequence = 1; ///< Next reliable sequence to assign
+            std::unordered_map<SequenceNumber, NetworkMessage> unacknowledgedMessages; ///< Awaiting ACK
+            std::unordered_map<SequenceNumber, float> reliableOriginalSendTime; ///< First-send time (RTT samples)
+            std::unordered_map<SequenceNumber, int> retransmitCounts;           ///< Per-message retries (backoff)
+
+            // Incoming reliable stream (messages this peer sent us)
+            SequenceNumber remoteSequenceHighest = 0; ///< Highest reliable sequence received
+            uint32_t ackBitfield = 0;                 ///< Bitfield for sequences (highest-1) to (highest-32)
+            std::unordered_map<SequenceNumber, float> receivedSequences;      ///< seq → receive time (dedup)
+            SequenceNumber expectedOrderedSequence = 1;                       ///< Next sequence to deliver in order
+            std::unordered_map<SequenceNumber, NetworkMessage> orderedBuffer; ///< Out-of-order holding buffer
+        };
+
+        /// @brief Peer key a client uses for its single implicit peer (the server).
+        static constexpr ClientID SERVER_PEER = INVALID_CLIENT;
+
+        std::unordered_map<ClientID, PeerState> m_peers; ///< Reliability state keyed by peer
+
+        /// Get (or lazily create) the reliability state for a peer
+        PeerState& GetPeerState(ClientID peerKey) { return m_peers[peerKey]; }
+
+        /// Resolve which peer an incoming message belongs to: on the server the
+        /// trusted senderID stamped by ProcessIncoming; on a client SERVER_PEER
+        ClientID GetIncomingPeerKey(const NetworkMessage& msg) const;
 
         // RTT estimation (Jacobson/Karels algorithm)
         float m_smoothedRTT = 0.0f;    ///< SRTT (smoothed round-trip time)
@@ -629,38 +668,28 @@ namespace Spark::Net
         /// @brief Checks heartbeat freshness and fires timeout callbacks.
         void CheckConnectionTimeouts();
 
-        // ACK processing — tracks the highest received reliable sequence and a
-        // 32-bit bitfield of the previous 32 sequences for cumulative ACKs.
-        SequenceNumber m_remoteSequenceHighest = 0;        ///< Highest reliable sequence received
-        uint32_t m_ackBitfield = 0;                        ///< Bitfield for sequences (highest-1) to (highest-32)
-        float m_ackSendTimer = 0.0f;                       ///< Accumulate before sending ACK
-        static constexpr float ACK_SEND_INTERVAL = 0.033f; ///< ~30 Hz ACK rate
+        // ACK pacing — per-peer highest-sequence/bitfield state lives in PeerState.
+        float m_ackSendTimer = 0.0f;                        ///< Accumulate before sending ACKs
+        static constexpr float ACK_SEND_INTERVAL = 0.033f;  ///< ~30 Hz ACK rate
+        static constexpr float RECEIVED_SEQ_EXPIRY = 30.0f; ///< Prune received-sequence dedup entries after 30s
 
-        // Duplicate detection — set of recently received reliable sequence numbers.
-        // Bounded to prevent unbounded growth; old entries pruned periodically.
-        std::unordered_map<SequenceNumber, float> m_receivedSequences; ///< seq → receive time
-        static constexpr float RECEIVED_SEQ_EXPIRY = 30.0f;            ///< Prune after 30s
-
-        // Ordered delivery — buffer for out-of-order ReliableOrdered messages.
-        SequenceNumber m_expectedOrderedSequence = 1; ///< Next sequence to deliver in order
-        std::unordered_map<SequenceNumber, NetworkMessage> m_orderedBuffer;
-
-        /// Process an incoming ACK message: remove acknowledged messages from unack map
+        /// Process an incoming ACK: remove acknowledged messages from the
+        /// sending peer's unacked map (never another peer's)
         void HandleAck(const NetworkMessage& msg);
 
-        /// Send a cumulative ACK packet to the remote endpoint
+        /// Send one cumulative ACK packet per peer, covering only that peer's sequences
         void SendAckPacket();
 
-        /// Check for duplicate reliable message
-        bool IsDuplicateSequence(SequenceNumber seq) const;
+        /// Check for duplicate reliable message from this peer
+        bool IsDuplicateSequence(const PeerState& peer, SequenceNumber seq) const;
 
-        /// Record a received reliable sequence and update ACK bitfield
-        void RecordReceivedSequence(SequenceNumber seq);
+        /// Record a reliable sequence received from this peer and update its ACK bitfield
+        void RecordReceivedSequence(PeerState& peer, SequenceNumber seq);
 
-        /// Deliver buffered ordered messages that are now in-sequence
-        void FlushOrderedBuffer();
+        /// Deliver this peer's buffered ordered messages that are now in-sequence
+        void FlushOrderedBuffer(ClientID peerKey);
 
-        /// Prune old entries from m_receivedSequences
+        /// Prune old entries from every peer's received-sequence dedup map
         void PruneReceivedSequences();
 
         // Replication

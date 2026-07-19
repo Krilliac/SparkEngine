@@ -4,7 +4,8 @@
  *
  * Low-level evaluation code lives in:
  *   - SkeletalAnimation.cpp   — keyframe interpolation, clip sampling, blending, skinning
- *   - InverseKinematics.cpp   — TwoBoneIK, LookAtIK, FABRIK solvers
+ *   - InverseKinematics.cpp   — TwoBoneIK, LookAtIK solvers
+ *   - InverseKinematicsFABRIK.cpp — FABRIK solver
  *   - AnimationStateMachine.cpp — state machine transitions and crossfade
  */
 #include "AnimationSystem.h"

@@ -114,6 +114,20 @@ If a `ThirdParty/` directory looks empty or CMake reports missing files there, a
 
 ---
 
+## Architectural Defects Found by the 2026-07-18 Sweep (now fixed)
+
+A multi-agent defect sweep (2026-07-18) confirmed and fixed 41 local defects across 31 files, plus three architectural ones that were fixed in follow-up commits the same day:
+
+1. **Per-client reliable-message state was server-wide** (fixed). Receive-side dedup/ACK/ordered state lived per-`NetworkManager`, not per sender, so with ≥2 clients, client B's sequence N was dropped as a duplicate of client A's and the merged broadcast ACK silently cancelled B's retransmit. Now all reliability state (dedup windows, reorder buffers, outgoing sequences, unacked/retransmit maps) lives in a per-peer `PeerState` keyed by ClientID, with per-peer unicast ACKs. Regression tests: `Tests/TestReliableChannel.cpp` (overlapping sequence spaces, ordered independence, ACK isolation).
+2. **Core ECS phase systems were never registered in production** (fixed). `CreatePhaseSystemManager` had no non-test callers. The gameplay lifecycle (`GameplayLifecycleShared.cpp`) now creates the manager during init and pumps `UpdateAll` each frame in the documented phase order; the dead `StageBasedExecutor` was deleted. Regression test: `Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp`.
+3. **Delta snapshot ACKs were never wired** (fixed). Deltas now have their own ack echo — `MessageType::DeltaAck` carries the delta sequence (a different sequence space than transport ACKs, which would falsely advance baselines); clients echo it for applied Unreliable entity-state updates and the server routes the trusted sender to `DeltaSnapshotManager::AcknowledgeSequence` (cumulative, stale acks ignored). `pendingDeltas` is bounded at 256/connection. Regression tests: `Tests/TestNetworkReplicationIntegration.cpp`.
+
+### Bloat-split campaign (same day)
+
+Six split waves reduced the over-threshold file count from **104 to 1** (103 files split into coherent sibling TUs plus small internal headers, all moves byte-identical and build+test verified). The final wave split the 18 Windows-only files (`*Windows.cpp`, `ProcessWin32.cpp`) using the MinGW cross-build (`linux-mingw-release` preset) for compile verification — each split TU was checked with `x86_64-w64-mingw32-g++ -fsyntax-only` against the real build flags, and the full cross-build stays green. The only remaining violation is `GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h` (301 lines, a FROZEN CONTRACT header deliberately left alone). Gotchas discovered: (1) `Tests/CMakeLists.txt` links some module `.cpp` files by explicit path (e.g. `TFOutfitStore.cpp`), so splitting one of those requires adding the new sibling TU there too; (2) exe-only entry files (`SparkEngineWindows.cpp`) are listed in `SPARK_ENGINE_ENTRY_POINTS`, not globbed into the lib — their split parts must be added to that list; (3) in a network-restricted container, stage DirectXMath headers into `build/.dxmath-cache/extract/DirectXMath-oct2024/Inc/` (plus a placeholder `oct2024.zip`) — the NuGet `directxmath` package is a working source when GitHub is blocked.
+
+---
+
 ## Source & Freshness
 
 - **Original observation:** `.claude/knowledge/codebase-observations.md`, last updated 2026-03-19.

@@ -847,20 +847,22 @@ cmake --build build --config Release
 <!-- AUTO:panel_list -->
 | Panel | Header |
 |-------|--------|
-| `AbilityEditorPanel` | `SparkEditor/Source/Panels/AbilityEditorPanel.h` |
 | `AIDebugPanel` | `SparkEditor/Source/Panels/AIDebugPanel.h` |
 | `AIEditorPanel` | `SparkEditor/Source/Panels/AIEditorPanel.h` |
+| `AbilityEditorPanel` | `SparkEditor/Source/Panels/AbilityEditorPanel.h` |
 | `AssetBrowserPanel` | `SparkEditor/Source/Panels/AssetBrowserPanel.h` |
 | `AudioMixerPanel` | `SparkEditor/Source/Panels/AudioMixerPanel.h` |
+| `BasicMaterialEditorPanel` | `SparkEditor/Source/Panels/BasicMaterialEditorPanel.h` |
 | `BuildCookPanel` | `SparkEditor/Source/Panels/BuildCookPanel.h` |
+| `CSGEditorPanel` | `SparkEditor/Source/Panels/CSGEditorPanel.h` |
 | `CinematicSequencerPanel` | `SparkEditor/Source/Panels/CinematicSequencerPanel.h` |
 | `CollaborationPanel` | `SparkEditor/Source/Panels/CollaborationPanel.h` |
 | `ConditionEditorPanel` | `SparkEditor/Source/Panels/ConditionEditorPanel.h` |
 | `ConsolePanel` | `SparkEditor/Source/Panels/ConsolePanel.h` |
 | `CoroutineDebugPanel` | `SparkEditor/Source/Panels/CoroutineDebugPanel.h` |
-| `CSGEditorPanel` | `SparkEditor/Source/Panels/CSGEditorPanel.h` |
 | `DebugVisualizerPanel` | `SparkEditor/Source/Panels/DebugVisualizerPanel.h` |
 | `DecalEditorPanel` | `SparkEditor/Source/Panels/DecalEditorPanel.h` |
+| `DecorLayoutEditorPanel` | `SparkEditor/Source/Panels/DecorLayoutEditorPanel.h` |
 | `DedicatedServerPanel` | `SparkEditor/Source/Panels/DedicatedServerPanel.h` |
 | `DestructionEditorPanel` | `SparkEditor/Source/Panels/DestructionEditorPanel.h` |
 | `DialogueEditorPanel` | `SparkEditor/Source/Panels/DialogueEditorPanel.h` |
@@ -868,6 +870,7 @@ cmake --build build --config Release
 | `EventResponsePanel` | `SparkEditor/Source/Panels/EventResponsePanel.h` |
 | `FPSToolsPanel` | `SparkEditor/Source/Panels/FPSToolsPanel.h` |
 | `GameModuleSelectorPanel` | `SparkEditor/Source/Panels/GameModuleSelectorPanel.h` |
+| `GameModuleSelectorPanel` | `SparkEditor/Source/Panels/PlayControlPanel.h` |
 | `GameViewPanel` | `SparkEditor/Source/Panels/GameViewPanel.h` |
 | `HierarchyPanel` | `SparkEditor/Source/Panels/HierarchyPanel.h` |
 | `InspectorPanel` | `SparkEditor/Source/Panels/InspectorPanel.h` |
@@ -885,8 +888,10 @@ cmake --build build --config Release
 | `ProjectBrowserPanel` | `SparkEditor/Source/Panels/ProjectBrowserPanel.h` |
 | `ProjectSettingsPanel` | `SparkEditor/Source/Panels/ProjectSettingsPanel.h` |
 | `PrototypingPanel` | `SparkEditor/Source/Panels/PrototypingPanel.h` |
+| `RegionMapEditorPanel` | `SparkEditor/Source/Panels/RegionMapEditorPanel.h` |
 | `ReplayPanel` | `SparkEditor/Source/Panels/ReplayPanel.h` |
 | `SaveSystemPanel` | `SparkEditor/Source/Panels/SaveSystemPanel.h` |
+| `SceneImportPanel` | `SparkEditor/Source/Panels/SceneImportPanel.h` |
 | `SceneStatisticsPanel` | `SparkEditor/Source/Panels/SceneStatisticsPanel.h` |
 | `SceneViewPanel` | `SparkEditor/Source/Panels/SceneViewPanel.h` |
 | `ScriptDebugPanel` | `SparkEditor/Source/Panels/ScriptDebugPanel.h` |
@@ -901,8 +906,8 @@ cmake --build build --config Release
 | `TriggerEditorPanel` | `SparkEditor/Source/Panels/TriggerEditorPanel.h` |
 | `UIDesignerPanel` | `SparkEditor/Source/Panels/UIDesignerPanel.h` |
 | `UndoHistoryPanel` | `SparkEditor/Source/Panels/UndoHistoryPanel.h` |
-| `VisualScriptPanel` | `SparkEditor/Source/Panels/VisualScriptPanel.h` |
 | `VRConfigPanel` | `SparkEditor/Source/Panels/VRConfigPanel.h` |
+| `VisualScriptPanel` | `SparkEditor/Source/Panels/VisualScriptPanel.h` |
 | `WeaponEditorPanel` | `SparkEditor/Source/Panels/WeaponEditorPanel.h` |
 | `WeatherFogPanel` | `SparkEditor/Source/Panels/WeatherFogPanel.h` |
 | `WorkflowPanel` | `SparkEditor/Source/Panels/WorkflowPanel.h` |

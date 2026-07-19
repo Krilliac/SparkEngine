@@ -24,6 +24,7 @@ using Microsoft::WRL::ComPtr;
 #include <mutex>
 #include <unordered_map>
 #include <chrono>
+#include <limits>
 
 /**
  * @brief Profiling category
@@ -108,7 +109,7 @@ struct FrameTimingHistory
         else
         {
             // Full recalc only when we evicted an extremum (rare: ~1/HISTORY_SIZE pushes)
-            minTime = 1000.0f;
+            minTime = std::numeric_limits<float>::max();
             maxTime = 0.0f;
             for (float t : frameTimes)
             {
@@ -120,6 +121,8 @@ struct FrameTimingHistory
                         maxTime = t;
                 }
             }
+            if (minTime == std::numeric_limits<float>::max())
+                minTime = 0.0f; // No valid samples in the window
             m_dirtyMinMax = false;
         }
     }

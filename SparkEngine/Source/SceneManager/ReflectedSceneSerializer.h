@@ -1,3 +1,8 @@
+/**
+ * @file ReflectedSceneSerializer.h
+ * @brief Reflection-driven JSON scene serialization for World objects.
+ */
+
 #pragma once
 #include <string>
 

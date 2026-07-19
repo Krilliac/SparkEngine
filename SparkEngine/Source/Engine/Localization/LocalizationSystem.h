@@ -121,7 +121,13 @@ namespace Spark
         bool SetCurrentLanguage(const std::string& languageCode);
 
         /** @brief Get the current language code. */
-        const std::string& GetCurrentLanguage() const { return m_currentLanguage; }
+        std::string GetCurrentLanguage() const
+        {
+            // By value: SetCurrentLanguage reassigns this member under the lock,
+            // so a returned reference could dangle mid-read.
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_currentLanguage;
+        }
 
         /** @brief Get a list of all loaded language codes. */
         std::vector<std::string> GetAvailableLanguages() const;
@@ -159,7 +165,11 @@ namespace Spark
      * @brief Set the fallback language used when a key is missing.
      * @param languageCode ISO 639-1 code (default: "en").
      */
-        void SetFallbackLanguage(const std::string& languageCode) { m_fallbackLanguage = languageCode; }
+        void SetFallbackLanguage(const std::string& languageCode)
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_fallbackLanguage = languageCode;
+        }
 
         /**
      * @brief Register a callback invoked when the language changes.

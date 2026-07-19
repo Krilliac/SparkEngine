@@ -148,6 +148,17 @@ namespace Spark::Net
                        m_stats.uptimeSeconds, m_stats.totalConnectionsServed);
         Log("Server shutting down...");
 
+        // Stop the tick thread before touching the network runtime — NetworkManager::Update
+        // is not thread-safe, so the shutdown flush below must run single-threaded.
+        m_running.store(false, std::memory_order_release);
+
+        // Join tick thread
+        if (m_tickThread.joinable())
+            m_tickThread.join();
+
+        // Stop LAN broadcast
+        StopLanBroadcast();
+
         // Signal all clients
         NetworkMessage shutdownMsg;
         shutdownMsg.type = MessageType::Disconnect;
@@ -159,15 +170,6 @@ namespace Spark::Net
 
         // Give the message a chance to be flushed
         m_networkRuntime->Update(0.0f);
-
-        m_running.store(false, std::memory_order_release);
-
-        // Stop LAN broadcast
-        StopLanBroadcast();
-
-        // Join tick thread
-        if (m_tickThread.joinable())
-            m_tickThread.join();
 
         // Join LAN broadcast thread
         if (m_lanBroadcastThread.joinable())

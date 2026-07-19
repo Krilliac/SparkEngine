@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <charconv>
 #include <regex>
 
 namespace Spark
@@ -219,15 +220,42 @@ namespace Spark
 
     std::string LocalizationSystem::FormatImpl(const std::string& tmpl, const std::vector<std::string>& args) const
     {
-        std::string result = tmpl;
-        for (size_t i = 0; i < args.size(); ++i)
+        // Single left-to-right scan of the original template. Substituted argument
+        // text is never re-scanned, so an argument containing "{N}" (e.g. a
+        // user-supplied name) stays literal instead of being treated as a directive.
+        std::string result;
+        result.reserve(tmpl.length());
+        size_t pos = 0;
+        while (pos < tmpl.length())
         {
-            std::string placeholder = "{" + std::to_string(i) + "}";
-            size_t pos = 0;
-            while ((pos = result.find(placeholder, pos)) != std::string::npos)
+            size_t open = tmpl.find('{', pos);
+            if (open == std::string::npos)
             {
-                result.replace(pos, placeholder.length(), args[i]);
-                pos += args[i].length();
+                result.append(tmpl, pos, std::string::npos);
+                break;
+            }
+            result.append(tmpl, pos, open - pos);
+
+            size_t digitEnd = open + 1;
+            while (digitEnd < tmpl.length() && tmpl[digitEnd] >= '0' && tmpl[digitEnd] <= '9')
+            {
+                ++digitEnd;
+            }
+
+            size_t index = 0;
+            auto [parseEnd, parseErr] = std::from_chars(tmpl.data() + open + 1, tmpl.data() + digitEnd, index);
+            bool isPlaceholder = digitEnd > open + 1 && digitEnd < tmpl.length() && tmpl[digitEnd] == '}' &&
+                                 parseErr == std::errc{} && parseEnd == tmpl.data() + digitEnd && index < args.size();
+            if (isPlaceholder)
+            {
+                result += args[index];
+                pos = digitEnd + 1;
+            }
+            else
+            {
+                // Not a substitutable placeholder — emit the brace literally.
+                result += '{';
+                pos = open + 1;
             }
         }
         return result;

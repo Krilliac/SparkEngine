@@ -1,333 +1,35 @@
 /**
  * @file TFClientNetHandlers.cpp
- * @brief TFClientNet message + view plumbing: client-side TFMsg handlers,
- *        the listen-host/standalone loopback router, HUD feedback from the
- *        server event bus, remote-pawn interpolation, the first-person
- *        camera and the debug panel. Core pump/prediction logic lives in
+ * @brief TFClientNet client-side TFMsg handlers: registration/release against
+ *        NetworkManager, the in-process loopback reply mirror and the S->C
+ *        reply handlers (world-welcome, spawn, combat feedback, chat and the
+ *        W5 onboarding replies). Core pump/prediction logic lives in
  *        TFClientNet.cpp (same class, split per repo file-size rules —
- *        mirrors the TFWeaponSystem/TFWeaponServer split).
+ *        mirrors the TFWeaponSystem/TFWeaponServer split); the loopback
+ *        router lives in TFClientNetLoopback.cpp and the view path in
+ *        TFClientNetView.cpp.
  */
 #include "Net/TFClientNet.h"
 #include "Net/TFChatRules.h"
 
-#include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
-#include "Game/TFWeaponMath.h"
-#include "Game/TFWeaponSystem.h"
-#include "Game/TFOutfitSystem.h"    // Outfits lane: killfeed name tags
 #include "Net/TFRedeployProtocol.h" // W7 ui-map-keys: redeploy reply -> map screen
-#include "Net/TFReplication.h"
-#include "Net/TFServerSim.h"
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h" // W7 ui-map-keys: OnRedeployReply sink
 #include "UI/TFLoginFlow.h" // W5 onboarding (Task 6): direct reply-sink forwarding
 #include "UI/TFScoreboard.h"
-#include "World/TFWorldSetup.h"
 
-#include "Camera/SparkEngineCamera.h"
-#include "Engine/ECS/Components.h"
-#include "Spark/IEngineContext.h"
 #include "Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef SPARK_HAS_IMGUI
-#include <imgui.h>
-#endif
-
 #include <algorithm>
-#include <cmath>
-#include <cstdio>
 #include <cstring>
-#include <vector>
 
 namespace Terrafront
 {
-
-    namespace
-    {
-
-        constexpr float kInterpDelaySec = 0.100f; // remote pawn render delay
-        constexpr float kRadToDeg = 57.2957795f;
-        constexpr double kTwoPi = 6.28318530717958647692;
-
-        void PlayerLabel(PlayerId id, char out[16])
-        {
-            if (id == kInvalidPlayer)
-                std::snprintf(out, 16, "-");
-            else if (id == kTFLocalHostPlayer)
-                std::snprintf(out, 16, "HOST");
-            else
-                std::snprintf(out, 16, "P%u", id);
-        }
-
-        /// Shift `yaw` by whole turns so it lands nearest to `reference` (keeps the
-        /// interpolation buffer free of ±pi wrap pops).
-        float UnwrapNear(float reference, float yaw)
-        {
-            const double turns = std::round((static_cast<double>(reference) - yaw) / kTwoPi);
-            return yaw + static_cast<float>(turns * kTwoPi);
-        }
-
-    } // namespace
-
-    // ---------------------------------------------------------------------------
-    // Remote pawn interpolation (pure client)
-    // ---------------------------------------------------------------------------
-
-    void TFClientNet::UpdateRemotePawns()
-    {
-        if (!m_ctx->replication || !m_ctx->players)
-            return;
-
-        World* world = m_ctx->engine ? m_ctx->engine->GetWorld() : nullptr;
-        const float renderTime = static_cast<float>(m_clock) - kInterpDelaySec;
-
-        std::unordered_map<EntityId, InterpEntry>& interp = m_interp;
-        std::vector<EntityId> seen;
-        seen.reserve(interp.size() + 4);
-
-        m_ctx->replication->ForEachRemotePawn(
-            [&](const RemotePawn& rp)
-            {
-                seen.push_back(rp.entity);
-                if (rp.owner == m_ctx->localPlayer)
-                    return; // own pawn: first-person, prediction drives the camera
-
-                InterpEntry& e = interp[rp.entity];
-                if (!e.has || rp.recvTime != e.lastRecvTime)
-                {
-                    // New replication sample: timestamp on OUR clock so evaluation and
-                    // sampling share one time base regardless of sender cadence.
-                    const float y = e.has ? UnwrapNear(e.lastYaw, rp.yaw) : rp.yaw;
-                    e.pos.AddSample({rp.pos[0], rp.pos[1], rp.pos[2]}, static_cast<float>(m_clock));
-                    e.yaw.AddSample(y, static_cast<float>(m_clock));
-                    e.lastYaw = y;
-                    e.lastRecvTime = rp.recvTime;
-                    e.has = true;
-                }
-
-                if (!world || !e.pos.HasSamples())
-                    return;
-                uint32_t localEnt = 0;
-                if (!m_ctx->players->ResolveEntity(rp.entity, localEnt))
-                    return; // visual entity not created yet (TFPlayerSystem::SyncClientRecords)
-                const auto ecsEnt = static_cast<EntityID>(localEnt);
-                if (!world->GetRegistry().valid(ecsEnt))
-                    return;
-                if (Transform* t = world->GetComponent<Transform>(ecsEnt))
-                {
-                    const DirectX::XMFLOAT3 p = e.pos.Evaluate(renderTime);
-                    t->position = p;
-                    t->rotation.y = e.yaw.Evaluate(renderTime) * kRadToDeg;
-                }
-            });
-
-        // Drop buffers for entities that left the replication store.
-        for (auto it = interp.begin(); it != interp.end();)
-        {
-            if (std::find(seen.begin(), seen.end(), it->first) == seen.end())
-                it = interp.erase(it);
-            else
-                ++it;
-        }
-    }
-
-    // ---------------------------------------------------------------------------
-    // First-person camera
-    // ---------------------------------------------------------------------------
-
-    void TFClientNet::DriveFirstPersonCamera(bool aliveLocalPawn, const float feetPos[3])
-    {
-        if (!aliveLocalPawn)
-            return;
-        // Module-owned camera (TFWorldSetup) — the engine context camera slot is
-        // never populated in module mode.
-        SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
-        if (!cam)
-            return;
-
-        float eye[3] = {feetPos[0], feetPos[1], feetPos[2]};
-        if (!m_ctx->IsAuthority() && m_predActive)
-        {
-            eye[0] = m_predState.position.x;
-            eye[1] = m_predState.position.y;
-            eye[2] = m_predState.position.z;
-        }
-        // Authority roles read the pawn Transform truth (TFServerSim writes it).
-
-        cam->SetPosition({eye[0], eye[1] + WeaponMath::kEyeHeightM, eye[2]});
-    }
-
-    // ---------------------------------------------------------------------------
-    // Loopback routing (listen host / standalone — no socket round-trip)
-    // ---------------------------------------------------------------------------
-
-    void TFClientNet::RouteLoopback(TFMsg id, const void* payload, size_t size)
-    {
-        EnsureLocalHostIdentity();
-        const PlayerId me = m_localPlayer;
-
-        switch (id)
-        {
-#ifdef ENABLE_NETWORKING
-        // W5 T6 (T4-review #1 security fix): every client-originated gameplay
-        // AND onboarding message now routes straight into
-        // TFServerSim::RouteClientMessage — the SAME dispatcher the socket
-        // path uses (RegisterNetHandlers) — so the enter-world gate added
-        // there (RouteClientMessage) applies identically to the listen-host/
-        // standalone loopback player and to real network clients: the local
-        // host (kTFLocalHostPlayer) must complete login -> character
-        // select/create -> enter-world via TFLoginFlow exactly like a
-        // networked client before it can move, spawn, fire, or switch
-        // factions. RouteClientMessage only exists under ENABLE_NETWORKING
-        // (mirrors every other Handle* on TFServerSim); the #else branch
-        // below preserves the pre-W5 direct-call behavior for builds without
-        // networking (no socket attack surface to close there).
-        case TFMsg::ClientInput:
-        case TFMsg::SpawnRequest:
-        case TFMsg::FireEvent:
-        case TFMsg::FactionSelect:
-        case TFMsg::VehicleEnter:
-        case TFMsg::VehicleExit:
-        case TFMsg::AegisDeploy:
-        case TFMsg::SquadMsg:
-        case TFMsg::ChatMsg:
-        case TFMsg::LoginRequest:
-        case TFMsg::RegisterRequest:
-        case TFMsg::CharListRequest:
-        case TFMsg::CharCreateReq:
-        case TFMsg::CharDeleteReq:
-        case TFMsg::EnterWorldReq:
-        case TFMsg::RedeployRequest: // W7 ui-map-keys: listen-host/standalone redeploy
-            // final-review #3: vehicle/squad verbs now share the same
-            // enter-world gate as the other gameplay ids on this path too.
-            if (m_ctx->serverSim)
-                m_ctx->serverSim->RouteClientMessage(me, id, payload, size);
-            break;
-#else
-        case TFMsg::ClientInput:
-            if (size == sizeof(TF_ClientInput) && m_ctx->serverSim)
-            {
-                TF_ClientInput in;
-                std::memcpy(&in, payload, sizeof(in));
-                m_ctx->serverSim->EnqueueInput(me, in);
-            }
-            break;
-
-        case TFMsg::SpawnRequest:
-            if (size == sizeof(TF_SpawnRequest) && m_ctx->players)
-            {
-                TF_SpawnRequest rq;
-                std::memcpy(&rq, payload, sizeof(rq));
-                m_ctx->players->ServerHandleSpawnRequest(me, rq);
-            }
-            break;
-
-        case TFMsg::FireEvent:
-            if (size == sizeof(TF_FireEvent) && m_ctx->weapons)
-            {
-                TF_FireEvent ev;
-                std::memcpy(&ev, payload, sizeof(ev));
-                m_ctx->weapons->ServerHandleFire(me, ev);
-            }
-            break;
-
-        case TFMsg::FactionSelect:
-            if (size == sizeof(TF_FactionSelect))
-            {
-                TF_FactionSelect sel;
-                std::memcpy(&sel, payload, sizeof(sel));
-                const auto f = static_cast<FactionId>(sel.faction);
-                // Mirror the alive-guard TFServerSim::HandleFactionSelect enforces for
-                // networked clients: no faction/team switch while this player has an
-                // active pawn. Without this, the listen-host/standalone loopback path
-                // could team-swap mid-life in a way real networked clients cannot.
-                if (m_ctx->serverSim && m_ctx->serverSim->IsPlayerAlive(me))
-                {
-                    SPARK_LOG_WARN(Spark::LogCategory::Game,
-                                   "[TF] player %u tried to switch faction while alive - ignored", me);
-                    break;
-                }
-                if (m_ctx->serverSim)
-                    m_ctx->serverSim->SetPlayerFaction(me, f);
-                if (m_ctx->players)
-                    m_ctx->players->ServerHandleFactionSelect(me, f);
-                m_ctx->localFaction = f;
-            }
-            break;
-#endif
-
-        default:
-            break; // LoadoutChange/Squad/Chat: TF-W2 server routing
-        }
-    }
-
-    // ---------------------------------------------------------------------------
-    // Local (bus) feedback for the in-process authority player
-    // ---------------------------------------------------------------------------
-
-    void TFClientNet::PushKillfeedEntry(PlayerId killer, PlayerId victim, WeaponId weapon, FactionId killerF,
-                                        FactionId victimF, bool headshot)
-    {
-        if (!m_ctx->hud)
-            return;
-        char killerName[16], victimName[16];
-        PlayerLabel(killer, killerName);
-        PlayerLabel(victim, victimName);
-        // Outfits lane: prepend "[TAG] " when the player is in an outfit.
-        char killerTagged[26], victimTagged[26];
-        OutfitTaggedLabel(m_ctx->outfits ? m_ctx->outfits->GetOutfitTag(killer) : "", killerName, killerTagged,
-                          sizeof(killerTagged));
-        OutfitTaggedLabel(m_ctx->outfits ? m_ctx->outfits->GetOutfitTag(victim) : "", victimName, victimTagged,
-                          sizeof(victimTagged));
-
-        const char* weaponName = "-";
-        if (m_ctx->data && m_ctx->data->IsLoaded())
-        {
-            if (const WeaponDef* wd = m_ctx->data->GetWeapon(weapon))
-                weaponName = wd->name.c_str();
-        }
-        // W6 combat HUD: extended overload — headshot marker + player ids for the
-        // local-row highlight and the pure-client death panel.
-        m_ctx->hud->PushKillfeed(killerTagged, weaponName, victimTagged, killerF, victimF, headshot, killer, victim);
-    }
-
-    void TFClientNet::OnBusPlayerKilled(const EvPlayerKilled& ev)
-    {
-        // Only the in-process authority player needs the bus mirror; connected
-        // clients get TFMsg::KillEvent from the server instead.
-        if (!m_ctx || !m_ctx->IsAuthority() || !m_ctx->HasLocalPlayer())
-            return;
-
-        FactionId killerF = FactionId::None;
-        FactionId victimF = FactionId::None;
-        if (m_ctx->players)
-        {
-            killerF = m_ctx->players->FactionOf(ev.killer);
-            victimF = m_ctx->players->FactionOf(ev.victim);
-        }
-        PushKillfeedEntry(ev.killer, ev.victim, ev.weapon, killerF, victimF, ev.headshot);
-
-        if (ev.killer == m_ctx->localPlayer && m_ctx->hud)
-            m_ctx->hud->ShowHitmarker(true);
-    }
-
-    void TFClientNet::OnBusPlayerDamaged(const EvPlayerDamaged& ev)
-    {
-        if (!m_ctx || !m_ctx->IsAuthority() || !m_ctx->HasLocalPlayer() || !m_ctx->hud || !m_ctx->players)
-            return;
-
-        PawnInfo pawn{};
-        if (!m_ctx->players->GetPawnByPlayer(m_ctx->localPlayer, pawn))
-            return;
-        if (ev.attacker == pawn.entity && ev.victim != pawn.entity)
-            m_ctx->hud->ShowHitmarker(false);
-        if (ev.victim == pawn.entity)
-            m_ctx->hud->ShowDamageFrom(0);
-    }
 
     // ---------------------------------------------------------------------------
     // Client-side TFMsg handlers
@@ -680,38 +382,5 @@ namespace Terrafront
     }
 
 #endif // ENABLE_NETWORKING
-
-    // ---------------------------------------------------------------------------
-    // Debug UI
-    // ---------------------------------------------------------------------------
-
-    void TFClientNet::RenderDebugUI()
-    {
-#ifdef SPARK_HAS_IMGUI
-        if (!m_showDebug)
-            return;
-        if (ImGui::Begin("TF Client Net", &m_showDebug))
-        {
-            const char* mode = m_connected ? "remote client" : (LocalLoopback() ? "local loopback" : "idle");
-            ImGui::Text("mode        : %s", mode);
-            ImGui::Text("local player: 0x%08X", m_localPlayer);
-            ImGui::Text("inputs sent : %u (seq %u)", m_inputsSent,
-                        m_ctx && !m_ctx->IsAuthority() ? m_prediction.GetCurrentSequence() : m_inputSeq);
-            ImGui::Text("view        : yaw %.2f pitch %.2f rad", m_viewYaw, m_viewPitch);
-            if (m_ctx && !m_ctx->IsAuthority())
-            {
-                ImGui::Separator();
-                ImGui::Text("prediction  : %s, pending %zu, correction %.3fm, reconciles %u",
-                            m_predActive ? "active" : "off", m_prediction.GetPendingInputCount(),
-                            m_prediction.GetLastCorrectionMagnitude(), m_reconciles);
-                ImGui::Text("pred pos    : (%.1f %.1f %.1f) %s", m_predState.position.x, m_predState.position.y,
-                            m_predState.position.z, m_predState.isGrounded ? "ground" : "air");
-                ImGui::Text("interp pawns: %zu", m_interp.size());
-            }
-            ImGui::Text("rank        : %u (xp %u)", m_lastRank, m_lastXPTotal);
-        }
-        ImGui::End();
-#endif
-    }
 
 } // namespace Terrafront

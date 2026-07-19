@@ -4,7 +4,8 @@
  *        client presentation (dust tint, wind-blown particles, cull fog-in,
  *        storm wind audio seams). W12 weather-visuals lane.
  *
- * OWNERSHIP: weather-visuals lane (W12) — this header + TFWeatherFx.cpp, plus
+ * OWNERSHIP: weather-visuals lane (W12) — this header + TFWeatherFx.cpp
+ * (cycle/console/net) + TFWeatherFxRender.cpp (client presentation), plus
  * the small clearly-sectioned hooks in Game/TFAudioAmbience.* (storm wind bed)
  * and World/TFRegionDecor.cpp (storm cull scale). Wiring into the contended
  * TFWorldSetup.cpp (Update tick + Render call + skybox dim) goes through the

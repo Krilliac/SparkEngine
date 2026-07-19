@@ -3,8 +3,8 @@
  * @brief Implementation of the TerrainSystem ECS system
  *
  * Wires TerrainComponent entities to the ClipmapTerrain LOD system.
- * Each frame: selects LOD per terrain, feeds heightmap data to the
- * clipmap system, and triggers mesh rebuilds when terrain is dirty.
+ * Each frame: selects LOD per terrain and feeds heightmap data to the
+ * clipmap system when terrain is dirty.
  */
 
 #include "TerrainSystem.h"
@@ -78,17 +78,9 @@ namespace Spark::ECS
                                 res);
             }
 
-            // Rebuild clipmap meshes for levels that moved
-            for (uint32_t level = 0; level < clipmap.GetLevelCount(); ++level)
-            {
-                const auto& lvl = clipmap.GetLevel(level);
-                if (lvl.needsUpdate)
-                {
-                    std::vector<float> vertices;
-                    std::vector<uint32_t> indices;
-                    clipmap.GenerateMesh(level, vertices, indices);
-                }
-            }
+            // Note: GPU mesh rebuilds for dirty clipmap levels (needsUpdate) are the
+            // renderer's responsibility via ClipmapTerrain::UpdateGPUMesh; generating
+            // mesh data here without a consumer would be discarded work.
         }
 
         SPARK_LOG_TRACE(Spark::LogCategory::ECS, "TerrainSystem active terrains: %d", m_activeTerrainCount);

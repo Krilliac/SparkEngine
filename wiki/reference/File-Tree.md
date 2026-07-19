@@ -21,6 +21,7 @@ graph LR
     SparkEditor --> UndoRedo
     SparkEditor --> Utils
     SparkEditor --> __
+    SparkEditor --> misc
     SparkEngine --> Audio
     SparkEngine --> Camera
     SparkEngine --> Components
@@ -94,6 +95,24 @@ graph LR
     SparkGameMMO --> Utils
     SparkGameMMO --> World
     SparkGameMMO --> WorldBoss
+    SparkGameMMOFPS --> Account
+    SparkGameMMOFPS --> Audio
+    SparkGameMMOFPS --> Camera
+    SparkGameMMOFPS --> Console
+    SparkGameMMOFPS --> Core
+    SparkGameMMOFPS --> Data
+    SparkGameMMOFPS --> Engine
+    SparkGameMMOFPS --> Game
+    SparkGameMMOFPS --> Graphics
+    SparkGameMMOFPS --> Input
+    SparkGameMMOFPS --> Net
+    SparkGameMMOFPS --> Persistence
+    SparkGameMMOFPS --> Physics
+    SparkGameMMOFPS --> SceneManager
+    SparkGameMMOFPS --> Spark
+    SparkGameMMOFPS --> UI
+    SparkGameMMOFPS --> Utils
+    SparkGameMMOFPS --> World
     SparkGameOpenWorld --> Audio
     SparkGameOpenWorld --> Engine
     SparkGameOpenWorld --> Enums
@@ -158,8 +177,11 @@ graph LR
     SparkGameVisualScript --> Engine
     SparkGameVisualScript --> Spark
     SparkGameVisualScript --> Utils
+    SparkSDK --> Core
+    SparkSDK --> Physics
     SparkSDK --> Spark
     SparkShaderCompiler --> __
+    Tests --> Account
     Tests --> Audio
     Tests --> Communication
     Tests --> Core
@@ -168,11 +190,14 @@ graph LR
     Tests --> Graphics
     Tests --> Input
     Tests --> LevelStreaming
+    Tests --> Net
     Tests --> Panels
+    Tests --> Persistence
     Tests --> Physics
     Tests --> Prototyping
     Tests --> SceneManager
     Tests --> Search
+    Tests --> Spark
     Tests --> UIDesigner
     Tests --> Utils
     Tests --> VersionControl
@@ -252,7 +277,7 @@ graph LR
 - [`ClassSystem.cpp`](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.cpp) — 692 LOC — Implementation of the FPS class system
 - [`ClassSystem.h`](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h) — 304 LOC — FPS class system for the Spark Engine showcase
 - [`Console.cpp`](../../GameModules/SparkGameFPS/Source/Game/Console.cpp) — 268 LOC
-- [`Console.h`](../../GameModules/SparkGameFPS/Source/Game/Console.h) — 192 LOC — Debug console system for runtime commands and logging
+- [`Console.h`](../../GameModules/SparkGameFPS/Source/Game/Console.h) — 205 LOC — Debug console system for runtime commands and logging
 - [`CubeObject.cpp`](../../GameModules/SparkGameFPS/Source/Game/CubeObject.cpp) — 67 LOC
 - [`CubeObject.h`](../../GameModules/SparkGameFPS/Source/Game/CubeObject.h) — 115 LOC — Axis-aligned cube primitive game object for prototyping and level design
 - [`Enemy.cpp`](../../GameModules/SparkGameFPS/Source/Game/Enemy.cpp) — 420 LOC — AI-driven enemy implementation using engine BehaviorTree system
@@ -335,7 +360,7 @@ graph LR
 
 ### `GameModules/SparkGameMMO/Source/Chat/`
 
-- [`MMOChatSystem.cpp`](../../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp) — 245 LOC — Multi-channel chat with network message routing
+- [`MMOChatSystem.cpp`](../../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.cpp) — 249 LOC — Multi-channel chat with network message routing
 - [`MMOChatSystem.h`](../../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.h) — 94 LOC — Multi-channel chat system for the MMO showcase
 
 ### `GameModules/SparkGameMMO/Source/Core/`
@@ -376,12 +401,12 @@ graph LR
 
 ### `GameModules/SparkGameMMO/Source/Persistence/`
 
-- [`MMOPersistenceSystem.cpp`](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp) — 839 LOC — Database schema, prepared statements, and save/load implementation
-- [`MMOPersistenceSystem.h`](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h) — 247 LOC — MMO character and world persistence using AsyncDatabasePool
+- [`MMOPersistenceSystem.cpp`](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp) — 870 LOC — Database schema, prepared statements, and save/load implementation
+- [`MMOPersistenceSystem.h`](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h) — 250 LOC — MMO character and world persistence using AsyncDatabasePool
 
 ### `GameModules/SparkGameMMO/Source/Player/`
 
-- [`MMOPlayerSystem.cpp`](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp) — 320 LOC — MMO player spawning, replication, prediction, and area migration
+- [`MMOPlayerSystem.cpp`](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.cpp) — 326 LOC — MMO player spawning, replication, prediction, and area migration
 - [`MMOPlayerSystem.h`](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h) — 93 LOC — MMO player management: spawning, replication, prediction, migration
 
 ### `GameModules/SparkGameMMO/Source/Reputation/`
@@ -401,13 +426,341 @@ graph LR
 
 ### `GameModules/SparkGameMMO/Source/World/`
 
-- [`MMOWorldSetup.cpp`](../../GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp) — 413 LOC — MMO world area definitions and server topology configuration
+- [`MMOWorldSetup.cpp`](../../GameModules/SparkGameMMO/Source/World/MMOWorldSetup.cpp) — 439 LOC — MMO world area definitions and server topology configuration
 - [`MMOWorldSetup.h`](../../GameModules/SparkGameMMO/Source/World/MMOWorldSetup.h) — 111 LOC — Configures the MMO world: area definitions, server topology, streaming
 
 ### `GameModules/SparkGameMMO/Source/WorldBoss/`
 
 - [`MMOWorldBossSystem.cpp`](../../GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.cpp) — 453 LOC — World boss definitions, phase management, contribution tracking
 - [`MMOWorldBossSystem.h`](../../GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.h) — 139 LOC — Open-world boss encounters with phases, contribution tracking, shared loot
+
+### `GameModules/SparkGameMMOFPS/Source/Account/`
+
+- [`TFAccountSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.cpp) — 216 LOC — TERRAFRONT account register/login core logic (W5 onboarding, Task 2).
+- [`TFAccountSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Account/TFAccountSystem.h) — 50 LOC — TERRAFRONT account register/login core logic (W5 onboarding, Task 2).
+- [`TFCharacterSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.cpp) — 164 LOC — TERRAFRONT character CRUD + enter-world core logic (W5 onboarding, Task 3).
+- [`TFCharacterSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.h) — 55 LOC — TERRAFRONT character CRUD + enter-world core logic (W5 onboarding, Task 3).
+- [`TFCrypto.cpp`](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp) — 269 LOC — SHA-256 / HMAC-SHA256 / PBKDF2-HMAC-SHA256 implementation.
+- [`TFCrypto.h`](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.h) — 51 LOC — Self-contained SHA-256 / HMAC-SHA256 / PBKDF2-HMAC-SHA256 primitives
+
+### `GameModules/SparkGameMMOFPS/Source/Console/`
+
+- [`TFCommands.cpp`](../../GameModules/SparkGameMMOFPS/Source/Console/TFCommands.cpp) — 402 LOC — TERRAFRONT console command registration (tf_*).
+- [`TFCommandsGameplay.cpp`](../../GameModules/SparkGameMMOFPS/Source/Console/TFCommandsGameplay.cpp) — 451 LOC — TERRAFRONT console commands — data/world, debug/move and W2/W3
+- [`TFCommandsInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Console/TFCommandsInternal.h) — 55 LOC — Shared internals for the TFCommands*.cpp split parts: the lower-case
+- [`TFCommandsNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/Console/TFCommandsNet.cpp) — 448 LOC — TERRAFRONT console commands — chat + W5 onboarding surface and the
+
+### `GameModules/SparkGameMMOFPS/Source/Core/`
+
+- [`Main.cpp`](../../GameModules/SparkGameMMOFPS/Source/Core/Main.cpp) — 396 LOC — TERRAFRONT module — IModule exports and lifecycle (OnLoad boot
+- [`MainFrame.cpp`](../../GameModules/SparkGameMMOFPS/Source/Core/MainFrame.cpp) — 263 LOC — TERRAFRONT module per-frame callbacks: OnUpdate / OnFixedUpdate /
+- [`SparkGameMMOFPS.h`](../../GameModules/SparkGameMMOFPS/Source/Core/SparkGameMMOFPS.h) — 175 LOC — TERRAFRONT — massively-multiplayer combined-arms FPS module.
+- [`TFEvents.h`](../../GameModules/SparkGameMMOFPS/Source/Core/TFEvents.h) — 138 LOC — TERRAFRONT in-process event structs + a tiny synchronous event bus.
+- [`TFTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Core/TFTypes.h) — 301 LOC — TERRAFRONT core types, ids, constants, and the shared game context.
+
+### `GameModules/SparkGameMMOFPS/Source/Data/`
+
+- [`TFDataTables.cpp`](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.cpp) — 372 LOC — JSON data-table loaders (weapons/vehicles/classes/regions/factions).
+- [`TFDataTables.h`](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h) — 261 LOC — JSON data-table loaders (weapons/vehicles/classes/regions/factions).
+- [`TFDataTablesInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesInternal.h) — 80 LOC — Shared internals for the TFDataTables*.cpp split parts: the
+- [`TFDataTablesParseRoster.cpp`](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseRoster.cpp) — 363 LOC — Roster-table parsers (factions/weapons/classes/vehicles) with the
+- [`TFDataTablesParseWorld.cpp`](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTablesParseWorld.cpp) — 400 LOC — World-table parsers (regions/continent lattice, presentation,
+
+### `GameModules/SparkGameMMOFPS/Source/Game/`
+
+- [`TFAbilitySystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAbilitySystem.cpp) — 427 LOC — Class abilities (W9) — lifecycle (Initialize/Update/FixedUpdate),
+- [`TFAbilitySystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAbilitySystem.h) — 236 LOC — Class abilities (W9): server-authoritative activation, durations,
+- [`TFAbilitySystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAbilitySystemClient.cpp) — 285 LOC — TFAbilitySystem client half: local-player mirror queries and tick,
+- [`TFAbilitySystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAbilitySystemServer.cpp) — 407 LOC — TFAbilitySystem server half: wire entry + validation, the
+- [`TFAbilityTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAbilityTypes.h) — 117 LOC — Ability wire protocol + tuning split out of TFAbilitySystem.h
+- [`TFAudioAmbience.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAudioAmbience.cpp) — 433 LOC — Per-zone ambient beds (sanctuary hum / continent wind, crossfaded)
+- [`TFAudioAmbience.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAudioAmbience.h) — 146 LOC — Per-zone ambient audio beds + activity-biased one-shot layers.
+- [`TFAudioAmbienceWire.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFAudioAmbienceWire.cpp) — 145 LOC — TFAudioAmbience wire half: the W9 remote-fire client fx seam
+- [`TFBallistics.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBallistics.cpp) — 116 LOC — Implementation of the stateless ballistics helpers: hit-zone
+- [`TFBallistics.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBallistics.h) — 93 LOC — Server ballistics helpers for TFWeaponSystem: physics-backed world
+- [`TFBlobShadows.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBlobShadows.cpp) — 217 LOC — Ground-projected blob shadow renderer (see TFBlobShadows.h for the
+- [`TFBlobShadows.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBlobShadows.h) — 113 LOC — Client-side ground-projected "blob" shadows under pawns, vehicles,
+- [`TFBotSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystem.cpp) — 437 LOC — Server-side bots driving the REAL game paths: faction select + spawn
+- [`TFBotSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystem.h) — 296 LOC — Server-side AI combatants — the W2 validation workhorse that makes
+- [`TFBotSystemBrain.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemBrain.cpp) — 396 LOC — TFBotSystem 5 Hz brain: per-life state reset, the alive think
+- [`TFBotSystemChaos.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemChaos.cpp) — 402 LOC — TFBotSystem chaos exercise mode (bots-chaos lane): run start/stop,
+- [`TFBotSystemCombat.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemCombat.cpp) — 236 LOC — TFBotSystem combat: target acquisition with hysteresis + rough LoS,
+- [`TFBotSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemInternal.h) — 242 LOC — Shared internals for the TFBotSystem*.cpp split parts: bot tuning
+- [`TFBotSystemNav.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemNav.cpp) — 185 LOC — TFBotSystem local obstacle avoidance (W12 bot-navigation): chest-
+- [`TFBotSystemTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemTypes.h) — 31 LOC — Shared bot-facing declarations split out of TFBotSystem.h: the base
+- [`TFBotSystemVehicle.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemVehicle.cpp) — 300 LOC — TFBotSystem vehicle use: driver-seat approach/boarding through the
+- [`TFCaptureFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFCaptureFx.cpp) — 392 LOC — Capture-point presentation FX (see TFCaptureFx.h for the contract).
+- [`TFCaptureFx.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFCaptureFx.h) — 117 LOC — Client-side "capturing feels alive" presentation for region capture
+- [`TFChaosHarness.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFChaosHarness.cpp) — 271 LOC — Chaos-run validation: counters + the machine-greppable tf_validate
+- [`TFChaosHarness.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFChaosHarness.h) — 117 LOC — Chaos-run validation counters + the tf_validate PASS/FAIL report.
+- [`TFColossusSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFColossusSystem.cpp) — 195 LOC — Colossus exosuit purchase (W3) — flux-gated in-place pawn swap.
+- [`TFColossusSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFColossusSystem.h) — 95 LOC — Colossus exosuit purchase + suit stats (W3).
+- [`TFComponents.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFComponents.h) — 115 LOC — TERRAFRONT ECS components (DESIGN.md §3).
+- [`TFDamageSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.cpp) — 457 LOC — Server-authoritative damage: shield-first absorb, faction regen
+- [`TFDamageSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDamageSystem.h) — 288 LOC — Health/shields, TTK model, friendly fire, kill credit.
+- [`TFDeployablePlacement.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployablePlacement.cpp) — 201 LOC — W6 placement validation (slope / spacing / region ownership / physics
+- [`TFDeployableSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.cpp) — 347 LOC — Fabricator turret / ammo pack + Medtech beacon (W3) + resupply
+- [`TFDeployableSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h) — 251 LOC — Fabricator turret / ammo pack + Medtech beacon (W3).
+- [`TFDeployableSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystemInternal.h) — 26 LOC — Shared internals for the TFDeployableSystem*.cpp split parts: the
+- [`TFDeployableSystemNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystemNet.cpp) — 194 LOC — TFDeployableSystem 0x54FC-0x54FE replication: server broadcast
+- [`TFDeployableSystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystemServer.cpp) — 265 LOC — TFDeployableSystem server placement + damage/destroy paths:
+- [`TFDeployableSystemTick.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystemTick.cpp) — 318 LOC — TFDeployableSystem server-tick mechanics: lifetime expiry, the W3
+- [`TFDeployableTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableTypes.h) — 107 LOC — Deployable kind catalog + per-kind placement/stat specs (W6 expansion).
+- [`TFDirectiveData.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveData.h) — 114 LOC — Data-driven directive (mission) definitions — code tables, no new file formats.
+- [`TFDirectiveSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveSystem.cpp) — 356 LOC — Directive progress tracking + tiered payouts (see header for design).
+- [`TFDirectiveSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveSystem.h) — 131 LOC — Server-tracked per-player directives (missions) with tiered rewards.
+- [`TFFootsteps.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFFootsteps.cpp) — 283 LOC — Client-side footstep audio — see TFFootsteps.h for the trigger /
+- [`TFFootsteps.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFFootsteps.h) — 101 LOC — Client-side footstep audio for the local pawn and nearby remote
+- [`TFGrenadeSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.cpp) — 275 LOC — Frag grenades (W10) — lifecycle, per-frame/fixed ticks, time base and
+- [`TFGrenadeSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystem.h) — 299 LOC — Frag grenades (W10): server-authoritative throw validation, ballistic
+- [`TFGrenadeSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystemClient.cpp) — 376 LOC — TFGrenadeSystem client half: G-key throw entry + local count mirror,
+- [`TFGrenadeSystemFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystemFx.cpp) — 203 LOC — TFGrenadeSystem client rendering: replicated grenade bodies (sphere),
+- [`TFGrenadeSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystemInternal.h) — 33 LOC — Shared internals for the TFGrenadeSystem*.cpp split parts: the boom
+- [`TFGrenadeSystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystemServer.cpp) — 460 LOC — TFGrenadeSystem server half: throw validation + spawn, ballistic
+- [`TFGrenadeSystemTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGrenadeSystemTypes.h) — 172 LOC — Grenades-lane wire protocol (reserved TFMsg ids + packed structs),
+- [`TFGroundFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGroundFx.cpp) — 244 LOC — Hover-dust flipbook emitter (see TFGroundFx.h for the wiring
+- [`TFGroundFx.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFGroundFx.h) — 97 LOC — Client-side hover-dust emitter: short-lived camera-facing flipbook
+- [`TFImpactFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFImpactFx.cpp) — 467 LOC — Bullet-impact flipbook emitter (see TFImpactFx.h for the wiring and
+- [`TFImpactFx.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFImpactFx.h) — 152 LOC — Client-side bullet-impact feedback: short-lived camera-facing
+- [`TFLanDiscovery.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.cpp) — 362 LOC — W11 server-browser lane: lifecycle + LAN beacon broadcaster half
+- [`TFLanDiscovery.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.h) — 149 LOC — W11 server-browser lane: LAN server discovery (UDP beacon + scanner).
+- [`TFLanDiscoveryInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryInternal.h) — 104 LOC — Shared internals for the TFLanDiscovery*.cpp split parts: the
+- [`TFLanDiscoveryScan.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp) — 184 LOC — W11 server-browser lane: LAN scanner half (client side) — bind UDP
+- [`TFMedalSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.cpp) — 239 LOC — TFMedalSystem core: the medal definition table + icon paths, system
+- [`TFMedalSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h) — 296 LOC — Medals (killstreak / multikill / Savior / Avenger) + the server-tracked
+- [`TFMedalSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystemClient.cpp) — 212 LOC — TFMedalSystem client half: the TF_ScoreUpdate score-row mirror, the
+- [`TFMedalSystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystemServer.cpp) — 337 LOC — TFMedalSystem server half: medal detection from the bus events
+- [`TFMovementModel.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFMovementModel.h) — 158 LOC — TF movement model v1 — THE shared client/server movement step.
+- [`TFOpticsSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOpticsSystem.cpp) — 351 LOC — Weapon optics presentation (see TFOpticsSystem.h for the contract).
+- [`TFOpticsSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOpticsSystem.h) — 167 LOC — Weapon optics (W11 weapon-optics lane): per-weapon sight selection
+- [`TFOutfitSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.cpp) — 378 LOC — Outfits (clans/guilds) core: lifecycle, name/tag validation,
+- [`TFOutfitSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h) — 276 LOC — Outfits (PS2-style clans/guilds): create, invite/accept, ranks,
+- [`TFOutfitSystemConsole.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemConsole.cpp) — 216 LOC — TFOutfitSystem console commands (tf_outfit_*): registered from
+- [`TFOutfitSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemInternal.h) — 52 LOC — Shared internals for the TFOutfitSystem*.cpp split parts: wall-clock
+- [`TFOutfitSystemScore.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemScore.cpp) — 157 LOC — TFOutfitSystem W12 competition score: aggregation off the existing
+- [`TFOutfitSystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemServer.cpp) — 448 LOC — TFOutfitSystem server op handlers: TF_OutfitRequest dispatch,
+- [`TFOutfitSystemTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemTypes.h) — 202 LOC — Outfit wire protocol split out of TFOutfitSystem.h (umbrella): the
+- [`TFOutfitSystemWire.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystemWire.cpp) — 449 LOC — TFOutfitSystem wire halves: server-side sends (replies, chunked
+- [`TFPingSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPingSystem.cpp) — 486 LOC — Squad-scoped tactical pings (W11) — server validation + squad
+- [`TFPingSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPingSystem.h) — 287 LOC — Squad-scoped tactical pings (W11): server-validated placement, squad
+- [`TFPingSystemFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPingSystemFx.cpp) — 112 LOC — TFPingSystem client rendering: the billboarded diamond world markers
+- [`TFPlayerSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.cpp) — 357 LOC — Pawn registry + server spawn/kill/respawn flow, W1 full ECS
+- [`TFPlayerSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystem.h) — 133 LOC — Spawn/death/respawn, class loadouts, pawn registry (both sides).
+- [`TFPlayerSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystemClient.cpp) — 295 LOC — TFPlayerSystem query surface + pure-client half: PawnInfo queries,
+- [`TFPlayerSystemSpawn.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFPlayerSystemSpawn.cpp) — 219 LOC — TFPlayerSystem spawn-request flow: TF_SpawnRequest validation
+- [`TFProgressionSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.cpp) — 440 LOC — Server-authoritative XP/rank/flux progression core: lifecycle, the
+- [`TFProgressionSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystem.h) — 273 LOC — XP events, ranks 1-30, flux income, persistence.
+- [`TFProgressionSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemInternal.h) — 32 LOC — Shared internals for the TFProgressionSystem*.cpp split parts: the
+- [`TFProgressionSystemMeta.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemMeta.cpp) — 366 LOC — TFProgressionSystem W6 progression expansion + loadout-depth wave:
+- [`TFProgressionSystemPersist.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionSystemPersist.cpp) — 161 LOC — TFProgressionSystem JSON persistence: read-modify-write of the
+- [`TFProgressionTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFProgressionTypes.h) — 92 LOC — Progression declaration groups split out of TFProgressionSystem.h:
+- [`TFRedeployRules.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFRedeployRules.cpp) — 102 LOC — Shared client/server redeploy eligibility (see TFRedeployRules.h).
+- [`TFRedeployRules.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFRedeployRules.h) — 61 LOC — Shared client/server eligibility rules for map redeploys (W7).
+- [`TFSecondaryMotion.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp) — 257 LOC — Damped pendulum-chain simulation (see TFSecondaryMotion.h for the
+- [`TFSecondaryMotion.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.h) — 128 LOC — Reusable client-side secondary-motion framework: damped point-mass
+- [`TFServerValidation.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.cpp) — 211 LOC — Server-authoritative anti-cheat sanity layer. See TFServerValidation.h
+- [`TFServerValidation.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFServerValidation.h) — 190 LOC — Server-authoritative anti-cheat sanity layer (W13 anti-cheat lane).
+- [`TFSocialSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.cpp) — 305 LOC — Friends / block list / recent players + online-player roster:
+- [`TFSocialSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h) — 203 LOC — Friends / block list / recent players + the online-player roster.
+- [`TFSocialSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemClient.cpp) — 253 LOC — TFSocialSystem client mirror: roster / friends / blocked / recent
+- [`TFSocialSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemInternal.h) — 67 LOC — Shared internals for the TFSocialSystem*.cpp split parts: wall-clock
+- [`TFSocialSystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemServer.cpp) — 372 LOC — TFSocialSystem server registry: enter/leave detection off
+- [`TFSocialSystemStore.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp) — 206 LOC — TFSocialSystem persistence: the atomic-JSON social store
+- [`TFSocialSystemWire.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemWire.cpp) — 181 LOC — TFSocialSystem server->client sends: list/roster snapshot builders,
+- [`TFSpectator.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSpectator.cpp) — 345 LOC — Dead-time spectator camera lifecycle (W12 spectator-mode lane):
+- [`TFSpectator.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSpectator.h) — 202 LOC — Dead-time spectator camera (W12 spectator-mode lane): squadmate
+- [`TFSpectatorDrive.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSpectatorDrive.cpp) — 247 LOC — TFSpectator camera drive: the FOLLOW-mode third-person chase (wall
+- [`TFSpectatorUi.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSpectatorUi.cpp) — 157 LOC — TFSpectator ImGui overlay: the SPECTATING / KILLED BY / FREE CAMERA
+- [`TFSquadSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadSystem.cpp) — 266 LOC — Squads of 6 (W4): lifecycle (clock, disconnect-sweep cadence, net
+- [`TFSquadSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadSystem.h) — 287 LOC — Squads of 6: invite/accept/leave, squad spawn, waypoint.
+- [`TFSquadSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadSystemClient.cpp) — 418 LOC — TFSquadSystem client half: the local squad mirror (TF_SquadMsg state
+- [`TFSquadSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadSystemInternal.h) — 32 LOC — Shared internals for the TFSquadSystem*.cpp split parts: the roster
+- [`TFSquadSystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadSystemServer.cpp) — 422 LOC — TFSquadSystem server registry: TF_SquadMsg op handlers
+- [`TFSquadTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadTypes.h) — 51 LOC — Squad constants and the W11 squad-v2 wire block (TF_SquadWaypoint on
+- [`TFTargetRange.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTargetRange.cpp) — 495 LOC — Sanctuary firing range (see the header for the cosmetic-only
+- [`TFTargetRange.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTargetRange.h) — 113 LOC — Sanctuary firing range: 6 target dummies at 20/40/60 m that react to
+- [`TFTransparentPass.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTransparentPass.cpp) — 162 LOC — Sorted alpha-blended draw pass (see TFTransparentPass.h for the
+- [`TFTransparentPass.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTransparentPass.h) — 116 LOC — Sorted alpha-blended draw pass for the module's basic-shader path
+- [`TFTutorial.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorial.cpp) — 394 LOC — First-join sanctuary tutorial: lifecycle, console command, flow
+- [`TFTutorial.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorial.h) — 147 LOC — First-join guided tutorial in Sanctuary Haven (W12 tutorial-flow
+- [`TFTutorialInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorialInternal.h) — 56 LOC — Shared internals for the TFTutorial*.cpp split parts: the step-label
+- [`TFTutorialUi.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorialUi.cpp) — 231 LOC — TFTutorial ImGui presentation: the toast line, the right-edge step
+- [`TFUiSounds.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFUiSounds.h) — 104 LOC — Semantic UI bleep helper: terminal open/close/confirm/deny and
+- [`TFVehicleClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleClient.cpp) — 358 LOC — W3 vehicles — client UX half of TFVehicleSystem: terminal purchase
+- [`TFVehicleClientDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleClientDraw.cpp) — 218 LOC — W3 vehicles — client drawing half of TFVehicleClient.cpp: the E/B
+- [`TFVehicleFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleFx.cpp) — 322 LOC — Vehicle damage-state flipbook emitter + critical-tier engine audio
+- [`TFVehicleFx.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleFx.h) — 136 LOC — Client-side vehicle damage-state presentation: hull-hp-fraction
+- [`TFVehicleNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleNet.cpp) — 342 LOC — W3 vehicles — server replication half of TFVehicleSystem on the
+- [`TFVehicleNetMirror.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleNetMirror.cpp) — 314 LOC — W3 vehicles — pure-client mirror half of TFVehicleSystem replication
+- [`TFVehiclePhysics.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehiclePhysics.cpp) — 443 LOC — Hover-rig force model: corner-spring suspension, drive/steer servo, grip,
+- [`TFVehiclePhysics.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehiclePhysics.h) — 133 LOC — Jolt-backed server-side rigid-body simulation for TERRAFRONT hover vehicles.
+- [`TFVehicleSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.cpp) — 358 LOC — W3 vehicles — lifecycle + shared server core: init/update/shutdown,
+- [`TFVehicleSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystem.h) — 299 LOC — Drifter/Aegis/Ravager/Vulture: seats, driving (ground + VTOL flight),
+- [`TFVehicleSystemDamage.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemDamage.cpp) — 298 LOC — W3 vehicles — damage/destruction: the server-authoritative hp pool
+- [`TFVehicleSystemDrive.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemDrive.cpp) — 288 LOC — W3 vehicles — authoritative driving model: the math-path StepVehicle
+- [`TFVehicleSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemInternal.h) — 27 LOC — Shared internals for the TFVehicleSystem*.cpp split parts: the world
+- [`TFVehicleSystemRecords.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemRecords.h) — 190 LOC — Record structs behind TFVehicleSystem, split from TFVehicleSystem.h
+- [`TFVehicleSystemSeats.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemSeats.cpp) — 327 LOC — W3 vehicles — seats: enter/exit with the one-tick exit latch, the
+- [`TFVehicleSystemSpawn.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemSpawn.cpp) — 457 LOC — W3 vehicles — validated terminal purchase + vehicle entity creation,
+- [`TFVehicleSystemTypes.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleSystemTypes.h) — 74 LOC — Shared vehicle declarations split from TFVehicleSystem.h (the
+- [`TFVehicleTerminal.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleTerminal.cpp) — 206 LOC — Vehicle terminal prop spawner (see TFVehicleTerminal.h).
+- [`TFVehicleTerminal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVehicleTerminal.h) — 69 LOC — Client-side vehicle terminal props: one physical terminal console at
+- [`TFViewModel.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFViewModel.cpp) — 180 LOC — First-person arms + weapon viewmodel (see TFViewModel.h for the
+- [`TFViewModel.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFViewModel.h) — 139 LOC — First-person viewmodel: stylized arms + the equipped weapon, drawn at
+- [`TFViewModelInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFViewModelInternal.h) — 174 LOC — Shared internals for the TFViewModel*.cpp split parts: the viewmodel
+- [`TFViewModelRender.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFViewModelRender.cpp) — 484 LOC — TFViewModel per-frame Render pass: animation springs (recoil recovery,
+- [`TFVisualUtils.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFVisualUtils.h) — 36 LOC — Shared faction structure/pawn/vehicle tint-material lookup (sp4
+- [`TFWeaponMath.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponMath.h) — 167 LOC — Small float[3] vector helpers + capsule/cone math shared by the
+- [`TFWeaponServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServer.cpp) — 268 LOC — Server half of TERRAFRONT weapons, fire-entry part: server-side
+- [`TFWeaponServerFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServerFx.cpp) — 174 LOC — TFWeaponSystem server fx broadcasts: the 0x54F4 remote-fire fx for
+- [`TFWeaponServerHitscan.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServerHitscan.cpp) — 235 LOC — TFWeaponSystem server hitscan: lag-compensated pellet rays with
+- [`TFWeaponServerInternal.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServerInternal.h) — 21 LOC — Shared internals for the TFWeaponServer*.cpp split parts: the
+- [`TFWeaponServerProjectile.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponServerProjectile.cpp) — 264 LOC — TFWeaponSystem server projectiles: spawn from validated fire events,
+- [`TFWeaponSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.cpp) — 486 LOC — Client half of TERRAFRONT weapons: loadout, ammo/reload, ADS,
+- [`TFWeaponSystem.h`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h) — 277 LOC — Data-driven weapons: hitscan + projectile, ADS/spread, ammo/reload.
+- [`TFWeaponSystemRemoteFire.cpp`](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystemRemoteFire.cpp) — 120 LOC — TFWeaponSystem remote/distant fire audio (W8 audio-polish lane):
+
+### `GameModules/SparkGameMMOFPS/Source/Net/`
+
+- [`TFChatRules.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFChatRules.h) — 155 LOC — Pure validation and recipient rules for TERRAFRONT chat.
+- [`TFClientNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.cpp) — 327 LOC — W1 client networking core: connection observe, identity, and the
+- [`TFClientNet.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h) — 235 LOC — Client connection, ClientPrediction wiring, interpolation buffers.
+- [`TFClientNetHandlers.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNetHandlers.cpp) — 386 LOC — TFClientNet client-side TFMsg handlers: registration/release against
+- [`TFClientNetInput.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNetInput.cpp) — 280 LOC — TFClientNet input pump + prediction: 60 Hz InputManager sampling,
+- [`TFClientNetLoopback.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNetLoopback.cpp) — 213 LOC — TFClientNet listen-host/standalone plumbing: the client-originated
+- [`TFClientNetView.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNetView.cpp) — 172 LOC — TFClientNet presentation plumbing: remote-pawn interpolation, the
+- [`TFFireFxProtocol.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFFireFxProtocol.h) — 187 LOC — Wire struct + message id for remote-fire fx: per-shot muzzle flash +
+- [`TFNetProtocol.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocol.h) — 28 LOC — TERRAFRONT wire protocol — every app-level message on the network.
+- [`TFNetProtocolGameplay.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolGameplay.h) — 224 LOC — Packed gameplay wire structs: input, spawn, combat, capture,
+- [`TFNetProtocolIds.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolIds.h) — 162 LOC — TFMsg message-id enum for the TERRAFRONT wire protocol (0x5400 block).
+- [`TFNetProtocolOnboarding.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFNetProtocolOnboarding.h) — 124 LOC — Packed onboarding wire structs: auth (W5 Task 4), character
+- [`TFRedeployProtocol.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFRedeployProtocol.h) — 64 LOC — Wire structs for the W7 map redeploy flow (ui-map-keys lane).
+- [`TFRepProtocol.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFRepProtocol.h) — 267 LOC — Private wire structs for the TF replication channel (owned by the
+- [`TFReplication.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFReplication.cpp) — 334 LOC — TF replication channel (W1) — lifecycle + SERVER side: pawn
+- [`TFReplication.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFReplication.h) — 142 LOC — TF replication channel — server-side pawn create/update/destroy
+- [`TFReplicationClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFReplicationClient.cpp) — 266 LOC — TF replication channel (W1) — CLIENT side: handlers for the 0x54F0
+- [`TFServerSim.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.cpp) — 356 LOC — Authoritative fixed-tick simulation core: lifecycle, frozen
+- [`TFServerSim.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSim.h) — 249 LOC — Authoritative fixed-tick simulation (movement validate, hits, capture).
+- [`TFServerSimConstants.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSimConstants.h) — 32 LOC — Shared simulation constants for the TFServerSim implementation split
+- [`TFServerSimMovement.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSimMovement.cpp) — 303 LOC — TFServerSim movement integration: per-player input replay through the
+- [`TFServerSimNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSimNet.cpp) — 309 LOC — TFServerSim session/socket plumbing: TFMsg handler registration, client
+- [`TFServerSimNetHandlers.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSimNetHandlers.cpp) — 455 LOC — TFServerSim gameplay TFMsg handlers: input/spawn/fire/faction, vehicle
+- [`TFServerSimOnboarding.cpp`](../../GameModules/SparkGameMMOFPS/Source/Net/TFServerSimOnboarding.cpp) — 453 LOC — TFServerSim client-message routing choke point (the enter-world gate)
+- [`TFSocialProtocol.h`](../../GameModules/SparkGameMMOFPS/Source/Net/TFSocialProtocol.h) — 139 LOC — Wire structs + message ids for the TERRAFRONT social layer
+
+### `GameModules/SparkGameMMOFPS/Source/Persistence/`
+
+- [`TFDatabase.cpp`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp) — 464 LOC — TFDatabase implementation — atomic-JSON-file backing (see TFDatabase.h).
+- [`TFDatabase.h`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h) — 118 LOC — TERRAFRONT account/character persistence (W5 onboarding, Task 1).
+- [`TFOutfitStore.cpp`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.cpp) — 404 LOC — TFOutfitStore implementation — atomic-JSON-file backing (see header).
+- [`TFOutfitStore.h`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h) — 155 LOC — TERRAFRONT outfit (clan/guild) persistence — atomic-JSON-file backing.
+- [`TFOutfitStoreDisk.cpp`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStoreDisk.cpp) — 183 LOC — TFOutfitStore disk round-trip: strict-JSON load and atomic
+- [`TFPlayerMeta.cpp`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.cpp) — 101 LOC — TFPlayerMetaStore — runtime record management + TFDatabase round-trip.
+- [`TFPlayerMeta.h`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFPlayerMeta.h) — 119 LOC — Runtime per-player progression meta (unlocks, loadout, per-weapon
+- [`TFUnlockTree.cpp`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFUnlockTree.cpp) — 114 LOC — The unlock table (code data table) + linear lookups.
+- [`TFUnlockTree.h`](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFUnlockTree.h) — 77 LOC — Data-driven-in-code weapon/vehicle unlock tree (rank- and flux-gated).
+
+### `GameModules/SparkGameMMOFPS/Source/UI/`
+
+- [`TFChatWindow.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFChatWindow.cpp) — 433 LOC — Client chat window implementation (see TFChatWindow.h).
+- [`TFChatWindow.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFChatWindow.h) — 96 LOC — Client chat window: bottom-left overlay, channel tabs, slash-prefix
+- [`TFDeathRecap.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.cpp) — 390 LOC — Death recap v2 client panel — see TFDeathRecap.h for the full design
+- [`TFDeathRecap.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFDeathRecap.h) — 114 LOC — Death recap v2 panel (W11 death-recap lane): timeline of the hits
+- [`TFDirectivePanel.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFDirectivePanel.cpp) — 477 LOC — Directives panel implementation (see TFDirectivePanel.h).
+- [`TFDirectivePanel.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFDirectivePanel.h) — 154 LOC — Player-facing directives panel (J): active directives with live
+- [`TFHUD.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUD.cpp) — 257 LOC — TFHUD core: lifecycle, feed-in setters, and the per-frame pawn-state
+- [`TFHUD.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUD.h) — 212 LOC — ImGui HUD: health/shield/ammo, crosshair, hitmarkers, killfeed,
+- [`TFHUDChat.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUDChat.cpp) — 159 LOC — TFHUD built-in chat: the input-receiving chat window (history,
+- [`TFHUDCombat.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUDCombat.cpp) — 331 LOC — TFHUD combat-half state (W6): killfeed feed-in with headshot marker
+- [`TFHUDCombatDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUDCombatDraw.cpp) — 265 LOC — TFHUD combat-half drawing (W6): killfeed rows with weapon + headshot
+- [`TFHUDDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUDDraw.cpp) — 411 LOC — TFHUD overlay drawing: the borderless full-viewport HUD window
+- [`TFHUDInternal.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFHUDInternal.h) — 35 LOC — Shared internals for the TFHUD*.cpp split parts: the hitmarker
+- [`TFKeybinds.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFKeybinds.h) — 123 LOC — Client-side action -> key table for the TERRAFRONT UI layer.
+- [`TFLoadoutScreen.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoadoutScreen.cpp) — 497 LOC — loadout-depth wave: TFLoadoutScreen implementation. See the header
+- [`TFLoadoutScreen.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoadoutScreen.h) — 94 LOC — loadout-depth wave: the real loadout editor — primary/secondary/
+- [`TFLoginFlow.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.cpp) — 339 LOC — W5 onboarding client UI state machine (see TFLoginFlow.h): lifecycle,
+- [`TFLoginFlow.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.h) — 184 LOC — W5 onboarding: client ImGui state machine for login -> character
+- [`TFLoginFlowDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlowDraw.cpp) — 388 LOC — TFLoginFlow rendering half: the full-viewport onboarding modal
+- [`TFMapScreen.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFMapScreen.cpp) — 337 LOC — W2 continent map, lifecycle + input half: open/close/toggle with
+- [`TFMapScreen.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFMapScreen.h) — 128 LOC — Continent hex map: ownership, lattice, capture progress, deploy.
+- [`TFMapScreenDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFMapScreenDraw.cpp) — 486 LOC — TFMapScreen rendering half: fullscreen hex-grid overlay of the
+- [`TFMapScreenInspect.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFMapScreenInspect.cpp) — 190 LOC — TFMapScreen W7 selected-region inspect panel: owner / occupants /
+- [`TFMinimap.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFMinimap.cpp) — 402 LOC — Corner minimap v3 implementation (W13 minimap-v2 lane) — see
+- [`TFMinimap.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFMinimap.h) — 78 LOC — Corner minimap v3 (W13 minimap-v2 lane): owner-colored region hexes +
+- [`TFNameplates.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFNameplates.cpp) — 377 LOC — Over-pawn nameplate rendering + the client-side damage-reveal
+- [`TFNameplates.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFNameplates.h) — 93 LOC — Over-pawn MMO nameplates (W10): character name + outfit tag +
+- [`TFOutfitPanel.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFOutfitPanel.cpp) — 388 LOC — Outfit UI implementation (see header for the embedding contract).
+- [`TFOutfitPanel.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFOutfitPanel.h) — 87 LOC — Outfit (clan) UI: create form, roster with ranks, invite-by-name,
+- [`TFPingUI.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFPingUI.cpp) — 433 LOC — Q-key ping input (tap = context, hold = wheel), ray resolution,
+- [`TFPingUI.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFPingUI.h) — 112 LOC — Ping input + screen-space presentation (W11): Q-tap context ping,
+- [`TFPingUIDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFPingUIDraw.cpp) — 169 LOC — TFPingUI rendering half: distance labels drawn under the live 3D
+- [`TFScoreboard.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFScoreboard.cpp) — 497 LOC — Hold-TAB fullscreen scoreboard: stacked faction sections with
+- [`TFScoreboard.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFScoreboard.h) — 111 LOC — Per-faction K/D/score/regions tab screen.
+- [`TFSocialPanel.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSocialPanel.cpp) — 440 LOC — Social window implementation (see TFSocialPanel.h).
+- [`TFSocialPanel.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSocialPanel.h) — 69 LOC — Social window: friends / recent players / block list / squad roster.
+- [`TFSpawnScreen.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSpawnScreen.cpp) — 265 LOC — W2 death/spawn screen: faction splash (first join), class picker
+- [`TFSpawnScreen.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSpawnScreen.h) — 101 LOC — Death -> spawn point chooser (faction splash, class picker, spawn list).
+- [`TFSpawnScreenDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSpawnScreenDraw.cpp) — 399 LOC — TFSpawnScreen rendering half: the full-viewport deploy modal
+- [`TFSquadHUD.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSquadHUD.cpp) — 430 LOC — W11 squad-v2: left-edge squadmate list, waypoint world beacon, and
+- [`TFSquadHUD.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSquadHUD.h) — 76 LOC — PS2-style squad HUD (W11 squad-v2 lane): left-edge squadmate list
+- [`TFSquadHUDBeacon.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSquadHUDBeacon.cpp) — 163 LOC — TFSquadHUD world-space half: the squad-waypoint beacon (tall pulsing
+- [`TFSquadHUDInternal.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFSquadHUDInternal.h) — 31 LOC — Shared internals for the TFSquadHUD*.cpp split parts: the squad
+- [`TFUiCommon.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFUiCommon.h) — 88 LOC — Shared ImGui helpers for the TERRAFRONT full-screen UIs
+- [`TFVehicleHUD.cpp`](../../GameModules/SparkGameMMOFPS/Source/UI/TFVehicleHUD.cpp) — 242 LOC — W10 vehicle HUD bodies — seated cockpit widget (name / hull HP /
+- [`TFVehicleHUD.h`](../../GameModules/SparkGameMMOFPS/Source/UI/TFVehicleHUD.h) — 49 LOC — W10 vehicle HUD — the seated player's cockpit widget (bottom-center):
+
+### `GameModules/SparkGameMMOFPS/Source/Utils/`
+
+- [`TFPerfCounters.h`](../../GameModules/SparkGameMMOFPS/Source/Utils/TFPerfCounters.h) — 203 LOC — Cheap, allocation-free scoped timers for profiling the authoritative
+
+### `GameModules/SparkGameMMOFPS/Source/World/`
+
+- [`TFAlertSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.cpp) — 386 LOC — Continent alerts core: lifecycle + tf_alert console command, the
+- [`TFAlertSystem.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystem.h) — 246 LOC — Continent alerts — server-scheduled timed events (Territory Rush /
+- [`TFAlertSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystemInternal.h) — 31 LOC — Shared internals for the TFAlertSystem*.cpp split parts: the faction
+- [`TFAlertSystemNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystemNet.cpp) — 176 LOC — TFAlertSystem state view + wire plumbing: the TF_AlertState builder,
+- [`TFAlertSystemUi.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFAlertSystemUi.cpp) — 206 LOC — TFAlertSystem presentation: the tf_alert status report, the
+- [`TFDayNight.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFDayNight.cpp) — 450 LOC — Continent day/night cycle: authoritative 40-minute day clock,
+- [`TFDayNight.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFDayNight.h) — 179 LOC — Continent day/night cycle — server-authoritative clock (1 game day ==
+- [`TFDayNightNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFDayNightNet.cpp) — 131 LOC — TFDayNight wire plumbing: the reliable TF_TimeOfDay broadcast on the
+- [`TFDecorCulling.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFDecorCulling.h) — 70 LOC — Distance culling for region decor entities (W10 distance-culling lane).
+- [`TFRegionDecor.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.cpp) — 180 LOC — TFRegionDecor lifecycle: construction, Initialize (console commands),
+- [`TFRegionDecor.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecor.h) — 271 LOC — Per-tier region decor: a deterministic ROLE-AGNOSTIC layout (region
+- [`TFRegionDecorData.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecorData.cpp) — 184 LOC — TFRegionDecor decor.json parsing (LoadTemplates): tier templates,
+- [`TFRegionDecorInstancing.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecorInstancing.cpp) — 288 LOC — TFRegionDecor W12 decor-instancing lane: BuildInstanceGroups,
+- [`TFRegionDecorLayout.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecorLayout.cpp) — 425 LOC — TFRegionDecor role-agnostic layout (W10): ClearOfGameplay,
+- [`TFRegionDecorVisuals.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionDecorVisuals.cpp) — 218 LOC — TFRegionDecor presentation passes: static collision registration
+- [`TFRegionSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystem.cpp) — 360 LOC — W2 territory war: lifecycle, region topology/seeding, lattice rules
+- [`TFRegionSystem.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystem.h) — 211 LOC — Hex regions, conduit lattice, capture points, Dominion.
+- [`TFRegionSystemCapture.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystemCapture.cpp) — 265 LOC — TFRegionSystem authoritative side: the 1 Hz capture tick over the
+- [`TFRegionSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystemInternal.h) — 41 LOC — Shared internals for the TFRegionSystem*.cpp split parts: the
+- [`TFRegionSystemNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystemNet.cpp) — 380 LOC — TFRegionSystem wire + persistence: TF_RegionState/TF_CaptureTick
+- [`TFRegionSystemUi.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFRegionSystemUi.cpp) — 362 LOC — TFRegionSystem viewer-facing surfaces: capture-point landmarks +
+- [`TFSanctuaryDecor.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFSanctuaryDecor.cpp) — 346 LOC — Sanctuary Haven home-base decor + class terminal (see the header).
+- [`TFSanctuaryDecor.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFSanctuaryDecor.h) — 76 LOC — Client-side Sanctuary Haven decor (sanc kit stamp) + the class
+- [`TFSanctuaryZone.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFSanctuaryZone.h) — 99 LOC — Sanctuary Haven zone constants + pure positional helpers (continents lane).
+- [`TFTravelSystem.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.cpp) — 441 LOC — Continent/sanctuary travel — lifecycle, continents.json display
+- [`TFTravelSystem.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.h) — 257 LOC — Continent/sanctuary travel: per-player mapId, sanctuary first-spawn
+- [`TFTravelSystemClient.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystemClient.cpp) — 258 LOC — TFTravelSystem client half: local pawn/terminal helpers, the menu
+- [`TFTravelSystemInternal.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystemInternal.h) — 22 LOC — Shared internals for the TFTravelSystem*.cpp split parts: the XZ
+- [`TFTravelSystemNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystemNet.cpp) — 183 LOC — TFTravelSystem wire plumbing (own channel, TFVehicleNet precedent):
+- [`TFTravelSystemServer.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystemServer.cpp) — 227 LOC — TFTravelSystem server half: sanctuary first-spawn placement, stale
+- [`TFTravelSystemUi.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystemUi.cpp) — 262 LOC — TFTravelSystem presentation: the [E] terminal prompt, sanctuary
+- [`TFTravelSystemWire.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystemWire.h) — 69 LOC — Travel wire channel for TFTravelSystem: the reserved TFMsg block
+- [`TFWeatherFx.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWeatherFx.cpp) — 316 LOC — Cindral dust-storm cycle (see TFWeatherFx.h for the ownership/wiring
+- [`TFWeatherFx.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFWeatherFx.h) — 209 LOC — Cindral dust-storm cycle: server-owned weather phase machine + pure
+- [`TFWeatherFxRender.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWeatherFxRender.cpp) — 230 LOC — TFWeatherFx client presentation: wind-blown dust-flake billboards
+- [`TFWorldCollision.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.cpp) — 365 LOC — Scene-file -> static Jolt box bodies: scene parse, OBJ AABB streaming,
+- [`TFWorldCollision.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollision.h) — 197 LOC — Static Jolt collision for the authored scene (mesas, structures, props)
+- [`TFWorldCollisionDecor.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollisionDecor.cpp) — 172 LOC — W10 decor-collision + W11 gate-passages: AddModelObb / AddObbPart
+- [`TFWorldCollisionInternal.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollisionInternal.h) — 22 LOC — Shared internals for the TFWorldCollision*.cpp split parts: the body
+- [`TFWorldCollisionMove.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldCollisionMove.cpp) — 173 LOC — The shared capsule-sweep move resolver (server integrator + client
+- [`TFWorldSetup.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp) — 332 LOC — Scene/terrain load, WorldServer/AreaServer boot, origin-rebase driving.
+- [`TFWorldSetup.h`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h) — 240 LOC — Scene/terrain load, WorldServer/AreaServer boot, origin-rebase driving.
+- [`TFWorldSetupDraw.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetupDraw.cpp) — 378 LOC — TFWorldSetup camera + device-direct draw helpers: module camera,
+- [`TFWorldSetupNet.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetupNet.cpp) — 250 LOC — TFWorldSetup networking boot (frozen API): StartHost/StartDedicated/
+- [`TFWorldSetupRender.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetupRender.cpp) — 305 LOC — TFWorldSetup frame composition (RenderWorld): the module-owned
+- [`TFWorldSetupUpdate.cpp`](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetupUpdate.cpp) — 168 LOC — TFWorldSetup frame driving: per-frame Update (network pump, weather,
 
 ### `GameModules/SparkGameOpenWorld/Source/Core/`
 
@@ -600,7 +953,8 @@ graph LR
 
 ### `GameModules/SparkGameRacing/Source/Core/`
 
-- [`Main.cpp`](../../GameModules/SparkGameRacing/Source/Core/Main.cpp) — 576 LOC — SparkGameRacing DLL - IModule implementation and exports
+- [`Main.cpp`](../../GameModules/SparkGameRacing/Source/Core/Main.cpp) — 401 LOC — SparkGameRacing DLL - IModule implementation and exports
+- [`MainRaceFlow.cpp`](../../GameModules/SparkGameRacing/Source/Core/MainRaceFlow.cpp) — 195 LOC — SparkGameRacing race-flow orchestration: default roster setup and
 - [`RacingEngineSystems.cpp`](../../GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp) — 402 LOC — Engine system integration for the racing module
 - [`RacingEngineSystems.h`](../../GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.h) — 96 LOC — Wires Spark Engine subsystems into racing gameplay
 - [`SparkGameRacing.h`](../../GameModules/SparkGameRacing/Source/Core/SparkGameRacing.h) — 85 LOC — SparkGameRacing module - Racing game showcase
@@ -640,9 +994,9 @@ graph LR
 - [`CommandParser.h`](../../SparkConsole/src/CommandParser.h) — 37 LOC — Splits raw command-line strings into a command name and argument list.
 - [`CommandRegistry.cpp`](../../SparkConsole/src/CommandRegistry.cpp) — 84 LOC
 - [`CommandRegistry.h`](../../SparkConsole/src/CommandRegistry.h) — 79 LOC — Console command registration and dispatch for the SparkConsole subprocess.
-- [`ConsoleApp.cpp`](../../SparkConsole/src/ConsoleApp.cpp) — 1407 LOC
-- [`ConsoleApp.h`](../../SparkConsole/src/ConsoleApp.h) — 148 LOC — SparkConsole application — external console subprocess for the Spark Engine.
-- [`main.cpp`](../../SparkConsole/src/main.cpp) — 58 LOC
+- [`ConsoleApp.cpp`](../../SparkConsole/src/ConsoleApp.cpp) — 1103 LOC
+- [`ConsoleApp.h`](../../SparkConsole/src/ConsoleApp.h) — 123 LOC — SparkConsole application — external console subprocess for the Spark Engine.
+- [`main.cpp`](../../SparkConsole/src/main.cpp) — 90 LOC
 
 ### `SparkEditor/Source/Animation/`
 
@@ -661,11 +1015,11 @@ graph LR
 
 ### `SparkEditor/Source/AssetPipeline/`
 
-- [`AdvancedAssetPipeline.cpp`](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp) — 781 LOC — Implementation of the advanced asset processing and pipeline system
+- [`AdvancedAssetPipeline.cpp`](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp) — 791 LOC — Implementation of the advanced asset processing and pipeline system
 - [`AdvancedAssetPipeline.h`](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h) — 554 LOC — Advanced asset processing and pipeline system for Spark Engine Editor
 - [`AdvancedAssetPipelineUI.cpp`](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipelineUI.cpp) — 952 LOC — UI rendering methods for the AdvancedAssetPipeline
 - [`AssetPipelineTypes.h`](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h) — 226 LOC — Type definitions for the advanced asset pipeline system
-- [`AssetProcessors.cpp`](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp) — 1006 LOC — Asset processor implementations (Texture, Mesh, Audio, DependencyGraph)
+- [`AssetProcessors.cpp`](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp) — 1011 LOC — Asset processor implementations (Texture, Mesh, Audio, DependencyGraph)
 
 ### `SparkEditor/Source/`
 
@@ -673,8 +1027,8 @@ graph LR
 
 ### `SparkEditor/Source/Communication/`
 
-- [`CollaborativeEditSession.cpp`](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp) — 1373 LOC — Multi-user collaborative editor session with TCP networking
-- [`CollaborativeEditSession.h`](../../SparkEditor/Source/Communication/CollaborativeEditSession.h) — 376 LOC — Multi-user collaborative editor session with presence, locking, and TCP networking
+- [`CollaborativeEditSession.cpp`](../../SparkEditor/Source/Communication/CollaborativeEditSession.cpp) — 1497 LOC — Multi-user collaborative editor session with TCP networking
+- [`CollaborativeEditSession.h`](../../SparkEditor/Source/Communication/CollaborativeEditSession.h) — 397 LOC — Multi-user collaborative editor session with presence, locking, and TCP networking
 - [`EngineInterface.cpp`](../../SparkEditor/Source/Communication/EngineInterface.cpp) — 693 LOC — Implementation of the Engine communication interface
 - [`EngineInterface.h`](../../SparkEditor/Source/Communication/EngineInterface.h) — 452 LOC — Communication interface between Editor and Engine
 - [`LiveEditBridge.cpp`](../../SparkEditor/Source/Communication/LiveEditBridge.cpp) — 270 LOC — Bridge between collaborative editing and a running AreaServer
@@ -683,35 +1037,36 @@ graph LR
 ### `SparkEditor/Source/Core/`
 
 - [`EditorApplication.cpp`](../../SparkEditor/Source/Core/EditorApplication.cpp) — 250 LOC — Implementation of the enhanced editor application class
-- [`EditorApplication.h`](../../SparkEditor/Source/Core/EditorApplication.h) — 138 LOC — Main SparkEditor application class with cross-platform graphics and ImGui integration
+- [`EditorApplication.h`](../../SparkEditor/Source/Core/EditorApplication.h) — 146 LOC — Main SparkEditor application class with cross-platform graphics and ImGui integration
 - [`EditorApplicationLinux.cpp`](../../SparkEditor/Source/Core/EditorApplicationLinux.cpp) — 321 LOC — Linux/SDL2+OpenGL editor application — window creation, graphics init, run loop, shutdown
-- [`EditorApplicationWindows.cpp`](../../SparkEditor/Source/Core/EditorApplicationWindows.cpp) — 418 LOC — Windows/D3D11 editor application — window creation, graphics init, run loop, shutdown
-- [`EditorCommandRegistry.cpp`](../../SparkEditor/Source/Core/EditorCommandRegistry.cpp) — 173 LOC — Command palette registration for the SparkEditor UI.
-- [`EditorCrashHandler.cpp`](../../SparkEditor/Source/Core/EditorCrashHandler.cpp) — 977 LOC — Implementation of the editor crash handler
+- [`EditorApplicationWindows.cpp`](../../SparkEditor/Source/Core/EditorApplicationWindows.cpp) — 423 LOC — Windows/D3D11 editor application — window creation, graphics init, run loop, shutdown
+- [`EditorCommandRegistry.cpp`](../../SparkEditor/Source/Core/EditorCommandRegistry.cpp) — 177 LOC — Command palette registration for the SparkEditor UI.
+- [`EditorCrashHandler.cpp`](../../SparkEditor/Source/Core/EditorCrashHandler.cpp) — 1022 LOC — Implementation of the editor crash handler
 - [`EditorCrashHandler.h`](../../SparkEditor/Source/Core/EditorCrashHandler.h) — 208 LOC — Enhanced crash handling system for Spark Engine Editor
-- [`EditorFonts.cpp`](../../SparkEditor/Source/Core/EditorFonts.cpp) — 116 LOC — Font loading implementation for the Spark Engine Editor
+- [`EditorFonts.cpp`](../../SparkEditor/Source/Core/EditorFonts.cpp) — 164 LOC — Font loading implementation for the Spark Engine Editor
 - [`EditorFonts.h`](../../SparkEditor/Source/Core/EditorFonts.h) — 57 LOC — Font management for the Spark Engine Editor
 - [`EditorIcons.h`](../../SparkEditor/Source/Core/EditorIcons.h) — 229 LOC — FontAwesome 6 icon constants for the Spark Engine Editor
 - [`EditorLayoutManager.cpp`](../../SparkEditor/Source/Core/EditorLayoutManager.cpp) — 616 LOC — Implementation of EditorLayoutManager — disk-backed panel layouts
 - [`EditorLayoutManager.h`](../../SparkEditor/Source/Core/EditorLayoutManager.h) — 234 LOC — Panel-layout persistence for the Spark Engine Editor
 - [`EditorLogger.cpp`](../../SparkEditor/Source/Core/EditorLogger.cpp) — 337 LOC — Implementation of the editor logging system
 - [`EditorLogger.h`](../../SparkEditor/Source/Core/EditorLogger.h) — 303 LOC — Advanced logging system for the Spark Engine Editor
-- [`EditorMenuBar.cpp`](../../SparkEditor/Source/Core/EditorMenuBar.cpp) — 868 LOC — Main menu bar and toolbar rendering for the SparkEditor UI
+- [`EditorMenuBar.cpp`](../../SparkEditor/Source/Core/EditorMenuBar.cpp) — 878 LOC — Main menu bar and toolbar rendering for the SparkEditor UI
 - [`EditorNotificationManager.cpp`](../../SparkEditor/Source/Core/EditorNotificationManager.cpp) — 134 LOC — Implementation of the SparkEditor toast notification queue.
 - [`EditorNotificationManager.h`](../../SparkEditor/Source/Core/EditorNotificationManager.h) — 62 LOC — Toast-style notification queue for the SparkEditor UI.
 - [`EditorPanel.cpp`](../../SparkEditor/Source/Core/EditorPanel.cpp) — 86 LOC — Implementation of base editor panel class
 - [`EditorPanel.h`](../../SparkEditor/Source/Core/EditorPanel.h) — 301 LOC — Base class for all editor UI panels
-- [`EditorPanelFactory.cpp`](../../SparkEditor/Source/Core/EditorPanelFactory.cpp) — 440 LOC — Panel creation for the SparkEditor UI
+- [`EditorPanelFactory.cpp`](../../SparkEditor/Source/Core/EditorPanelFactory.cpp) — 331 LOC — Panel creation for the SparkEditor UI
+- [`EditorPanelFactoryMetadata.cpp`](../../SparkEditor/Source/Core/EditorPanelFactoryMetadata.cpp) — 209 LOC — Panel metadata setup (icons, categories, default visibility) for the SparkEditor UI
 - [`EditorPluginManager.cpp`](../../SparkEditor/Source/Core/EditorPluginManager.cpp) — 430 LOC — Implementation of the editor plugin manager (R7.1)
 - [`EditorPluginManager.h`](../../SparkEditor/Source/Core/EditorPluginManager.h) — 205 LOC — Manages editor plugin lifecycle and registration (R7.1)
-- [`EditorTheme.cpp`](../../SparkEditor/Source/Core/EditorTheme.cpp) — 1456 LOC — Theme system implementation for the Spark Engine Editor
+- [`EditorTheme.cpp`](../../SparkEditor/Source/Core/EditorTheme.cpp) — 1587 LOC — Theme system implementation for the Spark Engine Editor
 - [`EditorTheme.h`](../../SparkEditor/Source/Core/EditorTheme.h) — 339 LOC — Professional theme management system with Unity/Unreal-inspired styling
-- [`EditorUI.cpp`](../../SparkEditor/Source/Core/EditorUI.cpp) — 1515 LOC — Core editor UI system — lifecycle, rendering dispatch, layout, commands
-- [`EditorUI.h`](../../SparkEditor/Source/Core/EditorUI.h) — 323 LOC — Core UI management system for the Spark Engine Editor with advanced features
+- [`EditorUI.cpp`](../../SparkEditor/Source/Core/EditorUI.cpp) — 1686 LOC — Core editor UI system — lifecycle, rendering dispatch, layout, commands
+- [`EditorUI.h`](../../SparkEditor/Source/Core/EditorUI.h) — 403 LOC — Core UI management system for the Spark Engine Editor with advanced features
 - [`EditorWindowManager.cpp`](../../SparkEditor/Source/Core/EditorWindowManager.cpp) — 399 LOC — Implementation of EditorWindowManager methods (layout persistence, JSON helpers)
 - [`EditorWindowManager.h`](../../SparkEditor/Source/Core/EditorWindowManager.h) — 245 LOC — Multi-monitor floating window management with layout persistence
 - [`IEditorPlugin.h`](../../SparkEditor/Source/Core/IEditorPlugin.h) — 111 LOC — Abstract interface for editor plugins (R7.1)
-- [`ProjectManager.cpp`](../../SparkEditor/Source/Core/ProjectManager.cpp) — 1096 LOC — Implementation of the project management system
+- [`ProjectManager.cpp`](../../SparkEditor/Source/Core/ProjectManager.cpp) — 1115 LOC — Implementation of the project management system
 - [`ProjectManager.h`](../../SparkEditor/Source/Core/ProjectManager.h) — 171 LOC — Project management system for the Spark Engine Editor
 - [`TutorialSystem.h`](../../SparkEditor/Source/Core/TutorialSystem.h) — 531 LOC — Interactive editor tutorial system with step-by-step guidance
 
@@ -730,6 +1085,8 @@ graph LR
 
 - [`GizmoSystem.cpp`](../../SparkEditor/Source/Gizmos/GizmoSystem.cpp) — 925 LOC — 3D object manipulation gizmo system implementation
 - [`GizmoSystem.h`](../../SparkEditor/Source/Gizmos/GizmoSystem.h) — 463 LOC — 3D object manipulation gizmo system for the Spark Engine Editor
+- [`SceneEditTools.cpp`](../../SparkEditor/Source/Gizmos/SceneEditTools.cpp) — 398 LOC — Implementation of the undoable scene-manipulation helpers (W9)
+- [`SceneEditTools.h`](../../SparkEditor/Source/Gizmos/SceneEditTools.h) — 77 LOC — Undoable scene-manipulation helpers for the editor viewport (W9)
 
 ### `SparkEditor/Source/Integration/`
 
@@ -769,10 +1126,15 @@ graph LR
 - [`AssetBrowserPanel.h`](../../SparkEditor/Source/Panels/AssetBrowserPanel.h) — 87 LOC — Asset browser panel for the Spark Engine Editor
 - [`AudioMixerPanel.cpp`](../../SparkEditor/Source/Panels/AudioMixerPanel.cpp) — 278 LOC — Implementation of the audio mixer management panel
 - [`AudioMixerPanel.h`](../../SparkEditor/Source/Panels/AudioMixerPanel.h) — 91 LOC — Audio mixer and sound management panel for the Spark Engine Editor
+- [`BasicMaterialEditorDrawing.cpp`](../../SparkEditor/Source/Panels/BasicMaterialEditorDrawing.cpp) — 329 LOC — ImGui drawing for the basic-path material editor panel
+- [`BasicMaterialEditorInternal.h`](../../SparkEditor/Source/Panels/BasicMaterialEditorInternal.h) — 25 LOC — Shared helpers for the BasicMaterialEditorPanel implementation files
+- [`BasicMaterialEditorPanel.cpp`](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp) — 388 LOC — Editor for the basic-path material JSONs under Assets/Materials
+- [`BasicMaterialEditorPanel.h`](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.h) — 115 LOC — Editor for the basic-path material JSONs under Assets/Materials
 - [`BuildCookPanel.cpp`](../../SparkEditor/Source/Panels/BuildCookPanel.cpp) — 682 LOC — Build, cook, and package settings panel implementation
 - [`BuildCookPanel.h`](../../SparkEditor/Source/Panels/BuildCookPanel.h) — 140 LOC — Build, cook, and package settings panel for the Spark Engine Editor
-- [`BuildPipeline.cpp`](../../SparkEditor/Source/Panels/BuildPipeline.cpp) — 438 LOC — Async CMake subprocess management for build orchestration
+- [`BuildPipeline.cpp`](../../SparkEditor/Source/Panels/BuildPipeline.cpp) — 360 LOC — Async CMake subprocess management for build orchestration
 - [`BuildPipeline.h`](../../SparkEditor/Source/Panels/BuildPipeline.h) — 141 LOC — Async build orchestrator that invokes CMake as a subprocess
+- [`BuildPipelineProcess.cpp`](../../SparkEditor/Source/Panels/BuildPipelineProcess.cpp) — 280 LOC — Subprocess execution and output parsing for the build pipeline
 - [`CSGEditorPanel.h`](../../SparkEditor/Source/Panels/CSGEditorPanel.h) — 294 LOC — Editor panel for constructive solid geometry (CSG) level design
 - [`CinematicSequencerPanel.cpp`](../../SparkEditor/Source/Panels/CinematicSequencerPanel.cpp) — 376 LOC — Implementation of the cinematic sequence editor panel
 - [`CinematicSequencerPanel.h`](../../SparkEditor/Source/Panels/CinematicSequencerPanel.h) — 82 LOC — Cinematic sequence editor panel for the Spark Engine Editor
@@ -788,6 +1150,12 @@ graph LR
 - [`DebugVisualizerPanel.h`](../../SparkEditor/Source/Panels/DebugVisualizerPanel.h) — 120 LOC — Debug visualization overlay panel for the Spark Engine Editor
 - [`DecalEditorPanel.cpp`](../../SparkEditor/Source/Panels/DecalEditorPanel.cpp) — 209 LOC — Implementation of the decal material and surface mapping editor
 - [`DecalEditorPanel.h`](../../SparkEditor/Source/Panels/DecalEditorPanel.h) — 64 LOC — Decal material and surface mapping editor panel
+- [`DecorLayoutEditorCanvas.cpp`](../../SparkEditor/Source/Panels/DecorLayoutEditorCanvas.cpp) — 488 LOC — Toolbar and 2D top-down canvas for the decor layout editor
+- [`DecorLayoutEditorIO.cpp`](../../SparkEditor/Source/Panels/DecorLayoutEditorIO.cpp) — 468 LOC — Load/save/serialize for the decor layout editor (Assets/MMOFPS/Data/decor.json)
+- [`DecorLayoutEditorInternal.h`](../../SparkEditor/Source/Panels/DecorLayoutEditorInternal.h) — 54 LOC — Shared constants and helpers for the DecorLayoutEditorPanel implementation files
+- [`DecorLayoutEditorPanel.cpp`](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.cpp) — 291 LOC — Visual editor for Assets/MMOFPS/Data/decor.json (W12) — core lifecycle, validation, footprints
+- [`DecorLayoutEditorPanel.h`](../../SparkEditor/Source/Panels/DecorLayoutEditorPanel.h) — 196 LOC — Visual editor for the TERRAFRONT region decor templates (Assets/MMOFPS/Data/decor.json) — W12
+- [`DecorLayoutEditorSidePane.cpp`](../../SparkEditor/Source/Panels/DecorLayoutEditorSidePane.cpp) — 344 LOC — Side pane (tier/piece editors, validation, save) for the decor layout editor
 - [`DedicatedServerPanel.cpp`](../../SparkEditor/Source/Panels/DedicatedServerPanel.cpp) — 1015 LOC — Editor panel for dedicated server management, cooking, and PIE launching
 - [`DedicatedServerPanel.h`](../../SparkEditor/Source/Panels/DedicatedServerPanel.h) — 220 LOC — Editor panel for dedicated server management, cooking, and PIE server spawning
 - [`DestructionEditorPanel.cpp`](../../SparkEditor/Source/Panels/DestructionEditorPanel.cpp) — 181 LOC — Implementation of the destruction system editor panel
@@ -801,18 +1169,23 @@ graph LR
 - [`EventResponsePanel.h`](../../SparkEditor/Source/Panels/EventResponsePanel.h) — 92 LOC — Editor panel for creating and managing event response rules (no-code gameplay)
 - [`FPSToolsPanel.cpp`](../../SparkEditor/Source/Panels/FPSToolsPanel.cpp) — 655 LOC — FPS-specific development tools
 - [`FPSToolsPanel.h`](../../SparkEditor/Source/Panels/FPSToolsPanel.h) — 92 LOC — FPS-specific development tools panel
-- [`GameModuleSelectorPanel.cpp`](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.cpp) — 252 LOC — Game module discovery, selection, and manifest generation
-- [`GameModuleSelectorPanel.h`](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.h) — 71 LOC — Panel for discovering and selecting which game modules to load
+- [`GameModuleSelectorPanel.cpp`](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.cpp) — 473 LOC — Game module discovery, metadata probing, separate-process launch, and manifest generation
+- [`GameModuleSelectorPanel.h`](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.h) — 87 LOC — Panel for discovering game modules and launching the game as a separate process
 - [`GameViewPanel.cpp`](../../SparkEditor/Source/Panels/GameViewPanel.cpp) — 1172 LOC — Game viewport panel with full FPS HUD — shows player camera perspective
 - [`GameViewPanel.h`](../../SparkEditor/Source/Panels/GameViewPanel.h) — 163 LOC — Game viewport panel with full FPS HUD preview
-- [`HierarchyPanel.cpp`](../../SparkEditor/Source/Panels/HierarchyPanel.cpp) — 1182 LOC — Implementation of the Hierarchy panel
-- [`HierarchyPanel.h`](../../SparkEditor/Source/Panels/HierarchyPanel.h) — 344 LOC — Scene hierarchy panel for the Spark Engine Editor
+- [`HierarchyPanel.cpp`](../../SparkEditor/Source/Panels/HierarchyPanel.cpp) — 1533 LOC — Implementation of the Hierarchy panel
+- [`HierarchyPanel.h`](../../SparkEditor/Source/Panels/HierarchyPanel.h) — 425 LOC — Scene hierarchy panel for the Spark Engine Editor
 - [`InspectorComponentRenderers_2D.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_2D.cpp) — 93 LOC — Inspector renderers for 2D components with complex conditional UI
 - [`InspectorComponentRenderers_Core3D.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp) — 559 LOC — Inspector renderers for core 3D components: Transform, MeshRenderer, Light, Camera, RigidBody, Collider
 - [`InspectorComponentRenderers_Gameplay.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_Gameplay.cpp) — 66 LOC — Inspector renderers for gameplay components with complex conditional UI
-- [`InspectorComponentRenderers_Reflected.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_Reflected.cpp) — 1362 LOC — Inspector renderers using reflection-driven field rendering
-- [`InspectorPanel.cpp`](../../SparkEditor/Source/Panels/InspectorPanel.cpp) — 1288 LOC — Implementation of the Inspector panel
-- [`InspectorPanel.h`](../../SparkEditor/Source/Panels/InspectorPanel.h) — 151 LOC — Inspector panel for property editing in the Spark Engine Editor
+- [`InspectorComponentRenderers_Reflected.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_Reflected.cpp) — 267 LOC — Inspector renderers using reflection-driven field rendering
+- [`InspectorComponentRenderers_Reflected2D.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_Reflected2D.cpp) — 238 LOC — Reflection-driven inspector renderers for 2D components
+- [`InspectorComponentRenderers_ReflectedConditional.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedConditional.cpp) — 303 LOC — Reflection-driven inspector renderers using conditional field visibility
+- [`InspectorComponentRenderers_ReflectedGameplay.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedGameplay.cpp) — 261 LOC — Reflection-driven inspector renderers for gameplay components
+- [`InspectorComponentRenderers_ReflectedInternal.h`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedInternal.h) — 141 LOC — Shared macros and FieldInfo builders for the reflection-driven inspector renderer split
+- [`InspectorComponentRenderers_ReflectedVolumes.cpp`](../../SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedVolumes.cpp) — 252 LOC — Reflection-driven inspector renderers for volume, probe, placement, and audio components
+- [`InspectorPanel.cpp`](../../SparkEditor/Source/Panels/InspectorPanel.cpp) — 1401 LOC — Implementation of the Inspector panel
+- [`InspectorPanel.h`](../../SparkEditor/Source/Panels/InspectorPanel.h) — 207 LOC — Inspector panel for property editing in the Spark Engine Editor
 - [`LocalizationPanel.cpp`](../../SparkEditor/Source/Panels/LocalizationPanel.cpp) — 258 LOC — Implementation of the localization editor panel
 - [`LocalizationPanel.h`](../../SparkEditor/Source/Panels/LocalizationPanel.h) — 60 LOC — Localization editor panel for the Spark Engine Editor
 - [`MaterialEditorPanel.cpp`](../../SparkEditor/Source/Panels/MaterialEditorPanel.cpp) — 627 LOC — Visual material and shader property editor — core lifecycle and UI
@@ -830,26 +1203,38 @@ graph LR
 - [`Physics2DPanel.h`](../../SparkEditor/Source/Panels/Physics2DPanel.h) — 80 LOC — 2D Physics configuration and debug visualization panel
 - [`Physics3DPanel.cpp`](../../SparkEditor/Source/Panels/Physics3DPanel.cpp) — 331 LOC — Implementation of the 3D Physics (Jolt) editor panel
 - [`Physics3DPanel.h`](../../SparkEditor/Source/Panels/Physics3DPanel.h) — 111 LOC — 3D Physics (Jolt) configuration, debug visualization, and object placement panel
+- [`PlayControlLaunch.cpp`](../../SparkEditor/Source/Panels/PlayControlLaunch.cpp) — 348 LOC — Launch actions and instance bookkeeping for the play control panel.
+- [`PlayControlPanel.cpp`](../../SparkEditor/Source/Panels/PlayControlPanel.cpp) — 225 LOC — Out-of-process play-testing controls implementation.
+- [`PlayControlPanel.h`](../../SparkEditor/Source/Panels/PlayControlPanel.h) — 112 LOC — Out-of-process play-testing controls: launch/stop real SparkEngine.exe
 - [`PlayModeToolbarPanel.cpp`](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp) — 654 LOC — Implementation of the play-in-editor toolbar with transport controls and simulation options
 - [`PlayModeToolbarPanel.h`](../../SparkEditor/Source/Panels/PlayModeToolbarPanel.h) — 81 LOC — Dedicated play-in-editor toolbar with transport controls and simulation options
 - [`PostProcessingPanel.cpp`](../../SparkEditor/Source/Panels/PostProcessingPanel.cpp) — 168 LOC — Implementation of the post-processing settings panel
 - [`PostProcessingPanel.h`](../../SparkEditor/Source/Panels/PostProcessingPanel.h) — 43 LOC — Post-processing settings panel for the Spark Engine Editor
 - [`PrefabEditorPanel.cpp`](../../SparkEditor/Source/Panels/PrefabEditorPanel.cpp) — 399 LOC — Implementation of the prefab editor panel
 - [`PrefabEditorPanel.h`](../../SparkEditor/Source/Panels/PrefabEditorPanel.h) — 58 LOC — Panel for editing prefab templates
-- [`ProjectBrowserPanel.cpp`](../../SparkEditor/Source/Panels/ProjectBrowserPanel.cpp) — 551 LOC — Implementation of the project browser panel
+- [`ProjectBrowserPanel.cpp`](../../SparkEditor/Source/Panels/ProjectBrowserPanel.cpp) — 500 LOC — Implementation of the project browser panel
 - [`ProjectBrowserPanel.h`](../../SparkEditor/Source/Panels/ProjectBrowserPanel.h) — 81 LOC — Project browser panel for creating and opening projects
 - [`ProjectSettingsPanel.cpp`](../../SparkEditor/Source/Panels/ProjectSettingsPanel.cpp) — 1501 LOC — Implementation of the project settings editor panel
 - [`ProjectSettingsPanel.h`](../../SparkEditor/Source/Panels/ProjectSettingsPanel.h) — 63 LOC — Project-wide settings editor panel for the Spark Engine Editor
 - [`PrototypingPanel.cpp`](../../SparkEditor/Source/Panels/PrototypingPanel.cpp) — 204 LOC — Editor panel for rapid prototyping tools
 - [`PrototypingPanel.h`](../../SparkEditor/Source/Panels/PrototypingPanel.h) — 48 LOC — Editor panel for rapid prototyping tools
+- [`RegionMapEditorCanvas.cpp`](../../SparkEditor/Source/Panels/RegionMapEditorCanvas.cpp) — 377 LOC — 2D map canvas rendering and mouse interaction for RegionMapEditorPanel (W11)
+- [`RegionMapEditorIO.cpp`](../../SparkEditor/Source/Panels/RegionMapEditorIO.cpp) — 483 LOC — Load / save / serialize for RegionMapEditorPanel — Assets/MMOFPS/Data/regions.json (W11)
+- [`RegionMapEditorInternal.h`](../../SparkEditor/Source/Panels/RegionMapEditorInternal.h) — 77 LOC — Shared constants and helpers for the RegionMapEditorPanel implementation files
+- [`RegionMapEditorPanel.cpp`](../../SparkEditor/Source/Panels/RegionMapEditorPanel.cpp) — 332 LOC — Visual editor for Assets/MMOFPS/Data/regions.json (W11) — lifecycle, validation, layout
+- [`RegionMapEditorPanel.h`](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h) — 158 LOC — Visual editor for the TERRAFRONT territory lattice (Assets/MMOFPS/Data/regions.json) — W11
+- [`RegionMapEditorSidePane.cpp`](../../SparkEditor/Source/Panels/RegionMapEditorSidePane.cpp) — 330 LOC — Side-pane editors (continent / region) and the validation + save UI for RegionMapEditorPanel (W11)
 - [`ReplayPanel.cpp`](../../SparkEditor/Source/Panels/ReplayPanel.cpp) — 174 LOC — Implementation of the replay system editor panel
 - [`ReplayPanel.h`](../../SparkEditor/Source/Panels/ReplayPanel.h) — 56 LOC — Replay system editor panel for recording and playback management
 - [`SaveSystemPanel.cpp`](../../SparkEditor/Source/Panels/SaveSystemPanel.cpp) — 211 LOC — Implementation of the save system management panel
 - [`SaveSystemPanel.h`](../../SparkEditor/Source/Panels/SaveSystemPanel.h) — 60 LOC — Save system management panel for the Spark Engine Editor
+- [`SceneImportPanel.cpp`](../../SparkEditor/Source/Panels/SceneImportPanel.cpp) — 352 LOC — One-way import of game INI .scene files into the editor's live ECS World (W10)
+- [`SceneImportPanel.h`](../../SparkEditor/Source/Panels/SceneImportPanel.h) — 142 LOC — One-way import of game INI .scene files into the editor's live ECS World (W10)
+- [`SceneImportPanelDrawing.cpp`](../../SparkEditor/Source/Panels/SceneImportPanelDrawing.cpp) — 173 LOC — ImGui drawing for the one-way .scene import panel (W10)
 - [`SceneStatisticsPanel.cpp`](../../SparkEditor/Source/Panels/SceneStatisticsPanel.cpp) — 393 LOC — Implementation of the scene statistics panel
 - [`SceneStatisticsPanel.h`](../../SparkEditor/Source/Panels/SceneStatisticsPanel.h) — 125 LOC — Panel displaying real-time scene statistics and performance metrics
-- [`SceneViewPanel.cpp`](../../SparkEditor/Source/Panels/SceneViewPanel.cpp) — 513 LOC — Implementation of the Scene View panel
-- [`SceneViewPanel.h`](../../SparkEditor/Source/Panels/SceneViewPanel.h) — 140 LOC — Scene view panel for 3D scene rendering in the Spark Engine Editor
+- [`SceneViewPanel.cpp`](../../SparkEditor/Source/Panels/SceneViewPanel.cpp) — 1020 LOC — Implementation of the Scene View panel
+- [`SceneViewPanel.h`](../../SparkEditor/Source/Panels/SceneViewPanel.h) — 226 LOC — Scene view panel for 3D scene rendering in the Spark Engine Editor
 - [`ScriptDebugPanel.cpp`](../../SparkEditor/Source/Panels/ScriptDebugPanel.cpp) — 365 LOC — Visual script debugger panel implementation
 - [`ScriptDebugPanel.h`](../../SparkEditor/Source/Panels/ScriptDebugPanel.h) — 111 LOC — Visual script debugger panel with breakpoints, watch variables, and trace
 - [`ScriptEditorPanel.cpp`](../../SparkEditor/Source/Panels/ScriptEditorPanel.cpp) — 182 LOC — Implementation of the AngelScript editor panel
@@ -937,15 +1322,19 @@ graph LR
 
 ### `SparkEditor/Source/UndoRedo/`
 
-- [`EditorCommand.h`](../../SparkEditor/Source/UndoRedo/EditorCommand.h) — 513 LOC — Command pattern base class and concrete commands for the undo/redo system
+- [`EditorCommand.h`](../../SparkEditor/Source/UndoRedo/EditorCommand.h) — 161 LOC — Command pattern base class and concrete commands for the undo/redo system
 - [`EditorCommands.h`](../../SparkEditor/Source/UndoRedo/EditorCommands.h) — 252 LOC — Additional concrete editor commands for hierarchy and material operations
-- [`UndoRedoManager.cpp`](../../SparkEditor/Source/UndoRedo/UndoRedoManager.cpp) — 225 LOC — Implementation of the undo/redo command history manager
-- [`UndoRedoManager.h`](../../SparkEditor/Source/UndoRedo/UndoRedoManager.h) — 177 LOC — Manages the undo/redo command history stack
+- [`UndoRedoManager.cpp`](../../SparkEditor/Source/UndoRedo/UndoRedoManager.cpp) — 227 LOC — Implementation of the undo/redo command history manager
+- [`UndoRedoManager.h`](../../SparkEditor/Source/UndoRedo/UndoRedoManager.h) — 184 LOC — Manages the undo/redo command history stack
 
 ### `SparkEditor/Source/Utils/`
 
 - [`EditorConsoleBridge.cpp`](../../SparkEditor/Source/Utils/EditorConsoleBridge.cpp) — 140 LOC — Implementation of EditorConsoleBridge (R7.3 — console consolidation)
 - [`EditorConsoleBridge.h`](../../SparkEditor/Source/Utils/EditorConsoleBridge.h) — 125 LOC — Bridge that connects the editor's SimpleConsole to the engine's authoritative console (R7.3)
+- [`EditorProcessLaunch.cpp`](../../SparkEditor/Source/Utils/EditorProcessLaunch.cpp) — 179 LOC — Shared CreateProcessW helper implementation.
+- [`EditorProcessLaunch.h`](../../SparkEditor/Source/Utils/EditorProcessLaunch.h) — 108 LOC — Shared CreateProcessW helper for editor panels that spawn a separate
+- [`FolderDialog.cpp`](../../SparkEditor/Source/Utils/FolderDialog.cpp) — 123 LOC — Cross-platform native folder-picker dialog implementation.
+- [`FolderDialog.h`](../../SparkEditor/Source/Utils/FolderDialog.h) — 20 LOC — Cross-platform native folder-picker dialog.
 - [`ImGuiUtils.h`](../../SparkEditor/Source/Utils/ImGuiUtils.h) — 26 LOC — Utility helpers for Dear ImGui rendering in the SparkEditor
 
 ### `SparkEditor/Source/VersionControl/`
@@ -953,27 +1342,27 @@ graph LR
 - [`VersionControlConflicts.cpp`](../../SparkEditor/Source/VersionControl/VersionControlConflicts.cpp) — 254 LOC — Locking, conflict resolution, user settings, file status queries, and ignore patterns
 - [`VersionControlGitOps.cpp`](../../SparkEditor/Source/VersionControl/VersionControlGitOps.cpp) — 323 LOC — Git operations: staging, committing, pushing, pulling, branching, history, and diffs
 - [`VersionControlHelpers.cpp`](../../SparkEditor/Source/VersionControl/VersionControlHelpers.cpp) — 348 LOC — Parsing and utility helpers for VersionControlSystem
-- [`VersionControlRender.cpp`](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp) — 573 LOC — UI rendering methods, operation queue processing, and command execution
+- [`VersionControlRender.cpp`](../../SparkEditor/Source/VersionControl/VersionControlRender.cpp) — 589 LOC — UI rendering methods, operation queue processing, and command execution
 - [`VersionControlSystem.cpp`](../../SparkEditor/Source/VersionControl/VersionControlSystem.cpp) — 460 LOC — Core VersionControlSystem lifecycle, merge handler implementations, and repository operations
 - [`VersionControlSystem.h`](../../SparkEditor/Source/VersionControl/VersionControlSystem.h) — 511 LOC — Version control integration system for collaborative development in Spark Engine
 - [`VersionControlTypes.h`](../../SparkEditor/Source/VersionControl/VersionControlTypes.h) — 289 LOC — Type definitions, structs, and base classes for the version control system
 
 ### `SparkEditor/Source/Workflow/`
 
-- [`BuiltinWorkflows.cpp`](../../SparkEditor/Source/Workflow/BuiltinWorkflows.cpp) — 222 LOC — Implementations of pre-built editor workflow templates
+- [`BuiltinWorkflows.cpp`](../../SparkEditor/Source/Workflow/BuiltinWorkflows.cpp) — 310 LOC — Implementations of pre-built editor workflow templates
 - [`BuiltinWorkflows.h`](../../SparkEditor/Source/Workflow/BuiltinWorkflows.h) — 17 LOC — Pre-built editor workflow templates
 - [`EditorWorkflow.cpp`](../../SparkEditor/Source/Workflow/EditorWorkflow.cpp) — 122 LOC — Workflow execution and registry implementation
 - [`EditorWorkflow.h`](../../SparkEditor/Source/Workflow/EditorWorkflow.h) — 133 LOC — Lightweight editor workflow automation system
 
 ### `SparkEditor/Source/`
 
-- [`main.cpp`](../../SparkEditor/Source/main.cpp) — 386 LOC — SparkEditor entry point with integrated debug and collab server support
+- [`main.cpp`](../../SparkEditor/Source/main.cpp) — 496 LOC — SparkEditor entry point with integrated debug and collab server support
 
 ### `SparkEngine/Source/Audio/`
 
 - [`AudioBackendFactory.cpp`](../../SparkEngine/Source/Audio/AudioBackendFactory.cpp) — 71 LOC — Platform-aware factory for audio backend selection
 - [`AudioBackendFactory.h`](../../SparkEngine/Source/Audio/AudioBackendFactory.h) — 60 LOC — Factory for creating the best available IAudioBackend at startup
-- [`AudioEngine.cpp`](../../SparkEngine/Source/Audio/AudioEngine.cpp) — 950 LOC
+- [`AudioEngine.cpp`](../../SparkEngine/Source/Audio/AudioEngine.cpp) — 975 LOC
 - [`AudioEngine.h`](../../SparkEngine/Source/Audio/AudioEngine.h) — 589 LOC — XAudio2-based audio engine with comprehensive console integration
 - [`AudioMixer.cpp`](../../SparkEngine/Source/Audio/AudioMixer.cpp) — 329 LOC — Implementation of the audio mixer, reverb zones, and occlusion
 - [`AudioMixer.h`](../../SparkEngine/Source/Audio/AudioMixer.h) — 337 LOC — Audio mixer with mix buses, reverb zones, and occlusion
@@ -985,57 +1374,61 @@ graph LR
 - [`NullAudioBackend.h`](../../SparkEngine/Source/Audio/NullAudioBackend.h) — 117 LOC — No-op audio backend for headless and unsupported platforms
 - [`OpenALAudioBackend.cpp`](../../SparkEngine/Source/Audio/OpenALAudioBackend.cpp) — 164 LOC — IAudioBackend adapter delegating to the OpenAL Soft engine
 - [`OpenALAudioBackend.h`](../../SparkEngine/Source/Audio/OpenALAudioBackend.h) — 79 LOC — IAudioBackend adapter wrapping OpenALAudioEngine for Linux/macOS
-- [`OpenALAudioEngine.cpp`](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp) — 722 LOC — OpenAL Soft audio backend implementation for Linux/macOS
-- [`OpenALAudioEngine.h`](../../SparkEngine/Source/Audio/OpenALAudioEngine.h) — 199 LOC — OpenAL Soft audio backend for Linux/macOS cross-platform audio
-- [`SoundEffect.cpp`](../../SparkEngine/Source/Audio/SoundEffect.cpp) — 384 LOC
+- [`OpenALAudioEngine.cpp`](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp) — 736 LOC — OpenAL Soft audio backend implementation for Linux/macOS
+- [`OpenALAudioEngine.h`](../../SparkEngine/Source/Audio/OpenALAudioEngine.h) — 208 LOC — OpenAL Soft audio backend for Linux/macOS cross-platform audio
+- [`SoundEffect.cpp`](../../SparkEngine/Source/Audio/SoundEffect.cpp) — 394 LOC
 - [`SoundEffect.h`](../../SparkEngine/Source/Audio/SoundEffect.h) — 330 LOC — Sound effect loading and procedural audio generation system
 - [`XAudio2AudioBackend.cpp`](../../SparkEngine/Source/Audio/XAudio2AudioBackend.cpp) — 171 LOC — IAudioBackend adapter delegating to the XAudio2 AudioEngine
 - [`XAudio2AudioBackend.h`](../../SparkEngine/Source/Audio/XAudio2AudioBackend.h) — 80 LOC — IAudioBackend adapter wrapping the existing XAudio2-based AudioEngine
 
 ### `SparkEngine/Source/Camera/`
 
-- [`SparkEngineCamera.cpp`](../../SparkEngine/Source/Camera/SparkEngineCamera.cpp) — 465 LOC
-- [`SparkEngineCamera.h`](../../SparkEngine/Source/Camera/SparkEngineCamera.h) — 404 LOC — First-person camera system with smooth movement and console integration
+- [`SparkEngineCamera.cpp`](../../SparkEngine/Source/Camera/SparkEngineCamera.cpp) — 256 LOC — Core camera movement, rotation, and matrix update implementation
+- [`SparkEngineCamera.h`](../../SparkEngine/Source/Camera/SparkEngineCamera.h) — 408 LOC — First-person camera system with smooth movement and console integration
+- [`SparkEngineCameraConsoleOps.cpp`](../../SparkEngine/Source/Camera/SparkEngineCameraConsoleOps.cpp) — 254 LOC — Console integration methods for SparkEngineCamera
+- [`SparkEngineCameraInternal.h`](../../SparkEngine/Source/Camera/SparkEngineCameraInternal.h) — 81 LOC — Shared console-logging helpers for the SparkEngineCamera implementation files
 
 ### `SparkEngine/Source/Core/`
 
 - [`AssetHandle.h`](../../SparkEngine/Source/Core/AssetHandle.h) — 86 LOC — Lightweight hashed asset identifier for zero-allocation asset references
 - [`AssetIntegration.h`](../../SparkEngine/Source/Core/AssetIntegration.h) — 258 LOC — Cross-links AssetHandle with the engine's resource systems
 - [`AssetMigration.h`](../../SparkEngine/Source/Core/AssetMigration.h) — 476 LOC — Versioned asset format migration system
-- [`AssetValidator.cpp`](../../SparkEngine/Source/Core/AssetValidator.cpp) — 396 LOC
-- [`AssetValidator.h`](../../SparkEngine/Source/Core/AssetValidator.h) — 113 LOC — Asset validation pipeline for content integrity checking
-- [`ComponentReflection.cpp`](../../SparkEngine/Source/Core/ComponentReflection.cpp) — 1050 LOC — Runtime reflection registration for all ECS components
+- [`AssetValidator.cpp`](../../SparkEngine/Source/Core/AssetValidator.cpp) — 441 LOC
+- [`AssetValidator.h`](../../SparkEngine/Source/Core/AssetValidator.h) — 119 LOC — Asset validation pipeline for content integrity checking
+- [`ComponentReflection.cpp`](../../SparkEngine/Source/Core/ComponentReflection.cpp) — 1095 LOC — Runtime reflection registration for all ECS components
 - [`Contracts.h`](../../SparkEngine/Source/Core/Contracts.h) — 69 LOC — C++26 contract bridge macros (preconditions, postconditions, invariants)
 - [`EngineBootstrap.cpp`](../../SparkEngine/Source/Core/EngineBootstrap.cpp) — 403 LOC — Dependency-ordered subsystem initialization and shutdown implementation
 - [`EngineBootstrap.h`](../../SparkEngine/Source/Core/EngineBootstrap.h) — 210 LOC — Dependency-ordered subsystem initialization and shutdown
 - [`EngineConsoleCommands.cpp`](../../SparkEngine/Source/Core/EngineConsoleCommands.cpp) — 974 LOC — Engine-wide console command registration
 - [`EngineConsoleCommands.h`](../../SparkEngine/Source/Core/EngineConsoleCommands.h) — 28 LOC — Registers engine-wide console commands (modules, physics, audio, save, architecture)
-- [`EngineContext.cpp`](../../SparkEngine/Source/Core/EngineContext.cpp) — 219 LOC — Concrete IEngineContext implementation
-- [`EngineContext.h`](../../SparkEngine/Source/Core/EngineContext.h) — 459 LOC — Concrete implementation of IEngineContext for the engine runtime
-- [`EngineDiagnostics.cpp`](../../SparkEngine/Source/Core/EngineDiagnostics.cpp) — 1010 LOC — Runtime diagnostic commands that exercise live engine subsystems
-- [`EngineDiagnostics.h`](../../SparkEngine/Source/Core/EngineDiagnostics.h) — 93 LOC — Runtime diagnostic commands that exercise live engine subsystems
-- [`EngineDiagnosticsExtended.cpp`](../../SparkEngine/Source/Core/EngineDiagnosticsExtended.cpp) — 541 LOC — Extended runtime diagnostics for RHI, JobSystem, AI, debug tools,
+- [`EngineContext.cpp`](../../SparkEngine/Source/Core/EngineContext.cpp) — 244 LOC — Concrete IEngineContext implementation
+- [`EngineContext.h`](../../SparkEngine/Source/Core/EngineContext.h) — 497 LOC — Concrete implementation of IEngineContext for the engine runtime
+- [`EngineDiagnostics.cpp`](../../SparkEngine/Source/Core/EngineDiagnostics.cpp) — 1079 LOC — Runtime diagnostic commands that exercise live engine subsystems
+- [`EngineDiagnostics.h`](../../SparkEngine/Source/Core/EngineDiagnostics.h) — 94 LOC — Runtime diagnostic commands that exercise live engine subsystems
+- [`EngineDiagnosticsExtended.cpp`](../../SparkEngine/Source/Core/EngineDiagnosticsExtended.cpp) — 547 LOC — Extended runtime diagnostics for RHI, JobSystem, AI, debug tools,
 - [`EngineRuntime.cpp`](../../SparkEngine/Source/Core/EngineRuntime.cpp) — 28 LOC — Storage for the process-wide EngineRuntime instance.
-- [`EngineRuntime.h`](../../SparkEngine/Source/Core/EngineRuntime.h) — 68 LOC — Private container for engine-owned subsystem instances.
-- [`EngineSettings.cpp`](../../SparkEngine/Source/Core/EngineSettings.cpp) — 1478 LOC — Implementation of centralized engine settings
+- [`EngineRuntime.h`](../../SparkEngine/Source/Core/EngineRuntime.h) — 67 LOC — Private container for engine-owned subsystem instances.
+- [`EngineSettings.cpp`](../../SparkEngine/Source/Core/EngineSettings.cpp) — 1522 LOC — Implementation of centralized engine settings
 - [`EngineSettings.h`](../../SparkEngine/Source/Core/EngineSettings.h) — 1079 LOC — Centralized engine settings loaded from INI configuration
 - [`EngineSetup.h`](../../SparkEngine/Source/Core/EngineSetup.h) — 281 LOC — Wires architecture components into the engine lifecycle
 - [`FaultIsolation.cpp`](../../SparkEngine/Source/Core/FaultIsolation.cpp) — 391 LOC — Runtime fault isolation for engine subsystem updates
 - [`FaultIsolation.h`](../../SparkEngine/Source/Core/FaultIsolation.h) — 143 LOC — Runtime fault isolation for engine subsystem updates
 - [`FixedTimestepAccumulator.cpp`](../../SparkEngine/Source/Core/FixedTimestepAccumulator.cpp) — 127 LOC — Implementation of the fixed-timestep accumulator
 - [`FixedTimestepAccumulator.h`](../../SparkEngine/Source/Core/FixedTimestepAccumulator.h) — 88 LOC — Centralized fixed-timestep accumulator for the main loop
+- [`GameImGuiLayer.cpp`](../../SparkEngine/Source/Core/GameImGuiLayer.cpp) — 194 LOC — Game-mode ImGui overlay implementation (exe-only, Windows + DX11).
+- [`GameImGuiLayer.h`](../../SparkEngine/Source/Core/GameImGuiLayer.h) — 75 LOC — Game-mode (non-editor) ImGui overlay for the SparkEngine executable.
 - [`GameModuleLoader.cpp`](../../SparkEngine/Source/Core/GameModuleLoader.cpp) — 151 LOC — Platform-specific implementation of dynamic game module loading
 - [`GameModuleLoader.h`](../../SparkEngine/Source/Core/GameModuleLoader.h) — 68 LOC — Loads game modules (DLLs/shared libraries) at runtime
 - [`GamePackager.cpp`](../../SparkEngine/Source/Core/GamePackager.cpp) — 408 LOC
 - [`GamePackager.h`](../../SparkEngine/Source/Core/GamePackager.h) — 91 LOC — Game packaging pipeline for distribution builds
 - [`GameplaySystemLifecycle.cpp`](../../SparkEngine/Source/Core/GameplaySystemLifecycle.cpp) — 200 LOC
-- [`GameplaySystemLifecycle.h`](../../SparkEngine/Source/Core/GameplaySystemLifecycle.h) — 62 LOC — Initialization, update, and shutdown for all gameplay and debug subsystems
+- [`GameplaySystemLifecycle.h`](../../SparkEngine/Source/Core/GameplaySystemLifecycle.h) — 64 LOC — Initialization, update, and shutdown for all gameplay and debug subsystems
 - [`IGameModule.h`](../../SparkEngine/Source/Core/IGameModule.h) — 92 LOC — Abstract interface that game DLLs must implement
 
 ### `SparkEngine/Source/Core/Lifecycle/`
 
-- [`GameplayLifecycleShared.cpp`](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp) — 1347 LOC — Initialization, update, and shutdown for all gameplay and debug subsystems
-- [`GameplayLifecycleShared.h`](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.h) — 20 LOC — Shared lifecycle functions for gameplay and debug subsystem management
+- [`GameplayLifecycleShared.cpp`](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp) — 1386 LOC — Initialization, update, and shutdown for all gameplay and debug subsystems
+- [`GameplayLifecycleShared.h`](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.h) — 36 LOC — Shared lifecycle functions for gameplay and debug subsystem management
 - [`InitDebugStage.cpp`](../../SparkEngine/Source/Core/Lifecycle/InitDebugStage.cpp) — 21 LOC
 - [`InitGameplayStage.cpp`](../../SparkEngine/Source/Core/Lifecycle/InitGameplayStage.cpp) — 21 LOC
 - [`InitNetworkingStage.cpp`](../../SparkEngine/Source/Core/Lifecycle/InitNetworkingStage.cpp) — 21 LOC
@@ -1048,59 +1441,71 @@ graph LR
 
 - [`ModuleHotReload.cpp`](../../SparkEngine/Source/Core/ModuleHotReload.cpp) — 291 LOC — DLL/SO hot-reload file watcher implementation
 - [`ModuleHotReload.h`](../../SparkEngine/Source/Core/ModuleHotReload.h) — 148 LOC — Watches module DLLs for changes and triggers automatic hot-reload
-- [`ModuleManager.cpp`](../../SparkEngine/Source/Core/ModuleManager.cpp) — 852 LOC — Multi-module loader and lifecycle manager implementation
-- [`ModuleManager.h`](../../SparkEngine/Source/Core/ModuleManager.h) — 182 LOC — Multi-module loader and lifecycle manager
+- [`ModuleManager.cpp`](../../SparkEngine/Source/Core/ModuleManager.cpp) — 1064 LOC — Multi-module loader and lifecycle manager implementation
+- [`ModuleManager.h`](../../SparkEngine/Source/Core/ModuleManager.h) — 227 LOC — Multi-module loader and lifecycle manager
 - [`NonNull.h`](../../SparkEngine/Source/Core/NonNull.h) — 73 LOC — Lightweight non-null pointer wrapper with debug-mode enforcement
-- [`Platform.h`](../../SparkEngine/Source/Core/Platform.h) — 335 LOC — Cross-platform type definitions and compatibility layer
+- [`Platform.h`](../../SparkEngine/Source/Core/Platform.h) — 270 LOC — Cross-platform type definitions and compatibility layer
 - [`PlatformAudioStubs.h`](../../SparkEngine/Source/Core/PlatformAudioStubs.h) — 375 LOC — XAudio2, XInput, and related stubs for non-Windows platforms
 - [`PlatformD3DStubs.h`](../../SparkEngine/Source/Core/PlatformD3DStubs.h) — 221 LOC — D3D11/DXGI type stubs and ComPtr for non-Windows platforms
-- [`PlatformDirectXMathStubs.h`](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h) — 671 LOC — DirectXMath compatibility stubs for non-Windows platforms
-- [`PlatformTypes.h`](../../SparkEngine/Source/Core/PlatformTypes.h) — 399 LOC — Win32 type aliases and macros for non-Windows platforms
+- [`PlatformDirectXMathStubs.h`](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h) — 747 LOC — DirectXMath compatibility stubs for non-Windows platforms
+- [`PlatformTypes.h`](../../SparkEngine/Source/Core/PlatformTypes.h) — 440 LOC — Win32 type aliases and macros for non-Windows platforms
 - [`PluginRegistry.cpp`](../../SparkEngine/Source/Core/PluginRegistry.cpp) — 116 LOC — Implementation of the static plugin registry
 - [`PluginRegistry.h`](../../SparkEngine/Source/Core/PluginRegistry.h) — 82 LOC — Macro-based plugin registration using a static linked list
 - [`Reflection.h`](../../SparkEngine/Source/Core/Reflection.h) — 580 LOC — Lightweight compile-time type reflection system (ezEngine-inspired)
 - [`ReflectionSerializer.h`](../../SparkEngine/Source/Core/ReflectionSerializer.h) — 234 LOC — Generic reflection-driven serialization utilities
 - [`ResourceVersionTracker.cpp`](../../SparkEngine/Source/Core/ResourceVersionTracker.cpp) — 88 LOC — Implementation of the resource version tracker
 - [`ResourceVersionTracker.h`](../../SparkEngine/Source/Core/ResourceVersionTracker.h) — 72 LOC — Tracks version numbers for loaded resources to detect staleness
-- [`SafeCast.h`](../../SparkEngine/Source/Core/SafeCast.h) — 92 LOC — Type-safe cast utilities with debug-mode validation
-- [`SparkEngine.cpp`](../../SparkEngine/Source/Core/SparkEngine.cpp) — 443 LOC — SparkEngine executable entry point - loads game modules dynamically
+- [`SafeCast.h`](../../SparkEngine/Source/Core/SafeCast.h) — 99 LOC — Type-safe cast utilities with debug-mode validation
+- [`SparkEngine.cpp`](../../SparkEngine/Source/Core/SparkEngine.cpp) — 494 LOC — SparkEngine executable entry point - loads game modules dynamically
 - [`SparkEngine.h`](../../SparkEngine/Source/Core/SparkEngine.h) — 41 LOC — Main engine header - SparkEngine is the executable runtime host
-- [`SparkEngineLinux.cpp`](../../SparkEngine/Source/Core/SparkEngineLinux.cpp) — 1186 LOC — POSIX entry point (main) and SDL2 event loop (Linux + macOS).
-- [`SparkEngineMacOS.cpp`](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp) — 135 LOC — macOS-specific engine entry-point helpers (Metal view lifecycle, exe path).
+- [`SparkEngineLinux.cpp`](../../SparkEngine/Source/Core/SparkEngineLinux.cpp) — 228 LOC — POSIX entry point (main), signal handling, and command-line parsing (Linux + macOS).
+- [`SparkEngineLinuxHeadless.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp) — 199 LOC — Headless/dedicated-server loop and no-SDL2 fallback path (Linux + macOS).
+- [`SparkEngineLinuxInit.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxInit.cpp) — 353 LOC — Shared POSIX startup, per-frame tick, and shutdown helpers (Linux + macOS).
+- [`SparkEngineLinuxInternal.h`](../../SparkEngine/Source/Core/SparkEngineLinuxInternal.h) — 67 LOC — Internal declarations shared by the POSIX (Linux + macOS) entry-point files.
+- [`SparkEngineLinuxSDL2.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2.cpp) — 443 LOC — SDL2 windowed-mode bring-up: window/backend selection and RunSDL2Windowed (Linux + macOS).
+- [`SparkEngineLinuxSDL2Events.cpp`](../../SparkEngine/Source/Core/SparkEngineLinuxSDL2Events.cpp) — 215 LOC — SDL2 event translation, dispatch, and per-frame main loop (Linux + macOS).
+- [`SparkEngineMacOS.cpp`](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp) — 136 LOC — macOS-specific engine entry-point helpers (Metal view lifecycle, exe path).
 - [`SparkEngineMacOS.h`](../../SparkEngine/Source/Core/SparkEngineMacOS.h) — 54 LOC — macOS-specific engine entry-point helpers (Metal view, exe path).
-- [`SparkEngineWindows.cpp`](../../SparkEngine/Source/Core/SparkEngineWindows.cpp) — 1028 LOC — Windows entry point (wWinMain) and platform helpers
+- [`SparkEngineWindows.cpp`](../../SparkEngine/Source/Core/SparkEngineWindows.cpp) — 439 LOC — Windows entry point (wWinMain), command-line parsing, and -exec script playback
+- [`SparkEngineWindowsHeadless.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp) — 355 LOC — Headless/dedicated-server loop (Windows).
+- [`SparkEngineWindowsInit.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsInit.cpp) — 291 LOC — Windowed-mode subsystem initialization (Windows).
+- [`SparkEngineWindowsInternal.h`](../../SparkEngine/Source/Core/SparkEngineWindowsInternal.h) — 102 LOC — Internal declarations shared by the Windows entry-point files.
+- [`SparkEngineWindowsModules.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsModules.cpp) — 224 LOC — Game-module discovery, -game/manifest loading, and the bare-launch project selector (Windows).
+- [`SparkEngineWindowsWin32.cpp`](../../SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp) — 377 LOC — Win32 message pump, window creation, and window procedure (Windows).
 - [`SparkExport.h`](../../SparkEngine/Source/Core/SparkExport.h) — 38 LOC — DLL export/import macros for the Spark Engine module system
 - [`SparkPak.cpp`](../../SparkEngine/Source/Core/SparkPak.cpp) — 342 LOC — SparkPakReader implementation — opens .spk archives and reads entries
 - [`SparkPak.h`](../../SparkEngine/Source/Core/SparkPak.h) — 165 LOC — MPQ-inspired binary archive format for asset packaging
 - [`SparkPakWriter.cpp`](../../SparkEngine/Source/Core/SparkPakWriter.cpp) — 292 LOC — SparkPakWriter implementation — builds .spk archive files
 - [`SparkPakWriter.h`](../../SparkEngine/Source/Core/SparkPakWriter.h) — 68 LOC — Builder for SparkPak (.spk) archive files
-- [`SubsystemConsoleCommands.cpp`](../../SparkEngine/Source/Core/SubsystemConsoleCommands.cpp) — 608 LOC — Console commands for camera, network, AI, animation, weather, and post-processing
+- [`SubsystemConsoleCommands.cpp`](../../SparkEngine/Source/Core/SubsystemConsoleCommands.cpp) — 619 LOC — Console commands for camera, network, AI, animation, weather, and post-processing
 - [`SubsystemConsoleCommands.h`](../../SparkEngine/Source/Core/SubsystemConsoleCommands.h) — 24 LOC — Console commands for subsystems: camera, network, AI, animation, weather,
-- [`SubsystemConsoleCommandsExt.cpp`](../../SparkEngine/Source/Core/SubsystemConsoleCommandsExt.cpp) — 734 LOC — Console commands for input, scripting, cinematic, replay, localization,
+- [`SubsystemConsoleCommandsExt.cpp`](../../SparkEngine/Source/Core/SubsystemConsoleCommandsExt.cpp) — 767 LOC — Console commands for input, scripting, cinematic, replay, localization,
 - [`framework.h`](../../SparkEngine/Source/Core/framework.h) — 51 LOC — Core framework header with essential includes and library links
 - [`resource.h`](../../SparkEngine/Source/Core/resource.h) — 41 LOC — Windows resource definitions and identifiers
 - [`targetver.h`](../../SparkEngine/Source/Core/targetver.h) — 26 LOC — Platform version targeting
 
 ### `SparkEngine/Source/Engine/2D/`
 
-- [`Physics2D.h`](../../SparkEngine/Source/Engine/2D/Physics2D.h) — 405 LOC — 2D physics simulation with AABB/circle collision detection and resolution
+- [`Physics2D.h`](../../SparkEngine/Source/Engine/2D/Physics2D.h) — 436 LOC — 2D physics simulation with AABB/circle collision detection and resolution
 - [`Physics2DTypes.h`](../../SparkEngine/Source/Engine/2D/Physics2DTypes.h) — 254 LOC — Type definitions, structs, and collision functions for 2D physics
-- [`SceneGraph2D.h`](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h) — 320 LOC — Retained 2D scene graph with granular update flags
+- [`SceneGraph2D.h`](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h) — 325 LOC — Retained 2D scene graph with granular update flags
 
 ### `SparkEngine/Source/Engine/AI/`
 
-- [`AIBudgetLimiter.cpp`](../../SparkEngine/Source/Engine/AI/AIBudgetLimiter.cpp) — 263 LOC — Implementation of the AI frame-budget limiter
-- [`AIBudgetLimiter.h`](../../SparkEngine/Source/Engine/AI/AIBudgetLimiter.h) — 303 LOC — Frame-budget limiter for AI processing (R4.3)
+- [`AIBudgetLimiter.cpp`](../../SparkEngine/Source/Engine/AI/AIBudgetLimiter.cpp) — 279 LOC — Implementation of the AI frame-budget limiter
+- [`AIBudgetLimiter.h`](../../SparkEngine/Source/Engine/AI/AIBudgetLimiter.h) — 53 LOC — Frame-budget limiter for AI processing (R4.3)
+- [`AIBudgetLimiterCore.h`](../../SparkEngine/Source/Engine/AI/AIBudgetLimiterCore.h) — 217 LOC — AIBudgetLimiter class — per-frame AI time-budget enforcement (R4.3)
+- [`AIBudgetTypes.h`](../../SparkEngine/Source/Engine/AI/AIBudgetTypes.h) — 82 LOC — Shared data types for the AI budget limiter (R4.3)
 - [`AIDebugRenderer.cpp`](../../SparkEngine/Source/Engine/AI/AIDebugRenderer.cpp) — 315 LOC — AI debug visualization using DebugDraw primitives
 - [`AIDebugRenderer.h`](../../SparkEngine/Source/Engine/AI/AIDebugRenderer.h) — 239 LOC — Debug visualization for AI systems: NavMesh, paths, perception, behavior trees
 - [`AIDirector.cpp`](../../SparkEngine/Source/Engine/AI/AIDirector.cpp) — 262 LOC — Implementation of the AI Director dynamic difficulty system
 - [`AIDirector.h`](../../SparkEngine/Source/Engine/AI/AIDirector.h) — 220 LOC — Dynamic difficulty and pacing system (inspired by Left 4 Dead's AI Director)
-- [`AIIntegration.h`](../../SparkEngine/Source/Engine/AI/AIIntegration.h) — 289 LOC — Cross-links all AI architecture extensions with AISystem
-- [`AISystem.cpp`](../../SparkEngine/Source/Engine/AI/AISystem.cpp) — 920 LOC — AI system implementation — processes all AI agents each frame
+- [`AIIntegration.h`](../../SparkEngine/Source/Engine/AI/AIIntegration.h) — 293 LOC — Cross-links all AI architecture extensions with AISystem
+- [`AISystem.cpp`](../../SparkEngine/Source/Engine/AI/AISystem.cpp) — 931 LOC — AI system implementation — processes all AI agents each frame
 - [`AISystem.h`](../../SparkEngine/Source/Engine/AI/AISystem.h) — 417 LOC — ECS system for AI agent processing and coordination
 - [`BehaviorTree.h`](../../SparkEngine/Source/Engine/AI/BehaviorTree.h) — 318 LOC — Behavior tree framework for NPC AI decision-making
-- [`BehaviorTreeNodes.h`](../../SparkEngine/Source/Engine/AI/BehaviorTreeNodes.h) — 362 LOC — Concrete behavior tree node implementations
-- [`BehaviorTreeTypes.h`](../../SparkEngine/Source/Engine/AI/BehaviorTreeTypes.h) — 247 LOC — Core types for the behavior tree framework: NodeStatus, Blackboard, and BTNode base class
+- [`BehaviorTreeNodes.h`](../../SparkEngine/Source/Engine/AI/BehaviorTreeNodes.h) — 417 LOC — Concrete behavior tree node implementations
+- [`BehaviorTreeTypes.h`](../../SparkEngine/Source/Engine/AI/BehaviorTreeTypes.h) — 260 LOC — Core types for the behavior tree framework: NodeStatus, Blackboard, and BTNode base class
 - [`CollisionAvoidance.cpp`](../../SparkEngine/Source/Engine/AI/CollisionAvoidance.cpp) — 223 LOC — Implementation of the simplified ORCA collision avoidance system
 - [`CollisionAvoidance.h`](../../SparkEngine/Source/Engine/AI/CollisionAvoidance.h) — 173 LOC — ORCA collision avoidance for AI crowds
 - [`CoverSystem.cpp`](../../SparkEngine/Source/Engine/AI/CoverSystem.cpp) — 334 LOC — Cover analysis and querying implementation
@@ -1112,7 +1517,7 @@ graph LR
 - [`GroupAI.h`](../../SparkEngine/Source/Engine/AI/GroupAI.h) — 240 LOC — Group/squad AI coordination system
 - [`MovementSystem.cpp`](../../SparkEngine/Source/Engine/AI/MovementSystem.cpp) — 871 LOC — Implementation of the priority-based movement generator stack
 - [`MovementSystem.h`](../../SparkEngine/Source/Engine/AI/MovementSystem.h) — 419 LOC — Priority-based movement generator stack (TC MotionMaster-inspired)
-- [`NavMesh.cpp`](../../SparkEngine/Source/Engine/AI/NavMesh.cpp) — 1004 LOC — NavMesh implementation — query, builder, and manager
+- [`NavMesh.cpp`](../../SparkEngine/Source/Engine/AI/NavMesh.cpp) — 1108 LOC — NavMesh implementation — query, builder, and manager
 - [`NavMesh.h`](../../SparkEngine/Source/Engine/AI/NavMesh.h) — 468 LOC — Navigation mesh system for AI pathfinding
 - [`NavMeshLink.h`](../../SparkEngine/Source/Engine/AI/NavMeshLink.h) — 134 LOC — Off-mesh navigation links for jumps, ladders, and teleporters
 - [`NavMeshObstacles.cpp`](../../SparkEngine/Source/Engine/AI/NavMeshObstacles.cpp) — 435 LOC — Implementation of dynamic NavMesh obstacle carving
@@ -1141,18 +1546,19 @@ graph LR
 - [`AnimationEvaluator.h`](../../SparkEngine/Source/Engine/Animation/AnimationEvaluator.h) — 122 LOC — Core animation processing: sampling, blending, skinning, and IK solving
 - [`AnimationRetargeting.h`](../../SparkEngine/Source/Engine/Animation/AnimationRetargeting.h) — 307 LOC — Skeleton retargeting for sharing animations between different characters
 - [`AnimationStateMachine.cpp`](../../SparkEngine/Source/Engine/Animation/AnimationStateMachine.cpp) — 193 LOC — AnimationStateMachine implementation — state transitions, crossfade blending, state management
-- [`AnimationSystem.cpp`](../../SparkEngine/Source/Engine/Animation/AnimationSystem.cpp) — 658 LOC — AnimationManager (asset cache) and AnimationInstance (per-entity runtime update)
+- [`AnimationSystem.cpp`](../../SparkEngine/Source/Engine/Animation/AnimationSystem.cpp) — 688 LOC — AnimationManager (asset cache) and AnimationInstance (per-entity runtime update)
 - [`AnimationSystem.h`](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h) — 543 LOC — Skeletal animation system with bone hierarchies, skinning, blending, and state machines
 - [`AnimationTypes.h`](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h) — 563 LOC — Core animation data types: bones, skeletons, keyframes, clips, blending, IK, and instances
 - [`BlendSpace.cpp`](../../SparkEngine/Source/Engine/Animation/BlendSpace.cpp) — 444 LOC — Implementation of 2D parametric blend space with Delaunay triangulation
 - [`BlendSpace.h`](../../SparkEngine/Source/Engine/Animation/BlendSpace.h) — 237 LOC — Parametric 2D blend space for animation blending
 - [`IKSolver.h`](../../SparkEngine/Source/Engine/Animation/IKSolver.h) — 101 LOC — Inverse Kinematics types and chain definitions
-- [`InverseKinematics.cpp`](../../SparkEngine/Source/Engine/Animation/InverseKinematics.cpp) — 418 LOC — IK solver implementations — TwoBoneIK, LookAtIK, FABRIK
+- [`InverseKinematics.cpp`](../../SparkEngine/Source/Engine/Animation/InverseKinematics.cpp) — 347 LOC — IK solver implementations — TwoBoneIK, LookAtIK (FABRIK lives in InverseKinematicsFABRIK.cpp)
+- [`InverseKinematicsFABRIK.cpp`](../../SparkEngine/Source/Engine/Animation/InverseKinematicsFABRIK.cpp) — 175 LOC — IK solver implementation — FABRIK
 - [`PoseModifier.cpp`](../../SparkEngine/Source/Engine/Animation/PoseModifier.cpp) — 362 LOC — Post-animation pose modification pipeline implementation
 - [`PoseModifier.h`](../../SparkEngine/Source/Engine/Animation/PoseModifier.h) — 243 LOC — Post-animation pose modification pipeline
 - [`RagdollSystem.cpp`](../../SparkEngine/Source/Engine/Animation/RagdollSystem.cpp) — 275 LOC — Implementation of the ragdoll physics system
 - [`RagdollSystem.h`](../../SparkEngine/Source/Engine/Animation/RagdollSystem.h) — 269 LOC — Ragdoll physics with animation blending and hit reactions
-- [`SkeletalAnimation.cpp`](../../SparkEngine/Source/Engine/Animation/SkeletalAnimation.cpp) — 228 LOC — Low-level skeletal animation evaluation — keyframe interpolation, clip sampling,
+- [`SkeletalAnimation.cpp`](../../SparkEngine/Source/Engine/Animation/SkeletalAnimation.cpp) — 233 LOC — Low-level skeletal animation evaluation — keyframe interpolation, clip sampling,
 - [`Skeleton.h`](../../SparkEngine/Source/Engine/Animation/Skeleton.h) — 127 LOC — Bone and Skeleton structures for skeletal animation hierarchies
 
 ### `SparkEngine/Source/Engine/Build/`
@@ -1161,14 +1567,14 @@ graph LR
 
 ### `SparkEngine/Source/Engine/Cinematic/`
 
-- [`Sequencer.cpp`](../../SparkEngine/Source/Engine/Cinematic/Sequencer.cpp) — 812 LOC — Implementation of the cinematic sequencer system
-- [`Sequencer.h`](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h) — 342 LOC — Timeline-based cinematic sequencer for cutscenes and scripted events
+- [`Sequencer.cpp`](../../SparkEngine/Source/Engine/Cinematic/Sequencer.cpp) — 825 LOC — Implementation of the cinematic sequencer system
+- [`Sequencer.h`](../../SparkEngine/Source/Engine/Cinematic/Sequencer.h) — 345 LOC — Timeline-based cinematic sequencer for cutscenes and scripted events
 - [`VideoPlayer.h`](../../SparkEngine/Source/Engine/Cinematic/VideoPlayer.h) — 372 LOC — Video playback system for cutscenes, splash screens, and in-world displays
 
 ### `SparkEngine/Source/Engine/Coroutine/`
 
-- [`CancellationToken.h`](../../SparkEngine/Source/Engine/Coroutine/CancellationToken.h) — 65 LOC — Cancellation token for coroutines tied to entity lifetime
-- [`CoroutineScheduler.h`](../../SparkEngine/Source/Engine/Coroutine/CoroutineScheduler.h) — 226 LOC — Gameplay coroutine system -- delayed, yielding, and repeating tasks
+- [`CancellationToken.h`](../../SparkEngine/Source/Engine/Coroutine/CancellationToken.h) — 69 LOC — Cancellation token for coroutines tied to entity lifetime
+- [`CoroutineScheduler.h`](../../SparkEngine/Source/Engine/Coroutine/CoroutineScheduler.h) — 236 LOC — Gameplay coroutine system -- delayed, yielding, and repeating tasks
 - [`CoroutineTypes.h`](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h) — 495 LOC — Type definitions for the coroutine system -- yield instructions, promise types, and builder coroutine
 
 ### `SparkEngine/Source/Engine/Crafting/`
@@ -1181,14 +1587,14 @@ graph LR
 
 ### `SparkEngine/Source/Engine/Destruction/`
 
-- [`DestructionSystem.cpp`](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.cpp) — 223 LOC — Implementation of the destructible environment system
+- [`DestructionSystem.cpp`](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.cpp) — 259 LOC — Implementation of the destructible environment system
 - [`DestructionSystem.h`](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h) — 286 LOC — Destructible environment system for FPS gameplay
 
 ### `SparkEngine/Source/Engine/Dialogue/`
 
-- [`DialogueSystem.cpp`](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp) — 569 LOC — Implementation of the dialogue tree and conversation system
+- [`DialogueSystem.cpp`](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.cpp) — 578 LOC — Implementation of the dialogue tree and conversation system
 - [`DialogueSystem.h`](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h) — 332 LOC — Dialogue tree and conversation system for NPCs
-- [`DynamicResponseSystem.cpp`](../../SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.cpp) — 256 LOC — Dynamic response system implementation
+- [`DynamicResponseSystem.cpp`](../../SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.cpp) — 280 LOC — Dynamic response system implementation
 - [`DynamicResponseSystem.h`](../../SparkEngine/Source/Engine/Dialogue/DynamicResponseSystem.h) — 227 LOC — Signal/condition-driven dynamic response system
 
 ### `SparkEngine/Source/Engine/ECS/`
@@ -1203,7 +1609,7 @@ graph LR
 - [`AudioComponents.h`](../../SparkEngine/Source/Engine/ECS/Components/AudioComponents.h) — 55 LOC — ECS audio component: AudioSourceComponent
 - [`CollisionMaskComponents.h`](../../SparkEngine/Source/Engine/ECS/Components/CollisionMaskComponents.h) — 71 LOC — Lightweight game-logic collision masks separate from Bullet physics
 - [`CoreComponents.cpp`](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.cpp) — 69 LOC
-- [`CoreComponents.h`](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.h) — 149 LOC — Core ECS components: Transform, MeshRenderer, Camera, Script
+- [`CoreComponents.h`](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.h) — 150 LOC — Core ECS components: Transform, MeshRenderer, Camera, Script
 - [`FPSComponents.h`](../../SparkEngine/Source/Engine/ECS/Components/FPSComponents.h) — 285 LOC — ECS components for FPS gameplay: Decals, Projectiles, Interactions
 - [`GameplayComponents.h`](../../SparkEngine/Source/Engine/ECS/Components/GameplayComponents.h) — 214 LOC — ECS gameplay components: Tags, Health, Active, Weather, Inventory, Quests
 - [`LightComponents.h`](../../SparkEngine/Source/Engine/ECS/Components/LightComponents.h) — 61 LOC — ECS lighting component: LightComponent
@@ -1221,60 +1627,62 @@ graph LR
 - [`ECSIntegration.h`](../../SparkEngine/Source/Engine/ECS/ECSIntegration.h) — 173 LOC — Aggregates and cross-links all ECS architecture extensions
 - [`EntityArchetype.cpp`](../../SparkEngine/Source/Engine/ECS/EntityArchetype.cpp) — 99 LOC — Entity archetype system implementation
 - [`EntityArchetype.h`](../../SparkEngine/Source/Engine/ECS/EntityArchetype.h) — 179 LOC — Entity archetype/template system
-- [`EntityArchetypeLoader.cpp`](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp) — 386 LOC — Data-driven archetype loading and entity spawning
+- [`EntityArchetypeLoader.cpp`](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp) — 408 LOC — Data-driven archetype loading and entity spawning
 - [`EntityArchetypeLoader.h`](../../SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.h) — 80 LOC — Data-driven archetype loading from .archetype files and spawn API
 - [`EntityPresetManager.cpp`](../../SparkEngine/Source/Engine/ECS/EntityPresetManager.cpp) — 238 LOC — Implementation of entity preset registry with built-in game object templates
 - [`EntityPresetManager.h`](../../SparkEngine/Source/Engine/ECS/EntityPresetManager.h) — 107 LOC — Pre-configured entity templates for rapid no-code game creation
-- [`ReactiveSystem.h`](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h) — 221 LOC — EnTT-based reactive ECS system using observers (R2.4 — Architecture Analysis)
+- [`ReactiveSystem.h`](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h) — 224 LOC — EnTT-based reactive ECS system using observers (R2.4 — Architecture Analysis)
 - [`RuntimePrefab.h`](../../SparkEngine/Source/Engine/ECS/RuntimePrefab.h) — 476 LOC — Runtime prefab system for data-driven entity templates with serialization
 
 ### `SparkEngine/Source/Engine/ECS/Systems/`
 
 - [`ECSystemTypes.h`](../../SparkEngine/Source/Engine/ECS/Systems/ECSystemTypes.h) — 121 LOC — Base types and interfaces shared by all ECS systems.
-- [`ECSystems.cpp`](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.cpp) — 707 LOC — ECS system implementations — the runtime logic that processes components each frame.
-- [`ECSystems.h`](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h) — 849 LOC — ECS system definitions that process component data each frame
-- [`FixedTimestepPhysics.h`](../../SparkEngine/Source/Engine/ECS/Systems/FixedTimestepPhysics.h) — 164 LOC — Fixed-timestep physics system with accumulator pattern (R2.2 — Architecture Analysis)
-- [`ParallelSystemExecutor.cpp`](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.cpp) — 176 LOC — Stage-based parallel ECS system execution implementation
-- [`ParallelSystemExecutor.h`](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h) — 421 LOC — Parallel ECS system execution via the JobSystem (R2.1 — Architecture Analysis)
-- [`PhaseSystemManager.h`](../../SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h) — 264 LOC — Phase-based ECS system execution (R2.3 — Architecture Analysis)
-- [`Systems2D.h`](../../SparkEngine/Source/Engine/ECS/Systems/Systems2D.h) — 485 LOC — ECS systems for 2D/2.5D: sprite rendering, 2D physics, animation, parallax, tilemap
-- [`TerrainSystem.cpp`](../../SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.cpp) — 97 LOC — Implementation of the TerrainSystem ECS system
+- [`ECSystems.cpp`](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.cpp) — 739 LOC — ECS system implementations — the runtime logic that processes components each frame.
+- [`ECSystems.h`](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h) — 846 LOC — ECS system definitions that process component data each frame
+- [`FixedTimestepPhysics.h`](../../SparkEngine/Source/Engine/ECS/Systems/FixedTimestepPhysics.h) — 138 LOC — Fixed-timestep physics system with accumulator pattern (R2.2 — Architecture Analysis)
+- [`ParallelSystemExecutor.h`](../../SparkEngine/Source/Engine/ECS/Systems/ParallelSystemExecutor.h) — 335 LOC — Parallel ECS system execution via the JobSystem (R2.1 — Architecture Analysis)
+- [`PhaseSystemManager.h`](../../SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h) — 234 LOC — Phase-based ECS system execution (R2.3 — Architecture Analysis)
+- [`Systems2D.h`](../../SparkEngine/Source/Engine/ECS/Systems/Systems2D.h) — 512 LOC — ECS systems for 2D/2.5D: sprite rendering, 2D physics, animation, parallax, tilemap
+- [`TerrainSystem.cpp`](../../SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.cpp) — 89 LOC — Implementation of the TerrainSystem ECS system
 - [`TerrainSystem.h`](../../SparkEngine/Source/Engine/ECS/Systems/TerrainSystem.h) — 42 LOC — ECS system that processes TerrainComponent entities each frame
 
 ### `SparkEngine/Source/Engine/Editor/`
 
-- [`CoreComponentSerializers.cpp`](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp) — 491 LOC — Snapshot serializers for all core ECS component types
+- [`CoreComponentSerializers.cpp`](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializers.cpp) — 355 LOC — Snapshot serializers for core scene ECS component types
 - [`CoreComponentSerializers.h`](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializers.h) — 23 LOC — Registers snapshot serializers for all core ECS components
+- [`CoreComponentSerializersInternal.h`](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializersInternal.h) — 83 LOC — Shared internal helpers for the core component snapshot serializer translation units
+- [`CoreComponentSerializersPhysicsAudio.cpp`](../../SparkEngine/Source/Engine/Editor/CoreComponentSerializersPhysicsAudio.cpp) — 209 LOC — Snapshot serializers for the physics and audio core ECS component types
 - [`PlayModeManager.h`](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h) — 561 LOC — Play-in-editor mode management: scene snapshot, restore, time control
 - [`PlayModeTypes.h`](../../SparkEngine/Source/Engine/Editor/PlayModeTypes.h) — 200 LOC — Type definitions for play-in-editor mode: enums, structs, callbacks
 - [`SceneSnapshotSerializer.h`](../../SparkEngine/Source/Engine/Editor/SceneSnapshotSerializer.h) — 281 LOC — Binary ECS state serializer for play-in-editor snapshot save/restore
 
 ### `SparkEngine/Source/Engine/Events/`
 
-- [`EventSystem.h`](../../SparkEngine/Source/Engine/Events/EventSystem.h) — 362 LOC — Built-in event types and deferred event queue for engine communication
+- [`EventSystem.h`](../../SparkEngine/Source/Engine/Events/EventSystem.h) — 473 LOC — Built-in event types and deferred event queue for engine communication
 
 ### `SparkEngine/Source/Engine/Gameplay/`
 
 - [`AbilityAuras.cpp`](../../SparkEngine/Source/Engine/Gameplay/AbilityAuras.cpp) — 290 LOC — Aura management, tick processing, and proc system for AbilitySystem
 - [`AbilitySystem.cpp`](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.cpp) — 701 LOC — Implementation of the pipeline-based ability/spell system
 - [`AbilitySystem.h`](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h) — 345 LOC — Pipeline-based ability/spell system with auras and procs (TrinityCore-inspired)
-- [`AchievementSystem.h`](../../SparkEngine/Source/Engine/Gameplay/AchievementSystem.h) — 463 LOC — Achievement tracking with progressive, tiered, and cumulative support
-- [`ConditionSystem.cpp`](../../SparkEngine/Source/Engine/Gameplay/ConditionSystem.cpp) — 551 LOC — Implementation of the universal condition evaluation system
+- [`AchievementSystem.h`](../../SparkEngine/Source/Engine/Gameplay/AchievementSystem.h) — 498 LOC — Achievement tracking with progressive, tiered, and cumulative support
+- [`ConditionSystem.cpp`](../../SparkEngine/Source/Engine/Gameplay/ConditionSystem.cpp) — 558 LOC — Implementation of the universal condition evaluation system
 - [`ConditionSystem.h`](../../SparkEngine/Source/Engine/Gameplay/ConditionSystem.h) — 169 LOC — Universal data-driven condition evaluation (TC ConditionMgr-inspired)
 - [`EventResponseSystem.cpp`](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp) — 868 LOC — Implementation of the data-driven event response rule engine
 - [`EventResponseSystem.h`](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h) — 278 LOC — Data-driven "When/If/Then" event response rule engine for no-code gameplay
 - [`GameplaySystemExtension.h`](../../SparkEngine/Source/Engine/Gameplay/GameplaySystemExtension.h) — 260 LOC — Extension point system for game modules to extend engine quest/dialogue
 - [`GameplayTags.h`](../../SparkEngine/Source/Engine/Gameplay/GameplayTags.h) — 386 LOC — Hierarchical gameplay tag system for data-driven categorization and queries
-- [`InstanceManager.cpp`](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.cpp) — 484 LOC — Instance/dungeon management and encounter scripting implementation
+- [`InstanceEncounters.cpp`](../../SparkEngine/Source/Engine/Gameplay/InstanceEncounters.cpp) — 223 LOC — Encounter control and lockout management for InstanceManager
+- [`InstanceManager.cpp`](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.cpp) — 317 LOC — Instance/dungeon management and encounter scripting implementation
 - [`InstanceManager.h`](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.h) — 237 LOC — Instance/dungeon management with encounter scripting (TC-inspired)
-- [`InventorySystem.cpp`](../../SparkEngine/Source/Engine/Gameplay/InventorySystem.cpp) — 350 LOC — Implementation of the per-entity inventory management system
+- [`InventorySystem.cpp`](../../SparkEngine/Source/Engine/Gameplay/InventorySystem.cpp) — 384 LOC — Implementation of the per-entity inventory management system
 - [`InventorySystem.h`](../../SparkEngine/Source/Engine/Gameplay/InventorySystem.h) — 169 LOC — Reusable per-entity inventory management with item registry and stacking
 - [`MaterialEffects.cpp`](../../SparkEngine/Source/Engine/Gameplay/MaterialEffects.cpp) — 99 LOC — Material interaction effect system implementation
 - [`MaterialEffects.h`](../../SparkEngine/Source/Engine/Gameplay/MaterialEffects.h) — 159 LOC — Material interaction effect system
 - [`QuestSystem.cpp`](../../SparkEngine/Source/Engine/Gameplay/QuestSystem.cpp) — 381 LOC — Implementation of the per-entity quest tracking system
 - [`QuestSystem.h`](../../SparkEngine/Source/Engine/Gameplay/QuestSystem.h) — 224 LOC — Per-entity quest tracking with objectives, prerequisites, and rewards
-- [`WeaponManager.cpp`](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.cpp) — 475 LOC — Weapon system implementation - fire control, reload, recoil, ADS
-- [`WeaponManager.h`](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h) — 307 LOC — Central weapon management system for FPS gameplay
+- [`WeaponManager.cpp`](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.cpp) — 483 LOC — Weapon system implementation - fire control, reload, recoil, ADS
+- [`WeaponManager.h`](../../SparkEngine/Source/Engine/Gameplay/WeaponManager.h) — 308 LOC — Central weapon management system for FPS gameplay
 - [`WeatherGameplayIntegration.cpp`](../../SparkEngine/Source/Engine/Gameplay/WeatherGameplayIntegration.cpp) — 199 LOC — Bridges weather events to physics wind, AI perception, and audio state
 - [`WeatherGameplayIntegration.h`](../../SparkEngine/Source/Engine/Gameplay/WeatherGameplayIntegration.h) — 116 LOC — Bridges weather system events to gameplay mechanics (physics, AI, audio)
 
@@ -1292,72 +1700,79 @@ graph LR
 
 ### `SparkEngine/Source/Engine/Loading/`
 
-- [`LoadingScreen.cpp`](../../SparkEngine/Source/Engine/Loading/LoadingScreen.cpp) — 164 LOC — Implementation of the loading screen and progress tracking system
+- [`LoadingScreen.cpp`](../../SparkEngine/Source/Engine/Loading/LoadingScreen.cpp) — 195 LOC — Implementation of the loading screen and progress tracking system
 - [`LoadingScreen.h`](../../SparkEngine/Source/Engine/Loading/LoadingScreen.h) — 191 LOC — Async asset loading with progress tracking and loading screen support
 
 ### `SparkEngine/Source/Engine/Localization/`
 
-- [`LocalizationSystem.cpp`](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp) — 231 LOC — Implementation of the localization and string table system
-- [`LocalizationSystem.h`](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.h) — 197 LOC — Internationalization and localization system for Spark Engine
+- [`LocalizationSystem.cpp`](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.cpp) — 308 LOC — Implementation of the localization and string table system
+- [`LocalizationSystem.h`](../../SparkEngine/Source/Engine/Localization/LocalizationSystem.h) — 207 LOC — Internationalization and localization system for Spark Engine
 
 ### `SparkEngine/Source/Engine/Mobile/`
 
-- [`MobilePlatform.cpp`](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.cpp) — 178 LOC — Implementation of the mobile platform abstraction
-- [`MobilePlatform.h`](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h) — 246 LOC — Mobile platform abstraction for touch input and GPU optimization
+- [`MobilePlatform.cpp`](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.cpp) — 203 LOC — Implementation of the mobile platform abstraction
+- [`MobilePlatform.h`](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h) — 249 LOC — Mobile platform abstraction for touch input and GPU optimization
 
 ### `SparkEngine/Source/Engine/Modding/`
 
 - [`ArchiveResourceProvider.cpp`](../../SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.cpp) — 71 LOC — IResourceProvider implementation backed by SparkPak (.spk) archives
 - [`ArchiveResourceProvider.h`](../../SparkEngine/Source/Engine/Modding/ArchiveResourceProvider.h) — 60 LOC — IResourceProvider backed by a SparkPak (.spk) archive
-- [`ModSystem.cpp`](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp) — 425 LOC — Implementation of the mod loading and management system
+- [`ModSystem.cpp`](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp) — 343 LOC — Implementation of the mod loading and management system
 - [`ModSystem.h`](../../SparkEngine/Source/Engine/Modding/ModSystem.h) — 199 LOC — Plugin and modding SDK for user-created content
+- [`ModSystemIO.cpp`](../../SparkEngine/Source/Engine/Modding/ModSystemIO.cpp) — 180 LOC — Mod system persistence and console output — config save/load, mod.json parsing, console status
 - [`VirtualFileSystem.cpp`](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp) — 333 LOC — Implementation of the mount-priority virtual filesystem
 - [`VirtualFileSystem.h`](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.h) — 191 LOC — Mount-priority virtual filesystem for layered content loading
 
 ### `SparkEngine/Source/Engine/Networking/`
 
-- [`AreaServer.cpp`](../../SparkEngine/Source/Engine/Networking/AreaServer.cpp) — 576 LOC — Area-based server process implementation
-- [`AreaServer.h`](../../SparkEngine/Source/Engine/Networking/AreaServer.h) — 273 LOC — Area-based server process for scalable multiplayer worlds
+- [`AreaServer.cpp`](../../SparkEngine/Source/Engine/Networking/AreaServer.cpp) — 603 LOC — Area-based server process implementation
+- [`AreaServer.h`](../../SparkEngine/Source/Engine/Networking/AreaServer.h) — 279 LOC — Area-based server process for scalable multiplayer worlds
+- [`AreaServerTypes.h`](../../SparkEngine/Source/Engine/Networking/AreaServerTypes.h) — 93 LOC — Configuration, migration, and statistics types for AreaServer
 - [`ClientPrediction.cpp`](../../SparkEngine/Source/Engine/Networking/ClientPrediction.cpp) — 147 LOC — Implementation of client-side prediction and server reconciliation
 - [`ClientPrediction.h`](../../SparkEngine/Source/Engine/Networking/ClientPrediction.h) — 196 LOC — Client-side prediction and server reconciliation for multiplayer FPS
 - [`ConnectionScope.h`](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h) — 260 LOC — Per-connection object scoping for entity replication (Torque3D ghost-inspired)
 - [`ConnectionScopeFilter.h`](../../SparkEngine/Source/Engine/Networking/ConnectionScopeFilter.h) — 212 LOC — Per-connection entity visibility filtering for network replication
 - [`DatablockRegistry.h`](../../SparkEngine/Source/Engine/Networking/DatablockRegistry.h) — 408 LOC — Immutable shared-data objects sent once at connection time (Torque3D-inspired)
-- [`DedicatedServer.cpp`](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp) — 936 LOC — Dedicated game server implementation
+- [`DedicatedServer.cpp`](../../SparkEngine/Source/Engine/Networking/DedicatedServer.cpp) — 938 LOC — Dedicated game server implementation
 - [`DedicatedServer.h`](../../SparkEngine/Source/Engine/Networking/DedicatedServer.h) — 366 LOC — Dedicated game server with full lifecycle management
-- [`DeltaSnapshotManager.cpp`](../../SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.cpp) — 319 LOC — Implementation of per-connection delta snapshot tracking
-- [`DeltaSnapshotManager.h`](../../SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.h) — 185 LOC — Per-connection delta snapshot tracking for replicated entity fields
+- [`DeltaSnapshotManager.cpp`](../../SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.cpp) — 329 LOC — Implementation of per-connection delta snapshot tracking
+- [`DeltaSnapshotManager.h`](../../SparkEngine/Source/Engine/Networking/DeltaSnapshotManager.h) — 199 LOC — Per-connection delta snapshot tracking for replicated entity fields
 - [`EntityReplicator.cpp`](../../SparkEngine/Source/Engine/Networking/EntityReplicator.cpp) — 266 LOC — Implementation of dirty-tracked entity replication
 - [`EntityReplicator.h`](../../SparkEngine/Source/Engine/Networking/EntityReplicator.h) — 173 LOC — Manages entity state replication with dirty tracking and visibility (TC-inspired)
+- [`IAreaSimulation.h`](../../SparkEngine/Source/Engine/Networking/IAreaSimulation.h) — 46 LOC — Plug-in interface for game-supplied authoritative area simulation
 - [`INetworkRuntime.h`](../../SparkEngine/Source/Engine/Networking/INetworkRuntime.h) — 46 LOC — Minimal networking runtime interface used by DedicatedServer.
 - [`ITransport.h`](../../SparkEngine/Source/Engine/Networking/ITransport.h) — 69 LOC — Abstract transport layer interface for network communication
 - [`InstabilitySimulator.cpp`](../../SparkEngine/Source/Engine/Networking/InstabilitySimulator.cpp) — 206 LOC — Implementation of artificial network instability injection
 - [`InstabilitySimulator.h`](../../SparkEngine/Source/Engine/Networking/InstabilitySimulator.h) — 138 LOC — Artificial network instability injection for testing and debugging
 - [`InterpolationBuffer.h`](../../SparkEngine/Source/Engine/Networking/InterpolationBuffer.h) — 239 LOC — Generic ring-buffer for timestamped network sample interpolation
+- [`LagCompensation.cpp`](../../SparkEngine/Source/Engine/Networking/LagCompensation.cpp) — 261 LOC — Server-side hit rewind implementation
+- [`LagCompensation.h`](../../SparkEngine/Source/Engine/Networking/LagCompensation.h) — 121 LOC — Server-side hit rewind — ring buffer of entity poses + rewound raycast
+- [`NetQuantize.cpp`](../../SparkEngine/Source/Engine/Networking/NetQuantize.cpp) — 51 LOC — Implementation of quantized transform read/write through NetBuffer.
+- [`NetQuantize.h`](../../SparkEngine/Source/Engine/Networking/NetQuantize.h) — 48 LOC — NetBuffer-aware helpers for quantized transform replication.
 - [`NetworkBuffer.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkBuffer.cpp) — 181 LOC — NetBuffer serialization/deserialization helpers
-- [`NetworkConnection.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkConnection.cpp) — 1142 LOC — Connection lifecycle and message routing for NetworkManager
+- [`NetworkConnection.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkConnection.cpp) — 1253 LOC — Connection lifecycle and message routing for NetworkManager
 - [`NetworkEncryption.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp) — 299 LOC — Network encryption, token validation, rate limiting, and replay protection
 - [`NetworkEncryption.h`](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h) — 204 LOC — Lightweight symmetric encryption layer for game network traffic
 - [`NetworkIntegration.h`](../../SparkEngine/Source/Engine/Networking/NetworkIntegration.h) — 233 LOC — Cross-links ITransport and NetworkSecurity with NetworkManager
 - [`NetworkInterpolation.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkInterpolation.cpp) — 116 LOC — Implementation of client-side network entity interpolation
 - [`NetworkInterpolation.h`](../../SparkEngine/Source/Engine/Networking/NetworkInterpolation.h) — 122 LOC — Client-side interpolation buffer for smooth remote entity rendering
-- [`NetworkManager.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkManager.cpp) — 725 LOC — Core NetworkManager — singleton, update loop, socket helpers, lag compensation
-- [`NetworkManager.h`](../../SparkEngine/Source/Engine/Networking/NetworkManager.h) — 732 LOC — Multiplayer networking foundation with client/server architecture
+- [`NetworkManager.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkManager.cpp) — 762 LOC — Core NetworkManager — singleton, update loop, socket helpers, lag compensation
+- [`NetworkManager.h`](../../SparkEngine/Source/Engine/Networking/NetworkManager.h) — 768 LOC — Multiplayer networking foundation with client/server architecture
 - [`NetworkManagerRuntimeAdapter.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.cpp) — 85 LOC — INetworkRuntime adapter backed by NetworkManager.
 - [`NetworkManagerRuntimeAdapter.h`](../../SparkEngine/Source/Engine/Networking/NetworkManagerRuntimeAdapter.h) — 43 LOC — INetworkRuntime adapter backed by NetworkManager.
-- [`NetworkReliable.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkReliable.cpp) — 178 LOC — Reliable channel logic for NetworkManager
-- [`NetworkReplication.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkReplication.cpp) — 419 LOC — Entity replication methods for NetworkManager
+- [`NetworkReliable.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkReliable.cpp) — 225 LOC — Reliable channel logic for NetworkManager
+- [`NetworkReplication.cpp`](../../SparkEngine/Source/Engine/Networking/NetworkReplication.cpp) — 453 LOC — Entity replication methods for NetworkManager
 - [`NetworkSecurity.h`](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h) — 233 LOC — Network security layer -- packet encryption and connection token auth
-- [`PacketValidator.cpp`](../../SparkEngine/Source/Engine/Networking/PacketValidator.cpp) — 355 LOC — Network packet validation and sanitization implementation
+- [`PacketValidator.cpp`](../../SparkEngine/Source/Engine/Networking/PacketValidator.cpp) — 363 LOC — Network packet validation and sanitization implementation
 - [`PacketValidator.h`](../../SparkEngine/Source/Engine/Networking/PacketValidator.h) — 161 LOC — Network packet validation and sanitization layer
 - [`ReplicationFields.cpp`](../../SparkEngine/Source/Engine/Networking/ReplicationFields.cpp) — 120 LOC — Implementation of ReplicatedFieldSet dirty tracking and visibility masks
 - [`ReplicationFields.h`](../../SparkEngine/Source/Engine/Networking/ReplicationFields.h) — 181 LOC — Typed replicated field system with automatic dirty tracking (TrinityCore-inspired)
 - [`SteamTransport.h`](../../SparkEngine/Source/Engine/Networking/SteamTransport.h) — 95 LOC — Stub ITransport for future Steam Networking Sockets integration
 - [`SubTickInput.cpp`](../../SparkEngine/Source/Engine/Networking/SubTickInput.cpp) — 114 LOC — Implementation of sub-tick input recording and processing
 - [`SubTickInput.h`](../../SparkEngine/Source/Engine/Networking/SubTickInput.h) — 103 LOC — Sub-tick input recording for precise input timing within server ticks
-- [`UDPTransport.h`](../../SparkEngine/Source/Engine/Networking/UDPTransport.h) — 238 LOC — UDP socket transport implementation of ITransport
+- [`UDPTransport.h`](../../SparkEngine/Source/Engine/Networking/UDPTransport.h) — 247 LOC — UDP socket transport implementation of ITransport
 - [`WorldServer.cpp`](../../SparkEngine/Source/Engine/Networking/WorldServer.cpp) — 742 LOC — World server coordinator implementation
-- [`WorldServer.h`](../../SparkEngine/Source/Engine/Networking/WorldServer.h) — 330 LOC — Central coordinator for area-based multiplayer world architecture
+- [`WorldServer.h`](../../SparkEngine/Source/Engine/Networking/WorldServer.h) — 346 LOC — Central coordinator for area-based multiplayer world architecture
 
 ### `SparkEngine/Source/Engine/OnlineServices/`
 
@@ -1365,16 +1780,16 @@ graph LR
 
 ### `SparkEngine/Source/Engine/Persistence/`
 
-- [`AsyncDatabase.cpp`](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp) — 706 LOC — Implementation of the async database persistence layer.
+- [`AsyncDatabase.cpp`](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp) — 913 LOC — Implementation of the async database persistence layer.
 - [`AsyncDatabase.h`](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h) — 288 LOC — Async database layer with connection pooling and prepared statements (TC-inspired)
 
 ### `SparkEngine/Source/Engine/Physics/`
 
-- [`JoltPhysicsInterface.h`](../../SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h) — 381 LOC — Abstract physics interface to support Jolt Physics migration
+- [`JoltPhysicsInterface.h`](../../SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h) — 377 LOC — Abstract physics interface to support Jolt Physics migration
 
 ### `SparkEngine/Source/Engine/Procedural/`
 
-- [`ProceduralGenerator.h`](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h) — 559 LOC — Procedural content generation framework with noise, dungeon, and WFC support
+- [`ProceduralGenerator.h`](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h) — 560 LOC — Procedural content generation framework with noise, dungeon, and WFC support
 
 ### `SparkEngine/Source/Engine/RemoteDebug/`
 
@@ -1386,61 +1801,65 @@ graph LR
 
 ### `SparkEngine/Source/Engine/Replay/`
 
-- [`ReplaySystem.cpp`](../../SparkEngine/Source/Engine/Replay/ReplaySystem.cpp) — 512 LOC — Implementation of the replay recording and playback system
+- [`ReplaySystem.cpp`](../../SparkEngine/Source/Engine/Replay/ReplaySystem.cpp) — 536 LOC — Implementation of the replay recording and playback system
 - [`ReplaySystem.h`](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h) — 195 LOC — Replay recording and playback system for FPS games
 
 ### `SparkEngine/Source/Engine/SaveSystem/`
 
 - [`FreezeSystem.h`](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h) — 305 LOC — Tag-validated, per-subsystem save state serialization
-- [`SaveSystem.cpp`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp) — 1245 LOC — Save/load system implementation with JSON serialization
-- [`SaveSystem.h`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h) — 623 LOC — Game state serialization and save/load system for Spark Engine.
+- [`SaveSystem.cpp`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp) — 1389 LOC — Save/load system implementation with JSON serialization
+- [`SaveSystem.h`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.h) — 645 LOC — Game state serialization and save/load system for Spark Engine.
 - [`SaveSystemTypes.h`](../../SparkEngine/Source/Engine/SaveSystem/SaveSystemTypes.h) — 288 LOC — Data types used by the save/load system (metadata, serialized entities, save data).
 
 ### `SparkEngine/Source/Engine/Scripting/`
 
-- [`AngelScriptEngine.cpp`](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp) — 1232 LOC — AngelScript virtual machine wrapper implementation
-- [`AngelScriptEngine.h`](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h) — 465 LOC — AngelScript virtual machine wrapper with hot-reload scripting support
+- [`AngelScriptEngine.cpp`](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp) — 1473 LOC — AngelScript virtual machine wrapper implementation
+- [`AngelScriptEngine.h`](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h) — 576 LOC — AngelScript virtual machine wrapper with hot-reload scripting support
 - [`ScriptHookManager.cpp`](../../SparkEngine/Source/Engine/Scripting/ScriptHookManager.cpp) — 176 LOC — Implementation of the centralized script hook dispatcher
 - [`ScriptHookManager.h`](../../SparkEngine/Source/Engine/Scripting/ScriptHookManager.h) — 251 LOC — Centralized script hook dispatcher for gameplay events (TC ScriptMgr-inspired)
 - [`ScriptHotReload.cpp`](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.cpp) — 314 LOC — Implementation of script hot-reload and file watching
 - [`ScriptHotReload.h`](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h) — 335 LOC — File watcher and hot-reload system for AngelScript scripts
-- [`ScriptSandbox.cpp`](../../SparkEngine/Source/Engine/Scripting/ScriptSandbox.cpp) — 361 LOC — Runtime sandboxing implementation for AngelScript execution
-- [`ScriptSandbox.h`](../../SparkEngine/Source/Engine/Scripting/ScriptSandbox.h) — 209 LOC — Runtime sandboxing for AngelScript execution
-- [`VisualScriptCompiler.cpp`](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp) — 900 LOC — Implementation of visual script graph → AngelScript compiler
-- [`VisualScriptCompiler.h`](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.h) — 300 LOC — Compiles a visual script node graph into AngelScript source code
+- [`ScriptSandbox.cpp`](../../SparkEngine/Source/Engine/Scripting/ScriptSandbox.cpp) — 349 LOC — Runtime sandboxing implementation for AngelScript execution
+- [`ScriptSandbox.h`](../../SparkEngine/Source/Engine/Scripting/ScriptSandbox.h) — 217 LOC — Runtime sandboxing for AngelScript execution
+- [`VisualScriptCompiler.cpp`](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp) — 1049 LOC — Implementation of visual script graph → AngelScript compiler
+- [`VisualScriptCompiler.h`](../../SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.h) — 100 LOC — Compiles a visual script node graph into AngelScript source code
+- [`VisualScriptGraphTypes.h`](../../SparkEngine/Source/Engine/Scripting/VisualScriptGraphTypes.h) — 141 LOC — Pin, node, connection, and graph data structures for visual scripting
+- [`VisualScriptNodeTypes.h`](../../SparkEngine/Source/Engine/Scripting/VisualScriptNodeTypes.h) — 112 LOC — Node type enumeration for visual script graphs
 
 ### `SparkEngine/Source/Engine/Security/`
 
-- [`MemoryIntegrity.cpp`](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp) — 593 LOC — Runtime memory integrity and branch protection implementation
+- [`MemoryIntegrity.cpp`](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.cpp) — 597 LOC — Runtime memory integrity and branch protection implementation
 - [`MemoryIntegrity.h`](../../SparkEngine/Source/Engine/Security/MemoryIntegrity.h) — 313 LOC — Runtime memory integrity and branch protection system
 
 ### `SparkEngine/Source/Engine/Streaming/`
 
 - [`AreaAssetLoader.cpp`](../../SparkEngine/Source/Engine/Streaming/AreaAssetLoader.cpp) — 264 LOC — Bridges area streaming with async I/O via DirectStorageLoader
 - [`AreaAssetLoader.h`](../../SparkEngine/Source/Engine/Streaming/AreaAssetLoader.h) — 144 LOC — Bridges SeamlessAreaManager with DirectStorageLoader for real asset I/O
-- [`DirectStorageLoader.cpp`](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp) — 329 LOC — GPU-direct asset loading via DirectStorage (Windows 11+)
+- [`DirectStorageLoader.cpp`](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp) — 339 LOC — GPU-direct asset loading via DirectStorage (Windows 11+)
 - [`DirectStorageLoader.h`](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h) — 197 LOC — GPU-direct asset loading via DirectStorage (Windows 11+)
-- [`SceneManifest.h`](../../SparkEngine/Source/Engine/Streaming/SceneManifest.h) — 136 LOC — Lightweight scene asset manifest for area streaming
-- [`SeamlessAreaManager.cpp`](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp) — 527 LOC — Predictive asset streaming implementation
-- [`SeamlessAreaManager.h`](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h) — 317 LOC — Predictive asset streaming for seamless area transitions
+- [`SceneManifest.h`](../../SparkEngine/Source/Engine/Streaming/SceneManifest.h) — 151 LOC — Lightweight scene asset manifest for area streaming
+- [`SeamlessAreaManager.cpp`](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.cpp) — 270 LOC — Predictive asset streaming implementation
+- [`SeamlessAreaManager.h`](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManager.h) — 231 LOC — Predictive asset streaming for seamless area transitions
+- [`SeamlessAreaManagerStreaming.cpp`](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerStreaming.cpp) — 296 LOC — Prediction and streaming logic for SeamlessAreaManager
+- [`SeamlessAreaManagerTypes.h`](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerTypes.h) — 117 LOC — Area state, definition, and configuration types for predictive streaming
 
 ### `SparkEngine/Source/Engine/Text/`
 
-- [`FontSystem.h`](../../SparkEngine/Source/Engine/Text/FontSystem.h) — 572 LOC — Runtime font rendering system with glyph atlas and text layout
+- [`FontSystem.h`](../../SparkEngine/Source/Engine/Text/FontSystem.h) — 578 LOC — Runtime font rendering system with glyph atlas and text layout
 
 ### `SparkEngine/Source/Engine/Tween/`
 
-- [`TweenSystem.cpp`](../../SparkEngine/Source/Engine/Tween/TweenSystem.cpp) — 342 LOC — Advanced tween system implementation
-- [`TweenSystem.h`](../../SparkEngine/Source/Engine/Tween/TweenSystem.h) — 181 LOC — Advanced tween system with sequencing, composition, and easing
+- [`TweenSystem.cpp`](../../SparkEngine/Source/Engine/Tween/TweenSystem.cpp) — 376 LOC — Advanced tween system implementation
+- [`TweenSystem.h`](../../SparkEngine/Source/Engine/Tween/TweenSystem.h) — 203 LOC — Advanced tween system with sequencing, composition, and easing
 
 ### `SparkEngine/Source/Engine/UI/`
 
 - [`UIDirtyTracking.h`](../../SparkEngine/Source/Engine/UI/UIDirtyTracking.h) — 309 LOC — Dirty region tracking for UI rendering optimization
 - [`UIFactory.cpp`](../../SparkEngine/Source/Engine/UI/UIFactory.cpp) — 202 LOC — Config-driven UI creation with data binding implementation
 - [`UIFactory.h`](../../SparkEngine/Source/Engine/UI/UIFactory.h) — 161 LOC — Config-driven UI creation with typed data binding
-- [`UILayoutExtensions.cpp`](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp) — 604 LOC
+- [`UILayoutExtensions.cpp`](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp) — 684 LOC
 - [`UILayoutExtensions.h`](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h) — 250 LOC — Declarative UI layout containers, input widgets, and data binding
-- [`UISystem.cpp`](../../SparkEngine/Source/Engine/UI/UISystem.cpp) — 423 LOC — Implementation of the runtime UI/Widget system
+- [`UISystem.cpp`](../../SparkEngine/Source/Engine/UI/UISystem.cpp) — 428 LOC — Implementation of the runtime UI/Widget system
 - [`UISystem.h`](../../SparkEngine/Source/Engine/UI/UISystem.h) — 488 LOC — Runtime UI/Widget system for in-game HUD and menus
 
 ### `SparkEngine/Source/Engine/VR/`
@@ -1469,8 +1888,8 @@ graph LR
 
 ### `SparkEngine/Source/Game/`
 
-- [`GameObject.cpp`](../../SparkEngine/Source/Game/GameObject.cpp) — 280 LOC
-- [`GameObject.h`](../../SparkEngine/Source/Game/GameObject.h) — 320 LOC — Base class for all interactive objects in the game world
+- [`GameObject.cpp`](../../SparkEngine/Source/Game/GameObject.cpp) — 261 LOC
+- [`GameObject.h`](../../SparkEngine/Source/Game/GameObject.h) — 333 LOC — Base class for all interactive objects in the game world
 - [`Model.cpp`](../../SparkEngine/Source/Game/Model.cpp) — 215 LOC
 - [`Model.h`](../../SparkEngine/Source/Game/Model.h) — 43 LOC — Default constructor
 - [`ModelVertex.h`](../../SparkEngine/Source/Game/ModelVertex.h) — 80 LOC — Standard vertex structure for imported 3D models
@@ -1492,11 +1911,14 @@ graph LR
 - [`AssetPipeline.cpp`](../../SparkEngine/Source/Graphics/AssetPipeline.cpp) — 8 LOC — Platform-split redirect
 - [`AssetPipeline.h`](../../SparkEngine/Source/Graphics/AssetPipeline.h) — 580 LOC — Complete asset pipeline system for model loading and streaming
 - [`AssetPipelineConsoleOps.cpp`](../../SparkEngine/Source/Graphics/AssetPipelineConsoleOps.cpp) — 281 LOC — Console integration methods for AssetPipeline
-- [`AssetPipelineLinux.cpp`](../../SparkEngine/Source/Graphics/AssetPipelineLinux.cpp) — 526 LOC — Linux implementation — split from AssetPipeline.cpp
+- [`AssetPipelineLinux.cpp`](../../SparkEngine/Source/Graphics/AssetPipelineLinux.cpp) — 343 LOC — Linux implementation — split from AssetPipeline.cpp
+- [`AssetPipelineLinuxStreaming.cpp`](../../SparkEngine/Source/Graphics/AssetPipelineLinuxStreaming.cpp) — 204 LOC — Linux background streaming, metrics, and RHI mesh upload for AssetPipeline
 - [`AssetPipelineWindows.cpp`](../../SparkEngine/Source/Graphics/AssetPipelineWindows.cpp) — 441 LOC — Windows/D3D11 implementation — split from AssetPipeline.cpp
 - [`AssetTypes.cpp`](../../SparkEngine/Source/Graphics/AssetTypes.cpp) — 55 LOC — Cross-platform asset type definitions.
-- [`AssetTypesLinux.cpp`](../../SparkEngine/Source/Graphics/AssetTypesLinux.cpp) — 613 LOC — Linux asset type implementations (MeshAsset, TextureAsset, AudioAsset, AssetCache)
-- [`AssetTypesWindows.cpp`](../../SparkEngine/Source/Graphics/AssetTypesWindows.cpp) — 522 LOC — Windows/D3D11 asset type implementations (MeshAsset, TextureAsset, AudioAsset, AssetCache)
+- [`AssetTypesLinux.cpp`](../../SparkEngine/Source/Graphics/AssetTypesLinux.cpp) — 388 LOC — Linux mesh asset implementation (MeshAsset)
+- [`AssetTypesLinuxMedia.cpp`](../../SparkEngine/Source/Graphics/AssetTypesLinuxMedia.cpp) — 250 LOC — Linux texture/audio asset implementations (TextureAsset, AudioAsset) and AssetCache
+- [`AssetTypesWindows.cpp`](../../SparkEngine/Source/Graphics/AssetTypesWindows.cpp) — 187 LOC — Windows/D3D11 mesh asset implementation (MeshAsset)
+- [`AssetTypesWindowsMedia.cpp`](../../SparkEngine/Source/Graphics/AssetTypesWindowsMedia.cpp) — 358 LOC — Windows/D3D11 texture/audio asset implementations (TextureAsset, AudioAsset) and AssetCache
 - [`AsyncComputeScheduler.cpp`](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.cpp) — 282 LOC — Implementation of the async compute workload scheduler
 - [`AsyncComputeScheduler.h`](../../SparkEngine/Source/Graphics/AsyncComputeScheduler.h) — 198 LOC — Async compute workload scheduler with multi-backend support
 - [`BVHAccelerator.h`](../../SparkEngine/Source/Graphics/BVHAccelerator.h) — 447 LOC — SAH-based Bounding Volume Hierarchy for hierarchical frustum culling
@@ -1518,7 +1940,7 @@ graph LR
 - [`DecalSystem.h`](../../SparkEngine/Source/Graphics/DecalSystem.h) — 170 LOC — Projected decal system for bullet holes, scorch marks, and environmental detail
 - [`DecalSystemLinux.cpp`](../../SparkEngine/Source/Graphics/DecalSystemLinux.cpp) — 293 LOC — Linux implementation — split from DecalSystem.cpp
 - [`DecalSystemWindows.cpp`](../../SparkEngine/Source/Graphics/DecalSystemWindows.cpp) — 337 LOC — Windows/D3D11 implementation — split from DecalSystem.cpp
-- [`DenoiserInterface.h`](../../SparkEngine/Source/Graphics/DenoiserInterface.h) — 257 LOC — AI-powered image denoiser interface for ray-traced output
+- [`DenoiserInterface.h`](../../SparkEngine/Source/Graphics/DenoiserInterface.h) — 261 LOC — AI-powered image denoiser interface for ray-traced output
 - [`DirtyRectTracker.h`](../../SparkEngine/Source/Graphics/DirtyRectTracker.h) — 173 LOC — Dirty rectangle tracking for partial texture updates
 - [`DrawSortKey.h`](../../SparkEngine/Source/Graphics/DrawSortKey.h) — 321 LOC — 64-bit composite sort key for draw call batching and radix sort
 - [`DynamicQualityScaler.cpp`](../../SparkEngine/Source/Graphics/DynamicQualityScaler.cpp) — 171 LOC — Implementation of dynamic resolution scaling based on frame performance
@@ -1565,29 +1987,47 @@ graph LR
 - [`GraphicsConsoleCommands.h`](../../SparkEngine/Source/Graphics/GraphicsConsoleCommands.h) — 24 LOC — Registers graphics-related console commands
 - [`GraphicsConsoleOps.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOps.cpp) — 8 LOC — Platform-split redirect
 - [`GraphicsConsoleOpsLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsLinux.cpp) — 267 LOC — Linux implementation — split from GraphicsConsoleOps.cpp
-- [`GraphicsConsoleOpsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsWindows.cpp) — 531 LOC — Windows/D3D11 implementation — split from GraphicsConsoleOps.cpp
+- [`GraphicsConsoleOpsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsWindows.cpp) — 233 LOC — Windows/D3D11 implementation — split from GraphicsConsoleOps.cpp
+- [`GraphicsConsoleOpsWindowsDiagnostics.cpp`](../../SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp) — 405 LOC — Windows/D3D11 console diagnostics and device operations
 - [`GraphicsDeviceResources.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResources.cpp) — 8 LOC — Device creation and resource management — platform-split redirect
-- [`GraphicsDeviceResourcesLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinux.cpp) — 494 LOC — Linux RHI-bridge device and resource management for GraphicsEngine
-- [`GraphicsDeviceResourcesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp) — 851 LOC — D3D11 device creation, render targets, render states, and shader system
+- [`GraphicsDeviceResourcesLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinux.cpp) — 239 LOC — Linux RHI-bridge device and resource management for GraphicsEngine
+- [`GraphicsDeviceResourcesLinuxShaders.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp) — 316 LOC — Linux RHI-bridge basic shader system for GraphicsEngine
+- [`GraphicsDeviceResourcesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp) — 435 LOC — D3D11 device creation, render targets, render states, and pipeline setup
+- [`GraphicsDeviceResourcesWindowsBasicState.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsBasicState.cpp) — 417 LOC — D3D11 basic shader binding, constants, and basic material cache
+- [`GraphicsDeviceResourcesWindowsInstanced.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsInstanced.cpp) — 340 LOC — D3D11 basic instanced draw path (W12 decor-instancing)
+- [`GraphicsDeviceResourcesWindowsShaders.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsShaders.cpp) — 443 LOC — D3D11 basic shader system initialization and shader compilation
+- [`GraphicsDeviceResourcesWindowsTextures.cpp`](../../SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsTextures.cpp) — 378 LOC — D3D11 default, procedural, and file-loaded textures for the basic path
 - [`GraphicsEngine.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngine.cpp) — 13 LOC — Central rendering orchestrator — platform-split redirect
-- [`GraphicsEngine.h`](../../SparkEngine/Source/Graphics/GraphicsEngine.h) — 957 LOC — Advanced DirectX 11 graphics engine with AAA features and console integration
+- [`GraphicsEngine.h`](../../SparkEngine/Source/Graphics/GraphicsEngine.h) — 1241 LOC — Advanced DirectX 11 graphics engine with AAA features and console integration
 - [`GraphicsEngineHybridRT.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineHybridRT.cpp) — 61 LOC — Platform-agnostic HybridRT post-lighting dispatch.
-- [`GraphicsEngineLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineLinux.cpp) — 817 LOC — Linux RHI-bridge rendering orchestrator for SparkEngine
-- [`GraphicsEngineRHI.h`](../../SparkEngine/Source/Graphics/GraphicsEngineRHI.h) — 57 LOC — Internal header for Linux RHI state shared across GraphicsEngine translation units
+- [`GraphicsEngineLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineLinux.cpp) — 414 LOC — Linux RHI-bridge lifecycle (Initialize/Shutdown/Resize) for SparkEngine
+- [`GraphicsEngineLinuxAccessors.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineLinuxAccessors.cpp) — 110 LOC — Linux RHI-bridge system/state accessors for GraphicsEngine
+- [`GraphicsEngineLinuxFrame.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineLinuxFrame.cpp) — 242 LOC — Linux RHI-bridge per-frame rendering path for GraphicsEngine
+- [`GraphicsEngineLinuxRenderTargets.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineLinuxRenderTargets.cpp) — 99 LOC — Platform render target helpers (Linux/macOS) for GraphicsEngine
+- [`GraphicsEngineRHI.h`](../../SparkEngine/Source/Graphics/GraphicsEngineRHI.h) — 63 LOC — Internal header for Linux RHI state shared across GraphicsEngine translation units
 - [`GraphicsEngineSubmit.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineSubmit.cpp) — 151 LOC — Platform-agnostic ECS mesh draw submission for GraphicsEngine.
 - [`GraphicsEngineTypes.h`](../../SparkEngine/Source/Graphics/GraphicsEngineTypes.h) — 214 LOC — Enums, settings structs, and data-transfer types used by GraphicsEngine
-- [`GraphicsEngineWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp) — 1481 LOC — Windows/D3D11 central rendering orchestrator for SparkEngine
+- [`GraphicsEngineWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp) — 388 LOC — Windows/D3D11 central rendering orchestrator for SparkEngine
+- [`GraphicsEngineWindowsAccessors.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsAccessors.cpp) — 131 LOC — Windows/D3D11 system/state accessors for GraphicsEngine
+- [`GraphicsEngineWindowsDeviceLost.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp) — 157 LOC — Windows/D3D11 device-lost recovery for GraphicsEngine
+- [`GraphicsEngineWindowsDrawList.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsDrawList.cpp) — 189 LOC — Windows/D3D11 ECS mesh draw-list processing for GraphicsEngine
+- [`GraphicsEngineWindowsFrame.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp) — 478 LOC — Windows/D3D11 per-frame rendering path for GraphicsEngine
+- [`GraphicsEngineWindowsInit.cpp`](../../SparkEngine/Source/Graphics/GraphicsEngineWindowsInit.cpp) — 412 LOC — Windows/D3D11 windowed initialization for GraphicsEngine
 - [`GraphicsRenderPipelines.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelines.cpp) — 8 LOC — Rendering pipeline implementations — platform-split redirect
 - [`GraphicsRenderPipelinesLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesLinux.cpp) — 423 LOC — Linux RHI-bridge rendering pipeline implementations
-- [`GraphicsRenderPipelinesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindows.cpp) — 632 LOC — D3D11 rendering pipeline implementations (Forward, Deferred, Forward+)
+- [`GraphicsRenderPipelinesWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindows.cpp) — 273 LOC — D3D11 rendering pipeline implementations (Forward, Deferred, Forward+)
+- [`GraphicsRenderPipelinesWindowsPasses.cpp`](../../SparkEngine/Source/Graphics/GraphicsRenderPipelinesWindowsPasses.cpp) — 393 LOC — D3D11 G-Buffer fill, lighting pass, frustum culling, and post-processing passes
 - [`GraphicsStateAndSettings.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettings.cpp) — 8 LOC — Graphics state, metrics, and settings — platform-split redirect
 - [`GraphicsStateAndSettingsLinux.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsLinux.cpp) — 359 LOC — Linux RHI-bridge graphics state management, metrics, and settings
-- [`GraphicsStateAndSettingsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindows.cpp) — 660 LOC — D3D11 graphics state management, metrics, settings, and resize
+- [`GraphicsStateAndSettingsWindows.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindows.cpp) — 252 LOC — D3D11 graphics state management and metrics
+- [`GraphicsStateAndSettingsWindowsResize.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindowsResize.cpp) — 206 LOC — D3D11 resize handling, statistics reset, and screenshot capture
+- [`GraphicsStateAndSettingsWindowsSettings.cpp`](../../SparkEngine/Source/Graphics/GraphicsStateAndSettingsWindowsSettings.cpp) — 266 LOC — D3D11 graphics settings and configuration
 
 ### `SparkEngine/Source/Graphics/HybridRT/`
 
-- [`HybridRTManager.cpp`](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManager.cpp) — 610 LOC — Hybrid ray tracing coordinator implementation
+- [`HybridRTManager.cpp`](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManager.cpp) — 413 LOC — Hybrid ray tracing coordinator implementation
 - [`HybridRTManager.h`](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManager.h) — 238 LOC — Hybrid ray tracing coordinator — Lumen-style SS → Software RT → Hardware RT
+- [`HybridRTManagerExecute.cpp`](../../SparkEngine/Source/Graphics/HybridRT/HybridRTManagerExecute.cpp) — 221 LOC — HybridRTManager per-frame execution: the Execute() backend dispatch
 - [`HybridRTTypes.h`](../../SparkEngine/Source/Graphics/HybridRT/HybridRTTypes.h) — 163 LOC — Shared types for the hybrid ray tracing system
 - [`ProbeSystem.cpp`](../../SparkEngine/Source/Graphics/HybridRT/ProbeSystem.cpp) — 250 LOC — Irradiance probe grid management and compute dispatch
 - [`ProbeSystem.h`](../../SparkEngine/Source/Graphics/HybridRT/ProbeSystem.h) — 105 LOC — Irradiance probe grid for cached global illumination
@@ -1601,7 +2041,7 @@ graph LR
 
 ### `SparkEngine/Source/Graphics/`
 
-- [`LODGenerator.cpp`](../../SparkEngine/Source/Graphics/LODGenerator.cpp) — 421 LOC — QEM mesh simplification and LOD chain generation
+- [`LODGenerator.cpp`](../../SparkEngine/Source/Graphics/LODGenerator.cpp) — 452 LOC — QEM mesh simplification and LOD chain generation
 - [`LODGenerator.h`](../../SparkEngine/Source/Graphics/LODGenerator.h) — 169 LOC — Automatic LOD chain generation using quadric error metric simplification
 - [`LightLayers.h`](../../SparkEngine/Source/Graphics/LightLayers.h) — 130 LOC — Per-object light layer masking for selective lighting
 - [`LightManager.h`](../../SparkEngine/Source/Graphics/LightManager.h) — 446 LOC — Light culling, tile binning, and shadow atlas management
@@ -1611,9 +2051,15 @@ graph LR
 - [`LightingSystem.h`](../../SparkEngine/Source/Graphics/LightingSystem.h) — 477 LOC — Advanced lighting system with PBR support for Spark Engine
 - [`LightingSystemInternal.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternal.cpp) — 8 LOC — Platform-split redirect
 - [`LightingSystemInternalLinux.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalLinux.cpp) — 59 LOC — Linux implementation — split from LightingSystemInternal.cpp
-- [`LightingSystemInternalWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindows.cpp) — 982 LOC — Windows/D3D11 implementation — split from LightingSystemInternal.cpp
-- [`LightingSystemLinux.cpp`](../../SparkEngine/Source/Graphics/LightingSystemLinux.cpp) — 510 LOC — Linux implementation — split from LightingSystem.cpp
-- [`LightingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindows.cpp) — 851 LOC — Windows/D3D11 implementation — split from LightingSystem.cpp
+- [`LightingSystemInternalWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindows.cpp) — 323 LOC — Windows/D3D11 implementation — split from LightingSystemInternal.cpp
+- [`LightingSystemInternalWindowsCulling.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsCulling.cpp) — 254 LOC — Windows/D3D11 light culling and shadow matrix math for LightingSystem
+- [`LightingSystemInternalWindowsIBL.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsIBL.cpp) — 385 LOC — Windows/D3D11 image-based lighting generation for LightingSystem
+- [`LightingSystemInternalWindowsTypes.cpp`](../../SparkEngine/Source/Graphics/LightingSystemInternalWindowsTypes.cpp) — 105 LOC — Windows light/shadow type string conversions for LightingSystem
+- [`LightingSystemLinux.cpp`](../../SparkEngine/Source/Graphics/LightingSystemLinux.cpp) — 325 LOC — Linux implementation — split from LightingSystem.cpp
+- [`LightingSystemLinuxTypes.cpp`](../../SparkEngine/Source/Graphics/LightingSystemLinuxTypes.cpp) — 205 LOC — Linux Light class implementation and light/shadow type string conversions
+- [`LightingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindows.cpp) — 467 LOC — Windows/D3D11 implementation — split from LightingSystem.cpp
+- [`LightingSystemWindowsLightOps.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindowsLightOps.cpp) — 288 LOC — Windows light management and console operations for LightingSystem
+- [`LightingSystemWindowsTypes.cpp`](../../SparkEngine/Source/Graphics/LightingSystemWindowsTypes.cpp) — 146 LOC — Windows Light class implementation for LightingSystem
 - [`LightmapBaker.h`](../../SparkEngine/Source/Graphics/LightmapBaker.h) — 497 LOC — Offline lightmap baking system for pre-computed global illumination
 - [`LineTrailRenderer.h`](../../SparkEngine/Source/Graphics/LineTrailRenderer.h) — 138 LOC — World-space line rendering and trail effects
 - [`MSDFTextRenderer.cpp`](../../SparkEngine/Source/Graphics/MSDFTextRenderer.cpp) — 476 LOC — MSDF text rendering implementation with instanced glyph quads
@@ -1627,12 +2073,12 @@ graph LR
 - [`MaterialPropertyHandle.cpp`](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.cpp) — 82 LOC — Handle-based material uniform access — eliminates string lookups at runtime
 - [`MaterialPropertyHandle.h`](../../SparkEngine/Source/Graphics/MaterialPropertyHandle.h) — 152 LOC — Handle-based material uniform access eliminating runtime string lookups
 - [`MaterialSystem.cpp`](../../SparkEngine/Source/Graphics/MaterialSystem.cpp) — 486 LOC — Core MaterialSystem implementation — lifecycle, CRUD, texture loading, utilities
-- [`MaterialSystem.h`](../../SparkEngine/Source/Graphics/MaterialSystem.h) — 575 LOC — Advanced material system for AAA-quality rendering with PBR support
+- [`MaterialSystem.h`](../../SparkEngine/Source/Graphics/MaterialSystem.h) — 569 LOC — Advanced material system for AAA-quality rendering with PBR support
 - [`MaterialSystemLinux.cpp`](../../SparkEngine/Source/Graphics/MaterialSystemLinux.cpp) — 151 LOC — Linux MaterialSystem methods — RHI-based stubs for texture/sampler/binding
 - [`MaterialSystemWindows.cpp`](../../SparkEngine/Source/Graphics/MaterialSystemWindows.cpp) — 264 LOC — Windows/D3D11 MaterialSystem methods — texture loading, binding, samplers, GPU state
 - [`MaterialTextureLoading.cpp`](../../SparkEngine/Source/Graphics/MaterialTextureLoading.cpp) — 184 LOC — WIC-based texture loading for the MaterialSystem (Windows only)
 - [`Mesh.cpp`](../../SparkEngine/Source/Graphics/Mesh.cpp) — 8 LOC — Platform-split redirect
-- [`Mesh.h`](../../SparkEngine/Source/Graphics/Mesh.h) — 258 LOC — 3D mesh management and primitive generation system
+- [`Mesh.h`](../../SparkEngine/Source/Graphics/Mesh.h) — 242 LOC — 3D mesh management and primitive generation system (umbrella header)
 - [`MeshClusterSystem.h`](../../SparkEngine/Source/Graphics/MeshClusterSystem.h) — 824 LOC — Nanite-inspired mesh cluster hierarchy with GPU-driven rendering
 - [`MeshLOD.cpp`](../../SparkEngine/Source/Graphics/MeshLOD.cpp) — 8 LOC — Platform-split redirect
 - [`MeshLOD.h`](../../SparkEngine/Source/Graphics/MeshLOD.h) — 170 LOC — Mesh Level-of-Detail system with automatic generation and distance-based switching
@@ -1642,8 +2088,10 @@ graph LR
 - [`MeshOptimizer.h`](../../SparkEngine/Source/Graphics/MeshOptimizer.h) — 474 LOC — Mesh optimization pipeline: vertex cache, overdraw, fetch, simplification, meshlets
 - [`MeshShaderPipeline.cpp`](../../SparkEngine/Source/Graphics/MeshShaderPipeline.cpp) — 312 LOC — Mesh shader rendering pipeline implementation
 - [`MeshShaderPipeline.h`](../../SparkEngine/Source/Graphics/MeshShaderPipeline.h) — 152 LOC — Mesh shader rendering pipeline for meshlet-based geometry
-- [`MeshWindows.cpp`](../../SparkEngine/Source/Graphics/MeshWindows.cpp) — 500 LOC — Windows/D3D11 implementation — split from Mesh.cpp
-- [`ModelLoading.cpp`](../../SparkEngine/Source/Graphics/ModelLoading.cpp) — 240 LOC — Cross-platform model rendering helpers (BindMesh, BindMaterial, DrawBoundMesh)
+- [`MeshTypes.h`](../../SparkEngine/Source/Graphics/MeshTypes.h) — 83 LOC — Vertex, mesh data, and submesh structures for the mesh system
+- [`MeshWindows.cpp`](../../SparkEngine/Source/Graphics/MeshWindows.cpp) — 325 LOC — Windows/D3D11 implementation — split from Mesh.cpp
+- [`MeshWindowsPrimitives.cpp`](../../SparkEngine/Source/Graphics/MeshWindowsPrimitives.cpp) — 264 LOC — Procedural primitive generation for the Windows/D3D11 Mesh implementation
+- [`ModelLoading.cpp`](../../SparkEngine/Source/Graphics/ModelLoading.cpp) — 255 LOC — Cross-platform model rendering helpers (BindMesh, BindMaterial, DrawBoundMesh)
 - [`ModelLoadingLinux.cpp`](../../SparkEngine/Source/Graphics/ModelLoadingLinux.cpp) — 484 LOC — Linux model loading — split from ModelLoading.cpp
 - [`ModelLoadingWindows.cpp`](../../SparkEngine/Source/Graphics/ModelLoadingWindows.cpp) — 75 LOC — Windows/D3D11 model loading — split from ModelLoading.cpp
 
@@ -1651,18 +2099,22 @@ graph LR
 
 - [`CpuNeuralInference.cpp`](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.cpp) — 358 LOC — SIMD-optimized CPU neural network inference implementation
 - [`CpuNeuralInference.h`](../../SparkEngine/Source/Graphics/Neural/CpuNeuralInference.h) — 130 LOC — SIMD-optimized CPU neural network inference
+- [`CpuNeuralTraining.cpp`](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.cpp) — 466 LOC — CPU MLP training: backprop + SGD/Adam + MSE/L1/Huber losses
+- [`CpuNeuralTraining.h`](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h) — 218 LOC — CPU neural-network training: backprop + optimizers + losses
+- [`NeuralFunctionApproximator.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.cpp) — 166 LOC — Implementation of the learned CPU function facade
+- [`NeuralFunctionApproximator.h`](../../SparkEngine/Source/Graphics/Neural/NeuralFunctionApproximator.h) — 207 LOC — Generic learned CPU function f: R^N → R^M for engine subsystems
 - [`NeuralInference.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralInference.cpp) — 454 LOC — GPU neural network inference engine implementation
 - [`NeuralInference.h`](../../SparkEngine/Source/Graphics/Neural/NeuralInference.h) — 179 LOC — Lightweight GPU neural network inference engine (compute shader-based)
 - [`NeuralPostProcessing.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.cpp) — 460 LOC — Neural denoiser and super-resolution implementation (CPU paths)
 - [`NeuralPostProcessing.h`](../../SparkEngine/Source/Graphics/Neural/NeuralPostProcessing.h) — 159 LOC — Neural-enhanced denoiser and super-resolution post-processing
-- [`NeuralRadianceCache.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.cpp) — 320 LOC — Multi-resolution hash grid + MLP radiance cache implementation
-- [`NeuralRadianceCache.h`](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h) — 181 LOC — Multi-resolution hash grid + MLP for cached indirect lighting
-- [`NeuralTextureCompressor.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.cpp) — 527 LOC — Neural texture compression: CPU training + CPU/GPU decompression
+- [`NeuralRadianceCache.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.cpp) — 285 LOC — Multi-resolution hash grid + MLP radiance cache implementation
+- [`NeuralRadianceCache.h`](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h) — 189 LOC — Multi-resolution hash grid + MLP for cached indirect lighting
+- [`NeuralTextureCompressor.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.cpp) — 389 LOC — Neural texture compression: CPU training + CPU/GPU decompression
 - [`NeuralTextureCompressor.h`](../../SparkEngine/Source/Graphics/Neural/NeuralTextureCompressor.h) — 162 LOC — Neural texture compression: encode textures as tiny MLPs per block
 - [`NeuralTextureFormat.h`](../../SparkEngine/Source/Graphics/Neural/NeuralTextureFormat.h) — 70 LOC — .ntex binary file format for neural-compressed textures
 - [`NeuralTypes.h`](../../SparkEngine/Source/Graphics/Neural/NeuralTypes.h) — 126 LOC — Shared types for the neural rendering subsystem
-- [`NeuralWeights.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.cpp) — 129 LOC — .nnw file I/O for neural network weight serialization
-- [`NeuralWeights.h`](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.h) — 70 LOC — Serialization and deserialization of neural network weights (.nnw format)
+- [`NeuralWeights.cpp`](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.cpp) — 236 LOC — .nnw file I/O for neural network weight serialization
+- [`NeuralWeights.h`](../../SparkEngine/Source/Graphics/Neural/NeuralWeights.h) — 119 LOC — Serialization and deserialization of neural network weights (.nnw format)
 
 ### `SparkEngine/Source/Graphics/`
 
@@ -1676,22 +2128,29 @@ graph LR
 - [`PCSSshadows.h`](../../SparkEngine/Source/Graphics/PCSSshadows.h) — 273 LOC — Percentage-Closer Soft Shadows with variable penumbra
 - [`ParticleSystem.cpp`](../../SparkEngine/Source/Graphics/ParticleSystem.cpp) — 8 LOC — Platform-split redirect
 - [`ParticleSystem.h`](../../SparkEngine/Source/Graphics/ParticleSystem.h) — 265 LOC — GPU-friendly particle system for visual effects
-- [`ParticleSystemLinux.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemLinux.cpp) — 581 LOC — Linux implementation — split from ParticleSystem.cpp
-- [`ParticleSystemWindows.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemWindows.cpp) — 679 LOC — Windows/D3D11 implementation — split from ParticleSystem.cpp
+- [`ParticleSystemLinux.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemLinux.cpp) — 266 LOC — Linux ParticleSystem manager and console helpers — split from ParticleSystem.cpp.
+- [`ParticleSystemLinuxEmitter.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemLinuxEmitter.cpp) — 324 LOC — Linux ParticleEmitter implementation — split from ParticleSystemLinux.cpp,
+- [`ParticleSystemWindows.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemWindows.cpp) — 294 LOC — Windows/D3D11 ParticleSystem manager and console helpers — split from ParticleSystem.cpp.
+- [`ParticleSystemWindowsEmitter.cpp`](../../SparkEngine/Source/Graphics/ParticleSystemWindowsEmitter.cpp) — 395 LOC — Windows/D3D11 ParticleEmitter implementation — split from ParticleSystemWindows.cpp,
 - [`PersistentMaterialCB.h`](../../SparkEngine/Source/Graphics/PersistentMaterialCB.h) — 223 LOC — Persistent GPU material constant buffers (SRP Batcher pattern)
 - [`PipelineStateCache.h`](../../SparkEngine/Source/Graphics/PipelineStateCache.h) — 401 LOC — Hash-based caching of D3D11 pipeline state objects
 - [`PortalCulling.cpp`](../../SparkEngine/Source/Graphics/PortalCulling.cpp) — 296 LOC — Portal-based visibility culling — cell graph traversal and frustum narrowing
 - [`PortalCulling.h`](../../SparkEngine/Source/Graphics/PortalCulling.h) — 267 LOC — Portal-based visibility culling for indoor/architectural scenes
 - [`PostProcessingEffects.h`](../../SparkEngine/Source/Graphics/PostProcessingEffects.h) — 17 LOC — Post-processing effect type definitions and settings structs
-- [`PostProcessingPipeline.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipeline.cpp) — 1530 LOC
+- [`PostProcessingPipeline.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipeline.cpp) — 1539 LOC
 - [`PostProcessingPipeline.h`](../../SparkEngine/Source/Graphics/PostProcessingPipeline.h) — 434 LOC — Configurable post-processing effect chain with ordered passes
-- [`PostProcessingPipelineWindows.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindows.cpp) — 1089 LOC — D3D11 GPU implementation of post-processing passes
+- [`PostProcessingPipelineWindows.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindows.cpp) — 207 LOC — D3D11 GPU resource creation and effect-shader compilation
+- [`PostProcessingPipelineWindowsPasses.cpp`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsPasses.cpp) — 298 LOC — D3D11 per-pass GPU execution for the post-processing pipeline
+- [`PostProcessingPipelineWindowsShadersAO.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersAO.h) — 172 LOC — Inline HLSL sources for the ambient-occlusion post-process pixel shaders
+- [`PostProcessingPipelineWindowsShadersColor.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersColor.h) — 167 LOC — Inline HLSL sources for the color/HDR post-process pixel shaders
+- [`PostProcessingPipelineWindowsShadersFilter.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersFilter.h) — 166 LOC — Inline HLSL sources for the filtering post-process pixel shaders
+- [`PostProcessingPipelineWindowsShadersLens.h`](../../SparkEngine/Source/Graphics/PostProcessingPipelineWindowsShadersLens.h) — 188 LOC — Inline HLSL sources for the lens/camera post-process pixel shaders
 - [`PostProcessingTypes.h`](../../SparkEngine/Source/Graphics/PostProcessingTypes.h) — 285 LOC — Type definitions, enums, and settings structs for the post-processing pipeline
 
 ### `SparkEngine/Source/Graphics/RHI/D3D11/`
 
-- [`D3D11Device.cpp`](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp) — 1481 LOC — DirectX 11 RHI backend implementation
-- [`D3D11Device.h`](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h) — 345 LOC — DirectX 11 implementation of the RHI device interface
+- [`D3D11Device.cpp`](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp) — 1543 LOC — DirectX 11 RHI backend implementation
+- [`D3D11Device.h`](../../SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h) — 342 LOC — DirectX 11 implementation of the RHI device interface
 
 ### `SparkEngine/Source/Graphics/RHI/D3D12/`
 
@@ -1710,7 +2169,8 @@ graph LR
 
 - [`MetalDevice.h`](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h) — 545 LOC — Apple Metal implementation of the RHI device interface
 - [`MetalGoldenImageCapture.h`](../../SparkEngine/Source/Graphics/RHI/Metal/MetalGoldenImageCapture.h) — 93 LOC — `IGoldenImageCapture` that reads back a Metal texture.
-- [`MetalRayTracing.h`](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h) — 240 LOC — Metal 2.4+ hardware ray-tracing backend for HybridRTManager.
+- [`MetalInterop.h`](../../SparkEngine/Source/Graphics/RHI/Metal/MetalInterop.h) — 22 LOC — C++-safe entry points for Objective-C++ Metal implementation details.
+- [`MetalRayTracing.h`](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h) — 241 LOC — Metal 2.4+ hardware ray-tracing backend for HybridRTManager.
 - [`MetalTextureReadback.h`](../../SparkEngine/Source/Graphics/RHI/Metal/MetalTextureReadback.h) — 55 LOC — CPU readback of an MTLTexture into an RGBA byte vector.
 
 ### `SparkEngine/Source/Graphics/RHI/`
@@ -1720,8 +2180,8 @@ graph LR
 
 ### `SparkEngine/Source/Graphics/RHI/OpenGL/`
 
-- [`OpenGLDevice.cpp`](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp) — 2103 LOC — OpenGL 4.6 Core Profile RHI backend implementation
-- [`OpenGLDevice.h`](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h) — 435 LOC — OpenGL 4.6 Core Profile implementation of the RHI device interface
+- [`OpenGLDevice.cpp`](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp) — 2160 LOC — OpenGL 4.6 Core Profile RHI backend implementation
+- [`OpenGLDevice.h`](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.h) — 438 LOC — OpenGL 4.6 Core Profile implementation of the RHI device interface
 
 ### `SparkEngine/Source/Graphics/RHI/`
 
@@ -1730,11 +2190,11 @@ graph LR
 - [`RHI.h`](../../SparkEngine/Source/Graphics/RHI/RHI.h) — 41 LOC — Master include for the Rendering Hardware Interface
 - [`RHIAdapter.cpp`](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.cpp) — 613 LOC — Implementation of the RHI adapter layer (R3.2 -- Route rendering through RHI)
 - [`RHIAdapter.h`](../../SparkEngine/Source/Graphics/RHI/RHIAdapter.h) — 414 LOC — Adapter layer that routes legacy GraphicsEngine calls through the RHI
-- [`RHIBridge.cpp`](../../SparkEngine/Source/Graphics/RHI/RHIBridge.cpp) — 713 LOC — Implementation of the RHI bridge layer
+- [`RHIBridge.cpp`](../../SparkEngine/Source/Graphics/RHI/RHIBridge.cpp) — 735 LOC — Implementation of the RHI bridge layer
 - [`RHIBridge.h`](../../SparkEngine/Source/Graphics/RHI/RHIBridge.h) — 270 LOC — Integration bridge between the RHI abstraction and the existing GraphicsEngine
 - [`RHIDevice.h`](../../SparkEngine/Source/Graphics/RHI/RHIDevice.h) — 184 LOC — Abstract Rendering Hardware Interface device
 - [`RHIDeviceBase.h`](../../SparkEngine/Source/Graphics/RHI/RHIDeviceBase.h) — 48 LOC — Shared base class for concrete IRHIDevice implementations.
-- [`RHIFactory.cpp`](../../SparkEngine/Source/Graphics/RHI/RHIFactory.cpp) — 653 LOC — RHI factory and utility implementation
+- [`RHIFactory.cpp`](../../SparkEngine/Source/Graphics/RHI/RHIFactory.cpp) — 652 LOC — RHI factory and utility implementation
 - [`RHIFactory.h`](../../SparkEngine/Source/Graphics/RHI/RHIFactory.h) — 208 LOC — Factory and utility functions for RHI backend selection
 - [`RHIFormatUtils.h`](../../SparkEngine/Source/Graphics/RHI/RHIFormatUtils.h) — 178 LOC — Shared format utility functions for all RHI backends
 - [`RHIHandlePool.h`](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h) — 239 LOC — Typed handle pool with generation counters for RHI resources (Filament/bgfx-inspired)
@@ -1747,7 +2207,7 @@ graph LR
 
 ### `SparkEngine/Source/Graphics/RHI/Vulkan/`
 
-- [`VulkanCommandList.cpp`](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanCommandList.cpp) — 676 LOC — VulkanSwapChain and VulkanCommandList implementations
+- [`VulkanCommandList.cpp`](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanCommandList.cpp) — 682 LOC — VulkanSwapChain and VulkanCommandList implementations
 - [`VulkanDescriptorCache.cpp`](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDescriptorCache.cpp) — 260 LOC — Descriptor set layout caching and batched writes implementation
 - [`VulkanDescriptorCache.h`](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDescriptorCache.h) — 131 LOC — Descriptor set layout caching and batched descriptor writes
 - [`VulkanDevice.cpp`](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp) — 1991 LOC — Vulkan RHI backend implementation
@@ -1758,7 +2218,7 @@ graph LR
 
 - [`RTHandleSystem.h`](../../SparkEngine/Source/Graphics/RTHandleSystem.h) — 268 LOC — Scale-based render texture allocation with automatic resolution adaptation
 - [`ReflectionProbeCache.h`](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h) — 320 LOC — Cached reflection probe cubemaps with LRU eviction
-- [`RenderCommandRing.h`](../../SparkEngine/Source/Graphics/RenderCommandRing.h) — 208 LOC — Thread-decoupled render command ring buffer
+- [`RenderCommandRing.h`](../../SparkEngine/Source/Graphics/RenderCommandRing.h) — 209 LOC — Thread-decoupled render command ring buffer
 - [`RenderDevice.cpp`](../../SparkEngine/Source/Graphics/RenderDevice.cpp) — 262 LOC — Core GPU device and swap chain management for Direct3D 11
 - [`RenderDevice.h`](../../SparkEngine/Source/Graphics/RenderDevice.h) — 142 LOC — Thin wrapper around the RHI device and swap chain (R3.1 — Architecture Analysis)
 - [`RenderGraph.h`](../../SparkEngine/Source/Graphics/RenderGraph.h) — 1125 LOC — Declarative render graph / frame graph system for SparkEngine (umbrella header)
@@ -1767,9 +2227,9 @@ graph LR
 
 - [`RenderGraphBuilder.cpp`](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.cpp) — 530 LOC — Implementation of StandardPipelineBuilder (R3.3 -- Activate RenderGraph pipeline)
 - [`RenderGraphBuilder.h`](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h) — 318 LOC — High-level helper that constructs a RenderGraph from the engine's
-- [`RenderGraphExporter.cpp`](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphExporter.cpp) — 85 LOC — GraphViz .dot export for render graph visualization
+- [`RenderGraphExporter.cpp`](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphExporter.cpp) — 92 LOC — GraphViz .dot export for render graph visualization
 - [`RenderGraphExporter.h`](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphExporter.h) — 39 LOC — Exports render graph as GraphViz .dot file for debugging
-- [`TransientResourcePool.cpp`](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.cpp) — 196 LOC — Implementation of age-based transient GPU resource pooling
+- [`TransientResourcePool.cpp`](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.cpp) — 199 LOC — Implementation of age-based transient GPU resource pooling
 - [`TransientResourcePool.h`](../../SparkEngine/Source/Graphics/RenderGraph/TransientResourcePool.h) — 151 LOC — Age-based transient GPU resource pooling for the render graph
 
 ### `SparkEngine/Source/Graphics/`
@@ -1787,25 +2247,29 @@ graph LR
 - [`RenderTargetManagerLinux.cpp`](../../SparkEngine/Source/Graphics/RenderTargetManagerLinux.cpp) — 299 LOC — Linux implementation — split from RenderTargetManager.cpp
 - [`RenderTargetManagerWindows.cpp`](../../SparkEngine/Source/Graphics/RenderTargetManagerWindows.cpp) — 364 LOC — Windows/D3D11 implementation — split from RenderTargetManager.cpp
 - [`RenderTargetPool.h`](../../SparkEngine/Source/Graphics/RenderTargetPool.h) — 401 LOC — Pooled transient render target management
-- [`RenderTargetWindows.cpp`](../../SparkEngine/Source/Graphics/RenderTargetWindows.cpp) — 510 LOC — Windows/D3D11 implementation — split from RenderTarget.cpp
+- [`RenderTargetWindows.cpp`](../../SparkEngine/Source/Graphics/RenderTargetWindows.cpp) — 402 LOC — Windows/D3D11 implementation — split from RenderTarget.cpp
+- [`RenderTargetWindowsMulti.cpp`](../../SparkEngine/Source/Graphics/RenderTargetWindowsMulti.cpp) — 123 LOC — Windows/D3D11 MultipleRenderTargets implementation — split from RenderTargetWindows.cpp
 - [`SHLighting.h`](../../SparkEngine/Source/Graphics/SHLighting.h) — 299 LOC — Spherical harmonics evaluation and BRDF LUT generation for IBL (Filament-inspired)
 - [`SSAOTemporal.h`](../../SparkEngine/Source/Graphics/SSAOTemporal.h) — 234 LOC — Temporal denoising for SSAO with history reprojection
 - [`SVGRenderer.h`](../../SparkEngine/Source/Graphics/SVGRenderer.h) — 803 LOC — SVG path parsing, tessellation, and rendering to vertex buffers
 - [`SceneRenderer.cpp`](../../SparkEngine/Source/Graphics/SceneRenderer.cpp) — 243 LOC — High-level scene rendering: draw command submission, frustum culling, and sorting
 - [`SceneRenderer.h`](../../SparkEngine/Source/Graphics/SceneRenderer.h) — 198 LOC — ECS-based scene rendering — collects draw commands and feeds the pipeline (R3.1, R3.5)
-- [`ScreenCapture.h`](../../SparkEngine/Source/Graphics/ScreenCapture.h) — 325 LOC — Screenshot and frame sequence capture system
+- [`ScreenCapture.h`](../../SparkEngine/Source/Graphics/ScreenCapture.h) — 375 LOC — Screenshot and frame sequence capture system
 - [`ScreenSpaceEffects.cpp`](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.cpp) — 344 LOC — Implementation of screen-space rendering effects manager
 - [`ScreenSpaceEffects.h`](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.h) — 339 LOC — Screen-space rendering effects: SSAO, SSR, screen-space shadows
 - [`Shader.cpp`](../../SparkEngine/Source/Graphics/Shader.cpp) — 8 LOC — Platform-split redirect
 - [`Shader.h`](../../SparkEngine/Source/Graphics/Shader.h) — 667 LOC — Advanced HLSL shader management with PBR, lighting, and console integration
 - [`ShaderCompilation.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilation.cpp) — 8 LOC — Platform-split redirect
-- [`ShaderCompilationLinux.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp) — 717 LOC — Linux implementation — split from ShaderCompilation.cpp
-- [`ShaderCompilationWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp) — 742 LOC — Windows/D3D11 implementation — split from ShaderCompilation.cpp
+- [`ShaderCompilationLinux.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp) — 462 LOC — Linux implementation — split from ShaderCompilation.cpp
+- [`ShaderCompilationLinuxCompileOps.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxCompileOps.cpp) — 222 LOC — Linux compile utilities — split from ShaderCompilationLinux.cpp
+- [`ShaderCompilationLinuxInternal.h`](../../SparkEngine/Source/Graphics/ShaderCompilationLinuxInternal.h) — 76 LOC — Shared Linux-only helpers for the ShaderCompilationLinux*.cpp split parts
+- [`ShaderCompilationWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationWindows.cpp) — 467 LOC — Windows/D3D11 implementation — split from ShaderCompilation.cpp
+- [`ShaderCompilationWindowsCompileOps.cpp`](../../SparkEngine/Source/Graphics/ShaderCompilationWindowsCompileOps.cpp) — 303 LOC — Windows/D3D11 compile utilities — split from ShaderCompilationWindows.cpp
 - [`ShaderConsoleOps.cpp`](../../SparkEngine/Source/Graphics/ShaderConsoleOps.cpp) — 482 LOC — Console integration methods for the Shader system
 - [`ShaderCrossCompiler.h`](../../SparkEngine/Source/Graphics/ShaderCrossCompiler.h) — 394 LOC — Shader cross-compilation pipeline for multi-backend RHI support
 - [`ShaderDaemonBridge.cpp`](../../SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp) — 67 LOC — Implementation of the CompiledShaderBlob wire codec.
 - [`ShaderDaemonBridge.h`](../../SparkEngine/Source/Graphics/ShaderDaemonBridge.h) — 52 LOC — Translate between engine `CompiledShaderBlob` and daemon opaque bytes.
-- [`ShaderDiskCache.cpp`](../../SparkEngine/Source/Graphics/ShaderDiskCache.cpp) — 286 LOC — Persistent shader disk cache implementation
+- [`ShaderDiskCache.cpp`](../../SparkEngine/Source/Graphics/ShaderDiskCache.cpp) — 311 LOC — Persistent shader disk cache implementation
 - [`ShaderDiskCache.h`](../../SparkEngine/Source/Graphics/ShaderDiskCache.h) — 156 LOC — Persistent on-disk shader compilation cache
 
 ### `SparkEngine/Source/Graphics/ShaderGraph/`
@@ -1819,7 +2283,8 @@ graph LR
 - [`ShaderHotReload.h`](../../SparkEngine/Source/Graphics/ShaderHotReload.h) — 549 LOC — Shader file watcher and hot-reload system
 - [`ShaderLinux.cpp`](../../SparkEngine/Source/Graphics/ShaderLinux.cpp) — 383 LOC — Linux implementation — split from Shader.cpp
 - [`ShaderVariantSystem.h`](../../SparkEngine/Source/Graphics/ShaderVariantSystem.h) — 396 LOC — Shader variant keyword and stripping system
-- [`ShaderWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderWindows.cpp) — 502 LOC — Windows/D3D11 implementation — split from Shader.cpp
+- [`ShaderWindows.cpp`](../../SparkEngine/Source/Graphics/ShaderWindows.cpp) — 324 LOC — Windows/D3D11 implementation — split from Shader.cpp
+- [`ShaderWindowsConstantBuffers.cpp`](../../SparkEngine/Source/Graphics/ShaderWindowsConstantBuffers.cpp) — 204 LOC — Windows/D3D11 constant buffer management — split from ShaderWindows.cpp
 - [`ShadowAtlas.cpp`](../../SparkEngine/Source/Graphics/ShadowAtlas.cpp) — 366 LOC — Implementation of priority-based shadow map atlas tile allocation
 - [`ShadowAtlas.h`](../../SparkEngine/Source/Graphics/ShadowAtlas.h) — 138 LOC — Priority-based shadow map atlas for efficient shadow rendering
 - [`ShadowAtlasTypes.h`](../../SparkEngine/Source/Graphics/ShadowAtlasTypes.h) — 41 LOC — Type definitions for the shadow atlas system
@@ -1832,20 +2297,24 @@ graph LR
 - [`TemporalTypes.h`](../../SparkEngine/Source/Graphics/TemporalTypes.h) — 338 LOC — Settings, enums, jitter generation, and helper types for temporal effects
 - [`TerrainRenderer.cpp`](../../SparkEngine/Source/Graphics/TerrainRenderer.cpp) — 398 LOC — Engine-level terrain renderer — heightmap mesh generation and GPU rendering
 - [`TerrainRenderer.h`](../../SparkEngine/Source/Graphics/TerrainRenderer.h) — 182 LOC — Engine-level terrain rendering for ECS TerrainComponent entities
-- [`TextureCompressor.cpp`](../../SparkEngine/Source/Graphics/TextureCompressor.cpp) — 430 LOC — GPU texture compression implementation
+- [`TextureCompressor.cpp`](../../SparkEngine/Source/Graphics/TextureCompressor.cpp) — 491 LOC — GPU texture compression implementation
 - [`TextureCompressor.h`](../../SparkEngine/Source/Graphics/TextureCompressor.h) — 152 LOC — GPU texture compression pipeline (BC1/BC7/ASTC)
 - [`TextureEviction.cpp`](../../SparkEngine/Source/Graphics/TextureEviction.cpp) — 419 LOC — Cache eviction and VRAM management: LRU scoring, eviction policy,
 - [`TextureStreaming.cpp`](../../SparkEngine/Source/Graphics/TextureStreaming.cpp) — 192 LOC — Async texture streaming: streaming queue, priority management, background
 - [`TextureSystem.h`](../../SparkEngine/Source/Graphics/TextureSystem.h) — 449 LOC — Advanced texture loading and management system for Spark Engine
-- [`TextureSystemLinux.cpp`](../../SparkEngine/Source/Graphics/TextureSystemLinux.cpp) — 540 LOC — CPU-portable texture system logic (metadata, caching, format detection)
-- [`TextureSystemWindows.cpp`](../../SparkEngine/Source/Graphics/TextureSystemWindows.cpp) — 748 LOC — D3D11 GPU texture loading, creation, and binding
+- [`TextureSystemLinux.cpp`](../../SparkEngine/Source/Graphics/TextureSystemLinux.cpp) — 387 LOC — CPU-portable texture system logic (metadata, caching, format detection)
+- [`TextureSystemLinuxTexture.cpp`](../../SparkEngine/Source/Graphics/TextureSystemLinuxTexture.cpp) — 176 LOC — Texture class implementation for Linux (stb_image/tinyexr CPU-side image loading)
+- [`TextureSystemWindows.cpp`](../../SparkEngine/Source/Graphics/TextureSystemWindows.cpp) — 470 LOC — TextureSystem manager, console operations, and format utilities (Windows/D3D11)
+- [`TextureSystemWindowsTexture.cpp`](../../SparkEngine/Source/Graphics/TextureSystemWindowsTexture.cpp) — 303 LOC — Texture class implementation for Windows (D3D11 + WIC image loading)
 - [`TonemapColorGrading.cpp`](../../SparkEngine/Source/Graphics/TonemapColorGrading.cpp) — 541 LOC — Auto-exposure, tonemapping, and color grading implementation
 - [`TonemapColorGrading.h`](../../SparkEngine/Source/Graphics/TonemapColorGrading.h) — 203 LOC — Tonemapping, auto-exposure, and color grading post-processing
 - [`UICompositor.h`](../../SparkEngine/Source/Graphics/UICompositor.h) — 244 LOC — Compositor stack with pooled render targets for per-element UI effects
 - [`UpscalingShaders.h`](../../SparkEngine/Source/Graphics/UpscalingShaders.h) — 690 LOC — Inline HLSL compute shader source strings for the upscaling system
 - [`UpscalingSystem.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystem.cpp) — 483 LOC — CPU-side upscaling utilities: Halton jitter, DLL detection, resolution calculation, mode/quality names
 - [`UpscalingSystem.h`](../../SparkEngine/Source/Graphics/UpscalingSystem.h) — 656 LOC — Upscaling integration: FSR 1.0/2.0, DLSS, XeSS
-- [`UpscalingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystemWindows.cpp) — 605 LOC — GPU-side upscaling implementation: D3D11 resource creation, shader compilation, execute dispatches
+- [`UpscalingSystemWindows.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystemWindows.cpp) — 441 LOC — GPU-side upscaling implementation: D3D11 resource creation, shader compilation, execute dispatches
+- [`UpscalingSystemWindowsExecute.cpp`](../../SparkEngine/Source/Graphics/UpscalingSystemWindowsExecute.cpp) — 194 LOC — Per-backend upscaling Execute dispatches (FSR1, FSR2, DLSS, XeSS, SparkSR)
+- [`UpscalingSystemWindowsInternal.h`](../../SparkEngine/Source/Graphics/UpscalingSystemWindowsInternal.h) — 30 LOC — Shared Windows-only UpscalingUtils declarations for the UpscalingSystemWindows*.cpp split parts
 - [`UpscalingTypes.h`](../../SparkEngine/Source/Graphics/UpscalingTypes.h) — 352 LOC — Type definitions for the upscaling system: enums, structs, constants
 - [`VRAMBudgetMonitor.cpp`](../../SparkEngine/Source/Graphics/VRAMBudgetMonitor.cpp) — 169 LOC — GPU memory budget monitoring implementation
 - [`VRAMBudgetMonitor.h`](../../SparkEngine/Source/Graphics/VRAMBudgetMonitor.h) — 109 LOC — GPU memory budget monitoring via DXGI adapter queries
@@ -1854,20 +2323,22 @@ graph LR
 - [`VolumeSystem.h`](../../SparkEngine/Source/Graphics/VolumeSystem.h) — 509 LOC — Spatial parameter blending system (Unity-inspired Volume framework)
 - [`VolumetricClouds.cpp`](../../SparkEngine/Source/Graphics/VolumetricClouds.cpp) — 485 LOC — CPU reference / GPU feeder for the volumetric cloud layer
 - [`VolumetricClouds.h`](../../SparkEngine/Source/Graphics/VolumetricClouds.h) — 218 LOC — Ray-marched volumetric cloud system with procedural noise coverage
-- [`VoxelConeTracing.h`](../../SparkEngine/Source/Graphics/VoxelConeTracing.h) — 470 LOC — Voxel Cone Traced Global Illumination (VCTGI) for D3D11
+- [`VoxelConeTracing.h`](../../SparkEngine/Source/Graphics/VoxelConeTracing.h) — 475 LOC — Voxel Cone Traced Global Illumination (VCTGI) for D3D11
 - [`WaterRenderer.cpp`](../../SparkEngine/Source/Graphics/WaterRenderer.cpp) — 405 LOC — Implementation of Gerstner wave water surface simulation
 - [`WaterRenderer.h`](../../SparkEngine/Source/Graphics/WaterRenderer.h) — 269 LOC — Water surface rendering with Gerstner wave simulation
 - [`WeatherSystem.h`](../../SparkEngine/Source/Graphics/WeatherSystem.h) — 479 LOC — Dynamic weather simulation with rain, snow, fog, and storm effects
+- [`WorldBasicRenderer.cpp`](../../SparkEngine/Source/Graphics/WorldBasicRenderer.cpp) — 75 LOC
+- [`WorldBasicRenderer.h`](../../SparkEngine/Source/Graphics/WorldBasicRenderer.h) — 48 LOC — Per-path cache of device-loaded meshes for generic ECS rendering.
 
 ### `SparkEngine/Source/Input/`
 
-- [`GamepadInput.cpp`](../../SparkEngine/Source/Input/GamepadInput.cpp) — 432 LOC
+- [`GamepadInput.cpp`](../../SparkEngine/Source/Input/GamepadInput.cpp) — 444 LOC
 - [`GamepadInput.h`](../../SparkEngine/Source/Input/GamepadInput.h) — 484 LOC — Xbox controller / gamepad input support via XInput
 - [`InputActionSystem.h`](../../SparkEngine/Source/Input/InputActionSystem.h) — 530 LOC — Data-driven input action system with rebindable controls
 - [`InputBindings.cpp`](../../SparkEngine/Source/Input/InputBindings.cpp) — 293 LOC — Implementation of the input binding, preset, and accessibility system
 - [`InputBindings.h`](../../SparkEngine/Source/Input/InputBindings.h) — 236 LOC — Runtime input rebinding, presets, and accessibility features
-- [`InputManager.cpp`](../../SparkEngine/Source/Input/InputManager.cpp) — 926 LOC — Input handling implementation — shared logic + platform-specific backends
-- [`InputManager.h`](../../SparkEngine/Source/Input/InputManager.h) — 474 LOC — Comprehensive input handling system with console integration
+- [`InputManager.cpp`](../../SparkEngine/Source/Input/InputManager.cpp) — 971 LOC — Input handling implementation — shared logic + platform-specific backends
+- [`InputManager.h`](../../SparkEngine/Source/Input/InputManager.h) — 475 LOC — Comprehensive input handling system with console integration
 - [`InputTypes.h`](../../SparkEngine/Source/Input/InputTypes.h) — 19 LOC — Shared input type definitions
 - [`PlatformInput.h`](../../SparkEngine/Source/Input/PlatformInput.h) — 501 LOC — Cross-platform input abstraction with action mapping and backend factory
 
@@ -1875,7 +2346,7 @@ graph LR
 
 - [`CharacterController.cpp`](../../SparkEngine/Source/Physics/CharacterController.cpp) — 242 LOC — Jolt CharacterVirtual wrapper implementation
 - [`CharacterController.h`](../../SparkEngine/Source/Physics/CharacterController.h) — 161 LOC — Jolt CharacterVirtual wrapper for game character movement
-- [`ClothSimulation.cpp`](../../SparkEngine/Source/Physics/ClothSimulation.cpp) — 368 LOC — Implementation of the position-based cloth and soft body simulation
+- [`ClothSimulation.cpp`](../../SparkEngine/Source/Physics/ClothSimulation.cpp) — 372 LOC — Implementation of the position-based cloth and soft body simulation
 - [`ClothSimulation.h`](../../SparkEngine/Source/Physics/ClothSimulation.h) — 268 LOC — Position-based cloth and soft body simulation
 - [`CollisionSystem.cpp`](../../SparkEngine/Source/Physics/CollisionSystem.cpp) — 710 LOC
 - [`CollisionSystem.h`](../../SparkEngine/Source/Physics/CollisionSystem.h) — 438 LOC — Comprehensive 3D collision detection and physics system
@@ -1889,12 +2360,15 @@ graph LR
 - [`PhysicsDebugRenderer.h`](../../SparkEngine/Source/Physics/PhysicsDebugRenderer.h) — 80 LOC — Debug visualization for Jolt Physics
 - [`PhysicsMotorControl.cpp`](../../SparkEngine/Source/Physics/PhysicsMotorControl.cpp) — 104 LOC — Constraint motor control and removal for PhysicsSystem
 - [`PhysicsShapeFactory.cpp`](../../SparkEngine/Source/Physics/PhysicsShapeFactory.cpp) — 376 LOC — Collision shape creation for Jolt Physics
-- [`PhysicsSpatialQueries.cpp`](../../SparkEngine/Source/Physics/PhysicsSpatialQueries.cpp) — 313 LOC — Raycasting, overlap queries, and shape cast (sweep) tests for PhysicsSystem
-- [`PhysicsSystem.cpp`](../../SparkEngine/Source/Physics/PhysicsSystem.cpp) — 728 LOC — Core PhysicsSystem lifecycle, simulation loop, and collision processing
-- [`PhysicsSystem.h`](../../SparkEngine/Source/Physics/PhysicsSystem.h) — 685 LOC — PhysicsSystem class and umbrella include for the physics subsystem
-- [`PhysicsSystemQueries.cpp`](../../SparkEngine/Source/Physics/PhysicsSystemQueries.cpp) — 717 LOC — Body lifecycle, debug rendering, materials, metrics, buoyancy, state
-- [`PhysicsSystemStub.cpp`](../../SparkEngine/Source/Physics/PhysicsSystemStub.cpp) — 804 LOC — No-op implementation of PhysicsSystem when Jolt Physics is unavailable.
-- [`PhysicsTypes.h`](../../SparkEngine/Source/Physics/PhysicsTypes.h) — 779 LOC — Physics type definitions, enums, descriptors, and utility functions.
+- [`PhysicsSpatialQueries.cpp`](../../SparkEngine/Source/Physics/PhysicsSpatialQueries.cpp) — 237 LOC — Raycasting and overlap queries for PhysicsSystem
+- [`PhysicsSpatialQueriesCasts.cpp`](../../SparkEngine/Source/Physics/PhysicsSpatialQueriesCasts.cpp) — 144 LOC — Shape cast (sweep) tests for PhysicsSystem
+- [`PhysicsSpatialQueriesFiltered.cpp`](../../SparkEngine/Source/Physics/PhysicsSpatialQueriesFiltered.cpp) — 212 LOC — Layer-mask filtered raycast and overlap queries for PhysicsSystem
+- [`PhysicsSpatialQueriesInternal.h`](../../SparkEngine/Source/Physics/PhysicsSpatialQueriesInternal.h) — 75 LOC — Shared internal helpers for the PhysicsSystem spatial-query translation units
+- [`PhysicsSystem.cpp`](../../SparkEngine/Source/Physics/PhysicsSystem.cpp) — 823 LOC — Core PhysicsSystem lifecycle, simulation loop, and collision processing
+- [`PhysicsSystem.h`](../../SparkEngine/Source/Physics/PhysicsSystem.h) — 797 LOC — PhysicsSystem class and umbrella include for the physics subsystem
+- [`PhysicsSystemQueries.cpp`](../../SparkEngine/Source/Physics/PhysicsSystemQueries.cpp) — 742 LOC — Body lifecycle, debug rendering, materials, metrics, buoyancy, state
+- [`PhysicsSystemStub.cpp`](../../SparkEngine/Source/Physics/PhysicsSystemStub.cpp) — 871 LOC — No-op implementation of PhysicsSystem when Jolt Physics is unavailable.
+- [`PhysicsTypes.h`](../../SparkEngine/Source/Physics/PhysicsTypes.h) — 828 LOC — Physics type definitions, enums, descriptors, and utility functions.
 - [`RagdollSystem.cpp`](../../SparkEngine/Source/Physics/RagdollSystem.cpp) — 210 LOC — Jolt ragdoll wrapper implementation
 - [`RagdollSystem.h`](../../SparkEngine/Source/Physics/RagdollSystem.h) — 148 LOC — Jolt ragdoll wrapper for physics-driven skeletal animation
 - [`SoftBodyPhysics.cpp`](../../SparkEngine/Source/Physics/SoftBodyPhysics.cpp) — 377 LOC — Jolt soft body wrapper implementation
@@ -1904,8 +2378,10 @@ graph LR
 
 ### `SparkEngine/Source/SceneManager/`
 
+- [`ReflectedSceneSerializer.cpp`](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp) — 211 LOC
+- [`ReflectedSceneSerializer.h`](../../SparkEngine/Source/SceneManager/ReflectedSceneSerializer.h) — 23 LOC — Reflection-driven JSON scene serialization for World objects.
 - [`SceneConfigDatabase.h`](../../SparkEngine/Source/SceneManager/SceneConfigDatabase.h) — 162 LOC — Per-scene configuration override database
-- [`SceneManager.cpp`](../../SparkEngine/Source/SceneManager/SceneManager.cpp) — 895 LOC
+- [`SceneManager.cpp`](../../SparkEngine/Source/SceneManager/SceneManager.cpp) — 917 LOC
 - [`SceneManager.h`](../../SparkEngine/Source/SceneManager/SceneManager.h) — 600 LOC — Scene management with serialization, hierarchy, and prefab support
 - [`SceneManagerTypes.h`](../../SparkEngine/Source/SceneManager/SceneManagerTypes.h) — 229 LOC — Type definitions, enums, and structs used by SceneManager
 
@@ -1917,7 +2393,7 @@ graph LR
 
 - [`AlignedHeapArray.h`](../../SparkEngine/Source/Utils/AlignedHeapArray.h) — 212 LOC — SIMD-aligned heap arrays with move semantics
 - [`AngleUtils.h`](../../SparkEngine/Source/Utils/AngleUtils.h) — 85 LOC — Constexpr angle arithmetic helpers (normalize, delta, lerp)
-- [`Assert.cpp`](../../SparkEngine/Source/Utils/Assert.cpp) — 345 LOC — Implementation of assertion failure handlers with optional suppression
+- [`Assert.cpp`](../../SparkEngine/Source/Utils/Assert.cpp) — 354 LOC — Implementation of assertion failure handlers with optional suppression
 - [`Assert.h`](../../SparkEngine/Source/Utils/Assert.h) — 369 LOC — Comprehensive assertion and verification macro system for Spark Engine
 - [`AssetServiceClient.cpp`](../../SparkEngine/Source/Utils/AssetServiceClient.cpp) — 99 LOC — Implementation of the typed Asset service client wrapper.
 - [`AssetServiceClient.h`](../../SparkEngine/Source/Utils/AssetServiceClient.h) — 74 LOC — Engine-side wrapper for the SparkDaemon Asset service.
@@ -1925,8 +2401,9 @@ graph LR
 - [`AssetStallDetector.cpp`](../../SparkEngine/Source/Utils/AssetStallDetector.cpp) — 196 LOC — Asset loading stall detection — timeout tracking and queue monitoring
 - [`AssetStallDetector.h`](../../SparkEngine/Source/Utils/AssetStallDetector.h) — 152 LOC — Monitors asset loading pipeline for stalled or excessively slow requests
 - [`AtomicSharedPtr.h`](../../SparkEngine/Source/Utils/AtomicSharedPtr.h) — 113 LOC — Lock-free atomic shared pointer wrapper
-- [`BenchmarkFramework.cpp`](../../SparkEngine/Source/Utils/BenchmarkFramework.cpp) — 403 LOC
-- [`BenchmarkFramework.h`](../../SparkEngine/Source/Utils/BenchmarkFramework.h) — 114 LOC — Performance regression benchmark framework with baseline comparison
+- [`BenchmarkFramework.cpp`](../../SparkEngine/Source/Utils/BenchmarkFramework.cpp) — 238 LOC
+- [`BenchmarkFramework.h`](../../SparkEngine/Source/Utils/BenchmarkFramework.h) — 124 LOC — Performance regression benchmark framework with baseline comparison
+- [`BenchmarkFrameworkBaseline.cpp`](../../SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp) — 298 LOC — Baseline persistence and regression comparison for BenchmarkFramework
 - [`BitFlags.h`](../../SparkEngine/Source/Utils/BitFlags.h) — 167 LOC — Type-safe bitwise operations for enum class flags
 - [`BitUtils.h`](../../SparkEngine/Source/Utils/BitUtils.h) — 111 LOC — Constexpr bit manipulation utilities wrapping C++20 <bit>
 - [`CacheDebugger.h`](../../SparkEngine/Source/Utils/CacheDebugger.h) — 402 LOC — Generic cache performance tracking and efficiency analysis
@@ -1947,9 +2424,8 @@ graph LR
 - [`ContainerUtils.h`](../../SparkEngine/Source/Utils/ContainerUtils.h) — 130 LOC — Safe container lookup and mutation helpers
 - [`Cooldown.h`](../../SparkEngine/Source/Utils/Cooldown.h) — 200 LOC — Reusable cooldown timer for gameplay, AI, and ability systems
 - [`CpuDebugger.h`](../../SparkEngine/Source/Utils/CpuDebugger.h) — 455 LOC — Per-section CPU timing with statistical analysis and hotspot detection
-- [`CrashHandler.cpp`](../../SparkEngine/Source/Utils/CrashHandler.cpp) — 1322 LOC
+- [`CrashHandler.cpp`](../../SparkEngine/Source/Utils/CrashHandler.cpp) — 1456 LOC
 - [`CrashHandler.h`](../../SparkEngine/Source/Utils/CrashHandler.h) — 118 LOC — Unhandled-exception crash handler with minidump generation and upload
-- [`CrashHandlerHelpers.cpp`](../../SparkEngine/Source/Utils/CrashHandlerHelpers.cpp) — 992 LOC
 - [`CrashHandlerStub.cpp`](../../SparkEngine/Source/Utils/CrashHandlerStub.cpp) — 28 LOC — No-op fallbacks for CrashHandler when CrashHandler.cpp is excluded
 - [`CrashReportUploader.cpp`](../../SparkEngine/Source/Utils/CrashReportUploader.cpp) — 1214 LOC — GitHub crash report upload implementation (extracted from CrashHandler)
 - [`CrashReportUploader.h`](../../SparkEngine/Source/Utils/CrashReportUploader.h) — 136 LOC — Multi-backend crash report upload (GitHub, Dropbox, FTP, HTTP, proxy)
@@ -1967,7 +2443,7 @@ graph LR
 - [`DaemonProtocol.h`](../../SparkEngine/Source/Utils/DaemonProtocol.h) — 244 LOC — Wire format and shared constants for SparkDaemon IPC.
 - [`DeadlockDetector.cpp`](../../SparkEngine/Source/Utils/DeadlockDetector.cpp) — 265 LOC — Wait-for graph deadlock detection implementation
 - [`DeadlockDetector.h`](../../SparkEngine/Source/Utils/DeadlockDetector.h) — 198 LOC — Debug-mode deadlock detection via wait-for graph analysis
-- [`DebugDraw.h`](../../SparkEngine/Source/Utils/DebugDraw.h) — 494 LOC — 3D debug shape rendering system for runtime visualization
+- [`DebugDraw.h`](../../SparkEngine/Source/Utils/DebugDraw.h) — 496 LOC — 3D debug shape rendering system for runtime visualization
 - [`DebugHookManager.cpp`](../../SparkEngine/Source/Utils/DebugHookManager.cpp) — 220 LOC — Implementation of the project-wide debugging hook system
 - [`DebugHookManager.h`](../../SparkEngine/Source/Utils/DebugHookManager.h) — 447 LOC — Project-wide debugging hook system for engine instrumentation
 - [`DebugOverlay.h`](../../SparkEngine/Source/Utils/DebugOverlay.h) — 413 LOC — Lightweight in-game debug HUD overlay
@@ -1983,7 +2459,7 @@ graph LR
 
 ### `SparkEngine/Source/Utils/FileWatcher/`
 
-- [`FileWatcher.h`](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h) — 443 LOC — File and directory change notification system
+- [`FileWatcher.h`](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h) — 445 LOC — File and directory change notification system
 
 ### `SparkEngine/Source/Utils/`
 
@@ -1997,19 +2473,22 @@ graph LR
 - [`GPUStallProfiler.h`](../../SparkEngine/Source/Utils/GPUStallProfiler.h) — 237 LOC — CPU-GPU timeline analysis and bottleneck detection
 - [`GameplayDebugger.h`](../../SparkEngine/Source/Utils/GameplayDebugger.h) — 405 LOC — Structured in-world gameplay debugging with category-based visualization
 - [`GoldenImageTest.h`](../../SparkEngine/Source/Utils/GoldenImageTest.h) — 559 LOC — Golden image / screenshot regression testing framework
-- [`Hash.h`](../../SparkEngine/Source/Utils/Hash.h) — 309 LOC — Compile-time and runtime hash utilities for strings and composite keys
-- [`HitchDetector.cpp`](../../SparkEngine/Source/Utils/HitchDetector.cpp) — 219 LOC — Frame hitch detection — rolling average analysis and spike classification
+- [`Hash.h`](../../SparkEngine/Source/Utils/Hash.h) — 50 LOC — Compile-time and runtime hash utilities for strings and composite keys
+- [`HashCombine.h`](../../SparkEngine/Source/Utils/HashCombine.h) — 61 LOC — Hash-combining helpers for building composite hash values
+- [`HashFNV1a.h`](../../SparkEngine/Source/Utils/HashFNV1a.h) — 195 LOC — FNV-1a hashing (32-bit and 64-bit) with constexpr support and hash literals
+- [`HashTransparentString.h`](../../SparkEngine/Source/Utils/HashTransparentString.h) — 66 LOC — Transparent string hash/equality functors for heterogeneous map lookup
+- [`HitchDetector.cpp`](../../SparkEngine/Source/Utils/HitchDetector.cpp) — 227 LOC — Frame hitch detection — rolling average analysis and spike classification
 - [`HitchDetector.h`](../../SparkEngine/Source/Utils/HitchDetector.h) — 144 LOC — Detects frame-time spikes (micro-stutters) above rolling average thresholds
 - [`IODebugger.h`](../../SparkEngine/Source/Utils/IODebugger.h) — 407 LOC — File I/O operation tracking, bandwidth analysis, and bottleneck detection
 - [`InGameConsole.h`](../../SparkEngine/Source/Utils/InGameConsole.h) — 507 LOC — In-game developer console overlay (Quake-style drop-down console)
-- [`InvalidStateDetector.cpp`](../../SparkEngine/Source/Utils/InvalidStateDetector.cpp) — 535 LOC — Runtime detection of impossible/contradictory ECS component state combinations
-- [`InvalidStateDetector.h`](../../SparkEngine/Source/Utils/InvalidStateDetector.h) — 169 LOC — Runtime detection of impossible/contradictory ECS component state combinations
-- [`JobSystem.h`](../../SparkEngine/Source/Utils/JobSystem.h) — 271 LOC — Simple thread pool for parallel work dispatch
-- [`JsonUtils.h`](../../SparkEngine/Source/Utils/JsonUtils.h) — 963 LOC — Minimal self-contained JSON parser and serializer
+- [`InvalidStateDetector.cpp`](../../SparkEngine/Source/Utils/InvalidStateDetector.cpp) — 550 LOC — Runtime detection of impossible/contradictory ECS component state combinations
+- [`InvalidStateDetector.h`](../../SparkEngine/Source/Utils/InvalidStateDetector.h) — 193 LOC — Runtime detection of impossible/contradictory ECS component state combinations
+- [`JobSystem.h`](../../SparkEngine/Source/Utils/JobSystem.h) — 285 LOC — Simple thread pool for parallel work dispatch
+- [`JsonUtils.h`](../../SparkEngine/Source/Utils/JsonUtils.h) — 1087 LOC — Minimal self-contained JSON parser and serializer
 - [`LocalFileCache.h`](../../SparkEngine/Source/Utils/LocalFileCache.h) — 451 LOC — In-memory file cache with LRU eviction for local file I/O
 - [`LockFreeRingAllocator.h`](../../SparkEngine/Source/Utils/LockFreeRingAllocator.h) — 155 LOC — Lock-free ring buffer allocator for producer-consumer patterns
 - [`LogMacros.h`](../../SparkEngine/Source/Utils/LogMacros.h) — 210 LOC — Unified logging macros for Spark Engine
-- [`Logger.cpp`](../../SparkEngine/Source/Utils/Logger.cpp) — 638 LOC — Unified logging system implementation
+- [`Logger.cpp`](../../SparkEngine/Source/Utils/Logger.cpp) — 645 LOC — Unified logging system implementation
 - [`Logger.h`](../../SparkEngine/Source/Utils/Logger.h) — 586 LOC — Unified logging system for Spark Engine
 - [`MathUtils.cpp`](../../SparkEngine/Source/Utils/MathUtils.cpp) — 247 LOC
 - [`MathUtils.h`](../../SparkEngine/Source/Utils/MathUtils.h) — 504 LOC — Mathematics utility library for Spark Engine
@@ -2026,13 +2505,17 @@ graph LR
 - [`OpaqueHandle.h`](../../SparkEngine/Source/Utils/OpaqueHandle.h) — 117 LOC — Type-safe opaque handle wrapper for subsystem-managed pointers
 - [`PerformanceStats.h`](../../SparkEngine/Source/Utils/PerformanceStats.h) — 331 LOC — Real-time performance monitoring and statistics collection
 - [`Process.h`](../../SparkEngine/Source/Utils/Process.h) — 143 LOC — Cross-platform subprocess spawning with optional stdin/stdout/stderr piping.
-- [`ProcessLinux.cpp`](../../SparkEngine/Source/Utils/ProcessLinux.cpp) — 461 LOC — Linux/macOS implementation of Spark::Process
+- [`ProcessLinux.cpp`](../../SparkEngine/Source/Utils/ProcessLinux.cpp) — 467 LOC — Linux/macOS implementation of Spark::Process
 - [`ProcessStub.cpp`](../../SparkEngine/Source/Utils/ProcessStub.cpp) — 92 LOC — Fallback stubs for platforms without subprocess support.
-- [`ProcessWin32.cpp`](../../SparkEngine/Source/Utils/ProcessWin32.cpp) — 420 LOC — Windows implementation of Spark::Process
+- [`ProcessWin32.cpp`](../../SparkEngine/Source/Utils/ProcessWin32.cpp) — 151 LOC — Windows implementation of Spark::Process
+- [`ProcessWin32Internal.h`](../../SparkEngine/Source/Utils/ProcessWin32Internal.h) — 118 LOC — Shared Windows-only Process::Impl definition for the ProcessWin32*.cpp split parts
+- [`ProcessWin32Launch.cpp`](../../SparkEngine/Source/Utils/ProcessWin32Launch.cpp) — 299 LOC — Windows implementation of Spark::Process::Builder (configuration and launch)
 - [`ProfileProperties.cpp`](../../SparkEngine/Source/Utils/ProfileProperties.cpp) — 118 LOC — Implementation of frame-resetting typed profile properties
 - [`ProfileProperties.h`](../../SparkEngine/Source/Utils/ProfileProperties.h) — 126 LOC — Typed profile properties that auto-reset each frame
-- [`Profiler.cpp`](../../SparkEngine/Source/Utils/Profiler.cpp) — 418 LOC — Frame profiling and performance analysis implementation
-- [`Profiler.h`](../../SparkEngine/Source/Utils/Profiler.h) — 343 LOC — Frame profiling and performance analysis system
+- [`Profiler.cpp`](../../SparkEngine/Source/Utils/Profiler.cpp) — 457 LOC — Frame profiling and performance analysis implementation
+- [`Profiler.h`](../../SparkEngine/Source/Utils/Profiler.h) — 355 LOC — Frame profiling and performance analysis system
+- [`Quantization.cpp`](../../SparkEngine/Source/Utils/Quantization.cpp) — 184 LOC — Shared implementations of smallest-three 48-bit quaternion packing
+- [`Quantization.h`](../../SparkEngine/Source/Utils/Quantization.h) — 58 LOC — Low-precision packing for transforms: smallest-three 48-bit quaternions
 - [`RandomEngine.h`](../../SparkEngine/Source/Utils/RandomEngine.h) — 263 LOC — Thread-safe random number generation with modern C++ distributions
 - [`Result.h`](../../SparkEngine/Source/Utils/Result.h) — 151 LOC — Type-safe error handling via Result<T>
 - [`RingBuffer.h`](../../SparkEngine/Source/Utils/RingBuffer.h) — 188 LOC — Generic fixed-size and dynamic ring buffer templates
@@ -2043,8 +2526,8 @@ graph LR
 - [`ShaderServiceClient.cpp`](../../SparkEngine/Source/Utils/ShaderServiceClient.cpp) — 86 LOC — Implementation of the typed Shader service client wrapper.
 - [`ShaderServiceClient.h`](../../SparkEngine/Source/Utils/ShaderServiceClient.h) — 71 LOC — Engine-side wrapper for the SparkDaemon Shader service.
 - [`ShaderServiceProtocol.h`](../../SparkEngine/Source/Utils/ShaderServiceProtocol.h) — 185 LOC — Wire format for the SparkDaemon Shader service (ServiceId::Shader).
-- [`SparkConsole.cpp`](../../SparkEngine/Source/Utils/SparkConsole.cpp) — 641 LOC
-- [`SparkConsole.h`](../../SparkEngine/Source/Utils/SparkConsole.h) — 193 LOC — Thread-safe in-engine log sink and command registry
+- [`SparkConsole.cpp`](../../SparkEngine/Source/Utils/SparkConsole.cpp) — 662 LOC
+- [`SparkConsole.h`](../../SparkEngine/Source/Utils/SparkConsole.h) — 205 LOC — Thread-safe in-engine log sink and command registry
 - [`SparkError.h`](../../SparkEngine/Source/Utils/SparkError.h) — 465 LOC — Comprehensive error handling, bounds checking, and verbose diagnostics for Spark Engine
 - [`SplineMath.cpp`](../../SparkEngine/Source/Utils/SplineMath.cpp) — 140 LOC — Implementation of static spline math utility functions
 - [`SplineMath.h`](../../SparkEngine/Source/Utils/SplineMath.h) — 155 LOC — Static spline math utility functions for Spark Engine
@@ -2075,10 +2558,10 @@ graph LR
 - [`EventTypes.h`](../../SparkSDK/Include/Spark/EventTypes.h) — 28 LOC — Event system usage guide and forward declarations for game modules
 - [`IEngineContext.h`](../../SparkSDK/Include/Spark/IEngineContext.h) — 332 LOC — Service locator interface for accessing engine subsystems
 - [`ILogger.h`](../../SparkSDK/Include/Spark/ILogger.h) — 71 LOC — Logging interface for game modules
-- [`IModule.h`](../../SparkSDK/Include/Spark/IModule.h) — 140 LOC — Module interface for dynamically loaded game/gameplay modules
+- [`IModule.h`](../../SparkSDK/Include/Spark/IModule.h) — 163 LOC — Module interface for dynamically loaded game/gameplay modules
 - [`InputTypes.h`](../../SparkSDK/Include/Spark/InputTypes.h) — 94 LOC — Input type definitions for game modules
 - [`MathTypes.h`](../../SparkSDK/Include/Spark/MathTypes.h) — 113 LOC — Common math type definitions for game modules
-- [`ModuleDllMain.h`](../../SparkSDK/Include/Spark/ModuleDllMain.h) — 49 LOC — Standard DllMain entry point for Spark module DLLs.
+- [`ModuleDllMain.h`](../../SparkSDK/Include/Spark/ModuleDllMain.h) — 132 LOC — Standard DllMain entry point for Spark module DLLs.
 - [`ModuleRegistry.h`](../../SparkSDK/Include/Spark/ModuleRegistry.h) — 61 LOC — Helper macros for implementing and exporting modules
 - [`ServiceInterfaces.h`](../../SparkSDK/Include/Spark/ServiceInterfaces.h) — 46 LOC — Thin service interfaces for context-driven dependency injection.
 - [`SparkExport.h`](../../SparkSDK/Include/Spark/SparkExport.h) — 42 LOC — DLL export/import macros for the Spark Engine module system
@@ -2087,7 +2570,7 @@ graph LR
 
 ### `SparkShaderCompiler/src/`
 
-- [`main.cpp`](../../SparkShaderCompiler/src/main.cpp) — 533 LOC — SparkShaderCompiler - Standalone offline shader compilation tool
+- [`main.cpp`](../../SparkShaderCompiler/src/main.cpp) — 578 LOC — SparkShaderCompiler - Standalone offline shader compilation tool
 
 ### `Tests/Integration/`
 
@@ -2113,7 +2596,7 @@ graph LR
 - [`TestAccessibility.cpp`](../../Tests/TestAccessibility.cpp) — 262 LOC
 - [`TestAchievementSystem.cpp`](../../Tests/TestAchievementSystem.cpp) — 218 LOC
 - [`TestAchievementSystemReal.cpp`](../../Tests/TestAchievementSystemReal.cpp) — 146 LOC — Real-class tests for Spark::Gameplay::AchievementSystem
-- [`TestAdversarialEngine.cpp`](../../Tests/TestAdversarialEngine.cpp) — 1665 LOC
+- [`TestAdversarialEngine.cpp`](../../Tests/TestAdversarialEngine.cpp) — 1801 LOC
 - [`TestAlignedHeapArray.cpp`](../../Tests/TestAlignedHeapArray.cpp) — 160 LOC — Tests for SIMD-aligned heap memory arrays
 - [`TestAlignedHeapArrayReal.cpp`](../../Tests/TestAlignedHeapArrayReal.cpp) — 66 LOC — Real-class tests for Spark::FixedHeapArray and DynamicHeapArray
 - [`TestAngelScriptEngine.cpp`](../../Tests/TestAngelScriptEngine.cpp) — 487 LOC
@@ -2127,6 +2610,7 @@ graph LR
 - [`TestAnimationStress.cpp`](../../Tests/TestAnimationStress.cpp) — 583 LOC
 - [`TestAnimationSystem.cpp`](../../Tests/TestAnimationSystem.cpp) — 895 LOC
 - [`TestAreaAssetLoader.cpp`](../../Tests/TestAreaAssetLoader.cpp) — 468 LOC
+- [`TestAreaSimulationHook.cpp`](../../Tests/TestAreaSimulationHook.cpp) — 123 LOC — Tests for the AreaServer IAreaSimulation plug-in hook
 - [`TestAssertSuppression.cpp`](../../Tests/TestAssertSuppression.cpp) — 138 LOC
 - [`TestAssertSuppressionReal.cpp`](../../Tests/TestAssertSuppressionReal.cpp) — 103 LOC — Real-class tests for Assert.h suppression API
 - [`TestAssetDatabase.cpp`](../../Tests/TestAssetDatabase.cpp) — 213 LOC
@@ -2137,24 +2621,25 @@ graph LR
 - [`TestAssetPipelineIntegration.cpp`](../../Tests/TestAssetPipelineIntegration.cpp) — 201 LOC — Integration tests for AssetPipeline lifecycle, cache, and asset type detection
 - [`TestAssetPipelineReal.cpp`](../../Tests/TestAssetPipelineReal.cpp) — 220 LOC — Real-class tests for AssetPipeline types and AssetCache
 - [`TestAssetServiceClient.cpp`](../../Tests/TestAssetServiceClient.cpp) — 455 LOC — Loopback + persistence tests for the Phase 3a Asset service.
-- [`TestAssetStallDetector.cpp`](../../Tests/TestAssetStallDetector.cpp) — 321 LOC — Tests for the AssetStallDetector loading pipeline monitor
+- [`TestAssetStallDetector.cpp`](../../Tests/TestAssetStallDetector.cpp) — 312 LOC — Tests for the AssetStallDetector loading pipeline monitor
 - [`TestAssetValidator.cpp`](../../Tests/TestAssetValidator.cpp) — 149 LOC
 - [`TestAsyncComputeScheduler.cpp`](../../Tests/TestAsyncComputeScheduler.cpp) — 194 LOC
 - [`TestAsyncComputeSchedulerPhaseCC.cpp`](../../Tests/TestAsyncComputeSchedulerPhaseCC.cpp) — 186 LOC — Phase CC Theme 3D tests for Spark::Graphics::AsyncComputeScheduler
 - [`TestAsyncDatabase.cpp`](../../Tests/TestAsyncDatabase.cpp) — 383 LOC
+- [`TestAsyncDatabaseRegressions.cpp`](../../Tests/TestAsyncDatabaseRegressions.cpp) — 80 LOC
 - [`TestAtomicSharedPtr.cpp`](../../Tests/TestAtomicSharedPtr.cpp) — 127 LOC
 - [`TestAtomicSharedPtrReal.cpp`](../../Tests/TestAtomicSharedPtrReal.cpp) — 95 LOC — Real-class tests for Spark::AtomicSharedPtr<T>
 - [`TestAudioBackendFactory.cpp`](../../Tests/TestAudioBackendFactory.cpp) — 102 LOC — Verifies platform-specific audio backend selection
 - [`TestAudioEngine.cpp`](../../Tests/TestAudioEngine.cpp) — 478 LOC
 - [`TestAudioMixerBus.cpp`](../../Tests/TestAudioMixerBus.cpp) — 523 LOC — Tests for AudioMixer: bus hierarchy, volume cascading, mute/solo,
-- [`TestAutoLODPerformance.cpp`](../../Tests/TestAutoLODPerformance.cpp) — 139 LOC
+- [`TestAutoLODPerformance.cpp`](../../Tests/TestAutoLODPerformance.cpp) — 159 LOC
 - [`TestBVHAccelerator.cpp`](../../Tests/TestBVHAccelerator.cpp) — 255 LOC — Phase L — tests for the BVHAccelerator orphan
 - [`TestBehaviorTreeNodes.cpp`](../../Tests/TestBehaviorTreeNodes.cpp) — 247 LOC
-- [`TestBenchmarkFramework.cpp`](../../Tests/TestBenchmarkFramework.cpp) — 339 LOC — Get a cross-platform temporary file path for tests
+- [`TestBenchmarkFramework.cpp`](../../Tests/TestBenchmarkFramework.cpp) — 364 LOC — Get a cross-platform temporary file path for tests
 - [`TestBitFlags.cpp`](../../Tests/TestBitFlags.cpp) — 131 LOC
 - [`TestBitFlagsReal.cpp`](../../Tests/TestBitFlagsReal.cpp) — 67 LOC — Real-class tests for Spark::BitFlags<E>
 - [`TestBitUtils.cpp`](../../Tests/TestBitUtils.cpp) — 131 LOC
-- [`TestBitUtilsReal.cpp`](../../Tests/TestBitUtilsReal.cpp) — 57 LOC — Real-class tests for Spark::BitUtils (replacing fake-coverage TestBitUtils.cpp)
+- [`TestBitUtilsReal.cpp`](../../Tests/TestBitUtilsReal.cpp) — 99 LOC — Real-class tests for Spark::BitUtils (replacing fake-coverage TestBitUtils.cpp)
 - [`TestBlendSpace.cpp`](../../Tests/TestBlendSpace.cpp) — 161 LOC
 - [`TestBlendSpaceReal.cpp`](../../Tests/TestBlendSpaceReal.cpp) — 61 LOC — Real-class tests for Spark::Animation::BlendSpace2D
 - [`TestCSGEditorPanel.cpp`](../../Tests/TestCSGEditorPanel.cpp) — 282 LOC
@@ -2197,9 +2682,10 @@ graph LR
 - [`TestCoreAndBuildSystems.cpp`](../../Tests/TestCoreAndBuildSystems.cpp) — 459 LOC — Tests for untested core, build, and mobile subsystems
 - [`TestCoroutineScheduler.cpp`](../../Tests/TestCoroutineScheduler.cpp) — 336 LOC — Tests for the gameplay coroutine/task scheduler
 - [`TestCoverSystem.cpp`](../../Tests/TestCoverSystem.cpp) — 191 LOC
-- [`TestCoverSystemReal.cpp`](../../Tests/TestCoverSystemReal.cpp) — 70 LOC — Real-class tests for Spark::AI::CoverSystem
+- [`TestCoverSystemReal.cpp`](../../Tests/TestCoverSystemReal.cpp) — 77 LOC — Real-class tests for Spark::AI::CoverSystem
 - [`TestCpuDebuggerPhaseGG.cpp`](../../Tests/TestCpuDebuggerPhaseGG.cpp) — 100 LOC — Phase GG Theme 3D tests for Spark::CpuDebugger
 - [`TestCpuNeuralInference.cpp`](../../Tests/TestCpuNeuralInference.cpp) — 389 LOC — Tests for SIMD-optimized CPU neural inference
+- [`TestCpuNeuralTraining.cpp`](../../Tests/TestCpuNeuralTraining.cpp) — 399 LOC — Tests for the CPU neural-network training substrate.
 - [`TestCrashReportUploader.cpp`](../../Tests/TestCrashReportUploader.cpp) — 185 LOC
 - [`TestCrossSystemIntegration.cpp`](../../Tests/TestCrossSystemIntegration.cpp) — 395 LOC — Integration tests for cross-system interaction
 - [`TestDXRSupport.cpp`](../../Tests/TestDXRSupport.cpp) — 238 LOC
@@ -2253,7 +2739,7 @@ graph LR
 - [`TestEditorSubsystems.cpp`](../../Tests/TestEditorSubsystems.cpp) — 1066 LOC — Tests for editor subsystems that operate without ImGui or GPU
 - [`TestEditorWindowManager.cpp`](../../Tests/TestEditorWindowManager.cpp) — 349 LOC
 - [`TestEngineBootPlatforms.cpp`](../../Tests/TestEngineBootPlatforms.cpp) — 483 LOC — Tests for engine boot sequence across platforms
-- [`TestEngineContext.cpp`](../../Tests/TestEngineContext.cpp) — 607 LOC
+- [`TestEngineContext.cpp`](../../Tests/TestEngineContext.cpp) — 609 LOC
 - [`TestEngineDiagnostics.cpp`](../../Tests/TestEngineDiagnostics.cpp) — 179 LOC — Runs the runtime diagnostics against live singleton subsystems.
 - [`TestEngineLifecycle.cpp`](../../Tests/TestEngineLifecycle.cpp) — 398 LOC — End-to-end engine lifecycle smoke tests
 - [`TestEngineLoadTest.cpp`](../../Tests/TestEngineLoadTest.cpp) — 1716 LOC — Full engine load test — measures real CPU time, wall time, peak memory,
@@ -2292,7 +2778,7 @@ graph LR
 - [`TestFontSystem.cpp`](../../Tests/TestFontSystem.cpp) — 178 LOC
 - [`TestFormationSystem.cpp`](../../Tests/TestFormationSystem.cpp) — 213 LOC
 - [`TestFrameAllocator.cpp`](../../Tests/TestFrameAllocator.cpp) — 93 LOC — Tests for Spark::FrameAllocator
-- [`TestFramework.h`](../../Tests/TestFramework.h) — 330 LOC — Lightweight test framework for SparkEngine
+- [`TestFramework.h`](../../Tests/TestFramework.h) — 398 LOC — Lightweight test framework for SparkEngine
 - [`TestFreezeDetector.cpp`](../../Tests/TestFreezeDetector.cpp) — 368 LOC — Tests for the FreezeDetector watchdog system
 - [`TestFreezeSystem.cpp`](../../Tests/TestFreezeSystem.cpp) — 204 LOC — Tests for tag-validated save state serialization
 - [`TestFrustumCulling.cpp`](../../Tests/TestFrustumCulling.cpp) — 321 LOC — Tests for frustum plane extraction and AABB/sphere visibility testing
@@ -2303,7 +2789,7 @@ graph LR
 - [`TestGPUParticleSystem.cpp`](../../Tests/TestGPUParticleSystem.cpp) — 233 LOC
 - [`TestGPUPerfCounters.cpp`](../../Tests/TestGPUPerfCounters.cpp) — 155 LOC — Tests for categorized GPU performance counter tracking
 - [`TestGPUProfiler.cpp`](../../Tests/TestGPUProfiler.cpp) — 138 LOC — Tests for GPU profiling system
-- [`TestGPUResourceLeakDetector.cpp`](../../Tests/TestGPUResourceLeakDetector.cpp) — 352 LOC — Tests for the GPUResourceLeakDetector resource lifecycle tracker
+- [`TestGPUResourceLeakDetector.cpp`](../../Tests/TestGPUResourceLeakDetector.cpp) — 342 LOC — Tests for the GPUResourceLeakDetector resource lifecycle tracker
 - [`TestGPUSkinning.cpp`](../../Tests/TestGPUSkinning.cpp) — 274 LOC
 - [`TestGPUStallProfiler.cpp`](../../Tests/TestGPUStallProfiler.cpp) — 109 LOC
 - [`TestGPUStallProfilerPhaseCC.cpp`](../../Tests/TestGPUStallProfilerPhaseCC.cpp) — 170 LOC — Phase CC Theme 3D tests for Spark::GPUStallProfiler
@@ -2338,7 +2824,7 @@ graph LR
 - [`TestHResultPlatform.cpp`](../../Tests/TestHResultPlatform.cpp) — 214 LOC — Regression tests for HRESULT type and SUCCEEDED/FAILED macros
 - [`TestHash.cpp`](../../Tests/TestHash.cpp) — 174 LOC
 - [`TestHashReal.cpp`](../../Tests/TestHashReal.cpp) — 81 LOC — Real-class tests for Spark::FNV1a32/64 + CombineHash
-- [`TestHitchDetector.cpp`](../../Tests/TestHitchDetector.cpp) — 394 LOC — Tests for the HitchDetector frame-spike detection system
+- [`TestHitchDetector.cpp`](../../Tests/TestHitchDetector.cpp) — 389 LOC — Tests for the HitchDetector frame-spike detection system
 - [`TestHybridRT.cpp`](../../Tests/TestHybridRT.cpp) — 215 LOC
 - [`TestInGameConsole.cpp`](../../Tests/TestInGameConsole.cpp) — 229 LOC
 - [`TestInputActionSystem.cpp`](../../Tests/TestInputActionSystem.cpp) — 235 LOC
@@ -2347,11 +2833,13 @@ graph LR
 - [`TestInputSystem.cpp`](../../Tests/TestInputSystem.cpp) — 206 LOC
 - [`TestInstanceManager.cpp`](../../Tests/TestInstanceManager.cpp) — 441 LOC
 - [`TestInventorySystem.cpp`](../../Tests/TestInventorySystem.cpp) — 375 LOC
-- [`TestInventorySystemReal.cpp`](../../Tests/TestInventorySystemReal.cpp) — 103 LOC — Real-class tests for Spark::Gameplay::InventorySystem
+- [`TestInventorySystemReal.cpp`](../../Tests/TestInventorySystemReal.cpp) — 154 LOC — Real-class tests for Spark::Gameplay::InventorySystem
 - [`TestJobSystem.cpp`](../../Tests/TestJobSystem.cpp) — 259 LOC
+- [`TestJsonStrict.cpp`](../../Tests/TestJsonStrict.cpp) — 281 LOC — Spark::Json::ParseStrict (W9): strict acceptance/rejection contract vs
 - [`TestJsonUtils.cpp`](../../Tests/TestJsonUtils.cpp) — 542 LOC
 - [`TestLODGenerator.cpp`](../../Tests/TestLODGenerator.cpp) — 280 LOC
-- [`TestLODGeneratorPhaseGG.cpp`](../../Tests/TestLODGeneratorPhaseGG.cpp) — 107 LOC — Phase GG Theme 3D tests for Spark::Graphics::LODGenerator
+- [`TestLODGeneratorPhaseGG.cpp`](../../Tests/TestLODGeneratorPhaseGG.cpp) — 178 LOC — Phase GG Theme 3D tests for Spark::Graphics::LODGenerator
+- [`TestLagCompensation.cpp`](../../Tests/TestLagCompensation.cpp) — 206 LOC — Tests for Spark::Net::LagCompensation (engine hit-rewind ring buffer)
 - [`TestLagCompensationIntegration.cpp`](../../Tests/TestLagCompensationIntegration.cpp) — 288 LOC — Tests for lag compensation integrated with hit detection
 - [`TestLevelStreamingSystemPhaseAA.cpp`](../../Tests/TestLevelStreamingSystemPhaseAA.cpp) — 188 LOC — Phase AA Theme 3C tests for SparkEditor::LevelStreamingSystem
 - [`TestLightManager.cpp`](../../Tests/TestLightManager.cpp) — 282 LOC
@@ -2365,7 +2853,7 @@ graph LR
 - [`TestLogger.cpp`](../../Tests/TestLogger.cpp) — 460 LOC
 - [`TestLootAndCrafting.cpp`](../../Tests/TestLootAndCrafting.cpp) — 179 LOC
 - [`TestMacOSPlatform.cpp`](../../Tests/TestMacOSPlatform.cpp) — 131 LOC — Smoke tests for the macOS platform surface
-- [`TestMain.cpp`](../../Tests/TestMain.cpp) — 857 LOC — Lightweight test runner for SparkEngine
+- [`TestMain.cpp`](../../Tests/TestMain.cpp) — 872 LOC — Lightweight test runner for SparkEngine
 - [`TestMaterialDefinition.cpp`](../../Tests/TestMaterialDefinition.cpp) — 246 LOC
 - [`TestMaterialEffects.cpp`](../../Tests/TestMaterialEffects.cpp) — 161 LOC
 - [`TestMaterialSystemEdgeCases.cpp`](../../Tests/TestMaterialSystemEdgeCases.cpp) — 344 LOC — Edge-case tests for MaterialSystem: hot reload, metrics, texture type conversion
@@ -2393,21 +2881,22 @@ graph LR
 - [`TestNavMeshLink.cpp`](../../Tests/TestNavMeshLink.cpp) — 132 LOC
 - [`TestNavMeshObstacles.cpp`](../../Tests/TestNavMeshObstacles.cpp) — 87 LOC
 - [`TestNetBuffer.cpp`](../../Tests/TestNetBuffer.cpp) — 558 LOC
+- [`TestNetQuantize.cpp`](../../Tests/TestNetQuantize.cpp) — 209 LOC
 - [`TestNetworkDebugPanel.cpp`](../../Tests/TestNetworkDebugPanel.cpp) — 359 LOC
 - [`TestNetworkEncryption.cpp`](../../Tests/TestNetworkEncryption.cpp) — 372 LOC
-- [`TestNetworkHealthMonitor.cpp`](../../Tests/TestNetworkHealthMonitor.cpp) — 462 LOC — Tests for the NetworkHealthMonitor connection quality tracker
+- [`TestNetworkHealthMonitor.cpp`](../../Tests/TestNetworkHealthMonitor.cpp) — 452 LOC — Tests for the NetworkHealthMonitor connection quality tracker
 - [`TestNetworkIntegration.cpp`](../../Tests/TestNetworkIntegration.cpp) — 827 LOC — Integration tests for NetworkManager orchestration
 - [`TestNetworkInterpolation.cpp`](../../Tests/TestNetworkInterpolation.cpp) — 276 LOC
-- [`TestNetworkMMOIntegration.cpp`](../../Tests/TestNetworkMMOIntegration.cpp) — 814 LOC — Full-stack integration tests for the MMO networking pipeline
+- [`TestNetworkMMOIntegration.cpp`](../../Tests/TestNetworkMMOIntegration.cpp) — 815 LOC — Full-stack integration tests for the MMO networking pipeline
 - [`TestNetworkManagerEdgeCases.cpp`](../../Tests/TestNetworkManagerEdgeCases.cpp) — 318 LOC — Edge-case and error-path tests for NetworkManager
-- [`TestNetworkManagerIntegration.cpp`](../../Tests/TestNetworkManagerIntegration.cpp) — 176 LOC — Integration tests for NetworkManager lifecycle and message handling
+- [`TestNetworkManagerIntegration.cpp`](../../Tests/TestNetworkManagerIntegration.cpp) — 262 LOC — Integration tests for NetworkManager lifecycle and message handling
 - [`TestNetworkManagerOrchestration.cpp`](../../Tests/TestNetworkManagerOrchestration.cpp) — 888 LOC — Tests for NetworkManager connection state machine, message routing,
 - [`TestNetworkManagerReal.cpp`](../../Tests/TestNetworkManagerReal.cpp) — 296 LOC — Real-class tests for Spark::Net types (NetBuffer, LagCompensator, enums)
-- [`TestNetworkReplicationIntegration.cpp`](../../Tests/TestNetworkReplicationIntegration.cpp) — 422 LOC — Integration tests for network entity replication
+- [`TestNetworkReplicationIntegration.cpp`](../../Tests/TestNetworkReplicationIntegration.cpp) — 497 LOC — Integration tests for network entity replication
 - [`TestNetworkSecurity.cpp`](../../Tests/TestNetworkSecurity.cpp) — 149 LOC
 - [`TestNetworkSecurityPhaseHH.cpp`](../../Tests/TestNetworkSecurityPhaseHH.cpp) — 115 LOC — Phase HH Theme 3D tests for Spark::Net::NetworkSecurity
 - [`TestNetworkStack.cpp`](../../Tests/TestNetworkStack.cpp) — 43 LOC
-- [`TestNetworkStress.cpp`](../../Tests/TestNetworkStress.cpp) — 1018 LOC — Stress tests and security-focused pentesting for the networking layer
+- [`TestNetworkStress.cpp`](../../Tests/TestNetworkStress.cpp) — 1028 LOC — Stress tests and security-focused pentesting for the networking layer
 - [`TestNeuralInference.cpp`](../../Tests/TestNeuralInference.cpp) — 334 LOC — Tests for neural inference engine (CPU path)
 - [`TestNeuralPostProcessing.cpp`](../../Tests/TestNeuralPostProcessing.cpp) — 252 LOC — Tests for neural denoiser and super-resolution
 - [`TestNeuralRadianceCache.cpp`](../../Tests/TestNeuralRadianceCache.cpp) — 176 LOC — Tests for neural radiance cache
@@ -2433,6 +2922,7 @@ graph LR
 - [`TestPhysicsInterpolation.cpp`](../../Tests/TestPhysicsInterpolation.cpp) — 262 LOC
 - [`TestPhysicsStress.cpp`](../../Tests/TestPhysicsStress.cpp) — 566 LOC
 - [`TestPhysicsSystem.cpp`](../../Tests/TestPhysicsSystem.cpp) — 694 LOC
+- [`TestPhysicsTeardownGuard.cpp`](../../Tests/TestPhysicsTeardownGuard.cpp) — 66 LOC — Regression tests for the physics teardown-order guard (W10 exit AV).
 - [`TestPlatformInput.cpp`](../../Tests/TestPlatformInput.cpp) — 150 LOC
 - [`TestPlayModeManager.cpp`](../../Tests/TestPlayModeManager.cpp) — 510 LOC — Tests for Spark::Editor::PlayModeManager
 - [`TestPortalCulling.cpp`](../../Tests/TestPortalCulling.cpp) — 502 LOC — Tests for portal-based visibility culling (cell graph, portal traversal, frustum narrowing)
@@ -2443,22 +2933,24 @@ graph LR
 - [`TestPostProcessingPipelinePhaseN.cpp`](../../Tests/TestPostProcessingPipelinePhaseN.cpp) — 131 LOC — Phase N — integration tests for RTHandleSystem + ConstantBufferRing activations
 - [`TestPrefabManager.cpp`](../../Tests/TestPrefabManager.cpp) — 224 LOC — Tests for the prefab system
 - [`TestProceduralGenerator.cpp`](../../Tests/TestProceduralGenerator.cpp) — 208 LOC
-- [`TestProcess.cpp`](../../Tests/TestProcess.cpp) — 300 LOC — Tests for Spark::Process — cross-platform subprocess spawning and piping.
+- [`TestProcess.cpp`](../../Tests/TestProcess.cpp) — 307 LOC — Tests for Spark::Process — cross-platform subprocess spawning and piping.
 - [`TestProcessDrawListLinux.cpp`](../../Tests/TestProcessDrawListLinux.cpp) — 324 LOC — Unit tests for the non-Windows ProcessDrawList RHI path.
 - [`TestProfiler.cpp`](../../Tests/TestProfiler.cpp) — 316 LOC
 - [`TestProximityTriggerSystem.cpp`](../../Tests/TestProximityTriggerSystem.cpp) — 170 LOC
 - [`TestQuestSystem.cpp`](../../Tests/TestQuestSystem.cpp) — 381 LOC
-- [`TestRHIBridgeIntegration.cpp`](../../Tests/TestRHIBridgeIntegration.cpp) — 236 LOC — Integration tests for RHIBridge lifecycle, backend fallback, and resource creation
+- [`TestRHIBridgeIntegration.cpp`](../../Tests/TestRHIBridgeIntegration.cpp) — 267 LOC — Integration tests for RHIBridge lifecycle, backend fallback, and resource creation
 - [`TestRHICapabilityParity.cpp`](../../Tests/TestRHICapabilityParity.cpp) — 76 LOC — Tests normalization/parity logic for cross-backend RHI capabilities
 - [`TestRHIHandlePool.cpp`](../../Tests/TestRHIHandlePool.cpp) — 274 LOC
 - [`TestRHIHandlePoolPhaseX.cpp`](../../Tests/TestRHIHandlePoolPhaseX.cpp) — 294 LOC — Phase X real-class tests for Spark::RHI::HandlePool and TypedHandle
 - [`TestRTHandleSystem.cpp`](../../Tests/TestRTHandleSystem.cpp) — 273 LOC — Phase N — portable CPU tests for RTHandleSystem
 - [`TestRandomEngine.cpp`](../../Tests/TestRandomEngine.cpp) — 128 LOC
 - [`TestRecastIntegration.cpp`](../../Tests/TestRecastIntegration.cpp) — 229 LOC — Tests verifying Recast/Detour integration with the NavMesh system
-- [`TestReflection.cpp`](../../Tests/TestReflection.cpp) — 634 LOC
+- [`TestReflectedScene.cpp`](../../Tests/TestReflectedScene.cpp) — 130 LOC
+- [`TestReflectedSceneEmissiveHierarchy.cpp`](../../Tests/TestReflectedSceneEmissiveHierarchy.cpp) — 193 LOC
+- [`TestReflection.cpp`](../../Tests/TestReflection.cpp) — 636 LOC
 - [`TestReflectionProbeCache.cpp`](../../Tests/TestReflectionProbeCache.cpp) — 275 LOC — Phase M — CPU reference tests for ReflectionProbeCache
 - [`TestReflectionReal.cpp`](../../Tests/TestReflectionReal.cpp) — 485 LOC — Real-class tests for Spark::TypeRegistry, FieldInfo attributes,
-- [`TestReliableChannel.cpp`](../../Tests/TestReliableChannel.cpp) — 404 LOC
+- [`TestReliableChannel.cpp`](../../Tests/TestReliableChannel.cpp) — 710 LOC
 - [`TestRemoteDebugSystem.cpp`](../../Tests/TestRemoteDebugSystem.cpp) — 193 LOC
 - [`TestRenderCommandRing.cpp`](../../Tests/TestRenderCommandRing.cpp) — 239 LOC — Tests for SPSC render command ring buffer
 - [`TestRenderECSIntegration.cpp`](../../Tests/TestRenderECSIntegration.cpp) — 136 LOC — Integration tests for rendering + ECS interaction patterns
@@ -2479,7 +2971,7 @@ graph LR
 - [`TestSceneManager.cpp`](../../Tests/TestSceneManager.cpp) — 575 LOC
 - [`TestSceneRoundtrip.cpp`](../../Tests/TestSceneRoundtrip.cpp) — 96 LOC — Integration tests for scene serialization data consistency
 - [`TestSceneSerializer.cpp`](../../Tests/TestSceneSerializer.cpp) — 549 LOC — Tests for SceneSerializer: round-trip serialization of game objects,
-- [`TestSceneSnapshotSerializer.cpp`](../../Tests/TestSceneSnapshotSerializer.cpp) — 261 LOC — Tests for Spark::Editor::SceneSnapshotSerializer and binary IO helpers
+- [`TestSceneSnapshotSerializer.cpp`](../../Tests/TestSceneSnapshotSerializer.cpp) — 338 LOC — Tests for Spark::Editor::SceneSnapshotSerializer and binary IO helpers
 - [`TestScheduledCallback.cpp`](../../Tests/TestScheduledCallback.cpp) — 195 LOC
 - [`TestScopeGuard.cpp`](../../Tests/TestScopeGuard.cpp) — 161 LOC
 - [`TestScopedTimer.cpp`](../../Tests/TestScopedTimer.cpp) — 97 LOC
@@ -2488,14 +2980,14 @@ graph LR
 - [`TestScriptHookManager.cpp`](../../Tests/TestScriptHookManager.cpp) — 368 LOC
 - [`TestScriptHookManagerPhaseBB.cpp`](../../Tests/TestScriptHookManagerPhaseBB.cpp) — 353 LOC — Phase BB Theme 3D tests for Spark::Scripting::ScriptHookManager
 - [`TestScriptHotReload.cpp`](../../Tests/TestScriptHotReload.cpp) — 481 LOC
-- [`TestScriptSandbox.cpp`](../../Tests/TestScriptSandbox.cpp) — 363 LOC — Tests for the ScriptSandbox execution limiter
+- [`TestScriptSandbox.cpp`](../../Tests/TestScriptSandbox.cpp) — 99 LOC — Real-class tests for Spark::ScriptSandbox.
 - [`TestSeamlessAreaManager.cpp`](../../Tests/TestSeamlessAreaManager.cpp) — 546 LOC
 - [`TestSelectionManager.cpp`](../../Tests/TestSelectionManager.cpp) — 494 LOC
 - [`TestSelfRecovery.cpp`](../../Tests/TestSelfRecovery.cpp) — 551 LOC
 - [`TestSequencer.cpp`](../../Tests/TestSequencer.cpp) — 174 LOC
 - [`TestSequencerReal.cpp`](../../Tests/TestSequencerReal.cpp) — 88 LOC — Real-class tests for Spark::Cinematic::SequencerManager
 - [`TestSerializer.cpp`](../../Tests/TestSerializer.cpp) — 200 LOC
-- [`TestServerLiveMockClient.cpp`](../../Tests/TestServerLiveMockClient.cpp) — 589 LOC — Live integration tests — starts a real NetworkManager server and
+- [`TestServerLiveMockClient.cpp`](../../Tests/TestServerLiveMockClient.cpp) — 590 LOC — Live integration tests — starts a real NetworkManager server and
 - [`TestServerMockClient.cpp`](../../Tests/TestServerMockClient.cpp) — 1222 LOC
 - [`TestShaderCrossCompilerPhaseW.cpp`](../../Tests/TestShaderCrossCompilerPhaseW.cpp) — 326 LOC — Phase W activation tests for Spark::Graphics::ShaderCrossCompiler
 - [`TestShaderDiskCache.cpp`](../../Tests/TestShaderDiskCache.cpp) — 166 LOC
@@ -2524,7 +3016,7 @@ graph LR
 - [`TestSpringArm.cpp`](../../Tests/TestSpringArm.cpp) — 109 LOC
 - [`TestSpringArmReal.cpp`](../../Tests/TestSpringArmReal.cpp) — 106 LOC — Real-class tests for Spark::Graphics::SpringArmState
 - [`TestSprite2DComponents.cpp`](../../Tests/TestSprite2DComponents.cpp) — 656 LOC
-- [`TestStackTrace.cpp`](../../Tests/TestStackTrace.cpp) — 193 LOC
+- [`TestStackTrace.cpp`](../../Tests/TestStackTrace.cpp) — 201 LOC
 - [`TestStateMachine.cpp`](../../Tests/TestStateMachine.cpp) — 217 LOC
 - [`TestStateMachineReal.cpp`](../../Tests/TestStateMachineReal.cpp) — 113 LOC — Real-class tests for Spark::StateMachine<StateID>
 - [`TestSteeringBehaviors.cpp`](../../Tests/TestSteeringBehaviors.cpp) — 490 LOC
@@ -2535,6 +3027,19 @@ graph LR
 - [`TestSubTickInput.cpp`](../../Tests/TestSubTickInput.cpp) — 92 LOC
 - [`TestSubsystemConsoleCommands.cpp`](../../Tests/TestSubsystemConsoleCommands.cpp) — 469 LOC — Tests for the new settings sections (Weather, TimeOfDay, Streaming,
 - [`TestSystemManagerIntegration.cpp`](../../Tests/TestSystemManagerIntegration.cpp) — 251 LOC — Integration tests for ECS SystemManager orchestration
+- [`TestTFAbilityWire.cpp`](../../Tests/TestTFAbilityWire.cpp) — 140 LOC — TERRAFRONT W9 class-abilities lane: frozen wire layout for the
+- [`TestTFCaptureMath.cpp`](../../Tests/TestTFCaptureMath.cpp) — 246 LOC — TERRAFRONT capture-point state machine: the per-region tick math of
+- [`TestTFChatRules.cpp`](../../Tests/TestTFChatRules.cpp) — 156 LOC — Standalone validation of TERRAFRONT chat normalization and routing.
+- [`TestTFDamageModel.cpp`](../../Tests/TestTFDamageModel.cpp) — 330 LOC — TERRAFRONT damage-model math, reimplemented standalone per DESIGN §4
+- [`TestTFDataTables.cpp`](../../Tests/TestTFDataTables.cpp) — 515 LOC — TERRAFRONT data-table validation against the REAL JSON files in
+- [`TestTFDeathRecapWire.cpp`](../../Tests/TestTFDeathRecapWire.cpp) — 144 LOC — TERRAFRONT W11 death-recap lane: frozen wire layout for the 0x5474
+- [`TestTFNetProtocolLayout.cpp`](../../Tests/TestTFNetProtocolLayout.cpp) — 441 LOC — TERRAFRONT wire-protocol layout freeze tests.
+- [`TestTFOnboarding.cpp`](../../Tests/TestTFOnboarding.cpp) — 413 LOC — TERRAFRONT W5 onboarding tests: TFDatabase (Task 1), TFAccountSystem
+- [`TestTFOutfitStore.cpp`](../../Tests/TestTFOutfitStore.cpp) — 497 LOC — TERRAFRONT outfit persistence (W7/W8): JSON round-trip, uniqueness,
+- [`TestTFRedeployRules.cpp`](../../Tests/TestTFRedeployRules.cpp) — 202 LOC — TERRAFRONT W7 redeploy rules: frozen wire layout + reason vocabulary
+- [`TestTFRegionLattice.cpp`](../../Tests/TestTFRegionLattice.cpp) — 455 LOC — TERRAFRONT lattice rules (capturability + spawn connectivity) over
+- [`TestTFSecondaryMotion.cpp`](../../Tests/TestTFSecondaryMotion.cpp) — 264 LOC — TERRAFRONT secondary-motion chain math (W8): Verlet pendulum chains
+- [`TestTFServerValidation.cpp`](../../Tests/TestTFServerValidation.cpp) — 397 LOC — TERRAFRONT server-authoritative anti-cheat sanity layer (W13/W14):
 - [`TestTacticalPointSystem.cpp`](../../Tests/TestTacticalPointSystem.cpp) — 170 LOC
 - [`TestTelemetry.cpp`](../../Tests/TestTelemetry.cpp) — 341 LOC
 - [`TestTelemetryPhaseFF.cpp`](../../Tests/TestTelemetryPhaseFF.cpp) — 102 LOC — Phase FF Theme 3D tests for Spark::TelemetrySystem
@@ -2569,7 +3074,7 @@ graph LR
 - [`TestVersionControlSystemPhaseAA.cpp`](../../Tests/TestVersionControlSystemPhaseAA.cpp) — 166 LOC — Phase AA Theme 3C tests for SparkEditor::VersionControlSystem
 - [`TestVersionedHandle.cpp`](../../Tests/TestVersionedHandle.cpp) — 161 LOC
 - [`TestVideoPlayer.cpp`](../../Tests/TestVideoPlayer.cpp) — 201 LOC
-- [`TestVisualScriptCompiler.cpp`](../../Tests/TestVisualScriptCompiler.cpp) — 522 LOC
+- [`TestVisualScriptCompiler.cpp`](../../Tests/TestVisualScriptCompiler.cpp) — 691 LOC
 - [`TestVolumeManager.cpp`](../../Tests/TestVolumeManager.cpp) — 207 LOC — Phase K — CPU reference tests for the VolumeManager orphan
 - [`TestVolumetricClouds.cpp`](../../Tests/TestVolumetricClouds.cpp) — 204 LOC — Tests for the volumetric cloud system
 - [`TestVoxelConeTracing.cpp`](../../Tests/TestVoxelConeTracing.cpp) — 463 LOC — Phase T — CPU reference tests for VoxelConeTracing (VCT GI)
@@ -2581,8 +3086,43 @@ graph LR
 - [`TestWeaponSystem.cpp`](../../Tests/TestWeaponSystem.cpp) — 339 LOC
 - [`TestWeatherSystem.cpp`](../../Tests/TestWeatherSystem.cpp) — 257 LOC
 - [`TestWorkSema.cpp`](../../Tests/TestWorkSema.cpp) — 183 LOC — Tests for spin-before-sleep work semaphore
-- [`TestWorldOriginSystem.cpp`](../../Tests/TestWorldOriginSystem.cpp) — 79 LOC
+- [`TestWorldBasicRender.cpp`](../../Tests/TestWorldBasicRender.cpp) — 131 LOC — GPU-headless smoke test proving GraphicsEngine::InitializeFromDevice()
+- [`TestWorldOriginSystem.cpp`](../../Tests/TestWorldOriginSystem.cpp) — 189 LOC
 - [`TestWorldServerRouting.cpp`](../../Tests/TestWorldServerRouting.cpp) — 657 LOC — Tests for WorldServer: area management, player routing, instance creation,
+
+### `Tests/harden/`
+
+- [`Test_ai-anim_animation.cpp`](../../Tests/harden/Test_ai-anim_animation.cpp) — 149 LOC
+- [`Test_ai-anim_navmesh.cpp`](../../Tests/harden/Test_ai-anim_navmesh.cpp) — 144 LOC
+- [`Test_core_hardening.cpp`](../../Tests/harden/Test_core_hardening.cpp) — 140 LOC
+- [`Test_ecs_ai_pathfollow.cpp`](../../Tests/harden/Test_ecs_ai_pathfollow.cpp) — 109 LOC — Regression test for AIUpdateSystem path-following vs. Dynamic rigid bodies.
+- [`Test_ecs_audio_doppler.cpp`](../../Tests/harden/Test_ecs_audio_doppler.cpp) — 94 LOC — Regression test for the AudioUpdateSystem Doppler-velocity discontinuity guard.
+- [`Test_editor_collab_lock_protocol.cpp`](../../Tests/harden/Test_editor_collab_lock_protocol.cpp) — 80 LOC — Regression test: the authoritative lock-arbitration reply messages
+- [`Test_engine-misc_Coroutine.cpp`](../../Tests/harden/Test_engine-misc_Coroutine.cpp) — 71 LOC — Regression tests for coroutine scheduler reentrancy and cancellation chains.
+- [`Test_engine-misc_EventQueueEviction.cpp`](../../Tests/harden/Test_engine-misc_EventQueueEviction.cpp) — 75 LOC — Regression tests for QueuedEventBus overflow eviction (EventSystem.h).
+- [`Test_engine-misc_MobileGestures.cpp`](../../Tests/harden/Test_engine-misc_MobileGestures.cpp) — 83 LOC — Regression tests for the mobile gesture pipeline (MobilePlatform.cpp).
+- [`Test_engine-misc_SnapshotCount.cpp`](../../Tests/harden/Test_engine-misc_SnapshotCount.cpp) — 98 LOC — Regression test for the snapshot component-count contract.
+- [`Test_gamemodules_mmochat_di.cpp`](../../Tests/harden/Test_gamemodules_mmochat_di.cpp) — 91 LOC — Regression test: MMOChatSystem resolves networking through the injected
+- [`Test_gameplay_achievement.cpp`](../../Tests/harden/Test_gameplay_achievement.cpp) — 77 LOC
+- [`Test_gameplay_dialogue.cpp`](../../Tests/harden/Test_gameplay_dialogue.cpp) — 53 LOC
+- [`Test_gameplay_instance.cpp`](../../Tests/harden/Test_gameplay_instance.cpp) — 69 LOC
+- [`Test_gameplay_inventory.cpp`](../../Tests/harden/Test_gameplay_inventory.cpp) — 72 LOC
+- [`Test_gameplay_response.cpp`](../../Tests/harden/Test_gameplay_response.cpp) — 41 LOC
+- [`Test_graphics_rhi.cpp`](../../Tests/harden/Test_graphics_rhi.cpp) — 161 LOC — Hardening regression tests for the graphics-rhi lane.
+- [`Test_lifecycle_ecs_phase_wiring.cpp`](../../Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp) — 109 LOC — Regression tests: the production gameplay lifecycle must register and
+- [`Test_net-world_migration.cpp`](../../Tests/harden/Test_net-world_migration.cpp) — 95 LOC — Regression tests for AreaServer pending-migration accessors.
+- [`Test_persistence_AsyncDatabaseParams.cpp`](../../Tests/harden/Test_persistence_AsyncDatabaseParams.cpp) — 84 LOC
+- [`Test_persistence_AsyncDatabasePool.cpp`](../../Tests/harden/Test_persistence_AsyncDatabasePool.cpp) — 109 LOC
+- [`Test_persistence_ModSystem.cpp`](../../Tests/harden/Test_persistence_ModSystem.cpp) — 84 LOC
+- [`Test_persistence_ReplaySystem.cpp`](../../Tests/harden/Test_persistence_ReplaySystem.cpp) — 92 LOC
+- [`Test_persistence_SaveSystem.cpp`](../../Tests/harden/Test_persistence_SaveSystem.cpp) — 97 LOC
+- [`Test_scripting_hardening.cpp`](../../Tests/harden/Test_scripting_hardening.cpp) — 339 LOC — Regression tests for the scripting-lane hardening fixes.
+- [`Test_tests_ecsystemordering_real.cpp`](../../Tests/harden/Test_tests_ecsystemordering_real.cpp) — 134 LOC — Real-class tests for Spark::ECS::PhaseSystemManager.
+- [`Test_tests_enginecontext_real.cpp`](../../Tests/harden/Test_tests_enginecontext_real.cpp) — 106 LOC — Real-class tests for the dependency-aware subsystem init in EngineContext.
+- [`Test_tests_inversekinematics.cpp`](../../Tests/harden/Test_tests_inversekinematics.cpp) — 295 LOC — Real-class unit tests for the IK solvers in AnimationEvaluator
+- [`Test_tooling_CommandParser.cpp`](../../Tests/harden/Test_tooling_CommandParser.cpp) — 72 LOC — Regression tests for SparkConsole's CommandParser.
+- [`Test_ui-2d_tween.cpp`](../../Tests/harden/Test_ui-2d_tween.cpp) — 124 LOC — Hardening tests for TweenSystem: ApplyEase coverage + reentrant-callback safety.
+- [`Test_ui-2d_ui.cpp`](../../Tests/harden/Test_ui-2d_ui.cpp) — 99 LOC — Hardening tests for the runtime UI system.
 
 ---
 
@@ -2590,7 +3130,7 @@ graph LR
 
 | Metric | Count |
 |--------|-------|
-| Source files scanned | 1855 |
-| Total lines of code  | 568006 |
-| Source directories   | 16 |
-| Last generated       | 2026-04-18 14:28:58 |
+| Source files scanned | 2337 |
+| Total lines of code  | 668265 |
+| Source directories   | 17 |
+| Last generated       | 2026-07-19 03:58:42 |

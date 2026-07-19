@@ -1054,6 +1054,13 @@ list(FILTER SPARK_ENGINE_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 set(SPARK_ENGINE_ENTRY_POINTS
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngine.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindows.cpp"
+    # SparkEngineWindows.cpp split parts: exe-only — they define/consume the
+    # entry-point globals and (Init/Modules/Win32) the game-mode ImGui overlay,
+    # whose enabling compile definition is set on the SparkEngine target only.
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsInit.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsModules.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Core/SparkEngineLinux.cpp"
     # Game-mode ImGui overlay: exe-only (owns the ImGui context that is
     # injected into module DLLs; must NOT live in SparkEngineLib which the
@@ -1079,6 +1086,8 @@ if(NOT JOLT_FOUND)
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsConstraints\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsMotorControl\\.cpp$")
     list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSpatialQueries\\.cpp$")
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSpatialQueriesCasts\\.cpp$")
+    list(FILTER SPARK_ENGINE_LIB_SOURCES EXCLUDE REGEX ".*/Physics/PhysicsSpatialQueriesFiltered\\.cpp$")
     message(WARNING "Jolt Physics not found — using PhysicsSystemStub.cpp fallback (no rigid body physics)")
 else()
     # When the real PhysicsSystem is built, exclude the stub

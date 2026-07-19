@@ -8,7 +8,7 @@
  *
  * Constraint creation lives in PhysicsConstraints.cpp.
  * Constraint motor control lives in PhysicsMotorControl.cpp.
- * Spatial queries (raycast, overlap, sweep) live in PhysicsSpatialQueries.cpp.
+ * Spatial queries (raycast, overlap, sweep) live in PhysicsSpatialQueries*.cpp.
  */
 
 #include "PhysicsSystem.h"

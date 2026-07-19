@@ -106,16 +106,19 @@ namespace Spark::ECS
                 if (!m_registry)
                     break;
 
+                if (change.type == ChangeType::Destroyed)
+                {
+                    // Entity may already be invalid (registry.destroy()) and the
+                    // component already removed — notify without reference
+                    OnComponentDestroyed(world, change.entity);
+                    continue;
+                }
+
                 // Skip destroyed entities
                 if (!m_registry->valid(change.entity))
                     continue;
 
-                if (change.type == ChangeType::Destroyed)
-                {
-                    // Component may already be removed — notify without reference
-                    OnComponentDestroyed(world, change.entity);
-                }
-                else if (m_registry->template all_of<Component>(change.entity))
+                if (m_registry->template all_of<Component>(change.entity))
                 {
                     auto& comp = m_registry->template get<Component>(change.entity);
                     OnComponentChanged(world, change.entity, comp, change.type);

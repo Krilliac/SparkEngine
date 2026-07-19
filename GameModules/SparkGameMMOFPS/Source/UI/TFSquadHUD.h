@@ -6,8 +6,9 @@
  *        pulsing light pillar + base diamond + distance), and the leader-only
  *        waypoint request pings with promote/dismiss controls.
  *
- * OWNERSHIP: squad-v2 lane (this header + TFSquadHUD.cpp, alongside the
- * waypoint + query sections of Game/TFSquadSystem.h/.cpp).
+ * OWNERSHIP: squad-v2 lane (this header + TFSquadHUD.cpp / TFSquadHUDBeacon.cpp
+ * / TFSquadHUDInternal.h, alongside the waypoint + query sections of
+ * Game/TFSquadSystem.h/.cpp).
  *
  * No wire traffic of its own — every input is client-mirrored state:
  *  - roster/waypoint/requests ... TFSquadSystem (GetLocalSquadView,

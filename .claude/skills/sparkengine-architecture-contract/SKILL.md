@@ -183,36 +183,30 @@ correctness guarantee, not a style preference.
 **Failure mode if violated.** One-frame lag, physics/render desync, AI reacting
 to stale positions, audio emitters attached to not-yet-updated transforms.
 
-**Rule (which manager) — read this honestly: NONE of the three is a cleanly-wired
-home right now.** This is an OPEN architectural weak point. The intended-canonical
-manager is **`PhaseSystemManager`**
-(`SparkEngine/Source/Engine/ECS/Systems/PhaseSystemManager.h`), whose build site
-`EngineSetup.h::CreatePhaseSystemManager()` buckets each system by `Phase::` and
-runs them in enum order in `UpdateAll()`. **But `CreatePhaseSystemManager()` has
-zero callers and `UpdateAll` is never invoked in any `.cpp` — it is
-DEFINED-not-wired, not ticked in the shipping loop.** Meanwhile the loop actually
-ticks `StageBasedExecutor::ExecuteAll(dt)` every frame
-(`GameplayLifecycleShared.cpp:1062`), but nothing calls its `RegisterSystem(...)`,
-so that is a **dead tick** (a live tick over zero registered systems). The
-shipping Core loop drives module systems via `moduleManager->UpdateAll(dt)`.
-Consequence: there is no single obviously-correct place to "add a new ECS system"
-today — flag this and coordinate rather than authoring against a manager that does
-not run. For the executor tick reality see
-**sparkengine-job-system-threading §1c**; for query/registration idioms see
-**sparkengine-ecs-query-patterns**. Keep those three skills telling the same story.
+**Rule (which manager) — RESOLVED 2026-07-18: `PhaseSystemManager` is the wired
+canonical manager.** `GameplayLifecycleShared.cpp` creates it via
+`EngineSetup.h::CreatePhaseSystemManager()` during gameplay init and pumps
+`UpdateAll(*world, dt)` every frame in `Phase::` enum order
+(Physics→Animation→AI→Audio→Gameplay→PreRender→Render). **New ECS systems go
+into `CreatePhaseSystemManager` with the correct `Phase::` bucket.** The
+regression test `Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp` fails if the
+production init path stops registering/ticking phase systems. The shipping Core
+loop still separately drives module systems via `moduleManager->UpdateAll(dt)` —
+module OO behavior trees are unaffected. For query/registration idioms see
+**sparkengine-ecs-query-patterns**. Keep those skills telling the same story.
 
-**OPEN / KNOWN-WEAK — three parallel executors (as of 2026-07-07).** There are
-**three** classes doing related jobs, which contradicts CLAUDE.md's own
-anti-bloat rule ("Parallel singleton systems doing the same thing: 0"):
+**Executor consolidation (was OPEN, resolved 2026-07-18).** Previously three
+classes did related jobs; `StageBasedExecutor` (a live tick over zero registered
+systems) was **deleted** in the same change that wired `PhaseSystemManager`:
 
 | Class | File | Status |
 |---|---|---|
-| `PhaseSystemManager` | `ECS/Systems/PhaseSystemManager.h` | **INTENDED canonical manager, but DEFINED-not-wired** (zero callers of `CreatePhaseSystemManager`; `UpdateAll` never invoked). Serial, phase-ordered. |
-| `SystemManager` | `ECS/Systems/ECSystems.h` (line 735) | Flat insertion-order manager; **legacy**, no phase guarantee. |
-| `StageBasedExecutor` | `ECS/Systems/ParallelSystemExecutor.h` (line 378) | Parallel stage executor (JobSystem). **EXISTS and its `ExecuteAll(dt)` is ticked every frame** at `GameplayLifecycleShared.cpp:1062`, but **no `RegisterSystem` caller exists → dead tick** (ticks nothing). |
+| `PhaseSystemManager` | `ECS/Systems/PhaseSystemManager.h` | **Canonical, wired** — created and ticked by `GameplayLifecycleShared.cpp`. Serial, phase-ordered. |
+| `SystemManager` | `ECS/Systems/ECSystems.h` | Flat insertion-order manager; **legacy**, no phase guarantee — do not add new systems here. |
+| `StageBasedExecutor` | *(deleted 2026-07-18)* | Was a dead tick (no `RegisterSystem` callers); removed when the phase pipeline was wired. |
 
-Per `HARDEN_FLEET_HANDOFF.md`, the intended cleanup is to **consolidate** these
-and either register systems into `StageBasedExecutor` or delete it. Until then:
+Residual cleanup candidate: migrate any remaining `SystemManager` users onto
+`PhaseSystemManager`. Until then:
 - **Do not assume any of the three runs your system in the shipping loop.**
   `PhaseSystemManager` is not ticked at all; `StageBasedExecutor`'s tick is live
   but has zero registered systems. If you must add a system, verify the tick path
