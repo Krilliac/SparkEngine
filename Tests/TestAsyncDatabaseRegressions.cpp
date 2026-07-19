@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 using namespace Spark::Persistence;
@@ -32,8 +33,7 @@ TEST(AsyncDatabase_PlaceholderSubstitution_DoesNotCorrupt10Plus)
 
     // 12 placeholders (?0..?11) so ?1 is a prefix of ?10 and ?11.
     const PreparedStatementID stmtId = 1;
-    EXPECT_TRUE(conn.PrepareStatement(
-        stmtId, "SET result ?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?10 ?11"));
+    EXPECT_TRUE(conn.PrepareStatement(stmtId, "SET result ?0 ?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9 ?10 ?11"));
 
     std::vector<PreparedStatementParam> params;
     for (int64_t i = 100; i <= 111; ++i)
@@ -52,8 +52,7 @@ TEST(AsyncDatabase_PlaceholderSubstitution_DoesNotCorrupt10Plus)
 
     if (getResult.HasRows())
     {
-        EXPECT_EQ(getResult.rows[0].GetString(0),
-                  std::string("100 101 102 103 104 105 106 107 108 109 110 111"));
+        EXPECT_EQ(getResult.rows[0].GetString(0), std::string("100 101 102 103 104 105 106 107 108 109 110 111"));
     }
 
     conn.Close();
@@ -77,4 +76,47 @@ TEST(AsyncDatabase_SetValue_EmbeddedNewlineNotTruncated)
     }
 
     conn.Close();
+}
+
+TEST(AsyncDatabase_LegacyKVFile_LoadsRawBackslashes)
+{
+    // Files written before the escaped KV format have no format-marker header
+    // and store raw bytes. Loading one must not run the unescaper: a legacy
+    // value like "C:\temp\a.txt" would otherwise decode "\t" into a tab.
+    const std::string dbPath = MakeTempDbPath("legacy");
+    {
+        std::ofstream legacy(dbPath, std::ios::trunc);
+        legacy << "winpath\tC:\\temp\\a.txt\n";
+        legacy << "slashes\tfoo\\bar\n";
+    }
+
+    SQLiteConnection conn;
+    EXPECT_TRUE(conn.Open(dbPath));
+
+    auto pathResult = conn.ExecuteRaw("GET winpath");
+    EXPECT_TRUE(pathResult.HasRows());
+    if (pathResult.HasRows())
+    {
+        EXPECT_EQ(pathResult.rows[0].GetString(0), std::string("C:\\temp\\a.txt"));
+    }
+
+    auto slashResult = conn.ExecuteRaw("GET slashes");
+    EXPECT_TRUE(slashResult.HasRows());
+    if (slashResult.HasRows())
+    {
+        EXPECT_EQ(slashResult.rows[0].GetString(0), std::string("foo\\bar"));
+    }
+
+    // A flush rewrites the file in the marked, escaped format; values must
+    // round-trip unchanged through the upgrade.
+    conn.Close();
+    SQLiteConnection reopened;
+    EXPECT_TRUE(reopened.Open(dbPath));
+    auto upgraded = reopened.ExecuteRaw("GET winpath");
+    EXPECT_TRUE(upgraded.HasRows());
+    if (upgraded.HasRows())
+    {
+        EXPECT_EQ(upgraded.rows[0].GetString(0), std::string("C:\\temp\\a.txt"));
+    }
+    reopened.Close();
 }

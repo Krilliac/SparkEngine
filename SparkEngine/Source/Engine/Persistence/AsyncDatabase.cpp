@@ -173,6 +173,11 @@ namespace Spark::Persistence
             return escaped;
         }
 
+        // First line of files written in the escaped format. Files without it
+        // predate escaping and store raw bytes — they must load verbatim, or a
+        // legacy value like "C:\temp" would decode its "\t" into a tab.
+        constexpr const char* kKVFormatMarker = "#!spark-kv-v2";
+
         std::string UnescapeKVField(const std::string& field)
         {
             std::string unescaped;
@@ -190,7 +195,13 @@ namespace Spark::Persistence
                     case 'n':
                         unescaped += '\n';
                         break;
+                    case '\\':
+                        unescaped += '\\';
+                        break;
                     default:
+                        // Not a sequence our writer produces — keep the
+                        // backslash rather than silently dropping it.
+                        unescaped += '\\';
                         unescaped += field[i];
                         break;
                     }
@@ -543,6 +554,7 @@ namespace Spark::Persistence
             return;
         }
 
+        file << kKVFormatMarker << '\n';
         for (const auto& [key, value] : m_kvStore)
         {
             file << EscapeKVField(key) << '\t' << EscapeKVField(value) << '\n';
@@ -568,14 +580,36 @@ namespace Spark::Persistence
         }
 
         std::string line;
+        bool escapedFormat = false;
+        if (std::getline(file, line))
+        {
+            if (line == kKVFormatMarker)
+            {
+                escapedFormat = true;
+            }
+            else
+            {
+                // Legacy file (no marker): the first line is data, stored raw.
+                auto tabPos = line.find('\t');
+                if (tabPos != std::string::npos)
+                {
+                    m_kvStore[line.substr(0, tabPos)] = line.substr(tabPos + 1);
+                }
+            }
+        }
         while (std::getline(file, line))
         {
             auto tabPos = line.find('\t');
             if (tabPos != std::string::npos)
             {
-                std::string key = UnescapeKVField(line.substr(0, tabPos));
-                std::string value = UnescapeKVField(line.substr(tabPos + 1));
-                m_kvStore[key] = value;
+                if (escapedFormat)
+                {
+                    m_kvStore[UnescapeKVField(line.substr(0, tabPos))] = UnescapeKVField(line.substr(tabPos + 1));
+                }
+                else
+                {
+                    m_kvStore[line.substr(0, tabPos)] = line.substr(tabPos + 1);
+                }
             }
         }
 
