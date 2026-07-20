@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: loc-counter-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   count-loc:
@@ -136,7 +136,7 @@ jobs:
         git add .github/badges/
         git diff --cached --quiet && echo "No changes to commit" && exit 0
         git commit -m "chore: update lines of code counter"
-        git push origin "HEAD:${GITHUB_REF_NAME}"
+        git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
         echo "changed=true" >> "$GITHUB_OUTPUT"
 
     # Pushes made with GITHUB_TOKEN intentionally do not trigger ordinary
@@ -149,5 +149,15 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        test "$(git rev-parse HEAD)" = "$(git ls-remote --heads origin "$GITHUB_REF" | awk '{print $1}')"
-        gh workflow run build.yml --ref "$GITHUB_REF_NAME"
+        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin "$GITHUB_REF" | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+          echo "Working advanced after this badge push; the newer head owns the build."
+          exit 0
+        fi
+        for attempt in 1 2 3 4 5; do
+          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"; then
+            exit 0
+          fi
+          test "$attempt" -lt 5 || exit 1
+          sleep "$((attempt * 2))"
+        done

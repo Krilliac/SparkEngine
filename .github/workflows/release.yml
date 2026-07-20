@@ -24,7 +24,7 @@ on:
           - debug
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # ===========================================================================
@@ -232,18 +232,37 @@ jobs:
   release:
     needs: [prepare, build-windows, build-linux, build-installer]
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+    concurrency:
+      group: publish-builds-${{ needs.prepare.outputs.tag }}
+      cancel-in-progress: false
 
     steps:
-    - name: Checkout repository
+    - name: Checkout release source
       uses: actions/checkout@v7
       with:
-        ref: ${{ github.ref }}
+        ref: ${{ github.sha }}
         fetch-depth: 0
 
+    # Counters are repository-global/default-branch state, not tag state. A
+    # separate checkout keeps release tags immutable and preserves the exact
+    # source checkout used by the release metadata below.
+    - name: Checkout canonical badge branch
+      uses: actions/checkout@v7
+      with:
+        ref: Working
+        path: badge-repository
+
     - name: Snapshot download counts and update badges
+      id: badge-commit
+      working-directory: badge-repository
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        set -euo pipefail
+        echo "changed=false" >> "$GITHUB_OUTPUT"
         mkdir -p .github/badges
         DATA_FILE=".github/badges/downloads-data.json"
         LIFETIME_BADGE=".github/badges/downloads.json"
@@ -253,8 +272,10 @@ jobs:
         # Read existing lifetime total
         if [ -f "$DATA_FILE" ]; then
           LIFETIME=$(jq -r '.total // 0' "$DATA_FILE")
+          LAST_SNAPSHOT_RUN_ID=$(jq -r '.snapshotRunId // ""' "$DATA_FILE")
         else
           LIFETIME=0
+          LAST_SNAPSHOT_RUN_ID=""
         fi
         echo "Previous lifetime total: $LIFETIME"
 
@@ -265,7 +286,11 @@ jobs:
           NIGHTLY_DL=$(gh api repos/${{ github.repository }}/releases/tags/nightly \
             --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
           echo "Current nightly downloads before reset: $NIGHTLY_DL"
-          SNAPSHOT=$NIGHTLY_DL
+          if test "$LAST_SNAPSHOT_RUN_ID" != "$GITHUB_RUN_ID"; then
+            SNAPSHOT=$NIGHTLY_DL
+          else
+            echo "This workflow run already recorded the nightly snapshot; not counting it twice."
+          fi
 
           # Reset nightly badge to 0 (release is being replaced)
           echo '{
@@ -281,7 +306,11 @@ jobs:
           STABLE_DL=$(gh api repos/${{ github.repository }}/releases/latest \
             --jq '[.assets[].download_count] | add // 0' 2>/dev/null || echo 0)
           echo "Current stable downloads before reset: $STABLE_DL"
-          SNAPSHOT=$STABLE_DL
+          if test "$LAST_SNAPSHOT_RUN_ID" != "$GITHUB_RUN_ID"; then
+            SNAPSHOT=$STABLE_DL
+          else
+            echo "This workflow run already recorded the stable snapshot; not counting it twice."
+          fi
 
           # Reset stable badge to 0 (new release is being published)
           echo '{
@@ -300,8 +329,8 @@ jobs:
         FORMATTED=$(printf "%'d" "$NEW_TOTAL" 2>/dev/null || echo "$NEW_TOTAL")
 
         # Write data file
-        printf '{\n    "total": %d,\n    "updated": "%s"\n}\n' \
-          "$NEW_TOTAL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DATA_FILE"
+        printf '{\n    "total": %d,\n    "updated": "%s",\n    "snapshotRunId": "%s"\n}\n' \
+          "$NEW_TOTAL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GITHUB_RUN_ID" > "$DATA_FILE"
 
         # Write lifetime badge
         printf '{\n    "schemaVersion": 1,\n    "label": "lifetime downloads",\n    "message": "%s",\n    "color": "brightgreen",\n    "namedLogo": "github",\n    "logoColor": "white"\n}\n' \
@@ -312,21 +341,52 @@ jobs:
         # this badge to the current sum on every release run. The installer asset name
         # is the same across releases, so this is a stable aggregate.
         INSTALLER_BADGE=".github/badges/installer-downloads.json"
-        INSTALLER_TOTAL=$(gh api "repos/${{ github.repository }}/releases" --paginate \
-          --jq '[.[].assets[] | select(.name | startswith("SparkInstaller-")) | .download_count] | add // 0' \
+        INSTALLER_TOTAL=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate --slurp \
+          --jq '[.[][] | .assets[] | select(.name | startswith("SparkInstaller-")) | .download_count] | add // 0' \
           2>/dev/null || echo 0)
         echo "Installer total downloads: $INSTALLER_TOTAL"
         INSTALLER_FORMATTED=$(printf "%'d" "$INSTALLER_TOTAL" 2>/dev/null || echo "$INSTALLER_TOTAL")
         printf '{\n    "schemaVersion": 1,\n    "label": "installer downloads",\n    "message": "%s",\n    "color": "blueviolet",\n    "namedLogo": "github",\n    "logoColor": "white"\n}\n' \
           "$INSTALLER_FORMATTED" > "$INSTALLER_BADGE"
 
-        # Commit updated counters
+        # This release snapshot must not be silently lost. Fail on supersession
+        # so a rerun can regenerate it from the new Working head.
+        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+          echo "Working advanced while download data was generated; rerun this release."
+          exit 1
+        fi
+
+        # Commit updated counters.
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add .github/badges/
         git diff --cached --quiet && echo "No download count change" && exit 0
         git commit -m "chore: update download counters (lifetime: $NEW_TOTAL, installer: $INSTALLER_TOTAL) [skip ci]"
-        git push origin HEAD:${{ github.ref_name }}
+        git push origin "HEAD:refs/heads/Working"
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+
+    # GITHUB_TOKEN pushes do not trigger ordinary push workflows, so explicitly
+    # prove and publish the generated Working head.
+    - name: Dispatch exact-head build after Working badge commit
+      if: steps.badge-commit.outputs.changed == 'true'
+      working-directory: badge-repository
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        REMOTE_HEAD="$(git ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+          echo "Working advanced after this counter push; the newer head owns the build."
+          exit 0
+        fi
+        for attempt in 1 2 3 4 5; do
+          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref Working; then
+            exit 0
+          fi
+          test "$attempt" -lt 5 || exit 1
+          sleep "$((attempt * 2))"
+        done
 
     - name: Resolve short commit SHA
       id: sha

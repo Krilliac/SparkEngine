@@ -6,7 +6,12 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
+
+concurrency:
+  group: update-download-badges-Working
+  cancel-in-progress: false
 
 jobs:
   update-badges:
@@ -18,11 +23,13 @@ jobs:
         ref: Working
 
     - name: Refresh download count badges
+      id: badge-commit
       env:
         GH_TOKEN: ${{ github.token }}
         REPO: ${{ github.repository }}
       run: |
-        set -u
+        set -euo pipefail
+        echo "changed=false" >> "$GITHUB_OUTPUT"
         mkdir -p .github/badges
         NIGHTLY_BADGE=".github/badges/nightly-downloads.json"
         STABLE_BADGE=".github/badges/stable-downloads.json"
@@ -73,10 +80,40 @@ jobs:
         jq empty "$NIGHTLY_BADGE" "$STABLE_BADGE" \
           || { echo "Generated badge JSON is invalid; aborting." >&2; exit 1; }
 
-        # Commit if changed
+        # Only the run that still owns the exact Working head may advance it.
+        REMOTE_HEAD="$(git ls-remote --heads origin refs/heads/Working | awk '{print $1}')"
+        if test -z "$REMOTE_HEAD" || test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+          echo "Working advanced while badge data was generated; the newer run owns the update."
+          exit 0
+        fi
+
+        # Commit if changed.
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add .github/badges/nightly-downloads.json .github/badges/stable-downloads.json
         git diff --cached --quiet && echo "No changes" && exit 0
         git commit -m "chore: refresh download badges (nightly: $NIGHTLY_DL, stable: $STABLE_DL) [skip ci]"
-        git push origin Working
+        git push origin "HEAD:refs/heads/Working"
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+
+    # GITHUB_TOKEN pushes do not trigger ordinary push workflows. Dispatching
+    # Build explicitly ensures every generated Working head receives the same
+    # proof and exact-head site publication as a human-authored commit.
+    - name: Dispatch exact-head build after badge commit
+      if: steps.badge-commit.outputs.changed == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        REMOTE_HEAD="$(git ls-remote --heads origin refs/heads/Working | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$(git rev-parse HEAD)"; then
+          echo "Working advanced after this badge push; the newer head owns the build."
+          exit 0
+        fi
+        for attempt in 1 2 3 4 5; do
+          if gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref Working; then
+            exit 0
+          fi
+          test "$attempt" -lt 5 || exit 1
+          sleep "$((attempt * 2))"
+        done
