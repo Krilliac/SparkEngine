@@ -1010,7 +1010,7 @@ jobs:
       contents: read
       pull-requests: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1026,7 +1026,10 @@ jobs:
             ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
             ccache-coverage-
       - name: Restore build directory
-        uses: actions/cache@v6
+        # Coverage build trees are ~1.5 GB. Saving one for every commit can
+        # consume the job's entire post-step budget after all evidence passed.
+        # Restore prior trees for speed; ccache remains the durable write cache.
+        uses: actions/cache/restore@v6
         with:
           path: build
           key: build-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
