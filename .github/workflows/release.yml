@@ -333,7 +333,7 @@ jobs:
       run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Download all build artifacts
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@v8.0.1
       with:
         path: release-assets
 

@@ -226,7 +226,7 @@ jobs:
       EVIDENCE_CONCLUSION: ${{ needs.site-data-prepare.outputs.evidence_conclusion }}
     steps:
       - name: Download the proven publication payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: sparkengine-site-data-publication-${{ env.SOURCE_COMMIT }}
           path: ${{ runner.temp }}/sparkengine-site-data-payload
