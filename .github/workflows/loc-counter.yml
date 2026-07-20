@@ -10,7 +10,12 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
+
+concurrency:
+  group: loc-counter-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   count-loc:
@@ -117,12 +122,32 @@ jobs:
         EOF
 
     - name: Commit badge data
+      id: badge-commit
       run: |
+        set -euo pipefail
+        echo "changed=false" >> "$GITHUB_OUTPUT"
+        REMOTE_HEAD="$(git ls-remote --heads origin "$GITHUB_REF" | awk '{print $1}')"
+        if test "$REMOTE_HEAD" != "$GITHUB_SHA"; then
+          echo "Working advanced while badge data was generated; the newer run owns the update."
+          exit 0
+        fi
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add .github/badges/
         git diff --cached --quiet && echo "No changes to commit" && exit 0
-        # Do not skip CI: the repository-driven site must publish the bot commit
-        # too, otherwise Working advances beyond the displayed exact SHA.
         git commit -m "chore: update lines of code counter"
-        git push
+        git push origin "HEAD:${GITHUB_REF_NAME}"
+        echo "changed=true" >> "$GITHUB_OUTPUT"
+
+    # Pushes made with GITHUB_TOKEN intentionally do not trigger ordinary
+    # push workflows. Explicit workflow_dispatch is the supported exception,
+    # so prove the generated-badge commit instead of leaving Working ahead of
+    # the repository-driven site publication.
+    - name: Dispatch exact-head build after badge commit
+      if: steps.badge-commit.outputs.changed == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = "$(git ls-remote --heads origin "$GITHUB_REF" | awk '{print $1}')"
+        gh workflow run build.yml --ref "$GITHUB_REF_NAME"
