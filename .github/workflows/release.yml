@@ -85,7 +85,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@v7.0.1
       with:
         submodules: recursive
 
@@ -126,7 +126,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@v7.0.1
       with:
         submodules: recursive
 
@@ -193,7 +193,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Configure SparkBuild + SparkInstaller (standalone)
         shell: bash
@@ -241,7 +241,7 @@ jobs:
 
     steps:
     - name: Checkout release source
-      uses: actions/checkout@v7
+      uses: actions/checkout@v7.0.1
       with:
         ref: ${{ github.sha }}
         fetch-depth: 0
@@ -250,7 +250,7 @@ jobs:
     # separate checkout keeps release tags immutable and preserves the exact
     # source checkout used by the release metadata below.
     - name: Checkout canonical badge branch
-      uses: actions/checkout@v7
+      uses: actions/checkout@v7.0.1
       with:
         ref: Working
         path: badge-repository
