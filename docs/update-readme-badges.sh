@@ -5,8 +5,8 @@
 # .github/copilot-instructions.md, .github/prompts/*, and badge JSON files.
 #
 # What it updates:
-#   - README.md: test badge, panel count, game module count, test count prose
-#   - .github/badges/*.json: LOC and file count badges
+#   - README.md: panel count, game module count, and test count prose
+#   - .github/badges/*.json: tests, LOC, and source-file count badges
 #   - .github/copilot-instructions.md: test/panel counts
 #   - .github/prompts/copilot-instructions.md: test/panel counts
 #   - .github/prompts/build-test.prompt.md: test counts
@@ -60,13 +60,14 @@ collect_metrics() {
 
     eval "$("${PYTHON[@]}" "$PROJECT_ROOT/docs/codebase-metrics.py" --shell)"
     TEST_CASES="$TEST_DEFINITIONS"
+    format_count() {
+        "${PYTHON[@]}" -c 'import sys; print(f"{int(sys.argv[1]):,}")' "$1"
+    }
     PANEL_COUNT=$(find "$EDITOR_SRC/Panels" -name '*Panel.h' 2>/dev/null | wc -l | tr -d " ")
     GAME_MODULES=$(find "$GAME_SRC" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d " ")
     WIKI_PAGES=$(find "$PROJECT_ROOT/wiki" -name '*.md' ! -name '_Sidebar.md' 2>/dev/null | wc -l | tr -d " ")
 
-    # URL-encoded test count for badge (commas → %2C)
-    FORMATTED_TESTS=$(printf "%'d" "$TEST_CASES" 2>/dev/null || echo "$TEST_CASES")
-    BADGE_TESTS=$(echo "${FORMATTED_TESTS}" | sed 's/,/%2C/g')
+    FORMATTED_TESTS=$(format_count "$TEST_CASES")
 
     log_info "Found: ${TEST_CASES} tests, ${PANEL_COUNT} panels, ${GAME_MODULES} modules, ${TOTAL_LINES} LOC"
 }
@@ -102,14 +103,6 @@ sed_replace() {
 update_readme() {
     local readme="$PROJECT_ROOT/README.md"
 
-    # Test badge: tests-N%2CNNN_cases
-    sed_replace "$readme" \
-        'tests-[0-9%2C]*_cases' \
-        "tests-${BADGE_TESTS}_cases"
-    sed_replace "$readme" \
-        '[0-9%2C]*_tests-' \
-        "${BADGE_TESTS}_tests-"
-
     # "N specialized panels:" or "N panels"
     sed_replace "$readme" \
         '[0-9]* specialized panels' \
@@ -120,15 +113,15 @@ update_readme() {
         'ImGui editor ([0-9]* panels)' \
         "ImGui editor (${PANEL_COUNT} panels)"
 
-    # Test count in prose: "N unit tests across M test files"
+    # Test count in prose: "N unit tests across M files"
     sed_replace "$readme" \
-        '[0-9,]* unit tests across [0-9,]* test files' \
-        "${FORMATTED_TESTS} unit tests across ${TEST_FILES} test files"
+        '[0-9,]* unit tests across [0-9,]* files' \
+        "${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
 
-    # Test count in tree: "N unit tests across M files"
+    # Test count in the repository tree summary
     sed_replace "$readme" \
-        '# [0-9,]* unit tests across [0-9,]* files' \
-        "# ${FORMATTED_TESTS} unit tests across ${TEST_FILES} files"
+        'Tests/                 [0-9,]* unit tests, [0-9,]* files' \
+        "Tests/                 ${FORMATTED_TESTS} unit tests, ${TEST_FILES} files"
 
     # Wiki page count in tree
     sed_replace "$readme" \
@@ -177,8 +170,8 @@ update_badges() {
     mkdir -p "$badge_dir"
 
     local formatted_loc formatted_files
-    formatted_loc=$(printf "%'d" "$TOTAL_LINES" 2>/dev/null || echo "$TOTAL_LINES")
-    formatted_files=$(printf "%'d" "$FILE_COUNT" 2>/dev/null || echo "$FILE_COUNT")
+    formatted_loc=$(format_count "$TOTAL_LINES")
+    formatted_files=$(format_count "$FILE_COUNT")
     local ts
     if [ "$DRY_RUN" = true ] && [ -f "$badge_dir/loc-breakdown.json" ]; then
         ts=$("${PYTHON[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["updated"])' \
@@ -187,11 +180,12 @@ update_badges() {
         ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     fi
 
+    local tests_json='{"schemaVersion":1,"label":"tests","message":"'"$FORMATTED_TESTS"'","color":"brightgreen"}'
     local loc_json='{"schemaVersion":1,"label":"C++ lines of code","message":"'"$formatted_loc"'","color":"blue","namedLogo":"cplusplus","logoColor":"white"}'
     local files_json='{"schemaVersion":1,"label":"source files","message":"'"$formatted_files"'","color":"green"}'
     local breakdown_json='{"schemaVersion":1,"total":'"$TOTAL_LINES"',"files":'"$FILE_COUNT"',"engine":'"$ENGINE_LINES"',"editor":'"$EDITOR_LINES"',"game":'"$GAME_LINES"',"tests":'"$TEST_LINES"',"tools":'"$TOOL_LINES"',"updated":"'"$ts"'"}'
 
-    for pair in "loc.json:$loc_json" "files.json:$files_json" "loc-breakdown.json:$breakdown_json"; do
+    for pair in "tests.json:$tests_json" "loc.json:$loc_json" "files.json:$files_json" "loc-breakdown.json:$breakdown_json"; do
         local name="${pair%%:*}"
         local content="${pair#*:}"
         local filepath="$badge_dir/$name"

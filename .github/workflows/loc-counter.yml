@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
 
@@ -40,11 +40,14 @@ jobs:
         }
         FORMATTED_LOC="$(format_count "$CPP_LINES")"
         FORMATTED_FILES="$(format_count "$FILE_COUNT")"
+        FORMATTED_TESTS="$(format_count "$TEST_DEFINITIONS")"
 
         echo "total_lines=$CPP_LINES" >> "$GITHUB_OUTPUT"
         echo "formatted_lines=$FORMATTED_LOC" >> "$GITHUB_OUTPUT"
         echo "file_count=$FILE_COUNT" >> "$GITHUB_OUTPUT"
         echo "formatted_files=$FORMATTED_FILES" >> "$GITHUB_OUTPUT"
+        echo "test_count=$TEST_DEFINITIONS" >> "$GITHUB_OUTPUT"
+        echo "formatted_tests=$FORMATTED_TESTS" >> "$GITHUB_OUTPUT"
         echo "engine_lines=$ENGINE_LINES" >> "$GITHUB_OUTPUT"
         echo "editor_lines=$EDITOR_LINES" >> "$GITHUB_OUTPUT"
         echo "game_lines=$GAME_LINES" >> "$GITHUB_OUTPUT"
@@ -66,6 +69,16 @@ jobs:
     - name: Generate badge JSON
       run: |
         mkdir -p .github/badges
+
+        # Registered test-definition badge
+        cat > .github/badges/tests.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "tests",
+          "message": "${{ steps.loc.outputs.formatted_tests }}",
+          "color": "brightgreen"
+        }
+        EOF
 
         # Total LOC badge
         cat > .github/badges/loc.json << EOF
@@ -118,7 +131,7 @@ jobs:
         fi
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add .github/badges/
+        git add .github/badges/tests.json .github/badges/loc.json .github/badges/files.json .github/badges/loc-breakdown.json
         git diff --cached --quiet && echo "No changes to commit" && exit 0
         git commit -m "chore: update lines of code counter"
         git push \
