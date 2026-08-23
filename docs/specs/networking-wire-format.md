@@ -136,6 +136,15 @@ Client                          Server
   |<-- InputAck, EntityUpdates ---|
 ```
 
+### Ingress trust boundary
+
+- A client accepts gameplay datagrams only from the exact IPv4 address and port configured by `Connect`.
+- A server derives `ClientID` from its endpoint-to-client table; the wire-supplied sender ID is never authentication.
+- Undefined channel bytes and malformed built-in payload sizes are rejected before dispatch.
+- User-defined message types remain schema-optional for compatibility, but are accepted only from an established endpoint. Register a `MessageSchema` to enforce their size and direction.
+
+Endpoint binding prevents off-endpoint injection, but it is not cryptographic peer authentication and does not support transparent endpoint migration. A reconnect is required when the server tuple changes.
+
 ## Entity Replication
 
 ### Replicated Properties

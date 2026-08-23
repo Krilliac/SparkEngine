@@ -48,8 +48,8 @@ namespace Spark::Net
                                               .allowedFromClient = true,
                                               .allowedFromServer = false});
 
-        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 0,
-                                                      .maxPayloadSize = 256,
+        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 4,
+                                                      .maxPayloadSize = 8,
                                                       .requiresAuth = false,
                                                       .allowedFromClient = false,
                                                       .allowedFromServer = true});
@@ -73,8 +73,8 @@ namespace Spark::Net
                                                 .allowedFromServer = true});
 
         // Reliability
-        RegisterSchema(MessageType::Ack, {.minPayloadSize = 4,
-                                          .maxPayloadSize = 64,
+        RegisterSchema(MessageType::Ack, {.minPayloadSize = 8,
+                                          .maxPayloadSize = 8,
                                           .requiresAuth = true,
                                           .allowedFromClient = true,
                                           .allowedFromServer = true});
@@ -204,7 +204,15 @@ namespace Spark::Net
                 return {false, PacketViolation::InvalidType,
                         std::format("Unknown built-in message type: {}", static_cast<uint16_t>(msg.type))};
             }
-            // User-defined types pass without schema validation
+            // Custom types remain schema-optional for compatibility with game
+            // modules, but they may only enter through an authenticated peer.
+            if (!senderIsAuthenticated)
+            {
+                m_stats.totalRejected++;
+                m_stats.rejectedUnauthenticated++;
+                return {false, PacketViolation::Unauthenticated,
+                        std::format("Unauthenticated custom message type: {}", static_cast<uint16_t>(msg.type))};
+            }
             return {true, PacketViolation::None, ""};
         }
 

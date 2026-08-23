@@ -307,7 +307,13 @@ namespace Spark::Net
         }
 
         outMsg.type = static_cast<MessageType>(buf.ReadUint16());
-        outMsg.channel = static_cast<ChannelType>(buf.ReadUint8());
+        const uint8_t rawChannel = buf.ReadUint8();
+        if (rawChannel > static_cast<uint8_t>(ChannelType::ReliableOrdered))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Invalid packet channel %u", rawChannel);
+            return false;
+        }
+        outMsg.channel = static_cast<ChannelType>(rawChannel);
         outMsg.senderID = buf.ReadUint32();
         outMsg.sequence = buf.ReadUint32();
         outMsg.timestamp = buf.ReadFloat();

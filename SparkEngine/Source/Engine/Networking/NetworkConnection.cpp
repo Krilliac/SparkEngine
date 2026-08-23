@@ -28,6 +28,14 @@
 using namespace DirectX;
 namespace Spark::Net
 {
+    namespace
+    {
+        bool IsSameEndpoint(const sockaddr_in& lhs, const sockaddr_in& rhs) noexcept
+        {
+            return lhs.sin_family == rhs.sin_family && lhs.sin_port == rhs.sin_port &&
+                   lhs.sin_addr.s_addr == rhs.sin_addr.s_addr;
+        }
+    } // namespace
 
     // --------------------------------------------------------------------------
     // Initialize / Shutdown
@@ -68,12 +76,20 @@ namespace Spark::Net
         RegisterHandler(MessageType::ConnectAccepted,
                         [this](const NetworkMessage& msg)
                         {
-                            std::lock_guard<std::mutex> stateLock(m_stateMutex);
-                            if (m_role == NetworkRole::Client)
+                            if (GetRole() == NetworkRole::Client)
                             {
                                 NetBuffer buf;
                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                m_localClientID = buf.ReadUint32();
+                                const ClientID assignedID = buf.ReadUint32();
+                                if (buf.HasError() || assignedID == INVALID_CLIENT)
+                                {
+                                    SPARK_LOG_WARN(Spark::LogCategory::Network,
+                                                   "Ignoring malformed ConnectAccepted packet");
+                                    return;
+                                }
+
+                                std::lock_guard<std::mutex> stateLock(m_stateMutex);
+                                m_localClientID = assignedID;
                                 m_connectionState = ConnectionState::Connected;
 
                                 // Mark as connected for auto-reconnect tracking
@@ -839,9 +855,30 @@ namespace Spark::Net
             if (received <= 0)
                 break;
 
+            const NetworkRole role = GetRole();
+            if (role == NetworkRole::Client && !IsSameEndpoint(senderAddr, m_serverAddress))
+            {
+                SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping packet from unexpected server endpoint");
+                continue;
+            }
+
             NetworkMessage msg;
             if (!DeserializeMessage(rawData.data(), rawData.size(), msg))
                 continue;
+
+            ClientID trustedSender = INVALID_CLIENT;
+            if (role == NetworkRole::Server)
+            {
+                for (const auto& [id, addr] : m_clientAddresses)
+                {
+                    if (IsSameEndpoint(addr, senderAddr))
+                    {
+                        trustedSender = id;
+                        break;
+                    }
+                }
+                msg.senderID = trustedSender;
+            }
 
             // Validate the packet against registered schemas — bypassing
             // allows malicious packets to reach game logic unvalidated
@@ -857,23 +894,11 @@ namespace Spark::Net
                 // from OUR OWN trusted state instead: the address->client table on the
                 // server, live connection state on the client.
                 bool isAuthenticated;
-                if (m_role == NetworkRole::Server)
-                {
-                    isAuthenticated = false;
-                    for (const auto& [id, addr] : m_clientAddresses)
-                    {
-                        if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr && addr.sin_port == senderAddr.sin_port)
-                        {
-                            isAuthenticated = true;
-                            break;
-                        }
-                    }
-                }
+                if (role == NetworkRole::Server)
+                    isAuthenticated = (trustedSender != INVALID_CLIENT);
                 else
-                {
-                    isAuthenticated = (m_connectionState == ConnectionState::Connected);
-                }
-                bool isFromClient = (m_role == NetworkRole::Server);
+                    isAuthenticated = (GetConnectionState() == ConnectionState::Connected);
+                bool isFromClient = (role == NetworkRole::Server);
                 auto validation = m_packetValidator.ValidatePacket(msg, isAuthenticated, isFromClient);
                 if (!validation.valid)
                 {
@@ -884,7 +909,7 @@ namespace Spark::Net
             SPARK_BRANCH_GUARD_END("network_packet_gateway")
 
             // On the server, map sender address to a client ID
-            if (m_role == NetworkRole::Server)
+            if (role == NetworkRole::Server)
             {
                 // Check if this is a new connection
                 if (msg.type == MessageType::Connect)
@@ -894,16 +919,7 @@ namespace Spark::Net
                     // Duplicate-address detection: if this address already has
                     // an active connection, ignore the redundant Connect to
                     // prevent slot exhaustion from repeated packets.
-                    bool addressAlreadyConnected = false;
-                    for (const auto& [id, addr] : m_clientAddresses)
-                    {
-                        if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr && addr.sin_port == senderAddr.sin_port)
-                        {
-                            addressAlreadyConnected = true;
-                            break;
-                        }
-                    }
-                    if (addressAlreadyConnected)
+                    if (trustedSender != INVALID_CLIENT)
                     {
                         SPARK_LOG_DEBUG(Spark::LogCategory::Network,
                                         "Ignoring duplicate Connect from already-connected address");
@@ -920,17 +936,11 @@ namespace Spark::Net
                     continue;
                 }
 
-                // Look up sender by address
-                ClientID foundID = INVALID_CLIENT;
-                for (const auto& [id, addr] : m_clientAddresses)
+                if (trustedSender == INVALID_CLIENT)
                 {
-                    if (addr.sin_addr.s_addr == senderAddr.sin_addr.s_addr && addr.sin_port == senderAddr.sin_port)
-                    {
-                        foundID = id;
-                        break;
-                    }
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping packet from unknown client endpoint");
+                    continue;
                 }
-                msg.senderID = foundID;
             }
 
             std::lock_guard<std::mutex> lock(m_queueMutex);

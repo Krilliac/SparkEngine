@@ -233,10 +233,14 @@ Transports implement the `ITransport` interface and are selected via `TransportT
 
 ## Security
 
-Packets are optionally encrypted using XOR-based encryption with a session key established during the connection handshake. The `NetworkSecurity` module handles:
+The active UDP path binds client traffic to the configured server address and port, and binds server-side client identity to the endpoint recorded during `Connect`. Wire-supplied sender IDs are not trusted. Undefined channels, malformed built-in payload sizes, and unauthenticated custom messages are rejected before dispatch.
+
+This tuple binding is a spoofing defense, not cryptographic authentication; transparent endpoint migration is unsupported and requires reconnecting. The experimental `NetworkSecurity` helpers are not integrated strongly enough to make confidentiality or authenticated-encryption claims for production traffic.
+
+Planned security work includes:
 
 - Token-based authentication
 - Rate limiting (packets per second per client)
-- Session key rotation
+- Authenticated encryption and session key rotation
 
 See [Networking](../subsystems/Networking.md) for the full networking architecture overview.

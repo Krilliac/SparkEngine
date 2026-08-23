@@ -189,24 +189,26 @@ TEST(NetworkManager_ProcessIncoming_RejectsForgedSenderIDFromUnknownAddress)
     //   [4] magic 0x5350524B  [2] type  [1] channel  [4] senderID
     //   [4] sequence  [4] timestamp  [4] payloadLen  [N] payload
     std::vector<uint8_t> packet;
-    auto put32 = [&](uint32_t v) {
+    auto put32 = [&](uint32_t v)
+    {
         packet.push_back(static_cast<uint8_t>(v & 0xFF));
         packet.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
         packet.push_back(static_cast<uint8_t>((v >> 16) & 0xFF));
         packet.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
     };
-    auto put16 = [&](uint16_t v) {
+    auto put16 = [&](uint16_t v)
+    {
         packet.push_back(static_cast<uint8_t>(v & 0xFF));
         packet.push_back(static_cast<uint8_t>((v >> 8) & 0xFF));
     };
 
-    put32(0x5350524B);                                          // magic "SPRK"
-    put16(static_cast<uint16_t>(MessageType::ClientInput));      // requiresAuth = true
+    put32(0x5350524B);                                             // magic "SPRK"
+    put16(static_cast<uint16_t>(MessageType::ClientInput));        // requiresAuth = true
     packet.push_back(static_cast<uint8_t>(ChannelType::Reliable)); // channel
-    put32(999);                                                 // FORGED senderID -- never Connect'd
-    put32(1);                                                   // sequence
-    put32(0);                                                   // timestamp bits (0.0f)
-    put32(8);                                                   // payload length (meets minPayloadSize=8)
+    put32(999);                                                    // FORGED senderID -- never Connect'd
+    put32(1);                                                      // sequence
+    put32(0);                                                      // timestamp bits (0.0f)
+    put32(8);                                                      // payload length (meets minPayloadSize=8)
     for (int i = 0; i < 8; ++i)
         packet.push_back(0);
 
@@ -230,6 +232,145 @@ TEST(NetworkManager_ProcessIncoming_RejectsForgedSenderIDFromUnknownAddress)
     EXPECT_TRUE(stats.rejectedUnauthenticated >= 1);
 
     nm.StopServer();
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_ProcessIncoming_RejectsInvalidChannelBeforeConnect)
+{
+    auto& nm = NetworkManager::GetInstance();
+    EXPECT_TRUE(nm.Initialize());
+
+    const uint16_t port = 39200;
+    EXPECT_TRUE(nm.StartServer(port, 8));
+    nm.GetPacketValidator().ResetStatistics();
+
+    SOCKET rawSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    EXPECT_TRUE(rawSock != INVALID_SOCKET);
+
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
+
+    std::vector<uint8_t> packet;
+    auto put32 = [&](uint32_t value)
+    {
+        for (int shift = 0; shift < 32; shift += 8)
+            packet.push_back(static_cast<uint8_t>((value >> shift) & 0xFF));
+    };
+    auto put16 = [&](uint16_t value)
+    {
+        packet.push_back(static_cast<uint8_t>(value & 0xFF));
+        packet.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+    };
+
+    put32(0x5350524B);
+    put16(static_cast<uint16_t>(MessageType::Connect));
+    packet.push_back(255); // not a defined ChannelType
+    put32(INVALID_CLIENT);
+    put32(0);
+    put32(0);
+    put32(0);
+
+    const int sent = sendto(rawSock, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
+                            reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
+    EXPECT_EQ(sent, static_cast<int>(packet.size()));
+    closesocket(rawSock);
+
+    for (int i = 0; i < 10; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+
+    EXPECT_TRUE(nm.GetClients().empty());
+    EXPECT_EQ(nm.GetPacketValidator().GetStatistics().totalValidated, 0u);
+
+    nm.StopServer();
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
+{
+    auto& nm = NetworkManager::GetInstance();
+    EXPECT_TRUE(nm.Initialize());
+
+    const uint16_t port = 39201;
+    SOCKET serverSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    SOCKET spoofSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    EXPECT_TRUE(serverSock != INVALID_SOCKET);
+    EXPECT_TRUE(spoofSock != INVALID_SOCKET);
+
+    sockaddr_in listenAddr{};
+    listenAddr.sin_family = AF_INET;
+    listenAddr.sin_port = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &listenAddr.sin_addr);
+    EXPECT_EQ(bind(serverSock, reinterpret_cast<sockaddr*>(&listenAddr), sizeof(listenAddr)), 0);
+
+    u_long nonBlocking = 1;
+    EXPECT_EQ(ioctlsocket(serverSock, FIONBIO, &nonBlocking), 0);
+    EXPECT_TRUE(nm.Connect("127.0.0.1", port, "EndpointTest"));
+
+    sockaddr_in clientAddr{};
+    int clientAddrLength = sizeof(clientAddr);
+    std::vector<uint8_t> receiveBuffer(1024);
+    int received = SOCKET_ERROR;
+    for (int i = 0; i < 20 && received == SOCKET_ERROR; ++i)
+    {
+        nm.Update(0.016f);
+        received =
+            recvfrom(serverSock, reinterpret_cast<char*>(receiveBuffer.data()), static_cast<int>(receiveBuffer.size()),
+                     0, reinterpret_cast<sockaddr*>(&clientAddr), &clientAddrLength);
+        if (received == SOCKET_ERROR)
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_TRUE(received > 0);
+
+    std::vector<uint8_t> accepted;
+    auto put32 = [&](uint32_t value)
+    {
+        for (int shift = 0; shift < 32; shift += 8)
+            accepted.push_back(static_cast<uint8_t>((value >> shift) & 0xFF));
+    };
+    auto put16 = [&](uint16_t value)
+    {
+        accepted.push_back(static_cast<uint8_t>(value & 0xFF));
+        accepted.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+    };
+    put32(0x5350524B);
+    put16(static_cast<uint16_t>(MessageType::ConnectAccepted));
+    accepted.push_back(static_cast<uint8_t>(ChannelType::Reliable));
+    put32(INVALID_CLIENT);
+    put32(1);
+    put32(0);
+    put32(4);
+    put32(42);
+
+    EXPECT_EQ(sendto(spoofSock, reinterpret_cast<const char*>(accepted.data()), static_cast<int>(accepted.size()), 0,
+                     reinterpret_cast<sockaddr*>(&clientAddr), sizeof(clientAddr)),
+              static_cast<int>(accepted.size()));
+    for (int i = 0; i < 5; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connecting));
+    EXPECT_EQ(nm.GetLocalClientID(), INVALID_CLIENT);
+
+    EXPECT_EQ(sendto(serverSock, reinterpret_cast<const char*>(accepted.data()), static_cast<int>(accepted.size()), 0,
+                     reinterpret_cast<sockaddr*>(&clientAddr), sizeof(clientAddr)),
+              static_cast<int>(accepted.size()));
+    for (int i = 0; i < 10 && nm.GetConnectionState() != ConnectionState::Connected; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connected));
+    EXPECT_EQ(nm.GetLocalClientID(), 42u);
+
+    nm.Disconnect();
+    closesocket(spoofSock);
+    closesocket(serverSock);
     nm.Shutdown();
 }
 
