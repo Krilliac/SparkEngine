@@ -49,6 +49,7 @@ jobs:
           cmake -S . -B "${{ env.build }}"
           -G "Visual Studio 17 2022" -A x64 -T v143
           -DBUILD_TESTS=OFF
+          -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON
 
       # Build is not required unless generated source files are used
       # - name: Build CMake

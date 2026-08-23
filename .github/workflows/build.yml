@@ -765,7 +765,6 @@ jobs:
   build-linux-mingw-wine:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    continue-on-error: true
     steps:
     - name: Checkout repository
       uses: actions/checkout@v7.0.1
@@ -832,11 +831,13 @@ jobs:
         WINEPREFIX: ${{ github.workspace }}/build/.wineprefix
         WINEDEBUG: -all
         LIBGL_ALWAYS_SOFTWARE: "1"
+        # Native Windows lanes cover these facilities. Wine lacks Windows Git,
+        # WARP, native D3DCompiler include semantics, and native stack-frame
+        # addresses, so exclude only those known platform-incompatible tests.
+        SPARK_TEST_EXCLUDE: VersionControlPhaseAA_InitializeShutdown,GPUDriven_D3D11_ShaderReflectionMatchesSharedABI,GPUDriven_D3D11_PrimitiveLosesSparseSourceIdentityAndProductionGateFailsClosed,PostProcessingD3D11_ZeroAndOnePassRouteWithoutViewHazards,WorldBasicRender_DrawsGeometryIntoOffscreenRTV,WARP_D3D11DeviceInit,WARP_D3D11BufferCreation,WARP_D3D11FactoryCreate,StackTrace_FramesHaveAddresses
       run: |
-        tools/wine-run.sh build/bin/SparkTests.exe 2>&1 | tee wine-test-results.txt || {
-          echo "::warning::Wine test execution had failures (non-blocking)"
-          true
-        }
+        set -o pipefail
+        tools/wine-run.sh build/bin/SparkTests.exe 2>&1 | tee wine-test-results.txt
 
     - name: Extract error summary
       if: failure()

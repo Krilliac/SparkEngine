@@ -2,6 +2,7 @@
 #include "TestFramework.h"
 #include "Utils/FileWatcher/FileWatcher.h"
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -24,6 +25,16 @@ static void WriteFile(const std::string& path, const std::string& content)
 {
     std::ofstream f(path);
     f << content;
+}
+
+static void RewriteFileWithDistinctTimestamp(const std::string& path, const std::string& content)
+{
+    const auto previousWriteTime = std::filesystem::last_write_time(path);
+    WriteFile(path, content);
+    // FAT/NTFS timestamps observed through Wine can be coarser than the host
+    // filesystem. Advance explicitly so modification tests do not depend on a
+    // scheduler sleep or filesystem timestamp resolution.
+    std::filesystem::last_write_time(path, previousWriteTime + std::chrono::seconds(2));
 }
 
 // ============================================================================
@@ -147,9 +158,7 @@ TEST(FileWatcher_DetectFileModification)
                               modified = true;
                       });
 
-    // Wait briefly to ensure different timestamp
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    WriteFile(filePath, "modified content");
+    RewriteFileWithDistinctTimestamp(filePath, "modified content");
 
     watcher.Update(0.1f);
     EXPECT_TRUE(modified);
@@ -237,8 +246,7 @@ TEST(FileWatcher_CallbackCanReentrantlyReplaceItsWatch)
                                            watcher.WatchFile(secondPath, [](const Spark::Utils::FileChangeEvent&) {});
                                    });
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    WriteFile(firstPath, "modified content");
+    RewriteFileWithDistinctTimestamp(firstPath, "modified content");
     watcher.Update(0.1f);
 
     EXPECT_TRUE(callbackRan);
