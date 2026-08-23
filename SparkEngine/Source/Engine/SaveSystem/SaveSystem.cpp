@@ -1016,6 +1016,10 @@ namespace Spark
     {
         try
         {
+            // Parse transactionally so a malformed file never leaves callers
+            // with a partially populated SaveData object.
+            SaveData parsedData;
+
             // Try reading via file cache for binary data
             std::vector<uint8_t> fileData;
             bool fromCache = false;
@@ -1109,15 +1113,15 @@ namespace Spark
             uint32_t version;
             if (!readBytes(&version, sizeof(version)))
                 return false;
-            outData.metadata.version = version;
+            parsedData.metadata.version = version;
 
             // Reject saves written by a newer, incompatible engine build: their field
             // semantics may differ and deserializing them would silently corrupt the world.
-            if (version > kCurrentSaveVersion)
+            if (version == 0 || version > kCurrentSaveVersion)
             {
                 SPARK_LOG_WARN(
                     Spark::LogCategory::Save,
-                    "ReadFromFile: save '%s' version %u is newer than supported version %u — refusing to load",
+                    "ReadFromFile: save '%s' version %u is unsupported (current version %u) — refusing to load",
                     filepath.c_str(), version, kCurrentSaveVersion);
                 return false;
             }
@@ -1140,17 +1144,17 @@ namespace Spark
             offset += metaSize;
 
             std::istringstream metaStream(metaStr);
-            std::getline(metaStream, outData.metadata.saveName);
-            std::getline(metaStream, outData.metadata.sceneName);
-            std::getline(metaStream, outData.metadata.playerClass);
-            metaStream >> outData.metadata.timestamp;
-            metaStream >> outData.metadata.playTime;
-            metaStream >> outData.metadata.playerHealth;
-            metaStream >> outData.metadata.playerArmor;
-            metaStream >> outData.metadata.playerPosition.x >> outData.metadata.playerPosition.y >>
-                outData.metadata.playerPosition.z;
-            metaStream >> outData.metadata.playerKills;
-            metaStream >> outData.metadata.playerDeaths;
+            std::getline(metaStream, parsedData.metadata.saveName);
+            std::getline(metaStream, parsedData.metadata.sceneName);
+            std::getline(metaStream, parsedData.metadata.playerClass);
+            metaStream >> parsedData.metadata.timestamp;
+            metaStream >> parsedData.metadata.playTime;
+            metaStream >> parsedData.metadata.playerHealth;
+            metaStream >> parsedData.metadata.playerArmor;
+            metaStream >> parsedData.metadata.playerPosition.x >> parsedData.metadata.playerPosition.y >>
+                parsedData.metadata.playerPosition.z;
+            metaStream >> parsedData.metadata.playerKills;
+            metaStream >> parsedData.metadata.playerDeaths;
 
             // Read entities
             uint32_t entityCount;
@@ -1221,36 +1225,40 @@ namespace Spark
                     entity.components.push_back(comp);
                 }
 
-                outData.entities.push_back(entity);
+                parsedData.entities.push_back(entity);
             }
 
-            // Read custom state key-value pairs (if present in file)
+            // Version 1 always ends with a custom-state count, even when zero.
             uint32_t customStateCount = 0;
-            if (readBytes(&customStateCount, sizeof(customStateCount)))
+            if (!readBytes(&customStateCount, sizeof(customStateCount)))
+                return false;
+
+            constexpr uint32_t kMaxCustomState = 100'000;
+            if (customStateCount > kMaxCustomState)
+                return false;
+            for (uint32_t i = 0; i < customStateCount; ++i)
             {
-                constexpr uint32_t kMaxCustomState = 100'000;
-                if (customStateCount > kMaxCustomState)
+                uint16_t keyLen;
+                if (!readBytes(&keyLen, sizeof(keyLen)))
                     return false;
-                for (uint32_t i = 0; i < customStateCount; ++i)
-                {
-                    uint16_t keyLen;
-                    if (!readBytes(&keyLen, sizeof(keyLen)))
-                        break;
-                    std::string key(keyLen, '\0');
-                    if (!readBytes(key.data(), keyLen))
-                        break;
+                std::string key(keyLen, '\0');
+                if (!readBytes(key.data(), keyLen))
+                    return false;
 
-                    uint16_t valLen;
-                    if (!readBytes(&valLen, sizeof(valLen)))
-                        break;
-                    std::string val(valLen, '\0');
-                    if (!readBytes(val.data(), valLen))
-                        break;
+                uint16_t valLen;
+                if (!readBytes(&valLen, sizeof(valLen)))
+                    return false;
+                std::string val(valLen, '\0');
+                if (!readBytes(val.data(), valLen))
+                    return false;
 
-                    outData.customState[key] = val;
-                }
+                parsedData.customState[key] = val;
             }
 
+            if (offset != fileData.size())
+                return false;
+
+            outData = std::move(parsedData);
             return true;
         }
         catch (const std::exception& e)

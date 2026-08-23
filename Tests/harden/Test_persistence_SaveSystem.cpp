@@ -9,11 +9,14 @@
 
 #include "TestFramework.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/ECS/Components.h"
 
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 using namespace Spark;
 
@@ -92,6 +95,97 @@ TEST(SaveSystem_GetSaveMetadata_RejectsBadMagic)
 
     SaveMetadata meta;
     EXPECT_FALSE(ss.GetSaveMetadata("junkslot", meta));
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_RejectsTruncatedCustomStateCountWithoutChangingWorld)
+{
+    const std::string dir = MakeTempSaveDir("truncated_tail");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    World source;
+    SaveMetadata metadata;
+    metadata.saveName = "Tail test";
+    EXPECT_TRUE(ss.Save("tailslot", source, metadata));
+
+    const auto path = std::filesystem::path(dir) / "tailslot.spark_save";
+    std::ifstream input(path, std::ios::binary);
+    const std::vector<char> original((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    input.close();
+    EXPECT_TRUE(original.size() >= sizeof(uint32_t));
+
+    for (size_t bytesRemoved = 1; bytesRemoved <= sizeof(uint32_t); ++bytesRemoved)
+    {
+        std::ofstream truncated(path, std::ios::binary | std::ios::trunc);
+        truncated.write(original.data(), static_cast<std::streamsize>(original.size() - bytesRemoved));
+        truncated.close();
+
+        World target;
+        target.CreateEntity("sentinel");
+        EXPECT_FALSE(ss.Load("tailslot", target));
+        EXPECT_EQ(target.GetEntityCount(), 1u);
+    }
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveSystem_Load_RejectsEveryTruncatedCustomStateField)
+{
+    const std::string dir = MakeTempSaveDir("truncated_custom_entry");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    World source;
+    SaveMetadata metadata;
+    metadata.saveName = "Custom entry test";
+    EXPECT_TRUE(ss.Save("customslot", source, metadata));
+
+    const auto path = std::filesystem::path(dir) / "customslot.spark_save";
+    std::ifstream input(path, std::ios::binary);
+    std::vector<char> prefix((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    input.close();
+    EXPECT_TRUE(prefix.size() >= sizeof(uint32_t));
+    prefix.resize(prefix.size() - sizeof(uint32_t));
+
+    auto append16 = [](std::vector<char>& bytes, uint16_t value)
+    {
+        bytes.push_back(static_cast<char>(value & 0xFF));
+        bytes.push_back(static_cast<char>((value >> 8) & 0xFF));
+    };
+    auto append32 = [](std::vector<char>& bytes, uint32_t value)
+    {
+        for (int shift = 0; shift < 32; shift += 8)
+            bytes.push_back(static_cast<char>((value >> shift) & 0xFF));
+    };
+
+    std::vector<std::vector<char>> malformed;
+    auto entry = prefix;
+    append32(entry, 1);
+    malformed.push_back(entry); // missing key length
+    append16(entry, 2);
+    malformed.push_back(entry); // missing key bytes
+    entry.push_back('k');
+    malformed.push_back(entry); // partial key bytes
+    entry.push_back('2');
+    malformed.push_back(entry); // missing value length
+    append16(entry, 3);
+    malformed.push_back(entry); // missing value bytes
+    entry.push_back('v');
+    malformed.push_back(entry); // partial value bytes
+
+    for (const auto& bytes : malformed)
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        output.close();
+
+        World target;
+        target.CreateEntity("sentinel");
+        EXPECT_FALSE(ss.Load("customslot", target));
+        EXPECT_EQ(target.GetEntityCount(), 1u);
+    }
 
     std::filesystem::remove_all(dir);
 }
