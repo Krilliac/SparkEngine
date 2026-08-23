@@ -282,8 +282,12 @@ TEST(FreezeDetector_HeartbeatResetsState)
     fd.Configure(cfg);
 
     fd.Start();
-    // Let it enter warning state
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    // Wait for the watchdog to observe the missed heartbeat. A fixed sleep is
+    // flaky on loaded CI hosts because the watchdog thread may not be scheduled
+    // before the assertion even when the threshold has elapsed.
+    const auto warningDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (fd.GetState() < TestFreeze::FreezeState::Warning && std::chrono::steady_clock::now() < warningDeadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
     EXPECT_TRUE(fd.GetState() >= TestFreeze::FreezeState::Warning);
 
     // Send heartbeat to recover
