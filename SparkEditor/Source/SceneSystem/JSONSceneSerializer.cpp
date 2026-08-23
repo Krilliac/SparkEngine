@@ -434,8 +434,7 @@ namespace SparkEditor
 
         const auto finite3 = [](const XMFLOAT3& value)
         { return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z); };
-        const auto finite4 = [](const XMFLOAT4& value)
-        {
+        const auto finite4 = [](const XMFLOAT4& value) {
             return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
         };
         bool finite = finite3(scene.header.gravity) && finite4(scene.header.ambientColor) &&
