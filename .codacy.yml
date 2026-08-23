@@ -2,10 +2,6 @@
 # Keep the legacy Codacy wrapper focused on first-party analyzable source. Its
 # SARIF formatter decodes every reported file as UTF-8, so vendored code,
 # generated binaries, and repository assets must never enter its result set.
-engines:
-  cppcheck:
-    enabled: true
-
 exclude_paths:
   - "Assets/**/*"
   - "Shaders/Compiled/**/*"
