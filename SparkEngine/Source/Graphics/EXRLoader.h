@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -93,6 +94,9 @@ namespace Spark::Graphics
 #if defined(SPARK_HAS_TINYEXR) && SPARK_HAS_TINYEXR
             if (!IsEXR(data, dataSize))
                 return false;
+            constexpr size_t kMaxInputBytes = 16ull * 1024ull * 1024ull;
+            if (dataSize > kMaxInputBytes)
+                return false;
 
             EXRVersion version{};
             if (ParseEXRVersionFromMemory(&version, data, dataSize) != TINYEXR_SUCCESS || version.tiled ||
@@ -101,64 +105,132 @@ namespace Spark::Graphics
 
             EXRHeader header;
             InitEXRHeader(&header);
+            ::EXRImage decoded;
+            InitEXRImage(&decoded);
             const char* error = nullptr;
-            if (ParseEXRHeaderFromMemory(&header, &version, data, dataSize, &error) != TINYEXR_SUCCESS)
-            {
-                if (error)
-                    FreeEXRErrorMessage(error);
-                FreeEXRHeader(&header);
-                return false;
-            }
-
-            const int64_t width = static_cast<int64_t>(header.data_window.max_x) - header.data_window.min_x + 1;
-            const int64_t height = static_cast<int64_t>(header.data_window.max_y) - header.data_window.min_y + 1;
-            constexpr int64_t kMaxDimension = 16'384;
-            constexpr uint64_t kMaxPixels = 16'777'216; // 256 MiB RGBA32F output cap.
-            const bool invalidDimensions = width <= 0 || height <= 0 || width > kMaxDimension ||
-                                           height > kMaxDimension ||
-                                           static_cast<uint64_t>(width) > kMaxPixels / static_cast<uint64_t>(height);
-            FreeEXRHeader(&header);
-            if (error)
-                FreeEXRErrorMessage(error);
-            if (invalidDimensions)
-                return false;
-
-            float* rgba = nullptr;
-            int decodedWidth = 0;
-            int decodedHeight = 0;
-            error = nullptr;
-            const int result = LoadEXRFromMemory(&rgba, &decodedWidth, &decodedHeight, data, dataSize, &error);
-            if (result != TINYEXR_SUCCESS || !rgba || decodedWidth != width || decodedHeight != height)
-            {
-                std::free(rgba);
-                if (error)
-                    FreeEXRErrorMessage(error);
-                return false;
-            }
-
-            EXRImage parsed;
-            parsed.width = static_cast<uint32_t>(decodedWidth);
-            parsed.height = static_cast<uint32_t>(decodedHeight);
-            parsed.channels = 4;
-            parsed.isHDR = true;
-            const size_t componentCount = static_cast<size_t>(decodedWidth) * static_cast<size_t>(decodedHeight) * 4;
             try
             {
-                parsed.pixels.assign(rgba, rgba + componentCount);
+                if (ParseEXRHeaderFromMemory(&header, &version, data, dataSize, &error) != TINYEXR_SUCCESS)
+                {
+                    if (error)
+                        FreeEXRErrorMessage(error);
+                    FreeEXRHeader(&header);
+                    return false;
+                }
+
+                const int64_t width = static_cast<int64_t>(header.data_window.max_x) - header.data_window.min_x + 1;
+                const int64_t height = static_cast<int64_t>(header.data_window.max_y) - header.data_window.min_y + 1;
+                constexpr int64_t kMaxDimension = 16'384;
+                constexpr uint64_t kMaxWorkingBytes = 128ull * 1024ull * 1024ull;
+                const bool invalidDimensions =
+                    width <= 0 || height <= 0 || width > kMaxDimension || height > kMaxDimension;
+                if (invalidDimensions || header.num_channels < 3 || header.num_channels > 4)
+                {
+                    FreeEXRHeader(&header);
+                    if (error)
+                        FreeEXRErrorMessage(error);
+                    return false;
+                }
+
+                int red = -1;
+                int green = -1;
+                int blue = -1;
+                int alpha = -1;
+                bool supportedChannels = true;
+                for (int channel = 0; channel < header.num_channels; ++channel)
+                {
+                    const std::string_view name(header.channels[channel].name);
+                    int* destination = nullptr;
+                    if (name == "R")
+                        destination = &red;
+                    else if (name == "G")
+                        destination = &green;
+                    else if (name == "B")
+                        destination = &blue;
+                    else if (name == "A")
+                        destination = &alpha;
+                    else
+                        supportedChannels = false;
+
+                    if (!destination || *destination != -1 || header.channels[channel].x_sampling != 1 ||
+                        header.channels[channel].y_sampling != 1 ||
+                        (header.pixel_types[channel] != TINYEXR_PIXELTYPE_HALF &&
+                         header.pixel_types[channel] != TINYEXR_PIXELTYPE_FLOAT))
+                    {
+                        supportedChannels = false;
+                        continue;
+                    }
+                    *destination = channel;
+                    header.requested_pixel_types[channel] = TINYEXR_PIXELTYPE_FLOAT;
+                }
+
+                const uint64_t pixelCount = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
+                const uint64_t bytesPerPixel = static_cast<uint64_t>(header.num_channels + 4) * sizeof(float);
+                if (!supportedChannels || red < 0 || green < 0 || blue < 0 || (header.num_channels == 4 && alpha < 0) ||
+                    pixelCount > kMaxWorkingBytes / bytesPerPixel)
+                {
+                    FreeEXRHeader(&header);
+                    if (error)
+                        FreeEXRErrorMessage(error);
+                    return false;
+                }
+
+                error = nullptr;
+                const int result = LoadEXRImageFromMemory(&decoded, &header, data, dataSize, &error);
+                if (result != TINYEXR_SUCCESS || decoded.width != width || decoded.height != height || !decoded.images)
+                {
+                    FreeEXRImage(&decoded);
+                    FreeEXRHeader(&header);
+                    if (error)
+                        FreeEXRErrorMessage(error);
+                    return false;
+                }
+
+                EXRImage parsed;
+                parsed.width = static_cast<uint32_t>(decoded.width);
+                parsed.height = static_cast<uint32_t>(decoded.height);
+                parsed.channels = 4;
+                parsed.isHDR = true;
+                try
+                {
+                    parsed.pixels.resize(static_cast<size_t>(pixelCount) * 4);
+                }
+                catch (...)
+                {
+                    FreeEXRImage(&decoded);
+                    FreeEXRHeader(&header);
+                    if (error)
+                        FreeEXRErrorMessage(error);
+                    return false;
+                }
+
+                const auto* redPixels = reinterpret_cast<const float*>(decoded.images[red]);
+                const auto* greenPixels = reinterpret_cast<const float*>(decoded.images[green]);
+                const auto* bluePixels = reinterpret_cast<const float*>(decoded.images[blue]);
+                const auto* alphaPixels = alpha >= 0 ? reinterpret_cast<const float*>(decoded.images[alpha]) : nullptr;
+                for (size_t pixel = 0; pixel < static_cast<size_t>(pixelCount); ++pixel)
+                {
+                    parsed.pixels[pixel * 4 + 0] = redPixels[pixel];
+                    parsed.pixels[pixel * 4 + 1] = greenPixels[pixel];
+                    parsed.pixels[pixel * 4 + 2] = bluePixels[pixel];
+                    parsed.pixels[pixel * 4 + 3] = alphaPixels ? alphaPixels[pixel] : 1.0f;
+                }
+
+                FreeEXRImage(&decoded);
+                FreeEXRHeader(&header);
+                if (error)
+                    FreeEXRErrorMessage(error);
+                outImage = std::move(parsed);
+                return true;
             }
             catch (...)
             {
-                std::free(rgba);
+                FreeEXRImage(&decoded);
+                FreeEXRHeader(&header);
                 if (error)
                     FreeEXRErrorMessage(error);
                 return false;
             }
-
-            std::free(rgba);
-            if (error)
-                FreeEXRErrorMessage(error);
-            outImage = std::move(parsed);
-            return true;
 #else
             (void)data;
             (void)dataSize;

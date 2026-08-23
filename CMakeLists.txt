@@ -618,7 +618,11 @@ endif()
 if(MINIZ_SOURCES)
     # Create miniz library target
     add_library(miniz STATIC ${MINIZ_SOURCES})
-    target_include_directories(miniz PUBLIC "${MINIZ_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}")
+    target_include_directories(miniz PUBLIC
+        $<BUILD_INTERFACE:${MINIZ_ROOT}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/miniz>
+    )
 
     # Generate miniz_export.h (required by miniz headers, empty for static builds)
     include(GenerateExportHeader)
@@ -642,7 +646,10 @@ endif()
 set(ZSTD_ROOT "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/zstd")
 if(NOT TARGET zstd AND EXISTS "${ZSTD_ROOT}/zstd.h")
     add_library(zstd STATIC "${ZSTD_ROOT}/zstd_impl.cpp")
-    target_include_directories(zstd PUBLIC "${ZSTD_ROOT}")
+    target_include_directories(zstd PUBLIC
+        $<BUILD_INTERFACE:${ZSTD_ROOT}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/zstd>
+    )
     if(MSVC)
         target_compile_options(zstd PRIVATE /W0)
         set_property(TARGET zstd PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -687,7 +694,7 @@ if(TINYOBJLOADER_INCLUDE_DIR)
     )
     target_include_directories(tinyobjloader PUBLIC
         $<BUILD_INTERFACE:${TINYOBJLOADER_INCLUDE_DIR}>
-        $<INSTALL_INTERFACE:include>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/tinyobjloader>
     )
     # Don't add TINYOBJLOADER_IMPLEMENTATION to the interface - it's only in TinyObjImpl.cpp
 
@@ -710,7 +717,10 @@ endif()
 set(STB_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/stb")
 if(NOT TARGET stb_image AND EXISTS "${STB_DIR}/stb_image.h")
     add_library(stb_image STATIC "${STB_DIR}/stb_impl.cpp")
-    target_include_directories(stb_image PUBLIC "${STB_DIR}")
+    target_include_directories(stb_image PUBLIC
+        $<BUILD_INTERFACE:${STB_DIR}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/stb>
+    )
     if(MSVC)
         target_compile_options(stb_image PRIVATE /W0)
         set_property(TARGET stb_image PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -726,7 +736,10 @@ endif()
 set(CGLTF_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/cgltf")
 if(NOT TARGET cgltf AND EXISTS "${CGLTF_DIR}/cgltf.h")
     add_library(cgltf STATIC "${CGLTF_DIR}/cgltf_impl.cpp")
-    target_include_directories(cgltf PUBLIC "${CGLTF_DIR}")
+    target_include_directories(cgltf PUBLIC
+        $<BUILD_INTERFACE:${CGLTF_DIR}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/cgltf>
+    )
     if(MSVC)
         target_compile_options(cgltf PRIVATE /W0)
         set_property(TARGET cgltf PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -742,7 +755,10 @@ endif()
 set(MINIAUDIO_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Audio/miniaudio")
 if(NOT TARGET miniaudio AND EXISTS "${MINIAUDIO_DIR}/miniaudio.h")
     add_library(miniaudio STATIC "${MINIAUDIO_DIR}/miniaudio_impl.cpp")
-    target_include_directories(miniaudio PUBLIC "${MINIAUDIO_DIR}")
+    target_include_directories(miniaudio PUBLIC
+        $<BUILD_INTERFACE:${MINIAUDIO_DIR}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/miniaudio>
+    )
     if(MSVC)
         target_compile_options(miniaudio PRIVATE /W0)
         set_property(TARGET miniaudio PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -765,7 +781,10 @@ endif()
 set(NLOHMANN_JSON_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/json")
 if(NOT TARGET nlohmann_json AND EXISTS "${NLOHMANN_JSON_DIR}/nlohmann_json.h")
     add_library(nlohmann_json INTERFACE)
-    target_include_directories(nlohmann_json INTERFACE "${NLOHMANN_JSON_DIR}")
+    target_include_directories(nlohmann_json INTERFACE
+        $<BUILD_INTERFACE:${NLOHMANN_JSON_DIR}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/json>
+    )
     message(STATUS "Found nlohmann/json (header-only)")
 endif()
 
@@ -775,7 +794,10 @@ endif()
 set(TINYEXR_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/Utils/tinyexr")
 if(NOT TARGET tinyexr AND EXISTS "${TINYEXR_DIR}/tinyexr.h")
     add_library(tinyexr STATIC "${TINYEXR_DIR}/tinyexr_impl.cpp")
-    target_include_directories(tinyexr PUBLIC "${TINYEXR_DIR}")
+    target_include_directories(tinyexr PUBLIC
+        $<BUILD_INTERFACE:${TINYEXR_DIR}>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/tinyexr>
+    )
     if(TARGET miniz)
         target_link_libraries(tinyexr PRIVATE miniz)
     else()
@@ -1203,7 +1225,9 @@ endif()
 
 # Link third-party libraries to the static lib (both exe and game DLL get them)
 if(MINIZ_FOUND)
-    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:miniz>)
+    # Public because installed inline headers (ScreenCapture and tinyexr-backed
+    # loaders) compile miniz call sites in downstream translation units.
+    target_link_libraries(SparkEngineLib PUBLIC miniz)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_MINIZ_AVAILABLE=1)
     target_compile_definitions(SparkEngine PRIVATE SPARK_MINIZ_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with MINIZ")
@@ -1217,7 +1241,7 @@ endif()
 
 # zstd — Zstandard compression (faster than miniz, used alongside it)
 if(TARGET zstd)
-    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:zstd>)
+    target_link_libraries(SparkEngineLib PRIVATE zstd)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_ZSTD_AVAILABLE=1)
     target_compile_definitions(SparkEngine PRIVATE SPARK_ZSTD_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with zstd")
@@ -1235,14 +1259,14 @@ if(CURL_FOUND)
 endif()
 
 if(TINYOBJ_FOUND)
-    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:tinyobjloader>)
+    target_link_libraries(SparkEngineLib PRIVATE tinyobjloader)
     message(STATUS "Linking SparkEngineLib with TinyObjLoader")
 endif()
 
 # Link stb_image (cross-platform texture loading)
 # PUBLIC because TextureSystem.h consumers may transitively need it
 if(TARGET stb_image)
-    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:stb_image>)
+    target_link_libraries(SparkEngineLib PUBLIC stb_image)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_STB_IMAGE=1)
     message(STATUS "Linking SparkEngineLib with stb_image")
 endif()
@@ -1250,7 +1274,7 @@ endif()
 # Link cgltf (glTF 2.0 model loading)
 # PUBLIC because AssetPipeline.h consumers may transitively need it
 if(TARGET cgltf)
-    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:cgltf>)
+    target_link_libraries(SparkEngineLib PUBLIC cgltf)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_CGLTF=1)
     message(STATUS "Linking SparkEngineLib with cgltf")
 endif()
@@ -1258,7 +1282,7 @@ endif()
 # Link miniaudio (cross-platform audio backend)
 # PUBLIC because PlatformAudioStubs.h includes miniaudio.h transitively
 if(TARGET miniaudio)
-    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:miniaudio>)
+    target_link_libraries(SparkEngineLib PUBLIC miniaudio)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_MINIAUDIO=1)
     message(STATUS "Linking SparkEngineLib with miniaudio")
 endif()
@@ -1266,7 +1290,7 @@ endif()
 # Link nlohmann/json (JSON parsing library)
 # PUBLIC because JsonUtils.h includes nlohmann_json.h when available
 if(TARGET nlohmann_json)
-    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:nlohmann_json>)
+    target_link_libraries(SparkEngineLib PUBLIC nlohmann_json)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_NLOHMANN_JSON=1)
     message(STATUS "Linking SparkEngineLib with nlohmann/json")
 endif()
@@ -1274,7 +1298,7 @@ endif()
 # Link tinyexr (OpenEXR image loading)
 # PUBLIC because TextureSystem consumers may transitively need it
 if(TARGET tinyexr)
-    target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:tinyexr>)
+    target_link_libraries(SparkEngineLib PUBLIC tinyexr)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_HAS_TINYEXR=1)
     message(STATUS "Linking SparkEngineLib with tinyexr")
 endif()
@@ -1368,6 +1392,7 @@ if(JOLT_FOUND)
         endif()
     endif()
 
+    set(ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
     add_subdirectory("${JOLT_PHYSICS_SOURCE_DIR}/Build" "${CMAKE_BINARY_DIR}/JoltPhysics")
 
     # Suppress warnings in third-party Jolt code
@@ -1379,7 +1404,7 @@ if(JOLT_FOUND)
         endif()
     endif()
 
-    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:Jolt>)
+    target_link_libraries(SparkEngineLib PRIVATE Jolt)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_JOLT_PHYSICS_AVAILABLE=1)
     target_compile_definitions(SparkEngine PRIVATE SPARK_JOLT_PHYSICS_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with Jolt Physics")
@@ -1391,7 +1416,10 @@ set(RECAST_DIR "${CMAKE_SOURCE_DIR}/ThirdParty/AI/recastnavigation")
 if(ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS "${RECAST_DIR}/Recast/Source/Recast.cpp")
     file(GLOB RECAST_SOURCES "${RECAST_DIR}/Recast/Source/*.cpp")
     add_library(Recast STATIC ${RECAST_SOURCES})
-    target_include_directories(Recast PUBLIC "${RECAST_DIR}/Recast/Include")
+    target_include_directories(Recast PUBLIC
+        $<BUILD_INTERFACE:${RECAST_DIR}/Recast/Include>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/recast/Recast>
+    )
     if(MSVC)
         target_compile_options(Recast PRIVATE /W0)
     else()
@@ -1400,7 +1428,10 @@ if(ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS "${RECAS
 
     file(GLOB DETOUR_SOURCES "${RECAST_DIR}/Detour/Source/*.cpp")
     add_library(Detour STATIC ${DETOUR_SOURCES})
-    target_include_directories(Detour PUBLIC "${RECAST_DIR}/Detour/Include")
+    target_include_directories(Detour PUBLIC
+        $<BUILD_INTERFACE:${RECAST_DIR}/Detour/Include>
+        $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/recast/Detour>
+    )
     if(MSVC)
         target_compile_options(Detour PRIVATE /W0)
     else()
@@ -1417,7 +1448,7 @@ else()
 endif()
 
 if(RECAST_FOUND)
-    target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:Recast> $<BUILD_INTERFACE:Detour>)
+    target_link_libraries(SparkEngineLib PRIVATE Recast Detour)
     target_compile_definitions(SparkEngineLib PUBLIC SPARK_RECAST_AVAILABLE=1)
     message(STATUS "Linking SparkEngineLib with Recast/Detour")
 endif()
@@ -1776,7 +1807,27 @@ target_include_directories(SparkEngineLib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/GameModules/SparkGameFPS/Source>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SparkSDK/Include>
     $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:include/SparkEngine>
+    $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty>
 )
+target_compile_features(SparkEngineLib PUBLIC cxx_std_23)
+target_compile_definitions(SparkEngineLib PUBLIC
+    $<$<PLATFORM_ID:Windows>:SPARK_PLATFORM_WINDOWS>
+    $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+    $<$<PLATFORM_ID:Windows>:NOMINMAX>
+)
+if(MSVC)
+    # Public headers use C++20 variadic-macro features such as __VA_OPT__.
+    # MSVC requires its conforming preprocessor mode even when the language
+    # standard is published as C++23.
+    target_compile_options(SparkEngineLib PUBLIC /Zc:preprocessor)
+    # SparkEngine's Debug static ABI is built with iterator level 1. Publish
+    # the same ABI setting so installed Debug consumers do not link a level-2
+    # STL object model against the engine archives (LNK2038).
+    target_compile_definitions(SparkEngineLib PUBLIC
+        $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>
+    )
+endif()
 foreach(_tp_dir ${THIRDPARTY_INCLUDE_DIRS})
     target_include_directories(SparkEngineLib PUBLIC
         $<BUILD_INTERFACE:${_tp_dir}>
@@ -1859,11 +1910,14 @@ if(SPARK_OPENGL_AVAILABLE)
 
     if(GLAD_FOUND)
         add_library(glad STATIC "${GLAD_SOURCE_DIR}/glad.c")
-        target_include_directories(glad PUBLIC "${GLAD_INCLUDE_DIR}")
+        target_include_directories(glad PUBLIC
+            $<BUILD_INTERFACE:${GLAD_INCLUDE_DIR}>
+            $<INSTALL_INTERFACE:include/SparkEngine/ThirdParty/glad>
+        )
         if(MSVC)
             set_property(TARGET glad PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
         endif()
-        target_link_libraries(SparkEngineLib PUBLIC $<BUILD_INTERFACE:glad>)
+        target_link_libraries(SparkEngineLib PUBLIC glad)
     endif()
 
     # EGL for headless software rendering on Linux
@@ -2000,17 +2054,24 @@ endif()
 
 
 
+set(SPARK_PACKAGE_HAS_SDL2 0)
 if(ENABLE_SDL2)
     # Prefer the ThirdParty submodule target, then system SDL2, then pkg-config
     if(TARGET SDL2::SDL2)
         list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
-        target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:SDL2::SDL2>)
-        target_include_directories(SparkEngineLib PUBLIC
-            $<BUILD_INTERFACE:$<TARGET_PROPERTY:SDL2::SDL2,INTERFACE_INCLUDE_DIRECTORIES>>)
+        set(SPARK_PACKAGE_HAS_SDL2 1)
+        target_link_libraries(SparkEngineLib PUBLIC
+            $<BUILD_INTERFACE:SDL2::SDL2>
+            $<INSTALL_INTERFACE:SDL2::SDL2>
+        )
         message(STATUS "SDL2 found and linked (windowing + input on Linux)")
     elseif(TARGET SDL2)
         list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
-        target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:SDL2>)
+        set(SPARK_PACKAGE_HAS_SDL2 1)
+        target_link_libraries(SparkEngineLib PUBLIC
+            $<BUILD_INTERFACE:SDL2>
+            $<INSTALL_INTERFACE:SDL2::SDL2>
+        )
         # PUBLIC so the exe (SparkEngine.cpp) and tests see SDL.h; SPARK_SDL2_AVAILABLE
         # is PUBLIC too, so consumers need the include path.
         target_include_directories(SparkEngineLib PUBLIC
@@ -2021,12 +2082,20 @@ if(ENABLE_SDL2)
         if(SDL2_FOUND)
             list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
             if(TARGET SDL2::SDL2)
-                target_link_libraries(SparkEngineLib PRIVATE $<BUILD_INTERFACE:SDL2::SDL2>)
-                target_include_directories(SparkEngineLib PUBLIC
-                    $<BUILD_INTERFACE:$<TARGET_PROPERTY:SDL2::SDL2,INTERFACE_INCLUDE_DIRECTORIES>>)
+                set(SPARK_PACKAGE_HAS_SDL2 1)
+                target_link_libraries(SparkEngineLib PUBLIC
+                    $<BUILD_INTERFACE:SDL2::SDL2>
+                    $<INSTALL_INTERFACE:SDL2::SDL2>
+                )
             else()
-                target_include_directories(SparkEngineLib PUBLIC ${SDL2_INCLUDE_DIRS})
-                target_link_libraries(SparkEngineLib PRIVATE ${SDL2_LIBRARIES})
+                set(SPARK_PACKAGE_HAS_SDL2 1)
+                target_include_directories(SparkEngineLib PUBLIC
+                    $<BUILD_INTERFACE:${SDL2_INCLUDE_DIRS}>
+                )
+                target_link_libraries(SparkEngineLib PUBLIC
+                    $<BUILD_INTERFACE:${SDL2_LIBRARIES}>
+                    $<INSTALL_INTERFACE:SDL2::SDL2>
+                )
             endif()
             message(STATUS "SDL2 found and linked (system install)")
         else()
@@ -2036,8 +2105,14 @@ if(ENABLE_SDL2)
                 pkg_check_modules(SDL2_PKG QUIET sdl2)
                 if(SDL2_PKG_FOUND)
                     list(APPEND FEATURE_DEFINITIONS "SPARK_SDL2_AVAILABLE")
-                    target_include_directories(SparkEngineLib PUBLIC ${SDL2_PKG_INCLUDE_DIRS})
-                    target_link_libraries(SparkEngineLib PRIVATE ${SDL2_PKG_LIBRARIES})
+                    set(SPARK_PACKAGE_HAS_SDL2 1)
+                    target_include_directories(SparkEngineLib PUBLIC
+                        $<BUILD_INTERFACE:${SDL2_PKG_INCLUDE_DIRS}>
+                    )
+                    target_link_libraries(SparkEngineLib PUBLIC
+                        $<BUILD_INTERFACE:${SDL2_PKG_LIBRARIES}>
+                        $<INSTALL_INTERFACE:SDL2::SDL2>
+                    )
                     message(STATUS "SDL2 found via pkg-config and linked")
                 else()
                     message(WARNING "SDL2 not found — run: git submodule update --init --recursive")
@@ -2140,6 +2215,11 @@ set(SPARK_INSTALL_COMPONENT_TEMPLATES "templates")
 set(SPARK_INSTALL_COMPONENT_SAMPLES "samples")
 
 set(_SPARK_INSTALL_TARGETS SparkEngineLib)
+foreach(_spark_dependency miniz tinyexr zstd tinyobjloader stb_image cgltf miniaudio nlohmann_json glad Jolt Recast Detour)
+    if(TARGET ${_spark_dependency})
+        list(APPEND _SPARK_INSTALL_TARGETS ${_spark_dependency})
+    endif()
+endforeach()
 install(TARGETS ${_SPARK_INSTALL_TARGETS}
     EXPORT SparkEngineTargets
     ARCHIVE DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
@@ -2183,6 +2263,10 @@ install(EXPORT SparkEngineTargets
 
 # Package config
 include(CMakePackageConfigHelpers)
+set(SPARK_PACKAGE_HAS_CURL 0)
+if(TARGET CURL::libcurl)
+    set(SPARK_PACKAGE_HAS_CURL 1)
+endif()
 configure_package_config_file(
     "${CMAKE_SOURCE_DIR}/cmake/SparkEngineConfig.cmake.in"
     "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
@@ -2697,6 +2781,71 @@ set(CPACK_SOURCE_IGNORE_FILES
 set(CPACK_PACKAGE_FILE_NAME
     "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
 )
+
+if(TARGET miniz)
+    install(DIRECTORY "${MINIZ_ROOT}/"
+        DESTINATION include/SparkEngine/ThirdParty/miniz
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        FILES_MATCHING PATTERN "*.h"
+    )
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/miniz_export.h"
+        DESTINATION include/SparkEngine/ThirdParty/miniz
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+    )
+endif()
+if(TARGET tinyexr)
+    install(DIRECTORY "${TINYEXR_DIR}/"
+        DESTINATION include/SparkEngine/ThirdParty/tinyexr
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hh"
+    )
+endif()
+if(TARGET glad)
+    install(DIRECTORY "${GLAD_INCLUDE_DIR}/"
+        DESTINATION include/SparkEngine/ThirdParty/glad
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+foreach(_spark_header_install
+        "${ZSTD_ROOT}|include/SparkEngine/ThirdParty/zstd"
+        "${TINYOBJLOADER_INCLUDE_DIR}|include/SparkEngine/ThirdParty/tinyobjloader"
+        "${STB_DIR}|include/SparkEngine/ThirdParty/stb"
+        "${CGLTF_DIR}|include/SparkEngine/ThirdParty/cgltf"
+        "${MINIAUDIO_DIR}|include/SparkEngine/ThirdParty/miniaudio"
+        "${NLOHMANN_JSON_DIR}|include/SparkEngine/ThirdParty/json")
+    string(REPLACE "|" ";" _spark_header_parts "${_spark_header_install}")
+    list(GET _spark_header_parts 0 _spark_header_source)
+    list(GET _spark_header_parts 1 _spark_header_destination)
+    if(EXISTS "${_spark_header_source}")
+        install(DIRECTORY "${_spark_header_source}/"
+            DESTINATION "${_spark_header_destination}"
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+            FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+        )
+    endif()
+endforeach()
+if(TARGET Jolt)
+    install(DIRECTORY "${JOLT_PHYSICS_SOURCE_DIR}/Jolt/"
+        DESTINATION include/Jolt
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.inl"
+    )
+endif()
+if(TARGET Recast)
+    install(DIRECTORY "${RECAST_DIR}/Recast/Include/"
+        DESTINATION include/SparkEngine/ThirdParty/recast/Recast
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
+if(TARGET Detour)
+    install(DIRECTORY "${RECAST_DIR}/Detour/Include/"
+        DESTINATION include/SparkEngine/ThirdParty/recast/Detour
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()
 set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/SparkCPackOptions.cmake")
 
 include(CPack)

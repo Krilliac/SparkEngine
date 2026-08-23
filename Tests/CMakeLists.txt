@@ -306,6 +306,7 @@ add_executable(SparkTests
     TestWeaponMechanics.cpp
     TestGameObjectTransforms.cpp
     TestSceneSerializer.cpp
+    TestSceneSerializerReal.cpp
     TestMusicManager.cpp
     TestAngelScriptEngine.cpp
     TestScriptHotReload.cpp
@@ -555,6 +556,10 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorWindowManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneSerializer.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
     # Editor sources needed by tests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/CollaborativeEditSession.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Communication/LiveEditBridge.cpp"
@@ -596,6 +601,9 @@ target_include_directories(SparkTests PRIVATE
 
 # Link engine static library so tests can call .cpp-backed implementations
 target_link_libraries(SparkTests PRIVATE SparkEngineLib)
+if(TARGET miniz)
+    target_link_libraries(SparkTests PRIVATE miniz)
+endif()
 
 # SparkBuild command generation is part of the supported first-party build
 # surface. Keep these tests conditional so minimal engine configurations can

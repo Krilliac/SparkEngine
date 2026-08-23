@@ -4,9 +4,9 @@
  * @author Spark Engine Team
  * @date 2025
  * 
- * This file provides functionality for saving and loading scene files
- * in both binary and JSON formats, with version compatibility and
- * error handling.
+ * This file provides complete JSON scene persistence with version
+ * compatibility and error handling. The legacy binary entry points fail
+ * closed until a complete, versioned binary schema is implemented.
  */
 
 #pragma once
@@ -25,7 +25,7 @@ namespace SparkEditor
  */
     enum class SerializationFormat
     {
-        BINARY, ///< Compact binary format for production
+        BINARY, ///< Reserved; currently rejected because the legacy schema is incomplete
         JSON,   ///< Human-readable JSON format for debugging/version control
         AUTO    ///< Automatically detect format from file extension
     };
@@ -45,13 +45,12 @@ namespace SparkEditor
     /**
  * @brief Scene file serialization and deserialization system
  * 
- * Handles saving and loading of scene files with support for both binary
- * and JSON formats. Provides version compatibility, validation, and
+ * Handles saving and loading of complete JSON scene files. Provides version compatibility, validation, and
  * comprehensive error handling.
  * 
  * Features:
- * - Binary format for production (fast loading, compact)
- * - JSON format for debugging and version control (human-readable)
+ * - Complete JSON format for editor persistence and version control
+ * - Fail-closed handling of the incomplete legacy binary format
  * - Automatic format detection
  * - Version compatibility handling
  * - Data validation and integrity checks

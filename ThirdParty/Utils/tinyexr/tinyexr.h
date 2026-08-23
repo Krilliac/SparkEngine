@@ -1362,6 +1362,10 @@ struct HeaderInfo {
 
 static bool ReadChannelInfo(std::vector<ChannelInfo> &channels,
                             const std::vector<unsigned char> &data) {
+  static const size_t kMaxChannelCount = 64;
+  if (data.empty()) {
+    return false;
+  }
   const char *p = reinterpret_cast<const char *>(&data.at(0));
 
   for (;;) {
@@ -1402,6 +1406,9 @@ static bool ReadChannelInfo(std::vector<ChannelInfo> &channels,
     tinyexr::swap4(&info.x_sampling);
     tinyexr::swap4(&info.y_sampling);
 
+    if (channels.size() >= kMaxChannelCount) {
+      return false;
+    }
     channels.push_back(info);
   }
 
@@ -5784,6 +5791,13 @@ static unsigned char **AllocateImage(int num_channels,
       reinterpret_cast<unsigned char **>(static_cast<float **>(
           malloc(sizeof(float *) * static_cast<size_t>(num_channels))));
 
+  if (!images) {
+    if (success) {
+      (*success) = false;
+    }
+    return NULL;
+  }
+
   for (size_t c = 0; c < static_cast<size_t>(num_channels); c++) {
     images[c] = NULL;
   }
@@ -5823,6 +5837,15 @@ static unsigned char **AllocateImage(int num_channels,
       images[c] = NULL; // just in case.
       valid = false;
       break;
+    }
+  }
+
+  if (valid) {
+    for (size_t c = 0; c < static_cast<size_t>(num_channels); c++) {
+      if (!images[c]) {
+        valid = false;
+        break;
+      }
     }
   }
 
@@ -6287,8 +6310,34 @@ static bool ConvertHeader(EXRHeader *exr_header, const HeaderInfo &info, std::st
 
   exr_header->num_channels = static_cast<int>(info.channels.size());
 
+  if (exr_header->num_channels <= 0 || exr_header->num_channels > 64) {
+    if (err) {
+      (*err) += "(ConvertHeader) Invalid or excessive channel count.\n";
+    }
+    exr_header->num_channels = 0;
+    return false;
+  }
+
   exr_header->channels = static_cast<EXRChannelInfo *>(malloc(
       sizeof(EXRChannelInfo) * static_cast<size_t>(exr_header->num_channels)));
+  exr_header->pixel_types = static_cast<int *>(
+      malloc(sizeof(int) * static_cast<size_t>(exr_header->num_channels)));
+  exr_header->requested_pixel_types = static_cast<int *>(
+      malloc(sizeof(int) * static_cast<size_t>(exr_header->num_channels)));
+  if (!exr_header->channels || !exr_header->pixel_types ||
+      !exr_header->requested_pixel_types) {
+    free(exr_header->channels);
+    free(exr_header->pixel_types);
+    free(exr_header->requested_pixel_types);
+    exr_header->channels = NULL;
+    exr_header->pixel_types = NULL;
+    exr_header->requested_pixel_types = NULL;
+    exr_header->num_channels = 0;
+    if (err) {
+      (*err) += "(ConvertHeader) Out of memory allocating channel metadata.\n";
+    }
+    return false;
+  }
   for (size_t c = 0; c < static_cast<size_t>(exr_header->num_channels); c++) {
 #ifdef _MSC_VER
     strncpy_s(exr_header->channels[c].name, info.channels[c].name.c_str(), 255);
@@ -6304,15 +6353,11 @@ static bool ConvertHeader(EXRHeader *exr_header, const HeaderInfo &info, std::st
     exr_header->channels[c].y_sampling = info.channels[c].y_sampling;
   }
 
-  exr_header->pixel_types = static_cast<int *>(
-      malloc(sizeof(int) * static_cast<size_t>(exr_header->num_channels)));
   for (size_t c = 0; c < static_cast<size_t>(exr_header->num_channels); c++) {
     exr_header->pixel_types[c] = info.channels[c].pixel_type;
   }
 
   // Initially fill with values of `pixel_types`
-  exr_header->requested_pixel_types = static_cast<int *>(
-      malloc(sizeof(int) * static_cast<size_t>(exr_header->num_channels)));
   for (size_t c = 0; c < static_cast<size_t>(exr_header->num_channels); c++) {
     exr_header->requested_pixel_types[c] = info.channels[c].pixel_type;
   }
@@ -6328,6 +6373,13 @@ static bool ConvertHeader(EXRHeader *exr_header, const HeaderInfo &info, std::st
 
     exr_header->custom_attributes = static_cast<EXRAttribute *>(malloc(
         sizeof(EXRAttribute) * size_t(exr_header->num_custom_attributes)));
+    if (!exr_header->custom_attributes) {
+      exr_header->num_custom_attributes = 0;
+      if (err) {
+        (*err) += "(ConvertHeader) Out of memory allocating custom attributes.\n";
+      }
+      return false;
+    }
 
     for (size_t i = 0; i < size_t(exr_header->num_custom_attributes); i++) {
       memcpy(exr_header->custom_attributes[i].name, info.attributes[i].name,

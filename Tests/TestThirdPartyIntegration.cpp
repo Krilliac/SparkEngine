@@ -224,8 +224,10 @@ TEST(TinyExr_ApiAvailable)
 {
     EXRHeader header;
     InitEXRHeader(&header);
-    EXPECT_NEAR(header.pixel_aspect_ratio, 1.0f, 0.01f);
-    EXPECT_NEAR(header.screen_window_width, 1.0f, 0.01f);
+    EXPECT_NEAR(header.pixel_aspect_ratio, 0.0f, 0.01f);
+    EXPECT_NEAR(header.screen_window_width, 0.0f, 0.01f);
+    EXPECT_TRUE(header.channels == nullptr);
+    EXPECT_EQ(header.num_channels, 0);
     FreeEXRHeader(&header);
 }
 

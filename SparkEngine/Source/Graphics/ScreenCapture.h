@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #if defined(SPARK_MINIZ_AVAILABLE) && __has_include(<miniz.h>)
 #include <miniz.h>
 #define SPARK_SCREENCAP_PNG 1

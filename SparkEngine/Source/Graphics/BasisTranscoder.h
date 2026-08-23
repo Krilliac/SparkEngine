@@ -100,10 +100,10 @@ namespace Spark::Graphics
     /**
      * @brief Transcodes Basis Universal textures to native GPU formats
      *
-     * The engine currently exposes format-selection and safe header inspection,
-     * but does not ship a Basis Universal decoder backend. Transcode therefore
-     * fails closed instead of fabricating pixels. Link basisu and replace the
-     * backend gate before accepting .basis content in production.
+     * The engine currently exposes format selection, but does not ship a Basis
+     * Universal decoder backend. Header parsing and transcoding therefore fail
+     * closed instead of guessing the format layout or fabricating pixels. Link
+     * basisu and replace the backend gate before accepting .basis content.
      *
      * Intended usage once a backend is available:
      * 1. Call SelectBestFormat() to pick the optimal format for the current RHI backend
@@ -148,45 +148,10 @@ namespace Spark::Graphics
          */
         static bool ParseHeader(const uint8_t* data, size_t dataSize, BasisFileHeader& outHeader)
         {
-            if (!data || dataSize < 32)
-                return false;
-
-            // Check magic
-            if (data[0] != 0x73 || data[1] != 0x42) // 'sB'
-                return false;
-
-            auto readU16 = [](const uint8_t* bytes)
-            { return static_cast<uint16_t>(bytes[0]) | (static_cast<uint16_t>(bytes[1]) << 8); };
-            auto readU32 = [](const uint8_t* bytes)
-            {
-                return static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8) |
-                       (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24);
-            };
-
-            BasisFileHeader parsed;
-            parsed.magic = static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8);
-            parsed.version = readU16(data + 2);
-
-            // Read dimensions from header (offsets are Basis-specific)
-            // Simplified: real implementation reads the full header struct
-            parsed.width = readU32(data + 12);
-            parsed.height = readU32(data + 16);
-            parsed.totalImages = readU32(data + 8);
-            parsed.mipLevels = std::max(1u, readU32(data + 20));
-            parsed.flags = readU16(data + 4);
-            parsed.isETC1S = (parsed.flags & 0x01) != 0;
-            parsed.hasAlpha = (parsed.flags & 0x02) != 0;
-
-            constexpr uint32_t kMaxDimension = 16'384;
-            constexpr uint32_t kMaxImages = 256;
-            constexpr uint32_t kMaxMipLevels = 16;
-            if (parsed.width == 0 || parsed.height == 0 || parsed.width > kMaxDimension ||
-                parsed.height > kMaxDimension || parsed.totalImages == 0 || parsed.totalImages > kMaxImages ||
-                parsed.mipLevels > kMaxMipLevels)
-                return false;
-
-            outHeader = parsed;
-            return true;
+            (void)data;
+            (void)dataSize;
+            (void)outHeader;
+            return false;
         }
 
         /**

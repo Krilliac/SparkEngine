@@ -17,6 +17,8 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <algorithm>
+#include <cctype>
 
 using namespace DirectX;
 namespace SparkEditor
@@ -38,7 +40,9 @@ namespace SparkEditor
             actualFormat = DetectFormat(filePath);
             if (actualFormat == SerializationFormat::AUTO)
             {
-                actualFormat = SerializationFormat::BINARY;
+                SerializationResult result;
+                result.errorMessage = "Unsupported scene file extension: " + filePath;
+                return result;
             }
         }
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving scene to '%s' (format=%s)", filePath.c_str(),
@@ -50,13 +54,20 @@ namespace SparkEditor
             CreateBackup(filePath);
         }
 
-        if (actualFormat == SerializationFormat::BINARY)
+        try
         {
-            result = SaveBinary(scene, filePath);
+            if (actualFormat == SerializationFormat::BINARY)
+                result = SaveBinary(scene, filePath);
+            else
+                result = SaveJSON(scene, filePath);
         }
-        else
+        catch (const std::exception& exception)
         {
-            result = SaveJSON(scene, filePath);
+            result.errorMessage = "Scene save failed: " + std::string(exception.what());
+        }
+        catch (...)
+        {
+            result.errorMessage = "Scene save failed with an unknown error";
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
@@ -72,17 +83,30 @@ namespace SparkEditor
         auto startTime = std::chrono::high_resolution_clock::now();
 
         SerializationFormat format = DetectFormat(filePath);
+        if (format == SerializationFormat::AUTO)
+        {
+            SerializationResult result;
+            result.errorMessage = "Unsupported scene file extension: " + filePath;
+            return result;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading scene from '%s' (detected format=%s)", filePath.c_str(),
                        format == SerializationFormat::JSON ? "json" : "binary");
         SerializationResult result;
 
-        if (format == SerializationFormat::JSON)
+        try
         {
-            result = LoadJSON(filePath, outScene);
+            if (format == SerializationFormat::JSON)
+                result = LoadJSON(filePath, outScene);
+            else
+                result = LoadBinary(filePath, outScene);
         }
-        else
+        catch (const std::exception& exception)
         {
-            result = LoadBinary(filePath, outScene);
+            result.errorMessage = "Scene load failed: " + std::string(exception.what());
+        }
+        catch (...)
+        {
+            result.errorMessage = "Scene load failed with an unknown error";
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
@@ -93,41 +117,15 @@ namespace SparkEditor
 
     SerializationResult SceneSerializer::ValidateSceneFile(const std::string& filePath)
     {
-        SerializationResult result;
-
-        std::vector<uint8_t> data;
-        if (!ReadFromFile(filePath, data))
+        if (DetectFormat(filePath) != SerializationFormat::JSON)
         {
-            result.success = false;
-            result.errorMessage = "Failed to read file: " + filePath;
+            SerializationResult result;
+            result.errorMessage = "Unsupported scene file extension: " + filePath;
             return result;
         }
 
-        if (data.size() < sizeof(SceneHeader))
-        {
-            result.success = false;
-            result.errorMessage = "File too small to be a valid scene file";
-            return result;
-        }
-
-        SceneHeader header;
-        memcpy(&header, data.data(), sizeof(SceneHeader));
-
-        if (header.magic != SCENE_FILE_MAGIC)
-        {
-            result.success = false;
-            result.errorMessage = "Invalid scene file magic number";
-            return result;
-        }
-
-        if (header.version > SCENE_FILE_VERSION)
-        {
-            result.warnings.push_back("Scene file version is newer than supported");
-        }
-
-        result.success = true;
-        result.bytesProcessed = data.size();
-        return result;
+        SceneFile validatedScene;
+        return LoadScene(filePath, validatedScene);
     }
 
     SerializationResult SceneSerializer::ConvertSceneFormat(const std::string& inputPath, const std::string& outputPath,
@@ -147,11 +145,11 @@ namespace SparkEditor
         switch (format)
         {
         case SerializationFormat::BINARY:
-            return {".spks", ".scene"};
+            return {};
         case SerializationFormat::JSON:
-            return {".json", ".scenejson"};
+            return {".sparkscene", ".json", ".scenejson"};
         default:
-            return {".spks", ".scene", ".json", ".scenejson"};
+            return {".sparkscene", ".json", ".scenejson"};
         }
     }
 
@@ -163,13 +161,11 @@ namespace SparkEditor
             return SerializationFormat::AUTO;
         }
         std::string ext = filePath.substr(dotPos);
-        if (ext == ".json" || ext == ".scenejson")
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (ext == ".sparkscene" || ext == ".json" || ext == ".scenejson")
         {
             return SerializationFormat::JSON;
-        }
-        if (ext == ".spks" || ext == ".scene")
-        {
-            return SerializationFormat::BINARY;
         }
         return SerializationFormat::AUTO;
     }
@@ -208,10 +204,11 @@ namespace SparkEditor
     bool SceneSerializer::HandleVersionCompatibility(uint32_t fileVersion, SceneFile& /*scene*/,
                                                      SerializationResult& result)
     {
-        if (fileVersion > SCENE_FILE_VERSION)
+        if (fileVersion != SCENE_FILE_VERSION)
         {
             result.warnings.push_back("Scene file version " + std::to_string(fileVersion) +
-                                      " is newer than supported version " + std::to_string(SCENE_FILE_VERSION));
+                                      " is unsupported; expected " + std::to_string(SCENE_FILE_VERSION));
+            return false;
         }
         return true;
     }

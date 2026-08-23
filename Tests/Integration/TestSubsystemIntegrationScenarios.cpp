@@ -433,6 +433,7 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
 
     float currentTimeMs = 0.0f;
     int deliveredPackets = 0;
+    float maxCorrectionMagnitude = 0.0f;
     while (deliveredPackets < 8 && currentTimeMs < 700.0f)
     {
         auto readyPackets = simulator.GetReadyPackets(currentTimeMs);
@@ -443,6 +444,7 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
             serverState.position = packet.authoritativePosition;
             serverState.lastProcessedInput = packet.ackInput;
             prediction.Reconcile(serverState, 1.0f / 60.0f);
+            maxCorrectionMagnitude = std::max(maxCorrectionMagnitude, prediction.GetLastCorrectionMagnitude());
 
             const auto& reconciled = prediction.GetState();
             transform.position = reconciled.position;
@@ -452,7 +454,7 @@ TEST(Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation)
     }
 
     EXPECT_EQ(deliveredPackets, 8);
-    EXPECT_TRUE(prediction.GetLastCorrectionMagnitude() > 0.01f);
+    EXPECT_TRUE(maxCorrectionMagnitude > 0.01f);
 
     const auto& finalPredicted = prediction.GetState();
     EXPECT_NEAR(transform.position.x, finalPredicted.position.x, 0.0001f);

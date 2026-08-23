@@ -241,6 +241,37 @@ TEST(ClientPrediction_InputReplay)
     EXPECT_TRUE(reconciledState.position.x > 0.0f);
 }
 
+TEST(ClientPrediction_ReplayUsesRecordedTickDurationsAndIgnoresStaleAcks)
+{
+    Spark::ClientPrediction prediction;
+    Spark::PredictedState state;
+    state.isGrounded = true;
+
+    Spark::PredictedInput first;
+    first.moveDirection = {1, 0, 0};
+    const uint32_t firstSequence = prediction.RecordInput(first);
+    prediction.ApplyPrediction(state, first, 0.01f);
+
+    Spark::PredictedInput second;
+    second.moveDirection = {1, 0, 0};
+    const uint32_t secondSequence = prediction.RecordInput(second);
+    prediction.ApplyPrediction(state, second, 0.03f);
+    EXPECT_EQ(prediction.GetState().lastProcessedInput, secondSequence);
+
+    Spark::PredictedState authoritative;
+    authoritative.lastProcessedInput = firstSequence;
+    authoritative.isGrounded = true;
+    prediction.Reconcile(authoritative, 1.0f);
+    EXPECT_NEAR(prediction.GetState().position.x, 0.15f, 0.0001f);
+
+    const auto reconciled = prediction.GetState();
+    Spark::PredictedState stale = authoritative;
+    stale.lastProcessedInput = 0;
+    stale.position = {100.0f, 0.0f, 0.0f};
+    prediction.Reconcile(stale, 1.0f);
+    EXPECT_NEAR(prediction.GetState().position.x, reconciled.position.x, 0.0001f);
+}
+
 TEST(ClientPrediction_BufferOverflow)
 {
     Spark::ClientPrediction prediction;

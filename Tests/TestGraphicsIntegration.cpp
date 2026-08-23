@@ -236,7 +236,7 @@ TEST(BasisTranscoder_FailsClosedWithoutBackend)
     basis[20] = 1;   // mipLevels
 
     BasisFileHeader header;
-    EXPECT_TRUE(BasisTranscoder::ParseHeader(basis.data(), basis.size(), header));
+    EXPECT_FALSE(BasisTranscoder::ParseHeader(basis.data(), basis.size(), header));
     EXPECT_TRUE(BasisTranscoder::Transcode(basis.data(), basis.size(), TranscoderFormat::RGBA32).data.empty());
     EXPECT_TRUE(BasisTranscoder::Transcode(basis.data(), basis.size(), TranscoderFormat::BC7_RGBA, 0, 32).data.empty());
 }
@@ -254,8 +254,9 @@ TEST(BasisTranscoder_HeaderValidationIsBoundedAndTransactional)
     basis[20] = 1;
 
     BasisFileHeader header;
-    EXPECT_TRUE(BasisTranscoder::ParseHeader(basis, 32, header));
-    EXPECT_EQ(header.width, 1u);
+    header.width = 77;
+    EXPECT_FALSE(BasisTranscoder::ParseHeader(basis, 32, header));
+    EXPECT_EQ(header.width, 77u);
 
     basis[15] = 0x40; // width = 0x40000001, beyond the allocation budget.
     BasisFileHeader sentinel;
@@ -306,6 +307,64 @@ TEST(EXRLoader_TruncationFailsTransactionally)
     EXPECT_EQ(image.width, 77u);
     EXPECT_EQ(image.pixels.size(), 1u);
     EXPECT_NEAR(image.pixels[0], 42.0f, 0.001f);
+
+    std::free(encoded);
+    if (error)
+        FreeEXRErrorMessage(error);
+}
+
+TEST(EXRLoader_RejectsUnsupportedChannelLayoutTransactionally)
+{
+    const float source[] = {0.5f};
+    unsigned char* encoded = nullptr;
+    const char* error = nullptr;
+    const int encodedSize = SaveEXRToMemory(source, 1, 1, 1, 1, &encoded, &error);
+    EXPECT_TRUE(encodedSize > 0);
+    EXPECT_TRUE(encoded != nullptr);
+
+    Spark::Graphics::EXRImage image;
+    image.width = 77;
+    image.pixels = {9.0f};
+    for (int attempt = 0; attempt < 4; ++attempt)
+        EXPECT_FALSE(Spark::Graphics::EXRLoader::Load(encoded, static_cast<size_t>(encodedSize), image));
+    EXPECT_EQ(image.width, 77u);
+    EXPECT_EQ(image.pixels.size(), size_t{1});
+    EXPECT_NEAR(image.pixels[0], 9.0f, 0.001f);
+
+    std::free(encoded);
+    if (error)
+        FreeEXRErrorMessage(error);
+}
+
+TEST(EXRLoader_RejectsSubsampledChannels)
+{
+    const float source[] = {1.0f, 0.25f, 0.5f, 1.0f, 0.0f, 0.75f, 0.125f, 0.5f};
+    unsigned char* encoded = nullptr;
+    const char* error = nullptr;
+    const int encodedSize = SaveEXRToMemory(source, 2, 1, 4, 1, &encoded, &error);
+    EXPECT_TRUE(encodedSize > 0);
+    EXPECT_TRUE(encoded != nullptr);
+
+    const std::string marker("channels\0chlist\0", 16);
+    auto* markerPosition = std::search(encoded, encoded + encodedSize, marker.begin(), marker.end());
+    EXPECT_TRUE(markerPosition != encoded + encodedSize);
+    if (markerPosition != encoded + encodedSize)
+    {
+        unsigned char* attributeSize = markerPosition + marker.size();
+        unsigned char* channelName = attributeSize + sizeof(uint32_t);
+        unsigned char* channelNameEnd = std::find(channelName, encoded + encodedSize, static_cast<unsigned char>(0));
+        EXPECT_TRUE(channelNameEnd != encoded + encodedSize);
+        if (channelNameEnd != encoded + encodedSize && encoded + encodedSize - channelNameEnd >= 13)
+        {
+            const uint32_t subsampled = 2;
+            std::memcpy(channelNameEnd + 1 + 8, &subsampled, sizeof(subsampled));
+
+            Spark::Graphics::EXRImage image;
+            image.width = 77;
+            EXPECT_FALSE(Spark::Graphics::EXRLoader::Load(encoded, static_cast<size_t>(encodedSize), image));
+            EXPECT_EQ(image.width, 77u);
+        }
+    }
 
     std::free(encoded);
     if (error)

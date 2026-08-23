@@ -101,6 +101,15 @@ jobs:
     - name: Run Tests
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure
 
+    - name: Validate external package consumption
+      shell: pwsh
+      run: |
+        cmake --install build --config ${{ matrix.config }} --component sdk
+        cmake -S Tests/PackageSmoke -B smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 `
+          -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine"
+        cmake --build smoke-build --config ${{ matrix.config }} --parallel
+        ctest --test-dir smoke-build -C ${{ matrix.config }} --output-on-failure
+
     - name: Generate CPack packages
       shell: pwsh
       run: |
@@ -158,12 +167,15 @@ jobs:
         cmake --install build
         cmake -S Tests/PackageSmoke -B smoke-build \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DCMAKE_C_COMPILER=gcc-14 \
+          -DCMAKE_CXX_COMPILER=g++-14 \
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine"
         cmake --build smoke-build --parallel $(nproc)
+        ctest --test-dir smoke-build --output-on-failure
 
     - name: Generate CPack packages
       run: |
-        cpack --config build/CPackConfig.cmake -B build/packages
+        cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
     - name: Upload packaged artifact
       uses: actions/upload-artifact@v7

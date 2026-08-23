@@ -36,21 +36,32 @@ namespace Spark
 
     void ClientPrediction::ApplyPrediction(PredictedState& state, const PredictedInput& input, float deltaTime)
     {
-        m_movementSimulator(state, input, deltaTime);
-        state.lastProcessedInput = input.sequenceNumber;
+        PredictedInput appliedInput = input;
+        if (appliedInput.sequenceNumber == 0 && !m_pendingInputs.empty())
+            appliedInput.sequenceNumber = m_pendingInputs.back().sequenceNumber;
+
+        const auto pending = std::find_if(m_pendingInputs.rbegin(), m_pendingInputs.rend(), [&](PredictedInput& value)
+                                          { return value.sequenceNumber == appliedInput.sequenceNumber; });
+        if (pending != m_pendingInputs.rend())
+            pending->simulationDeltaTime = deltaTime;
+        appliedInput.simulationDeltaTime = deltaTime;
+
+        m_movementSimulator(state, appliedInput, deltaTime);
+        state.lastProcessedInput = appliedInput.sequenceNumber;
         m_currentState = state;
     }
 
     void ClientPrediction::Reconcile(const PredictedState& serverState, float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
-        // Calculate correction magnitude
-        float dx = serverState.position.x - m_currentState.position.x;
-        float dy = serverState.position.y - m_currentState.position.y;
-        float dz = serverState.position.z - m_currentState.position.z;
-        m_lastCorrectionMag = std::sqrt(dx * dx + dy * dy + dz * dz);
-        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Reconcile: correction magnitude=%.4f, pending inputs=%zu",
-                        m_lastCorrectionMag, m_pendingInputs.size());
+        if (serverState.lastProcessedInput < m_lastServerAck)
+        {
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Ignoring stale reconciliation ACK %u (latest=%u)",
+                            serverState.lastProcessedInput, m_lastServerAck);
+            return;
+        }
+        m_lastServerAck = serverState.lastProcessedInput;
+        const PredictedState previousState = m_currentState;
 
         // Snap to server state
         PredictedState reconciled = serverState;
@@ -64,15 +75,27 @@ namespace Spark
         // Re-apply all remaining pending inputs
         for (const auto& input : m_pendingInputs)
         {
-            m_movementSimulator(reconciled, input, deltaTime);
+            const float replayDeltaTime = input.simulationDeltaTime > 0.0f ? input.simulationDeltaTime : deltaTime;
+            m_movementSimulator(reconciled, input, replayDeltaTime);
+            reconciled.lastProcessedInput = input.sequenceNumber;
         }
+
+        // Report the correction actually applied after replaying unacknowledged
+        // inputs. Comparing directly with the raw server snapshot incorrectly
+        // counts legitimate pending movement as error.
+        const float dx = reconciled.position.x - previousState.position.x;
+        const float dy = reconciled.position.y - previousState.position.y;
+        const float dz = reconciled.position.z - previousState.position.z;
+        m_lastCorrectionMag = std::sqrt(dx * dx + dy * dy + dz * dz);
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Reconcile: correction magnitude=%.4f, pending inputs=%zu",
+                        m_lastCorrectionMag, m_pendingInputs.size());
 
         if (m_smoothCorrection && m_lastCorrectionMag > 0.001f)
         {
             // Store correction offset for smooth interpolation
-            m_correctionOffset.x = m_currentState.position.x - reconciled.position.x;
-            m_correctionOffset.y = m_currentState.position.y - reconciled.position.y;
-            m_correctionOffset.z = m_currentState.position.z - reconciled.position.z;
+            m_correctionOffset.x = previousState.position.x - reconciled.position.x;
+            m_correctionOffset.y = previousState.position.y - reconciled.position.y;
+            m_correctionOffset.z = previousState.position.z - reconciled.position.z;
         }
 
         m_currentState = reconciled;

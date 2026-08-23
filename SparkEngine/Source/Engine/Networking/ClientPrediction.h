@@ -75,6 +75,7 @@ namespace Spark
         bool fire = false;                        ///< Fire pressed
         bool reload = false;                      ///< Reload pressed
         bool interact = false;                    ///< Interact pressed
+        float simulationDeltaTime = 0.0f;         ///< Tick duration used for deterministic reconciliation replay
     };
 
     // =============================================================================
@@ -183,6 +184,7 @@ namespace Spark
         std::vector<PredictedInput> m_pendingInputs;
         PredictedState m_currentState;
         uint32_t m_sequenceNumber = 0;
+        uint32_t m_lastServerAck = 0;
         size_t m_maxPendingInputs = 128;
         float m_lastCorrectionMag = 0.0f;
 

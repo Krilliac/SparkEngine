@@ -21,88 +21,21 @@ namespace SparkEditor
 
     SerializationResult SceneSerializer::SaveBinary(const SceneFile& scene, const std::string& filePath)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Saving scene (binary) to: %s (%zu objects)", filePath.c_str(),
-                       scene.objects.size());
+        (void)scene;
+        SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Refusing unsupported binary scene save: %s", filePath.c_str());
         SerializationResult result;
-        std::vector<uint8_t> buffer;
-
-        // Write header
-        size_t headerSize = sizeof(SceneHeader);
-        buffer.resize(headerSize);
-        memcpy(buffer.data(), &scene.header, headerSize);
-
-        // Write objects
-        for (const auto& obj : scene.objects)
-        {
-            // Object ID
-            size_t offset = buffer.size();
-            buffer.resize(offset + sizeof(ObjectID));
-            memcpy(buffer.data() + offset, &obj.id, sizeof(ObjectID));
-
-            // Name length + name
-            uint32_t nameLen = static_cast<uint32_t>(obj.name.size());
-            offset = buffer.size();
-            buffer.resize(offset + sizeof(uint32_t) + nameLen);
-            memcpy(buffer.data() + offset, &nameLen, sizeof(uint32_t));
-            memcpy(buffer.data() + offset + sizeof(uint32_t), obj.name.data(), nameLen);
-
-            // Transform
-            SerializeTransform(obj.transform, buffer);
-
-            // Active flag
-            offset = buffer.size();
-            buffer.resize(offset + 1);
-            buffer[offset] = obj.active ? 1 : 0;
-        }
-
-        if (!WriteToFile(filePath, buffer))
-        {
-            result.success = false;
-            result.errorMessage = "Failed to write file: " + filePath;
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to write binary scene: %s", filePath.c_str());
-            return result;
-        }
-
-        result.success = true;
-        result.bytesProcessed = buffer.size();
-        m_totalBytesWritten += buffer.size();
+        result.errorMessage =
+            "Binary scene serialization is unavailable because the legacy format is incomplete; use JSON/.sparkscene";
         return result;
     }
 
     SerializationResult SceneSerializer::LoadBinary(const std::string& filePath, SceneFile& outScene)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading scene (binary) from: %s", filePath.c_str());
+        (void)outScene;
+        SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Refusing unsupported binary scene load: %s", filePath.c_str());
         SerializationResult result;
-
-        std::vector<uint8_t> data;
-        if (!ReadFromFile(filePath, data))
-        {
-            result.success = false;
-            result.errorMessage = "Failed to read file: " + filePath;
-            return result;
-        }
-
-        if (data.size() < sizeof(SceneHeader))
-        {
-            result.success = false;
-            result.errorMessage = "File too small for scene header";
-            return result;
-        }
-
-        memcpy(&outScene.header, data.data(), sizeof(SceneHeader));
-
-        if (outScene.header.magic != SCENE_FILE_MAGIC)
-        {
-            result.success = false;
-            result.errorMessage = "Invalid scene file magic number";
-            return result;
-        }
-
-        HandleVersionCompatibility(outScene.header.version, outScene, result);
-
-        result.success = true;
-        result.bytesProcessed = data.size();
-        m_totalBytesRead += data.size();
+        result.errorMessage =
+            "Binary scene deserialization is unavailable because the legacy format is incomplete; use JSON/.sparkscene";
         return result;
     }
 

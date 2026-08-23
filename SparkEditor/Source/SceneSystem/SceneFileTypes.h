@@ -1007,10 +1007,10 @@ namespace SparkEditor
  */
     struct Component
     {
-        ComponentType type;        ///< Component type identifier
-        ObjectID objectID;         ///< Object this component belongs to
-        bool enabled = true;       ///< Whether component is enabled
-        std::vector<uint8_t> data; ///< Serialized component data
+        ComponentType type = ComponentType::CUSTOM; ///< Component type identifier
+        ObjectID objectID = INVALID_OBJECT_ID;      ///< Object this component belongs to
+        bool enabled = true;                        ///< Whether component is enabled
+        std::vector<uint8_t> data;                  ///< Serialized component data
 
         /**
      * @brief Get component data as specific type

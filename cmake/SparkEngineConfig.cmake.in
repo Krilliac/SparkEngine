@@ -6,6 +6,14 @@ if(NOT WIN32)
     find_dependency(Threads REQUIRED)
 endif()
 
+if(@SPARK_PACKAGE_HAS_CURL@)
+    find_dependency(CURL REQUIRED)
+endif()
+
+if(@SPARK_PACKAGE_HAS_SDL2@)
+    find_dependency(SDL2 REQUIRED)
+endif()
+
 if(NOT TARGET OpenGL::GL)
     find_package(OpenGL QUIET)
 endif()
