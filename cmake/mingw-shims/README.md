@@ -6,6 +6,7 @@ Microsoft SDK:
 
 | Header              | MinGW-w64                          | Windows SDK / MSVC  |
 |---------------------|------------------------------------|---------------------|
+| `Windows.h`         | `windows.h` (lowercase)            | `Windows.h`         |
 | `DirectXMath.h`     | `directxmath.h` (lowercase, stub)  | `DirectXMath.h`     |
 | `DirectXCollision.h`| *not present*                      | `DirectXCollision.h`|
 | `DirectXColors.h`   | *not present*                      | `DirectXColors.h`   |
@@ -34,6 +35,7 @@ and `FetchContent` will skip the download. The expected file names are:
 
 ```
 cmake/mingw-shims/
+├── Windows.h               (required case-compatibility wrapper)
 ├── DirectXMath.h           (required)
 ├── DirectXMathConvert.inl  (required)
 ├── DirectXMathMatrix.inl   (required)

@@ -94,8 +94,7 @@ done
 dedup() {
     local file="$1" max="$2"
     sed -E 's|/home/runner/work/[^/]*/[^/]*/||g; s|[A-Z]:\\[^ ]*\\SparkEngine\\||g; s|\s+| |g' "$file" \
-        | awk '!seen[$0]++' \
-        | head -n "$max"
+        | awk -v max="$max" '!seen[$0]++ && count < max { print; count++ }'
 }
 
 max_errors=30
