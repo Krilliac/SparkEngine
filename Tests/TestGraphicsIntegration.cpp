@@ -4,10 +4,13 @@
 //         ShaderVariantSystem, FastNoiseLite
 
 #include "TestFramework.h"
+#include "Graphics/BasisTranscoder.h"
+#include "Graphics/EXRLoader.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <numeric>
 #include <string>
@@ -198,33 +201,117 @@ TEST(MeshOptimizer_MeshletLimits)
 
 TEST(BasisTranscoder_BlockSizes)
 {
-    // BC1: 8 bytes per 4x4 block (4 bpp)
-    EXPECT_EQ(8u, 8u); // BC1
-    // BC3: 16 bytes per 4x4 block (8 bpp)
-    EXPECT_EQ(16u, 16u); // BC3
-    // BC7: 16 bytes per 4x4 block (8 bpp)
-    EXPECT_EQ(16u, 16u); // BC7
+    using namespace Spark::Graphics;
+    EXPECT_EQ(BasisTranscoder::GetBlockSize(TranscoderFormat::BC1_RGB), 8u);
+    EXPECT_EQ(BasisTranscoder::GetBlockSize(TranscoderFormat::BC3_RGBA), 16u);
+    EXPECT_EQ(BasisTranscoder::GetBlockSize(TranscoderFormat::BC7_RGBA), 16u);
 }
 
 TEST(BasisTranscoder_CompressionRatios)
 {
-    // BC1: 32/4 = 8x compression
-    float bc1Ratio = 32.0f / 4.0f;
-    EXPECT_NEAR(bc1Ratio, 8.0f, 0.0001f);
-
-    // BC7: 32/8 = 4x compression
-    float bc7Ratio = 32.0f / 8.0f;
-    EXPECT_NEAR(bc7Ratio, 4.0f, 0.0001f);
+    using namespace Spark::Graphics;
+    EXPECT_NEAR(BasisTranscoder::GetCompressionRatio(TranscoderFormat::BC1_RGB), 8.0f, 0.0001f);
+    EXPECT_NEAR(BasisTranscoder::GetCompressionRatio(TranscoderFormat::BC7_RGBA), 4.0f, 0.0001f);
 }
 
 TEST(BasisTranscoder_DXGIFormatMapping)
 {
-    // Verify DXGI format constants
-    EXPECT_EQ(71u, 71u); // DXGI_FORMAT_BC1_UNORM
-    EXPECT_EQ(77u, 77u); // DXGI_FORMAT_BC3_UNORM
-    EXPECT_EQ(98u, 98u); // DXGI_FORMAT_BC7_UNORM
-    EXPECT_EQ(28u, 28u); // DXGI_FORMAT_R8G8B8A8_UNORM
+    using namespace Spark::Graphics;
+    EXPECT_EQ(BasisTranscoder::GetDXGIFormat(TranscoderFormat::BC1_RGB), 71u);
+    EXPECT_EQ(BasisTranscoder::GetDXGIFormat(TranscoderFormat::BC3_RGBA), 77u);
+    EXPECT_EQ(BasisTranscoder::GetDXGIFormat(TranscoderFormat::BC7_RGBA), 98u);
+    EXPECT_EQ(BasisTranscoder::GetDXGIFormat(TranscoderFormat::RGBA32), 28u);
 }
+
+TEST(BasisTranscoder_FailsClosedWithoutBackend)
+{
+    using namespace Spark::Graphics;
+    std::vector<uint8_t> basis(32, 0);
+    basis[0] = 0x73;
+    basis[1] = 0x42;
+    basis[4] = 0x01; // ETC1S: this exact minimum-size case previously divided by zero.
+    basis[8] = 1;    // totalImages
+    basis[12] = 1;   // width
+    basis[16] = 1;   // height
+    basis[20] = 1;   // mipLevels
+
+    BasisFileHeader header;
+    EXPECT_TRUE(BasisTranscoder::ParseHeader(basis.data(), basis.size(), header));
+    EXPECT_TRUE(BasisTranscoder::Transcode(basis.data(), basis.size(), TranscoderFormat::RGBA32).data.empty());
+    EXPECT_TRUE(BasisTranscoder::Transcode(basis.data(), basis.size(), TranscoderFormat::BC7_RGBA, 0, 32).data.empty());
+}
+
+TEST(BasisTranscoder_HeaderValidationIsBoundedAndTransactional)
+{
+    using namespace Spark::Graphics;
+    std::vector<uint8_t> storage(33, 0);
+    uint8_t* basis = storage.data() + 1; // Deliberately unaligned input.
+    basis[0] = 0x73;
+    basis[1] = 0x42;
+    basis[8] = 1;
+    basis[12] = 1;
+    basis[16] = 1;
+    basis[20] = 1;
+
+    BasisFileHeader header;
+    EXPECT_TRUE(BasisTranscoder::ParseHeader(basis, 32, header));
+    EXPECT_EQ(header.width, 1u);
+
+    basis[15] = 0x40; // width = 0x40000001, beyond the allocation budget.
+    BasisFileHeader sentinel;
+    sentinel.width = 77;
+    EXPECT_FALSE(BasisTranscoder::ParseHeader(basis, 32, sentinel));
+    EXPECT_EQ(sentinel.width, 77u);
+}
+
+// ============================================================================
+// EXR Loader Tests
+// ============================================================================
+
+#if defined(SPARK_HAS_TINYEXR) && SPARK_HAS_TINYEXR
+TEST(EXRLoader_RealCompressedMemoryRoundTrip)
+{
+    const float source[] = {1.0f, 0.25f, 0.5f, 1.0f, 0.0f, 0.75f, 0.125f, 0.5f};
+    unsigned char* encoded = nullptr;
+    const char* error = nullptr;
+    const int encodedSize = SaveEXRToMemory(source, 2, 1, 4, 1, &encoded, &error);
+    EXPECT_TRUE(encodedSize > 0);
+    EXPECT_TRUE(encoded != nullptr);
+
+    Spark::Graphics::EXRImage image;
+    EXPECT_TRUE(Spark::Graphics::EXRLoader::Load(encoded, static_cast<size_t>(encodedSize), image));
+    EXPECT_EQ(image.width, 2u);
+    EXPECT_EQ(image.height, 1u);
+    EXPECT_EQ(image.pixels.size(), 8u);
+    EXPECT_NEAR(image.pixels[0], 1.0f, 0.001f);
+    EXPECT_NEAR(image.pixels[5], 0.75f, 0.001f);
+
+    std::free(encoded);
+    if (error)
+        FreeEXRErrorMessage(error);
+}
+
+TEST(EXRLoader_TruncationFailsTransactionally)
+{
+    const float source[] = {0.1f, 0.2f, 0.3f, 1.0f};
+    unsigned char* encoded = nullptr;
+    const char* error = nullptr;
+    const int encodedSize = SaveEXRToMemory(source, 1, 1, 4, 1, &encoded, &error);
+    EXPECT_TRUE(encodedSize > 0);
+
+    Spark::Graphics::EXRImage image;
+    image.width = 77;
+    image.pixels = {42.0f};
+    EXPECT_FALSE(Spark::Graphics::EXRLoader::Load(encoded, static_cast<size_t>(encodedSize / 2), image));
+    EXPECT_EQ(image.width, 77u);
+    EXPECT_EQ(image.pixels.size(), 1u);
+    EXPECT_NEAR(image.pixels[0], 42.0f, 0.001f);
+
+    std::free(encoded);
+    if (error)
+        FreeEXRErrorMessage(error);
+}
+#endif
 
 // ============================================================================
 // Cached Shadow Atlas Tests

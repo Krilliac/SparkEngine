@@ -24,6 +24,8 @@
 
 #include "../Core/Platform.h"
 
+#include <algorithm>
+#include <cstring>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -98,7 +100,12 @@ namespace Spark::Graphics
     /**
      * @brief Transcodes Basis Universal textures to native GPU formats
      *
-     * Usage:
+     * The engine currently exposes format-selection and safe header inspection,
+     * but does not ship a Basis Universal decoder backend. Transcode therefore
+     * fails closed instead of fabricating pixels. Link basisu and replace the
+     * backend gate before accepting .basis content in production.
+     *
+     * Intended usage once a backend is available:
      * 1. Call SelectBestFormat() to pick the optimal format for the current RHI backend
      * 2. Call Transcode() to decode the Basis data into the target GPU format
      * 3. Upload the TranscodedImage data to an IRHITexture
@@ -148,19 +155,37 @@ namespace Spark::Graphics
             if (data[0] != 0x73 || data[1] != 0x42) // 'sB'
                 return false;
 
-            outHeader.magic = static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8);
-            outHeader.version = static_cast<uint16_t>(data[2]) | (static_cast<uint16_t>(data[3]) << 8);
+            auto readU16 = [](const uint8_t* bytes)
+            { return static_cast<uint16_t>(bytes[0]) | (static_cast<uint16_t>(bytes[1]) << 8); };
+            auto readU32 = [](const uint8_t* bytes)
+            {
+                return static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8) |
+                       (static_cast<uint32_t>(bytes[2]) << 16) | (static_cast<uint32_t>(bytes[3]) << 24);
+            };
+
+            BasisFileHeader parsed;
+            parsed.magic = static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8);
+            parsed.version = readU16(data + 2);
 
             // Read dimensions from header (offsets are Basis-specific)
             // Simplified: real implementation reads the full header struct
-            outHeader.width = *reinterpret_cast<const uint32_t*>(data + 12);
-            outHeader.height = *reinterpret_cast<const uint32_t*>(data + 16);
-            outHeader.totalImages = *reinterpret_cast<const uint32_t*>(data + 8);
-            outHeader.mipLevels = std::max(1u, *reinterpret_cast<const uint32_t*>(data + 20));
-            outHeader.flags = *reinterpret_cast<const uint16_t*>(data + 4);
-            outHeader.isETC1S = (outHeader.flags & 0x01) != 0;
-            outHeader.hasAlpha = (outHeader.flags & 0x02) != 0;
+            parsed.width = readU32(data + 12);
+            parsed.height = readU32(data + 16);
+            parsed.totalImages = readU32(data + 8);
+            parsed.mipLevels = std::max(1u, readU32(data + 20));
+            parsed.flags = readU16(data + 4);
+            parsed.isETC1S = (parsed.flags & 0x01) != 0;
+            parsed.hasAlpha = (parsed.flags & 0x02) != 0;
 
+            constexpr uint32_t kMaxDimension = 16'384;
+            constexpr uint32_t kMaxImages = 256;
+            constexpr uint32_t kMaxMipLevels = 16;
+            if (parsed.width == 0 || parsed.height == 0 || parsed.width > kMaxDimension ||
+                parsed.height > kMaxDimension || parsed.totalImages == 0 || parsed.totalImages > kMaxImages ||
+                parsed.mipLevels > kMaxMipLevels)
+                return false;
+
+            outHeader = parsed;
             return true;
         }
 
@@ -177,39 +202,16 @@ namespace Spark::Graphics
         static TranscodedImage Transcode(const uint8_t* basisData, size_t basisSize, TranscoderFormat targetFormat,
                                          uint32_t imageIndex = 0, uint32_t mipLevel = 0)
         {
-            TranscodedImage result;
+            (void)basisData;
+            (void)basisSize;
+            (void)targetFormat;
+            (void)imageIndex;
+            (void)mipLevel;
 
-            BasisFileHeader header;
-            if (!ParseHeader(basisData, basisSize, header))
-                return result;
-
-            result.width = std::max(1u, header.width >> mipLevel);
-            result.height = std::max(1u, header.height >> mipLevel);
-            result.mipLevel = mipLevel;
-            result.format = targetFormat;
-
-            // Calculate output size based on format
-            uint32_t blocksX = (result.width + 3) / 4;
-            uint32_t blocksY = (result.height + 3) / 4;
-            uint32_t blockSize = GetBlockSize(targetFormat);
-
-            if (targetFormat == TranscoderFormat::RGBA32)
-            {
-                result.rowPitch = result.width * 4;
-                result.data.resize(result.width * result.height * 4);
-                // Fallback: decode to RGBA
-                DecodeToRGBA(basisData, basisSize, header, imageIndex, mipLevel, result.data.data());
-            }
-            else
-            {
-                result.rowPitch = blocksX * blockSize;
-                result.data.resize(blocksX * blocksY * blockSize);
-                // Transcode to compressed format
-                TranscodeBlocks(basisData, basisSize, header, imageIndex, mipLevel, targetFormat, result.data.data(),
-                                result.data.size());
-            }
-
-            return result;
+            // No basisu backend is linked. Returning an empty result is an
+            // explicit unsupported-format failure; synthetic texture data is
+            // never safe to publish as a successful asset decode.
+            return {};
         }
 
         /** @brief Get block size in bytes for a compressed format */
@@ -283,144 +285,18 @@ namespace Spark::Graphics
          * This is the fallback path when GPU-compressed transcoding is not available.
          * ETC1S uses a codebook-based approach; UASTC uses per-block decompression.
          */
-        static void DecodeToRGBA(const uint8_t* basisData, size_t basisSize, const BasisFileHeader& header,
-                                 uint32_t imageIndex, uint32_t mipLevel, uint8_t* outRGBA)
+        static bool DecodeToRGBA(const uint8_t*, size_t, const BasisFileHeader&, uint32_t, uint32_t, uint8_t*)
         {
-            uint32_t w = std::max(1u, header.width >> mipLevel);
-            uint32_t h = std::max(1u, header.height >> mipLevel);
-
-            // ETC1S decoding: read global codebooks, endpoint/selector tables, then decode per block
-            if (header.isETC1S)
-            {
-                // Simplified: iterate 4x4 blocks, decode from codebook entries
-                uint32_t blocksX = (w + 3) / 4;
-                uint32_t blocksY = (h + 3) / 4;
-
-                // ETC1S uses two codebooks: endpoints (colors) and selectors (pixel indices)
-                // Each block references an endpoint pair and a selector matrix
-                for (uint32_t by = 0; by < blocksY; ++by)
-                {
-                    for (uint32_t bx = 0; bx < blocksX; ++bx)
-                    {
-                        // Decode block to 4x4 RGBA pixels
-                        // Real implementation: lookup codebook entries and interpolate
-                        for (uint32_t py = 0; py < 4 && (by * 4 + py) < h; ++py)
-                        {
-                            for (uint32_t px = 0; px < 4 && (bx * 4 + px) < w; ++px)
-                            {
-                                uint32_t x = bx * 4 + px;
-                                uint32_t y = by * 4 + py;
-                                uint32_t offset = (y * w + x) * 4;
-
-                                // Hash-based pseudo-decoding for block color
-                                uint32_t blockIdx = by * blocksX + bx;
-                                uint32_t seed = blockIdx ^ (imageIndex * 0x9E3779B9u) ^ (mipLevel * 0x517CC1B7u);
-                                seed ^= *reinterpret_cast<const uint32_t*>(basisData + 24 +
-                                                                           (blockIdx % (basisSize / 4 - 8)) * 4);
-
-                                outRGBA[offset + 0] = static_cast<uint8_t>((seed >> 0) & 0xFF);
-                                outRGBA[offset + 1] = static_cast<uint8_t>((seed >> 8) & 0xFF);
-                                outRGBA[offset + 2] = static_cast<uint8_t>((seed >> 16) & 0xFF);
-                                outRGBA[offset + 3] = 255;
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // UASTC: each 4x4 block is a self-contained 128-bit UASTC block
-                // Decode each UASTC block to 4x4 RGBA pixels
-                uint32_t blocksX = (w + 3) / 4;
-                uint32_t blocksY = (h + 3) / 4;
-
-                for (uint32_t by = 0; by < blocksY; ++by)
-                {
-                    for (uint32_t bx = 0; bx < blocksX; ++bx)
-                    {
-                        for (uint32_t py = 0; py < 4 && (by * 4 + py) < h; ++py)
-                        {
-                            for (uint32_t px = 0; px < 4 && (bx * 4 + px) < w; ++px)
-                            {
-                                uint32_t x = bx * 4 + px;
-                                uint32_t y = by * 4 + py;
-                                uint32_t offset = (y * w + x) * 4;
-
-                                uint32_t blockIdx = by * blocksX + bx;
-                                uint32_t dataOffset = 32 + blockIdx * 16; // 16 bytes per UASTC block
-                                if (dataOffset + 16 > basisSize)
-                                {
-                                    memset(outRGBA + offset, 128, 3);
-                                    outRGBA[offset + 3] = 255;
-                                    continue;
-                                }
-
-                                // UASTC block decoding: read mode, endpoints, weights
-                                const uint8_t* block = basisData + dataOffset;
-                                uint8_t mode = block[0] & 0x1F;
-
-                                // Simplified: extract approximate color from block data
-                                uint8_t r = block[2 + (px + py * 4) % 12];
-                                uint8_t g = block[3 + (px + py * 4) % 12];
-                                uint8_t b = block[4 + (px + py * 4) % 12];
-
-                                outRGBA[offset + 0] = r;
-                                outRGBA[offset + 1] = g;
-                                outRGBA[offset + 2] = b;
-                                outRGBA[offset + 3] = 255;
-                            }
-                        }
-                    }
-                }
-            }
+            return false;
         }
 
         /**
          * @brief Transcode Basis blocks to a target compressed format
          */
-        static void TranscodeBlocks(const uint8_t* basisData, size_t basisSize, const BasisFileHeader& header,
-                                    uint32_t imageIndex, uint32_t mipLevel, TranscoderFormat targetFormat,
-                                    uint8_t* outBlocks, size_t outSize)
+        static bool TranscodeBlocks(const uint8_t*, size_t, const BasisFileHeader&, uint32_t, uint32_t,
+                                    TranscoderFormat, uint8_t*, size_t)
         {
-            uint32_t w = std::max(1u, header.width >> mipLevel);
-            uint32_t h = std::max(1u, header.height >> mipLevel);
-            uint32_t blocksX = (w + 3) / 4;
-            uint32_t blocksY = (h + 3) / 4;
-            uint32_t blockSize = GetBlockSize(targetFormat);
-
-            // For each 4x4 block: decode Basis → 4x4 RGBA → encode to target format
-            uint8_t blockRGBA[4 * 4 * 4]; // 4x4 pixels * 4 bytes
-
-            for (uint32_t by = 0; by < blocksY; ++by)
-            {
-                for (uint32_t bx = 0; bx < blocksX; ++bx)
-                {
-                    // Decode this block to RGBA
-                    uint32_t blockIdx = by * blocksX + bx;
-
-                    for (int py = 0; py < 4; ++py)
-                    {
-                        for (int px = 0; px < 4; ++px)
-                        {
-                            int pixIdx = py * 4 + px;
-                            uint32_t seed = blockIdx ^ (imageIndex * 0x9E3779B9u);
-                            uint32_t dataOff =
-                                24 + (blockIdx % std::max(1u, static_cast<uint32_t>(basisSize / 4 - 8))) * 4;
-                            if (dataOff + 4 <= basisSize)
-                                seed ^= *reinterpret_cast<const uint32_t*>(basisData + dataOff);
-
-                            blockRGBA[pixIdx * 4 + 0] = static_cast<uint8_t>((seed >> 0) & 0xFF);
-                            blockRGBA[pixIdx * 4 + 1] = static_cast<uint8_t>((seed >> 8) & 0xFF);
-                            blockRGBA[pixIdx * 4 + 2] = static_cast<uint8_t>((seed >> 16) & 0xFF);
-                            blockRGBA[pixIdx * 4 + 3] = 255;
-                        }
-                    }
-
-                    // Encode RGBA block to target format
-                    uint8_t* outBlock = outBlocks + (by * blocksX + bx) * blockSize;
-                    EncodeBlockToFormat(blockRGBA, outBlock, targetFormat);
-                }
-            }
+            return false;
         }
 
         /**
