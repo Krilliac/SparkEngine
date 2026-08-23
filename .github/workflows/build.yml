@@ -801,6 +801,7 @@ jobs:
 
     - name: Configure CMake (MinGW cross-compilation)
       run: |
+        set -o pipefail
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \

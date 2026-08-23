@@ -25,6 +25,29 @@ set(CMAKE_C_COMPILER   ${TOOLCHAIN_PREFIX}-gcc)
 set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++)
 set(CMAKE_RC_COMPILER  ${TOOLCHAIN_PREFIX}-windres)
 
+# Spark game modules embed the target compiler's exact C++ language level in
+# their ABI metadata. Cross builds cannot execute the normal probe binary, but
+# the cross-compiler itself runs on this host, so query its predefined macros.
+# An explicit -DSPARK_MODULE_CXX_LANGUAGE_ABI=<value> remains authoritative.
+if(NOT DEFINED SPARK_MODULE_CXX_LANGUAGE_ABI)
+    execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" -std=c++23 -dM -E -x c++ -
+        RESULT_VARIABLE _spark_mingw_abi_probe_result
+        OUTPUT_VARIABLE _spark_mingw_predefined_macros
+        ERROR_VARIABLE _spark_mingw_abi_probe_error)
+    string(REGEX MATCH "#define[ \t]+__cplusplus[ \t]+([0-9]+)L?"
+        _spark_mingw_abi_match "${_spark_mingw_predefined_macros}")
+    if(NOT _spark_mingw_abi_probe_result EQUAL 0 OR NOT CMAKE_MATCH_1)
+        message(FATAL_ERROR
+            "MinGW toolchain: failed to query target __cplusplus value: "
+            "${_spark_mingw_abi_probe_error}")
+    endif()
+    set(SPARK_MODULE_CXX_LANGUAGE_ABI "${CMAKE_MATCH_1}" CACHE STRING
+        "Target MinGW compiler __cplusplus value used by Spark module ABI checks")
+    message(STATUS
+        "MinGW toolchain: target C++ language ABI is ${SPARK_MODULE_CXX_LANGUAGE_ABI}")
+endif()
+
 # Target sysroot
 set(CMAKE_FIND_ROOT_PATH /usr/${TOOLCHAIN_PREFIX})
 
