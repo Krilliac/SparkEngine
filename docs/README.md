@@ -2,6 +2,8 @@
 
 Master index for every SparkEngine documentation artifact, grouped by type. Each category lives in its own subfolder of `docs/`. The full user-facing guide set lives in [`wiki/`](../wiki/) and is cross-linked below.
 
+The repository is the canonical documentation source. [GitHub Wiki](https://github.com/Krilliac/SparkEngine/wiki) is a flattened publication of `wiki/` for GitHub and website links, while [sparkengine.dev](https://sparkengine.dev/) consumes the deterministic repository site-data bundle. `tools/publish-wiki.py` rewrites folder-relative links and assets for GitHub Wiki without creating a second authored documentation tree; `.github/workflows/publish-wiki.yml` republishes the exact `Working` revision when canonical documentation changes.
+
 > **Regenerate auto-produced artifacts:** `docs/update-all-docs.sh`.
 > **Generate full API reference:** `docs/generate-api-docs.sh generate` (writes to `docs/api/`, gitignored).
 

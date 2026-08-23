@@ -34,7 +34,7 @@ footprint, and the build toggles that move the needle.
 
 ## Downloads
 
-Pre-built binaries are published on every commit to `master`:
+Release and nightly binaries are published from the canonical `Working` branch:
 
 - [Windows Release (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Release.zip)
 - [Windows Debug (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Debug.zip)
@@ -59,6 +59,9 @@ Pick the path that matches your role:
 
 `wiki/_Sidebar.md` is the canonical table of contents for all wiki pages and categories.
 
+- [Documentation portal](Documentation.md)
+- [Guides](Guides.md), [Tutorials](Tutorials.md), and [Samples](Samples.md)
+- [Build Guide](Build-Guide.md) and [Dependencies](Dependencies.md)
 - [Browse full wiki index](./_Sidebar.md)
 - [API Reference](reference/API-Reference.md)
 - [Documentation Index](../docs/README.md)
@@ -77,7 +80,7 @@ See [Contributing](advanced/Contributing.md) for the full pre-commit checklist.
 
 ## License
 
-SparkEngine is licensed under the [Spark Open License](https://github.com/Krilliac/SparkEngine/blob/master/LICENSE) — no royalties, no fees, anti-plagiarism protected.
+SparkEngine is licensed under the [Spark Open License](https://github.com/Krilliac/SparkEngine/blob/Working/LICENSE) — no royalties, no fees, anti-plagiarism protected.
 
 ## Project Statistics
 
@@ -89,7 +92,7 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 | Engine System Classes | 75 |
 | Editor Panels | 64 |
 | Test files | 535 |
-| Test cases | 6307+ |
-| Wiki pages | 184 |
-| *Last synced* | *2026-07-19 03:58* |
+| Test cases | 6308+ |
+| Wiki pages | 198 |
+| *Last synced* | *2026-08-23 05:58* |
 <!-- /AUTO:stats -->

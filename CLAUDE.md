@@ -134,7 +134,7 @@ GameModules/SparkGameVisualScript/Source/ — Visual script game module (DLL)
 SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
-Tests/                                   — 6198 unit tests across 536 files, CTest
+Tests/                                   — 6199 unit tests across 536 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -325,11 +325,13 @@ docs/generate-flowchart.sh generate  # Engine-Architecture-Flowchart.md
 docs/update-codebase-stats.sh generate  # Codebase-Statistics.md (LOC, file counts, largest files)
 docs/update-readme-badges.sh update     # README.md counts, badge JSON, AI prompt files
 docs/update-context.sh update           # CLAUDE.md counts
+python3 tools/publish-wiki.py --check   # Validate the flat GitHub Wiki publication
 ```
 
 **What gets auto-generated:**
 - `docs/api/` — per-header API pages, component/system indices
 - `wiki/` AUTO: sections — live component, system, panel, test inventories
+- GitHub Wiki — flattened publication of the canonical `wiki/` tree with Gollum-compatible links
 - `wiki/getting-started/Engine-Architecture-Flowchart.md` — architecture ASCII diagrams
 - `wiki/advanced/Codebase-Statistics.md` — all code metrics
 - `.github/badges/*.json` — LOC and file count badges for README
