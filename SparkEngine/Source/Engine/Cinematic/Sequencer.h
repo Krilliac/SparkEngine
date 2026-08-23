@@ -15,9 +15,15 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+namespace Spark::Audio
+{
+    class IAudioBackend;
+}
 
 namespace Spark::Cinematic
 {
@@ -264,9 +270,13 @@ namespace Spark::Cinematic
         FadeTrack* AddFadeTrack(const std::string& trackName);
 
         // Playback control
+        // [sequencer update thread] Play from Stopped restarts at time zero;
+        // resume from Paused preserves the current timeline position.
         void Play();
         void Pause();
         void Stop();
+        // [sequencer update thread] Scrubbing is silent. Cues crossed by a
+        // later forward Update are eligible, including after a rewind.
         void SetTime(float time);
         void SetPlaybackSpeed(float speed);
         void SetLooping(bool loop);
@@ -276,6 +286,8 @@ namespace Spark::Cinematic
 
         // Event and audio callbacks
         void SetEventCallback(EventCallback callback);
+        // Observer callback on the sequencer update thread. Production audio
+        // service dispatch is a separate manager-owned callback.
         void SetAudioCallback(AudioCallback callback);
 
         // State queries
@@ -295,10 +307,14 @@ namespace Spark::Cinematic
         const std::vector<std::unique_ptr<SequencerTrack>>& GetTracks() const { return m_tracks; }
 
       private:
+        friend class SequencerManager;
+        void SetAudioDispatchCallback(AudioCallback callback);
+
         std::string m_name;
         std::vector<std::unique_ptr<SequencerTrack>> m_tracks;
         EventCallback m_eventCallback;
         AudioCallback m_audioCallback;
+        AudioCallback m_audioDispatchCallback;
 
         SequencePlayState m_playState = SequencePlayState::Stopped;
         float m_currentTime = 0.0f;
@@ -333,13 +349,32 @@ namespace Spark::Cinematic
         bool IsAnyCutscenePlaying() const;
         Sequence* GetActiveSequence();
 
+        /**
+         * @brief Attach the non-owning runtime audio service.
+         * [game/update thread] EngineRuntime owns and must outlive the backend.
+         * Passing nullptr detaches it and discards pending cues deterministically.
+         */
+        void SetAudioBackend(Spark::Audio::IAudioBackend* backend);
+
+        /**
+         * @brief Deliver queued cues to the attached audio service exactly once.
+         * [game/update thread] Invoke after any worker Sequencer update joins.
+         * With no service, queued cues are consumed silently.
+         */
+        void DispatchPendingAudioCues();
+
         // Console integration
         std::string Console_ListSequences() const;
         std::string Console_GetSequenceInfo(const std::string& name) const;
 
       private:
         SequencerManager() = default;
+        void QueueAudioCue(const AudioCue& cue);
+
         std::unordered_map<std::string, std::unique_ptr<Sequence>> m_sequences;
+        Spark::Audio::IAudioBackend* m_audioBackend = nullptr; ///< Non-owning EngineRuntime service
+        std::vector<AudioCue> m_pendingAudioCues;
+        std::mutex m_audioQueueMutex;
     };
 
 } // namespace Spark::Cinematic

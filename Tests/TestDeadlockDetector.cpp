@@ -5,6 +5,7 @@
 
 #include "TestFramework.h"
 
+#include <atomic>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -241,7 +242,7 @@ TEST(DeadlockDetector_DetectsDeadlockCycle)
 
     std::mutex sync;
     bool thread1Ready = false;
-    bool thread2Ready = false;
+    std::atomic<bool> thread2Ready{false};
     bool deadlockFound = false;
 
     std::thread t1(
@@ -256,7 +257,7 @@ TEST(DeadlockDetector_DetectsDeadlockCycle)
                 thread1Ready = true;
             }
 
-            while (!thread2Ready)
+            while (!thread2Ready.load(std::memory_order_acquire))
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
             detector.OnLockAcquired("MutexB");
@@ -286,7 +287,7 @@ TEST(DeadlockDetector_DetectsDeadlockCycle)
             detector.OnUnlock("MutexA");
             detector.OnUnlock("MutexB");
 
-            thread2Ready = true;
+            thread2Ready.store(true, std::memory_order_release);
         });
 
     t1.join();

@@ -28,21 +28,26 @@ namespace Spark::Graphics
     // Pass Execution
     // =============================================================================
 
-    void PostProcessingPipeline::BeginPass(ID3D11PixelShader* ps, const PostProcessCB& cb)
+    bool PostProcessingPipeline::BeginPass(ID3D11PixelShader* ps, const PostProcessCB& cb)
     {
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!m_context || !ps)
-            return;
+            return false;
 
-        int src = GetSourceTarget();
-        int dst = m_currentTarget;
+        const uint32_t passOrdinal = static_cast<uint32_t>(m_activePassCount);
+        const int dst = PostProcessTargetRouting::DestinationForPass(passOrdinal);
+        ID3D11ShaderResourceView* sourceSRV = passOrdinal == 0 ? m_inputSRV : m_pingPongSRVs[1 - dst].Get();
+        ID3D11RenderTargetView* destinationRTV = m_pingPongRTVs[dst].Get();
+        if (!sourceSRV || !destinationRTV)
+            return false;
 
-        // Unbind current target as SRV before binding as RTV
-        ID3D11ShaderResourceView* nullSRV = nullptr;
-        m_context->PSSetShaderResources(0, 1, &nullSRV);
+        // Remove both scene/depth inputs before changing outputs. This avoids
+        // carrying a prior pass's SRV into a conflicting RTV binding.
+        ID3D11ShaderResourceView* nullSRVs[2] = {};
+        m_context->PSSetShaderResources(0, 2, nullSRVs);
 
         // Set render target
-        m_context->OMSetRenderTargets(1, &m_pingPongRTVs[dst], nullptr);
+        m_context->OMSetRenderTargets(1, &destinationRTV, nullptr);
 
         // Only set VS on the first pass — it never changes between passes.
         // The PS changes per-pass, so always set it.
@@ -67,12 +72,14 @@ namespace Spark::Graphics
         }
 
         // Set source texture and optional depth
-        m_context->PSSetShaderResources(0, 1, &m_pingPongSRVs[src]);
+        m_context->PSSetShaderResources(0, 1, &sourceSRV);
         if (m_depthSRV)
             m_context->PSSetShaderResources(1, 1, &m_depthSRV);
+        return true;
 #else
         (void)ps;
         (void)cb;
+        return false;
 #endif
     }
 
@@ -83,11 +90,10 @@ namespace Spark::Graphics
             return;
         // Topology and input layout already set in BeginPass (first pass only)
         m_context->Draw(3, 0);
-        SwapTargets();
 #endif
     }
 
-    void PostProcessingPipeline::ProcessPass(PostProcessPass pass, float deltaTime)
+    bool PostProcessingPipeline::ProcessPass(PostProcessPass pass, float deltaTime)
     {
         auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -252,9 +258,10 @@ namespace Spark::Graphics
             break;
 
         default:
-            return;
+            return false;
         }
 
+        bool executed = false;
         if (ps)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -280,17 +287,24 @@ namespace Spark::Graphics
 
             ScopedGPUEvent gpuEvent(m_gpuMarkers, kPassNamesW[static_cast<int>(pass)]);
             ScopedTimestamp gpuTs(m_gpuTimer, m_context, kPassNames[static_cast<int>(pass)]);
-            BeginPass(ps, cb);
-            DrawFullscreen();
+            if (BeginPass(ps, cb))
+            {
+                DrawFullscreen();
+                executed = true;
+            }
 #else
-            BeginPass(ps, cb);
-            DrawFullscreen();
+            if (BeginPass(ps, cb))
+            {
+                DrawFullscreen();
+                executed = true;
+            }
 #endif
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
         float ms = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count() / 1000.0f;
         m_passTimings[static_cast<int>(pass)] = ms;
+        return executed;
     }
 
 } // namespace Spark::Graphics

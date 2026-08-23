@@ -106,16 +106,41 @@ namespace Spark
         if (!std::filesystem::exists(rootPath) || !std::filesystem::is_directory(rootPath))
             return;
 
+        std::error_code pathEc;
+        const std::filesystem::path canonicalRoot = std::filesystem::weakly_canonical(rootPath, pathEc);
+        if (pathEc)
+            return;
+
         for (const auto& dirEntry : std::filesystem::recursive_directory_iterator(rootPath))
         {
-            if (!dirEntry.is_regular_file())
+            // Do not follow file symlinks while packaging. In addition, verify
+            // the resolved path remains under the resolved root so junctions or
+            // other platform-specific indirections cannot escape the source tree.
+            pathEc.clear();
+            const auto entryStatus = dirEntry.symlink_status(pathEc);
+            if (pathEc || std::filesystem::is_symlink(entryStatus))
                 continue;
 
-            auto relativePath = std::filesystem::relative(dirEntry.path(), rootPath).generic_string();
+            if (!dirEntry.is_regular_file(pathEc) || pathEc)
+                continue;
+
+            const std::filesystem::path canonicalEntry = std::filesystem::weakly_canonical(dirEntry.path(), pathEc);
+            if (pathEc)
+                continue;
+
+            const std::filesystem::path relative = canonicalEntry.lexically_relative(canonicalRoot);
+            if (relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "SparkPakWriter: rejected path outside packaging root '%s'",
+                               dirEntry.path().string().c_str());
+                continue;
+            }
+
+            auto relativePath = relative.generic_string();
             auto virtualPath = virtualPrefix.empty() ? relativePath : virtualPrefix + relativePath;
 
             // Read file contents
-            std::ifstream ifs(dirEntry.path(), std::ios::binary);
+            std::ifstream ifs(canonicalEntry, std::ios::binary);
             if (!ifs)
                 continue;
 

@@ -1,4 +1,6 @@
 #include "SparkConsole.h"
+#include "ScopeGuard.h"
+#include "SecureMemory.h"
 #include "../Core/Platform.h"
 #include "../Engine/Security/MemoryIntegrity.h"
 #include "ConsoleVariable.h"
@@ -220,6 +222,8 @@ namespace Spark
         std::scoped_lock lock(m_commandMutex, m_logMutex, m_historyMutex);
         m_commands.clear();
         m_logHistory.clear();
+        for (auto& command : m_commandHistory)
+            SecureClear(command);
         m_commandHistory.clear();
         m_aliases.clear();
         m_registeredCommands.store(0, std::memory_order_relaxed);
@@ -331,6 +335,28 @@ namespace Spark
         m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
     }
 
+    void SimpleConsole::RegisterSensitiveCommand(const std::string& name, CommandHandler handler,
+                                                 const std::string& description, const std::string& category,
+                                                 const std::string& usage)
+    {
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        std::lock_guard<std::mutex> lock(m_commandMutex);
+        // Remember the classification even if lifecycle state rejects the
+        // handler registration. A later unknown-command attempt must still
+        // never put these arguments into history.
+        m_sensitiveCommandNames.insert(name);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return;
+        CommandInfo info;
+        info.handler = std::move(handler);
+        info.description = description;
+        info.category = category;
+        info.usage = usage;
+        info.nameHash = FNV1a64(name);
+        m_commands[name] = std::move(info);
+        m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
+    }
+
     bool SimpleConsole::UnregisterCommand(const std::string& name)
     {
         std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
@@ -358,6 +384,7 @@ namespace Spark
             return false;
         std::string command;
         std::vector<std::string> args;
+        const auto clearArguments = MakeScopeExit([&] { SecureClear(args); });
         if (!ParseCommandLine(commandLine, command, args))
         {
             return false;
@@ -376,8 +403,10 @@ namespace Spark
 
         // Resolve aliases before parsing
         std::string resolved = ResolveAliases(commandLine);
+        const auto clearResolved = MakeScopeExit([&] { SecureClear(resolved); });
 
         auto tokens = ParseCommand(resolved);
+        const auto clearTokens = MakeScopeExit([&] { SecureClear(tokens); });
         if (tokens.empty())
         {
             return false;
@@ -386,12 +415,20 @@ namespace Spark
         outCommand = tokens[0];
         outArgs.assign(tokens.begin() + 1, tokens.end());
 
-        // Record in command history
+        // Sensitive commands keep only their name in history. Never retain a
+        // recoverable credential merely to support command recall.
+        bool sensitiveArguments = false;
+        {
+            std::lock_guard<std::mutex> lock(m_commandMutex);
+            sensitiveArguments = m_sensitiveCommandNames.contains(outCommand);
+        }
+
         {
             std::lock_guard<std::mutex> lock(m_historyMutex);
-            m_commandHistory.push_back(commandLine);
+            m_commandHistory.push_back(sensitiveArguments ? outCommand + " <arguments-redacted>" : commandLine);
             if (m_commandHistory.size() > MaxCommandHistory)
             {
+                SecureClear(m_commandHistory.front());
                 m_commandHistory.pop_front();
             }
         }
@@ -601,6 +638,7 @@ namespace Spark
     {
         std::vector<std::string> args;
         std::string current;
+        const auto clearCurrent = MakeScopeExit([&] { SecureClear(current); });
         bool inQuotes = false;
         bool escape = false;
 
@@ -627,7 +665,7 @@ namespace Spark
                 if (!current.empty())
                 {
                     args.push_back(current);
-                    current.clear();
+                    SecureClear(current);
                 }
                 continue;
             }

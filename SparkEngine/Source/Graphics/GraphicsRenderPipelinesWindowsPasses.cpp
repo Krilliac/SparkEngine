@@ -355,6 +355,9 @@ void GraphicsEngine::RenderPostProcessing()
         {
             deltaTime = std::clamp(deltaTime, 0.0f, 1.0f);
         }
+        m_postProcessing->SetInputSRV(m_backBufferSRV.Get());
+        m_postProcessing->SetDepthSRV(m_depthStencilSRV.Get());
+        m_postProcessing->SetOutputRTV(m_renderTargetView.Get());
         m_postProcessing->Process(deltaTime);
         m_postProcessing->Render();
     }

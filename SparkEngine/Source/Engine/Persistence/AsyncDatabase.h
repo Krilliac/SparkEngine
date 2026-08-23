@@ -275,6 +275,10 @@ namespace Spark::Persistence
         std::queue<WorkItem> m_workQueue;
         std::mutex m_queueMutex;
         std::condition_variable m_queueCV;
+        /// Admission gate guarded by m_queueMutex. Close() clears this before
+        /// waking workers, so no work can enter after they observe an empty
+        /// stopping queue and exit.
+        bool m_accepting{false};
 
         // Completed callbacks (dispatched on main thread)
         std::vector<CompletedCallback> m_completedCallbacks;

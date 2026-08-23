@@ -84,12 +84,14 @@ add_executable(SparkTests
     TestTypeTraits.cpp
     TestHash.cpp
     TestPasswordHash.cpp
+    TestMMOCredentialSecurity.cpp
     TestSecureRandom.cpp
     TestSparkConsoleConcurrency.cpp
     TestScopeGuard.cpp
     TestSerializer.cpp
     TestEventBus.cpp
     TestStateMachine.cpp
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.cpp"
     TestClientPrediction.cpp
     TestClothSimulation.cpp
     TestDialogueSystem.cpp
@@ -106,6 +108,7 @@ add_executable(SparkTests
     TestAreaSimulationHook.cpp
     TestModuleDependency.cpp
     TestModuleDiscovery.cpp
+    TestModuleABI.cpp
     TestReflection.cpp
     TestPathCache.cpp
     TestShaderGraphCompiler.cpp
@@ -398,6 +401,7 @@ add_executable(SparkTests
     TestPerformanceStatsReal.cpp
     TestBlendSpaceReal.cpp
     TestSequencerReal.cpp
+    TestSequencerAudioWiring.cpp
     TestFaultIsolationReal.cpp
     TestColorUtilsReal.cpp
     TestStateMachineReal.cpp
@@ -572,6 +576,32 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UIDesigner/UIDesignerSystem.cpp"
 )
 
+# Real shared-library fixtures for the pre-instantiation module ABI gate.
+# They intentionally do not link SparkEngineLib: the boundary under test must
+# be satisfied by SDK headers and the exported C ABI alone.
+add_library(SparkMismatchedModuleFixture SHARED
+    Fixtures/ModuleABI/MismatchedModule.cpp)
+add_library(SparkCompatibleModuleFixture SHARED
+    Fixtures/ModuleABI/CompatibleModule.cpp)
+
+foreach(_module_fixture IN ITEMS SparkMismatchedModuleFixture SparkCompatibleModuleFixture)
+    target_compile_features(${_module_fixture} PRIVATE cxx_std_23)
+    target_compile_definitions(${_module_fixture} PRIVATE SPARK_MODULE_DLL)
+    target_include_directories(${_module_fixture} PRIVATE "${CMAKE_SOURCE_DIR}/SparkSDK/Include")
+    if(MSVC)
+        set_property(TARGET ${_module_fixture} PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif()
+endforeach()
+
+spark_configure_module_abi(SparkMismatchedModuleFixture SDK_VERSION 3)
+spark_configure_module_abi(SparkCompatibleModuleFixture)
+
+add_dependencies(SparkTests SparkMismatchedModuleFixture SparkCompatibleModuleFixture)
+target_compile_definitions(SparkTests PRIVATE
+    SPARK_TEST_MISMATCHED_MODULE_PATH="$<TARGET_FILE:SparkMismatchedModuleFixture>"
+    SPARK_TEST_COMPATIBLE_MODULE_PATH="$<TARGET_FILE:SparkCompatibleModuleFixture>")
+
 # Objective-C++ test sources — only compile when the Metal backend is
 # actually available. SPARK_METAL_AVAILABLE is set by the root CMakeLists
 # when ENABLE_METAL AND APPLE is true and enable_language(OBJCXX) has run;
@@ -645,6 +675,10 @@ endif()
 
 if(WIN32)
     target_sources(SparkTests PRIVATE TestWorldBasicRender.cpp)
+    target_sources(SparkTests PRIVATE TestPostProcessingPipelineD3D11.cpp)
+    target_sources(SparkTests PRIVATE TestGPUDrivenRendererD3D11.cpp)
+    target_compile_definitions(SparkTests PRIVATE
+        SPARK_TEST_SOURCE_DIR_WIDE=L"${CMAKE_SOURCE_DIR}")
 endif()
 
 # =============================================================================
@@ -796,6 +830,10 @@ if(TARGET imgui)
 
     # Editor sources that require ImGui
     target_sources(SparkTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/Tests/TestAdvancedAssetPipeline.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AdvancedAssetPipelineUI.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AssetProcessors.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Search/CommandPalette.cpp"

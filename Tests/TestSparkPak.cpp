@@ -2,13 +2,17 @@
 // Standalone test: writes temp archives, reads them back, verifies round-trip correctness.
 
 #include "TestFramework.h"
+#include "Core/SparkPak.h"
+#include "Core/SparkPakWriter.h"
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 // ============================================================================
@@ -456,5 +460,131 @@ TEST(SparkPak_ReadMissingEntry)
     auto data = reader.ReadFile("does_not_exist.txt");
     EXPECT_EQ(data.size(), 0u);
 
+    Cleanup();
+}
+
+// ============================================================================
+// Production SparkPak hardening regressions
+// ============================================================================
+
+TEST(SparkPak_ProductionRejectsTinyArchiveWith2GiBEntryDeclaration)
+{
+    const auto path = TempPath("declared_2gib.spk");
+    const std::string virtualPath = "huge.bin";
+
+    Spark::PakHeader header;
+    header.fileCount = 1;
+    header.tocOffset = sizeof(Spark::PakHeader) + 1; // Physical data is one byte.
+    header.tocSize = static_cast<uint32_t>(27 + virtualPath.size());
+    header.tocRawSize = header.tocSize;
+
+    std::vector<uint8_t> toc(header.tocSize);
+    uint8_t* cursor = toc.data();
+    const uint64_t hash = Spark::PakFNV1a(virtualPath);
+    const uint64_t dataOffset = sizeof(Spark::PakHeader);
+    const uint32_t declaredSize = 2u * 1024u * 1024u * 1024u;
+    const uint8_t compression = static_cast<uint8_t>(Spark::PakCompression::Stored);
+    const uint16_t pathLen = static_cast<uint16_t>(virtualPath.size());
+    std::memcpy(cursor, &hash, sizeof(hash));
+    cursor += sizeof(hash);
+    std::memcpy(cursor, &dataOffset, sizeof(dataOffset));
+    cursor += sizeof(dataOffset);
+    std::memcpy(cursor, &declaredSize, sizeof(declaredSize));
+    cursor += sizeof(declaredSize);
+    std::memcpy(cursor, &declaredSize, sizeof(declaredSize));
+    cursor += sizeof(declaredSize);
+    std::memcpy(cursor, &compression, sizeof(compression));
+    cursor += sizeof(compression);
+    std::memcpy(cursor, &pathLen, sizeof(pathLen));
+    cursor += sizeof(pathLen);
+    std::memcpy(cursor, virtualPath.data(), virtualPath.size());
+
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        const uint8_t oneByte = 0x5a;
+        out.write(reinterpret_cast<const char*>(&oneByte), 1);
+        out.write(reinterpret_cast<const char*>(toc.data()), static_cast<std::streamsize>(toc.size()));
+    }
+
+    Spark::SparkPakReader reader;
+    EXPECT_FALSE(reader.Open(path));
+    Cleanup();
+}
+
+TEST(SparkPak_ProductionConcurrentReadsKeepEntryBoundaries)
+{
+    const auto path = TempPath("parallel_reads.spk");
+    std::vector<uint8_t> first(64 * 1024, 0x3c);
+    std::vector<uint8_t> second(64 * 1024, 0xa7);
+
+    Spark::SparkPakWriter writer;
+    writer.AddFile("first.bin", first, false);
+    writer.AddFile("second.bin", second, false);
+    EXPECT_TRUE(writer.Finalize(path));
+
+    Spark::SparkPakReader reader;
+    EXPECT_TRUE(reader.Open(path));
+
+    std::atomic<bool> readsCorrect{true};
+    std::vector<std::thread> threads;
+    for (int threadIndex = 0; threadIndex < 6; ++threadIndex)
+    {
+        threads.emplace_back(
+            [&, threadIndex]
+            {
+                for (int iteration = 0; iteration < 100; ++iteration)
+                {
+                    const bool chooseFirst = ((threadIndex + iteration) & 1) == 0;
+                    const auto bytes = reader.ReadFile(chooseFirst ? "first.bin" : "second.bin");
+                    if (bytes != (chooseFirst ? first : second))
+                    {
+                        readsCorrect.store(false, std::memory_order_relaxed);
+                        return;
+                    }
+                }
+            });
+    }
+    for (auto& thread : threads)
+        thread.join();
+
+    EXPECT_TRUE(readsCorrect.load(std::memory_order_relaxed));
+    reader.Close();
+    Cleanup();
+}
+
+TEST(SparkPak_ProductionAddDirectoryRejectsSymlinkOutsideRoot)
+{
+    namespace fs = std::filesystem;
+    const fs::path base = fs::path(TempPath("symlink_case"));
+    const fs::path root = base / "root";
+    const fs::path outside = base / "outside.bin";
+    std::error_code ec;
+    fs::create_directories(root, ec);
+    {
+        std::ofstream(root / "inside.bin", std::ios::binary) << "inside";
+        std::ofstream(outside, std::ios::binary) << "outside-secret";
+    }
+
+    fs::create_symlink(outside, root / "outside-link.bin", ec);
+    if (ec)
+    {
+        // Windows commonly requires Developer Mode or elevated symlink rights.
+        // The containment test is exercised on platforms where creation succeeds.
+        Cleanup();
+        return;
+    }
+
+    Spark::SparkPakWriter writer;
+    writer.AddDirectory(root);
+    EXPECT_EQ(writer.GetFileCount(), 1u);
+
+    const auto pakPath = (base / "symlink_escape.spk").string();
+    EXPECT_TRUE(writer.Finalize(pakPath));
+    Spark::SparkPakReader reader;
+    EXPECT_TRUE(reader.Open(pakPath));
+    EXPECT_TRUE(reader.Exists("inside.bin"));
+    EXPECT_FALSE(reader.Exists("outside-link.bin"));
+    reader.Close();
     Cleanup();
 }

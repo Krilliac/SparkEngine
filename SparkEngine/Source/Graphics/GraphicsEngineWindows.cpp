@@ -355,6 +355,7 @@ void GraphicsEngine::Shutdown()
     m_solidRasterState.Reset();
     m_depthStencilSRV.Reset();
     m_depthStencilView.Reset();
+    m_backBufferSRV.Reset();
     m_renderTargetView.Reset();
     m_swapChain.Reset();
     m_context.Reset();

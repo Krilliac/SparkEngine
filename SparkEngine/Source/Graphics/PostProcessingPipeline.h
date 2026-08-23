@@ -105,7 +105,12 @@ namespace Spark::Graphics
          */
         void Process(float deltaTime = 0.0f);
 
-        /** @brief Render the final result to the currently bound render target */
+        /**
+         * @brief Render the final result to the output set by SetOutputRTV().
+         *
+         * A zero-pass chain is a passthrough. If input and output reference the
+         * same resource, Render() leaves the existing scene color untouched.
+         */
         void Render();
 
         /** @brief Handle viewport resize, recreating GPU targets if needed */
@@ -301,17 +306,28 @@ namespace Spark::Graphics
         /** @brief Set the D3D11 device and context for GPU execution */
         void SetDevice(ID3D11Device* device, ID3D11DeviceContext* context);
 
-        /** @brief Set the scene depth SRV for depth-aware effects */
+        /** @brief Set the borrowed scene depth SRV for this frame */
         void SetDepthSRV(ID3D11ShaderResourceView* depthSRV) { m_depthSRV = depthSRV; }
 
-        /** @brief Set the input scene texture SRV */
+        /** @brief Set the borrowed input scene texture SRV for this frame */
         void SetInputSRV(ID3D11ShaderResourceView* inputSRV) { m_inputSRV = inputSRV; }
 
+        /** @brief Set the borrowed final output RTV for this frame */
+        void SetOutputRTV(ID3D11RenderTargetView* outputRTV) { m_outputRTV = outputRTV; }
+
         /** @brief Get the output render target view after processing */
-        ID3D11RenderTargetView* GetOutputRTV() const { return m_pingPongRTVs[m_currentTarget]; }
+        ID3D11RenderTargetView* GetOutputRTV() const
+        {
+            const int target = PostProcessTargetRouting::FinalTargetForPassCount(m_activePassCount);
+            return target == PostProcessTargetRouting::InputTarget ? nullptr : m_pingPongRTVs[target].Get();
+        }
 
         /** @brief Get the output SRV after processing */
-        ID3D11ShaderResourceView* GetOutputSRV() const { return m_pingPongSRVs[m_currentTarget]; }
+        ID3D11ShaderResourceView* GetOutputSRV() const
+        {
+            const int target = PostProcessTargetRouting::FinalTargetForPassCount(m_activePassCount);
+            return target == PostProcessTargetRouting::InputTarget ? m_inputSRV : m_pingPongSRVs[target].Get();
+        }
 
       private:
         // ---- GPU Constant Buffer ----
@@ -329,11 +345,9 @@ namespace Spark::Graphics
         void CompileEffectShaders();
 
         // ---- Pass Execution ----
-        void SwapTargets() { m_currentTarget = 1 - m_currentTarget; }
-        int GetSourceTarget() const { return 1 - m_currentTarget; }
-        void BeginPass(ID3D11PixelShader* ps, const PostProcessCB& cb);
+        bool BeginPass(ID3D11PixelShader* ps, const PostProcessCB& cb);
         void DrawFullscreen();
-        void ProcessPass(PostProcessPass pass, float deltaTime);
+        bool ProcessPass(PostProcessPass pass, float deltaTime);
 
         // ---- Pipeline state ----
         bool m_initialized = false;
@@ -341,7 +355,6 @@ namespace Spark::Graphics
         uint32_t m_height = 1080;
         float m_totalTime = 0.0f;
         int m_activePassCount = 0;
-        int m_currentTarget = 0;
         bool m_vsAlreadyBound = false; ///< Avoids redundant VS/sampler/topology binding between passes
 
         bool m_passEnabled[static_cast<int>(PostProcessPass::Count)] = {};
@@ -389,11 +402,13 @@ namespace Spark::Graphics
         ID3D11DeviceContext* m_context = nullptr;
         ID3D11ShaderResourceView* m_depthSRV = nullptr;
         ID3D11ShaderResourceView* m_inputSRV = nullptr;
+        ID3D11RenderTargetView* m_outputRTV = nullptr;
+        ComPtr<ID3D11RenderTargetView> m_implicitOutputRTV;
 
         // Ping-pong render targets
         ComPtr<ID3D11Texture2D> m_pingPongTextures[2];
-        ID3D11RenderTargetView* m_pingPongRTVs[2] = {};
-        ID3D11ShaderResourceView* m_pingPongSRVs[2] = {};
+        ComPtr<ID3D11RenderTargetView> m_pingPongRTVs[2];
+        ComPtr<ID3D11ShaderResourceView> m_pingPongSRVs[2];
 
         // Per-pass pixel shaders
 #ifdef SPARK_PLATFORM_WINDOWS

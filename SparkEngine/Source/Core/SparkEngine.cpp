@@ -31,6 +31,7 @@
 #include "EngineConsoleCommands.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/GraphicsConsoleCommands.h"
@@ -340,6 +341,10 @@ void ShutdownEngine()
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
     }
 
+    // Sequencer is a non-owning audio client. Detach it before releasing the
+    // EngineRuntime-owned backend/engine so queued cues cannot outlive audio.
+    Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
+    rt.audioBackend.reset();
     rt.audioEngine.reset();
     ShutdownPhysics(); // no-op when the module branch above already ran it
 
@@ -347,6 +352,7 @@ void ShutdownEngine()
     Spark::JobSystem::Get().Shutdown();
 
     EngineContext::ResetOwned();
+    rt.ShutdownHeadlessAssetServices();
     rt.eventBus.reset();
     rt.input.reset();
     rt.graphics.reset();

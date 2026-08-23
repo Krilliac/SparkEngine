@@ -21,6 +21,7 @@
 #include "IEngineContext.h"
 #include "IModule.h"
 #include "ILogger.h"
+#include "ModuleABI.h"
 #include "ModuleRegistry.h"
 #include "MathTypes.h"
 #include "InputTypes.h"

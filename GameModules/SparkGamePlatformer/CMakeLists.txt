@@ -87,6 +87,11 @@ list(FILTER SPARK_GAME_PLATFORMER_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 # ---------------------------------------------------------------------
 add_library(SparkGamePlatformer SHARED ${SPARK_GAME_PLATFORMER_SOURCES})
 
+if(NOT COMMAND spark_configure_module_abi)
+    include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkGameModule.cmake")
+endif()
+spark_configure_module_abi(SparkGamePlatformer)
+
 target_compile_definitions(SparkGamePlatformer PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
 # ---------------------------------------------------------------------

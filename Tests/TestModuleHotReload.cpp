@@ -2,6 +2,9 @@
 #include "TestFramework.h"
 #include "Engine/HotReload/ModuleHotReload.h"
 
+#include <filesystem>
+#include <fstream>
+
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -123,4 +126,45 @@ TEST(ModuleHotReload_ForceReload_UnknownModule)
     auto result = hr.ForceReload("NonExistent");
     EXPECT_TRUE(result == Spark::HotReload::ReloadResult::FileNotFound);
     hr.Shutdown();
+}
+
+TEST(ModuleHotReload_FailedReplacementDoesNotUnloadWorkingModule)
+{
+    auto& hr = Spark::HotReload::ModuleHotReload::GetInstance();
+    hr.Initialize();
+
+    const std::filesystem::path modulePath = std::filesystem::temp_directory_path() / "SparkLegacyHotReloadFailure.dll";
+    const std::filesystem::path sidecarPath = modulePath.string() + ".sparkabi";
+    {
+        std::ofstream module(modulePath, std::ios::binary | std::ios::trunc);
+        module << "fixture";
+        std::ofstream sidecar(sidecarPath, std::ios::trunc);
+        sidecar << "fixture";
+    }
+
+    bool reloadCalled = false;
+    bool unloadCalled = false;
+    hr.RegisterModule("SparkLegacyHotReloadFailure", modulePath);
+    hr.SetCallbacks([&](const std::string&) { unloadCalled = true; },
+                    [&](const std::string&, const std::filesystem::path&)
+                    {
+                        reloadCalled = true;
+                        return false;
+                    });
+
+    EXPECT_TRUE(hr.ForceReload("SparkLegacyHotReloadFailure") == Spark::HotReload::ReloadResult::LoadFailed);
+    EXPECT_TRUE(reloadCalled);
+    EXPECT_FALSE(unloadCalled);
+
+    const auto* watched = hr.GetModule("SparkLegacyHotReloadFailure");
+    if (watched)
+    {
+        std::error_code ec;
+        std::filesystem::remove(watched->shadowPath.string() + ".sparkabi", ec);
+        std::filesystem::remove(watched->shadowPath, ec);
+    }
+    hr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove(sidecarPath, ec);
+    std::filesystem::remove(modulePath, ec);
 }

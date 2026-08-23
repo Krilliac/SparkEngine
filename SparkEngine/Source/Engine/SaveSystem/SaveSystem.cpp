@@ -14,7 +14,17 @@
 #include <sstream>
 #include <filesystem>
 #include <algorithm>
+#include <cerrno>
 #include <limits>
+#include <system_error>
+
+#if defined(_WIN32)
+#define NOMINMAX
+#include <Windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -53,6 +63,88 @@ namespace Spark
     /// may differ), files with a lower version go through the migration hook in
     /// ReadFromFile. Bump this whenever the binary layout changes.
     static constexpr uint32_t kCurrentSaveVersion = 1;
+
+    namespace
+    {
+        bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error)
+        {
+#if defined(_WIN32)
+            const HANDLE file = ::CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                              FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (file == INVALID_HANDLE_VALUE)
+            {
+                error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+                return false;
+            }
+
+            const bool flushed = ::FlushFileBuffers(file) != FALSE;
+            const DWORD flushError = flushed ? ERROR_SUCCESS : ::GetLastError();
+            ::CloseHandle(file);
+            if (!flushed)
+            {
+                error = std::error_code(static_cast<int>(flushError), std::system_category());
+                return false;
+            }
+            return true;
+#else
+            const int file = ::open(path.c_str(), O_RDONLY);
+            if (file < 0)
+            {
+                error = std::error_code(errno, std::generic_category());
+                return false;
+            }
+
+            const bool flushed = ::fsync(file) == 0;
+            const int flushError = flushed ? 0 : errno;
+            ::close(file);
+            if (!flushed)
+            {
+                error = std::error_code(flushError, std::generic_category());
+                return false;
+            }
+            return true;
+#endif
+        }
+
+        bool ReplaceFileAtomically(const std::filesystem::path& temporary, const std::filesystem::path& destination,
+                                   std::error_code& error)
+        {
+#if defined(_WIN32)
+            if (::MoveFileExW(temporary.c_str(), destination.c_str(),
+                              MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            {
+                return true;
+            }
+            error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
+            return false;
+#else
+            std::filesystem::rename(temporary, destination, error);
+            if (error)
+                return false;
+
+            const std::filesystem::path directory = destination.has_parent_path() ? destination.parent_path() : ".";
+#if defined(O_DIRECTORY)
+            const int directoryFile = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
+#else
+            const int directoryFile = ::open(directory.c_str(), O_RDONLY);
+#endif
+            if (directoryFile < 0)
+            {
+                error = std::error_code(errno, std::generic_category());
+                return false;
+            }
+            const bool flushed = ::fsync(directoryFile) == 0;
+            const int flushError = flushed ? 0 : errno;
+            ::close(directoryFile);
+            if (!flushed)
+            {
+                error = std::error_code(flushError, std::generic_category());
+                return false;
+            }
+            return true;
+#endif
+        }
+    } // namespace
 
     // ============================================================================
     // ComponentSerializerRegistry
@@ -976,14 +1068,25 @@ namespace Spark
                 return false;
             }
 
-            // Atomic rename: replace target with completed temp file
             std::error_code ec;
-            std::filesystem::rename(tmpPath, filepath, ec);
-            if (ec)
+            if (!FlushFileDurably(tmpPath, ec))
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: rename failed %s -> %s: %s", tmpPath.c_str(),
-                               filepath.c_str(), ec.message().c_str());
-                std::filesystem::remove(tmpPath, ec);
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: durable flush failed for %s: %s",
+                               tmpPath.c_str(), ec.message().c_str());
+                std::error_code removeError;
+                std::filesystem::remove(tmpPath, removeError);
+                return false;
+            }
+
+            // Replace the destination atomically. std::filesystem::rename does not
+            // replace an existing file on Windows, which broke every second save to
+            // the same slot (including QuickSave).
+            if (!ReplaceFileAtomically(tmpPath, filepath, ec))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Save system: atomic replace failed %s -> %s: %s",
+                               tmpPath.c_str(), filepath.c_str(), ec.message().c_str());
+                std::error_code removeError;
+                std::filesystem::remove(tmpPath, removeError);
                 return false;
             }
 

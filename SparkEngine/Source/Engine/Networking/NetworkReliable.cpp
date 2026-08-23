@@ -173,38 +173,23 @@ namespace Spark::Net
     // Ordered delivery
     // --------------------------------------------------------------------------
 
-    void NetworkManager::FlushOrderedBuffer(ClientID peerKey)
+    bool NetworkManager::PopNextOrderedMessage(ClientID peerKey, NetworkMessage& outMessage)
     {
-        while (true)
-        {
-            // Re-resolve the peer every iteration: a dispatched handler may
-            // mutate m_peers (e.g. a Disconnect handler erasing this peer),
-            // which would invalidate a held reference.
-            auto peerIt = m_peers.find(peerKey);
-            if (peerIt == m_peers.end())
-                return;
+        // Re-resolve on every call: the previously dispatched handler may have
+        // mutated m_peers (for example, a Disconnect handler erasing this peer).
+        auto peerIt = m_peers.find(peerKey);
+        if (peerIt == m_peers.end())
+            return false;
 
-            PeerState& peer = peerIt->second;
-            auto it = peer.orderedBuffer.find(peer.expectedOrderedSequence);
-            if (it == peer.orderedBuffer.end())
-                break;
+        PeerState& peer = peerIt->second;
+        auto it = peer.orderedBuffer.find(peer.expectedOrderedSequence);
+        if (it == peer.orderedBuffer.end())
+            return false;
 
-            // Detach the message before dispatching so handler side effects
-            // cannot invalidate the buffer entry mid-use
-            NetworkMessage message = std::move(it->second);
-            peer.orderedBuffer.erase(it);
-            peer.expectedOrderedSequence++;
-
-            MessageHandler handler;
-            {
-                std::lock_guard<std::mutex> lock(m_handlerMutex);
-                auto handlerIt = m_handlers.find(static_cast<uint16_t>(message.type));
-                if (handlerIt != m_handlers.end())
-                    handler = handlerIt->second;
-            }
-            if (handler)
-                handler(message);
-        }
+        outMessage = std::move(it->second);
+        peer.orderedBuffer.erase(it);
+        peer.expectedOrderedSequence++;
+        return true;
     }
 
     void NetworkManager::PruneReceivedSequences()

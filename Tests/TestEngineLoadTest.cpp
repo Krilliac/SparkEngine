@@ -1059,6 +1059,7 @@ TEST(LoadTest_Severe_SaveLoadCycling)
 TEST(LoadTest_Severe_NetworkChurn)
 {
     auto& net = Spark::Net::NetworkManager::GetInstance();
+    net.Shutdown();
 
     constexpr int CYCLES = 50;
     int successCount = 0;
@@ -1067,9 +1068,11 @@ TEST(LoadTest_Severe_NetworkChurn)
 
     for (int i = 0; i < CYCLES; i++)
     {
-        uint16_t port = static_cast<uint16_t>(55000 + (i % 100));
-        if (net.StartServer(port, 2))
+        // Port 0 delegates selection to the OS. Fixed high-port ranges collide
+        // with parallel CI jobs, services, and ephemeral client allocations.
+        if (net.StartServer(0, 2))
         {
+            EXPECT_TRUE(net.GetBoundPort() != 0);
             net.Update(0.016f);
             net.StopServer();
             successCount++;
@@ -1086,6 +1089,7 @@ TEST(LoadTest_Severe_NetworkChurn)
 
     EXPECT_TRUE(successCount >= CYCLES - 5);
     EXPECT_TRUE(net.GetRole() == Spark::Net::NetworkRole::None);
+    net.Shutdown();
 }
 
 // ============================================================================

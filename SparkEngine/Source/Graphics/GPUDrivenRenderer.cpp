@@ -25,18 +25,7 @@
 
 namespace Spark::Graphics
 {
-    // Cull constant buffer layout (must match GPUCull.hlsl cbuffer)
 #ifdef SPARK_PLATFORM_WINDOWS
-
-    struct alignas(16) CullConstants
-    {
-        DirectX::XMFLOAT4X4 viewProj;
-        DirectX::XMFLOAT4 frustumPlanes[6];
-        uint32_t instanceCount, hiZWidth, hiZHeight, enableFrustumCull;
-        uint32_t enableHiZCull, pad0, pad1, pad2;
-    };
-
-    static_assert(sizeof(CullConstants) % 16 == 0, "CullConstants must be 16-byte aligned");
 
     // =========================================================================
     // Initialize — create buffers, compile shaders
@@ -107,7 +96,7 @@ namespace Spark::Graphics
 
         // Cull constant buffer
         D3D11_BUFFER_DESC cbDesc = {};
-        cbDesc.ByteWidth = sizeof(CullConstants);
+        cbDesc.ByteWidth = sizeof(GPUCullConstants);
         cbDesc.Usage = D3D11_USAGE_DYNAMIC;
         cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -164,15 +153,25 @@ namespace Spark::Graphics
     // CullAndDraw — dispatch culling CS and issue indirect draws
     // =========================================================================
 
-    void GPUDrivenRenderer::CullAndDraw(const GPUInstanceAABB* aabbs, uint32_t instanceCount,
+    bool GPUDrivenRenderer::CullAndDraw(const GPUInstanceAABB* aabbs, uint32_t instanceCount,
                                         const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& projMatrix,
                                         ID3D11Buffer* indexBuffer, ID3D11Buffer* vertexBuffer, uint32_t stride,
                                         uint32_t indexCount)
     {
-        if (!m_initialized || !aabbs || instanceCount == 0)
-            return;
+        if (!m_initialized || !m_context || !m_cullShader || !m_aabbBuffer || !m_aabbSRV || !m_visibilityUAV ||
+            !m_indirectArgsBuffer || !m_indirectArgsUAV || !m_cullConstantBuffer || !aabbs || instanceCount == 0 ||
+            !indexBuffer || !vertexBuffer || stride == 0 || indexCount == 0)
+            return false;
 
-        instanceCount = std::min(instanceCount, m_maxInstances);
+        if (instanceCount > m_maxInstances)
+            return false;
+
+        // Reusing indirect arguments is only correct when the exact instance
+        // batch is retained. This API receives transient batch data, so the
+        // safe meaning of freeze is to request the caller's CPU fallback.
+        if (m_settings.freezeCulling)
+            return false;
+
         m_stats.totalInstances = instanceCount;
 
         if (!m_settings.freezeCulling)
@@ -181,14 +180,16 @@ namespace Spark::Graphics
             D3D11_MAPPED_SUBRESOURCE mapped = {};
             HRESULT hr = m_context->Map(m_aabbBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
             if (FAILED(hr) || !mapped.pData)
-                return;
+                return false;
             std::memcpy(mapped.pData, aabbs, instanceCount * sizeof(GPUInstanceAABB));
             m_context->Unmap(m_aabbBuffer.Get(), 0);
 
             // Build cull constants with frustum planes extracted from view-projection
             DirectX::XMMATRIX viewProj = DirectX::XMMatrixMultiply(viewMatrix, projMatrix);
-            CullConstants cb = {};
-            DirectX::XMStoreFloat4x4(&cb.viewProj, DirectX::XMMatrixTranspose(viewProj));
+            GPUCullConstants cb = {};
+            DirectX::XMFLOAT4X4 transposedViewProj;
+            DirectX::XMStoreFloat4x4(&transposedViewProj, DirectX::XMMatrixTranspose(viewProj));
+            std::memcpy(cb.viewProjection, &transposedViewProj, sizeof(cb.viewProjection));
 
             DirectX::XMFLOAT4X4 vp;
             DirectX::XMStoreFloat4x4(&vp, viewProj);
@@ -200,7 +201,10 @@ namespace Spark::Graphics
                 if (len > 0.0001f)
                 {
                     float inv = 1.0f / len;
-                    cb.frustumPlanes[idx] = {x * inv, y * inv, z * inv, w * inv};
+                    cb.frustumPlanes[idx][0] = x * inv;
+                    cb.frustumPlanes[idx][1] = y * inv;
+                    cb.frustumPlanes[idx][2] = z * inv;
+                    cb.frustumPlanes[idx][3] = w * inv;
                 }
             };
             StorePlane(0, vp._14 + vp._11, vp._24 + vp._21, vp._34 + vp._31, vp._44 + vp._41);
@@ -213,19 +217,25 @@ namespace Spark::Graphics
             cb.instanceCount = instanceCount;
             cb.hiZWidth = m_hiZWidth;
             cb.hiZHeight = m_hiZHeight;
+            cb.hiZMipCount = static_cast<uint32_t>(m_hiZMipCount);
             cb.enableFrustumCull = m_settings.enableFrustumCull ? 1u : 0u;
-            cb.enableHiZCull = m_settings.enableHiZCull ? 1u : 0u;
+            cb.enableHiZCull =
+                (m_settings.enableHiZCull && m_hiZSRV && m_hiZWidth > 0 && m_hiZHeight > 0 && m_hiZMipCount > 0) ? 1u
+                                                                                                                 : 0u;
 
             hr = m_context->Map(m_cullConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
             if (FAILED(hr) || !mapped.pData)
-                return;
-            std::memcpy(mapped.pData, &cb, sizeof(CullConstants));
+                return false;
+            std::memcpy(mapped.pData, &cb, sizeof(GPUCullConstants));
             m_context->Unmap(m_cullConstantBuffer.Get(), 0);
 
             // Clear indirect args (reset instance count to 0)
             IndirectDrawArgs clearArgs = {};
             clearArgs.indexCountPerInstance = indexCount;
             m_context->UpdateSubresource(m_indirectArgsBuffer.Get(), 0, nullptr, &clearArgs, 0, 0);
+
+            const UINT clearVisibility[4] = {};
+            m_context->ClearUnorderedAccessViewUint(m_visibilityUAV.Get(), clearVisibility);
 
             // Dispatch cull compute shader (64 threads per group)
             m_context->CSSetShader(m_cullShader.Get(), nullptr, 0);
@@ -236,13 +246,16 @@ namespace Spark::Graphics
             ID3D11UnorderedAccessView* uavs[] = {m_visibilityUAV.Get(), m_indirectArgsUAV.Get()};
             m_context->CSSetUnorderedAccessViews(0, 2, uavs, nullptr);
 
-            m_context->Dispatch((instanceCount + 63) / 64, 1, 1);
+            m_context->Dispatch((instanceCount + GPUCullThreadGroupSize - 1) / GPUCullThreadGroupSize, 1, 1);
 
             // Unbind compute resources
             ID3D11ShaderResourceView* nullSRVs[2] = {};
             ID3D11UnorderedAccessView* nullUAVs[2] = {};
             m_context->CSSetShaderResources(0, 2, nullSRVs);
             m_context->CSSetUnorderedAccessViews(0, 2, nullUAVs, nullptr);
+            ID3D11Buffer* nullCB = nullptr;
+            m_context->CSSetConstantBuffers(0, 1, &nullCB);
+            m_context->CSSetShader(nullptr, nullptr, 0);
         }
 
         // Read back previous frame's visibility data (1-frame latency avoids CPU-GPU stall).
@@ -286,6 +299,7 @@ namespace Spark::Graphics
         m_context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
         m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_context->DrawIndexedInstancedIndirect(m_indirectArgsBuffer.Get(), 0);
+        return true;
     }
 
     // =========================================================================
@@ -445,6 +459,8 @@ namespace Spark::Graphics
         m_hiZMipCount = 0;
         m_hiZWidth = 0;
         m_hiZHeight = 0;
+        m_readbackPending = false;
+        m_readbackInstanceCount = 0;
 #endif
         m_stats = {};
         m_maxInstances = 0;

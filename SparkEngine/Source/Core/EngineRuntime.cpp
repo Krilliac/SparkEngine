@@ -9,6 +9,8 @@
 
 #include "EngineRuntime.h"
 
+#include "AssetIntegration.h"
+#include "EngineContext.h"
 #include "Engine/Events/EventSystem.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
@@ -16,10 +18,31 @@
 #include "Audio/IAudioBackend.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
+#include "Utils/LocalFileCache.h"
 #include "Utils/Timer.h"
 #ifdef SPARK_JOLT_PHYSICS_AVAILABLE
 #include "Physics/PhysicsSystem.h"
 #endif
+
+EngineRuntime::EngineRuntime() = default;
+EngineRuntime::~EngineRuntime() = default;
+
+void EngineRuntime::InitializeHeadlessAssetServices(EngineContext& context)
+{
+    if (!fileCache)
+        fileCache = std::make_unique<Spark::LocalFileCache>();
+    if (!assetRegistry)
+        assetRegistry = std::make_unique<Spark::AssetRegistry>();
+
+    context.SetFileCache(fileCache.get());
+    context.SetAssetRegistry(assetRegistry.get());
+}
+
+void EngineRuntime::ShutdownHeadlessAssetServices()
+{
+    assetRegistry.reset();
+    fileCache.reset();
+}
 
 EngineRuntime& GetEngineRuntime()
 {

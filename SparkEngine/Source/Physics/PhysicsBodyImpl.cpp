@@ -71,6 +71,12 @@ static bool HasValidJoltBody(uint32_t id)
     return jolt->GetBodyInterface().IsAdded(JPH::BodyID(id));
 }
 
+static bool IsZeroRelativeOffset(const XMFLOAT3& offset)
+{
+    constexpr float kZeroOffsetLengthSquared = 1.0e-12f;
+    return offset.x * offset.x + offset.y * offset.y + offset.z * offset.z <= kZeroOffsetLengthSquared;
+}
+
 // ============================================================================
 // PHYSICS BODY IMPLEMENTATION
 // ============================================================================
@@ -267,7 +273,7 @@ void PhysicsBody::ApplyForce(const XMFLOAT3& force, const XMFLOAT3& relativePos)
         return;
 
     auto& bi = GetBodyInterface();
-    if (relativePos.x == 0 && relativePos.y == 0 && relativePos.z == 0)
+    if (IsZeroRelativeOffset(relativePos))
     {
         bi.AddForce(JPH::BodyID(m_joltBodyID), JPH::Vec3(force.x, force.y, force.z));
     }
@@ -286,7 +292,7 @@ void PhysicsBody::ApplyImpulse(const XMFLOAT3& impulse, const XMFLOAT3& relative
         return;
 
     auto& bi = GetBodyInterface();
-    if (relativePos.x == 0 && relativePos.y == 0 && relativePos.z == 0)
+    if (IsZeroRelativeOffset(relativePos))
     {
         bi.AddImpulse(JPH::BodyID(m_joltBodyID), JPH::Vec3(impulse.x, impulse.y, impulse.z));
     }

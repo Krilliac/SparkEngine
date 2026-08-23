@@ -26,7 +26,7 @@ namespace MMO
         m_charSys = charSys;
         m_state = LoginUIState::Login;
         std::memset(m_loginUsername, 0, sizeof(m_loginUsername));
-        std::memset(m_loginPassword, 0, sizeof(m_loginPassword));
+        m_loginPassword.Clear();
         std::memset(m_registerEmail, 0, sizeof(m_registerEmail));
         std::memset(m_createName, 0, sizeof(m_createName));
         SPARK_LOG_INFO(Spark::LogCategory::Game, "MMO Login UI initialized");
@@ -36,12 +36,15 @@ namespace MMO
 
     void MMOLoginUI::Shutdown()
     {
+        m_loginPassword.Clear();
         m_accountSys = nullptr;
         m_charSys = nullptr;
+        m_context = nullptr;
     }
 
     void MMOLoginUI::ReturnToCharacterSelect()
     {
+        m_loginPassword.Clear();
         m_state = LoginUIState::CharacterSelect;
         m_selectedCharIndex = -1;
         m_confirmDelete = false;
@@ -53,6 +56,7 @@ namespace MMO
         if (!m_sessionToken.empty() && m_accountSys)
             m_accountSys->Logout(m_sessionToken);
         m_sessionToken.clear();
+        m_loginPassword.Clear();
         m_loggedInAccountId = 0;
         m_state = LoginUIState::Login;
         m_loginError.clear();
@@ -110,7 +114,7 @@ namespace MMO
         ImGui::InputText("Username", m_loginUsername, sizeof(m_loginUsername));
 
         ImGui::SetNextItemWidth(250);
-        ImGui::InputText("Password", m_loginPassword, sizeof(m_loginPassword), ImGuiInputTextFlags_Password);
+        ImGui::InputText("Password", m_loginPassword.data(), m_loginPassword.capacity(), ImGuiInputTextFlags_Password);
 
         if (m_isRegistering)
         {
@@ -131,9 +135,12 @@ namespace MMO
         {
             if (ImGui::Button("Register", ImVec2(120, 30)))
             {
+                // The view is borrowed only for this synchronous call. The
+                // scope guard clears the entire UI buffer on every exit path.
+                const auto clearPassword = m_loginPassword.ClearOnScopeExit();
                 if (m_accountSys)
                 {
-                    auto result = m_accountSys->Register(m_loginUsername, m_loginPassword, m_registerEmail);
+                    auto result = m_accountSys->Register(m_loginUsername, m_loginPassword.View(), m_registerEmail);
                     if (result.success)
                     {
                         m_loginSuccess = "Account created! You can now log in.";
@@ -150,6 +157,7 @@ namespace MMO
             ImGui::SameLine();
             if (ImGui::Button("Back to Login", ImVec2(120, 30)))
             {
+                m_loginPassword.Clear();
                 m_isRegistering = false;
                 m_loginError.clear();
             }
@@ -158,9 +166,12 @@ namespace MMO
         {
             if (ImGui::Button("Login", ImVec2(120, 30)))
             {
+                // AccountSystem accepts a non-owning view, so submitting does
+                // not manufacture a heap string containing the password.
+                const auto clearPassword = m_loginPassword.ClearOnScopeExit();
                 if (m_accountSys)
                 {
-                    auto result = m_accountSys->Login(m_loginUsername, m_loginPassword);
+                    auto result = m_accountSys->Login(m_loginUsername, m_loginPassword.View());
                     if (result.success)
                     {
                         SPARK_LOG_INFO(Spark::LogCategory::Game, "Login UI: login successful for %s", m_loginUsername);
@@ -181,6 +192,7 @@ namespace MMO
             ImGui::SameLine();
             if (ImGui::Button("Create Account", ImVec2(120, 30)))
             {
+                m_loginPassword.Clear();
                 m_isRegistering = true;
                 m_loginError.clear();
                 m_loginSuccess.clear();

@@ -20,6 +20,7 @@
 #include "Engine/Events/EventSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
+#include "Engine/Cinematic/Sequencer.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/GraphicsConsoleCommands.h"
 #include "Input/InputManager.h"
@@ -209,7 +210,7 @@ static void RegisterGameplaySubsystems()
  * Creates EngineContext, physics, core subsystem registration, save system,
  * coroutine scheduler, and gameplay subsystem registration.
  *
- * @param registerGameplay If true, registers Weather/UI/Dialogue/Modding and AssetRegistry.
+ * @param registerGameplay If true, registers Weather/UI/Dialogue/Modding and the windowed AssetRegistry.
  */
 void InitLinuxCoreSubsystems(bool registerGameplay)
 {
@@ -242,6 +243,13 @@ void InitLinuxCoreSubsystems(bool registerGameplay)
     }
     ctx->SetSaveSystem(&Spark::SaveSystem::GetInstance());
     ctx->SetCoroutineScheduler(&Spark::CoroutineScheduler::GetInstance());
+
+    if (!registerGameplay)
+    {
+        // Dedicated/headless modules still require CPU asset handle lookup and
+        // cached file access. Do not create GraphicsEngine/AssetPipeline here.
+        GetEngineRuntime().InitializeHeadlessAssetServices(*ctx);
+    }
 
     // ECS world service — parity with InitEngineContext/InitHeadlessEngineContext
     // on Windows: modules reach the ECS only through IEngineContext::GetWorld().
@@ -308,6 +316,16 @@ void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
         // Create cross-platform audio backend (OpenAL on Linux, wraps AudioEngine on Windows)
         GetEngineRuntime().audioBackend = Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto,
                                                                            GetEngineRuntime().audioEngine.get());
+        if (GetEngineRuntime().audioBackend && !GetEngineRuntime().audioBackend->IsAvailable() &&
+            !GetEngineRuntime().audioBackend->Initialize(32))
+        {
+            console.LogWarning("Cross-platform audio backend initialization failed; sequencer audio will be silent");
+        }
+        Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(GetEngineRuntime().audioBackend.get());
+    }
+    else
+    {
+        Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
     }
 
     GetEngineRuntime().moduleManager = std::make_unique<ModuleManager>();

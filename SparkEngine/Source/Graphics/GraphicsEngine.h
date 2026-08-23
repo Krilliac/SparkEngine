@@ -958,6 +958,7 @@ class GraphicsEngine
     ComPtr<ID3D11DeviceContext1> m_context;
     ComPtr<IDXGISwapChain1> m_swapChain;
     ComPtr<ID3D11RenderTargetView> m_renderTargetView;
+    ComPtr<ID3D11ShaderResourceView> m_backBufferSRV;
     ComPtr<ID3D11DepthStencilView> m_depthStencilView;
 
     /// True when this GraphicsEngine was set up via InitializeFromDevice()

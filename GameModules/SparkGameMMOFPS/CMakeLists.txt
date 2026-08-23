@@ -100,6 +100,11 @@ list(APPEND SPARK_GAME_MMOFPS_SOURCES
 # ---------------------------------------------------------------------
 add_library(SparkGameMMOFPS SHARED ${SPARK_GAME_MMOFPS_SOURCES})
 
+if(NOT COMMAND spark_configure_module_abi)
+    include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkGameModule.cmake")
+endif()
+spark_configure_module_abi(SparkGameMMOFPS)
+
 target_compile_definitions(SparkGameMMOFPS PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
 # ---------------------------------------------------------------------

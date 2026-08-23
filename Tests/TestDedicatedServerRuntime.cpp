@@ -63,9 +63,9 @@ namespace
             handlers.clear();
         }
 
-        const std::unordered_map<ClientID, ClientInfo>& GetClients() const override { return clients; }
+        std::unordered_map<ClientID, ClientInfo> GetClients() const override { return clients; }
 
-        const NetworkStats& GetStats() const override { return stats; }
+        NetworkStats GetStats() const override { return stats; }
 
         void KickClient(ClientID client, const std::string& reason) override
         {

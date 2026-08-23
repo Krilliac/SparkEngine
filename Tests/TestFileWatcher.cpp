@@ -214,3 +214,37 @@ TEST(FileWatcher_TrackedFileCount)
     watcher.Shutdown();
     CleanupTempDir(dir);
 }
+
+TEST(FileWatcher_CallbackCanReentrantlyReplaceItsWatch)
+{
+    auto& watcher = Spark::Utils::FileWatcher::GetInstance();
+    watcher.Initialize(0.01f);
+    const std::string dir = CreateTempDir();
+    const std::string firstPath = dir + "/reentrant-first.txt";
+    const std::string secondPath = dir + "/reentrant-second.txt";
+    WriteFile(firstPath, "initial");
+    WriteFile(secondPath, "initial");
+
+    bool callbackRan = false;
+    uint32_t replacementId = 0;
+    uint32_t originalId = 0;
+    originalId = watcher.WatchFile(firstPath,
+                                   [&](const Spark::Utils::FileChangeEvent&)
+                                   {
+                                       callbackRan = true;
+                                       watcher.Unwatch(originalId);
+                                       replacementId =
+                                           watcher.WatchFile(secondPath, [](const Spark::Utils::FileChangeEvent&) {});
+                                   });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    WriteFile(firstPath, "modified content");
+    watcher.Update(0.1f);
+
+    EXPECT_TRUE(callbackRan);
+    EXPECT_TRUE(replacementId > 0);
+    EXPECT_EQ(watcher.GetWatchCount(), static_cast<size_t>(1));
+
+    watcher.Shutdown();
+    CleanupTempDir(dir);
+}

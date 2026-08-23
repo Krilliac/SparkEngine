@@ -3,7 +3,8 @@
  * @brief Multi-module loader and lifecycle manager
  *
  * ModuleManager replaces GameModuleLoader with support for loading multiple
- * game/gameplay modules simultaneously. Each module is a DLL exporting
+ * game/gameplay modules simultaneously. Each module is a DLL exporting the
+ * mandatory SparkGetModuleCompatibility C descriptor followed by
  * CreateModule()/DestroyModule() (new API) or CreateGameModule()/
  * DestroyGameModule() (legacy API — wrapped via adapter).
  *
@@ -103,7 +104,7 @@ class ModuleManager
      * @brief Enumerate module-DLL candidates in a directory WITHOUT loading them
      *
      * Same filter as LoadModulesFromDirectory (name hint + system-DLL exclusion
-     * + export probe via DONT_RESOLVE_DLL_REFERENCES) but never runs DllMain.
+     * + mandatory sidecar presence) but never maps the image or runs DllMain.
      * Used by the bare-launch project selector.
      *
      * @return Absolute paths of probable module DLLs, sorted by filename.
@@ -155,7 +156,10 @@ class ModuleManager
      * @brief Reload a specific module by name (for hot-reload)
      *
      * Shuts down the module, unloads the DLL, reloads it, and re-initializes.
-     * The caller must have stored the IEngineContext to pass for re-init.
+     * The replacement is first copied to a unique shadow image, fully loaded,
+     * and initialized. The working module is committed away only after that
+     * staging succeeds, so validation/load/init failures preserve its instance
+     * and state. The caller must provide the IEngineContext for staging.
      *
      * @param name Module name to reload
      * @param context Engine context for re-initialization
@@ -185,10 +189,11 @@ class ModuleManager
     void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
     /**
-     * @brief Scan a directory for module DLLs and return metadata without loading
+     * @brief Scan a directory for module DLLs without executing them
      *
-     * Temporarily loads each candidate DLL, calls CreateModule() to get its name
-     * and version, then immediately unloads. Marks modules that are already loaded.
+     * Unloaded candidates use filename/unknown metadata. This method never
+     * invokes DllMain, compatibility hooks, injection hooks, or factories.
+     * Modules already loaded by this manager report their copied ModuleInfo.
      *
      * @param directory Directory to scan (defaults to executable directory)
      * @return List of discovered modules
@@ -214,6 +219,7 @@ class ModuleManager
         bool initialized = false;
         bool isLegacyAdapter = false;                     ///< True if wrapping IGameModule
         Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class (one Game per process)
+        std::string transientImagePath;                   ///< Shadow image removed after the module library is closed
     };
 
     /** @brief Sort modules by loadOrder */

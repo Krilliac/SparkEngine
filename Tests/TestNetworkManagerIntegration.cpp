@@ -10,6 +10,7 @@
 #include "TestFramework.h"
 #include "Engine/Networking/NetworkManager.h"
 
+#include <atomic>
 #include <chrono>
 #include <thread>
 #include <vector>
@@ -103,6 +104,99 @@ TEST(NetworkManager_UpdateAfterInit_DoesNotCrash)
 // ============================================================================
 
 #ifdef ENABLE_NETWORKING
+
+TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
+{
+    auto& nm = NetworkManager::GetInstance();
+    nm.Shutdown();
+    ASSERT_TRUE(nm.Initialize());
+    ASSERT_TRUE(nm.StartServer(0, 4));
+    const uint16_t port = nm.GetBoundPort();
+    ASSERT_TRUE(port != 0);
+
+    SOCKET rawSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    ASSERT_TRUE(rawSock != INVALID_SOCKET);
+
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
+
+    auto sendPacket = [&](MessageType type)
+    {
+        std::vector<uint8_t> packet;
+        auto put32 = [&](uint32_t value)
+        {
+            for (int shift = 0; shift < 32; shift += 8)
+                packet.push_back(static_cast<uint8_t>((value >> shift) & 0xFF));
+        };
+        auto put16 = [&](uint16_t value)
+        {
+            packet.push_back(static_cast<uint8_t>(value & 0xFF));
+            packet.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+        };
+        put32(0x5350524B);
+        put16(static_cast<uint16_t>(type));
+        packet.push_back(static_cast<uint8_t>(ChannelType::Unreliable));
+        put32(INVALID_CLIENT);
+        put32(0);
+        put32(0);
+        put32(0);
+        return sendto(rawSock, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
+                      reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
+    };
+
+    ASSERT_TRUE(sendPacket(MessageType::Connect) > 0);
+    for (int i = 0; i < 50 && nm.GetClients().empty(); ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    ASSERT_FALSE(nm.GetClients().empty());
+
+    std::atomic<bool> callbackCalled{false};
+    std::atomic<bool> workerFinished{false};
+    std::atomic<bool> workerFinishedDuringCallback{false};
+    std::thread worker;
+    nm.RegisterHandler(MessageType::UserDefined,
+                       [&](const NetworkMessage&)
+                       {
+                           callbackCalled.store(true, std::memory_order_release);
+                           worker = std::thread(
+                               [&]
+                               {
+                                   nm.StopServer();
+                                   workerFinished.store(true, std::memory_order_release);
+                               });
+
+                           const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+                           while (!workerFinished.load(std::memory_order_acquire) &&
+                                  std::chrono::steady_clock::now() < deadline)
+                               std::this_thread::yield();
+                           workerFinishedDuringCallback.store(workerFinished.load(std::memory_order_acquire),
+                                                              std::memory_order_release);
+                       });
+
+    ASSERT_TRUE(sendPacket(MessageType::UserDefined) > 0);
+    for (int i = 0; i < 50 && !callbackCalled.load(std::memory_order_acquire); ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    if (worker.joinable())
+        worker.join();
+
+    EXPECT_TRUE(callbackCalled.load(std::memory_order_acquire));
+    EXPECT_TRUE(workerFinished.load(std::memory_order_acquire));
+    // Under the old Update lock contract, the worker's StopServer could not
+    // finish until this callback returned. Update must also detect the
+    // lifecycle epoch change and avoid continuing against the closed socket.
+    EXPECT_TRUE(workerFinishedDuringCallback.load(std::memory_order_acquire));
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+
+    closesocket(rawSock);
+    nm.Shutdown();
+}
 
 TEST(NetworkManager_StartServer_Succeeds)
 {

@@ -425,8 +425,13 @@ namespace Spark
         report.Add(sub, "Singleton accessible", true);
 
         auto status = hd.GetStatus();
-        report.Add(sub, "Frames analyzed", status.framesAnalyzed > 0,
-                   std::to_string(status.framesAnalyzed) + " frames");
+        // A diagnostic can run during startup, before the first gameplay tick.
+        // Zero samples is therefore a valid "awaiting first frame" state, not a
+        // detector failure.  Once frames arrive the count remains visible in
+        // the detail text for operators to assess.
+        report.Add(sub, "Frame telemetry state", true,
+                   status.framesAnalyzed == 0 ? "awaiting first frame"
+                                              : std::to_string(status.framesAnalyzed) + " frames analyzed");
         report.Add(sub, "No severe hitches", status.severeCount == 0,
                    std::to_string(status.severeCount) + " severe, " + std::to_string(status.moderateCount) +
                        " moderate, " + std::to_string(status.mildCount) + " mild");

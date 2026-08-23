@@ -36,8 +36,8 @@ namespace Spark::Net
         virtual void RegisterHandler(MessageType type, MessageHandler handler) = 0;
         virtual void ClearHandlers() = 0;
 
-        virtual const std::unordered_map<ClientID, ClientInfo>& GetClients() const = 0;
-        virtual const NetworkStats& GetStats() const = 0;
+        virtual std::unordered_map<ClientID, ClientInfo> GetClients() const = 0;
+        virtual NetworkStats GetStats() const = 0;
         virtual void KickClient(ClientID client, const std::string& reason) = 0;
     };
 

@@ -43,6 +43,7 @@ namespace Spark::Net
 
     bool NetworkManager::Initialize()
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "Network", 0.0);
         if (m_initialized)
@@ -65,6 +66,7 @@ namespace Spark::Net
 
         SPARK_LOG_INFO(Spark::LogCategory::Network, "NetworkManager initialized");
         m_initialized = true;
+        ++m_lifecycleEpoch;
         m_lastBandwidthSample = std::chrono::steady_clock::now();
         m_bytesSentSinceSample = 0;
         m_bytesReceivedSinceSample = 0;
@@ -130,6 +132,8 @@ namespace Spark::Net
                                 NetBuffer buf;
                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
                                 DeserializeEntityState(buf);
+                                if (GetRole() != NetworkRole::Client)
+                                    return;
 
                                 // Delta-ack echo: unreliable state updates carry the server's
                                 // per-connection delta sequence in the message header (its own
@@ -206,8 +210,10 @@ namespace Spark::Net
 
     void NetworkManager::Shutdown()
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         if (!m_initialized)
             return;
+        ++m_lifecycleEpoch;
 
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreShutdown, "Network", 0.0);
         if (m_connectionState != ConnectionState::Disconnected)
@@ -247,6 +253,7 @@ namespace Spark::Net
         {
             std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
             m_replicatedEntities.clear();
+            ++m_replicationMutationEpoch;
         }
         {
             std::lock_guard<std::mutex> inputLock(m_inputMutex);
@@ -280,8 +287,10 @@ namespace Spark::Net
 
     bool NetworkManager::StartServer(uint16_t port, int maxClients)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
-        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, port > 0, "port must be greater than 0");
+        // Port 0 requests an OS-assigned ephemeral port and is the only
+        // conflict-free choice for parallel tests/tools.
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, maxClients > 0 && maxClients <= 256,
                           "maxClients must be in [1, 256]");
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Starting server on port %u (maxClients=%d)", port, maxClients);
@@ -306,13 +315,16 @@ namespace Spark::Net
         m_serverTime = 0.0f;
         m_heartbeatTimer = 0.0f;
         m_replicationTimer = 0.0f;
+        ++m_lifecycleEpoch;
         return true;
     }
 
     void NetworkManager::StopServer()
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         if (GetRole() != NetworkRole::Server)
             return;
+        ++m_lifecycleEpoch;
 
         // Collect client IDs under lock, then notify outside the lock
         std::vector<ClientID> clientIDs;
@@ -354,6 +366,7 @@ namespace Spark::Net
         {
             std::lock_guard<std::mutex> lock(m_replicationMutex);
             m_replicatedEntities.clear();
+            ++m_replicationMutationEpoch;
         }
         m_lagCompensator.Clear();
         {
@@ -376,6 +389,7 @@ namespace Spark::Net
 
     bool NetworkManager::Connect(const std::string& address, uint16_t port, const std::string& playerName)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, !address.empty(), "address must not be empty");
         SPARK_REQUIRE_MSG(Spark::LogCategory::Network, port > 0, "port must be greater than 0");
@@ -415,6 +429,7 @@ namespace Spark::Net
             m_role = NetworkRole::Client;
             m_connectionState = ConnectionState::Connecting;
         }
+        ++m_lifecycleEpoch;
 
         // Send connect request
         NetworkMessage connectMsg;
@@ -432,12 +447,14 @@ namespace Spark::Net
 
     void NetworkManager::Disconnect()
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         {
             std::lock_guard<std::mutex> stateLock(m_stateMutex);
             if (m_connectionState == ConnectionState::Disconnected)
                 return;
             m_connectionState = ConnectionState::Disconnecting;
         }
+        ++m_lifecycleEpoch;
 
         NetworkMessage disconnectMsg;
         disconnectMsg.type = MessageType::Disconnect;
@@ -485,6 +502,17 @@ namespace Spark::Net
 
     void NetworkManager::SendMessage(const NetworkMessage& msg)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        // Reject before queueing or assigning a reliable sequence. Otherwise a
+        // locally accepted message can be truncated/rejected by the receiver,
+        // and ReliableOrdered creates a permanent sequence gap.
+        if (!IsNetworkPayloadSizeValid(msg.payload.size()))
+        {
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return;
+        }
+
         // Server-side reliable broadcasts must fan out per client: each peer
         // has its own sequence stream and unacked map, so a single broadcast
         // sequence number cannot represent delivery to N independent peers.
@@ -522,9 +550,19 @@ namespace Spark::Net
 
     void NetworkManager::SendToClient(ClientID client, const NetworkMessage& msg)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::SendToClient — client ID must not be INVALID_CLIENT");
         if (m_role != NetworkRole::Server)
             return;
+
+        // This check must precede per-peer sequence allocation and unacked
+        // insertion so rejected reliable messages leave no delivery gap/state.
+        if (!IsNetworkPayloadSizeValid(msg.payload.size()))
+        {
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.packetsDropped++;
+            return;
+        }
 
         NetworkMessage copy = msg;
         copy.senderID = 0; // From server
@@ -579,12 +617,14 @@ namespace Spark::Net
 
     void NetworkManager::SendToAll(const NetworkMessage& msg)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         for (ClientID id : GetConnectedClientIDs())
             SendToClient(id, msg);
     }
 
     void NetworkManager::SendToAllExcept(ClientID excludeClient, const NetworkMessage& msg)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         for (ClientID id : GetConnectedClientIDs())
         {
             if (id != excludeClient)
@@ -594,11 +634,13 @@ namespace Spark::Net
 
     void NetworkManager::BroadcastMessage(const NetworkMessage& msg)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         SendToAll(msg);
     }
 
     void NetworkManager::RegisterHandler(MessageType type, MessageHandler handler)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterHandler — handler must not be null");
         std::lock_guard<std::mutex> lock(m_handlerMutex);
         m_handlers[static_cast<uint16_t>(type)] = std::move(handler);
@@ -606,6 +648,7 @@ namespace Spark::Net
 
     void NetworkManager::ClearHandlers()
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::lock_guard<std::mutex> lock(m_handlerMutex);
         m_handlers.clear();
     }
@@ -616,6 +659,7 @@ namespace Spark::Net
 
     void NetworkManager::KickClient(ClientID client, const std::string& reason)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::KickClient — client ID must not be INVALID_CLIENT");
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Kicking client %u: %s", client, reason.c_str());
 
@@ -772,11 +816,11 @@ namespace Spark::Net
     // CheckConnectionTimeouts
     // --------------------------------------------------------------------------
 
-    void NetworkManager::CheckConnectionTimeouts()
+    std::vector<ClientID> NetworkManager::CheckConnectionTimeouts()
     {
+        std::vector<ClientID> timedOut;
         if (m_role == NetworkRole::Server)
         {
-            std::vector<ClientID> timedOut;
             {
                 std::lock_guard<std::mutex> lock(m_clientsMutex);
                 for (const auto& [id, info] : m_clients)
@@ -792,9 +836,6 @@ namespace Spark::Net
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Network, "Client %u timed out (no heartbeat for %.1fs)", id,
                                m_connectionTimeout);
-
-                if (m_timeoutHandler)
-                    m_timeoutHandler(id);
 
                 // Clean up owned entities
                 std::vector<uint32_t> ownedEntities;
@@ -832,20 +873,20 @@ namespace Spark::Net
             // the connection is considered lost.
             // (Server heartbeat responses update m_serverTime via Update())
         }
+
+        return timedOut;
     }
 
     // --------------------------------------------------------------------------
     // ProcessIncoming -- read from socket, parse, enqueue
     // --------------------------------------------------------------------------
 
-    void NetworkManager::ProcessIncoming()
+    std::vector<ClientID> NetworkManager::ProcessIncoming()
     {
+        std::vector<ClientID> newlyConnected;
 #ifdef ENABLE_NETWORKING
         if (m_socket == INVALID_SOCKET)
-            return;
-
-        // Track newly connected clients for deferred entity sync
-        std::vector<ClientID> newlyConnected;
+            return newlyConnected;
 
         // Read all available datagrams
         for (int i = 0; i < 256; ++i) // Cap per-frame reads
@@ -958,17 +999,11 @@ namespace Spark::Net
             }
         }
 
-        // Send full entity state to newly connected clients (deferred to
-        // avoid blocking the receive loop with mutex acquisitions / sends)
-        for (ClientID id : newlyConnected)
-        {
-            SendFullEntitySync(id);
-        }
-
 #else
         // Without networking, just dispatch whatever is in the queue already
         // (for local/testing scenarios)
 #endif // ENABLE_NETWORKING
+        return newlyConnected;
     }
 
     // --------------------------------------------------------------------------
@@ -1030,6 +1065,13 @@ namespace Spark::Net
         {
             const auto& msg = toSend.front();
             auto serialized = SerializeMessage(msg);
+            if (serialized.empty())
+            {
+                m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                m_stats.packetsDropped++;
+                toSend.pop();
+                continue;
+            }
 
             // Apply instability simulation if enabled
             if (instability.GetSettings().enabled)
@@ -1189,8 +1231,25 @@ namespace Spark::Net
     // Console commands
     // --------------------------------------------------------------------------
 
+    uint16_t NetworkManager::GetBoundPort() const
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+#ifdef ENABLE_NETWORKING
+        if (m_socket == INVALID_SOCKET)
+            return 0;
+        sockaddr_in address{};
+        socklen_t addressLength = sizeof(address);
+        if (getsockname(m_socket, reinterpret_cast<sockaddr*>(&address), &addressLength) == SOCKET_ERROR)
+            return 0;
+        return ntohs(address.sin_port);
+#else
+        return 0;
+#endif
+    }
+
     std::string NetworkManager::Console_GetStatus() const
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::ostringstream ss;
         ss << "=== Network Status ===\n";
         ss << "Initialized: " << (m_initialized ? "Yes" : "No") << "\n";
@@ -1234,6 +1293,7 @@ namespace Spark::Net
 
     std::string NetworkManager::Console_ListClients() const
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::ostringstream ss;
         ss << "=== Connected Clients (" << m_clients.size() << ") ===\n";
         for (const auto& [id, info] : m_clients)
@@ -1246,6 +1306,7 @@ namespace Spark::Net
 
     std::string NetworkManager::Console_GetStats() const
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::ostringstream ss;
         ss << "=== Network Stats ===\n";
         ss << "Ping: " << m_stats.ping << "ms (jitter: " << m_stats.jitter << "ms)\n";

@@ -2,7 +2,9 @@
 // Validates frustum culling, HiZ occlusion, and indirect args without D3D11
 
 #include "TestFramework.h"
+#include "Graphics/GPUDrivenRenderer.h"
 
+#include <cstddef>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -61,15 +63,6 @@ namespace
         // Far: z < 100
         planes[5] = {{0, 0, -1}, 100.0f};
     }
-
-    struct IndirectDrawArgs
-    {
-        uint32_t indexCountPerInstance;
-        uint32_t instanceCount;
-        uint32_t startIndexLocation;
-        int32_t baseVertexLocation;
-        uint32_t startInstanceLocation;
-    };
 
 } // namespace
 
@@ -148,9 +141,11 @@ TEST(GPUDriven_HiZ_ExactBoundary)
 
 TEST(GPUDriven_IndirectArgs_Layout)
 {
-    EXPECT_EQ(sizeof(IndirectDrawArgs), 20u);
+    EXPECT_EQ(sizeof(Spark::Graphics::IndirectDrawArgs), 20u);
+    EXPECT_EQ(offsetof(Spark::Graphics::IndirectDrawArgs, instanceCount), 4u);
+    EXPECT_EQ(Spark::Graphics::GPUCullIndirectInstanceCountOffset, 4u);
 
-    IndirectDrawArgs args = {};
+    Spark::Graphics::IndirectDrawArgs args = {};
     args.indexCountPerInstance = 36;
     args.instanceCount = 0; // set by GPU
     args.startIndexLocation = 0;
@@ -158,6 +153,17 @@ TEST(GPUDriven_IndirectArgs_Layout)
     args.startInstanceLocation = 0;
 
     EXPECT_EQ(args.indexCountPerInstance, 36u);
+}
+
+TEST(GPUDriven_SharedShaderABI_Layout)
+{
+    EXPECT_EQ(sizeof(Spark::Graphics::GPUInstanceAABB), 32u);
+    EXPECT_EQ(offsetof(Spark::Graphics::GPUInstanceAABB, maxX), 16u);
+    EXPECT_EQ(sizeof(Spark::Graphics::GPUCullConstants), 192u);
+    EXPECT_EQ(offsetof(Spark::Graphics::GPUCullConstants, instanceCount), 160u);
+    EXPECT_EQ(offsetof(Spark::Graphics::GPUCullConstants, enableFrustumCull), 176u);
+    EXPECT_EQ(Spark::Graphics::GPUCullThreadGroupSize, 64u);
+    EXPECT_FALSE(Spark::Graphics::GPUDrivenRenderer::SupportsProductionDrawListInstanceContract());
 }
 
 TEST(GPUDriven_BatchCull_CountsCorrectly)

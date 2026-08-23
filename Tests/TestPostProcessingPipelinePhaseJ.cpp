@@ -35,6 +35,7 @@
 using Spark::Graphics::PassMetrics;
 using Spark::Graphics::PostProcessingPipeline;
 using Spark::Graphics::PostProcessPass;
+using Spark::Graphics::PostProcessTargetRouting;
 
 // =========================================================================
 // Enum ordering and metrics — the Phase J slot layout is load-bearing.
@@ -66,6 +67,21 @@ TEST(PhaseJ_EnumOrdering_SharpenIsLast)
 {
     // Sharpen stays the last user-facing pass — it runs after LDR output.
     EXPECT_EQ(static_cast<int>(PostProcessPass::Sharpen) + 1, static_cast<int>(PostProcessPass::Count));
+}
+
+TEST(PhaseJ_TargetRouting_ZeroPassPreservesInput)
+{
+    EXPECT_EQ(PostProcessTargetRouting::FinalTargetForPassCount(0), PostProcessTargetRouting::InputTarget);
+}
+
+TEST(PhaseJ_TargetRouting_AlternatesAndReturnsLastWrittenTarget)
+{
+    EXPECT_EQ(PostProcessTargetRouting::DestinationForPass(0), 0);
+    EXPECT_EQ(PostProcessTargetRouting::DestinationForPass(1), 1);
+    EXPECT_EQ(PostProcessTargetRouting::DestinationForPass(2), 0);
+    EXPECT_EQ(PostProcessTargetRouting::FinalTargetForPassCount(1), 0);
+    EXPECT_EQ(PostProcessTargetRouting::FinalTargetForPassCount(2), 1);
+    EXPECT_EQ(PostProcessTargetRouting::FinalTargetForPassCount(3), 0);
 }
 
 // =========================================================================
@@ -107,6 +123,19 @@ TEST(PhaseJ_ProcessIsSafeWithoutDevice)
     // m_context is null).
     pp.Process(0.016f);
     EXPECT_EQ(pp.GetActivePassCount(), 0);
+    pp.Shutdown();
+}
+
+TEST(PhaseJ_UnexecutablePassDoesNotAdvanceTargetRouting)
+{
+    PostProcessingPipeline pp;
+    pp.Initialize(320, 240);
+    pp.SetEffectEnabled(PostProcessPass::Sharpen, true);
+    pp.Process(0.016f);
+    // Headless has no pixel shader or render target. The enabled pass must
+    // fail closed instead of exposing an unwritten ping-pong target.
+    EXPECT_EQ(pp.GetActivePassCount(), 0);
+    EXPECT_TRUE(pp.GetOutputRTV() == nullptr);
     pp.Shutdown();
 }
 

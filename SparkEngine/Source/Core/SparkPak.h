@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -160,6 +161,10 @@ namespace Spark
         PakHeader m_header{};
         std::unordered_map<uint64_t, PakEntry> m_entries;
         std::vector<PakEntry*> m_entryList; ///< For iteration (ListFiles)
+        /// Serializes the seek+read pair on the shared C file stream.  Individual
+        /// stdio calls may lock internally, but a seek followed by a read is not
+        /// an atomic operation unless we hold one lock across both calls.
+        mutable std::mutex m_fileMutex;
     };
 
 } // namespace Spark

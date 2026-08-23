@@ -94,7 +94,7 @@ namespace SparkEditor
             } format = AUTO;
 
             int maxTextureSize = 2048;        ///< Maximum texture dimension
-            bool generateMipMaps = true;      ///< Generate mip maps
+            bool generateMipMaps = false;     ///< Generate mip maps (unsupported offline; opt-in fails closed)
             bool sRGB = true;                 ///< Use sRGB color space
             float compressionQuality = 0.8f;  ///< Compression quality (0-1)
             bool alphaIsTransparency = false; ///< Treat alpha as transparency
@@ -104,12 +104,12 @@ namespace SparkEditor
         // Mesh settings
         struct MeshSettings
         {
-            bool generateNormals = true;        ///< Generate normals if missing
-            bool generateTangents = true;       ///< Generate tangent vectors
+            bool generateNormals = false;       ///< Generate normals if missing (unsupported offline)
+            bool generateTangents = false;      ///< Generate tangent vectors (unsupported offline)
             bool generateLightmapUVs = false;   ///< Generate second UV set for lightmaps
             float normalSmoothingAngle = 60.0f; ///< Normal smoothing angle threshold
-            bool optimizeMesh = true;           ///< Optimize mesh for rendering
-            bool weldVertices = true;           ///< Weld duplicate vertices
+            bool optimizeMesh = false;          ///< Optimize mesh for rendering (unsupported offline)
+            bool weldVertices = false;          ///< Weld duplicate vertices (unsupported offline)
             float weldThreshold = 0.0001f;      ///< Vertex welding threshold
             bool autoGenerateLODs = false;      ///< Generate LOD chain during import
             bool previewGeneratedLODs = true;   ///< Show LOD chain preview in inspector
@@ -196,6 +196,7 @@ namespace SparkEditor
         std::function<void(const AssetMetadata&)> completionCallback; ///< Completion callback
         int priority = 0;                                             ///< Job priority (higher = more important)
         std::chrono::system_clock::time_point submissionTime;         ///< Job submission time
+        uint32_t batchID = 0;                                         ///< Owning batch (0 = standalone)
 
         bool operator<(const ProcessingJob& other) const
         {
@@ -212,15 +213,18 @@ namespace SparkEditor
  */
     struct BatchOperation
     {
-        std::string name;                            ///< Operation name
-        std::vector<std::string> assetPaths;         ///< Assets to process
-        AssetImportSettings settings;                ///< Batch import settings
-        std::function<void(float)> progressCallback; ///< Progress callback
-        std::function<void()> completionCallback;    ///< Completion callback
-        bool isActive = false;                       ///< Whether operation is active
-        float progress = 0.0f;                       ///< Current progress (0-1)
-        int completedAssets = 0;                     ///< Number of completed assets
-        int totalAssets = 0;                         ///< Total number of assets
+        std::string name;                                    ///< Operation name
+        std::vector<std::string> assetPaths;                 ///< Assets to process
+        AssetImportSettings settings;                        ///< Batch import settings
+        std::function<void(float)> progressCallback;         ///< Progress callback
+        std::function<void()> completionCallback;            ///< Completion callback
+        bool isActive = false;                               ///< Whether operation is active
+        float progress = 0.0f;                               ///< Current progress (0-1)
+        int completedAssets = 0;                             ///< Number of completed assets
+        int totalAssets = 0;                                 ///< Total number of assets
+        int failedAssets = 0;                                ///< Number of failed assets
+        ProcessingStatus status = ProcessingStatus::PENDING; ///< Aggregate batch state
+        bool completionDispatched = false;                   ///< Exactly-once completion guard
     };
 
 } // namespace SparkEditor

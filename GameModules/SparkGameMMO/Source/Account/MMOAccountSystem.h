@@ -22,6 +22,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -113,10 +114,12 @@ namespace MMO
         void RenderDebugUI();
 
         // === Registration ===
-        AuthResult Register(const std::string& username, const std::string& password, const std::string& email = "");
+        // Credential views are borrowed for these synchronous calls. Callers
+        // retain ownership and must promptly erase their writable buffers.
+        AuthResult Register(const std::string& username, std::string_view password, const std::string& email = "");
 
         // === Authentication ===
-        AuthResult Login(const std::string& username, const std::string& password);
+        AuthResult Login(const std::string& username, std::string_view password);
         void Logout(const std::string& sessionToken);
         bool ValidateSession(const std::string& sessionToken) const;
 
@@ -128,7 +131,7 @@ namespace MMO
         // === Account Management ===
         std::optional<AccountData> GetAccount(uint32_t accountId) const;
         std::optional<AccountData> FindAccount(const std::string& username) const;
-        bool ChangePassword(uint32_t accountId, const std::string& oldPass, const std::string& newPass);
+        bool ChangePassword(uint32_t accountId, std::string_view oldPass, std::string_view newPass);
         bool SetAccountStatus(uint32_t accountId, AccountStatus status, const std::string& reason = "");
         bool BanAccount(uint32_t accountId, float durationHours, const std::string& reason);
         bool UnbanAccount(uint32_t accountId);

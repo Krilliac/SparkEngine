@@ -3,7 +3,9 @@
  * @brief Self-contained SHA-256, HMAC-SHA256, and PBKDF2 password hashing.
  */
 #include "PasswordHash.h"
+#include "ScopeGuard.h"
 #include "SecureRandom.h"
+#include "SecureMemory.h"
 
 #include <algorithm>
 #include <array>
@@ -94,6 +96,7 @@ namespace Spark::PasswordHash
                 hash[5] += f;
                 hash[6] += g;
                 hash[7] += h;
+                SecureErase(words, sizeof(words));
             }
 
             void Update(const uint8_t* data, size_t length)
@@ -147,6 +150,7 @@ namespace Spark::PasswordHash
         Digest Sha256(const uint8_t* data, size_t length)
         {
             Sha256State state;
+            const auto clearState = Spark::MakeScopeExit([&] { SecureErase(&state, sizeof(state)); });
             state.Update(data, length);
             return state.Finalize();
         }
@@ -161,9 +165,12 @@ namespace Spark::PasswordHash
         {
             HmacSha256Key prepared;
             std::array<uint8_t, 64> keyBlock{};
+            const auto clearKeyBlock = Spark::MakeScopeExit([&] { SecureErase(keyBlock.data(), keyBlock.size()); });
             if (keyLength > keyBlock.size())
             {
-                const Digest hashedKey = Sha256(key, keyLength);
+                Digest hashedKey = Sha256(key, keyLength);
+                const auto clearHashedKey =
+                    Spark::MakeScopeExit([&] { SecureErase(hashedKey.data(), hashedKey.size()); });
                 std::memcpy(keyBlock.data(), hashedKey.data(), hashedKey.size());
             }
             else if (keyLength > 0)
@@ -180,16 +187,19 @@ namespace Spark::PasswordHash
         Digest HmacSha256(const HmacSha256Key& key, const uint8_t* data, size_t dataLength)
         {
             Sha256State inner;
+            const auto clearInner = Spark::MakeScopeExit([&] { SecureErase(&inner, sizeof(inner)); });
             inner.Update(key.innerPad.data(), key.innerPad.size());
             inner.Update(data, dataLength);
-            const Digest innerHash = inner.Finalize();
+            Digest innerHash = inner.Finalize();
+            const auto clearInnerHash = Spark::MakeScopeExit([&] { SecureErase(innerHash.data(), innerHash.size()); });
             Sha256State outer;
+            const auto clearOuter = Spark::MakeScopeExit([&] { SecureErase(&outer, sizeof(outer)); });
             outer.Update(key.outerPad.data(), key.outerPad.size());
             outer.Update(innerHash.data(), innerHash.size());
             return outer.Finalize();
         }
 
-        std::vector<uint8_t> Derive(const std::string& password, const std::vector<uint8_t>& salt, uint32_t iterations,
+        std::vector<uint8_t> Derive(std::string_view password, const std::vector<uint8_t>& salt, uint32_t iterations,
                                     size_t derivedLength)
         {
             constexpr size_t hashLength = 32;
@@ -199,7 +209,8 @@ namespace Spark::PasswordHash
             // PBKDF2's HMAC key normalization must happen once, not once per
             // iteration. Re-hashing long passwords in every round creates a
             // password-length-amplified denial-of-service path.
-            const HmacSha256Key preparedKey = PrepareHmacSha256Key(key, password.size());
+            HmacSha256Key preparedKey = PrepareHmacSha256Key(key, password.size());
+            const auto clearPreparedKey = Spark::MakeScopeExit([&] { SecureErase(&preparedKey, sizeof(preparedKey)); });
             for (uint32_t block = 1; derived.size() < derivedLength; ++block)
             {
                 std::vector<uint8_t> input = salt;
@@ -208,7 +219,10 @@ namespace Spark::PasswordHash
                 input.push_back(static_cast<uint8_t>(block >> 8));
                 input.push_back(static_cast<uint8_t>(block));
                 Digest value = HmacSha256(preparedKey, input.data(), input.size());
+                const auto clearValue = Spark::MakeScopeExit([&] { SecureErase(value.data(), value.size()); });
                 Digest accumulated = value;
+                const auto clearAccumulated =
+                    Spark::MakeScopeExit([&] { SecureErase(accumulated.data(), accumulated.size()); });
                 for (uint32_t round = 1; round < iterations; ++round)
                 {
                     value = HmacSha256(preparedKey, value.data(), value.size());
@@ -288,18 +302,19 @@ namespace Spark::PasswordHash
         }
     } // namespace
 
-    std::string Create(const std::string& password)
+    std::string Create(std::string_view password)
     {
         if (password.size() > kMaximumPasswordBytes)
             return {};
         std::vector<uint8_t> salt(kSaltBytes);
         if (!SecureRandom::Fill(salt.data(), salt.size()))
             return {};
-        const std::vector<uint8_t> derived = Derive(password, salt, kIterations, kDerivedBytes);
+        std::vector<uint8_t> derived = Derive(password, salt, kIterations, kDerivedBytes);
+        const auto clearDerived = Spark::MakeScopeExit([&] { SecureErase(derived.data(), derived.size()); });
         return std::string(kScheme) + '$' + std::to_string(kIterations) + '$' + ToHex(salt) + '$' + ToHex(derived);
     }
 
-    bool Verify(const std::string& password, const std::string& encodedHash)
+    bool Verify(std::string_view password, std::string_view encodedHash)
     {
         if (password.size() > kMaximumPasswordBytes || encodedHash.size() > kMaximumEncodedBytes)
             return false;
@@ -316,7 +331,8 @@ namespace Spark::PasswordHash
         if (!FromHex(parts[2], salt) || salt.size() != kSaltBytes || !FromHex(parts[3], expected) ||
             expected.size() != kDerivedBytes)
             return false;
-        const std::vector<uint8_t> actual = Derive(password, salt, iterations, expected.size());
+        std::vector<uint8_t> actual = Derive(password, salt, iterations, expected.size());
+        const auto clearActual = Spark::MakeScopeExit([&] { SecureErase(actual.data(), actual.size()); });
         return ConstantTimeEqual(actual, expected);
     }
 } // namespace Spark::PasswordHash

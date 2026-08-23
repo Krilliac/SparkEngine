@@ -434,7 +434,8 @@ namespace SparkEditor
 
         const auto finite3 = [](const XMFLOAT3& value)
         { return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z); };
-        const auto finite4 = [](const XMFLOAT4& value) {
+        const auto finite4 = [](const XMFLOAT4& value)
+        {
             return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
         };
         bool finite = finite3(scene.header.gravity) && finite4(scene.header.ambientColor) &&
@@ -1111,10 +1112,14 @@ namespace SparkEditor
                         return false;
                 }
                 val.numText = m_input.substr(start, m_pos - start);
-                const char* begin = val.numText.data();
-                const char* end = begin + val.numText.size();
-                const auto parsed = std::from_chars(begin, end, val.numVal, std::chars_format::general);
-                if (parsed.ec != std::errc{} || parsed.ptr != end)
+                // libc++ versions used by the MSan runner do not provide the
+                // floating-point std::from_chars overload. A classic-locale,
+                // no-skip stream keeps JSON parsing locale-independent while
+                // remaining portable across every supported standard library.
+                std::istringstream numberStream(val.numText);
+                numberStream.imbue(std::locale::classic());
+                numberStream >> std::noskipws >> val.numVal;
+                if (numberStream.fail() || numberStream.peek() != std::char_traits<char>::eof())
                     return false;
                 if (!std::isfinite(val.numVal))
                     return false;

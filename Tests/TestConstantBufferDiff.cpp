@@ -19,10 +19,12 @@ namespace
         bool ShouldUpdate(const std::string& key, const void* data, size_t size)
         {
             auto& slot = m_slots[key];
-            if (slot.size() != size || std::memcmp(slot.data(), data, size) != 0)
+            const bool contentChanged = slot.size() == size && size != 0 && std::memcmp(slot.data(), data, size) != 0;
+            if (slot.size() != size || contentChanged)
             {
                 slot.resize(size);
-                std::memcpy(slot.data(), data, size);
+                if (size != 0)
+                    std::memcpy(slot.data(), data, size);
                 m_updates++;
                 return true;
             }

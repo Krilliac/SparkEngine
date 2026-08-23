@@ -292,7 +292,7 @@ TEST(NetworkDebugPanelReal_PollEngineNetworkDelta)
     // Seed the NetworkManager's stats counters with known values BEFORE
     // initializing the panel so the baseline is captured.
     auto& nm = Spark::Net::NetworkManager::GetInstance();
-    auto& stats = const_cast<Spark::Net::NetworkStats&>(nm.GetStats());
+    auto stats = nm.GetStats();
     const uint64_t seedSent = stats.bytesSent;
     const uint64_t seedRecv = stats.bytesReceived;
     const uint32_t seedDropped = stats.packetsDropped;
@@ -310,6 +310,7 @@ TEST(NetworkDebugPanelReal_PollEngineNetworkDelta)
     stats.bytesSent = seedSent + 2048;
     stats.bytesReceived = seedRecv + 1024;
     stats.ping = 42.0f;
+    nm.SetStatsSnapshotForDiagnostics(stats);
     panel.Update(0.5f);
 
     EXPECT_EQ(panel.GetSnapshotCount(), static_cast<size_t>(1));
@@ -323,6 +324,7 @@ TEST(NetworkDebugPanelReal_PollEngineNetworkDelta)
     stats.bytesReceived = seedRecv;
     stats.packetsDropped = seedDropped;
     stats.ping = 0.0f;
+    nm.SetStatsSnapshotForDiagnostics(stats);
 }
 
 TEST(NetworkDebugPanelReal_PollEngineNetworkHandlesReset)
@@ -331,13 +333,14 @@ TEST(NetworkDebugPanelReal_PollEngineNetworkHandlesReset)
     // reconnect resets the stats), PollEngineNetwork must clamp the delta
     // to zero rather than wrapping a uint64 subtraction.
     auto& nm = Spark::Net::NetworkManager::GetInstance();
-    auto& stats = const_cast<Spark::Net::NetworkStats&>(nm.GetStats());
+    auto stats = nm.GetStats();
     const uint64_t seedSent = stats.bytesSent;
     const uint64_t seedRecv = stats.bytesReceived;
 
     // Seed baseline at something high.
     stats.bytesSent = 1'000'000;
     stats.bytesReceived = 500'000;
+    nm.SetStatsSnapshotForDiagnostics(stats);
 
     SparkEditor::NetworkDebugPanel panel;
     EXPECT_TRUE(panel.Initialize());
@@ -345,6 +348,7 @@ TEST(NetworkDebugPanelReal_PollEngineNetworkHandlesReset)
     // Simulate a reset: counters go to zero.
     stats.bytesSent = 0;
     stats.bytesReceived = 0;
+    nm.SetStatsSnapshotForDiagnostics(stats);
 
     // First poll after reset should clamp the delta and not crash /
     // emit a huge bogus snapshot value.
@@ -355,5 +359,6 @@ TEST(NetworkDebugPanelReal_PollEngineNetworkHandlesReset)
     // Restore.
     stats.bytesSent = seedSent;
     stats.bytesReceived = seedRecv;
+    nm.SetStatsSnapshotForDiagnostics(stats);
 }
 #endif // SPARK_TEST_HAS_IMGUI

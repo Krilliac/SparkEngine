@@ -64,6 +64,11 @@ endif()
 file(GLOB_RECURSE SPARK_GAME_VS_SOURCES CONFIGURE_DEPENDS "Source/*.cpp" "Source/*.h")
 
 add_library(SparkGameVisualScript SHARED ${SPARK_GAME_VS_SOURCES})
+
+if(NOT COMMAND spark_configure_module_abi)
+    include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkGameModule.cmake")
+endif()
+spark_configure_module_abi(SparkGameVisualScript)
 target_compile_definitions(SparkGameVisualScript PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
 if(NOT SPARK_GAME_VS_STANDALONE AND TARGET SparkEngineLib)

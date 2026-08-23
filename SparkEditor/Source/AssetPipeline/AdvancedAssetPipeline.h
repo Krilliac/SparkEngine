@@ -12,6 +12,7 @@
 #pragma once
 
 #include "AssetPipelineTypes.h"
+#include <atomic>
 #include <cstdint>
 #include "../Core/EditorPanel.h"
 #include <vector>
@@ -289,12 +290,11 @@ namespace SparkEditor
         void RegisterProcessor(std::unique_ptr<AssetProcessor> processor);
 
         /**
-     * @brief Process single asset
-     * @param assetPath Path to asset file
-     * @param settings Import settings
-     * @param callback Completion callback
-     * @return true if job was queued successfully
-     */
+         * @brief Queue one asset for processing.
+         * @details The callback is delivered exactly once: synchronously on the
+         * calling thread for admission rejection, otherwise on a worker thread.
+         * Callbacks are always invoked without pipeline mutexes held.
+         */
         bool ProcessAsset(const std::string& assetPath, const AssetImportSettings& settings,
                           std::function<void(const AssetMetadata&)> callback = nullptr);
 
@@ -305,6 +305,9 @@ namespace SparkEditor
      * @param progressCallback Progress callback
      * @param completionCallback Completion callback
      * @return Batch operation ID
+     * @details Progress and completion callbacks are dispatched by Update on
+     * its caller thread, always without pipeline mutexes held. Completion is
+     * exactly once. Shutdown drains remaining notifications on its caller.
      */
         uint32_t ProcessAssetsBatch(const std::vector<std::string>& assetPaths, const AssetImportSettings& settings,
                                     std::function<void(float)> progressCallback = nullptr,
@@ -316,6 +319,9 @@ namespace SparkEditor
      * @return true if operation was cancelled
      */
         bool CancelBatchOperation(uint32_t operationID);
+
+        /** @brief Copy a batch snapshot. [any thread, thread-safe] */
+        bool GetBatchOperation(uint32_t operationID, BatchOperation& outOperation) const;
 
         /**
      * @brief Get asset metadata
@@ -462,6 +468,12 @@ namespace SparkEditor
      */
         bool ProcessNextJob();
 
+        bool EnqueueAsset(const std::string& assetPath, const AssetImportSettings& settings,
+                          std::function<void(const AssetMetadata&)> callback, uint32_t batchID);
+        void CompleteBatchAsset(uint32_t batchID, const AssetMetadata& metadata);
+        void QueueBatchNotification(std::function<void()> notification);
+        void DrainBatchNotifications();
+
         /**
      * @brief Get processor for asset
      * @param assetPath Asset path
@@ -512,11 +524,14 @@ namespace SparkEditor
         // Processing threads
         std::vector<std::thread> m_processingThreads;    ///< Processing worker threads
         std::atomic<bool> m_shouldStopProcessing{false}; ///< Stop processing flag
+        std::atomic<bool> m_acceptingJobs{false};        ///< Admission gate closed before shutdown draining
 
         // Batch operations
         std::unordered_map<uint32_t, BatchOperation> m_batchOperations; ///< Active batch operations
         uint32_t m_nextBatchID = 1;                                     ///< Next batch operation ID
         mutable std::mutex m_batchMutex;                                ///< Batch operations mutex
+        std::vector<std::function<void()>> m_batchNotifications;        ///< Update-thread callback queue
+        std::mutex m_batchNotificationMutex;                            ///< Callback queue mutex
 
         // Dependency tracking
         AssetDependencyGraph m_dependencyGraph; ///< Asset dependency graph

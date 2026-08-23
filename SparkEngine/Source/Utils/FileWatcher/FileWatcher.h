@@ -206,12 +206,23 @@ namespace Spark::Utils
                 return;
             m_timeSinceLastPoll = 0.0f;
 
+            std::vector<PendingNotification> notifications;
             for (auto& [id, entry] : m_watches)
             {
                 if (entry.isDirectory)
-                    PollDirectory(entry);
+                    PollDirectory(entry, notifications);
                 else
-                    PollFile(entry);
+                    PollFile(entry, notifications);
+            }
+
+            // Call arbitrary client code only after all watch iteration and
+            // state mutation is complete. Callbacks may reentrantly add/remove
+            // watches or even shut down the watcher without invalidating the
+            // map iterators used by this poll.
+            for (auto& notification : notifications)
+            {
+                if (notification.callback)
+                    notification.callback(notification.event);
             }
         }
 
@@ -242,6 +253,12 @@ namespace Spark::Utils
 
       private:
         FileWatcher() = default;
+
+        struct PendingNotification
+        {
+            FileChangeCallback callback;
+            FileChangeEvent event;
+        };
 
         void ScanDirectory(WatchEntry& entry)
         {
@@ -278,7 +295,7 @@ namespace Spark::Utils
             }
         }
 
-        void PollDirectory(WatchEntry& entry)
+        void PollDirectory(WatchEntry& entry, std::vector<PendingNotification>& notifications)
         {
             std::error_code ec;
             if (!std::filesystem::exists(entry.path, ec))
@@ -340,11 +357,11 @@ namespace Spark::Utils
                 auto prevIt = entry.files.find(path);
                 if (prevIt == entry.files.end())
                 {
-                    NotifyChange(entry, path, FileChangeType::Created, currentTf.size);
+                    QueueChange(entry, path, FileChangeType::Created, currentTf.size, notifications);
                 }
                 else if (currentTf.lastWriteTime != prevIt->second.lastWriteTime)
                 {
-                    NotifyChange(entry, path, FileChangeType::Modified, currentTf.size);
+                    QueueChange(entry, path, FileChangeType::Modified, currentTf.size, notifications);
                 }
             }
 
@@ -352,13 +369,13 @@ namespace Spark::Utils
             for (const auto& [path, prevTf] : entry.files)
             {
                 if (!currentFiles.count(path))
-                    NotifyChange(entry, path, FileChangeType::Deleted, 0);
+                    QueueChange(entry, path, FileChangeType::Deleted, 0, notifications);
             }
 
             entry.files = std::move(currentFiles);
         }
 
-        void PollFile(WatchEntry& entry)
+        void PollFile(WatchEntry& entry, std::vector<PendingNotification>& notifications)
         {
             std::error_code ec;
             bool exists = std::filesystem::exists(entry.path, ec);
@@ -374,7 +391,7 @@ namespace Spark::Utils
                 tf.size = std::filesystem::file_size(entry.path, ec);
                 tf.exists = true;
                 entry.files[entry.path] = tf;
-                NotifyChange(entry, entry.path, FileChangeType::Created, tf.size);
+                QueueChange(entry, entry.path, FileChangeType::Created, tf.size, notifications);
             }
             else if (exists && wasTracked)
             {
@@ -383,13 +400,13 @@ namespace Spark::Utils
                 {
                     it->second.lastWriteTime = writeTime;
                     it->second.size = std::filesystem::file_size(entry.path, ec);
-                    NotifyChange(entry, entry.path, FileChangeType::Modified, it->second.size);
+                    QueueChange(entry, entry.path, FileChangeType::Modified, it->second.size, notifications);
                 }
             }
             else if (!exists && wasTracked)
             {
                 it->second.exists = false;
-                NotifyChange(entry, entry.path, FileChangeType::Deleted, 0);
+                QueueChange(entry, entry.path, FileChangeType::Deleted, 0, notifications);
             }
         }
 
@@ -407,7 +424,8 @@ namespace Spark::Utils
             return "Unknown";
         }
 
-        void NotifyChange(const WatchEntry& entry, const std::string& filePath, FileChangeType type, uint64_t newSize)
+        void QueueChange(const WatchEntry& entry, const std::string& filePath, FileChangeType type, uint64_t newSize,
+                         std::vector<PendingNotification>& notifications)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "FileWatcher: %s '%s'", ChangeTypeToString(type),
                            filePath.c_str());
@@ -432,7 +450,7 @@ namespace Spark::Utils
                 event.relativePath = std::filesystem::path(filePath).filename().string();
             }
 
-            entry.callback(event);
+            notifications.push_back({entry.callback, std::move(event)});
         }
 
         bool m_initialized = false;

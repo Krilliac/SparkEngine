@@ -400,6 +400,7 @@ TEST(ReliableChannel_MaxRetriesExceeded)
     }
 
     // Message should have been dropped after maxRetries
+    EXPECT_EQ(retransmitCount, tracker.maxRetries);
     EXPECT_TRUE(tracker.pending.empty());
     EXPECT_EQ(tracker.dropped.size(), 1u);
     EXPECT_EQ(tracker.dropped[0], 42u);
@@ -463,7 +464,7 @@ namespace TestReliablePerPeer
             }
         }
 
-        void Send(Net::MessageType type, Net::ChannelType channel, Net::SequenceNumber sequence,
+        bool Send(Net::MessageType type, Net::ChannelType channel, Net::SequenceNumber sequence,
                   const std::vector<uint8_t>& payload)
         {
             Net::NetBuffer buf;
@@ -478,23 +479,25 @@ namespace TestReliablePerPeer
                 buf.WriteBytes(payload.data(), payload.size());
 
             const auto& data = buf.GetData();
-            ::sendto(m_socket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0,
-                     reinterpret_cast<const sockaddr*>(&m_serverAddr), sizeof(m_serverAddr));
+            const int sent =
+                ::sendto(m_socket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0,
+                         reinterpret_cast<const sockaddr*>(&m_serverAddr), sizeof(m_serverAddr));
+            return sent == static_cast<int>(data.size());
         }
 
         /// Non-blocking receive of one engine-format message. False = nothing waiting.
         bool TryReceive(Net::NetworkMessage& outMsg)
         {
-            uint8_t raw[4096];
+            std::vector<uint8_t> raw(Net::MAX_UDP_WIRE_DATAGRAM_SIZE);
             sockaddr_in from{};
             socklen_t fromLen = sizeof(from);
-            int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw), sizeof(raw), 0,
+            int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw.data()), static_cast<int>(raw.size()), 0,
                                       reinterpret_cast<sockaddr*>(&from), &fromLen);
-            if (received < 23)
+            if (received < static_cast<int>(Net::NETWORK_WIRE_HEADER_SIZE))
                 return false;
 
             Net::NetBuffer buf;
-            buf.WriteBytes(raw, static_cast<size_t>(received));
+            buf.WriteBytes(raw.data(), static_cast<size_t>(received));
             if (buf.ReadUint32() != kWireMagic)
                 return false;
             outMsg.type = static_cast<Net::MessageType>(buf.ReadUint16());
@@ -503,6 +506,9 @@ namespace TestReliablePerPeer
             outMsg.sequence = buf.ReadUint32();
             outMsg.timestamp = buf.ReadFloat();
             uint32_t payloadLen = buf.ReadUint32();
+            if (!Net::IsNetworkPayloadSizeValid(payloadLen) ||
+                payloadLen > static_cast<size_t>(received) - Net::NETWORK_WIRE_HEADER_SIZE)
+                return false;
             outMsg.payload.resize(payloadLen);
             if (payloadLen > 0)
                 buf.ReadBytes(outMsg.payload.data(), payloadLen);
@@ -704,6 +710,122 @@ TEST(ReliablePerPeer_AckFromOnePeerDoesNotClearAnothers)
     EXPECT_EQ(retransmitsToA, 0); // A acked — its stream is settled
     EXPECT_GE(retransmitsToB, 1); // B's copy must still be tracked and retransmitted
 
+    nm.Shutdown();
+}
+
+TEST(NetworkWire_MaxPayload_LoopbackSendPreservesWholeDatagram)
+{
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_TRUE(nm.StartServer(28454, 2));
+
+    RawUdpClient client;
+    EXPECT_TRUE(client.Open(28454));
+    EXPECT_TRUE(client.Connect(nm, "MaxPayloadClient"));
+
+    Net::NetworkMessage outbound;
+    outbound.type = Net::MessageType::UserDefined;
+    outbound.channel = Net::ChannelType::Unreliable;
+    outbound.payload.resize(Net::MAX_NETWORK_MESSAGE_PAYLOAD_SIZE);
+    for (size_t i = 0; i < outbound.payload.size(); ++i)
+        outbound.payload[i] = static_cast<uint8_t>(i % 251);
+
+    nm.SendToClient(client.GetClientID(), outbound);
+
+    Net::NetworkMessage received;
+    bool found = false;
+    for (int attempt = 0; attempt < 100 && !found; ++attempt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        Net::NetworkMessage candidate;
+        while (client.TryReceive(candidate))
+        {
+            if (candidate.type == Net::MessageType::UserDefined)
+            {
+                received = candidate;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    EXPECT_TRUE(found);
+    EXPECT_EQ(received.payload.size(), Net::MAX_NETWORK_MESSAGE_PAYLOAD_SIZE);
+    EXPECT_TRUE(received.payload == outbound.payload);
+    nm.Shutdown();
+}
+
+TEST(NetworkWire_MaxPlusOneReliableRejectedBeforeSequenceAllocation)
+{
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_TRUE(nm.StartServer(28455, 2));
+
+    RawUdpClient client;
+    EXPECT_TRUE(client.Open(28455));
+    EXPECT_TRUE(client.Connect(nm, "OversizeClient"));
+
+    const uint64_t droppedBefore = nm.GetStats().packetsDropped;
+
+    Net::NetworkMessage oversize;
+    oversize.type = Net::MessageType::UserDefined;
+    oversize.channel = Net::ChannelType::Reliable;
+    oversize.payload.resize(Net::MAX_NETWORK_MESSAGE_PAYLOAD_SIZE + 1, 0xEE);
+    nm.SendToClient(client.GetClientID(), oversize);
+
+    Net::NetworkMessage valid;
+    valid.type = Net::MessageType::UserDefined;
+    valid.channel = Net::ChannelType::Reliable;
+    valid.payload = {0x2A};
+    nm.SendToClient(client.GetClientID(), valid);
+
+    Net::NetworkMessage received;
+    bool found = false;
+    for (int attempt = 0; attempt < 100 && !found; ++attempt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        Net::NetworkMessage candidate;
+        while (client.TryReceive(candidate))
+        {
+            if (candidate.type == Net::MessageType::UserDefined)
+            {
+                received = candidate;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    EXPECT_TRUE(found);
+    EXPECT_EQ(received.sequence, 2u); // ConnectAccepted consumed sequence 1.
+    EXPECT_TRUE(received.payload == valid.payload);
+    EXPECT_EQ(nm.GetStats().packetsDropped, droppedBefore + 1);
+    nm.Shutdown();
+}
+
+TEST(NetworkWire_5KiBReliableLoopbackReceiveIsNotTruncated)
+{
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_TRUE(nm.StartServer(28456, 2));
+
+    RawUdpClient client;
+    EXPECT_TRUE(client.Open(28456));
+    EXPECT_TRUE(client.Connect(nm, "FiveKiBClient"));
+
+    std::vector<uint8_t> expected(5 * 1024);
+    for (size_t i = 0; i < expected.size(); ++i)
+        expected[i] = static_cast<uint8_t>((i * 7) % 253);
+
+    std::vector<uint8_t> received;
+    nm.RegisterHandler(Net::MessageType::UserDefined,
+                       [&received](const Net::NetworkMessage& msg) { received = msg.payload; });
+
+    EXPECT_TRUE(client.Send(Net::MessageType::UserDefined, Net::ChannelType::Reliable, 1, expected));
+    PumpServer(nm, 20);
+
+    EXPECT_EQ(received.size(), expected.size());
+    EXPECT_TRUE(received == expected);
     nm.Shutdown();
 }
 

@@ -32,6 +32,13 @@
 namespace Spark
 {
 
+    namespace
+    {
+        constexpr uint64_t kMaxTocBytes = 256ull * 1024ull * 1024ull;   // 256 MB
+        constexpr uint32_t kMaxFileCount = 10'000'000u;                 // 10M entries
+        constexpr uint32_t kMaxEntryBytes = 2u * 1024u * 1024u * 1024u; // 2 GB
+    } // namespace
+
     // =========================================================================
     // Move semantics
     // =========================================================================
@@ -141,18 +148,15 @@ namespace Spark
         const uint64_t fileSize = PAK_FTELL(m_file);
 
         // Hard upper bounds to reject pathological headers early.
-        constexpr uint64_t kMaxTocBytes = 256ull * 1024ull * 1024ull; // 256 MB
-        constexpr uint32_t kMaxFileCount = 10'000'000u;               // 10M entries
-
         if (m_header.tocSize == 0 || m_header.tocSize > kMaxTocBytes)
             return false;
         if (m_header.tocRawSize == 0 || m_header.tocRawSize > kMaxTocBytes)
             return false;
         if (m_header.fileCount > kMaxFileCount)
             return false;
-        if (m_header.tocOffset >= fileSize)
+        if (m_header.tocOffset < sizeof(PakHeader) || m_header.tocOffset >= fileSize)
             return false;
-        if (m_header.tocOffset + m_header.tocSize > fileSize)
+        if (m_header.tocSize > fileSize - m_header.tocOffset)
             return false;
 
         // Seek to TOC
@@ -222,6 +226,24 @@ namespace Spark
             entry.virtualPath.assign(reinterpret_cast<const char*>(ptr), pathLen);
             ptr += pathLen;
 
+            // Validate every untrusted entry while opening the archive, before a
+            // later lookup can allocate from its declared sizes. File data is
+            // written before the TOC, so the subtraction form below both rejects
+            // TOC overlap/truncation and avoids integer overflow.
+            if (entry.compression != PakCompression::Stored && entry.compression != PakCompression::Deflate &&
+                entry.compression != PakCompression::Zstd)
+            {
+                return false;
+            }
+            if (entry.compressedSize > kMaxEntryBytes || entry.originalSize > kMaxEntryBytes)
+                return false;
+            if (entry.dataOffset < sizeof(PakHeader) || entry.dataOffset > m_header.tocOffset)
+                return false;
+            if (entry.compressedSize > m_header.tocOffset - entry.dataOffset)
+                return false;
+            if (entry.compression == PakCompression::Stored && entry.compressedSize != entry.originalSize)
+                return false;
+
             auto hash = entry.pathHash;
             m_entries.emplace(hash, std::move(entry));
         }
@@ -252,19 +274,16 @@ namespace Spark
 
         const auto& entry = it->second;
 
-        // Sanity-check sizes against the known file size so a corrupted entry
-        // can't trigger an unbounded std::bad_alloc.
-        constexpr uint32_t kMaxEntryBytes = 2u * 1024u * 1024u * 1024u; // 2 GB
-        if (entry.compressedSize > kMaxEntryBytes || entry.originalSize > kMaxEntryBytes)
-            return {};
-
-        // Seek and read compressed data
-        if (PAK_FSEEK(m_file, entry.dataOffset, SEEK_SET) != 0)
-            return {};
-
         std::vector<uint8_t> compressed(entry.compressedSize);
-        if (std::fread(compressed.data(), 1, entry.compressedSize, m_file) != entry.compressedSize)
-            return {};
+        {
+            // A FILE* has one shared cursor. Keep seek+read indivisible so two
+            // concurrent asset loads cannot redirect each other's reads.
+            std::lock_guard<std::mutex> lock(m_fileMutex);
+            if (PAK_FSEEK(m_file, entry.dataOffset, SEEK_SET) != 0)
+                return {};
+            if (std::fread(compressed.data(), 1, entry.compressedSize, m_file) != entry.compressedSize)
+                return {};
+        }
 
         if (entry.compression == PakCompression::Stored)
             return compressed;
@@ -275,6 +294,8 @@ namespace Spark
             std::vector<uint8_t> decompressed(entry.originalSize);
             mz_ulong destLen = entry.originalSize;
             if (mz_uncompress(decompressed.data(), &destLen, compressed.data(), entry.compressedSize) != MZ_OK)
+                return {};
+            if (destLen != entry.originalSize)
                 return {};
             return decompressed;
 #else
@@ -288,7 +309,7 @@ namespace Spark
             std::vector<uint8_t> decompressed(entry.originalSize);
             size_t result =
                 ZSTD_decompress(decompressed.data(), entry.originalSize, compressed.data(), entry.compressedSize);
-            if (ZSTD_isError(result))
+            if (ZSTD_isError(result) || result != entry.originalSize)
                 return {};
             return decompressed;
 #else

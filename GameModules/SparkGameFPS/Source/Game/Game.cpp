@@ -462,12 +462,9 @@ void Game::Update(float dt)
             auto& netMgr = Spark::Net::NetworkManager::GetInstance();
             netMgr.Update(dt);
 
-            // Replicate player position to network
+            // Send the client input heartbeat for prediction/reconciliation.
             if (m_player && netMgr.GetRole() != Spark::Net::NetworkRole::None)
             {
-                auto pos = m_player->GetPosition();
-                auto vel = m_player->GetVelocity();
-                // Send client input state for prediction/reconciliation
                 Spark::Net::ClientInputState inputState{};
                 inputState.deltaTime = dt;
                 inputState.timestamp = netMgr.GetServerTime();

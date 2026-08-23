@@ -8,6 +8,7 @@
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <limits>

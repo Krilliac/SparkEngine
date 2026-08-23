@@ -16,6 +16,7 @@
 #pragma once
 
 #include "Spark/IEngineContext.h"
+#include "Utils/SecureMemory.h"
 
 #include <cstdint>
 #include <functional>
@@ -56,7 +57,11 @@ namespace MMO
         void SetEnterWorldCallback(EnterWorldCallback cb) { m_enterWorldCallback = std::move(cb); }
 
         LoginUIState GetState() const { return m_state; }
-        void SetState(LoginUIState state) { m_state = state; }
+        void SetState(LoginUIState state)
+        {
+            m_loginPassword.Clear();
+            m_state = state;
+        }
         void ReturnToCharacterSelect();
         void ReturnToLogin();
 
@@ -75,7 +80,7 @@ namespace MMO
 
         // Login form state
         char m_loginUsername[64]{};
-        char m_loginPassword[64]{};
+        Spark::SensitiveCharBuffer<64> m_loginPassword;
         bool m_isRegistering{false};
         char m_registerEmail[128]{};
         std::string m_loginError;

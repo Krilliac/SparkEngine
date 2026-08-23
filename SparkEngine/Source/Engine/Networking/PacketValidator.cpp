@@ -26,7 +26,7 @@ namespace Spark::Net
 
     void PacketValidator::SetMaxPayloadSize(size_t bytes)
     {
-        m_maxPayloadSize = bytes;
+        m_maxPayloadSize = (std::min)(bytes, MAX_NETWORK_MESSAGE_PAYLOAD_SIZE);
     }
 
     void PacketValidator::SetMaxStringLength(size_t chars)
@@ -349,7 +349,7 @@ namespace Spark::Net
                 {
                     size_t newSize = std::stoull(args[0]);
                     SetMaxPayloadSize(newSize);
-                    return std::format("Max payload size set to {} bytes", newSize);
+                    return std::format("Max payload size set to {} bytes", m_maxPayloadSize);
                 }
                 catch (...)
                 {

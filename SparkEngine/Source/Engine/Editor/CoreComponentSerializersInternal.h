@@ -58,8 +58,7 @@ namespace Spark::Editor
 
         if constexpr (requires(entt::registry& r, entt::entity e) { r.create(e); })
         {
-            registry.create(entity);
-            return entity;
+            return registry.create(entity);
         }
         else
         {

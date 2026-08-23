@@ -1032,13 +1032,15 @@ namespace Spark::Core::Lifecycle
                 [dt]() { SPARK_GUARDED_UPDATE("Tween", "Core", { Spark::TweenSystem::GetInstance().Update(dt); }); });
 
             auto futCinematic = jobs.Submit(
-                [dt]() {
+                [dt]()
+                {
                     SPARK_GUARDED_UPDATE("Cinematic", "Core",
                                          { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
                 });
 
             auto futReplay = jobs.Submit(
-                [dt]() {
+                [dt]()
+                {
                     SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
                 });
 
@@ -1060,6 +1062,9 @@ namespace Spark::Core::Lifecycle
             futSeamless.get();
             futTween.get();
             futCinematic.get();
+            // Sequencer may evaluate on a worker, but audio backends are
+            // game-thread services. Deliver copied cues only after join.
+            Spark::Cinematic::SequencerManager::GetInstance().DispatchPendingAudioCues();
             futReplay.get();
         }
         else
@@ -1076,6 +1081,7 @@ namespace Spark::Core::Lifecycle
 
             SPARK_GUARDED_UPDATE("Cinematic", "Core",
                                  { Spark::Cinematic::SequencerManager::GetInstance().Update(dt); });
+            Spark::Cinematic::SequencerManager::GetInstance().DispatchPendingAudioCues();
             SPARK_GUARDED_UPDATE("Replay", "Core", { Spark::ReplaySystem::GetInstance().UpdatePlayback(dt); });
             SPARK_GUARDED_UPDATE("VR", "Core", {
                 if (auto* vr = ctx->GetVR())

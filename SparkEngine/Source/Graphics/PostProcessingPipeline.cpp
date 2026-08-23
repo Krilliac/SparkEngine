@@ -82,11 +82,29 @@ namespace Spark::Graphics
         if (m_width == width && m_height == height)
             return;
 
+        // Per-frame views are borrowed and may already have been destroyed by
+        // the owner that initiated this resize. Drop them even if allocating
+        // the replacement ping-pong set later fails.
+        m_depthSRV = nullptr;
+        m_inputSRV = nullptr;
+        m_outputRTV = nullptr;
+        m_implicitOutputRTV.Reset();
+
+        const uint32_t oldWidth = m_width;
+        const uint32_t oldHeight = m_height;
         m_width = width;
         m_height = height;
 
-        if (m_initialized && m_device)
-            CreatePingPongTargets();
+        if (m_initialized && m_device && !CreatePingPongTargets())
+        {
+            // CreatePingPongTargets is transactional, so restoring the logical
+            // size keeps the still-valid old targets and constants coherent.
+            m_width = oldWidth;
+            m_height = oldHeight;
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "PostProcessingPipeline: failed to resize ping-pong targets to %ux%u", width, height);
+            return;
+        }
 
         if (m_ssaoTemporalFilter.IsInitialized())
             m_ssaoTemporalFilter.Resize(width, height);
@@ -106,10 +124,15 @@ namespace Spark::Graphics
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "PostProcessingPipeline shutting down");
         for (int i = 0; i < 2; ++i)
         {
+            // Views own references to their texture, so release them first.
+            m_pingPongSRVs[i].Reset();
+            m_pingPongRTVs[i].Reset();
             m_pingPongTextures[i].Reset();
-            m_pingPongRTVs[i] = nullptr;
-            m_pingPongSRVs[i] = nullptr;
         }
+        m_implicitOutputRTV.Reset();
+        m_depthSRV = nullptr;
+        m_inputSRV = nullptr;
+        m_outputRTV = nullptr;
         m_fullscreenVS.Reset();
         m_bloomPS.Reset();
         m_gtaoPS.Reset();
@@ -178,6 +201,13 @@ namespace Spark::Graphics
         // no-op if Initialize() was never called.
         if (m_context)
         {
+            // Backward-compatible fallback for callers that still rely on the
+            // old "currently bound target" Render() contract. New callers set
+            // an explicit output via SetOutputRTV().
+            m_implicitOutputRTV.Reset();
+            if (!m_outputRTV)
+                m_context->OMGetRenderTargets(1, m_implicitOutputRTV.GetAddressOf(), nullptr);
+
             m_gpuTimer.BeginFrame(m_context);
             // Phase N: open the constant-buffer ring for this frame. The
             // map is a WRITE_DISCARD so the driver renames the buffer
@@ -202,8 +232,8 @@ namespace Spark::Graphics
             auto pass = static_cast<PostProcessPass>(i);
             if (IsEffectEnabled(pass))
             {
-                ProcessPass(pass, deltaTime);
-                m_activePassCount++;
+                if (ProcessPass(pass, deltaTime))
+                    m_activePassCount++;
             }
         }
 
@@ -229,33 +259,57 @@ namespace Spark::Graphics
         if (!m_initialized || !m_context || !m_fullscreenVS || !m_sharpenPS || !m_constantBuffer)
             return;
 
-        int src = GetSourceTarget();
-        if (m_pingPongSRVs[src])
+        ID3D11ShaderResourceView* sourceSRV = GetOutputSRV();
+        ID3D11RenderTargetView* outputRTV = m_outputRTV ? m_outputRTV : m_implicitOutputRTV.Get();
+        if (!sourceSRV || !outputRTV)
         {
-            PostProcessCB cb = {};
-            cb.params1 = {static_cast<float>(m_width), static_cast<float>(m_height), 0.0f, 0.0f};
-            cb.params0 = {0.0f, 0.0f, 0.0f, 0.0f};
-            if (m_sharpenPS)
-            {
-                m_context->VSSetShader(m_fullscreenVS.Get(), nullptr, 0);
-                m_context->PSSetShader(m_sharpenPS.Get(), nullptr, 0);
-
-                D3D11_MAPPED_SUBRESOURCE mapped = {};
-                if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) &&
-                    mapped.pData)
-                {
-                    memcpy(mapped.pData, &cb, sizeof(PostProcessCB));
-                    m_context->Unmap(m_constantBuffer.Get(), 0);
-                }
-                m_context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
-                m_context->PSSetShaderResources(0, 1, &m_pingPongSRVs[src]);
-                ID3D11SamplerState* samplers[] = {m_linearSampler.Get(), m_pointSampler.Get()};
-                m_context->PSSetSamplers(0, 2, samplers);
-                m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-                m_context->IASetInputLayout(nullptr);
-                m_context->Draw(3, 0);
-            }
+            m_implicitOutputRTV.Reset();
+            return;
         }
+
+        // Clear both post-process inputs before selecting the final output.
+        // The last ping-pong RTV is still bound after Process(), so this order
+        // is required before the same texture can become sourceSRV.
+        ID3D11ShaderResourceView* nullSRVs[2] = {};
+        m_context->PSSetShaderResources(0, 2, nullSRVs);
+
+        ComPtr<ID3D11Resource> sourceResource;
+        ComPtr<ID3D11Resource> outputResource;
+        sourceSRV->GetResource(sourceResource.GetAddressOf());
+        outputRTV->GetResource(outputResource.GetAddressOf());
+        if (sourceResource.Get() == outputResource.Get())
+        {
+            // Zero enabled passes with an in-place scene input/output needs no
+            // copy and, crucially, must never bind that resource as SRV+RTV.
+            m_context->OMSetRenderTargets(1, &outputRTV, nullptr);
+            m_implicitOutputRTV.Reset();
+            return;
+        }
+
+        m_context->OMSetRenderTargets(1, &outputRTV, nullptr);
+        m_context->VSSetShader(m_fullscreenVS.Get(), nullptr, 0);
+        m_context->PSSetShader(m_sharpenPS.Get(), nullptr, 0);
+
+        PostProcessCB cb = {};
+        cb.params1 = {static_cast<float>(m_width), static_cast<float>(m_height), 0.0f, 0.0f};
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (SUCCEEDED(m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) && mapped.pData)
+        {
+            memcpy(mapped.pData, &cb, sizeof(PostProcessCB));
+            m_context->Unmap(m_constantBuffer.Get(), 0);
+        }
+        m_context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
+        m_context->PSSetShaderResources(0, 1, &sourceSRV);
+        ID3D11SamplerState* samplers[] = {m_linearSampler.Get(), m_pointSampler.Get()};
+        m_context->PSSetSamplers(0, 2, samplers);
+        m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_context->IASetInputLayout(nullptr);
+        m_context->Draw(3, 0);
+
+        // Do not leak scene/depth SRVs into the following frame, where the
+        // same resources become writable backbuffer/depth targets again.
+        m_context->PSSetShaderResources(0, 2, nullSRVs);
+        m_implicitOutputRTV.Reset();
 #endif
     }
 
@@ -1269,11 +1323,11 @@ namespace Spark::Graphics
     // Pass Execution
     // =============================================================================
 
-    void PostProcessingPipeline::BeginPass(ID3D11PixelShader* ps, const PostProcessCB& cb)
+    bool PostProcessingPipeline::BeginPass(ID3D11PixelShader* ps, const PostProcessCB& cb)
     {
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!m_context || !ps)
-            return;
+            return false;
 
         int src = GetSourceTarget();
         int dst = m_currentTarget;
@@ -1311,9 +1365,11 @@ namespace Spark::Graphics
         m_context->PSSetShaderResources(0, 1, &m_pingPongSRVs[src]);
         if (m_depthSRV)
             m_context->PSSetShaderResources(1, 1, &m_depthSRV);
+        return true;
 #else
         (void)ps;
         (void)cb;
+        return false;
 #endif
     }
 
@@ -1324,11 +1380,10 @@ namespace Spark::Graphics
             return;
         // Topology and input layout already set in BeginPass (first pass only)
         m_context->Draw(3, 0);
-        SwapTargets();
 #endif
     }
 
-    void PostProcessingPipeline::ProcessPass(PostProcessPass pass, float deltaTime)
+    bool PostProcessingPipeline::ProcessPass(PostProcessPass pass, float deltaTime)
     {
         auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -1493,9 +1548,10 @@ namespace Spark::Graphics
             break;
 
         default:
-            return;
+            return false;
         }
 
+        bool executed = false;
         if (ps)
         {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -1521,17 +1577,24 @@ namespace Spark::Graphics
 
             ScopedGPUEvent gpuEvent(m_gpuMarkers, kPassNamesW[static_cast<int>(pass)]);
             ScopedTimestamp gpuTs(m_gpuTimer, m_context, kPassNames[static_cast<int>(pass)]);
-            BeginPass(ps, cb);
-            DrawFullscreen();
+            if (BeginPass(ps, cb))
+            {
+                DrawFullscreen();
+                executed = true;
+            }
 #else
-            BeginPass(ps, cb);
-            DrawFullscreen();
+            if (BeginPass(ps, cb))
+            {
+                DrawFullscreen();
+                executed = true;
+            }
 #endif
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
         float ms = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count() / 1000.0f;
         m_passTimings[static_cast<int>(pass)] = ms;
+        return executed;
     }
 
 #endif // !SPARK_PLATFORM_WINDOWS

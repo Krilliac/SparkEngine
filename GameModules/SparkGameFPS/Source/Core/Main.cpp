@@ -33,6 +33,7 @@
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
 #include "Utils/InvalidStateDetector.h"
+#include <Spark/ModuleRegistry.h>
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/AIComponents.h"
@@ -1230,6 +1231,8 @@ void SparkGameModule::RegisterGameConsoleCommands()
 // ===================================================================================
 // DLL Exports - New API (preferred by ModuleManager)
 // ===================================================================================
+
+SPARK_EXPORT_MODULE_COMPATIBILITY()
 
 extern "C"
 {

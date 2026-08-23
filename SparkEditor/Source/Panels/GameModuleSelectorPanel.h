@@ -51,7 +51,6 @@ namespace SparkEditor
 
       private:
         void RefreshModuleList();
-        void ProbeModuleMetadata();
         void RenderModuleList();
         void RenderLaunchControls();
         void RenderManifestControls();
@@ -73,7 +72,6 @@ namespace SparkEditor
         std::vector<ModuleEntry> m_modules;
         float m_refreshTimer = 0.0f;
         bool m_needsRefresh = true;
-        bool m_hasProbed = false; ///< User has run the metadata probe at least once (summary display only)
         std::string m_statusMessage;
 
         // --- Launch state (separate-process game launch) ---

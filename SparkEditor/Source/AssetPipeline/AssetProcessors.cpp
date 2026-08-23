@@ -263,6 +263,20 @@ namespace SparkEditor
             return false;
         }
 
+        if (settings.textureSettings.format != AssetImportSettings::TextureSettings::AUTO &&
+            settings.textureSettings.format != AssetImportSettings::TextureSettings::UNCOMPRESSED)
+        {
+            metadata.status = ProcessingStatus::FAILED;
+            metadata.errorMessage = "Requested offline texture compression is not supported";
+            return false;
+        }
+        if (settings.textureSettings.generateMipMaps)
+        {
+            metadata.status = ProcessingStatus::FAILED;
+            metadata.errorMessage = "Requested offline mip-map generation is not supported";
+            return false;
+        }
+
         if (progressCallback)
         {
             progressCallback(0.2f);
@@ -299,9 +313,15 @@ namespace SparkEditor
         }
 
         // Compress texture if needed
-        if (settings.textureSettings.format != AssetImportSettings::TextureSettings::UNCOMPRESSED)
+        if (settings.textureSettings.format != AssetImportSettings::TextureSettings::UNCOMPRESSED &&
+            settings.textureSettings.format != AssetImportSettings::TextureSettings::AUTO)
         {
-            CompressTexture(sourcePath.string(), outputPath.string(), settings.textureSettings);
+            if (!CompressTexture(sourcePath.string(), outputPath.string(), settings.textureSettings))
+            {
+                metadata.status = ProcessingStatus::FAILED;
+                metadata.errorMessage = "Texture compression failed";
+                return false;
+            }
         }
 
         if (progressCallback)
@@ -312,7 +332,12 @@ namespace SparkEditor
         // Generate mip maps if requested
         if (settings.textureSettings.generateMipMaps)
         {
-            GenerateMipMaps(outputPath.string());
+            if (!GenerateMipMaps(outputPath.string()))
+            {
+                metadata.status = ProcessingStatus::FAILED;
+                metadata.errorMessage = "Mip-map generation failed";
+                return false;
+            }
         }
 
         if (progressCallback)
@@ -341,9 +366,8 @@ namespace SparkEditor
 
     bool TextureProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/)
     {
-        // Thumbnail generation requires GPU access which is not available in the editor pipeline.
-        // Return true to indicate no error; thumbnails are generated at runtime.
-        return true;
+        // Thumbnail generation requires GPU access which is unavailable here.
+        return false;
     }
 
     bool TextureProcessor::Validate(const AssetMetadata& metadata)
@@ -411,6 +435,15 @@ namespace SparkEditor
             return false;
         }
 
+        if (settings.meshSettings.optimizeMesh || settings.meshSettings.weldVertices ||
+            settings.meshSettings.generateNormals || settings.meshSettings.generateTangents ||
+            settings.meshSettings.generateLightmapUVs)
+        {
+            metadata.status = ProcessingStatus::FAILED;
+            metadata.errorMessage = "Requested offline mesh transforms are not supported";
+            return false;
+        }
+
         if (progressCallback)
         {
             progressCallback(0.1f);
@@ -449,7 +482,12 @@ namespace SparkEditor
         // Apply mesh processing steps
         if (settings.meshSettings.optimizeMesh)
         {
-            OptimizeMesh(outputPath.string(), settings.meshSettings);
+            if (!OptimizeMesh(outputPath.string(), settings.meshSettings))
+            {
+                metadata.status = ProcessingStatus::FAILED;
+                metadata.errorMessage = "Mesh optimization failed";
+                return false;
+            }
         }
 
         if (progressCallback)
@@ -459,7 +497,12 @@ namespace SparkEditor
 
         if (settings.meshSettings.generateNormals)
         {
-            GenerateNormals(outputPath.string(), settings.meshSettings.normalSmoothingAngle);
+            if (!GenerateNormals(outputPath.string(), settings.meshSettings.normalSmoothingAngle))
+            {
+                metadata.status = ProcessingStatus::FAILED;
+                metadata.errorMessage = "Normal generation failed";
+                return false;
+            }
         }
 
         if (progressCallback)
@@ -469,7 +512,12 @@ namespace SparkEditor
 
         if (settings.meshSettings.generateTangents)
         {
-            GenerateTangents(outputPath.string());
+            if (!GenerateTangents(outputPath.string()))
+            {
+                metadata.status = ProcessingStatus::FAILED;
+                metadata.errorMessage = "Tangent generation failed";
+                return false;
+            }
         }
 
         if (progressCallback)
@@ -479,12 +527,22 @@ namespace SparkEditor
 
         if (settings.meshSettings.generateLightmapUVs)
         {
-            GenerateLightmapUVs(outputPath.string());
+            if (!GenerateLightmapUVs(outputPath.string()))
+            {
+                metadata.status = ProcessingStatus::FAILED;
+                metadata.errorMessage = "Lightmap UV generation failed";
+                return false;
+            }
         }
 
         if (settings.meshSettings.autoGenerateLODs)
         {
-            GenerateAutoLODs(metadata, settings.meshSettings);
+            if (!GenerateAutoLODs(metadata, settings.meshSettings))
+            {
+                metadata.status = ProcessingStatus::FAILED;
+                metadata.errorMessage = "Automatic LOD generation failed or is unsupported for this format";
+                return false;
+            }
         }
 
         if (progressCallback)
@@ -513,7 +571,7 @@ namespace SparkEditor
     bool MeshProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/)
     {
         // Mesh thumbnail generation requires a 3D renderer, handled at runtime.
-        return true;
+        return false;
     }
 
     bool MeshProcessor::Validate(const AssetMetadata& metadata)
@@ -630,6 +688,31 @@ namespace SparkEditor
             return false;
         }
 
+        std::string requestedExtension;
+        switch (settings.audioSettings.format)
+        {
+        case AssetImportSettings::AudioSettings::WAV:
+            requestedExtension = ".wav";
+            break;
+        case AssetImportSettings::AudioSettings::OGG:
+            requestedExtension = ".ogg";
+            break;
+        case AssetImportSettings::AudioSettings::MP3:
+            requestedExtension = ".mp3";
+            break;
+        case AssetImportSettings::AudioSettings::AUTO:
+            break;
+        }
+        std::string sourceExtension = sourcePath.extension().string();
+        std::transform(sourceExtension.begin(), sourceExtension.end(), sourceExtension.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (!requestedExtension.empty() && requestedExtension != sourceExtension)
+        {
+            metadata.status = ProcessingStatus::FAILED;
+            metadata.errorMessage = "Requested offline audio format conversion is not supported";
+            return false;
+        }
+
         if (progressCallback)
         {
             progressCallback(0.2f);
@@ -666,7 +749,12 @@ namespace SparkEditor
         }
 
         // Convert audio format if needed
-        ConvertAudio(sourcePath.string(), outputPath.string(), settings.audioSettings);
+        if (!ConvertAudio(sourcePath.string(), outputPath.string(), settings.audioSettings))
+        {
+            metadata.status = ProcessingStatus::FAILED;
+            metadata.errorMessage = "Audio conversion failed";
+            return false;
+        }
 
         if (progressCallback)
         {
@@ -674,7 +762,12 @@ namespace SparkEditor
         }
 
         // Analyze audio and extract metadata
-        AnalyzeAudio(outputPath.string(), metadata);
+        if (!AnalyzeAudio(outputPath.string(), metadata))
+        {
+            metadata.status = ProcessingStatus::FAILED;
+            metadata.errorMessage = "Audio analysis failed";
+            return false;
+        }
 
         if (progressCallback)
         {
@@ -702,7 +795,7 @@ namespace SparkEditor
     bool AudioProcessor::GenerateThumbnail(const AssetMetadata& /*metadata*/, int /*thumbnailSize*/)
     {
         // Audio waveform thumbnail generation is not supported in the pipeline.
-        return true;
+        return false;
     }
 
     bool AudioProcessor::Validate(const AssetMetadata& metadata)

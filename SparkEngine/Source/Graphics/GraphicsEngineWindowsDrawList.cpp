@@ -62,11 +62,47 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
     if (localDrawList.empty())
         return;
 
+    // Draw a suffix through the established per-object CPU path. GPU-driven
+    // rendering calls this immediately when any prerequisite or dispatch
+    // fails, so enabling the optimization can never discard submitted meshes.
+    auto drawCPUCommands = [&](size_t first)
+    {
+        SetBasicShaders();
+        std::string_view lastMaterial;
+        for (size_t commandIndex = first; commandIndex < localDrawList.size(); ++commandIndex)
+        {
+            const auto& cmd = localDrawList[commandIndex];
+            XMMATRIX world = XMLoadFloat4x4(&cmd.worldMatrix);
+            UpdateBasicConstants(world, viewMatrix, projMatrix);
+
+            if (m_assetPipeline)
+            {
+                m_assetPipeline->BindMesh(cmd.meshPath);
+                if (cmd.materialPath != lastMaterial)
+                {
+                    m_assetPipeline->BindMaterial(cmd.materialPath);
+                    lastMaterial = cmd.materialPath;
+                }
+                m_assetPipeline->DrawBoundMesh();
+            }
+            m_statistics.drawCalls++;
+        }
+    };
+
     // GPU-driven culling: group draws by mesh and use indirect draw per batch.
     // When enabled, instances sharing the same mesh are culled on the GPU via
     // frustum + HiZ compute shaders, then drawn with DrawIndexedInstancedIndirect.
     // Unique-mesh draws that can't batch fall through to the CPU path below.
-    if (m_settings.gpuDrivenRendering && m_assetPipeline)
+    if (m_settings.gpuDrivenRendering &&
+        !Spark::Graphics::GPUDrivenRenderer::SupportsProductionDrawListInstanceContract())
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                       "GPU-driven draw-list rendering requested, but the instance identity/transform contract is "
+                       "not available; using the CPU rendering path");
+    }
+
+    if (m_settings.gpuDrivenRendering && m_assetPipeline &&
+        Spark::Graphics::GPUDrivenRenderer::SupportsProductionDrawListInstanceContract())
     {
         auto& gpuRenderer = Spark::Graphics::GPUDrivenRenderer::GetInstance();
         if (gpuRenderer.IsInitialized())
@@ -92,7 +128,13 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
                 // transparent-hash and allocation-free.
                 auto meshAsset = m_assetPipeline->LoadMesh(std::string(batchMesh));
                 if (!meshAsset || !meshAsset->GetVertexBuffer() || !meshAsset->GetIndexBuffer())
-                    continue;
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GPU-driven draw prerequisites unavailable; using CPU rendering fallback");
+                    drawCPUCommands(batchStart);
+                    localDrawList.clear();
+                    return;
+                }
 
                 const auto& meshData = meshAsset->GetMeshData();
                 XMFLOAT3 bbMin = meshData.boundingBoxMin;
@@ -138,8 +180,15 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
                 ID3D11Buffer* vb = meshAsset->GetVertexBuffer();
                 ID3D11Buffer* ib = meshAsset->GetIndexBuffer();
                 uint32_t vertexStride = static_cast<uint32_t>(sizeof(MeshAssetData::Vertex));
-                gpuRenderer.CullAndDraw(aabbs.data(), batchCount, viewMatrix, projMatrix, ib, vb, vertexStride,
-                                        meshAsset->GetIndexCount());
+                if (!gpuRenderer.CullAndDraw(aabbs.data(), batchCount, viewMatrix, projMatrix, ib, vb, vertexStride,
+                                             meshAsset->GetIndexCount()))
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "GPU-driven culling failed; using CPU rendering fallback");
+                    drawCPUCommands(batchStart);
+                    localDrawList.clear();
+                    return;
+                }
 
                 m_statistics.drawCalls += gpuRenderer.GetVisibleCount();
             }
@@ -152,34 +201,7 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
     std::sort(localDrawList.begin(), localDrawList.end(),
               [](const MeshDrawCommand& a, const MeshDrawCommand& b) { return a.materialPath < b.materialPath; });
 
-    // Set up shaders for ECS mesh rendering
-    SetBasicShaders();
-
-    std::string_view lastMaterial;
-    for (const auto& cmd : localDrawList)
-    {
-        XMMATRIX world = XMLoadFloat4x4(&cmd.worldMatrix);
-
-        // Update per-object constant buffer with world/view/proj matrices
-        UpdateBasicConstants(world, viewMatrix, projMatrix);
-
-        // Bind mesh and material through the asset pipeline, then draw.
-        // string_view overloads + transparent-hash lookup keep this allocation-free
-        // on the per-draw-call inner loop.
-        if (m_assetPipeline)
-        {
-            m_assetPipeline->BindMesh(cmd.meshPath);
-            // Only rebind material when it changes (sorted order)
-            if (cmd.materialPath != lastMaterial)
-            {
-                m_assetPipeline->BindMaterial(cmd.materialPath);
-                lastMaterial = cmd.materialPath;
-            }
-            m_assetPipeline->DrawBoundMesh();
-        }
-
-        m_statistics.drawCalls++;
-    }
+    drawCPUCommands(0);
 
     // Clear the processing buffer once drained so the next frame's swap
     // delivers an empty (but capacity-preserving) buffer back to m_drawList.

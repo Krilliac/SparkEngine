@@ -1480,6 +1480,8 @@ endif()
 # it will be built automatically.  Remove the folder to exclude it.
 # Set BUILD_GAME_MODULES=OFF to skip all game modules entirely.
 # ---------------------------------------------------------------------
+include("${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake")
+
 if(BUILD_GAME_MODULES)
     file(GLOB _SPARK_GAME_MODULE_DIRS "${CMAKE_SOURCE_DIR}/GameModules/*/CMakeLists.txt")
     list(LENGTH _SPARK_GAME_MODULE_DIRS _SPARK_GAME_MODULE_COUNT)
@@ -1510,6 +1512,9 @@ if(BUILD_GAME_MODULES)
             add_custom_command(TARGET SparkEngine POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     $<TARGET_FILE:${_MOD_NAME}>
+                    $<TARGET_FILE_DIR:SparkEngine>
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "$<TARGET_FILE:${_MOD_NAME}>.sparkabi"
                     $<TARGET_FILE_DIR:SparkEngine>
                 COMMENT "Copying ${_MOD_NAME} DLL to engine output directory"
                 VERBATIM
@@ -2289,6 +2294,7 @@ install(FILES
     "${CMAKE_BINARY_DIR}/SparkEngineConfig.cmake"
     "${CMAKE_BINARY_DIR}/SparkEngineConfigVersion.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/SparkGameModule.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/WriteSparkModuleABI.cmake"
     DESTINATION lib/cmake/SparkEngine
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
 )
@@ -2301,6 +2307,10 @@ if(TARGET SparkGameFPS)
     install(TARGETS SparkGameFPS
         RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
         LIBRARY DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
+    )
+    install(FILES "$<TARGET_FILE:SparkGameFPS>.sparkabi"
+        DESTINATION bin
+        COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}
     )
 endif()
 

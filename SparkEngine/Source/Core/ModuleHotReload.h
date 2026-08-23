@@ -106,7 +106,7 @@ namespace Spark
 
         bool IsEnabled() const { return m_enabled; }
         bool IsRunning() const { return m_running; }
-        int GetReloadCount() const { return m_reloadCount; }
+        int GetReloadCount() const;
 
         /** @brief Console status string */
         std::string GetStatus() const;

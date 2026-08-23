@@ -1,6 +1,6 @@
 /**
  * @file GameModuleSelectorPanel.cpp
- * @brief Game module discovery, metadata probing, separate-process launch, and manifest generation
+ * @brief Safe module discovery, separate-process launch, and manifest generation
  */
 
 #include "GameModuleSelectorPanel.h"
@@ -33,9 +33,8 @@ namespace SparkEditor
     {
         m_refreshTimer += deltaTime;
 
-        // Auto-refresh every 5 seconds to pick up newly built DLLs. This only
-        // runs the safe candidate scan (no DllMain) — metadata probing stays
-        // strictly opt-in via the Probe button.
+        // Auto-refresh every 5 seconds to pick up newly built DLLs. This uses
+        // the safe candidate scan and never executes code from an unloaded DLL.
         if (m_refreshTimer >= 5.0f)
         {
             m_refreshTimer = 0.0f;
@@ -78,22 +77,16 @@ namespace SparkEditor
                                    "freely alongside the one game module.");
             ImGui::EndTooltip();
         }
-        if (m_hasProbed)
-            ImGui::Text("Available: %zu  |  Game-kind: %zu", m_modules.size(), gameKindCount);
-        else
-            ImGui::Text("Available: %zu  |  Game-kind: ? (probe for metadata)", m_modules.size());
+        ImGui::Text("Available: %zu  |  Known Game-kind: %zu", m_modules.size(), gameKindCount);
 
         if (ImGui::Button("Refresh"))
             m_needsRefresh = true;
-        ImGui::SameLine();
-        if (ImGui::Button("Probe Metadata"))
-            ProbeModuleMetadata();
         if (ImGui::IsItemHovered())
         {
             ImGui::BeginTooltip();
-            ImGui::TextUnformatted("Reads name / version / kind from each DLL's ModuleInfo.\n"
-                                   "This briefly loads and unloads each candidate DLL inside the editor\n"
-                                   "process (no module init runs). The plain list scan never loads DLLs.");
+            ImGui::TextUnformatted("Refreshes candidates without loading DLLs or executing DllMain/factories.\n"
+                                   "Unloaded modules use filename/unknown metadata until a sidecar or\n"
+                                   "manifest supplies trusted metadata.");
             ImGui::EndTooltip();
         }
         ImGui::SameLine();
@@ -134,7 +127,7 @@ namespace SparkEditor
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "GameModuleSelectorPanel: refreshing module list");
 
-        // Preserve user state (selection, probed metadata) across refreshes
+        // Preserve user state and any trusted metadata across refreshes.
         std::vector<ModuleEntry> previous = std::move(m_modules);
         m_modules.clear();
 
@@ -177,48 +170,9 @@ namespace SparkEditor
             }
         }
 
-        // NOTE: deliberately no auto re-probe here — probing loads every DLL,
-        // and this refresh runs on a 5-second timer. Previously probed entries
-        // keep their metadata (matched by path above); newly appearing or
-        // rebuilt DLLs show "?" until the user clicks Probe Metadata again.
-    }
-
-    void GameModuleSelectorPanel::ProbeModuleMetadata()
-    {
-        const std::string scanDir = GetEditorExecutableDirectory();
-
-        // DiscoverModules briefly loads each DLL (CreateModule + GetModuleInfo +
-        // DestroyModule + FreeLibrary — no OnLoad, no engine context). An empty
-        // local ModuleManager suffices; it never loads anything persistently.
-        ModuleManager probe;
-        const auto discovered = probe.DiscoverModules(scanDir);
-
-        for (auto& mod : m_modules)
-        {
-            for (const auto& info : discovered)
-            {
-                if (info.path != mod.path)
-                    continue;
-
-                mod.name = info.name;
-                mod.version = info.version;
-                mod.kindKnown = info.kindKnown;
-                if (info.kindKnown)
-                {
-                    mod.isGameKind = (info.kind == Spark::ModuleKind::Game);
-                    mod.kindLabel = mod.isGameKind ? "Game" : "Addon";
-                }
-                else
-                {
-                    mod.kindLabel = "?";
-                }
-                break;
-            }
-        }
-
-        m_hasProbed = true;
-        m_statusMessage = "Probed metadata for " + std::to_string(m_modules.size()) + " module(s)";
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "GameModuleSelectorPanel: %s", m_statusMessage.c_str());
+        // Previously known metadata is preserved by the path match above.
+        // New or rebuilt unloaded DLLs intentionally remain unknown: obtaining
+        // ModuleInfo would require calling the C++ factory inside the editor.
     }
 
     void GameModuleSelectorPanel::RenderModuleList()
@@ -273,7 +227,7 @@ namespace SparkEditor
                 ImGui::BeginTooltip();
                 ImGui::Text("Path: %s", mod.path.c_str());
                 if (!mod.kindKnown)
-                    ImGui::TextDisabled("Kind/version unknown — click 'Probe Metadata'.");
+                    ImGui::TextDisabled("Kind/version unknown — unloaded DLL code is not probed.");
                 ImGui::EndTooltip();
             }
 

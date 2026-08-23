@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "NetworkWireLimits.h"
+
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -95,7 +97,7 @@ namespace Spark::Net
         // Configuration
         // ====================================================================
 
-        /// Set the global maximum payload size (bytes)
+        /// Set the global maximum payload size (bytes), clamped to the UDP wire maximum.
         void SetMaxPayloadSize(size_t bytes);
 
         /// Set the global maximum string length for sanitization
@@ -151,7 +153,8 @@ namespace Spark::Net
         [[nodiscard]] std::string GetStatusString() const;
 
       private:
-        size_t m_maxPayloadSize = 4096;
+        // May be configured lower, but never above the UDP wire contract.
+        size_t m_maxPayloadSize = MAX_NETWORK_MESSAGE_PAYLOAD_SIZE;
         size_t m_maxStringLength = 1024;
 
         std::unordered_map<MessageType, MessageSchema> m_schemas;

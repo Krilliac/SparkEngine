@@ -11,8 +11,14 @@
 #include "TestFramework.h"
 #include "Engine/Persistence/AsyncDatabase.h"
 
+#include <atomic>
+#include <barrier>
+#include <chrono>
 #include <filesystem>
+#include <future>
 #include <string>
+#include <thread>
+#include <vector>
 
 using namespace Spark::Persistence;
 
@@ -104,6 +110,75 @@ TEST(AsyncDatabasePool_AsyncAndSyncWrites_SurviveCloseReopen)
 
         pool.Close();
     }
+
+    std::filesystem::remove(path);
+}
+
+TEST(AsyncDatabasePool_CloseRace_DrainsAcceptedAndCompletesRejectedWork)
+{
+    using namespace std::chrono_literals;
+
+    const std::string path = MakeTempDbPath("close_enqueue_race");
+    AsyncDatabasePool pool;
+    pool.PrepareStatement(kSetAsync, "SET race value");
+    pool.PrepareStatement(kGetAsync, "GET race");
+    EXPECT_TRUE(pool.Open(path, 1));
+
+    // Seed enough accepted work to exercise Close's drain contract rather than
+    // merely the already-closed fast path.
+    std::vector<std::future<QueryResult>> acceptedBeforeClose;
+    acceptedBeforeClose.reserve(32);
+    for (int i = 0; i < 32; ++i)
+        acceptedBeforeClose.push_back(pool.AsyncQuery(kSetAsync));
+
+    std::future<QueryResult> racingQuery;
+    std::future<QueryResult> racingTransaction;
+    std::atomic<int> callbackCount{0};
+    std::barrier startRace(3);
+
+    std::thread producer(
+        [&]
+        {
+            startRace.arrive_and_wait();
+            racingQuery = pool.AsyncQuery(kGetAsync);
+            pool.AsyncQueryWithCallback(kGetAsync, {},
+                                        [&](QueryResult) { callbackCount.fetch_add(1, std::memory_order_relaxed); });
+            Transaction transaction;
+            transaction.Append(kSetAsync);
+            racingTransaction = pool.AsyncTransaction(std::move(transaction));
+        });
+    std::thread closer(
+        [&]
+        {
+            startRace.arrive_and_wait();
+            pool.Close();
+        });
+
+    startRace.arrive_and_wait();
+    producer.join();
+    closer.join();
+
+    for (auto& future : acceptedBeforeClose)
+    {
+        EXPECT_TRUE(future.wait_for(2s) == std::future_status::ready);
+        if (future.wait_for(0s) == std::future_status::ready)
+            EXPECT_TRUE(future.get().success);
+    }
+
+    // Racing operations are allowed either outcome at the admission boundary:
+    // accepted work executes; rejected work completes with the normal closed
+    // result. Neither outcome may strand a future or callback.
+    EXPECT_TRUE(racingQuery.valid());
+    if (racingQuery.valid())
+        EXPECT_TRUE(racingQuery.wait_for(2s) == std::future_status::ready);
+    EXPECT_TRUE(racingTransaction.valid());
+    if (racingTransaction.valid())
+        EXPECT_TRUE(racingTransaction.wait_for(2s) == std::future_status::ready);
+
+    pool.ProcessCallbacks();
+    EXPECT_EQ(callbackCount.load(std::memory_order_relaxed), 1);
+    EXPECT_EQ(pool.GetPendingQueryCount(), 0);
+    EXPECT_FALSE(pool.IsOpen());
 
     std::filesystem::remove(path);
 }

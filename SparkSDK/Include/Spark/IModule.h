@@ -10,8 +10,10 @@
  * CreateModule()/DestroyModule(). Modules are initialized in load-order
  * and shut down in reverse order.
  *
- * Existing game DLLs using the legacy IGameModule/CreateGameModule exports
- * continue to work through a compatibility adapter in ModuleManager.
+ * Existing source modules using the legacy IGameModule/CreateGameModule
+ * exports continue to work through a compatibility adapter when they also
+ * export the mandatory SparkGetModuleCompatibility descriptor. Prebuilt
+ * descriptor-less DLLs are rejected before their factory is called.
  *
  * ## String ownership
  * All `const char*` returns from GetModuleInfo() (name, version) must point

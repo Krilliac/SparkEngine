@@ -58,6 +58,25 @@ namespace Spark::Graphics
         Count
     };
 
+    /**
+     * @brief Deterministic ping-pong routing for an ordered post-process chain.
+     *
+     * Pass zero writes target zero, pass one writes target one, and so on.
+     * A chain with no enabled passes preserves the caller's scene input rather
+     * than exposing an uninitialized ping-pong target.
+     */
+    struct PostProcessTargetRouting
+    {
+        static constexpr int InputTarget = -1;
+
+        static constexpr int DestinationForPass(uint32_t passOrdinal) { return static_cast<int>(passOrdinal & 1u); }
+
+        static constexpr int FinalTargetForPassCount(uint32_t passCount)
+        {
+            return passCount == 0 ? InputTarget : DestinationForPass(passCount - 1);
+        }
+    };
+
     // =============================================================================
     // Effect Settings
     // =============================================================================

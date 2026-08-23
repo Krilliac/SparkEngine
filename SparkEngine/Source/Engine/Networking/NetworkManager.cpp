@@ -272,6 +272,13 @@ namespace Spark::Net
         //   [4] payload length
         //   [N] payload bytes
 
+        if (!IsNetworkPayloadSizeValid(msg.payload.size()))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload size %zu exceeds UDP wire maximum (%zu)",
+                           msg.payload.size(), MAX_NETWORK_MESSAGE_PAYLOAD_SIZE);
+            return {};
+        }
+
         NetBuffer buf;
         buf.WriteUint32(0x5350524B); // Magic
         buf.WriteUint16(static_cast<uint16_t>(msg.type));
@@ -290,9 +297,16 @@ namespace Spark::Net
     bool NetworkManager::DeserializeMessage(const uint8_t* data, size_t length, NetworkMessage& outMsg) const
     {
         // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23
-        if (length < 23)
+        if (length < NETWORK_WIRE_HEADER_SIZE)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet too small (%zu bytes, need 23 minimum)", length);
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet too small (%zu bytes, need %zu minimum)", length,
+                           NETWORK_WIRE_HEADER_SIZE);
+            return false;
+        }
+        if (length > MAX_UDP_WIRE_DATAGRAM_SIZE)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet size %zu exceeds UDP wire maximum (%zu)", length,
+                           MAX_UDP_WIRE_DATAGRAM_SIZE);
             return false;
         }
 
@@ -325,12 +339,10 @@ namespace Spark::Net
             return false;
         }
 
-        // Reject unreasonably large payloads to prevent memory exhaustion attacks
-        constexpr uint32_t kMaxPayloadSize = 64 * 1024; // 64 KB
-        if (payloadLen > kMaxPayloadSize)
+        if (!IsNetworkPayloadSizeValid(payloadLen))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload length %u exceeds max allowed (%u)", payloadLen,
-                           kMaxPayloadSize);
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload length %u exceeds max allowed (%zu)", payloadLen,
+                           MAX_NETWORK_MESSAGE_PAYLOAD_SIZE);
             return false;
         }
 
@@ -345,10 +357,12 @@ namespace Spark::Net
 
     bool NetworkManager::SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr)
     {
-        if (m_socket == INVALID_SOCKET || data.empty())
+        if (m_socket == INVALID_SOCKET || data.empty() || data.size() > MAX_UDP_WIRE_DATAGRAM_SIZE)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network, "SendRawTo failed: %s",
-                           m_socket == INVALID_SOCKET ? "socket not open" : "empty data");
+                           m_socket == INVALID_SOCKET
+                               ? "socket not open"
+                               : (data.empty() ? "empty data" : "datagram exceeds UDP wire maximum"));
             return false;
         }
 
@@ -374,11 +388,11 @@ namespace Spark::Net
             return -1;
         }
 
-        static constexpr int MAX_PACKET_SIZE = 4096;
-        outData.resize(MAX_PACKET_SIZE);
+        constexpr int maxPacketSize = static_cast<int>(MAX_UDP_WIRE_DATAGRAM_SIZE);
+        outData.resize(MAX_UDP_WIRE_DATAGRAM_SIZE);
 
         socklen_t senderLen = sizeof(outSender);
-        int received = recvfrom(m_socket, reinterpret_cast<char*>(outData.data()), MAX_PACKET_SIZE, 0,
+        int received = recvfrom(m_socket, reinterpret_cast<char*>(outData.data()), maxPacketSize, 0,
                                 reinterpret_cast<sockaddr*>(&outSender), &senderLen);
 
         if (received <= 0)
@@ -401,15 +415,16 @@ namespace Spark::Net
 
     void NetworkManager::SetAutoReconnect(const AutoReconnectConfig& config)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         m_autoReconnect = config;
         m_reconnectAttempts = 0;
         m_reconnectNextRetryTime = 0.0f;
     }
 
-    void NetworkManager::TryAutoReconnect(float deltaTime)
+    std::function<void()> NetworkManager::TryAutoReconnect(float deltaTime)
     {
         if (!m_autoReconnect.enabled || !m_wasConnected)
-            return;
+            return {};
 
         // Check if max attempts exhausted
         if (m_autoReconnect.maxAttempts > 0 && m_reconnectAttempts >= m_autoReconnect.maxAttempts)
@@ -418,14 +433,12 @@ namespace Spark::Net
             m_wasConnected = false;
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "AUTO-RECONNECT: Max attempts (%u) exhausted — giving up",
                             m_autoReconnect.maxAttempts);
-            if (m_reconnectFailedCallback)
-                m_reconnectFailedCallback();
-            return;
+            return m_reconnectFailedCallback;
         }
 
         // Wait for cooldown
         if (m_serverTime < m_reconnectNextRetryTime)
-            return;
+            return {};
 
         m_reconnectAttempts++;
         float backoff = m_autoReconnect.baseDelay * static_cast<float>(1u << std::min(m_reconnectAttempts - 1, 5u));
@@ -443,10 +456,29 @@ namespace Spark::Net
             SPARK_LOG_INFO(Spark::LogCategory::Network, "AUTO-RECONNECT: Connection attempt initiated successfully");
             // m_reconnectAttempts reset happens when we receive ConnectAccepted
         }
+        return {};
     }
 
     void NetworkManager::Update(float deltaTime)
     {
+        std::unique_lock<std::recursive_mutex> apiLock(m_apiMutex);
+        uint64_t updateLifecycleEpoch = m_lifecycleEpoch;
+        auto invokeUnlocked = [&apiLock, this, &updateLifecycleEpoch](auto&& callback)
+        {
+            apiLock.unlock();
+            try
+            {
+                callback();
+            }
+            catch (...)
+            {
+                apiLock.lock();
+                throw;
+            }
+            apiLock.lock();
+            return m_lifecycleEpoch == updateLifecycleEpoch;
+        };
+        std::function<void()> reconnectFailedCallback;
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreUpdate, "Network", 0.0);
 
@@ -461,10 +493,17 @@ namespace Spark::Net
             {
                 m_serverTime += deltaTime;
                 advancedForReconnect = true;
-                TryAutoReconnect(deltaTime);
+                reconnectFailedCallback = TryAutoReconnect(deltaTime);
+                // A successful reconnect attempt is an Update-owned lifecycle
+                // transition, not callback interference.
+                updateLifecycleEpoch = m_lifecycleEpoch;
             }
             if (GetRole() == NetworkRole::None)
+            {
+                if (reconnectFailedCallback)
+                    (void)invokeUnlocked(reconnectFailedCallback);
                 return;
+            }
         }
 
         // Advance server time exactly once for active client/server updates. Idle
@@ -473,7 +512,18 @@ namespace Spark::Net
             m_serverTime += deltaTime;
 
         // Receive from socket and enqueue
-        ProcessIncoming();
+        const std::vector<ClientID> newlyConnected = ProcessIncoming();
+        for (ClientID id : newlyConnected)
+        {
+            // SendFullEntitySync owns its lock so its property callbacks can
+            // completely release it (recursive unlock would leave this frame's
+            // outer acquisition held).
+            apiLock.unlock();
+            SendFullEntitySync(id);
+            apiLock.lock();
+            if (m_lifecycleEpoch != updateLifecycleEpoch)
+                return;
+        }
 
         // Dispatch queued messages to handlers
         {
@@ -565,7 +615,12 @@ namespace Spark::Net
                 }
                 if (handler)
                 {
-                    handler(msg);
+                    // Copy both callback and message before releasing the API
+                    // lock. User code may synchronously wait for another thread
+                    // that calls GetStats/SendMessage/Shutdown.
+                    NetworkMessage callbackMessage = msg;
+                    if (!invokeUnlocked([&handler, &callbackMessage]() { handler(callbackMessage); }))
+                        return;
                 }
                 else
                 {
@@ -582,7 +637,26 @@ namespace Spark::Net
                 // successors from the same peer (by key — the handler above may
                 // have mutated m_peers, invalidating references)
                 if (wasReliableOrdered)
-                    FlushOrderedBuffer(peerKey);
+                {
+                    NetworkMessage orderedMessage;
+                    while (PopNextOrderedMessage(peerKey, orderedMessage))
+                    {
+                        MessageHandler orderedHandler;
+                        {
+                            std::lock_guard<std::mutex> lock(m_handlerMutex);
+                            auto it = m_handlers.find(static_cast<uint16_t>(orderedMessage.type));
+                            if (it != m_handlers.end())
+                                orderedHandler = it->second;
+                        }
+                        if (orderedHandler)
+                        {
+                            NetworkMessage callbackMessage = orderedMessage;
+                            if (!invokeUnlocked([&orderedHandler, &callbackMessage]()
+                                                { orderedHandler(callbackMessage); }))
+                                return;
+                        }
+                    }
+                }
             }
         }
 
@@ -595,11 +669,13 @@ namespace Spark::Net
             PruneReceivedSequences();
         }
 
-        UpdateReplication(deltaTime);
+        if (!UpdateReplication(deltaTime, apiLock, updateLifecycleEpoch))
+            return;
         UpdateHeartbeat(deltaTime);
 
         // Check for timed-out clients (server) or server timeout (client)
-        CheckConnectionTimeouts();
+        std::vector<ClientID> timedOutClients = CheckConnectionTimeouts();
+        TimeoutHandler timeoutHandler = m_timeoutHandler;
 
         // Update bandwidth stats every second
         auto now = std::chrono::steady_clock::now();
@@ -616,6 +692,25 @@ namespace Spark::Net
 
         ProcessOutgoing();
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Network", 0.0);
+
+        // Connection state and transport cleanup are complete before external
+        // timeout/reconnect notifications run. Never call user code while
+        // holding the public API serialization lock.
+        apiLock.unlock();
+        if (timeoutHandler)
+        {
+            for (ClientID id : timedOutClients)
+            {
+                timeoutHandler(id);
+                apiLock.lock();
+                const bool lifecycleUnchanged = (m_lifecycleEpoch == updateLifecycleEpoch);
+                apiLock.unlock();
+                if (!lifecycleUnchanged)
+                    return;
+            }
+        }
+        if (reconnectFailedCallback)
+            reconnectFailedCallback();
     }
 
     // --------------------------------------------------------------------------
@@ -624,6 +719,7 @@ namespace Spark::Net
 
     void NetworkManager::SendClientInput(const ClientInputState& input)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         if (GetRole() != NetworkRole::Client)
             return;
 
@@ -706,6 +802,7 @@ namespace Spark::Net
                                                                     const XMFLOAT3& rayOrigin,
                                                                     const XMFLOAT3& rayDirection, float maxDistance)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         HitValidationResult result;
         float rewindTime = clientTimestamp - halfRTT;
 

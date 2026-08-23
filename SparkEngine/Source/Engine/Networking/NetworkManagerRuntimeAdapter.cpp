@@ -65,12 +65,12 @@ namespace Spark::Net
         m_networkManager.ClearHandlers();
     }
 
-    const std::unordered_map<ClientID, ClientInfo>& NetworkManagerRuntimeAdapter::GetClients() const
+    std::unordered_map<ClientID, ClientInfo> NetworkManagerRuntimeAdapter::GetClients() const
     {
         return m_networkManager.GetClients();
     }
 
-    const NetworkStats& NetworkManagerRuntimeAdapter::GetStats() const
+    NetworkStats NetworkManagerRuntimeAdapter::GetStats() const
     {
         return m_networkManager.GetStats();
     }

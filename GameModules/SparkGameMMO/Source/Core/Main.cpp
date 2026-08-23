@@ -562,24 +562,25 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                 return m_persistenceSystem->GetStatusString();
                             });
 
-    console.RegisterCommand("mmo_register",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.size() < 2)
-                                    return "Usage: mmo_register <username> <password>";
-                                auto result = m_accountSystem->Register(args[0], args[1]);
-                                return result.success ? "Account created (ID " + std::to_string(result.accountId) + ")"
-                                                      : "Error: " + result.errorMessage;
-                            });
+    console.RegisterSensitiveCommand("mmo_register",
+                                     [this](const std::vector<std::string>& args) -> std::string
+                                     {
+                                         if (args.size() < 2)
+                                             return "Usage: mmo_register <username> <password>";
+                                         auto result = m_accountSystem->Register(args[0], args[1]);
+                                         return result.success
+                                                    ? "Account created (ID " + std::to_string(result.accountId) + ")"
+                                                    : "Error: " + result.errorMessage;
+                                     });
 
-    console.RegisterCommand("mmo_login",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.size() < 2)
-                                    return "Usage: mmo_login <username> <password>";
-                                auto result = m_accountSystem->Login(args[0], args[1]);
-                                return result.success ? "Logged in" : "Error: " + result.errorMessage;
-                            });
+    console.RegisterSensitiveCommand("mmo_login",
+                                     [this](const std::vector<std::string>& args) -> std::string
+                                     {
+                                         if (args.size() < 2)
+                                             return "Usage: mmo_login <username> <password>";
+                                         auto result = m_accountSystem->Login(args[0], args[1]);
+                                         return result.success ? "Logged in" : "Error: " + result.errorMessage;
+                                     });
 
     console.RegisterCommand("mmo_online", [this](const std::vector<std::string>&) -> std::string
                             { return m_accountSystem->GetOnlineListString(); });

@@ -30,8 +30,8 @@ namespace Spark::Net
         void RegisterHandler(MessageType type, MessageHandler handler) override;
         void ClearHandlers() override;
 
-        const std::unordered_map<ClientID, ClientInfo>& GetClients() const override;
-        const NetworkStats& GetStats() const override;
+        std::unordered_map<ClientID, ClientInfo> GetClients() const override;
+        NetworkStats GetStats() const override;
         void KickClient(ClientID client, const std::string& reason) override;
 
       private:

@@ -207,3 +207,36 @@ TEST(SaveSystem_Load_RejectsEveryTruncatedCustomStateField)
 
     std::filesystem::remove_all(dir);
 }
+
+TEST(SaveSystem_Save_ReplacesExistingSlotAtomically)
+{
+    const std::string dir = MakeTempSaveDir("replace_existing");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    EXPECT_TRUE(ss.Initialize(dir));
+
+    World firstWorld;
+    const EntityID firstEntity = firstWorld.CreateEntity("first-only");
+    firstWorld.AddComponent<Transform>(firstEntity);
+    SaveMetadata firstMetadata;
+    firstMetadata.saveName = "First revision";
+    EXPECT_TRUE(ss.Save("same-slot", firstWorld, firstMetadata));
+
+    World secondWorld;
+    const EntityID secondA = secondWorld.CreateEntity("second-a");
+    const EntityID secondB = secondWorld.CreateEntity("second-b");
+    secondWorld.AddComponent<Transform>(secondA);
+    secondWorld.AddComponent<Transform>(secondB);
+    SaveMetadata secondMetadata;
+    secondMetadata.saveName = "Second revision";
+    EXPECT_TRUE(ss.Save("same-slot", secondWorld, secondMetadata));
+
+    SaveMetadata loadedMetadata;
+    EXPECT_TRUE(ss.GetSaveMetadata("same-slot", loadedMetadata));
+    EXPECT_EQ(loadedMetadata.saveName, std::string("Second revision"));
+
+    World loadedWorld;
+    EXPECT_TRUE(ss.Load("same-slot", loadedWorld));
+    EXPECT_EQ(loadedWorld.GetEntityCount(), 2u);
+
+    std::filesystem::remove_all(dir);
+}

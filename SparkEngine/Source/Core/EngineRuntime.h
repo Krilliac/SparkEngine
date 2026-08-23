@@ -25,10 +25,13 @@ class Timer;
 class AudioEngine;
 class ModuleManager;
 class PhysicsSystem;
+class EngineContext;
 
 namespace Spark
 {
+    class AssetRegistry;
     class EventBus;
+    class LocalFileCache;
     class ModuleHotReloadManager;
     namespace Audio
     {
@@ -45,6 +48,12 @@ namespace Spark
  */
 struct EngineRuntime
 {
+    EngineRuntime();
+    ~EngineRuntime();
+
+    EngineRuntime(const EngineRuntime&) = delete;
+    EngineRuntime& operator=(const EngineRuntime&) = delete;
+
     std::unique_ptr<GraphicsEngine> graphics;
     std::unique_ptr<InputManager> input;
     std::unique_ptr<Timer> timer;
@@ -53,9 +62,22 @@ struct EngineRuntime
     std::unique_ptr<AudioEngine> audioEngine;
     std::unique_ptr<Spark::Audio::IAudioBackend> audioBackend;
     std::unique_ptr<Spark::ModuleHotReloadManager> moduleHotReload;
+    std::unique_ptr<Spark::LocalFileCache> fileCache;
+    std::unique_ptr<Spark::AssetRegistry> assetRegistry;
 #ifdef SPARK_JOLT_PHYSICS_AVAILABLE
     std::unique_ptr<PhysicsSystem> physics;
 #endif
+
+    /**
+     * @brief Create and register the CPU-only asset services required by modules.
+     *
+     * [startup thread] Safe for headless/server paths: this does not construct
+     * GraphicsEngine, AssetPipeline, editor state, or any GPU resource.
+     */
+    void InitializeHeadlessAssetServices(EngineContext& context);
+
+    /// [shutdown thread] Release owned asset services after EngineContext teardown.
+    void ShutdownHeadlessAssetServices();
 };
 
 /**

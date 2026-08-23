@@ -76,8 +76,10 @@ namespace Spark::HotReload
     /**
      * @brief Callback signature for module lifecycle during hot-reload
      *
-     * The hot-reload system calls these to perform the actual DLL unload/load.
-     * The engine's ModuleManager provides these callbacks when registering modules.
+     * The reload callback must stage and initialize a replacement while the
+     * current module remains usable. The unload callback is invoked only after
+     * staging succeeds, to retire the previous instance. The engine's
+     * ModuleManager provides these callbacks when registering modules.
      */
     using UnloadCallback = std::function<void(const std::string& moduleName)>;
     using ReloadCallback = std::function<bool(const std::string& moduleName, const std::filesystem::path& dllPath)>;
@@ -114,6 +116,8 @@ namespace Spark::HotReload
             m_initialized = true;
             m_modules.clear();
             m_history.clear();
+            m_onUnload = nullptr;
+            m_onReload = nullptr;
             SPARK_LOG_INFO(Spark::LogCategory::Core, "ModuleHotReload initialized (poll: %.1fs)", pollIntervalSeconds);
         }
 
@@ -122,6 +126,8 @@ namespace Spark::HotReload
         {
             m_modules.clear();
             m_history.clear();
+            m_onUnload = nullptr;
+            m_onReload = nullptr;
             m_initialized = false;
             m_enabled = false;
         }
@@ -167,8 +173,8 @@ namespace Spark::HotReload
 
         /**
          * @brief Set callbacks for the actual unload/reload operations
-         * @param onUnload Called before unloading a module
-         * @param onReload Called to load the new module DLL; returns true on success
+         * @param onUnload Called after a replacement is fully staged, to retire the old module
+         * @param onReload Called first to stage/initialize the replacement; returns true on success
          */
         void SetCallbacks(UnloadCallback onUnload, ReloadCallback onReload)
         {
@@ -321,31 +327,41 @@ namespace Spark::HotReload
          */
         ReloadResult PerformReload(WatchedModule& mod)
         {
-            // Step 1: Shadow-copy the DLL so the original can be overwritten by the compiler
+            // Step 1: Shadow-copy the DLL and mandatory compatibility sidecar
+            // so the original build outputs can be replaced by the compiler.
             std::error_code ec;
             std::filesystem::copy_file(mod.dllPath, mod.shadowPath, std::filesystem::copy_options::overwrite_existing,
                                        ec);
+            if (!ec)
+            {
+                std::filesystem::copy_file(mod.dllPath.string() + ".sparkabi", mod.shadowPath.string() + ".sparkabi",
+                                           std::filesystem::copy_options::overwrite_existing, ec);
+            }
             if (ec)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Core, "HotReload: Failed to copy DLL for module '%s'",
                                mod.name.c_str());
+                std::error_code cleanupError;
+                std::filesystem::remove(mod.shadowPath.string() + ".sparkabi", cleanupError);
+                std::filesystem::remove(mod.shadowPath, cleanupError);
                 return ReloadResult::CopyFailed;
             }
 
-            // Step 2: Unload the current module
+            // Step 2: Stage the replacement while the current module remains
+            // live. A failed callback must not retire the working instance.
+            if (!m_onReload || !m_onReload(mod.name, mod.shadowPath))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "HotReload: Failed to stage module '%s'", mod.name.c_str());
+                std::error_code cleanupError;
+                std::filesystem::remove(mod.shadowPath.string() + ".sparkabi", cleanupError);
+                std::filesystem::remove(mod.shadowPath, cleanupError);
+                return ReloadResult::LoadFailed;
+            }
+
+            // Step 3: Commit by retiring the previous instance only after the
+            // replacement callback reports it is fully usable.
             if (m_onUnload)
                 m_onUnload(mod.name);
-
-            // Step 3: Load the new module from the shadow copy
-            if (m_onReload)
-            {
-                if (!m_onReload(mod.name, mod.shadowPath))
-                {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "HotReload: Failed to load module '%s'",
-                                    mod.name.c_str());
-                    return ReloadResult::LoadFailed;
-                }
-            }
 
             mod.reloadCount++;
             SPARK_LOG_INFO(Spark::LogCategory::Core, "HotReload: Successfully reloaded module '%s' (count: %u)",

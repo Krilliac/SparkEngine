@@ -4,6 +4,7 @@
  */
 
 #include "Sequencer.h"
+#include "../../Audio/IAudioBackend.h"
 #include "../../Core/SafeCast.h"
 #include "../../Utils/LogMacros.h"
 
@@ -566,12 +567,19 @@ namespace Spark::Cinematic
                     m_eventCallback(cue->eventName, cue->parameters);
             }
 
-            if (track->GetType() == TrackType::AudioCue && m_audioCallback)
+            if (track->GetType() == TrackType::AudioCue && (m_audioDispatchCallback || m_audioCallback))
             {
                 auto* audioTrack = Spark::CheckedCast<AudioCueTrack*>(track.get());
                 auto triggered = audioTrack->GetTriggeredCues(m_previousTime, m_currentTime);
                 for (const auto* cue : triggered)
-                    m_audioCallback(*cue);
+                {
+                    if (m_audioDispatchCallback)
+                        m_audioDispatchCallback(*cue);
+                    // Public callbacks are observers and cannot replace the
+                    // production service wiring installed by the manager.
+                    if (m_audioCallback)
+                        m_audioCallback(*cue);
+                }
             }
         }
 
@@ -620,6 +628,11 @@ namespace Spark::Cinematic
     void Sequence::SetAudioCallback(AudioCallback callback)
     {
         m_audioCallback = std::move(callback);
+    }
+
+    void Sequence::SetAudioDispatchCallback(AudioCallback callback)
+    {
+        m_audioDispatchCallback = std::move(callback);
     }
 
     float Sequence::GetDuration() const
@@ -675,6 +688,7 @@ namespace Spark::Cinematic
     {
         SPARK_LOG_INFO(Spark::LogCategory::Cinematic, "Creating sequence '%s'", name.c_str());
         auto seq = std::make_unique<Sequence>(name);
+        seq->SetAudioDispatchCallback([this](const AudioCue& cue) { QueueAudioCue(cue); });
         auto* ptr = seq.get();
         m_sequences[name] = std::move(seq);
         return ptr;
@@ -751,6 +765,49 @@ namespace Spark::Cinematic
                 return seq.get();
         }
         return nullptr;
+    }
+
+    void SequencerManager::SetAudioBackend(Spark::Audio::IAudioBackend* backend)
+    {
+        std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+        m_audioBackend = backend;
+        m_pendingAudioCues.clear();
+    }
+
+    void SequencerManager::QueueAudioCue(const AudioCue& cue)
+    {
+        std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+        m_pendingAudioCues.push_back(cue);
+    }
+
+    void SequencerManager::DispatchPendingAudioCues()
+    {
+        std::vector<AudioCue> cues;
+        Spark::Audio::IAudioBackend* backend = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+            cues.swap(m_pendingAudioCues);
+            backend = m_audioBackend;
+        }
+
+        if (!backend)
+            return;
+
+        for (const auto& cue : cues)
+        {
+            if (cue.soundName.empty())
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Cinematic, "Ignoring sequencer audio cue with empty sound name");
+                continue;
+            }
+
+            const float volume = std::isfinite(cue.volume) ? std::clamp(cue.volume, 0.0f, 1.0f) : 1.0f;
+            if (cue.is3D)
+                backend->PlaySound3D(cue.soundName, cue.position.x, cue.position.y, cue.position.z, volume, 1.0f,
+                                     false);
+            else
+                backend->PlaySound(cue.soundName, volume, 1.0f, false);
+        }
     }
 
     std::string SequencerManager::Console_ListSequences() const

@@ -17,10 +17,13 @@
 
 #include "TestFramework.h"
 
+#include "Core/AssetIntegration.h"
 #include "Core/EngineContext.h"
+#include "Core/EngineRuntime.h"
 #include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Systems/PhaseSystemManager.h"
+#include "Utils/LocalFileCache.h"
 
 #include <memory>
 
@@ -40,6 +43,41 @@ namespace
         return s_world;
     }
 } // namespace
+
+TEST(HeadlessAssetServices_ProductionRuntimeOwnsCpuOnlyServices)
+{
+    EngineRuntime runtime;
+    Spark::LocalFileCache* firstCache = nullptr;
+    Spark::AssetRegistry* firstRegistry = nullptr;
+
+    {
+        EngineContext context;
+        EXPECT_TRUE(context.GetGraphics() == nullptr);
+        EXPECT_TRUE(context.GetAssetPipeline() == nullptr);
+
+        runtime.InitializeHeadlessAssetServices(context);
+        firstCache = context.GetFileCache();
+        firstRegistry = context.GetAssetRegistry();
+
+        EXPECT_TRUE(firstCache != nullptr);
+        EXPECT_TRUE(firstRegistry != nullptr);
+        EXPECT_TRUE(runtime.graphics == nullptr);
+
+        int resource = 42;
+        const auto handle = AssetHandle::FromPath("server/data/probe.asset");
+        firstRegistry->Register<int>(handle, "server/data/probe.asset", &resource, sizeof(resource));
+        EXPECT_TRUE(firstRegistry->Get<int>(handle) == &resource);
+
+        // Re-registration (e.g. startup retry) must retain the owned services.
+        runtime.InitializeHeadlessAssetServices(context);
+        EXPECT_TRUE(context.GetFileCache() == firstCache);
+        EXPECT_TRUE(context.GetAssetRegistry() == firstRegistry);
+    }
+
+    runtime.ShutdownHeadlessAssetServices();
+    EXPECT_TRUE(runtime.fileCache == nullptr);
+    EXPECT_TRUE(runtime.assetRegistry == nullptr);
+}
 
 TEST(LifecycleEcsPhases_ProductionInitRegistersSystems)
 {

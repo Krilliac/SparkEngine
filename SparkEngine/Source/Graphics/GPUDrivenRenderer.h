@@ -20,6 +20,7 @@
 #pragma once
 
 #include "../Core/Platform.h"
+#include "../../../Shaders/HLSL/Compute/GPUCullShared.hlsli"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
@@ -42,7 +43,7 @@ namespace Spark::Graphics
     {
         bool enableFrustumCull = true; ///< Frustum plane culling
         bool enableHiZCull = true;     ///< Hierarchical Z-buffer occlusion culling
-        bool freezeCulling = false;    ///< Debug: freeze culling at current camera
+        bool freezeCulling = false;    ///< Debug: bypass GPU pass; CullAndDraw returns false for CPU fallback
     };
 
     // =========================================================================
@@ -56,33 +57,6 @@ namespace Spark::Graphics
         uint32_t visibleInstances = 0; ///< Instances that passed all cull tests
         uint32_t culledByFrustum = 0;  ///< Instances removed by frustum test
         uint32_t culledByHiZ = 0;      ///< Instances removed by HiZ occlusion test
-    };
-
-    // =========================================================================
-    // GPU Instance AABB (matches HLSL structured buffer layout)
-    // =========================================================================
-
-    /// @brief Axis-aligned bounding box uploaded to the GPU cull shader
-    struct alignas(16) GPUInstanceAABB
-    {
-        float minX = 0.0f, minY = 0.0f, minZ = 0.0f;
-        float padding0 = 0.0f;
-        float maxX = 0.0f, maxY = 0.0f, maxZ = 0.0f;
-        float padding1 = 0.0f;
-    };
-
-    // =========================================================================
-    // GPU Indirect Draw Arguments (matches D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS)
-    // =========================================================================
-
-    /// @brief Indirect draw arguments written by the cull compute shader
-    struct IndirectDrawArgs
-    {
-        uint32_t indexCountPerInstance = 0;
-        uint32_t instanceCount = 0;
-        uint32_t startIndexLocation = 0;
-        int32_t baseVertexLocation = 0;
-        uint32_t startInstanceLocation = 0;
     };
 
     // =========================================================================
@@ -102,6 +76,17 @@ namespace Spark::Graphics
     class GPUDrivenRenderer
     {
       public:
+        /**
+         * @brief Whether CullAndDraw can preserve draw-list instance identity.
+         *
+         * The current primitive produces visibility flags and an indirect
+         * instance count, but has no compacted source-index/world-transform/
+         * material stream consumed by the graphics shaders. Production draw
+         * lists must therefore remain on the CPU path until that complete
+         * contract exists.
+         */
+        static constexpr bool SupportsProductionDrawListInstanceContract() noexcept { return false; }
+
         static GPUDrivenRenderer& GetInstance()
         {
             static GPUDrivenRenderer instance;
@@ -145,8 +130,10 @@ namespace Spark::Graphics
          * @param vertexBuffer  Vertex buffer for the geometry
          * @param stride        Vertex stride in bytes
          * @param indexCount    Total index count in the index buffer
+         * @return true when the indirect draw was submitted; false when the
+         *         caller must use its safe CPU rendering path
          */
-        void CullAndDraw(const GPUInstanceAABB* aabbs, uint32_t instanceCount, const DirectX::XMMATRIX& viewMatrix,
+        bool CullAndDraw(const GPUInstanceAABB* aabbs, uint32_t instanceCount, const DirectX::XMMATRIX& viewMatrix,
                          const DirectX::XMMATRIX& projMatrix, ID3D11Buffer* indexBuffer, ID3D11Buffer* vertexBuffer,
                          uint32_t stride, uint32_t indexCount);
 #endif

@@ -15,6 +15,7 @@
 #include "Audio/AudioEngine.h"
 #include "Core/AssetValidator.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
+#include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
 #include "Engine/Events/EventSystem.h"
@@ -47,7 +48,6 @@
 #include "Utils/GPUResourceLeakDetector.h"
 #include "Utils/HitchDetector.h"
 #include "Utils/InvalidStateDetector.h"
-#include "Utils/LocalFileCache.h"
 #include "Utils/Logger.h"
 #include "Utils/NetworkHealthMonitor.h"
 #include "Utils/SparkConsole.h"
@@ -124,8 +124,11 @@ static bool InitHeadlessEngineContext()
         return false;
     }
 
-    g_fileCache = std::make_unique<Spark::LocalFileCache>();
-    ctx->SetFileCache(g_fileCache.get());
+    // CPU-only services used by game modules for handle lookup and cached
+    // config/data access. EngineRuntime owns them; no GraphicsEngine/editor
+    // construction is required on a dedicated server.
+    GetEngineRuntime().InitializeHeadlessAssetServices(*ctx);
+    Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
 
     InitPhysics();
 
@@ -342,7 +345,6 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     g_uiSystem.reset();
     g_weatherSystem.reset();
     console.LogInfo("Headless server shutting down...");
-    g_fileCache.reset();
     ShutdownEngine();
 
     // Only free the console if we successfully allocated one in

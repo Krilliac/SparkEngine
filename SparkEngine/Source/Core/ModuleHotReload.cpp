@@ -8,6 +8,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 
+#include <algorithm>
 #include <sstream>
 #include <thread>
 
@@ -83,48 +84,57 @@ namespace Spark
         if (!m_running || !m_enabled || !m_moduleManager)
             return 0;
 
-        auto now = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
         int reloadedCount = 0;
+        std::vector<PendingReload> readyReloads;
+        std::vector<std::string> detectedModules;
 
-        std::lock_guard lock(m_mutex);
-
-        // 1. Check each watched module for file changes
-        for (auto& [name, watched] : m_watchedModules)
         {
-            if (!HasFileChanged(watched))
-                continue;
+            std::lock_guard lock(m_mutex);
 
-            // Avoid adding duplicate pending reloads
-            bool alreadyPending = false;
-            for (const auto& pending : m_pendingReloads)
+            // 1. Check each watched module for file changes.
+            for (auto& [name, watched] : m_watchedModules)
             {
-                if (pending.moduleName == name)
+                if (!HasFileChanged(watched))
+                    continue;
+
+                const bool alreadyPending =
+                    std::any_of(m_pendingReloads.begin(), m_pendingReloads.end(),
+                                [&name](const PendingReload& pending) { return pending.moduleName == name; });
+                if (!alreadyPending)
                 {
-                    alreadyPending = true;
-                    break;
+                    m_pendingReloads.push_back({name, now});
+                    detectedModules.push_back(name);
                 }
             }
 
-            if (!alreadyPending)
+            // 2. Move debounce-ready work out of protected state. Module code,
+            // retry waits, logging, and client callbacks must never execute
+            // while m_mutex is held.
+            const auto debounceThreshold = std::chrono::milliseconds(m_debounceMs);
+            auto pendingIt = m_pendingReloads.begin();
+            while (pendingIt != m_pendingReloads.end())
             {
-                SimpleConsole::GetInstance().LogInfo("Change detected in module: " + name);
-                m_pendingReloads.push_back({name, now});
+                if (now - pendingIt->detectedAt >= debounceThreshold)
+                {
+                    readyReloads.push_back(std::move(*pendingIt));
+                    pendingIt = m_pendingReloads.erase(pendingIt);
+                }
+                else
+                {
+                    ++pendingIt;
+                }
             }
         }
 
-        // 2. Process pending reloads that have passed the debounce threshold
-        auto debounceThreshold = std::chrono::milliseconds(m_debounceMs);
-        std::vector<PendingReload> remaining;
+        for (const auto& name : detectedModules)
+            SimpleConsole::GetInstance().LogInfo("Change detected in module: " + name);
 
-        for (const auto& pending : m_pendingReloads)
+        for (const auto& pending : readyReloads)
         {
-            if (now - pending.detectedAt < debounceThreshold)
-            {
-                remaining.push_back(pending);
-                continue;
-            }
-
-            // Debounce window passed — perform reload (with one retry if DLL is locked)
+            // Perform reload with one retry if the compiler is still replacing
+            // the source image. ReloadModule is transactional, so both failures
+            // preserve the working module.
             auto& console = SimpleConsole::GetInstance();
             console.LogInfo("Reloading module: " + pending.moduleName);
 
@@ -141,7 +151,6 @@ namespace Spark
             if (success)
             {
                 console.LogSuccess("Module hot-reloaded: " + pending.moduleName);
-                ++m_reloadCount;
                 ++reloadedCount;
             }
             else
@@ -149,20 +158,23 @@ namespace Spark
                 console.LogError("Module hot-reload failed after retry: " + pending.moduleName);
             }
 
-            // Re-snapshot after reload attempt
-            auto it = m_watchedModules.find(pending.moduleName);
-            if (it != m_watchedModules.end())
+            ModuleReloadCallback callback;
             {
-                SnapshotFile(it->second);
+                std::lock_guard lock(m_mutex);
+                if (success)
+                    ++m_reloadCount;
+
+                auto it = m_watchedModules.find(pending.moduleName);
+                if (it != m_watchedModules.end())
+                    SnapshotFile(it->second);
+
+                callback = m_reloadCallback;
             }
 
-            if (m_reloadCallback)
-            {
-                m_reloadCallback(pending.moduleName, success);
-            }
+            if (callback)
+                callback(pending.moduleName, success);
         }
 
-        m_pendingReloads = std::move(remaining);
         return reloadedCount;
     }
 
@@ -181,34 +193,39 @@ namespace Spark
         bool success = m_moduleManager->ReloadModule(moduleName, m_context);
 
         if (success)
-        {
             console.LogSuccess("Module force-reloaded: " + moduleName);
-            ++m_reloadCount;
-        }
         else
-        {
             console.LogError("Module force-reload failed: " + moduleName);
+
+        ModuleReloadCallback callback;
+        {
+            std::lock_guard lock(m_mutex);
+            if (success)
+                ++m_reloadCount;
+
+            auto it = m_watchedModules.find(moduleName);
+            if (it != m_watchedModules.end())
+                SnapshotFile(it->second);
+
+            callback = m_reloadCallback;
         }
 
-        // Re-snapshot
-        std::lock_guard lock(m_mutex);
-        auto it = m_watchedModules.find(moduleName);
-        if (it != m_watchedModules.end())
-        {
-            SnapshotFile(it->second);
-        }
-
-        if (m_reloadCallback)
-        {
-            m_reloadCallback(moduleName, success);
-        }
+        if (callback)
+            callback(moduleName, success);
 
         return success;
     }
 
     void ModuleHotReloadManager::SetReloadCallback(ModuleReloadCallback callback)
     {
+        std::lock_guard lock(m_mutex);
         m_reloadCallback = std::move(callback);
+    }
+
+    int ModuleHotReloadManager::GetReloadCount() const
+    {
+        std::lock_guard lock(m_mutex);
+        return m_reloadCount;
     }
 
     std::string ModuleHotReloadManager::GetStatus() const

@@ -659,8 +659,12 @@ namespace Spark::Persistence
             m_syncConnection->PrepareStatement(id, sql);
         }
 
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_stopping.store(false);
+            m_accepting = true;
+        }
         m_open.store(true);
-        m_stopping.store(false);
 
         // Launch worker threads
         for (int i = 0; i < poolSize; ++i)
@@ -673,13 +677,20 @@ namespace Spark::Persistence
 
     void AsyncDatabasePool::Close()
     {
-        if (!m_open.load())
         {
-            return;
+            // Admission and worker exit share the same mutex-protected state.
+            // Once m_accepting is false, every item already in m_workQueue is
+            // owned by the workers and will be drained before they may exit.
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            if (!m_open.load() || !m_accepting)
+            {
+                return;
+            }
+            m_accepting = false;
+            m_stopping.store(true);
         }
 
-        // Signal workers to stop
-        m_stopping.store(true);
+        // Wake all workers so they drain accepted work and then stop.
         m_queueCV.notify_all();
 
         // Join all worker threads
@@ -740,24 +751,29 @@ namespace Spark::Persistence
     std::future<QueryResult> AsyncDatabasePool::AsyncQuery(PreparedStatementID id,
                                                            std::vector<PreparedStatementParam> params)
     {
-        if (!m_open.load())
-        {
-            std::promise<QueryResult> promise;
-            promise.set_value(MakePoolClosedResult());
-            return promise.get_future();
-        }
-
         WorkItem item;
         item.stmtId = id;
         item.params = std::move(params);
         auto future = item.promise.get_future();
 
+        bool accepted = false;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            m_workQueue.push(std::move(item));
+            if (m_accepting)
+            {
+                m_workQueue.push(std::move(item));
+                m_pendingCount.fetch_add(1);
+                accepted = true;
+            }
         }
-        m_pendingCount.fetch_add(1);
-        m_queueCV.notify_one();
+        if (accepted)
+        {
+            m_queueCV.notify_one();
+        }
+        else
+        {
+            item.promise.set_value(MakePoolClosedResult());
+        }
 
         return future;
     }
@@ -765,47 +781,59 @@ namespace Spark::Persistence
     void AsyncDatabasePool::AsyncQueryWithCallback(PreparedStatementID id, std::vector<PreparedStatementParam> params,
                                                    Spark::Persistence::AsyncQueryCallback callback)
     {
-        if (!m_open.load())
-        {
-            // Deliver the failure through ProcessCallbacks like any completed query.
-            std::lock_guard<std::mutex> lock(m_callbackMutex);
-            m_completedCallbacks.push_back({std::move(callback), MakePoolClosedResult()});
-            return;
-        }
-
         WorkItem item;
         item.stmtId = id;
         item.params = std::move(params);
         item.callback = std::move(callback);
 
+        bool accepted = false;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            m_workQueue.push(std::move(item));
+            if (m_accepting)
+            {
+                m_workQueue.push(std::move(item));
+                m_pendingCount.fetch_add(1);
+                accepted = true;
+            }
         }
-        m_pendingCount.fetch_add(1);
-        m_queueCV.notify_one();
+        if (accepted)
+        {
+            m_queueCV.notify_one();
+        }
+        else
+        {
+            // Preserve callback API behavior: closed-pool failures are delivered
+            // by ProcessCallbacks() on its calling thread, never inline here.
+            std::lock_guard<std::mutex> lock(m_callbackMutex);
+            m_completedCallbacks.push_back({std::move(item.callback), MakePoolClosedResult()});
+        }
     }
 
     std::future<QueryResult> AsyncDatabasePool::AsyncTransaction(Transaction transaction)
     {
-        if (!m_open.load())
-        {
-            std::promise<QueryResult> promise;
-            promise.set_value(MakePoolClosedResult());
-            return promise.get_future();
-        }
-
         WorkItem item;
         item.isTransaction = true;
         item.transaction = std::move(transaction);
         auto future = item.promise.get_future();
 
+        bool accepted = false;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
-            m_workQueue.push(std::move(item));
+            if (m_accepting)
+            {
+                m_workQueue.push(std::move(item));
+                m_pendingCount.fetch_add(1);
+                accepted = true;
+            }
         }
-        m_pendingCount.fetch_add(1);
-        m_queueCV.notify_one();
+        if (accepted)
+        {
+            m_queueCV.notify_one();
+        }
+        else
+        {
+            item.promise.set_value(MakePoolClosedResult());
+        }
 
         return future;
     }

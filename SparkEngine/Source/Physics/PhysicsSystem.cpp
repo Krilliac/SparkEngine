@@ -421,7 +421,7 @@ HRESULT PhysicsSystem::Initialize()
 
     Spark::SimpleConsole::GetInstance().LogSuccess("PhysicsSystem initialized successfully (Jolt Physics)");
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Physics", 0.0);
-    return S_OK;
+    return static_cast<HRESULT>(0);
 }
 
 void PhysicsSystem::Shutdown()

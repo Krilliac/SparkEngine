@@ -56,6 +56,7 @@ void GraphicsEngine::OnResize(unsigned int width, unsigned int height)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Device context not available during resize", L"WARNING");
     }
+    m_backBufferSRV.Reset();
     m_renderTargetView.Reset();
     m_depthStencilView.Reset();
     if (m_swapChain)

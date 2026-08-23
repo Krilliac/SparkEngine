@@ -73,7 +73,7 @@ namespace MMO
 
     // === Registration ===
 
-    AuthResult MMOAccountSystem::Register(const std::string& username, const std::string& password,
+    AuthResult MMOAccountSystem::Register(const std::string& username, std::string_view password,
                                           const std::string& email)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
@@ -130,7 +130,7 @@ namespace MMO
 
     // === Authentication ===
 
-    AuthResult MMOAccountSystem::Login(const std::string& username, const std::string& password)
+    AuthResult MMOAccountSystem::Login(const std::string& username, std::string_view password)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         AuthResult result;
@@ -339,7 +339,7 @@ namespace MMO
         return std::nullopt;
     }
 
-    bool MMOAccountSystem::ChangePassword(uint32_t accountId, const std::string& oldPass, const std::string& newPass)
+    bool MMOAccountSystem::ChangePassword(uint32_t accountId, std::string_view oldPass, std::string_view newPass)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = m_accounts.find(accountId);

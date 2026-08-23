@@ -168,15 +168,22 @@ namespace SparkEditor
         ImGui::Text("Batch Operations");
         ImGui::Separator();
 
-        std::lock_guard<std::mutex> lock(m_batchMutex);
+        std::vector<std::pair<uint32_t, BatchOperation>> snapshots;
+        {
+            std::lock_guard<std::mutex> lock(m_batchMutex);
+            snapshots.reserve(m_batchOperations.size());
+            for (const auto& [id, batch] : m_batchOperations)
+                snapshots.emplace_back(id, batch);
+        }
 
-        if (m_batchOperations.empty())
+        if (snapshots.empty())
         {
             ImGui::Text("No batch operations.");
             return;
         }
 
-        for (const auto& [id, batch] : m_batchOperations)
+        uint32_t cancelID = 0;
+        for (const auto& [id, batch] : snapshots)
         {
             ImGui::PushID(static_cast<int>(id));
 
@@ -187,17 +194,15 @@ namespace SparkEditor
             if (batch.isActive)
             {
                 if (ImGui::Button("Cancel"))
-                {
-                    // Cannot call CancelBatchOperation here because it would deadlock (we hold the lock).
-                    // Mark inactive directly.
-                    // We cast away constness for the UI interaction.
-                    const_cast<BatchOperation&>(batch).isActive = false;
-                }
+                    cancelID = id;
             }
 
             ImGui::Separator();
             ImGui::PopID();
         }
+
+        if (cancelID != 0)
+            CancelBatchOperation(cancelID);
     }
 
     void AdvancedAssetPipeline::RenderAssetInspector()
@@ -667,10 +672,6 @@ namespace SparkEditor
 
         // Find processor for this asset
         AssetProcessor* processor = GetProcessorForAsset(job.assetPath);
-        if (!processor)
-        {
-            return false;
-        }
 
         // Create or update metadata
         AssetMetadata metadata;
@@ -696,15 +697,48 @@ namespace SparkEditor
 
         // Process the asset
         auto startTime = std::chrono::high_resolution_clock::now();
-        bool success = processor->Process(metadata, job.settings, nullptr);
+        bool success = false;
+        if (!processor)
+        {
+            metadata.status = ProcessingStatus::FAILED;
+            metadata.errorMessage = "Asset processor disappeared before execution";
+        }
+        else
+        {
+            try
+            {
+                success = processor->Process(metadata, job.settings, nullptr);
+            }
+            catch (const std::exception& e)
+            {
+                metadata.errorMessage = std::string("Asset processor threw: ") + e.what();
+            }
+            catch (...)
+            {
+                metadata.errorMessage = "Asset processor threw an unknown exception";
+            }
+        }
         auto endTime = std::chrono::high_resolution_clock::now();
 
         float elapsed = std::chrono::duration<float>(endTime - startTime).count();
         metadata.processingTime = elapsed;
 
+        if (success && metadata.status != ProcessingStatus::COMPLETED && metadata.status != ProcessingStatus::SKIPPED)
+        {
+            success = false;
+            metadata.errorMessage = "Asset processor returned success without a terminal success status";
+        }
+        if (success && metadata.status == ProcessingStatus::COMPLETED &&
+            (metadata.processedFilePath.empty() || !fs::exists(metadata.processedFilePath)))
+        {
+            success = false;
+            metadata.errorMessage = "Asset processor returned success without producing an artifact";
+        }
         if (!success)
         {
             metadata.status = ProcessingStatus::FAILED;
+            if (metadata.errorMessage.empty())
+                metadata.errorMessage = "Asset processing failed";
         }
 
         // Update metadata in the cache
@@ -716,10 +750,21 @@ namespace SparkEditor
         // Invoke completion callback
         if (job.completionCallback)
         {
-            job.completionCallback(metadata);
+            try
+            {
+                job.completionCallback(metadata);
+            }
+            catch (const std::exception& e)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Asset completion callback threw: %s", e.what());
+            }
+            catch (...)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Asset completion callback threw");
+            }
         }
 
-        return true;
+        return success;
     }
 
     AssetProcessor* AdvancedAssetPipeline::GetProcessorForAsset(const std::string& assetPath)

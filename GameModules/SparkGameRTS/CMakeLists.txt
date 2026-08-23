@@ -86,6 +86,11 @@ list(FILTER SPARK_GAME_RTS_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 # ---------------------------------------------------------------------
 add_library(SparkGameRTS SHARED ${SPARK_GAME_RTS_SOURCES})
 
+if(NOT COMMAND spark_configure_module_abi)
+    include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkGameModule.cmake")
+endif()
+spark_configure_module_abi(SparkGameRTS)
+
 target_compile_definitions(SparkGameRTS PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
 # ---------------------------------------------------------------------

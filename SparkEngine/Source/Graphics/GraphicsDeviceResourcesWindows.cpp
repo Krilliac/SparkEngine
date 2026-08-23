@@ -29,6 +29,7 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -123,7 +124,9 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
     swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    // Post-processing reads the completed scene color before compositing back
+    // into this buffer, so the swap-chain image must support both view types.
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHADER_INPUT;
     swapChainDesc.OutputWindow = hWnd;
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SampleDesc.Quality = 0;
@@ -159,14 +162,26 @@ HRESULT GraphicsEngine::CreateRenderTargetView()
         return hr;
     }
 
-    hr = m_device->CreateRenderTargetView(backBuffer.Get(), nullptr, &m_renderTargetView);
+    ComPtr<ID3D11RenderTargetView> renderTargetView;
+    hr = m_device->CreateRenderTargetView(backBuffer.Get(), nullptr, renderTargetView.GetAddressOf());
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create render target view", L"ERROR");
         return hr;
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Render target view created successfully", L"SUCCESS");
+    ComPtr<ID3D11ShaderResourceView> backBufferSRV;
+    hr = m_device->CreateShaderResourceView(backBuffer.Get(), nullptr, backBufferSRV.GetAddressOf());
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create back buffer shader resource view", L"ERROR");
+        return hr;
+    }
+
+    m_renderTargetView = std::move(renderTargetView);
+    m_backBufferSRV = std::move(backBufferSRV);
+
+    LOG_TO_CONSOLE_IMMEDIATE(L"Render target and shader resource views created successfully", L"SUCCESS");
     return S_OK;
 }
 

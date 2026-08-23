@@ -23,6 +23,7 @@
 #include "PostProcessingPipelineWindowsShadersFilter.h"
 #include "PostProcessingPipelineWindowsShadersLens.h"
 #include <d3dcompiler.h>
+#include <utility>
 
 using Microsoft::WRL::ComPtr;
 
@@ -34,6 +35,10 @@ namespace Spark::Graphics
 #ifdef SPARK_PLATFORM_WINDOWS
         if (!m_device)
             return false;
+
+        ComPtr<ID3D11Texture2D> textures[2];
+        ComPtr<ID3D11RenderTargetView> rtvs[2];
+        ComPtr<ID3D11ShaderResourceView> srvs[2];
 
         for (int i = 0; i < 2; ++i)
         {
@@ -47,17 +52,26 @@ namespace Spark::Graphics
             texDesc.Usage = D3D11_USAGE_DEFAULT;
             texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 
-            HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, &m_pingPongTextures[i]);
+            HRESULT hr = m_device->CreateTexture2D(&texDesc, nullptr, textures[i].GetAddressOf());
             if (FAILED(hr))
                 return false;
 
-            hr = m_device->CreateRenderTargetView(m_pingPongTextures[i].Get(), nullptr, &m_pingPongRTVs[i]);
+            hr = m_device->CreateRenderTargetView(textures[i].Get(), nullptr, rtvs[i].GetAddressOf());
             if (FAILED(hr))
                 return false;
 
-            hr = m_device->CreateShaderResourceView(m_pingPongTextures[i].Get(), nullptr, &m_pingPongSRVs[i]);
+            hr = m_device->CreateShaderResourceView(textures[i].Get(), nullptr, srvs[i].GetAddressOf());
             if (FAILED(hr))
                 return false;
+        }
+
+        // Commit only after the complete replacement set exists. This keeps a
+        // failed resize from leaving a mixture of old and new views.
+        for (int i = 0; i < 2; ++i)
+        {
+            m_pingPongSRVs[i] = std::move(srvs[i]);
+            m_pingPongRTVs[i] = std::move(rtvs[i]);
+            m_pingPongTextures[i] = std::move(textures[i]);
         }
         return true;
 #else

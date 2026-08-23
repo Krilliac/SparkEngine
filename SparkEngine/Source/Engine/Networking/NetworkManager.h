@@ -35,6 +35,7 @@
 #include <atomic>
 #include <array>
 #include "NetworkInterpolation.h"
+#include "NetworkWireLimits.h"
 #include "PacketValidator.h"
 
 #ifdef ENABLE_NETWORKING
@@ -344,8 +345,9 @@ namespace Spark::Net
     // NetworkManager
     // ============================================================================
 
-    // Thread safety: Queue mutex protects message I/O and handler registration.
-    // Socket operations run on a dedicated network thread when connected.
+    // Thread safety: all public state/lifecycle operations are serialized by
+    // m_apiMutex. Update owns the socket pump; there is no hidden network
+    // thread. Narrow container mutexes remain for internal lock granularity.
     class NetworkManager : public Spark::INetworkService
     {
       public:
@@ -392,6 +394,7 @@ namespace Spark::Net
         uint32_t RegisterReplicatedEntity(const ReplicatedEntity& entity);
         void UnregisterReplicatedEntity(uint32_t networkID);
         void MarkPropertyDirty(uint32_t networkID, const std::string& propertyName);
+        /// [game thread] Borrowed pointer; invalidated by unregister/shutdown.
         ReplicatedEntity* GetReplicatedEntity(uint32_t networkID);
 
         /// Serialize and send full state for all replicated entities (server only)
@@ -405,9 +408,14 @@ namespace Spark::Net
 
         // Client input (for server-side processing)
         void SendClientInput(const ClientInputState& input);
-        const std::vector<ClientInputState>& GetPendingInputs() const { return m_pendingInputs; }
+        std::vector<ClientInputState> GetPendingInputs() const
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+            std::lock_guard<std::mutex> inputLock(m_inputMutex);
+            return m_pendingInputs;
+        }
 
-        // Lag compensation
+        // Lag compensation. [game thread] Borrowed mutable subsystem reference.
         LagCompensator& GetLagCompensator() { return m_lagCompensator; }
 
         // State queries (thread-safe)
@@ -422,13 +430,38 @@ namespace Spark::Net
             std::lock_guard<std::mutex> lock(m_stateMutex);
             return m_localClientID;
         }
-        float GetServerTime() const { return m_serverTime; }
-        const NetworkStats& GetStats() const { return m_stats; }
-        void SetPredictionCorrectionCount(uint32_t correctionCount) { m_stats.correctionCount = correctionCount; }
+        float GetServerTime() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            return m_serverTime;
+        }
+        NetworkStats GetStats() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            return m_stats;
+        }
+        /// Replace the telemetry snapshot (diagnostic adapters/tests only).
+        /// This never changes transport, connection, or wire state.
+        void SetStatsSnapshotForDiagnostics(const NetworkStats& stats)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            m_stats = stats;
+        }
+        void SetPredictionCorrectionCount(uint32_t correctionCount)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            m_stats.correctionCount = correctionCount;
+        }
         bool IsInitialized() const override { return m_initialized; }
 
         // Client management (server only)
-        const std::unordered_map<ClientID, ClientInfo>& GetClients() const { return m_clients; }
+        std::unordered_map<ClientID, ClientInfo> GetClients() const
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+            std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+            return m_clients;
+        }
+        uint16_t GetBoundPort() const;
         void KickClient(ClientID client, const std::string& reason = "");
 
         // ====================================================================
@@ -457,10 +490,18 @@ namespace Spark::Net
         void ClearClientScope(ClientID client);
 
         /// Register a callback for client timeout events (server-side).
-        void SetTimeoutHandler(std::function<void(ClientID)> handler) { m_timeoutHandler = std::move(handler); }
+        void SetTimeoutHandler(std::function<void(ClientID)> handler)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            m_timeoutHandler = std::move(handler);
+        }
 
         /// Get estimated round-trip time in milliseconds.
-        float GetEstimatedRTT() const { return m_smoothedRTT * 1000.0f; }
+        float GetEstimatedRTT() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            return m_smoothedRTT * 1000.0f;
+        }
 
         // ====================================================================
         // Auto-reconnect (client-side)
@@ -479,19 +520,32 @@ namespace Spark::Net
         void SetAutoReconnect(const AutoReconnectConfig& config);
 
         /** @brief Get current auto-reconnect configuration */
-        const AutoReconnectConfig& GetAutoReconnectConfig() const { return m_autoReconnect; }
+        AutoReconnectConfig GetAutoReconnectConfig() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            return m_autoReconnect;
+        }
 
         /** @brief Register a callback invoked when auto-reconnect gives up */
         void SetReconnectFailedCallback(std::function<void()> callback)
         {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
             m_reconnectFailedCallback = std::move(callback);
         }
 
         /// Set the maximum number of retransmissions before a reliable message is dropped
-        void SetMaxReliableRetries(int maxRetries) { m_maxReliableRetries = maxRetries; }
+        void SetMaxReliableRetries(int maxRetries)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            m_maxReliableRetries = maxRetries;
+        }
 
         /// Get the maximum number of retransmissions
-        int GetMaxReliableRetries() const { return m_maxReliableRetries; }
+        int GetMaxReliableRetries() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+            return m_maxReliableRetries;
+        }
 
         // ====================================================================
         // Server-side hit validation (lag compensation integration)
@@ -522,6 +576,7 @@ namespace Spark::Net
                                         const XMFLOAT3& rayDirection, float maxDistance = 1000.0f);
 
         /// Get the packet validator for configuration
+        /// [game thread] Borrowed mutable validator reference.
         PacketValidator& GetPacketValidator() { return m_packetValidator; }
 
         /// Console integration
@@ -537,12 +592,20 @@ namespace Spark::Net
         NetworkManager(const NetworkManager&) = delete;
         NetworkManager& operator=(const NetworkManager&) = delete;
 
-        void ProcessIncoming();
+        // Outermost lock for public API/lifecycle access. Recursive because
+        // Update dispatches user handlers which may call SendMessage or query
+        // state on the same thread. Always acquire this before narrow locks.
+        mutable std::recursive_mutex m_apiMutex;
+        uint64_t m_lifecycleEpoch =
+            0; ///< Invalidates callback-interrupted Update continuations after lifecycle change.
+
+        std::vector<ClientID> ProcessIncoming();
         void ProcessOutgoing();
         void FlushOutgoingQueue();
         void HandleRetransmissions();
         std::vector<ClientID> GetConnectedClientIDs() const;
-        void UpdateReplication(float deltaTime);
+        bool UpdateReplication(float deltaTime, std::unique_lock<std::recursive_mutex>& apiLock,
+                               uint64_t lifecycleEpoch);
         void UpdateHeartbeat(float deltaTime);
         ClientID HandleConnect(const NetworkMessage& msg);
         void HandleDisconnect(const NetworkMessage& msg);
@@ -666,8 +729,9 @@ namespace Spark::Net
         using TimeoutHandler = std::function<void(ClientID)>;
         TimeoutHandler m_timeoutHandler; ///< Called when a client times out (server) or server times out (client)
 
-        /// @brief Checks heartbeat freshness and fires timeout callbacks.
-        void CheckConnectionTimeouts();
+        /// @brief Checks heartbeat freshness, removes timed-out clients, and
+        /// returns their IDs for callback delivery after m_apiMutex is released.
+        std::vector<ClientID> CheckConnectionTimeouts();
 
         // ACK pacing — per-peer highest-sequence/bitfield state lives in PeerState.
         float m_ackSendTimer = 0.0f;                        ///< Accumulate before sending ACKs
@@ -687,8 +751,9 @@ namespace Spark::Net
         /// Record a reliable sequence received from this peer and update its ACK bitfield
         void RecordReceivedSequence(PeerState& peer, SequenceNumber seq);
 
-        /// Deliver this peer's buffered ordered messages that are now in-sequence
-        void FlushOrderedBuffer(ClientID peerKey);
+        /// Detach the next in-sequence buffered message for a peer. Dispatch is
+        /// performed by Update after m_apiMutex is released.
+        bool PopNextOrderedMessage(ClientID peerKey, NetworkMessage& outMessage);
 
         /// Prune old entries from every peer's received-sequence dedup map
         void PruneReceivedSequences();
@@ -697,7 +762,8 @@ namespace Spark::Net
         mutable std::mutex m_replicationMutex; ///< Protects m_replicatedEntities
         std::unordered_map<uint32_t, ReplicatedEntity> m_replicatedEntities;
         std::atomic<uint32_t> m_nextNetworkID{1};
-        float m_replicationInterval = 0.05f; ///< 20 Hz replication rate
+        uint64_t m_replicationMutationEpoch = 0; ///< Prevents clearing dirtiness changed during an unlocked callback.
+        float m_replicationInterval = 0.05f;     ///< 20 Hz replication rate
         float m_replicationTimer = 0.0f;
 
         // Client input
@@ -723,8 +789,11 @@ namespace Spark::Net
         bool m_wasConnected = false;                     ///< True if we were connected before disconnect
         std::function<void()> m_reconnectFailedCallback; ///< Called when max attempts exhausted
 
-        /** @brief Attempt automatic reconnection (called from Update) */
-        void TryAutoReconnect(float deltaTime);
+        /**
+         * @brief Attempt automatic reconnection (called from Update).
+         * @return A failure callback to invoke after m_apiMutex is released.
+         */
+        std::function<void()> TryAutoReconnect(float deltaTime);
     };
 
 } // namespace Spark::Net

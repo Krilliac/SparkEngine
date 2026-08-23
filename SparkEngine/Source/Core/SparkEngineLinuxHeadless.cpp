@@ -10,6 +10,7 @@
 #include "SparkEngine.h"
 #include "Platform.h"
 #include "SparkEngineLinuxInternal.h"
+#include "Engine/Cinematic/Sequencer.h"
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "FaultIsolation.h" // SPARK_GUARDED_UPDATE / SubsystemFaultIsolator (mirrors SparkEngineWindows.cpp)
@@ -58,6 +59,7 @@ int RunHeadlessLinux(int argc, char* argv[])
 
     // Headless: no gameplay subsystems (no Weather/UI/Dialogue/Modding)
     InitLinuxCoreSubsystems(/*registerGameplay=*/false);
+    Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
 
     InitConsole();
 

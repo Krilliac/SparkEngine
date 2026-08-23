@@ -87,6 +87,11 @@ list(FILTER SPARK_GAME_OW_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
 # ---------------------------------------------------------------------
 add_library(SparkGameOpenWorld SHARED ${SPARK_GAME_OW_SOURCES})
 
+if(NOT COMMAND spark_configure_module_abi)
+    include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkGameModule.cmake")
+endif()
+spark_configure_module_abi(SparkGameOpenWorld)
+
 target_compile_definitions(SparkGameOpenWorld PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
 
 # ---------------------------------------------------------------------

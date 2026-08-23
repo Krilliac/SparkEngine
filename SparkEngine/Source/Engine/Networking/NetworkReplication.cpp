@@ -64,6 +64,7 @@ namespace Spark::Net
 
     uint32_t NetworkManager::RegisterReplicatedEntity(const ReplicatedEntity& entity)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         uint32_t netID = m_nextNetworkID.fetch_add(1, std::memory_order_relaxed);
 
         // Read role first (respects lock order: m_stateMutex before m_replicationMutex)
@@ -74,6 +75,7 @@ namespace Spark::Net
             m_replicatedEntities[netID] = entity;
             m_replicatedEntities[netID].networkID = netID;
             m_replicatedEntities[netID].needsFullSync = true;
+            ++m_replicationMutationEpoch;
         }
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Entity registered: netID=%u type='%s' owner=%u", netID,
                        entity.entityType.c_str(), entity.ownerID);
@@ -100,6 +102,7 @@ namespace Spark::Net
 
     void NetworkManager::UnregisterReplicatedEntity(uint32_t networkID)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         // Read role before replication lock (respects lock order)
         NetworkRole role = GetRole();
 
@@ -111,6 +114,7 @@ namespace Spark::Net
 
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Entity unregistered: netID=%u", networkID);
             m_replicatedEntities.erase(it);
+            ++m_replicationMutationEpoch;
         }
 
         // Notify clients after releasing m_replicationMutex to avoid
@@ -130,6 +134,7 @@ namespace Spark::Net
 
     void NetworkManager::MarkPropertyDirty(uint32_t networkID, const std::string& propertyName)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
         if (it == m_replicatedEntities.end())
@@ -139,6 +144,7 @@ namespace Spark::Net
             if (prop.name == propertyName)
             {
                 prop.dirty = true;
+                ++m_replicationMutationEpoch;
                 break;
             }
         }
@@ -146,6 +152,7 @@ namespace Spark::Net
 
     ReplicatedEntity* NetworkManager::GetReplicatedEntity(uint32_t networkID)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         std::lock_guard<std::mutex> lock(m_replicationMutex);
         auto it = m_replicatedEntities.find(networkID);
         return (it != m_replicatedEntities.end()) ? &it->second : nullptr;
@@ -153,6 +160,8 @@ namespace Spark::Net
 
     void NetworkManager::SendFullEntitySync(ClientID targetClient)
     {
+        std::unique_lock<std::recursive_mutex> apiLock(m_apiMutex);
+        const uint64_t lifecycleEpoch = m_lifecycleEpoch;
         if (GetRole() != NetworkRole::Server)
             return;
 
@@ -168,12 +177,18 @@ namespace Spark::Net
         ++m_stats.fullEntitySyncs;
 
         auto& scopeFilter = ConnectionScopeFilter::GetInstance();
-
-        std::lock_guard<std::mutex> lock(m_replicationMutex);
-        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Sending full entity sync to client %u (%zu entities)",
-                        targetClient, m_replicatedEntities.size());
-        for (const auto& [netID, entity] : m_replicatedEntities)
+        std::vector<ReplicatedEntity> entities;
         {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            entities.reserve(m_replicatedEntities.size());
+            for (const auto& [netID, entity] : m_replicatedEntities)
+                entities.push_back(entity);
+        }
+        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Sending full entity sync to client %u (%zu entities)",
+                        targetClient, entities.size());
+        for (const auto& entity : entities)
+        {
+            const uint32_t netID = entity.networkID;
             // Per-connection interest filter: skip entities outside the client's scope.
             // If no scope is set for this client, IsEntityInScope returns true (see-all default).
             if (!scopeFilter.IsEntityInScope(targetClient, entity.position, entity.areaId, entity.teamMask,
@@ -202,8 +217,21 @@ namespace Spark::Net
             stateMsg.channel = ChannelType::Reliable;
 
             NetBuffer stateBuf;
-            // Already holding m_replicationMutex — must not re-lock via SerializeEntityState.
-            SerializeEntityStateUnlocked(netID, entity, stateBuf);
+            apiLock.unlock();
+            try
+            {
+                // Property serializers are application callbacks. The entity is
+                // a value snapshot, so no manager lock is needed while they run.
+                SerializeEntityStateUnlocked(netID, entity, stateBuf);
+            }
+            catch (...)
+            {
+                apiLock.lock();
+                throw;
+            }
+            apiLock.lock();
+            if (m_lifecycleEpoch != lifecycleEpoch)
+                return;
             stateMsg.payload = stateBuf.GetData();
             SendToClient(targetClient, stateMsg);
         }
@@ -211,16 +239,24 @@ namespace Spark::Net
 
     void NetworkManager::SerializeEntityState(uint32_t networkID, NetBuffer& outBuffer) const
     {
-        std::lock_guard<std::mutex> lock(m_replicationMutex);
-        auto it = m_replicatedEntities.find(networkID);
-        if (it == m_replicatedEntities.end())
-            return;
+        std::unique_lock<std::recursive_mutex> apiLock(m_apiMutex);
+        ReplicatedEntity entity;
+        {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            auto it = m_replicatedEntities.find(networkID);
+            if (it == m_replicatedEntities.end())
+                return;
+            entity = it->second;
+        }
 
-        SerializeEntityStateUnlocked(networkID, it->second, outBuffer);
+        apiLock.unlock();
+        SerializeEntityStateUnlocked(networkID, entity, outBuffer);
     }
 
     void NetworkManager::DeserializeEntityState(NetBuffer& inBuffer)
     {
+        std::unique_lock<std::recursive_mutex> apiLock(m_apiMutex);
+        const uint64_t lifecycleEpoch = m_lifecycleEpoch;
         uint32_t networkID = inBuffer.ReadUint32();
         if (inBuffer.HasError())
         {
@@ -228,41 +264,46 @@ namespace Spark::Net
             return;
         }
 
-        std::lock_guard<std::mutex> lock(m_replicationMutex);
-        auto it = m_replicatedEntities.find(networkID);
-        if (it == m_replicatedEntities.end())
         {
-            // Entity not known locally -- create a placeholder
-            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Creating placeholder for unknown entity netID=%u", networkID);
-            ReplicatedEntity placeholder;
-            placeholder.networkID = networkID;
-            placeholder.position = inBuffer.ReadVector3();
-            placeholder.rotation = inBuffer.ReadVector3();
-            placeholder.velocity = inBuffer.ReadVector3();
-            // Skip remaining property data
-            uint16_t propCount = inBuffer.ReadUint16();
-            if (inBuffer.HasError())
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            auto it = m_replicatedEntities.find(networkID);
+            if (it == m_replicatedEntities.end())
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Network,
-                               "DeserializeEntityState: truncated packet for placeholder netID=%u", networkID);
+                // Entity not known locally -- create a placeholder
+                SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Creating placeholder for unknown entity netID=%u",
+                                networkID);
+                ReplicatedEntity placeholder;
+                placeholder.networkID = networkID;
+                placeholder.position = inBuffer.ReadVector3();
+                placeholder.rotation = inBuffer.ReadVector3();
+                placeholder.velocity = inBuffer.ReadVector3();
+                // Skip remaining property data
+                uint16_t propCount = inBuffer.ReadUint16();
+                if (inBuffer.HasError())
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Network,
+                                   "DeserializeEntityState: truncated packet for placeholder netID=%u", networkID);
+                    return;
+                }
+                for (uint16_t i = 0; i < propCount && !inBuffer.HasError(); ++i)
+                {
+                    inBuffer.ReadString(); // name
+                    inBuffer.ReadUint8();  // type
+                    // Cannot deserialize without a handler -- skip
+                }
+                placeholder.lastUpdateTime = m_serverTime;
+                m_replicatedEntities[networkID] = placeholder;
+                ++m_replicationMutationEpoch;
                 return;
             }
-            for (uint16_t i = 0; i < propCount && !inBuffer.HasError(); ++i)
-            {
-                inBuffer.ReadString(); // name
-                inBuffer.ReadUint8();  // type
-                // Cannot deserialize without a handler -- skip
-            }
-            placeholder.lastUpdateTime = m_serverTime;
-            m_replicatedEntities[networkID] = placeholder;
-            return;
-        }
 
-        auto& entity = it->second;
-        entity.position = inBuffer.ReadVector3();
-        entity.rotation = inBuffer.ReadVector3();
-        entity.velocity = inBuffer.ReadVector3();
-        entity.lastUpdateTime = m_serverTime;
+            auto& entity = it->second;
+            entity.position = inBuffer.ReadVector3();
+            entity.rotation = inBuffer.ReadVector3();
+            entity.velocity = inBuffer.ReadVector3();
+            entity.lastUpdateTime = m_serverTime;
+            ++m_replicationMutationEpoch;
+        }
 
         uint16_t propCount = inBuffer.ReadUint16();
         if (inBuffer.HasError())
@@ -285,13 +326,38 @@ namespace Spark::Net
                 break;
             }
 
-            // Find matching property and deserialize
-            for (auto& prop : entity.properties)
             {
-                if (prop.name == propName && prop.deserialize)
+                std::function<void(NetBuffer&)> deserialize;
                 {
-                    prop.deserialize(inBuffer);
-                    break;
+                    std::lock_guard<std::mutex> lock(m_replicationMutex);
+                    auto entityIt = m_replicatedEntities.find(networkID);
+                    if (entityIt != m_replicatedEntities.end())
+                    {
+                        for (const auto& prop : entityIt->second.properties)
+                        {
+                            if (prop.name == propName && prop.deserialize)
+                            {
+                                deserialize = prop.deserialize;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (deserialize)
+                {
+                    apiLock.unlock();
+                    try
+                    {
+                        deserialize(inBuffer);
+                    }
+                    catch (...)
+                    {
+                        apiLock.lock();
+                        throw;
+                    }
+                    apiLock.lock();
+                    if (m_lifecycleEpoch != lifecycleEpoch)
+                        return;
                 }
             }
         }
@@ -301,21 +367,51 @@ namespace Spark::Net
     // UpdateReplication
     // --------------------------------------------------------------------------
 
-    void NetworkManager::UpdateReplication(float deltaTime)
+    bool NetworkManager::UpdateReplication(float deltaTime, std::unique_lock<std::recursive_mutex>& apiLock,
+                                           uint64_t lifecycleEpoch)
     {
         if (GetRole() != NetworkRole::Server)
-            return;
+            return true;
 
         m_replicationTimer += deltaTime;
         if (m_replicationTimer < m_replicationInterval)
-            return;
+            return true;
         m_replicationTimer = 0.0f;
 
         auto& deltaManager = DeltaSnapshotManager::GetInstance();
         auto& scopeFilter = ConnectionScopeFilter::GetInstance();
 
-        for (auto& [netID, entity] : m_replicatedEntities)
+        // Work from value snapshots so application serializers can run with no
+        // NetworkManager/container lock held. A callback is then free to wait
+        // for another thread using any public networking API.
+        std::vector<ReplicatedEntity> entities;
         {
+            std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
+            entities.reserve(m_replicatedEntities.size());
+            for (const auto& [netID, entity] : m_replicatedEntities)
+                entities.push_back(entity);
+        }
+
+        auto serializeUnlocked =
+            [&apiLock, this, lifecycleEpoch](const std::function<void(NetBuffer&)>& serializer, NetBuffer& buffer)
+        {
+            apiLock.unlock();
+            try
+            {
+                serializer(buffer);
+            }
+            catch (...)
+            {
+                apiLock.lock();
+                throw;
+            }
+            apiLock.lock();
+            return m_lifecycleEpoch == lifecycleEpoch;
+        };
+
+        for (const auto& entity : entities)
+        {
+            const uint32_t netID = entity.networkID;
             bool hasDirty = entity.needsFullSync;
             if (!hasDirty)
             {
@@ -331,6 +427,7 @@ namespace Spark::Net
 
             if (hasDirty)
             {
+                const uint64_t mutationEpochBeforeCallbacks = m_replicationMutationEpoch;
                 // Record the current entity state for delta snapshot tracking.
                 // This builds FieldSnapshot entries from the entity's serialized properties.
                 std::vector<FieldSnapshot> fieldSnapshots;
@@ -347,7 +444,8 @@ namespace Spark::Net
                     if (prop.serialize)
                     {
                         NetBuffer fieldBuf;
-                        prop.serialize(fieldBuf);
+                        if (!serializeUnlocked(prop.serialize, fieldBuf))
+                            return false;
                         fs.serializedValue = fieldBuf.GetData();
                     }
                     fieldSnapshots.push_back(std::move(fs));
@@ -365,15 +463,27 @@ namespace Spark::Net
                         connectedClients.push_back(cid);
                 }
 
+                NetBuffer serializedState;
+                apiLock.unlock();
+                try
+                {
+                    SerializeEntityStateUnlocked(netID, entity, serializedState);
+                }
+                catch (...)
+                {
+                    apiLock.lock();
+                    throw;
+                }
+                apiLock.lock();
+                if (m_lifecycleEpoch != lifecycleEpoch)
+                    return false;
+                std::vector<uint8_t> payload = serializedState.GetData();
+
                 if (entity.needsFullSync)
                 {
                     // Full sync: previously broadcast to all clients. Now filter
                     // by ConnectionScopeFilter so out-of-scope clients don't see
                     // entities they can't observe.
-                    NetBuffer buf;
-                    SerializeEntityState(netID, buf);
-                    std::vector<uint8_t> payload = buf.GetData();
-
                     for (ClientID clientId : connectedClients)
                     {
                         if (!scopeFilter.IsEntityInScope(clientId, entity.position, entity.areaId, entity.teamMask,
@@ -396,10 +506,6 @@ namespace Spark::Net
                     // BuildDeltaPacket's field-indexed format has no receive-side parser and
                     // must not go on the wire; it serves as the per-connection sequence and
                     // baseline tracker for the delta-ack loop.
-                    NetBuffer buf;
-                    SerializeEntityState(netID, buf);
-                    std::vector<uint8_t> payload = buf.GetData();
-
                     for (ClientID clientId : connectedClients)
                     {
                         if (!scopeFilter.IsEntityInScope(clientId, entity.position, entity.areaId, entity.teamMask,
@@ -433,11 +539,23 @@ namespace Spark::Net
                     }
                 }
 
-                entity.needsFullSync = false;
-                for (auto& prop : entity.properties)
-                    prop.dirty = false;
+                // A callback may have asked another thread to mutate replication
+                // state while the API lock was released. Never erase that newer
+                // dirty signal; an extra resend is safer than a lost update.
+                if (m_replicationMutationEpoch == mutationEpochBeforeCallbacks)
+                {
+                    std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
+                    auto live = m_replicatedEntities.find(netID);
+                    if (live != m_replicatedEntities.end())
+                    {
+                        live->second.needsFullSync = false;
+                        for (auto& prop : live->second.properties)
+                            prop.dirty = false;
+                    }
+                }
             }
         }
+        return true;
     }
 
     // --------------------------------------------------------------------------
@@ -447,6 +565,7 @@ namespace Spark::Net
     void NetworkManager::SetClientScope(ClientID client, const XMFLOAT3& position, float radius, uint32_t areaId,
                                         uint32_t teamMask, uint32_t visibilityMask)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ConnectionScope scope;
         scope.areaId = areaId;
         scope.position = position;
@@ -458,6 +577,7 @@ namespace Spark::Net
 
     void NetworkManager::ClearClientScope(ClientID client)
     {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(client));
     }
 

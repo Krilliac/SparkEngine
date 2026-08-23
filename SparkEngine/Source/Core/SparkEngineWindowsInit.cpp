@@ -17,6 +17,7 @@
 #include "Audio/AudioEngine.h"
 #include "Core/AssetValidator.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
+#include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
 #include "Engine/Events/EventSystem.h"
@@ -225,6 +226,12 @@ void InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     // Create cross-platform audio backend (wraps AudioEngine on Windows, OpenAL on Linux)
     GetEngineRuntime().audioBackend =
         Spark::Audio::CreateAudioBackend(Spark::Audio::AudioBackendType::Auto, GetEngineRuntime().audioEngine.get());
+    if (GetEngineRuntime().audioBackend && !GetEngineRuntime().audioBackend->IsAvailable() &&
+        !GetEngineRuntime().audioBackend->Initialize(32))
+    {
+        console.LogWarning("Cross-platform audio backend initialization failed; sequencer audio will be silent");
+    }
+    Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(GetEngineRuntime().audioBackend.get());
 
     // Game-mode ImGui overlay: init BEFORE modules load so the exe context +
     // allocators can be injected into each module DLL at load time, then hook

@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <deque>
 #include <mutex>
@@ -138,6 +139,10 @@ namespace Spark
                              const std::string& category = "General", const std::string& usage = "");
         void RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
                              const std::string& category, const std::string& usage, CommandPermission permission);
+        /** Register a command whose arguments must be redacted from history and scrubbed after dispatch. */
+        void RegisterSensitiveCommand(const std::string& name, CommandHandler handler,
+                                      const std::string& description = "", const std::string& category = "General",
+                                      const std::string& usage = "");
         bool UnregisterCommand(const std::string& name);
         bool HasCommand(const std::string& name) const;
         bool ExecuteCommand(const std::string& commandLine);
@@ -182,6 +187,9 @@ namespace Spark
         std::string ResolveAliases(const std::string& commandLine);
 
         std::unordered_map<std::string, CommandInfo> m_commands;
+        // Retained across module unregister/reload windows so a known
+        // credential command can never fall back to raw history recording.
+        std::unordered_set<std::string> m_sensitiveCommandNames;
         std::deque<LogEntry> m_logHistory;
         std::deque<std::string> m_commandHistory;
 

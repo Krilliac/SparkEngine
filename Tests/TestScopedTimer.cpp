@@ -1,6 +1,7 @@
 // TestScopedTimer.cpp - Tests for Spark::ScopedTimer
 #include "TestFramework.h"
 #include "Utils/ScopedTimer.h"
+#include <cstdint>
 #include <thread>
 
 TEST(ScopedTimer_CallsCallback)
@@ -74,9 +75,9 @@ TEST(ScopedTimer_MultipleTimers)
         Spark::ScopedTimer outer("Outer", [&](const char*, float ms) { t1 = ms; });
         {
             Spark::ScopedTimer inner("Inner", [&](const char*, float ms) { t2 = ms; });
-            volatile int sum = 0;
+            volatile uint64_t sum = 0;
             for (int i = 0; i < 1000; ++i)
-                sum += i;
+                sum = sum + static_cast<uint64_t>(i);
         }
         // Inner completes first
         EXPECT_GE(t2, 0.0f);
@@ -89,9 +90,9 @@ TEST(ScopedTimer_ElapsedIncreases)
 {
     Spark::ScopedTimer timer("Growth", [](const char*, float) {});
     float e1 = timer.ElapsedMs();
-    volatile int sum = 0;
+    volatile uint64_t sum = 0;
     for (int i = 0; i < 100000; ++i)
-        sum += i;
+        sum = sum + static_cast<uint64_t>(i);
     float e2 = timer.ElapsedMs();
     EXPECT_GE(e2, e1);
 }

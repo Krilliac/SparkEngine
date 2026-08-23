@@ -9,6 +9,7 @@
 #pragma once
 
 #include "IModule.h"
+#include "ModuleABI.h"
 #include "SparkExport.h"
 
 /**
@@ -19,10 +20,12 @@
  *   SPARK_IMPLEMENT_MODULE(MyGameModule)
  * @endcode
  *
- * This generates the extern "C" CreateModule/DestroyModule functions
- * that the engine's ModuleManager looks for when loading the DLL.
+ * This generates the mandatory pre-instantiation compatibility descriptor
+ * plus the extern "C" CreateModule/DestroyModule functions that the engine's
+ * ModuleManager looks for when loading the DLL.
  */
 #define SPARK_IMPLEMENT_MODULE(ModuleClass)                                                                            \
+    SPARK_EXPORT_MODULE_COMPATIBILITY()                                                                                \
     extern "C"                                                                                                         \
     {                                                                                                                  \
         SPARK_MODULE_API Spark::IModule* CreateModule()                                                                \

@@ -16,6 +16,9 @@
 #endif
 
 #include "Engine/Networking/NetworkManager.h"
+#include <atomic>
+#include <chrono>
+#include <thread>
 
 using namespace Spark::Net;
 
@@ -315,4 +318,127 @@ TEST(NetworkMessage_ConnectionStates)
     EXPECT_NE(static_cast<int>(ConnectionState::Disconnected), static_cast<int>(ConnectionState::Connecting));
     EXPECT_NE(static_cast<int>(ConnectionState::Connecting), static_cast<int>(ConnectionState::Connected));
     EXPECT_NE(static_cast<int>(ConnectionState::Connected), static_cast<int>(ConnectionState::Disconnecting));
+}
+
+TEST(NetworkManager_ConcurrentSnapshotsSendAndStopAreSerialized)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.Initialize());
+    ASSERT_TRUE(nm.StartServer(0, 4));
+    EXPECT_TRUE(nm.GetBoundPort() != 0);
+
+    std::atomic<bool> start{false};
+    std::thread updater(
+        [&]
+        {
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            for (int i = 0; i < 250; ++i)
+                nm.Update(0.001f);
+        });
+    std::thread reader(
+        [&]
+        {
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            for (int i = 0; i < 250; ++i)
+            {
+                auto stats = nm.GetStats();
+                auto clients = nm.GetClients();
+                auto inputs = nm.GetPendingInputs();
+                (void)stats;
+                (void)clients;
+                (void)inputs;
+            }
+        });
+    std::thread sender(
+        [&]
+        {
+            NetworkMessage message;
+            message.type = MessageType::Heartbeat;
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+            for (int i = 0; i < 250; ++i)
+                nm.SendMessage(message);
+        });
+
+    start.store(true, std::memory_order_release);
+    nm.StopServer();
+    updater.join();
+    reader.join();
+    sender.join();
+
+    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
+    EXPECT_TRUE(nm.GetClients().empty());
+    EXPECT_EQ(nm.GetBoundPort(), static_cast<uint16_t>(0));
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_EphemeralPortChurnIsReleaseSafe)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+    for (int cycle = 0; cycle < 12; ++cycle)
+    {
+        ASSERT_TRUE(nm.StartServer(0, 2));
+        EXPECT_TRUE(nm.GetBoundPort() != 0);
+        nm.StopServer();
+        EXPECT_EQ(nm.GetBoundPort(), static_cast<uint16_t>(0));
+    }
+    nm.Shutdown();
+}
+
+TEST(NetworkManager_ReplicationCallbackMayWaitForCrossThreadApiCall)
+{
+    ResetNM();
+    auto& nm = NetworkManager::GetInstance();
+    ASSERT_TRUE(nm.StartServer(0, 2));
+
+    std::atomic<bool> launched{false};
+    std::atomic<bool> workerFinished{false};
+    std::atomic<bool> workerFinishedDuringCallback{false};
+    std::thread worker;
+
+    ReplicatedEntity entity;
+    entity.ownerID = 0;
+    entity.entityType = "CallbackLockRegression";
+    ReplicatedProperty property;
+    property.name = "value";
+    property.type = ReplicatedProperty::Type::Int;
+    property.dirty = true;
+    property.serialize = [&](NetBuffer& buffer)
+    {
+        if (!launched.exchange(true, std::memory_order_acq_rel))
+        {
+            worker = std::thread(
+                [&]
+                {
+                    (void)nm.GetStats();
+                    workerFinished.store(true, std::memory_order_release);
+                });
+
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+            while (!workerFinished.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::yield();
+            workerFinishedDuringCallback.store(workerFinished.load(std::memory_order_acquire),
+                                               std::memory_order_release);
+        }
+        buffer.WriteUint32(42);
+    };
+    entity.properties.push_back(std::move(property));
+    nm.RegisterReplicatedEntity(entity);
+
+    nm.Update(0.1f);
+    if (worker.joinable())
+        worker.join();
+
+    EXPECT_TRUE(launched.load(std::memory_order_acquire));
+    EXPECT_TRUE(workerFinished.load(std::memory_order_acquire));
+    // Before the callback-lock fix this is deterministically false: Update
+    // holds m_apiMutex, so the worker cannot complete GetStats until the
+    // callback returns.
+    EXPECT_TRUE(workerFinishedDuringCallback.load(std::memory_order_acquire));
+
+    nm.Shutdown();
 }
