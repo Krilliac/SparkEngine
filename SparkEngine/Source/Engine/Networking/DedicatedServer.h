@@ -9,7 +9,7 @@
  * - Headless server startup and tick loop
  * - Server configuration (max players, tick rate, maps, game modes)
  * - Map rotation with automatic level transitions
- * - Remote console (RCON) for administration
+ * - Trusted in-process administration command dispatch (legacy RCON API names)
  * - LAN broadcast discovery so clients on the local network can find the server
  * - Graceful shutdown with client notification
  * - Server-side game state authority
@@ -87,8 +87,11 @@ namespace Spark::Net
         bool randomizeMapOrder = false;
 
         // Administration
-        std::string rconPassword; ///< Empty = RCON disabled
-        uint16_t rconPort = 0;    ///< 0 = same as game port + 1
+        // Reserved for source/config compatibility. No remote RCON transport
+        // currently consumes these fields; use ExecuteRcon only from trusted
+        // host code until an authenticated administration channel is added.
+        std::string rconPassword;
+        uint16_t rconPort = 0;
         bool enableLogging = true;
         std::string logFilePath = "server.log";
 
@@ -118,7 +121,7 @@ namespace Spark::Net
         std::function<void(const std::string&)> onMapChanged;  ///< Fired after a map change completes (new map name).
         std::function<void(const std::string&)> onChatMessage; ///< Fired on incoming chat (formatted message string).
         std::function<void(const std::string&, const std::string&)>
-            onRconCommand;                                    ///< Fired on RCON command (command, response).
+            onRconCommand; ///< Fired on trusted local admin command dispatch (command, response).
         std::function<void(const std::string&)> onLogMessage; ///< Fired on server log output (message).
     };
 
@@ -148,10 +151,10 @@ namespace Spark::Net
     };
 
     // ============================================================================
-    // RCON Command
+    // Administration Command (legacy RCON API name)
     // ============================================================================
 
-    /// @brief A registered remote console command
+    /// @brief A registered administration command (legacy RCON API name).
     struct RconCommand
     {
         std::string name;
@@ -184,12 +187,12 @@ namespace Spark::Net
     /// The DedicatedServer wraps NetworkManager in server mode and adds:
     /// - Fixed-timestep tick loop (runs on a dedicated thread or externally driven)
     /// - Map rotation with automatic transitions
-    /// - RCON command registration and dispatch
+    /// - Trusted in-process administration command registration and dispatch
     /// - LAN broadcast for server discovery
     /// - Server-authoritative match state (score, timer, rounds)
     ///
     /// Thread safety: The server tick loop runs on its own thread when
-    /// Start() is used. External code may call RCON, kick, and query
+    /// Start() is used. Trusted host code may dispatch admin commands, kick, and query
     /// methods from any thread — they are protected by internal mutexes.
     class DedicatedServer
     {
@@ -264,9 +267,9 @@ namespace Spark::Net
         /// @brief Get the number of currently connected players.
         uint32_t GetPlayerCount() const;
 
-        // -- RCON --
+        // -- Trusted local administration (legacy RCON API names) --
 
-        /// @brief Register a remote console command.
+        /// @brief Register a trusted in-process administration command.
         void RegisterRconCommand(const std::string& name, const std::string& description,
                                  std::function<std::string(const std::vector<std::string>&)> handler);
 
@@ -276,7 +279,7 @@ namespace Spark::Net
         /// @return The command response text.
         std::string ExecuteRcon(const std::string& commandLine);
 
-        /// @brief Get all registered RCON commands.
+        /// @brief Get all registered administration commands.
         const std::vector<RconCommand>& GetRconCommands() const { return m_rconCommands; }
 
         // -- LAN Discovery --
@@ -318,7 +321,7 @@ namespace Spark::Net
         /// @brief Send a LAN broadcast packet (called periodically).
         void SendLanBroadcast();
 
-        /// @brief Register built-in RCON commands (help, status, kick, ban, map, say).
+        /// @brief Register built-in local admin commands (help, status, kick, ban, map, say).
         void RegisterBuiltInRconCommands();
         void RegisterNetworkHandlers();
         void ClearNetworkHandlers();
@@ -326,7 +329,7 @@ namespace Spark::Net
         /// @brief Log a message to file and callback.
         void Log(const std::string& message);
 
-        /// @brief Parse an RCON command string into name + arguments.
+        /// @brief Parse an administration command string into name + arguments.
         static void ParseRconCommandLine(const std::string& commandLine, std::string& outName,
                                          std::vector<std::string>& outArgs);
 
@@ -345,7 +348,7 @@ namespace Spark::Net
         std::thread m_tickThread;
         std::chrono::steady_clock::time_point m_startTime;
 
-        // RCON
+        // Trusted local administration (legacy RCON API names)
         std::vector<RconCommand> m_rconCommands;
         mutable std::mutex m_rconMutex;
 

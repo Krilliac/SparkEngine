@@ -121,8 +121,8 @@ The `Spark::Net::ServerConfig` struct controls all aspects of the dedicated serv
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `rconPassword` | `string` | `""` | RCON password (empty = disabled) |
-| `rconPort` | `uint16_t` | `0` | RCON port (0 = game port + 1) |
+| `rconPassword` | `string` | `""` | Reserved compatibility field; currently ignored |
+| `rconPort` | `uint16_t` | `0` | Reserved compatibility field; currently ignored |
 | `enableLogging` | `bool` | `true` | Write server log file |
 | `logFilePath` | `string` | `"server.log"` | Path to the log file |
 
@@ -204,7 +204,7 @@ int main()
 
 ### Using DedicatedServer Class
 
-The `DedicatedServer` class provides a higher-level API with tick loop management, map rotation, RCON, and LAN discovery:
+The `DedicatedServer` class provides a higher-level API with tick loop management, map rotation, trusted local administration commands, and LAN discovery. It does **not** currently expose a remote RCON transport:
 
 ```cpp
 #include "Engine/Networking/DedicatedServer.h"
@@ -221,7 +221,6 @@ config.gameMode = Spark::Net::GameModeType::TeamDeathmatch;
 config.scoreLimit = 75;
 config.timeLimitMinutes = 10.0f;
 config.mapRotation = {"dm_arena", "dm_warehouse", "dm_rooftop"};
-config.rconPassword = "mySecretPassword";
 config.enableLanBroadcast = true;
 
 // Set callbacks
@@ -246,7 +245,7 @@ if (!server.Start(config))
 }
 
 // Server is now running on its own thread
-// Main thread can handle RCON, admin commands, etc.
+// Trusted host/control thread can dispatch local admin commands.
 while (server.IsRunning())
 {
     std::string input;
@@ -296,12 +295,16 @@ server.Stop();
 | `vector<ClientInfo> GetConnectedClients() const` | Get all connected clients |
 | `uint32_t GetPlayerCount() const` | Current player count |
 
-### RCON (Remote Console)
+### Local Administration Commands (legacy RCON API names)
+
+`ExecuteRcon` is an in-process command dispatcher. Network chat is not an
+administration transport, and `rconPassword`/`rconPort` do not enable one.
+Remote callers require a separate authenticated transport before invoking it.
 
 | Method | Description |
 |--------|-------------|
-| `void RegisterRconCommand(name, description, handler)` | Register a custom RCON command |
-| `string ExecuteRcon(const string& commandLine)` | Execute an RCON command string |
+| `void RegisterRconCommand(name, description, handler)` | Register a local admin command |
+| `string ExecuteRcon(const string& commandLine)` | Dispatch a command from trusted host code |
 | `const vector<RconCommand>& GetRconCommands() const` | List registered commands |
 
 ### LAN Discovery
@@ -363,22 +366,29 @@ struct ServerCallbacks
 };
 ```
 
-## RCON Commands
+## Local Administration Commands
 
-### Built-in RCON Commands
+### Built-in Commands
 
-The server registers these RCON commands automatically:
+The server registers these local commands automatically:
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `help` | List all RCON commands | `help` |
+| `help` | List all administration commands | `help` |
 | `status` | Show server status | `status` |
 | `kick` | Kick a player by ID | `kick 3 cheating` |
 | `ban` | Ban a player by ID | `ban 5 exploit` |
 | `map` | Change the current map | `map dm_arena` |
 | `say` | Broadcast a message to all players | `say Server restarting in 5 minutes` |
+| `players` | List connected players | `players` |
+| `endmatch` | End the current match | `endmatch` |
+| `nextmap` | Rotate and start the next map | `nextmap` |
 
-### Custom RCON Commands
+There is intentionally no built-in `quit` command: calling `Stop()` from the
+server tick thread would self-join. The owning host must request shutdown and
+call `Stop()` from its control thread.
+
+### Custom Administration Commands
 
 Register your own commands for game-specific administration:
 
@@ -492,7 +502,7 @@ The `DedicatedServer` class uses internal synchronization for safe multi-threade
 | Resource | Protection | Notes |
 |----------|-----------|-------|
 | Server running state | `std::atomic<bool>` | Lock-free read from any thread |
-| RCON commands | `std::mutex` | Safe to register/execute from any thread |
+| Local administration commands | `std::mutex` | Safe to register/execute from trusted host threads |
 | Ban list | `std::mutex` | Safe to kick/ban from any thread |
 | Log output | `std::mutex` | Thread-safe logging |
 | LAN broadcast | `std::atomic<bool>` | Broadcast runs on its own thread |

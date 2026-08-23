@@ -561,7 +561,7 @@ namespace SparkBuild
 #ifdef SPARK_PLATFORM_WINDOWS
             case 8:
             {
-                std::string ts = Term::ReadLine("MSVC Toolset (e.g. v143, v144): ");
+                std::string ts = Term::ReadLine("MSVC Toolset (e.g. v143, v145): ");
                 if (!ts.empty())
                     m_config.config.msvcToolset = ts;
                 break;

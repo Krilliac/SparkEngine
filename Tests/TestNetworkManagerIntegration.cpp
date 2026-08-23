@@ -14,6 +14,10 @@
 #include <thread>
 #include <vector>
 
+#ifndef SPARK_PLATFORM_WINDOWS
+#include <fcntl.h>
+#endif
+
 using namespace Spark::Net;
 
 // ============================================================================
@@ -307,12 +311,22 @@ TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
     inet_pton(AF_INET, "127.0.0.1", &listenAddr.sin_addr);
     EXPECT_EQ(bind(serverSock, reinterpret_cast<sockaddr*>(&listenAddr), sizeof(listenAddr)), 0);
 
+#ifdef SPARK_PLATFORM_WINDOWS
     u_long nonBlocking = 1;
     EXPECT_EQ(ioctlsocket(serverSock, FIONBIO, &nonBlocking), 0);
+#else
+    const int flags = fcntl(serverSock, F_GETFL, 0);
+    EXPECT_TRUE(flags >= 0);
+    EXPECT_EQ(fcntl(serverSock, F_SETFL, flags | O_NONBLOCK), 0);
+#endif
     EXPECT_TRUE(nm.Connect("127.0.0.1", port, "EndpointTest"));
 
     sockaddr_in clientAddr{};
+#ifdef SPARK_PLATFORM_WINDOWS
     int clientAddrLength = sizeof(clientAddr);
+#else
+    socklen_t clientAddrLength = sizeof(clientAddr);
+#endif
     std::vector<uint8_t> receiveBuffer(1024);
     int received = SOCKET_ERROR;
     for (int i = 0; i < 20 && received == SOCKET_ERROR; ++i)

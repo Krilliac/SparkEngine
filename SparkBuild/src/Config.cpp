@@ -552,7 +552,9 @@ namespace SparkBuild
         if (!config.msvcToolset.empty() &&
             (config.generator == Generator::VS2022 || config.generator == Generator::VS2026))
         {
-            cmd += " -DSPARK_MSVC_TOOLSET=" + config.msvcToolset;
+            // CMake selects a Visual Studio toolset when the build tree is
+            // created. A cache variable cannot change that generator input.
+            cmd += " -T " + config.msvcToolset;
         }
 
         // Platform for VS generators

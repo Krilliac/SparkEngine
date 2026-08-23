@@ -17,6 +17,7 @@ add_executable(SparkTests
     TestGameMode.cpp
     TestNoiseGenerator.cpp
     TestSaveSystem.cpp
+    TestTFFixedStep.cpp
     TestAIBehaviorTree.cpp
     TestAIStress.cpp
     TestSequencer.cpp
@@ -595,6 +596,14 @@ target_include_directories(SparkTests PRIVATE
 
 # Link engine static library so tests can call .cpp-backed implementations
 target_link_libraries(SparkTests PRIVATE SparkEngineLib)
+
+# SparkBuild command generation is part of the supported first-party build
+# surface. Keep these tests conditional so minimal engine configurations can
+# still disable the tool entirely.
+if(TARGET SparkBuildCore)
+    target_sources(SparkTests PRIVATE TestSparkBuildConfig.cpp)
+    target_link_libraries(SparkTests PRIVATE SparkBuildCore)
+endif()
 
 # Editor version defines needed by ProjectManager.cpp
 target_compile_definitions(SparkTests PRIVATE

@@ -59,7 +59,7 @@ namespace SparkBuild
         // Build settings
         Generator generator = Generator::Ninja;
         BuildType buildType = BuildType::Release;
-        std::string msvcToolset; // e.g. "v143", "v144" (Windows only)
+        std::string msvcToolset; // e.g. "v143", "v145" (Windows only)
         std::string cmakePreset; // CMake preset name (empty = manual config)
 
         // All build options

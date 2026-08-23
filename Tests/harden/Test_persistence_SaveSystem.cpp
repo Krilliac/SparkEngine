@@ -81,6 +81,24 @@ TEST(SaveSystem_GetSaveMetadata_RejectsNewerVersion)
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveSystem_GetSaveMetadata_RejectsVersionZeroTransactionally)
+{
+    const std::string dir = MakeTempSaveDir("version_zero");
+    SaveSystem& ss = SaveSystem::GetInstance();
+    ss.SetSaveDirectory(dir);
+
+    WriteSaveHeader(dir + "/zeroslot.spark_save", 0u, kValidMeta);
+
+    SaveMetadata meta;
+    meta.saveName = "sentinel";
+    meta.version = 77u;
+    EXPECT_FALSE(ss.GetSaveMetadata("zeroslot", meta));
+    EXPECT_EQ(meta.saveName, std::string("sentinel"));
+    EXPECT_EQ(meta.version, 77u);
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveSystem_GetSaveMetadata_RejectsBadMagic)
 {
     const std::string dir = MakeTempSaveDir("badmagic");

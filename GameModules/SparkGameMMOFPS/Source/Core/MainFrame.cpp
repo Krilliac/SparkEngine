@@ -11,6 +11,7 @@
  */
 
 #include "Core/SparkGameMMOFPS.h"
+#include "Core/TFFixedStep.h"
 
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
@@ -132,18 +133,10 @@ void TerrafrontModule::OnFixedUpdate(float fdt)
     if (!m_initialized || m_paused)
         return;
 
-    // Authoritative simulation runs on the fixed step.
-    m_serverSim->FixedUpdate(fdt);
-    m_players->FixedUpdate(fdt);
-    m_abilities->FixedUpdate(fdt); // class-abilities lane (W9): authoritative ability tick
-    m_grenades->FixedUpdate(fdt);  // grenades lane (W10): authoritative grenade sim + fuse
-    m_weapons->FixedUpdate(fdt);
-    m_damage->FixedUpdate(fdt); // shield regeneration follows damage/weapon resolution
-    m_vehicles->FixedUpdate(fdt);
-    m_regions->FixedUpdate(fdt);
-    m_travel->FixedUpdate(fdt); // continents lane: applies queued sanctuary placements
-    m_bots->FixedUpdate(fdt);
-    m_replication->FixedUpdate(fdt);
+    // Authoritative simulation runs on the fixed step. The shared scheduler is
+    // production-linked and regression-tested, including damage/shield regen.
+    Terrafront::Detail::RunFixedStep(fdt, *m_serverSim, *m_players, *m_abilities, *m_grenades, *m_weapons, *m_damage,
+                                     *m_vehicles, *m_regions, *m_travel, *m_bots, *m_replication);
 }
 
 void TerrafrontModule::OnRender()

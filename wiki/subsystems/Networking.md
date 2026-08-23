@@ -16,7 +16,7 @@ The networking subsystem is composed of several layered modules that work togeth
 │          (registers handlers, sends messages, queries stats)       │
 ├────────────────────────────────────────────────────────────────────┤
 │                     DedicatedServer                                │
-│      (tick loop, map rotation, RCON, LAN discovery, match state)  │
+│ (tick loop, map rotation, local admin, LAN discovery, match state)│
 ├────────────────────────────────────────────────────────────────────┤
 │                      NetworkManager                                │
 │   (message routing, entity replication, connection management)     │
@@ -48,7 +48,7 @@ The networking subsystem is composed of several layered modules that work togeth
 | `NetworkSecurity.h` | XOR encryption, connection token generation/validation |
 | `NetworkEncryption.h` | Per-connection session keys, HMAC integrity, replay protection, rate limiting |
 | `NetworkIntegration.h` | `NetworkStack` -- combines transport + security into unified stack |
-| `DedicatedServer.h` | Headless server: tick loop, RCON, map rotation, LAN broadcast |
+| `DedicatedServer.h` | Headless server: tick loop, local admin commands, map rotation, LAN broadcast |
 | `AreaServer.h` | Per-area server process for scalable multiplayer worlds |
 | `WorldServer.h` | Central coordinator for area-based multiplayer architecture |
 
@@ -571,8 +571,8 @@ struct ServerConfig
     bool randomizeMapOrder = false;
 
     // Administration
-    std::string rconPassword;                  // Empty = RCON disabled
-    uint16_t rconPort = 0;                     // 0 = game port + 1
+    std::string rconPassword;                  // Reserved; currently ignored
+    uint16_t rconPort = 0;                     // Reserved; currently ignored
     bool enableLogging = true;
     std::string logFilePath = "server.log";
 
@@ -611,7 +611,6 @@ config.maxClients = 16;
 config.tickRate = 60.0f;
 config.gameMode = GameModeType::TeamDeathmatch;
 config.mapRotation = {"dm_warehouse", "dm_canyon", "dm_rooftops"};
-config.rconPassword = "secret123";
 
 // Start with background tick loop
 server.Start(config);
@@ -640,10 +639,14 @@ struct ServerCallbacks
 };
 ```
 
-### RCON (Remote Console)
+### Local Administration Commands (legacy RCON API names)
+
+There is currently no remote RCON listener. `ExecuteRcon` is for trusted
+in-process host/control code only; network chat never dispatches admin commands,
+and the compatibility fields `rconPassword`/`rconPort` are inactive.
 
 ```cpp
-// Register custom RCON commands
+// Register custom local administration commands
 server.RegisterRconCommand("restart", "Restart the current match",
     [&](const std::vector<std::string>& args) -> std::string {
         server.EndMatch();
@@ -651,11 +654,11 @@ server.RegisterRconCommand("restart", "Restart the current match",
         return "Match restarted.";
     });
 
-// Execute RCON
+// Dispatch from trusted host code
 std::string response = server.ExecuteRcon("kick 3 cheating");
 ```
 
-Built-in RCON commands are registered automatically: `help`, `status`, `kick`, `ban`, `map`, `say`.
+Built-in commands are registered automatically: `help`, `status`, `kick`, `ban`, `map`, `say`, `players`, `endmatch`, and `nextmap`. There is no `quit` command; the owning control thread must call `Stop()`.
 
 ### LAN Discovery
 
@@ -823,7 +826,7 @@ This ensures clients see fair hit registration despite network latency.
 | Component | Thread Safety | Details |
 |-----------|--------------|---------|
 | `NetworkManager` | Queue mutex | `m_queueMutex` protects `m_incomingQueue` and `m_outgoingQueue`; `m_handlerMutex` protects handler registration |
-| `DedicatedServer` | Internal mutexes | RCON (`m_rconMutex`), bans (`m_banMutex`), logging (`m_logMutex`). Tick loop runs on `m_tickThread`. |
+| `DedicatedServer` | Internal mutexes | Local admin registry (`m_rconMutex`), bans (`m_banMutex`), logging (`m_logMutex`). Tick loop runs on `m_tickThread`. |
 | `UDPTransport` | Not thread-safe | Socket operations should be called from the network thread only |
 | `NetworkSecurity` | Not thread-safe | Token map is not mutex-protected; call from single thread |
 | `ClientPrediction` | Not thread-safe | Call from main game thread only |

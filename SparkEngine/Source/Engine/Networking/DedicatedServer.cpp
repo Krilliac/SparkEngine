@@ -3,7 +3,7 @@
  * @brief Dedicated game server implementation
  *
  * Full implementation of the headless dedicated server with tick loop,
- * map rotation, RCON, LAN discovery, and match state management.
+ * map rotation, trusted local administration, LAN discovery, and match state management.
  *
  * All socket-level code is guarded by ENABLE_NETWORKING.
  */
@@ -71,6 +71,12 @@ namespace Spark::Net
         m_stats = ServerStats{};
         m_currentRound = 1;
         m_matchInProgress = false;
+
+        if (!m_config.rconPassword.empty() || m_config.rconPort != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "rconPassword/rconPort are reserved but inactive; no remote RCON transport is enabled");
+        }
 
         if (!m_networkRuntime->Initialize())
         {
@@ -315,9 +321,9 @@ namespace Spark::Net
                                               std::string chatText = buf.ReadString();
 
                                               // Chat is never an administration transport. In particular, a
-                                              // leading slash must not bypass the configured RCON password and
-                                              // reach privileged commands. ExecuteRcon is a trusted in-process
-                                              // API until a separate authenticated remote-admin protocol exists.
+                                              // leading slash must never reach privileged commands. ExecuteRcon is
+                                              // a trusted in-process API until a separate authenticated
+                                              // remote-admin protocol exists.
                                               NetworkMessage broadcast;
                                               broadcast.type = MessageType::ChatMessage;
                                               broadcast.channel = ChannelType::Reliable;
@@ -529,7 +535,7 @@ namespace Spark::Net
     }
 
     // ============================================================================
-    // RCON
+    // Trusted local administration (legacy RCON API names)
     // ============================================================================
 
     void DedicatedServer::RegisterRconCommand(const std::string& name, const std::string& description,
@@ -894,7 +900,7 @@ namespace Spark::Net
         oss << "Total Ticks:" << m_stats.totalTicksProcessed << "\n";
         oss << "Connections:" << m_stats.totalConnectionsServed << "\n";
         oss << "LAN Bcast:  " << (m_lanBroadcastActive.load(std::memory_order_acquire) ? "ON" : "OFF") << "\n";
-        oss << "RCON:       " << (m_config.rconPassword.empty() ? "DISABLED" : "ENABLED") << "\n";
+        oss << "Admin Cmds: LOCAL API ONLY\n";
         return oss.str();
     }
 

@@ -1291,10 +1291,13 @@ namespace Spark
             file.read(reinterpret_cast<char*>(&version), sizeof(version));
             if (!file)
                 return false;
-            // Same version gate as ReadFromFile: never surface a newer-format save.
-            if (version > kCurrentSaveVersion)
+            // Same version gate as ReadFromFile: never surface an invalid or
+            // unsupported-format save in slot listings.
+            if (version == 0 || version > kCurrentSaveVersion)
                 return false;
-            outMetadata.version = version;
+
+            SaveMetadata parsedMetadata;
+            parsedMetadata.version = version;
 
             // Metadata is a length-prefixed text block immediately after the header.
             uint32_t metaSize = 0;
@@ -1315,16 +1318,21 @@ namespace Spark
             }
 
             std::istringstream metaStream(metaStr);
-            std::getline(metaStream, outMetadata.saveName);
-            std::getline(metaStream, outMetadata.sceneName);
-            std::getline(metaStream, outMetadata.playerClass);
-            metaStream >> outMetadata.timestamp;
-            metaStream >> outMetadata.playTime;
-            metaStream >> outMetadata.playerHealth;
-            metaStream >> outMetadata.playerArmor;
-            metaStream >> outMetadata.playerPosition.x >> outMetadata.playerPosition.y >> outMetadata.playerPosition.z;
-            metaStream >> outMetadata.playerKills;
-            metaStream >> outMetadata.playerDeaths;
+            std::getline(metaStream, parsedMetadata.saveName);
+            std::getline(metaStream, parsedMetadata.sceneName);
+            std::getline(metaStream, parsedMetadata.playerClass);
+            metaStream >> parsedMetadata.timestamp;
+            metaStream >> parsedMetadata.playTime;
+            metaStream >> parsedMetadata.playerHealth;
+            metaStream >> parsedMetadata.playerArmor;
+            metaStream >> parsedMetadata.playerPosition.x >> parsedMetadata.playerPosition.y >>
+                parsedMetadata.playerPosition.z;
+            metaStream >> parsedMetadata.playerKills;
+            metaStream >> parsedMetadata.playerDeaths;
+            if (!metaStream)
+                return false;
+
+            outMetadata = std::move(parsedMetadata);
             return true;
         }
         catch (const std::exception& e)
