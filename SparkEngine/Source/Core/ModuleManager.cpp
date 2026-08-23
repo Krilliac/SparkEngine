@@ -334,6 +334,9 @@ bool ModuleManager::LoadModule(const std::string& path)
                 console.LogError(std::format("REFUSED to load legacy game module '{}': game module '{}' is already "
                                              "loaded (one game module per process).",
                                              info.name, existing));
+                // Destroy the adapter (and therefore the legacy object through
+                // its DLL export) while the library code is still resident.
+                adapterOwner.reset();
 #ifdef _WIN32
                 FreeLibrary(static_cast<HMODULE>(handle));
 #else

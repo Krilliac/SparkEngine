@@ -23,16 +23,32 @@ namespace SparkEditor
 
     class EditorApplication;
 
+    struct PluginDeleter
+    {
+        DestroyEditorPluginFn destroyFn = nullptr;
+
+        void operator()(IEditorPlugin* plugin) const
+        {
+            if (!plugin)
+                return;
+            if (destroyFn)
+                destroyFn(plugin);
+            else
+                delete plugin;
+        }
+    };
+
+    using EditorPluginPtr = std::unique_ptr<IEditorPlugin, PluginDeleter>;
+
     /**
      * @brief Tracks a loaded plugin and its associated resources
      */
     struct PluginEntry
     {
-        std::unique_ptr<IEditorPlugin> plugin;
+        EditorPluginPtr plugin;
         bool isInitialized = false;
         bool isFromDLL = false;
         void* libraryHandle = nullptr;
-        DestroyEditorPluginFn destroyFn = nullptr;
     };
 
     /**
@@ -64,9 +80,8 @@ namespace SparkEditor
         template <typename T> bool RegisterPlugin()
         {
             static_assert(std::is_base_of_v<IEditorPlugin, T>, "T must derive from IEditorPlugin");
-            auto plugin = std::make_unique<T>();
-            return RegisterPluginInstance(std::move(plugin), /*isFromDLL=*/false, /*handle=*/nullptr,
-                                          /*destroyFn=*/nullptr);
+            EditorPluginPtr plugin(new T(), PluginDeleter{});
+            return RegisterPluginInstance(std::move(plugin), /*isFromDLL=*/false, /*handle=*/nullptr);
         }
 
         /**
@@ -183,8 +198,7 @@ namespace SparkEditor
         /**
          * @brief Internal helper to register a plugin instance
          */
-        bool RegisterPluginInstance(std::unique_ptr<IEditorPlugin> plugin, bool isFromDLL, void* libraryHandle,
-                                    DestroyEditorPluginFn destroyFn);
+        bool RegisterPluginInstance(EditorPluginPtr plugin, bool isFromDLL, void* libraryHandle);
 
         /**
          * @brief Find a plugin entry by name
@@ -198,8 +212,14 @@ namespace SparkEditor
          */
         static void UnloadLibrary(void* handle);
 
+        /// Shut down and destroy every panel registered while @p pluginName
+        /// was initializing. Must run before unloading that plugin's library.
+        void ReleasePanelsForPlugin(const std::string& pluginName);
+
         std::vector<PluginEntry> m_plugins;
         std::vector<std::unique_ptr<EditorPanel>> m_registeredPanels;
+        std::vector<std::string> m_registeredPanelOwners;
+        std::string m_registeringPlugin;
     };
 
 } // namespace SparkEditor

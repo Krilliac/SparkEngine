@@ -11,6 +11,8 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 
+#include <cstddef>
+
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -32,8 +34,7 @@ namespace SparkEditor
 
     // ----- Registration -----
 
-    bool EditorPluginManager::RegisterPluginInstance(std::unique_ptr<IEditorPlugin> plugin, bool isFromDLL,
-                                                     void* libraryHandle, DestroyEditorPluginFn destroyFn)
+    bool EditorPluginManager::RegisterPluginInstance(EditorPluginPtr plugin, bool isFromDLL, void* libraryHandle)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!plugin)
@@ -56,7 +57,6 @@ namespace SparkEditor
         entry.plugin = std::move(plugin);
         entry.isFromDLL = isFromDLL;
         entry.libraryHandle = libraryHandle;
-        entry.destroyFn = destroyFn;
         entry.isInitialized = false;
 
         Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Registered plugin '" + name + "' v" +
@@ -130,10 +130,22 @@ namespace SparkEditor
             return false;
         }
 
-        // Wrap in unique_ptr with custom deleter awareness — the destroy function
-        // is stored in PluginEntry and called during unload rather than via unique_ptr deleter.
-        auto plugin = std::unique_ptr<IEditorPlugin>(rawPlugin);
-        return RegisterPluginInstance(std::move(plugin), /*isFromDLL=*/true, handle, destroyFn);
+        EditorPluginPtr plugin(rawPlugin, PluginDeleter{destroyFn});
+        try
+        {
+            if (RegisterPluginInstance(std::move(plugin), /*isFromDLL=*/true, handle))
+                return true;
+        }
+        catch (...)
+        {
+            UnloadLibrary(handle);
+            throw;
+        }
+
+        // Registration failure destroys the instance through the DLL export
+        // before the library is released (including duplicate-name failures).
+        UnloadLibrary(handle);
+        return false;
     }
 
     bool EditorPluginManager::UnloadPlugin(const std::string& name)
@@ -156,13 +168,12 @@ namespace SparkEditor
             it->isInitialized = false;
         }
 
-        // For DLL plugins, call the destroy function before releasing the unique_ptr
-        if (it->isFromDLL && it->destroyFn)
-        {
-            it->destroyFn(it->plugin.release());
-        }
+        // Panel vtables and destructors may live in the plugin DLL. Release
+        // them before destroying the plugin instance or unloading the library.
+        ReleasePanelsForPlugin(name);
 
         void* handle = it->libraryHandle;
+        it->plugin.reset();
         m_plugins.erase(it);
 
         // Unload the library after erasing the entry
@@ -219,6 +230,13 @@ namespace SparkEditor
             const std::string name = entry.plugin->GetName();
             Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Initializing plugin '" + name + "'...");
 
+            struct RegistrationScope
+            {
+                std::string& activePlugin;
+                ~RegistrationScope() { activePlugin.clear(); }
+            } registrationScope{m_registeringPlugin};
+            m_registeringPlugin = name;
+
             if (entry.plugin->Initialize(app))
             {
                 entry.isInitialized = true;
@@ -227,6 +245,7 @@ namespace SparkEditor
             }
             else
             {
+                ReleasePanelsForPlugin(name);
                 Spark::SimpleConsole::GetInstance().LogError("EditorPluginManager: Plugin '" + name +
                                                              "' failed to initialize");
                 allSucceeded = false;
@@ -249,15 +268,20 @@ namespace SparkEditor
                 it->plugin->Shutdown();
                 it->isInitialized = false;
             }
-
-            // For DLL plugins, call destroy before releasing
-            if (it->isFromDLL && it->destroyFn)
-            {
-                it->destroyFn(it->plugin.release());
-            }
         }
 
-        // Unload all DLL handles after destroying plugin objects
+        // Plugin-provided panel implementations must be gone before any DLL
+        // that supplied their virtual methods is unloaded.
+        for (auto it = m_registeredPanels.rbegin(); it != m_registeredPanels.rend(); ++it)
+            (*it)->Shutdown();
+        m_registeredPanels.clear();
+        m_registeredPanelOwners.clear();
+
+        // Destroy plugin objects while their DLL exports remain callable.
+        for (auto it = m_plugins.rbegin(); it != m_plugins.rend(); ++it)
+            it->plugin.reset();
+
+        // Unload all DLL handles only after every DLL-owned object is gone.
         for (auto& entry : m_plugins)
         {
             if (entry.libraryHandle)
@@ -268,13 +292,6 @@ namespace SparkEditor
         }
 
         m_plugins.clear();
-
-        // Shutdown and release plugin-registered panels
-        for (auto& panel : m_registeredPanels)
-        {
-            panel->Shutdown();
-        }
-        m_registeredPanels.clear();
     }
 
     void EditorPluginManager::UpdateAll(float deltaTime)
@@ -358,11 +375,25 @@ namespace SparkEditor
 
         Spark::SimpleConsole::GetInstance().LogInfo("EditorPluginManager: Registered panel '" + panel->GetName() + "'");
         m_registeredPanels.push_back(std::move(panel));
+        m_registeredPanelOwners.push_back(m_registeringPlugin);
     }
 
     const std::vector<std::unique_ptr<EditorPanel>>& EditorPluginManager::GetRegisteredPanels() const
     {
         return m_registeredPanels;
+    }
+
+    void EditorPluginManager::ReleasePanelsForPlugin(const std::string& pluginName)
+    {
+        for (size_t i = m_registeredPanels.size(); i-- > 0;)
+        {
+            if (m_registeredPanelOwners[i] != pluginName)
+                continue;
+
+            m_registeredPanels[i]->Shutdown();
+            m_registeredPanels.erase(m_registeredPanels.begin() + static_cast<std::ptrdiff_t>(i));
+            m_registeredPanelOwners.erase(m_registeredPanelOwners.begin() + static_cast<std::ptrdiff_t>(i));
+        }
     }
 
     // ----- Console integration -----
