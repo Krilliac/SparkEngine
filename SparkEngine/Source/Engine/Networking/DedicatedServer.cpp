@@ -314,23 +314,10 @@ namespace Spark::Net
                                               buf.WriteBytes(msg.payload.data(), msg.payload.size());
                                               std::string chatText = buf.ReadString();
 
-                                              SPARK_BRANCH_GUARD_BEGIN("rcon_command_gate")
-                                              if (chatText.size() > 1 && chatText[0] == '/')
-                                              {
-                                                  std::string rconCmd = chatText.substr(1);
-                                                  std::string response = ExecuteRcon(rconCmd);
-
-                                                  NetworkMessage reply;
-                                                  reply.type = MessageType::ChatMessage;
-                                                  reply.channel = ChannelType::Reliable;
-                                                  NetBuffer replyBuf;
-                                                  replyBuf.WriteString("[RCON] " + response);
-                                                  reply.payload = replyBuf.GetData();
-                                                  m_networkRuntime->SendToClient(msg.senderID, reply);
-                                                  return;
-                                              }
-                                              SPARK_BRANCH_GUARD_END("rcon_command_gate")
-
+                                              // Chat is never an administration transport. In particular, a
+                                              // leading slash must not bypass the configured RCON password and
+                                              // reach privileged commands. ExecuteRcon is a trusted in-process
+                                              // API until a separate authenticated remote-admin protocol exists.
                                               NetworkMessage broadcast;
                                               broadcast.type = MessageType::ChatMessage;
                                               broadcast.channel = ChannelType::Reliable;
@@ -558,17 +545,29 @@ namespace Spark::Net
         std::vector<std::string> args;
         ParseRconCommandLine(commandLine, cmdName, args);
 
-        std::lock_guard<std::mutex> lock(m_rconMutex);
-        for (const auto& cmd : m_rconCommands)
+        std::function<std::string(const std::vector<std::string>&)> handler;
         {
-            if (cmd.name == cmdName && cmd.handler)
+            std::lock_guard<std::mutex> lock(m_rconMutex);
+            for (const auto& cmd : m_rconCommands)
             {
-                std::string response = cmd.handler(args);
-                if (m_callbacks.onRconCommand)
-                    m_callbacks.onRconCommand(commandLine, response);
-                Log("RCON: " + commandLine + " -> " + response);
-                return response;
+                if (cmd.name == cmdName && cmd.handler)
+                {
+                    handler = cmd.handler;
+                    break;
+                }
             }
+        }
+
+        // Handlers may query or register RCON commands (the built-in help
+        // handler does exactly that), so never invoke one while holding the
+        // registry mutex.
+        if (handler)
+        {
+            std::string response = handler(args);
+            if (m_callbacks.onRconCommand)
+                m_callbacks.onRconCommand(commandLine, response);
+            Log("RCON: " + commandLine + " -> " + response);
+            return response;
         }
 
         std::string err = "Unknown command: " + cmdName;
@@ -690,12 +689,10 @@ namespace Spark::Net
                                 return std::format("Rotated to map: {}", m_currentMap);
                             });
 
-        RegisterRconCommand("quit", "Shut down the server",
-                            [this](const std::vector<std::string>&)
-                            {
-                                Stop();
-                                return std::string("Server shutting down...");
-                            });
+        // Shutdown is intentionally not a command handler. ExecuteRcon may run
+        // on the server tick thread, where Stop() would attempt to join itself.
+        // The owning host must request shutdown and call Stop() from its control
+        // thread after command dispatch returns.
     }
 
     void DedicatedServer::ParseRconCommandLine(const std::string& commandLine, std::string& outName,

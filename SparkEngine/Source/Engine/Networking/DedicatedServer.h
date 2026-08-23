@@ -270,7 +270,9 @@ namespace Spark::Net
         void RegisterRconCommand(const std::string& name, const std::string& description,
                                  std::function<std::string(const std::vector<std::string>&)> handler);
 
-        /// @brief Execute an RCON command string, e.g. "kick 3 cheating".
+        /// @brief Execute a trusted in-process RCON command string, e.g. "kick 3 cheating".
+        /// Network chat is intentionally not an RCON transport; a future remote
+        /// administration channel must authenticate before calling this API.
         /// @return The command response text.
         std::string ExecuteRcon(const std::string& commandLine);
 

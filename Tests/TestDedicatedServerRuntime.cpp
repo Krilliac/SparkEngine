@@ -168,7 +168,7 @@ TEST(DedicatedServerRuntime_ConnectDisconnectCallbacks)
     EXPECT_TRUE(runtime.clearHandlersCalled);
 }
 
-TEST(DedicatedServerRuntime_ChatAndRconFlow)
+TEST(DedicatedServerRuntime_ChatCannotInvokeRcon)
 {
     MockNetworkRuntime runtime;
     DedicatedServer server(runtime);
@@ -190,17 +190,19 @@ TEST(DedicatedServerRuntime_ChatAndRconFlow)
     EXPECT_EQ(runtime.sendToAllExceptCalls[0].first, static_cast<ClientID>(12));
     EXPECT_EQ(seenChat, std::string("hello squad"));
 
-    const NetworkMessage rcon = BuildStringMessage(MessageType::ChatMessage, 12, "/status");
-    runtime.Dispatch(rcon);
-    EXPECT_EQ(runtime.sendToClientCalls.size(), static_cast<size_t>(1));
-    EXPECT_EQ(runtime.sendToClientCalls[0].first, static_cast<ClientID>(12));
+    const NetworkMessage slashChat = BuildStringMessage(MessageType::ChatMessage, 12, "/status");
+    runtime.Dispatch(slashChat);
+    EXPECT_EQ(runtime.sendToAllExceptCalls.size(), static_cast<size_t>(2));
+    EXPECT_TRUE(runtime.sendToClientCalls.empty());
+    EXPECT_EQ(seenChat, std::string("/status"));
 
-    NetBuffer responseBuf;
-    const auto& payload = runtime.sendToClientCalls[0].second.payload;
-    responseBuf.WriteBytes(payload.data(), payload.size());
-    const std::string response = responseBuf.ReadString();
-    EXPECT_TRUE(response.rfind("[RCON] ", 0) == 0);
-    EXPECT_TRUE(response.find("Server") != std::string::npos);
+    const std::string statusResponse = server.ExecuteRcon("status");
+    EXPECT_TRUE(statusResponse.find("Server") != std::string::npos);
+
+    // The help handler takes the registry mutex internally. ExecuteRcon must
+    // release that mutex before dispatch or this call self-deadlocks.
+    const std::string helpResponse = server.ExecuteRcon("help");
+    EXPECT_TRUE(helpResponse.find("Available commands") != std::string::npos);
 
     server.Stop();
 }
