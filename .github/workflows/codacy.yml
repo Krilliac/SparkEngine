@@ -66,6 +66,9 @@ jobs:
           # This will handover control about PR rejection to the GitHub side
           max-allowed-issues: 2147483647
 
+      - name: Assign stable categories to Codacy's C and C++ SARIF runs
+        run: python3 -I .github/scripts/normalize-codacy-sarif.py results.sarif
+
       # Upload the SARIF file generated in the previous step
       - name: Upload SARIF results file
         uses: github/codeql-action/upload-sarif@4c0873ef8656cb3c50b3f42fb63bc1ade0cfa827 # v4
