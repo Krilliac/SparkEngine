@@ -34,14 +34,26 @@ namespace SparkEditor
             std::function<bool(const SceneComponentFieldReader&, std::any&)> decode;
         };
 
-        template <typename T> bool ValidatePayload(const T&) { return true; }
+        template <typename T> bool ValidatePayload(const T&)
+        {
+            return true;
+        }
         template <typename T> bool InRange(T value, T minimum, T maximum)
         {
             return value >= minimum && value <= maximum;
         }
-        bool Unit(float value) { return InRange(value, 0.0f, 1.0f); }
-        bool Positive2(const XMFLOAT2& value) { return value.x > 0.0f && value.y > 0.0f; }
-        bool Positive3(const XMFLOAT3& value) { return value.x > 0.0f && value.y > 0.0f && value.z > 0.0f; }
+        bool Unit(float value)
+        {
+            return InRange(value, 0.0f, 1.0f);
+        }
+        bool Positive2(const XMFLOAT2& value)
+        {
+            return value.x > 0.0f && value.y > 0.0f;
+        }
+        bool Positive3(const XMFLOAT3& value)
+        {
+            return value.x > 0.0f && value.y > 0.0f && value.z > 0.0f;
+        }
         bool ValidatePayload(const Light& value)
         {
             return value.type >= Light::DIRECTIONAL && value.type <= Light::AREA && value.intensity >= 0.0f &&
@@ -71,8 +83,7 @@ namespace SparkEditor
         bool ValidatePayload(const AudioSource& value)
         {
             return InRange(value.volume, 0.0f, 2.0f) && value.pitch > 0.0f && value.pitch <= 4.0f &&
-                   Unit(value.spatialBlend) &&
-                   value.minDistance >= 0.0f && value.maxDistance > value.minDistance &&
+                   Unit(value.spatialBlend) && value.minDistance >= 0.0f && value.maxDistance > value.minDistance &&
                    InRange(value.priority, 0, 255);
         }
         bool ValidatePayload(const Camera2DData& value)
@@ -82,9 +93,9 @@ namespace SparkEditor
         }
         bool ValidatePayload(const RigidBody2DData& value)
         {
-            return InRange(value.bodyType, 0, 2) && (value.bodyType != 2 || value.mass > 0.0f) &&
-                   value.mass >= 0.0f && value.linearDamping >= 0.0f && value.angularDamping >= 0.0f &&
-                   Unit(value.friction) && Unit(value.restitution);
+            return InRange(value.bodyType, 0, 2) && (value.bodyType != 2 || value.mass > 0.0f) && value.mass >= 0.0f &&
+                   value.linearDamping >= 0.0f && value.angularDamping >= 0.0f && Unit(value.friction) &&
+                   Unit(value.restitution);
         }
         bool ValidatePayload(const Collider2DData& value)
         {
@@ -106,7 +117,10 @@ namespace SparkEditor
             return value.emissionRate >= 0.0f && value.lifetime > 0.0f && value.startSize > 0.0f &&
                    value.startSpeed >= 0.0f && value.maxParticles >= 0;
         }
-        bool ValidatePayload(const AnimationControllerData&) { return true; }
+        bool ValidatePayload(const AnimationControllerData&)
+        {
+            return true;
+        }
         bool ValidatePayload(const NineSliceData& value)
         {
             return value.borderLeft >= 0.0f && value.borderTop >= 0.0f && value.borderRight >= 0.0f &&
@@ -116,14 +130,20 @@ namespace SparkEditor
         {
             return value.referenceWidth > 0 && value.referenceHeight > 0;
         }
-        bool ValidatePayload(const HealthData& value) { return value.maxHealth > 0.0f && InRange(value.health, 0.0f, value.maxHealth); }
+        bool ValidatePayload(const HealthData& value)
+        {
+            return value.maxHealth > 0.0f && InRange(value.health, 0.0f, value.maxHealth);
+        }
         bool ValidatePayload(const AIAgentData& value)
         {
             return InRange(value.aiState, 0, 5) && value.detectionRange > 0.0f && value.attackRange > 0.0f &&
                    value.attackRange <= value.detectionRange && value.moveSpeed >= 0.0f && Unit(value.accuracy) &&
                    value.reactionTime >= 0.0f;
         }
-        bool ValidatePayload(const SplineData& value) { return value.pointCount >= 0; }
+        bool ValidatePayload(const SplineData& value)
+        {
+            return value.pointCount >= 0;
+        }
         bool ValidatePayload(const SplineFollowerData& value)
         {
             return value.speed >= 0.0f && InRange(value.loopMode, 0, 2);
@@ -229,7 +249,10 @@ namespace SparkEditor
         {
             return InRange(value.triggerShape, 0, 1) && value.radius > 0.0f && Positive3(value.halfExtents);
         }
-        bool ValidatePayload(const DialogueTriggerData& value) { return value.interactionRadius > 0.0f; }
+        bool ValidatePayload(const DialogueTriggerData& value)
+        {
+            return value.interactionRadius > 0.0f;
+        }
         bool ValidatePayload(const AreaBoundaryData& value)
         {
             return value.boundsMax.x >= value.boundsMin.x && value.boundsMax.y >= value.boundsMin.y &&
@@ -241,7 +264,10 @@ namespace SparkEditor
             return Positive2(value.size) && InRange(value.lockAxis, 0, 2) && value.fadeStartDistance >= 0.0f &&
                    value.fadeEndDistance >= value.fadeStartDistance;
         }
-        bool ValidatePayload(const AudioListenerData& value) { return value.volumeScale >= 0.0f; }
+        bool ValidatePayload(const AudioListenerData& value)
+        {
+            return value.volumeScale >= 0.0f;
+        }
         bool ValidatePayload(const CharacterControllerData& value)
         {
             return value.height > 0.0f && value.radius > 0.0f && value.stepHeight >= 0.0f &&
@@ -329,8 +355,8 @@ namespace SparkEditor
                     if (!value || !ValidatePayload(*value))
                         return false;
                     bool valid = true;
-                    std::apply([&](const auto&... field) { ((valid = valid && writer.Write(field.name, value->*(field.member))), ...); },
-                               fields);
+                    std::apply([&](const auto&... field)
+                               { ((valid = valid && writer.Write(field.name, value->*(field.member))), ...); }, fields);
                     return valid;
                 },
                 [fields](const SceneComponentFieldReader& reader, std::any& payload)
@@ -343,8 +369,8 @@ namespace SparkEditor
                         return false;
                     T value{};
                     bool valid = true;
-                    std::apply([&](const auto&... field) { ((valid = valid && reader.Read(field.name, value.*(field.member))), ...); },
-                               fields);
+                    std::apply([&](const auto&... field)
+                               { ((valid = valid && reader.Read(field.name, value.*(field.member))), ...); }, fields);
                     if (!valid || !ValidatePayload(value))
                         return false;
                     payload = std::move(value);
@@ -384,18 +410,17 @@ namespace SparkEditor
                                        F(AudioSource, maxDistance), F(AudioSource, priority)),
                 MakeCodec<ScriptData>(ComponentType::SCRIPT, "Script", F(ScriptData, scriptPath),
                                       F(ScriptData, className), F(ScriptData, autoStart)),
-                MakeCodec<ParticleEmitterData>(
-                    ComponentType::PARTICLE_SYSTEM, "ParticleSystem", F(ParticleEmitterData, effectName),
-                    F(ParticleEmitterData, autoPlay), F(ParticleEmitterData, emissionRate),
-                    F(ParticleEmitterData, lifetime), F(ParticleEmitterData, startColor),
-                    F(ParticleEmitterData, startSize), F(ParticleEmitterData, startSpeed),
-                    F(ParticleEmitterData, gravityMultiplier), F(ParticleEmitterData, maxParticles),
-                    F(ParticleEmitterData, loop)),
-                MakeCodec<AnimationControllerData>(ComponentType::ANIMATION, "Animation",
-                                                   F(AnimationControllerData, defaultAnimation),
-                                                   F(AnimationControllerData, playbackSpeed),
-                                                   F(AnimationControllerData, playing),
-                                                   F(AnimationControllerData, loop)),
+                MakeCodec<ParticleEmitterData>(ComponentType::PARTICLE_SYSTEM, "ParticleSystem",
+                                               F(ParticleEmitterData, effectName), F(ParticleEmitterData, autoPlay),
+                                               F(ParticleEmitterData, emissionRate), F(ParticleEmitterData, lifetime),
+                                               F(ParticleEmitterData, startColor), F(ParticleEmitterData, startSize),
+                                               F(ParticleEmitterData, startSpeed),
+                                               F(ParticleEmitterData, gravityMultiplier),
+                                               F(ParticleEmitterData, maxParticles), F(ParticleEmitterData, loop)),
+                MakeCodec<AnimationControllerData>(
+                    ComponentType::ANIMATION, "Animation", F(AnimationControllerData, defaultAnimation),
+                    F(AnimationControllerData, playbackSpeed), F(AnimationControllerData, playing),
+                    F(AnimationControllerData, loop)),
                 MakeCodec<SpriteRendererData>(
                     ComponentType::SPRITE_RENDERER, "SpriteRenderer", F(SpriteRendererData, texturePath),
                     F(SpriteRendererData, color), F(SpriteRendererData, sourceRect), F(SpriteRendererData, pivot),
@@ -431,12 +456,12 @@ namespace SparkEditor
                 MakeCodec<PixelPerfectData>(ComponentType::PIXEL_PERFECT, "PixelPerfect",
                                             F(PixelPerfectData, referenceWidth), F(PixelPerfectData, referenceHeight),
                                             F(PixelPerfectData, upscaleToFill), F(PixelPerfectData, cropToFit)),
-                MakeCodec<TerrainSceneData>(
-                    ComponentType::TERRAIN, "Terrain", F(TerrainSceneData, heightmapResolution),
-                    F(TerrainSceneData, terrainSize), F(TerrainSceneData, heightScale), F(TerrainSceneData, minHeight),
-                    F(TerrainSceneData, maxHeight), F(TerrainSceneData, lodLevels), F(TerrainSceneData, lodBias),
-                    F(TerrainSceneData, generateCollider), F(TerrainSceneData, castShadows),
-                    F(TerrainSceneData, receiveShadows)),
+                MakeCodec<TerrainSceneData>(ComponentType::TERRAIN, "Terrain", F(TerrainSceneData, heightmapResolution),
+                                            F(TerrainSceneData, terrainSize), F(TerrainSceneData, heightScale),
+                                            F(TerrainSceneData, minHeight), F(TerrainSceneData, maxHeight),
+                                            F(TerrainSceneData, lodLevels), F(TerrainSceneData, lodBias),
+                                            F(TerrainSceneData, generateCollider), F(TerrainSceneData, castShadows),
+                                            F(TerrainSceneData, receiveShadows)),
                 MakeCodec<HealthData>(ComponentType::HEALTH, "Health", F(HealthData, health), F(HealthData, maxHealth)),
                 MakeCodec<AIAgentData>(ComponentType::AI_AGENT, "AIAgent", F(AIAgentData, aiState),
                                        F(AIAgentData, behaviorTreeName), F(AIAgentData, detectionRange),
@@ -466,25 +491,24 @@ namespace SparkEditor
                                        F(WeatherData, intensity), F(WeatherData, windSpeed),
                                        F(WeatherData, windDirection), F(WeatherData, transitionTime),
                                        F(WeatherData, enabled)),
-                MakeCodec<NetworkIdentityData>(ComponentType::NETWORK_IDENTITY, "NetworkIdentity",
-                                               F(NetworkIdentityData, replicateTransform),
-                                               F(NetworkIdentityData, replicateHealth),
-                                               F(NetworkIdentityData, isLocalAuthority)),
-                MakeCodec<TriggerVolumeData>(ComponentType::TRIGGER_VOLUME, "TriggerVolume",
-                                             F(TriggerVolumeData, shape), F(TriggerVolumeData, radius),
-                                             F(TriggerVolumeData, halfExtents), F(TriggerVolumeData, onEnterEvent),
-                                             F(TriggerVolumeData, onExitEvent), F(TriggerVolumeData, enabled),
-                                             F(TriggerVolumeData, oneShot)),
+                MakeCodec<NetworkIdentityData>(
+                    ComponentType::NETWORK_IDENTITY, "NetworkIdentity", F(NetworkIdentityData, replicateTransform),
+                    F(NetworkIdentityData, replicateHealth), F(NetworkIdentityData, isLocalAuthority)),
+                MakeCodec<TriggerVolumeData>(
+                    ComponentType::TRIGGER_VOLUME, "TriggerVolume", F(TriggerVolumeData, shape),
+                    F(TriggerVolumeData, radius), F(TriggerVolumeData, halfExtents), F(TriggerVolumeData, onEnterEvent),
+                    F(TriggerVolumeData, onExitEvent), F(TriggerVolumeData, enabled), F(TriggerVolumeData, oneShot)),
                 MakeCodec<PostProcessVolumeData>(
                     ComponentType::POST_PROCESS_VOLUME, "PostProcessVolume", F(PostProcessVolumeData, isGlobal),
                     F(PostProcessVolumeData, priority), F(PostProcessVolumeData, weight),
                     F(PostProcessVolumeData, blendDistance), F(PostProcessVolumeData, overrideExposure),
-                    F(PostProcessVolumeData, exposure), F(PostProcessVolumeData, minEV), F(PostProcessVolumeData, maxEV),
-                    F(PostProcessVolumeData, overrideBloom), F(PostProcessVolumeData, bloomIntensity),
-                    F(PostProcessVolumeData, bloomThreshold), F(PostProcessVolumeData, overrideColorGrading),
-                    F(PostProcessVolumeData, saturation), F(PostProcessVolumeData, contrast),
-                    F(PostProcessVolumeData, temperature), F(PostProcessVolumeData, overrideFog),
-                    F(PostProcessVolumeData, fogDensity), F(PostProcessVolumeData, fogHeight)),
+                    F(PostProcessVolumeData, exposure), F(PostProcessVolumeData, minEV),
+                    F(PostProcessVolumeData, maxEV), F(PostProcessVolumeData, overrideBloom),
+                    F(PostProcessVolumeData, bloomIntensity), F(PostProcessVolumeData, bloomThreshold),
+                    F(PostProcessVolumeData, overrideColorGrading), F(PostProcessVolumeData, saturation),
+                    F(PostProcessVolumeData, contrast), F(PostProcessVolumeData, temperature),
+                    F(PostProcessVolumeData, overrideFog), F(PostProcessVolumeData, fogDensity),
+                    F(PostProcessVolumeData, fogHeight)),
                 MakeCodec<ReflectionProbeData>(
                     ComponentType::REFLECTION_PROBE, "ReflectionProbe", F(ReflectionProbeData, resolution),
                     F(ReflectionProbeData, influenceRadius), F(ReflectionProbeData, boxExtents),
@@ -497,11 +521,11 @@ namespace SparkEditor
                 MakeCodec<NavObstacleData>(ComponentType::NAV_OBSTACLE, "NavObstacle", F(NavObstacleData, shape),
                                            F(NavObstacleData, halfExtents), F(NavObstacleData, radius),
                                            F(NavObstacleData, height), F(NavObstacleData, carveOnMove)),
-                MakeCodec<WaterPlaneData>(
-                    ComponentType::WATER_PLANE, "WaterPlane", F(WaterPlaneData, size), F(WaterPlaneData, shallowColor),
-                    F(WaterPlaneData, deepColor), F(WaterPlaneData, waveHeight), F(WaterPlaneData, waveSpeed),
-                    F(WaterPlaneData, waveFrequency), F(WaterPlaneData, reflectionStrength),
-                    F(WaterPlaneData, refractionStrength), F(WaterPlaneData, receiveShadows)),
+                MakeCodec<WaterPlaneData>(ComponentType::WATER_PLANE, "WaterPlane", F(WaterPlaneData, size),
+                                          F(WaterPlaneData, shallowColor), F(WaterPlaneData, deepColor),
+                                          F(WaterPlaneData, waveHeight), F(WaterPlaneData, waveSpeed),
+                                          F(WaterPlaneData, waveFrequency), F(WaterPlaneData, reflectionStrength),
+                                          F(WaterPlaneData, refractionStrength), F(WaterPlaneData, receiveShadows)),
                 MakeCodec<FogVolumeData>(ComponentType::FOG_VOLUME, "FogVolume", F(FogVolumeData, halfExtents),
                                          F(FogVolumeData, density), F(FogVolumeData, color), F(FogVolumeData, falloff),
                                          F(FogVolumeData, heightFalloff)),
@@ -513,24 +537,24 @@ namespace SparkEditor
                                           F(SpawnPointData, teamID), F(SpawnPointData, spawnRadius),
                                           F(SpawnPointData, respawnDelay), F(SpawnPointData, maxConcurrent),
                                           F(SpawnPointData, enabled), F(SpawnPointData, priority)),
-                MakeCodec<AudioReverbZoneData>(
-                    ComponentType::AUDIO_REVERB_ZONE, "AudioReverbZone", F(AudioReverbZoneData, innerRadius),
-                    F(AudioReverbZoneData, outerRadius), F(AudioReverbZoneData, reverbPreset),
-                    F(AudioReverbZoneData, decayTime), F(AudioReverbZoneData, earlyReflections),
-                    F(AudioReverbZoneData, lateReverbLevel), F(AudioReverbZoneData, diffusion),
-                    F(AudioReverbZoneData, roomSize)),
+                MakeCodec<AudioReverbZoneData>(ComponentType::AUDIO_REVERB_ZONE, "AudioReverbZone",
+                                               F(AudioReverbZoneData, innerRadius), F(AudioReverbZoneData, outerRadius),
+                                               F(AudioReverbZoneData, reverbPreset), F(AudioReverbZoneData, decayTime),
+                                               F(AudioReverbZoneData, earlyReflections),
+                                               F(AudioReverbZoneData, lateReverbLevel),
+                                               F(AudioReverbZoneData, diffusion), F(AudioReverbZoneData, roomSize)),
                 MakeCodec<WindZoneData>(ComponentType::WIND_ZONE, "WindZone", F(WindZoneData, mode),
                                         F(WindZoneData, direction), F(WindZoneData, mainStrength),
                                         F(WindZoneData, turbulenceStrength), F(WindZoneData, pulseFrequency),
                                         F(WindZoneData, radius), F(WindZoneData, affectsParticles),
                                         F(WindZoneData, affectsVegetation), F(WindZoneData, affectsCloth)),
-                MakeCodec<PhysicsJointData>(
-                    ComponentType::PHYSICS_JOINT, "PhysicsJoint", F(PhysicsJointData, jointType),
-                    F(PhysicsJointData, connectedBody), F(PhysicsJointData, anchor), F(PhysicsJointData, axis),
-                    F(PhysicsJointData, lowerLimit), F(PhysicsJointData, upperLimit),
-                    F(PhysicsJointData, enableLimits), F(PhysicsJointData, enableMotor),
-                    F(PhysicsJointData, motorSpeed), F(PhysicsJointData, motorMaxForce),
-                    F(PhysicsJointData, breakForce), F(PhysicsJointData, breakTorque)),
+                MakeCodec<PhysicsJointData>(ComponentType::PHYSICS_JOINT, "PhysicsJoint",
+                                            F(PhysicsJointData, jointType), F(PhysicsJointData, connectedBody),
+                                            F(PhysicsJointData, anchor), F(PhysicsJointData, axis),
+                                            F(PhysicsJointData, lowerLimit), F(PhysicsJointData, upperLimit),
+                                            F(PhysicsJointData, enableLimits), F(PhysicsJointData, enableMotor),
+                                            F(PhysicsJointData, motorSpeed), F(PhysicsJointData, motorMaxForce),
+                                            F(PhysicsJointData, breakForce), F(PhysicsJointData, breakTorque)),
                 MakeCodec<OccluderData>(ComponentType::OCCLUDER, "Occluder", F(OccluderData, shape),
                                         F(OccluderData, halfExtents), F(OccluderData, doubleSided)),
                 MakeCodec<CoverPointData>(ComponentType::COVER_POINT, "CoverPoint", F(CoverPointData, height),
@@ -540,12 +564,11 @@ namespace SparkEditor
                 MakeCodec<TacticalPointData>(ComponentType::TACTICAL_POINT, "TacticalPoint",
                                              F(TacticalPointData, pointType), F(TacticalPointData, qualityScore),
                                              F(TacticalPointData, radius), F(TacticalPointData, enabled)),
-                MakeCodec<DestructibleData>(
-                    ComponentType::DESTRUCTIBLE, "Destructible", F(DestructibleData, health),
-                    F(DestructibleData, damageStages), F(DestructibleData, fracturePattern),
-                    F(DestructibleData, debrisLifetime), F(DestructibleData, explosionForce),
-                    F(DestructibleData, minDamageThreshold), F(DestructibleData, generateColliders),
-                    F(DestructibleData, chainReaction)),
+                MakeCodec<DestructibleData>(ComponentType::DESTRUCTIBLE, "Destructible", F(DestructibleData, health),
+                                            F(DestructibleData, damageStages), F(DestructibleData, fracturePattern),
+                                            F(DestructibleData, debrisLifetime), F(DestructibleData, explosionForce),
+                                            F(DestructibleData, minDamageThreshold),
+                                            F(DestructibleData, generateColliders), F(DestructibleData, chainReaction)),
                 MakeCodec<CinematicTriggerData>(
                     ComponentType::CINEMATIC_TRIGGER, "CinematicTrigger", F(CinematicTriggerData, sequenceName),
                     F(CinematicTriggerData, triggerShape), F(CinematicTriggerData, radius),
@@ -581,10 +604,9 @@ namespace SparkEditor
                                        F(NavLinkData, radius), F(NavLinkData, traversalType),
                                        F(NavLinkData, traversalCost), F(NavLinkData, bidirectional),
                                        F(NavLinkData, enabled)),
-                MakeCodec<SkyboxData>(ComponentType::SKYBOX, "Skybox", F(SkyboxData, mode),
-                                      F(SkyboxData, cubemapPath), F(SkyboxData, topColor),
-                                      F(SkyboxData, bottomColor), F(SkyboxData, turbidity), F(SkyboxData, sunSize),
-                                      F(SkyboxData, exposure), F(SkyboxData, rotation)),
+                MakeCodec<SkyboxData>(ComponentType::SKYBOX, "Skybox", F(SkyboxData, mode), F(SkyboxData, cubemapPath),
+                                      F(SkyboxData, topColor), F(SkyboxData, bottomColor), F(SkyboxData, turbidity),
+                                      F(SkyboxData, sunSize), F(SkyboxData, exposure), F(SkyboxData, rotation)),
                 MakeCodec<ConstantForceData>(ComponentType::CONSTANT_FORCE, "ConstantForce",
                                              F(ConstantForceData, force), F(ConstantForceData, torque),
                                              F(ConstantForceData, relativeForce), F(ConstantForceData, relativeTorque),
@@ -597,22 +619,21 @@ namespace SparkEditor
                                        F(RagdollData, definitionName), F(RagdollData, blendWeight),
                                        F(RagdollData, jointStiffness), F(RagdollData, linearDamping),
                                        F(RagdollData, angularDamping), F(RagdollData, selfCollision)),
-                MakeCodec<SoftBodyData>(ComponentType::SOFT_BODY, "SoftBody", F(SoftBodyData, mass),
-                                        F(SoftBodyData, stiffness), F(SoftBodyData, damping),
-                                        F(SoftBodyData, windInfluence), F(SoftBodyData, gravityScale),
-                                        F(SoftBodyData, solverIterations), F(SoftBodyData, selfCollision),
-                                        F(SoftBodyData, twoSided)),
+                MakeCodec<SoftBodyData>(
+                    ComponentType::SOFT_BODY, "SoftBody", F(SoftBodyData, mass), F(SoftBodyData, stiffness),
+                    F(SoftBodyData, damping), F(SoftBodyData, windInfluence), F(SoftBodyData, gravityScale),
+                    F(SoftBodyData, solverIterations), F(SoftBodyData, selfCollision), F(SoftBodyData, twoSided)),
                 MakeCodec<VehicleData>(ComponentType::VEHICLE, "Vehicle", F(VehicleData, vehicleType),
                                        F(VehicleData, wheelCount), F(VehicleData, mass),
                                        F(VehicleData, maxEngineTorque), F(VehicleData, maxSteerAngle),
                                        F(VehicleData, maxBrakeForce), F(VehicleData, suspensionLength),
                                        F(VehicleData, suspensionStiffness), F(VehicleData, suspensionDamping),
                                        F(VehicleData, gearCount), F(VehicleData, antiRollBar)),
-                MakeCodec<BuoyancyVolumeData>(
-                    ComponentType::BUOYANCY_VOLUME, "BuoyancyVolume", F(BuoyancyVolumeData, halfExtents),
-                    F(BuoyancyVolumeData, waterDensity), F(BuoyancyVolumeData, linearDrag),
-                    F(BuoyancyVolumeData, angularDrag), F(BuoyancyVolumeData, flowSpeed),
-                    F(BuoyancyVolumeData, flowDirection), F(BuoyancyVolumeData, enabled)),
+                MakeCodec<BuoyancyVolumeData>(ComponentType::BUOYANCY_VOLUME, "BuoyancyVolume",
+                                              F(BuoyancyVolumeData, halfExtents), F(BuoyancyVolumeData, waterDensity),
+                                              F(BuoyancyVolumeData, linearDrag), F(BuoyancyVolumeData, angularDrag),
+                                              F(BuoyancyVolumeData, flowSpeed), F(BuoyancyVolumeData, flowDirection),
+                                              F(BuoyancyVolumeData, enabled)),
                 MakeCodec<SpringArmData>(ComponentType::SPRING_ARM, "SpringArm", F(SpringArmData, targetLength),
                                          F(SpringArmData, probeRadius), F(SpringArmData, smoothSpeed),
                                          F(SpringArmData, minLength), F(SpringArmData, doCollisionTest)),
@@ -620,22 +641,22 @@ namespace SparkEditor
                     ComponentType::LINE_RENDERER, "LineRenderer", F(LineRendererData, startWidth),
                     F(LineRendererData, endWidth), F(LineRendererData, startColor), F(LineRendererData, endColor),
                     F(LineRendererData, useWorldSpace), F(LineRendererData, loop), F(LineRendererData, sortingLayer)),
-                MakeCodec<TrailRendererData>(
-                    ComponentType::TRAIL_RENDERER, "TrailRenderer", F(TrailRendererData, lifetime),
-                    F(TrailRendererData, minVertexDistance), F(TrailRendererData, startWidth),
-                    F(TrailRendererData, endWidth), F(TrailRendererData, startColor), F(TrailRendererData, endColor),
-                    F(TrailRendererData, emitting), F(TrailRendererData, sortingLayer)),
+                MakeCodec<TrailRendererData>(ComponentType::TRAIL_RENDERER, "TrailRenderer",
+                                             F(TrailRendererData, lifetime), F(TrailRendererData, minVertexDistance),
+                                             F(TrailRendererData, startWidth), F(TrailRendererData, endWidth),
+                                             F(TrailRendererData, startColor), F(TrailRendererData, endColor),
+                                             F(TrailRendererData, emitting), F(TrailRendererData, sortingLayer)),
                 MakeCodec<Text3DData>(ComponentType::TEXT_3D, "Text3D", F(Text3DData, text), F(Text3DData, fontPath),
                                       F(Text3DData, fontSize), F(Text3DData, color), F(Text3DData, faceCamera),
                                       F(Text3DData, castShadows), F(Text3DData, alignment), F(Text3DData, maxWidth),
                                       F(Text3DData, sortingLayer)),
-                MakeCodec<FoliageVolumeData>(
-                    ComponentType::FOLIAGE_VOLUME, "FoliageVolume", F(FoliageVolumeData, halfExtents),
-                    F(FoliageVolumeData, seed), F(FoliageVolumeData, densityScale),
-                    F(FoliageVolumeData, minSlopeAngle), F(FoliageVolumeData, maxSlopeAngle),
-                    F(FoliageVolumeData, minAltitude), F(FoliageVolumeData, maxAltitude),
-                    F(FoliageVolumeData, alignToSurface), F(FoliageVolumeData, castShadows),
-                    F(FoliageVolumeData, cullDistance), F(FoliageVolumeData, enabled)),
+                MakeCodec<FoliageVolumeData>(ComponentType::FOLIAGE_VOLUME, "FoliageVolume",
+                                             F(FoliageVolumeData, halfExtents), F(FoliageVolumeData, seed),
+                                             F(FoliageVolumeData, densityScale), F(FoliageVolumeData, minSlopeAngle),
+                                             F(FoliageVolumeData, maxSlopeAngle), F(FoliageVolumeData, minAltitude),
+                                             F(FoliageVolumeData, maxAltitude), F(FoliageVolumeData, alignToSurface),
+                                             F(FoliageVolumeData, castShadows), F(FoliageVolumeData, cullDistance),
+                                             F(FoliageVolumeData, enabled)),
             };
             return codecs;
         }
@@ -650,24 +671,71 @@ namespace SparkEditor
             return nullptr;
         }
 
-        constexpr std::array<const char*, 65> kTypeNames = {
-            "Transform",          "MeshRenderer",       "Light",             "Camera",
-            "RigidBody",          "Collider",           "AudioSource",       "Script",
-            "ParticleSystem",     "Animation",          "SpriteRenderer",    "SpriteAnimator",
-            "Camera2D",           "Tilemap",            "RigidBody2D",       "Collider2D",
-            "ParallaxBackground", "NineSlice",          "PixelPerfect",      "Terrain",
-            "Health",             "AIAgent",            "Spline",            "SplineFollower",
-            "Decal",              "Projectile",         "Interaction",       "Weather",
-            "NetworkIdentity",    "TriggerVolume",      "PostProcessVolume", "ReflectionProbe",
-            "LightProbe",         "NavObstacle",        "WaterPlane",        "FogVolume",
-            "LODGroup",           "SpawnPoint",         "AudioReverbZone",   "WindZone",
-            "PhysicsJoint",       "Occluder",           "CoverPoint",        "TacticalPoint",
-            "Destructible",       "CinematicTrigger",   "DialogueTrigger",   "AreaBoundary",
-            "Billboard",          "AudioListener",      "CharacterController", "NavRegion",
-            "NavLink",            "Skybox",             "ConstantForce",     "ForceRegion",
-            "Ragdoll",            "SoftBody",           "Vehicle",           "BuoyancyVolume",
-            "SpringArm",          "LineRenderer",       "TrailRenderer",     "Text3D",
-            "FoliageVolume"};
+        constexpr std::array<const char*, 65> kTypeNames = {"Transform",
+                                                            "MeshRenderer",
+                                                            "Light",
+                                                            "Camera",
+                                                            "RigidBody",
+                                                            "Collider",
+                                                            "AudioSource",
+                                                            "Script",
+                                                            "ParticleSystem",
+                                                            "Animation",
+                                                            "SpriteRenderer",
+                                                            "SpriteAnimator",
+                                                            "Camera2D",
+                                                            "Tilemap",
+                                                            "RigidBody2D",
+                                                            "Collider2D",
+                                                            "ParallaxBackground",
+                                                            "NineSlice",
+                                                            "PixelPerfect",
+                                                            "Terrain",
+                                                            "Health",
+                                                            "AIAgent",
+                                                            "Spline",
+                                                            "SplineFollower",
+                                                            "Decal",
+                                                            "Projectile",
+                                                            "Interaction",
+                                                            "Weather",
+                                                            "NetworkIdentity",
+                                                            "TriggerVolume",
+                                                            "PostProcessVolume",
+                                                            "ReflectionProbe",
+                                                            "LightProbe",
+                                                            "NavObstacle",
+                                                            "WaterPlane",
+                                                            "FogVolume",
+                                                            "LODGroup",
+                                                            "SpawnPoint",
+                                                            "AudioReverbZone",
+                                                            "WindZone",
+                                                            "PhysicsJoint",
+                                                            "Occluder",
+                                                            "CoverPoint",
+                                                            "TacticalPoint",
+                                                            "Destructible",
+                                                            "CinematicTrigger",
+                                                            "DialogueTrigger",
+                                                            "AreaBoundary",
+                                                            "Billboard",
+                                                            "AudioListener",
+                                                            "CharacterController",
+                                                            "NavRegion",
+                                                            "NavLink",
+                                                            "Skybox",
+                                                            "ConstantForce",
+                                                            "ForceRegion",
+                                                            "Ragdoll",
+                                                            "SoftBody",
+                                                            "Vehicle",
+                                                            "BuoyancyVolume",
+                                                            "SpringArm",
+                                                            "LineRenderer",
+                                                            "TrailRenderer",
+                                                            "Text3D",
+                                                            "FoliageVolume"};
     } // namespace
 
     const char* SceneComponentTypeName(ComponentType type)
@@ -689,7 +757,10 @@ namespace SparkEditor
         return false;
     }
 
-    bool HasSceneComponentPayloadCodec(ComponentType type) { return FindCodec(type) != nullptr; }
+    bool HasSceneComponentPayloadCodec(ComponentType type)
+    {
+        return FindCodec(type) != nullptr;
+    }
 
     std::vector<ComponentType> GetSceneComponentPayloadTypes()
     {

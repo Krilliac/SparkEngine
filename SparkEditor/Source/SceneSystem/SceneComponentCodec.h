@@ -121,8 +121,7 @@ namespace SparkEditor
     [[nodiscard]] bool HasSceneComponentPayloadCodec(ComponentType type);
     [[nodiscard]] std::vector<ComponentType> GetSceneComponentPayloadTypes();
     bool InitializeDefaultSceneComponentPayload(Component& component, std::string& error);
-    bool EncodeSceneComponentPayload(const Component& component, SceneComponentFieldWriter& writer,
-                                     std::string& error);
+    bool EncodeSceneComponentPayload(const Component& component, SceneComponentFieldWriter& writer, std::string& error);
     bool DecodeSceneComponentPayload(ComponentType type, const SceneComponentFieldReader& reader, Component& component,
                                      std::string& error);
 } // namespace SparkEditor

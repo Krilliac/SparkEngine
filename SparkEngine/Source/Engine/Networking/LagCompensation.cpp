@@ -182,17 +182,15 @@ namespace Spark::Net
                                             uint32_t ignoreEntity, float outHitPoint[3], float* outDist) const
     {
         if (m_count == 0 || !origin || !dir || !std::isfinite(rewindTime) || !std::isfinite(maxDist) ||
-            maxDist <= 0.0f || !std::isfinite(origin[0]) || !std::isfinite(origin[1]) ||
-            !std::isfinite(origin[2]) || !std::isfinite(dir[0]) || !std::isfinite(dir[1]) ||
-            !std::isfinite(dir[2]))
+            maxDist <= 0.0f || !std::isfinite(origin[0]) || !std::isfinite(origin[1]) || !std::isfinite(origin[2]) ||
+            !std::isfinite(dir[0]) || !std::isfinite(dir[1]) || !std::isfinite(dir[2]))
             return 0;
 
         const float dirLenSq = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
         if (!std::isfinite(dirLenSq) || dirLenSq < kEpsilon)
             return 0;
         const float inverseLength = 1.0f / std::sqrt(dirLenSq);
-        const float normalizedDirection[3] = {dir[0] * inverseLength, dir[1] * inverseLength,
-                                              dir[2] * inverseLength};
+        const float normalizedDirection[3] = {dir[0] * inverseLength, dir[1] * inverseLength, dir[2] * inverseLength};
 
         // Clamp into the recorded range, then find the bracketing snapshots.
         const double oldest = At(0).time;

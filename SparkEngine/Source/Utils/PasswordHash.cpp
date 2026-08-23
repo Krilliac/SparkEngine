@@ -28,16 +28,14 @@ namespace Spark::PasswordHash
         constexpr std::string_view kScheme = "pbkdf2-sha256";
 
         constexpr uint32_t kRoundConstants[64] = {
-            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-            0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-            0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-            0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-            0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-            0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-            0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-            0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-            0xc67178f2};
+            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+            0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+            0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+            0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+            0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+            0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+            0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
 
         constexpr uint32_t RotateRight(uint32_t value, uint32_t count)
         {
@@ -62,10 +60,10 @@ namespace Spark::PasswordHash
                 }
                 for (size_t i = 16; i < 64; ++i)
                 {
-                    const uint32_t s0 = RotateRight(words[i - 15], 7) ^ RotateRight(words[i - 15], 18) ^
-                                        (words[i - 15] >> 3);
-                    const uint32_t s1 = RotateRight(words[i - 2], 17) ^ RotateRight(words[i - 2], 19) ^
-                                        (words[i - 2] >> 10);
+                    const uint32_t s0 =
+                        RotateRight(words[i - 15], 7) ^ RotateRight(words[i - 15], 18) ^ (words[i - 15] >> 3);
+                    const uint32_t s1 =
+                        RotateRight(words[i - 2], 17) ^ RotateRight(words[i - 2], 19) ^ (words[i - 2] >> 10);
                     words[i] = words[i - 16] + s0 + words[i - 7] + s1;
                 }
 
@@ -191,8 +189,8 @@ namespace Spark::PasswordHash
             return outer.Finalize();
         }
 
-        std::vector<uint8_t> Derive(const std::string& password, const std::vector<uint8_t>& salt,
-                                    uint32_t iterations, size_t derivedLength)
+        std::vector<uint8_t> Derive(const std::string& password, const std::vector<uint8_t>& salt, uint32_t iterations,
+                                    size_t derivedLength)
         {
             constexpr size_t hashLength = 32;
             std::vector<uint8_t> derived;
@@ -280,14 +278,15 @@ namespace Spark::PasswordHash
             while (true)
             {
                 const size_t separator = encoded.find('$', start);
-                parts.push_back(encoded.substr(start, separator == std::string_view::npos ? separator : separator - start));
+                parts.push_back(
+                    encoded.substr(start, separator == std::string_view::npos ? separator : separator - start));
                 if (separator == std::string_view::npos)
                     break;
                 start = separator + 1;
             }
             return parts;
         }
-    }
+    } // namespace
 
     std::string Create(const std::string& password)
     {
@@ -320,4 +319,4 @@ namespace Spark::PasswordHash
         const std::vector<uint8_t> actual = Derive(password, salt, iterations, expected.size());
         return ConstantTimeEqual(actual, expected);
     }
-}
+} // namespace Spark::PasswordHash

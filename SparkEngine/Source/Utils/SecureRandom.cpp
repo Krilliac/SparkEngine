@@ -35,8 +35,8 @@ namespace Spark::SecureRandom
 #if defined(_WIN32)
         while (size > 0)
         {
-            const ULONG chunk = static_cast<ULONG>(
-                std::min(size, static_cast<size_t>((std::numeric_limits<ULONG>::max)())));
+            const ULONG chunk =
+                static_cast<ULONG>(std::min(size, static_cast<size_t>((std::numeric_limits<ULONG>::max)())));
             if (BCryptGenRandom(nullptr, output, chunk, BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0)
                 return false;
             output += chunk;
@@ -85,4 +85,4 @@ namespace Spark::SecureRandom
         }
         return token;
     }
-}
+} // namespace Spark::SecureRandom

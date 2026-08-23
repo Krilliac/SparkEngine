@@ -549,11 +549,10 @@ namespace Spark
 
     SimpleConsole::ConsoleStats SimpleConsole::GetStats() const
     {
-        return ConsoleStats{m_totalLogsWritten.load(std::memory_order_relaxed),
-                            m_totalCommandsExecuted.load(std::memory_order_relaxed),
-                            m_totalCommandsFailed.load(std::memory_order_relaxed),
-                            m_registeredCommands.load(std::memory_order_relaxed),
-                            m_registeredAliases.load(std::memory_order_relaxed)};
+        return ConsoleStats{
+            m_totalLogsWritten.load(std::memory_order_relaxed), m_totalCommandsExecuted.load(std::memory_order_relaxed),
+            m_totalCommandsFailed.load(std::memory_order_relaxed), m_registeredCommands.load(std::memory_order_relaxed),
+            m_registeredAliases.load(std::memory_order_relaxed)};
     }
 
     // ============================================================================

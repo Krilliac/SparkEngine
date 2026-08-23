@@ -1036,7 +1036,8 @@ namespace SparkEditor
      * @param componentData Data to store in component
      */
         template <typename T> void SetData(const T& componentData);
-        template <typename T> void SetData(T&& componentData)
+        template <typename T>
+        void SetData(T&& componentData)
             requires(!std::is_lvalue_reference_v<T>);
     };
 
@@ -1127,7 +1128,8 @@ namespace SparkEditor
         data = componentData;
     }
 
-    template <typename T> void Component::SetData(T&& componentData)
+    template <typename T>
+    void Component::SetData(T&& componentData)
         requires(!std::is_lvalue_reference_v<T>)
     {
         using Stored = std::remove_cvref_t<T>;

@@ -551,6 +551,13 @@ if(NOT WIN32 AND ENABLE_SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/CMakeLists.txt")
     set(SDL_STATIC   OFF CACHE BOOL "" FORCE)
     set(SDL_TEST     OFF CACHE BOOL "" FORCE)
     set(SDL_OPENGL   ON  CACHE BOOL "" FORCE)
+    # SparkEngineLib's installed target links SDL2::SDL2. SDL defaults to
+    # disabling its install/export rules when embedded as a subproject, which
+    # leaves the vendored SDL2 target outside every export set and makes CMake
+    # reject SparkEngineTargets during generation. Ship SDL's own package with
+    # the SDK so installed consumers can resolve the advertised dependency.
+    set(SDL2_DISABLE_INSTALL OFF CACHE BOOL
+        "Allow SDL2 to participate in package exports" FORCE)
 
     if(APPLE)
         # macOS: Cocoa + CoreAudio. X11/Wayland/ALSA etc. are irrelevant.

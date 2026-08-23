@@ -14,4 +14,4 @@ namespace Spark::PasswordHash
 
     /** Verify a self-describing hash in constant time. Unknown and legacy formats fail closed. */
     [[nodiscard]] bool Verify(const std::string& password, const std::string& encodedHash);
-}
+} // namespace Spark::PasswordHash

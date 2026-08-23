@@ -649,8 +649,7 @@ namespace Spark::Graphics
                 return RenderGraphResource::INVALID_INDEX;
             }
             const auto& producers = m_resources[handle.index].versionProducers;
-            return handle.version < producers.size() ? producers[handle.version]
-                                                     : RenderGraphResource::INVALID_INDEX;
+            return handle.version < producers.size() ? producers[handle.version] : RenderGraphResource::INVALID_INDEX;
         }
 
         void ValidateResourceVersions() const
@@ -892,8 +891,8 @@ namespace Spark::Graphics
 
             auto addDependency = [&](uint32_t producer, uint32_t consumer)
             {
-                if (producer == RenderGraphResource::INVALID_INDEX || producer == consumer ||
-                    producer >= passCount || m_passes[producer]->IsCulled())
+                if (producer == RenderGraphResource::INVALID_INDEX || producer == consumer || producer >= passCount ||
+                    m_passes[producer]->IsCulled())
                 {
                     return;
                 }
@@ -967,8 +966,8 @@ namespace Spark::Graphics
                 }
             }
 
-            const auto activePasses = static_cast<size_t>(std::count_if(
-                m_passes.begin(), m_passes.end(), [](const auto& pass) { return !pass->IsCulled(); }));
+            const auto activePasses = static_cast<size_t>(
+                std::count_if(m_passes.begin(), m_passes.end(), [](const auto& pass) { return !pass->IsCulled(); }));
             if (m_executionOrder.size() != activePasses)
             {
                 m_executionOrder.clear();
@@ -1002,19 +1001,16 @@ namespace Spark::Graphics
                 }
                 const auto& x = a.textureDesc;
                 const auto& y = b.textureDesc;
-                return x.width == y.width && x.height == y.height && x.depth == y.depth &&
-                       x.arraySize == y.arraySize && x.mipLevels == y.mipLevels &&
-                       x.sampleCount == y.sampleCount && x.format == y.format && x.usage == y.usage;
+                return x.width == y.width && x.height == y.height && x.depth == y.depth && x.arraySize == y.arraySize &&
+                       x.mipLevels == y.mipLevels && x.sampleCount == y.sampleCount && x.format == y.format &&
+                       x.usage == y.usage;
             };
             auto overlaps = [](const RenderGraphResourceNode& a, const RenderGraphResourceNode& b)
-            {
-                return !(a.lastUsePass < b.firstUsePass || b.lastUsePass < a.firstUsePass);
-            };
+            { return !(a.lastUsePass < b.firstUsePass || b.lastUsePass < a.firstUsePass); };
             auto resourceSize = [](const RenderGraphResourceNode& resource)
             {
-                return resource.type == RenderGraphResourceType::Texture
-                           ? resource.textureDesc.EstimateMemoryBytes()
-                           : resource.bufferDesc.EstimateMemoryBytes();
+                return resource.type == RenderGraphResourceType::Texture ? resource.textureDesc.EstimateMemoryBytes()
+                                                                         : resource.bufferDesc.EstimateMemoryBytes();
             };
 
             // Honor explicit alias hints, but reject unsafe hints instead of
@@ -1044,9 +1040,9 @@ namespace Spark::Graphics
 
                 auto& srcRes = m_resources[root];
                 auto& dstRes = m_resources[to.index];
-                const bool destinationOwnsAliases = std::any_of(
-                    m_resources.begin(), m_resources.end(), [&](const auto& resource)
-                    { return resource.aliasTarget == to.index; });
+                const bool destinationOwnsAliases =
+                    std::any_of(m_resources.begin(), m_resources.end(),
+                                [&](const auto& resource) { return resource.aliasTarget == to.index; });
                 if (srcRes.lifetime != RenderGraphResourceLifetime::Transient ||
                     dstRes.lifetime != RenderGraphResourceLifetime::Transient ||
                     srcRes.firstUsePass == RenderGraphResource::INVALID_INDEX ||
@@ -1079,14 +1075,15 @@ namespace Spark::Graphics
                 }
             }
 
-            std::sort(transients.begin(), transients.end(), [&](uint32_t a, uint32_t b)
-            {
-                if (m_resources[a].firstUsePass != m_resources[b].firstUsePass)
-                {
-                    return m_resources[a].firstUsePass < m_resources[b].firstUsePass;
-                }
-                return a < b;
-            });
+            std::sort(transients.begin(), transients.end(),
+                      [&](uint32_t a, uint32_t b)
+                      {
+                          if (m_resources[a].firstUsePass != m_resources[b].firstUsePass)
+                          {
+                              return m_resources[a].firstUsePass < m_resources[b].firstUsePass;
+                          }
+                          return a < b;
+                      });
 
             std::vector<std::vector<uint32_t>> groups;
             for (uint32_t root : transients)
@@ -1120,21 +1117,23 @@ namespace Spark::Graphics
                 // Explicit roots already owning members stay roots. Avoid
                 // creating alias chains that depend on allocation order.
                 auto ownGroup = std::find_if(groups.begin(), groups.end(), [&](const auto& members)
-                { return !members.empty() && members.front() == resourceIndex; });
+                                             { return !members.empty() && members.front() == resourceIndex; });
                 if (ownGroup != groups.end())
                 {
                     continue;
                 }
 
-                auto destination = std::find_if(groups.begin(), groups.end(), [&](const auto& members)
-                {
-                    if (members.empty() || !compatible(m_resources[members.front()], resource))
-                    {
-                        return false;
-                    }
-                    return std::none_of(members.begin(), members.end(), [&](uint32_t member)
-                    { return overlaps(m_resources[member], resource); });
-                });
+                auto destination =
+                    std::find_if(groups.begin(), groups.end(),
+                                 [&](const auto& members)
+                                 {
+                                     if (members.empty() || !compatible(m_resources[members.front()], resource))
+                                     {
+                                         return false;
+                                     }
+                                     return std::none_of(members.begin(), members.end(), [&](uint32_t member)
+                                                         { return overlaps(m_resources[member], resource); });
+                                 });
                 if (destination != groups.end())
                 {
                     resource.aliasTarget = destination->front();

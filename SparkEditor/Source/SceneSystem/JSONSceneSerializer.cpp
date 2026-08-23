@@ -434,8 +434,7 @@ namespace SparkEditor
 
         const auto finite3 = [](const XMFLOAT3& value)
         { return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z); };
-        const auto finite4 = [](const XMFLOAT4& value)
-        {
+        const auto finite4 = [](const XMFLOAT4& value) {
             return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
         };
         bool finite = finite3(scene.header.gravity) && finite4(scene.header.ambientColor) &&
@@ -510,8 +509,8 @@ namespace SparkEditor
         ValidatingSceneComponentWriter payloadValidator;
         for (const Component& component : scene.components)
         {
-            const bool markerOnly = component.type == ComponentType::TRANSFORM ||
-                                    component.type == ComponentType::SPRITE_ANIMATOR;
+            const bool markerOnly =
+                component.type == ComponentType::TRANSFORM || component.type == ComponentType::SPRITE_ANIMATOR;
             if (markerOnly)
             {
                 if (component.HasData())
@@ -1527,14 +1526,13 @@ namespace SparkEditor
             std::memcpy(loadedScene.header.description, desc.data(), desc.size());
             loadedScene.header.description[desc.size()] = '\0';
         }
-        const size_t versionFieldCount =
-            static_cast<size_t>(std::count_if(root.objVal.begin(), root.objVal.end(),
-                                              [](const JSONMember& member) { return member.key == "version"; }));
+        const size_t versionFieldCount = static_cast<size_t>(std::count_if(
+            root.objVal.begin(), root.objVal.end(), [](const JSONMember& member) { return member.key == "version"; }));
         loadedScene.header.version = FieldUint32(root, "version", SCENE_FILE_VERSION);
         if (versionFieldCount != 1 || loadedScene.header.version != SCENE_FILE_VERSION)
         {
-            result.errorMessage =
-                "Scene file version is unsupported; legacy raw-memory scene payloads must be resaved by a trusted build";
+            result.errorMessage = "Scene file version is unsupported; legacy raw-memory scene payloads must be resaved "
+                                  "by a trusted build";
             return result;
         }
         loadedScene.header.objectCount = FieldUint32(root, "objectCount");
@@ -1693,8 +1691,8 @@ namespace SparkEditor
                 comp.enabled = FieldBool(compVal, "enabled", true);
 
                 const JSONValue* data = Field(compVal, "data");
-                const bool markerOnly = comp.type == ComponentType::TRANSFORM ||
-                                        comp.type == ComponentType::SPRITE_ANIMATOR;
+                const bool markerOnly =
+                    comp.type == ComponentType::TRANSFORM || comp.type == ComponentType::SPRITE_ANIMATOR;
                 if (markerOnly)
                 {
                     if (data)

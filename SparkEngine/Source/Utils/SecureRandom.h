@@ -14,4 +14,4 @@ namespace Spark::SecureRandom
 
     /** Return a lowercase hexadecimal token containing byteCount random bytes. */
     [[nodiscard]] std::string HexToken(size_t byteCount);
-}
+} // namespace Spark::SecureRandom
