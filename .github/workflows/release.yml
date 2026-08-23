@@ -401,10 +401,18 @@ jobs:
       id: assets
       run: |
         # Flatten all package artifacts + standalone installer binaries to current directory.
-        find release-assets -type f \
-          \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
-             -o -name "SparkInstaller-*" \) \
-          -exec cp {} . \;
+        while IFS= read -r -d '' artifact; do
+          name=$(basename "$artifact")
+          if [[ -e "$name" ]]; then
+            echo "Duplicate release asset name: $name" >&2
+            exit 1
+          fi
+          cp "$artifact" "$name"
+        done < <(
+          find release-assets -type f \
+            \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
+               -o -name "SparkInstaller-*" \) -print0
+        )
 
         FILES=""
         TABLE="| Asset | Notes |"$'\n'"|---|---|"

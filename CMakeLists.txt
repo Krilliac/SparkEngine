@@ -2662,7 +2662,15 @@ set(CPACK_COMPONENT_SAMPLES_DESCRIPTION "Reference sample modules and sample pro
 set(CPACK_COMPONENT_SAMPLES_DEPENDS runtime)
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/LICENSE")
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+    # WiX rejects license resources without a recognized extension. Keep the
+    # repository's canonical LICENSE file extensionless, but stage an identical
+    # .txt copy for all CPack generators so scheduled Windows packaging works.
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/LICENSE"
+        "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt"
+        COPYONLY
+    )
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt")
 endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/README.md")
     set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
@@ -2680,5 +2688,6 @@ set(CPACK_SOURCE_IGNORE_FILES
 set(CPACK_PACKAGE_FILE_NAME
     "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
 )
+set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_SOURCE_DIR}/cmake/SparkCPackOptions.cmake")
 
 include(CPack)
