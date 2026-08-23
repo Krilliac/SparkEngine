@@ -321,6 +321,7 @@ namespace Spark::Net
         uint32_t packetsReceived = 0; ///< Total UDP packets received.
         uint32_t packetsDropped = 0;  ///< Packets detected as lost (sequence gaps).
         uint32_t correctionCount = 0; ///< Number of client prediction corrections observed.
+        uint32_t fullEntitySyncs = 0; ///< Initial full snapshots sent to admitted clients.
         float bandwidthUp = 0.0f;     ///< KB/s
         float bandwidthDown = 0.0f;   ///< KB/s
     };
@@ -543,7 +544,7 @@ namespace Spark::Net
         std::vector<ClientID> GetConnectedClientIDs() const;
         void UpdateReplication(float deltaTime);
         void UpdateHeartbeat(float deltaTime);
-        void HandleConnect(const NetworkMessage& msg);
+        ClientID HandleConnect(const NetworkMessage& msg);
         void HandleDisconnect(const NetworkMessage& msg);
 
 #ifdef ENABLE_NETWORKING

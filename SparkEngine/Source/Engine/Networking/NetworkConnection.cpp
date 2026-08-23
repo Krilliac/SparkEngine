@@ -648,10 +648,10 @@ namespace Spark::Net
     // HandleConnect / HandleDisconnect
     // --------------------------------------------------------------------------
 
-    void NetworkManager::HandleConnect(const NetworkMessage& msg)
+    ClientID NetworkManager::HandleConnect(const NetworkMessage& msg)
     {
         if (GetRole() != NetworkRole::Server)
-            return;
+            return INVALID_CLIENT;
 
         // ProcessIncoming pre-registers m_clientAddresses[m_nextClientID] so
         // that SendToClient can reach the new client. If we reject, we must
@@ -678,7 +678,7 @@ namespace Spark::Net
             // doesn't receive broadcast traffic meant for real clients
             m_clientAddresses.erase(pendingID);
 #endif
-            return;
+            return INVALID_CLIENT;
         }
 
         ClientID newID = m_nextClientID++;
@@ -717,6 +717,7 @@ namespace Spark::Net
         SendToClient(newID, accept);
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u accepted ('%s'), %d/%d slots used", newID,
                        info.name.c_str(), static_cast<int>(m_clients.size()), m_maxClients);
+        return newID;
     }
 
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
@@ -928,11 +929,12 @@ namespace Spark::Net
 
                     // Pre-register the client address so HandleConnect's
                     // SendToClient(ConnectAccepted) can reach the new client.
-                    ClientID newID = m_nextClientID;
-                    m_clientAddresses[newID] = senderAddr;
+                    const ClientID pendingID = m_nextClientID;
+                    m_clientAddresses[pendingID] = senderAddr;
 
-                    HandleConnect(msg);
-                    newlyConnected.push_back(newID);
+                    const ClientID admittedID = HandleConnect(msg);
+                    if (admittedID != INVALID_CLIENT)
+                        newlyConnected.push_back(admittedID);
                     continue;
                 }
 

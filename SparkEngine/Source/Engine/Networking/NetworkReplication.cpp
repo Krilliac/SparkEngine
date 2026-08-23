@@ -156,6 +156,17 @@ namespace Spark::Net
         if (GetRole() != NetworkRole::Server)
             return;
 
+        // A rejected/pending endpoint is never entitled to an entity walk. This
+        // guard also keeps accidental callers from turning rejection traffic
+        // into O(connects * replicated-entities) CPU amplification.
+        {
+            std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+            if (!m_clients.contains(targetClient))
+                return;
+        }
+
+        ++m_stats.fullEntitySyncs;
+
         auto& scopeFilter = ConnectionScopeFilter::GetInstance();
 
         std::lock_guard<std::mutex> lock(m_replicationMutex);

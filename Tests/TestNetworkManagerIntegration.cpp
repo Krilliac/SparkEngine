@@ -374,6 +374,73 @@ TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
     nm.Shutdown();
 }
 
+TEST(NetworkManager_RejectedConnectDoesNotTriggerEntitySync)
+{
+    auto& nm = NetworkManager::GetInstance();
+    EXPECT_TRUE(nm.Initialize());
+
+    const uint16_t port = 39202;
+    EXPECT_TRUE(nm.StartServer(port, 1));
+
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
+
+    std::vector<uint8_t> connectPacket;
+    auto put32 = [&](uint32_t value)
+    {
+        for (int shift = 0; shift < 32; shift += 8)
+            connectPacket.push_back(static_cast<uint8_t>((value >> shift) & 0xFF));
+    };
+    auto put16 = [&](uint16_t value)
+    {
+        connectPacket.push_back(static_cast<uint8_t>(value & 0xFF));
+        connectPacket.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
+    };
+    put32(0x5350524B);
+    put16(static_cast<uint16_t>(MessageType::Connect));
+    connectPacket.push_back(static_cast<uint8_t>(ChannelType::Reliable));
+    put32(INVALID_CLIENT);
+    put32(0);
+    put32(0);
+    put32(0);
+
+    auto sendConnect = [&]()
+    {
+        SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        EXPECT_TRUE(client != INVALID_SOCKET);
+        const int sent =
+            sendto(client, reinterpret_cast<const char*>(connectPacket.data()), static_cast<int>(connectPacket.size()),
+                   0, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
+        EXPECT_EQ(sent, static_cast<int>(connectPacket.size()));
+        return client;
+    };
+
+    SOCKET admitted = sendConnect();
+    for (int i = 0; i < 20 && nm.GetClients().empty(); ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(nm.GetClients().size(), 1u);
+    EXPECT_EQ(nm.GetStats().fullEntitySyncs, 1u);
+
+    SOCKET rejected = sendConnect();
+    for (int i = 0; i < 10; ++i)
+    {
+        nm.Update(0.016f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(nm.GetClients().size(), 1u);
+    EXPECT_EQ(nm.GetStats().fullEntitySyncs, 1u);
+
+    closesocket(rejected);
+    closesocket(admitted);
+    nm.StopServer();
+    nm.Shutdown();
+}
+
 #endif // ENABLE_NETWORKING
 
 // ============================================================================
