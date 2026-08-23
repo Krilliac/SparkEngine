@@ -42,10 +42,13 @@ jobs:
           submodules: recursive
 
       - name: Configure CMake
+        # The build matrix already compiles and runs the test corpus. Keep
+        # NativeRecommendedRules focused on production targets so hundreds
+        # of test translation units cannot exhaust this job's 60-minute cap.
         run: >-
           cmake -S . -B "${{ env.build }}"
           -G "Visual Studio 17 2022" -A x64 -T v143
-          -DBUILD_TESTS=ON
+          -DBUILD_TESTS=OFF
 
       # Build is not required unless generated source files are used
       # - name: Build CMake

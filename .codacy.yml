@@ -1,0 +1,20 @@
+---
+# Keep the legacy Codacy wrapper focused on analyzable source. Its SARIF
+# formatter attempts to decode every reported file as UTF-8, so repository
+# binary assets must be excluded explicitly.
+engines:
+  cppcheck:
+    language: c++
+
+exclude_paths:
+  - "**/*.bin"
+  - "**/*.bof"
+  - "**/*.cso"
+  - "**/*.icns"
+  - "**/*.jar"
+  - "**/*.jpeg"
+  - "**/*.jpg"
+  - "**/*.png"
+  - "**/*.tga"
+  - "**/*.ttf"
+  - "**/*.wav"

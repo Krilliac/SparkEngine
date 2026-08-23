@@ -33,7 +33,9 @@ jobs:
       actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
     name: Codacy Security Scan
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The C++ corpus is large enough that cppcheck can exceed the classic CLI's
+    # 15-minute per-tool default. Leave headroom for SARIF generation/upload.
+    timeout-minutes: 90
     steps:
       # Checkout the repository to the GitHub Actions runner
       - name: Checkout code
@@ -50,6 +52,7 @@ jobs:
           # You can also omit the token and run the tools that support default configurations
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           verbose: true
+          tool-timeout: 45minutes
           output: results.sarif
           format: sarif
           # Adjust severity of non-security issues
