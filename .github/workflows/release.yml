@@ -117,7 +117,7 @@ jobs:
         cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
     - name: Upload packaged artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Windows-${{ matrix.config }}-packages
         path: build/packages/*
@@ -178,7 +178,7 @@ jobs:
         cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
     - name: Upload packaged artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Linux-${{ matrix.config }}-packages
         path: build/packages/*
@@ -232,7 +232,7 @@ jobs:
           cp "build-installer/build/bin/${{ matrix.bin_name }}" "staging/${{ matrix.artifact_name }}"
 
       - name: Upload installer binary
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.artifact_name }}
           path: staging/${{ matrix.artifact_name }}
@@ -405,7 +405,7 @@ jobs:
       run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
     - name: Download all build artifacts
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@v8.0.1
       with:
         path: release-assets
 

@@ -72,7 +72,7 @@ jobs:
 
     - name: Upload check-format error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-check-format
         path: error-summary.json
@@ -180,7 +180,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-linux-asan
         path: error-summary.json
@@ -188,7 +188,7 @@ jobs:
 
     - name: Upload ASan + UBSan + LSan report
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: sanitizer-report-asan-ubsan-lsan
         path: build/asan-ubsan-lsan-results.txt
@@ -270,7 +270,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-linux-tsan
         path: error-summary.json
@@ -278,7 +278,7 @@ jobs:
 
     - name: Upload TSan report
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: sanitizer-report-tsan
         path: build/tsan-results.txt
@@ -360,7 +360,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-linux-msan
         path: error-summary.json
@@ -379,7 +379,7 @@ jobs:
 
     - name: Upload MSan report
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: sanitizer-report-msan
         path: build/msan-results.txt
@@ -404,7 +404,7 @@ jobs:
       uses: microsoft/setup-msbuild@v3
 
     - name: Setup sccache
-      uses: mozilla-actions/sccache-action@v0.0.10
+      uses: mozilla-actions/sccache-action@v0.0.11
 
     - name: Restore build directory
       uses: actions/cache@v6
@@ -449,7 +449,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-windows-vs2022-${{ matrix.config }}
         path: error-summary.json
@@ -470,7 +470,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Windows-VS2022-${{ matrix.config }}
         path: SparkEngine-Windows-${{ matrix.config }}.zip
@@ -533,7 +533,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Windows-VS2026-${{ matrix.config }}
         path: build/bin/${{ matrix.config }}/
@@ -625,7 +625,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-linux-gcc-${{ matrix.config }}
         path: error-summary.json
@@ -641,7 +641,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Linux-GCC-${{ matrix.config }}
         path: SparkEngine-Linux-GCC-${{ matrix.config }}.tar.gz
@@ -736,7 +736,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-linux-clang-${{ matrix.config }}
         path: error-summary.json
@@ -752,7 +752,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-Linux-Clang-${{ matrix.config }}
         path: SparkEngine-Linux-Clang-${{ matrix.config }}.tar.gz
@@ -847,7 +847,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-linux-mingw-wine
         path: error-summary.json
@@ -855,7 +855,7 @@ jobs:
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: mingw-wine-test-results
         path: wine-test-results.txt
@@ -967,7 +967,7 @@ jobs:
 
     - name: Upload error summary
       if: failure()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: ci-errors-macos-${{ matrix.config }}-${{ matrix.backend }}
         path: error-summary.json
@@ -980,7 +980,7 @@ jobs:
     # each failure instead of rerunning the job locally.
     - name: Upload Golden Image Diffs
       if: failure() && matrix.backend == 'Metal'
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: rt-goldens-macos-${{ matrix.config }}-${{ github.run_id }}
         path: |
@@ -991,7 +991,7 @@ jobs:
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v7.0.1
       with:
         name: SparkEngine-macOS-${{ matrix.config }}-${{ matrix.backend }}
         path: build/bin/
@@ -1104,7 +1104,7 @@ jobs:
 
       - name: Upload error summary
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ci-errors-coverage
           path: error-summary.json
@@ -1148,7 +1148,7 @@ jobs:
               console.log('Could not post coverage:', e.message);
             }
       - name: Upload coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: coverage-report
           path: |
@@ -1241,7 +1241,7 @@ jobs:
             clang-tidy-output.log || true
       - name: Upload clang-tidy error summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ci-errors-clang-tidy
           path: error-summary.json
@@ -1249,7 +1249,7 @@ jobs:
           if-no-files-found: ignore
       - name: Upload clang-tidy full log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: clang-tidy-output
           path: clang-tidy-output.log
@@ -1288,7 +1288,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       - name: Download all error summaries
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: ci-errors-*
           path: ci-error-summaries
@@ -1327,7 +1327,7 @@ jobs:
           fi
       - name: Upload todo-count summary artifact
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: todo-count-report
           path: todo-list.log
@@ -1382,7 +1382,7 @@ jobs:
           cp "build-installer/build/bin/${{ matrix.bin_name }}" "staging/${{ matrix.bin_name }}"
 
       - name: Upload installer binary
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.artifact }}
           path: staging/${{ matrix.bin_name }}
