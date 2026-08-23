@@ -1780,7 +1780,7 @@ graph LR
 
 ### `SparkEngine/Source/Engine/Persistence/`
 
-- [`AsyncDatabase.cpp`](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp) — 913 LOC — Implementation of the async database persistence layer.
+- [`AsyncDatabase.cpp`](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp) — 947 LOC — Implementation of the async database persistence layer.
 - [`AsyncDatabase.h`](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h) — 288 LOC — Async database layer with connection pooling and prepared statements (TC-inspired)
 
 ### `SparkEngine/Source/Engine/Physics/`
@@ -2626,7 +2626,7 @@ graph LR
 - [`TestAsyncComputeScheduler.cpp`](../../Tests/TestAsyncComputeScheduler.cpp) — 194 LOC
 - [`TestAsyncComputeSchedulerPhaseCC.cpp`](../../Tests/TestAsyncComputeSchedulerPhaseCC.cpp) — 186 LOC — Phase CC Theme 3D tests for Spark::Graphics::AsyncComputeScheduler
 - [`TestAsyncDatabase.cpp`](../../Tests/TestAsyncDatabase.cpp) — 383 LOC
-- [`TestAsyncDatabaseRegressions.cpp`](../../Tests/TestAsyncDatabaseRegressions.cpp) — 80 LOC
+- [`TestAsyncDatabaseRegressions.cpp`](../../Tests/TestAsyncDatabaseRegressions.cpp) — 122 LOC
 - [`TestAtomicSharedPtr.cpp`](../../Tests/TestAtomicSharedPtr.cpp) — 127 LOC
 - [`TestAtomicSharedPtrReal.cpp`](../../Tests/TestAtomicSharedPtrReal.cpp) — 95 LOC — Real-class tests for Spark::AtomicSharedPtr<T>
 - [`TestAudioBackendFactory.cpp`](../../Tests/TestAudioBackendFactory.cpp) — 102 LOC — Verifies platform-specific audio backend selection
@@ -3131,6 +3131,6 @@ graph LR
 | Metric | Count |
 |--------|-------|
 | Source files scanned | 2337 |
-| Total lines of code  | 668265 |
+| Total lines of code  | 668341 |
 | Source directories   | 17 |
-| Last generated       | 2026-07-19 03:58:42 |
+| Last generated       | 2026-08-23 05:58:52 |

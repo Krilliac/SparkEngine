@@ -517,7 +517,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*535 test files, 6307+ test cases*
+*535 test files, 6308+ test cases*
 
 | Test File | Test Cases |
 |-----------|------------|
@@ -566,7 +566,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestAsyncComputeScheduler` | 9 |
 | `TestAsyncComputeSchedulerPhaseCC` | 12 |
 | `TestAsyncDatabase` | 23 |
-| `TestAsyncDatabaseRegressions` | 2 |
+| `TestAsyncDatabaseRegressions` | 3 |
 | `TestAtomicSharedPtr` | 3 |
 | `TestAtomicSharedPtrReal` | 7 |
 | `TestAudioBackendFactory` | 5 |
