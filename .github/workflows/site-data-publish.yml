@@ -118,7 +118,7 @@ jobs:
               "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}/jobs?per_page=100&page=${PAGE}" \
               --output "$PAGE_FILE"
 
-            PAGE_METADATA="$(python3 -I -c 'import json, os, sys; payload = json.load(open(sys.argv[1], encoding="utf-8")); jobs = payload.get("jobs"); total = payload.get("total_count"); assert isinstance(jobs, list) and isinstance(total, int) and total > 0; expected_run = int(os.environ["EVIDENCE_RUN_ID"]); expected_sha = os.environ["SOURCE_COMMIT"]; assert all(isinstance(job, dict) and isinstance(job.get("id"), int) and job["id"] > 0 and job.get("run_id") == expected_run and job.get("head_sha") == expected_sha and isinstance(job.get("name"), str) and job["name"] for job in jobs); print(f"{total}\t{len(jobs)}")' \
+            PAGE_METADATA="$(python3 -I -c 'import json, os, sys; payload = json.load(open(sys.argv[1], encoding="utf-8")); jobs = payload.get("jobs"); total = payload.get("total_count"); assert isinstance(jobs, list) and isinstance(total, int) and total >= 0; expected_run = int(os.environ["EVIDENCE_RUN_ID"]); expected_sha = os.environ["SOURCE_COMMIT"]; assert all(isinstance(job, dict) and isinstance(job.get("id"), int) and job["id"] > 0 and job.get("run_id") == expected_run and job.get("head_sha") == expected_sha and isinstance(job.get("name"), str) and job["name"] for job in jobs); print(f"{total}\t{len(jobs)}")' \
               "$PAGE_FILE")"
             PAGE_TOTAL_COUNT="${PAGE_METADATA%%$'\t'*}"
             PAGE_JOB_COUNT="${PAGE_METADATA#*$'\t'}"
@@ -142,7 +142,6 @@ jobs:
             test "$PAGE" -le 100
           done
 
-          test -s "$JOBS_FILE"
           JOB_COUNT="$(wc -l < "$JOBS_FILE" | tr -d '[:space:]')"
           UNIQUE_JOB_COUNT="$(cut -f 1 "$JOBS_FILE" | LC_ALL=C sort -u | wc -l | tr -d '[:space:]')"
           test "$JOB_COUNT" -eq "$EXPECTED_JOB_COUNT"
@@ -153,6 +152,7 @@ jobs:
 
           NORMALIZED_CONCLUSION="failure"
           if test "$EVIDENCE_RUN_ATTEMPT" -eq 1 \
+            && test "$JOB_COUNT" -gt 0 \
             && test "$REPORTED_EVIDENCE_CONCLUSION" = "success" \
             && test ! -s "$NON_PASSING_FILE"; then
             NORMALIZED_CONCLUSION="success"
@@ -160,6 +160,9 @@ jobs:
             echo "::warning::The build evidence is not fully passing (workflow=${REPORTED_EVIDENCE_CONCLUSION})."
             if test "$EVIDENCE_RUN_ATTEMPT" -ne 1; then
               echo "::warning::A rerun cannot promote site evidence because a partial rerun does not prove the complete job roster. Push a new commit for a full run."
+            fi
+            if test "$JOB_COUNT" -eq 0; then
+              echo "::warning::The build was cancelled before any jobs materialized; publishing blocked evidence."
             fi
             while IFS=$'\t' read -r JOB_ID JOB_NAME JOB_STATUS JOB_CONCLUSION; do
               printf 'Non-passing job %s: %s (%s/%s)\n' \
