@@ -279,7 +279,7 @@ HEREDOC
 | ENABLE_* feature toggles | ${ENABLE_TOGGLES} |
 | Game modules | ${GAME_MODULE_COUNT} |
 | SDK public headers | ${SDK_HEADER_COUNT} |
-| Supported compilers | MSVC v143/v144, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
+| Supported compilers | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
 ## Third-Party Dependencies

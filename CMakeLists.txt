@@ -9,16 +9,17 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Set CMake policies for modern behavior
 cmake_policy(SET CMP0091 NEW)  # Enable MSVC_RUNTIME_LIBRARY support
+cmake_policy(SET CMP0141 NEW)  # Select MSVC debug-information format through CMake
 
 # Note: CMAKE_MSVC_RUNTIME_LIBRARY is set after project() below,
 # because the MSVC variable is not defined until the compiler is identified.
 
 # MSVC toolset selection:
 #   v143 = Visual Studio 2022
-#   v144 = Visual Studio 2026
-# Override at configure time: cmake -DSPARK_MSVC_TOOLSET=v144 ...
+#   v145 = Visual Studio 2026
+# Prefer the generator's -T option (or a preset's "toolset" field).
 set(SPARK_MSVC_TOOLSET "" CACHE STRING
-    "MSVC toolset version (e.g. v143 for VS 2022, v144 for VS 2026). Empty = auto-detect.")
+    "Deprecated compatibility hint for the selected MSVC toolset. Use cmake -T instead.")
 
 # ---------------------------------------------------------------------
 # 1) Disable all third-party tests/examples globally
@@ -32,17 +33,18 @@ set(BUILD_DOCS OFF CACHE BOOL "Disable docs" FORCE)
 # ---------------------------------------------------------------------
 # 2) Global generator and project settings
 # ---------------------------------------------------------------------
-# Platform-specific generator settings (only if not already set)
-if(WIN32 AND NOT CMAKE_GENERATOR_TOOLSET)
-    if(NOT SPARK_MSVC_TOOLSET STREQUAL "")
-        set(CMAKE_GENERATOR_TOOLSET "${SPARK_MSVC_TOOLSET}")
-    else()
-        # Default to v143 (VS 2022). Use -DSPARK_MSVC_TOOLSET=v144 for VS 2026.
-        set(CMAKE_GENERATOR_TOOLSET "v143")
+# Generator toolset/platform are immutable generator inputs. Never rewrite
+# them from project code; use -T/-A or CMakePresets.json instead.
+if(WIN32 AND NOT SPARK_MSVC_TOOLSET STREQUAL "")
+    if(CMAKE_GENERATOR_TOOLSET AND NOT CMAKE_GENERATOR_TOOLSET STREQUAL SPARK_MSVC_TOOLSET)
+        message(FATAL_ERROR
+            "SPARK_MSVC_TOOLSET=${SPARK_MSVC_TOOLSET} disagrees with generator toolset "
+            "${CMAKE_GENERATOR_TOOLSET}. Configure with -T ${SPARK_MSVC_TOOLSET} instead.")
+    elseif(NOT CMAKE_GENERATOR_TOOLSET)
+        message(WARNING
+            "SPARK_MSVC_TOOLSET is a compatibility hint only. Select the toolset with "
+            "-T ${SPARK_MSVC_TOOLSET} or a preset toolset field.")
     endif()
-endif()
-if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM)
-    set(CMAKE_GENERATOR_PLATFORM "x64")
 endif()
 
 # macOS deployment target — must be set before project() so the compiler is
@@ -69,7 +71,13 @@ endif()
 # Set consistent runtime library for all targets using modern CMake (CMP0091)
 # Must be after project() so that the MSVC variable is defined.
 if(MSVC)
+    if(MSVC_VERSION LESS 1936)
+        message(FATAL_ERROR "SparkEngine requires MSVC 19.36 or newer (Visual Studio 2022 17.6+)")
+    endif()
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    # /Z7 embeds CodeView data in object files, allowing sccache to cache
+    # Debug builds while link-time /DEBUG still emits PDBs.
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
 endif()
 
 # ---------------------------------------------------------------------
@@ -79,10 +87,7 @@ if(MSVC)
     # Map _MSC_VER ranges to Visual Studio release years
     if(MSVC_VERSION GREATER_EQUAL 1950)
         set(SPARK_VS_YEAR "2026+")
-        set(SPARK_VS_TOOLSET "v144+")
-    elseif(MSVC_VERSION GREATER_EQUAL 1940)
-        set(SPARK_VS_YEAR "2026")
-        set(SPARK_VS_TOOLSET "v144")
+        set(SPARK_VS_TOOLSET "v145+")
     elseif(MSVC_VERSION GREATER_EQUAL 1930)
         set(SPARK_VS_YEAR "2022")
         set(SPARK_VS_TOOLSET "v143")
@@ -205,7 +210,6 @@ if(MSVC)
     # Note: /GS (buffer security check) is enabled by default in MSVC — no explicit flag needed.
     add_compile_options(
         /W3 /MP /bigobj
-        /Zi          # Always generate PDB debug info (enables stack trace symbol resolution)
         /wd4005  # Macro redefinition
         /wd4996  # Deprecated functions
         /wd4244  # Conversion warnings
@@ -223,14 +227,14 @@ if(MSVC)
         add_compile_options(/Zc:__cplusplus /permissive-)
     endif()
 
-    # VS 2026 (v144, _MSC_VER >= 1940): enable C++26 readiness flags
-    if(MSVC_VERSION GREATER_EQUAL 1940)
+    # VS 2026 (v145, _MSC_VER >= 1950): enable C++26 readiness flags
+    if(MSVC_VERSION GREATER_EQUAL 1950)
         add_compile_options(
-            /Zc:preprocessor   # Standard-conforming preprocessor (fully enabled in v144)
+            /Zc:preprocessor   # Standard-conforming preprocessor
             /wd5045            # Spectre mitigation informational warning
         )
         add_compile_definitions(SPARK_COMPILER_VS2026)
-    # VS 2022 (v143, _MSC_VER 1930-1939)
+    # VS 2022 (v143, _MSC_VER 1930-1944)
     elseif(MSVC_VERSION GREATER_EQUAL 1930)
         add_compile_options(/Zc:preprocessor)
         add_compile_definitions(SPARK_COMPILER_VS2022)

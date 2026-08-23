@@ -29,7 +29,7 @@ is shown and the relevant `EngineSettings` / setter is called out.
 | **CPU Baseline** | x64 baseline | AVX2 (`/arch:AVX2` forced in Release, `CMakeLists.txt:403`) |
 | **GPU (Primary)** | D3D11 Feature Level 10.0 | D3D11 FL 11.1 |
 | **GPU (Optional)** | D3D12 FL 12.0 (Win10+) | D3D12 FL 12.0 with DXR Tier 1.1 |
-| **Compiler** | MSVC 19.36+ (VS 2022 17.6+, v143 toolset) | MSVC v143 / v144 |
+| **Compiler** | MSVC 19.36+ (VS 2022 17.6+, v143 toolset) | MSVC v143 / v145 |
 | **Audio** | XAudio2 (Win32 runtime) | XAudio2 |
 | **CMake** | 3.25+ | 3.25+ |
 | **C++ Standard** | C++23 | C++23 |

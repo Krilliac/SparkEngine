@@ -139,7 +139,7 @@ Current status of all major subsystems as of v1.0.0 (April 2026).
 | Platform | Status | Notes |
 |----------|--------|-------|
 | Windows 10+ (MSVC v143) | **Stable** | Primary, fully CI tested |
-| Windows (MSVC v144 / VS 2026) | Experimental | Forward-compatibility |
+| Windows (MSVC v145 / VS 2026) | Experimental | Native CMake VS 18 generator coverage |
 | Linux (GCC 13+) | Experimental | CI tested, pre-built binaries |
 | Linux (Clang 17+) | Experimental | CI tested |
 | macOS (Apple Clang) | Experimental | Builds, no Metal yet |

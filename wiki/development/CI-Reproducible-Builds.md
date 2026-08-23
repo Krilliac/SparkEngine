@@ -112,12 +112,12 @@ MSan requires libc++ built with `-fsanitize=memory`; this is why the job is `con
 ## Windows MSVC VS 2022 (v143) — Debug + Release (job `build-windows-vs2022`)
 
 ```bash
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
+cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure --parallel
 ```
 
-CI additionally passes `-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache` for caching; omit those locally unless you have sccache installed. The VS 2026 job (`build-windows-vs2026`, `continue-on-error`) is identical but uses `-T v144 -DSPARK_MSVC_TOOLSET=v144`.
+The engine selects embedded MSVC debug information (`/Z7`) through CMake policy CMP0141 so Ninja-based local builds can use sccache effectively. The advisory VS 2026 job uses CMake 4.2+'s native `Visual Studio 18 2026` generator and its default v145 toolset; it fails visibly when that toolchain is absent instead of reporting a green no-op.
 
 ## macOS (job `build-macos`, `continue-on-error`)
 
@@ -170,7 +170,7 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
   - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.).
   - Added the new `ci-linux-asan` / `ci-linux-tsan` presets as alternatives.
   - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI.
-  - Added sccache/`continue-on-error` notes for the Windows jobs and the v144 VS 2026 variant.
+  - Added sccache/`continue-on-error` notes for the Windows jobs and the v145 VS 2026 variant.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
 

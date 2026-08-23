@@ -173,9 +173,11 @@ CI enforces manifest hygiene via `tools/check-thirdparty-manifest-sync.sh`: depe
 ### MSVC Toolset Selection
 
 ```bash
-cmake -DSPARK_MSVC_TOOLSET=v143 ...  # VS 2022 (default)
-cmake -DSPARK_MSVC_TOOLSET=v144 ...  # VS 2026
+cmake -G "Visual Studio 17 2022" -A x64 -T v143 ...  # VS 2022
+cmake -G "Visual Studio 18 2026" -A x64 ...          # VS 2026 (v145 default)
 ```
+
+Toolset and platform are generator inputs; select them with `-T`/`-A` or the preset `toolset`/`architecture` fields, not project cache variables.
 
 ## CMake Presets
 
@@ -446,7 +448,7 @@ Runs on every push to `main`, `develop`, and `feature/*` branches, and on all pu
 | `build-linux-clang` | ubuntu-24.04 | Clang | Debug, Release | `-DBUILD_TESTS=ON` |
 | `build-linux-asan` | ubuntu-24.04 | GCC | Debug | ASan + UBSan |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
-| `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
+| `build-windows-vs2026` | windows-latest | MSVC v145 | Debug, Release | native VS 18 generator; advisory until runner availability is guaranteed |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |
 | `clang-tidy` | ubuntu-24.04 | Clang | Debug | `continue-on-error` |
 | `todo-count` | ubuntu-24.04 | -- | -- | threshold: 20 |
@@ -483,7 +485,7 @@ cd build && ctest --output-on-failure && ./bin/SparkTests && cd ..
 **Windows MSVC (VS 2022):**
 ```bash
 cmake -B build -G "Visual Studio 17 2022" -A x64 \
-    -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON
+    -T v143 -DBUILD_TESTS=ON
 cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
@@ -501,7 +503,7 @@ Runs on every push to `master`/`main`:
 | Compiler | Version | Platform | Status |
 |----------|---------|----------|--------|
 | MSVC | v143 (VS 2022) | Windows | Fully supported |
-| MSVC | v144 (VS 2026) | Windows | Experimental (`continue-on-error`) |
+| MSVC | v145 (VS 2026) | Windows | Experimental (`continue-on-error`) |
 | GCC | 13+ | Linux | Fully supported |
 | Clang | 17+ | Linux | Fully supported |
 | Apple Clang | C++23 capable | macOS | Experimental |

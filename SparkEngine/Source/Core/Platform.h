@@ -28,11 +28,10 @@
 // Visual Studio release year mapping (_MSC_VER ranges):
 //   VS 2017 (v141) : 1910-1916
 //   VS 2019 (v142) : 1920-1929
-//   VS 2022 (v143) : 1930-1939
-//   VS 2026 (v144) : 1940+
+//   VS 2022 (v143) : 1930-1944
+//   VS 2026 (v145) : 1950+
 #if _MSC_VER >= 1950
 #define SPARK_COMPILER_MSVC_2026_PLUS 1
-#elif _MSC_VER >= 1940
 #define SPARK_COMPILER_MSVC_2026 1
 #elif _MSC_VER >= 1930
 #define SPARK_COMPILER_MSVC_2022 1

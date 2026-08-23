@@ -364,7 +364,7 @@ Tests run automatically on every push via GitHub Actions. The CI matrix covers m
 | `build-linux-tsan` | ubuntu-24.04 | GCC | Debug | TSan (thread races) |
 | `build-linux-msan` | ubuntu-24.04 | Clang + libc++ | Debug | MSan (`continue-on-error`) |
 | `build-windows-vs2022` | windows-latest | MSVC v143 | Debug, Release | `-DBUILD_TESTS=ON` |
-| `build-windows-vs2026` | windows-latest | MSVC v144 | Debug, Release | `continue-on-error` |
+| `build-windows-vs2026` | windows-latest | MSVC v145 | Debug, Release | `continue-on-error` |
 | `build-linux-mingw-wine` | ubuntu-24.04 | MinGW-w64 + Wine | Release | `continue-on-error` |
 | `build-macos` | macos-latest | Apple Clang | Debug, Release | `continue-on-error` |
 | `coverage` | ubuntu-24.04 | GCC | Debug | `--coverage` + lcov |

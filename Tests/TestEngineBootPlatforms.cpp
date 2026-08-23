@@ -352,6 +352,19 @@ TEST(Platform_CompilerVersionNonZero)
     EXPECT_GT(SPARK_COMPILER_VERSION, 0);
 }
 
+TEST(Platform_MSVCGenerationMatchesCompilerVersion)
+{
+#if defined(_MSC_VER) && _MSC_VER >= 1950
+    EXPECT_TRUE(SPARK_COMPILER_MSVC_2026 == 1);
+    EXPECT_TRUE(SPARK_COMPILER_MSVC_2026_PLUS == 1);
+#elif defined(_MSC_VER)
+    static_assert(_MSC_VER >= 1936, "SparkEngine requires MSVC 19.36+");
+    EXPECT_TRUE(SPARK_COMPILER_MSVC_2022 == 1);
+#else
+    EXPECT_TRUE(true);
+#endif
+}
+
 TEST(Platform_NativeWindowHandle_IsVoidPtr)
 {
     EXPECT_EQ(sizeof(Spark::NativeWindowHandle), sizeof(void*));

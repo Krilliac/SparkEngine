@@ -417,7 +417,7 @@ jobs:
 
     - name: Configure CMake (VS 2022 / v143)
       shell: bash
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DSPARK_MSVC_TOOLSET=v143 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache 2>&1 | tee cmake-configure.log
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
 
     - name: Build
       shell: bash
@@ -475,9 +475,10 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
-  # Windows Build (MSVC VS 2022 generator + v144 toolset for VS 2026)
-  # Uses VS 2022 generator since CMake does not yet have a VS 2026 generator.
-  # Marked continue-on-error until v144 toolset is broadly available on runners.
+  # Windows Build (Visual Studio 2026 / v145)
+  # CMake 4.2+ provides the native Visual Studio 18 2026 generator. This lane
+  # remains advisory until GitHub-hosted runners guarantee that installation,
+  # but an unavailable toolchain must be visible rather than a green no-op.
   # ===========================================================================
   build-windows-vs2026:
     if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
@@ -496,9 +497,6 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v3
 
-    - name: Setup sccache
-      uses: mozilla-actions/sccache-action@v0.0.10
-
     - name: Restore build directory
       uses: actions/cache@v6
       with:
@@ -508,35 +506,31 @@ jobs:
           build-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-windows-vs2026-${{ matrix.config }}-
 
-    - name: Check v144 toolset availability
-      id: check-v144
+    - name: Require Visual Studio 2026
       shell: pwsh
       run: |
-        # v144 platform toolset ships with VS 2026. Check if the toolset props file exists.
-        $propsPath = Join-Path $env:ProgramFiles "Microsoft Visual Studio" "2022" "Enterprise" `
-          "MSBuild" "Microsoft" "VC" "v170" "Platforms" "x64" "PlatformToolsets" "v144"
-        if (Test-Path $propsPath) {
-          echo "available=true" >> $env:GITHUB_OUTPUT
-          Write-Host "v144 toolset found"
-        } else {
-          echo "available=false" >> $env:GITHUB_OUTPUT
-          Write-Host "v144 toolset not found — skipping VS 2026 build"
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
+        if (-not (Test-Path $vswhere)) {
+          throw "vswhere is unavailable; cannot verify Visual Studio 2026"
         }
+        $install = & $vswhere -latest -products * -version '[18.0,19.0)' -property installationPath
+        if (-not $install) {
+          throw "Visual Studio 2026 is unavailable on this runner"
+        }
+        Write-Host "Visual Studio 2026: $install"
 
-    - name: Configure CMake (VS 2022 generator / v144 toolset)
-      if: steps.check-v144.outputs.available == 'true'
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v144 -DSPARK_MSVC_TOOLSET=v144 -DBUILD_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+    - name: Configure CMake (VS 2026 / v145)
+      run: cmake -B build -G "Visual Studio 18 2026" -A x64 -DBUILD_TESTS=ON
 
     - name: Build
-      if: steps.check-v144.outputs.available == 'true'
       run: cmake --build build --config ${{ matrix.config }} --parallel
 
     - name: Run Tests
-      if: steps.check-v144.outputs.available == 'true' && matrix.config == 'Release'
+      if: matrix.config == 'Release'
       run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --parallel
 
     - name: Upload Build Artifacts
-      if: steps.check-v144.outputs.available == 'true' && matrix.config == 'Release'
+      if: matrix.config == 'Release'
       uses: actions/upload-artifact@v7
       with:
         name: SparkEngine-Windows-VS2026-${{ matrix.config }}

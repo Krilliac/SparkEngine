@@ -118,7 +118,7 @@ Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-07-
 | ENABLE_* feature toggles | 18 |
 | Game modules | 11 |
 | SDK public headers | 12 |
-| Supported compilers | MSVC v143/v144, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
+| Supported compilers | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
 ## Third-Party Dependencies

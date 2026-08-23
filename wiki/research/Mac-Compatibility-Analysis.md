@@ -207,7 +207,7 @@ drain-without-render stub):
 
 | Platform | Minimum | Recommended |
 |----------|---------|-------------|
-| **Windows** | Win10 x64, MSVC 19.36+, D3D11 FL 10.0 | Win11, MSVC v143/v144, D3D11 FL 11.1, D3D12+DXR |
+| **Windows** | Win10 x64, MSVC 19.36+, D3D11 FL 10.0 | Win11, MSVC v143/v145, D3D11 FL 11.1, D3D12+DXR |
 | **Linux** | glibc 2.35+ x64, GCC 13+/Clang 17+, OpenGL 4.6 *or* Vulkan 1.3 | Ubuntu 24.04, GCC 14, Vulkan 1.3 |
 | **macOS** | macOS 11 Big Sur, x64/ARM64, Metal 2.3 *or* OpenGL 4.1 | macOS 12+, Apple Silicon M2+, Metal 3 with `supportsRaytracing` |
 

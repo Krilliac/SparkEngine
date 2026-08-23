@@ -12,7 +12,7 @@
 
 | Platform | Status | Compiler |
 |----------|--------|----------|
-| Windows 10+ | Primary | MSVC v143 (VS 2022), v144 (VS 2026) |
+| Windows 10+ | Primary | MSVC v143 (VS 2022), v145 (VS 2026) |
 | Linux x64 | Experimental | GCC 13+, Clang 17+ |
 | macOS 11+ | Experimental | Apple Clang with C++23 |
 

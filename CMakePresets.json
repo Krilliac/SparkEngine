@@ -20,9 +20,9 @@
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
+            "toolset": "v143",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "SPARK_MSVC_TOOLSET": "v143"
+                "CMAKE_BUILD_TYPE": "Debug"
             },
             "condition": {
                 "type": "equals",
@@ -36,9 +36,9 @@
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
+            "toolset": "v143",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "SPARK_MSVC_TOOLSET": "v143"
+                "CMAKE_BUILD_TYPE": "Release"
             },
             "condition": {
                 "type": "equals",
@@ -132,9 +132,9 @@
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
+            "toolset": "v143",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
-                "SPARK_MSVC_TOOLSET": "v143",
                 "SPARK_NATIVE_ARCH": "OFF",
                 "ENABLE_EDITOR": "OFF",
                 "ENABLE_PROFILING": "OFF",
@@ -156,9 +156,9 @@
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
+            "toolset": "v143",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-                "SPARK_MSVC_TOOLSET": "v143",
                 "SPARK_NATIVE_ARCH": "ON",
                 "ENABLE_CONSOLE_IN_SHIPPING": "ON",
                 "ENABLE_DEVCOMMANDS_IN_SHIPPING": "ON"
