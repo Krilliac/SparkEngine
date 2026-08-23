@@ -26,6 +26,15 @@ if [ ! -f "$MANIFEST" ]; then
     exit 1
 fi
 
+# Parse the manifest with CMake itself before examining git drift. Quoted
+# semicolons are CMake list separators unless escaped, so a record can look
+# like nine pipe-delimited fields to a text-only check while becoming two
+# invalid entries at configure time.
+cmake \
+    -DSPARK_THIRDPARTY_AUDIT_VALIDATE_ONLY=ON \
+    -DSPARK_THIRDPARTY_MANIFEST="$PROJECT_ROOT/$MANIFEST" \
+    -P "$PROJECT_ROOT/cmake/SparkThirdPartyAudit.cmake"
+
 if [ "${CI:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ]; then
     if git rev-parse --verify origin/Working >/dev/null 2>&1; then
         BASE_REF="$(git merge-base HEAD origin/Working)"
