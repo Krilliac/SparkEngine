@@ -33,7 +33,10 @@ jobs:
     # Keep the runner aligned with the explicitly requested VS 2022/v143
     # toolchain. windows-latest has moved past the VS 2022 image.
     runs-on: windows-2022
-    timeout-minutes: 60
+    # NativeRecommendedRules takes just over an hour on clean hosted runners
+    # even with tests and PCH disabled. Leave enough room for analysis and
+    # SARIF publication instead of canceling a healthy production scan.
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
