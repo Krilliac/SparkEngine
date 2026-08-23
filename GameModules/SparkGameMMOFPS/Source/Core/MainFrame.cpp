@@ -138,6 +138,7 @@ void TerrafrontModule::OnFixedUpdate(float fdt)
     m_abilities->FixedUpdate(fdt); // class-abilities lane (W9): authoritative ability tick
     m_grenades->FixedUpdate(fdt);  // grenades lane (W10): authoritative grenade sim + fuse
     m_weapons->FixedUpdate(fdt);
+    m_damage->FixedUpdate(fdt); // shield regeneration follows damage/weapon resolution
     m_vehicles->FixedUpdate(fdt);
     m_regions->FixedUpdate(fdt);
     m_travel->FixedUpdate(fdt); // continents lane: applies queued sanctuary placements
