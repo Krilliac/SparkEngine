@@ -492,7 +492,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 ### release.yml
 
-Runs on every push to `master`/`main`:
+Runs on every push to the canonical `Working` branch:
 - Creates rolling `latest` GitHub Release
 - Packages: Windows and Linux binaries (Debug + Release)
 - Formats: `.zip` (Windows), `.tar.gz` (Linux)

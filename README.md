@@ -2,6 +2,8 @@
 
 A C++23 open-source 3D game engine with a full RHI abstraction layer, ECS (EnTT), Jolt Physics, AngelScript scripting, and an ImGui-based editor. Originally built around first-person shooters, it now includes genre templates for RPGs, MMOs, RTS, racing, open-world, and platformers.
 
+> 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
+
 [![Build SparkEngine](https://img.shields.io/github/actions/workflow/status/Krilliac/SparkEngine/build.yml?branch=Working&style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions)
 [![](https://img.shields.io/badge/5962_tests-brightgreen?style=flat-square)](Tests)
 [![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/loc.json&style=flat-square)](GitHub)

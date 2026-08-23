@@ -12,7 +12,7 @@ SparkEngine is a free, open-source 3D game engine written in C++23. It started a
 
 ### Is SparkEngine free?
 
-Yes. SparkEngine is licensed under the [Spark Open License](https://github.com/Krilliac/SparkEngine/blob/master/LICENSE) — no royalties, no fees, fully free for commercial use. The license includes anti-plagiarism protection to prevent wholesale copying without attribution.
+Yes. SparkEngine is licensed under the [Spark Open License](https://github.com/Krilliac/SparkEngine/blob/Working/LICENSE) — no royalties, no fees, fully free for commercial use. The license includes anti-plagiarism protection to prevent wholesale copying without attribution.
 
 ### What platforms does SparkEngine support?
 
