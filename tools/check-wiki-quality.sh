@@ -31,14 +31,36 @@ fi
 
 ISSUES=0
 
+matches_pattern() {
+    local pattern="$1"
+    local file="$2"
+
+    if command -v rg >/dev/null 2>&1; then
+        rg -q -- "$pattern" "$file"
+    else
+        grep -Eq -- "$pattern" "$file"
+    fi
+}
+
+print_pattern_matches() {
+    local pattern="$1"
+    local file="$2"
+
+    if command -v rg >/dev/null 2>&1; then
+        rg -n -- "$pattern" "$file"
+    else
+        grep -En -- "$pattern" "$file"
+    fi
+}
+
 check_no_pattern() {
     local file="$1"
     local pattern="$2"
     local description="$3"
 
-    if rg -n "$pattern" "$file" >/dev/null 2>&1; then
+    if matches_pattern "$pattern" "$file"; then
         log_warning "$description found in $(basename "$file")"
-        rg -n "$pattern" "$file" || true
+        print_pattern_matches "$pattern" "$file" || true
         ISSUES=$((ISSUES + 1))
     fi
 }
@@ -54,7 +76,7 @@ CONTRIBUTING_FILE="$WIKI_DIR/advanced/Contributing.md"
 if [ ! -f "$CONTRIBUTING_FILE" ]; then
     log_warning "Missing $CONTRIBUTING_FILE"
     ISSUES=$((ISSUES + 1))
-elif ! rg -q "Wiki Authoring Standard" "$CONTRIBUTING_FILE"; then
+elif ! matches_pattern "Wiki Authoring Standard" "$CONTRIBUTING_FILE"; then
     log_warning "Contributing.md does not include 'Wiki Authoring Standard' section"
     ISSUES=$((ISSUES + 1))
 fi
