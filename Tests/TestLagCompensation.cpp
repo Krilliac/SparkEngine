@@ -14,6 +14,8 @@
 
 #include "Engine/Networking/LagCompensation.h"
 
+#include <limits>
+
 using Spark::Net::LagCompensation;
 using Spark::Net::RewindPose;
 
@@ -103,6 +105,31 @@ TEST(LagCompensation_MissLeavesOutputsUntouched)
     // Beyond maxDist is also a miss.
     const float fwd[3] = {0.0f, 0.0f, 1.0f};
     EXPECT_EQ(lc.RewindRaycast(0.0, origin, fwd, 2.0f, 0, nullptr, nullptr), 0u);
+}
+
+TEST(LagCompensation_NormalizesDirectionAndRejectsNonFiniteInput)
+{
+    LagCompensation lc;
+    lc.Configure(1.0f, 10.0f);
+    lc.RecordSnapshot(0.0, {Pose(1, 0.0f, 5.0f)});
+
+    const float origin[3] = {0.0f, 1.0f, 0.0f};
+    const float scaledDirection[3] = {0.0f, 0.0f, 10.0f};
+    float distance = -1.0f;
+    float point[3] = {};
+    EXPECT_EQ(lc.RewindRaycast(0.0, origin, scaledDirection, 10.0f, 0, point, &distance), 1u);
+    EXPECT_NEAR(distance, 4.5f, 0.01f);
+    EXPECT_NEAR(point[2], 4.5f, 0.01f);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float badDirection[3] = {nan, 0.0f, 1.0f};
+    EXPECT_EQ(lc.RewindRaycast(0.0, origin, badDirection, 10.0f, 0, nullptr, nullptr), 0u);
+    const float overflowingDirection[3] = {(std::numeric_limits<float>::max)(),
+                                           (std::numeric_limits<float>::max)(), 0.0f};
+    EXPECT_EQ(lc.RewindRaycast(0.0, origin, overflowingDirection, 10.0f, 0, nullptr, nullptr), 0u);
+    EXPECT_EQ(lc.RewindRaycast(std::numeric_limits<double>::infinity(), origin, scaledDirection, 10.0f, 0, nullptr,
+                               nullptr),
+              0u);
 }
 
 TEST(LagCompensation_NearestHitWins)

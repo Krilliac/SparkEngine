@@ -82,7 +82,7 @@ namespace MMO
         std::string m_loginSuccess;
 
         // Session data
-        uint64_t m_sessionToken{0};
+        std::string m_sessionToken;
         uint32_t m_loggedInAccountId{0};
 
         // Character select state

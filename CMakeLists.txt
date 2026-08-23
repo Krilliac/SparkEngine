@@ -1852,7 +1852,7 @@ if(WIN32)
     target_link_libraries(SparkEngineLib PUBLIC
         ${SPARK_D3D_LIBS}
         kernel32 user32 gdi32 winspool
-        shell32 comdlg32 advapi32
+        shell32 comdlg32 advapi32 bcrypt
         ole32 oleaut32 uuid
         winmm dbghelp xaudio2_8
         $<$<BOOL:${ENABLE_NETWORKING}>:ws2_32>

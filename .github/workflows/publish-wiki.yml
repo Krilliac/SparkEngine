@@ -11,6 +11,9 @@ on:
       - "CONTRIBUTING.md"
       - "SECURITY.md"
       - "tools/publish-wiki.py"
+      - "tools/check-wiki-quality.sh"
+      - "tools/check-wiki-nav.sh"
+      - "Tests/Tools/test_publish_wiki.py"
       - ".github/workflows/publish-wiki.yml"
   pull_request:
     branches: [Working]
@@ -18,6 +21,9 @@ on:
       - "wiki/**"
       - "docs/**"
       - "tools/publish-wiki.py"
+      - "tools/check-wiki-quality.sh"
+      - "tools/check-wiki-nav.sh"
+      - "Tests/Tools/test_publish_wiki.py"
       - ".github/workflows/publish-wiki.yml"
   workflow_dispatch:
 
@@ -43,11 +49,17 @@ jobs:
       - name: Build and validate GitHub Wiki tree
         run: |
           set -euo pipefail
-          python3 tools/publish-wiki.py --output "$RUNNER_TEMP/published-wiki"
+          bash docs/sync-wiki.sh check
+          bash tools/check-wiki-quality.sh
+          bash tools/check-wiki-nav.sh
+          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
+          python3 tools/publish-wiki.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --output "$RUNNER_TEMP/published-wiki"
 
   publish:
     name: Publish canonical wiki source
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/Working'
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -63,18 +75,24 @@ jobs:
       - name: Build and validate GitHub Wiki tree
         run: |
           set -euo pipefail
-          python3 tools/publish-wiki.py --output "$RUNNER_TEMP/published-wiki"
+          python3 tools/publish-wiki.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --output "$RUNNER_TEMP/published-wiki"
 
       - name: Publish exact source revision
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          REMOTE_HEAD="$(git ls-remote --exit-code --heads origin refs/heads/Working | awk '{print $1}')"
+          if test "$REMOTE_HEAD" != "$GITHUB_SHA"; then
+            echo "Working advanced while this wiki was validated; the newer run owns publication."
+            exit 0
+          fi
           git clone --quiet \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" \
             "$RUNNER_TEMP/wiki-repository"
-          find "$RUNNER_TEMP/wiki-repository" -mindepth 1 -maxdepth 1 \
-            ! -name .git -exec rm -rf -- {} +
+          git -C "$RUNNER_TEMP/wiki-repository" rm -r --ignore-unmatch -- .
           cp -a "$RUNNER_TEMP/published-wiki/." "$RUNNER_TEMP/wiki-repository/"
           cd "$RUNNER_TEMP/wiki-repository"
           git config user.name "github-actions[bot]"
@@ -85,4 +103,10 @@ jobs:
             exit 0
           fi
           git commit -m "docs: sync wiki from ${GITHUB_SHA}"
+          REMOTE_HEAD="$(git ls-remote --exit-code --heads \
+            "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/Working | awk '{print $1}')"
+          if test "$REMOTE_HEAD" != "$GITHUB_SHA"; then
+            echo "Working advanced before wiki push; the newer run owns publication."
+            exit 0
+          fi
           git push origin HEAD:master

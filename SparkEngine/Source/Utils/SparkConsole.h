@@ -150,7 +150,7 @@ namespace Spark
         void Show();
         void Hide();
         void Toggle();
-        bool IsVisible() const { return m_visible; }
+        bool IsVisible() const { return m_visible.load(std::memory_order_relaxed); }
         void Clear();
 
         // Accessors
@@ -186,17 +186,24 @@ namespace Spark
         std::deque<std::string> m_commandHistory;
 
         std::atomic<bool> m_initialized{false};
-        bool m_visible = true;
+        std::atomic<bool> m_visible{true};
 
         mutable std::mutex m_logMutex;
         mutable std::mutex m_commandMutex;
         mutable std::mutex m_historyMutex;
+        // Recursive because Initialize registers built-ins and handlers may
+        // register/unregister commands while holding the lifecycle lease.
+        mutable std::recursive_mutex m_lifecycleMutex;
 
         std::unordered_map<std::string, std::string> m_aliases;
-        CommandPermission m_currentPermission = CommandPermission::Developer;
+        std::atomic<CommandPermission> m_currentPermission{CommandPermission::Developer};
 
         std::atomic<uint64_t> m_logSequence{0};
-        ConsoleStats m_stats{};
+        std::atomic<uint64_t> m_totalLogsWritten{0};
+        std::atomic<uint64_t> m_totalCommandsExecuted{0};
+        std::atomic<uint64_t> m_totalCommandsFailed{0};
+        std::atomic<uint32_t> m_registeredCommands{0};
+        std::atomic<uint32_t> m_registeredAliases{0};
 
         static constexpr size_t MaxLogHistory = 2000;
         static constexpr size_t MaxCommandHistory = 500;

@@ -25,6 +25,7 @@
 #include "RHIResources.h"
 #include "RHITypes.h"
 
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -55,6 +56,15 @@ namespace Spark
 
             /** @brief CPU pointer used by NullRHIDevice::MapBuffer. */
             void* GetCpuPointer() { return m_storage.empty() ? nullptr : m_storage.data(); }
+
+            bool Write(const void* data, size_t size, size_t offset)
+            {
+                if ((!data && size != 0) || offset > m_storage.size() || size > m_storage.size() - offset)
+                    return false;
+                if (size != 0)
+                    std::memcpy(m_storage.data() + offset, data, size);
+                return true;
+            }
 
           private:
             RHIBufferDesc m_desc;

@@ -9,7 +9,7 @@
  */
 
 #include "SceneSerializer.h"
-#include "Core/Reflection.h"
+#include "SceneComponentCodec.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
@@ -183,95 +183,20 @@ namespace SparkEditor
         std::filesystem::path m_path;
     };
 
-    // Data-driven component type ↔ string mapping.
-    // Adding a new component type requires only adding one entry here.
-    static const std::pair<ComponentType, const char*> s_componentTypeMap[] = {
-        {ComponentType::TRANSFORM, "Transform"},
-        {ComponentType::MESH_RENDERER, "MeshRenderer"},
-        {ComponentType::LIGHT, "Light"},
-        {ComponentType::CAMERA, "Camera"},
-        {ComponentType::RIGID_BODY, "RigidBody"},
-        {ComponentType::COLLIDER, "Collider"},
-        {ComponentType::AUDIO_SOURCE, "AudioSource"},
-        {ComponentType::SCRIPT, "Script"},
-        {ComponentType::PARTICLE_SYSTEM, "ParticleSystem"},
-        {ComponentType::ANIMATION, "Animation"},
-        {ComponentType::TERRAIN, "Terrain"},
-    };
-
     static std::string ComponentTypeToString(ComponentType type)
     {
-        for (const auto& [ct, name] : s_componentTypeMap)
-        {
-            if (ct == type)
-                return name;
-        }
-        return "Custom_" + std::to_string(static_cast<uint32_t>(type));
+        const char* name = SceneComponentTypeName(type);
+        return name ? name : std::string{};
     }
 
     static bool StringToComponentType(const std::string& s, ComponentType& output)
     {
-        for (const auto& [ct, name] : s_componentTypeMap)
-        {
-            if (s == name)
-            {
-                output = ct;
-                return true;
-            }
-        }
-        constexpr std::string_view prefix = "Custom_";
-        if (!s.starts_with(prefix))
-            return false;
-        uint32_t value = 0;
-        const char* begin = s.data() + prefix.size();
-        const char* end = s.data() + s.size();
-        const auto parsed = std::from_chars(begin, end, value);
-        if (parsed.ec != std::errc{} || parsed.ptr != end || (value > 64 && value < 1000))
-            return false;
-        output = static_cast<ComponentType>(value);
-        return true;
+        return TryParseSceneComponentTypeName(s, output);
     }
 
     template <size_t Size> static std::string BoundedString(const char (&text)[Size])
     {
         return std::string(text, std::find(text, text + Size, '\0'));
-    }
-
-    static std::string BytesToHex(const std::vector<uint8_t>& data)
-    {
-        std::ostringstream ss;
-        ss << std::hex << std::setfill('0');
-        for (uint8_t b : data)
-            ss << std::setw(2) << static_cast<int>(b);
-        return ss.str();
-    }
-
-    static bool HexToBytes(const std::string& hex, std::vector<uint8_t>& output)
-    {
-        std::vector<uint8_t> bytes;
-        if ((hex.size() & 1u) != 0)
-            return false;
-        bytes.reserve(hex.size() / 2);
-        auto digit = [](char c) -> int
-        {
-            if (c >= '0' && c <= '9')
-                return c - '0';
-            if (c >= 'a' && c <= 'f')
-                return c - 'a' + 10;
-            if (c >= 'A' && c <= 'F')
-                return c - 'A' + 10;
-            return -1;
-        };
-        for (size_t i = 0; i < hex.size(); i += 2)
-        {
-            const int high = digit(hex[i]);
-            const int low = digit(hex[i + 1]);
-            if (high < 0 || low < 0)
-                return false;
-            bytes.push_back(static_cast<uint8_t>((high << 4) | low));
-        }
-        output = std::move(bytes);
-        return true;
     }
 
     // Write helpers for indented JSON
@@ -330,6 +255,7 @@ namespace SparkEditor
         void Value(int v) { m_os << v; }
         void Value(uint32_t v) { m_os << v; }
         void Value(uint64_t v) { m_os << v; }
+        void Value(int64_t v) { m_os << v; }
         void Value(float v) { m_os << v; }
         void Value(bool v) { m_os << (v ? "true" : "false"); }
 // size_t overload only when it differs from uint64_t (e.g. 32-bit builds).
@@ -363,6 +289,11 @@ namespace SparkEditor
             Key(k);
             Value(v);
         }
+        void KV(const std::string& k, int64_t v)
+        {
+            Key(k);
+            Value(v);
+        }
         void KV(const std::string& k, float v)
         {
             Key(k);
@@ -378,6 +309,11 @@ namespace SparkEditor
         {
             Key(k);
             m_os << "[" << v.x << ", " << v.y << ", " << v.z << "]";
+        }
+        void Float2(const std::string& k, const XMFLOAT2& v)
+        {
+            Key(k);
+            m_os << "[" << v.x << ", " << v.y << "]";
         }
         void Float4(const std::string& k, const XMFLOAT4& v)
         {
@@ -412,6 +348,82 @@ namespace SparkEditor
         bool m_pretty;
         int m_depth = 0;
         std::vector<bool> m_first;
+    };
+
+    class JSONSceneComponentWriter final : public SceneComponentFieldWriter
+    {
+      public:
+        explicit JSONSceneComponentWriter(JSONWriter& writer) : m_writer(writer) {}
+        bool WriteBool(std::string_view name, bool value) override
+        {
+            m_writer.KV(std::string(name), value);
+            return true;
+        }
+        bool WriteSigned(std::string_view name, int64_t value) override
+        {
+            m_writer.KV(std::string(name), value);
+            return true;
+        }
+        bool WriteUnsigned(std::string_view name, uint64_t value) override
+        {
+            m_writer.KV(std::string(name), value);
+            return true;
+        }
+        bool WriteFloat(std::string_view name, float value) override
+        {
+            m_writer.KV(std::string(name), value);
+            return std::isfinite(value);
+        }
+        bool WriteString(std::string_view name, std::string_view value) override
+        {
+            m_writer.KV(std::string(name), std::string(value));
+            return true;
+        }
+        bool WriteFloat2(std::string_view name, const XMFLOAT2& value) override
+        {
+            m_writer.Float2(std::string(name), value);
+            return std::isfinite(value.x) && std::isfinite(value.y);
+        }
+        bool WriteFloat3(std::string_view name, const XMFLOAT3& value) override
+        {
+            m_writer.Float3(std::string(name), value);
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+        bool WriteFloat4(std::string_view name, const XMFLOAT4& value) override
+        {
+            m_writer.Float4(std::string(name), value);
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
+        }
+
+      private:
+        JSONWriter& m_writer;
+    };
+
+    class ValidatingSceneComponentWriter final : public SceneComponentFieldWriter
+    {
+      public:
+        bool WriteBool(std::string_view, bool) override { return true; }
+        bool WriteSigned(std::string_view, int64_t) override { return true; }
+        bool WriteUnsigned(std::string_view, uint64_t) override { return true; }
+        bool WriteFloat(std::string_view, float value) override { return std::isfinite(value); }
+        bool WriteString(std::string_view, std::string_view value) override
+        {
+            constexpr size_t kMaxComponentStringBytes = 1024 * 1024;
+            return value.size() <= kMaxComponentStringBytes && value.find('\0') == std::string_view::npos &&
+                   IsValidUTF8(value);
+        }
+        bool WriteFloat2(std::string_view, const XMFLOAT2& value) override
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y);
+        }
+        bool WriteFloat3(std::string_view, const XMFLOAT3& value) override
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+        bool WriteFloat4(std::string_view, const XMFLOAT4& value) override
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
+        }
     };
 
     SerializationResult SceneSerializer::SaveJSON(const SceneFile& scene, const std::string& filePath)
@@ -493,6 +505,28 @@ namespace SparkEditor
         {
             result.errorMessage = "Scene data failed validation before save";
             return result;
+        }
+
+        ValidatingSceneComponentWriter payloadValidator;
+        for (const Component& component : scene.components)
+        {
+            const bool markerOnly = component.type == ComponentType::TRANSFORM ||
+                                    component.type == ComponentType::SPRITE_ANIMATOR;
+            if (markerOnly)
+            {
+                if (component.HasData())
+                {
+                    result.errorMessage = "Marker-only component unexpectedly contains a payload";
+                    return result;
+                }
+                continue;
+            }
+            std::string codecError;
+            if (!EncodeSceneComponentPayload(component, payloadValidator, codecError))
+            {
+                result.errorMessage = "Cannot persist " + ComponentTypeToString(component.type) + ": " + codecError;
+                return result;
+            }
         }
 
         const std::filesystem::path destination(filePath);
@@ -583,9 +617,18 @@ namespace SparkEditor
             w.KV("type", ComponentTypeToString(comp.type));
             w.KV("objectID", comp.objectID);
             w.KV("enabled", comp.enabled);
-            if (!comp.data.empty())
+            if (HasSceneComponentPayloadCodec(comp.type))
             {
-                w.KV("data", BytesToHex(comp.data));
+                w.Key("data");
+                w.BeginObject();
+                w.KV("schema", SCENE_COMPONENT_SCHEMA_VERSION);
+                w.Key("fields");
+                w.BeginObject();
+                JSONSceneComponentWriter payloadWriter(w);
+                std::string ignoredError;
+                (void)EncodeSceneComponentPayload(comp, payloadWriter, ignoredError);
+                w.EndObject();
+                w.EndObject();
             }
             w.EndObject();
         }
@@ -750,6 +793,13 @@ namespace SparkEditor
                 return true;
             }
             bool TryGetInt(int& value) const
+            {
+                if (type != NUMBER || numText.empty())
+                    return false;
+                const auto result = std::from_chars(numText.data(), numText.data() + numText.size(), value);
+                return result.ec == std::errc{} && result.ptr == numText.data() + numText.size();
+            }
+            bool TryGetInt64(int64_t& value) const
             {
                 if (type != NUMBER || numText.empty())
                     return false;
@@ -1284,6 +1334,101 @@ namespace SparkEditor
             return v ? v->GetFloat4(def) : def;
         }
 
+        class JSONSceneComponentReader final : public SceneComponentFieldReader
+        {
+          public:
+            explicit JSONSceneComponentReader(const JSONValue& fields) : m_fields(fields) {}
+
+            bool HasExactly(std::span<const std::string_view> names) const override
+            {
+                if (m_fields.type != JSONValue::OBJECT || m_fields.objVal.size() != names.size())
+                    return false;
+                for (std::string_view name : names)
+                {
+                    size_t matches = 0;
+                    for (const JSONMember& member : m_fields.objVal)
+                        matches += member.key == name ? 1u : 0u;
+                    if (matches != 1)
+                        return false;
+                }
+                return true;
+            }
+
+            bool ReadBool(std::string_view name, bool& value) const override
+            {
+                const JSONValue* field = Find(name);
+                if (!field || field->type != JSONValue::BOOL)
+                    return false;
+                value = field->boolVal;
+                return true;
+            }
+            bool ReadSigned(std::string_view name, int64_t& value) const override
+            {
+                const JSONValue* field = Find(name);
+                return field && field->TryGetInt64(value);
+            }
+            bool ReadUnsigned(std::string_view name, uint64_t& value) const override
+            {
+                const JSONValue* field = Find(name);
+                return field && field->TryGetUint64(value);
+            }
+            bool ReadFloat(std::string_view name, float& value) const override
+            {
+                const JSONValue* field = Find(name);
+                return field && field->TryGetFloat(value);
+            }
+            bool ReadString(std::string_view name, std::string& value) const override
+            {
+                const JSONValue* field = Find(name);
+                constexpr size_t kMaxComponentStringBytes = 1024 * 1024;
+                if (!field || field->type != JSONValue::STRING || field->strVal.size() > kMaxComponentStringBytes ||
+                    field->strVal.find('\0') != std::string::npos)
+                    return false;
+                value = field->strVal;
+                return true;
+            }
+            bool ReadFloat2(std::string_view name, XMFLOAT2& value) const override
+            {
+                float parsed[2]{};
+                if (!ReadFloatArray(name, parsed))
+                    return false;
+                value = {parsed[0], parsed[1]};
+                return true;
+            }
+            bool ReadFloat3(std::string_view name, XMFLOAT3& value) const override
+            {
+                float parsed[3]{};
+                if (!ReadFloatArray(name, parsed))
+                    return false;
+                value = {parsed[0], parsed[1], parsed[2]};
+                return true;
+            }
+            bool ReadFloat4(std::string_view name, XMFLOAT4& value) const override
+            {
+                float parsed[4]{};
+                if (!ReadFloatArray(name, parsed))
+                    return false;
+                value = {parsed[0], parsed[1], parsed[2], parsed[3]};
+                return true;
+            }
+
+          private:
+            const JSONValue* Find(std::string_view name) const { return m_fields.Find(std::string(name)); }
+
+            template <size_t Size> bool ReadFloatArray(std::string_view name, float (&values)[Size]) const
+            {
+                const JSONValue* field = Find(name);
+                if (!field || field->type != JSONValue::ARRAY || field->arrVal.size() != Size)
+                    return false;
+                for (size_t index = 0; index < Size; ++index)
+                    if (!field->arrVal[index].TryGetFloat(values[index]))
+                        return false;
+                return true;
+            }
+
+            const JSONValue& m_fields;
+        };
+
     } // anonymous namespace
 
     SerializationResult SceneSerializer::LoadJSON(const std::string& filePath, SceneFile& outScene)
@@ -1382,7 +1527,16 @@ namespace SparkEditor
             std::memcpy(loadedScene.header.description, desc.data(), desc.size());
             loadedScene.header.description[desc.size()] = '\0';
         }
+        const size_t versionFieldCount =
+            static_cast<size_t>(std::count_if(root.objVal.begin(), root.objVal.end(),
+                                              [](const JSONMember& member) { return member.key == "version"; }));
         loadedScene.header.version = FieldUint32(root, "version", SCENE_FILE_VERSION);
+        if (versionFieldCount != 1 || loadedScene.header.version != SCENE_FILE_VERSION)
+        {
+            result.errorMessage =
+                "Scene file version is unsupported; legacy raw-memory scene payloads must be resaved by a trusted build";
+            return result;
+        }
         loadedScene.header.objectCount = FieldUint32(root, "objectCount");
         loadedScene.header.componentCount = FieldUint32(root, "componentCount");
         loadedScene.header.assetReferenceCount = FieldUint32(root, "assetReferenceCount");
@@ -1524,8 +1678,7 @@ namespace SparkEditor
                     return result;
                 }
                 if (!OptionalType(compVal, "type", JSONValue::STRING) || !OptionalUint64(compVal, "objectID") ||
-                    !OptionalType(compVal, "enabled", JSONValue::BOOL) ||
-                    !OptionalType(compVal, "data", JSONValue::STRING))
+                    !OptionalType(compVal, "enabled", JSONValue::BOOL))
                 {
                     result.errorMessage = "Scene component fields have invalid JSON types or ranges";
                     return result;
@@ -1538,10 +1691,49 @@ namespace SparkEditor
                 }
                 comp.objectID = FieldUint64(compVal, "objectID");
                 comp.enabled = FieldBool(compVal, "enabled", true);
-                std::string hexData = FieldStr(compVal, "data");
-                if (!hexData.empty() && !HexToBytes(hexData, comp.data))
+
+                const JSONValue* data = Field(compVal, "data");
+                const bool markerOnly = comp.type == ComponentType::TRANSFORM ||
+                                        comp.type == ComponentType::SPRITE_ANIMATOR;
+                if (markerOnly)
                 {
-                    result.errorMessage = "Component data must contain complete hexadecimal byte pairs";
+                    if (data)
+                    {
+                        result.errorMessage = "Marker-only scene component must not contain data";
+                        return result;
+                    }
+                    loadedScene.components.push_back(std::move(comp));
+                    continue;
+                }
+                if (!HasSceneComponentPayloadCodec(comp.type) || !data || data->type != JSONValue::OBJECT ||
+                    data->objVal.size() != 2)
+                {
+                    result.errorMessage = "Scene component requires a registered schema-tagged data object";
+                    return result;
+                }
+
+                const JSONValue* schema = data->Find("schema");
+                const JSONValue* fields = data->Find("fields");
+                uint32_t schemaVersion = 0;
+                size_t schemaKeys = 0;
+                size_t fieldKeys = 0;
+                for (const JSONMember& member : data->objVal)
+                {
+                    schemaKeys += member.key == "schema" ? 1u : 0u;
+                    fieldKeys += member.key == "fields" ? 1u : 0u;
+                }
+                if (schemaKeys != 1 || fieldKeys != 1 || !schema || !schema->TryGetUint32(schemaVersion) ||
+                    schemaVersion != SCENE_COMPONENT_SCHEMA_VERSION || !fields || fields->type != JSONValue::OBJECT)
+                {
+                    result.errorMessage = "Scene component data schema is invalid or unsupported";
+                    return result;
+                }
+
+                JSONSceneComponentReader payloadReader(*fields);
+                std::string codecError;
+                if (!DecodeSceneComponentPayload(comp.type, payloadReader, comp, codecError))
+                {
+                    result.errorMessage = "Cannot decode " + ComponentTypeToString(comp.type) + ": " + codecError;
                     return result;
                 }
                 loadedScene.components.push_back(std::move(comp));
@@ -1799,144 +1991,18 @@ namespace SparkEditor
 
     void* SceneSerializer::ComponentToJSON(const Component& component)
     {
-        auto* json = new std::string();
-        std::ostringstream ss;
-        ss << "{\"type\":\"" << ComponentTypeToString(component.type) << "\"," << "\"objectID\":" << component.objectID
-           << "," << "\"enabled\":" << (component.enabled ? "true" : "false");
-        if (!component.data.empty())
-        {
-            ss << ",\"data\":\"" << BytesToHex(component.data) << "\"";
-
-            // Reflection-driven readable properties: if the component type name
-            // is registered in TypeRegistry, output named fields alongside the
-            // binary blob for human readability and debugging.
-            std::string typeName = ComponentTypeToString(component.type);
-            const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(typeName);
-            if (typeInfo && !typeInfo->fields.empty() && component.data.size() >= typeInfo->size)
-            {
-                ss << ",\"_properties\":{";
-                bool first = true;
-                for (const auto& field : typeInfo->fields)
-                {
-                    if (!field.serialized)
-                        continue;
-                    std::string val = Spark::GetFieldAsString(component.data.data(), field);
-                    if (!first)
-                        ss << ",";
-                    // Escape quotes in string values
-                    ss << "\"" << field.fieldName << "\":\"" << val << "\"";
-                    first = false;
-                }
-                ss << "}";
-            }
-        }
-        ss << "}";
-        *json = ss.str();
-        return json;
+        (void)component;
+        // The old string helper had no structured error channel and emitted
+        // ABI-dependent object images. Callers must use SaveScene, which owns
+        // the schema-tagged codec transaction.
+        return nullptr;
     }
 
     bool SceneSerializer::JSONToComponent(void* json, Component& component)
     {
-        if (!json)
-            return false;
-        const auto* str = static_cast<const std::string*>(json);
-        if (str->empty())
-            return false;
-
-        // Extract type string
-        auto typePos = str->find("\"type\":\"");
-        if (typePos != std::string::npos)
-        {
-            typePos += 8;
-            auto endPos = str->find('"', typePos);
-            if (endPos != std::string::npos)
-            {
-                std::string typeStr = str->substr(typePos, endPos - typePos);
-                if (!StringToComponentType(typeStr, component.type))
-                    return false;
-            }
-        }
-
-        // Extract objectID
-        auto oidPos = str->find("\"objectID\":");
-        if (oidPos != std::string::npos)
-        {
-            char* end = nullptr;
-            component.objectID = std::strtoull(str->c_str() + oidPos + 11, &end, 10);
-        }
-
-        // Extract enabled
-        auto enPos = str->find("\"enabled\":");
-        if (enPos != std::string::npos)
-        {
-            component.enabled = (str->find("true", enPos + 10) == enPos + 10);
-        }
-
-        // Extract data hex string (primary path)
-        auto dataPos = str->find("\"data\":\"");
-        if (dataPos != std::string::npos)
-        {
-            dataPos += 8;
-            auto endPos = str->find('"', dataPos);
-            if (endPos != std::string::npos)
-            {
-                std::string hexStr = str->substr(dataPos, endPos - dataPos);
-                if (!HexToBytes(hexStr, component.data))
-                    return false;
-            }
-        }
-
-        // Reflection fallback: if no hex data but _properties exist, reconstruct
-        // component data from named fields via TypeRegistry. This allows hand-edited
-        // scene files with readable property values.
-        if (component.data.empty())
-        {
-            auto propsPos = str->find("\"_properties\":");
-            if (propsPos != std::string::npos)
-            {
-                std::string typeName = ComponentTypeToString(component.type);
-                const auto* typeInfo = Spark::TypeRegistry::Get().FindTypeByName(typeName);
-                if (typeInfo && typeInfo->size > 0)
-                {
-                    component.data.resize(typeInfo->size, 0);
-                    // Parse simple "key":"value" pairs from the _properties block
-                    auto braceStart = str->find('{', propsPos);
-                    auto braceEnd = str->find('}', braceStart);
-                    if (braceStart != std::string::npos && braceEnd != std::string::npos)
-                    {
-                        std::string propsBlock = str->substr(braceStart + 1, braceEnd - braceStart - 1);
-                        size_t pos = 0;
-                        while (pos < propsBlock.size())
-                        {
-                            auto keyStart = propsBlock.find('"', pos);
-                            if (keyStart == std::string::npos)
-                                break;
-                            auto keyEnd = propsBlock.find('"', keyStart + 1);
-                            if (keyEnd == std::string::npos)
-                                break;
-                            auto valStart = propsBlock.find('"', keyEnd + 2);
-                            if (valStart == std::string::npos)
-                                break;
-                            auto valEnd = propsBlock.find('"', valStart + 1);
-                            if (valEnd == std::string::npos)
-                                break;
-
-                            std::string key = propsBlock.substr(keyStart + 1, keyEnd - keyStart - 1);
-                            std::string val = propsBlock.substr(valStart + 1, valEnd - valStart - 1);
-
-                            const auto* field = typeInfo->FindField(key);
-                            if (field)
-                            {
-                                Spark::SetFieldFromString(component.data.data(), *field, val);
-                            }
-                            pos = valEnd + 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        return true;
+        (void)json;
+        (void)component;
+        return false;
     }
 
 } // namespace SparkEditor

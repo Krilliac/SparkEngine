@@ -19,6 +19,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -77,7 +78,7 @@ namespace MMO
     /// @brief Active session for a logged-in account
     struct SessionData
     {
-        uint64_t sessionToken = 0;
+        std::string sessionToken;
         uint32_t accountId = 0;
         std::string username;
         AccountTier tier = AccountTier::Free;
@@ -94,7 +95,7 @@ namespace MMO
         bool success = false;
         std::string errorMessage;
         uint32_t accountId = 0;
-        uint64_t sessionToken = 0;
+        std::string sessionToken;
     };
 
     /**
@@ -116,18 +117,17 @@ namespace MMO
 
         // === Authentication ===
         AuthResult Login(const std::string& username, const std::string& password);
-        void Logout(uint64_t sessionToken);
-        bool ValidateSession(uint64_t sessionToken) const;
+        void Logout(const std::string& sessionToken);
+        bool ValidateSession(const std::string& sessionToken) const;
 
         // === Session ===
-        const SessionData* GetSession(uint64_t sessionToken) const;
-        SessionData* GetSessionMut(uint64_t sessionToken);
-        const SessionData* GetSessionByAccount(uint32_t accountId) const;
-        bool SetActiveCharacter(uint64_t sessionToken, uint32_t characterId);
+        std::optional<SessionData> GetSession(const std::string& sessionToken) const;
+        std::optional<SessionData> GetSessionByAccount(uint32_t accountId) const;
+        bool SetActiveCharacter(const std::string& sessionToken, uint32_t characterId);
 
         // === Account Management ===
-        const AccountData* GetAccount(uint32_t accountId) const;
-        const AccountData* FindAccount(const std::string& username) const;
+        std::optional<AccountData> GetAccount(uint32_t accountId) const;
+        std::optional<AccountData> FindAccount(const std::string& username) const;
         bool ChangePassword(uint32_t accountId, const std::string& oldPass, const std::string& newPass);
         bool SetAccountStatus(uint32_t accountId, AccountStatus status, const std::string& reason = "");
         bool BanAccount(uint32_t accountId, float durationHours, const std::string& reason);
@@ -136,23 +136,22 @@ namespace MMO
 
         // === Queries ===
         bool IsLoggedIn(uint32_t accountId) const;
-        size_t GetOnlineCount() const { return m_sessions.size(); }
-        size_t GetAccountCount() const { return m_accounts.size(); }
+        size_t GetOnlineCount() const;
+        size_t GetAccountCount() const;
 
         std::string GetAccountInfoString(uint32_t accountId) const;
         std::string GetOnlineListString() const;
 
       private:
-        static std::string GenerateSalt();
-        static std::string HashPassword(const std::string& password, const std::string& salt);
-        static uint64_t GenerateSessionToken();
+        static std::string GenerateSessionToken();
         static uint64_t GetTimestamp();
         void CleanExpiredSessions();
         void CleanExpiredBans();
 
         Spark::IEngineContext* m_context{nullptr};
         std::unordered_map<uint32_t, AccountData> m_accounts;
-        std::unordered_map<uint64_t, SessionData> m_sessions;
+        std::unordered_map<std::string, SessionData> m_sessions;
+        mutable std::recursive_mutex m_mutex;
         uint32_t m_nextAccountId = 1;
 
         static constexpr float SESSION_TIMEOUT = 1800.0f; // 30 minutes idle

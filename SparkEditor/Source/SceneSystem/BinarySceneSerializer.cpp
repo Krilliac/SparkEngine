@@ -73,47 +73,18 @@ namespace SparkEditor
 
     void SceneSerializer::SerializeComponent(const Component& component, std::vector<uint8_t>& buffer)
     {
-        size_t offset = buffer.size();
-        buffer.resize(offset + sizeof(ComponentType) + sizeof(ObjectID) + sizeof(uint32_t) + component.data.size());
-
-        memcpy(buffer.data() + offset, &component.type, sizeof(ComponentType));
-        offset += sizeof(ComponentType);
-        memcpy(buffer.data() + offset, &component.objectID, sizeof(ObjectID));
-        offset += sizeof(ObjectID);
-        uint32_t dataSize = static_cast<uint32_t>(component.data.size());
-        memcpy(buffer.data() + offset, &dataSize, sizeof(uint32_t));
-        offset += sizeof(uint32_t);
-        if (dataSize > 0)
-        {
-            memcpy(buffer.data() + offset, component.data.data(), dataSize);
-        }
+        (void)component;
+        (void)buffer;
+        // Retired: serializing C++ object images is not portable or safe.
     }
 
     bool SceneSerializer::DeserializeComponent(const std::vector<uint8_t>& buffer, size_t& offset, Component& component)
     {
-        if (offset + sizeof(ComponentType) + sizeof(ObjectID) + sizeof(uint32_t) > buffer.size())
-            return false;
-
-        memcpy(&component.type, buffer.data() + offset, sizeof(ComponentType));
-        offset += sizeof(ComponentType);
-        memcpy(&component.objectID, buffer.data() + offset, sizeof(ObjectID));
-        offset += sizeof(ObjectID);
-        uint32_t dataSize = 0;
-        memcpy(&dataSize, buffer.data() + offset, sizeof(uint32_t));
-        offset += sizeof(uint32_t);
-
-        // Sanity check: component data should not exceed 16 MB
-        if (dataSize > 16 * 1024 * 1024)
-            return false;
-        if (offset + dataSize > buffer.size())
-            return false;
-        component.data.resize(dataSize);
-        if (dataSize > 0)
-        {
-            memcpy(component.data.data(), buffer.data() + offset, dataSize);
-        }
-        offset += dataSize;
-        return true;
+        (void)buffer;
+        (void)offset;
+        (void)component;
+        // Retired: legacy raw payloads fail closed.
+        return false;
     }
 
     bool SceneSerializer::WriteToFile(const std::string& filePath, const std::vector<uint8_t>& data)

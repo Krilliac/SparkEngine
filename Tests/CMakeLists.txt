@@ -83,6 +83,9 @@ add_executable(SparkTests
     TestNetworkInterpolation.cpp
     TestTypeTraits.cpp
     TestHash.cpp
+    TestPasswordHash.cpp
+    TestSecureRandom.cpp
+    TestSparkConsoleConcurrency.cpp
     TestScopeGuard.cpp
     TestSerializer.cpp
     TestEventBus.cpp
@@ -557,6 +560,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPluginManager.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"

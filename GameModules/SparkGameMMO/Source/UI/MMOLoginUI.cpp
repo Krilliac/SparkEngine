@@ -50,9 +50,9 @@ namespace MMO
     void MMOLoginUI::ReturnToLogin()
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Login UI: returning to login screen");
-        if (m_sessionToken != 0 && m_accountSys)
+        if (!m_sessionToken.empty() && m_accountSys)
             m_accountSys->Logout(m_sessionToken);
-        m_sessionToken = 0;
+        m_sessionToken.clear();
         m_loggedInAccountId = 0;
         m_state = LoginUIState::Login;
         m_loginError.clear();

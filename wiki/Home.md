@@ -2,7 +2,9 @@
 
 **Spark Engine** is a free, open-source 3D game engine written in C++23. Originally designed for first-person shooters, Spark Engine is evolving into a general-purpose engine supporting FPS, RPG, MMO, open-world, and other genres. It ships with a multi-backend RHI (DirectX 11/12, Vulkan, OpenGL, Metal, NullRHI), global illumination, GPU-driven rendering, mesh shaders, DXR ray tracing, Jolt Physics, XAudio2 spatial audio, AngelScript hot-reload scripting with visual scripting and Shader Graph, an EnTT-based ECS architecture, an ImGui visual editor with dockable panels, and HeroEngine-inspired features including seamless world streaming, area-based server architecture, and collaborative multi-user editing.
 
-> **v1.0.0 Released** — SparkEngine's first official release. Production-ready core systems with active feature development.
+> **Release hardening in progress** — SparkEngine is currently source-usable,
+> but no versioned release has been published. The repository's readiness gates
+> distinguish implemented features from verified, supported release claims.
 
 ![SparkEditor — ImGui-based visual editor](../docs/screenshots/editor-overview.png)
 
@@ -32,14 +34,16 @@ footprint, and the build toggles that move the needle.
 - **Networking** — UDP client/server, entity replication, client-side prediction, lag compensation (hitbox rewinding), delta snapshots. [HeroEngine-inspired MMO architecture](subsystems/Area-Server-Architecture.md) with AreaServers, WorldServer, seamless entity migration, and dynamic load balancing.
 - **Editor** — ImGui-powered visual editor with 59 dockable panels: scene hierarchy, inspector, gizmos, [Shader Graph](graphics/Shader-Graph.md) material editor, [visual script editor](subsystems/Visual-Scripting.md), cinematic sequencer, dialogue editor, AI debugger, command palette (Ctrl+P), collaborative multi-user editing, and 200+ debug console commands.
 
-## Downloads
+## Get the Source
 
-Release and nightly binaries are published from the canonical `Working` branch:
+There are no supported release or nightly binary downloads yet. Clone the
+canonical repository and follow the [Build Guide](Build-Guide.md). CI artifacts,
+when present, are diagnostic snapshots for a specific run rather than releases.
 
-- [Windows Release (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Release.zip)
-- [Windows Debug (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Windows-Debug.zip)
-- [Linux Release (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Release.tar.gz)
-- [Linux Debug (x64)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkEngine-Linux-Debug.tar.gz)
+```bash
+git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git
+cd SparkEngine
+```
 
 ## Where to Start
 

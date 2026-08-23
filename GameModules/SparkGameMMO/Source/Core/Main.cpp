@@ -578,9 +578,7 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                 if (args.size() < 2)
                                     return "Usage: mmo_login <username> <password>";
                                 auto result = m_accountSystem->Login(args[0], args[1]);
-                                return result.success
-                                           ? "Logged in (Session " + std::to_string(result.sessionToken) + ")"
-                                           : "Error: " + result.errorMessage;
+                                return result.success ? "Logged in" : "Error: " + result.errorMessage;
                             });
 
     console.RegisterCommand("mmo_online", [this](const std::vector<std::string>&) -> std::string

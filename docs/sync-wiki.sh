@@ -135,7 +135,7 @@ collect_inventory() {
         tname=$(basename "$tfile" .cpp)
         TEST_FILES="${TEST_FILES}${tname}\n"
         local tc
-        tc=$(grep -c '^TEST(' "$tfile" 2>/dev/null) || tc=0
+        tc=$(grep -Ec '^[[:space:]]*TEST(_F)?[[:space:]]*\(' "$tfile" 2>/dev/null) || tc=0
         TEST_COUNT=$((TEST_COUNT + tc))
     done < "$tmpfile"
     TEST_FILE_COUNT=$(echo -e "$TEST_FILES" | grep -c '[A-Z]' || true)
@@ -232,7 +232,7 @@ sync_testing_page() {
             local tname
             tname=$(basename "$tfile" .cpp)
             local tc
-            tc=$(grep -c '^TEST(' "$tfile" 2>/dev/null) || tc=0
+            tc=$(grep -Ec '^[[:space:]]*TEST(_F)?[[:space:]]*\(' "$tfile" 2>/dev/null) || tc=0
             echo "| \`$tname\` | $tc |"
         done)
 
@@ -322,16 +322,21 @@ sync_home_page() {
 check_stale_references() {
     log_info "Checking for stale references in wiki..."
 
-    find "$WIKI_DIR" -name '*.md' | while IFS= read -r wfile; do
-        # Look for backtick-quoted paths like `SparkEngine/Source/Foo/Bar.h`
-        grep -oE '`(SparkEngine|SparkEditor|SparkGame|Tests)/[^`]+\.(h|cpp)`' "$wfile" 2>/dev/null | \
-            tr -d '`' | while read -r ref_path; do
-                if [ ! -f "$PROJECT_ROOT/$ref_path" ]; then
-                    log_warning "  $(basename "$wfile"): references missing file \`$ref_path\`"
-                    WARNINGS=$((WARNINGS + 1))
-                fi
-            done
-    done
+    # Scan the tree once. Process substitution keeps WARNINGS in this shell
+    # instead of losing increments inside pipeline subshells.
+    while IFS=: read -r wfile line ref_path; do
+        [ -n "$ref_path" ] || continue
+        if [ ! -f "$PROJECT_ROOT/$ref_path" ]; then
+            log_warning "  $(basename "$wfile"):$line references missing file \`$ref_path\`"
+            WARNINGS=$((WARNINGS + 1))
+        fi
+    done < <(
+        cd "$PROJECT_ROOT"
+        rg --no-heading --line-number --only-matching \
+            --replace '$1' \
+            '`((?:SparkEngine|SparkEditor|SparkGame|Tests)/[^`]+\.(?:h|cpp))`' \
+            wiki -g '*.md' 2>/dev/null || true
+    )
 }
 
 # ============================================================================
@@ -343,14 +348,14 @@ sync_sidebar() {
 
     # Check if any wiki .md files exist that aren't in the sidebar
     local missing=0
-    find "$WIKI_DIR" -name '*.md' ! -name '_*.md' | while IFS= read -r wfile; do
+    while IFS= read -r wfile; do
         local page_name
         page_name=$(basename "$wfile" .md)
         if ! grep -qF "$page_name" "$sidebar" 2>/dev/null; then
             log_warning "  Wiki page '$page_name' is not listed in _Sidebar.md"
             WARNINGS=$((WARNINGS + 1))
         fi
-    done
+    done < <(find "$WIKI_DIR" -name '*.md' ! -name '_*.md')
 }
 
 # ============================================================================

@@ -26,6 +26,7 @@
 #include <functional>
 #include <memory>
 #include <queue>
+#include <stdexcept>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -115,18 +116,51 @@ namespace Spark::Graphics
                                  std::function<void(RenderGraphBuilder&)> setup,
                                  std::function<void(const RenderGraphResourceRegistry&)> execute)
         {
+            struct ResourceMutationSnapshot
+            {
+                uint32_t refCount;
+                size_t versionProducerCount;
+                bool hasVersionConflict;
+            };
+
+            const size_t originalResourceCount = m_resources.size();
+            const size_t originalAliasCount = m_aliasPairs.size();
+            std::vector<ResourceMutationSnapshot> originalResources;
+            originalResources.reserve(originalResourceCount);
+            for (const auto& resource : m_resources)
+            {
+                originalResources.push_back(
+                    {resource.refCount, resource.versionProducers.size(), resource.hasVersionConflict});
+            }
+
+            // A setup callback is allowed to mutate graph-owned resource metadata.
+            // Invalidate the prior schedule before invoking user code, then restore
+            // every mutation if setup fails so the graph remains structurally sound.
+            m_compiled = false;
             auto passIndex = static_cast<uint32_t>(m_passes.size());
             auto pass = std::make_unique<RenderGraphPass>(name, type, passIndex);
             pass->SetExecuteCallback(std::move(execute));
 
-            // Run the setup lambda to record resource dependencies
-            RenderGraphBuilder builder(*this, *pass);
-            setup(builder);
+            try
+            {
+                RenderGraphBuilder builder(*this, *pass);
+                setup(builder);
+                m_passes.push_back(std::move(pass));
+            }
+            catch (...)
+            {
+                m_aliasPairs.resize(originalAliasCount);
+                m_resources.resize(originalResourceCount);
+                for (size_t i = 0; i < originalResourceCount; ++i)
+                {
+                    m_resources[i].refCount = originalResources[i].refCount;
+                    m_resources[i].versionProducers.resize(originalResources[i].versionProducerCount);
+                    m_resources[i].hasVersionConflict = originalResources[i].hasVersionConflict;
+                }
+                throw;
+            }
 
-            auto& ref = *pass;
-            m_passes.push_back(std::move(pass));
-            m_compiled = false;
-            return ref;
+            return *m_passes.back();
         }
 
         // ========================================================================
@@ -151,17 +185,21 @@ namespace Spark::Graphics
             node.type = RenderGraphResourceType::Texture;
             node.lifetime = RenderGraphResourceLifetime::Imported;
             node.importedTexture = texture;
+            node.versionProducers.push_back(RenderGraphResource::INVALID_INDEX);
 
             if (texture)
             {
                 const auto& desc = texture->GetDesc();
                 node.textureDesc.width = desc.width;
                 node.textureDesc.height = desc.height;
+                node.textureDesc.arraySize = desc.arraySize;
                 node.textureDesc.format = desc.format;
                 node.textureDesc.sampleCount = desc.sampleCount;
                 node.textureDesc.mipLevels = desc.mipLevels;
                 node.textureDesc.usage = desc.usage;
                 node.textureDesc.clearColor = desc.clearColor;
+                node.textureDesc.clearDepth = desc.clearDepth;
+                node.textureDesc.clearStencil = desc.clearStencil;
             }
 
             RenderGraphResource handle;
@@ -195,17 +233,32 @@ namespace Spark::Graphics
         {
             auto compileStart = std::chrono::high_resolution_clock::now();
 
-            ComputeResourceLifetimes();
-            CullUnreferencedPasses();
-            TopologicalSort();
-            AnalyzeResourceAliasing();
-            ScheduleAsyncCompute();
+            m_compiled = false;
+            try
+            {
+                ValidateResourceVersions();
+                CullUnreferencedPasses();
+                TopologicalSort();
+                ComputeResourceLifetimes();
+                AnalyzeResourceAliasing();
+                ScheduleAsyncCompute();
 
-            m_compiled = true;
-
-            auto compileEnd = std::chrono::high_resolution_clock::now();
-            m_stats.compileTimeMs = std::chrono::duration<float, std::milli>(compileEnd - compileStart).count();
-            UpdateStats();
+                auto compileEnd = std::chrono::high_resolution_clock::now();
+                m_stats.compileTimeMs = std::chrono::duration<float, std::milli>(compileEnd - compileStart).count();
+                UpdateStats();
+                m_compiled = true;
+            }
+            catch (...)
+            {
+                m_executionOrder.clear();
+                for (auto& resource : m_resources)
+                {
+                    resource.aliasTarget = RenderGraphResource::INVALID_INDEX;
+                }
+                m_stats.aliasedResources = 0;
+                m_stats.savedByAliasing = 0;
+                throw;
+            }
         }
 
         /**
@@ -226,28 +279,41 @@ namespace Spark::Graphics
      * 3. Run the pass's execute callback.
      * 4. Release transient resources whose last use was this pass.
      *
-     * Requires a prior call to Compile(). Asserts if not compiled.
+     * Requires a prior successful call to Compile().
      */
         void Execute()
         {
-            assert(m_compiled && "RenderGraph::Execute() called before Compile()");
+            if (!m_compiled)
+            {
+                throw std::logic_error("RenderGraph::Execute() called before a successful Compile()");
+            }
 
             auto executeStart = std::chrono::high_resolution_clock::now();
+            m_stats.executedPasses = 0;
 
-            AllocateTransientResources();
-
-            RenderGraphResourceRegistry registry(m_resources);
-
-            for (uint32_t passIndex : m_executionOrder)
+            // Clear any allocation retained by an earlier failed execution.
+            try
             {
-                auto& pass = *m_passes[passIndex];
-                if (pass.IsCulled())
-                {
-                    continue;
-                }
+                ReleaseTransientResources();
+                AllocateTransientResources();
+                RenderGraphResourceRegistry registry(m_resources);
 
-                pass.Execute(registry);
-                m_stats.executedPasses++;
+                for (uint32_t passIndex : m_executionOrder)
+                {
+                    auto& pass = *m_passes[passIndex];
+                    if (pass.IsCulled())
+                    {
+                        continue;
+                    }
+
+                    pass.Execute(registry);
+                    m_stats.executedPasses++;
+                }
+            }
+            catch (...)
+            {
+                ReleaseTransientResources();
+                throw;
             }
 
             ReleaseTransientResources();
@@ -495,6 +561,7 @@ namespace Spark::Graphics
             node.lifetime = RenderGraphResourceLifetime::Transient;
             node.textureDesc = desc;
             node.producerPass = producerPass;
+            node.versionProducers.push_back(producerPass);
 
             RenderGraphResource handle;
             handle.index = static_cast<uint32_t>(m_resources.size());
@@ -516,6 +583,7 @@ namespace Spark::Graphics
             node.lifetime = RenderGraphResourceLifetime::Transient;
             node.bufferDesc = desc;
             node.producerPass = producerPass;
+            node.versionProducers.push_back(producerPass);
 
             RenderGraphResource handle;
             handle.index = static_cast<uint32_t>(m_resources.size());
@@ -540,10 +608,27 @@ namespace Spark::Graphics
         /**
      * @brief Increment the version of a resource (on write). Returns new handle.
      */
-        RenderGraphResource IncrementVersion(RenderGraphResource handle)
+        RenderGraphResource IncrementVersion(RenderGraphResource handle, uint32_t producerPass)
         {
             RenderGraphResource newHandle = handle;
             newHandle.version++;
+
+            if (!handle.IsValid() || handle.index >= m_resources.size())
+            {
+                return newHandle;
+            }
+
+            auto& resource = m_resources[handle.index];
+            if (newHandle.version < resource.versionProducers.size())
+            {
+                resource.hasVersionConflict = true;
+            }
+            else
+            {
+                resource.versionProducers.resize(static_cast<size_t>(newHandle.version) + 1,
+                                                 RenderGraphResource::INVALID_INDEX);
+                resource.versionProducers[newHandle.version] = producerPass;
+            }
             return newHandle;
         }
 
@@ -557,6 +642,79 @@ namespace Spark::Graphics
         // Compilation Steps
         // ========================================================================
 
+        uint32_t GetVersionProducer(RenderGraphResource handle) const
+        {
+            if (!handle.IsValid() || handle.index >= m_resources.size())
+            {
+                return RenderGraphResource::INVALID_INDEX;
+            }
+            const auto& producers = m_resources[handle.index].versionProducers;
+            return handle.version < producers.size() ? producers[handle.version]
+                                                     : RenderGraphResource::INVALID_INDEX;
+        }
+
+        void ValidateResourceVersions() const
+        {
+            for (const auto& resource : m_resources)
+            {
+                if (resource.hasVersionConflict)
+                {
+                    throw std::logic_error("RenderGraph resource version has multiple producers: " + resource.name);
+                }
+                for (size_t version = 1; version < resource.versionProducers.size(); ++version)
+                {
+                    if (resource.versionProducers[version] == RenderGraphResource::INVALID_INDEX)
+                    {
+                        throw std::logic_error("RenderGraph resource has a missing version producer: " + resource.name);
+                    }
+                }
+            }
+
+            auto validateHandle = [&](RenderGraphResource handle, const char* operation)
+            {
+                if (!handle.IsValid() || handle.index >= m_resources.size())
+                {
+                    throw std::logic_error(std::string("RenderGraph ") + operation + " uses an invalid resource");
+                }
+                const auto& resource = m_resources[handle.index];
+                if (handle.version >= resource.versionProducers.size())
+                {
+                    throw std::logic_error(std::string("RenderGraph ") + operation + " uses an unknown version of " +
+                                           resource.name);
+                }
+                if (handle.version > 0 &&
+                    resource.versionProducers[handle.version] == RenderGraphResource::INVALID_INDEX)
+                {
+                    throw std::logic_error(std::string("RenderGraph ") + operation + " uses an unproduced version of " +
+                                           resource.name);
+                }
+            };
+
+            for (const auto& pass : m_passes)
+            {
+                for (const auto& handle : pass->GetReads())
+                {
+                    validateHandle(handle, "read");
+                }
+                for (const auto& handle : pass->GetWrites())
+                {
+                    validateHandle(handle, "write");
+                    if (handle.version == 0 || GetVersionProducer(handle) != pass->GetIndex())
+                    {
+                        throw std::logic_error("RenderGraph write is not the unique producer of its version");
+                    }
+                }
+                for (const auto& handle : pass->GetCreates())
+                {
+                    validateHandle(handle, "create");
+                    if (handle.version != 0 || GetVersionProducer(handle) != pass->GetIndex())
+                    {
+                        throw std::logic_error("RenderGraph create has an invalid producer");
+                    }
+                }
+            }
+        }
+
         /**
      * @brief Compute first/last use pass index for each resource.
      */
@@ -568,9 +726,19 @@ namespace Spark::Graphics
                 res.lastUsePass = 0;
             }
 
+            std::vector<uint32_t> executionPosition(m_passes.size(), RenderGraphResource::INVALID_INDEX);
+            for (uint32_t position = 0; position < m_executionOrder.size(); ++position)
+            {
+                executionPosition[m_executionOrder[position]] = position;
+            }
+
             for (const auto& pass : m_passes)
             {
-                uint32_t pi = pass->GetIndex();
+                if (pass->IsCulled())
+                {
+                    continue;
+                }
+                uint32_t pi = executionPosition[pass->GetIndex()];
 
                 auto updateLifetime = [&](RenderGraphResource handle)
                 {
@@ -614,19 +782,6 @@ namespace Spark::Graphics
             for (auto& pass : m_passes)
             {
                 pass->SetCulled(true);
-            }
-
-            // Build a reverse dependency map: for each resource, which passes read it
-            std::unordered_map<uint32_t, std::vector<uint32_t>> resourceReaders;
-            for (const auto& pass : m_passes)
-            {
-                for (const auto& r : pass->GetReads())
-                {
-                    if (r.IsValid())
-                    {
-                        resourceReaders[r.index].push_back(pass->GetIndex());
-                    }
-                }
             }
 
             // Find passes that must execute (have side effects or write to
@@ -676,8 +831,25 @@ namespace Spark::Graphics
                     {
                         continue;
                     }
-                    // Find the producer pass
-                    uint32_t producer = m_resources[r.index].producerPass;
+                    // Find the producer of the exact version consumed.
+                    uint32_t producer = GetVersionProducer(r);
+                    if (producer != RenderGraphResource::INVALID_INDEX && producer < m_passes.size() &&
+                        m_passes[producer]->IsCulled())
+                    {
+                        m_passes[producer]->SetCulled(false);
+                        workQueue.push(producer);
+                    }
+                }
+
+                // Writes also depend on the previous version. Preserve that
+                // producer even if this is a write-only pass.
+                for (const auto& w : pass.GetWrites())
+                {
+                    if (w.version == 0)
+                    {
+                        continue;
+                    }
+                    uint32_t producer = GetVersionProducer({w.index, w.version - 1});
                     if (producer != RenderGraphResource::INVALID_INDEX && producer < m_passes.size() &&
                         m_passes[producer]->IsCulled())
                     {
@@ -704,30 +876,32 @@ namespace Spark::Graphics
             std::vector<std::vector<uint32_t>> adjacency(passCount);
             std::vector<uint32_t> inDegree(passCount, 0);
 
-            // Map: resource index -> producer pass index
-            std::unordered_map<uint32_t, uint32_t> lastWriter;
-
+            std::vector<std::unordered_set<uint32_t>> edges(passCount);
+            std::unordered_map<RenderGraphResource, std::vector<uint32_t>, RenderGraphResourceHash> versionReaders;
             for (const auto& pass : m_passes)
             {
                 if (pass->IsCulled())
                 {
                     continue;
                 }
-                for (const auto& w : pass->GetWrites())
+                for (const auto& read : pass->GetReads())
                 {
-                    if (w.IsValid())
-                    {
-                        lastWriter[w.index] = pass->GetIndex();
-                    }
-                }
-                for (const auto& c : pass->GetCreates())
-                {
-                    if (c.IsValid())
-                    {
-                        lastWriter[c.index] = pass->GetIndex();
-                    }
+                    versionReaders[read].push_back(pass->GetIndex());
                 }
             }
+
+            auto addDependency = [&](uint32_t producer, uint32_t consumer)
+            {
+                if (producer == RenderGraphResource::INVALID_INDEX || producer == consumer ||
+                    producer >= passCount || m_passes[producer]->IsCulled())
+                {
+                    return;
+                }
+                if (edges[producer].insert(consumer).second)
+                {
+                    inDegree[consumer]++;
+                }
+            };
 
             for (const auto& pass : m_passes)
             {
@@ -741,17 +915,35 @@ namespace Spark::Graphics
                     {
                         continue;
                     }
-                    auto it = lastWriter.find(r.index);
-                    if (it != lastWriter.end() && it->second != pass->GetIndex())
+                    addDependency(GetVersionProducer(r), pass->GetIndex());
+                }
+                for (const auto& w : pass->GetWrites())
+                {
+                    if (w.version > 0)
                     {
-                        adjacency[it->second].push_back(pass->GetIndex());
-                        inDegree[pass->GetIndex()]++;
+                        const RenderGraphResource previous{w.index, w.version - 1};
+                        addDependency(GetVersionProducer(previous), pass->GetIndex());
+                        const auto readers = versionReaders.find(previous);
+                        if (readers != versionReaders.end())
+                        {
+                            for (uint32_t reader : readers->second)
+                            {
+                                addDependency(reader, pass->GetIndex());
+                            }
+                        }
                     }
                 }
             }
 
-            // Kahn's algorithm
-            std::queue<uint32_t> ready;
+            for (uint32_t producer = 0; producer < passCount; ++producer)
+            {
+                adjacency[producer].assign(edges[producer].begin(), edges[producer].end());
+                std::sort(adjacency[producer].begin(), adjacency[producer].end());
+            }
+
+            // Kahn's algorithm. Lowest registration index wins ties so the
+            // schedule is stable across builds and standard library versions.
+            std::priority_queue<uint32_t, std::vector<uint32_t>, std::greater<>> ready;
             for (const auto& pass : m_passes)
             {
                 if (!pass->IsCulled() && inDegree[pass->GetIndex()] == 0)
@@ -762,7 +954,7 @@ namespace Spark::Graphics
 
             while (!ready.empty())
             {
-                uint32_t current = ready.front();
+                uint32_t current = ready.top();
                 ready.pop();
                 m_executionOrder.push_back(current);
 
@@ -774,6 +966,14 @@ namespace Spark::Graphics
                     }
                 }
             }
+
+            const auto activePasses = static_cast<size_t>(std::count_if(
+                m_passes.begin(), m_passes.end(), [](const auto& pass) { return !pass->IsCulled(); }));
+            if (m_executionOrder.size() != activePasses)
+            {
+                m_executionOrder.clear();
+                throw std::logic_error("RenderGraph contains a dependency cycle");
+            }
         }
 
         /**
@@ -782,90 +982,176 @@ namespace Spark::Graphics
      */
         void AnalyzeResourceAliasing()
         {
-            // Honor explicit alias hints
-            for (const auto& [from, to] : m_aliasPairs)
+            m_stats.aliasedResources = 0;
+            m_stats.savedByAliasing = 0;
+            for (auto& resource : m_resources)
             {
-                if (!from.IsValid() || !to.IsValid())
-                {
-                    continue;
-                }
-                if (from.index >= m_resources.size() || to.index >= m_resources.size())
-                {
-                    continue;
-                }
-
-                auto& srcRes = m_resources[from.index];
-                auto& dstRes = m_resources[to.index];
-
-                // Only alias transient resources
-                if (srcRes.lifetime != RenderGraphResourceLifetime::Transient ||
-                    dstRes.lifetime != RenderGraphResourceLifetime::Transient)
-                {
-                    continue;
-                }
-
-                // Check non-overlapping lifetimes
-                if (srcRes.lastUsePass < dstRes.firstUsePass || dstRes.lastUsePass < srcRes.firstUsePass)
-                {
-                    dstRes.aliasTarget = from.index;
-                    m_stats.aliasedResources++;
-                    m_stats.savedByAliasing += dstRes.textureDesc.EstimateMemoryBytes();
-                }
+                resource.aliasTarget = RenderGraphResource::INVALID_INDEX;
             }
 
-            // Automatic aliasing: greedily pair transient resources with
-            // non-overlapping lifetimes and compatible sizes
+            auto compatible = [](const RenderGraphResourceNode& a, const RenderGraphResourceNode& b)
+            {
+                if (a.type != b.type)
+                {
+                    return false;
+                }
+                if (a.type == RenderGraphResourceType::Buffer)
+                {
+                    return a.bufferDesc.sizeBytes == b.bufferDesc.sizeBytes &&
+                           a.bufferDesc.stride == b.bufferDesc.stride && a.bufferDesc.usage == b.bufferDesc.usage;
+                }
+                const auto& x = a.textureDesc;
+                const auto& y = b.textureDesc;
+                return x.width == y.width && x.height == y.height && x.depth == y.depth &&
+                       x.arraySize == y.arraySize && x.mipLevels == y.mipLevels &&
+                       x.sampleCount == y.sampleCount && x.format == y.format && x.usage == y.usage;
+            };
+            auto overlaps = [](const RenderGraphResourceNode& a, const RenderGraphResourceNode& b)
+            {
+                return !(a.lastUsePass < b.firstUsePass || b.lastUsePass < a.firstUsePass);
+            };
+            auto resourceSize = [](const RenderGraphResourceNode& resource)
+            {
+                return resource.type == RenderGraphResourceType::Texture
+                           ? resource.textureDesc.EstimateMemoryBytes()
+                           : resource.bufferDesc.EstimateMemoryBytes();
+            };
+
+            // Honor explicit alias hints, but reject unsafe hints instead of
+            // silently constructing an overlapping or incompatible allocation.
+            for (const auto& [from, to] : m_aliasPairs)
+            {
+                if (!from.IsValid() || !to.IsValid() || from.index >= m_resources.size() ||
+                    to.index >= m_resources.size() || from.index == to.index)
+                {
+                    throw std::logic_error("RenderGraph has an invalid explicit alias");
+                }
+                if (from.version >= m_resources[from.index].versionProducers.size() ||
+                    to.version >= m_resources[to.index].versionProducers.size())
+                {
+                    throw std::logic_error("RenderGraph alias references an unknown resource version");
+                }
+
+                uint32_t root = from.index;
+                for (size_t hop = 0; m_resources[root].aliasTarget != RenderGraphResource::INVALID_INDEX; ++hop)
+                {
+                    if (hop >= m_resources.size())
+                    {
+                        throw std::logic_error("RenderGraph explicit aliases contain a cycle");
+                    }
+                    root = m_resources[root].aliasTarget;
+                }
+
+                auto& srcRes = m_resources[root];
+                auto& dstRes = m_resources[to.index];
+                const bool destinationOwnsAliases = std::any_of(
+                    m_resources.begin(), m_resources.end(), [&](const auto& resource)
+                    { return resource.aliasTarget == to.index; });
+                if (srcRes.lifetime != RenderGraphResourceLifetime::Transient ||
+                    dstRes.lifetime != RenderGraphResourceLifetime::Transient ||
+                    srcRes.firstUsePass == RenderGraphResource::INVALID_INDEX ||
+                    dstRes.firstUsePass == RenderGraphResource::INVALID_INDEX || !compatible(srcRes, dstRes) ||
+                    dstRes.aliasTarget != RenderGraphResource::INVALID_INDEX || destinationOwnsAliases)
+                {
+                    throw std::logic_error("RenderGraph explicit alias resources are incompatible");
+                }
+
+                for (size_t i = 0; i < m_resources.size(); ++i)
+                {
+                    if ((i == root || m_resources[i].aliasTarget == root) && overlaps(m_resources[i], dstRes))
+                    {
+                        throw std::logic_error("RenderGraph explicit alias lifetimes overlap");
+                    }
+                }
+                dstRes.aliasTarget = root;
+            }
+
+            // Build allocation groups and only add a resource when it is
+            // compatible and disjoint from every existing group member.
             std::vector<uint32_t> transients;
             for (size_t i = 0; i < m_resources.size(); ++i)
             {
                 const auto& res = m_resources[i];
                 if (res.lifetime == RenderGraphResourceLifetime::Transient &&
-                    res.aliasTarget == RenderGraphResource::INVALID_INDEX &&
                     res.firstUsePass != RenderGraphResource::INVALID_INDEX)
                 {
                     transients.push_back(static_cast<uint32_t>(i));
                 }
             }
 
-            for (size_t i = 0; i < transients.size(); ++i)
+            std::sort(transients.begin(), transients.end(), [&](uint32_t a, uint32_t b)
             {
-                auto& candidateRes = m_resources[transients[i]];
-                if (candidateRes.aliasTarget != RenderGraphResource::INVALID_INDEX)
+                if (m_resources[a].firstUsePass != m_resources[b].firstUsePass)
                 {
-                    continue; // already aliased
+                    return m_resources[a].firstUsePass < m_resources[b].firstUsePass;
+                }
+                return a < b;
+            });
+
+            std::vector<std::vector<uint32_t>> groups;
+            for (uint32_t root : transients)
+            {
+                if (m_resources[root].aliasTarget != RenderGraphResource::INVALID_INDEX)
+                {
+                    continue;
+                }
+                std::vector<uint32_t> explicitGroup{root};
+                for (uint32_t member : transients)
+                {
+                    if (m_resources[member].aliasTarget == root)
+                    {
+                        explicitGroup.push_back(member);
+                    }
+                }
+                if (explicitGroup.size() > 1)
+                {
+                    groups.push_back(std::move(explicitGroup));
+                }
+            }
+
+            for (uint32_t resourceIndex : transients)
+            {
+                auto& resource = m_resources[resourceIndex];
+                if (resource.aliasTarget != RenderGraphResource::INVALID_INDEX)
+                {
+                    continue;
                 }
 
-                for (size_t j = i + 1; j < transients.size(); ++j)
+                // Explicit roots already owning members stay roots. Avoid
+                // creating alias chains that depend on allocation order.
+                auto ownGroup = std::find_if(groups.begin(), groups.end(), [&](const auto& members)
+                { return !members.empty() && members.front() == resourceIndex; });
+                if (ownGroup != groups.end())
                 {
-                    auto& targetRes = m_resources[transients[j]];
-                    if (targetRes.aliasTarget != RenderGraphResource::INVALID_INDEX)
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    // Non-overlapping?
-                    if (candidateRes.lastUsePass < targetRes.firstUsePass ||
-                        targetRes.lastUsePass < candidateRes.firstUsePass)
+                auto destination = std::find_if(groups.begin(), groups.end(), [&](const auto& members)
+                {
+                    if (members.empty() || !compatible(m_resources[members.front()], resource))
                     {
-                        // Compatible type?
-                        if (candidateRes.type == targetRes.type)
-                        {
-                            size_t sizeA = (candidateRes.type == RenderGraphResourceType::Texture)
-                                               ? candidateRes.textureDesc.EstimateMemoryBytes()
-                                               : candidateRes.bufferDesc.EstimateMemoryBytes();
-                            size_t sizeB = (targetRes.type == RenderGraphResourceType::Texture)
-                                               ? targetRes.textureDesc.EstimateMemoryBytes()
-                                               : targetRes.bufferDesc.EstimateMemoryBytes();
-
-                            // Allow aliasing if sizes are within 2x of each other
-                            if (sizeA > 0 && sizeB > 0 && sizeA <= sizeB * 2 && sizeB <= sizeA * 2)
-                            {
-                                targetRes.aliasTarget = transients[i];
-                                m_stats.aliasedResources++;
-                                m_stats.savedByAliasing += std::min(sizeA, sizeB);
-                            }
-                        }
+                        return false;
                     }
+                    return std::none_of(members.begin(), members.end(), [&](uint32_t member)
+                    { return overlaps(m_resources[member], resource); });
+                });
+                if (destination != groups.end())
+                {
+                    resource.aliasTarget = destination->front();
+                    destination->push_back(resourceIndex);
+                }
+                else
+                {
+                    groups.push_back({resourceIndex});
+                }
+            }
+
+            for (const auto& resource : m_resources)
+            {
+                if (resource.aliasTarget != RenderGraphResource::INVALID_INDEX)
+                {
+                    m_stats.aliasedResources++;
+                    m_stats.savedByAliasing += resourceSize(resource);
                 }
             }
         }
@@ -904,6 +1190,10 @@ namespace Spark::Graphics
                 if (res.lifetime != RenderGraphResourceLifetime::Transient)
                 {
                     continue;
+                }
+                if (res.aliasTarget != RenderGraphResource::INVALID_INDEX)
+                {
+                    continue; // Allocate roots first; aliases are bound below.
                 }
                 if (res.type == RenderGraphResourceType::Buffer)
                 {
@@ -952,17 +1242,11 @@ namespace Spark::Graphics
                     continue;
                 }
 
-                // If aliased, share the physical texture with the alias target
-                if (res.aliasTarget != RenderGraphResource::INVALID_INDEX)
-                {
-                    res.physicalTexture = m_resources[res.aliasTarget].physicalTexture;
-                    continue;
-                }
-
                 ::RenderTargetDesc rtDesc;
                 rtDesc.name = res.name;
                 rtDesc.width = res.textureDesc.width;
                 rtDesc.height = res.textureDesc.height;
+                rtDesc.arraySize = res.textureDesc.arraySize;
                 rtDesc.format = res.textureDesc.format;
                 rtDesc.sampleCount = res.textureDesc.sampleCount;
                 rtDesc.mipLevels = res.textureDesc.mipLevels;
@@ -977,6 +1261,24 @@ namespace Spark::Graphics
                     res.physicalTexture = std::move(rt);
                 }
             }
+
+            for (auto& res : m_resources)
+            {
+                if (res.lifetime != RenderGraphResourceLifetime::Transient ||
+                    res.aliasTarget == RenderGraphResource::INVALID_INDEX)
+                {
+                    continue;
+                }
+                const auto& root = m_resources[res.aliasTarget];
+                if (res.type == RenderGraphResourceType::Texture)
+                {
+                    res.physicalTexture = root.physicalTexture;
+                }
+                else
+                {
+                    res.physicalBuffer = root.physicalBuffer;
+                }
+            }
         }
 
         /**
@@ -989,6 +1291,7 @@ namespace Spark::Graphics
                 if (res.lifetime == RenderGraphResourceLifetime::Transient)
                 {
                     res.physicalTexture.reset();
+                    res.physicalBuffer.Reset();
                 }
             }
         }
@@ -1111,7 +1414,7 @@ namespace Spark::Graphics
 
     inline RenderGraphResource RenderGraphBuilder::Write(RenderGraphResource resource)
     {
-        auto newHandle = m_graph.IncrementVersion(resource);
+        auto newHandle = m_graph.IncrementVersion(resource, m_pass.GetIndex());
         m_pass.AddWrite(newHandle);
         m_graph.AddResourceRef(newHandle);
         return newHandle;

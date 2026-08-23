@@ -86,7 +86,7 @@ namespace Spark::Net
          *
          * @param rewindTime  Target server time to rewind to (seconds)
          * @param origin      Ray origin (world space)
-         * @param dir         Ray direction — must be normalized
+         * @param dir         Finite, non-zero ray direction (normalized internally)
          * @param maxDist     Maximum hit distance
          * @param ignoreEntity Entity id excluded from the test (e.g. shooter)
          * @param outHitPoint Optional (may be null): world-space hit point

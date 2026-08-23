@@ -118,19 +118,19 @@ namespace Spark
     // ============================================================================
 
     // Host-injected instance (see SetGlobalInstance docs in the header).
-    static SimpleConsole* s_injectedConsole = nullptr;
+    static std::atomic<SimpleConsole*> s_injectedConsole{nullptr};
 
     SimpleConsole& SimpleConsole::GetInstance()
     {
-        if (s_injectedConsole)
-            return *s_injectedConsole;
+        if (SimpleConsole* injected = s_injectedConsole.load(std::memory_order_acquire))
+            return *injected;
         static SimpleConsole instance;
         return instance;
     }
 
     void SimpleConsole::SetGlobalInstance(SimpleConsole* instance)
     {
-        s_injectedConsole = instance;
+        s_injectedConsole.store(instance, std::memory_order_release);
     }
 
     namespace Detail
@@ -148,7 +148,8 @@ namespace Spark
     bool SimpleConsole::Initialize()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-        if (m_initialized)
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (m_initialized.load(std::memory_order_acquire))
         {
             return true;
         }
@@ -156,6 +157,11 @@ namespace Spark
         SPARK_LOG_INFO(Spark::LogCategory::Core, "SimpleConsole initializing");
 
         // Register built-in help command
+        // Publish initialized while the lifecycle lease is exclusive. Command
+        // operations also take this lease, so no other thread can observe a
+        // partially registered console.
+        m_initialized.store(true, std::memory_order_release);
+
         RegisterCommand(
             "help",
             [this](const std::vector<std::string>& args) -> std::string
@@ -196,7 +202,6 @@ namespace Spark
             },
             "Show available commands", "General", "help [command]");
 
-        m_initialized = true;
         SPARK_LOG_INFO(Spark::LogCategory::Core, "SimpleConsole initialized");
         return true;
     }
@@ -204,17 +209,21 @@ namespace Spark
     void SimpleConsole::Shutdown()
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
-        if (!m_initialized)
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
         {
             return;
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "SimpleConsole shutting down");
-        m_initialized = false;
+        m_initialized.store(false, std::memory_order_release);
+        std::scoped_lock lock(m_commandMutex, m_logMutex, m_historyMutex);
         m_commands.clear();
         m_logHistory.clear();
         m_commandHistory.clear();
         m_aliases.clear();
+        m_registeredCommands.store(0, std::memory_order_relaxed);
+        m_registeredAliases.store(0, std::memory_order_relaxed);
     }
 
     void SimpleConsole::Update()
@@ -245,7 +254,7 @@ namespace Spark
             m_logHistory.pop_front();
         }
 
-        m_stats.totalLogsWritten++;
+        m_totalLogsWritten.fetch_add(1, std::memory_order_relaxed);
     }
 
     void SimpleConsole::Log(ConsoleSeverity severity, const std::string& message)
@@ -289,6 +298,9 @@ namespace Spark
     void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
                                         const std::string& category, const std::string& usage)
     {
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return;
         std::lock_guard<std::mutex> lock(m_commandMutex);
         CommandInfo info;
         info.handler = std::move(handler);
@@ -297,13 +309,16 @@ namespace Spark
         info.usage = usage;
         info.nameHash = FNV1a64(name);
         m_commands[name] = std::move(info);
-        m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
+        m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
     }
 
     void SimpleConsole::RegisterCommand(const std::string& name, CommandHandler handler, const std::string& description,
                                         const std::string& category, const std::string& usage,
                                         CommandPermission permission)
     {
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return;
         std::lock_guard<std::mutex> lock(m_commandMutex);
         CommandInfo info;
         info.handler = std::move(handler);
@@ -313,14 +328,17 @@ namespace Spark
         info.nameHash = FNV1a64(name);
         info.requiredPermission = permission;
         m_commands[name] = std::move(info);
-        m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
+        m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
     }
 
     bool SimpleConsole::UnregisterCommand(const std::string& name)
     {
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return false;
         std::lock_guard<std::mutex> lock(m_commandMutex);
         bool removed = m_commands.erase(name) > 0;
-        m_stats.registeredCommands = static_cast<uint32_t>(m_commands.size());
+        m_registeredCommands.store(static_cast<uint32_t>(m_commands.size()), std::memory_order_relaxed);
         return removed;
     }
 
@@ -332,6 +350,12 @@ namespace Spark
 
     bool SimpleConsole::ExecuteCommand(const std::string& commandLine)
     {
+        // Keep module-provided handler code leased until dispatch finishes.
+        // Shutdown takes the same lease before clearing handlers, so module
+        // unload cannot race an already-copied callback.
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return false;
         std::string command;
         std::vector<std::string> args;
         if (!ParseCommandLine(commandLine, command, args))
@@ -394,7 +418,7 @@ namespace Spark
                     info += "\n  " + cvar->GetDescription();
                 }
                 LogInfo(info);
-                m_stats.totalCommandsExecuted++;
+                m_totalCommandsExecuted.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
             else
@@ -403,13 +427,13 @@ namespace Spark
                 if (cvar->GetFlags() & CVarFlags::ReadOnly)
                 {
                     LogError(command + " is read-only");
-                    m_stats.totalCommandsFailed++;
+                    m_totalCommandsFailed.fetch_add(1, std::memory_order_relaxed);
                     return false;
                 }
                 if ((cvar->GetFlags() & CVarFlags::Cheat) && !CVarRegistry::Get().AreCheatsEnabled())
                 {
                     LogError(command + " requires cheats to be enabled");
-                    m_stats.totalCommandsFailed++;
+                    m_totalCommandsFailed.fetch_add(1, std::memory_order_relaxed);
                     return false;
                 }
                 if (cvar->SetFromString(newVal))
@@ -419,14 +443,14 @@ namespace Spark
                     {
                         LogWarning("Change to " + command + " requires engine restart to take effect");
                     }
-                    m_stats.totalCommandsExecuted++;
+                    m_totalCommandsExecuted.fetch_add(1, std::memory_order_relaxed);
                     return true;
                 }
                 else
                 {
                     LogError("Invalid value '" + newVal + "' for " + command +
                              " (type: " + std::string(CVarTypeToString(cvar->GetType())) + ")");
-                    m_stats.totalCommandsFailed++;
+                    m_totalCommandsFailed.fetch_add(1, std::memory_order_relaxed);
                     return false;
                 }
             }
@@ -447,17 +471,17 @@ namespace Spark
                 }
                 errorMsg += " Type 'help' for available commands.";
                 LogError(errorMsg);
-                m_stats.totalCommandsFailed++;
+                m_totalCommandsFailed.fetch_add(1, std::memory_order_relaxed);
                 return false;
             }
 
             // Permission check — bypassing allows any user to run admin/dev commands
             SPARK_BRANCH_GUARD_BEGIN("console_permission_check")
-            if (m_currentPermission < it->second.requiredPermission)
+            if (m_currentPermission.load(std::memory_order_relaxed) < it->second.requiredPermission)
             {
                 LogError("Permission denied: '" + command + "' requires " +
                          CommandPermissionToString(it->second.requiredPermission) + " level");
-                m_stats.totalCommandsFailed++;
+                m_totalCommandsFailed.fetch_add(1, std::memory_order_relaxed);
                 return false;
             }
             SPARK_BRANCH_GUARD_END("console_permission_check")
@@ -471,13 +495,13 @@ namespace Spark
             {
                 LogInfo(result);
             }
-            m_stats.totalCommandsExecuted++;
+            m_totalCommandsExecuted.fetch_add(1, std::memory_order_relaxed);
             return true;
         }
         catch (const std::exception& e)
         {
             LogError("Command '" + command + "' failed: " + std::string(e.what()));
-            m_stats.totalCommandsFailed++;
+            m_totalCommandsFailed.fetch_add(1, std::memory_order_relaxed);
             return false;
         }
     }
@@ -488,15 +512,18 @@ namespace Spark
 
     void SimpleConsole::Show()
     {
-        m_visible = true;
+        m_visible.store(true, std::memory_order_relaxed);
     }
     void SimpleConsole::Hide()
     {
-        m_visible = false;
+        m_visible.store(false, std::memory_order_relaxed);
     }
     void SimpleConsole::Toggle()
     {
-        m_visible = !m_visible;
+        bool current = m_visible.load(std::memory_order_relaxed);
+        while (!m_visible.compare_exchange_weak(current, !current, std::memory_order_relaxed))
+        {
+        }
     }
     void SimpleConsole::Clear()
     {
@@ -522,7 +549,11 @@ namespace Spark
 
     SimpleConsole::ConsoleStats SimpleConsole::GetStats() const
     {
-        return m_stats;
+        return ConsoleStats{m_totalLogsWritten.load(std::memory_order_relaxed),
+                            m_totalCommandsExecuted.load(std::memory_order_relaxed),
+                            m_totalCommandsFailed.load(std::memory_order_relaxed),
+                            m_registeredCommands.load(std::memory_order_relaxed),
+                            m_registeredAliases.load(std::memory_order_relaxed)};
     }
 
     // ============================================================================
@@ -531,14 +562,22 @@ namespace Spark
 
     void SimpleConsole::SetAlias(const std::string& alias, const std::string& command)
     {
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return;
+        std::lock_guard<std::mutex> lock(m_commandMutex);
         m_aliases[alias] = command;
-        m_stats.registeredAliases = static_cast<uint32_t>(m_aliases.size());
+        m_registeredAliases.store(static_cast<uint32_t>(m_aliases.size()), std::memory_order_relaxed);
     }
 
     void SimpleConsole::RemoveAlias(const std::string& alias)
     {
+        std::lock_guard<std::recursive_mutex> lifecycleLock(m_lifecycleMutex);
+        if (!m_initialized.load(std::memory_order_acquire))
+            return;
+        std::lock_guard<std::mutex> lock(m_commandMutex);
         m_aliases.erase(alias);
-        m_stats.registeredAliases = static_cast<uint32_t>(m_aliases.size());
+        m_registeredAliases.store(static_cast<uint32_t>(m_aliases.size()), std::memory_order_relaxed);
     }
 
     // ============================================================================
@@ -547,12 +586,12 @@ namespace Spark
 
     void SimpleConsole::SetCurrentPermissionLevel(CommandPermission level)
     {
-        m_currentPermission = level;
+        m_currentPermission.store(level, std::memory_order_relaxed);
     }
 
     CommandPermission SimpleConsole::GetCurrentPermissionLevel() const
     {
-        return m_currentPermission;
+        return m_currentPermission.load(std::memory_order_relaxed);
     }
 
     // ============================================================================
@@ -607,7 +646,15 @@ namespace Spark
         auto now = std::chrono::system_clock::now();
         auto t = std::chrono::system_clock::to_time_t(now);
         char buf[64];
-        std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&t));
+        std::tm local{};
+#ifdef _WIN32
+        if (localtime_s(&local, &t) != 0)
+            return "00:00:00";
+#else
+        if (!localtime_r(&t, &local))
+            return "00:00:00";
+#endif
+        std::strftime(buf, sizeof(buf), "%H:%M:%S", &local);
         return buf;
     }
 
@@ -643,6 +690,7 @@ namespace Spark
 
     std::string SimpleConsole::ResolveAliases(const std::string& cmd)
     {
+        std::lock_guard<std::mutex> lock(m_commandMutex);
         std::string resolved = cmd;
         for (int depth = 0; depth < 10; ++depth)
         {

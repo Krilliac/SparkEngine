@@ -367,3 +367,58 @@ TEST(NullRHIDevicePhaseY_ImmediateCommandListWorks)
     auto* nullCmd = static_cast<Spark::RHI::NullCommandList*>(cmd);
     EXPECT_EQ(nullCmd->GetDrawCallCount(), static_cast<uint32_t>(2));
 }
+
+TEST(NullRHIDevicePhaseY_SwapChainAndDeferredListAreFunctional)
+{
+    PhaseYFixture fx;
+    Spark::RHI::RHISwapChainDesc desc;
+    desc.width = 640;
+    desc.height = 360;
+    desc.bufferCount = 3;
+    auto swapChain = fx.device.CreateSwapChain(desc);
+    EXPECT_TRUE(swapChain != nullptr);
+    EXPECT_TRUE(swapChain->GetBackBuffer() != nullptr);
+    EXPECT_TRUE(swapChain->GetBackBuffer()->GetDesc().usage & Spark::RHI::RHITextureUsage::RenderTarget);
+    EXPECT_TRUE(swapChain->Present(false));
+    EXPECT_EQ(swapChain->GetCurrentBufferIndex(), 1u);
+    EXPECT_TRUE(swapChain->Resize(800, 600));
+    EXPECT_EQ(swapChain->GetWidth(), 800u);
+    EXPECT_EQ(swapChain->GetHeight(), 600u);
+    EXPECT_FALSE(swapChain->Resize(0, 600));
+
+    auto deferred = fx.device.CreateDeferredCommandList();
+    EXPECT_TRUE(deferred != nullptr);
+    deferred->Begin();
+    deferred->Draw(3);
+    deferred->Dispatch(1, 1, 1);
+    deferred->End();
+    auto* nullDeferred = static_cast<Spark::RHI::NullCommandList*>(deferred.get());
+    EXPECT_EQ(nullDeferred->GetDispatchCount(), 1u);
+    deferred->Reset();
+    EXPECT_EQ(nullDeferred->GetDrawCallCount(), 0u);
+    EXPECT_EQ(nullDeferred->GetDispatchCount(), 0u);
+    deferred->Dispatch(1, 1, 1);
+    EXPECT_EQ(nullDeferred->GetDispatchCount(), 1u);
+    deferred->Begin();
+    EXPECT_EQ(nullDeferred->GetDispatchCount(), 0u);
+    deferred->End();
+    fx.device.ExecuteCommandList(deferred.get());
+    EXPECT_EQ(fx.device.GetNullStats().commandListsExecuted, 1u);
+}
+
+TEST(NullRHIDevicePhaseY_UpdateBufferWritesWithinBounds)
+{
+    PhaseYFixture fx;
+    Spark::RHI::RHIBufferDesc desc;
+    desc.size = 8;
+    auto buffer = fx.device.CreateBuffer(desc);
+    const uint8_t update[3] = {4, 5, 6};
+    fx.device.UpdateBuffer(buffer.get(), update, sizeof(update), 2);
+    const auto* bytes = static_cast<const uint8_t*>(fx.device.MapBuffer(buffer.get()));
+    EXPECT_TRUE(bytes != nullptr);
+    EXPECT_EQ(bytes[1], 0u);
+    EXPECT_EQ(bytes[2], 4u);
+    EXPECT_EQ(bytes[4], 6u);
+    EXPECT_EQ(bytes[5], 0u);
+    fx.device.UnmapBuffer(buffer.get());
+}

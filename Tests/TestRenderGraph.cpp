@@ -506,3 +506,287 @@ TEST(RenderGraph_ConsoleGetGraphStats)
     EXPECT_FALSE(stats.empty());
     EXPECT_TRUE(stats.find("StatsTest") != std::string::npos);
 }
+
+TEST(RenderGraph_ImportPreservesAllocationSignificantDescriptorFields)
+{
+    ::RenderTargetDesc descriptor;
+    descriptor.width = 320;
+    descriptor.height = 180;
+    descriptor.arraySize = 6;
+    descriptor.mipLevels = 4;
+    descriptor.sampleCount = 1;
+    descriptor.usage = RenderTargetUsage::DepthStencil | RenderTargetUsage::Array;
+    descriptor.clearDepth = 0.25f;
+    descriptor.clearStencil = 7;
+    ::RenderTarget target(descriptor);
+
+    RenderGraph graph("Test");
+    const RenderGraphResource imported = graph.Import("ArrayTarget", &target);
+    const auto& importedDescriptor = graph.GetResources()[imported.index].textureDesc;
+    EXPECT_EQ(importedDescriptor.arraySize, 6u);
+    EXPECT_EQ(importedDescriptor.mipLevels, 4u);
+    EXPECT_EQ(static_cast<uint32_t>(importedDescriptor.usage), static_cast<uint32_t>(descriptor.usage));
+    EXPECT_NEAR(importedDescriptor.clearDepth, 0.25f, 0.0001f);
+    EXPECT_EQ(importedDescriptor.clearStencil, static_cast<uint8_t>(7));
+}
+
+// ============================================================================
+// Adversarial dependency and aliasing cases
+// ============================================================================
+
+TEST(RenderGraph_ExactVersionDependencyDoesNotDependOnLaterOverwrite)
+{
+    RenderGraph graph("Versions");
+    RenderGraphResource versionOne;
+
+    auto& producer = graph.AddPass(
+        "Producer", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder)
+        {
+            RenderGraphTextureDesc desc;
+            versionOne = builder.Write(builder.Create("Versioned", desc));
+        },
+        [](const RenderGraphResourceRegistry&) {});
+    producer.MarkSideEffects();
+
+    auto& overwriter = graph.AddPass(
+        "ProducesV2", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder) { builder.Write(versionOne); },
+        [](const RenderGraphResourceRegistry&) {});
+    overwriter.MarkSideEffects();
+
+    // Registered after the overwrite, but it consumes the earlier physical
+    // version and must execute before that allocation is overwritten.
+    auto& consumer = graph.AddPass(
+        "ConsumesV1", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder) { builder.Read(versionOne); },
+        [](const RenderGraphResourceRegistry&) {});
+    consumer.MarkSideEffects();
+
+    graph.Compile();
+    const auto& order = graph.GetExecutionOrder();
+    ASSERT_EQ(order.size(), size_t(3));
+    EXPECT_EQ(order[0], producer.GetIndex());
+    EXPECT_EQ(order[1], consumer.GetIndex());
+    EXPECT_EQ(order[2], overwriter.GetIndex());
+}
+
+TEST(RenderGraph_IndependentPassOrderIsStable)
+{
+    RenderGraph graph("StableOrder");
+    for (int i = 0; i < 4; ++i)
+    {
+        auto& pass = graph.AddPass(
+            "Independent" + std::to_string(i), RenderGraphPassType::Graphics, [](RenderGraphBuilder&) {},
+            [](const RenderGraphResourceRegistry&) {});
+        pass.MarkSideEffects();
+    }
+
+    graph.Compile();
+    const auto& order = graph.GetExecutionOrder();
+    ASSERT_EQ(order.size(), size_t(4));
+    for (uint32_t i = 0; i < 4; ++i)
+    {
+        EXPECT_EQ(order[i], i);
+    }
+}
+
+TEST(RenderGraph_DependencyCycleIsRejected)
+{
+    RenderGraph graph("Cycle");
+    const auto a = graph.Import("A", nullptr);
+    const auto b = graph.Import("B", nullptr);
+    const RenderGraphResource futureB{b.index, 1};
+    RenderGraphResource a1;
+
+    auto& first = graph.AddPass(
+        "First", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder)
+        {
+            builder.Read(futureB);
+            a1 = builder.Write(a);
+        },
+        [](const RenderGraphResourceRegistry&) {});
+    first.MarkSideEffects();
+
+    auto& second = graph.AddPass(
+        "Second", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder)
+        {
+            builder.Read(a1);
+            builder.Write(b);
+        },
+        [](const RenderGraphResourceRegistry&) {});
+    second.MarkSideEffects();
+
+    EXPECT_THROW(graph.Compile(), std::logic_error);
+    EXPECT_FALSE(graph.IsCompiled());
+    EXPECT_TRUE(graph.GetExecutionOrder().empty());
+}
+
+TEST(RenderGraph_UnknownResourceVersionIsRejected)
+{
+    RenderGraph graph("UnknownVersion");
+    const auto imported = graph.Import("Imported", nullptr);
+    RenderGraphResource unknown{imported.index, 7};
+    auto& pass = graph.AddPass(
+        "InvalidRead", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder) { builder.Read(unknown); },
+        [](const RenderGraphResourceRegistry&) {});
+    pass.MarkSideEffects();
+
+    EXPECT_THROW(graph.Compile(), std::logic_error);
+    EXPECT_FALSE(graph.IsCompiled());
+}
+
+TEST(RenderGraph_ThrowingPassSetupRollsBackAndInvalidates)
+{
+    RenderGraph graph("Test");
+    RenderGraphResource existing;
+    graph.AddPass(
+        "Producer", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder)
+        {
+            existing = builder.Create("Existing", RenderGraphTextureDesc{});
+        },
+        [](const RenderGraphResourceRegistry&) {});
+    graph.Compile();
+    EXPECT_TRUE(graph.IsCompiled());
+
+    const size_t originalPassCount = graph.GetPasses().size();
+    const size_t originalResourceCount = graph.GetResources().size();
+    const uint32_t originalRefCount = graph.GetResources()[existing.index].refCount;
+    const size_t originalVersionCount = graph.GetResources()[existing.index].versionProducers.size();
+    const bool originalVersionConflict = graph.GetResources()[existing.index].hasVersionConflict;
+
+    EXPECT_THROW(
+        graph.AddPass(
+            "Throwing", RenderGraphPassType::Graphics,
+            [&](RenderGraphBuilder& builder)
+            {
+                builder.Read(existing);
+                builder.Write(existing);
+                builder.Write(existing); // Same version producer marks a conflict until rollback.
+                const auto temporary = builder.Create("Temporary", RenderGraphTextureDesc{});
+                builder.Alias(temporary, existing);
+                throw std::runtime_error("setup failed");
+            },
+            [](const RenderGraphResourceRegistry&) {}),
+        std::runtime_error);
+
+    EXPECT_FALSE(graph.IsCompiled());
+    EXPECT_EQ(graph.GetPasses().size(), originalPassCount);
+    EXPECT_EQ(graph.GetResources().size(), originalResourceCount);
+    EXPECT_EQ(graph.GetResources()[existing.index].refCount, originalRefCount);
+    EXPECT_EQ(graph.GetResources()[existing.index].versionProducers.size(), originalVersionCount);
+    EXPECT_EQ(graph.GetResources()[existing.index].hasVersionConflict, originalVersionConflict);
+    EXPECT_NO_THROW(graph.Compile());
+}
+
+TEST(RenderGraph_ExecuteRejectsUncompiledGraph)
+{
+    RenderGraph graph("NotCompiled");
+    EXPECT_THROW(graph.Execute(), std::logic_error);
+}
+
+TEST(RenderGraph_FailedRecompileClearsPriorSchedule)
+{
+    RenderGraph graph("FailedRecompile");
+    auto& valid = graph.AddPass(
+        "Valid", RenderGraphPassType::Graphics, [](RenderGraphBuilder&) {},
+        [](const RenderGraphResourceRegistry&) {});
+    valid.MarkSideEffects();
+    graph.Compile();
+    ASSERT_EQ(graph.GetExecutionOrder().size(), size_t(1));
+
+    auto& invalid = graph.AddPass(
+        "Invalid", RenderGraphPassType::Graphics,
+        [](RenderGraphBuilder& builder)
+        { builder.Read(RenderGraphResource{RenderGraphResource::INVALID_INDEX, 0}); },
+        [](const RenderGraphResourceRegistry&) {});
+    invalid.MarkSideEffects();
+
+    EXPECT_THROW(graph.Compile(), std::logic_error);
+    EXPECT_FALSE(graph.IsCompiled());
+    EXPECT_TRUE(graph.GetExecutionOrder().empty());
+    EXPECT_THROW(graph.Execute(), std::logic_error);
+}
+
+TEST(RenderGraph_AliasGroupMembersNeverOverlap)
+{
+    RenderGraph graph("AliasGroups");
+    RenderGraphResource a;
+    RenderGraphResource b;
+    RenderGraphResource c;
+    RenderGraphTextureDesc desc;
+    desc.width = 64;
+    desc.height = 64;
+
+    auto& passA = graph.AddPass(
+        "A", RenderGraphPassType::Graphics, [&](RenderGraphBuilder& builder) { a = builder.Create("A", desc); },
+        [](const RenderGraphResourceRegistry&) {});
+    passA.MarkSideEffects();
+    auto& passB = graph.AddPass(
+        "BStart", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder) { b = builder.Create("B", desc); },
+        [](const RenderGraphResourceRegistry&) {});
+    passB.MarkSideEffects();
+    auto& passC = graph.AddPass(
+        "C", RenderGraphPassType::Graphics, [&](RenderGraphBuilder& builder) { c = builder.Create("C", desc); },
+        [](const RenderGraphResourceRegistry&) {});
+    passC.MarkSideEffects();
+    auto& useB = graph.AddPass(
+        "BEnd", RenderGraphPassType::Graphics, [&](RenderGraphBuilder& builder) { builder.Read(b); },
+        [](const RenderGraphResourceRegistry&) {});
+    useB.MarkSideEffects();
+
+    graph.Compile();
+    const auto& resources = graph.GetResources();
+    EXPECT_EQ(resources[b.index].aliasTarget, a.index);
+    EXPECT_EQ(resources[c.index].aliasTarget, RenderGraphResource::INVALID_INDEX);
+    EXPECT_EQ(graph.GetStats().aliasedResources, uint32_t(1));
+}
+
+TEST(RenderGraph_AliasingRequiresExactAllocationCompatibility)
+{
+    RenderGraph graph("AliasCompatibility");
+    RenderGraphTextureDesc wide;
+    wide.width = 64;
+    wide.height = 64;
+    RenderGraphTextureDesc narrow = wide;
+    narrow.width = 128;
+    narrow.height = 32; // Same byte count, incompatible texture shape.
+
+    auto& first = graph.AddPass(
+        "Wide", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder) { builder.Create("Wide", wide); },
+        [](const RenderGraphResourceRegistry&) {});
+    first.MarkSideEffects();
+    auto& second = graph.AddPass(
+        "Narrow", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder) { builder.Create("Narrow", narrow); },
+        [](const RenderGraphResourceRegistry&) {});
+    second.MarkSideEffects();
+
+    graph.Compile();
+    EXPECT_EQ(graph.GetStats().aliasedResources, uint32_t(0));
+}
+
+TEST(RenderGraph_OverlappingExplicitAliasIsRejected)
+{
+    RenderGraph graph("UnsafeAlias");
+    auto& pass = graph.AddPass(
+        "BothLive", RenderGraphPassType::Graphics,
+        [&](RenderGraphBuilder& builder)
+        {
+            RenderGraphTextureDesc desc;
+            const auto a = builder.Create("A", desc);
+            const auto b = builder.Create("B", desc);
+            builder.Alias(a, b);
+        },
+        [](const RenderGraphResourceRegistry&) {});
+    pass.MarkSideEffects();
+
+    EXPECT_THROW(graph.Compile(), std::logic_error);
+    EXPECT_FALSE(graph.IsCompiled());
+}

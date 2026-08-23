@@ -30,6 +30,7 @@
 #include "RHIHandlePool.h"
 #include "TransientBufferAllocator.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace Spark
@@ -43,9 +44,17 @@ namespace Spark
         class NullCommandList : public IRHICommandList
         {
           public:
-            void Begin() override { m_drawCalls = 0; }
+            void Begin() override
+            {
+                m_drawCalls = 0;
+                m_dispatchCalls = 0;
+            }
             void End() override {}
-            void Reset() override { m_drawCalls = 0; }
+            void Reset() override
+            {
+                m_drawCalls = 0;
+                m_dispatchCalls = 0;
+            }
 
             void SetRenderTargets(IRHITexture* const*, uint32_t, IRHITexture*) override {}
             void ClearRenderTarget(IRHITexture*, const float[4]) override {}
@@ -86,6 +95,53 @@ namespace Spark
           private:
             uint32_t m_drawCalls = 0;
             uint32_t m_dispatchCalls = 0;
+        };
+
+        /** @brief CPU-only swap chain with a stable NullTexture back buffer. */
+        class NullSwapChain : public IRHISwapChain
+        {
+          public:
+            explicit NullSwapChain(RHISwapChainDesc desc) : m_desc(desc) { RecreateBackBuffer(); }
+
+            bool Present(bool) override
+            {
+                m_currentIndex = (m_currentIndex + 1) % std::max(1u, m_desc.bufferCount);
+                return true;
+            }
+
+            bool Resize(uint32_t width, uint32_t height) override
+            {
+                if (width == 0 || height == 0)
+                    return false;
+                m_desc.width = width;
+                m_desc.height = height;
+                m_currentIndex = 0;
+                RecreateBackBuffer();
+                return true;
+            }
+
+            IRHITexture* GetBackBuffer() override { return m_backBuffer.get(); }
+            PixelFormat GetFormat() const override { return m_desc.format; }
+            uint32_t GetWidth() const override { return m_desc.width; }
+            uint32_t GetHeight() const override { return m_desc.height; }
+            uint32_t GetCurrentBufferIndex() const override { return m_currentIndex; }
+
+          private:
+            void RecreateBackBuffer()
+            {
+                RHITextureDesc texture;
+                texture.width = m_desc.width;
+                texture.height = m_desc.height;
+                texture.format = m_desc.format;
+                texture.sampleCount = std::max(1u, m_desc.sampleCount);
+                texture.usage = RHITextureUsage::RenderTarget | RHITextureUsage::ShaderResource;
+                texture.debugName = "NullSwapChain.BackBuffer";
+                m_backBuffer = std::make_unique<NullTexture>(texture);
+            }
+
+            RHISwapChainDesc m_desc;
+            std::unique_ptr<NullTexture> m_backBuffer;
+            uint32_t m_currentIndex = 0;
         };
 
         /**
@@ -158,7 +214,12 @@ namespace Spark
                 m_stats = {};
             }
 
-            std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc&) override { return nullptr; }
+            std::unique_ptr<IRHISwapChain> CreateSwapChain(const RHISwapChainDesc& desc) override
+            {
+                if (desc.width == 0 || desc.height == 0 || desc.bufferCount == 0)
+                    return nullptr;
+                return std::make_unique<NullSwapChain>(desc);
+            }
 
             std::unique_ptr<IRHIBuffer> CreateBuffer(const RHIBufferDesc& desc) override
             {
@@ -220,17 +281,24 @@ namespace Spark
                 // the TransientBufferAllocator receives a writable pointer.
                 // A safe static_cast is fine here because every buffer
                 // reaching this path was produced by NullRHIDevice::CreateBuffer.
-                if (auto* nb = static_cast<NullBuffer*>(buffer))
+                if (auto* nb = dynamic_cast<NullBuffer*>(buffer))
                     return nb->GetCpuPointer();
                 return nullptr;
             }
 
             void UnmapBuffer(IRHIBuffer*) override {}
-            void UpdateBuffer(IRHIBuffer*, const void*, size_t, size_t) override {}
+            void UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset) override
+            {
+                if (auto* nullBuffer = dynamic_cast<NullBuffer*>(buffer))
+                    nullBuffer->Write(data, size, offset);
+            }
             void UpdateTexture(IRHITexture*, const void*, uint32_t, uint32_t) override {}
 
             IRHICommandList* GetImmediateCommandList() override { return &m_commandList; }
-            std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override { return nullptr; }
+            std::unique_ptr<IRHICommandList> CreateDeferredCommandList() override
+            {
+                return std::make_unique<NullCommandList>();
+            }
             void ExecuteCommandList(IRHICommandList*) override { m_stats.commandListsExecuted++; }
 
             void BeginFrame() override

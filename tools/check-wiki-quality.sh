@@ -61,13 +61,24 @@ fi
 
 HOME_FILE="$WIKI_DIR/Home.md"
 TESTING_FILE="$WIKI_DIR/advanced/Testing.md"
+BUILD_GUIDE_FILE="$WIKI_DIR/Build-Guide.md"
+README_FILE="$PROJECT_ROOT/README.md"
 
 if [ -f "$HOME_FILE" ]; then
     check_no_pattern "$HOME_FILE" "3,119|244 test files" "Stale hardcoded test metrics"
+    check_no_pattern "$HOME_FILE" "releases/latest/download|v[0-9]+\\.[0-9]+\\.[0-9]+ Released|Release and nightly binaries are published" "Unsupported release/download claim"
 fi
 
 if [ -f "$TESTING_FILE" ]; then
     check_no_pattern "$TESTING_FILE" "3,119|244 test files" "Stale hardcoded test metrics"
+fi
+
+if [ -f "$BUILD_GUIDE_FILE" ]; then
+    check_no_pattern "$BUILD_GUIDE_FILE" "cmake --build build --config Release" "Preset guide builds the wrong directory"
+fi
+
+if [ -f "$README_FILE" ]; then
+    check_no_pattern "$README_FILE" "releases/latest/download|nightly\\.link/.+/coverage-report" "Unsupported release/artifact download claim"
 fi
 
 if [ "$ISSUES" -eq 0 ]; then

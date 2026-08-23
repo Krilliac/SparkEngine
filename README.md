@@ -5,7 +5,7 @@ A C++23 open-source 3D game engine with a full RHI abstraction layer, ECS (EnTT)
 > 🌐 **Website now live:** [sparkengine.dev](https://sparkengine.dev/)
 
 [![Build SparkEngine](https://img.shields.io/github/actions/workflow/status/Krilliac/SparkEngine/build.yml?branch=Working&style=flat-square&label=CI)](https://github.com/Krilliac/SparkEngine/actions)
-[![](https://img.shields.io/badge/5962_tests-brightgreen?style=flat-square)](Tests)
+[![](https://img.shields.io/badge/6405_tests-brightgreen?style=flat-square)](Tests)
 [![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/loc.json&style=flat-square)](GitHub)
 [![](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Krilliac/SparkEngine/Working/.github/badges/files.json&style=flat-square)](GitHub)
 [![License: Spark Open](https://img.shields.io/badge/License-Spark_Open-blue?style=flat-square)](LICENSE)
@@ -15,15 +15,10 @@ A C++23 open-source 3D game engine with a full RHI abstraction layer, ECS (EnTT)
 
 ## Getting Started
 
-**Install via prebuilt installer (~5 min):**
-
-| Platform | Download |
-|---|---|
-| Windows x64 | [![Windows x64](https://img.shields.io/badge/↓_Install-Windows_x64-0078D4?style=flat-square&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-Windows-x64.exe) |
-| Linux x64 | [![Linux x64](https://img.shields.io/badge/↓_Install-Linux_x64-E95420?style=flat-square&logo=linux)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-Linux-x64) |
-| macOS arm64 | [![macOS arm64](https://img.shields.io/badge/↓_Install-macOS_arm64-000000?style=flat-square&logo=apple)](https://github.com/Krilliac/SparkEngine/releases/latest/download/SparkInstaller-macOS-arm64) |
-
-Run with `--gui` for interactive setup, or `--headless` for server installs. See [SparkInstaller/README.md](SparkInstaller/README.md) for all flags.
+SparkEngine is currently distributed as source. No versioned installer or
+prebuilt release has been published yet; the release-readiness gates remain
+authoritative. The in-tree [installer documentation](SparkInstaller/README.md)
+describes development and packaging workflows, not an available download.
 
 **Build from source:**
 
@@ -168,7 +163,8 @@ cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON \
 cmake --build build-asan && ./build-asan/bin/SparkTests
 ```
 
-Sanitizer reports and per-commit coverage are available as [CI artifacts](https://nightly.link/Krilliac/SparkEngine/workflows/build/Working/coverage-report.zip).
+When a workflow uploads sanitizer or coverage results, they are available from
+that run on the [GitHub Actions page](https://github.com/Krilliac/SparkEngine/actions/workflows/build.yml).
 
 ---
 

@@ -35,8 +35,8 @@ This is the stable documentation entry point used by [sparkengine.dev](https://s
 - [Documentation source](https://github.com/Krilliac/SparkEngine/tree/Working/docs)
 - [Full navigation](./_Sidebar.md)
 
-Documentation describes the `Working` branch unless a page explicitly names a release or historical snapshot.
+Documentation describes the `Working` branch unless a page explicitly names a historical snapshot. It does not imply that a versioned release exists.
 
 ## Source & Freshness
 
-This index is maintained in `wiki/Documentation.md` and published from the exact `Working` revision shown in the GitHub Wiki footer.
+This index is maintained in `wiki/Documentation.md`; publication pins repository links and the footer to the exact source commit.

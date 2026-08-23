@@ -4,6 +4,7 @@
  */
 
 #include "TestFramework.h"
+#include "SceneSystem/SceneComponentCodec.h"
 #include "SceneSystem/SceneSerializer.h"
 
 #include <algorithm>
@@ -117,8 +118,7 @@ TEST(SceneSerializerReal_CompleteRoundTripPreservesLargeIDs)
     object.staticObject = true;
     object.transform.parentID = INVALID_OBJECT_ID;
     object.transform.position.x = 123456.7890625f;
-    object.componentTypes = {ComponentType::SCRIPT, ComponentType::SPRITE_RENDERER, ComponentType::FOLIAGE_VOLUME,
-                             static_cast<ComponentType>(1001)};
+    object.componentTypes = {ComponentType::SCRIPT, ComponentType::SPRITE_RENDERER, ComponentType::FOLIAGE_VOLUME};
     scene.objects.push_back(object);
 
     for (ComponentType type : object.componentTypes)
@@ -127,8 +127,16 @@ TEST(SceneSerializerReal_CompleteRoundTripPreservesLargeIDs)
         component.type = type;
         component.objectID = object.id;
         component.enabled = type != ComponentType::FOLIAGE_VOLUME;
-        if (type == ComponentType::FOLIAGE_VOLUME)
-            component.data = {0x00, 0x7f, 0xff};
+        if (type == ComponentType::SCRIPT)
+            component.SetData(ScriptData{});
+        else if (type == ComponentType::SPRITE_RENDERER)
+            component.SetData(SpriteRendererData{});
+        else if (type == ComponentType::FOLIAGE_VOLUME)
+        {
+            FoliageVolumeData foliage;
+            foliage.seed = 127;
+            component.SetData(foliage);
+        }
         scene.components.push_back(component);
     }
 
@@ -163,14 +171,14 @@ TEST(SceneSerializerReal_CompleteRoundTripPreservesLargeIDs)
               static_cast<uint32_t>(ComponentType::SPRITE_RENDERER));
     EXPECT_EQ(static_cast<uint32_t>(loaded.objects[0].componentTypes[2]),
               static_cast<uint32_t>(ComponentType::FOLIAGE_VOLUME));
-    EXPECT_EQ(static_cast<uint32_t>(loaded.objects[0].componentTypes[3]), 1001u);
     EXPECT_TRUE(loaded.objects[0].staticObject);
     EXPECT_FALSE(loaded.objects[0].active);
-    EXPECT_EQ(loaded.components.size(), size_t{4});
+    EXPECT_EQ(loaded.components.size(), size_t{3});
     const auto foliage = std::find_if(loaded.components.begin(), loaded.components.end(), [](const Component& value)
                                       { return value.type == ComponentType::FOLIAGE_VOLUME; });
     EXPECT_TRUE(foliage != loaded.components.end());
-    EXPECT_EQ(foliage->data.size(), size_t{3});
+    EXPECT_TRUE(foliage->GetData<FoliageVolumeData>() != nullptr);
+    EXPECT_EQ(foliage->GetData<FoliageVolumeData>()->seed, 127);
     EXPECT_FALSE(foliage->enabled);
     EXPECT_EQ(loaded.assetReferences[0].lastModified, UINT64_C(9007199254740999));
     EXPECT_EQ(loaded.assetReferences[0].fileSize, UINT64_C(9007199254741001));
@@ -185,7 +193,7 @@ TEST(SceneSerializerReal_ParsesUnicodeEscapesAndRejectsInvalidStrings)
     TemporarySceneFile file(".sparkscene");
     {
         std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
-        output << R"({"sceneName":"Spark \uD83D\uDE80","version":1})";
+        output << R"({"sceneName":"Spark \uD83D\uDE80","version":2})";
     }
 
     SceneSerializer serializer;
@@ -245,7 +253,7 @@ TEST(SceneSerializerReal_NumbersIgnoreProcessLocale)
     TemporarySceneFile inputFile(".sparkscene");
     {
         std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
-        output << R"({"ambientIntensity":1.5})";
+        output << R"({"version":2,"ambientIntensity":1.5})";
     }
 
     SceneSerializer serializer;
@@ -288,7 +296,7 @@ TEST(SceneSerializerReal_RejectsSemanticCorruptionAndOutOfRangeIntegers)
 
     {
         std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
-        output << R"({"version":2})";
+        output << R"({"version":3})";
     }
     result = serializer.LoadScene(file.Path().string(), liveScene);
     EXPECT_FALSE(result.success);
@@ -483,6 +491,314 @@ TEST(SceneSerializerReal_RejectsExcessiveJSONNesting)
     const auto result = serializer.LoadScene(file.Path().string(), liveScene);
     EXPECT_FALSE(result.success);
     EXPECT_EQ(liveScene.header.timestamp, UINT64_C(9012));
+}
+
+TEST(SceneSerializerReal_ComponentPayloadsOwnLongStringsAndRoundTripAsNamedFields)
+{
+    using namespace SparkEditor;
+    const std::string longPath = "Assets/" + std::string(256, 'x') + "/payload.asset";
+
+    MeshRenderer mesh;
+    mesh.meshAssetPath = longPath + ".mesh";
+    mesh.materialAssetPath = longPath + ".material";
+    Collider collider;
+    collider.meshAssetPath = longPath + ".collider";
+    collider.physicsMaterial = longPath + ".physics";
+    AudioSource audio;
+    audio.audioClipPath = longPath + ".wav";
+    SpriteRendererData sprite;
+    sprite.texturePath = longPath + ".png";
+    TilemapData tilemap;
+    tilemap.tilesetTexturePath = longPath + ".tiles";
+    ParallaxLayerData parallax;
+    parallax.texturePath = longPath + ".parallax";
+
+    SceneFile scene;
+    SceneObject object;
+    object.id = 1;
+    object.componentTypes = {ComponentType::MESH_RENDERER, ComponentType::COLLIDER, ComponentType::AUDIO_SOURCE,
+                             ComponentType::SPRITE_RENDERER, ComponentType::TILEMAP, ComponentType::PARALLAX_BG};
+    scene.objects.push_back(object);
+
+    const auto add = [&](ComponentType type, const auto& value)
+    {
+        Component component;
+        component.type = type;
+        component.objectID = 1;
+        component.SetData(value);
+        scene.components.push_back(std::move(component));
+    };
+    add(ComponentType::MESH_RENDERER, mesh);
+    add(ComponentType::COLLIDER, collider);
+    add(ComponentType::AUDIO_SOURCE, audio);
+    add(ComponentType::SPRITE_RENDERER, sprite);
+    add(ComponentType::TILEMAP, tilemap);
+    add(ComponentType::PARALLAX_BG, parallax);
+    scene.UpdateHeader();
+
+    // std::any copies and moves the owned values rather than aliasing a byte image.
+    Component copied = scene.components.front();
+    copied.GetData<MeshRenderer>()->meshAssetPath = "copy-only";
+    EXPECT_EQ(scene.components.front().GetData<MeshRenderer>()->meshAssetPath, mesh.meshAssetPath);
+    Component moved = std::move(copied);
+    EXPECT_EQ(moved.GetData<MeshRenderer>()->meshAssetPath, std::string("copy-only"));
+    EXPECT_TRUE(moved.GetData<AudioSource>() == nullptr);
+    const Component& constMoved = moved;
+    EXPECT_TRUE(constMoved.GetData<MeshRenderer>() != nullptr);
+
+    TemporarySceneFile file(".sparkscene");
+    SceneSerializer serializer;
+    const auto save = serializer.SaveScene(scene, file.Path().string(), SerializationFormat::JSON);
+    EXPECT_TRUE(save.success);
+
+    std::ifstream jsonInput(file.Path(), std::ios::binary);
+    const std::string json((std::istreambuf_iterator<char>(jsonInput)), std::istreambuf_iterator<char>());
+    EXPECT_TRUE(json.find("\"schema\": 1") != std::string::npos);
+    EXPECT_TRUE(json.find("\"fields\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"meshAssetPath\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"data\":\"") == std::string::npos);
+
+    SceneFile loaded;
+    const auto load = serializer.LoadScene(file.Path().string(), loaded);
+    EXPECT_TRUE(load.success);
+    EXPECT_EQ(loaded.components.size(), size_t{6});
+    EXPECT_EQ(loaded.components[0].GetData<MeshRenderer>()->meshAssetPath, mesh.meshAssetPath);
+    EXPECT_EQ(loaded.components[1].GetData<Collider>()->physicsMaterial, collider.physicsMaterial);
+    EXPECT_EQ(loaded.components[2].GetData<AudioSource>()->audioClipPath, audio.audioClipPath);
+    EXPECT_EQ(loaded.components[3].GetData<SpriteRendererData>()->texturePath, sprite.texturePath);
+    EXPECT_EQ(loaded.components[4].GetData<TilemapData>()->tilesetTexturePath, tilemap.tilesetTexturePath);
+    EXPECT_EQ(loaded.components[5].GetData<ParallaxLayerData>()->texturePath, parallax.texturePath);
+}
+
+TEST(SceneSerializerReal_AllBuiltInPayloadCodecsDefaultAndRoundTrip)
+{
+    using namespace SparkEditor;
+    const std::vector<ComponentType> types = GetSceneComponentPayloadTypes();
+    EXPECT_EQ(types.size(), size_t{63});
+
+    SceneFile scene;
+    SceneObject object;
+    object.id = 1;
+    object.componentTypes = types;
+    scene.objects.push_back(object);
+    for (ComponentType type : types)
+    {
+        Component component;
+        component.type = type;
+        component.objectID = 1;
+        std::string error;
+        EXPECT_TRUE(InitializeDefaultSceneComponentPayload(component, error));
+        EXPECT_TRUE(component.HasData());
+        scene.components.push_back(std::move(component));
+    }
+    scene.UpdateHeader();
+
+    TemporarySceneFile file(".sparkscene");
+    SceneSerializer serializer;
+    EXPECT_TRUE(serializer.SaveScene(scene, file.Path().string(), SerializationFormat::JSON).success);
+    SceneFile loaded;
+    EXPECT_TRUE(serializer.LoadScene(file.Path().string(), loaded).success);
+    EXPECT_EQ(loaded.components.size(), types.size());
+    for (size_t index = 0; index < types.size(); ++index)
+    {
+        EXPECT_EQ(static_cast<uint32_t>(loaded.components[index].type), static_cast<uint32_t>(types[index]));
+        EXPECT_TRUE(loaded.components[index].HasData());
+        EXPECT_TRUE(loaded.components[index].DataType() == scene.components[index].DataType());
+    }
+}
+
+TEST(SceneSerializerReal_WrongCustomAndLegacyRawPayloadsFailClosed)
+{
+    using namespace SparkEditor;
+    SceneSerializer serializer;
+    TemporarySceneFile outputFile(".sparkscene");
+
+    SceneFile wrongType;
+    SceneObject object;
+    object.id = 1;
+    object.componentTypes = {ComponentType::MESH_RENDERER};
+    wrongType.objects.push_back(object);
+    Component component;
+    component.type = ComponentType::MESH_RENDERER;
+    component.objectID = 1;
+    component.SetData(AudioSource{});
+    wrongType.components.push_back(component);
+    wrongType.UpdateHeader();
+    EXPECT_FALSE(serializer.SaveScene(wrongType, outputFile.Path().string(), SerializationFormat::JSON).success);
+
+    SceneFile invalidEnum;
+    invalidEnum.objects.push_back(object);
+    invalidEnum.objects[0].componentTypes = {ComponentType::LIGHT};
+    component.type = ComponentType::LIGHT;
+    Light light;
+    light.type = static_cast<Light::Type>(999);
+    component.SetData(light);
+    invalidEnum.components.push_back(component);
+    invalidEnum.UpdateHeader();
+    EXPECT_FALSE(serializer.SaveScene(invalidEnum, outputFile.Path().string(), SerializationFormat::JSON).success);
+
+    const auto rejectsSemanticPayload = [&](ComponentType type, const auto& payload)
+    {
+        SceneFile invalid;
+        SceneObject owner;
+        owner.id = 1;
+        owner.componentTypes = {type};
+        invalid.objects.push_back(owner);
+        Component invalidComponent;
+        invalidComponent.type = type;
+        invalidComponent.objectID = 1;
+        invalidComponent.SetData(payload);
+        invalid.components.push_back(std::move(invalidComponent));
+        invalid.UpdateHeader();
+        EXPECT_FALSE(serializer.SaveScene(invalid, outputFile.Path().string(), SerializationFormat::JSON).success);
+    };
+    RigidBody2DData invalidBody2D;
+    invalidBody2D.bodyType = 999;
+    rejectsSemanticPayload(ComponentType::RIGID_BODY_2D, invalidBody2D);
+    LODGroupData invalidLod;
+    invalidLod.lodCount = 999;
+    rejectsSemanticPayload(ComponentType::LOD_GROUP, invalidLod);
+    VehicleData invalidVehicle;
+    invalidVehicle.wheelCount = 0;
+    rejectsSemanticPayload(ComponentType::VEHICLE, invalidVehicle);
+    Text3DData invalidText;
+    invalidText.alignment = 999;
+    rejectsSemanticPayload(ComponentType::TEXT_3D, invalidText);
+    HealthData invalidHealth;
+    invalidHealth.health = -1.0f;
+    rejectsSemanticPayload(ComponentType::HEALTH, invalidHealth);
+    ParticleEmitterData invalidParticle;
+    invalidParticle.startSize = 0.0f;
+    rejectsSemanticPayload(ComponentType::PARTICLE_SYSTEM, invalidParticle);
+    AIAgentData invalidAI;
+    invalidAI.detectionRange = 10.0f;
+    invalidAI.attackRange = 20.0f;
+    rejectsSemanticPayload(ComponentType::AI_AGENT, invalidAI);
+    ProjectileData invalidProjectile;
+    invalidProjectile.maxRange = 0.0f;
+    rejectsSemanticPayload(ComponentType::PROJECTILE, invalidProjectile);
+    InteractionData invalidInteraction;
+    invalidInteraction.interactionRadius = 0.0f;
+    rejectsSemanticPayload(ComponentType::INTERACTION, invalidInteraction);
+    AudioSource invalidAudio;
+    invalidAudio.pitch = 5.0f;
+    rejectsSemanticPayload(ComponentType::AUDIO_SOURCE, invalidAudio);
+    AudioReverbZoneData invalidReverb;
+    invalidReverb.innerRadius = 0.0f;
+    rejectsSemanticPayload(ComponentType::AUDIO_REVERB_ZONE, invalidReverb);
+    DialogueTriggerData invalidDialogue;
+    invalidDialogue.interactionRadius = 0.0f;
+    rejectsSemanticPayload(ComponentType::DIALOGUE_TRIGGER, invalidDialogue);
+    AreaBoundaryData invalidBoundary;
+    invalidBoundary.loadRadius = 0.0f;
+    rejectsSemanticPayload(ComponentType::AREA_BOUNDARY, invalidBoundary);
+    SpringArmData invalidSpringArm;
+    invalidSpringArm.minLength = 0.0f;
+    rejectsSemanticPayload(ComponentType::SPRING_ARM, invalidSpringArm);
+    Camera2DData invalidCamera2D;
+    invalidCamera2D.followSmoothing = 2.0f;
+    rejectsSemanticPayload(ComponentType::CAMERA_2D, invalidCamera2D);
+
+    const auto acceptsSemanticPayload = [&](ComponentType type, const auto& payload)
+    {
+        SceneFile valid;
+        SceneObject owner;
+        owner.id = 1;
+        owner.componentTypes = {type};
+        valid.objects.push_back(owner);
+        Component validComponent;
+        validComponent.type = type;
+        validComponent.objectID = 1;
+        validComponent.SetData(payload);
+        valid.components.push_back(std::move(validComponent));
+        valid.UpdateHeader();
+        EXPECT_TRUE(serializer.SaveScene(valid, outputFile.Path().string(), SerializationFormat::JSON).success);
+        SceneFile reloaded;
+        EXPECT_TRUE(serializer.LoadScene(outputFile.Path().string(), reloaded).success);
+        EXPECT_EQ(reloaded.components.size(), size_t{1});
+    };
+    AnimationControllerData reverseAnimation;
+    reverseAnimation.playbackSpeed = -1.0f;
+    acceptsSemanticPayload(ComponentType::ANIMATION, reverseAnimation);
+    RigidBody staticBody;
+    staticBody.bodyType = RigidBody::STATIC;
+    staticBody.mass = 0.0f;
+    acceptsSemanticPayload(ComponentType::RIGID_BODY, staticBody);
+    RigidBody2DData staticBody2D;
+    staticBody2D.bodyType = 0;
+    staticBody2D.mass = 0.0f;
+    staticBody2D.friction = 1.0f;
+    acceptsSemanticPayload(ComponentType::RIGID_BODY_2D, staticBody2D);
+    AudioSource loudAudio;
+    loudAudio.volume = 2.0f;
+    loudAudio.minDistance = 1.0f;
+    loudAudio.maxDistance = 2.0f;
+    acceptsSemanticPayload(ComponentType::AUDIO_SOURCE, loudAudio);
+
+    SceneFile custom;
+    custom.objects.push_back(object);
+    custom.objects[0].componentTypes = {ComponentType::CUSTOM};
+    component.type = ComponentType::CUSTOM;
+    component.SetData(HealthData{});
+    custom.components.push_back(component);
+    custom.UpdateHeader();
+    EXPECT_FALSE(serializer.SaveScene(custom, outputFile.Path().string(), SerializationFormat::JSON).success);
+
+    TemporarySceneFile inputFile(".sparkscene");
+    {
+        std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
+        output << R"({"version":1,"objectCount":1,"componentCount":1,"objects":[{"id":1,"componentTypes":["MeshRenderer"]}],"components":[{"type":"MeshRenderer","objectID":1,"data":"deadbeef"}]})";
+    }
+    SceneFile live;
+    live.header.timestamp = 42;
+    EXPECT_FALSE(serializer.LoadScene(inputFile.Path().string(), live).success);
+    EXPECT_EQ(live.header.timestamp, UINT64_C(42));
+
+    {
+        std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
+        output << R"({"version":1,"objectCount":0,"componentCount":0,"objects":[],"components":[]})";
+    }
+    EXPECT_FALSE(serializer.LoadScene(inputFile.Path().string(), live).success);
+    EXPECT_EQ(live.header.timestamp, UINT64_C(42));
+
+    {
+        std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
+        output << R"({"objectCount":0,"componentCount":0,"objects":[],"components":[]})";
+    }
+    EXPECT_FALSE(serializer.LoadScene(inputFile.Path().string(), live).success);
+    EXPECT_EQ(live.header.timestamp, UINT64_C(42));
+
+    {
+        std::ofstream output(inputFile.Path(), std::ios::binary | std::ios::trunc);
+        output << R"({"version":2,"version":1,"objectCount":0,"componentCount":0,"objects":[],"components":[]})";
+    }
+    EXPECT_FALSE(serializer.LoadScene(inputFile.Path().string(), live).success);
+    EXPECT_EQ(live.header.timestamp, UINT64_C(42));
+}
+
+TEST(SceneSerializerReal_ComponentSchemaRejectsMissingUnknownAndWrongTypedFields)
+{
+    using namespace SparkEditor;
+    TemporarySceneFile file(".sparkscene");
+    SceneSerializer serializer;
+    SceneFile live;
+    live.header.timestamp = 99;
+
+    const auto rejects = [&](const std::string& fields)
+    {
+        std::ofstream output(file.Path(), std::ios::binary | std::ios::trunc);
+        output << "{\"version\":2,\"objectCount\":1,\"componentCount\":1,"
+                  "\"objects\":[{\"id\":1,\"componentTypes\":[\"Health\"]}],"
+                  "\"components\":[{\"type\":\"Health\",\"objectID\":1,\"data\":{\"schema\":1,\"fields\":"
+               << fields << "}}]}";
+        output.close();
+        EXPECT_FALSE(serializer.LoadScene(file.Path().string(), live).success);
+        EXPECT_EQ(live.header.timestamp, UINT64_C(99));
+    };
+
+    rejects(R"({"health":100.0})");
+    rejects(R"({"health":100.0,"maxHealth":100.0,"unknown":1})");
+    rejects(R"({"health":"100","maxHealth":100.0})");
 }
 
 TEST(SceneSerializerReal_BinaryFormatFailsWithoutWriting)

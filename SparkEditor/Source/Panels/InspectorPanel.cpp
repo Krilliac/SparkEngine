@@ -289,6 +289,9 @@ namespace SparkEditor
                     case ComponentType::PIXEL_PERFECT:
                         comp.SetData(PixelPerfectData{});
                         break;
+                    case ComponentType::TERRAIN:
+                        comp.SetData(TerrainSceneData{});
+                        break;
                     case ComponentType::PARTICLE_SYSTEM:
                         comp.SetData(ParticleEmitterData{});
                         break;

@@ -181,12 +181,18 @@ namespace Spark::Net
     uint32_t LagCompensation::RewindRaycast(double rewindTime, const float origin[3], const float dir[3], float maxDist,
                                             uint32_t ignoreEntity, float outHitPoint[3], float* outDist) const
     {
-        if (m_count == 0 || maxDist <= 0.0f)
+        if (m_count == 0 || !origin || !dir || !std::isfinite(rewindTime) || !std::isfinite(maxDist) ||
+            maxDist <= 0.0f || !std::isfinite(origin[0]) || !std::isfinite(origin[1]) ||
+            !std::isfinite(origin[2]) || !std::isfinite(dir[0]) || !std::isfinite(dir[1]) ||
+            !std::isfinite(dir[2]))
             return 0;
 
-        float dirLenSq = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
-        if (dirLenSq < kEpsilon)
+        const float dirLenSq = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
+        if (!std::isfinite(dirLenSq) || dirLenSq < kEpsilon)
             return 0;
+        const float inverseLength = 1.0f / std::sqrt(dirLenSq);
+        const float normalizedDirection[3] = {dir[0] * inverseLength, dir[1] * inverseLength,
+                                              dir[2] * inverseLength};
 
         // Clamp into the recorded range, then find the bracketing snapshots.
         const double oldest = At(0).time;
@@ -209,10 +215,12 @@ namespace Spark::Net
 
         auto testPose = [&](const RewindPose& pose)
         {
-            if (pose.entityId == 0 || pose.entityId == ignoreEntity)
+            if (pose.entityId == 0 || pose.entityId == ignoreEntity || !std::isfinite(pose.pos[0]) ||
+                !std::isfinite(pose.pos[1]) || !std::isfinite(pose.pos[2]) || !std::isfinite(pose.radius) ||
+                !std::isfinite(pose.height) || pose.radius <= 0.0f || pose.height <= 0.0f)
                 return;
             float hitT = 0.0f;
-            if (RayVerticalCapsule(origin, dir, pose, hitT) && hitT <= bestT)
+            if (RayVerticalCapsule(origin, normalizedDirection, pose, hitT) && hitT <= bestT)
             {
                 bestT = hitT;
                 bestId = pose.entityId;
@@ -248,7 +256,7 @@ namespace Spark::Net
             if (outHitPoint)
             {
                 for (int i = 0; i < 3; ++i)
-                    outHitPoint[i] = origin[i] + dir[i] * bestT;
+                    outHitPoint[i] = origin[i] + normalizedDirection[i] * bestT;
             }
             if (outDist)
                 *outDist = bestT;

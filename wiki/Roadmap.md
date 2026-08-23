@@ -13,7 +13,7 @@ The canonical roadmap is maintained in [`docs/plans/FEATURE_ROADMAP.md`](https:/
 - [Engine readiness handoff](https://github.com/Krilliac/SparkEngine/blob/Working/docs/readiness/ENGINE_READINESS_HANDOFF.md)
 - [Open issues](https://github.com/Krilliac/SparkEngine/issues)
 
-For historical releases and completed changes, use the [Changelog](Changelog.md).
+For completed changes and the unreleased change history, use the [Changelog](Changelog.md).
 
 ## Source & Freshness
 

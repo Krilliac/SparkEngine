@@ -129,4 +129,4 @@ See `docs/specs/plugin-abi-guide.md` for full ABI details.
 
 ## Version History
 
-See the [release notes](https://github.com/Krilliac/SparkEngine/releases) for detailed changelogs.
+Until versioned releases are published, use the repository [changelog](../Changelog.md) and compare the exact source commits being migrated.

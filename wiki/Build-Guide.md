@@ -10,17 +10,25 @@
 
 SparkEngine requires CMake 3.25+ and a C++23-capable compiler. Windows 10+ with MSVC is the primary platform; Linux and macOS support is experimental.
 
-```bash
-# Configure one supported preset
+Choose the preset for the host platform and use its matching build directory:
+
+```powershell
+# Windows
 cmake --preset windows-release
+cmake --build --preset windows-release
+ctest --test-dir build/windows-release -C Release --output-on-failure
+```
+
+```bash
+# Linux
 cmake --preset linux-gcc-release
+cmake --build --preset linux-gcc-release
+ctest --test-dir build/linux-gcc-release --output-on-failure
+
+# macOS
 cmake --preset macos-release
-
-# Build
-cmake --build build --config Release
-
-# Test
-cd build && ctest --output-on-failure
+cmake --build --preset macos-release
+ctest --test-dir build/macos-release --output-on-failure
 ```
 
 ## Read before building

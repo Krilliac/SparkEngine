@@ -228,6 +228,13 @@ namespace Spark::Graphics
         /// The pass that first creates / writes this resource (producer).
         uint32_t producerPass = RenderGraphResource::INVALID_INDEX;
 
+        /// Producer for each logical version. Imported version zero has no
+        /// graph producer; versions created by Write() identify their pass.
+        std::vector<uint32_t> versionProducers;
+
+        /// Set when more than one pass attempts to produce the same SSA version.
+        bool hasVersionConflict = false;
+
         /// Execution-time concrete object. Populated during Execute().
         std::shared_ptr<RenderTarget> physicalTexture;
 

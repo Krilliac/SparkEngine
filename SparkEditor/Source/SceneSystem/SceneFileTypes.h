@@ -11,6 +11,10 @@
 
 #pragma once
 
+#include <any>
+#include <concepts>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include <cstdint>
 #include <string>
@@ -41,7 +45,7 @@ namespace SparkEditor
     /**
  * @brief Scene file format version for compatibility
  */
-    constexpr uint32_t SCENE_FILE_VERSION = 1;
+    constexpr uint32_t SCENE_FILE_VERSION = 2;
 
     /**
  * @brief Magic number for scene file identification
@@ -210,7 +214,7 @@ namespace SparkEditor
         std::string audioClipPath;  ///< Audio clip asset path
         bool playOnAwake = true;    ///< Play audio when object is created
         bool loop = false;          ///< Loop the audio clip
-        float volume = 1.0f;        ///< Audio volume (0-1)
+        float volume = 1.0f;        ///< Audio volume (0-2)
         float pitch = 1.0f;         ///< Audio pitch multiplier
         float spatialBlend = 0.0f;  ///< 2D/3D spatial blend (0=2D, 1=3D)
         float minDistance = 1.0f;   ///< Minimum 3D distance
@@ -1010,7 +1014,9 @@ namespace SparkEditor
         ComponentType type = ComponentType::CUSTOM; ///< Component type identifier
         ObjectID objectID = INVALID_OBJECT_ID;      ///< Object this component belongs to
         bool enabled = true;                        ///< Whether component is enabled
-        std::vector<uint8_t> data;                  ///< Serialized component data
+        // Own the live C++ value.  Persisted bytes are produced only by the
+        // versioned scene-component codec; object images are never retained.
+        std::any data;
 
         /**
      * @brief Get component data as specific type
@@ -1018,6 +1024,11 @@ namespace SparkEditor
      * @return Pointer to component data, or nullptr if wrong type
      */
         template <typename T> T* GetData();
+        template <typename T> const T* GetData() const;
+
+        [[nodiscard]] bool HasData() const noexcept { return data.has_value(); }
+        [[nodiscard]] const std::type_info& DataType() const noexcept { return data.type(); }
+        void ClearData() noexcept { data.reset(); }
 
         /**
      * @brief Set component data from specific type
@@ -1025,6 +1036,8 @@ namespace SparkEditor
      * @param componentData Data to store in component
      */
         template <typename T> void SetData(const T& componentData);
+        template <typename T> void SetData(T&& componentData)
+            requires(!std::is_lvalue_reference_v<T>);
     };
 
     /**
@@ -1100,17 +1113,26 @@ namespace SparkEditor
     // Template implementations
     template <typename T> T* Component::GetData()
     {
-        if (data.size() != sizeof(T))
-        {
-            return nullptr;
-        }
-        return reinterpret_cast<T*>(data.data());
+        return std::any_cast<T>(&data);
+    }
+
+    template <typename T> const T* Component::GetData() const
+    {
+        return std::any_cast<T>(&data);
     }
 
     template <typename T> void Component::SetData(const T& componentData)
     {
-        data.resize(sizeof(T));
-        memcpy(data.data(), &componentData, sizeof(T));
+        static_assert(std::copy_constructible<T>, "Scene component payloads must be copy constructible");
+        data = componentData;
+    }
+
+    template <typename T> void Component::SetData(T&& componentData)
+        requires(!std::is_lvalue_reference_v<T>)
+    {
+        using Stored = std::remove_cvref_t<T>;
+        static_assert(std::copy_constructible<Stored>, "Scene component payloads must be copy constructible");
+        data = Stored(std::forward<T>(componentData));
     }
 
 } // namespace SparkEditor
