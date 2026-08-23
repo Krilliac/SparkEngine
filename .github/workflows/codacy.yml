@@ -52,7 +52,12 @@ jobs:
           # You can also omit the token and run the tools that support default configurations
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
           verbose: true
+          # This is the C++ security lane. Running every auto-detected tool
+          # also scans vendored/assets content and can strand the legacy SARIF
+          # formatter after all analyzers have already completed.
+          tool: cppcheck
           tool-timeout: 45minutes
+          fail-if-incomplete: true
           output: results.sarif
           format: sarif
           # Adjust severity of non-security issues
