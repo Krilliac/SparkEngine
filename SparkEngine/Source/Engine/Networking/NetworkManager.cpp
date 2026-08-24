@@ -9,6 +9,7 @@
  */
 
 #include "NetworkManager.h"
+#include "NetworkBindPolicy.h"
 #include "../../Core/EngineContext.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/DebugHookManager.h"
@@ -266,7 +267,7 @@ namespace Spark::Net
         {
             sockaddr_in localAddr{};
             localAddr.sin_family = AF_INET;
-            localAddr.sin_addr.s_addr = INADDR_ANY;
+            localAddr.sin_addr.s_addr = UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
             localAddr.sin_port = htons(bindPort);
 
             if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) != SOCKET_ERROR)

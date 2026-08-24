@@ -65,7 +65,7 @@ class LiveTestClient
 
         sockaddr_in local{};
         local.sin_family = AF_INET;
-        local.sin_addr.s_addr = INADDR_ANY;
+        local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         local.sin_port = 0;
         if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&local), sizeof(local)) == SOCKET_ERROR)
         {

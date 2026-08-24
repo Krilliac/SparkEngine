@@ -16,6 +16,7 @@
 #endif
 
 #include "Engine/Networking/NetworkManager.h"
+#include "Engine/Networking/NetworkBindPolicy.h"
 #include <atomic>
 #include <chrono>
 #include <thread>
@@ -23,6 +24,17 @@
 #include <utility>
 
 using namespace Spark::Net;
+
+TEST(NetworkBindPolicy_AcceptsOnlyExplicitLoopbackModes)
+{
+    EXPECT_TRUE(UseLoopbackNetworkBind());
+    EXPECT_TRUE(IsLoopbackBindMode("loopback"));
+    EXPECT_TRUE(IsLoopbackBindMode("localhost"));
+    EXPECT_TRUE(IsLoopbackBindMode("127.0.0.1"));
+    EXPECT_FALSE(IsLoopbackBindMode(""));
+    EXPECT_FALSE(IsLoopbackBindMode("0.0.0.0"));
+    EXPECT_FALSE(IsLoopbackBindMode("LOOPBACK"));
+}
 
 static void ResetNM()
 {

@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <numeric>
@@ -457,6 +458,19 @@ static void PrintUsage(const char* argv0)
 
 int main(int argc, char** argv)
 {
+    // The test executable opens real UDP listeners. Confining them to
+    // loopback prevents a fresh Windows machine from showing a firewall
+    // permission dialog while preserving all same-host wire tests.
+#ifdef _WIN32
+    if (_putenv_s("SPARK_NETWORK_BIND_MODE", "loopback") != 0)
+#else
+    if (setenv("SPARK_NETWORK_BIND_MODE", "loopback", 1) != 0)
+#endif
+    {
+        std::cerr << "Error: Could not enforce loopback-only network tests\n";
+        return EXIT_FAILURE;
+    }
+
     InstallCrashHandlers();
 
     // Parse CLI arguments

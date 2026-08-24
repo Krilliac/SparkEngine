@@ -4,6 +4,7 @@
  */
 
 #include "CollaborativeEditSession.h"
+#include "Engine/Networking/NetworkBindPolicy.h"
 #include "Utils/Validate.h"
 
 #include <algorithm>
@@ -474,7 +475,7 @@ namespace SparkEditor
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = INADDR_ANY;
+        addr.sin_addr.s_addr = Spark::Net::UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
         addr.sin_port = htons(port);
 
         if (::bind(m_listenSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)

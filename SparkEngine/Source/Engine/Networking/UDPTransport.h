@@ -12,6 +12,7 @@
 
 #pragma once
 #include "ITransport.h"
+#include "NetworkBindPolicy.h"
 #include "../../Utils/LogMacros.h"
 
 #ifdef ENABLE_NETWORKING
@@ -161,7 +162,7 @@ namespace Spark::Net
             // Bind to the requested port (0 = OS-assigned ephemeral port)
             sockaddr_in localAddr{};
             localAddr.sin_family = AF_INET;
-            localAddr.sin_addr.s_addr = INADDR_ANY;
+            localAddr.sin_addr.s_addr = UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
             localAddr.sin_port = htons(port);
 
             if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == SOCKET_ERROR)

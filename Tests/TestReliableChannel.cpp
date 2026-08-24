@@ -445,6 +445,17 @@ namespace TestReliablePerPeer
             if (m_socket == INVALID_SOCKET)
                 return false;
 
+            sockaddr_in localAddr{};
+            localAddr.sin_family = AF_INET;
+            localAddr.sin_port = 0;
+            localAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) != 0)
+            {
+                closesocket(m_socket);
+                m_socket = INVALID_SOCKET;
+                return false;
+            }
+
 #ifdef SPARK_PLATFORM_WINDOWS
             u_long nonBlocking = 1;
             ioctlsocket(m_socket, FIONBIO, &nonBlocking);

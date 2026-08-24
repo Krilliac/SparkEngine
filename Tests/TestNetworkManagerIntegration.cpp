@@ -105,6 +105,18 @@ TEST(NetworkManager_UpdateAfterInit_DoesNotCrash)
 
 #ifdef ENABLE_NETWORKING
 
+namespace
+{
+    bool BindLoopbackEphemeral(SOCKET socket)
+    {
+        sockaddr_in localAddr{};
+        localAddr.sin_family = AF_INET;
+        localAddr.sin_port = 0;
+        localAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        return bind(socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == 0;
+    }
+} // namespace
+
 TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
 {
     auto& nm = NetworkManager::GetInstance();
@@ -116,6 +128,7 @@ TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
 
     SOCKET rawSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     ASSERT_TRUE(rawSock != INVALID_SOCKET);
+    ASSERT_TRUE(BindLoopbackEphemeral(rawSock));
 
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
@@ -277,6 +290,7 @@ TEST(NetworkManager_ProcessIncoming_RejectsForgedSenderIDFromUnknownAddress)
 
     SOCKET rawSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     EXPECT_TRUE(rawSock != INVALID_SOCKET);
+    ASSERT_TRUE(BindLoopbackEphemeral(rawSock));
 
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
@@ -344,6 +358,7 @@ TEST(NetworkManager_ProcessIncoming_RejectsInvalidChannelBeforeConnect)
 
     SOCKET rawSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     EXPECT_TRUE(rawSock != INVALID_SOCKET);
+    ASSERT_TRUE(BindLoopbackEphemeral(rawSock));
 
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
@@ -398,6 +413,7 @@ TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
     SOCKET spoofSock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     EXPECT_TRUE(serverSock != INVALID_SOCKET);
     EXPECT_TRUE(spoofSock != INVALID_SOCKET);
+    ASSERT_TRUE(BindLoopbackEphemeral(spoofSock));
 
     sockaddr_in listenAddr{};
     listenAddr.sin_family = AF_INET;
@@ -518,6 +534,7 @@ TEST(NetworkManager_RejectedConnectDoesNotTriggerEntitySync)
     {
         SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         EXPECT_TRUE(client != INVALID_SOCKET);
+        EXPECT_TRUE(BindLoopbackEphemeral(client));
         const int sent =
             sendto(client, reinterpret_cast<const char*>(connectPacket.data()), static_cast<int>(connectPacket.size()),
                    0, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));

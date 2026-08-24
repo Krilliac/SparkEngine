@@ -7,6 +7,7 @@
  */
 #include "Game/TFLanDiscovery.h"
 
+#include "Engine/Networking/NetworkBindPolicy.h"
 #include "Utils/LogMacros.h"
 
 #include "Game/TFLanDiscoveryInternal.h"
@@ -69,7 +70,7 @@ namespace Terrafront
         sockaddr_in bindAddr{};
         bindAddr.sin_family = AF_INET;
         bindAddr.sin_port = htons(kTFLanBeaconPort);
-        bindAddr.sin_addr.s_addr = INADDR_ANY;
+        bindAddr.sin_addr.s_addr = Spark::Net::UseLoopbackNetworkBind() ? htonl(INADDR_LOOPBACK) : INADDR_ANY;
         if (bind(s, reinterpret_cast<const sockaddr*>(&bindAddr), sizeof(bindAddr)) != 0 || !SetNonBlocking(s))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Game,

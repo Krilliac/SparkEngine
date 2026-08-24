@@ -56,7 +56,7 @@ class TestUDPClient
 
         sockaddr_in localAddr{};
         localAddr.sin_family = AF_INET;
-        localAddr.sin_addr.s_addr = INADDR_ANY;
+        localAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         localAddr.sin_port = 0;
         if (::bind(m_socket, reinterpret_cast<const sockaddr*>(&localAddr), sizeof(localAddr)) == SOCKET_ERROR)
         {
