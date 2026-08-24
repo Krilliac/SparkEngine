@@ -572,13 +572,17 @@ namespace SparkEditor
             }
         }
 
-        // F4: Reload all shaders
+#ifdef _WIN32
+        // F4: Reload all shaders. The editor-owned GraphicsEngine is currently
+        // attached only on the D3D11/Windows path; other editor backends do not
+        // expose m_graphics yet.
         if (ImGui::IsKeyPressed(ImGuiKey_F4) && !io.WantTextInput)
         {
             const bool reloaded = m_graphics && m_graphics->Console_ReloadShaders();
             ShowNotification(reloaded ? "Shaders reloaded" : "Shader reload failed", reloaded ? "success" : "error",
                              2.0f);
         }
+#endif
 
         // W/E/R: Transform tool shortcuts (only when not typing and not in game view)
         bool gameViewCapturing = false;
