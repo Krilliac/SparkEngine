@@ -31,8 +31,16 @@ namespace Spark
 
     DebugHookManager& DebugHookManager::GetInstance()
     {
-        static DebugHookManager instance;
-        return instance;
+        // Debug hooks are process-lifetime infrastructure. They are used by
+        // other function-static services during their destructors, and RAII
+        // DebugHookHandles retain a pointer back to the manager. A destructed
+        // function-static manager therefore makes otherwise-valid late
+        // Shutdown()/Unregister() calls depend on CRT destruction order.
+        //
+        // Keep the manager reachable until process termination; normal engine
+        // shutdown still releases all registered callbacks through Clear().
+        static DebugHookManager* const instance = new DebugHookManager();
+        return *instance;
     }
 
     // =============================================================================

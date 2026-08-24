@@ -102,10 +102,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(SparkInstaller PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-set_target_properties(SparkInstaller PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
-)
+if(NOT CMAKE_PROJECT_NAME STREQUAL "SparkEngine")
+    set_target_properties(SparkInstaller PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
 
 install(TARGETS SparkInstaller RUNTIME DESTINATION bin COMPONENT tools)

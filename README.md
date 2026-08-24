@@ -35,6 +35,9 @@ cd SparkEngine
 ./build.sh release
 ```
 
+Visual Studio and Ninja Multi-Config builds keep binaries isolated under
+`build/bin/<Config>` (for example, `build/bin/Release/SparkEditor.exe`).
+
 Requirements: MSVC 19.36+ / GCC 13+ / Clang 17+, CMake 3.25+.  
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
 
@@ -141,7 +144,7 @@ Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (ImGuizmo), Nod
 
 ## Quality Assurance
 
-**Tests:** 6,446 unit tests across 548 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 6,447 unit tests across 548 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
 
 ```bash
 cd build && ctest --output-on-failure
@@ -255,7 +258,7 @@ SparkEngine/
 ├── SparkEditor/Source/    59 dockable panels, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           10 prebuilt game templates
-├── Tests/                 6,446 unit tests, 548 files
+├── Tests/                 6,447 unit tests, 548 files
 ├── wiki/                  144+ wiki pages
 └── docs/                  API reference, guides
 ```

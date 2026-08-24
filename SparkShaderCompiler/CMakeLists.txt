@@ -116,6 +116,5 @@ if(SPARK_OPENGL_AVAILABLE)
 endif()
 
 set_target_properties(SparkShaderCompiler PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     FOLDER "Tools"
 )

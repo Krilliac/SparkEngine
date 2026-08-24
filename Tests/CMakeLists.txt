@@ -576,6 +576,16 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/UIDesigner/UIDesignerSystem.cpp"
 )
 
+# Standalone process used to exercise CRT destruction order without the test
+# runner's top-level crash handler masking a teardown access violation.
+add_executable(SparkDebugHookTeardownProbe
+    Teardown/DebugHookTeardownProbe.cpp)
+target_compile_features(SparkDebugHookTeardownProbe PRIVATE cxx_std_23)
+target_link_libraries(SparkDebugHookTeardownProbe PRIVATE SparkEngineLib)
+add_dependencies(SparkTests SparkDebugHookTeardownProbe)
+target_compile_definitions(SparkTests PRIVATE
+    SPARK_TEST_DEBUG_HOOK_TEARDOWN_PROBE_PATH="$<TARGET_FILE:SparkDebugHookTeardownProbe>")
+
 # Real shared-library fixtures for the pre-instantiation module ABI gate.
 # They intentionally do not link SparkEngineLib: the boundary under test must
 # be satisfied by SDK headers and the exported C ABI alone.

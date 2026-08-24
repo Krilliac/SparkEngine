@@ -177,31 +177,25 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# >>> BEGIN per-config archive output dirs (engine-teardown-fix lane, W11) >>>
-# Static/import libraries (.lib/.a) are per-config LINK INPUTS: a Debug build
-# writing into the same flat build/lib as a Release build clobbers the vendor
-# libs (Jolt etc.) and the next Release link dies in an LNK2038
-# _ITERATOR_DEBUG_LEVEL storm (hit live in W10). Split ARCHIVE output per
-# config so Debug/Release archives coexist: build/lib/<Config>.
-#
-# Runtime artifacts (exes + DLLs, incl. game module DLLs on Windows) and
-# LIBRARY output stay flat on purpose — the engine, launchers, and module
-# discovery expect one bin/ beside Resources/, and nothing links them by path.
-# All targets link archives BY TARGET NAME, so CMake rewrites the .lib paths
-# automatically; a repo-wide grep found no hardcoded build/lib references.
-# These per-config variables are set BEFORE every add_subdirectory (Jolt at
-# JoltPhysics/Build, SDL2, game modules, Tests), so third-party and module
-# targets inherit them at target-creation time. Per-config variables take
-# precedence over the flat base values above on both multi-config generators
-# (VS, Ninja Multi-Config) and single-config generators with CMAKE_BUILD_TYPE
-# set; the flat base remains only as a fallback for an unset build type.
+# Multi-config generators must keep every artifact configuration-specific.
+# A flat runtime directory lets Debug overwrite a Release DLL/executable while
+# CMake still considers the Release target up to date. The next Release build
+# can then pair that stale Debug binary with newly generated Release metadata
+# (observed with module ABI sidecars), or launch the wrong configuration.
+# Single-config Ninja/Make builds retain the established flat bin/ and lib/
+# layout used by Linux/macOS tooling and CI.
+get_property(SPARK_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 foreach(config Debug Release RelWithDebInfo MinSizeRel)
     string(TOUPPER ${config} CONFIG_UPPER)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/lib)
+    if(SPARK_GENERATOR_IS_MULTI_CONFIG)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin/${config})
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/lib/${config})
+    else()
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin)
+        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/lib)
+    endif()
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG_UPPER} ${CMAKE_BINARY_DIR}/lib/${config})
 endforeach()
-# <<< END per-config archive output dirs (engine-teardown-fix lane, W11) <<<
 
 # ---------------------------------------------------------------------
 # 6) Compiler options (platform-specific)

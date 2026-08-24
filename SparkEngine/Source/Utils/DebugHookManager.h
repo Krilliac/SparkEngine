@@ -287,7 +287,7 @@ namespace Spark
     class DebugHookManager
     {
       public:
-        /** @brief Get the singleton instance. */
+        /** @brief Get the process-lifetime singleton instance. */
         static DebugHookManager& GetInstance();
 
         /**

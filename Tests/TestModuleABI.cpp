@@ -175,7 +175,7 @@ TEST(ModuleABI_ModifiedBinaryRejectedByHashBeforeDllMainOrStaticConstructor)
 TEST(ModuleABI_CompatibleMacroModuleStillLoads)
 {
     ModuleManager manager;
-    EXPECT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
 
     const auto loaded = manager.GetLoadedModuleInfo();
     EXPECT_EQ(loaded.size(), size_t{1});
@@ -195,7 +195,7 @@ TEST(ModuleABI_FailedTransactionalReloadPreservesWorkingModule)
     const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReloadPreservationModule");
     NullEngineContext context;
     ModuleManager manager;
-    EXPECT_TRUE(manager.LoadModule(modulePath.string()));
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
     manager.InitializeAll(&context);
 
     Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
@@ -231,7 +231,7 @@ TEST(ModuleABI_FailedReplacementInitializationPreservesWorkingModule)
     const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReloadInitFailureModule");
     NullEngineContext context;
     ModuleManager manager;
-    EXPECT_TRUE(manager.LoadModule(modulePath.string()));
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
     manager.InitializeAll(&context);
 
     Spark::IModule* const workingInstance = manager.GetModule("Spark Compatible ABI Fixture");
@@ -255,7 +255,7 @@ TEST(ModuleABI_HotReloadCallbackCanReenterManagerWithoutDeadlock)
     const std::filesystem::path modulePath = CopyCompatibleFixtureToTemp("SparkReentrantReloadModule");
     NullEngineContext context;
     ModuleManager manager;
-    EXPECT_TRUE(manager.LoadModule(modulePath.string()));
+    ASSERT_TRUE(manager.LoadModule(modulePath.string()));
     manager.InitializeAll(&context);
 
     Spark::ModuleHotReloadManager hotReload;

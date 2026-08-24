@@ -83,12 +83,16 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(SparkBuild PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Output to a predictable location
-set_target_properties(SparkBuild PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
-)
+# Standalone consumers retain the historical flat output. The SparkEngine
+# superproject supplies configuration-specific directories for multi-config
+# generators so Debug and Release artifacts cannot overwrite one another.
+if(NOT CMAKE_PROJECT_NAME STREQUAL "SparkEngine")
+    set_target_properties(SparkBuild PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
 
 # Install alongside other SparkEngine tools so CPack picks it up.
 install(TARGETS SparkBuild RUNTIME DESTINATION bin)

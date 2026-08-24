@@ -6,7 +6,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$bin = Join-Path $root 'build\windows-release\bin'
+$buildBin = Join-Path $root 'build\windows-release\bin'
+$configBin = Join-Path $buildBin 'Release'
+$bin = if (Test-Path -LiteralPath $configBin) { $configBin } else { $buildBin }
 $engine = Join-Path $bin 'SparkEngine.exe'
 $game = Join-Path $bin 'SparkGameMMOFPS.dll'
 $serverConfig = Join-Path $PSScriptRoot 'Terrafront\server.cfg'

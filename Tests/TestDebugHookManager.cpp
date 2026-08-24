@@ -9,6 +9,7 @@
 
 #include "TestFramework.h"
 #include "Utils/DebugHookManager.h"
+#include "Utils/Process.h"
 
 #include <algorithm>
 #include <string>
@@ -634,4 +635,15 @@ TEST(DebugHookManager_SelectiveSystemFilter)
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "Physics", 2.1);
 
     EXPECT_EQ(physicsUpdates, 2);
+}
+
+TEST(DebugHookManager_ProcessTeardownAfterNetworkInitIsClean)
+{
+#ifdef SPARK_TEST_DEBUG_HOOK_TEARDOWN_PROBE_PATH
+    auto probe = Spark::Process::Builder(SPARK_TEST_DEBUG_HOOK_TEARDOWN_PROBE_PATH).Launch();
+    ASSERT_TRUE(probe.has_value());
+    EXPECT_EQ(probe->WaitForExit(), 0);
+#else
+    EXPECT_TRUE(false);
+#endif
 }
