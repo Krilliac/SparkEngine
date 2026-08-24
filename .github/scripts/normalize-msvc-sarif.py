@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Assign stable, unique categories to every MSVC analysis SARIF run."""
+"""Coalesce PREfast SARIF runs without exceeding GitHub upload limits."""
 
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -13,23 +15,17 @@ import tempfile
 from typing import Any, Iterable
 
 
-def _artifact_uris(run: dict[str, Any]) -> Iterable[str]:
-    for artifact in run.get("artifacts", []):
-        if isinstance(artifact, dict):
-            location = artifact.get("location", {})
-            if isinstance(location, dict) and isinstance(location.get("uri"), str):
-                yield location["uri"].replace("\\", "/")
-
-    for result in run.get("results", []):
-        if not isinstance(result, dict):
-            continue
-        for location in result.get("locations", []):
-            if not isinstance(location, dict):
-                continue
-            physical = location.get("physicalLocation", {})
-            artifact = physical.get("artifactLocation", {}) if isinstance(physical, dict) else {}
-            if isinstance(artifact, dict) and isinstance(artifact.get("uri"), str):
-                yield artifact["uri"].replace("\\", "/")
+MAX_GITHUB_RUNS = 20
+MAX_RESULTS_PER_RUN = 25_000
+SUPPORTED_RUN_KEYS = {"tool", "results", "invocations", "artifacts"}
+INVOCATION_ARTIFACT_FIELDS = (
+    "executableLocation",
+    "workingDirectory",
+    "stdin",
+    "stdout",
+    "stderr",
+    "stdoutStderr",
+)
 
 
 def _slug(value: object, fallback: str) -> str:
@@ -37,35 +33,256 @@ def _slug(value: object, fallback: str) -> str:
     return slug or fallback
 
 
-def _run_label(run: dict[str, Any]) -> str:
-    tool = run.get("tool", {})
-    driver = tool.get("driver", {}) if isinstance(tool, dict) else {}
-    name = driver.get("name", "msvc") if isinstance(driver, dict) else "msvc"
-    return _slug(name, "msvc")
+def _array(run: dict[str, Any], key: str) -> list[Any]:
+    value = run.get(key, [])
+    if not isinstance(value, list):
+        raise ValueError(f"run.{key} must be an array")
+    return value
 
 
-def _stable_signature(run: dict[str, Any]) -> str:
-    """Describe a logical run without depending on its changing findings."""
-    tool = run.get("tool", {})
-    driver = tool.get("driver", {}) if isinstance(tool, dict) else {}
-    automation = run.get("automationDetails", {})
-    bases = run.get("originalUriBaseIds", {})
+def _tool(run: dict[str, Any]) -> dict[str, Any]:
+    tool = run.get("tool")
+    if not isinstance(tool, dict):
+        raise ValueError("run.tool must be an object")
+    driver = tool.get("driver")
+    if not isinstance(driver, dict) or not isinstance(driver.get("name"), str):
+        raise ValueError("run.tool.driver must have a string name")
+    extensions = tool.get("extensions", [])
+    if not isinstance(extensions, list) or not all(
+        isinstance(extension, dict) for extension in extensions
+    ):
+        raise ValueError("run.tool.extensions must be an array of objects")
+    if len(extensions) > 100:
+        raise ValueError("MSVC tool exceeds GitHub's 100-extension limit")
+
+    rule_count = 0
+    for component in (driver, *extensions):
+        rules = component.get("rules", [])
+        if not isinstance(rules, list):
+            raise ValueError("MSVC tool-component rules must be an array")
+        rule_count += len(rules)
+        locations = component.get("locations", [])
+        if not isinstance(locations, list) or not all(
+            isinstance(location, dict) for location in locations
+        ):
+            raise ValueError("MSVC tool-component locations must be an array of objects")
+        if any("index" in location for location in locations):
+            raise ValueError("indexed MSVC tool-component locations cannot be safely coalesced")
+    if rule_count > MAX_RESULTS_PER_RUN:
+        raise ValueError("MSVC tool exceeds GitHub's 25,000-rule limit")
+    return tool
+
+
+def _is_index(value: Any) -> bool:
+    # bool is an int subclass in Python but is never a valid SARIF array index.
+    return type(value) is int
+
+
+def _tool_signature(run: dict[str, Any]) -> str:
+    # Exact tool equality keeps rule/extension indices valid without rewriting
+    # reportingDescriptorReference or toolComponentReference values.
+    return json.dumps(_tool(run), sort_keys=True, separators=(",", ":"))
+
+
+def _stable_run_signature(run: dict[str, Any]) -> str:
     descriptor = {
-        "tool": {
-            key: driver.get(key)
-            for key in ("name", "fullName", "organization", "informationUri")
-            if isinstance(driver, dict) and driver.get(key) is not None
-        },
-        "automation": {
-            key: automation.get(key)
-            for key in ("id", "guid", "correlationGuid", "description")
-            if isinstance(automation, dict) and automation.get(key) is not None
-        },
-        "bases": bases if isinstance(bases, dict) else {},
-        "artifacts": sorted(set(_artifact_uris(run))),
+        "artifacts": _array(run, "artifacts"),
+        "results": _array(run, "results"),
+        "invocations": _array(run, "invocations"),
     }
     encoded = json.dumps(descriptor, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _walk(value: Any) -> Iterable[dict[str, Any]]:
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _walk(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk(child)
+
+
+def _reject_unsupported_shape(run: dict[str, Any]) -> None:
+    unsupported = set(run) - SUPPORTED_RUN_KEYS
+    if unsupported:
+        raise ValueError(
+            "MSVC SARIF run contains unsupported metadata: " + ", ".join(sorted(unsupported))
+        )
+
+    for node in _walk(run):
+        if "runGraphIndex" in node:
+            raise ValueError("MSVC SARIF run graphs require unsupported runGraphIndex remapping")
+        if "parentIndex" in node:
+            raise ValueError("MSVC SARIF parentIndex references require unsupported array remapping")
+        thread_location = node.get("threadFlowLocation")
+        if isinstance(thread_location, dict) and "index" in thread_location:
+            raise ValueError("MSVC SARIF threadFlowLocation indices are unsupported")
+        logical_location = node.get("logicalLocation")
+        if isinstance(logical_location, dict) and "index" in logical_location:
+            raise ValueError("MSVC SARIF logicalLocation indices are unsupported")
+        logical_locations = node.get("logicalLocations")
+        if isinstance(logical_locations, list) and any(
+            isinstance(location, dict) and "index" in location for location in logical_locations
+        ):
+            raise ValueError("MSVC SARIF logicalLocations indices are unsupported")
+
+
+def _rebase_references(value: Any, artifact_offset: int, invocation_offset: int) -> None:
+    for node in _walk(value):
+        for reference_name in ("artifactLocation", "analysisTarget"):
+            reference = node.get(reference_name)
+            if isinstance(reference, dict) and _is_index(reference.get("index")):
+                reference["index"] += artifact_offset
+
+        provenance = node.get("provenance")
+        if isinstance(provenance, dict) and _is_index(provenance.get("invocationIndex")):
+            provenance["invocationIndex"] += invocation_offset
+
+
+def _rebase_artifacts(artifacts: list[Any], artifact_offset: int) -> None:
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            raise ValueError("run.artifacts entries must be objects")
+        location = artifact.get("location")
+        if isinstance(location, dict) and _is_index(location.get("index")):
+            location["index"] += artifact_offset
+
+
+def _invocation_artifact_locations(invocation: Any) -> list[dict[str, Any]]:
+    if not isinstance(invocation, dict):
+        raise ValueError("run.invocations entries must be objects")
+    locations: list[dict[str, Any]] = []
+    for key in INVOCATION_ARTIFACT_FIELDS:
+        if key in invocation:
+            location = invocation[key]
+            if not isinstance(location, dict):
+                raise ValueError(f"invocation.{key} must be an artifact location object")
+            locations.append(location)
+    response_files = invocation.get("responseFiles", [])
+    if not isinstance(response_files, list):
+        raise ValueError("invocation.responseFiles must be an array")
+    if not all(isinstance(location, dict) for location in response_files):
+        raise ValueError("invocation.responseFiles entries must be artifact location objects")
+    locations.extend(response_files)
+    return locations
+
+
+def _rebase_invocation_artifacts(invocations: list[Any], artifact_offset: int) -> None:
+    for invocation in invocations:
+        for location in _invocation_artifact_locations(invocation):
+            if _is_index(location.get("index")):
+                location["index"] += artifact_offset
+
+
+def _validate_invocation_artifacts(invocations: list[Any], artifact_count: int) -> None:
+    for invocation in invocations:
+        for location in _invocation_artifact_locations(invocation):
+            if "index" not in location:
+                continue
+            index = location["index"]
+            if not _is_index(index) or not 0 <= index < artifact_count:
+                raise ValueError("invocation artifact location is outside run artifacts")
+
+
+def _validate_references(run: dict[str, Any]) -> None:
+    artifact_count = len(_array(run, "artifacts"))
+    invocation_count = len(_array(run, "invocations"))
+    for artifact in _array(run, "artifacts"):
+        if not isinstance(artifact, dict):
+            raise ValueError("run.artifacts entries must be objects")
+        location = artifact.get("location")
+        if isinstance(location, dict) and "index" in location:
+            index = location["index"]
+            if not _is_index(index) or not 0 <= index < artifact_count:
+                raise ValueError("artifact.location.index is outside run artifacts")
+    _validate_invocation_artifacts(_array(run, "invocations"), artifact_count)
+    for node in _walk(run):
+        for reference_name in ("artifactLocation", "analysisTarget"):
+            reference = node.get(reference_name)
+            if isinstance(reference, dict) and "index" in reference:
+                index = reference["index"]
+                if not _is_index(index) or not 0 <= index < artifact_count:
+                    raise ValueError(f"{reference_name}.index is outside merged artifacts")
+        provenance = node.get("provenance")
+        if isinstance(provenance, dict) and "invocationIndex" in provenance:
+            index = provenance["invocationIndex"]
+            if not _is_index(index) or not 0 <= index < invocation_count:
+                raise ValueError("provenance.invocationIndex is outside merged invocations")
+
+
+def _validate_rule_references(run: dict[str, Any]) -> None:
+    rules = _tool(run)["driver"].get("rules", [])
+    for result in _array(run, "results"):
+        if not isinstance(result, dict):
+            raise ValueError("run.results entries must be objects")
+        if "ruleIndex" not in result:
+            continue
+        index = result["ruleIndex"]
+        if not _is_index(index) or not 0 <= index < len(rules):
+            raise ValueError("result.ruleIndex is outside tool.driver.rules")
+
+
+def _partition(runs: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    buckets: list[list[dict[str, Any]]] = []
+    bucket: list[dict[str, Any]] = []
+    bucket_results = 0
+    for run in sorted(runs, key=_stable_run_signature):
+        result_count = len(_array(run, "results"))
+        if result_count > MAX_RESULTS_PER_RUN:
+            raise ValueError("one MSVC SARIF run exceeds GitHub's 25,000-result limit")
+        if bucket and bucket_results + result_count > MAX_RESULTS_PER_RUN:
+            buckets.append(bucket)
+            bucket = []
+            bucket_results = 0
+        bucket.append(run)
+        bucket_results += result_count
+    if bucket:
+        buckets.append(bucket)
+    return buckets
+
+
+def _merge_bucket(runs: list[dict[str, Any]], automation_id: str) -> dict[str, Any]:
+    tool_signature = _tool_signature(runs[0])
+    merged: dict[str, Any] = {
+        "tool": deepcopy(_tool(runs[0])),
+        "invocations": [],
+        "artifacts": [],
+        "results": [],
+        "automationDetails": {"id": automation_id},
+    }
+
+    expected_results = 0
+    for run in runs:
+        _reject_unsupported_shape(run)
+        if _tool_signature(run) != tool_signature:
+            raise ValueError("attempted to merge incompatible MSVC tool components")
+        _validate_references(run)
+        _validate_rule_references(run)
+
+        artifact_offset = len(merged["artifacts"])
+        invocation_offset = len(merged["invocations"])
+        artifacts = deepcopy(_array(run, "artifacts"))
+        invocations = deepcopy(_array(run, "invocations"))
+        results = deepcopy(_array(run, "results"))
+        expected_results += len(results)
+
+        _rebase_artifacts(artifacts, artifact_offset)
+        _rebase_invocation_artifacts(invocations, artifact_offset)
+        _rebase_references(invocations, artifact_offset, invocation_offset)
+        _rebase_references(results, artifact_offset, invocation_offset)
+        merged["artifacts"].extend(artifacts)
+        merged["invocations"].extend(invocations)
+        merged["results"].extend(results)
+
+    if len(merged["results"]) != expected_results:
+        raise ValueError("MSVC SARIF findings were lost during consolidation")
+    if len(merged["results"]) > MAX_RESULTS_PER_RUN:
+        raise ValueError("merged MSVC SARIF exceeds GitHub's 25,000-result limit")
+    _validate_references(merged)
+    _validate_rule_references(merged)
+    return merged
 
 
 def normalize(payload: dict[str, Any]) -> list[str]:
@@ -74,25 +291,44 @@ def normalize(payload: dict[str, Any]) -> list[str]:
         raise ValueError("MSVC SARIF must contain at least one run")
     if not all(isinstance(run, dict) for run in runs):
         raise ValueError("MSVC SARIF runs must be objects")
+    for run in runs:
+        _reject_unsupported_shape(run)
 
-    grouped: dict[str, list[tuple[str, int, dict[str, Any]]]] = {}
-    for index, run in enumerate(runs):
-        grouped.setdefault(_run_label(run), []).append((_stable_signature(run), index, run))
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for run in runs:
+        grouped.setdefault(_tool_signature(run), []).append(run)
 
+    partitions: list[tuple[str, list[dict[str, Any]]]] = []
+    for signature in sorted(grouped):
+        partitions.extend((signature, bucket) for bucket in _partition(grouped[signature]))
+    if len(partitions) > MAX_GITHUB_RUNS:
+        total_results = sum(len(_array(run, "results")) for run in runs)
+        minimum = math.ceil(total_results / MAX_RESULTS_PER_RUN)
+        raise ValueError(
+            f"MSVC SARIF needs {len(partitions)} categories (minimum by result count: {minimum}); "
+            f"GitHub accepts {MAX_GITHUB_RUNS}"
+        )
+
+    base_labels = [_slug(_tool(bucket[0])["driver"]["name"], "msvc") for _, bucket in partitions]
+    label_totals = {label: base_labels.count(label) for label in set(base_labels)}
+    label_seen: dict[str, int] = {}
     assigned: list[str] = []
-    for label in sorted(grouped):
-        members = sorted(grouped[label], key=lambda item: (item[0], item[1]))
-        for index, (_, _, run) in enumerate(members, start=1):
-            suffix = "" if len(members) == 1 else f"-{index}"
-            automation_id = f"msvc/{label}{suffix}/"
-            details = run.setdefault("automationDetails", {})
-            if not isinstance(details, dict):
-                raise ValueError("run.automationDetails must be an object")
-            details["id"] = automation_id
-            assigned.append(automation_id)
+    merged_runs: list[dict[str, Any]] = []
+    original_results = sum(len(_array(run, "results")) for run in runs)
 
-    if len(assigned) != len(runs) or len(assigned) != len(set(assigned)):
-        raise ValueError("MSVC SARIF categories are incomplete or not unique")
+    for (_, bucket), label in zip(partitions, base_labels):
+        label_seen[label] = label_seen.get(label, 0) + 1
+        suffix = f"-{label_seen[label]}" if label_totals[label] > 1 else ""
+        automation_id = f"msvc/{label}{suffix}/"
+        merged_runs.append(_merge_bucket(bucket, automation_id))
+        assigned.append(automation_id)
+
+    merged_results = sum(len(_array(run, "results")) for run in merged_runs)
+    if merged_results != original_results:
+        raise ValueError("MSVC SARIF findings were lost during consolidation")
+    if len(assigned) != len(set(assigned)):
+        raise ValueError("MSVC SARIF categories are not unique")
+    payload["runs"] = merged_runs
     return sorted(assigned)
 
 
@@ -105,6 +341,11 @@ def main() -> int:
     payload = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict) or payload.get("version") != "2.1.0":
         raise ValueError("expected a SARIF 2.1.0 object")
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        raise ValueError("MSVC SARIF runs must be an array")
+    original_runs = len(runs)
+    original_results = sum(len(_array(run, "results")) for run in runs)
 
     assigned = normalize(payload)
     with tempfile.NamedTemporaryFile(
@@ -114,7 +355,10 @@ def main() -> int:
         stream.write("\n")
         temporary = Path(stream.name)
     os.replace(temporary, path)
-    print(f"Assigned {len(assigned)} MSVC SARIF categories: {', '.join(assigned)}")
+    print(
+        f"Consolidated {original_runs} MSVC SARIF runs with {original_results} findings "
+        f"into {len(assigned)} categories: {', '.join(assigned)}"
+    )
     return 0
 
 

@@ -67,10 +67,10 @@ jobs:
           # Ruleset file that will determine what checks will be run
           ruleset: NativeRecommendedRules.ruleset
 
-      # The analyzer emits one SARIF run per analyzed project. GitHub no longer
-      # combines runs that share a category, so retain every run while assigning
-      # stable, distinct automation identities before publication.
-      - name: Assign stable categories to MSVC SARIF runs
+      # The analyzer emits one SARIF run per translation unit (more than 1,000
+      # here), while GitHub accepts at most 20 runs per upload. Coalesce runs by
+      # tool without dropping findings, rebasing their run-relative indices.
+      - name: Consolidate MSVC SARIF runs into stable categories
         run: python -I .github/scripts/normalize-msvc-sarif.py "${{ steps.run-analysis.outputs.sarif }}"
 
       # Upload SARIF file to GitHub Code Scanning Alerts
@@ -79,9 +79,13 @@ jobs:
         with:
           sarif_file: ${{ steps.run-analysis.outputs.sarif }}
 
-      # Upload SARIF file as an Artifact to download and view
-      # - name: Upload SARIF as an Artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: sarif-file
-      #     path: ${{ steps.run-analysis.outputs.sarif }}
+      # Preserve a failed payload briefly so future schema or service-limit
+      # changes can be diagnosed without rerunning the hour-long analyzer.
+      - name: Upload failed MSVC SARIF for diagnosis
+        if: failure() && steps.run-analysis.outputs.sarif != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: msvc-sarif-${{ github.run_id }}
+          path: ${{ steps.run-analysis.outputs.sarif }}
+          if-no-files-found: ignore
+          retention-days: 1
