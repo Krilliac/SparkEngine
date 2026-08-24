@@ -5,6 +5,7 @@
 
 #include <nlohmann_json.h>
 #include <fstream>
+#include <filesystem>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -295,7 +296,7 @@ namespace Spark
 
     bool SaveWorld(const World& world, const std::string& path)
     {
-        std::ofstream f(path, std::ios::binary);
+        std::ofstream f(std::filesystem::u8path(path), std::ios::binary);
         if (!f.is_open())
             return false;
         f << SerializeWorld(world);
@@ -304,7 +305,7 @@ namespace Spark
 
     bool LoadWorld(World& world, const std::string& path)
     {
-        std::ifstream f(path, std::ios::binary);
+        std::ifstream f(std::filesystem::u8path(path), std::ios::binary);
         if (!f.is_open())
             return false;
         std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());

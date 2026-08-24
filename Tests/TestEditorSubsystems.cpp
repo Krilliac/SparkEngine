@@ -23,6 +23,7 @@
 #include "SceneManager/ReflectedSceneSerializer.h"
 #include "Engine/ECS/Components.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <chrono>
 #include <cstdio>
@@ -716,6 +717,85 @@ TEST(CrashHandler_GetStats)
 // ProjectManager Tests
 // ============================================================================
 
+namespace
+{
+    std::filesystem::path FindProjectManagerTestSourceRoot()
+    {
+        std::vector<std::filesystem::path> seeds;
+#if defined(_WIN32) && defined(SPARK_TEST_SOURCE_DIR_WIDE)
+        seeds.emplace_back(SPARK_TEST_SOURCE_DIR_WIDE);
+#endif
+        std::error_code ec;
+        seeds.push_back(std::filesystem::current_path(ec));
+        seeds.push_back(std::filesystem::absolute(std::filesystem::path(__FILE__), ec).parent_path());
+
+        for (const auto& seed : seeds)
+        {
+            std::filesystem::path candidate = seed;
+            for (int depth = 0; !candidate.empty() && depth < 12; ++depth)
+            {
+                bool completeCatalog = std::filesystem::is_regular_file(candidate / "CMakeLists.txt", ec) && !ec;
+                for (const auto& descriptor : ProjectManager::GetProjectTemplateDescriptors())
+                {
+                    ec.clear();
+                    if (!std::filesystem::is_regular_file(
+                            candidate / "Templates" / std::string(descriptor.packageDirectory) / "template.json", ec) ||
+                        ec)
+                    {
+                        completeCatalog = false;
+                        break;
+                    }
+                }
+                if (completeCatalog)
+                    return std::filesystem::weakly_canonical(candidate, ec);
+
+                const std::filesystem::path parent = candidate.parent_path();
+                if (parent == candidate)
+                    break;
+                candidate = parent;
+            }
+        }
+        return {};
+    }
+
+    bool IsPortableCodeIdentifier(const std::string& value)
+    {
+        if (value.empty())
+            return false;
+        const auto isAlpha = [](unsigned char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); };
+        const auto isDigit = [](unsigned char c) { return c >= '0' && c <= '9'; };
+        if (!isAlpha(static_cast<unsigned char>(value.front())) && value.front() != '_')
+            return false;
+        return std::all_of(value.begin() + 1, value.end(),
+                           [&](unsigned char c) { return isAlpha(c) || isDigit(c) || c == '_'; });
+    }
+
+    std::vector<std::string> SnapshotRecentProjects(const ProjectManager& manager)
+    {
+        std::vector<std::string> snapshot;
+        for (const auto& project : manager.GetRecentProjects())
+        {
+            snapshot.push_back(project.name + "\n" + project.path + "\n" + project.engineVersion + "\n" +
+                               std::to_string(project.lastOpened) + "\n" + (project.valid ? "valid" : "invalid"));
+        }
+        return snapshot;
+    }
+
+    bool HasProjectStagingResidue(const std::filesystem::path& parent, const std::string& destinationName)
+    {
+        std::error_code ec;
+        if (!std::filesystem::is_directory(parent, ec) || ec)
+            return false;
+        const auto prefix = std::filesystem::u8path(destinationName + ".spark-staging-").native();
+        for (std::filesystem::directory_iterator it(parent, ec), end; !ec && it != end; it.increment(ec))
+        {
+            if (it->path().filename().native().starts_with(prefix))
+                return true;
+        }
+        return false;
+    }
+} // namespace
+
 TEST(ProjectManager_TemplateName)
 {
     const auto descriptors = ProjectManager::GetProjectTemplateDescriptors();
@@ -751,6 +831,307 @@ TEST(ProjectManager_TemplateName)
     EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::MMO).empty());
     EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::Platformer).empty());
     EXPECT_FALSE(ProjectManager::GetProjectTemplateName(ProjectTemplate::RPG).empty());
+}
+
+TEST(ProjectManager_AllRegisteredTemplatesCreateMappedPhysicalPackages)
+{
+    const std::filesystem::path sourceRoot = FindProjectManagerTestSourceRoot();
+    ASSERT_FALSE(sourceRoot.empty());
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-template-catalog-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(parent);
+
+    ProjectManager manager;
+    manager.Initialize();
+    manager.SetEngineRoot(sourceRoot.string());
+    size_t callbackCount = 0;
+    manager.SetOnProjectOpened([&](const ProjectInfo&) { ++callbackCount; });
+    constexpr std::array<size_t, 8> expectedEntityCountsByType = {0, 6, 6, 8, 4, 7, 12, 9};
+
+    size_t templateIndex = 0;
+    for (const auto& descriptor : ProjectManager::GetProjectTemplateDescriptors())
+    {
+        const std::string projectName = "RegistryTemplate" + std::to_string(templateIndex);
+        const std::filesystem::path projectRoot = parent / projectName;
+        const std::filesystem::path sourcePackage = sourceRoot / "Templates" / std::string(descriptor.packageDirectory);
+        EXPECT_TRUE(std::filesystem::is_regular_file(sourcePackage /
+                                                     (std::string(descriptor.packageDirectory) + ".sparkproject")));
+
+        const bool created =
+            manager.CreateProject(projectName, parent.string(), descriptor.type, "registry integration test");
+        EXPECT_TRUE(created);
+        if (!created)
+        {
+            ++templateIndex;
+            continue;
+        }
+
+        const std::filesystem::path mappedScene = projectRoot / std::filesystem::path(descriptor.defaultScene);
+        const std::filesystem::path canonicalProject = projectRoot / (projectName + ".sparkproject");
+        EXPECT_TRUE(std::filesystem::is_regular_file(mappedScene));
+        World loadedScene;
+        EXPECT_TRUE(Spark::LoadWorld(loadedScene, mappedScene.string()));
+        EXPECT_EQ(loadedScene.GetEntityCount(), expectedEntityCountsByType.at(static_cast<size_t>(descriptor.type)));
+        EXPECT_TRUE(std::filesystem::is_regular_file(canonicalProject));
+        EXPECT_FALSE(
+            std::filesystem::exists(projectRoot / (std::string(descriptor.packageDirectory) + ".sparkproject")));
+        EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "CMakeLists.txt"));
+        EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "Source" / "GameModule.h"));
+        EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "Source" / "GameModule.cpp"));
+        EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "spark.modules.json"));
+        EXPECT_TRUE(std::filesystem::is_regular_file(projectRoot / "Assets" / "manifest.json"));
+
+        const ProjectInfo& project = manager.GetCurrentProject();
+        EXPECT_EQ(project.name, projectName);
+        EXPECT_EQ(static_cast<int>(project.templateType), static_cast<int>(descriptor.type));
+        EXPECT_EQ(project.defaultScene, std::string(descriptor.defaultScene));
+        EXPECT_EQ(project.lastOpenedScene, std::string(descriptor.defaultScene));
+        EXPECT_EQ(project.scenes.size(), static_cast<size_t>(1));
+        if (!project.scenes.empty())
+            EXPECT_EQ(project.scenes.front(), std::string(descriptor.defaultScene));
+        EXPECT_EQ(project.modules.size(), static_cast<size_t>(1));
+        if (!project.modules.empty())
+            EXPECT_TRUE(IsPortableCodeIdentifier(project.modules.front()));
+        EXPECT_EQ(std::filesystem::path(manager.GetProjectFilePath()),
+                  std::filesystem::weakly_canonical(canonicalProject));
+
+        std::ifstream templateMetadata(projectRoot / "template.json");
+        const std::string templateText((std::istreambuf_iterator<char>(templateMetadata)),
+                                       std::istreambuf_iterator<char>());
+        EXPECT_STR_CONTAINS(templateText, std::string("\"identity\": \"") + std::string(descriptor.stableId) + "\"");
+        EXPECT_EQ(callbackCount, templateIndex + 1);
+        EXPECT_FALSE(HasProjectStagingResidue(parent, projectName));
+
+        manager.RemoveRecentProject(canonicalProject.string());
+        manager.CloseProject();
+        ++templateIndex;
+    }
+
+    manager.Shutdown();
+    std::error_code cleanupError;
+    std::filesystem::remove_all(parent, cleanupError);
+    EXPECT_FALSE(cleanupError);
+}
+
+TEST(ProjectManager_DisplayNameProducesSafeModuleAndCanonicalProjectDocument)
+{
+    const std::filesystem::path sourceRoot = FindProjectManagerTestSourceRoot();
+    ASSERT_FALSE(sourceRoot.empty());
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-template-unicode-test-" + std::to_string(stamp));
+    std::filesystem::create_directories(parent);
+
+    const std::string displayName = std::string("42 Caf") + "\xC3\xA9" + " Quest " + "\xF0\x9F\x9A\x80";
+    const std::string expectedIdentifier = "SparkGame42_Caf_Quest_";
+    const std::filesystem::path destination = parent / std::filesystem::u8path(displayName);
+    const std::filesystem::path canonicalProject = destination / std::filesystem::u8path(displayName + ".sparkproject");
+
+    ProjectManager manager;
+    manager.Initialize();
+    manager.SetEngineRoot(sourceRoot.string());
+    EXPECT_TRUE(manager.CreateProject(displayName, parent.string(), ProjectTemplate::Empty));
+    EXPECT_EQ(manager.GetCurrentProject().name, displayName);
+    EXPECT_EQ(manager.GetCurrentProject().modules.size(), static_cast<size_t>(1));
+    if (!manager.GetCurrentProject().modules.empty())
+    {
+        EXPECT_EQ(manager.GetCurrentProject().modules.front(), expectedIdentifier);
+        EXPECT_TRUE(IsPortableCodeIdentifier(manager.GetCurrentProject().modules.front()));
+    }
+    EXPECT_TRUE(std::filesystem::is_regular_file(canonicalProject));
+    EXPECT_FALSE(std::filesystem::exists(destination / "EmptyProject.sparkproject"));
+    EXPECT_EQ(std::filesystem::u8path(manager.GetProjectFilePath()),
+              std::filesystem::weakly_canonical(canonicalProject));
+
+    std::ifstream cmakeInput(destination / "CMakeLists.txt");
+    const std::string cmakeText((std::istreambuf_iterator<char>(cmakeInput)), std::istreambuf_iterator<char>());
+    EXPECT_STR_CONTAINS(cmakeText, "spark_add_game_module(" + expectedIdentifier);
+    std::ifstream headerInput(destination / "Source" / "GameModule.h");
+    const std::string headerText((std::istreambuf_iterator<char>(headerInput)), std::istreambuf_iterator<char>());
+    EXPECT_STR_CONTAINS(headerText, "class " + expectedIdentifier + "Module");
+    World loadedScene;
+    EXPECT_TRUE(Spark::LoadWorld(loadedScene, manager.GetCurrentProject().path + "/Scenes/Default.sparkscene"));
+    cmakeInput.close();
+    headerInput.close();
+    EXPECT_FALSE(HasProjectStagingResidue(parent, displayName));
+
+    manager.RemoveRecentProject(manager.GetProjectFilePath());
+    manager.Shutdown();
+    std::error_code cleanupError;
+    std::filesystem::remove_all(parent, cleanupError);
+    EXPECT_FALSE(cleanupError);
+}
+
+TEST(ProjectManager_GeneratedFallbackUsesProjectIdentityInsteadOfStagingName)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-generated-fallback-test-" + std::to_string(stamp));
+    const std::filesystem::path emptyEngineRoot = parent / "EngineWithoutTemplates";
+    const std::filesystem::path projects = parent / "Projects";
+    std::filesystem::create_directories(emptyEngineRoot);
+    std::filesystem::create_directories(projects);
+
+    ProjectManager manager;
+    manager.Initialize();
+    manager.SetEngineRoot(emptyEngineRoot.string());
+    ASSERT_TRUE(manager.CreateProject("Fallback Playable", projects.string(), ProjectTemplate::FirstPerson,
+                                      "generated fallback"));
+
+    const std::filesystem::path projectRoot = projects / "Fallback Playable";
+    const std::string expectedIdentifier = "Fallback_Playable";
+    std::ifstream cmakeInput(projectRoot / "CMakeLists.txt");
+    const std::string cmakeText((std::istreambuf_iterator<char>(cmakeInput)), std::istreambuf_iterator<char>());
+    std::ifstream moduleInput(projectRoot / "spark.modules.json");
+    const std::string moduleText((std::istreambuf_iterator<char>(moduleInput)), std::istreambuf_iterator<char>());
+    EXPECT_STR_CONTAINS(cmakeText, "project(" + expectedIdentifier + " LANGUAGES CXX)");
+    EXPECT_STR_CONTAINS(cmakeText, "spark_add_game_module(" + expectedIdentifier);
+    EXPECT_STR_CONTAINS(moduleText, "\"name\": \"" + expectedIdentifier + "\"");
+    EXPECT_STR_CONTAINS(moduleText, "\"path\": \"" + expectedIdentifier + ".dll\"");
+    EXPECT_EQ(manager.GetCurrentProject().name, "Fallback Playable");
+    EXPECT_EQ(manager.GetCurrentProject().modules.size(), static_cast<size_t>(1));
+    if (!manager.GetCurrentProject().modules.empty())
+        EXPECT_EQ(manager.GetCurrentProject().modules.front(), expectedIdentifier);
+    EXPECT_FALSE(HasProjectStagingResidue(projects, "Fallback Playable"));
+    cmakeInput.close();
+    moduleInput.close();
+
+    manager.RemoveRecentProject((projectRoot / "Fallback Playable.sparkproject").string());
+    manager.Shutdown();
+    std::error_code cleanupError;
+    std::filesystem::remove_all(parent, cleanupError);
+    EXPECT_FALSE(cleanupError);
+}
+
+TEST(ProjectManager_LegacyAndCustomProjectsDoNotAcquireBlankTemplateIdentity)
+{
+    const std::filesystem::path sourceRoot = FindProjectManagerTestSourceRoot();
+    ASSERT_FALSE(sourceRoot.empty());
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-template-identity-test-" + std::to_string(stamp));
+    const std::filesystem::path legacyRoot = parent / "Legacy";
+    std::filesystem::create_directories(legacyRoot);
+    const std::filesystem::path legacyDocument = legacyRoot / "Legacy.sparkproject";
+    std::ofstream(legacyDocument)
+        << "{\n  \"name\": \"Legacy\",\n  \"version\": \"1.0.0\",\n  \"modules\": [],\n  \"scenes\": []\n}\n";
+
+    ProjectManager manager;
+    manager.Initialize();
+    ASSERT_TRUE(manager.OpenProject(legacyDocument.string()));
+    EXPECT_FALSE(manager.GetCurrentProject().hasTemplateIdentity);
+    ASSERT_TRUE(manager.SaveProject());
+    std::ifstream savedLegacy(legacyDocument);
+    const std::string legacyText((std::istreambuf_iterator<char>(savedLegacy)), std::istreambuf_iterator<char>());
+    EXPECT_FALSE(legacyText.contains("\"template\""));
+    savedLegacy.close();
+    manager.RemoveRecentProject(legacyDocument.string());
+    manager.CloseProject();
+
+    manager.SetEngineRoot(sourceRoot.string());
+    const std::filesystem::path customRoot = parent / "CustomArena";
+    ASSERT_TRUE(manager.CreateProjectFromTemplate("CustomArena", customRoot.string(), "MultiplayerArena"));
+    EXPECT_FALSE(manager.GetCurrentProject().hasTemplateIdentity);
+    ASSERT_TRUE(manager.SaveProject());
+    const std::filesystem::path customDocument = customRoot / "CustomArena.sparkproject";
+    std::ifstream savedCustom(customDocument);
+    const std::string customText((std::istreambuf_iterator<char>(savedCustom)), std::istreambuf_iterator<char>());
+    EXPECT_FALSE(customText.contains("\"template\""));
+    savedCustom.close();
+
+    manager.RemoveRecentProject(customDocument.string());
+    manager.Shutdown();
+    std::error_code cleanupError;
+    std::filesystem::remove_all(parent, cleanupError);
+    EXPECT_FALSE(cleanupError);
+}
+
+TEST(ProjectManager_FailedCreationIsTransactionalAndCleansStaging)
+{
+    const std::filesystem::path sourceRoot = FindProjectManagerTestSourceRoot();
+    ASSERT_FALSE(sourceRoot.empty());
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path parent =
+        std::filesystem::temp_directory_path() / ("spark-template-rollback-test-" + std::to_string(stamp));
+    const std::filesystem::path projects = parent / "Projects";
+    const std::filesystem::path brokenCatalog = parent / "BrokenCatalog";
+    std::filesystem::create_directories(projects);
+
+    ProjectManager manager;
+    manager.Initialize();
+    manager.SetEngineRoot(sourceRoot.string());
+    ASSERT_TRUE(manager.CreateProject("Baseline", projects.string(), ProjectTemplate::Blank3D));
+    const std::filesystem::path baselineProject = projects / "Baseline" / "Baseline.sparkproject";
+    manager.RemoveRecentProject(baselineProject.string());
+
+    const ProjectInfo baselineInfo = manager.GetCurrentProject();
+    const std::string baselineDocument = manager.GetProjectFilePath();
+    const std::string baselineActivePath = ProjectManager::GetActiveProjectPath();
+    const std::vector<std::string> baselineRecent = SnapshotRecentProjects(manager);
+    size_t callbackCount = 0;
+    manager.SetOnProjectOpened([&](const ProjectInfo&) { ++callbackCount; });
+
+    const auto expectBaselineUnchanged = [&]()
+    {
+        EXPECT_TRUE(manager.HasOpenProject());
+        EXPECT_EQ(manager.GetCurrentProject().name, baselineInfo.name);
+        EXPECT_EQ(manager.GetCurrentProject().path, baselineInfo.path);
+        EXPECT_EQ(manager.GetCurrentProject().defaultScene, baselineInfo.defaultScene);
+        EXPECT_TRUE(manager.GetCurrentProject().scenes == baselineInfo.scenes);
+        EXPECT_TRUE(manager.GetCurrentProject().modules == baselineInfo.modules);
+        EXPECT_EQ(manager.GetProjectFilePath(), baselineDocument);
+        EXPECT_EQ(ProjectManager::GetActiveProjectPath(), baselineActivePath);
+        EXPECT_TRUE(SnapshotRecentProjects(manager) == baselineRecent);
+        EXPECT_EQ(callbackCount, static_cast<size_t>(0));
+    };
+
+    EXPECT_FALSE(manager.CreateProject("../Traversal", projects.string(), ProjectTemplate::Empty));
+    EXPECT_FALSE(manager.CreateProject("CON", projects.string(), ProjectTemplate::Empty));
+    EXPECT_FALSE(manager.CreateProject("NUL.txt", projects.string(), ProjectTemplate::Empty));
+    EXPECT_FALSE(manager.CreateProjectFromTemplate("Valid Project", (projects / "TraversalTemplate").string(),
+                                                   "../EmptyProject"));
+    EXPECT_FALSE(manager.CreateProjectFromTemplate("Valid Project", (projects / "ReservedTemplate").string(), "COM1"));
+    expectBaselineUnchanged();
+    EXPECT_FALSE(std::filesystem::exists(projects / "TraversalTemplate"));
+    EXPECT_FALSE(std::filesystem::exists(projects / "ReservedTemplate"));
+    EXPECT_FALSE(HasProjectStagingResidue(projects, "TraversalTemplate"));
+    EXPECT_FALSE(HasProjectStagingResidue(projects, "ReservedTemplate"));
+
+    const std::filesystem::path collision = projects / "ExistingDestination";
+    std::filesystem::create_directories(collision);
+    std::ofstream(collision / "keep.txt") << "must remain";
+    EXPECT_FALSE(manager.CreateProjectFromTemplate("Collision", collision.string(), "EmptyProject"));
+    expectBaselineUnchanged();
+    EXPECT_TRUE(std::filesystem::is_regular_file(collision / "keep.txt"));
+    EXPECT_FALSE(HasProjectStagingResidue(projects, collision.filename().string()));
+
+    // Construct a catalog that passes discovery but whose FPS package omits its
+    // declared scene. The staged project document is loaded first, so this
+    // exercises rollback after ProjectManager has temporarily mutated state.
+    for (const auto& descriptor : ProjectManager::GetProjectTemplateDescriptors())
+    {
+        const std::filesystem::path package = brokenCatalog / std::string(descriptor.packageDirectory);
+        std::filesystem::create_directories(package);
+        std::ofstream(package / "template.json") << "{\n  \"name\": \"" << descriptor.packageDirectory << "\"\n}\n";
+    }
+    const std::filesystem::path brokenFps = brokenCatalog / "FPSStarter";
+    std::ofstream(brokenFps / "FPSStarter.sparkproject")
+        << "{\n  \"name\": \"Injected staged state\",\n  \"version\": \"9.9.9\",\n"
+           "  \"defaultScene\": \"Scenes/Arena.sparkscene\",\n  \"modules\": [\"InjectedModule\"]\n}\n";
+
+    manager.SetEngineRoot(brokenCatalog.string());
+    const std::filesystem::path brokenDestination = projects / "BrokenTemplateDestination";
+    EXPECT_FALSE(manager.CreateProjectFromTemplate("Broken Project", brokenDestination.string(), "FPSStarter"));
+    expectBaselineUnchanged();
+    EXPECT_FALSE(std::filesystem::exists(brokenDestination));
+    EXPECT_FALSE(HasProjectStagingResidue(projects, brokenDestination.filename().string()));
+
+    manager.Shutdown();
+    EXPECT_TRUE(ProjectManager::GetActiveProjectPath().empty());
+    std::error_code cleanupError;
+    std::filesystem::remove_all(parent, cleanupError);
+    EXPECT_FALSE(cleanupError);
 }
 
 TEST(ProjectManager_Initialize)
@@ -800,6 +1181,8 @@ TEST(ProjectManager_RecentProjects)
 
 TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
 {
+    const std::filesystem::path sourceRoot = FindProjectManagerTestSourceRoot();
+    ASSERT_FALSE(sourceRoot.empty());
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     const std::filesystem::path parent =
         std::filesystem::temp_directory_path() / ("spark-project-test-" + std::to_string(stamp));
@@ -807,10 +1190,11 @@ TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
 
     ProjectManager pm;
     pm.Initialize();
+    pm.SetEngineRoot(sourceRoot.string());
     EXPECT_TRUE(pm.CreateProject("Playable", parent.string(), ProjectTemplate::FirstPerson, "test"));
     EXPECT_TRUE(pm.HasOpenProject());
 
-    const std::filesystem::path scene = parent / "Playable" / "Scenes" / "Default.sparkscene";
+    const std::filesystem::path scene = parent / "Playable" / "Scenes" / "Arena.sparkscene";
     EXPECT_TRUE(std::filesystem::exists(scene));
     World loaded;
     EXPECT_TRUE(Spark::LoadWorld(loaded, scene.string()));
@@ -846,9 +1230,8 @@ TEST(ProjectManager_CreateProject_WritesLoadableReflectedScene)
     {
         std::ifstream input(moduleHeader);
         const std::string moduleText((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-        EXPECT_STR_CONTAINS(moduleText, "#include <Graphics/GraphicsEngine.h>");
-        EXPECT_STR_CONTAINS(moduleText, "graphics->BeginFrame()");
-        EXPECT_STR_CONTAINS(moduleText, "graphics->EndFrame()");
+        EXPECT_STR_CONTAINS(moduleText, "#include <Spark/SparkSDK.h>");
+        EXPECT_STR_CONTAINS(moduleText, "class PlayableModule final");
     }
 
     // Opening an older generated project repairs missing scaffold files but

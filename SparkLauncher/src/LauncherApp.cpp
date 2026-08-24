@@ -374,7 +374,7 @@ namespace SparkLauncher
                 return;
             }
             std::error_code ec;
-            fs::create_directories(projectRoot, ec);
+            fs::create_directories(fs::path(m_newProjectLocation), ec);
             if (ec)
             {
                 m_statusMessage = "Cannot create directory: " + ec.message();

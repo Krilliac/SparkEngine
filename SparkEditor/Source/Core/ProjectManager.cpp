@@ -18,12 +18,19 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <random>
 #include <set>
 #include <array>
+#include <limits>
+#include <stdexcept>
 
 #ifdef _WIN32
 #include <shlobj.h>
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -368,21 +375,187 @@ namespace SparkEditor
 
         static_assert(kProjectTemplates.size() == 8);
 
+        fs::path GetProcessExecutablePath()
+        {
+#ifdef _WIN32
+            std::wstring buffer(32768, L'\0');
+            const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+            if (length == 0 || length >= buffer.size())
+                return {};
+            buffer.resize(length);
+            return fs::path(buffer);
+#elif defined(__APPLE__)
+            uint32_t size = 0;
+            if (_NSGetExecutablePath(nullptr, &size) != -1 || size == 0)
+                return {};
+            std::string buffer(size, '\0');
+            if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+                return {};
+            return fs::path(buffer.c_str());
+#else
+            std::array<char, 4096> buffer{};
+            const ssize_t length = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+            if (length <= 0 || static_cast<size_t>(length) == buffer.size() - 1)
+                return {};
+            return fs::path(std::string(buffer.data(), static_cast<size_t>(length)));
+#endif
+        }
+
+        fs::path PathFromUtf8(std::string_view value)
+        {
+#ifdef _WIN32
+            if (value.empty())
+                return {};
+            if (value.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+                throw std::runtime_error("UTF-8 path is too long");
+            const int sourceLength = static_cast<int>(value.size());
+            const int wideLength =
+                MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), sourceLength, nullptr, 0);
+            if (wideLength <= 0)
+                throw std::runtime_error("Path is not valid UTF-8");
+            std::wstring wide(static_cast<size_t>(wideLength), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), sourceLength, wide.data(),
+                                    wideLength) != wideLength)
+                throw std::runtime_error("Could not convert UTF-8 path");
+            return fs::path(wide);
+#else
+            return fs::path(value);
+#endif
+        }
+
+        std::string PathToUtf8(const fs::path& value)
+        {
+#ifdef _WIN32
+            const std::wstring& wide = value.native();
+            if (wide.empty())
+                return {};
+            if (wide.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+                throw std::runtime_error("Native path is too long");
+            const int sourceLength = static_cast<int>(wide.size());
+            const int utf8Length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), sourceLength,
+                                                       nullptr, 0, nullptr, nullptr);
+            if (utf8Length <= 0)
+                throw std::runtime_error("Could not measure UTF-8 path");
+            std::string utf8(static_cast<size_t>(utf8Length), '\0');
+            if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), sourceLength, utf8.data(), utf8Length,
+                                    nullptr, nullptr) != utf8Length)
+                throw std::runtime_error("Could not convert native path to UTF-8");
+            return utf8;
+#else
+            return value.string();
+#endif
+        }
+
+        void AddTemplateRootCandidates(const fs::path& base, std::vector<fs::path>& candidates)
+        {
+            if (base.empty())
+                return;
+            candidates.push_back(base);
+            candidates.push_back(base / "Templates");
+            candidates.push_back(base / "share" / "SparkEngine" / "templates");
+        }
+
+        std::string ResolveTemplateRoot(const std::string& explicitRoot)
+        {
+            std::vector<fs::path> candidates;
+            if (!explicitRoot.empty())
+                AddTemplateRootCandidates(PathFromUtf8(explicitRoot), candidates);
+
+            const bool hasExplicitRoot = !explicitRoot.empty();
+
+            if (!hasExplicitRoot)
+            {
+                if (const char* configuredRoot = std::getenv("SPARK_ENGINE_ROOT"))
+                    AddTemplateRootCandidates(configuredRoot, candidates);
+            }
+
+            auto addAncestors = [&candidates](fs::path current)
+            {
+                for (int depth = 0; !current.empty() && depth < 8; ++depth)
+                {
+                    AddTemplateRootCandidates(current, candidates);
+                    const fs::path parent = current.parent_path();
+                    if (parent == current)
+                        break;
+                    current = parent;
+                }
+            };
+
+            if (!hasExplicitRoot)
+                addAncestors(GetProcessExecutablePath().parent_path());
+
+            for (const fs::path& candidate : candidates)
+            {
+                std::error_code ec;
+                const fs::path canonical = fs::weakly_canonical(candidate, ec);
+                if (ec || !fs::is_directory(canonical, ec) || ec)
+                    continue;
+                bool hasPackage = false;
+                for (fs::directory_iterator it(canonical, fs::directory_options::skip_permission_denied, ec), end;
+                     !ec && it != end; it.increment(ec))
+                {
+                    if (it->is_directory(ec) && !ec && fs::is_regular_file(it->path() / "template.json", ec) && !ec)
+                    {
+                        hasPackage = true;
+                        break;
+                    }
+                }
+                if (hasPackage)
+                    return PathToUtf8(canonical);
+            }
+            return {};
+        }
+
+        bool IsValidUtf8(std::string_view value)
+        {
+            for (size_t i = 0; i < value.size();)
+            {
+                const auto byte = static_cast<unsigned char>(value[i]);
+                size_t trailing = 0;
+                if (byte <= 0x7F)
+                {
+                    ++i;
+                    continue;
+                }
+                if (byte >= 0xC2 && byte <= 0xDF)
+                    trailing = 1;
+                else if (byte >= 0xE0 && byte <= 0xEF)
+                    trailing = 2;
+                else if (byte >= 0xF0 && byte <= 0xF4)
+                    trailing = 3;
+                else
+                    return false;
+                if (i + trailing >= value.size())
+                    return false;
+                const auto second = static_cast<unsigned char>(value[i + 1]);
+                if ((second & 0xC0) != 0x80 || (byte == 0xE0 && second < 0xA0) || (byte == 0xED && second >= 0xA0) ||
+                    (byte == 0xF0 && second < 0x90) || (byte == 0xF4 && second >= 0x90))
+                    return false;
+                for (size_t offset = 2; offset <= trailing; ++offset)
+                {
+                    if ((static_cast<unsigned char>(value[i + offset]) & 0xC0) != 0x80)
+                        return false;
+                }
+                i += trailing + 1;
+            }
+            return true;
+        }
+
         std::string NormalizeProjectPath(const std::string& value)
         {
             if (value.empty())
                 return {};
             std::error_code ec;
-            fs::path normalized = fs::absolute(fs::path(value), ec);
+            fs::path normalized = fs::absolute(PathFromUtf8(value), ec);
             if (ec)
             {
                 ec.clear();
-                normalized = fs::path(value);
+                normalized = PathFromUtf8(value);
             }
             const fs::path canonical = fs::weakly_canonical(normalized, ec);
             if (!ec)
                 normalized = canonical;
-            return normalized.lexically_normal().string();
+            return PathToUtf8(normalized.lexically_normal());
         }
 
         bool ProjectPathsEqual(const std::string& left, const std::string& right)
@@ -403,12 +576,140 @@ namespace SparkEditor
             std::string result;
             result.reserve(value.size() + 8);
             for (unsigned char c : value)
-                result.push_back(std::isalnum(c) || c == '_' ? static_cast<char>(c) : '_');
+            {
+                const bool asciiAlphaNumeric =
+                    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+                if (asciiAlphaNumeric || (c == '_' && (result.empty() || result.back() != '_')))
+                    result.push_back(static_cast<char>(c));
+                else if (result.empty() || result.back() != '_')
+                    result.push_back('_');
+            }
             if (result.empty())
                 result = "SparkGame";
-            if (std::isdigit(static_cast<unsigned char>(result.front())))
+            if (!((result.front() >= 'a' && result.front() <= 'z') || (result.front() >= 'A' && result.front() <= 'Z')))
+                result.insert(0, "SparkGame");
+            static const std::set<std::string> cppKeywords = {
+                "alignas",       "alignof",     "and",        "and_eq",   "asm",       "auto",
+                "bitand",        "bitor",       "bool",       "break",    "case",      "catch",
+                "char",          "class",       "compl",      "concept",  "const",     "consteval",
+                "constexpr",     "constinit",   "const_cast", "continue", "co_await",  "co_return",
+                "co_yield",      "decltype",    "default",    "delete",   "do",        "double",
+                "dynamic_cast",  "else",        "enum",       "explicit", "export",    "extern",
+                "false",         "float",       "for",        "friend",   "goto",      "if",
+                "inline",        "int",         "long",       "mutable",  "namespace", "new",
+                "noexcept",      "not",         "not_eq",     "nullptr",  "operator",  "or",
+                "or_eq",         "private",     "protected",  "public",   "register",  "reinterpret_cast",
+                "requires",      "return",      "short",      "signed",   "sizeof",    "static",
+                "static_assert", "static_cast", "struct",     "switch",   "template",  "this",
+                "thread_local",  "throw",       "true",       "try",      "typedef",   "typeid",
+                "typename",      "union",       "unsigned",   "using",    "virtual",   "void",
+                "volatile",      "wchar_t",     "while",      "xor",      "xor_eq"};
+            if (cppKeywords.contains(result))
                 result.insert(0, "SparkGame_");
+            if (result.size() > 63)
+            {
+                uint32_t hash = 2166136261u;
+                for (unsigned char c : value)
+                {
+                    hash ^= c;
+                    hash *= 16777619u;
+                }
+                constexpr char hex[] = "0123456789abcdef";
+                std::string suffix(9, '_');
+                for (int nibble = 0; nibble < 8; ++nibble)
+                    suffix[8 - nibble] = hex[(hash >> (nibble * 4)) & 0x0F];
+                result.resize(63 - suffix.size());
+                while (!result.empty() && result.back() == '_')
+                    result.pop_back();
+                result += suffix;
+            }
             return result;
+        }
+
+        bool IsPortableProjectName(const std::string& value)
+        {
+            if (value.empty() || value.size() > 120 || !IsValidUtf8(value) || value == "." || value == ".." ||
+                value.front() == ' ' || value.back() == ' ' || value.back() == '.')
+                return false;
+            static constexpr std::string_view invalid = "\\/:*?\"<>|";
+            for (unsigned char c : value)
+            {
+                if (c < 0x20 || invalid.find(static_cast<char>(c)) != std::string_view::npos)
+                    return false;
+            }
+
+            std::string stem = value;
+            if (const size_t dot = stem.find('.'); dot != std::string::npos)
+                stem.resize(dot);
+            std::transform(stem.begin(), stem.end(), stem.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+            for (const auto& [encoded, ascii] : std::array<std::pair<std::string_view, char>, 3>{
+                     {{"\xC2\xB9", '1'}, {"\xC2\xB2", '2'}, {"\xC2\xB3", '3'}}})
+            {
+                if (const size_t pos = stem.find(encoded); pos != std::string::npos)
+                    stem.replace(pos, encoded.size(), 1, ascii);
+            }
+            static const std::set<std::string> reserved = {"CON",  "PRN",    "AUX",    "NUL",    "COM1", "COM2", "COM3",
+                                                           "COM4", "COM5",   "COM6",   "COM7",   "COM8", "COM9", "LPT1",
+                                                           "LPT2", "LPT3",   "LPT4",   "LPT5",   "LPT6", "LPT7", "LPT8",
+                                                           "LPT9", "CLOCK$", "CONIN$", "CONOUT$"};
+            return !reserved.contains(stem);
+        }
+
+        fs::path CreateOwnedStagingDirectory(const fs::path& destination)
+        {
+            std::error_code ec;
+            fs::create_directories(destination.parent_path(), ec);
+            if (ec)
+                return {};
+
+            std::random_device entropy;
+            const uint64_t now =
+                static_cast<uint64_t>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+            for (uint64_t attempt = 0; attempt < 64; ++attempt)
+            {
+                const uint64_t nonce = now ^ (static_cast<uint64_t>(entropy()) << 32) ^ entropy() ^ attempt;
+                fs::path candidate = destination;
+#ifdef _WIN32
+                candidate += L".spark-staging-" + std::to_wstring(nonce);
+#else
+                candidate += ".spark-staging-" + std::to_string(nonce);
+#endif
+                ec.clear();
+                if (fs::create_directory(candidate, ec))
+                    return candidate;
+                if (ec && ec != std::errc::file_exists)
+                    return {};
+            }
+            return {};
+        }
+
+        bool IsLinkOrReparsePoint(const fs::path& path)
+        {
+            std::error_code ec;
+            const fs::file_status status = fs::symlink_status(path, ec);
+            if (ec || fs::is_symlink(status))
+                return true;
+#ifdef _WIN32
+            const DWORD attributes = GetFileAttributesW(path.c_str());
+            return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+            return false;
+#endif
+        }
+
+        bool TemplateTreeContainsLinks(const fs::path& root)
+        {
+            std::error_code ec;
+            if (IsLinkOrReparsePoint(root))
+                return true;
+            for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end;
+                 !ec && it != end; it.increment(ec))
+            {
+                if (IsLinkOrReparsePoint(it->path()))
+                    return true;
+            }
+            return static_cast<bool>(ec);
         }
 
         std::string EscapeCppString(const std::string& value)
@@ -496,134 +797,407 @@ namespace SparkEditor
                                        ProjectTemplate templateType, const std::string& description)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !projectName.empty(), false);
+        SPARK_VALIDATE_RET(Spark::LogCategory::Editor, IsPortableProjectName(projectName), false);
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !parentDirectory.empty(), false);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Creating project '%s' in '%s'", projectName.c_str(),
                        parentDirectory.c_str());
-        // If engine root is set and templates exist, use template-based creation
-        if (!m_engineRoot.empty())
+        // Prefer the matching physical package when a coherent source/install
+        // template root is available. A missing package falls back to the
+        // serializer-backed generator below, so fresh source builds and lean
+        // runtime installs still create usable projects.
+        const auto* descriptor = FindProjectTemplateDescriptor(templateType);
+        std::string templateRoot;
+        try
         {
-            return CreateProjectFromTemplate(projectName, (fs::path(parentDirectory) / projectName).string(),
-                                             "EmptyProject");
+            templateRoot = ResolveTemplateRoot(m_engineRoot);
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Could not resolve the SparkEngine template root: " << e.what() << "\n";
+            return false;
+        }
+        std::error_code packageEc;
+        const bool hasPhysicalPackage =
+            descriptor && !templateRoot.empty() &&
+            fs::is_directory(PathFromUtf8(templateRoot) / descriptor->packageDirectory, packageEc) && !packageEc;
+        if (hasPhysicalPackage)
+        {
+            bool created = false;
+            try
+            {
+                created = CreateProjectFromTemplateInternal(
+                    projectName, PathToUtf8(PathFromUtf8(parentDirectory) / PathFromUtf8(projectName)),
+                    std::string(descriptor->packageDirectory), description, templateRoot);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Error preparing physical template project creation: " << e.what() << "\n";
+                return false;
+            }
+            if (created)
+                return true;
+            // A package that exists but fails to materialize is not silently
+            // replaced with different content; retain the specific failure.
+            return false;
         }
 
         std::cout << "Creating project '" << projectName << "' in " << parentDirectory << "\n";
 
-        // Build the project root: parentDirectory/projectName
-        std::string projectRoot = (fs::path(parentDirectory) / projectName).string();
+        const ProjectInfo previousProject = m_currentProject;
+        const std::string previousProjectFilePath = m_currentProjectFilePath;
+        const bool previouslyOpen = m_hasOpenProject;
+        std::error_code destinationEc;
+        fs::path destination;
+        try
+        {
+            destination = fs::absolute(PathFromUtf8(parentDirectory) / PathFromUtf8(projectName), destinationEc)
+                              .lexically_normal();
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Project destination path is invalid: " << e.what() << "\n";
+            return false;
+        }
+        if (destinationEc || destination.filename().empty())
+        {
+            std::cerr << "Project destination path is invalid.\n";
+            return false;
+        }
+        fs::path staging;
+        bool ownsStaging = false;
+        bool committed = false;
+
+        auto fail = [&](const std::string& message)
+        {
+            if (!committed)
+            {
+                if (ownsStaging)
+                {
+                    std::error_code cleanupEc;
+                    fs::remove_all(staging, cleanupEc);
+                    if (cleanupEc)
+                        std::cerr << "Could not remove failed project staging directory '" << PathToUtf8(staging)
+                                  << "': " << cleanupEc.message() << "\n";
+                }
+                m_currentProject = previousProject;
+                m_currentProjectFilePath = previousProjectFilePath;
+                m_hasOpenProject = previouslyOpen;
+            }
+            if (!message.empty())
+                std::cerr << message << "\n";
+            return false;
+        };
 
         try
         {
-            if (fs::exists(projectRoot) && !fs::is_empty(projectRoot))
-            {
-                std::cerr << "Project directory already exists and is not empty: " << projectRoot << "\n";
-                return false;
-            }
+            if (fs::exists(destination))
+                return fail("Project destination already exists: " + PathToUtf8(destination));
 
-            if (!CreateProjectStructure(projectRoot, templateType))
-            {
-                return false;
-            }
+            staging = CreateOwnedStagingDirectory(destination);
+            if (staging.empty())
+                return fail("Could not create an isolated project staging directory.");
+            ownsStaging = true;
+
+            if (!CreateProjectStructure(PathToUtf8(staging), projectName, templateType))
+                return fail("Could not create the generated project structure.");
 
             // Fill project info
             m_currentProject = ProjectInfo{};
             m_currentProject.name = projectName;
-            m_currentProject.path = NormalizeProjectPath(projectRoot);
-            m_currentProjectFilePath =
-                NormalizeProjectPath((fs::path(m_currentProject.path) / (projectName + ".sparkproject")).string());
+            m_currentProject.path = NormalizeProjectPath(PathToUtf8(staging));
+            m_currentProjectFilePath = NormalizeProjectPath(
+                PathToUtf8(PathFromUtf8(m_currentProject.path) / PathFromUtf8(projectName + ".sparkproject")));
             m_currentProject.version = "1.0.0";
             m_currentProject.description = description.empty() ? "Spark Engine Project" : description;
             m_currentProject.engineVersion = GetCurrentEngineVersion().ToString();
             m_currentProject.createdTime = GetCurrentTimestamp();
             m_currentProject.lastModified = m_currentProject.createdTime;
             m_currentProject.templateType = templateType;
+            m_currentProject.hasTemplateIdentity = true;
             m_currentProject.modules.push_back(MakeCodeIdentifier(projectName));
 
-            // Add the default scene
-            std::string defaultSceneRelative = "Scenes/Default.sparkscene";
+            // Add the descriptor-selected default scene. The fallback
+            // generator and physical package path therefore expose identical
+            // project metadata.
+            const std::string defaultSceneRelative =
+                descriptor ? std::string(descriptor->defaultScene) : "Scenes/Default.sparkscene";
             m_currentProject.scenes.push_back(defaultSceneRelative);
             m_currentProject.defaultScene = defaultSceneRelative;
             m_currentProject.lastOpenedScene = defaultSceneRelative;
 
             if (!SaveProjectFile())
-            {
-                return false;
-            }
+                return fail("Could not write the generated project document.");
+            if (!LoadProjectFile(m_currentProjectFilePath))
+                return fail("Could not validate the generated project document.");
 
+            std::string finalProjectPath = NormalizeProjectPath(PathToUtf8(destination));
+            std::string finalProjectFilePath =
+                NormalizeProjectPath(PathToUtf8(destination / PathFromUtf8(projectName + ".sparkproject")));
+            fs::rename(staging, destination);
+            committed = true;
+            ownsStaging = false;
+            m_currentProject.path = std::move(finalProjectPath);
+            m_currentProjectFilePath = std::move(finalProjectFilePath);
             m_hasOpenProject = true;
+            try
             {
                 std::lock_guard lock(s_activeProjectMutex);
                 s_activeProjectPath = m_currentProject.path;
             }
-            AddToRecentProjects(projectName, GetProjectFilePath());
+            catch (const std::exception& activePathError)
+            {
+                std::cerr << "Could not publish active project path after commit: " << activePathError.what() << "\n";
+            }
+            try
+            {
+                AddToRecentProjects(projectName, GetProjectFilePath());
+            }
+            catch (const std::exception& recentError)
+            {
+                std::cerr << "Could not update recent projects after commit: " << recentError.what() << "\n";
+            }
 
             if (m_onProjectOpened)
             {
-                m_onProjectOpened(m_currentProject);
+                try
+                {
+                    m_onProjectOpened(m_currentProject);
+                }
+                catch (const std::exception& callbackError)
+                {
+                    std::cerr << "Project-opened callback failed after commit: " << callbackError.what() << "\n";
+                }
+                catch (...)
+                {
+                    std::cerr << "Project-opened callback failed after commit.\n";
+                }
             }
 
-            std::cout << "Project created successfully: " << projectRoot << "\n";
+            std::cout << "Project created successfully: " << PathToUtf8(destination) << "\n";
             return true;
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Error creating project: " << e.what() << "\n";
-            return false;
+            return fail("Error creating project: " + std::string(e.what()));
         }
     }
 
     bool ProjectManager::CreateProjectFromTemplate(const std::string& projectName, const std::string& projectPath,
                                                    const std::string& templateName)
     {
+        try
+        {
+            return CreateProjectFromTemplateInternal(projectName, projectPath, templateName, "", "");
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Error preparing template project creation: " << e.what() << "\n";
+            return false;
+        }
+    }
+
+    bool ProjectManager::CreateProjectFromTemplateInternal(const std::string& projectName,
+                                                           const std::string& projectPath,
+                                                           const std::string& templateName,
+                                                           const std::string& description,
+                                                           const std::string& resolvedTemplateRoot)
+    {
+        if (!IsPortableProjectName(projectName))
+        {
+            std::cerr << "Project name is not a portable filesystem component: " << projectName << "\n";
+            return false;
+        }
+        if (!IsPortableProjectName(templateName))
+        {
+            std::cerr << "Template package name is not a portable filesystem component: " << templateName << "\n";
+            return false;
+        }
         std::cout << "Creating project '" << projectName << "' from template '" << templateName << "' at "
                   << projectPath << "\n";
 
-        std::string templateDir = m_engineRoot + "/Templates/" + templateName;
-        if (!fs::exists(templateDir))
+        const std::string templateRoot =
+            resolvedTemplateRoot.empty() ? ResolveTemplateRoot(m_engineRoot) : resolvedTemplateRoot;
+        if (templateRoot.empty())
+        {
+            std::cerr << "No valid SparkEngine template root was found for package: " << templateName << "\n";
+            return false;
+        }
+
+        std::error_code templateEc;
+        const fs::path canonicalTemplateRoot = fs::weakly_canonical(PathFromUtf8(templateRoot), templateEc);
+        if (templateEc)
+        {
+            std::cerr << "Template root could not be canonicalized: " << templateRoot << "\n";
+            return false;
+        }
+        templateEc.clear();
+        const fs::path canonicalTemplateDir =
+            fs::weakly_canonical(canonicalTemplateRoot / PathFromUtf8(templateName), templateEc);
+        if (templateEc)
+        {
+            std::cerr << "Template package could not be canonicalized: " << templateName << "\n";
+            return false;
+        }
+        const auto mismatchResult = std::mismatch(canonicalTemplateRoot.begin(), canonicalTemplateRoot.end(),
+                                                  canonicalTemplateDir.begin(), canonicalTemplateDir.end());
+        const bool contained = mismatchResult.first == canonicalTemplateRoot.end();
+        const std::string templateDir = PathToUtf8(canonicalTemplateDir);
+        templateEc.clear();
+        const bool isTemplateDirectory = fs::is_directory(canonicalTemplateDir, templateEc);
+        if (templateEc || !contained || !isTemplateDirectory)
         {
             std::cerr << "Template not found: " << templateDir << "\n";
             return false;
         }
 
+        const ProjectInfo previousProject = m_currentProject;
+        const std::string previousProjectFilePath = m_currentProjectFilePath;
+        const bool previouslyOpen = m_hasOpenProject;
+        std::error_code destinationEc;
+        const fs::path destination = fs::absolute(PathFromUtf8(projectPath), destinationEc).lexically_normal();
+        if (destinationEc || destination.filename().empty())
+        {
+            std::cerr << "Project destination path is invalid: " << projectPath << "\n";
+            return false;
+        }
+        fs::path staging;
+        bool ownsStaging = false;
+        bool committed = false;
+
+        auto fail = [&](const std::string& message)
+        {
+            if (!committed)
+            {
+                if (ownsStaging)
+                {
+                    std::error_code cleanupEc;
+                    fs::remove_all(staging, cleanupEc);
+                    if (cleanupEc)
+                        std::cerr << "Could not remove failed project staging directory '" << PathToUtf8(staging)
+                                  << "': " << cleanupEc.message() << "\n";
+                }
+                m_currentProject = previousProject;
+                m_currentProjectFilePath = previousProjectFilePath;
+                m_hasOpenProject = previouslyOpen;
+            }
+            if (!message.empty())
+                std::cerr << message << "\n";
+            return false;
+        };
+
         try
         {
-            // Copy template and replace placeholders
-            if (!CopyTemplate(templateDir, projectPath, projectName))
-            {
-                return false;
-            }
+            if (fs::exists(destination))
+                return fail("Project destination already exists: " + PathToUtf8(destination));
 
-            // Load the generated project settings
-            if (!LoadProjectFile(projectPath + "/" + projectName + ".sparkproject"))
+            if (TemplateTreeContainsLinks(canonicalTemplateDir))
+                return fail("Template package contains a symbolic link or reparse point: " + templateDir);
+
+            staging = CreateOwnedStagingDirectory(destination);
+            if (staging.empty())
+                return fail("Could not create an isolated project staging directory.");
+            ownsStaging = true;
+
+            if (!CopyTemplate(templateDir, PathToUtf8(staging), projectName))
+                return fail("Could not copy template package into staging directory.");
+
+            const fs::path canonicalProjectFile = staging / PathFromUtf8(projectName + ".sparkproject");
+            const fs::path legacyProjectFile = staging / "spark.project.json";
+            const fs::path sourceProjectFile =
+                fs::is_regular_file(canonicalProjectFile) ? canonicalProjectFile : legacyProjectFile;
+            if (fs::is_regular_file(sourceProjectFile))
             {
-                // Fall back: set defaults if no .sparkproject was in template
+                if (!LoadProjectFile(PathToUtf8(sourceProjectFile)))
+                    return fail("Could not load the template project metadata.");
+            }
+            else
                 m_currentProject = ProjectInfo{};
-                m_currentProject.name = projectName;
-                m_currentProject.path = NormalizeProjectPath(projectPath);
-                m_currentProjectFilePath =
-                    NormalizeProjectPath((fs::path(m_currentProject.path) / (projectName + ".sparkproject")).string());
+
+            m_currentProject.name = projectName;
+            m_currentProject.path = NormalizeProjectPath(PathToUtf8(staging));
+            m_currentProjectFilePath = NormalizeProjectPath(PathToUtf8(canonicalProjectFile));
+            if (m_currentProject.version.empty())
                 m_currentProject.version = "1.0.0";
+            if (m_currentProject.engineVersion.empty())
                 m_currentProject.engineVersion = GetCurrentEngineVersion().ToString();
-                m_currentProject.modules.push_back(MakeCodeIdentifier(projectName));
+            if (m_currentProject.createdTime == 0)
                 m_currentProject.createdTime = GetCurrentTimestamp();
-                m_currentProject.lastModified = m_currentProject.createdTime;
-                if (!SaveProjectFile())
-                    return false;
+            m_currentProject.lastModified = GetCurrentTimestamp();
+            m_currentProject.modules = {MakeCodeIdentifier(projectName)};
+
+            if (!EnsureBuildScaffold(PathToUtf8(staging), projectName))
+                return fail("Could not create the project build scaffold.");
+
+            if (const auto* descriptor = FindProjectTemplateDescriptor(templateName))
+            {
+                const fs::path defaultScene = staging / fs::path(descriptor->defaultScene);
+                if (!fs::is_regular_file(defaultScene))
+                    return fail("Template package is missing its declared default scene: " + PathToUtf8(defaultScene));
+                m_currentProject.templateType = descriptor->type;
+                m_currentProject.hasTemplateIdentity = true;
+                m_currentProject.description = description.empty() ? std::string(descriptor->description) : description;
+                m_currentProject.defaultScene = std::string(descriptor->defaultScene);
+                m_currentProject.lastOpenedScene = m_currentProject.defaultScene;
+                m_currentProject.scenes = {m_currentProject.defaultScene};
+            }
+            else if (m_currentProject.description.empty())
+            {
+                m_currentProject.description = description.empty() ? "Spark Engine Project" : description;
             }
 
-            if (!EnsureBuildScaffold(projectPath, m_currentProject.name))
-                return false;
+            if (!SaveProjectFile())
+                return fail("Could not write the canonical project document.");
+            if (!LoadProjectFile(PathToUtf8(canonicalProjectFile)))
+                return fail("Could not validate the canonical project document.");
+            if (legacyProjectFile != canonicalProjectFile)
+            {
+                std::error_code removeEc;
+                const bool removed = fs::remove(legacyProjectFile, removeEc);
+                if (removeEc || (fs::exists(legacyProjectFile) && !removed))
+                    return fail("Could not remove the legacy project document from staging.");
+            }
 
+            std::string finalProjectPath = NormalizeProjectPath(PathToUtf8(destination));
+            std::string finalProjectFilePath =
+                NormalizeProjectPath(PathToUtf8(destination / PathFromUtf8(projectName + ".sparkproject")));
+            fs::rename(staging, destination);
+            committed = true;
+            ownsStaging = false;
+            m_currentProject.path = std::move(finalProjectPath);
+            m_currentProjectFilePath = std::move(finalProjectFilePath);
             m_hasOpenProject = true;
+            try
             {
                 std::lock_guard lock(s_activeProjectMutex);
                 s_activeProjectPath = m_currentProject.path;
             }
-            AddToRecentProjects(projectName, GetProjectFilePath());
+            catch (const std::exception& activePathError)
+            {
+                std::cerr << "Could not publish active project path after commit: " << activePathError.what() << "\n";
+            }
+            try
+            {
+                AddToRecentProjects(projectName, GetProjectFilePath());
+            }
+            catch (const std::exception& recentError)
+            {
+                std::cerr << "Could not update recent projects after commit: " << recentError.what() << "\n";
+            }
 
             if (m_onProjectOpened)
             {
-                m_onProjectOpened(m_currentProject);
+                try
+                {
+                    m_onProjectOpened(m_currentProject);
+                }
+                catch (const std::exception& callbackError)
+                {
+                    std::cerr << "Project-opened callback failed after commit: " << callbackError.what() << "\n";
+                }
+                catch (...)
+                {
+                    std::cerr << "Project-opened callback failed after commit.\n";
+                }
             }
 
             std::cout << "Project '" << projectName << "' created successfully from template '" << templateName
@@ -632,8 +1206,7 @@ namespace SparkEditor
         }
         catch (const std::exception& e)
         {
-            std::cerr << "Error creating project from template: " << e.what() << "\n";
-            return false;
+            return fail("Error creating project from template: " + std::string(e.what()));
         }
     }
 
@@ -642,12 +1215,23 @@ namespace SparkEditor
     {
         try
         {
-            // Copy the entire template directory
-            fs::copy(templatePath, destPath, fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+            const fs::path sourceRoot = PathFromUtf8(templatePath);
+            const fs::path destinationRoot = PathFromUtf8(destPath);
+            if (!fs::is_directory(sourceRoot) || !fs::is_directory(destinationRoot) || !fs::is_empty(destinationRoot) ||
+                TemplateTreeContainsLinks(sourceRoot))
+            {
+                std::cerr << "Template copy requires a link-free source and an empty owned destination.\n";
+                return false;
+            }
+            for (const auto& source : fs::directory_iterator(sourceRoot))
+            {
+                fs::copy(source.path(), destinationRoot / source.path().filename(),
+                         fs::copy_options::recursive | fs::copy_options::overwrite_existing);
+            }
 
             // Text file extensions that should have their template name rewritten
-            static const std::set<std::string> textExtensions = {".h",    ".hpp",   ".cpp", ".c", ".txt",
-                                                                 ".json", ".cmake", ".md",  ".py"};
+            static const std::set<std::string> textExtensions = {
+                ".h", ".hpp", ".cpp", ".c", ".txt", ".json", ".cmake", ".md", ".py", ".sparkproject", ".sparkscene"};
 
             // Templates are shipped as real, compilable game modules named after
             // their directory (e.g. `Templates/FPSStarter` uses `FPSStarterModule`,
@@ -655,17 +1239,26 @@ namespace SparkEditor
             // materialize a user project from a template, rewrite every textual
             // occurrence of the template's name to the user's chosen project name
             // so they do not have to do it by hand.
-            const std::string templateName = fs::path(templatePath).filename().string();
-            if (templateName.empty() || templateName == projectName)
+            const std::string templateName = PathToUtf8(sourceRoot.filename());
+            const std::string codeIdentifier = MakeCodeIdentifier(projectName);
+            if (templateName.empty())
             {
-                // Nothing to rewrite — the copy is the final artifact.
                 return true;
             }
 
-            for (auto& entry : fs::recursive_directory_iterator(destPath))
+            std::vector<std::pair<fs::path, fs::path>> renames;
+            for (auto& entry : fs::recursive_directory_iterator(destinationRoot))
             {
                 if (!entry.is_regular_file())
                     continue;
+
+                const std::string filename = PathToUtf8(entry.path().filename());
+                if (const size_t token = filename.find(templateName); token != std::string::npos)
+                {
+                    std::string renamed = filename;
+                    renamed.replace(token, templateName.size(), projectName);
+                    renames.emplace_back(entry.path(), entry.path().parent_path() / PathFromUtf8(renamed));
+                }
 
                 auto ext = entry.path().extension().string();
                 if (!Spark::ContainerUtils::Contains(textExtensions, ext))
@@ -673,9 +1266,11 @@ namespace SparkEditor
 
                 std::ifstream inFile(entry.path());
                 if (!inFile.is_open())
-                    continue;
+                    return false;
 
                 std::string content((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
+                if (inFile.bad())
+                    return false;
                 inFile.close();
 
                 if (!content.contains(templateName))
@@ -684,16 +1279,29 @@ namespace SparkEditor
                 size_t pos = 0;
                 while ((pos = content.find(templateName, pos)) != std::string::npos)
                 {
-                    content.replace(pos, templateName.length(), projectName);
-                    pos += projectName.length();
+                    // Package tokens participate in C++ symbols, CMake targets,
+                    // and module binary stems. Never substitute the UTF-8
+                    // display name into those identifier-bearing surfaces.
+                    content.replace(pos, templateName.length(), codeIdentifier);
+                    pos += codeIdentifier.length();
                 }
 
                 std::ofstream outFile(entry.path());
-                if (outFile.is_open())
-                {
-                    outFile << content;
-                    outFile.close();
-                }
+                if (!outFile.is_open())
+                    return false;
+                outFile << content;
+                outFile.flush();
+                if (!outFile.good())
+                    return false;
+                outFile.close();
+                if (outFile.fail())
+                    return false;
+            }
+
+            for (const auto& [source, destination] : renames)
+            {
+                if (source != destination)
+                    fs::rename(source, destination);
             }
 
             return true;
@@ -712,67 +1320,72 @@ namespace SparkEditor
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading project from '%s'", sparkprojectPath.c_str());
         std::cout << "Opening project: " << sparkprojectPath << "\n";
 
-        // Accept either a .sparkproject file or a directory containing one
-        std::string resolvedPath = sparkprojectPath;
-        if (fs::is_directory(sparkprojectPath))
+        try
         {
-            // Search for .sparkproject file inside
-            for (auto& entry : fs::directory_iterator(sparkprojectPath))
+
+            // Accept either a .sparkproject file or a directory containing one
+            std::string resolvedPath = sparkprojectPath;
+            const fs::path requestedPath = PathFromUtf8(sparkprojectPath);
+            std::error_code pathEc;
+            if (fs::is_directory(requestedPath, pathEc) && !pathEc)
             {
-                if (entry.path().extension() == ".sparkproject")
+                // Search for .sparkproject file inside
+                for (auto& entry : fs::directory_iterator(requestedPath))
                 {
-                    resolvedPath = entry.path().string();
-                    break;
+                    if (entry.path().extension() == ".sparkproject")
+                    {
+                        resolvedPath = PathToUtf8(entry.path());
+                        break;
+                    }
+                }
+                // Also try spark.project.json (new module format)
+                if (resolvedPath == sparkprojectPath)
+                {
+                    const fs::path sparkJson = requestedPath / "spark.project.json";
+                    if (fs::exists(sparkJson))
+                        resolvedPath = PathToUtf8(sparkJson);
                 }
             }
-            // Also try spark.project.json (new module format)
-            if (resolvedPath == sparkprojectPath)
+
+            if (!fs::exists(PathFromUtf8(resolvedPath)))
             {
-                std::string sparkJson = sparkprojectPath + "/spark.project.json";
-                if (fs::exists(sparkJson))
-                {
-                    resolvedPath = sparkJson;
-                }
+                std::cerr << "Project file not found: " << resolvedPath << "\n";
+                return false;
             }
-        }
 
-        if (!fs::exists(resolvedPath))
+            if (m_hasOpenProject)
+            {
+                SaveProject();
+                CloseProject();
+            }
+
+            if (!LoadProjectFile(resolvedPath))
+                return false;
+
+            // Older editor-created projects predate the standalone build skeleton.
+            // Add only missing generated files; never overwrite user-authored build
+            // scripts or module sources.
+            if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name))
+                return false;
+
+            m_hasOpenProject = true;
+            {
+                std::lock_guard lock(s_activeProjectMutex);
+                s_activeProjectPath = NormalizeProjectPath(m_currentProject.path);
+            }
+            m_currentProject.lastModified = GetCurrentTimestamp();
+            AddToRecentProjects(m_currentProject.name, resolvedPath);
+
+            if (m_onProjectOpened)
+                m_onProjectOpened(m_currentProject);
+
+            return true;
+        }
+        catch (const std::exception& e)
         {
-            std::cerr << "Project file not found: " << resolvedPath << "\n";
+            std::cerr << "Error opening project: " << e.what() << "\n";
             return false;
         }
-
-        if (m_hasOpenProject)
-        {
-            SaveProject();
-            CloseProject();
-        }
-
-        if (!LoadProjectFile(resolvedPath))
-        {
-            return false;
-        }
-
-        // Older editor-created projects predate the standalone build skeleton.
-        // Add only missing generated files; never overwrite user-authored build
-        // scripts or module sources.
-        if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name))
-            return false;
-
-        m_hasOpenProject = true;
-        {
-            std::lock_guard lock(s_activeProjectMutex);
-            s_activeProjectPath = NormalizeProjectPath(m_currentProject.path);
-        }
-        m_currentProject.lastModified = GetCurrentTimestamp();
-        AddToRecentProjects(m_currentProject.name, resolvedPath);
-
-        if (m_onProjectOpened)
-        {
-            m_onProjectOpened(m_currentProject);
-        }
-
-        return true;
     }
 
     bool ProjectManager::SaveProject()
@@ -874,7 +1487,7 @@ namespace SparkEditor
         if (m_currentProject.path.empty() || m_currentProject.name.empty())
             return {};
         return NormalizeProjectPath(
-            (fs::path(m_currentProject.path) / (m_currentProject.name + ".sparkproject")).string());
+            PathToUtf8(PathFromUtf8(m_currentProject.path) / PathFromUtf8(m_currentProject.name + ".sparkproject")));
     }
 
     std::string ProjectManager::GetActiveProjectPath()
@@ -964,7 +1577,7 @@ namespace SparkEditor
 
         if (content.empty())
         {
-            std::ifstream file(sparkprojectPath);
+            std::ifstream file(PathFromUtf8(sparkprojectPath));
             if (!file.is_open())
             {
                 std::cerr << "Could not open project file: " << sparkprojectPath << "\n";
@@ -978,6 +1591,7 @@ namespace SparkEditor
         std::string version = ExtractJsonString(content, "version");
         std::string description = ExtractJsonString(content, "description");
         std::string engineVer = ExtractJsonString(content, "engineVersion");
+        std::string templateId = ExtractJsonString(content, "template");
         std::string defaultScene = ExtractJsonString(content, "defaultScene");
         std::string lastScene = ExtractJsonString(content, "lastOpenedScene");
         uint64_t lastModified = ExtractJsonUint64(content, "lastModified");
@@ -989,11 +1603,12 @@ namespace SparkEditor
         // name. On macOS, normalization also resolves /var -> /private/var;
         // every public project path then uses the same canonical spelling.
         const std::string normalizedProjectFile = NormalizeProjectPath(sparkprojectPath);
-        std::string projectRoot = fs::path(normalizedProjectFile).parent_path().string();
+        const fs::path projectRootPath = PathFromUtf8(normalizedProjectFile).parent_path();
+        std::string projectRoot = PathToUtf8(projectRootPath);
 
         m_currentProject = ProjectInfo{};
         m_currentProjectFilePath = normalizedProjectFile;
-        m_currentProject.name = name.empty() ? fs::path(projectRoot).filename().string() : name;
+        m_currentProject.name = name.empty() ? PathToUtf8(projectRootPath.filename()) : name;
         m_currentProject.path = projectRoot;
         m_currentProject.version = version.empty() ? "1.0.0" : version;
         m_currentProject.description = description.empty() ? "Spark Engine Project" : description;
@@ -1004,6 +1619,11 @@ namespace SparkEditor
         m_currentProject.createdTime = createdTime;
         m_currentProject.scenes = scenes;
         m_currentProject.modules = modules;
+        if (const auto* descriptor = FindProjectTemplateDescriptor(templateId))
+        {
+            m_currentProject.templateType = descriptor->type;
+            m_currentProject.hasTemplateIdentity = true;
+        }
 
         std::cout << "Loaded project: " << m_currentProject.name << " v" << m_currentProject.version << " (engine "
                   << m_currentProject.engineVersion << ")\n";
@@ -1017,9 +1637,10 @@ namespace SparkEditor
         try
         {
             // Ensure directory exists
-            fs::create_directories(fs::path(filePath).parent_path());
+            const fs::path nativeFilePath = PathFromUtf8(filePath);
+            fs::create_directories(nativeFilePath.parent_path());
 
-            std::ofstream file(filePath);
+            std::ofstream file(nativeFilePath);
             if (!file.is_open())
             {
                 std::cerr << "Failed to open project file for writing: " << filePath << "\n";
@@ -1032,6 +1653,9 @@ namespace SparkEditor
             file << "  \"version\": \"" << EscapeJsonString(m_currentProject.version) << "\",\n";
             file << "  \"description\": \"" << EscapeJsonString(m_currentProject.description) << "\",\n";
             file << "  \"engineVersion\": \"" << EscapeJsonString(m_currentProject.engineVersion) << "\",\n";
+            if (m_currentProject.hasTemplateIdentity)
+                if (const auto* descriptor = FindProjectTemplateDescriptor(m_currentProject.templateType))
+                    file << "  \"template\": \"" << EscapeJsonString(std::string(descriptor->stableId)) << "\",\n";
             file << "  \"defaultScene\": \"" << EscapeJsonString(m_currentProject.defaultScene) << "\",\n";
             file << "  \"lastOpenedScene\": \"" << EscapeJsonString(m_currentProject.lastOpenedScene) << "\",\n";
             file << "  \"createdTime\": " << m_currentProject.createdTime << ",\n";
@@ -1060,7 +1684,18 @@ namespace SparkEditor
             file << "  ]\n";
             file << "}\n";
 
+            file.flush();
+            if (!file.good())
+            {
+                std::cerr << "Failed while writing project file: " << filePath << "\n";
+                return false;
+            }
             file.close();
+            if (file.fail())
+            {
+                std::cerr << "Failed while closing project file: " << filePath << "\n";
+                return false;
+            }
 
             if (m_fileCache)
             {
@@ -1080,51 +1715,49 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     // Project structure creation
     // ------------------------------------------------------------------
-    bool ProjectManager::CreateProjectStructure(const std::string& projectPath, ProjectTemplate templateType)
+    bool ProjectManager::CreateProjectStructure(const std::string& projectPath, const std::string& projectName,
+                                                ProjectTemplate templateType)
     {
         try
         {
-            fs::create_directories(projectPath);
+            const fs::path root = PathFromUtf8(projectPath);
+            fs::create_directories(root);
 
             // Core directories every project needs
-            fs::create_directories(projectPath + "/Source");
-            fs::create_directories(projectPath + "/Assets");
-            fs::create_directories(projectPath + "/Assets/Textures");
-            fs::create_directories(projectPath + "/Assets/Models");
-            fs::create_directories(projectPath + "/Assets/Materials");
-            fs::create_directories(projectPath + "/Assets/Audio");
-            fs::create_directories(projectPath + "/Assets/Fonts");
-            fs::create_directories(projectPath + "/Assets/Prefabs");
-            fs::create_directories(projectPath + "/Scenes");
-            fs::create_directories(projectPath + "/Scripts");
-            fs::create_directories(projectPath + "/Config");
-            fs::create_directories(projectPath + "/Temp");
-            fs::create_directories(projectPath + "/Saved");
-            fs::create_directories(projectPath + "/Saved/Backups");
+            for (const fs::path& directory :
+                 {root / "Source", root / "Assets", root / "Assets/Textures", root / "Assets/Models",
+                  root / "Assets/Materials", root / "Assets/Audio", root / "Assets/Fonts", root / "Assets/Prefabs",
+                  root / "Scenes", root / "Scripts", root / "Config", root / "Temp", root / "Saved",
+                  root / "Saved/Backups"})
+                fs::create_directories(directory);
 
             // Template-specific directories
             if (templateType == ProjectTemplate::FirstPerson || templateType == ProjectTemplate::ThirdPerson)
             {
-                fs::create_directories(projectPath + "/Assets/Characters");
-                fs::create_directories(projectPath + "/Assets/Weapons");
-                fs::create_directories(projectPath + "/Assets/UI");
+                fs::create_directories(root / "Assets/Characters");
+                fs::create_directories(root / "Assets/Weapons");
+                fs::create_directories(root / "Assets/UI");
             }
 
             // Create a scene through the same serializer the editor uses to
             // open/save it. Hand-written legacy JSON here used a different
             // schema and appeared empty as soon as the project opened.
-            if (!CreateDefaultScene(projectPath + "/Scenes/Default.sparkscene", templateType))
+            const auto* descriptor = FindProjectTemplateDescriptor(templateType);
+            const fs::path scenePath =
+                root / (descriptor ? fs::path(descriptor->defaultScene) : fs::path("Scenes/Default.sparkscene"));
+            fs::create_directories(scenePath.parent_path());
+            if (!CreateDefaultScene(PathToUtf8(scenePath), templateType))
                 return false;
 
             // Create editor settings
-            CreateDefaultEditorSettings(projectPath + "/Config");
+            CreateDefaultEditorSettings(PathToUtf8(root / "Config"));
 
-            if (!EnsureBuildScaffold(projectPath, fs::path(projectPath).filename().string()))
+            if (!EnsureBuildScaffold(projectPath, projectName))
                 return false;
 
             // Create .gitignore for the project
             {
-                std::ofstream gitignore(projectPath + "/.gitignore");
+                std::ofstream gitignore(root / ".gitignore");
                 if (gitignore.is_open())
                 {
                     gitignore << "# Spark Engine Project\n";
@@ -1220,7 +1853,7 @@ namespace SparkEditor
     {
         try
         {
-            const fs::path root = fs::absolute(projectPath).lexically_normal();
+            const fs::path root = fs::absolute(PathFromUtf8(projectPath)).lexically_normal();
             const fs::path source = root / "Source";
             fs::create_directories(source);
 
@@ -1300,7 +1933,7 @@ namespace SparkEditor
 
     void ProjectManager::CreateDefaultEditorSettings(const std::string& configPath)
     {
-        std::ofstream file(configPath + "/EditorSettings.json");
+        std::ofstream file(PathFromUtf8(configPath) / "EditorSettings.json");
         if (!file.is_open())
             return;
 
@@ -1334,10 +1967,10 @@ namespace SparkEditor
     std::string ProjectManager::GetEditorDataDirectory()
     {
 #ifdef _WIN32
-        char appDataPath[MAX_PATH];
-        if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_APPDATA, nullptr, 0, appDataPath)))
+        wchar_t appDataPath[MAX_PATH];
+        if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, appDataPath)))
         {
-            return std::string(appDataPath) + "\\SparkEngine\\Editor";
+            return PathToUtf8(fs::path(appDataPath) / "SparkEngine" / "Editor");
         }
         return "./SparkEditor";
 #else
@@ -1352,7 +1985,7 @@ namespace SparkEditor
 
     std::string ProjectManager::GetRecentProjectsFilePath()
     {
-        return (fs::path(GetEditorDataDirectory()) / "RecentProjects.json").string();
+        return PathToUtf8(PathFromUtf8(GetEditorDataDirectory()) / "RecentProjects.json");
     }
 
     void ProjectManager::LoadRecentProjectsList()
@@ -1377,19 +2010,19 @@ namespace SparkEditor
         // repeated load/save cycles). Start fresh rather than parse it.
         {
             std::error_code sizeEc;
-            const auto sz = fs::file_size(filePath, sizeEc);
+            const auto sz = fs::file_size(PathFromUtf8(filePath), sizeEc);
             if (!sizeEc && sz > 1024 * 1024)
             {
                 std::cerr << "RecentProjects.json is " << sz << " bytes - corrupt/runaway, resetting.\n";
                 std::error_code rmEc;
-                fs::remove(filePath, rmEc);
+                fs::remove(PathFromUtf8(filePath), rmEc);
                 return;
             }
         }
 
         if (content.empty())
         {
-            std::ifstream file(filePath);
+            std::ifstream file(PathFromUtf8(filePath));
             if (!file.is_open())
                 return;
             content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -1432,7 +2065,8 @@ namespace SparkEditor
                 rp.path = NormalizeProjectPath(path);
                 rp.engineVersion = engineVer;
                 rp.lastOpened = lastOpened;
-                rp.valid = fs::exists(path);
+                std::error_code existsEc;
+                rp.valid = fs::exists(PathFromUtf8(path), existsEc) && !existsEc;
                 m_recentProjects.push_back(rp);
             }
 
@@ -1448,9 +2082,10 @@ namespace SparkEditor
 
         try
         {
-            fs::create_directories(fs::path(filePath).parent_path());
+            const fs::path nativeFilePath = PathFromUtf8(filePath);
+            fs::create_directories(nativeFilePath.parent_path());
 
-            std::ofstream file(filePath);
+            std::ofstream file(nativeFilePath);
             if (!file.is_open())
                 return;
 

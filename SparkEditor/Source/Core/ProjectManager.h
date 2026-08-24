@@ -85,6 +85,7 @@ namespace SparkEditor
         uint64_t lastModified = 0;        ///< Last modified timestamp (epoch seconds)
         uint64_t createdTime = 0;         ///< Creation timestamp (epoch seconds)
         ProjectTemplate templateType = ProjectTemplate::Blank3D;
+        bool hasTemplateIdentity = false; ///< True only when templateType came from a registered stable ID.
     };
 
     /**
@@ -177,7 +178,11 @@ namespace SparkEditor
       private:
         bool LoadProjectFile(const std::string& sparkprojectPath);
         bool SaveProjectFile();
-        bool CreateProjectStructure(const std::string& projectPath, ProjectTemplate templateType);
+        bool CreateProjectFromTemplateInternal(const std::string& projectName, const std::string& projectPath,
+                                               const std::string& templateName, const std::string& description,
+                                               const std::string& resolvedTemplateRoot);
+        bool CreateProjectStructure(const std::string& projectPath, const std::string& projectName,
+                                    ProjectTemplate templateType);
         bool CreateDefaultScene(const std::string& scenePath, ProjectTemplate templateType);
         bool EnsureBuildScaffold(const std::string& projectPath, const std::string& projectName);
         void CreateDefaultEditorSettings(const std::string& configPath);
