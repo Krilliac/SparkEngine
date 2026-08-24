@@ -55,8 +55,8 @@ namespace SparkEditor
         {
             if (name.empty() || name == "." || name == "..")
                 return false;
-            return std::none_of(name.begin(), name.end(), [](unsigned char c)
-                                { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
+            return std::none_of(name.begin(), name.end(),
+                                [](unsigned char c) { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
         }
     } // namespace
 

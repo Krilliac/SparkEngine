@@ -302,16 +302,16 @@ namespace SparkEditor
         const auto& transform = cameras.get<::Transform>(cameraEntity);
         const auto& camera = cameras.get<::Camera>(cameraEntity);
         using namespace DirectX;
-        const XMMATRIX rotation = XMMatrixRotationRollPitchYaw(
-            XMConvertToRadians(transform.rotation.x), XMConvertToRadians(transform.rotation.y),
-            XMConvertToRadians(transform.rotation.z));
+        const XMMATRIX rotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(transform.rotation.x),
+                                                               XMConvertToRadians(transform.rotation.y),
+                                                               XMConvertToRadians(transform.rotation.z));
         const XMVECTOR eye = XMLoadFloat3(&transform.position);
         const XMVECTOR forward = XMVector3TransformNormal(XMVectorSet(0, 0, 1, 0), rotation);
         const XMVECTOR up = XMVector3TransformNormal(XMVectorSet(0, 1, 0, 0), rotation);
         const XMMATRIX view = XMMatrixLookAtLH(eye, XMVectorAdd(eye, forward), up);
         const float aspect = static_cast<float>(width) / static_cast<float>(height);
-        const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(camera.fov), aspect, camera.nearPlane,
-                                                       camera.farPlane);
+        const XMMATRIX proj =
+            XMMatrixPerspectiveFovLH(XMConvertToRadians(camera.fov), aspect, camera.nearPlane, camera.farPlane);
 
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> previousRTV;
         Microsoft::WRL::ComPtr<ID3D11DepthStencilView> previousDSV;
@@ -699,57 +699,58 @@ namespace SparkEditor
             drawList->AddRectFilled(pos, ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y),
                                     IM_COL32(20, 22, 28, 255));
 
-        // Simulated sky gradient
-        float horizonY = viewportSize.y * 0.55f;
-        for (int y = 0; y < (int)horizonY; y++)
-        {
-            float t = (float)y / horizonY;
-            int r = (int)(15 + t * 35);
-            int g = (int)(25 + t * 50);
-            int b = (int)(50 + t * 60);
-            drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(pos.x + viewportSize.x, pos.y + y),
-                              IM_COL32(r, g, b, 255));
-        }
+            // Simulated sky gradient
+            float horizonY = viewportSize.y * 0.55f;
+            for (int y = 0; y < (int)horizonY; y++)
+            {
+                float t = (float)y / horizonY;
+                int r = (int)(15 + t * 35);
+                int g = (int)(25 + t * 50);
+                int b = (int)(50 + t * 60);
+                drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(pos.x + viewportSize.x, pos.y + y),
+                                  IM_COL32(r, g, b, 255));
+            }
 
-        // Ground
-        float groundY = pos.y + horizonY;
-        drawList->AddRectFilled(ImVec2(pos.x, groundY), ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y),
-                                IM_COL32(32, 38, 28, 255));
+            // Ground
+            float groundY = pos.y + horizonY;
+            drawList->AddRectFilled(ImVec2(pos.x, groundY), ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y),
+                                    IM_COL32(32, 38, 28, 255));
 
-        // Perspective grid on ground
-        float cx = pos.x + viewportSize.x * 0.5f;
-        for (int i = -15; i <= 15; i++)
-        {
-            float spread = (float)i * viewportSize.x * 0.06f;
-            float topX = cx + spread * 0.1f;
-            float bottomX = cx + spread;
-            drawList->AddLine(ImVec2(topX, groundY), ImVec2(bottomX, pos.y + viewportSize.y),
-                              IM_COL32(45, 52, 38, 180));
-        }
-        for (int i = 1; i <= 8; i++)
-        {
-            float t = (float)i / 8.0f;
-            float y = groundY + t * (viewportSize.y - horizonY);
-            float alpha = 180.0f * (1.0f - t * 0.5f);
-            drawList->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + viewportSize.x, y), IM_COL32(45, 52, 38, (int)alpha));
-        }
+            // Perspective grid on ground
+            float cx = pos.x + viewportSize.x * 0.5f;
+            for (int i = -15; i <= 15; i++)
+            {
+                float spread = (float)i * viewportSize.x * 0.06f;
+                float topX = cx + spread * 0.1f;
+                float bottomX = cx + spread;
+                drawList->AddLine(ImVec2(topX, groundY), ImVec2(bottomX, pos.y + viewportSize.y),
+                                  IM_COL32(45, 52, 38, 180));
+            }
+            for (int i = 1; i <= 8; i++)
+            {
+                float t = (float)i / 8.0f;
+                float y = groundY + t * (viewportSize.y - horizonY);
+                float alpha = 180.0f * (1.0f - t * 0.5f);
+                drawList->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + viewportSize.x, y),
+                                  IM_COL32(45, 52, 38, (int)alpha));
+            }
 
-        // Some distant structures for atmosphere
-        float structY = groundY - 5.0f;
-        for (int i = 0; i < 5; i++)
-        {
-            float sx = pos.x + viewportSize.x * (0.1f + i * 0.2f);
-            float sw = 30.0f + (float)((i * 17) % 40);
-            float sh = 15.0f + (float)((i * 23) % 30);
-            drawList->AddRectFilled(ImVec2(sx, structY - sh), ImVec2(sx + sw, structY), IM_COL32(40, 45, 50, 150));
-        }
+            // Some distant structures for atmosphere
+            float structY = groundY - 5.0f;
+            for (int i = 0; i < 5; i++)
+            {
+                float sx = pos.x + viewportSize.x * (0.1f + i * 0.2f);
+                float sw = 30.0f + (float)((i * 17) % 40);
+                float sh = 15.0f + (float)((i * 23) % 30);
+                drawList->AddRectFilled(ImVec2(sx, structY - sh), ImVec2(sx + sw, structY), IM_COL32(40, 45, 50, 150));
+            }
         }
 
         // "Game View" center text (subtle) — show capture hint when not captured
         if (!m_isCursorCaptured)
         {
-            const char* label = m_isPlaying ? ICON_FA_GAMEPAD " Click to enter Game View"
-                                            : ICON_FA_PLAY " Press F5 to play";
+            const char* label =
+                m_isPlaying ? ICON_FA_GAMEPAD " Click to enter Game View" : ICON_FA_PLAY " Press F5 to play";
             ImVec2 textSize = ImGui::CalcTextSize(label);
             ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f);
             drawList->AddText(textPos, IM_COL32(80, 100, 120, 140), label);

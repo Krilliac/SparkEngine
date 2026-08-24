@@ -144,9 +144,9 @@ namespace SparkEditor
 
                 m_playMode = m_playModeManager.IsPlaying()
                                  ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating() ? PlayMode::Simulating
-                                                                    : (m_playModeManager.IsPaused() ? PlayMode::Paused
-                                                                                                    : PlayMode::Stopped));
+                                 : (m_playModeManager.IsSimulating()
+                                        ? PlayMode::Simulating
+                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
                 const bool running = m_playMode != PlayMode::Stopped;
                 ShowNotification(running ? "Running..." : "Unable to enter play mode", running ? "success" : "error");
             },

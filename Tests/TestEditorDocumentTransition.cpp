@@ -51,8 +51,7 @@ TEST(DocumentTransition_SaveOrDiscardReleasesExactlyOneAction)
 {
     DocumentTransitionGuard saveGuard;
     saveGuard.Request(DocumentTransitionAction::OpenSceneDialog, true);
-    EXPECT_TRUE(saveGuard.Resolve(UnsavedChangesDecision::Save, true) ==
-                DocumentTransitionAction::OpenSceneDialog);
+    EXPECT_TRUE(saveGuard.Resolve(UnsavedChangesDecision::Save, true) == DocumentTransitionAction::OpenSceneDialog);
     EXPECT_FALSE(saveGuard.HasPending());
 
     DocumentTransitionGuard discardGuard;

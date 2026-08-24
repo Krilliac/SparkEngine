@@ -34,8 +34,7 @@ namespace SparkEditor
         }
 
         // Try to merge with the last command (e.g., continuous transform drags)
-        const bool atTransientBarrier =
-            m_transientSessionActive && m_undoStack.size() == m_transientUndoCheckpoint;
+        const bool atTransientBarrier = m_transientSessionActive && m_undoStack.size() == m_transientUndoCheckpoint;
         if (!atTransientBarrier && !m_undoStack.empty() && m_undoStack.back()->MergeWith(command.get()))
         {
             ++m_editSequence;

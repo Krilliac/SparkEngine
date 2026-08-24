@@ -43,7 +43,9 @@ namespace SparkEditor
         namespace fs = std::filesystem;
         const std::vector<fs::path> fontPaths = {
             fs::path(GetEditorExecutableDirectory()) / "EditorAssets" / "Fonts",
-            fs::path("EditorAssets") / "Fonts", fs::path("Fonts"), fs::path("../SparkEditor/Fonts"),
+            fs::path("EditorAssets") / "Fonts",
+            fs::path("Fonts"),
+            fs::path("../SparkEditor/Fonts"),
             fs::path("../Fonts"),
         };
 

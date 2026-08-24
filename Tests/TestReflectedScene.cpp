@@ -18,7 +18,7 @@ TEST(ReflectedScene_RoundTrip_TransformAndMesh)
     EntityID ground = src.CreateEntity("Ground");
     Transform& gt = src.AddComponent<Transform>(ground);
     gt.position = {1.0f, 2.0f, 3.0f};
-    gt.scale    = {10.0f, 1.0f, 10.0f};
+    gt.scale = {10.0f, 1.0f, 10.0f};
     MeshRenderer& gm = src.AddComponent<MeshRenderer>(ground);
     gm.meshPath = "Assets/Models/x.obj";
     gm.materialPath = "Assets/Materials/y.json";
@@ -38,10 +38,12 @@ TEST(ReflectedScene_RoundTrip_TransformAndMesh)
 
     // Find the entity named "Ground" and verify its fields survived.
     bool foundGround = false, foundChildParented = false;
-    for (auto e : dst.GetEntitiesWith<Transform>()) {
+    for (auto e : dst.GetEntitiesWith<Transform>())
+    {
         const NameComponent* nc = dst.GetComponent<NameComponent>(e);
         const Transform* t = dst.GetComponent<Transform>(e);
-        if (nc && nc->name == "Ground") {
+        if (nc && nc->name == "Ground")
+        {
             foundGround = true;
             EXPECT_NEAR(t->position.x, 1.0f, 0.001f);
             EXPECT_NEAR(t->position.y, 2.0f, 0.001f);
@@ -52,7 +54,8 @@ TEST(ReflectedScene_RoundTrip_TransformAndMesh)
             EXPECT_STR_CONTAINS(mr->meshPath, "x.obj");
             EXPECT_STR_CONTAINS(mr->materialPath, "y.json");
         }
-        if (nc && nc->name == "Prop") {
+        if (nc && nc->name == "Prop")
+        {
             EXPECT_TRUE(t->parent != entt::null); // parent resolved
             foundChildParented = true;
         }
@@ -66,8 +69,8 @@ TEST(ReflectedScene_FieldCoverage_ScalarsAndVectors)
     World w;
     EntityID e = w.CreateEntity("Probe");
     MeshRenderer& mr = w.AddComponent<MeshRenderer>(e);
-    mr.visible = false;               // Bool
-    mr.meshPath = "a/b/c.obj";        // String
+    mr.visible = false;        // Bool
+    mr.meshPath = "a/b/c.obj"; // String
     Transform& t = w.AddComponent<Transform>(e);
     t.rotation = {15.0f, 30.0f, 45.0f}; // Vector3
 
@@ -100,7 +103,7 @@ TEST(ReflectedScene_RoundTrip_EnumAndMaskFieldsSurvive)
     rb.motionQuality = RigidBodyComponent::MotionQuality::LinearCast; // non-default (was Discrete)
 
     CollisionMaskComponent& cm = src.AddComponent<CollisionMaskComponent>(e);
-    cm.fromMask = CollisionLayer::Enemy;                       // non-default (was All)
+    cm.fromMask = CollisionLayer::Enemy;                                // non-default (was All)
     cm.intoMask = CollisionLayer::Player | CollisionLayer::Environment; // non-default (was All)
 
     const std::string json = SerializeWorld(src);

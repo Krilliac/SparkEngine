@@ -8,11 +8,10 @@ namespace
     std::unique_ptr<SparkEditor::EditorCommand> SetValue(int& value, int next)
     {
         const int previous = value;
-        return std::make_unique<SparkEditor::LambdaEditorCommand>([&value, next]() { value = next; },
-                                                                  [&value, previous]() { value = previous; },
-                                                                  "Set value");
+        return std::make_unique<SparkEditor::LambdaEditorCommand>(
+            [&value, next]() { value = next; }, [&value, previous]() { value = previous; }, "Set value");
     }
-}
+} // namespace
 
 TEST(UndoRedoProduction_TransientRollbackPreservesDocumentUndo)
 {

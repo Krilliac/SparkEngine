@@ -181,8 +181,8 @@ namespace SparkEditor
                 }
                 if (!m_lastOperationMessage.empty())
                 {
-                    const ImVec4 color = m_lastOperationSucceeded ? ImVec4(0.45f, 0.85f, 0.5f, 1.0f)
-                                                                  : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
+                    const ImVec4 color =
+                        m_lastOperationSucceeded ? ImVec4(0.45f, 0.85f, 0.5f, 1.0f) : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
                     ImGui::TextColored(color, "%s", m_lastOperationMessage.c_str());
                 }
                 ImGui::EndPopup();
@@ -234,8 +234,8 @@ namespace SparkEditor
             if (!m_lastOperationMessage.empty())
             {
                 ImGui::SameLine();
-                const ImVec4 color = m_lastOperationSucceeded ? ImVec4(0.45f, 0.85f, 0.5f, 1.0f)
-                                                              : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
+                const ImVec4 color =
+                    m_lastOperationSucceeded ? ImVec4(0.45f, 0.85f, 0.5f, 1.0f) : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
                 ImGui::TextColored(color, "%s", m_lastOperationMessage.c_str());
             }
 
@@ -402,15 +402,14 @@ namespace SparkEditor
                 const ImVec2 pos = ImGui::GetCursorScreenPos();
                 const ImVec2 size(m_thumbnailSize, m_thumbnailSize);
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
-                drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(40, 43, 50, 255),
-                                        4.0f);
+                drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(40, 43, 50, 255), 4.0f);
                 drawList->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(70, 75, 86, 255), 4.0f);
 
                 const char* icon = ICON_FA_FOLDER;
                 const ImVec2 iconSize = ImGui::CalcTextSize(icon);
-                drawList->AddText(ImVec2(pos.x + (size.x - iconSize.x) * 0.5f,
-                                         pos.y + (size.y - iconSize.y) * 0.5f - 4.0f),
-                                  IM_COL32(235, 190, 85, 255), icon);
+                drawList->AddText(
+                    ImVec2(pos.x + (size.x - iconSize.x) * 0.5f, pos.y + (size.y - iconSize.y) * 0.5f - 4.0f),
+                    IM_COL32(235, 190, 85, 255), icon);
 
                 ImGui::SetCursorScreenPos(pos);
                 ImGui::InvisibleButton(("##folder_" + folder).c_str(), size);

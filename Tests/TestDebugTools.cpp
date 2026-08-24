@@ -622,9 +622,9 @@ TEST(FileLogger_DirectoryWithoutTrailingSeparatorCreatesContainedLog)
     auto& logger = Spark::FileLogger::GetInstance();
     logger.Shutdown();
 
-    const auto root = std::filesystem::temp_directory_path() /
-                      ("spark-filelogger-" +
-                       std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
+    const auto root =
+        std::filesystem::temp_directory_path() /
+        ("spark-filelogger-" + std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
     const auto logs = root / "Logs";
     EXPECT_TRUE(logger.Initialize(logs.string(), Spark::FileLogLevel::Debug));
     const std::filesystem::path logPath = logger.GetCurrentFilePath();
