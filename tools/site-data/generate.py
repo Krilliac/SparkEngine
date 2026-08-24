@@ -299,14 +299,18 @@ def slug_for_source(source_path: str, catalog: dict[str, Any]) -> str:
             "readiness": "project-status",
         }.get(docs_parts[0], "advanced-engineering")
         return "/".join([prefix, *(slug_part(part) for part in docs_parts[1:])])
-    if source_path.startswith("GameModules/"):
-        module = slug_part(parts[1]) if len(parts) > 2 else "catalog"
+    if source_path.startswith(("GameModules/", "Templates/")):
+        catalog_name = "catalog" if source_path.startswith("GameModules/") else "templates"
+        entry = slug_part(parts[1]) if len(parts) > 2 else catalog_name
+        route = ["game-modules", entry]
+        # A nested README describes its directory, not the module/template
+        # root. Without the directory segments, e.g. Assets/README.md and the
+        # package README collide on the same published slug.
+        route.extend(slug_part(part) for part in parts[2:-1])
         document = slug_part(filename)
-        return f"game-modules/{module}" + ("" if document == "readme" else f"/{document}")
-    if source_path.startswith("Templates/"):
-        name = slug_part(parts[1]) if len(parts) > 2 else "templates"
-        document = slug_part(filename)
-        return f"game-modules/{name}" + ("" if document == "readme" else f"/{document}")
+        if document != "readme":
+            route.append(document)
+        return "/".join(route)
     if len(parts) == 1:
         return f"project/{slug_part(filename)}"
     nested = [slug_part(part) for part in parts[1:-1]]
