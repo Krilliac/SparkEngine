@@ -1,9 +1,0 @@
-{
-    "name": "PlatformerKit",
-    "version": "0.1.0",
-    "engineVersion": "1.0.0",
-    "description": "A platformer built with SparkEngine",
-    "modules": ["PlatformerKit"],
-    "defaultScene": "Assets/Scenes/Level01.scene",
-    "genre": "Platformer"
-}

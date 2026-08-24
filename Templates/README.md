@@ -1,114 +1,61 @@
-# Spark Engine — Game Module Templates
+# SparkEngine installed-SDK project templates
 
-This directory contains project templates for building **game modules** that run on SparkEngine. Each template is a standalone CMake project that compiles into a shared library loaded by the engine at runtime.
+These eight packages are the physical source for SparkEditor's built-in project templates. Each is a standalone CMake project that consumes an installed SparkEngine SDK, produces one game-module shared library, opens a current reflected `.sparkscene`, and bundles deterministic gameplay source plus an original, template-specific visual atlas.
 
-## Templates
+| Package | Editor template | Default scene |
+|---|---|---|
+| `EmptyProject` | Empty | `Scenes/Default.sparkscene` |
+| `FPSStarter` | First Person | `Scenes/Arena.sparkscene` |
+| `ThirdPersonStarter` | Third Person | `Scenes/Adventure.sparkscene` |
+| `TopDownStarter` | Top Down | `Scenes/Skirmish.sparkscene` |
+| `Blank3D` | Blank 3D | `Scenes/Default.sparkscene` |
+| `MMOStarter` | MMO | `Scenes/Frontier.sparkscene` |
+| `PlatformerKit` | Platformer | `Scenes/Level01.sparkscene` |
+| `RPGStarter` | RPG | `Scenes/Village.sparkscene` |
 
-| Name | Description |
-|------|-------------|
-| **EmptyProject** | Minimal scaffolding — a blank `IModule` implementation ready for your game logic |
-| **FPSStarter** | First-person shooter starter — weapon definitions, player state, HUD hook-up |
-| **MultiplayerArena** | Networked arena deathmatch — team assignment, round logic, respawn flow |
-| **PlatformerKit** | 2D/2.5D platformer foundation — checkpoints, collectibles, player controller |
-| **RPGStarter** | Single-player RPG — quest system, inventory, character progression |
+`MultiplayerArena` is a complete legacy compatibility sample outside the built-in registry. It now follows the same installed-SDK, reflected-scene, deterministic-gameplay, and asset-provenance contract.
 
-> For additional templates (physics, AI, networking, procedural generation, and more), see the **[SparkTemplates](https://github.com/Krilliac/SparkTemplates)** repository.
+## SDK requirement
 
-## Prerequisites
+Install SparkEngine before configuring a template. A raw engine build tree is not a standalone SDK package.
 
-These templates require a **built and installed** copy of SparkEngine on your system. "Installed" means you have run CMake's install step — pointing at the raw build tree will not work because the exported CMake config files (`SparkEngineConfig.cmake`, `SparkGameModule.cmake`, etc.) are only generated during installation.
-
-### Installing SparkEngine
-
-```bash
-# 1. Clone and build SparkEngine (if you haven't already)
-git clone --recurse-submodules https://github.com/Krilliac/SparkEngine.git
-cd SparkEngine
-cmake -B build
-cmake --build build --config Release
-
-# 2. Install to a local prefix (e.g. ~/SparkEngine-install)
-cmake --install build --prefix ~/SparkEngine-install
+```powershell
+cmake --install <engine-build> --prefix <sdk> --config Release
+cmake -S Templates/Blank3D -B build/blank-3d -DSparkEngine_DIR="<sdk>/lib/cmake/SparkEngine"
+cmake --build build/blank-3d --config RelWithDebInfo
 ```
 
-After this, `~/SparkEngine-install` will contain the engine executable, headers, libraries, and — critically — the CMake package config files that `find_package(SparkEngine)` needs.
+Every package uses only:
 
-> **Common mistake:** Passing the build directory or the `bin/` subdirectory as `CMAKE_PREFIX_PATH`. This will fail because the build tree does not contain the installed config files. Always point at the **install prefix** (the path you passed to `--prefix`).
+- `find_package(SparkEngine CONFIG REQUIRED)`;
+- `spark_add_game_module(...)` from the installed package;
+- public headers under `SparkSDK/Include/Spark`;
+- project-local source, reflected scenes, and metadata.
 
-## Building a Template
+There are no relative includes of the engine source tree. Gameplay behavior is represented by deterministic state machines with public accessors, allowing a package to be tested with `OnLoad(nullptr)`. Visual scene composition stays editable and uses built-in procedural primitive paths; each `Assets/` directory also contains an original transparent sprite/UI/material atlas ready for a host rendering adapter.
 
-Each template is a standalone CMake project:
+## Package layout
 
-```bash
-cd Templates/EmptyProject
-cmake -B build -DCMAKE_PREFIX_PATH=<path-to-SparkEngine-install-prefix>
-cmake --build build --config Release
+```text
+Package/
+|-- Assets/
+|   |-- <package>_atlas.png
+|   |-- README.md
+|   `-- manifest.json
+|-- Scenes/
+|   `-- <Default>.sparkscene
+|-- Source/
+|   |-- GameModule.cpp
+|   `-- GameModule.h
+|-- CMakeLists.txt
+|-- Package.sparkproject
+|-- README.md
+|-- spark.modules.json
+`-- template.json
 ```
 
-Replace `<path-to-SparkEngine-install-prefix>` with the actual install prefix you used (e.g. `~/SparkEngine-install`).
+The package directory name remains a literal source token throughout its text files. SparkEditor can therefore safely materialize a project by replacing that token with the requested project name.
 
-> **Warning:** Do not pass the SparkEngine build directory or its `bin/` subdirectory as the prefix path. Only the install prefix contains the required CMake config files.
+## Licensing and provenance
 
-## How Templates Relate to the Engine
-
-Each template compiles into a **game module** — a shared library (`.dll` on Windows, `.so` on Linux) — not a standalone executable. The SparkEngine executable loads the game module at startup:
-
-```bash
-# Windows
-SparkEngine.exe -game MyGame.dll
-
-# Linux
-./SparkEngine -game libMyGame.so
-```
-
-Because templates are separate shared libraries, they are built independently from the engine. You do not need the engine source tree at build time — only the installed SDK (headers + CMake config). However, a game module cannot be hot-swapped while the engine is running; you must restart the engine to pick up a rebuilt module. (AngelScript scripts *can* be hot-reloaded at runtime, but compiled C++ modules cannot.)
-
-## Template Structure
-
-Each template follows this layout:
-
-```
-TemplateName/
-├── CMakeLists.txt          # Standalone CMake project using find_package(SparkEngine)
-├── Source/
-│   ├── GameModule.h        # IModule implementation (your game logic entry point)
-│   └── GameModule.cpp      # DLL exports via SPARK_IMPLEMENT_MODULE()
-├── spark.project.json      # Project metadata (name, version, default scene)
-└── spark.modules.json      # Module loading configuration (DLL path, load order)
-```
-
-### Key Files
-
-- **`CMakeLists.txt`** — Calls `find_package(SparkEngine REQUIRED)` and uses the `spark_add_game_module()` helper to create the shared library with correct definitions and linkage.
-- **`GameModule.h`** — Your module class inheriting from `Spark::IModule`. Implement the lifecycle methods: `OnLoad()`, `OnUnload()`, `OnUpdate()`, `OnRender()`.
-- **`GameModule.cpp`** — Uses `SPARK_IMPLEMENT_MODULE(YourModuleClass)` to generate the `CreateModule()` / `DestroyModule()` DLL exports the engine requires.
-
-## Creating a New Project from a Template
-
-1. Copy the template directory of your choice and rename it:
-   ```bash
-   cp -r Templates/EmptyProject MyGame   # or FPSStarter, RPGStarter, etc.
-   cd MyGame
-   ```
-
-2. Rename every occurrence of the template's name (`EmptyProject`, `FPSStarter`, `MultiplayerArena`, `PlatformerKit`, or `RPGStarter`) to your project name. A one-liner from inside the copied directory:
-   ```bash
-   grep -rl 'EmptyProject' . | xargs sed -i 's/EmptyProject/MyGame/g'
-   ```
-   The editor's **File → New Project From Template** flow does this rename automatically via `ProjectManager::CreateProjectFromTemplate` — no manual substitution needed if you use the editor UI.
-
-3. Build and run:
-   ```bash
-   cmake -B build -DCMAKE_PREFIX_PATH=<path-to-SparkEngine-install-prefix>
-   cmake --build build --config Release
-
-   # Windows
-   SparkEngine.exe -game MyGame.dll
-
-   # Linux
-   ./SparkEngine -game libMyGame.so
-   ```
-
-## License
-
-MIT License. See [LICENSE](../LICENSE) for details.
+Template source, metadata, and repository-original generated artwork are covered by the repository's [Spark Open License 1.0](../LICENSE), not MIT. Every `Assets/README.md` and `Assets/manifest.json` records provenance and a SHA-256. No third-party art, audio, or fonts are bundled. Add verified license and provenance records before adding or redistributing replacement assets.

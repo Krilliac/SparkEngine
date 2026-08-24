@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "package": "RPGStarter",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "rpg_atlas.png",
+      "kind": "transparent character, quest, inventory, combat, reward, save, and material atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine RPGStarter",
+      "sha256": "fab74a133363a5e11e71061b149a49a8e44ca77b3bbc54111ca9915f44a46c54"
+    }
+  ],
+  "enginePrimitives": [
+    "__spark_primitive_Cube.obj",
+    "__spark_primitive_ground__.obj"
+  ],
+  "notes": "The village uses built-in primitives; the atlas supplies an original purple/gold quest-adventure visual kit."
+}

@@ -1,0 +1,9 @@
+{
+  "modules": [
+    {
+      "name": "MMOStarter",
+      "path": "MMOStarter.dll",
+      "loadOrder": 1000
+    }
+  ]
+}

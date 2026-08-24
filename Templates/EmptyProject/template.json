@@ -1,7 +1,12 @@
 {
-    "name": "EmptyProject",
-    "description": "Minimal boilerplate project with IModule interface",
-    "genre": "General",
-    "gameModule": "SparkGame",
-    "features": ["minimal"]
+  "name": "EmptyProject",
+  "identity": "empty",
+  "description": "A truthful empty project with an editable world and no bundled art or gameplay assumptions.",
+  "genre": "General",
+  "gameModule": "EmptyProject",
+  "defaultScene": "Scenes/Default.sparkscene",
+  "features": [
+    "minimal",
+    "scene-editing"
+  ]
 }

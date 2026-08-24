@@ -1,7 +1,16 @@
 {
-    "name": "FPSStarter",
-    "description": "First-person shooter with weapons, AI enemies, and HUD",
-    "genre": "FPS",
-    "gameModule": "SparkGameFPS",
-    "features": ["weapons", "ai-enemies", "hud", "health-system"]
+  "name": "FPSStarter",
+  "identity": "first-person",
+  "description": "A compact first-person game with movement, weapons, a damageable target, HUD state, and a restart loop.",
+  "genre": "FPS",
+  "gameModule": "FPSStarter",
+  "defaultScene": "Scenes/Arena.sparkscene",
+  "features": [
+    "movement",
+    "mouselook",
+    "weapons",
+    "damage",
+    "hud",
+    "restart"
+  ]
 }

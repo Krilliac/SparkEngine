@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "package": "ThirdPersonStarter",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "third_person_atlas.png",
+      "kind": "transparent character, pickup, environment, and UI atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine ThirdPersonStarter",
+      "sha256": "40604c1c69cc0ff7e6a01b57215c6db6305ee2b812815f15d43d16b4b598ab83"
+    }
+  ],
+  "enginePrimitives": [
+    "__spark_primitive_Cube.obj",
+    "__spark_primitive_ground__.obj"
+  ],
+  "notes": "The scene uses built-in primitives; the atlas supplies an original warm traversal-adventure visual kit."
+}

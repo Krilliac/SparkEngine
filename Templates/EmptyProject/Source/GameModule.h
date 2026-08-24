@@ -1,22 +1,12 @@
-/**
- * @file GameModule.h
- * @brief EmptyProject game module
- *
- * This is your game's main module. It implements Spark::IModule and serves
- * as the entry point for all game logic. The engine loads this module at
- * runtime and drives it through the IModule lifecycle.
- */
-
 #pragma once
 
 #include <Spark/SparkSDK.h>
 
-class EmptyProjectModule : public Spark::IModule
+#include <cstdint>
+
+class EmptyProjectModule final : public Spark::IModule
 {
   public:
-    EmptyProjectModule() = default;
-    ~EmptyProjectModule() override = default;
-
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
@@ -30,27 +20,37 @@ class EmptyProjectModule : public Spark::IModule
     bool OnLoad(Spark::IEngineContext* context) override
     {
         m_context = context;
-        // TODO: Initialize your game systems here
+        m_updateCount = 0;
+        m_elapsedSeconds = 0.0f;
+        m_paused = false;
         return true;
     }
 
     void OnUnload() override
     {
-        // TODO: Clean up your game systems here
         m_context = nullptr;
+        m_paused = false;
     }
 
     void OnUpdate(float deltaTime) override
     {
-        // TODO: Update your game logic here
-        (void)deltaTime;
+        if (m_paused || deltaTime <= 0.0f)
+            return;
+        ++m_updateCount;
+        m_elapsedSeconds += deltaTime;
     }
 
-    void OnRender() override
-    {
-        // TODO: Render your game here
-    }
+    void OnPause() override { m_paused = true; }
+    void OnResume() override { m_paused = false; }
+
+    [[nodiscard]] uint64_t GetUpdateCount() const { return m_updateCount; }
+    [[nodiscard]] float GetElapsedSeconds() const { return m_elapsedSeconds; }
+    [[nodiscard]] bool IsPaused() const { return m_paused; }
+    [[nodiscard]] bool HasEngineContext() const { return m_context != nullptr; }
 
   private:
     Spark::IEngineContext* m_context = nullptr;
+    uint64_t m_updateCount = 0;
+    float m_elapsedSeconds = 0.0f;
+    bool m_paused = false;
 };

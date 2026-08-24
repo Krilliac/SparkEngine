@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "algorithm": "sha256",
+  "assets": {
+    "Blank3D/Assets/blank3d_atlas.png": "3003f086b3a418cbcb15900313154b1af20eb5793675e6a9c2bff401c7fea611",
+    "EmptyProject/Assets/empty_project_atlas.png": "946fd87aff15dc36ed0c1eff47742bce2c9ae46749d0f0b7e9ba73c893d0525f",
+    "FPSStarter/Assets/fps_starter_atlas.png": "dff68fb4b4dd665246f276136714328479d2d0671dbdab9a8416d166ae8684c6",
+    "MMOStarter/Assets/mmo_starter_atlas.png": "4222f301a88f9f6896327b7a4cd6cfec17794773570ccd0f9822370a5cbf1dbe",
+    "MultiplayerArena/Assets/multiplayer_arena_atlas.png": "a953b9d53a3ce33508dbea68390306748edc9f1a32e6763dae8276af74a08d23",
+    "PlatformerKit/Assets/platformer_atlas.png": "d84977f108e572639bfa9b8ed0df1f7401bba2846b9c6d7fc9a59f6676edd033",
+    "RPGStarter/Assets/rpg_atlas.png": "fab74a133363a5e11e71061b149a49a8e44ca77b3bbc54111ca9915f44a46c54",
+    "ThirdPersonStarter/Assets/third_person_atlas.png": "40604c1c69cc0ff7e6a01b57215c6db6305ee2b812815f15d43d16b4b598ab83",
+    "TopDownStarter/Assets/top_down_atlas.png": "177e3f25cb8180ef0cc6355b5ad577a0ee54bea05ffe241aaed2fb0a9d4fb16d"
+  }
+}

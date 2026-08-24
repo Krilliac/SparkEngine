@@ -1,37 +1,21 @@
 cmake_minimum_required(VERSION 3.25)
+if(POLICY CMP0141)
+    cmake_policy(SET CMP0141 NEW)
+endif()
+set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
+
 project(RPGStarter LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
-include(SparkEnginePreflight)
+find_package(SparkEngine CONFIG REQUIRED)
 
-find_package(SparkEngine REQUIRED)
-
-file(GLOB_RECURSE GAME_SOURCES
-    CONFIGURE_DEPENDS
-    "Source/*.cpp"
-    "Source/*.h"
-    "Source/*.hpp"
+set(GAME_SOURCES
+    Source/GameModule.cpp
+    Source/GameModule.h
 )
 
 spark_add_game_module(RPGStarter ${GAME_SOURCES})
 target_include_directories(RPGStarter PRIVATE "Source")
-
-add_custom_command(TARGET RPGStarter POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RPGStarter>/Shaders"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:RPGStarter>/Assets"
-    COMMENT "Creating asset directories"
-)
-
-if(EXISTS "${CMAKE_SOURCE_DIR}/Assets")
-    add_custom_command(TARGET RPGStarter POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Assets"
-            "$<TARGET_FILE_DIR:RPGStarter>/Assets"
-        COMMENT "Copying game assets"
-    )
-endif()
-
-message(STATUS "RPGStarter RPG project configured")

@@ -1,67 +1,18 @@
-# EmptyProject — Spark Engine Template
+# EmptyProject
 
-A minimal game module template for SparkEngine. Provides a blank `Spark::IModule` implementation with the correct project structure, CMake configuration, and DLL exports — ready for you to add your game logic.
+A truthful empty project with an editable world and no bundled art or gameplay assumptions.
 
-## Prerequisites
+This is a standalone game-module example for an installed SparkEngine SDK. It includes a current reflected scene, an explicit empty/procedural asset manifest, and a lifecycle clock with public accessors. The state API is independent of graphics, input, and private engine headers and is safe to exercise with a null engine context.
 
-This template requires a **built and installed** SparkEngine SDK. See the [Templates README](../README.md) for full installation instructions.
+## Configure and build
 
-> **Short version:** You need to run `cmake --install build --prefix <install-path>` on SparkEngine so that `find_package(SparkEngine)` can locate the SDK.
-
-## Setup
-
-1. Copy this directory and rename it to your project name:
-   ```bash
-   cp -r Templates/EmptyProject MyGame
-   cd MyGame
-   ```
-
-2. Rename every occurrence of `EmptyProject` to your project name. The quickest way is a bulk rename plus the built-in editor scaffolder, which does this for you automatically when creating a project from a template:
-   ```bash
-   # Manual rename (from inside the copied directory)
-   grep -rl 'EmptyProject' . | xargs sed -i 's/EmptyProject/MyGame/g'
-   ```
-   Files touched:
-   - `CMakeLists.txt`
-   - `Source/GameModule.h`
-   - `Source/GameModule.cpp`
-   - `spark.project.json`
-   - `spark.modules.json`
-
-## Build
-
-```bash
-cmake -B build -DCMAKE_PREFIX_PATH=<path-to-SparkEngine-install-prefix>
-cmake --build build --config Release
+```powershell
+cmake -S . -B build -DSparkEngine_DIR="<sdk>/lib/cmake/SparkEngine"
+cmake --build build --config RelWithDebInfo
 ```
 
-> **Warning:** Do not pass the SparkEngine build directory or its `bin/` subdirectory as `CMAKE_PREFIX_PATH`. This will fail because the build tree does not contain the installed config files. Always use the **install prefix** (the path you passed to `--prefix`).
+The host loads `EmptyProject.dll` through `spark.modules.json`. The default reflected scene is `Scenes/Default.sparkscene`.
 
-## Run
+## License and assets
 
-The template compiles into a shared library (game module), not a standalone executable. Launch it through the SparkEngine executable:
-
-```bash
-# Windows
-SparkEngine.exe -game MyGame.dll
-
-# Linux
-./SparkEngine -game libMyGame.so
-```
-
-## What's Included
-
-| File | Purpose |
-|------|---------|
-| `CMakeLists.txt` | Standalone CMake project — calls `find_package(SparkEngine)` and `spark_add_game_module()` |
-| `Source/GameModule.h` | Your `IModule` subclass with lifecycle stubs (`OnLoad`, `OnUnload`, `OnUpdate`, `OnRender`) |
-| `Source/GameModule.cpp` | DLL exports via `SPARK_IMPLEMENT_MODULE()` |
-| `spark.project.json` | Project metadata (name, version, engine version, default scene) |
-| `spark.modules.json` | Module loading config (DLL path and load order) |
-
-## Next Steps
-
-- Implement your game logic in `GameModule::OnUpdate()` and `GameModule::OnRender()`
-- Use the `Spark::IEngineContext*` provided in `OnLoad()` to access engine subsystems
-- Add assets under an `Assets/` directory — they will be copied to the output automatically
-- See the **[SparkTemplates](https://github.com/Krilliac/SparkTemplates)** repository for more advanced examples (physics, AI, networking, etc.)
+See the SparkEngine root license for template source terms. `Assets/README.md` and `Assets/manifest.json` document that this starter contains no copied third-party content.

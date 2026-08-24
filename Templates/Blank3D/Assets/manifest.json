@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "package": "Blank3D",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "blank3d_atlas.png",
+      "kind": "transparent editor glyph, primitive, and material atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine Blank3D",
+      "sha256": "3003f086b3a418cbcb15900313154b1af20eb5793675e6a9c2bff401c7fea611"
+    }
+  ],
+  "enginePrimitives": [
+    "__spark_primitive_Cube.obj",
+    "__spark_primitive_ground__.obj"
+  ],
+  "notes": "The scene uses built-in primitives; the atlas supplies an original cyan/magenta technical visual kit."
+}

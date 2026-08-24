@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "ThirdPersonStarter",
+  "version": "0.1.0",
+  "description": "A third-person adventure slice with orbit camera, jumping, a pickup, and a goal.",
+  "engineVersion": "1.0.0",
+  "template": "third-person",
+  "defaultScene": "Scenes/Adventure.sparkscene",
+  "lastOpenedScene": "Scenes/Adventure.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "ThirdPersonStarter"
+  ],
+  "scenes": [
+    "Scenes/Adventure.sparkscene"
+  ]
+}

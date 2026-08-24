@@ -1,7 +1,18 @@
 {
-    "name": "PlatformerKit",
-    "description": "2D/3D platformer with character controller and level design",
-    "genre": "Platformer",
-    "gameModule": "SparkGamePlatformer",
-    "features": ["character-controller", "collectibles", "checkpoints", "level-timer"]
+  "name": "PlatformerKit",
+  "identity": "platformer",
+  "description": "A complete platformer level with double jump, collectibles, hazards, checkpoint, finish, and restart.",
+  "genre": "Platformer",
+  "gameModule": "PlatformerKit",
+  "defaultScene": "Scenes/Level01.sparkscene",
+  "features": [
+    "movement",
+    "jump",
+    "double-jump",
+    "collectibles",
+    "hazard",
+    "checkpoint",
+    "finish",
+    "restart"
+  ]
 }

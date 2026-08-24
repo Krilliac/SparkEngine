@@ -1,61 +1,36 @@
-/**
- * @file GameModule.h
- * @brief FPSStarter — FPS game module
- *
- * First-person shooter template with weapon system, AI enemies, health,
- * and a basic HUD. Extend this to build your own FPS game.
- */
-
 #pragma once
 
 #include <Spark/SparkSDK.h>
 
+#include <algorithm>
 #include <cstdint>
-#include <string>
-#include <vector>
 
-// ============================================================================
-// Player state
-// ============================================================================
+struct FPSStarterWeaponState
+{
+    uint32_t magazine = 8;
+    uint32_t reserve = 24;
+    float damage = 25.0f;
+    float fireInterval = 0.2f;
+    float reloadDuration = 1.0f;
+};
 
-struct PlayerState
+struct FPSStarterPlayerState
 {
     float health = 100.0f;
-    float maxHealth = 100.0f;
-    float armor = 0.0f;
-    uint32_t currentWeapon = 0;
-    uint32_t ammo = 30;
-    uint32_t reserveAmmo = 90;
-    uint32_t kills = 0;
     uint32_t deaths = 0;
-    bool isAlive = true;
+    uint32_t kills = 0;
+    bool alive = true;
 };
 
-// ============================================================================
-// Weapon definition
-// ============================================================================
-
-struct WeaponDef
+struct FPSStarterTargetState
 {
-    std::string name;
-    float damage = 25.0f;
-    float fireRate = 0.1f; ///< Seconds between shots
-    float range = 100.0f;
-    uint32_t magazineSize = 30;
-    float reloadTime = 2.0f;
-    bool isAutomatic = true;
+    float health = 100.0f;
+    bool destroyed = false;
 };
 
-// ============================================================================
-// FPS Game Module
-// ============================================================================
-
-class FPSStarterModule : public Spark::IModule
+class FPSStarterModule final : public Spark::IModule
 {
   public:
-    FPSStarterModule() = default;
-    ~FPSStarterModule() override = default;
-
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
@@ -69,8 +44,7 @@ class FPSStarterModule : public Spark::IModule
     bool OnLoad(Spark::IEngineContext* context) override
     {
         m_context = context;
-        InitializeWeapons();
-        m_player = PlayerState{};
+        ResetRound();
         return true;
     }
 
@@ -78,45 +52,108 @@ class FPSStarterModule : public Spark::IModule
 
     void OnUpdate(float deltaTime) override
     {
-        if (!m_player.isAlive)
-        {
-            m_respawnTimer -= deltaTime;
-            if (m_respawnTimer <= 0.0f)
-            {
-                Respawn();
-            }
+        if (deltaTime <= 0.0f)
             return;
+
+        m_fireCooldown = std::max(0.0f, m_fireCooldown - deltaTime);
+        if (m_reloadRemaining > 0.0f)
+        {
+            m_reloadRemaining = std::max(0.0f, m_reloadRemaining - deltaTime);
+            if (m_reloadRemaining == 0.0f)
+                FinishReload();
         }
 
-        m_fireTimer -= deltaTime;
-        // Game logic: check input, fire weapon, update AI, etc.
+        if (!m_player.alive)
+        {
+            m_respawnRemaining = std::max(0.0f, m_respawnRemaining - deltaTime);
+            if (m_respawnRemaining == 0.0f)
+                Respawn();
+        }
     }
 
-    void OnRender() override
+    bool TryFire()
     {
-        // HUD rendering: health bar, ammo counter, crosshair, kill feed
+        if (!m_player.alive || m_target.destroyed || m_fireCooldown > 0.0f || m_reloadRemaining > 0.0f ||
+            m_weapon.magazine == 0)
+            return false;
+
+        --m_weapon.magazine;
+        m_fireCooldown = m_weapon.fireInterval;
+        m_target.health = std::max(0.0f, m_target.health - m_weapon.damage);
+        if (m_target.health == 0.0f)
+        {
+            m_target.destroyed = true;
+            ++m_player.kills;
+            m_roundWon = true;
+        }
+        return true;
     }
+
+    bool BeginReload()
+    {
+        if (!m_player.alive || m_reloadRemaining > 0.0f || m_weapon.magazine >= kMagazineCapacity ||
+            m_weapon.reserve == 0)
+            return false;
+        m_reloadRemaining = m_weapon.reloadDuration;
+        return true;
+    }
+
+    void DamagePlayer(float amount)
+    {
+        if (!m_player.alive || amount <= 0.0f)
+            return;
+        m_player.health = std::max(0.0f, m_player.health - amount);
+        if (m_player.health == 0.0f)
+        {
+            m_player.alive = false;
+            ++m_player.deaths;
+            m_respawnRemaining = kRespawnDelay;
+        }
+    }
+
+    void ResetRound()
+    {
+        m_player = {};
+        m_target = {};
+        m_weapon = {};
+        m_fireCooldown = 0.0f;
+        m_reloadRemaining = 0.0f;
+        m_respawnRemaining = 0.0f;
+        m_roundWon = false;
+    }
+
+    [[nodiscard]] const FPSStarterPlayerState& GetPlayerState() const { return m_player; }
+    [[nodiscard]] const FPSStarterTargetState& GetTargetState() const { return m_target; }
+    [[nodiscard]] const FPSStarterWeaponState& GetWeaponState() const { return m_weapon; }
+    [[nodiscard]] float GetReloadRemaining() const { return m_reloadRemaining; }
+    [[nodiscard]] float GetRespawnRemaining() const { return m_respawnRemaining; }
+    [[nodiscard]] bool HasWonRound() const { return m_roundWon; }
 
   private:
-    void InitializeWeapons()
+    void FinishReload()
     {
-        m_weapons.push_back({"Pistol", 20.0f, 0.3f, 50.0f, 12, 1.5f, false});
-        m_weapons.push_back({"Assault Rifle", 25.0f, 0.1f, 80.0f, 30, 2.0f, true});
-        m_weapons.push_back({"Shotgun", 80.0f, 0.8f, 15.0f, 8, 2.5f, false});
-        m_weapons.push_back({"Sniper Rifle", 100.0f, 1.2f, 200.0f, 5, 3.0f, false});
+        const uint32_t needed = kMagazineCapacity - m_weapon.magazine;
+        const uint32_t transferred = std::min(needed, m_weapon.reserve);
+        m_weapon.magazine += transferred;
+        m_weapon.reserve -= transferred;
     }
 
     void Respawn()
     {
-        m_player.health = m_player.maxHealth;
-        m_player.isAlive = true;
-        m_player.ammo = m_weapons[m_player.currentWeapon].magazineSize;
-        m_respawnTimer = 3.0f;
+        m_player.health = 100.0f;
+        m_player.alive = true;
+        m_weapon.magazine = kMagazineCapacity;
     }
 
+    static constexpr uint32_t kMagazineCapacity = 8;
+    static constexpr float kRespawnDelay = 2.0f;
+
     Spark::IEngineContext* m_context = nullptr;
-    PlayerState m_player;
-    std::vector<WeaponDef> m_weapons;
-    float m_fireTimer = 0.0f;
-    float m_respawnTimer = 3.0f;
+    FPSStarterPlayerState m_player;
+    FPSStarterTargetState m_target;
+    FPSStarterWeaponState m_weapon;
+    float m_fireCooldown = 0.0f;
+    float m_reloadRemaining = 0.0f;
+    float m_respawnRemaining = 0.0f;
+    bool m_roundWon = false;
 };

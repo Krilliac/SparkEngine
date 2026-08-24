@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "TopDownStarter",
+  "version": "0.1.0",
+  "description": "A top-down action slice with pan/zoom camera, collision bounds, an enemy, a pickup, and restart.",
+  "engineVersion": "1.0.0",
+  "template": "top-down",
+  "defaultScene": "Scenes/Skirmish.sparkscene",
+  "lastOpenedScene": "Scenes/Skirmish.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "TopDownStarter"
+  ],
+  "scenes": [
+    "Scenes/Skirmish.sparkscene"
+  ]
+}

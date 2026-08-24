@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "package": "FPSStarter",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "fps_starter_atlas.png",
+      "kind": "transparent sprite, UI, decal, and material atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine FPSStarter",
+      "sha256": "dff68fb4b4dd665246f276136714328479d2d0671dbdab9a8416d166ae8684c6"
+    }
+  ],
+  "enginePrimitives": [
+    "__spark_primitive_Cube.obj",
+    "__spark_primitive_ground__.obj"
+  ],
+  "notes": "The reflected scene uses SparkEngine built-in primitives; the atlas provides original production art for host rendering and UI adapters."
+}

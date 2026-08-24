@@ -1,0 +1,15 @@
+{
+  "name": "ThirdPersonStarter",
+  "identity": "third-person",
+  "description": "A third-person adventure slice with orbit camera, jumping, a pickup, and a goal.",
+  "genre": "Adventure",
+  "gameModule": "ThirdPersonStarter",
+  "defaultScene": "Scenes/Adventure.sparkscene",
+  "features": [
+    "movement",
+    "orbit-camera",
+    "jump",
+    "pickup",
+    "goal"
+  ]
+}

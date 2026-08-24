@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "PlatformerKit",
+  "version": "0.1.0",
+  "description": "A complete platformer level with double jump, collectibles, hazards, checkpoint, finish, and restart.",
+  "engineVersion": "1.0.0",
+  "template": "platformer",
+  "defaultScene": "Scenes/Level01.sparkscene",
+  "lastOpenedScene": "Scenes/Level01.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "PlatformerKit"
+  ],
+  "scenes": [
+    "Scenes/Level01.sparkscene"
+  ]
+}

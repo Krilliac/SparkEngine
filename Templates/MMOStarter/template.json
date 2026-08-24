@@ -1,0 +1,17 @@
+{
+  "name": "MMOStarter",
+  "identity": "mmo",
+  "description": "A bounded local client/server sample with character setup, faction objective, bot, chat, and respawn.",
+  "genre": "MMO",
+  "gameModule": "MMOStarter",
+  "defaultScene": "Scenes/Frontier.sparkscene",
+  "features": [
+    "local-client-server",
+    "character",
+    "faction",
+    "capture-point",
+    "bot",
+    "chat",
+    "respawn"
+  ]
+}

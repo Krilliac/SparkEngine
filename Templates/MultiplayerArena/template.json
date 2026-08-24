@@ -1,7 +1,15 @@
 {
-    "name": "MultiplayerArena",
-    "description": "Multiplayer arena with networking, lobby, and scoreboard",
-    "genre": "Multiplayer",
-    "gameModule": "SparkGameFPS",
-    "features": ["networking", "lobby", "scoreboard", "respawn", "team-system"]
+  "name": "MultiplayerArena",
+  "identity": "multiplayer-arena-legacy",
+  "description": "A bounded local arena simulation with lobby readiness, teams, scoring, respawns, and match completion.",
+  "genre": "Multiplayer Arena",
+  "gameModule": "MultiplayerArena",
+  "defaultScene": "Scenes/Arena.sparkscene",
+  "features": [
+    "local-lobby",
+    "team-assignment",
+    "scoreboard",
+    "respawn",
+    "match-loop"
+  ]
 }

@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "RPGStarter",
+  "version": "0.1.0",
+  "description": "A village RPG slice with dialogue, quest, inventory, combat, reward, and save/load.",
+  "engineVersion": "1.0.0",
+  "template": "rpg",
+  "defaultScene": "Scenes/Village.sparkscene",
+  "lastOpenedScene": "Scenes/Village.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "RPGStarter"
+  ],
+  "scenes": [
+    "Scenes/Village.sparkscene"
+  ]
+}

@@ -1,0 +1,317 @@
+{
+  "entities": [
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,0.000000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "50.000000,0.100000,50.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_ground__.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 0,
+      "name": "Ground",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,10.000000,0.000000",
+            "rotation": "50.000000,-30.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "1.000000,0.960000,0.840000",
+            "intensity": "1.000000",
+            "range": "10.000000",
+            "shadowMapResolution": "1024",
+            "spotAngle": "45.000000",
+            "spotInnerAngle": "30.000000",
+            "type": "0"
+          },
+          "type": "LightComponent"
+        }
+      ],
+      "id": 1,
+      "name": "Directional Light",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,5.000000,-12.000000",
+            "rotation": "10.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "farPlane": "1000.000000",
+            "fov": "60.000000",
+            "isMainCamera": "true",
+            "nearPlane": "0.100000"
+          },
+          "type": "Camera"
+        }
+      ],
+      "id": 2,
+      "name": "Main Camera",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "0.000000,1.000000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.800000,1.600000,0.800000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 3,
+      "name": "Player",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "5.000000,1.500000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "5.000000,0.500000,3.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 4,
+      "name": "Platform A",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "12.000000,3.500000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "4.000000,0.500000,3.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 5,
+      "name": "Platform B",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "3.000000,1.000000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.350000,0.350000,0.350000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 6,
+      "name": "Coin 1",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "6.000000,2.500000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.350000,0.350000,0.350000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 7,
+      "name": "Coin 2",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "13.000000,4.500000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.350000,0.350000,0.350000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 8,
+      "name": "Coin 3",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "9.000000,0.250000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "2.000000,0.500000,3.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 9,
+      "name": "Hazard",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "12.000000,4.500000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.400000,2.000000,0.400000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 10,
+      "name": "Checkpoint",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "position": "18.000000,2.000000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "0.500000,4.000000,3.000000"
+          },
+          "type": "Transform"
+        },
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_Cube.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        }
+      ],
+      "id": 11,
+      "name": "Finish",
+      "parent": -1
+    }
+  ],
+  "version": 1
+}

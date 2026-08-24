@@ -902,3 +902,9 @@ set_target_properties(SparkTests PROPERTIES
 # Add to CTest
 enable_testing()
 add_test(NAME SparkEngineTests COMMAND SparkTests)
+add_test(
+    NAME SparkTemplateAssets
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_TEMPLATE_ROOT=${CMAKE_SOURCE_DIR}/Templates
+        -P ${CMAKE_SOURCE_DIR}/cmake/VerifyTemplateAssets.cmake
+)

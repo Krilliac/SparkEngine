@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "package": "MultiplayerArena",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "multiplayer_arena_atlas.png",
+      "kind": "transparent character, weapon, objective, network, UI, decal, and material atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine MultiplayerArena",
+      "sha256": "a953b9d53a3ce33508dbea68390306748edc9f1a32e6763dae8276af74a08d23"
+    }
+  ],
+  "enginePrimitives": [
+    "__spark_primitive_Cube.obj",
+    "__spark_primitive_ground__.obj"
+  ],
+  "notes": "The scene uses built-in primitives; the atlas supplies an original cyan-versus-magenta arena visual kit."
+}

@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "package": "EmptyProject",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "empty_project_atlas.png",
+      "kind": "transparent lifecycle, module, neutral material, and thumbnail atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine EmptyProject",
+      "sha256": "946fd87aff15dc36ed0c1eff47742bce2c9ae46749d0f0b7e9ba73c893d0525f"
+    }
+  ],
+  "enginePrimitives": [],
+  "notes": "The reflected scene remains intentionally empty; the atlas supplies optional original starter and lifecycle visuals."
+}

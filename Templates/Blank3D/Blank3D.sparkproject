@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "Blank3D",
+  "version": "0.1.0",
+  "description": "A ready-to-edit 3D scene with a visible primitive, ground, lighting, and fly camera.",
+  "engineVersion": "1.0.0",
+  "template": "blank-3d",
+  "defaultScene": "Scenes/Default.sparkscene",
+  "lastOpenedScene": "Scenes/Default.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "Blank3D"
+  ],
+  "scenes": [
+    "Scenes/Default.sparkscene"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "package": "PlatformerKit",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "platformer_atlas.png",
+      "kind": "transparent character animation, collectible, hazard, environment, and UI atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine PlatformerKit",
+      "sha256": "d84977f108e572639bfa9b8ed0df1f7401bba2846b9c6d7fc9a59f6676edd033"
+    }
+  ],
+  "enginePrimitives": [
+    "__spark_primitive_Cube.obj",
+    "__spark_primitive_ground__.obj"
+  ],
+  "notes": "The level uses built-in primitives; the atlas supplies an original bright platformer visual kit."
+}

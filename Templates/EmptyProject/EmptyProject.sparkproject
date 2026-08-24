@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "EmptyProject",
+  "version": "0.1.0",
+  "description": "A truthful empty project with an editable world and no bundled art or gameplay assumptions.",
+  "engineVersion": "1.0.0",
+  "template": "empty",
+  "defaultScene": "Scenes/Default.sparkscene",
+  "lastOpenedScene": "Scenes/Default.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "EmptyProject"
+  ],
+  "scenes": [
+    "Scenes/Default.sparkscene"
+  ]
+}

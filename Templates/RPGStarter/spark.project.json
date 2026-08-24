@@ -1,9 +1,0 @@
-{
-    "name": "RPGStarter",
-    "version": "0.1.0",
-    "engineVersion": "1.0.0",
-    "description": "An RPG built with SparkEngine",
-    "modules": ["RPGStarter"],
-    "defaultScene": "Assets/Scenes/Village.scene",
-    "genre": "RPG"
-}

@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "FPSStarter",
+  "version": "0.1.0",
+  "description": "A compact first-person game with movement, weapons, a damageable target, HUD state, and a restart loop.",
+  "engineVersion": "1.0.0",
+  "template": "first-person",
+  "defaultScene": "Scenes/Arena.sparkscene",
+  "lastOpenedScene": "Scenes/Arena.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "FPSStarter"
+  ],
+  "scenes": [
+    "Scenes/Arena.sparkscene"
+  ]
+}

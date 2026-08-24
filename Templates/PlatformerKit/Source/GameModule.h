@@ -1,60 +1,33 @@
-/**
- * @file GameModule.h
- * @brief PlatformerKit — Platformer game module
- *
- * Side-scrolling / 3D platformer template with character controller,
- * collectibles, checkpoints, and level timer.
- */
-
 #pragma once
 
 #include <Spark/SparkSDK.h>
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <string>
-#include <vector>
 
-// ============================================================================
-// Platformer player state
-// ============================================================================
-
-struct PlatformerPlayer
+struct PlatformerKitState
 {
-    float posX = 0.0f;
-    float posY = 0.0f;
+    float x = 0.0f;
+    float y = 0.0f;
     float velocityX = 0.0f;
     float velocityY = 0.0f;
-    float moveSpeed = 8.0f;
-    float jumpForce = 12.0f;
-    float gravity = -30.0f;
-    bool isGrounded = true;
-    bool canDoubleJump = true;
+    float checkpointX = 0.0f;
+    float checkpointY = 0.0f;
+    float elapsedSeconds = 0.0f;
     uint32_t lives = 3;
     uint32_t coins = 0;
-    uint32_t score = 0;
+    uint32_t deaths = 0;
+    uint32_t jumpsUsed = 0;
+    bool grounded = true;
+    bool checkpointActive = false;
+    bool finished = false;
 };
 
-// ============================================================================
-// Checkpoint
-// ============================================================================
-
-struct Checkpoint
-{
-    float posX = 0.0f;
-    float posY = 0.0f;
-    bool activated = false;
-};
-
-// ============================================================================
-// Platformer Game Module
-// ============================================================================
-
-class PlatformerKitModule : public Spark::IModule
+class PlatformerKitModule final : public Spark::IModule
 {
   public:
-    PlatformerKitModule() = default;
-    ~PlatformerKitModule() override = default;
-
     Spark::ModuleInfo GetModuleInfo() const override
     {
         Spark::ModuleInfo info{};
@@ -68,8 +41,7 @@ class PlatformerKitModule : public Spark::IModule
     bool OnLoad(Spark::IEngineContext* context) override
     {
         m_context = context;
-        m_player = PlatformerPlayer{};
-        InitializeCheckpoints();
+        RestartLevel();
         return true;
     }
 
@@ -77,44 +49,98 @@ class PlatformerKitModule : public Spark::IModule
 
     void OnUpdate(float deltaTime) override
     {
-        // Apply gravity
-        if (!m_player.isGrounded)
+        if (deltaTime <= 0.0f || m_state.finished || m_state.lives == 0)
+            return;
+
+        m_state.elapsedSeconds += deltaTime;
+        m_state.velocityX = m_moveInput * 8.0f;
+        if (!m_state.grounded)
+            m_state.velocityY -= 24.0f * deltaTime;
+        m_state.x += m_state.velocityX * deltaTime;
+        m_state.y += m_state.velocityY * deltaTime;
+
+        if (m_state.y <= 0.0f)
         {
-            m_player.velocityY += m_player.gravity * deltaTime;
+            m_state.y = 0.0f;
+            m_state.velocityY = 0.0f;
+            m_state.grounded = true;
+            m_state.jumpsUsed = 0;
         }
-
-        // Update position
-        m_player.posX += m_player.velocityX * deltaTime;
-        m_player.posY += m_player.velocityY * deltaTime;
-
-        // Ground check (simplified)
-        if (m_player.posY <= 0.0f)
-        {
-            m_player.posY = 0.0f;
-            m_player.velocityY = 0.0f;
-            m_player.isGrounded = true;
-            m_player.canDoubleJump = true;
-        }
-
-        // Update level timer
-        m_levelTimer += deltaTime;
     }
 
-    void OnRender() override
+    void SetMoveInput(float input) { m_moveInput = std::clamp(input, -1.0f, 1.0f); }
+
+    bool Jump()
     {
-        // Render coins, lives, score, timer HUD
+        if (m_state.finished || m_state.lives == 0 || m_state.jumpsUsed >= 2)
+            return false;
+        ++m_state.jumpsUsed;
+        m_state.grounded = false;
+        m_state.velocityY = 10.0f;
+        return true;
+    }
+
+    bool CollectCoin(std::size_t index)
+    {
+        if (index >= m_collected.size() || m_collected[index])
+            return false;
+        m_collected[index] = true;
+        ++m_state.coins;
+        return true;
+    }
+
+    void ActivateCheckpoint(float x = 12.0f, float y = 4.0f)
+    {
+        m_state.checkpointX = x;
+        m_state.checkpointY = y;
+        m_state.checkpointActive = true;
+    }
+
+    void HitHazard()
+    {
+        if (m_state.lives == 0 || m_state.finished)
+            return;
+        --m_state.lives;
+        ++m_state.deaths;
+        if (m_state.lives > 0)
+            Respawn();
+    }
+
+    bool ReachFinish()
+    {
+        if (m_state.coins != m_collected.size() || m_state.lives == 0)
+            return false;
+        m_state.finished = true;
+        m_moveInput = 0.0f;
+        return true;
+    }
+
+    void RestartLevel()
+    {
+        m_state = {};
+        m_collected.fill(false);
+        m_moveInput = 0.0f;
+    }
+
+    [[nodiscard]] const PlatformerKitState& GetState() const { return m_state; }
+    [[nodiscard]] bool IsCoinCollected(std::size_t index) const
+    {
+        return index < m_collected.size() && m_collected[index];
     }
 
   private:
-    void InitializeCheckpoints()
+    void Respawn()
     {
-        m_checkpoints.push_back({0.0f, 0.0f, true});
-        m_checkpoints.push_back({50.0f, 10.0f, false});
-        m_checkpoints.push_back({120.0f, 25.0f, false});
+        m_state.x = m_state.checkpointX;
+        m_state.y = m_state.checkpointY;
+        m_state.velocityX = 0.0f;
+        m_state.velocityY = 0.0f;
+        m_state.grounded = m_state.checkpointY == 0.0f;
+        m_state.jumpsUsed = 0;
     }
 
     Spark::IEngineContext* m_context = nullptr;
-    PlatformerPlayer m_player;
-    std::vector<Checkpoint> m_checkpoints;
-    float m_levelTimer = 0.0f;
+    PlatformerKitState m_state;
+    std::array<bool, 3> m_collected{};
+    float m_moveInput = 0.0f;
 };

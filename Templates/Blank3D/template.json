@@ -1,0 +1,14 @@
+{
+  "name": "Blank3D",
+  "identity": "blank-3d",
+  "description": "A ready-to-edit 3D scene with a visible primitive, ground, lighting, and fly camera.",
+  "genre": "General",
+  "gameModule": "Blank3D",
+  "defaultScene": "Scenes/Default.sparkscene",
+  "features": [
+    "primitive",
+    "ground",
+    "lighting",
+    "fly-camera"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "manifestVersion": 1,
+  "package": "TopDownStarter",
+  "license": "Spark Open License 1.0; repository-original generated artwork",
+  "assets": [
+    {
+      "path": "top_down_atlas.png",
+      "kind": "transparent unit, tactical UI, boundary, and material atlas",
+      "origin": "OpenAI ImageGen, directed for SparkEngine TopDownStarter",
+      "sha256": "177e3f25cb8180ef0cc6355b5ad577a0ee54bea05ffe241aaed2fb0a9d4fb16d"
+    }
+  ],
+  "enginePrimitives": [
+    "__spark_primitive_Cube.obj",
+    "__spark_primitive_ground__.obj"
+  ],
+  "notes": "The scene uses built-in primitives; the atlas supplies an original neon tactical-board visual kit."
+}

@@ -1,0 +1,18 @@
+{
+  "projectFileVersion": 1,
+  "name": "MMOStarter",
+  "version": "0.1.0",
+  "description": "A bounded local client/server sample with character setup, faction objective, bot, chat, and respawn.",
+  "engineVersion": "1.0.0",
+  "template": "mmo",
+  "defaultScene": "Scenes/Frontier.sparkscene",
+  "lastOpenedScene": "Scenes/Frontier.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "MMOStarter"
+  ],
+  "scenes": [
+    "Scenes/Frontier.sparkscene"
+  ]
+}
