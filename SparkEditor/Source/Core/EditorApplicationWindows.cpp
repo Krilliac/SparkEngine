@@ -12,12 +12,14 @@
 
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "ProjectManager.h"
 #include "EditorWindowManager.h"
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
@@ -156,6 +158,14 @@ namespace SparkEditor
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
+
+        // Keep per-user editor state out of the repository/current working
+        // directory. ImGui retains this pointer until context shutdown.
+        const std::filesystem::path editorDataDirectory = ProjectManager::GetEditorDataDirectory();
+        std::error_code directoryError;
+        std::filesystem::create_directories(editorDataDirectory, directoryError);
+        m_imguiIniPath = (editorDataDirectory / "imgui.ini").string();
+        io.IniFilename = m_imguiIniPath.c_str();
 
         // Enable keyboard controls and docking
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;

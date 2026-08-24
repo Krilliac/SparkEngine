@@ -112,6 +112,7 @@ namespace SparkEditor
       private:
         // Configuration and state
         EditorConfig m_config;
+        std::string m_imguiIniPath;
         bool m_isInitialized = false;
         bool m_isRunning = false;
 

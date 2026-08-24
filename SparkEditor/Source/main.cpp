@@ -217,6 +217,12 @@ int main(int argc, char* argv[])
         showDebugConsole = true;
     }
 
+    // Bounded/test launches are unattended. They may still request a debug
+    // console for diagnostics, but must never wait for keyboard input after
+    // completing or failing.
+    const bool waitForConsoleOnExit =
+        showDebugConsole && !IsDebuggerAttached() && !testMode && testFrameLimit <= 0 && saveScenePath.empty();
+
     // Create console window for debugging if needed
     if (showDebugConsole)
     {
@@ -297,6 +303,9 @@ int main(int argc, char* argv[])
             if (showDebugConsole)
             {
                 std::cerr << "Failed to initialize SparkEditor" << std::endl;
+            }
+            if (waitForConsoleOnExit)
+            {
                 std::cout << "Press Enter to exit..." << std::endl;
                 std::cin.get();
             }
@@ -411,8 +420,9 @@ int main(int argc, char* argv[])
         if (showDebugConsole)
         {
             std::cout << "Shutdown complete." << std::endl;
-            // Only wait for input if we're in debug mode and not launched from debugger
-            if (!IsDebuggerAttached())
+            // Interactive debug launches may keep the console open; bounded
+            // automation and debugger-attached sessions must return directly.
+            if (waitForConsoleOnExit)
             {
                 std::cout << "Press Enter to exit..." << std::endl;
                 std::cin.get();
@@ -432,6 +442,9 @@ int main(int argc, char* argv[])
         if (showDebugConsole)
         {
             std::cerr << "SparkEditor error: " << e.what() << std::endl;
+        }
+        if (waitForConsoleOnExit)
+        {
             std::cout << "Press Enter to exit..." << std::endl;
             std::cin.get();
         }
@@ -445,6 +458,9 @@ int main(int argc, char* argv[])
         if (showDebugConsole)
         {
             std::cerr << "SparkEditor: Unknown error occurred" << std::endl;
+        }
+        if (waitForConsoleOnExit)
+        {
             std::cout << "Press Enter to exit..." << std::endl;
             std::cin.get();
         }
