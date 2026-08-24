@@ -67,6 +67,12 @@ jobs:
           # Ruleset file that will determine what checks will be run
           ruleset: NativeRecommendedRules.ruleset
 
+      # The analyzer emits one SARIF run per analyzed project. GitHub no longer
+      # combines runs that share a category, so retain every run while assigning
+      # stable, distinct automation identities before publication.
+      - name: Assign stable categories to MSVC SARIF runs
+        run: python -I .github/scripts/normalize-msvc-sarif.py "${{ steps.run-analysis.outputs.sarif }}"
+
       # Upload SARIF file to GitHub Code Scanning Alerts
       - name: Upload SARIF to GitHub
         uses: github/codeql-action/upload-sarif@4c0873ef8656cb3c50b3f42fb63bc1ade0cfa827 # v4
