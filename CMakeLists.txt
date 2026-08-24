@@ -1754,7 +1754,7 @@ endif()
 # command" because TFDataTables::Initialize() returned false before the module could register
 # them. SparkTests.exe never hit this because its TFData_* tests walk up to the repo root
 # instead of trusting cwd.
-foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO MMOFPS)
+foreach(ASSET_DIR Models Textures Audio Materials Scenes Scripts MMO MMOFPS Engine)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/${ASSET_DIR}")
         add_custom_command(TARGET SparkEngine POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -2312,6 +2312,14 @@ endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/SparkEngine/Shaders")
     install(DIRECTORY "SparkEngine/Shaders/"
         DESTINATION bin/Shaders
+        COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
+    )
+endif()
+
+# Startup branding is needed before any project or renderer is initialized.
+if(EXISTS "${CMAKE_SOURCE_DIR}/Assets/Engine")
+    install(DIRECTORY "Assets/Engine/"
+        DESTINATION bin/Assets/Engine
         COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
     )
 endif()

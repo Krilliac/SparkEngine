@@ -12,6 +12,7 @@
 #include "Platform.h"
 #include "SparkEngineLinuxInternal.h"
 #include "SparkEngineMacOS.h"
+#include "StartupSplash.h"
 #include "EngineRuntime.h"
 #include "ModuleManager.h"
 #include "EngineContext.h"
@@ -42,7 +43,9 @@
 #include <cstring>
 #include <cstdlib>
 #include <memory>
+#include <filesystem>
 #include <string>
+#include <vector>
 
 #ifndef SPARK_PLATFORM_WINDOWS
 #ifdef SPARK_SDL2_AVAILABLE
@@ -163,6 +166,24 @@ int RunSDL2Windowed(int argc, char* argv[])
         // physics, scripting, and networking headlessly.
         Spark::SimpleConsole::GetInstance().LogWarning(std::string("SDL_Init failed: ") + SDL_GetError() +
                                                        " — falling back to windowless / NullRHIDevice mode");
+    }
+
+    if (sdlInitOk)
+    {
+        Spark::StartupSplashContext splashContext;
+        splashContext.arguments.reserve(static_cast<size_t>(argc));
+        for (int i = 0; i < argc; ++i)
+            splashContext.arguments.emplace_back(argv[i] ? argv[i] : "");
+        splashContext.headless = g_headlessMode;
+        splashContext.automatedTest = g_testFrameLimit > 0;
+        splashContext.executableDirectory = Spark::MacOS::GetExecutableDirectory();
+        if (splashContext.executableDirectory.empty())
+        {
+            std::error_code ec;
+            const auto executable = std::filesystem::read_symlink("/proc/self/exe", ec);
+            splashContext.executableDirectory = ec ? std::filesystem::current_path() : executable.parent_path();
+        }
+        Spark::PlayStartupSplash(splashContext);
     }
 
     auto& settings = EngineSettings::GetInstance();

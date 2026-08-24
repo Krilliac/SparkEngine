@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 512">
+  <g stroke="#ff5200" stroke-width="12" stroke-linecap="square">
+    <path d="M114 256H32M266 256h82M190 180V98M190 332v82"/>
+    <path d="M136 202L78 144M244 202l58-58M136 310l-58 58M244 310l58 58"/>
+  </g>
+  <circle cx="190" cy="256" r="8" fill="#ece8de"/>
+  <text x="315" y="326" fill="#ece8de" font-family="DejaVu Sans,Arial,sans-serif" font-weight="700" font-stretch="condensed" font-size="170" letter-spacing="2">SPARKENGINE</text>
+</svg>

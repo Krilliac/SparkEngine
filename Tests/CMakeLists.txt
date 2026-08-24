@@ -97,6 +97,7 @@ add_executable(SparkTests
     TestDialogueSystem.cpp
     TestInputBindings.cpp
     TestLoadingScreen.cpp
+    TestStartupSplash.cpp
     TestUISystem.cpp
     TestLocalizationSystem.cpp
     TestDestructionSystem.cpp

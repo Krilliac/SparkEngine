@@ -14,6 +14,7 @@
 #include "Platform.h"
 #include "framework.h"
 #include "SparkEngineWindowsInternal.h"
+#include "StartupSplash.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/Modding/ModSystem.h"
 #include "Engine/UI/UISystem.h"
@@ -188,6 +189,45 @@ static std::string ParseScenePathOverride(LPWSTR cmdLine)
         return {};
     }
     return utf8;
+}
+
+static std::string StartupSplashUtf8(const wchar_t* value)
+{
+    if (!value)
+        return {};
+    const int inputLength = static_cast<int>(wcslen(value));
+    if (inputLength == 0)
+        return {};
+    const int length =
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, inputLength, nullptr, 0, nullptr, nullptr);
+    if (length <= 0)
+        return {};
+    std::string result(static_cast<size_t>(length), '\0');
+    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, inputLength, result.data(), length, nullptr,
+                            nullptr) != length)
+        return {};
+    return result;
+}
+
+static Spark::StartupSplashContext BuildStartupSplashContext()
+{
+    Spark::StartupSplashContext context;
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argv)
+    {
+        context.arguments.reserve(static_cast<size_t>(argc));
+        for (int i = 0; i < argc; ++i)
+            context.arguments.push_back(StartupSplashUtf8(argv[i]));
+        LocalFree(argv);
+    }
+    wchar_t executable[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameW(nullptr, executable, MAX_PATH);
+    if (length > 0 && length < MAX_PATH)
+        context.executableDirectory = std::filesystem::path(executable).parent_path();
+    context.headless = g_headlessMode;
+    context.automatedTest = g_testFrameLimit > 0 || g_testSecondsLimit > 0.0;
+    return context;
 }
 
 // Windows-specific globals (MAX_LOADSTRING lives in SparkEngineWindowsInternal.h)
@@ -453,6 +493,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     if (g_headlessMode)
         return RunHeadlessWindows(lpCmdLine);
 #endif
+
+    // A small CPU renderer keeps the launch signature independent of the
+    // selected RHI and any video codec. Automated/headless starts are skipped
+    // by policy, so smoke tests never inherit the 2.8-second delay.
+    Spark::PlayStartupSplash(BuildStartupSplashContext());
 
     // Register window class and title
     ASSERT(MAX_LOADSTRING <= _countof(g_szClass) && MAX_LOADSTRING <= _countof(g_szTitle));
