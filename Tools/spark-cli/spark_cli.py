@@ -38,6 +38,221 @@ import json
 from pathlib import Path
 
 
+MODULE_EXTENSIONS = {
+    "windows": (".dll",),
+    "linux": (".so",),
+    "macos": (".dylib", ".so"),
+}
+
+
+def current_platform():
+    """Return the Spark CLI platform name for the current interpreter."""
+    if sys.platform.startswith("win"):
+        return "windows"
+    if sys.platform.startswith("linux"):
+        return "linux"
+    if sys.platform.startswith("darwin"):
+        return "macos"
+    return "unknown"
+
+
+def executable_filename():
+    """Return the runtime host's conventional filename on this platform."""
+    return "SparkEngine.exe" if current_platform() == "windows" else "SparkEngine"
+
+
+def load_json_object(path, description):
+    """Load a JSON object and return ``(value, error)`` without raising."""
+    try:
+        with open(path, encoding="utf-8") as source:
+            value = json.load(source)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return None, f"Invalid {description} '{path}': {exc}"
+    if not isinstance(value, dict):
+        return None, f"Invalid {description} '{path}': the root must be a JSON object"
+    return value, None
+
+
+def find_project_descriptor(project_root):
+    """Find the active project descriptor, supporting current and legacy names."""
+    descriptors = sorted(project_root.glob("*.sparkproject"))
+    if len(descriptors) == 1:
+        return descriptors[0], None
+    if len(descriptors) > 1:
+        names = ", ".join(path.name for path in descriptors)
+        return None, f"Multiple project descriptors found; keep only the active one: {names}"
+
+    legacy = project_root / "spark.project.json"
+    if legacy.is_file():
+        return legacy, None
+    return None, (
+        "No project descriptor found (expected one *.sparkproject file "
+        "or legacy spark.project.json)."
+    )
+
+
+def configured_build_dir(project_root, config):
+    """Choose an existing configured CMake tree, including editor layouts."""
+    build_root = project_root / "build"
+    candidates = (build_root / config, build_root)
+    for candidate in candidates:
+        if (candidate / "CMakeCache.txt").is_file():
+            return candidate
+    return build_root
+
+
+def _path_is_within(candidate, parent):
+    try:
+        candidate.resolve().relative_to(parent.resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def read_module_manifest(package_root):
+    """Validate a runnable package manifest and its module artifacts."""
+    manifest_path = package_root / "spark.modules.json"
+    if not manifest_path.is_file():
+        return None, f"Package '{package_root}' has no spark.modules.json"
+
+    manifest, error = load_json_object(manifest_path, "module manifest")
+    if error:
+        return None, error
+    modules = manifest.get("modules")
+    if not isinstance(modules, list) or not modules:
+        return None, f"Invalid module manifest '{manifest_path}': 'modules' must be a non-empty array"
+
+    module_paths = []
+    for index, module in enumerate(modules):
+        if not isinstance(module, dict) or not isinstance(module.get("path"), str) or not module["path"].strip():
+            return None, f"Invalid module manifest '{manifest_path}': modules[{index}].path is required"
+        relative = Path(module["path"])
+        if relative.is_absolute():
+            return None, f"Invalid module path '{relative}': package manifests must use relative paths"
+        resolved = (package_root / relative).resolve()
+        if not _path_is_within(resolved, package_root):
+            return None, f"Invalid module path '{relative}': path escapes the package directory"
+        expected_extensions = MODULE_EXTENSIONS.get(current_platform(), (".dll", ".so", ".dylib"))
+        if resolved.suffix.casefold() not in expected_extensions:
+            return None, f"Invalid module path '{relative}': unsupported module extension on this platform"
+        if not resolved.is_file():
+            return None, f"Package module is missing: {resolved}"
+        sidecar = Path(str(resolved) + ".sparkabi")
+        if not sidecar.is_file():
+            return None, f"Package module ABI sidecar is missing: {sidecar}"
+        module_paths.append(resolved)
+    return module_paths, None
+
+
+def find_package_host(package_root, project_name):
+    """Find one unambiguous runtime host inside an assembled package."""
+    platform = current_platform()
+    search_roots = [package_root, package_root / "bin"]
+    conventional = [
+        "SparkGame.exe" if platform == "windows" else "SparkGame",
+        executable_filename(),
+    ]
+    if project_name.isidentifier():
+        conventional.append(f"{project_name}.exe" if platform == "windows" else project_name)
+    for root in search_roots:
+        for name in conventional:
+            candidate = root / name
+            if candidate.is_file() and _path_is_within(candidate, package_root):
+                if platform == "windows" or os.access(candidate, os.X_OK):
+                    return candidate.resolve(), None
+
+    candidates = []
+    for root in search_roots:
+        if not root.is_dir():
+            continue
+        if platform == "windows":
+            candidates.extend(path for path in root.glob("*.exe") if path.is_file())
+        else:
+            candidates.extend(
+                path for path in root.iterdir()
+                if path.is_file() and os.access(path, os.X_OK) and not path.suffix
+            )
+    candidates = sorted(set(candidates))
+    if len(candidates) == 1:
+        return candidates[0], None
+    if not candidates:
+        return None, f"Package '{package_root}' contains no runtime host executable"
+    names = ", ".join(path.name for path in candidates)
+    return None, f"Package '{package_root}' contains multiple possible runtime hosts: {names}"
+
+
+def package_candidates(project_root, config, project_name, explicit_package=None):
+    """Return bounded, deterministic candidate package directories."""
+    if explicit_package:
+        requested = Path(explicit_package)
+        if not requested.is_absolute():
+            requested = project_root / requested
+        return [requested.resolve()]
+
+    platform = current_platform()
+    candidates = [
+        project_root / "build" / "Output",
+        project_root / "build" / config / "Output",
+        project_root / "dist" / f"{project_name}-{platform}-{config.lower()}",
+    ]
+    result = []
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in result:
+            result.append(resolved)
+    return result
+
+
+def find_runtime_host(engine_root, config):
+    """Find a matching development runtime host for build-tree execution."""
+    explicit = os.environ.get("SPARKENGINE_RUNTIME_HOST")
+    if explicit:
+        candidate = Path(explicit).expanduser().resolve()
+        return candidate if candidate.is_file() else None
+    if not engine_root:
+        return None
+
+    filename = executable_filename()
+    candidates = (
+        engine_root / "build" / "bin" / config / filename,
+        engine_root / "build" / config / filename,
+        engine_root / "bin" / config / filename,
+        engine_root / "bin" / filename,
+    )
+    return next((path.resolve() for path in candidates if path.is_file()), None)
+
+
+def _module_stem(path):
+    stem = Path(path).stem.casefold()
+    return stem[3:] if stem.startswith("lib") else stem
+
+
+def find_built_module(build_dir, manifest_modules, config=None):
+    """Find the freshly built module identified by the project's manifest."""
+    extensions = MODULE_EXTENSIONS.get(current_platform(), (".dll", ".so", ".dylib"))
+    wanted_stems = {
+        _module_stem(module.get("path", ""))
+        for module in manifest_modules
+        if isinstance(module, dict) and isinstance(module.get("path"), str)
+    }
+    search_root = build_dir
+    configured_output = build_dir / config if config else None
+    if configured_output and configured_output.is_dir():
+        search_root = configured_output
+    candidates = []
+    if search_root.is_dir():
+        for extension in extensions:
+            candidates.extend(path for path in search_root.rglob(f"*{extension}") if path.is_file())
+    candidates = [path for path in candidates if Path(str(path) + ".sparkabi").is_file()]
+    matches = [path for path in candidates if _module_stem(path) in wanted_stems]
+    if len(matches) == 1:
+        return matches[0].resolve(), None
+    if not matches:
+        return None, f"No built module with an ABI sidecar was found under '{search_root}'"
+    names = ", ".join(str(path) for path in sorted(matches))
+    return None, f"Multiple matching built modules found; remove stale outputs: {names}"
+
+
 def find_engine_root():
     """Find the SparkEngine root directory."""
     # Check environment variable first
@@ -149,14 +364,15 @@ def cmd_build(args):
         return 1
 
     config = args.config or "Debug"
-    build_dir = Path("build")
+    project_root = Path.cwd().resolve()
+    build_dir = configured_build_dir(project_root, config)
 
     # Configure if needed
-    if not build_dir.exists():
+    if not (build_dir / "CMakeCache.txt").is_file():
         print("Configuring project...")
         result = subprocess.run(
-            ["cmake", "-B", "build", f"-DCMAKE_BUILD_TYPE={config}"],
-            cwd=Path.cwd()
+            ["cmake", "-S", str(project_root), "-B", str(build_dir), f"-DCMAKE_BUILD_TYPE={config}"],
+            cwd=project_root
         )
         if result.returncode != 0:
             print("Configuration failed.")
@@ -165,32 +381,115 @@ def cmd_build(args):
     # Build
     print(f"Building ({config})...")
     result = subprocess.run(
-        ["cmake", "--build", "build", "--config", config],
-        cwd=Path.cwd()
+        ["cmake", "--build", str(build_dir), "--config", config],
+        cwd=project_root
     )
     return result.returncode
 
 
 def cmd_run(args):
-    """Build and run the current game project."""
-    # Build first
-    build_result = cmd_build(args)
-    if build_result != 0:
-        return build_result
-
-    # Find the built DLL and the engine executable
-    project_file = Path("spark.project.json")
-    if not project_file.exists():
-        print("Error: No spark.project.json found. Cannot determine how to run.")
+    """Build and run the current project through its package or runtime host."""
+    project_root = Path.cwd().resolve()
+    project_file, error = find_project_descriptor(project_root)
+    if error:
+        print(f"Error: {error}")
+        return 1
+    project_info, error = load_json_object(project_file, "project descriptor")
+    if error:
+        print(f"Error: {error}")
         return 1
 
-    with open(project_file) as f:
-        project_info = json.load(f)
+    project_name = project_info.get("name")
+    if not isinstance(project_name, str) or not project_name.strip():
+        print(f"Error: Project descriptor '{project_file}' has no non-empty 'name'.")
+        return 1
+    project_name = project_name.strip()
+    config = args.config or "Debug"
+    explicit_package = getattr(args, "package", None)
 
-    print(f"Project: {project_info.get('name', 'Unknown')}")
-    print("To run, copy the built DLL next to SparkEngine.exe and launch it.")
-    print("(Automatic launch will be supported in a future update)")
-    return 0
+    if not getattr(args, "no_build", False) and not explicit_package:
+        build_result = cmd_build(args)
+        if build_result != 0:
+            return build_result
+
+    runtime_args = list(getattr(args, "runtime_args", []) or [])
+    if runtime_args[:1] == ["--"]:
+        runtime_args.pop(0)
+
+    invalid_packages = []
+    package_host_fallback = None
+    for package_root in package_candidates(project_root, config, project_name, explicit_package):
+        if not package_root.is_dir():
+            if explicit_package:
+                print(f"Error: Package directory does not exist: {package_root}")
+                return 1
+            continue
+        _, manifest_error = read_module_manifest(package_root)
+        if manifest_error:
+            invalid_packages.append(manifest_error)
+            continue
+        host, host_error = find_package_host(package_root, project_name)
+        if host_error:
+            invalid_packages.append(host_error)
+            continue
+
+        if getattr(args, "no_build", False) or explicit_package:
+            print(f"Project: {project_name}")
+            print(f"Package: {package_root}")
+            print(f"Running: {host}")
+            try:
+                result = subprocess.run([str(host), *runtime_args], cwd=package_root)
+            except OSError as exc:
+                print(f"Error: Failed to launch '{host}': {exc}")
+                return 1
+            return result.returncode
+        if package_host_fallback is None:
+            package_host_fallback = host
+
+    if explicit_package:
+        print(f"Error: {invalid_packages[0] if invalid_packages else 'Package is not runnable.'}")
+        return 1
+
+    manifest_path = project_root / "spark.modules.json"
+    manifest, manifest_error = load_json_object(manifest_path, "module manifest")
+    if manifest_error:
+        print(f"Error: {manifest_error}")
+        if invalid_packages:
+            print(f"Package error: {invalid_packages[0]}")
+        return 1
+    modules = manifest.get("modules")
+    if not isinstance(modules, list) or not modules:
+        print(f"Error: Invalid module manifest '{manifest_path}': 'modules' must be a non-empty array")
+        return 1
+
+    build_dir = configured_build_dir(project_root, config)
+    module_path, module_error = find_built_module(build_dir, modules, config)
+    if module_error:
+        print(f"Error: {module_error}")
+        if invalid_packages:
+            print(f"Package error: {invalid_packages[0]}")
+        return 1
+    host = find_runtime_host(find_engine_root(), config) or package_host_fallback
+    if not host:
+        print(f"Error: No SparkEngine runtime host matching {config} was found.")
+        print("Set SPARKENGINE_RUNTIME_HOST to an explicit executable or build/install the engine host.")
+        return 1
+
+    command = [
+        str(host),
+        "-game", str(module_path),
+        "-project", str(project_file),
+        *runtime_args,
+    ]
+    print(f"Project: {project_name}")
+    print(f"Module:  {module_path}")
+    print(f"Running: {host}")
+    try:
+        result = subprocess.run(command, cwd=project_root)
+    except OSError as exc:
+        print(f"Error: Failed to launch '{host}': {exc}")
+        return 1
+    return result.returncode
 
 
 def cmd_package(args):
@@ -593,6 +892,12 @@ def main():
     run_parser.add_argument("--config", "-c", default="Debug",
                            choices=["Debug", "Release", "RelWithDebInfo", "MinSizeRel"],
                            help="Build configuration (default: Debug)")
+    run_parser.add_argument("--no-build", action="store_true",
+                           help="Launch an existing package/build without rebuilding")
+    run_parser.add_argument("--package", default=None,
+                           help="Launch an explicit existing package without rebuilding")
+    run_parser.add_argument("runtime_args", nargs=argparse.REMAINDER,
+                           help="Arguments after -- are forwarded to the runtime")
 
     # spark info
     subparsers.add_parser("info", help="Show project and engine info")
