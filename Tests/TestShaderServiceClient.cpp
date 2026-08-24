@@ -23,7 +23,6 @@
 #include <cstdio>
 #include <memory>
 #include <string>
-#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -42,9 +41,14 @@ namespace
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
-            struct stat st;
-            if (::stat(path.c_str(), &st) == 0)
+            // bind() creates the socket path before listen() starts accepting.
+            // Probe a real connection so callers cannot race that small window.
+            Spark::Daemon::DaemonClient probe;
+            if (probe.Connect(path).has_value())
+            {
+                probe.Disconnect();
                 return true;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return false;
@@ -378,15 +382,16 @@ TEST(ShaderService_OverwriteReplacesFileContents)
     EXPECT_TRUE(shader.PutCacheEntry(77ull, 3, 3, std::vector<uint8_t>(100, 0xAA)).has_value());
     EXPECT_TRUE(shader.PutCacheEntry(77ull, 3, 3, std::vector<uint8_t>(50, 0xBB)).has_value());
 
+    client.Disconnect();
     fx.RestartServer();
 
     Spark::Daemon::DaemonClient client2;
-    EXPECT_TRUE(client2.Connect(fx.sockPath).has_value());
+    ASSERT_TRUE(client2.Connect(fx.sockPath).has_value());
     Spark::Daemon::ShaderServiceClient shader2(client2);
 
     auto get = shader2.GetCacheEntry(77ull, 3, 3);
-    EXPECT_TRUE(get && get->found);
-    EXPECT_EQ(get->blob.size(), 50u);
+    ASSERT_TRUE(get && get->found);
+    ASSERT_EQ(get->blob.size(), 50u);
     EXPECT_EQ(get->blob[0], 0xBBu);
 
     auto stats = shader2.GetCacheStats();

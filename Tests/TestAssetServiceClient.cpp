@@ -25,7 +25,6 @@
 #include <fstream>
 #include <memory>
 #include <string>
-#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -54,9 +53,14 @@ namespace
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
-            struct stat st;
-            if (::stat(path.c_str(), &st) == 0)
+            // A filesystem entry appears at bind(), just before listen(). Use
+            // an actual connection to prove the service is ready for clients.
+            Spark::Daemon::DaemonClient probe;
+            if (probe.Connect(path).has_value())
+            {
+                probe.Disconnect();
                 return true;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return false;
